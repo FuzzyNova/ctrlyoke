@@ -84,10 +84,19 @@ suite("CompletionCore", () => {
   test("returns and cancels the latest file snapshot when its budget expires", async () => {
     let receivedSignal: AbortSignal | undefined;
     const files = {
-      queryFiles: async (_query: string, options?: { signal?: AbortSignal; onProgress?: (progress: any) => void }) => {
+      queryFiles: async (
+        _query: string,
+        options?: { signal?: AbortSignal; onProgress?: (progress: any) => void }
+      ) => {
         receivedSignal = options?.signal;
         options?.onProgress?.({
-          results: [{ kind: WORKSPACE_ENTRY_KINDS.FILE, relativePath: "src/Widget.ts", rank: 0 }],
+          results: [
+            {
+              kind: WORKSPACE_ENTRY_KINDS.FILE,
+              relativePath: "src/Widget.ts",
+              rank: 0,
+            },
+          ],
         });
         return new Promise<any[]>((resolve) =>
           setTimeout(() => resolve([]), 100)
@@ -97,14 +106,20 @@ suite("CompletionCore", () => {
       suggestPaths: async () => [],
       getStatus: () => ({ state: "building", indexed: 1 }),
     };
-    const core = new CompletionCore({ files: files as any, isMultiRoot: () => false });
+    const core = new CompletionCore({
+      files: files as any,
+      isMultiRoot: () => false,
+    });
     const partials: string[][] = [];
     const result = await core.getFileCompletions("Wid", {
       budgetMs: 5,
       onPartial: (items) => partials.push(items.map((item) => item.label)),
     });
     assert.deepStrictEqual(partials, [["Widget.ts"]]);
-    assert.deepStrictEqual(result.map((item) => item.label), ["Widget.ts"]);
+    assert.deepStrictEqual(
+      result.map((item) => item.label),
+      ["Widget.ts"]
+    );
     assert.strictEqual(receivedSignal?.aborted, true);
   });
 

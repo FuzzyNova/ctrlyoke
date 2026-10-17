@@ -179,7 +179,10 @@ suite("HostedWorkspaceViewerService", function () {
           fs.readFileSync(userSettingsPath, "utf8"),
           '{"theme":"light"}'
         );
-        assert.strictEqual(fs.existsSync(path.join(root, "settings.json")), false);
+        assert.strictEqual(
+          fs.existsSync(path.join(root, "settings.json")),
+          false
+        );
       } finally {
         configService.getUserFilePath = originalGetUserFilePath;
       }

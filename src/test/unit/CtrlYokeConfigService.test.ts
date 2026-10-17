@@ -1201,7 +1201,10 @@ suite("FileConfigBackend", () => {
     const configPath = path.join(tmpDir, "settings.json");
     fs.writeFileSync(
       configPath,
-      JSON.stringify({ schemaVersion: 999, futureSettings: { retained: true } }),
+      JSON.stringify({
+        schemaVersion: 999,
+        futureSettings: { retained: true },
+      }),
       "utf8"
     );
     const backend = new FileConfigBackend(configPath);

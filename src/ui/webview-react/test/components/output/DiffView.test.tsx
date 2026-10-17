@@ -68,7 +68,8 @@ const {
     ) => 0
   ),
   mockExpandFromRawCode: vi.fn(
-    (hunks: unknown[], _source?: string, _start?: number, _end?: number) => hunks
+    (hunks: unknown[], _source?: string, _start?: number, _end?: number) =>
+      hunks
   ),
   mockRefractorRegistered: vi.fn(() => false),
   mockTokenize: vi.fn(() => null),
@@ -665,8 +666,8 @@ describe("DiffView", () => {
       changes: [],
     }));
     mockToRdvFromContent.mockReturnValue({ hunks, diffType: "modify" });
-    mockGetCollapsedLinesCountBetween.mockImplementation((left, right) =>
-      right.oldStart - (left.oldStart + left.oldLines)
+    mockGetCollapsedLinesCountBetween.mockImplementation(
+      (left, right) => right.oldStart - (left.oldStart + left.oldLines)
     );
     mockExpandFromRawCode.mockImplementation((current, _source, start, end) => {
       if (start === 2 && end === 6) {
@@ -674,16 +675,28 @@ describe("DiffView", () => {
       }
       return current;
     });
-    const oldContent = Array.from({ length: 42 }, (_, i) => `line ${i + 1}`).join("\n");
+    const oldContent = Array.from(
+      { length: 42 },
+      (_, i) => `line ${i + 1}`
+    ).join("\n");
     const { getByRole } = render(
-      <DiffView oldContent={oldContent} newContent={oldContent} globallyCollapsed={false} />
+      <DiffView
+        oldContent={oldContent}
+        newContent={oldContent}
+        globallyCollapsed={false}
+      />
     );
 
     fireEvent.click(getByRole("button", { name: /show 4 hidden lines/i }));
-    fireEvent.click(getByRole("button", { name: /show 25 of 36 hidden lines/i }));
+    fireEvent.click(
+      getByRole("button", { name: /show 25 of 36 hidden lines/i })
+    );
 
     expect(mockExpandFromRawCode).toHaveBeenLastCalledWith(
-      expect.any(Array), oldContent, 7, 32
+      expect.any(Array),
+      oldContent,
+      7,
+      32
     );
   });
 
@@ -697,8 +710,8 @@ describe("DiffView", () => {
       changes: [],
     }));
     mockToRdvFromContent.mockReturnValue({ hunks, diffType: "modify" });
-    mockGetCollapsedLinesCountBetween.mockImplementation((left, right) =>
-      right.oldStart - (left.oldStart + left.oldLines)
+    mockGetCollapsedLinesCountBetween.mockImplementation(
+      (left, right) => right.oldStart - (left.oldStart + left.oldLines)
     );
     mockExpandFromRawCode.mockImplementation((current) => [
       { ...hunks[0], oldLines: 5 },
@@ -707,7 +720,9 @@ describe("DiffView", () => {
     const onExpandGap = vi.fn();
     const { getByRole } = render(
       <DiffView
-        oldContent={Array.from({ length: 42 }, (_, i) => `line ${i + 1}`).join("\n")}
+        oldContent={Array.from({ length: 42 }, (_, i) => `line ${i + 1}`).join(
+          "\n"
+        )}
         newContent=""
         globallyCollapsed={false}
         expandedGaps={new Map([[1, 6]])}
@@ -715,7 +730,9 @@ describe("DiffView", () => {
       />
     );
 
-    fireEvent.click(getByRole("button", { name: /show 25 of 36 hidden lines/i }));
+    fireEvent.click(
+      getByRole("button", { name: /show 25 of 36 hidden lines/i })
+    );
 
     expect(onExpandGap).toHaveBeenCalledWith(2, 32);
   });
@@ -730,21 +747,35 @@ describe("DiffView", () => {
       changes: [],
     }));
     mockToRdvFromContent.mockReturnValue({ hunks, diffType: "modify" });
-    mockGetCollapsedLinesCountBetween.mockImplementation((left, right) =>
-      right.oldStart - (left.oldStart + left.oldLines)
+    mockGetCollapsedLinesCountBetween.mockImplementation(
+      (left, right) => right.oldStart - (left.oldStart + left.oldLines)
     );
     mockExpandFromRawCode.mockImplementation((current, _source, start, end) =>
-      start === 2 && end === 3 ? [{ ...hunks[0], oldLines: 2 }, current[2]] : current
+      start === 2 && end === 3
+        ? [{ ...hunks[0], oldLines: 2 }, current[2]]
+        : current
     );
-    const oldContent = Array.from({ length: 42 }, (_, i) => `line ${i + 1}`).join("\n");
+    const oldContent = Array.from(
+      { length: 42 },
+      (_, i) => `line ${i + 1}`
+    ).join("\n");
     const { getByRole } = render(
-      <DiffView oldContent={oldContent} newContent={oldContent} globallyCollapsed={false} />
+      <DiffView
+        oldContent={oldContent}
+        newContent={oldContent}
+        globallyCollapsed={false}
+      />
     );
 
-    fireEvent.click(getByRole("button", { name: /show 25 of 39 hidden lines/i }));
+    fireEvent.click(
+      getByRole("button", { name: /show 25 of 39 hidden lines/i })
+    );
 
     expect(mockExpandFromRawCode).toHaveBeenLastCalledWith(
-      expect.any(Array), oldContent, 4, 29
+      expect.any(Array),
+      oldContent,
+      4,
+      29
     );
   });
 

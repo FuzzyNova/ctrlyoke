@@ -21,7 +21,7 @@ If the user switches to another file before the save returns, that file's editor
 ## Root Cause
 
 - `src/ui/webview-react/components/workspace-viewer/WorkspaceExplorerPane.tsx:563-591`: `handleSave` captures `fileContent` and `selectedFilePath` when the save starts. After `await workspaceSaveFile(...)` it sets `modifiedAtRef.current = result.modifiedAt` (line 572) and calls `markFileSaved(fileContent)` (line 574) without checking that the selected file and its content are still the ones that were saved.
-- `src/ui/webview-react/store/workspaceViewerStore.ts:655-673`: `markFileSaved` applies the passed content to the file selected *now*. It overwrites `fileContent` and `originalFileContent`, clears `fileDirty`, and deletes that path's draft.
+- `src/ui/webview-react/store/workspaceViewerStore.ts:655-673`: `markFileSaved` applies the passed content to the file selected _now_. It overwrites `fileContent` and `originalFileContent`, clears `fileDirty`, and deletes that path's draft.
 - `src/ui/webview-react/components/workspace-viewer/WorkspaceFileEditor.tsx:642-655`: the content-sync effect pushes the stale snapshot into CodeMirror with `Transaction.addToHistory.of(false)`, so the change cannot be undone.
 - The editor is not locked during a save. The `saving` prop (`WorkspaceFileEditor.tsx:123`) is declared but unused. `selectFile` (`workspaceViewerStore.ts:478`) switches files immediately. Saves have no request-sequence guard like the `fileLoadRequestSeqRef` guard that `openFile` uses.
 

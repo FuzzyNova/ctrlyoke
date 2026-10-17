@@ -3,15 +3,16 @@
 **Status:** Implemented 2026-10-15. All 19 bug docs are in
 `dev/bugs/implemented/` (step 7 was fixed before the drain, in `e45a21ab8`).
 The review pass fixed four problems in the queued steps' work:
+
 - **Excerpt reads (step 8):** every non-first-line `#selection` was broken, and over-cap line ranges were refused outright. Excerpts now use `splitLines`/`streamFileLines`.
 - **Codex custom mode (step 4):** `permissions.codexSandboxMode` had been made dead for every workflow. Codex now clamps to read-only only when a whole write-capable tool is denied.
 - **OSC recovery (step 10):** it could emit text twice.
 - **Coordination board (step 2):** recovering from a corrupt board reset its sequence numbers and dropped live claims. It now salvages every entry that parses.
-**Runs as:** plan 4 of 4 in a parallel bug drain. Each plan runs through
-`out/templates/workflows/spec-driven-loop.ctrlyoke.yaml` in its own git
-worktree. The orchestrator reads this plan, queues one `append_step` per step
-below, in the order given, and then reviews.
-**Size:** 19 bug docs, 26 effort points (S = 1, M = 2), 14 steps.
+  **Runs as:** plan 4 of 4 in a parallel bug drain. Each plan runs through
+  `out/templates/workflows/spec-driven-loop.ctrlyoke.yaml` in its own git
+  worktree. The orchestrator reads this plan, queues one `append_step` per step
+  below, in the order given, and then reviews.
+  **Size:** 19 bug docs, 26 effort points (S = 1, M = 2), 14 steps.
 
 ## Goal and scope
 
@@ -203,6 +204,7 @@ steps; and the three `workspaceViewerStore` bugs in steps 13 and 14.
 
   Then check each harness's permission mapper. Confirm that this custom mode
   gives deny-by-default in a headless run on all six harnesses.
+
 - **Tests:** `src/test/unit/CommitMessageGenerator.test.ts`. Replace the test
   that pins `ALLOW_ALL` with one that pins the restricted permissions for each
   MCP mode.

@@ -15,7 +15,9 @@ suite("ExternalRootsApproval — workspace state root", () => {
       `${identity}::${ExternalRootsTrustStore.canonicalizeRoot(root)}`;
     const store = {
       getApprovedRoots: (identity: string, roots: readonly string[]) =>
-        roots.filter((root) => decisions.get(keyFor(identity, root)) === "allow"),
+        roots.filter(
+          (root) => decisions.get(keyFor(identity, root)) === "allow"
+        ),
       getPendingRoots: (identity: string, roots: readonly string[]) =>
         roots.filter((root) => !decisions.has(keyFor(identity, root))),
       setDecisions: async (
@@ -23,7 +25,8 @@ suite("ExternalRootsApproval — workspace state root", () => {
         roots: readonly string[],
         decision: "allow" | "deny"
       ) => {
-        for (const root of roots) decisions.set(keyFor(identity, root), decision);
+        for (const root of roots)
+          decisions.set(keyFor(identity, root), decision);
       },
     };
     const port: UserInteractionPort = {
@@ -43,12 +46,20 @@ suite("ExternalRootsApproval — workspace state root", () => {
       store
     );
 
-    const approvedRoots = store.getApprovedRoots(workspaceIdentity, [outsideRoot]);
-    const decision = evaluateFileAccess(path.join(outsideRoot, ".ssh", "config"), {
-      workspaceRoots: [path.resolve("/repos/project")],
-      approvedExternalRoots: approvedRoots,
-    });
-    assert.strictEqual(decisions.get(keyFor(workspaceIdentity, outsideRoot)), "deny");
+    const approvedRoots = store.getApprovedRoots(workspaceIdentity, [
+      outsideRoot,
+    ]);
+    const decision = evaluateFileAccess(
+      path.join(outsideRoot, ".ssh", "config"),
+      {
+        workspaceRoots: [path.resolve("/repos/project")],
+        approvedExternalRoots: approvedRoots,
+      }
+    );
+    assert.strictEqual(
+      decisions.get(keyFor(workspaceIdentity, outsideRoot)),
+      "deny"
+    );
     assert.strictEqual(decision.allowed, false);
     assert.strictEqual(decision.reason, "outsideTrustedRoots");
   });

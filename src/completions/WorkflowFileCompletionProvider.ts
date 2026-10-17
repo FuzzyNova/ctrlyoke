@@ -135,7 +135,10 @@ export class WorkflowFileCompletionProvider
       items.map((item) => {
         const vscodeItem = toVSCodeWorkflowCompletionItem(item, range);
         if (startsOnQuote && !item.filterText) {
-          vscodeItem.filterText = (item.insertText ?? item.label).replace(/^[\s,]+/, "");
+          vscodeItem.filterText = (item.insertText ?? item.label).replace(
+            /^[\s,]+/,
+            ""
+          );
         }
         return vscodeItem;
       }),

@@ -163,7 +163,11 @@ suite("ExecutionPlanBuilder", () => {
 
   test("places Codex image flags after the headless prompt", async () => {
     const session = createSession("headless");
-    session.preparePrompt("Describe shots/diagram.png", [], ["shots/diagram.png"]);
+    session.preparePrompt(
+      "Describe shots/diagram.png",
+      [],
+      ["shots/diagram.png"]
+    );
     const plan = await createBuilder(new CodexCliProvider()).plan(session);
     const promptIndex = plan.cliArgs.indexOf("Describe shots/diagram.png");
     const imageFlagIndex = plan.cliArgs.indexOf("--image");
@@ -180,7 +184,10 @@ suite("ExecutionPlanBuilder", () => {
       ...resolvedProperties,
       harness: HARNESS_IDS.CLAUDE_CLI,
       mcpServers: [
-        { id: "io.github.upstash/context7", deniedTools: ["resolve-library-id"] },
+        {
+          id: "io.github.upstash/context7",
+          deniedTools: ["resolve-library-id"],
+        },
       ],
       toolPermissions: { mode: "custom", allowedTools: [], deniedTools: [] },
     };

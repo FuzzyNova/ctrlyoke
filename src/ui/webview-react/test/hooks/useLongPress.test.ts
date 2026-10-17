@@ -8,7 +8,9 @@ function touchEvent(touchCount: number): React.TouchEvent {
     clientY: 20 + index,
   }));
   return {
-    touches: Object.assign(touches, { item: (index: number) => touches[index] }),
+    touches: Object.assign(touches, {
+      item: (index: number) => touches[index],
+    }),
     target: null,
     currentTarget: null,
   } as unknown as React.TouchEvent;

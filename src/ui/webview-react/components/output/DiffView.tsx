@@ -769,7 +769,12 @@ export const DiffView: React.FC<DiffViewProps> = ({
                           <button
                             type="button"
                             onClick={() =>
-                              handleExpand(baseGapIndex, prevHunk, hunk, "chunk")
+                              handleExpand(
+                                baseGapIndex,
+                                prevHunk,
+                                hunk,
+                                "chunk"
+                              )
                             }
                             className="cursor-pointer border-none bg-transparent p-0 font-mono text-link-fg hover:text-link-active-fg"
                             title={

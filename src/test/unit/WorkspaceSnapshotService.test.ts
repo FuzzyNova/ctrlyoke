@@ -112,8 +112,16 @@ suite("WorkspaceSnapshotService", function () {
     await fs.mkdir(packageRoot, { recursive: true });
     await fs.writeFile(path.join(packageRoot, "modified.txt"), "base\n");
     await fs.writeFile(path.join(packageRoot, "deleted.txt"), "restore me\n");
-    await fs.writeFile(path.join(workspaceRoot, "outside.txt"), "outside base\n");
-    runGit(["add", "packages/foo/modified.txt", "packages/foo/deleted.txt", "outside.txt"]);
+    await fs.writeFile(
+      path.join(workspaceRoot, "outside.txt"),
+      "outside base\n"
+    );
+    runGit([
+      "add",
+      "packages/foo/modified.txt",
+      "packages/foo/deleted.txt",
+      "outside.txt",
+    ]);
     runGit(["commit", "-m", "Add package files"]);
 
     const before = await snapshotService.captureWorkspaceState(
@@ -122,7 +130,10 @@ suite("WorkspaceSnapshotService", function () {
     );
     await fs.writeFile(path.join(packageRoot, "modified.txt"), "changed\n");
     await fs.rm(path.join(packageRoot, "deleted.txt"));
-    await fs.writeFile(path.join(workspaceRoot, "outside.txt"), "outside changed\n");
+    await fs.writeFile(
+      path.join(workspaceRoot, "outside.txt"),
+      "outside changed\n"
+    );
 
     const after = await snapshotService.captureWorkspaceState(
       packageRoot,
@@ -134,7 +145,8 @@ suite("WorkspaceSnapshotService", function () {
       packageRoot
     );
     assert.deepStrictEqual(
-      changes.map(({ path: filePath, changeType }) => ({ filePath, changeType }))
+      changes
+        .map(({ path: filePath, changeType }) => ({ filePath, changeType }))
         .sort((a, b) => a.filePath.localeCompare(b.filePath)),
       [
         { filePath: "deleted.txt", changeType: "deleted" },

@@ -268,7 +268,12 @@ suite("CliMcpConfigGenerator", () => {
           "run-2026-10-14T12-01-00-000Z",
           "workflow.ctrlyoke.json"
         ),
-        path.join(workspaceRoot, workflowKey, "draft", "workflow.ctrlyoke.json"),
+        path.join(
+          workspaceRoot,
+          workflowKey,
+          "draft",
+          "workflow.ctrlyoke.json"
+        ),
       ];
 
       const configPaths = workingFiles.map((workingFile) =>

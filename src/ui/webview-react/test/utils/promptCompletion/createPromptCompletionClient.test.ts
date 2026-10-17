@@ -123,7 +123,9 @@ describe("PromptCompletionClient", () => {
     const view = {} as EditorView;
     const client = makeClient(transport, () => view);
 
-    const pending = client.customSource(contextFor("@src")) as unknown as Promise<{
+    const pending = client.customSource(
+      contextFor("@src")
+    ) as unknown as Promise<{
       options: readonly { label: string }[];
     }>;
     const { seq } = transport.sent[0];
@@ -139,9 +141,7 @@ describe("PromptCompletionClient", () => {
     const second = client.customSource(contextFor("@src")) as unknown as {
       options: readonly { label: string }[];
     };
-    expect(second.options.map((option) => option.label)).toEqual([
-      "second.ts",
-    ]);
+    expect(second.options.map((option) => option.label)).toEqual(["second.ts"]);
 
     respond(seq, ["final.ts"]);
     expect(startCompletionMock).toHaveBeenCalledTimes(2);

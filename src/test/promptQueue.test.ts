@@ -2501,11 +2501,7 @@ suite("PromptQueue State Machine Tests", () => {
   suite("reorderPendingPrompts", () => {
     test("warns when reordering shifts a final-step positional reference", async () => {
       queue.loadPrompts(
-        createPromptFile([
-          { prompt: "A" },
-          { prompt: "B" },
-          { prompt: "C" },
-        ])
+        createPromptFile([{ prompt: "A" }, { prompt: "B" }, { prompt: "C" }])
       );
       (queue as any).workflowFile.finalStep = {
         prompt: "Summarize $step:2",

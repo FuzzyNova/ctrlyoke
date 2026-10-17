@@ -23,10 +23,9 @@ function selectSavedScript(): void {
     fileName: "workflow.ctrlyoke.yaml",
     steps: [savedScript],
   });
-  useEditorStore.getState().selectPrompt(
-    { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
-    savedScript
-  );
+  useEditorStore
+    .getState()
+    .selectPrompt({ kind: FINAL_STEP_PHASES.QUEUE, index: 0 }, savedScript);
 }
 
 afterEach(() => {

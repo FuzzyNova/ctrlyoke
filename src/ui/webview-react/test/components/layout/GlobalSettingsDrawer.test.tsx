@@ -118,7 +118,9 @@ describe("GlobalSettingsDrawer", () => {
         },
       },
     });
-    useUiStore.setState({ globalSettingsActiveTab: GLOBAL_SETTINGS_TABS.STATS });
+    useUiStore.setState({
+      globalSettingsActiveTab: GLOBAL_SETTINGS_TABS.STATS,
+    });
 
     render(<GlobalSettingsDrawer />);
     fireEvent.change(

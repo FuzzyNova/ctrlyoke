@@ -16,7 +16,9 @@ describe("buildCodeMirrorCompletionResult", () => {
     expect(option.label).toBe("Indexing workspace files… (42 so far)");
     expect(typeof option.apply).toBe("function");
     if (typeof option.apply !== "function") {
-      throw new Error("Expected status completion to have a no-op apply handler");
+      throw new Error(
+        "Expected status completion to have a no-op apply handler"
+      );
     }
     option.apply(
       { dispatch } as unknown as EditorView,

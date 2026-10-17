@@ -302,8 +302,10 @@ export class SettingsJsonHooksTracker {
     );
     const allEvents = new Set<string>(Object.keys(baseHooks));
     for (const workflow of pathWorkflows) {
-      for (const key of Object.keys(workflow.layers.ctrlyoke)) allEvents.add(key);
-      for (const key of Object.keys(workflow.layers.userHooks)) allEvents.add(key);
+      for (const key of Object.keys(workflow.layers.ctrlyoke))
+        allEvents.add(key);
+      for (const key of Object.keys(workflow.layers.userHooks))
+        allEvents.add(key);
     }
 
     const mergedHooks: Record<string, unknown[]> = {};
@@ -319,7 +321,11 @@ export class SettingsJsonHooksTracker {
 
     settings.hooks = mergedHooks;
     await fs.mkdir(path.dirname(settingsPath), { recursive: true });
-    await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2), "utf-8");
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify(settings, null, 2),
+      "utf-8"
+    );
   }
 
   private async restoreBaseline(
@@ -347,7 +353,11 @@ export class SettingsJsonHooksTracker {
       } else {
         settings.hooks = baseline.hooks;
       }
-      await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2), "utf-8");
+      await fs.writeFile(
+        settingsPath,
+        JSON.stringify(settings, null, 2),
+        "utf-8"
+      );
     } catch (error) {
       Log.warn(
         `[SettingsJsonHooksTracker] Failed to restore hooks baseline for ${this.toolName}: ${error}`

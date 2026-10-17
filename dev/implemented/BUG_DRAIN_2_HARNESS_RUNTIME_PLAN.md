@@ -91,7 +91,7 @@ change to what the bug requires.
 (plan 1); `src/utils/AtomicFileUtils.ts`, `src/types/WebviewMessageTypes.ts`,
 `src/core/harness/shared/BaseLogParser.ts`, `src/utils/HarnessMcpExporter.ts` (plan 3);
 `src/core/orchestration/ExternalRunWatchCoordinator.ts`, `src/utils/FileLockUtils.ts`,
-`src/mcp-server.ts`, `src/cli.ts` (plan 4). *Calling* their exported helpers is fine;
+`src/mcp-server.ts`, `src/cli.ts` (plan 4). _Calling_ their exported helpers is fine;
 changing them is not.
 
 **Generated docs:** `docs/harnesses/compatibility.md` is generated from the harness
@@ -245,7 +245,7 @@ each other.
   `src/core/harness/shared/SettingsJsonHooksTracker.ts`
 - **Approach:** add one shared predicate next to `QwenNotificationMonitor.buildHookConfig`
   (e.g. `isCtrlYokeQwenHookGroup`) that matches groups whose hooks are all
-  `type: "command"` running the `ctrlyoke-qwen-hook.js` *basename*, so groups from older
+  `type: "command"` running the `ctrlyoke-qwen-hook.js` _basename_, so groups from older
   extension versions match too. Pass it as the `HookBaselinePolicy.discardHookGroup`
   from `registerHooksInSettings`. When the sanitized baseline shows that the file held
   only discarded groups, also recognize a leftover ctrlyoke `.qwen/.gitignore` by its

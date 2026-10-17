@@ -108,7 +108,9 @@ function createListenHarness(
   return server;
 }
 
-async function listenForUrl(server: HostedServerListenInternals): Promise<string> {
+async function listenForUrl(
+  server: HostedServerListenInternals
+): Promise<string> {
   const url = await server.listen();
   if (!url) throw new Error("Hosted server did not start");
   return url;

@@ -27,7 +27,10 @@ suite("WorkflowLockManager stale-run recovery", () => {
       workflowKey,
       runRef
     );
-    const lockPath = WorkflowLockManager.getLockPath(workspaceRoot, workflowKey);
+    const lockPath = WorkflowLockManager.getLockPath(
+      workspaceRoot,
+      workflowKey
+    );
     const fsPromises = require("fs/promises") as typeof import("fs/promises");
     const originalRename = fsPromises.rename;
     let successorAcquire: Promise<void> | undefined;
@@ -44,7 +47,10 @@ suite("WorkflowLockManager stale-run recovery", () => {
         runFilePath,
         JSON.stringify({
           steps: [{ prompt: "interrupted" }],
-          _runtime: { currentIndex: 0, executionState: EXECUTION_STATES.RUNNING },
+          _runtime: {
+            currentIndex: 0,
+            executionState: EXECUTION_STATES.RUNNING,
+          },
         }),
         "utf8"
       );
@@ -108,10 +114,15 @@ suite("WorkflowLockManager stale-run recovery", () => {
         },
       });
 
-      await WorkflowLockManager.normalizeStaleLocks(workspaceRoot, [workflowKey]);
+      await WorkflowLockManager.normalizeStaleLocks(workspaceRoot, [
+        workflowKey,
+      ]);
       await successorAcquire;
 
-      assert.ok(intercepted, "normalization should atomically rename the run file");
+      assert.ok(
+        intercepted,
+        "normalization should atomically rename the run file"
+      );
       assert.strictEqual(
         (await readWorkflowLock(workspaceRoot, workflowKey))?.ownerToken,
         "successor-owner"
@@ -158,7 +169,10 @@ suite("WorkflowLockManager stale-run recovery", () => {
       workflowKey,
       staleRunRef
     );
-    const lockPath = WorkflowLockManager.getLockPath(workspaceRoot, workflowKey);
+    const lockPath = WorkflowLockManager.getLockPath(
+      workspaceRoot,
+      workflowKey
+    );
     const fsPromises = require("fs/promises") as typeof import("fs/promises");
     const originalRename = fsPromises.rename;
     let signalWriteStarted!: () => void;
@@ -177,7 +191,10 @@ suite("WorkflowLockManager stale-run recovery", () => {
         staleRunPath,
         JSON.stringify({
           steps: [{ prompt: "interrupted" }],
-          _runtime: { currentIndex: 0, executionState: EXECUTION_STATES.RUNNING },
+          _runtime: {
+            currentIndex: 0,
+            executionState: EXECUTION_STATES.RUNNING,
+          },
         }),
         "utf8"
       );

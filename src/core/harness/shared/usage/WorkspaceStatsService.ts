@@ -304,13 +304,12 @@ export class WorkspaceStatsService {
       this.progress.scanned += allRunRefs.length;
       return;
     }
-    const runRefs = allRunRefs
-      .filter(
-        (runRef) =>
-          !existing ||
-          runRef < existing.countedFrom ||
-          runRef > existing.countedThrough
-      );
+    const runRefs = allRunRefs.filter(
+      (runRef) =>
+        !existing ||
+        runRef < existing.countedFrom ||
+        runRef > existing.countedThrough
+    );
     this.progress.total += runRefs.length;
 
     for (

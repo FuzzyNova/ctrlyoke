@@ -892,8 +892,10 @@ suite("HistorySearchIndexService", () => {
     );
     assert.deepStrictEqual(
       retried.results.map((result) => result.workflowKey).sort(),
-      Array.from({ length: 10 }, (_, index) =>
-        `refused-snapshot-run-${index}-2026-10-14T22-34-00` as WorkflowKey
+      Array.from(
+        { length: 10 },
+        (_, index) =>
+          `refused-snapshot-run-${index}-2026-10-14T22-34-00` as WorkflowKey
       ).sort()
     );
   });

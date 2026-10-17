@@ -233,7 +233,10 @@ suite("PromptEditorSupportService", () => {
     let state = "building";
     const core = {
       getFileIndexStatus: () => ({ state, indexed: 23 }),
-      getFileCompletions: async (_query: string, options: { onPartial?: (items: any[]) => void }) => {
+      getFileCompletions: async (
+        _query: string,
+        options: { onPartial?: (items: any[]) => void }
+      ) => {
         options.onPartial?.([
           { label: "Widget.ts", kind: 17, insertText: "src/Widget.ts" },
         ]);
@@ -268,15 +271,24 @@ suite("PromptEditorSupportService", () => {
       19
     );
 
-    assert.deepStrictEqual(responses.map(({ partial, seq }) => ({ partial, seq })), [
-      { partial: true, seq: 19 },
-      { partial: false, seq: 19 },
-    ]);
+    assert.deepStrictEqual(
+      responses.map(({ partial, seq }) => ({ partial, seq })),
+      [
+        { partial: true, seq: 19 },
+        { partial: false, seq: 19 },
+      ]
+    );
     const indexingRow = responses[0].items.at(-1)!;
-    assert.strictEqual(indexingRow.label, "Indexing workspace files… (23 so far)");
+    assert.strictEqual(
+      indexingRow.label,
+      "Indexing workspace files… (23 so far)"
+    );
     assert.strictEqual(indexingRow.status, true);
     assert.strictEqual("insertText" in indexingRow, false);
-    assert.deepStrictEqual(responses[1].items.map(({ label }) => label), ["Widget.ts"]);
+    assert.deepStrictEqual(
+      responses[1].items.map(({ label }) => label),
+      ["Widget.ts"]
+    );
   });
 
   test("reports zero-byte prompt files as empty too", async () => {

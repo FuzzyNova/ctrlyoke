@@ -176,7 +176,9 @@ suite("CLI dry-run process", () => {
 
   test("reports explicit harness and model when a JSON run fails before loading", async function () {
     this.timeout(30000);
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-early-error-"));
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-early-error-")
+    );
     temporaryRoots.push(root);
     const workflow = path.join(root, "invalid.ctrlyoke.yaml");
     await fs.writeFile(workflow, "steps: [invalid", "utf8");

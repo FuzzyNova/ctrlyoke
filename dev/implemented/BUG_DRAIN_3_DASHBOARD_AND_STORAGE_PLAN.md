@@ -98,17 +98,17 @@ src/utils/WorkspaceSnapshotService.ts
 **Owned by other plans; do not edit.** The ones this plan's fixes are most likely to brush
 against:
 
-| File | Owner | Why a step might be tempted |
-| --- | --- | --- |
-| `package.json` | plan 1 | Adding a TOML library (step 8). Do not; see step 8. |
-| `src/ui/WebviewMessageRouter.ts` | plan 1 | Message routing for MCP search / delete (steps 9, 12). Routing already forwards whole payloads, so no change is needed. |
-| `src/ui/webview-react/components/output/OutputRow.tsx` | plan 1 | Passes `workingDirectory` to CLI links (step 15). No change needed. |
-| `src/ui/webview-react/utils/executionPreview.ts` | plan 1 | Neighbour of `executionPreviewStore` (step 14). |
-| `src/ui/webview-react/components/shared/McpServerForm.tsx` | plan 4 | Inline duplicate-id error (step 9). Optional; skip it. |
-| `src/core/harness/opencode/OpenCodeCliProvider.ts` | plan 2 | Caller of the collision resolver (step 10). |
-| `src/core/harness/shared/CliMcpConfigGenerator.ts` | plan 2 | MCP config neighbour (step 8). |
-| `src/utils/WorkflowPaths.ts` | plan 2 | Not needed by any step here. |
-| `src/server/CtrlYokeHostedServer.ts` | plan 1 | Error body of the checkout endpoint (step 16). Parse it client-side instead. |
+| File                                                       | Owner  | Why a step might be tempted                                                                                             |
+| ---------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `package.json`                                             | plan 1 | Adding a TOML library (step 8). Do not; see step 8.                                                                     |
+| `src/ui/WebviewMessageRouter.ts`                           | plan 1 | Message routing for MCP search / delete (steps 9, 12). Routing already forwards whole payloads, so no change is needed. |
+| `src/ui/webview-react/components/output/OutputRow.tsx`     | plan 1 | Passes `workingDirectory` to CLI links (step 15). No change needed.                                                     |
+| `src/ui/webview-react/utils/executionPreview.ts`           | plan 1 | Neighbour of `executionPreviewStore` (step 14).                                                                         |
+| `src/ui/webview-react/components/shared/McpServerForm.tsx` | plan 4 | Inline duplicate-id error (step 9). Optional; skip it.                                                                  |
+| `src/core/harness/opencode/OpenCodeCliProvider.ts`         | plan 2 | Caller of the collision resolver (step 10).                                                                             |
+| `src/core/harness/shared/CliMcpConfigGenerator.ts`         | plan 2 | MCP config neighbour (step 8).                                                                                          |
+| `src/utils/WorkflowPaths.ts`                               | plan 2 | Not needed by any step here.                                                                                            |
+| `src/server/CtrlYokeHostedServer.ts`                       | plan 1 | Error body of the checkout endpoint (step 16). Parse it client-side instead.                                            |
 
 The full list of other plans' files is in the orchestrating workflow's task text.
 

@@ -31,7 +31,9 @@ Both commands call `promptYesNo` (`src/cli/CliPrompt.ts`) unconditionally:
 ```ts
 const approved =
   options.yes ||
-  (await promptYesNo(`Trust all ${pendingRoots.length} listed folder(s)? [y/N] `));
+  (await promptYesNo(
+    `Trust all ${pendingRoots.length} listed folder(s)? [y/N] `
+  ));
 ```
 
 When stdin is at EOF, `rl.question` never settles; the event loop drains and Node exits 0

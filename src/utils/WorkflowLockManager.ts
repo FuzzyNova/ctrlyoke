@@ -291,7 +291,9 @@ export class WorkflowLockManager {
       );
       let initialRun: WorkingFile;
       try {
-        initialRun = JSON.parse(await fs.promises.readFile(runFilePath, "utf8"));
+        initialRun = JSON.parse(
+          await fs.promises.readFile(runFilePath, "utf8")
+        );
       } catch {
         continue;
       }
@@ -300,7 +302,8 @@ export class WorkflowLockManager {
         isNewerRunFile(initialRun) ||
         !initialState ||
         !ACTIVE_EXECUTION_STATES.has(initialState as ExecutionState)
-      ) continue;
+      )
+        continue;
 
       if (lockInspection.liveness === WORKFLOW_LOCK_LIVENESS.ACTIVE) {
         Log.info(
@@ -330,7 +333,8 @@ export class WorkflowLockManager {
             !executionState ||
             !ACTIVE_EXECUTION_STATES.has(executionState as ExecutionState) ||
             executionState === EXECUTION_STATES.PAUSED
-          ) continue;
+          )
+            continue;
 
           runningFile._runtime!.executionState = EXECUTION_STATES.STOPPED;
           settleInterruptedRun(runningFile);

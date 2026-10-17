@@ -259,7 +259,9 @@ export function excludeUndoneCandidates(
   const normalizeWorkspaceKey = (path: string): string | undefined => {
     if (workspaceRoot && isAbsolutePath(path)) {
       const relativePath = relativizeToWorkspace(path, workspaceRoot);
-      return relativePath === undefined ? undefined : normalizePath(relativePath);
+      return relativePath === undefined
+        ? undefined
+        : normalizePath(relativePath);
     }
     return normalizePath(path);
   };
@@ -277,8 +279,11 @@ export function excludeUndoneCandidates(
 
     // Without a workspace root, retain sameFilePath's absolute/relative
     // suffix matching for paths that cannot be reduced to a shared key.
-    return workspaceRoot != null || !redoInstructions.some((instruction) =>
-      sameFilePath(instruction.path, path)
+    return (
+      workspaceRoot != null ||
+      !redoInstructions.some((instruction) =>
+        sameFilePath(instruction.path, path)
+      )
     );
   });
 }

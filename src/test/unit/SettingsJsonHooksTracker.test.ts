@@ -283,7 +283,9 @@ suite("SettingsJsonHooksTracker", () => {
   });
 
   test("deletes settings and temporary gitignore independently for fresh roots", async () => {
-    const freshRoot = await fs.mkdtemp(path.join(os.tmpdir(), "hooks-fresh-root-"));
+    const freshRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "hooks-fresh-root-")
+    );
     additionalTmpDirs.push(freshRoot);
     await fs.rm(settingsDir, { recursive: true, force: true });
     const tracker = SettingsJsonHooksTracker.getInstance("qwen");

@@ -70,9 +70,7 @@ suite("CodexCliProvider", () => {
     );
 
     assert.ok(
-      preparation.cliArgs.some((arg) =>
-        arg.includes("mcp_servers.ctrlyoke")
-      )
+      preparation.cliArgs.some((arg) => arg.includes("mcp_servers.ctrlyoke"))
     );
     assert.ok(
       preparation.cliArgs.some((arg) =>

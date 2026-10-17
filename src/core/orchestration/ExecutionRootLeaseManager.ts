@@ -133,7 +133,8 @@ async function readLeaseTolerantly(
     if (!(error instanceof SyntaxError)) throw error;
     if (removeMalformed) {
       await fs.unlink(leasePath).catch((unlinkError: unknown) => {
-        if ((unlinkError as NodeJS.ErrnoException).code !== "ENOENT") throw unlinkError;
+        if ((unlinkError as NodeJS.ErrnoException).code !== "ENOENT")
+          throw unlinkError;
       });
     }
     return null;

@@ -105,11 +105,20 @@ async function withFakeTimers(
   };
 
   Date.now = () => now;
-  globalThis.setTimeout = ((callback: (...args: unknown[]) => void, delay = 0) =>
-    schedule(callback, delay)) as unknown as typeof setTimeout;
+  globalThis.setTimeout = ((
+    callback: (...args: unknown[]) => void,
+    delay = 0
+  ) => schedule(callback, delay)) as unknown as typeof setTimeout;
   globalThis.clearTimeout = clear as typeof clearTimeout;
-  globalThis.setInterval = ((callback: (...args: unknown[]) => void, delay = 0) =>
-    schedule(callback, delay, Math.max(1, delay))) as unknown as typeof setInterval;
+  globalThis.setInterval = ((
+    callback: (...args: unknown[]) => void,
+    delay = 0
+  ) =>
+    schedule(
+      callback,
+      delay,
+      Math.max(1, delay)
+    )) as unknown as typeof setInterval;
   globalThis.clearInterval = clear as typeof clearInterval;
 
   const clock: FakeTimerClock = {
@@ -272,7 +281,11 @@ suite("CliLogMonitor", () => {
 
           await clock.tickAsync(2200);
           const result = await resultPromise;
-          assert.strictEqual(result.success, true, `${race} changed completion`);
+          assert.strictEqual(
+            result.success,
+            true,
+            `${race} changed completion`
+          );
           assert.strictEqual(result.failureKind, undefined);
         }
       } finally {

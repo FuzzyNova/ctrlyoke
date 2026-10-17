@@ -23,10 +23,9 @@ The broken shortcut is documented as the redo key in `docs/guide/prompt-editor.m
 `src/ui/webview-react/hooks/useUndoRedoKeyHandler.ts:161-163` pre-filters on `e.key` being `"z"`, `"y"` or `"Z"`. That means it expects the shifted form. The classification below it is case-sensitive, though:
 
 ```ts
-const isUndo = (e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey;   // line 174
+const isUndo = (e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey; // line 174
 const isRedo =
-  (e.ctrlKey || e.metaKey) &&
-  (e.key === "y" || (e.key === "z" && e.shiftKey));                         // lines 175-177
+  (e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey)); // lines 175-177
 ```
 
 With Shift held, Chromium reports `e.key === "Z"`. Neither check matches, and line 189 (`if (!isUndo && !isRedo) return;`) exits before `temporal.redo()` is called. Caps Lock without Shift also produces `"Z"`, so the undo check fails as well.

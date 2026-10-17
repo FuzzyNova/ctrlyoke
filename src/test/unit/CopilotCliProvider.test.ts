@@ -133,7 +133,9 @@ suite("CopilotCliProvider", () => {
     assert.ok(!preparation.cliArgs.includes("github(a,b)"));
     assert.strictEqual(preparation.diagnostics.length, 2);
     assert.ok(
-      preparation.diagnostics.every((diagnostic) => /github/.test(diagnostic.message))
+      preparation.diagnostics.every((diagnostic) =>
+        /github/.test(diagnostic.message)
+      )
     );
   });
 
@@ -155,13 +157,13 @@ suite("CopilotCliProvider", () => {
       );
     const first = await plan();
     for (const mutation of first.mutations) await mutation.apply();
-    const firstPath = provider.getHeadlessSpawnEnv()
-      .COPILOT_OTEL_FILE_EXPORTER_PATH;
+    const firstPath =
+      provider.getHeadlessSpawnEnv().COPILOT_OTEL_FILE_EXPORTER_PATH;
 
     const second = await plan();
     for (const mutation of second.mutations) await mutation.apply();
-    const secondPath = provider.getHeadlessSpawnEnv()
-      .COPILOT_OTEL_FILE_EXPORTER_PATH;
+    const secondPath =
+      provider.getHeadlessSpawnEnv().COPILOT_OTEL_FILE_EXPORTER_PATH;
 
     assert.ok(firstPath);
     assert.ok(secondPath);

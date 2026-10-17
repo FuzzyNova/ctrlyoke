@@ -102,10 +102,7 @@ export function stripDevCommands({
   }
 
   // Write modified package.json
-  fs.writeFileSync(
-    packagePath,
-    JSON.stringify(packageJson, null, 2) + "\n"
-  );
+  fs.writeFileSync(packagePath, JSON.stringify(packageJson, null, 2) + "\n");
   console.log(`✅ Updated package.json for production build\n`);
 }
 

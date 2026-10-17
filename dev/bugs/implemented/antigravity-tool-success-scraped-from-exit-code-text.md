@@ -21,7 +21,7 @@ On the antigravity-cli harness, a `view_file`, `grep_search`, MCP or other non-c
 In `src/core/harness/antigravity/AntigravityToolEventBuilder.ts:505-508`, `resultSucceeded()` treats any exit code returned by `exitCode()` as authoritative for every tool type. `exitCode()` (lines 544-566) has no structured `exit_code`/`exitCode` field to read here, so it falls back to an unanchored regex at lines 558-560:
 
 ```ts
-/(?:exit\s*code|exit_code)\s*[:=]\s*(-?\d+)|exited with code\s+(-?\d+)/i
+/(?:exit\s*code|exit_code)\s*[:=]\s*(-?\d+)|exited with code\s+(-?\d+)/i;
 ```
 
 It runs this regex over the whole `entry.content`, and that content can be arbitrary file or tool output. agy now types every tool result `GENERIC` (`AntigravityLogParser.ts:811-818`), so `entry.type` cannot narrow the check. The fallback therefore runs for `view_file`, `grep_search`, MCP and other results, which have no explicit success field and only carry `status: DONE`.

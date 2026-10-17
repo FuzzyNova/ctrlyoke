@@ -46,7 +46,9 @@ export function getScriptStepPropertyUpdate(
     ...(editor.errorBehavior !== undefined
       ? { errorBehavior: editor.errorBehavior }
       : {}),
-    ...(editor.timeoutSec !== undefined ? { timeoutSec: editor.timeoutSec } : {}),
+    ...(editor.timeoutSec !== undefined
+      ? { timeoutSec: editor.timeoutSec }
+      : {}),
     ...(editor.onPass !== CONDITION_ACTIONS.CONTINUE
       ? { onPass: editor.onPass as ScriptStep["onPass"] }
       : {}),
@@ -55,8 +57,7 @@ export function getScriptStepPropertyUpdate(
       : {}),
     ...(editor.compareSource !== DEFAULT_COMPARE_SOURCE
       ? {
-          compareSource:
-            editor.compareSource as ScriptStep["compareSource"],
+          compareSource: editor.compareSource as ScriptStep["compareSource"],
         }
       : {}),
     ...(editor.operator !== DEFAULT_SCRIPT_OPERATOR
@@ -82,7 +83,9 @@ export function getScriptStepPropertyUpdate(
     ...(editor.timeoutSec === undefined ? ["timeoutSec"] : []),
     ...(editor.onPass === CONDITION_ACTIONS.CONTINUE ? ["onPass"] : []),
     ...(editor.onFail === CONDITION_ACTIONS.STOP_WORKFLOW ? ["onFail"] : []),
-    ...(editor.compareSource === DEFAULT_COMPARE_SOURCE ? ["compareSource"] : []),
+    ...(editor.compareSource === DEFAULT_COMPARE_SOURCE
+      ? ["compareSource"]
+      : []),
     ...(editor.operator === DEFAULT_SCRIPT_OPERATOR ? ["operator"] : []),
     ...(!editor.expected ? ["expected"] : []),
     ...(!editor.ignoreCase ? ["ignoreCase"] : []),

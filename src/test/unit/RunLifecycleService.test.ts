@@ -288,7 +288,9 @@ suite("RunLifecycleService continuation validation", () => {
         ),
         RunDidNotPrepareError
       );
-      await fs.stat(WorkflowPaths.draftFilePath(workspace, created.workflowKey));
+      await fs.stat(
+        WorkflowPaths.draftFilePath(workspace, created.workflowKey)
+      );
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }

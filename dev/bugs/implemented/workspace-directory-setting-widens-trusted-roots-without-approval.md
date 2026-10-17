@@ -23,7 +23,7 @@ This is a security issue. A repository's committed `.vscode/settings.json` can s
 - `src/platform/WorkspaceRootResolver.ts:148-156` (`resolveTrustedWorkspaceRoots`) adds that unchecked root as a trusted containment root.
 - `src/utils/FileAccessPolicy.ts:54-71` grants `reason: "workspace"` to any path under that root. This check runs before the approved-external-roots check at `:92-109`.
 - The same root becomes the LSP and hosted server `workspaceRoot` at `src/extension.ts:1704`, `1716` and `1735`. The trusted roots reach callers at `src/extension.ts:454` and `487`, `src/platform/VsCodeAdapter.ts:39`, `src/completions/PromptLinkProvider.ts:108` and `src/completions/ContextMenuReferenceCommands.ts:183`.
-- This contradicts the model stated in `src/config/ExternalRootsTrustStore.ts:28-34`: shared workspace config may only *request* wider filesystem access, and a local reviewed decision is required before it takes effect.
+- This contradicts the model stated in `src/config/ExternalRootsTrustStore.ts:28-34`: shared workspace config may only _request_ wider filesystem access, and a local reviewed decision is required before it takes effect.
 
 ## Suggested Fix
 

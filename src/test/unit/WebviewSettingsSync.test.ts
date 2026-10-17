@@ -913,16 +913,22 @@ suite("WebviewSettingsSync", () => {
     test("sends INIT without coordination scope when its snapshot times out", async () => {
       const messages: any[] = [];
       const postMessage = (message: any) => messages.push(message);
-      const sync = new WebviewSettingsSync(postMessage, () => ({
-        ...makeViewOrchestrator({}),
-        getCoordinationScopeSnapshot: async () => {
-          throw new FileLockTimeoutError("board.jsonl.lock");
-        },
-      }) as any);
+      const sync = new WebviewSettingsSync(
+        postMessage,
+        () =>
+          ({
+            ...makeViewOrchestrator({}),
+            getCoordinationScopeSnapshot: async () => {
+              throw new FileLockTimeoutError("board.jsonl.lock");
+            },
+          }) as any
+      );
 
       await assert.doesNotReject(sync.sendInitialState(postMessage));
 
-      const init = messages.find((message) => message.type === MESSAGE_TYPES.INIT);
+      const init = messages.find(
+        (message) => message.type === MESSAGE_TYPES.INIT
+      );
       assert.ok(init);
       assert.ok(!Object.hasOwn(init.data, "coordinationScope"));
     });

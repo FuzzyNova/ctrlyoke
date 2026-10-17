@@ -87,7 +87,11 @@ suite("GitUtils.gitRefExists", function () {
   });
 
   test("checks ignored paths in one NUL-safe batch, including names with spaces", async () => {
-    await fs.writeFile(path.join(workspaceRoot, ".gitignore"), "ignored files/\n", "utf8");
+    await fs.writeFile(
+      path.join(workspaceRoot, ".gitignore"),
+      "ignored files/\n",
+      "utf8"
+    );
     await writeWorkspaceFile("ignored files/first file.txt", "ignored\n");
     await writeWorkspaceFile("visible file.txt", "visible\n");
 
@@ -96,7 +100,10 @@ suite("GitUtils.gitRefExists", function () {
       path.join(workspaceRoot, "visible file.txt"),
     ]);
 
-    assert.deepStrictEqual([...ignored], [path.resolve(workspaceRoot, "ignored files/first file.txt")]);
+    assert.deepStrictEqual(
+      [...ignored],
+      [path.resolve(workspaceRoot, "ignored files/first file.txt")]
+    );
   });
 
   test("reports the diff pseudo-ref as present when the tree is dirty", async () => {

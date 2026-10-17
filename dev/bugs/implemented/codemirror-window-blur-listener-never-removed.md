@@ -19,9 +19,9 @@ Each time a `CodeMirrorEditor` unmounts, it leaves a `blur` listener attached to
 The orphaned-MouseSelection teardown effect adds the listener with one event name and removes it with another:
 
 ```ts
-window.addEventListener("blur", teardown);        // :563
+window.addEventListener("blur", teardown); // :563
 // ...
-window.removeEventListener("blur-sm", teardown);  // :566
+window.removeEventListener("blur-sm", teardown); // :566
 ```
 
 `"blur-sm"` never matches `"blur"`, so `removeEventListener` does nothing. This looks like a Tailwind v4 class-rename codemod (`blur` -> `blur-sm`) that also rewrote an event-name string. The comments at :554 and :1194 show the same rewrite.

@@ -10,7 +10,7 @@ function escapeCommand(value) {
 
 function escapeArgument(value) {
   let argument = String(value);
-  argument = argument.replace(/(?=(\\+?)?)\1"/g, "$1$1\\\"");
+  argument = argument.replace(/(?=(\\+?)?)\1"/g, '$1$1\\"');
   argument = argument.replace(/(?=(\\+?)?)\1$/g, "$1$1");
   return `"${argument}"`.replace(WINDOWS_META_CHARS, "^$1");
 }

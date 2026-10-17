@@ -1128,11 +1128,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       // Show confirmation modal
       setPendingDelete({ address, scope: WORKFLOW_DELETE_SCOPES.LINEAGE });
     },
-    [
-      globalSettings.confirmDeleteOperations,
-      setRecentWorkflows,
-      vscode,
-    ]
+    [globalSettings.confirmDeleteOperations, setRecentWorkflows, vscode]
   );
 
   // Confirmed: actually remove the workflow history entry

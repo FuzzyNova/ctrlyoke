@@ -3008,10 +3008,7 @@ export class CtrlYokeHostedServer
           // A delete event has no current modification time.
         }
         for (const subscribedViewerPath of subscribedClients.values()) {
-          this.broadcastWorkspaceFileChanged(
-            subscribedViewerPath,
-            modifiedAt
-          );
+          this.broadcastWorkspaceFileChanged(subscribedViewerPath, modifiedAt);
           void this.languageIntelligenceHost.notifyWorkspaceFileChanged(
             subscribedViewerPath,
             type
