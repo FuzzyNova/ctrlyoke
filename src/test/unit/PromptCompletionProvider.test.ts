@@ -140,9 +140,19 @@ suite("PromptCompletionProvider", () => {
       return list.items;
     };
 
-    const atItems = await complete("@", "@");
+    // `clearFilesCache` rebuilds the file index in the background, and a
+    // query during that rebuild is answered from the previous roots' store, so
+    // under load the first `@` lookup can predate this test's workspace.
+    const hasEscapedPath = (items: vscode.CompletionItem[]) =>
+      items.some((item) => item.insertText === '\\"my dir/a.md\\"');
+    let atItems = await complete("@", "@");
+    const deadline = Date.now() + 10_000;
+    while (!hasEscapedPath(atItems) && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      atItems = await complete("@", "@");
+    }
     assert.ok(
-      atItems.some((item) => item.insertText === '\\"my dir/a.md\\"'),
+      hasEscapedPath(atItems),
       "@ path completion should escape reference quotes for JSON"
     );
 
