@@ -1,5 +1,62 @@
 import * as path from "path";
+import { promises as fs } from "fs";
 import { foldPathForCompare } from "./PathCasing";
+
+export interface RealpathContainmentResult {
+  resolvedPath: string;
+  allowed: boolean;
+}
+
+/**
+ * Authorize filesystem references after resolving symlinks/junctions. Root
+ * realpaths are cached for the lifetime of this checker so callers can share
+ * one checker across all references in a prompt expansion.
+ */
+export class RealpathContainmentChecker {
+  private readonly realRoots: Promise<string[]>;
+  private readonly lexicalRoots: string[];
+
+  constructor(roots: readonly string[]) {
+    this.lexicalRoots = roots.map((root) => path.resolve(root));
+    this.realRoots = Promise.all(
+      roots.map(async (root) => {
+        try {
+          return path.resolve(await fs.realpath(root));
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
+            return path.resolve(root);
+          }
+          throw error;
+        }
+      })
+    );
+  }
+
+  async check(candidate: string): Promise<RealpathContainmentResult> {
+    let resolvedPath: string;
+    try {
+      resolvedPath = path.resolve(await fs.realpath(candidate));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
+        // Preserve the existing missing-file behaviour. A lexical in-root
+        // missing path cannot expose content; its caller's stat/read keeps
+        // producing the existing not-found skip. Traversal is still denied.
+        return {
+          resolvedPath: path.resolve(candidate),
+          allowed: isPathWithinAnyDirectory(
+            path.resolve(candidate),
+            this.lexicalRoots
+          ),
+        };
+      }
+      throw error;
+    }
+    return {
+      resolvedPath,
+      allowed: isPathWithinAnyDirectory(resolvedPath, await this.realRoots),
+    };
+  }
+}
 
 /**
  * Returns true if `candidate` is equal to or a descendant of `directory`.

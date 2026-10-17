@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by Claude Code (bug-hunt final step; reproduced against compiled `out/` with a junction)
 - **Area:** `src/utils/ContextExpander.ts` (`resolveReference`), `src/utils/AttachmentBuilders.ts`
-- **Severity:** medium (security)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
