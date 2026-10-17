@@ -503,9 +503,21 @@ export default async (req: Request): Promise<Response> => {
         // Records state only. Cancellation and expiry deliberately do not
         // suspend: Restrict Access expiration ends the license at term end —
         // see RELEASE_CHECKLIST.md §4.4 item 3.
-        await recordSubscriptionState(
-          rawPayload as LemonSqueezySubscriptionPayload
-        );
+        const payload = rawPayload as LemonSqueezySubscriptionPayload;
+        if (
+          !shouldIssueTestModeLicense(
+            payload.meta.test_mode,
+            process.env.ALLOW_TEST_MODE_ORDERS
+          )
+        ) {
+          console.info(
+            `ls-webhook: skipped subscription state update for test-mode subscription ${payload.data.id}`
+          );
+          return new Response("Ignored (test-mode subscription)", {
+            status: 200,
+          });
+        }
+        await recordSubscriptionState(payload);
         return new Response("OK", { status: 200 });
       }
       case LS_EVENT.SUBSCRIPTION_PAYMENT_SUCCESS: {
