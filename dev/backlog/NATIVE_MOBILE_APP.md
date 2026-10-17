@@ -52,11 +52,43 @@ Out of scope: a native dashboard UI, offline workflow editing, or running anythi
 
 ## Connectivity
 
-The app only reaches servers the phone can already reach (option A in
-`CTRLYOKE_ACCOUNTS_PLAN.md`): same network, or the user's own VPN. Embedding Tailscale in the app
-(option B) would remove the VPN step, but there is no official Tailscale mobile SDK; `tsnet` is
-Go only, and the mobile wrappers are community projects. Decide that together with the server side
-of option B, not separately.
+Connectivity is decided in `CTRLYOKE_ACCOUNTS_PLAN.md` ("Connectivity options"), not here. Short
+version: a phone can't connect to a public IP and port the server reports, because of NAT and
+carrier-grade NAT. Reaching a machine with no setup needs a relay we run. The recommended target
+there is option D: a **blind relay** that forwards TLS by SNI, plus a publicly trusted certificate
+for each machine's `<machine-id>.ctrlyoke.net` hostname (the `plex.direct` model).
+
+The app's job:
+
+- **First version:** use option A. Try the addresses the directory lists (LAN, Tailscale), so it
+  only reaches servers the phone can already reach.
+- **Once D ships:** try the LAN hostname first, then fall back to the relay hostname. Nothing is
+  app-specific here; the browser does the same.
+- **Optional later step:** use option E (WebRTC hole punching with the directory as signaling) to
+  take traffic off the relay. Only the native app can do this, because it can run a local proxy
+  that carries the dashboard's HTTP/WebSocket over a data channel.
+
+Embedding Tailscale (option B) is still blocked on mobile: `tsnet` is Go only and the mobile
+wrappers are community projects.
+
+**Effect on the case for the app:** D with real certificates also fixes certificate profiles and
+"one app per address" for the **PWA**. That leaves native push, the workspace list, and E as the
+app's own value. Check that this is still enough for guideline 4.2 (see Open questions) before
+committing to the app.
+
+## Services
+
+The backend, relay, and DNS are chosen in `CTRLYOKE_ACCOUNTS_PLAN.md` ("Recommended services"):
+Supabase, Fly.io, and Cloudflare. The app adds two accounts of its own:
+
+- **Apple Developer Program** ($99/yr): App Store distribution and APNs.
+- **Firebase project** (free): FCM for Android push. If keeping vendor count down ever matters
+  more than the Postgres data model, this same project could also take over sign-in (see the
+  Firebase row in that plan's alternatives table).
+
+Push messages are sent by the backend, never by the user's machine, so a machine's credentials
+never include push keys. The machine reports "awaiting input" or "run finished" to the backend
+(event type and workspace only, no content), and the backend sends the push.
 
 ## Stack
 
