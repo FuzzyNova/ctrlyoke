@@ -16,7 +16,7 @@ ctrlyoke prompt files support structured references that help you attach the rig
   extension, such as `@"Makefile"`
 - an unquoted path must contain `/`, `\`, or `.`, so `@workspace` is not treated as a
   reference. An `@` in the middle of a word is not a trigger, which keeps email addresses such
-  as `nathan@gmail.com` from becoming references.
+  as `name@example.com` from becoming references.
 
 ### Where paths resolve
 

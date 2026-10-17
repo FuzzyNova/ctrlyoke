@@ -156,7 +156,7 @@ Enable it with `--enable experimental_windows_sandbox` or `[features].experiment
 │                    * ▝▜█████▛▘ *                   │ Added LSP (Language Server Protocol) tool for code intelligence features like go-to-definition, find references, and hover documentation │
 │                     *  ▘▘ ▝▝  *                    │ Added `/terminal-setup` support for Kitty, Alacritty, Zed, and Warp terminals                                                            │
 │                                                    │ Added ctrl+t shortcut in `/theme` to toggle syntax highlighting on/off                                                                   │
-│ Haiku 4.5 · Claude Pro · nathanhickey1@gmail.com's │ /release-notes for more                                                                                                                  │
+│ Haiku 4.5 · Claude Pro · name@example.com's        │ /release-notes for more                                                                                                                  │
 │  Organization                                      │                                                                                                                                          │
 │                 C:\dev\FlightPath                  │                                                                                                                                          │
 ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯

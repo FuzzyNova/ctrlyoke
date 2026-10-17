@@ -2,15 +2,14 @@
 
 - **Found:** 2026-10-17 by release-ready audit workflow (Claude, repo-hygiene auditor)
 - **Area:** `src/ui/webview-react/components/settings/stats/StatusLinePreview.tsx` (~L79-83)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
-The Copilot example payload in the Settings status-line preview shows
-`transcript_path: "C:\\Users\\natha\\.copilot\\session-state\\<session_id>"` and
-`cwd: "C:\\dev\\ctrlyoke"`. Every user who opens that preview sees the developer's home path, which
-ships in the VSIX and the hosted dashboard and will be searchable once the repo is public. The other
-harness cases already use neutral values such as `cwd: "/workspace/project"`.
+The Copilot example payload in the Settings status-line preview showed a developer home path in
+`transcript_path` and the repository path in `cwd`. Every user who opens that preview sees the
+developer's local paths, which ship in the VSIX and the hosted dashboard and are searchable once the
+repo is public. The other harness cases already use neutral values such as `cwd: "/workspace/project"`.
 
 ## Steps to Reproduce
 

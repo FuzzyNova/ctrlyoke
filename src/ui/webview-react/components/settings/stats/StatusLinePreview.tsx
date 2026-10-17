@@ -76,13 +76,13 @@ function previewPayload(
       break;
     case STATUS_LINE_FORMAT_PROVIDERS.COPILOT:
       representativePayload = {
-        cwd: "C:\\dev\\ctrlyoke",
+        cwd: "C:\\projects\\my-app",
         session_id: "fadbffd9-fb8e-4a6d-9048-2fcbbd09858b",
         session_name: "Implement Pong Response",
         transcript_path:
-          "C:\\Users\\natha\\.copilot\\session-state\\<session_id>",
+          "C:\\Users\\you\\.copilot\\session-state\\<session_id>",
         model: { id: "gpt-5.6-luna", display_name: "gpt-5.6-luna · high" },
-        workspace: { current_dir: "C:\\dev\\ctrlyoke" },
+        workspace: { current_dir: "C:\\projects\\my-app" },
         username: null,
         remote: { connected: false },
         version: "1.0.80",

@@ -725,7 +725,7 @@ export function parseAtReferences(prompt: string): FileReference[] {
   // Unquoted paths end at whitespace or colon (include . for extensions)
   // The lookbehind rejects not just alphanumerics but every other character
   // that's legal inside a filename (+, -, _, =, @, #, $, %, ^, &, !, ~), so
-  // an email (nathan@gmail.com) or a filename like data_file~@backup!.csv
+  // an email (name@example.com) or a filename like data_file~@backup!.csv
   // mentioned in prose isn't mistaken for a reference at the inner @ — while
   // `(@file.ts` or `"@file.ts` still match, since `(`/`"` aren't filename
   // characters. The unquoted body still permits an embedded @ so a path like

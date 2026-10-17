@@ -18,7 +18,7 @@ the workspace root." That is incomplete in two ways and contradicts
 
 Also, `docs/workflows/context-files.md` (around line 16) says an unquoted `@` path must contain
 `/`, `\` or `.`, "so `@workspace` or an email address is not treated as a reference". The result
-is right but the reason isn't for emails: `nathan@gmail.com` contains `.`. Emails are excluded by
+is right but the reason isn't for emails: `name@example.com` contains `.`. Emails are excluded by
 the word-boundary lookbehind (`src/utils/ReferenceBoundary.ts`, used in
 `FileReferenceParser.ts` around line 161).
 

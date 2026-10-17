@@ -81,7 +81,7 @@ suite("ReferencePatterns", () => {
 
     test("does not fire mid-word or inside an email address", () => {
       const { fullFile } = createReferencePatterns();
-      assert.deepStrictEqual(paths(fullFile, "mail nathan@gmail.com now"), []);
+      assert.deepStrictEqual(paths(fullFile, "mail name@example.com now"), []);
     });
 
     test("keeps an embedded @ inside a single reference", () => {

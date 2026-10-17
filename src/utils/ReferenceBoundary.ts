@@ -5,7 +5,7 @@
  * trigger at a word start. "Word" here means *filename*, not identifier: the boundary
  * class below is the set of characters that are legal inside a filename, so
  * `(@file.ts` and `"@file.ts` still match (punctuation is not a filename
- * character) while an email address (`nathan@gmail.com`) or a filename
+ * character) while an email address (`name@example.com`) or a filename
  * mentioned in prose (`data_file~@backup!.csv`) does not.
  *
  * This class was previously copy-pasted into ~30 regex literals across the
