@@ -914,6 +914,17 @@ export interface TerminalEndedMessage {
 }
 
 /**
+ * PTY session retired and its tab dropped (extension -> webview). Sent when a
+ * newly spawned process continues the AI session this terminal held, so the
+ * same conversation is not shown in two tabs.
+ */
+export interface TerminalRemovedMessage {
+  type: typeof MESSAGE_TYPES.TERMINAL_REMOVED;
+  workflowId: string;
+  sessionId: string;
+}
+
+/**
  * Status message (extension -> webview)
  */
 export interface StatusMessageMessage {

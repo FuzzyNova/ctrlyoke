@@ -168,6 +168,78 @@ const stdoutProviderFactories: ReadonlyArray<{
   { name: "OpenCode", create: () => new OpenCodeCliProvider() },
 ];
 
+/** A coordinator holding one live PTY for workflow-1, for termination tests. */
+async function createCoordinatorWithLivePty(
+  onKill: (sessionId: string, reason: TerminalEndReason) => Promise<void>,
+  postTerminalMessage: (message: unknown) => void = () => {}
+): Promise<CliTransportCoordinator> {
+  const coordinator = new CliTransportCoordinator({
+    provider: {
+      config: {
+        name: "test-cli",
+        displayName: "Test CLI",
+        terminalName: "Test",
+        installCommand: "",
+        shouldStreamHeadlessOutput: false,
+        harnessId: "copilot-cli",
+      },
+      notificationMonitor: {
+        supportsSessionIdInFilename: true,
+        supportsSessionStart: false,
+        monitorForCompletion: async () => ({ completed: false }),
+        buildHookConfig: () => ({ type: "none" as const }),
+        getNotificationDirectory: () => process.cwd(),
+      },
+      toolPermissionMapper: {},
+      buildCliArgs: async () => [],
+      buildHeadlessArgs: (baseArgs: string[], prompt: string) => [
+        ...baseArgs,
+        prompt,
+      ],
+      buildInteractiveArgs: (baseArgs: string[], promptText: string) => [
+        "--interactive",
+        promptText,
+        ...baseArgs,
+      ],
+      checkAvailability: async () => true,
+    } as unknown as ICliProvider,
+    processManager: {} as any,
+    resolveCliCommand: resolveCommand,
+    runtimeState: {
+      getWorkspaceRoot: () => process.cwd(),
+      isCancelling: () => false,
+    },
+    hostCallbacks: {
+      onBeforeInteractiveStart: () => {},
+      onCommandPrepared: () => {},
+      onStreamingChunk: () => {},
+      onStreamingEvents: () => {},
+      onResponseComplete: () => {},
+      onPtyExit: () => {},
+      cleanupTempFiles: async () => {},
+    },
+    postTerminalMessage,
+    getPtyManager: () =>
+      ({
+        getExpectedController: () => undefined,
+        gracefulKillAiCliSession: onKill,
+        spawnPty: (config: { sessionId: string; workflowId: string }) => ({
+          id: config.sessionId,
+          workflowId: config.workflowId,
+          kind: SESSION_KINDS.AI_CLI,
+          reconnectBuffer: [],
+        }),
+      }) as any,
+  });
+
+  await coordinator.startInteractiveProcess([], "prompt", {
+    promptIndex: 0,
+    allPrompts: [{ prompt: "one" }],
+    instanceId: "workflow-1",
+  } as any);
+  return coordinator;
+}
+
 suite("CliTransportCoordinator", () => {
   test("passes the configured prompt limit to headless spawn", async () => {
     const originalTimeoutReader =
@@ -1110,76 +1182,12 @@ line two`,
     let killedSessionId: string | undefined;
     let killReason: TerminalEndReason | undefined;
 
-    const coordinator = new CliTransportCoordinator({
-      provider: {
-        config: {
-          name: "test-cli",
-          displayName: "Test CLI",
-          terminalName: "Test",
-          installCommand: "",
-          shouldStreamHeadlessOutput: false,
-          harnessId: "copilot-cli",
-        },
-        notificationMonitor: {
-          supportsSessionIdInFilename: true,
-          supportsSessionStart: false,
-          monitorForCompletion: async () => ({ completed: false }),
-          buildHookConfig: () => ({ type: "none" as const }),
-          getNotificationDirectory: () => process.cwd(),
-        },
-        toolPermissionMapper: {},
-        buildCliArgs: async () => [],
-        buildHeadlessArgs: (baseArgs: string[], prompt: string) => [
-          ...baseArgs,
-          prompt,
-        ],
-        buildInteractiveArgs: (baseArgs: string[], promptText: string) => [
-          "--interactive",
-          promptText,
-          ...baseArgs,
-        ],
-        checkAvailability: async () => true,
-      } as unknown as ICliProvider,
-      processManager: {} as any,
-      resolveCliCommand: resolveCommand,
-      runtimeState: {
-        getWorkspaceRoot: () => process.cwd(),
-        isCancelling: () => false,
-      },
-      hostCallbacks: {
-        onBeforeInteractiveStart: () => {},
-        onCommandPrepared: () => {},
-        onStreamingChunk: () => {},
-        onStreamingEvents: () => {},
-        onResponseComplete: () => {},
-        onPtyExit: () => {},
-        cleanupTempFiles: async () => {},
-      },
-      postTerminalMessage: () => {},
-      getPtyManager: () =>
-        ({
-          getExpectedController: () => undefined,
-          gracefulKillAiCliSession: async (
-            sessionId: string,
-            reason: TerminalEndReason
-          ) => {
-            killedSessionId = sessionId;
-            killReason = reason;
-          },
-          spawnPty: (config: { sessionId: string; workflowId: string }) => ({
-            id: config.sessionId,
-            workflowId: config.workflowId,
-            kind: SESSION_KINDS.AI_CLI,
-            reconnectBuffer: [],
-          }),
-        }) as any,
-    });
-
-    await coordinator.startInteractiveProcess([], "prompt", {
-      promptIndex: 0,
-      allPrompts: [{ prompt: "one" }],
-      instanceId: "workflow-1",
-    } as any);
+    const coordinator = await createCoordinatorWithLivePty(
+      async (sessionId, reason) => {
+        killedSessionId = sessionId;
+        killReason = reason;
+      }
+    );
 
     const terminatedSessionId =
       await coordinator.terminateCurrentPtySession("headless resume");
@@ -1191,6 +1199,28 @@ line two`,
       await coordinator.terminateCurrentPtySession("second call"),
       undefined
     );
+  });
+
+  test("drops the terminated PTY's tab when asked", async () => {
+    const posted: { type?: string }[] = [];
+    const coordinator = await createCoordinatorWithLivePty(
+      async () => {},
+      (message) => posted.push(message as { type?: string })
+    );
+    posted.length = 0;
+
+    const terminatedSessionId = await coordinator.terminateCurrentPtySession(
+      "same-session restart",
+      { removeTerminalTab: true }
+    );
+
+    assert.deepStrictEqual(posted, [
+      {
+        type: MESSAGE_TYPES.TERMINAL_REMOVED,
+        workflowId: "workflow-1",
+        sessionId: terminatedSessionId,
+      },
+    ]);
   });
 
   test("should honor closeTerminalOnComplete for active PTY sessions", async () => {

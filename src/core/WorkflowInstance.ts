@@ -202,6 +202,7 @@ import type { DashboardHostActions, FileWatcherFactory } from "./HostPorts";
 import type { RunViewPublisherInstance } from "./orchestration/RunViewPublisher";
 import {
   buildTerminalEndedMessage,
+  buildTerminalRemovedMessage,
   getPtyProcessManager,
   ptyPostMessage,
   resolveShellInvocation,
@@ -377,13 +378,18 @@ export class WorkflowInstance
     HarnessIntegration
   >();
   /**
-   * Execution integrations this run owns that no spawn-identity key points at:
-   * provisional ones created before the executor resolved a prompt, and ones
-   * superseded by a newer conversation for the same spawn identity. Their
-   * terminals stay open for the rest of the run — retention is the point — but
-   * no prompt can select them again, so they are never parked for reuse.
+   * Provisional execution integrations created before the executor resolved a
+   * prompt, so no spawn-identity key points at them. Their terminals stay open
+   * for the rest of the run, but no prompt can select them, so they are never
+   * parked for reuse.
    */
   private readonly unkeyedExecutionIntegrations = new Set<HarnessIntegration>();
+  /**
+   * Separates a spawn-identity key from the sequence number that keeps a
+   * superseded conversation addressable (`claimSpawnIdentityKey`).
+   */
+  private static readonly SUPERSEDED_KEY_SEPARATOR = "::superseded:";
+  private supersededKeySequence = 0;
   /** Target-keyed integrations used by a future parallel group fan-out. */
   private readonly targetExecutionIntegrations = new Map<
     string,
@@ -439,9 +445,8 @@ export class WorkflowInstance
    * at execution completion even when their PTY/session watcher remains live.
    */
   private readonly retainedIntegrationArtifactContexts = new Map<
-    string,
+    HarnessIntegration,
     {
-      integration: HarnessIntegration;
       workingFilePath: string | undefined;
       workspaceRoot: string;
     }
@@ -1155,8 +1160,8 @@ export class WorkflowInstance
     }
     this.lastRunIntegrations = [];
     // Dispose all live reusable integrations held across runs (PTY still alive).
-    for (const [harnessKey, integration] of this.liveReusableIntegrations) {
-      void this.cleanupRetainedIntegrationArtifacts(harnessKey, integration);
+    for (const integration of this.liveReusableIntegrations.values()) {
+      void this.cleanupRetainedIntegrationArtifacts(integration);
       integration.dispose();
     }
     this.liveReusableIntegrations.clear();
@@ -1200,11 +1205,8 @@ export class WorkflowInstance
     }
     this.lastRunIntegrations = [];
 
-    for (const [harnessKey, liveIntegration] of this.liveReusableIntegrations) {
-      await this.cleanupRetainedIntegrationArtifacts(
-        harnessKey,
-        liveIntegration
-      );
+    for (const liveIntegration of this.liveReusableIntegrations.values()) {
+      await this.cleanupRetainedIntegrationArtifacts(liveIntegration);
       liveIntegration.closeTerminalGracefully(TERMINAL_END_REASONS.SUPERSEDED);
       liveIntegration.dispose();
     }
@@ -2033,8 +2035,18 @@ export class WorkflowInstance
           outputResolver: this.outputHistoryManager.getRunOutputResolver(),
         }),
       getDashboardProvider: () => this.dashboardSink,
-      createIntegrationForMode: (harnessOverride, target, properties) =>
-        this.createIntegrationForMode(harnessOverride, target, properties),
+      createIntegrationForMode: (
+        harnessOverride,
+        target,
+        properties,
+        resumeAiSessionId
+      ) =>
+        this.createIntegrationForMode(
+          harnessOverride,
+          target,
+          properties,
+          resumeAiSessionId
+        ),
       getSequentialIntegrationKey: (properties) =>
         this.getSequentialIntegrationKey(properties),
       registerTargetIntegration: (target, integration) =>
@@ -3946,11 +3958,7 @@ export class WorkflowInstance
         `[inst:${this.id.slice(0, 8)}] Retired terminal ${ptySessionId?.slice(0, 8) ?? "(none)"} — its AI session ${aiSessionId} is being resumed by a new process`
       );
       if (ptySessionId) {
-        ptyPostMessage({
-          type: MESSAGE_TYPES.TERMINAL_REMOVED,
-          workflowId: this.id,
-          sessionId: ptySessionId,
-        });
+        ptyPostMessage(buildTerminalRemovedMessage(this.id, ptySessionId));
       }
     }
   }
@@ -3985,7 +3993,8 @@ export class WorkflowInstance
   private createIntegrationForMode(
     harnessOverride?: HarnessId,
     target?: WorkflowAttemptTarget,
-    resolvedProperties?: ResolvedProperties
+    resolvedProperties?: ResolvedProperties,
+    resumeAiSessionId?: string
   ): HarnessIntegration {
     const harness =
       resolvedProperties?.harness ??
@@ -4033,6 +4042,16 @@ export class WorkflowInstance
       return fresh;
     }
 
+    if (resumeAiSessionId !== undefined) {
+      const owner = this.reclaimSupersededConversation(
+        integrationKey,
+        resumeAiSessionId
+      );
+      if (owner) {
+        return owner;
+      }
+    }
+
     // If a live integration from the previous run is waiting in liveReusableIntegrations,
     // promote it into executionIntegrations immediately — before checking the cache or
     // creating a new instance. This ensures the live one wins even when
@@ -4041,13 +4060,7 @@ export class WorkflowInstance
     const live = this.liveReusableIntegrations.get(integrationKey);
     if (live) {
       this.liveReusableIntegrations.delete(integrationKey);
-      if (!this.canReuseExecutionIntegration(live)) {
-        void this.cleanupRetainedIntegrationArtifacts(integrationKey, live);
-        live.closeTerminalGracefully(TERMINAL_END_REASONS.SUPERSEDED);
-        live.dispose();
-      } else {
-        live.resetForNewRun();
-        live.setSourceDefinitionPath(this.sourceDefinitionPath);
+      if (this.reviveRetainedIntegration(live)) {
         this.executionIntegrations.set(integrationKey, live);
         Log.info(
           `[inst:${this.id.slice(0, 8)}] Reusing live reusable integration (key=${integrationKey}) from previous run`
@@ -4075,32 +4088,97 @@ export class WorkflowInstance
   /**
    * Make `integration` the conversation `integrationKey` names, demoting
    * whatever held that key. The superseded integration keeps its terminal —
-   * nothing about it conflicts with the new process — but no later prompt can
-   * resolve to it, so ownership moves to the unkeyed set that disposes with the
-   * run.
+   * nothing about it conflicts with the new process — and moves to a
+   * superseded key of the same spawn identity, so it is retained across
+   * passes like any other and a later prompt resuming its session can still
+   * reach it (`reclaimSupersededConversation`).
    */
   private claimSpawnIdentityKey(
     integrationKey: string,
     integration: HarnessIntegration
   ): void {
-    const superseded =
-      this.executionIntegrations.get(integrationKey) ??
-      this.liveReusableIntegrations.get(integrationKey);
-    if (superseded && superseded !== integration) {
-      this.executionIntegrations.delete(integrationKey);
-      this.liveReusableIntegrations.delete(integrationKey);
-      if (
-        this.retainedIntegrationArtifactContexts.get(integrationKey)
-          ?.integration === superseded
-      ) {
-        this.retainedIntegrationArtifactContexts.delete(integrationKey);
+    for (const registry of [
+      this.executionIntegrations,
+      this.liveReusableIntegrations,
+    ]) {
+      const superseded = registry.get(integrationKey);
+      if (!superseded || superseded === integration) {
+        continue;
       }
-      this.unkeyedExecutionIntegrations.add(superseded);
+      const supersededKey = `${integrationKey}${WorkflowInstance.SUPERSEDED_KEY_SEPARATOR}${++this.supersededKeySequence}`;
+      registry.delete(integrationKey);
+      registry.set(supersededKey, superseded);
       Log.info(
-        `[inst:${this.id.slice(0, 8)}] Superseded integration for key ${integrationKey}; its terminal stays open but no longer receives prompts`
+        `[inst:${this.id.slice(0, 8)}] Superseded integration for key ${integrationKey}; its terminal stays open as ${supersededKey}`
       );
     }
     this.executionIntegrations.set(integrationKey, integration);
+  }
+
+  /**
+   * A resuming prompt continues whichever integration still holds its AI
+   * session. When that is a conversation a fresh-session prompt displaced from
+   * this spawn identity, promote it back to the identity's key so its running
+   * terminal is reused instead of being killed and replaced by a `--resume`
+   * of the same session in a new tab.
+   */
+  private reclaimSupersededConversation(
+    integrationKey: string,
+    aiSessionId: string
+  ): HarnessIntegration | undefined {
+    const supersededPrefix = `${integrationKey}${WorkflowInstance.SUPERSEDED_KEY_SEPARATOR}`;
+    for (const registry of [
+      this.executionIntegrations,
+      this.liveReusableIntegrations,
+    ]) {
+      for (const [key, candidate] of registry) {
+        if (
+          !key.startsWith(supersededPrefix) ||
+          !candidate.ownsLiveAiSession(aiSessionId)
+        ) {
+          continue;
+        }
+        registry.delete(key);
+        if (
+          registry === this.liveReusableIntegrations &&
+          !this.reviveRetainedIntegration(candidate)
+        ) {
+          return undefined;
+        }
+        candidate.setSourceDefinitionPath(this.sourceDefinitionPath);
+        this.claimSpawnIdentityKey(integrationKey, candidate);
+        Log.info(
+          `[inst:${this.id.slice(0, 8)}] Reclaimed superseded integration ${key} — it still holds AI session ${aiSessionId}`
+        );
+        return candidate;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Prepare an integration taken out of `liveReusableIntegrations` for this
+   * pass, or retire it when it belongs to another execution workspace.
+   */
+  private reviveRetainedIntegration(live: HarnessIntegration): boolean {
+    if (!this.canReuseExecutionIntegration(live)) {
+      void this.cleanupRetainedIntegrationArtifacts(live);
+      live.closeTerminalGracefully(TERMINAL_END_REASONS.SUPERSEDED);
+      live.dispose();
+      return false;
+    }
+    live.resetForNewRun();
+    live.setSourceDefinitionPath(this.sourceDefinitionPath);
+    return true;
+  }
+
+  /** Drop `integration` from `liveReusableIntegrations` under whatever key it holds. */
+  private forgetLiveReusableIntegration(integration: HarnessIntegration): void {
+    for (const [key, retained] of this.liveReusableIntegrations) {
+      if (retained === integration) {
+        this.liveReusableIntegrations.delete(key);
+      }
+    }
   }
 
   private getSequentialIntegrationKey(
@@ -4457,11 +4535,8 @@ export class WorkflowInstance
     // Any PTY retained across the pause for reuse belongs to the worktree
     // being abandoned and cannot follow execution to the new workspace —
     // settlement below must not race a still-live process in that directory.
-    for (const [harnessKey, liveIntegration] of this.liveReusableIntegrations) {
-      await this.cleanupRetainedIntegrationArtifacts(
-        harnessKey,
-        liveIntegration
-      );
+    for (const liveIntegration of this.liveReusableIntegrations.values()) {
+      await this.cleanupRetainedIntegrationArtifacts(liveIntegration);
       liveIntegration.closeTerminalGracefully(
         TERMINAL_END_REASONS.WORKTREE_RELEASED
       );
@@ -4547,10 +4622,7 @@ export class WorkflowInstance
       .liveReusableIntegrations) {
       if (!this.canReuseExecutionIntegration(liveIntegration)) {
         this.liveReusableIntegrations.delete(integrationKey);
-        await this.cleanupRetainedIntegrationArtifacts(
-          integrationKey,
-          liveIntegration
-        );
+        await this.cleanupRetainedIntegrationArtifacts(liveIntegration);
         liveIntegration.closeTerminalGracefully(
           TERMINAL_END_REASONS.SUPERSEDED
         );
@@ -4663,27 +4735,22 @@ export class WorkflowInstance
           workspaceRoot &&
           execIntegration.shouldRetainWorkflowArtifactsForReuse()
         ) {
-          this.retainedIntegrationArtifactContexts.set(harnessKey, {
-            integration: execIntegration,
+          this.retainedIntegrationArtifactContexts.set(execIntegration, {
             workingFilePath: options.workingFilePath,
             workspaceRoot: execIntegration.getExecutionRoot() ?? workspaceRoot,
           });
         } else {
           await this.cleanupRetainedIntegrationArtifacts(
-            harnessKey,
             execIntegration,
             options.workingFilePath,
             workspaceRoot
           );
         }
         execIntegration.onPtySessionEnded(() => {
-          if (
-            this.liveReusableIntegrations.get(harnessKey) === execIntegration
-          ) {
-            this.liveReusableIntegrations.delete(harnessKey);
-          }
+          // Look the integration up by identity: a fresh-session prompt may
+          // have moved it to a superseded key since it was parked.
+          this.forgetLiveReusableIntegration(execIntegration);
           void this.cleanupRetainedIntegrationArtifacts(
-            harnessKey,
             execIntegration
           ).finally(() => {
             execIntegration.dispose();
@@ -4702,7 +4769,6 @@ export class WorkflowInstance
           execIntegration.dispose();
         }
         const cleanup = await this.cleanupIntegrationArtifactsForSettlement(
-          harnessKey,
           execIntegration,
           options.workingFilePath,
           execIntegration.getExecutionRoot() ?? workspaceRoot,
@@ -4760,13 +4826,12 @@ export class WorkflowInstance
     // not reinserted into executionIntegrations. It is still part of the
     // worktree cleanup barrier and must never outlive the lease.
     if (terminalWorktreeRun) {
-      for (const [harnessKey, retained] of this.liveReusableIntegrations) {
+      for (const retained of this.liveReusableIntegrations.values()) {
         retained.closeTerminalGracefully(
           TERMINAL_END_REASONS.WORKTREE_RELEASED
         );
         retained.dispose();
         const cleanup = await this.cleanupIntegrationArtifactsForSettlement(
-          harnessKey,
           retained,
           options.workingFilePath,
           retained.getExecutionRoot() ?? workspaceRoot,
@@ -4937,24 +5002,19 @@ export class WorkflowInstance
   }
 
   private async cleanupRetainedIntegrationArtifacts(
-    harnessKey: string,
     integration: HarnessIntegration,
     fallbackWorkingFilePath?: string,
     fallbackWorkspaceRoot?: string
   ): Promise<void> {
     const retainedContext =
-      this.retainedIntegrationArtifactContexts.get(harnessKey);
-    if (retainedContext?.integration === integration) {
-      this.retainedIntegrationArtifactContexts.delete(harnessKey);
-    }
-    const workingFilePath =
-      retainedContext?.integration === integration
-        ? retainedContext.workingFilePath
-        : fallbackWorkingFilePath;
-    const workspaceRoot =
-      retainedContext?.integration === integration
-        ? retainedContext.workspaceRoot
-        : fallbackWorkspaceRoot;
+      this.retainedIntegrationArtifactContexts.get(integration);
+    this.retainedIntegrationArtifactContexts.delete(integration);
+    const workingFilePath = retainedContext
+      ? retainedContext.workingFilePath
+      : fallbackWorkingFilePath;
+    const workspaceRoot = retainedContext
+      ? retainedContext.workspaceRoot
+      : fallbackWorkspaceRoot;
     if (!workspaceRoot) return;
 
     await integration
@@ -4968,28 +5028,22 @@ export class WorkflowInstance
   }
 
   private async cleanupIntegrationArtifactsForSettlement(
-    harnessKey: string,
     integration: HarnessIntegration,
     workingFilePath: string | undefined,
     workspaceRoot: string,
     strict: boolean
   ): Promise<{ cleaned: boolean; message?: string }> {
     const retainedContext =
-      this.retainedIntegrationArtifactContexts.get(harnessKey);
-    if (retainedContext?.integration === integration) {
-      this.retainedIntegrationArtifactContexts.delete(harnessKey);
-    }
-    const effectiveWorkingFilePath =
-      retainedContext?.integration === integration
-        ? retainedContext.workingFilePath
-        : workingFilePath;
-    const effectiveWorkspaceRoot =
-      retainedContext?.integration === integration
-        ? retainedContext.workspaceRoot
-        : workspaceRoot;
+      this.retainedIntegrationArtifactContexts.get(integration);
+    this.retainedIntegrationArtifactContexts.delete(integration);
+    const effectiveWorkingFilePath = retainedContext
+      ? retainedContext.workingFilePath
+      : workingFilePath;
+    const effectiveWorkspaceRoot = retainedContext
+      ? retainedContext.workspaceRoot
+      : workspaceRoot;
     if (!strict) {
       await this.cleanupRetainedIntegrationArtifacts(
-        harnessKey,
         integration,
         effectiveWorkingFilePath,
         effectiveWorkspaceRoot

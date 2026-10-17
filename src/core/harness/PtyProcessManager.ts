@@ -22,7 +22,10 @@ import {
   type TerminalEndReason,
   type TerminalSessionStatus,
 } from "../../types/DashboardConstants";
-import type { TerminalEndedMessage } from "../../types/WebviewMessageTypes";
+import type {
+  TerminalEndedMessage,
+  TerminalRemovedMessage,
+} from "../../types/WebviewMessageTypes";
 import type { KeyValueStore } from "../HostPorts";
 
 type NodePtyModule = typeof import("node-pty");
@@ -321,6 +324,14 @@ export function buildTerminalEndedMessage(
     status: session.status,
     ...(session.endReason ? { endReason: session.endReason } : {}),
   };
+}
+
+/** Single builder for every TERMINAL_REMOVED payload. */
+export function buildTerminalRemovedMessage(
+  workflowId: string,
+  sessionId: string
+): TerminalRemovedMessage {
+  return { type: MESSAGE_TYPES.TERMINAL_REMOVED, workflowId, sessionId };
 }
 
 /**

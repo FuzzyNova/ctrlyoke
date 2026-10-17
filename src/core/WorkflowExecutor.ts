@@ -23,6 +23,7 @@ import {
   type ParallelGroupDefinition,
   type ScriptProperties,
   type WorkflowStopReason,
+  type PromptFile,
 } from "../types/CtrlYokeTypes";
 import {
   WorkflowContext,
@@ -78,6 +79,7 @@ import {
   type EvaluationResult,
 } from "./EndConditionEvaluator";
 import { Log } from "../utils/Log";
+import { SessionResolver } from "../utils/SessionResolver";
 import {
   PropertyResolver,
   type ResolvedProperties,
@@ -229,7 +231,9 @@ export interface WorkflowExecutionContext {
   getIntegrationForPrompt: (
     prompt: PromptStep,
     resolvedProperties: ResolvedProperties,
-    target?: ExecutionTarget
+    target?: ExecutionTarget,
+    /** The AI session the prompt resumes, when known; see `resolveResumedAiSessionId`. */
+    resumeAiSessionId?: string
   ) => HarnessIntegration;
   /** Retire a sibling integration's PTY when this dispatch takes over its session. */
   releaseConflictingAiSession?: WorkflowContext["releaseConflictingAiSession"];
@@ -1836,6 +1840,37 @@ export class WorkflowExecutor {
     return true;
   }
 
+  /**
+   * The AI session this dispatch will resume, resolved the same way the
+   * harness integration resolves it before spawning. Integration selection
+   * needs it up front: a retained terminal already holding that session is
+   * the one to continue, whatever newer conversation took its spawn identity.
+   */
+  private resolveResumedAiSessionId(
+    prompt: PromptStep,
+    target: WorkflowAttemptTarget,
+    resolvedProperties: ResolvedProperties,
+    workflowFile: PromptFile,
+    preflightMember?: ParallelGroupPreflightMember
+  ): string | undefined {
+    if (!resolvedProperties.resumeSession) {
+      return undefined;
+    }
+    if (preflightMember) {
+      return preflightMember.resolvedSessionId;
+    }
+    const steps = this.promptQueue.getState().steps;
+    return SessionResolver.resolveWithProperties(
+      prompt,
+      target.kind === FINAL_STEP_PHASES.QUEUE ? target.stepIndex : steps.length,
+      steps,
+      resolvedProperties,
+      workflowFile.finalStep?._runtime?.sessionId as string | undefined,
+      undefined,
+      false
+    );
+  }
+
   private async executeTarget(
     target: ExecutionTarget,
     step: WorkflowStep,
@@ -2257,7 +2292,14 @@ export class WorkflowExecutor {
       const integration = context.getIntegrationForPrompt(
         prompt,
         resolvedProperties,
-        target
+        target,
+        this.resolveResumedAiSessionId(
+          prompt,
+          target,
+          resolvedProperties,
+          workflowFile,
+          preflightMember
+        )
       );
 
       const runtimeStepIndex =

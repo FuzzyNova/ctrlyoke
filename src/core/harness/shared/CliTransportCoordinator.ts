@@ -27,6 +27,7 @@ import {
 import type { ICliProvider } from "./interfaces/ICliProvider";
 import {
   buildTerminalEndedMessage,
+  buildTerminalRemovedMessage,
   getPtyProcessManager,
   ptyPostMessage,
   toPtySpawnArgs,
@@ -128,7 +129,18 @@ export interface CliExecutionTransportCoordinator {
    * Terminate the current PTY when another execution mode needs exclusive
    * ownership of the same AI session.
    */
-  terminateCurrentPtySession?(reason: string): Promise<string | undefined>;
+  terminateCurrentPtySession?(
+    reason: string,
+    options?: TerminatePtySessionOptions
+  ): Promise<string | undefined>;
+}
+
+export interface TerminatePtySessionOptions {
+  /**
+   * Also drop the terminal's tab. Set when the process about to replace it
+   * continues the same AI session, so the conversation is not shown twice.
+   */
+  removeTerminalTab?: boolean;
 }
 
 export class CliTransportCoordinator implements CliExecutionTransportCoordinator {
@@ -617,7 +629,8 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
    * headless process must be the only live owner of that session.
    */
   async terminateCurrentPtySession(
-    reason: string
+    reason: string,
+    options: TerminatePtySessionOptions = {}
   ): Promise<string | undefined> {
     if (!this.currentPtySession) {
       return undefined;
@@ -641,6 +654,12 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       ptySession.pty.write("\x03");
       await new Promise<void>((resolve) => setTimeout(resolve, 500));
       ptySession.pty.kill();
+    }
+    if (options.removeTerminalTab) {
+      const postMessage = this.deps.postTerminalMessage ?? ptyPostMessage;
+      postMessage(
+        buildTerminalRemovedMessage(ptySession.workflowId, sessionId)
+      );
     }
     return sessionId;
   }

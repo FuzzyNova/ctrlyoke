@@ -64,7 +64,8 @@ export type WorkflowStartupContextPort = Omit<
   readonly createIntegrationForMode: (
     harnessOverride?: HarnessId,
     target?: WorkflowAttemptTarget,
-    resolvedProperties?: ResolvedProperties
+    resolvedProperties?: ResolvedProperties,
+    resumeAiSessionId?: string
   ) => HarnessIntegration;
   readonly getSequentialIntegrationKey: (
     properties: ResolvedProperties
@@ -484,7 +485,8 @@ export class WorkflowStartupPipeline {
       getIntegrationForPrompt: (
         prompt: PromptStep,
         resolvedProperties: ResolvedProperties,
-        target?: WorkflowAttemptTarget
+        target?: WorkflowAttemptTarget,
+        resumeAiSessionId?: string
       ) => {
         const targetIsGrouped = target
           ? isTargetInParallelGroup(target)
@@ -501,9 +503,16 @@ export class WorkflowStartupPipeline {
 
         const integrationKey = getSequentialIntegrationKey(resolvedProperties);
         const requiresFreshIntegration = !resolvedProperties.resumeSession;
+        // The same spawn identity can name several retained conversations; a
+        // prompt resuming one the current integration does not hold must be
+        // routed to the terminal that does.
+        const resumesAnotherConversation =
+          resumeAiSessionId !== undefined &&
+          !currentIntegration.ownsLiveAiSession(resumeAiSessionId);
         if (
           requiresFreshIntegration ||
-          activeIntegrationKey !== integrationKey
+          activeIntegrationKey !== integrationKey ||
+          resumesAnotherConversation
         ) {
           Log.info(
             `[inst:${self.port.id.slice(0, 8)}] Prompt ${prompt.name || "unnamed"} selecting spawn identity ${resolvedProperties.harness}::${integrationKey.slice(-16)}; retaining incompatible terminals`
@@ -511,7 +520,8 @@ export class WorkflowStartupPipeline {
           currentIntegration = createIntegrationForMode(
             resolvedProperties.harness,
             undefined,
-            resolvedProperties
+            resolvedProperties,
+            resumeAiSessionId
           );
           activeIntegrationKey = integrationKey;
         }

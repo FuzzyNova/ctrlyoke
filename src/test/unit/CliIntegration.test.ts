@@ -42,6 +42,7 @@ import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import type { ExecutionWorkspace } from "../../types/WorkflowContextTypes";
 import type { ManagedMcpServer } from "../../types/WebviewMessageTypes";
 import { McpServerNormalizer } from "../../utils/McpServerNormalizer";
+import type { TerminatePtySessionOptions } from "../../core/harness/shared/CliTransportCoordinator";
 import {
   MockHarnessIntegration,
   TEST_VERSION_POLICY,
@@ -1683,6 +1684,42 @@ suite("CliIntegration", () => {
       assert.deepStrictEqual(lifecycle, ["kill", "exit", "spawn"]);
     } finally {
       integration.dispose();
+    }
+  });
+
+  // The replacement continues the retired PTY's conversation, so leaving its
+  // tab behind would show one session in two terminals; an unrelated
+  // replacement keeps the old tab so its transcript stays reviewable.
+  test("drops the retired PTY's tab only when the replacement resumes its session", async () => {
+    for (const [resolvedSessionId, expected] of [
+      ["session-existing", true],
+      ["session-unrelated", false],
+    ] as const) {
+      const integration = createTestIntegration();
+      const removeTerminalTab: (boolean | undefined)[] = [];
+      (integration as any).executionRunner.getLastInteractiveContext = () =>
+        createRunningTerminalContext(createResolvedProperties());
+      (integration as any).transportCoordinator.terminateCurrentPtySession =
+        async (_reason: string, options?: TerminatePtySessionOptions) => {
+          removeTerminalTab.push(options?.removeTerminalTab);
+          return "pty-existing";
+        };
+
+      try {
+        await sendInteractiveWithLivePty(
+          integration,
+          createResolvedProperties(),
+          resolvedSessionId,
+          []
+        );
+        assert.deepStrictEqual(
+          removeTerminalTab,
+          [expected],
+          `resuming ${resolvedSessionId}`
+        );
+      } finally {
+        integration.dispose();
+      }
     }
   });
 

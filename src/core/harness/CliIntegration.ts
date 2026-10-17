@@ -1214,7 +1214,9 @@ export class CliIntegration extends HarnessIntegration {
       Log.info(
         "[CliIntegration] Terminal reuse unavailable — falling back to restart mode"
       );
-      await this.retireInteractivePtyForRestartFallback();
+      await this.retireInteractivePtyForRestartFallback(
+        this.doesInteractivePtyOwnSession(session)
+      );
     } else if (isInteractive && this.transportCoordinator.hasLivePtySession()) {
       // Terminal reuse was preemptively skipped (settings changed, resumeSession: false,
       // etc.) but a live PTY from the previous step is still running. Gracefully signal
@@ -1232,7 +1234,9 @@ export class CliIntegration extends HarnessIntegration {
       // `WorkflowInstance`, which hand an incompatible prompt its own integration
       // and coordinator; a terminal worth retaining therefore never reaches this
       // branch at all.
-      await this.retireInteractivePtyForRestartFallback();
+      await this.retireInteractivePtyForRestartFallback(
+        this.doesInteractivePtyOwnSession(session)
+      );
     }
 
     // If the session was prepared with reuse-lenient rules (which can leave
@@ -1402,12 +1406,19 @@ export class CliIntegration extends HarnessIntegration {
    * way its exit must not be treated as a failure for the new step — which is
    * why this is the one caller that suppresses the *last known* PTY's exit and
    * resets the failure tracker: `capturePtyExit` may already have run for it.
+   *
+   * When the restart resumes the very conversation the old PTY held, its tab
+   * goes with it — the new terminal continues that session, and leaving the
+   * dead one behind would show the same conversation twice.
    */
-  private async retireInteractivePtyForRestartFallback(): Promise<void> {
+  private async retireInteractivePtyForRestartFallback(
+    continuesSameAiSession: boolean
+  ): Promise<void> {
     await this.retireInteractivePty({
       reason: "reuse fallback restart",
       suppressLastKnownPty: true,
       resetFailureTracker: true,
+      removeTerminalTab: continuesSameAiSession,
     });
   }
 
@@ -1431,10 +1442,13 @@ export class CliIntegration extends HarnessIntegration {
      * during a prior await) so it is not attributed to the next step.
      */
     resetFailureTracker?: boolean;
+    /** Drop the retired terminal's tab; see `TerminatePtySessionOptions`. */
+    removeTerminalTab?: boolean;
   }): Promise<string | undefined> {
     const terminatedPtyId =
       await this.transportCoordinator.terminateCurrentPtySession(
-        options.reason
+        options.reason,
+        { removeTerminalTab: options.removeTerminalTab }
       );
     const suppressedPtyId = options.suppressLastKnownPty
       ? (terminatedPtyId ?? this.transportCoordinator.getLastPtySessionId())

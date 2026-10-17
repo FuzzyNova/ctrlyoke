@@ -5,6 +5,7 @@ import * as path from "path";
 import { suite, test } from "mocha";
 import type { IEvent, IPty } from "node-pty";
 import { WorkflowInstance } from "../../core/WorkflowInstance";
+import type { WorkflowExecutionContext } from "../../core/WorkflowExecutor";
 import { PromptFileResolver } from "../../core/PromptFileResolver";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
 import {
@@ -31,6 +32,7 @@ import {
   USER_FEEDBACK_SEVERITY,
   WORKTREE_MODES,
   type HarnessId,
+  type TerminalEndReason,
   INTERACTIVE_TERMINAL_MODES,
 } from "../../types/DashboardConstants";
 import { PromptStep } from "../../types/CtrlYokeTypes";
@@ -72,6 +74,23 @@ function createResolvedProperties(
 
 function integrationCacheKey(props: ResolvedProperties): string {
   return `${props.harness}::${spawnIdentityHash(props)}`;
+}
+
+/** Integrations a fresh-session prompt displaced from `props`' spawn identity. */
+function supersededIntegrations(
+  instance: WorkflowInstance,
+  props: ResolvedProperties
+): HarnessIntegration[] {
+  const key = integrationCacheKey(props);
+  const registries: Map<string, HarnessIntegration>[] = [
+    (instance as any).executionIntegrations,
+    (instance as any).liveReusableIntegrations,
+  ];
+  return registries.flatMap((registry) =>
+    [...registry]
+      .filter(([candidate]) => candidate.startsWith(`${key}::superseded:`))
+      .map(([, integration]) => integration)
+  );
 }
 
 async function loadPromptFileForTest(
@@ -427,8 +446,8 @@ suite("WorkflowInstance target resources", () => {
 
       assert.notStrictEqual(first, second);
       // The newest fresh session is the conversation that spawn identity now
-      // names; the one it displaced keeps its terminal but is unselectable.
-      assert.strictEqual((instance as any).executionIntegrations.size, 1);
+      // names; the one it displaced keeps its terminal under a superseded key,
+      // reachable only by a prompt resuming its own session.
       assert.strictEqual(
         (instance as any).executionIntegrations.get(
           integrationCacheKey(properties)
@@ -436,7 +455,7 @@ suite("WorkflowInstance target resources", () => {
         second
       );
       assert.ok(
-        (instance as any).unkeyedExecutionIntegrations.has(first),
+        supersededIntegrations(instance, properties).includes(first),
         "a superseded integration must still be owned by the run"
       );
     } finally {
@@ -486,8 +505,76 @@ suite("WorkflowInstance target resources", () => {
         "a resuming prompt must continue the newest session for its spawn identity"
       );
       assert.ok(
-        (instance as any).unkeyedExecutionIntegrations.has(first),
+        supersededIntegrations(instance, resuming).includes(first),
         "the superseded terminal must stay owned rather than be reused or dropped"
+      );
+    } finally {
+      instance.dispose();
+    }
+  });
+
+  // The bug this covers: after a fresh-session step took the spawn identity, a
+  // later step explicitly resuming the *older* session was handed the newer
+  // integration, which killed its own unrelated terminal and spawned a third
+  // one with `--resume` instead of reusing the terminal still holding it.
+  test("routes a prompt resuming a superseded session back to its terminal", () => {
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    const initial = new MockHarnessIntegration(undefined, false);
+    const context = new WorkflowStartupPipeline(
+      (instance as any).createWorkflowStartupPipelinePort()
+    ).buildWorkflowExecutionContext(initial, "", undefined);
+    const resuming = createResolvedProperties();
+    const fresh = createResolvedProperties({ resumeSession: false });
+
+    try {
+      const first = context.getIntegrationForPrompt(
+        { name: "step one", prompt: "one" },
+        resuming
+      ) as SessionHoldingMockHarnessIntegration;
+      first.holdAiSession("ai-session-1", "pty-1");
+      const second = context.getIntegrationForPrompt(
+        { name: "step two", prompt: "two" },
+        fresh
+      ) as SessionHoldingMockHarnessIntegration;
+      second.holdAiSession("ai-session-2", "pty-2");
+
+      const resumesFirst = context.getIntegrationForPrompt(
+        { name: "step two again", prompt: "two" },
+        resuming,
+        undefined,
+        "ai-session-1"
+      );
+      assert.strictEqual(resumesFirst, first);
+      assert.strictEqual(
+        (instance as any).executionIntegrations.get(
+          integrationCacheKey(resuming)
+        ),
+        first,
+        "the reclaimed conversation must own the spawn identity again"
+      );
+      assert.deepStrictEqual(supersededIntegrations(instance, resuming), [
+        second,
+      ]);
+
+      const resumesSecond = context.getIntegrationForPrompt(
+        { name: "step three", prompt: "three" },
+        resuming,
+        undefined,
+        "ai-session-2"
+      );
+      assert.strictEqual(
+        resumesSecond,
+        second,
+        "the displaced conversation must stay reachable in turn"
       );
     } finally {
       instance.dispose();
@@ -3686,6 +3773,103 @@ suite("WorkflowInstance secret-grant approval callback", () => {
 });
 
 suite("WorkflowInstance retained integration artifacts", () => {
+  // The user-facing bug: step 1 resumes, step 2 starts a new session, then the
+  // run continues from step 2 switched to resume step 1's session. Step 1's
+  // terminal was dropped from retention at the end of the first pass and killed
+  // at the start of the next, so the continuation spawned a third terminal.
+  test("keeps a superseded conversation's terminal reusable across a continuation", async () => {
+    class ReusableSessionIntegration extends SessionHoldingMockHarnessIntegration {
+      readonly closedTerminals: string[] = [];
+
+      override canReuseRunningTerminal(): boolean {
+        return true;
+      }
+
+      override closeTerminal(reason: TerminalEndReason): void {
+        this.closedTerminals.push(reason);
+      }
+
+      override closeTerminalGracefully(reason: TerminalEndReason): void {
+        this.closedTerminals.push(reason);
+      }
+    }
+    class ReusableSessionFactory extends IntegrationFactory {
+      override createForExecution(_harness: HarnessId): HarnessIntegration {
+        return new ReusableSessionIntegration(undefined, false);
+      }
+    }
+
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      undefined,
+      new ReusableSessionFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    const resuming = createResolvedProperties();
+    const fresh = createResolvedProperties({ resumeSession: false });
+    let stepOne: ReusableSessionIntegration | undefined;
+    let stepTwo: ReusableSessionIntegration | undefined;
+    let continuation: HarnessIntegration | undefined;
+
+    try {
+      (instance as any).workflowExecutor.execute = async (
+        _integration: HarnessIntegration,
+        context: WorkflowExecutionContext
+      ) => {
+        stepOne = context.getIntegrationForPrompt(
+          { name: "step one", prompt: "one" },
+          resuming
+        ) as ReusableSessionIntegration;
+        stepOne.holdAiSession("ai-session-1", "pty-1");
+        stepTwo = context.getIntegrationForPrompt(
+          { name: "step two", prompt: "two" },
+          fresh
+        ) as ReusableSessionIntegration;
+        stepTwo.holdAiSession("ai-session-2", "pty-2");
+      };
+      await (instance as any).startWorkflowExecution(
+        undefined,
+        "",
+        "workflow.ctrlyoke.json"
+      );
+
+      (instance as any).workflowExecutor.execute = async (
+        _integration: HarnessIntegration,
+        context: WorkflowExecutionContext
+      ) => {
+        continuation = context.getIntegrationForPrompt(
+          { name: "step two", prompt: "two" },
+          resuming,
+          undefined,
+          "ai-session-1"
+        );
+      };
+      await (instance as any).startWorkflowExecution(
+        undefined,
+        "",
+        "workflow.ctrlyoke.json"
+      );
+
+      assert.strictEqual(
+        continuation,
+        stepOne,
+        "the continuation must reuse the terminal still holding step 1's session"
+      );
+      assert.deepStrictEqual(stepOne!.closedTerminals, []);
+      assert.deepStrictEqual(
+        stepTwo!.closedTerminals,
+        [],
+        "step 2's own conversation is unrelated and must keep its terminal"
+      );
+    } finally {
+      instance.dispose();
+    }
+  });
+
   test("keeps required completion hooks until a reusable PTY integration actually exits", async () => {
     class RetainedIntegration extends MockHarnessIntegration {
       cleanupCalls = 0;
