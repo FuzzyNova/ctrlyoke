@@ -60,6 +60,52 @@ Code. That installed copy — not any `F5` config — is your daily driver.
    want the daily driver to pick up accumulated changes) to roll the fix
    forward into the long-lived instance.
 
+### Which `ctrlyoke` CLI you get, and how to test the working tree's
+
+Every ctrlyoke extension activation calls `exposeBundledCli()`
+(`src/ui/CtrlyokeCliCommands.ts`), which prepends `<extensionPath>/bin` to
+`PATH` in that window's integrated terminals and registers the same directory
+for harness processes it spawns. `<extensionPath>` is whichever copy of the
+extension is running, so the bare `ctrlyoke` command resolves differently by
+window:
+
+| Where you type `ctrlyoke`                     | What runs                                                                          |
+| --------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Daily-driver terminal, or a harness it spawns | The installed VSIX's bundled CLI (production build, the VSIX's version)            |
+| Dev host terminal, or a harness it spawns     | This checkout's `bin/ctrlyoke` → `out/cli.js` (dev build of your tree)             |
+| A shell outside VS Code                       | Whatever is on your system `PATH`: an `npm link`, a global npm install, or nothing |
+
+The recommended flow follows from that:
+
+- **Testing a CLI change from the daily driver or any shell:** run the build
+  directly with `node out/cli.js <args>` after `npm run compile:extension`.
+  It's explicit, so there's no question which copy ran.
+- **Testing it inside the dev host:** just type `ctrlyoke`. The dev host's
+  terminals and harnesses already point at this checkout's `bin/`, and every
+  `dev:host:start`/`restart` recompiles first.
+- **Before publishing:** pack and install the real npm tarball as described in
+  `DEVELOPMENT.md` ("Pre-publish check"). Neither of the above exercises the
+  published file list.
+- **Skip `npm link`.** In every VS Code terminal the extension's bundled `bin`
+  comes first on `PATH` and shadows the link, so the link only matters in
+  outside shells, where `node out/cli.js` does the same job. Remove an old
+  one with `npm unlink -g ctrlyoke`.
+
+A linked or checkout CLI also confuses the installation registry
+(`~/.ctrlyoke/installations.json`, `src/utils/CtrlyokeInstallations.ts`). A
+CLI records its version only when it runs a subcommand (the `preAction` hook
+in `src/cli.ts`; `--version` doesn't count), so after a version bump the
+checkout's entry keeps the old version until the next real command. A newly
+installed VSIX then shows "ctrlyoke CLI x is older than this extension",
+naming the checkout. Running any subcommand from the checkout (for example
+`node out/cli.js about`) refreshes the entry; the notice shows only once per
+version pair either way, and dead entries age out after 30 days. The
+`big-feature`/`small-feature`/`bug-fix` worktrees record their own entries
+the same way and stay at their older version until they merge the bump, which
+is accurate. Separately, `ctrlyoke about` describes a checkout CLI as "bundled
+with the VS Code extension": `isBundledInExtension()` keys on the root
+`package.json` having `engines.vscode`, which the repo root does.
+
 This is the shape the user already proposed; the rest of this doc fills in
 the two things that made it feel unsafe: getting trace logs out of a
 production install, and stopping the two instances from stepping on each
@@ -508,6 +554,8 @@ scope.
       Level..." — the latter doesn't reliably survive restarts on current
       VS Code Stable; see "Getting TRACE-level logs" above.
 - [ ] Set `"ctrlyoke.enableDiagnosticLogs": true` in **user**-scope settings.
+- [ ] Test CLI changes with `node out/cli.js`, or `ctrlyoke` inside the dev
+      host; don't rely on an `npm link` (see "Which `ctrlyoke` CLI you get").
 - [ ] Optionally add `"env": { "CTRLYOKE_HOME": "<some local, gitignored path>" }`
       to the `extensionHost` launch configs when separate user-scoped state is
       useful; it is not required for workspace safety.

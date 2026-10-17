@@ -133,6 +133,7 @@ Caveats:
 
 - This is the extension-layout build with the repo's root `package.json`, not the exact package users install.
 - It shadows any published `ctrlyoke` installed globally until you unlink.
+- It doesn't apply in VS Code's integrated terminals. The installed extension prepends its own bundled `bin` to `PATH` there, so `ctrlyoke` runs the extension's copy. Use `node out/cli.js` instead; see `dev/reference/DEVELOPING_CTRLYOKE_WITH_CTRLYOKE.md` ("Which `ctrlyoke` CLI you get").
 
 ### Pre-publish check: pack the real npm package
 
