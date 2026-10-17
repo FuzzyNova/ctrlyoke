@@ -2,7 +2,11 @@
 
 - **Found:** 2026-10-17 by release-ready audit workflow (Claude, code-sanity + landing auditors, confirmed by verifier)
 - **Area:** `netlify/functions/ls-webhook.ts` (`KEYGEN_POLICY_BY_LS_VARIANT` ~L62-78), `src/license/LemonSqueezyConstants.ts` (~L20-38)
-- **Severity:** critical (blocks the repo-public flip)
+- **Severity:** high. It was critical until 2026-10-17, when the dashboard mitigation below closed
+  the live hole. The code fix is still needed as defense in depth.
+
+> **Mitigated 2026-10-17 (Nathan):** test webhook `129600` deleted, test-mode products
+> unpublished, test-issued licenses revoked. Only the code fix (Suggested Fix 1) remains.
 
 ## Symptom
 

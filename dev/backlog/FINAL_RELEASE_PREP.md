@@ -23,30 +23,38 @@ change into the checklist.
   covered, and 844 internal links resolve.
 - **Backlog:** nothing in `dev/backlog/` must land before release. The 2026-10-10 compatibility
   triage still holds, and every plan added since is additive.
-- **One real blocker** stands before the repo flip: test-mode checkouts mint real licenses (item 1).
+- **The one blocker** (test-mode checkouts minting real licenses, item 1) was mitigated in the LS
+  dashboard on 2026-10-17; only the defensive code fix remains.
 
 ## Handoff: who does what
 
 **Owner only** (dashboards, accounts, legal judgment). An agent cannot do these:
 
-- Item 1, dashboard half: delete or disable LS test webhook `129600`, and revoke any Keygen licenses
-  that test-mode orders issued.
 - Everything in "Go-live order" and "Right after the flip".
 
 **Agent-ready now:** items 1 (code half), 3, 4, 6, 7, 8, 9, 10, 12, 13, 14, 15, plus "Docs" and
-"Checklist housekeeping". Run item 7 (the repo-wide format commit) **first and alone**: if it lands
-while other agents are mid-change, every one of them hits merge conflicts. Item 11 waits for
-release day.
+"Checklist housekeeping". The repo-wide format pass already landed (`f9c5fe317`), so agents can
+run in parallel. Item 11 waits for release day. Every owner decision is made; nothing here needs
+Nathan before work starts.
 
 ## Before the repo flip
 
-- [ ] **1. Test-mode orders mint production licenses (BLOCKER).** Bug:
+- [ ] **1. Test-mode orders mint production licenses (was BLOCKER; mitigated).** Bug:
       [`test-mode-lemon-squeezy-orders-mint-production-licenses.md`](../bugs/backlog/test-mode-lemon-squeezy-orders-mint-production-licenses.md).
       The test checkout URLs are in `src/license/LemonSqueezyConstants.ts` (and in git history).
       `ls-webhook.ts` maps the test variants to the production Keygen policies and never checks
       `test_mode`. Once the repo is public, anyone can get free Pro or Enterprise with Stripe's test
-      card. Fix: gate issuance on `meta.test_mode`, and/or delete test webhook `129600`. Then
-      redeploy with `workflow_dispatch`.
+      card.
+  - [x] **Dashboard half, done by Nathan 2026-10-17.** Test webhook `129600` deleted; test-mode
+        Pro and Enterprise products unpublished, so the committed test checkout links are dead; live
+        webhook `143280` untouched. Test-issued Keygen licenses revoked. The one remaining license
+        is Nathan's development key, so keep it. The hole is closed today.
+  - [ ] **Code half (agent):** in `ls-webhook.ts`, skip issuance for `meta.test_mode === true`
+        unless an env flag such as `ALLOW_TEST_MODE_ORDERS` is set. This guards against a test
+        webhook being re-created later. Cover it with a unit test; there is no test webhook to verify
+        against live anymore. Redeploy with `workflow_dispatch` (`netlify/**` is outside the push
+        filter, unless item 9 lands first). Update the comment "Both modes are mapped so test-mode
+        purchases keep working after launch" to match.
 - [x] **2. Decided 2026-10-17: accept storefront sales before DataRep is effective.**
       `ctrlyoke.lemonsqueezy.com` lists Pro at $59 with a live checkout, and the live Enterprise URL
       is in the deployed `/enterprise/checkout/` page source. So `LAUNCHED` is not the only purchase
@@ -88,10 +96,9 @@ release day.
   - Add `.env.*` with `!.env.example` to `.gitignore`.
   - Delete or move the stale `.ctrlyoke/debug/*.md` handoffs (FlightPath-era, one marked
     `🔴 UNRESOLVED`).
-- [ ] **7. Format drift.** `npm run format:check` fails on 50 tracked files, and no gate enforces
-      it. Run `npm run format` once as a standalone style commit, add `landing/.astro` to
-      `.prettierignore`, and add `format:check` to `check:fast`, so a first outside contributor's PR
-      isn't buried in unrelated reformatting.
+- [ ] **7. Format drift.** The one-time `npm run format` landed in `f9c5fe317`. What's left: add
+      `landing/.astro` to `.prettierignore`, and add `format:check` to `check:fast`, so the pre-push
+      hook and `ci.yml` enforce it. Confirm `npm run format:check` exits 0 afterwards.
 
 ## Before tagging v0.2.0
 
