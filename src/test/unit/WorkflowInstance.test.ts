@@ -581,6 +581,82 @@ suite("WorkflowInstance target resources", () => {
     }
   });
 
+  // Resuming a session nothing holds any more (its terminal was closed) used
+  // to restart on whichever integration owned the spawn identity, killing that
+  // unrelated conversation's reusable terminal. It is superseded instead, the
+  // same as for a fresh-session prompt — while an ordinary resume of the
+  // session the holder already runs, or a holder whose terminal cannot be
+  // reused, keeps today's single integration.
+  for (const { name, heldSession, canReuse, expectFresh } of [
+    {
+      name: "supersedes a reusable terminal running another conversation",
+      heldSession: "ai-session-2",
+      canReuse: true,
+      expectFresh: true,
+    },
+    {
+      name: "keeps the integration already running the resumed session",
+      heldSession: "ai-session-1",
+      canReuse: true,
+      expectFresh: false,
+    },
+    {
+      name: "keeps the integration when its terminal cannot be reused",
+      heldSession: "ai-session-2",
+      canReuse: false,
+      expectFresh: false,
+    },
+  ]) {
+    test(`resuming a session nothing else holds ${name}`, () => {
+      const platform = new MockPlatform();
+      const instance = new WorkflowInstance(
+        platform,
+        undefined,
+        new MockIntegrationFactory(platform),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        process.cwd()
+      );
+      const initial = new MockHarnessIntegration(undefined, false);
+      const context = new WorkflowStartupPipeline(
+        (instance as any).createWorkflowStartupPipelinePort()
+      ).buildWorkflowExecutionContext(initial, "", undefined);
+      const resuming = createResolvedProperties();
+
+      try {
+        const holder = context.getIntegrationForPrompt(
+          { name: "step two", prompt: "two" },
+          resuming
+        ) as SessionHoldingMockHarnessIntegration;
+        holder.holdAiSession(heldSession, "pty-2");
+        holder.canReuseRunningTerminal = () => canReuse;
+
+        const resumed = context.getIntegrationForPrompt(
+          { name: "step three", prompt: "three" },
+          resuming,
+          undefined,
+          "ai-session-1"
+        );
+
+        if (expectFresh) {
+          assert.notStrictEqual(resumed, holder);
+          assert.deepStrictEqual(supersededIntegrations(instance, resuming), [
+            holder,
+          ]);
+        } else {
+          assert.strictEqual(resumed, holder);
+          assert.deepStrictEqual(
+            supersededIntegrations(instance, resuming),
+            []
+          );
+        }
+      } finally {
+        instance.dispose();
+      }
+    });
+  }
+
   // Sibling terminals are only safe while they own different conversations. A
   // step that changes a spawn-time property but still resumes the previous
   // step's session must take that session over, because every harness rejects a

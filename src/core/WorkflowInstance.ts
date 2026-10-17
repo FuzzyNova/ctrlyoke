@@ -4030,18 +4030,6 @@ export class WorkflowInstance
 
     const integrationKey = this.getSequentialIntegrationKey(resolvedProperties);
 
-    // A fresh-session prompt must never reuse an existing integration, even
-    // when its other spawn-time properties happen to match a previous prompt.
-    // It does, however, become the conversation that spawn identity now names:
-    // the next compatible prompt auto-resumes the session this one is about to
-    // create, so it has to select this integration rather than the superseded
-    // one still holding the older session.
-    if (!resolvedProperties.resumeSession) {
-      const fresh = this.createExecutionIntegration(harness);
-      this.claimSpawnIdentityKey(integrationKey, fresh);
-      return fresh;
-    }
-
     if (resumeAiSessionId !== undefined) {
       const owner = this.reclaimSupersededConversation(
         integrationKey,
@@ -4050,6 +4038,28 @@ export class WorkflowInstance
       if (owner) {
         return owner;
       }
+    }
+
+    // A fresh-session prompt must never reuse an existing integration, even
+    // when its other spawn-time properties happen to match a previous prompt.
+    // It does, however, become the conversation that spawn identity now names:
+    // the next compatible prompt auto-resumes the session this one is about to
+    // create, so it has to select this integration rather than the superseded
+    // one still holding the older session. A prompt resuming a session nothing
+    // holds is the same case when the identity's integration keeps a reusable
+    // terminal for another conversation: restarting there would kill that
+    // unrelated terminal, so it is superseded instead.
+    if (
+      !resolvedProperties.resumeSession ||
+      (resumeAiSessionId !== undefined &&
+        this.spawnIdentityHoldsAnotherConversation(
+          integrationKey,
+          resumeAiSessionId
+        ))
+    ) {
+      const fresh = this.createExecutionIntegration(harness);
+      this.claimSpawnIdentityKey(integrationKey, fresh);
+      return fresh;
     }
 
     // If a live integration from the previous run is waiting in liveReusableIntegrations,
@@ -4154,6 +4164,25 @@ export class WorkflowInstance
       }
     }
     return undefined;
+  }
+
+  /**
+   * Does the integration `integrationKey` names keep a reusable terminal for a
+   * conversation other than `aiSessionId`? Gated on reuse: without it the
+   * terminal could never take another prompt, so there is nothing to preserve.
+   */
+  private spawnIdentityHoldsAnotherConversation(
+    integrationKey: string,
+    aiSessionId: string
+  ): boolean {
+    const holder =
+      this.executionIntegrations.get(integrationKey) ??
+      this.liveReusableIntegrations.get(integrationKey);
+    return (
+      holder !== undefined &&
+      holder.canReuseRunningTerminal() &&
+      !holder.ownsLiveAiSession(aiSessionId)
+    );
   }
 
   /**
