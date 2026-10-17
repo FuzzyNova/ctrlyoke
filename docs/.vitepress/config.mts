@@ -13,7 +13,29 @@ export default defineConfig({
   srcExclude: ["reference/_partials/**"],
   lastUpdated: true,
   // Same pre-launch switch as the landing pages, which the docs are merged into.
-  head: LAUNCHED ? [] : [["meta", { name: "robots", content: "noindex" }]],
+  sitemap: {
+    hostname: "https://ctrlyoke.dev/docs/",
+  },
+  head: [
+    ...(LAUNCHED ? [] : [["meta", { name: "robots", content: "noindex" }]]),
+    ["meta", { property: "og:site_name", content: "ctrlyoke" }],
+    ["meta", { property: "og:type", content: "website" }],
+    [
+      "meta",
+      {
+        property: "og:image",
+        content: "https://ctrlyoke.dev/assets/hero-poster.webp",
+      },
+    ],
+    ["meta", { name: "twitter:card", content: "summary_large_image" }],
+    [
+      "meta",
+      {
+        name: "twitter:image",
+        content: "https://ctrlyoke.dev/assets/hero-poster.webp",
+      },
+    ],
+  ],
   themeConfig: {
     logo: "/ctrlyoke-icon.svg",
     nav: [

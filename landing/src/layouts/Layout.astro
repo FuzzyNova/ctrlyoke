@@ -1,6 +1,7 @@
 ---
 import Cta from "../components/Cta.astro";
 import { LAUNCHED, MARKETPLACE_URL } from "../config";
+import heroPoster from "../../../images/screenshots/hero-poster-1350x900.webp";
 import "../styles/global.css";
 
 interface Props {
@@ -25,7 +26,9 @@ const {
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:site_name" content="ctrlyoke" />
+    <meta property="og:image" content={`https://ctrlyoke.dev${heroPoster.src}`} />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content={`https://ctrlyoke.dev${heroPoster.src}`} />
     {/* Pre-launch: no index until ctrlyoke ships (controlled by LAUNCHED in src/config.ts). */}
     {!LAUNCHED && <meta name="robots" content="noindex" />}
   </head>

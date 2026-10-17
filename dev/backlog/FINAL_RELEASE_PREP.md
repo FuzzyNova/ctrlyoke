@@ -193,12 +193,12 @@ of the flip and the tag, and it has no step that makes the Marketplace listing p
 
 ## Docs (good enough; optional polish)
 
-- [ ] `QUICK_START.md` ships in the VSIX but is a stale duplicate with repo-relative `docs/` links.
+- [x] `QUICK_START.md` ships in the VSIX but is a stale duplicate with repo-relative `docs/` links.
       Reduce it to a pointer at `ctrlyoke.dev/docs/guide/quick-start`, or switch to absolute URLs and
       add the `verboseLogging` caveat for the hook-debug log.
 - [ ] `docs/examples/index.md` is thin (4 examples). Before launch if time allows, add mixed-harness
       implement/review, a parallel research group, a worktree run and an onPass retry loop.
-- [ ] Add a sitemap (VitePress `sitemap.hostname`, plus `@astrojs/sitemap` or a static sitemap) and
+- [x] Add a sitemap (VitePress `sitemap.hostname`, plus `@astrojs/sitemap` or a static sitemap) and
       an `og:image`. `Layout.astro` declares `summary_large_image` but has no image.
 - [ ] `DOCUMENTATION_GAPS_PLAN.md` P1 rows: a CLI "continuing and editing runs" walkthrough and
       `@image` attachments in `context-files.md`. Also mark its stale P0 mobile/Tailscale and §3.2
@@ -206,13 +206,13 @@ of the flip and the tag, and it has no step that makes the Marketplace listing p
 
 ## Checklist housekeeping (`RELEASE_CHECKLIST.md`)
 
-- [ ] Rewrite the L5 status header. It still says Phase 8 is the largest blocker and full-suite is
+- [x] Rewrite the L5 status header. It still says Phase 8 is the largest blocker and full-suite is
       failing.
-- [ ] Summary row L1249: the Marketplace step now depends on DataRep and v0.2.0, not Phase 8.
-- [ ] L551: name both purchase gates (the site and the LS storefront).
-- [ ] L722: drop "set the real CHECKOUT_URL" (already live). Tick L766 and L1086 (0 issues/PRs
+- [x] Summary row L1249: the Marketplace step now depends on DataRep and v0.2.0, not Phase 8.
+- [x] L551: name both purchase gates (the site and the LS storefront).
+- [x] L722: drop "set the real CHECKOUT_URL" (already live). Tick L766 and L1086 (0 issues/PRs
       verified).
-- [ ] Phase 4.4 self-contradictions: storefront ON vs OFF (L146 vs L154), and "not yet
+- [x] Phase 4.4 self-contradictions: storefront ON vs OFF (L146 vs L154), and "not yet
       deployed/verified" notes at L186, L278, L305, L424 and L506 that were superseded on Oct 16.
-- [ ] Add the go-live order above and the "make Marketplace listing public" checkbox.
-- [ ] Stale backlog headers: `SCREENSHOTS_AND_MEDIA_PLAN.md:37-39` and `WORKFLOW_STEP_PLAN.md:12-14`.
+- [x] Add the go-live order above and the "make Marketplace listing public" checkbox.
+- [x] Stale backlog headers: `SCREENSHOTS_AND_MEDIA_PLAN.md:37-39` and `WORKFLOW_STEP_PLAN.md:12-14`.
