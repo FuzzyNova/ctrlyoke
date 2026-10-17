@@ -9,6 +9,7 @@ import { Log } from "../utils/Log";
 import { secretRedactionService } from "../utils/SecretRedactionService";
 import { stripLeadingBom } from "../utils/TextUtils";
 import type { CompletionNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
+import { LICENSE_UI } from "../types/DashboardConstants";
 
 const PRIVATE_DIRECTORY_MODE = 0o700;
 const PRIVATE_FILE_MODE = 0o600;
@@ -92,7 +93,7 @@ export class WebPushService {
   private readonly onAccessBlocked: (() => void) | undefined;
 
   constructor(
-    private readonly vapidSubject: string = "mailto:ctrlyoke@example.com", //TODO: update this with a valid support email when we get one
+    private readonly vapidSubject: string = `mailto:${LICENSE_UI.SUPPORT_EMAIL}`,
     options: WebPushServiceOptions = {}
   ) {
     this.canUseRemoteAccess = options.canUseRemoteAccess ?? (async () => true);

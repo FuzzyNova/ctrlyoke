@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-17 by release-ready audit workflow (Claude, code-sanity auditor)
 - **Area:** `src/server/WebPushService.ts` (~L95, ~L265), `src/server/CtrlYokeHostedServer.ts` (~L406)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

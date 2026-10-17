@@ -6,6 +6,7 @@ import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import {
   COMPLETION_NOTIFICATION_KINDS,
   COMPLETION_NOTIFICATION_SEVERITY,
+  LICENSE_UI,
 } from "../../types/DashboardConstants";
 import {
   WebPushService,
@@ -71,6 +72,28 @@ suite("WebPushService", () => {
     assert.strictEqual(stored.privateJwk.crv, "P-256");
     assert.strictEqual(typeof stored.privateJwk.x, "string");
     assert.strictEqual(typeof stored.privateJwk.y, "string");
+  });
+
+  test("uses the support email as the default VAPID subject", async () => {
+    const service = new WebPushService();
+    await service.upsertSubscription(await createValidSubscription(), {});
+    let subject: string | undefined;
+    globalThis.fetch = async (_input, init = {}) => {
+      const authorization = new Headers(init.headers).get("Authorization");
+      const token = authorization?.match(/vapid t=([^,]+)/)?.[1];
+      assert.ok(token, "push request should include a VAPID token");
+      const payload = token!.split(".")[1];
+      subject = (
+        JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
+          sub: string;
+        }
+      ).sub;
+      return new Response(null, { status: 201 });
+    };
+
+    await service.sendNotification(createEvent());
+
+    assert.strictEqual(subject, `mailto:${LICENSE_UI.SUPPORT_EMAIL}`);
   });
 
   test("does not overwrite an existing corrupt VAPID keys file", async () => {
