@@ -45,7 +45,7 @@ exercise the `format:check` gate that item 7 adds, so item 3 is effectively owne
 
 ## Before the repo flip
 
-- [ ] **1. Test-mode orders mint production licenses (was BLOCKER; mitigated).** Bug:
+- [x] **1. Test-mode orders mint production licenses (was BLOCKER; mitigated).** Bug:
       [`test-mode-lemon-squeezy-orders-mint-production-licenses.md`](../bugs/implemented/test-mode-lemon-squeezy-orders-mint-production-licenses.md).
       The test checkout URLs are in `src/license/LemonSqueezyConstants.ts` (and in git history).
       `ls-webhook.ts` maps the test variants to the production Keygen policies and never checks
@@ -70,7 +70,8 @@ exercise the `format:check` gate that item 7 adds, so item 3 is effectively owne
       Marketplace listing and the `LAUNCHED` flip until the appointment is confirmed, since those
       are what actually offer the product to the EU/UK. Housekeeping: reword checklist L551 and
       L722 to match.
-- [ ] **3. Run `ci.yml` once on GitHub.** The future required check `fast-checks` has never run
+- [ ] **3. Run `ci.yml` once on GitHub (owner, after merge; tracked in the checklist's Go-live
+      order).** The future required check `fast-checks` has never run
       (`gh run list --workflow ci.yml` is empty). Run `gh workflow run ci.yml --ref main`, and run
       full-suite again too (last green 2026-10-13). Confirm both are green before applying the
       rulesets.
@@ -118,12 +119,12 @@ exercise the `format:check` gate that item 7 adds, so item 3 is effectively owne
       [`deploy-path-filter-skips-root-legal-docs.md`](../bugs/implemented/deploy-path-filter-skips-root-legal-docs.md).
       Both deploy workflows now include root legal documents, `src/license/**`, and `netlify/**`.
       The production redeploy happens after this work merges to `main`; check `/privacy/` then.
-- [ ] **10. Small code bugs:**
+- [x] **10. Small code bugs:**
   - [x] [`web-push-vapid-subject-placeholder-email.md`](../bugs/implemented/web-push-vapid-subject-placeholder-email.md)
   - [x] [`opencode-pretooluse-compat-matrix-overstates-blocking.md`](../bugs/implemented/opencode-pretooluse-compat-matrix-overstates-blocking.md):
         the public matrix promises that a preToolUse guard blocks on OpenCode, and it does not.
   - [x] [`readme-logo-relative-image-path.md`](../bugs/implemented/readme-logo-relative-image-path.md)
-- [ ] **11. Version strings.** Re-date `CHANGELOG.md` `[0.2.0]` (currently 2026-10-16). Bump the
+- [ ] **11. Version strings (release day; tracked in the checklist).** Re-date `CHANGELOG.md` `[0.2.0]` (currently 2026-10-16). Bump the
       `ctrlyoke@0.1.2` pins in `docs/cli/ci.md` (L13, 19, 188, 200). Optionally inject the package
       version for `src/mcp-server.ts:434` (`"1.0.0"`) and `CodexAppServerClient.ts:132` (`"0.1.0"`).
 - [x] **12. Pricing copy vs EULA §6(c) (decided 2026-10-17; agent-ready).** The pricing page says
@@ -179,6 +180,9 @@ of the flip and the tag, and it has no step that makes the Marketplace listing p
 
 ## Right after the flip
 
+These owner items are now tracked in `RELEASE_CHECKLIST.md` (Phase 14 and "Release-day and
+post-flip follow-ups"), which stays the canonical go-live tracker.
+
 - [ ] Enable private vulnerability reporting, and confirm `TRUST_PAGE.md`'s `/security/policy` link
       resolves.
 - [ ] Optional settings not covered by `apply-github-guardrails.mjs`: squash-only merges,
@@ -196,7 +200,7 @@ of the flip and the tag, and it has no step that makes the Marketplace listing p
 - [x] `QUICK_START.md` ships in the VSIX but is a stale duplicate with repo-relative `docs/` links.
       Reduce it to a pointer at `ctrlyoke.dev/docs/guide/quick-start`, or switch to absolute URLs and
       add the `verboseLogging` caveat for the hook-debug log.
-- [ ] `docs/examples/index.md` is thin (4 examples). Before launch if time allows, add mixed-harness
+- [x] `docs/examples/index.md` is thin (4 examples). Before launch if time allows, add mixed-harness
       implement/review, a parallel research group, a worktree run and an onPass retry loop.
 - [x] Add a sitemap (VitePress `sitemap.hostname`, plus `@astrojs/sitemap` or a static sitemap) and
       an `og:image`. `Layout.astro` declares `summary_large_image` but has no image.

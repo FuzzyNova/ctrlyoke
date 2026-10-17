@@ -2315,10 +2315,16 @@ suite("WorkflowSerializer", () => {
     }
 
     async function cleanUpStateRoot(workspaceRoot: string): Promise<void> {
-      await fs.rm(path.dirname(WorkflowPaths.runsRoot(workspaceRoot)), {
-        recursive: true,
-        force: true,
-      });
+      // Windows can still hold a just-restored file as cleanup starts
+      // (ENOTEMPTY); residual cleanup must never fail a green test.
+      await fs
+        .rm(path.dirname(WorkflowPaths.runsRoot(workspaceRoot)), {
+          recursive: true,
+          force: true,
+          maxRetries: 5,
+          retryDelay: 100,
+        })
+        .catch(() => {});
     }
 
     test("Clear all history is refused without its confirmation phrase", async () => {

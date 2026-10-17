@@ -48,12 +48,12 @@ describe("findCliFileReferenceRanges", () => {
 
   it("still matches a plain .js script path (a real, openable file)", () => {
     const text =
-      "C:\\\\Users\\\\natha\\\\AppData\\\\Roaming\\\\npm\\\\node_modules\\\\codex\\\\bin\\\\codex.js --enable hooks";
+      "C:\\\\Users\\\\you\\\\AppData\\\\Roaming\\\\npm\\\\node_modules\\\\codex\\\\bin\\\\codex.js --enable hooks";
     const ranges = findCliFileReferenceRanges(text);
 
     expect(ranges).toHaveLength(1);
     expect(ranges[0].openPath).toBe(
-      "C:\\Users\\natha\\AppData\\Roaming\\npm\\node_modules\\codex\\bin\\codex.js"
+      "C:\\Users\\you\\AppData\\Roaming\\npm\\node_modules\\codex\\bin\\codex.js"
     );
   });
 

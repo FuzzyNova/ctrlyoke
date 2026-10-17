@@ -72,28 +72,25 @@ suite("FileAccessPolicy", () => {
 
   if (process.platform === "win32") {
     test("resolves a forward-slash Windows external root", () => {
-      const candidate = "C:\\Users\\natha\\shared\\a.md";
+      const candidate = "C:\\Users\\you\\shared\\a.md";
       const decision = evaluateFileAccess(candidate, {
         workspaceRoots: ["C:\\dev\\ws"],
-        approvedExternalRoots: ["C:/Users/natha/shared"],
+        approvedExternalRoots: ["C:/Users/you/shared"],
       });
 
       assert.strictEqual(decision.allowed, true);
       assert.strictEqual(decision.reason, "trustedExternalRoot");
       assert.strictEqual(
         decision.matchedRoot,
-        path.resolve("C:/Users/natha/shared")
+        path.resolve("C:/Users/you/shared")
       );
     });
 
     test("does not widen a normalized Windows root to a sibling prefix", () => {
-      const decision = evaluateFileAccess(
-        "C:\\Users\\natha\\shared-evil\\a.md",
-        {
-          workspaceRoots: ["C:\\dev\\ws"],
-          approvedExternalRoots: ["C:/Users/natha/shared"],
-        }
-      );
+      const decision = evaluateFileAccess("C:\\Users\\you\\shared-evil\\a.md", {
+        workspaceRoots: ["C:\\dev\\ws"],
+        approvedExternalRoots: ["C:/Users/you/shared"],
+      });
 
       assert.strictEqual(decision.allowed, false);
       assert.strictEqual(decision.reason, "outsideTrustedRoots");

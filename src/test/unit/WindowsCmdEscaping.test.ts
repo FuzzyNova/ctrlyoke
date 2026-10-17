@@ -103,7 +103,7 @@ suite("WindowsCmdEscaping", () => {
     const trustArg =
       'hooks.state={ "C:\\\\<session-flags>\\\\config.toml:session_start:0:0" = { "trusted_hash" = "sha256:abc" } }';
     const args = buildCmdExeVerbatimArgs(
-      "C:\\Users\\natha\\AppData\\Roaming\\npm\\codex.cmd",
+      "C:\\Users\\you\\AppData\\Roaming\\npm\\codex.cmd",
       ["-c", trustArg]
     );
     const payload = args.join(" ");

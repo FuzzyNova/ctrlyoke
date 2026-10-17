@@ -549,7 +549,7 @@ The plan's open question #4 ("LS custom fulfillment vs. our own transactional em
    - [x] _Done October 16, 2026:_ every test and smoke-test license was deleted except Pro `e936bf6b` ("test1"), which Nathan keeps for his own machines. The three test-mode Enterprise subscriptions were cancelled first, so no renewal event will ever reference a deleted license. Original item: **Clean up Keygen:** delete or suspend the smoke-test licenses. They count against the Dev-tier 100-license cap; see the Verification Plan in `PRO_LICENSE_PLAN.md`.
    - [x] **Update this checklist's records with the live values** (done October 16, 2026): the 5.1 table's Products and Webhooks rows (live product ids, live webhook id), 4.4 item 2's "copying this product to live mode is still open" note, 4.4 item 3's variant-id citation, and the Phase-status table's "live-mode product copy" open item.
    - [x] **Grab the live checkout links** — in `LS_CHECKOUT_URLS`. `landing/src/config.ts` selects the test-mode link under `astro dev` and the live link in every build. The Enterprise card leads to `/enterprise/checkout/` (4.4 item 5), with the PO/invoice `mailto:sales@` link underneath. The site's `LAUNCHED` flag gates purchases through ctrlyoke.dev; the separately published Lemon Squeezy storefront is already ON and directly purchasable.
-   - **Deliberately still held:** flipping `LAUNCHED = true` (Phase 9). This enables the site's purchase links. Direct purchases through the live LS storefront remain available, as decided October 17, 2026 (see `dev/backlog/FINAL_RELEASE_PREP.md`, item 2).
+   - **Deliberately still held:** flipping `LAUNCHED = true` (Phase 9). This enables the site's purchase links. Direct purchases through the live LS storefront remain available, as decided October 17, 2026 (see `dev/implemented/FINAL_RELEASE_PREP.md`, item 2).
 
 ### 5.4 Why the ordering matters (chicken-and-egg)
 
@@ -1248,6 +1248,25 @@ before the merge does not exercise the `format:check` gate added to `ci.yml`.
 7. Commit `LAUNCHED = true`. Verify a live Pro checkout and that `noindex` is gone
    from `/` and `/docs/`.
 8. Capture the trademark specimen screenshots after the Marketplace listing is public.
+
+### Release-day and post-flip follow-ups
+
+Carried over from the 2026-10-17 release-prep audit (`dev/implemented/FINAL_RELEASE_PREP.md`).
+
+- [ ] Release day: bump the `ctrlyoke@0.1.2` pins in `docs/cli/ci.md` to the released version.
+      Optionally inject the package version for the MCP server's advertised version
+      (`src/mcp-server.ts`, `"1.0.0"`) and the Codex app-server client info
+      (`CodexAppServerClient.ts`, `"0.1.0"`).
+- [ ] After the flip: optional repo settings not covered by `apply-github-guardrails.mjs`
+      (squash-only merges, auto-delete head branches, disable Projects, Dependabot security
+      updates); consider versioning them in the script.
+- [ ] After the flip: update `full-suite.yml`'s "private-repo 2-vCPU runner" comment. Public
+      repos get 4 vCPUs, so also reconsider the raised 60 s UI timeout.
+- [ ] Pin `softprops/action-gh-release` to a SHA, and pin `netlify-cli@latest` and the `npm@^11`
+      upgrade to exact versions. Both run in jobs that hold publish secrets.
+- [ ] Social preview / `og:image`: the site currently uses the landing hero poster
+      (`/assets/hero-poster.webp`); replace it with a dedicated 1280×640 image when one exists, and
+      upload the same image as the GitHub social preview.
 
 ## Summary Table
 
