@@ -6,9 +6,10 @@
 > `$previous:summary:3`, `$step:summary:1,3-5`. Read every `$summary:<selector>` below as
 > `$<kind>:summary…`; `PRIOR_CONTEXT_SUMMARY_PREFIX` is now `PRIOR_CONTEXT_SUMMARY_SEGMENT`.
 >
-> **2026-10-13:** The pre-release slice of D12 landed: `PriorContextItem.scriptVerdict` and its
-> `<verdict/>` rendering (D12a, for every script step), and `PRIOR_CONTEXT_SUMMARY_PREFIX`,
-> reserved by an editor warning but not yet parsed or expanded (D12b).
+> **2026-10-17 status:** The prior-context work described by D12 is implemented through
+> `PRIOR_CONTEXT_DETAIL_PLAN.md` Phases 0–3, including structured full output, script verdicts,
+> bounded summary detail, and descendant-only child-run output reads. The first-class sub-workflow
+> step in this plan remains unimplemented; the two prerequisite worktree bugs are fixed.
 >
 > **2026-10-10 audit:** Not started apart from the two prerequisite worktree bugs (fixed in
 > `87c4065e4`, `1f4a87c1e`). No `STEP_TYPES.WORKFLOW`, `subWorkflowStep`, `getStepType`,

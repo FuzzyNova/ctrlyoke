@@ -25,28 +25,22 @@ because the small palette greyed every accent colour) plus `output-pane-find-dif
 as a GIF at any legible size, which is why the README cut is shorter. The landing hero also has
 a `hero-poster-1350x900.webp` poster frame. Everything else below is post-launch polish.
 
-**Status:** Partial. Capture is under way; slotting assets into landing and docs has started.
+**Status:** Partial. The release-blocking README media is complete; remaining captures and slotting
+are post-launch polish.
 
-> **2026-10-10 audit:** Done: #6 (the landing hero, now `hero-{av1,h264}-1350x900.mp4`), #1 in a different
-> form (the six `rate-limiter-*-1200x800.png` stills in landing's `HarnessDeck.astro` instead of a
-> layered composite), #3/#7 motion (`ctrlyoke-take-control-1080p.mp4` on landing), and #7's iOS,
-> Android and desktop setup sets, slotted into `docs/pro/mobile-setup.md`. #12 is captured and
-> slotted into `docs/workflows/properties-panel.md`. #10 (explorer and search stills only) and #11
-> (`undo-changes-dialog-1680x1800.png`) are captured but not slotted. The docs copy pipeline exists
-> as `scripts/sync-docs-screenshots.mjs`. Not started: #2, #4, #5, #8, #9, #13 (all walkthrough
-> media; the walkthrough now has six steps, and `.vscodeignore` still has no `images/screenshots`
-> allowlist line) and #14. The `demo-app` project referenced below lives outside the repo.
-> **README.md has no images at all.**
+> **2026-10-17 audit:** `README.md` now has the 10-second hero GIF and two dashboard stills, linked
+> with absolute `https://ctrlyoke.dev/docs/screenshots/` URLs. The docs sync script scans README
+> references and copies those images into the docs build. The walkthrough has themed static captures
+> for its setup steps and a dark-only run-workflow GIF. The landing hero, rate-limiter stills,
+> take-control video, mobile/desktop setup sets, and properties-panel image remain captured and
+> slotted as described below. Other numbered captures and placements are still open; the
+> `demo-app` project referenced below lives outside the repo.
 >
-> **Pre-release: yes, partly.** `RELEASE_CHECKLIST.md` Phase 8 makes "Screenshots + demo GIF for
-> README/Marketplace" a release blocker, and nothing has gone into `README.md` yet. The minimum
-> before publish is the existing hero GIF plus one or two dashboard stills in `README.md`. They
-> need absolute `https://` URLs, either from the published site or from the GitHub repo once it
-> is public. `vsce` rewrites relative image paths to the repo URL, and `.vscodeignore` excludes
-> `images/screenshots/`, so relative paths break while the repo is private. Every published VSIX
-> freezes its README, so a first impression with no images can't be fixed retroactively for that
-> version. Walkthrough media (#13) is also frozen per VSIX, but text-only steps work, so it isn't
-> a blocker. Everything else here (landing and docs polish) can ship any time after release.
+> **Pre-release: done.** `RELEASE_CHECKLIST.md` Phase 8's README/Marketplace media gate is complete.
+> The README uses absolute site URLs, and `scripts/sync-docs-screenshots.mjs` publishes the
+> referenced files with the docs site. Verify the README images render during Phase 9's public
+> Marketplace check. Remaining walkthrough and marketing media is not release-blocking.
+> Everything else here (landing and docs polish) can ship any time after release.
 
 ## Goal
 
