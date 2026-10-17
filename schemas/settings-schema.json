@@ -486,7 +486,7 @@
       "properties": {
         "reuseRunningTerminal": {
           "type": "boolean",
-          "description": "When true, keeps the TUI alive between prompts and sends follow-up prompts to the running terminal instead of restarting the harness. Faster, and avoids the Claude Code resume cache bug. Interactive steps only, and only when the step resumes the previous session. Has no effect while `execution.closeTerminalOnComplete` is on.",
+          "description": "When true, a step that resumes a session whose terminal is still open types its prompt into that running terminal instead of restarting the harness with a resume, which is faster. Interactive steps only, and only when the step's start-up properties (model, tool permissions, hooks, MCP servers, additional args, secrets) match the running process; otherwise a new process starts. Whether terminals stay open after a step is set by `execution.closeTerminalOnComplete`, so this has no effect while that is on.",
           "default": true
         },
         "closeTerminalOnComplete": {

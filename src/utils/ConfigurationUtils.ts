@@ -879,9 +879,9 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Returns true when terminal reuse is enabled.
-   * Keeps the TUI alive and writes follow-up prompts directly into the PTY,
-   * avoiding terminal restart latency and the Claude Code resume cache bug.
+   * Returns true when terminal reuse is enabled: a resumed step's prompt is
+   * written into the PTY still holding its session instead of restarting the
+   * harness, avoiding terminal restart latency.
    *
    * closeTerminalOnComplete takes precedence: if terminals are closed on
    * completion, injection is impossible regardless of the reuseRunningTerminal setting.

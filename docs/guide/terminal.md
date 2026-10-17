@@ -70,16 +70,20 @@ A finished interactive step leaves its terminal open, with its session still
 live, so the next step can continue the same conversation:
 
 - **Reuse running terminal** (`execution.reuseRunningTerminal`, on by default) types the next
-  step's prompt straight into that terminal instead of starting the harness
-  again. This only happens when the next step is interactive, uses the same
-  harness, resumes the previous session, and doesn't change anything the
-  harness only reads at start-up: the model, permissions, hooks, MCP servers or
-  additional arguments. Otherwise ctrlyoke starts a new terminal.
+  step's prompt straight into the terminal holding the session it resumes,
+  instead of starting the harness again. That terminal doesn't have to be the
+  previous step's: a step that resumes an earlier conversation, for example
+  after you continue a run from an earlier step, is typed into that
+  conversation's terminal if it is still open. This only happens when the step
+  is interactive, uses the same harness, and doesn't change anything the
+  harness only reads at start-up: the model, permissions, hooks, MCP servers,
+  additional arguments or secrets. Otherwise ctrlyoke starts a new terminal.
 - A step that starts a **new session** (`resumeSession: false`), or changes one
   of those start-up properties, gets a terminal of its own beside the old one,
-  so both conversations stay open. When a step resumes a session that another
-  terminal still holds, that older terminal is closed first, because a harness
-  session can only be open in one place.
+  so both conversations stay open. When a new terminal resumes a session that
+  another terminal still holds, that older terminal is closed first and its tab
+  removed, because a harness session can only be open in one place and the new
+  terminal continues the same conversation.
 - A headless step between two interactive steps closes the terminal, so the
   next interactive step starts a fresh one.
 
@@ -93,7 +97,7 @@ in these cases, and a strip at the bottom of an ended terminal says why:
 | ---------------------------------------------- | ------------------------------------------------------------------------------------- |
 | **Process closed — step complete**             | A parallel member finished, or `execution.closeTerminalOnComplete` is on.             |
 | **Process closed — worktree released**         | The run used a [worktree](/workflows/worktrees), which is released when the run ends. |
-| **Process closed — replaced by a new session** | A later step took over the session.                                                   |
+| **Process closed — replaced by a new session** | The terminal was closed to make way for a later step's terminal.                      |
 | **Process stopped**                            | You stopped the run.                                                                  |
 
 Turn on `execution.closeTerminalOnComplete` to close every AI terminal when its

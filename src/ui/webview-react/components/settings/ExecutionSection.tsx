@@ -109,7 +109,7 @@ export function ExecutionSection({
         {...{
           description: exec.closeTerminalOnComplete
             ? "Unavailable — terminal reuse requires keeping the terminal open. Disable 'Close terminal on completion' to enable this."
-            : "Keep the TUI alive between prompts — faster and avoids the Claude Code resume cache bug.",
+            : "Type a resumed step's prompt into its still-open terminal instead of restarting the harness — faster.",
         }}
         checked={exec.reuseRunningTerminal ?? false}
         onChange={(v) => onUpdate("execution.reuseRunningTerminal", v)}
