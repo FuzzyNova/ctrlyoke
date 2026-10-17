@@ -590,6 +590,28 @@ You can't create the LS webhook without a target URL, and the Netlify function's
       through its Irish entity and the separate UK appointment through DataRep
       UK under one service. Current plan and purchase procedure (verified
       September 17, 2026):
+
+  **Status, October 16, 2026: purchased, waiting on DataRep's client
+  questionnaire.** Nathan bought the Small Company — No Sensitive Data package
+  (€150/year) and has the receipt. Nothing in ctrlyoke is Article 9 special-category
+  data, telemetry included, so that tier is correct. Step 1's consultation was
+  skipped. DataRep's service page already confirms the UK appointment is
+  included at no extra cost, so what still needs DataRep is the start date and
+  the wording to publish (step 4). Per DataRep's FAQ, the appointment starts
+  only once a satisfactorily completed one-page questionnaire is received with
+  payment, and the Article 30 record is due within 30 days of the start.
+  Prepared ahead of the questionnaire:
+  - [`dev/reference/DATAREP_QUESTIONNAIRE_PREFILL.md`](../reference/DATAREP_QUESTIONNAIRE_PREFILL.md):
+    answers for step 3, with **[confirm]** markers for the facts only Nathan
+    knows (employee count, data-subject estimate, vendor DPAs, breaches).
+  - [`dev/reference/GDPR_RECORD_OF_PROCESSING.md`](../reference/GDPR_RECORD_OF_PROCESSING.md):
+    the draft Article 30 record (step 4's last item). Keep it updated whenever
+    `PRIVACY.md` or `DPA.md` changes.
+
+  Telemetry is compiled into CI-built packages from 0.2.0 on (Phase 8), so
+  **hold the `v0.2.0` tag push until DataRep confirms the appointment has
+  started**, then do step 5 before or with the release.
+
   1. Start with DataRep's [free representative
      consultation](https://www.datarep.com/consultation/) and send them links or
      copies of `PRIVACY.md` and, if useful, `DPA.md`. Ask them to confirm in
@@ -653,6 +675,7 @@ You can't create the LS webhook without a target URL, and the Netlify function's
      DataRep's renewal questionnaire and renew or upgrade without a coverage gap.
      Revisit the tier earlier when approaching 1,000 relevant people or whenever
      processing changes materially.
+
 - [x] Publish the refund policy decided in [`REFUND_POLICY.md`](../backlog/REFUND_POLICY.md): Pro gets a 30-day money-back guarantee, and Enterprise stays non-refundable under the existing terms. Add the pricing FAQ, docs, and LS product copy, fix the partial-refund webhook bug, and add the live-mode webhook events. Lemon Squeezy has no auto-refund setting, so each refund is approved by hand. _Repo-side progress (2026-10-10):_ the pricing FAQ and Pro card carry the 30-day guarantee, `docs/pro/index.md` mentions refunds, and the partial-refund webhook bug is fixed (`87ba0728a`; `dev/bugs/implemented/partial-refund-suspends-license.md`). The LS product copy and the live-mode webhook events cannot be checked from the repo. _October 16, 2026:_ the live webhook `143280` subscribes to `subscription_payment_refunded`, and a live Pro refund was verified end to end (5.3 step 6). _October 16, 2026:_ the live Pro product's description, confirmation message, and receipt note now carry "30-day money-back guarantee: email billing@ctrlyoke.dev". The same edit replaced the old "ctrlyoke: Activate Pro License" instructions on both live products, the license-key email, the Enterprise checkout and offline pages, and `docs/pro/index.md` with **Settings → License**.
 - [ ] Publish `ctrlyoke.dev/terms` plain-language summary (the legal page itself is already live rendering `LICENSE.md` directly).
 - [x] Keep public GitHub Issues for community reports; `support@ctrlyoke.dev` stays private for Pro/Enterprise support (both already exist — verified as the intended steady state, not a pending action).
@@ -1220,7 +1243,7 @@ already-versioned lineage descriptor).
 | Live-mode LS webhook (separate from test-mode one)                         | DONE                  | Phase 5.3 step 6 — live webhook `143280` created and smoke-tested with live Pro and Enterprise orders, October 16, 2026                                                                                                                                 |
 | **`LicenseService` implementation**                                        | **DONE**              | Phase 6 — implementation, gate sites, trial, docs, and unlicensed free-path production review complete; QR scanning deferred                                                                                                                            |
 | Attorney sign-off on final EULA                                            | DONE                  | Phase 7 — approved September 7, 2026                                                                                                                                                                                                                    |
-| EU/EEA + UK Article 27 representatives (DataRep)                           | OPEN — SALES GATE     | Phase 7 — purchase the confirmed dual appointment before EU/EEA/UK sales or monitoring, publish the exact executed contact details in `PRIVACY.md`, and renew annually                                                                                  |
+| EU/EEA + UK Article 27 representatives (DataRep)                           | IN PROGRESS — GATE    | Phase 7 — package purchased October 16, 2026; waiting on DataRep's questionnaire (answers and the Article 30 record drafted in `dev/reference/`). Then publish the executed contact details in `PRIVACY.md`, push `v0.2.0`, and renew annually          |
 | Screenshots + demo GIF                                                     | DONE                  | Phase 8 — README GIF and stills in 2026-10-12; verify in the Marketplace listing after publish                                                                                                                                                          |
 | Final `vsce ls` package inspection                                         | DONE                  | Phase 8 — `0.2.0` package inspected and `npm audit --omit=dev` clean, 2026-10-16                                                                                                                                                                        |
 | Marketplace publish                                                        | OPEN — unblocked      | Phase 9 — `v0.1.2` already published by `release.yml` to the listing, which is still private/unpublished; making it public plus the post-publish checks remain, behind Phase 8 packaging/screenshots, not a legal or licensing gate anymore             |
