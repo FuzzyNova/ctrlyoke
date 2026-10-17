@@ -52,7 +52,9 @@ export class OpenCodeNotificationMonitor
     sessionStart: OpenCodeNotificationMonitor.partialHook(
       HOOK_CAVEAT_CODES.MAIN_SESSION_START_UNRELIABLE
     ),
-    preToolUse: OpenCodeNotificationMonitor.verifiedHook(),
+    preToolUse: OpenCodeNotificationMonitor.partialHook(
+      HOOK_CAVEAT_CODES.CANNOT_BLOCK
+    ),
     postToolUse: OpenCodeNotificationMonitor.verifiedHook(),
     userPromptSubmit: OpenCodeNotificationMonitor.verifiedHook(),
     permissionRequest: OpenCodeNotificationMonitor.partialHook(

@@ -30,12 +30,12 @@ declarations that drive the dashboard's compatibility warnings.
 | Notification | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-7">7</a></sup> | <span title="Not supported">❌</span><sup><a href="#note-7">7</a></sup> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-7">7</a></sup> |
 | Permission Request | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Partially supported">◐</span><sup><a href="#note-8">8</a></sup> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-7">7</a></sup> |
 | Post Tool Use | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> |
-| Pre Tool Use | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> |
-| Session Start | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Partially supported">◐</span><sup><a href="#note-9">9</a></sup> | <span title="Supported">✅</span> | <span title="Supported">✅</span> |
+| Pre Tool Use | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Partially supported">◐</span><sup><a href="#note-9">9</a></sup> | <span title="Supported">✅</span> | <span title="Supported">✅</span> |
+| Session Start | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Partially supported">◐</span><sup><a href="#note-10">10</a></sup> | <span title="Supported">✅</span> | <span title="Supported">✅</span> |
 | Stop | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> |
 | User Prompt Submit | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-7">7</a></sup> |
 | **MCP** |  |  |  |  |  |  |
-| Per Server Tool Filtering | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-10">10</a></sup> |
+| Per Server Tool Filtering | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-11">11</a></sup> |
 
 ### Notes
 
@@ -63,10 +63,13 @@ Applies to **Codex**: Error, Notification · **OpenCode**: Notification · **Qwe
 <a id="note-8"></a>**8.** Partially supported because the hook fires but this harness's allow/deny response contract is unverified, so a returned decision may be ignored. _What to do:_ Remove the affected hook event or select a harness with verified support for it.<br>
 Applies to **OpenCode**: Permission Request.
 
-<a id="note-9"></a>**9.** Partially supported because this harness can start the main session before its plugin is listening, so the hook may not fire for it. _What to do:_ Remove the affected hook event or select a harness with verified support for it.<br>
+<a id="note-9"></a>**9.** Partially supported because this harness's pre-tool hook fires but cannot block the tool call. _What to do:_ Remove the affected hook event or select a harness with verified support for it.<br>
+Applies to **OpenCode**: Pre Tool Use.
+
+<a id="note-10"></a>**10.** Partially supported because this harness can start the main session before its plugin is listening, so the hook may not fire for it. _What to do:_ Remove the affected hook event or select a harness with verified support for it.<br>
 Applies to **OpenCode**: Session Start.
 
-<a id="note-10"></a>**10.** Not supported because this harness exposes no documented per-server tool filtering mechanism. _What to do:_ Remove the server filter or select a harness with verified per-server MCP filtering.<br>
+<a id="note-11"></a>**11.** Not supported because this harness exposes no documented per-server tool filtering mechanism. _What to do:_ Remove the server filter or select a harness with verified per-server MCP filtering.<br>
 Applies to **Antigravity**: Per Server Tool Filtering.
 
 ## How to read the matrix

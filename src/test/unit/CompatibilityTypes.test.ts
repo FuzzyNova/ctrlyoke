@@ -11,7 +11,10 @@ import {
   COMPATIBILITY_SOURCE_TIERS,
   PERMISSION_CAPABILITY_KEYS,
 } from "../../types/DashboardConstants";
-import { getCompatibilityCaveatMessage } from "../../types/CompatibilityTypes";
+import {
+  getCompatibilityCaveatMessage,
+  HOOK_CAVEAT_CODES,
+} from "../../types/CompatibilityTypes";
 import { CODEX_PERMISSION_CAPABILITIES } from "../../core/harness/codex/CodexToolPermissionMapper";
 import { ANTIGRAVITY_PERMISSION_CAPABILITIES } from "../../core/harness/antigravity/AntigravityToolPermissionMapper";
 import type {
@@ -109,5 +112,12 @@ suite("Compatibility caveat codes", () => {
   test("an unknown caveat code yields no invented reason", () => {
     assert.strictEqual(getCompatibilityCaveatMessage(undefined), undefined);
     assert.strictEqual(getCompatibilityCaveatMessage("not-a-code"), undefined);
+  });
+
+  test("explains that OpenCode pre-tool hooks cannot block tool calls", () => {
+    assert.match(
+      getCompatibilityCaveatMessage(HOOK_CAVEAT_CODES.CANNOT_BLOCK) ?? "",
+      /pre-tool hook fires but cannot block the tool call/
+    );
   });
 });

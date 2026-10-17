@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import * as path from "path";
 import { OpenCodeNotificationMonitor } from "../../core/harness/opencode/OpenCodeNotificationMonitor";
+import { HOOK_CAVEAT_CODES } from "../../types/CompatibilityTypes";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 
 suite("OpenCodeNotificationMonitor", () => {
@@ -48,5 +49,12 @@ suite("OpenCodeNotificationMonitor", () => {
       OpenCodeNotificationMonitor.CAPABILITIES.notification.mechanism,
       "none"
     );
+  });
+
+  test("marks pre-tool hooks partial because they cannot block the tool call", () => {
+    const declaration = OpenCodeNotificationMonitor.CAPABILITIES.preToolUse;
+
+    assert.strictEqual(declaration.fidelity, "partial");
+    assert.strictEqual(declaration.caveatCode, HOOK_CAVEAT_CODES.CANNOT_BLOCK);
   });
 });

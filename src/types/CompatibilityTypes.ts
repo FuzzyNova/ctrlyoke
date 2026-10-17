@@ -220,6 +220,8 @@ export const HOOK_CAVEAT_CODES = {
   MAIN_SESSION_START_UNRELIABLE: "hooks.mainSessionStartUnreliable",
   /** The hook fires, but the harness's decision-response contract is unverified. */
   UNVERIFIED_DECISION_CONTRACT: "hooks.unverifiedDecisionContract",
+  /** The hook fires, but cannot block the tool call. */
+  CANNOT_BLOCK: "hooks.cannotBlock",
 } as const;
 
 export type PermissionCaveatCode =
@@ -280,6 +282,8 @@ export function getCompatibilityCaveatMessage(
       return "because this harness can start the main session before its plugin is listening, so the hook may not fire for it";
     case HOOK_CAVEAT_CODES.UNVERIFIED_DECISION_CONTRACT:
       return "because the hook fires but this harness's allow/deny response contract is unverified, so a returned decision may be ignored";
+    case HOOK_CAVEAT_CODES.CANNOT_BLOCK:
+      return "because this harness's pre-tool hook fires but cannot block the tool call";
     default:
       return undefined;
   }

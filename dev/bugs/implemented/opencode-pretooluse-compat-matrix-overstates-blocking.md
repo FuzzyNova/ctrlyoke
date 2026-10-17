@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-17 by release-ready audit workflow (Claude, backlog auditor)
 - **Area:** `src/scripts/ctrlyoke-opencode-plugin.ts` (~L149-163, ~L749), hook caveat registry (`HOOK_CAVEAT_CODES`), generated `docs/harnesses/compatibility.md` (~L33)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
