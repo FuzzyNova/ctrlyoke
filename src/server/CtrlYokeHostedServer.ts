@@ -331,7 +331,7 @@ export class CtrlYokeHostedServer
   private readonly fileWatcherFactory: FileWatcherFactory;
   private readonly fileWatchers = new Map<
     string,
-    { watcher: FileWatcher; clients: Set<string> }
+    { watcher: FileWatcher; clients: Map<string, string> }
   >();
   private readonly watchedFilesByClient = new Map<string, string>();
   private readonly canUseRemoteAccess: (() => Promise<boolean>) | undefined;
@@ -2984,7 +2984,10 @@ export class CtrlYokeHostedServer
     }
     const normalizedPath = path.resolve(absolutePath);
     const currentPath = this.watchedFilesByClient.get(clientId);
-    if (currentPath === normalizedPath) return;
+    if (currentPath === normalizedPath) {
+      this.fileWatchers.get(normalizedPath)?.clients.set(clientId, viewerPath);
+      return;
+    }
     this.unwatchWorkspaceFile(clientId);
 
     let subscription = this.fileWatchers.get(normalizedPath);
@@ -2994,8 +2997,9 @@ export class CtrlYokeHostedServer
         directory,
         path.basename(normalizedPath)
       );
-      subscription = { watcher, clients: new Set() };
+      subscription = { watcher, clients: new Map() };
       this.fileWatchers.set(normalizedPath, subscription);
+      const subscribedClients = subscription.clients;
       const notify = async (type = 2) => {
         let modifiedAt: number | undefined;
         try {
@@ -3003,17 +3007,22 @@ export class CtrlYokeHostedServer
         } catch {
           // A delete event has no current modification time.
         }
-        this.broadcastWorkspaceFileChanged(viewerPath, modifiedAt);
-        void this.languageIntelligenceHost.notifyWorkspaceFileChanged(
-          viewerPath,
-          type
-        );
+        for (const subscribedViewerPath of subscribedClients.values()) {
+          this.broadcastWorkspaceFileChanged(
+            subscribedViewerPath,
+            modifiedAt
+          );
+          void this.languageIntelligenceHost.notifyWorkspaceFileChanged(
+            subscribedViewerPath,
+            type
+          );
+        }
       };
       watcher.onDidChange(() => void notify(2));
       watcher.onDidCreate(() => void notify(1));
       watcher.onDidDelete(() => void notify(3));
     }
-    subscription.clients.add(clientId);
+    subscription.clients.set(clientId, viewerPath);
     this.watchedFilesByClient.set(clientId, normalizedPath);
   }
 

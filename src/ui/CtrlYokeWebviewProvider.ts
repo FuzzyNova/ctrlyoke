@@ -229,7 +229,9 @@ export class CtrlYokeWebviewProvider
     // webview iframe loads, but React's message listener may not be
     // attached yet. The READY handler sends INIT again as a
     // guaranteed fallback once React confirms it is listening.
-    void this.settingsSync.sendInitialState();
+    void this.settingsSync.sendInitialState().catch((error) => {
+      Log.warn("[CtrlYokeWebviewProvider] Failed to send early INIT:", error);
+    });
 
     if (this._pendingActiveWorkflowId !== undefined) {
       this.notifyActiveWorkflowChanged(this._pendingActiveWorkflowId);

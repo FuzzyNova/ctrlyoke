@@ -685,6 +685,53 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
       }
     });
   });
+
+  test("shared file watchers report each subscriber's viewer path", async () => {
+    await withServer(async (root, port, token, watcherFactory) => {
+      const realPath = path.join(root, "real.ts");
+      const linkPath = path.join(root, "link.ts");
+      fs.writeFileSync(realPath, "export {};\n");
+      try {
+        fs.symlinkSync(realPath, linkPath, "file");
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === "EPERM" || code === "EACCES" || code === "ENOTSUP") {
+          return;
+        }
+        throw error;
+      }
+
+      const linkTab = await openBrowserTab(port, token, "link-tab");
+      const realTab = await openBrowserTab(port, token, "real-tab");
+      try {
+        for (const [clientId, viewerPath] of [
+          ["link-tab", "link.ts"],
+          ["real-tab", "real.ts"],
+        ]) {
+          const watch = await sendJsonRequest(
+            port,
+            `/api/workspace-viewer/file/watch?token=${token}`,
+            "POST",
+            { path: viewerPath },
+            { "x-ctrlyoke-client-id": clientId }
+          );
+          assert.strictEqual(watch.statusCode, 200);
+        }
+        assert.strictEqual(watcherFactory.watchers.length, 1);
+
+        const linkChange = nextWorkspaceFileChanged(linkTab);
+        const realChange = nextWorkspaceFileChanged(realTab);
+        fs.writeFileSync(realPath, "export const changed = true;\n");
+        watcherFactory.fireChange(realPath);
+
+        assert.strictEqual((await linkChange).path, "link.ts");
+        assert.strictEqual((await realChange).path, "real.ts");
+      } finally {
+        linkTab.close();
+        realTab.close();
+      }
+    });
+  });
 });
 
 suite("CtrlYokeHostedServer theme defaults", () => {

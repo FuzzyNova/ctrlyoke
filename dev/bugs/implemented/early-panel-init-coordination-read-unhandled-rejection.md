@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-16 by Claude Code (production telemetry triage)
 - **Area:** `src/ui/CtrlYokeWebviewProvider.ts`, `src/ui/WebviewSettingsSync.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

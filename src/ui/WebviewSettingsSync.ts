@@ -39,6 +39,7 @@ import type {
   CapabilitiesFile,
   CapabilitiesModel,
 } from "../types/CapabilitiesTypes";
+import type { CoordinationScopeSnapshot } from "../types/CtrlYokeTypes";
 import {
   ConfigurationUtils,
   CONFIG_KEYS,
@@ -276,8 +277,16 @@ export class WebviewSettingsSync {
     );
 
     const workflowState = this.getCurrentState(clientId);
-    const coordinationScope =
-      await this.getOrchestrator()?.getCoordinationScopeSnapshot?.(clientId);
+    let coordinationScope: CoordinationScopeSnapshot | undefined;
+    try {
+      coordinationScope =
+        await this.getOrchestrator()?.getCoordinationScopeSnapshot?.(clientId);
+    } catch (error) {
+      Log.warn(
+        "[WebviewSettingsSync] Failed to load coordination scope for INIT:",
+        error
+      );
+    }
     const globalSettings = this.buildGlobalSettings();
     const modelOptions = this.buildModelOptions();
     this.licenseAccess = await this.resolveLicenseAccess();

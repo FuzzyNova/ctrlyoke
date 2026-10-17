@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-17 by Claude Code during a full `npm test`
 - **Area:** `src/ui/webview-react/test/components/workflow/WorkflowStatus.test.tsx`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

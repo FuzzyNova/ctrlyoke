@@ -4,7 +4,7 @@
  * WorkflowStatus depends on workflowStore, uiStore, settingsStore and vscodeApi.
  * Strategy: preset store state, render, assert what's visible and what's posted.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   render,
   screen,
@@ -65,6 +65,10 @@ beforeEach(() => {
     window.vscodeApi as unknown as { postMessage: ReturnType<typeof vi.fn> }
   ).postMessage = postMessageSpy;
   postMessageSpy.mockClear();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 function setRecentWorkflows(
@@ -1724,7 +1728,8 @@ describe("WorkflowStatus — run navigation panel", () => {
   });
 
   it("re-clicking the chevron while the run panel is open switches back to the workflow list", async () => {
-    const user = userEvent.setup();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const workflowKey = "multi-wf" as never;
     render(<WorkflowStatus />);
     setRecentWorkflows([
@@ -1765,16 +1770,18 @@ describe("WorkflowStatus — run navigation panel", () => {
     expect(
       document.querySelector(".animate-slide-out-right")
     ).toBeInTheDocument();
-    await waitFor(() => {
-      expect(
-        document.querySelector(".animate-slide-out-right")
-      ).not.toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(321);
     });
+    expect(
+      document.querySelector(".animate-slide-out-right")
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Multi-run Workflow")).toBeInTheDocument();
   });
 
   it("restores the workflow list when Back is pressed from the run panel", async () => {
-    const user = userEvent.setup();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const workflowKey = "multi-wf" as never;
     render(<WorkflowStatus />);
     setRecentWorkflows([
@@ -1820,17 +1827,19 @@ describe("WorkflowStatus — run navigation panel", () => {
     // wait for the exit animation before remounting.
     expect(screen.getByText("Other Workflow")).toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(
-        document.querySelector(".animate-slide-out-right")
-      ).not.toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(321);
     });
+    expect(
+      document.querySelector(".animate-slide-out-right")
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Multi-run Workflow")).toBeInTheDocument();
     expect(screen.getByText("Other Workflow")).toBeInTheDocument();
   });
 
   it("returns to the workflow list with the same exit animation on Escape", async () => {
-    const user = userEvent.setup();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const workflowKey = "multi-wf" as never;
     render(<WorkflowStatus />);
     setRecentWorkflows([
@@ -1865,11 +1874,12 @@ describe("WorkflowStatus — run navigation panel", () => {
     const departingPanel = document.querySelector(".animate-slide-out-right");
     expect(departingPanel).toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(
-        document.querySelector(".animate-slide-out-right")
-      ).not.toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(321);
     });
+    expect(
+      document.querySelector(".animate-slide-out-right")
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Multi-run Workflow")).toBeInTheDocument();
   });
 

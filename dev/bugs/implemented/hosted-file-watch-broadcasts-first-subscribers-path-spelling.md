@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by Claude Code (bug-hunt final step; code reading, low confidence on how often it happens)
 - **Area:** `src/server/CtrlYokeHostedServer.ts` (`watchWorkspaceFile`, `broadcastWorkspaceFileChanged`), `src/ui/webview-react/components/workspace-viewer/WorkspaceExplorerPane.tsx`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
