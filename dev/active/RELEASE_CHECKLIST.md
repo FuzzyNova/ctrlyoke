@@ -1105,7 +1105,7 @@ public**.
     GitHub's private advisory form.
 - [ ] After the flip, open a throwaway PR from a fork (or another account) and
       confirm `fast-checks` runs after approval and is required.
-- [ ] After the flip, upload the ctrlyoke social preview image (Settings →
+- [ ] After the flip, upload `images/social-preview.png` as the social preview image (Settings →
       General → Social preview → Edit; 1280×640 PNG under 1 MB). GitHub hides
       this option on private repos. Repos have no avatar of their own, so this
       image is what a shared `FuzzyNova/ctrlyoke` link shows instead of the
@@ -1264,9 +1264,9 @@ Carried over from the 2026-10-17 release-prep audit (`dev/implemented/FINAL_RELE
       repos get 4 vCPUs, so also reconsider the raised 60 s UI timeout.
 - [ ] Pin `softprops/action-gh-release` to a SHA, and pin `netlify-cli@latest` and the `npm@^11`
       upgrade to exact versions. Both run in jobs that hold publish secrets.
-- [ ] Social preview / `og:image`: the site currently uses the landing hero poster
-      (`/assets/hero-poster.webp`); replace it with a dedicated 1280×640 image when one exists, and
-      upload the same image as the GitHub social preview.
+- [x] Social preview / `og:image`: `images/social-preview.png` (1280×640, logo + wordmark, source
+      `images/social-preview.html`) is the site and docs `og:image` at
+      `/assets/social-preview.png`. Upload the same file to GitHub after the flip (Phase 14).
 
 ## Summary Table
 

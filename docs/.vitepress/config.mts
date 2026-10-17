@@ -24,7 +24,7 @@ export default defineConfig({
       "meta",
       {
         property: "og:image",
-        content: "https://ctrlyoke.dev/assets/hero-poster.webp",
+        content: "https://ctrlyoke.dev/assets/social-preview.png",
       },
     ],
     ["meta", { name: "twitter:card", content: "summary_large_image" }],
@@ -32,7 +32,7 @@ export default defineConfig({
       "meta",
       {
         name: "twitter:image",
-        content: "https://ctrlyoke.dev/assets/hero-poster.webp",
+        content: "https://ctrlyoke.dev/assets/social-preview.png",
       },
     ],
   ],

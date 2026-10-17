@@ -1,0 +1,95 @@
+<!doctype html>
+<!--
+  Source for images/social-preview.png (1280x640: GitHub social preview and the site's og:image).
+  Regenerate from the repo root with headless Chrome:
+    chrome --headless=new --hide-scrollbars --force-device-scale-factor=1 --allow-file-access-from-files
+      --virtual-time-budget=3000 --window-size=1280,640
+      --screenshot=images/social-preview.png images/social-preview.html
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      @font-face {
+        font-family: "Sixtyfour";
+        src: url("../landing/public/fonts/sixtyfour-variable-bled-scan.ttf")
+          format("truetype-variations");
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        width: 1280px;
+        height: 640px;
+        overflow: hidden;
+        background: #03151e;
+        background-image: radial-gradient(
+          ellipse 80% 60% at 50% -10%,
+          rgba(14, 83, 128, 0.45),
+          transparent
+        );
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: system-ui, "Segoe UI", sans-serif;
+      }
+      /* translateX recentres the block: scaleX on the wordmark leaves its layout box wider than it looks. */
+      .wrap {
+        display: flex;
+        align-items: center;
+        gap: 56px;
+        transform: translateX(69px);
+      }
+      .icon {
+        width: 300px;
+        height: 300px;
+        filter: drop-shadow(0 12px 36px rgba(57, 148, 188, 0.4));
+      }
+      .text {
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+      }
+      .wordmark {
+        font-family: "Sixtyfour", monospace;
+        font-variation-settings:
+          "BLED" 0,
+          "SCAN" -15;
+        text-transform: uppercase;
+        font-size: 96px;
+        line-height: 1;
+        color: #3994bc;
+        -webkit-text-stroke: 4px #051923;
+        paint-order: stroke fill;
+        text-shadow: 0 0 20px rgba(57, 148, 188, 0.45);
+        letter-spacing: 0.02em;
+        transform: scaleX(0.82);
+        transform-origin: left center;
+      }
+      .tagline {
+        color: #ffffff;
+        font-size: 38px;
+        font-weight: 700;
+        line-height: 1.2;
+      }
+      .sub {
+        color: #94a3b8;
+        font-size: 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <img class="icon" src="../landing/public/ctrlyoke-icon.svg" alt="" />
+      <div class="text">
+        <div class="wordmark">ctrlyoke</div>
+        <div class="tagline">
+          One workflow engine for<br />every CLI coding agent
+        </div>
+        <div class="sub">ctrlyoke.dev</div>
+      </div>
+    </div>
+  </body>
+</html>

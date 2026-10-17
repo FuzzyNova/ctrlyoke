@@ -188,7 +188,7 @@ post-flip follow-ups"), which stays the canonical go-live tracker.
 - [ ] Optional settings not covered by `apply-github-guardrails.mjs`: squash-only merges,
       auto-delete head branches, disable Projects, Dependabot security updates (consider
       versioning these in the script).
-- [ ] Upload a social preview image (1280×640; none exists in `images/`).
+- [ ] Upload a social preview image (1280×640): `images/social-preview.png` now exists.
 - [ ] Throwaway fork PR test (checklist ~L1103).
 - [ ] Update `full-suite.yml`'s "private-repo 2-vCPU runner" comment. Public repos get 4 vCPUs, so
       also reconsider the raised 60 s UI timeout.

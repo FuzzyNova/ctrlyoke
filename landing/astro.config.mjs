@@ -13,9 +13,10 @@ export default defineConfig({
     build: {
       rollupOptions: {
         output: {
+          // Unhashed so the docs' og:image (docs/.vitepress/config.mts) can name a stable URL.
           assetFileNames: ({ name }) =>
-            name === "hero-poster-1350x900.webp"
-              ? "assets/hero-poster.webp"
+            name === "social-preview.png"
+              ? "assets/social-preview.png"
               : "assets/[name].[hash][extname]",
         },
       },
