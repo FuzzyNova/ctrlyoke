@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by Claude Code (bug-hunt final step; read from the installed Qwen 0.25.1 bundle, not run)
 - **Area:** `src/core/harness/CliIntegration.ts` (`formatFileReference`/`formatTempFileRef`), `src/core/harness/qwen/QwenCliProvider.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -39,3 +39,10 @@ with its own tools. Paths without a space keep the `@` form. Content is not inli
   plain-path fallback is read on Windows. The finding came from reading the Qwen 0.25.1 bundle.
 - Tests: `QwenCliProvider` formats a spaced path as an escaped `@` reference on POSIX and as a
   plain path on win32; unspaced paths are unchanged; other providers keep `@"…"`.
+
+## Resolution notes
+
+Verified the parser behavior from the installed `@qwen-code/qwen-code` 0.25.1 bundle:
+`parseAllAtCommands` stops an `@` path at unescaped whitespace, and `unescapePath` is a no-op on
+win32; on POSIX its shell-special-character pattern includes spaces, so `\ ` is unescaped. No live
+Qwen invocation was run; the implementation and tests rely on this bundle evidence.
