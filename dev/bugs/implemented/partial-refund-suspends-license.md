@@ -1,6 +1,6 @@
 # Partial refund suspends the buyer's Keygen license
 
-- **Found:** 2026-10-04 by Claude while deciding the refund policy ([`dev/backlog/REFUND_POLICY.md`](../../backlog/REFUND_POLICY.md))
+- **Found:** 2026-10-04 by Claude while deciding the refund policy ([`dev/implemented/REFUND_POLICY.md`](../../implemented/REFUND_POLICY.md))
 - **Area:** `netlify/functions/ls-webhook.ts`
 - **Resolution:** fixed in this commit
 

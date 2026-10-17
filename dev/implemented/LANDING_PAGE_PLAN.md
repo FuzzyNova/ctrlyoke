@@ -309,7 +309,7 @@ _New users get a **14-day free trial of remote access** — no card, no account.
 - "Can I use it on multiple machines?" — Yes, one license activates on up to 10 devices.
 - "Is there a trial?" — Yes. The free tier is fully functional forever (no time limit, no credit card), and remote "code on the go" access is free to trial for 14 days on top of that.
 - "Do you offer team/enterprise pricing?" — As shipped: yes, a $4,499/year Enterprise site license; email sales@ctrlyoke.dev, which also handles POs.
-- "What's your refund policy?" — As shipped: Pro has a 30-day money-back guarantee, and Enterprise is non-refundable once the term starts (see `dev/backlog/REFUND_POLICY.md`).
+- "What's your refund policy?" — As shipped: Pro has a 30-day money-back guarantee, and Enterprise is non-refundable once the term starts (see `dev/implemented/REFUND_POLICY.md`).
 
 ---
 

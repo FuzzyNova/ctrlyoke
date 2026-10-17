@@ -1,25 +1,16 @@
 # Refund Policy (Pro + Enterprise)
 
 **Created:** October 4, 2026
-**Status:** Partial. The repo side is implemented; the Lemon Squeezy dashboard steps and the
-test-mode refund check are still open. Launch work is tracked from
-[`../active/RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md) Phase 7 (refund item) and
-Phase 12 (refund check).
+**Status:** Implemented (October 17, 2026). The code and copy landed in `87ba0728a` and
+`1eae68844`. On October 16, 2026 the live Pro product's description, confirmation message and
+receipt got the refund line, and live webhook `143280` was subscribed to
+`subscription_payment_refunded` and verified with a live full refund
+([`../active/RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md) Phase 7 refund item and
+5.3 step 6). Nathan confirmed the partial-refund path (license stays active) on October 17, 2026.
+The test-mode webhook is being retired
+([test-mode orders bug](../bugs/backlog/test-mode-lemon-squeezy-orders-mint-production-licenses.md)),
+so its event list no longer matters. The per-request runbook below is the operating procedure.
 
-> **2026-10-10 audit:** All three code and copy items are done. `87ba0728a` suspends only on full
-> refunds, handles `subscription_payment_refunded`, and adds the pricing FAQ, the Pro card line
-> ("30-day money-back guarantee.") and the `docs/pro/index.md` "Buy Pro" sentence. `1eae68844`
-> added the refund confirmation email (`sendRefundEmail`). The "What exists today" table below is
-> the pre-decision snapshot: the pricing page and `docs/pro/index.md` now state the policy. Still
-> open, none of it verifiable from the repo: steps 1–3 under "Manual steps in Lemon Squeezy" below
-> (product description and receipt copy, `subscription_payment_refunded` on the test **and**
-> live-mode webhooks, and the test-mode full/partial refund check).
->
-> **Pre-release: yes.** The published policy is already live on the pricing page, so the LS
-> product and receipt copy must match it before the first real sale. The live-mode webhook (created
-> when Test mode is flipped off) must also subscribe to `order_refunded` and
-> `subscription_payment_refunded`, or refunds won't suspend licenses or send the confirmation
-> email. Both are dashboard clicks, not code.
 > **Related:** [`../implemented/PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md) (the
 > LS → Netlify → Keygen pipeline), [`../../ENTERPRISE_TERMS.md`](../../ENTERPRISE_TERMS.md) §6–7,
 > [`../../LICENSE.md`](../../LICENSE.md) §6(e),
@@ -80,15 +71,11 @@ Sources: [LS refunds & chargebacks](https://docs.lemonsqueezy.com/help/payments/
   and at $59 one human click is cheaper than a $15 chargeback or a bad review. The 14-day remote
   trial reduces how many refunds are needed; it doesn't replace the window (the trial covers
   remote access before purchase, not "it doesn't work on my setup" after).
-- **After 30 days:** no refunds, except at Nathan's discretion (e.g. a bug that makes Pro unusable
-  for them) or where required by law.
-- **Refund abuse is an accepted, bounded risk.** A buyer could check out an offline license file
-  at `ctrlyoke.dev/license/offline/` and then refund: suspension stops online clients within the
-  30-day file TTL, but an offline file keeps working until its own expiry (one year — see
-  [`../implemented/SELF_SERVE_OFFLINE_LICENSE_FILE_PLAN.md`](../implemented/SELF_SERVE_OFFLINE_LICENSE_FILE_PLAN.md)).
-  That is the same honor-system threat model as the bind gate (PRO_LICENSE_PLAN §1.8); EULA §4(c)
-  is the backstop. Reserve the right to refuse requests showing a refund-abuse pattern (repeat
-  buy/refund), which LS's buyer terms also allow.
+- **After 30 days:** no refunds, except at our discretion or where required by law.
+- **Refund abuse is an accepted, bounded risk.** It falls under the same honor-system threat model
+  as the bind gate (PRO_LICENSE_PLAN §1.8), with EULA §4(c) as the backstop. We reserve the right to
+  refuse requests that show an abuse pattern (repeated buy-and-refund), which LS's buyer terms also
+  allow.
 
 ### Enterprise ($4,499/yr): keep the existing terms — non-refundable
 
@@ -98,7 +85,7 @@ Sources: [LS refunds & chargebacks](https://docs.lemonsqueezy.com/help/payments/
 - **Why it's fair without a window:** an org can evaluate everything free forever, test remote
   access with the 14-day trial, and buy a $59 Pro first. Renewal gets a 30-day reminder (§4(b)) and
   can be cancelled any time before renewal (§6).
-- **Discretionary exceptions** (Nathan's call, case by case, using §7's "expressly stated in an
+- **Discretionary exceptions** (case by case, using §7's "expressly stated in an
   Order" / LS discretion): duplicate purchase, wrong product bought, or a renewal charged when the
   customer demonstrably tried to cancel. Expect LS may also refund within 60 days to head off a
   chargeback; the webhook handles license suspension either way.
@@ -160,12 +147,12 @@ abuse-prone self-serve endpoint, and buys nothing at this volume).
 
 Nothing has to be switched on to allow refunds. To launch the policy:
 
-1. **ctrlyoke Pro → edit product:** add the refund line to the description and the
-   confirmation-modal / receipt copy (the same field that already explains the separate key email).
-2. **Webhooks (test and live mode):** confirm the webhook includes `order_refunded`, and add
-   `subscription_payment_refunded` (the handler now exists; without the subscription the event never arrives).
-3. **Test mode:** run the Phase 12 refund check — refund a test order, confirm the Keygen license
-   is suspended; then a partial refund, confirm it is **not**.
+- [x] **ctrlyoke Pro → edit product:** add the refund line to the description and the
+      confirmation-modal / receipt copy. Done on the live product, October 16, 2026.
+- [x] **Webhooks:** the live webhook `143280` includes `order_refunded` and
+      `subscription_payment_refunded` (October 16, 2026). The test-mode webhook is being retired.
+- [x] **Refund check:** a full refund suspends the Keygen license and sends the confirmation
+      (live, October 16, 2026); a partial refund leaves it active (confirmed October 17, 2026).
 
 ### Per-request runbook (Pro)
 

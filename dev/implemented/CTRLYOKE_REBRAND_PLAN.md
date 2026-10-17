@@ -2,7 +2,7 @@
 
 **Created:** June 28, 2026
 **Status:** 🟡 In progress — **PR1 (brand) + PR2 (extension) DONE & committed on `main`.** Remaining: `docs/` + `landing/` prose, legal docs, and external/business steps. **See [Execution Status](#execution-status--updated-june-30-2026) first.**
-**Decision:** Rename the product from **FlightPath** to **ctrlyoke**. See `dev/reference/rebrand-naming.md` for the naming rationale and trademark clearance (`dev/reference/trademark-search-results.csv`).
+**Decision:** Rename the product from **FlightPath** to **ctrlyoke**. The naming rationale and trademark clearance (`rebrand-naming.md`, `trademark-search-results.csv`) moved to the Fuzzy Nova LLC business Drive (`Trademark & IP/`) on October 17, 2026.
 
 > **Pre-release, no back-compat.** Per `CLAUDE.md`, there are no published users to migrate. We rename hard — no aliases, no dual-read of old directory/extension names — except the developer-local cleanup noted in [§9](#9-developer-local-migration). This keeps the rename a clean cut rather than a permanent compatibility tax.
 
