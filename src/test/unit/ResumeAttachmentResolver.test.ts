@@ -86,4 +86,62 @@ suite("ResumeAttachmentResolver", () => {
     assert.strictEqual(result.agent, undefined);
     assert.deepStrictEqual(result.skills, ["skill-b"]);
   });
+
+  test("omits a skill sent by any earlier step on the session, not only the most recent", () => {
+    const sessionStep = (skills: string[]): PromptStep => ({
+      prompt: "turn",
+      _runtime: {
+        startedAt: 1,
+        completedAt: 2,
+        sessionId: "session-123",
+        harness: "claude-cli",
+        agent: "reviewer",
+        skills,
+      },
+    });
+
+    // Step 2 omitted "git" because step 1 sent it, so it recorded `[]`.
+    const result = ResumeAttachmentResolver.resolve({
+      promptIndex: 2,
+      allPrompts: [sessionStep(["git"]), sessionStep([])],
+      harness: "claude-cli",
+      resumeSession: true,
+      resolvedSessionId: "session-123",
+      agent: "reviewer",
+      skills: ["git"],
+    });
+
+    assert.strictEqual(result.agent, undefined);
+    assert.strictEqual(result.skills, undefined);
+  });
+
+  test("omits attachments the session received in another run", () => {
+    const result = ResumeAttachmentResolver.resolve({
+      promptIndex: 0,
+      allPrompts: [],
+      harness: "claude-cli",
+      resumeSession: true,
+      resolvedSessionId: "session-from-other-run",
+      agent: "reviewer",
+      skills: ["git", "testing"],
+      priorAttachments: { agents: ["reviewer"], skills: ["git"] },
+    });
+
+    assert.strictEqual(result.agent, undefined);
+    assert.deepStrictEqual(result.skills, ["testing"]);
+  });
+
+  test("still attaches a different agent than the session received elsewhere", () => {
+    const result = ResumeAttachmentResolver.resolve({
+      promptIndex: 0,
+      allPrompts: [],
+      harness: "claude-cli",
+      resumeSession: true,
+      resolvedSessionId: "session-from-other-run",
+      agent: "planner",
+      priorAttachments: { agents: ["reviewer"], skills: [] },
+    });
+
+    assert.strictEqual(result.agent, "planner");
+  });
 });

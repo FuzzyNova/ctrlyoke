@@ -1,4 +1,5 @@
 import type { HarnessId, WorkflowStep } from "../types/CtrlYokeTypes";
+import type { SessionAttachments } from "./SessionAttachmentLedger";
 
 export interface ResumeAttachmentResolution {
   agent: string | undefined;
@@ -13,11 +14,13 @@ interface ResumeAttachmentResolverParams {
   resolvedSessionId?: string;
   agent?: string;
   skills?: string[];
+  /** What the session received outside this run, from `SessionAttachmentLedger`. */
+  priorAttachments?: SessionAttachments;
 }
 
 /**
- * When resuming a session, only re-attach agent/skill instructions that are not
- * already present in the most relevant prior prompt for that session.
+ * When resuming a session, only re-attach agent/skill instructions that the
+ * session has not already received.
  */
 export class ResumeAttachmentResolver {
   static resolve(
@@ -30,18 +33,18 @@ export class ResumeAttachmentResolver {
       return { agent: currentAgent, skills: currentSkills };
     }
 
-    const previousRuntime = this.findPreviousRuntime(params);
-    if (!previousRuntime) {
+    const previous = this.findPreviousAttachments(params);
+    if (!previous) {
       return { agent: currentAgent, skills: currentSkills };
     }
 
     const agent =
-      currentAgent && currentAgent !== previousRuntime.agent
+      currentAgent && !previous.agents.has(currentAgent)
         ? currentAgent
         : undefined;
-
-    const previousSkills = new Set(previousRuntime.skills ?? []);
-    const skills = currentSkills?.filter((skill) => !previousSkills.has(skill));
+    const skills = currentSkills?.filter(
+      (skill) => !previous.skills.has(skill)
+    );
 
     return {
       agent,
@@ -49,9 +52,20 @@ export class ResumeAttachmentResolver {
     };
   }
 
-  private static findPreviousRuntime(
+  /**
+   * With a session ID, everything the session received: the union over every
+   * earlier completed step on it plus `priorAttachments`. A step's
+   * `_runtime.skills` lists only what that step sent, so comparing against the
+   * most recent step alone would re-send what an earlier step attached.
+   * Without one, the most recent completed step on the same harness.
+   */
+  private static findPreviousAttachments(
     params: ResumeAttachmentResolverParams
-  ): WorkflowStep["_runtime"] | undefined {
+  ): { agents: Set<string>; skills: Set<string> } | undefined {
+    const agents = new Set(params.priorAttachments?.agents ?? []);
+    const skills = new Set(params.priorAttachments?.skills ?? []);
+    let found = params.priorAttachments !== undefined;
+
     for (let i = params.promptIndex - 1; i >= 0; i--) {
       const runtime = params.allPrompts[i]?._runtime;
       if (!runtime?.completedAt) {
@@ -64,15 +78,24 @@ export class ResumeAttachmentResolver {
       ) {
         continue;
       }
-      if (params.resolvedSessionId) {
-        if (runtime.sessionId === params.resolvedSessionId) {
-          return runtime;
-        }
+      if (
+        params.resolvedSessionId &&
+        runtime.sessionId !== params.resolvedSessionId
+      ) {
         continue;
       }
-      return runtime;
+      found = true;
+      if (runtime.agent) {
+        agents.add(runtime.agent);
+      }
+      for (const skill of runtime.skills ?? []) {
+        skills.add(skill);
+      }
+      if (!params.resolvedSessionId) {
+        break;
+      }
     }
 
-    return undefined;
+    return found ? { agents, skills } : undefined;
   }
 }

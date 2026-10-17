@@ -38,6 +38,7 @@ export const PERSISTED_STORES = {
   NAMED_WORKTREE_SETUP: "named-worktree-setup",
   INSTALLATIONS: "installations",
   HISTORY_TRASH_ENTRY: "history-trash-entry",
+  SESSION_ATTACHMENTS: "session-attachments",
 } as const;
 
 export type PersistedStore =
@@ -66,6 +67,7 @@ export const CURRENT_SCHEMA_VERSIONS = {
   [PERSISTED_STORES.NAMED_WORKTREE_SETUP]: 1,
   [PERSISTED_STORES.INSTALLATIONS]: 1,
   [PERSISTED_STORES.HISTORY_TRASH_ENTRY]: 1,
+  [PERSISTED_STORES.SESSION_ATTACHMENTS]: 1,
 } as const satisfies Record<PersistedStore, number>;
 
 const STORE_LABELS: Record<PersistedStore, string> = {
@@ -87,6 +89,7 @@ const STORE_LABELS: Record<PersistedStore, string> = {
   [PERSISTED_STORES.NAMED_WORKTREE_SETUP]: "named worktree setup record",
   [PERSISTED_STORES.INSTALLATIONS]: "installation registry",
   [PERSISTED_STORES.HISTORY_TRASH_ENTRY]: "recently deleted entry",
+  [PERSISTED_STORES.SESSION_ATTACHMENTS]: "session attachment ledger",
 };
 
 /** Thrown instead of writing a store that a newer ctrlyoke version owns. */

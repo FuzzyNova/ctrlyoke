@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-17 by Nathan (observed), traced by Claude
 - **Area:** `src/utils/ResumeAttachmentResolver.ts`, `src/core/harness/shared/CliPromptPreparer.ts` (~L205-251), `src/core/harness/shared/CliPromptRuntimeCoordinator.ts` (~L92-114), `src/ui/webview-react/utils/replyToStep.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -57,3 +57,17 @@ Case 2:
    `sessionId`. The narrower option is for Reply to step to carry the source session's accumulated
    attachments onto the new step, which needs a persisted field and only covers that one entry point.
    Either way, decide how stale entries are pruned (for example, with run retention).
+
+## Fix
+
+Both parts of the suggested fix, with the general option for part 2:
+
+1. `ResumeAttachmentResolver` now unions the agent and skills of every completed earlier step on
+   the same harness and session, instead of reading only the most recent one.
+2. `SessionAttachmentLedger` keeps `session-attachments.json` beside `.runs` in the project state
+   root. `CliPromptRuntimeCoordinator` records each turn's sent agent and skills there whenever
+   it persists a runtime with a session ID. `CliPromptPreparer` reads the entry and passes it to the
+   resolver as `priorAttachments`. Pruning is a cap of 500 sessions, dropping the least recently
+   updated, rather than a tie to run retention. A dropped or missing entry only means the
+   attachments are sent again. The ledger is best effort: read and write failures are logged
+   and ignored, and a file written by a newer ctrlyoke is left untouched.

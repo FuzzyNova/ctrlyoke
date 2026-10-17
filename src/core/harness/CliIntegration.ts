@@ -32,6 +32,7 @@ import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { CliProcessManager } from "../../utils/CliProcessManager";
 import { TempFileManager } from "../../utils/TempFileManager";
 import { Log } from "../../utils/Log";
+import { SessionAttachmentLedger } from "../../utils/SessionAttachmentLedger";
 import { reportCliNotFound } from "../../utils/TelemetryEvents";
 import {
   CLI_EVENT_TYPES,
@@ -935,6 +936,11 @@ export class CliIntegration extends HarnessIntegration {
     const promptPreparer = new CliPromptPreparer({
       shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () =>
         ConfigurationUtils.shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume(),
+      getSessionAttachments: (harness, sessionId) =>
+        SessionAttachmentLedger.forStateRoot(this.getStateRoot()).get(
+          harness,
+          sessionId
+        ),
       buildPromptSections: (
         prompt,
         resolvedAgent,
@@ -997,6 +1003,12 @@ export class CliIntegration extends HarnessIntegration {
 
     const promptRuntimeCoordinator = new CliPromptRuntimeCoordinator({
       getIntegrationHarness: () => this.getIntegrationMode(),
+      recordSessionAttachments: (harness, sessionId, sent) =>
+        SessionAttachmentLedger.forStateRoot(this.getStateRoot()).record(
+          harness,
+          sessionId,
+          sent
+        ),
     });
 
     const transportCoordinator = new CliTransportCoordinator({

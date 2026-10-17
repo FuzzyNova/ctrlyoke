@@ -187,6 +187,45 @@ suite("CliPromptRuntimeCoordinator", () => {
     ]);
   });
 
+  test("records what a successful turn sent into its session", async () => {
+    const recorded: unknown[] = [];
+    const coordinator = new CliPromptRuntimeCoordinator({
+      getIntegrationHarness: () => HARNESS_IDS.COPILOT_CLI,
+      recordSessionAttachments: async (harness, sessionId, sent) => {
+        recorded.push({ harness, sessionId, ...sent });
+      },
+    });
+
+    await coordinator.persistSuccessfulPromptRuntime({
+      prompt: { prompt: "done" },
+      resolvedProperties: {
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        model: "sonnet",
+        executionMode: "headless",
+        agent: "reviewer",
+        resumeSession: true,
+        mcpServers: null,
+        hooks: null,
+        toolPermissions: null,
+      },
+      attachedSkills: ["git"],
+      extractedSessionId: "session-456",
+    });
+    await coordinator.persistSuccessfulPromptRuntime({
+      prompt: { prompt: "no session" },
+      attachedSkills: ["git"],
+    });
+
+    assert.deepStrictEqual(recorded, [
+      {
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        sessionId: "session-456",
+        agent: "reviewer",
+        skills: ["git"],
+      },
+    ]);
+  });
+
   test("should preserve existing parsed output session ID on successful completion", async () => {
     const prompt: PromptStep = {
       prompt: "rerun",

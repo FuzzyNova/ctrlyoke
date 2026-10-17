@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "sessions": {
+    "claude-cli:8f14e45f-ceea-467a-9b2c-3d1e5f6a7b8c": {
+      "agents": ["reviewer"],
+      "skills": ["commit", "ctrlyoke-syntax"],
+      "updatedAt": 1792281600000
+    },
+    "codex-cli:019a2b3c-4d5e-7f60-8a9b-0c1d2e3f4a5b": {
+      "agents": [],
+      "skills": ["testing"],
+      "updatedAt": 1792285200000
+    }
+  }
+}

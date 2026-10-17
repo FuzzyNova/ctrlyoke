@@ -273,6 +273,13 @@ export const PATH_CONSTANTS = {
   /** Persistent search index directory name (subdirectory of CTRLYOKE_DIR) */
   SEARCH_INDEX_DIR: ".search-index",
 
+  /**
+   * Agents and skills already sent into each harness session, a sibling of
+   * RUNS_DIR. Lets a resume omit them even when the earlier turns ran in
+   * another run or workflow. See `SessionAttachmentLedger.ts`.
+   */
+  SESSION_ATTACHMENTS_FILE: "session-attachments.json",
+
   /** Agents directory name (subdirectory of CTRLYOKE_DIR) */
   AGENTS_DIR: "agents",
 

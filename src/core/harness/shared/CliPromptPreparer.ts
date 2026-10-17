@@ -1,7 +1,7 @@
 import * as crypto from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
-import type { PromptStep } from "../../../types/CtrlYokeTypes";
+import type { HarnessId, PromptStep } from "../../../types/CtrlYokeTypes";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import {
   PromptFileSplitter,
@@ -43,6 +43,7 @@ import {
 } from "../../../utils/SecretReferenceParser";
 import { getProcessMapSecretNames } from "../../../utils/SecretResolver";
 import { ResumeAttachmentResolver } from "../../../utils/ResumeAttachmentResolver";
+import type { SessionAttachments } from "../../../utils/SessionAttachmentLedger";
 import { AgentExpander } from "../../../utils/AgentExpander";
 import {
   scanCtrlYokeSlashTokens,
@@ -99,6 +100,11 @@ export interface PromptPreparationPlan {
 
 export interface CliPromptPreparerDeps {
   shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => boolean;
+  /** Attachments a session received outside the current run. */
+  getSessionAttachments?: (
+    harness: HarnessId,
+    sessionId: string
+  ) => Promise<SessionAttachments | undefined>;
   buildPromptSections: (
     prompt: PromptStep,
     resolvedAgent?: string,
@@ -243,6 +249,10 @@ export class CliPromptPreparer {
           resolvedSessionId,
           agent: resolvedProperties?.agent,
           skills: declaredAndInlineSkills,
+          priorAttachments: await this.deps.getSessionAttachments?.(
+            harnessId,
+            resolvedSessionId
+          ),
         })
       : {
           agent: resolvedProperties?.agent,

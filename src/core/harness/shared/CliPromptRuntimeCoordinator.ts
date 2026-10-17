@@ -8,6 +8,12 @@ import { Log } from "../../../utils/Log";
 export interface CliPromptRuntimeCoordinatorDeps {
   getIntegrationHarness: () => HarnessId;
   now?: () => number;
+  /** Remember what a session was sent so a resume from another run can omit it. */
+  recordSessionAttachments?: (
+    harness: HarnessId,
+    sessionId: string,
+    sent: { agent?: string; skills?: readonly string[] }
+  ) => Promise<void>;
 }
 
 export class CliPromptRuntimeCoordinator {
@@ -70,6 +76,12 @@ export class CliPromptRuntimeCoordinator {
     runtime.failureMessage = params.failureMessage;
     runtime.completedAt = this.now();
 
+    await this.recordSessionAttachments(
+      actualHarness,
+      runtime.sessionId,
+      actualAgent,
+      actualSkills
+    );
     await params.workingFilePersistence.updateWorkingFile();
     Log.debug(
       `[CliPromptRuntimeCoordinator] Saved cancelled-prompt runtime to working file (sessionId: ${sessionId || "none"})`
@@ -137,6 +149,12 @@ export class CliPromptRuntimeCoordinator {
     params.prompt._runtime.failureMessage = undefined;
     params.prompt._runtime.completedAt = this.now();
 
+    await this.recordSessionAttachments(
+      actualHarness,
+      params.prompt._runtime.sessionId,
+      actualAgent,
+      actualSkills
+    );
     if (params.workingFilePersistence) {
       await params.workingFilePersistence.updateWorkingFile();
       Log.debug(
@@ -145,5 +163,20 @@ export class CliPromptRuntimeCoordinator {
     }
 
     return parsedOutput;
+  }
+
+  private async recordSessionAttachments(
+    harness: HarnessId,
+    sessionId: string | undefined,
+    agent: string | undefined,
+    skills: readonly string[] | undefined
+  ): Promise<void> {
+    if (!sessionId || !this.deps.recordSessionAttachments) {
+      return;
+    }
+    await this.deps.recordSessionAttachments(harness, sessionId, {
+      agent,
+      skills,
+    });
   }
 }
