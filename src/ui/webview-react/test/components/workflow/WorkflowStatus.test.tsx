@@ -1728,8 +1728,7 @@ describe("WorkflowStatus — run navigation panel", () => {
   });
 
   it("re-clicking the chevron while the run panel is open switches back to the workflow list", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const user = userEvent.setup();
     const workflowKey = "multi-wf" as never;
     render(<WorkflowStatus />);
     setRecentWorkflows([
@@ -1766,7 +1765,10 @@ describe("WorkflowStatus — run navigation panel", () => {
       screen.getByRole("button", { name: "Back to workflow list" })
     ).toBeInTheDocument();
 
-    await user.click(dropdownTrigger);
+    // Fake only the exit fallback timer from here on, and trigger the exit
+    // synchronously: RTL's async act wrapper waits on a real setTimeout(0).
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    fireEvent.click(dropdownTrigger);
     expect(
       document.querySelector(".animate-slide-out-right")
     ).toBeInTheDocument();
@@ -1780,8 +1782,7 @@ describe("WorkflowStatus — run navigation panel", () => {
   });
 
   it("restores the workflow list when Back is pressed from the run panel", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const user = userEvent.setup();
     const workflowKey = "multi-wf" as never;
     render(<WorkflowStatus />);
     setRecentWorkflows([
@@ -1819,7 +1820,8 @@ describe("WorkflowStatus — run navigation panel", () => {
     const backButton = screen.getByRole("button", {
       name: "Back to workflow list",
     });
-    await user.click(backButton);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    fireEvent.click(backButton);
 
     const departingPanel = backButton.closest(".animate-slide-out-right");
     expect(departingPanel).toBeInTheDocument();
@@ -1838,8 +1840,7 @@ describe("WorkflowStatus — run navigation panel", () => {
   });
 
   it("returns to the workflow list with the same exit animation on Escape", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const user = userEvent.setup();
     const workflowKey = "multi-wf" as never;
     render(<WorkflowStatus />);
     setRecentWorkflows([
@@ -1870,7 +1871,10 @@ describe("WorkflowStatus — run navigation panel", () => {
       screen.getByRole("button", { name: /Browse runs of Multi-run Workflow/i })
     );
 
-    await user.keyboard("{Escape}");
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: "Escape",
+    });
     const departingPanel = document.querySelector(".animate-slide-out-right");
     expect(departingPanel).toBeInTheDocument();
 

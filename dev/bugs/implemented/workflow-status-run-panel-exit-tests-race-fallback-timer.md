@@ -31,3 +31,13 @@ The same pattern is used at lines 1817, 1865 and 2189 of the test file, so those
 ## Suggested Fix
 
 Drive the exit with fake timers in these tests: `vi.useFakeTimers({ shouldAdvanceTime: true })` plus `userEvent.setup({ advanceTimers: vi.advanceTimersByTime })`. The departing state then lasts until the test advances time past `RUN_PANEL_EXIT_FALLBACK_MS`, and the "present, then gone" assertions become deterministic.
+
+## Resolution notes
+
+The suggested `shouldAdvanceTime: true` does not remove the race: it advances the fake clock
+with wall time, so a slow click still fires the 320 ms fallback before the assertion. Fully fake
+timers hang instead, because RTL's async act wrapper (used by every `user.*` call) waits on a
+`setTimeout(0)` it only advances when a global `jest` exists. The tests now open the panel with
+real timers, then switch to `vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })` and
+trigger the exit with a synchronous `fireEvent`, so only the test's `advanceTimersByTime` can
+end the departing state. The 2189 test only asserts absence and is not affected.
