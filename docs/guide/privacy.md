@@ -11,7 +11,7 @@ ctrlyoke doesn't send any of this to Fuzzy Nova:
 - prompt text, workflow files, and AI output
 - source code, file contents, file paths, and workspace or repository names
 - run history, session IDs, and workflow identifiers
-- secrets, which stay in your OS credential store or your environment
+- secrets, which stay on your machine, in your OS credential store or your environment
 - names of agents, skills, MCP servers and end-condition scripts
 
 The harnesses are separate programs. Copilot CLI, Claude Code, Codex, OpenCode, Qwen Code and

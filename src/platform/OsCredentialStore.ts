@@ -214,7 +214,8 @@ class TornCredentialReadError extends Error {}
 
 /**
  * CLI/server SecretStore backed by the native credential store for the host.
- * It deliberately has no file or plaintext fallback.
+ * It has no fallback of its own; `createNodeSecretStore` composes it with
+ * `FileSecretStore` for hosts where it is unavailable.
  */
 export class OsCredentialStore implements SecretStore {
   private readonly platform: NodeJS.Platform;

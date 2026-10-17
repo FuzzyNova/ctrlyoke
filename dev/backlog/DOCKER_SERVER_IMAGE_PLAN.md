@@ -1,7 +1,8 @@
 # Docker Server Image Plan
 
-**Status:** backlog, not started. Proposed 2026-10-15. Blocked on
-[`headless-linux-has-no-persistent-secret-store.md`](../bugs/backlog/headless-linux-has-no-persistent-secret-store.md).
+**Status:** backlog, not started. Proposed 2026-10-15. Its prerequisite,
+[`headless-linux-has-no-persistent-secret-store.md`](../bugs/implemented/headless-linux-has-no-persistent-secret-store.md),
+is fixed.
 
 ## Goal
 
@@ -104,10 +105,12 @@ bridge network should get a clearer message than the generic remote-access block
 
 ### Secrets, license and machine identity
 
-Blocked on the linked bug. The image needs: a persistent secret store on the `ctrlyoke-home`
-volume, a license that can come from `CTRLYOKE_LICENSE_KEY` or a mounted license file, and a
-machine fingerprint that is stable across container recreation, so a rebuild doesn't use up a
-Keygen machine activation.
+Done by the linked bug. Without a keyring, the server and `ctrlyoke secret` store secrets in
+`<CTRLYOKE_HOME>/secrets.json` (plaintext, `0600`), which is on the `ctrlyoke-home` volume. The
+license can come from `CTRLYOKE_LICENSE_KEY_FILE` (a Docker secret) or `CTRLYOKE_LICENSE_KEY`,
+activated at start only when it differs from the stored key. The machine fingerprint is in the
+same file, so a rebuild reuses its Keygen machine. The image should set `CTRLYOKE_HOME` on the
+volume and document `CTRLYOKE_LICENSE_KEY_FILE` with a compose `secrets:` example.
 
 ### Harness login
 
@@ -152,7 +155,7 @@ ctrlyoke@<version>` layer plus base-image security updates. A scheduled weekly r
 
 ## Phases
 
-1. Fix the headless secret-store bug (prerequisite).
+1. ~~Fix the headless secret-store bug (prerequisite).~~ Done.
 2. Dockerfile + entrypoint + compose example, tested by hand on a Linux home server with
    two harnesses. This includes capturing the no-harness preflight state for D6 in
    `DOCUMENTATION_GAPS_PLAN.md`, by starting with `CTRLYOKE_HARNESSES` empty.

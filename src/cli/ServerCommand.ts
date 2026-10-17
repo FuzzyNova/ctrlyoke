@@ -15,6 +15,18 @@ import {
   createWorkspaceConfigBackend,
 } from "../config/FileConfigBackend";
 import { createNodeHostedServer } from "../platform/NodeHostServices";
+import {
+  createNodeSecretStore,
+  type NodeSecretStore,
+} from "../platform/NodeSecretStore";
+import { LicenseService } from "../license/LicenseService";
+import {
+  applyEnvironmentLicenseKey,
+  LICENSE_KEY_FILE_ENV,
+  takeEnvironmentLicenseKey,
+  type EnvironmentLicenseKey,
+} from "../license/LicenseEnvironment";
+import { getErrorMessage } from "../utils/ErrorUtils";
 import { ServerCertificateService } from "../server/ServerCertificateService";
 import { ctrlyokeStateHome } from "../utils/ProjectStatePaths";
 import { isLoopbackBindAddress } from "../utils/NetworkUtils";
@@ -193,7 +205,69 @@ export function installServerShutdown(
   });
 }
 
+type ServerLicenseService = Pick<
+  LicenseService,
+  "getStoredLicenseKey" | "activateWithKey" | "canUseRemoteAccess"
+>;
+
+/**
+ * Activates a license key supplied through the environment. A failure (most
+ * often no network at boot) is reported but does not stop the server: a
+ * license activated on an earlier start is still stored and still valid.
+ */
+export async function provisionEnvironmentLicense(
+  licenseService: ServerLicenseService,
+  environmentLicense: EnvironmentLicenseKey,
+  warn: (message: string) => void
+): Promise<void> {
+  try {
+    if (
+      await applyEnvironmentLicenseKey(licenseService, environmentLicense.key)
+    ) {
+      console.log(
+        `Activated the Pro license from ${environmentLicense.source}.`
+      );
+    }
+  } catch (error) {
+    warn(
+      `Could not activate the Pro license from ${environmentLicense.source}: ${getErrorMessage(error)}`
+    );
+  }
+}
+
+/**
+ * Decides whether `--https` may generate a LAN certificate. Returns the
+ * message explaining why not, or undefined when it may. The message names the
+ * storage problem when there is one, because "Pro feature" alone reads as
+ * "you have no license" to someone whose license was activated but could not
+ * be kept.
+ */
+export async function checkHttpsRemoteAccess(
+  secretStore: NodeSecretStore,
+  licenseService: ServerLicenseService,
+  bindAddress: string
+): Promise<string | undefined> {
+  if (
+    isLoopbackBindAddress(bindAddress) ||
+    (await licenseService.canUseRemoteAccess())
+  ) {
+    return undefined;
+  }
+  const skipped = "HTTPS LAN certificate generation was skipped.";
+  try {
+    await secretStore.keys();
+  } catch (error) {
+    return `Remote access is a Pro feature, and the stored license could not be read: ${getErrorMessage(error)} ${skipped}`;
+  }
+  if (secretStore.isUsingFallback) {
+    return `Remote access is a Pro feature, and no Pro license is saved in ${secretStore.fileStore.filePath}, which holds this machine's secrets because it has no OS credential store. Set ${LICENSE_KEY_FILE_ENV} to activate a license at startup. ${skipped}`;
+  }
+  return `Remote access is a Pro feature. ${skipped}`;
+}
+
 export async function serverCommand(options: ServerOptions): Promise<void> {
+  // Taken first, before anything can spawn a process that would inherit it.
+  const environmentLicense = await takeEnvironmentLicenseKey();
   const cwd = path.resolve(options.cwd ?? process.cwd());
   configService.setUserBackend(createUserConfigBackend());
   configService.setWorkspaceBackend(createWorkspaceConfigBackend(cwd));
@@ -219,31 +293,43 @@ export async function serverCommand(options: ServerOptions): Promise<void> {
     );
   applyOverlay(serverSettings.tls);
 
-  if (initial.https && (!certPath || !keyPath)) {
-    const licenseStore = await import("../platform/OsCredentialStore.js");
-    const { LicenseService } = await import("../license/LicenseService.js");
-    const service = new LicenseService(new licenseStore.OsCredentialStore());
-    const allowed = await service.canUseRemoteAccess();
-    service.dispose();
-    if (!allowed && !isLoopbackBindAddress(initial.bindAddress)) {
-      console.warn(
-        "Remote access is a Pro feature. HTTPS LAN certificate generation was skipped."
-      );
-    } else {
-      const generated = await new ServerCertificateService().generate(
-        path.join(ctrlyokeStateHome(), "certs"),
-        initial.bindAddress === SERVER_BIND_ADDRESSES.ALL_INTERFACES,
-        initial.publicHostname
-      );
-      certPath = generated.certPath;
-      keyPath = generated.keyPath;
-      applyOverlay({ enabled: true, certPath, keyPath });
+  const warn = (message: string): void => console.warn(message);
+  const secretStore = createNodeSecretStore({ warn });
+  const needsCertificate = initial.https && (!certPath || !keyPath);
+  if (environmentLicense || needsCertificate) {
+    const service = new LicenseService(secretStore);
+    try {
+      if (environmentLicense) {
+        await provisionEnvironmentLicense(service, environmentLicense, warn);
+      }
+      if (needsCertificate) {
+        const skippedMessage = await checkHttpsRemoteAccess(
+          secretStore,
+          service,
+          initial.bindAddress
+        );
+        if (skippedMessage) {
+          warn(skippedMessage);
+        } else {
+          const generated = await new ServerCertificateService().generate(
+            path.join(ctrlyokeStateHome(), "certs"),
+            initial.bindAddress === SERVER_BIND_ADDRESSES.ALL_INTERFACES,
+            initial.publicHostname
+          );
+          certPath = generated.certPath;
+          keyPath = generated.keyPath;
+          applyOverlay({ enabled: true, certPath, keyPath });
+        }
+      }
+    } finally {
+      service.dispose();
     }
   }
 
   const runtime = await createNodeHostedServer({
     cwd,
     mode: EXECUTION_MODES.HEADLESS,
+    secretStore,
     regenerateToken: options.regenerateToken,
     strictPort: options.strictPort,
   });

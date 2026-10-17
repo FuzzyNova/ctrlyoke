@@ -1,12 +1,35 @@
 import * as assert from "assert";
+import * as path from "path";
 import { suite, test } from "mocha";
 import {
+  checkHttpsRemoteAccess,
   formatServerBanner,
   getUrlOpener,
   installServerShutdown,
+  provisionEnvironmentLicense,
   resolveServerSettings,
   type ServerSignalSource,
 } from "../../cli/ServerCommand";
+import {
+  LICENSE_KEY_FILE_ENV,
+  LICENSE_KEY_ENV,
+} from "../../license/LicenseEnvironment";
+import {
+  LICENSE_KEY_SECRET_KEY,
+  LICENSE_TIERS,
+  type Entitlement,
+  type LicenseService,
+} from "../../license/LicenseService";
+import { FileSecretStore } from "../../platform/FileSecretStore";
+import {
+  createNodeSecretStore,
+  type NodeSecretStore,
+} from "../../platform/NodeSecretStore";
+import {
+  SecretStoreUnavailableError,
+  type SecretStore,
+} from "../../platform/SecretStore";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import type { ShutdownSignal, ShutdownTimers } from "../../cli/SignalShutdown";
 import { handleCliError } from "../../cli/CliExitCode";
 import { PROCESS_SIGNALS } from "../../types/DashboardConstants";
@@ -76,6 +99,59 @@ class FakeTimers implements ShutdownTimers {
       next[1].callback();
     }
   }
+}
+
+/** A machine with no OS keyring, as in a container. */
+class UnavailableSecretStore implements SecretStore {
+  get(): Promise<string | undefined> {
+    return Promise.reject(new SecretStoreUnavailableError("linux"));
+  }
+  store(): Promise<void> {
+    return Promise.reject(new SecretStoreUnavailableError("linux"));
+  }
+  delete(): Promise<void> {
+    return Promise.reject(new SecretStoreUnavailableError("linux"));
+  }
+  keys(): Promise<string[]> {
+    return Promise.reject(new SecretStoreUnavailableError("linux"));
+  }
+}
+
+/**
+ * Entitled exactly when a license key is stored, standing in for the signed
+ * license file `LicenseService` verifies; activation stores the key.
+ */
+class StoreBackedLicenseService implements Pick<
+  LicenseService,
+  "getStoredLicenseKey" | "activateWithKey" | "canUseRemoteAccess"
+> {
+  readonly activations: string[] = [];
+  activationError: Error | undefined;
+
+  constructor(private readonly secretStore: SecretStore) {}
+
+  async getStoredLicenseKey(): Promise<string | undefined> {
+    return this.secretStore.get(LICENSE_KEY_SECRET_KEY);
+  }
+
+  async activateWithKey(key: string): Promise<Entitlement> {
+    if (this.activationError) throw this.activationError;
+    this.activations.push(key);
+    await this.secretStore.store(LICENSE_KEY_SECRET_KEY, key);
+    return { tier: LICENSE_TIERS.PRO, features: new Set(), expiresAt: null };
+  }
+
+  async canUseRemoteAccess(): Promise<boolean> {
+    return (await this.getStoredLicenseKey()) !== undefined;
+  }
+}
+
+function createKeyringlessStore(filePath: string): NodeSecretStore {
+  return createNodeSecretStore({
+    primary: new UnavailableSecretStore(),
+    fallback: new FileSecretStore({ filePath }),
+    warn: () => undefined,
+  });
 }
 
 const flushPromises = async (): Promise<void> => {
@@ -478,5 +554,96 @@ suite("ServerCommand", () => {
     assert.deepStrictEqual(exits, [1]);
     assert.ok(messages.at(-1)?.includes("timed out"));
     assert.ok(messages.at(-1)?.includes("pending"));
+  });
+
+  suite("pre-start license check", () => {
+    test("a license saved by an earlier run on a keyringless machine allows the LAN certificate", async () => {
+      const tempDir = makeTempDir("ctrlyoke-server-license-");
+      try {
+        const filePath = path.join(tempDir, "secrets.json");
+        const firstRun = createKeyringlessStore(filePath);
+        await provisionEnvironmentLicense(
+          new StoreBackedLicenseService(firstRun),
+          { key: "PRO-KEY", source: LICENSE_KEY_ENV },
+          (message) => assert.fail(message)
+        );
+
+        const restarted = createKeyringlessStore(filePath);
+        const message = await checkHttpsRemoteAccess(
+          restarted,
+          new StoreBackedLicenseService(restarted),
+          "0.0.0.0"
+        );
+
+        assert.strictEqual(message, undefined);
+      } finally {
+        removeTempDir(tempDir);
+      }
+    });
+
+    test("names the secret file when a keyringless machine has no license", async () => {
+      const tempDir = makeTempDir("ctrlyoke-server-license-");
+      try {
+        const filePath = path.join(tempDir, "secrets.json");
+        const store = createKeyringlessStore(filePath);
+
+        const message = await checkHttpsRemoteAccess(
+          store,
+          new StoreBackedLicenseService(store),
+          "0.0.0.0"
+        );
+
+        assert.ok(message);
+        assert.ok(message.includes(filePath), message);
+        assert.ok(message.includes("no OS credential store"), message);
+        assert.ok(message.includes(LICENSE_KEY_FILE_ENV), message);
+        assert.ok(message.includes("was skipped"), message);
+      } finally {
+        removeTempDir(tempDir);
+      }
+    });
+
+    test("a loopback bind needs no license", async () => {
+      const tempDir = makeTempDir("ctrlyoke-server-license-");
+      try {
+        const store = createKeyringlessStore(
+          path.join(tempDir, "secrets.json")
+        );
+        assert.strictEqual(
+          await checkHttpsRemoteAccess(
+            store,
+            new StoreBackedLicenseService(store),
+            "127.0.0.1"
+          ),
+          undefined
+        );
+      } finally {
+        removeTempDir(tempDir);
+      }
+    });
+
+    test("a failed environment activation warns without stopping the server", async () => {
+      const tempDir = makeTempDir("ctrlyoke-server-license-");
+      try {
+        const store = createKeyringlessStore(
+          path.join(tempDir, "secrets.json")
+        );
+        const service = new StoreBackedLicenseService(store);
+        service.activationError = new Error("network unreachable");
+        const warnings: string[] = [];
+
+        await provisionEnvironmentLicense(
+          service,
+          { key: "PRO-KEY", source: LICENSE_KEY_FILE_ENV },
+          (message) => warnings.push(message)
+        );
+
+        assert.strictEqual(warnings.length, 1);
+        assert.ok(warnings[0].includes(LICENSE_KEY_FILE_ENV), warnings[0]);
+        assert.ok(warnings[0].includes("network unreachable"), warnings[0]);
+      } finally {
+        removeTempDir(tempDir);
+      }
+    });
   });
 });

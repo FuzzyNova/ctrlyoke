@@ -4,7 +4,7 @@ import {
   SecretStoreUnavailableError,
   type SecretStore,
 } from "../platform/SecretStore";
-import { OsCredentialStore } from "../platform/OsCredentialStore";
+import { createNodeSecretStore } from "../platform/NodeSecretStore";
 import { CliAdapter, type ResolvedCliConfig } from "../platform/CliAdapter";
 import { PromptFileParser } from "../core/PromptFileParser";
 import {
@@ -64,11 +64,16 @@ export interface SecretCommandDependencies {
   >;
 }
 
-/** Construct the CLI platform contract without introducing a plaintext fallback. */
+/**
+ * Construct the CLI platform contract on the same store `ctrlyoke server`
+ * uses, so a secret set here is the one the server resolves.
+ */
 export function createCliSecretCommandDependencies(
   workspaceRoot: string
 ): SecretCommandDependencies {
-  const secretStore = new OsCredentialStore();
+  const secretStore = createNodeSecretStore({
+    warn: (message) => console.error(message),
+  });
   const config: ResolvedCliConfig = {
     cwd: workspaceRoot,
 

@@ -26,7 +26,8 @@ ctrlyoke server --open
 Keep the tokenized URL private. Requests without the token are rejected. The
 server token persists so a saved bookmark or scanned QR code remains usable
 after restart. Each workspace has its own token, stored in the system credential
-store and shared with the VS Code extension's server for the same workspace, so
+store (or the [secret file](#headless-hosts-and-containers) on a machine without
+one) and shared with the VS Code extension's server for the same workspace, so
 the link stays the same whichever one serves it. `--regenerate-token` rotates
 only this workspace's token. For scripted use, `CTRLYOKE_SERVER_TOKEN` supplies
 the token without putting it in visible process arguments; while it is set the
@@ -71,6 +72,50 @@ changing certificate settings; connected clients will need to reconnect.
 
 Provide an existing certificate pair with `--cert` and `--key`, or configure
 the paths in `server.tls` in `.ctrlyoke/settings.json`.
+
+## Headless hosts and containers
+
+The server keeps its secrets (the Pro license, the workspace token and
+[managed secrets](/workflows/secrets)) in the operating system's credential
+store. A Docker container or a headless Linux server usually has none: there is
+no D-Bus session or keyring daemon for `secret-tool` to reach. There, ctrlyoke
+stores them in `~/.ctrlyoke/secrets.json`, or `secrets.json` in the folder
+`CTRLYOKE_HOME` points to, and prints a warning naming the file.
+
+The file is **not encrypted**. Its protection is its permissions: ctrlyoke
+writes it readable and writable only by your user (mode `0600`), re-applies that
+mode on every write, and warns when it finds the file readable by others. This
+is how `gh`, Docker, git's credential store and the harness CLIs store logins
+on a machine without a keyring. Anyone who can read your home directory, and
+any agent ctrlyoke runs as your user, can read it. In a container, keep
+`CTRLYOKE_HOME` on a volume so the license, token and secrets survive
+recreating the container.
+
+`ctrlyoke secret` uses the same store, so a secret set from a shell in the
+container is the one the server resolves.
+
+### Activate a license at startup
+
+On Docker's default bridge network every browser is a remote client, and
+remote access needs Pro, so a fresh container cannot be activated from its own
+dashboard. Give the server the license key instead:
+
+| Variable                    | Effect                                                                                                                                      |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CTRLYOKE_LICENSE_KEY_FILE` | Path to a file that holds the license key, such as a Docker secret under `/run/secrets/`. Preferred.                                        |
+| `CTRLYOKE_LICENSE_KEY`      | The license key itself. The server removes it from its environment as soon as it starts, so harnesses and scripts it launches never see it. |
+
+On start, the server activates the key unless it is already the stored one, so
+restarting with the same key reuses the existing activation and Keygen machine.
+A changed key is activated in its place. If activation fails, for example with
+no network at boot, the server warns and starts anyway with whatever license is
+already stored. A file is preferred because every process the server launches
+inherits its environment until the variable is removed; a file never enters it.
+
+The activation stays stored, so removing the variable later does not deactivate
+the license. Losing the volume loses the activation, and the next start
+registers a new machine. If that reaches the license's machine limit, deactivate
+the old one from the **Activated machines** list on the License tab.
 
 ## Options
 

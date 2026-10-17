@@ -172,7 +172,8 @@ Uninstalling leaves your data, so reinstalling picks up where you left off:
 - `~/.ctrlyoke/`, with your user settings, run history and trust decisions (or the folder
   `CTRLYOKE_HOME` points to)
 - each workspace's `.ctrlyoke/` folder
-- [managed secrets](/workflows/secrets), which live in your operating system's credential store.
-  Remove them with `ctrlyoke secret rm <NAME>` before uninstalling.
+- [managed secrets](/workflows/secrets), which live in your operating system's credential store
+  (or, on a machine without one, in `secrets.json` in that same folder). Remove them with
+  `ctrlyoke secret rm <NAME>` before uninstalling.
 
 Delete those folders yourself to remove everything.

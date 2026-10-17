@@ -8,7 +8,7 @@ import {
 } from "../../platform/SecretStore";
 import { userSecretKey, userSecretMetadataKey } from "../../platform/SecretKey";
 import { CliAdapter } from "../../platform/CliAdapter";
-import { OsCredentialStore } from "../../platform/OsCredentialStore";
+import { NodeSecretStore } from "../../platform/NodeSecretStore";
 import { VsCodeAdapter } from "../../platform/VsCodeAdapter";
 import { EXECUTION_MODES } from "../../types/DashboardConstants";
 
@@ -132,7 +132,7 @@ suite("ManagedSecretMigration", () => {
     assert.strictEqual(target.isUsingFallback, true);
   });
 
-  test("uses an injected extension store and the CLI's default OS store", () => {
+  test("uses an injected extension store and the CLI's default Node store", () => {
     const extensionStore = new FallbackSecretStore(
       new MemorySecretStore(),
       new MemorySecretStore()
@@ -150,7 +150,7 @@ suite("ManagedSecretMigration", () => {
       cliExecutionMode: EXECUTION_MODES.HEADLESS,
     });
     assert.strictEqual(extension.getSecretStore(), extensionStore);
-    assert.ok(cli.getSecretStore() instanceof OsCredentialStore);
+    assert.ok(cli.getSecretStore() instanceof NodeSecretStore);
   });
 
   test("keeps the newer profile value and its metadata", async () => {

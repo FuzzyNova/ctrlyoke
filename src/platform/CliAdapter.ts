@@ -5,7 +5,7 @@ import type { ExecutionMode } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import type { SecretStore } from "./SecretStore";
-import { OsCredentialStore } from "./OsCredentialStore";
+import { createNodeSecretStore } from "./NodeSecretStore";
 import { resolvePackageRootFromEntry } from "../utils/CtrlyokeCliPath";
 import { INTERACTIVE_TERMINAL_MODES } from "../types/DashboardConstants";
 import type { InteractiveTerminalMode } from "../types/DashboardConstants";
@@ -55,7 +55,7 @@ export class CliAdapter implements PlatformAdapter {
 
   constructor(
     private readonly config: ResolvedCliConfig,
-    secretStore: SecretStore = new OsCredentialStore()
+    secretStore: SecretStore = createNodeSecretStore()
   ) {
     this.secretStore = secretStore;
     this.interactiveTerminal =

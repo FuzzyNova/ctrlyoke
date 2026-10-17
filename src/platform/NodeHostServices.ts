@@ -11,9 +11,8 @@ import { CliAdapter, type ResolvedCliConfig } from "./CliAdapter";
 import { NodeFileWatcherFactory } from "./NodeFileWatcher";
 import { FileKeyValueStore } from "./FileKeyValueStore";
 import { NodeDashboardHostActions } from "./NodeDashboardHostActions";
-import { OsCredentialStore } from "./OsCredentialStore";
-import { FallbackSecretStore } from "./FallbackSecretStore";
-import { MemorySecretStore, type SecretStore } from "./SecretStore";
+import { createNodeSecretStore } from "./NodeSecretStore";
+import type { SecretStore } from "./SecretStore";
 import { ConsoleUserFeedbackSink } from "./ConsoleUserFeedbackSink";
 import { CompositeUserFeedbackSink } from "../core/CompositeUserFeedbackSink";
 import { HostedWebSocketUserFeedbackSink } from "../server/HostedWebSocketUserFeedbackSink";
@@ -85,6 +84,8 @@ export interface NodeHostServices {
 export async function createNodeHostServices(options: {
   cwd: string;
   mode: ExecutionMode;
+  /** Shared with the caller's pre-start license check; built here otherwise. */
+  secretStore?: SecretStore;
 }): Promise<NodeHostServices> {
   const cwd = path.resolve(options.cwd);
   if (!isRunHistoryInitialized()) {
@@ -100,14 +101,7 @@ export async function createNodeHostServices(options: {
       for (const disposable of disposables.splice(0)) disposable.dispose();
     },
   };
-  const secretStore = new FallbackSecretStore(
-    new OsCredentialStore(),
-    new MemorySecretStore(),
-    (error) =>
-      Log.warn(
-        `ctrlyoke: OS credential store unavailable; server secrets will only last for this process: ${error.message}`
-      )
-  );
+  const secretStore = options.secretStore ?? createNodeSecretStore();
   const config: ResolvedCliConfig = {
     cwd,
     verbose: configService.get("diagnostics").verboseLogging,
@@ -254,6 +248,7 @@ function logStartupPhase(phase: string, startedAt: number): number {
 export async function createNodeHostedServer(options: {
   cwd: string;
   mode: ExecutionMode;
+  secretStore?: SecretStore;
   regenerateToken?: boolean;
   strictPort?: boolean;
 }): Promise<NodeHostedServerRuntime> {

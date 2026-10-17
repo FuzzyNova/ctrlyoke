@@ -489,10 +489,12 @@ prints names, scope, set state, and source (`managed`, `environment`, or
 defaults to `user`. `secret rm <NAME>` asks for confirmation unless you pass
 `--yes`.
 
-Managed secrets use the host OS credential store and are never written to a
-plaintext fallback file. On this machine, the dashboard, CLI, and hosted server
-share those secrets. The extension falls back to VS Code profile storage when
-the OS credential store is unavailable. The CI-friendly path does not require a
+Managed secrets use the host OS credential store. On this machine, the
+dashboard, CLI, and hosted server share those secrets. The extension falls back
+to VS Code profile storage when the OS credential store is unavailable; the CLI
+and `ctrlyoke server` fall back to an unencrypted, owner-only secret file and
+print a warning naming it (see
+[Headless hosts and containers](/cli/server#headless-hosts-and-containers)). The CI-friendly path does not require a
 credential backend: export the declared names in the environment and run the
 workflow as usual. For example:
 
@@ -825,9 +827,10 @@ versioned one-line result envelope; failures exit with code `2`.
 
 ## Environment variables
 
-| Variable                | Effect                                                                                                                                        |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CTRLYOKE_HOME`         | Moves the user state home (`<ctrlyokeStateHome>`, default `~/.ctrlyoke`) that holds run history. Settings stay in `~/.ctrlyoke/settings.json` |
-| `CTRLYOKE_WORKING_FILE` | Set by ctrlyoke for harness and workflow-script processes; names the run a step belongs to. Used by `history search --this-workflow`          |
-| `CTRLYOKE_MAX_STEPS`    | Set for the built-in MCP server process to the global `queue.maxSteps` value; a workflow's `maxSteps` can override it for that run            |
-| Declared secret names   | Resolve a workflow's declared secrets without a credential store (env passthrough)                                                            |
+| Variable                                            | Effect                                                                                                                                        |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CTRLYOKE_HOME`                                     | Moves the user state home (`<ctrlyokeStateHome>`, default `~/.ctrlyoke`) that holds run history. Settings stay in `~/.ctrlyoke/settings.json` |
+| `CTRLYOKE_WORKING_FILE`                             | Set by ctrlyoke for harness and workflow-script processes; names the run a step belongs to. Used by `history search --this-workflow`          |
+| `CTRLYOKE_MAX_STEPS`                                | Set for the built-in MCP server process to the global `queue.maxSteps` value; a workflow's `maxSteps` can override it for that run            |
+| Declared secret names                               | Resolve a workflow's declared secrets without a credential store (env passthrough)                                                            |
+| `CTRLYOKE_LICENSE_KEY_FILE`, `CTRLYOKE_LICENSE_KEY` | Activate a Pro license when `ctrlyoke server` starts; see [Activate a license at startup](/cli/server#activate-a-license-at-startup)          |

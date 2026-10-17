@@ -13,8 +13,8 @@ export interface SecretStore {
 }
 
 /**
- * Process-lifetime secret storage, for a host whose OS credential store is
- * unavailable (the Node server's fallback) and for composing hosts in tests.
+ * Process-lifetime secret storage for composing hosts in tests. Node hosts
+ * fall back to `FileSecretStore` instead, so secrets survive a restart.
  */
 export class MemorySecretStore implements SecretStore {
   private readonly values = new Map<string, string>();

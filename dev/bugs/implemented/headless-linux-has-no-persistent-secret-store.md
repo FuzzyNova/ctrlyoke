@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by Claude Code (code reading while planning a Docker deployment of `ctrlyoke server`; not yet reproduced in a container)
 - **Area:** `src/platform/OsCredentialStore.ts`, `src/platform/NodeHostServices.ts`, `src/cli/ServerCommand.ts`, `src/cli/SecretCommands.ts`, `src/license/LicenseService.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
