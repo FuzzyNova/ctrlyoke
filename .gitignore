@@ -16,6 +16,7 @@ package.json.backup
 
 # ctrlyoke temp files (prompt files for CLI execution)
 .ctrlyoke/temp/
+.ctrlyoke/debug/
 .ctrlyoke/.runs/
 .ctrlyoke/logs/
 .ctrlyoke/.search-index/
@@ -46,6 +47,13 @@ docs/public/screenshots/
 
 # Real Keygen test license keys (embed buyer email in cleartext, base64-encoded)
 dev/test_keys.md
+
+# Workspace file for the private sibling repo
+ctrlyoke-fuzzno.code-workspace
+
+# Environment files (keep the committed example)
+.env.*
+!.env.example
 
 # Azure Application Insights connection strings (see dev/backlog/TELEMETRY_PLAN.md)
 .env

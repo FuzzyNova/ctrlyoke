@@ -17,6 +17,7 @@ syntaxes/ctrlyoke-prompt-markdown.injection.json
 
 # Dependencies
 node_modules/
+landing/.astro/
 
 # Runtime-managed state
 .codex/hooks.json

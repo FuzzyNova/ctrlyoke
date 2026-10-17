@@ -46,7 +46,7 @@ exercise the `format:check` gate that item 7 adds, so item 3 is effectively owne
 ## Before the repo flip
 
 - [ ] **1. Test-mode orders mint production licenses (was BLOCKER; mitigated).** Bug:
-      [`test-mode-lemon-squeezy-orders-mint-production-licenses.md`](../bugs/backlog/test-mode-lemon-squeezy-orders-mint-production-licenses.md).
+      [`test-mode-lemon-squeezy-orders-mint-production-licenses.md`](../bugs/implemented/test-mode-lemon-squeezy-orders-mint-production-licenses.md).
       The test checkout URLs are in `src/license/LemonSqueezyConstants.ts` (and in git history).
       `ls-webhook.ts` maps the test variants to the production Keygen policies and never checks
       `test_mode`. Once the repo is public, anyone can get free Pro or Enterprise with Stripe's test
@@ -55,12 +55,12 @@ exercise the `format:check` gate that item 7 adds, so item 3 is effectively owne
         Pro and Enterprise products unpublished, so the committed test checkout links are dead; live
         webhook `143280` untouched. Test-issued Keygen licenses revoked. The one remaining license
         is Nathan's development key, so keep it. The hole is closed today.
-  - [ ] **Code half (agent):** in `ls-webhook.ts`, skip issuance for `meta.test_mode === true`
+  - [x] **Code half (agent):** in `ls-webhook.ts`, skip issuance for `meta.test_mode === true`
         unless an env flag such as `ALLOW_TEST_MODE_ORDERS` is set. This guards against a test
         webhook being re-created later. Cover it with a unit test; there is no test webhook to verify
-        against live anymore. Redeploy with `workflow_dispatch` (`netlify/**` is outside the push
-        filter, unless item 9 lands first). Update the comment "Both modes are mapped so test-mode
-        purchases keep working after launch" to match.
+        against live anymore. Item 9 now puts `netlify/**` in the push filter; redeploy after this
+        work merges to `main` (or dispatch `deploy.yml` manually). The deploy filter will trigger the
+        production deploy when merged.
 - [x] **2. Decided 2026-10-17: accept storefront sales before DataRep is effective.**
       `ctrlyoke.lemonsqueezy.com` lists Pro at $59 with a live checkout, and the live Enterprise URL
       is in the deployed `/enterprise/checkout/` page source. So `LAUNCHED` is not the only purchase
@@ -74,12 +74,12 @@ exercise the `format:check` gate that item 7 adds, so item 3 is effectively owne
       (`gh run list --workflow ci.yml` is empty). Run `gh workflow run ci.yml --ref main`, and run
       full-suite again too (last green 2026-10-13). Confirm both are green before applying the
       rulesets.
-- [ ] **4. Personal data cleanup (decided 2026-10-17: remove all of it).**
-  - Bug: [`status-line-preview-hardcodes-personal-path.md`](../bugs/backlog/status-line-preview-hardcodes-personal-path.md).
-    `C:\Users\natha\...` ships in the Settings UI.
+- [x] **4. Personal data cleanup (decided 2026-10-17: remove all of it).**
+  - Bug: [`status-line-preview-hardcodes-personal-path.md`](../bugs/implemented/status-line-preview-hardcodes-personal-path.md).
+    A personal Windows home path ships in the Settings UI.
   - Remove every personal or real-looking email address:
     - Redact the personal Gmail in `dev/reference/TUI_VISUALS.md:159`.
-    - Replace the `nathan@gmail.com` examples (likely a real stranger's address) in
+    - Replace the email examples in
       `docs/workflows/context-files.md:19`, `src/utils/ReferenceBoundary.ts:8`,
       `src/utils/FileReferenceParser.ts:728` and `src/test/unit/ReferencePatterns.test.ts:84` with
       `name@example.com`.
@@ -96,15 +96,15 @@ exercise the `format:check` gate that item 7 adds, so item 3 is effectively owne
   - `rebrand-naming.md` and `trademark-search-results.csv` moved to the Fuzzy Nova LLC business
     Drive (`Trademark & IP/`) and were removed from `dev/reference/`. Git history still holds them,
     which is acceptable.
-- [ ] **6. Repo tidy (trivial):**
+- [x] **6. Repo tidy (trivial):**
   - Untrack `ctrlyoke-fuzzno.code-workspace` (it references a private sibling repo) and add it to
     `.gitignore`.
   - Add `.env.*` with `!.env.example` to `.gitignore`.
   - Delete or move the stale `.ctrlyoke/debug/*.md` handoffs (FlightPath-era, one marked
     `🔴 UNRESOLVED`).
-- [ ] **7. Format drift.** The one-time `npm run format` landed in `f9c5fe317`. What's left: add
-      `landing/.astro` to `.prettierignore`, and add `format:check` to `check:fast`, so the pre-push
-      hook and `ci.yml` enforce it. Confirm `npm run format:check` exits 0 afterwards.
+- [x] **7. Format drift.** The one-time `npm run format` landed in `f9c5fe317`. Added
+      `landing/.astro` to `.prettierignore` and `format:check` to `check:fast`, so the pre-push hook
+      and `ci.yml` enforce it. `npm run format:check` confirmation is deferred to integration.
 
 ## Before tagging v0.2.0
 
@@ -114,19 +114,19 @@ exercise the `format:check` gate that item 7 adds, so item 3 is effectively owne
       deps are missing, versions are stale and licence texts are absent. Rebuild the VSIX after.
       Default: **disclose** elkjs, rather than stripping the ELK layout engine out of mermaid,
       unless Nathan says otherwise.
-- [ ] **9. Deploy filter.** Bug:
-      [`deploy-path-filter-skips-root-legal-docs.md`](../bugs/backlog/deploy-path-filter-skips-root-legal-docs.md).
-      The DataRep `PRIVACY.md` commit will not redeploy the site on its own. Fix the filter, or
-      dispatch `deploy.yml` by hand and check `/privacy/`.
+- [x] **9. Deploy filter.** Bug:
+      [`deploy-path-filter-skips-root-legal-docs.md`](../bugs/implemented/deploy-path-filter-skips-root-legal-docs.md).
+      Both deploy workflows now include root legal documents, `src/license/**`, and `netlify/**`.
+      The production redeploy happens after this work merges to `main`; check `/privacy/` then.
 - [ ] **10. Small code bugs:**
-  - [`web-push-vapid-subject-placeholder-email.md`](../bugs/backlog/web-push-vapid-subject-placeholder-email.md)
-  - [`opencode-pretooluse-compat-matrix-overstates-blocking.md`](../bugs/backlog/opencode-pretooluse-compat-matrix-overstates-blocking.md):
-    the public matrix promises that a preToolUse guard blocks on OpenCode, and it does not.
-  - [`readme-logo-relative-image-path.md`](../bugs/backlog/readme-logo-relative-image-path.md)
+  - [x] [`web-push-vapid-subject-placeholder-email.md`](../bugs/implemented/web-push-vapid-subject-placeholder-email.md)
+  - [x] [`opencode-pretooluse-compat-matrix-overstates-blocking.md`](../bugs/implemented/opencode-pretooluse-compat-matrix-overstates-blocking.md):
+        the public matrix promises that a preToolUse guard blocks on OpenCode, and it does not.
+  - [x] [`readme-logo-relative-image-path.md`](../bugs/implemented/readme-logo-relative-image-path.md)
 - [ ] **11. Version strings.** Re-date `CHANGELOG.md` `[0.2.0]` (currently 2026-10-16). Bump the
       `ctrlyoke@0.1.2` pins in `docs/cli/ci.md` (L13, 19, 188, 200). Optionally inject the package
       version for `src/mcp-server.ts:434` (`"1.0.0"`) and `CodexAppServerClient.ts:132` (`"0.1.0"`).
-- [ ] **12. Pricing copy vs EULA §6(c) (decided 2026-10-17; agent-ready).** The pricing page says
+- [x] **12. Pricing copy vs EULA §6(c) (decided 2026-10-17; agent-ready).** The pricing page says
       "Perpetual … includes all future Pro features", while `LICENSE.md` §6(c) reserves a paid
       major-version upgrade. §6(c) opens with "Unless otherwise stated at purchase", so an unscoped
       "all future features" claim at purchase may override the reservation. **Decision:** keep
@@ -145,16 +145,16 @@ exercise the `format:check` gate that item 7 adds, so item 3 is effectively owne
   - `docs/pro/index.md:33` and `:60-61` also say "future Pro features": make them match the
     section above (Pro docs may carry the scoped wording directly).
   - Do not edit `LICENSE.md`.
-- [ ] **13. Large-org threshold in the README (decided 2026-10-17).** The Marketplace listing stays
+- [x] **13. Large-org threshold in the README (decided 2026-10-17).** The Marketplace listing stays
       **Free** to install: do not add a `"pricing"` field to `package.json`. Add one or two sentences
       to the README License section saying the free tier covers individuals and small teams, and
       that organizations with $10M+ revenue or 250+ staff need Pro (`LICENSE.md` §3(b)). Link
       `https://ctrlyoke.dev/docs/pro`.
-- [ ] **14. README telemetry summary** (L363-368) understates `PRIVACY.md` §3: it leaves out the
+- [x] **14. README telemetry summary** (L363-368) understates `PRIVACY.md` §3: it leaves out the
       redacted error reports and pseudonymous machine/session IDs. Add them, or shorten the summary
       to just the link.
-- [ ] **15. Marketplace discoverability:** add `opencode` and `qwen` to keywords. Consider the
-      categories `["AI", "Machine Learning", "Other"]` (replacing "Programming Languages").
+- [x] **15. Marketplace discoverability:** added `opencode` and `qwen` to keywords and set the
+      categories to `AI`, `Machine Learning` and `Other`.
 
 ## Go-live order
 
