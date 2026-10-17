@@ -33,9 +33,19 @@ via `path.resolve`/`fs.realpath`)". Other containment code already canonicalizes
 
 ## Suggested Fix
 
-Realpath the candidate (and, memoized, every trusted root) before the containment check. Decide
-first whether a symlink inside the workspace that points outside should be blocked or honoured
-when the user created it on purpose (monorepo links, `node_modules` links). Approved
-`permissions.trustedExternalRoots` may be the intended escape hatch. **Not queued:** the fix
-changes behaviour for users whose workspaces deliberately link to outside folders, so it needs a
-decision.
+Realpath the candidate (and, memoized, every trusted root) before the containment check.
+
+**Decision (2026-10-16):** block by default. A link inside the workspace that resolves outside it
+is treated like any other outside path: the reference is skipped unless its real target lies under
+an approved `permissions.trustedExternalRoots` entry. Links that resolve inside the workspace keep
+working.
+
+- Check the realpath of the target against the realpaths of the workspace folders and the
+  approved trusted roots, so a trusted root that is itself reached through a link still matches.
+- A missing target (`ENOENT` from `realpath`) keeps today's behaviour: the reference is skipped.
+- The skip message should name the resolved target and point to `trustedExternalRoots`, so a user
+  with a deliberate monorepo link knows how to allow it.
+- Document the behaviour in `docs/workflows/permissions.md`.
+- Tests: a junction/symlink to an outside folder is skipped for `@file`, `@dir/`, `#selection`
+  and `#sym`; the same link is allowed once its target is a trusted root; an inside-to-inside link
+  still works.

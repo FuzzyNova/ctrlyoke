@@ -25,8 +25,9 @@ raises `SecretStoreUnavailableError`, and every host handles that differently:
   `OsCredentialStore` (`ServerCommand.ts:225`), not the fallback. `computeEntitlement` swallows
   the error and returns Free. The CLI's `LicenseService` has no `trialState`, so the trial reads
   as unavailable too. Result: with a non-loopback bind, LAN certificate generation is skipped
-  with "Remote access is a Pro feature", even for a licensed user. The message is misleading:
-  the problem is storage, not entitlement.
+  with "Remote access is a Pro feature", even for a licensed user. The message is true (no
+  license is present), but it doesn't say why: a license activated in an earlier server run was
+  only ever held in memory, because there was nowhere persistent to store it.
 - **`ctrlyoke secret set`** builds a bare `OsCredentialStore` (`SecretCommands.ts:71`) and fails
   outright.
 
@@ -62,25 +63,90 @@ Not run yet. The steps above come from reading the code; confirm them before fix
 
 ## Suggested Fix
 
-1. **Single-source the Node secret store.** One factory (e.g. `createNodeSecretStore()` in
-   `src/platform/`) used by `NodeHostServices`, `ServerCommand` and `SecretCommands`, so the
-   pre-start license check and `ctrlyoke secret` see the same backend as the running server.
-2. **Add a persistent file-backed fallback** for hosts with no OS keyring: an encrypted file
-   under `ctrlyokeStateHome()`, mode `0600`. The key could come from a `CTRLYOKE_SECRET_KEY`
-   env var or Docker secret file, or fall back to a key file next to it. A key file next to the
-   data protects against little beyond casual reads, so say so in the warning. That is still
-   strictly better than losing everything on restart, and it matches what other headless CLIs
-   do (`gh`, `docker` credential fallbacks).
-3. **Let a license come from outside the store:** e.g. `CTRLYOKE_LICENSE_KEY` /
-   `CTRLYOKE_LICENSE_FILE` env vars, or a mounted license file. Then a container can be
-   recreated without touching the store at all.
-4. **Persist a stable machine fingerprint** independent of the secret store (e.g. a file in
-   the state home, or derived from `/etc/machine-id` when it is stable), so a container rebuilt
-   on the same volume reuses its Keygen machine.
-5. **Fix the misleading message** in `ServerCommand.ts`: when the store is unavailable, say
-   so instead of "Remote access is a Pro feature".
-6. Tests: an `OsCredentialStore` with a stub runner reporting the D-Bus error should route to
-   the file store; `ServerCommand` with an unavailable keyring and a license in the file store
-   should generate the LAN certificate.
+**Decision (2026-10-16):** approved as written below. It replaces the earlier list, which
+proposed an encrypted file with the key stored beside it.
+
+### Threat model
+
+On a headless host, the realistic attacker is another user on the same machine, or someone who
+gets a copy of the volume. File mode `0600` in a `0700` directory stops the first. Encryption
+whose key sits in the same home directory stops neither, because whoever can read the data can
+read the key. An encryption key passed as an env var doesn't help either: ctrlyoke doesn't scrub
+its environment before spawning harness CLIs and scripts, so every agent inherits it.
+
+The harnesses ctrlyoke drives already store their logins this way on Linux, in the same home
+volume (`~/.claude/.credentials.json`, `~/.codex/auth.json`). So does the wider CLI ecosystem when
+no keyring is available:
+
+- `gh` falls back to plaintext `hosts.yml` with a warning.
+- `docker` keeps auths in `config.json` unless a credential helper is set.
+- git's `credential-store` keeps `~/.git-credentials`.
+- the AWS CLI keeps `~/.aws/credentials`.
+- Electron/VS Code's `basic_text` safeStorage backend uses a hard-coded key.
+
+Agents running in the container can read the store whatever format it uses. The container is the
+sandbox, as `DOCKER_SERVER_IMAGE_PLAN.md` already says.
+
+### Fix
+
+1. **One Node secret-store factory** in `src/platform/` (e.g. `createNodeSecretStore()`),
+   returning `FallbackSecretStore(OsCredentialStore, FileSecretStore)`. Use it in
+   `NodeHostServices`, `ServerCommand`'s pre-start license check, `SecretCommands`, and as
+   `CliAdapter`'s default. Then the server, `ctrlyoke secret`, and the license check always see
+   the same backend. This part needs no decision and can ship first.
+2. **`FileSecretStore`: plaintext JSON, not encrypted.**
+   - It lives at `ctrlyokeStateHome()/secrets.json`, so `CTRLYOKE_HOME` and the Docker volume
+     already cover it.
+   - The file is mode `0600` in a `0700` directory. Re-apply the mode on every write, and warn if
+     the file is group- or world-readable on read, as ssh does.
+   - Writes are atomic (temp file + rename) under `withFileLock`, because the server and
+     `ctrlyoke secret` can write concurrently.
+   - It implements `keys()` directly, so it needs no separate index.
+   - Replace the "secrets will only last for this process" warning with one that names the file
+     and says it is unencrypted, as `gh` does.
+   - Keep `MemorySecretStore` only for tests.
+   - Encryption can come later as an opt-in key file (`CTRLYOKE_SECRET_KEY_FILE`) for volumes
+     that are backed up apart from the key. Don't build it now.
+3. **License from a mounted file: `CTRLYOKE_LICENSE_KEY_FILE`.**
+   - This follows the official Postgres/MySQL image convention for Docker secrets
+     (`/run/secrets/…`). A file is preferred over a bare env var because harness subprocesses
+     would inherit the env var.
+   - Also accept `CTRLYOKE_LICENSE_KEY` for convenience, but delete it from `process.env` after
+     reading so children don't inherit it.
+   - On start, if the provided key differs from the stored one, activate it through the normal
+     path. Store the result in the secret store as usual.
+   - This is needed, not just convenient. On Docker's bridge network every browser is remote, and
+     remote access needs Pro, so a container can't be activated from its own dashboard without
+     `docker exec` or host networking. There is also no `ctrlyoke license` CLI command today.
+   - A `ctrlyoke license activate|status|deactivate` command would be the natural companion, and
+     could be done as a separate change.
+4. **Machine fingerprint: no separate mechanism.**
+   - It stays a persisted random value. Once the store is a file on the volume, the fingerprint
+     survives container recreation and a rebuild reuses its Keygen machine.
+   - Don't derive it from `/etc/machine-id`. In containers it is usually absent, or baked into
+     the image and shared by every container started from it, which would merge distinct
+     machines.
+   - Losing the volume costs one machine activation. That's acceptable; deactivate the old
+     machine from the Keygen portal.
+5. **Make the message say why** in `ServerCommand.ts`. Item 1 alone doesn't change it: with
+   only the in-memory fallback the store is empty at startup, so the check still reads Free.
+   Items 1 and 2 together let the check find a license saved by an earlier run. Separately, when
+   no persistent store is available, add the reason to the message (e.g. "no credential store is
+   available, so a license activated earlier was not saved") instead of only "Pro feature".
+6. **Out of scope here:** the CLI server's missing `trialState` (the Docker plan owns it). A trial
+   kept on a volume can be reset by deleting the volume, so it needs its own decision.
+7. **Tests:**
+   - `OsCredentialStore` with a stub runner returning the D-Bus error routes to
+     `FileSecretStore`.
+   - `FileSecretStore` round-trips values, keeps mode `0600`, and survives concurrent writers.
+   - `ServerCommand` with no keyring and a stored license generates the LAN certificate.
+   - `CTRLYOKE_LICENSE_KEY_FILE` activates once and is a no-op on the next start.
+   - `CTRLYOKE_LICENSE_KEY` is removed from `process.env`.
+8. **Docs:** the CLI/server page gets the storage location and its unencrypted status, and the
+   env vars.
+
+The extension is unaffected: on a host without a keyring it already falls back to VS Code's own
+secret storage (`extension.ts`). On a headless Linux box running both the extension and the
+server, their stores will differ. That already happens today and is outside this bug.
 
 Related plan: `dev/backlog/DOCKER_SERVER_IMAGE_PLAN.md`; this bug is its first prerequisite.

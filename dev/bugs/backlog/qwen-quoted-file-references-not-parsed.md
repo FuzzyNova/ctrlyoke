@@ -27,7 +27,15 @@ harness, and `QwenCliProvider.formatFileReference` (`:849-850`) prefixes `@`. Qw
 
 ## Suggested Fix
 
-Give providers control over quoting, so Qwen can backslash-escape spaces on POSIX. Windows has no
-`@` form that can express a space, so Qwen needs a fallback there: a plain path for the model to
-read itself, or inline content. **Not queued:** the Windows fallback is a design choice, and this
-hasn't been verified end to end against a live Qwen.
+Give providers control over quoting, so Qwen can backslash-escape spaces on POSIX.
+
+**Decision (2026-10-16):** on Windows, a path containing a space is sent to Qwen as a plain path
+with no `@` (quoted, so the model can read the whole path), and the model reads the file itself
+with its own tools. Paths without a space keep the `@` form. Content is not inlined.
+
+- The plain-path form needs a short instruction around it (e.g. "Read the file at …") when it
+  replaces a temp prompt, agent or skill file reference, because the model must act on it.
+- Verify against a live Qwen first: that `\ ` escaping attaches the file on POSIX, and that the
+  plain-path fallback is read on Windows. The finding came from reading the Qwen 0.25.1 bundle.
+- Tests: `QwenCliProvider` formats a spaced path as an escaped `@` reference on POSIX and as a
+  plain path on win32; unspaced paths are unchanged; other providers keep `@"…"`.
