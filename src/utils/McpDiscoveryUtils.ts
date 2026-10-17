@@ -43,6 +43,13 @@ import {
 } from "./McpConfigPaths";
 
 type LocalSource = LocalMcpServerEntry["source"];
+
+const TOML_MCP_SERVERS_TABLE_KEY = "mcp_servers";
+const TOML_MCP_ASSIGNMENT_KEYS = {
+  ARGS: "args",
+  URL: "url",
+  TRANSPORT: "transport",
+} as const;
 type JsonRecord = Record<string, unknown>;
 
 interface LocalConfigDescriptor {
@@ -577,6 +584,84 @@ export function findTomlTableHeaderLines(lines: readonly string[]): number[] {
   return headers;
 }
 
+export interface TomlMcpServerAssignment {
+  id: string;
+  key: string[];
+  value: string;
+  startLine: number;
+  endLine: number;
+}
+
+/**
+ * Find assignments owned by individual servers inside a bare
+ * `[mcp_servers]` table. The returned line range includes a multi-line value.
+ */
+export function findTomlMcpServerAssignments(
+  lines: readonly string[]
+): TomlMcpServerAssignment[] {
+  const headerLines = new Set(findTomlTableHeaderLines(lines));
+  const assignments: TomlMcpServerAssignment[] = [];
+  let inMcpServers = false;
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    if (headerLines.has(lineIndex)) {
+      inMcpServers =
+        parseTomlTableHeader(lines[lineIndex]!) === TOML_MCP_SERVERS_TABLE_KEY;
+      continue;
+    }
+    if (!inMcpServers) continue;
+
+    const firstLine = lines[lineIndex]!;
+    const equals = firstLine.indexOf("=");
+    if (equals <= 0) continue;
+    const key = splitTomlDottedKey(firstLine.slice(0, equals).trim());
+    if (!key || key.length === 0) continue;
+
+    let value = firstLine.slice(equals + 1).trim();
+    let endLine = lineIndex;
+    let squareDepth = 0;
+    let braceDepth = 0;
+    let quote: string | null = null;
+    let escaped = false;
+    const scanValue = (chunk: string) => {
+      for (const char of chunk) {
+        if (quote) {
+          if (escaped) escaped = false;
+          else if (char === "\\" && quote === '"') escaped = true;
+          else if (char === quote) quote = null;
+          continue;
+        }
+        if (char === "#") break;
+        if (char === '"' || char === "'") quote = char;
+        else if (char === "[") squareDepth += 1;
+        else if (char === "]") squareDepth = Math.max(0, squareDepth - 1);
+        else if (char === "{") braceDepth += 1;
+        else if (char === "}") braceDepth = Math.max(0, braceDepth - 1);
+      }
+    };
+    scanValue(value);
+    while (
+      (squareDepth > 0 || braceDepth > 0 || quote !== null) &&
+      endLine + 1 < lines.length
+    ) {
+      endLine += 1;
+      const continuation = lines[endLine]!;
+      value += `\n${continuation}`;
+      scanValue(continuation);
+    }
+
+    assignments.push({
+      id: key[0]!,
+      key: key.slice(1),
+      value,
+      startLine: lineIndex,
+      endLine,
+    });
+    lineIndex = endLine;
+  }
+  return assignments;
+}
+
 /** Which part of an `[mcp_servers.<id>...]` server a TOML table header opens. */
 const TOML_MCP_SERVER_TABLES = {
   SERVER: "server",
@@ -592,7 +677,8 @@ function parseTomlMcpServerKey(
   sectionName: string
 ): { id: string; table: TomlMcpServerTable } | null {
   const parts = splitTomlDottedKey(sectionName);
-  if (!parts || parts[0] !== "mcp_servers" || !parts[1]) return null;
+  if (!parts || parts[0] !== TOML_MCP_SERVERS_TABLE_KEY || !parts[1])
+    return null;
   const id = parts[1];
   if (parts.length === 2) return { id, table: TOML_MCP_SERVER_TABLES.SERVER };
   if (parts.length === 3 && parts[2] === TOML_MCP_SERVER_TABLES.ENV) {
@@ -609,6 +695,73 @@ export function getTomlMcpServerSectionId(sectionName: string): string | null {
   return parseTomlMcpServerKey(sectionName)?.id ?? null;
 }
 
+type TomlMcpServerConfig = {
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  url?: string;
+  transport?: McpTransport;
+  headers?: Record<string, string>;
+};
+
+function setTomlMcpServerValue(
+  config: TomlMcpServerConfig,
+  key: string[],
+  value: string
+): void {
+  if (key.length === 0) {
+    for (const pair of splitTomlList(value.trim().replace(/^\{|\}$/g, ""))) {
+      const equals = pair.indexOf("=");
+      if (equals > 0) {
+        setTomlMcpServerValue(
+          config,
+          [unquoteTomlString(pair.slice(0, equals).trim())],
+          pair.slice(equals + 1).trim()
+        );
+      }
+    }
+    return;
+  }
+  const [field, nestedKey] = key;
+  if (!field) return;
+  if (field === MCP_CONFIG_KEYS.COMMAND && value.trim().startsWith('"')) {
+    config.command = unquoteTomlString(value.trim());
+  } else if (field === TOML_MCP_ASSIGNMENT_KEYS.ARGS) {
+    config.args = parseTomlStringArray(value);
+  } else if (
+    field === TOML_MCP_ASSIGNMENT_KEYS.URL &&
+    /^["']/.test(value.trim())
+  ) {
+    config.url = unquoteTomlString(value.trim());
+  } else if (
+    field === TOML_MCP_ASSIGNMENT_KEYS.TRANSPORT &&
+    /^["']/.test(value.trim())
+  ) {
+    const transport = unquoteTomlString(value.trim());
+    if (transport === MCP_TRANSPORTS.SSE) config.transport = MCP_TRANSPORTS.SSE;
+    else if (
+      transport === MCP_TRANSPORTS.STREAMABLE_HTTP ||
+      transport === MCP_CONFIG_ENTRY_TYPES.HTTP
+    )
+      config.transport = MCP_TRANSPORTS.STREAMABLE_HTTP;
+  } else if (
+    field === MCP_CONFIG_KEYS.ENV ||
+    field === MCP_CONFIG_KEYS.HEADERS
+  ) {
+    const target = field;
+    if (nestedKey) {
+      if (/^["']/.test(value.trim())) {
+        config[target] = config[target] ?? {};
+        config[target]![unquoteTomlString(nestedKey)] = unquoteTomlString(
+          value.trim()
+        );
+      }
+    } else {
+      config[target] = parseTomlInlineTable(value) ?? config[target];
+    }
+  }
+}
+
 function normalizeCodexToml(
   text: string,
   source: LocalSource,
@@ -618,14 +771,14 @@ function normalizeCodexToml(
   const lines = text.split(/\r?\n/);
   let currentId: string | null = null;
   let currentTable: TomlMcpServerTable = TOML_MCP_SERVER_TABLES.SERVER;
-  let currentConfig: {
-    command?: string;
-    args?: string[];
-    env?: Record<string, string>;
-    url?: string;
-    transport?: McpTransport;
-    headers?: Record<string, string>;
-  } | null = null;
+  let currentConfig: TomlMcpServerConfig | null = null;
+  const assignments = new Map(
+    findTomlMcpServerAssignments(lines).map((assignment) => [
+      assignment.startLine,
+      assignment,
+    ])
+  );
+  const assignmentConfigs = new Map<string, TomlMcpServerConfig>();
 
   const flushCurrent = () => {
     if (!currentId || !currentConfig) {
@@ -639,11 +792,25 @@ function normalizeCodexToml(
 
   const headerLines = new Set(findTomlTableHeaderLines(lines));
   for (const [lineIndex, rawLine] of lines.entries()) {
+    const assignment = assignments.get(lineIndex);
+    if (assignment) {
+      const config = assignmentConfigs.get(assignment.id) ?? {};
+      assignmentConfigs.set(assignment.id, config);
+      setTomlMcpServerValue(config, assignment.key, assignment.value);
+      continue;
+    }
     const sectionName = headerLines.has(lineIndex)
       ? parseTomlTableHeader(rawLine)
       : null;
     if (sectionName) {
       const nextSection = parseTomlMcpServerKey(sectionName);
+      if (sectionName === TOML_MCP_SERVERS_TABLE_KEY) {
+        flushCurrent();
+        currentId = null;
+        currentConfig = null;
+        currentTable = TOML_MCP_SERVER_TABLES.SERVER;
+        continue;
+      }
       if (!nextSection || nextSection.id !== currentId) {
         flushCurrent();
         currentId = nextSection?.id ?? null;
@@ -694,18 +861,21 @@ function normalizeCodexToml(
       continue;
     }
 
-    if (key === "args") {
+    if (key === TOML_MCP_ASSIGNMENT_KEYS.ARGS) {
       currentConfig.args = parseTomlStringArray(value);
       continue;
     }
 
-    if (key === "url" && (value.startsWith(`"`) || value.startsWith(`'`))) {
+    if (
+      key === TOML_MCP_ASSIGNMENT_KEYS.URL &&
+      (value.startsWith(`"`) || value.startsWith(`'`))
+    ) {
       currentConfig.url = unquoteTomlString(value);
       continue;
     }
 
     if (
-      key === "transport" &&
+      key === TOML_MCP_ASSIGNMENT_KEYS.TRANSPORT &&
       (value.startsWith(`"`) || value.startsWith(`'`))
     ) {
       const transport = unquoteTomlString(value);
@@ -749,6 +919,10 @@ function normalizeCodexToml(
   }
 
   flushCurrent();
+  for (const [id, config] of assignmentConfigs) {
+    const entry = buildLocalEntry(id, source, filePath, config);
+    if (entry) results.set(id, entry);
+  }
   return [...results.values()];
 }
 
