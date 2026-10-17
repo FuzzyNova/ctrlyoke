@@ -305,6 +305,54 @@ workflow values by default, and `--force <flag>` applies selected flags to
 every step. For `append` and `continue`, shared execution overrides affect
 pending work at workflow scope without `--force`.
 
+### Continue after a stop and edit pending work
+
+`run --json` returns the run's `workflowKey` and stable `runRef` when execution
+ends. Keep those values: history and step-edit commands target that exact run.
+For example, start a release workflow and stop it with Ctrl+C before the
+workflow is complete:
+
+```bash
+ctrlyoke run release.ctrlyoke.yaml --json
+# Press Ctrl+C while the workflow is running; it exits with code 5.
+```
+
+The final JSON line includes `workflowKey` and `runRef`; an interrupted run
+also records its status. Use the returned values to inspect what completed and
+what remains:
+
+```bash
+ctrlyoke history steps --workflow release --run <run-ref>
+ctrlyoke history show --workflow release --run <run-ref> --step 0
+```
+
+`history steps` shows the queue indexes. `history show` displays recorded
+output for a selector; queue indexes are zero-based, and `final:N` selects
+final-step pass N (for example, `--step final:2`). Each execution of the
+`finalStep` is a **pass**; a **loop** is the whole queue, final step and
+appended-steps cycle.
+
+If index 2 is still pending and needs a correction, edit it, then resume the
+same run. Replace `2` with the pending step's index shown by `history steps`:
+
+```bash
+ctrlyoke step edit --workflow release --run <run-ref> --index 2 \
+  --prompt "Include the database migration check before deployment."
+ctrlyoke continue --workflow release --run <run-ref>
+```
+
+Use the pending step's absolute zero-based index from `history steps`;
+completed and in-flight steps cannot be edited. `continue` executes the
+remaining work in that run. If the run has completed, use
+[`ctrlyoke append`](#ctrlyoke-append) to add work or
+[`ctrlyoke rerun`](#ctrlyoke-rerun) to start a new run instead.
+
+CLI runs in the workspace also appear in the dashboard, where they are
+read-only while the CLI owns them; see [run history in the
+dashboard](/guide/history#external-runs). For workflows
+that append or edit steps while running, see [Dynamic
+workflows](/workflows/dynamic-workflows).
+
 ## `ctrlyoke validate`
 
 Validate a workflow file without starting a harness or executing a workflow:

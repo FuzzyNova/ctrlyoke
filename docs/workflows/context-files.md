@@ -18,6 +18,29 @@ ctrlyoke prompt files support structured references that help you attach the rig
   reference. An `@` in the middle of a word is not a trigger, which keeps email addresses such
   as `name@example.com` from becoming references.
 
+### Image attachments
+
+Use a full-file `@` reference to attach an image to a prompt:
+
+```text
+What does this screenshot show? @images/checkout.png
+```
+
+ctrlyoke recognizes `.png`, `.jpg`, `.jpeg`, `.gif` and `.webp` image files.
+The image is passed to the harness as an image input when that harness supports
+it: Copilot CLI, Claude Code and Codex support image attachments. OpenCode
+supports them in headless mode; interactive OpenCode keeps the file path in the
+prompt but does not send the image as vision input. Qwen Code and Antigravity
+have no verified native image-attachment path, and compatibility analysis
+reports that limitation. See the [harness compatibility
+matrix](/harnesses/compatibility#compatibility-matrix) before using an image
+with a particular harness.
+
+Pasting an image into the prompt editor accepts PNG, JPEG, GIF and WebP files up
+to 15 MB each. That limit applies to pasted images; ctrlyoke does not impose
+that same byte limit on an image referenced from a workspace file. A harness
+may have its own input limits.
+
 ### Where paths resolve
 
 - A plain path such as `@src/app.ts` is relative to the workspace root. In a

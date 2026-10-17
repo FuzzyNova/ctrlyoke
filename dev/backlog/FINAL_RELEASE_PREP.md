@@ -200,7 +200,7 @@ of the flip and the tag, and it has no step that makes the Marketplace listing p
       implement/review, a parallel research group, a worktree run and an onPass retry loop.
 - [x] Add a sitemap (VitePress `sitemap.hostname`, plus `@astrojs/sitemap` or a static sitemap) and
       an `og:image`. `Layout.astro` declares `summary_large_image` but has no image.
-- [ ] `DOCUMENTATION_GAPS_PLAN.md` P1 rows: a CLI "continuing and editing runs" walkthrough and
+- [x] `DOCUMENTATION_GAPS_PLAN.md` P1 rows: a CLI "continuing and editing runs" walkthrough and
       `@image` attachments in `context-files.md`. Also mark its stale P0 mobile/Tailscale and §3.2
       rows done.
 

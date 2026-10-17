@@ -264,11 +264,11 @@ afterwards.
    `guide/installation.md` and `cli/index.md` currently say "once installed" with nothing behind
    it. Pick one: npm package, a VSIX-bundled shim added to PATH by a command, or a documented
    `node <extension>/out/cli.js` invocation.
-2. **Remote dashboard page placement.** Localhost hosting is free and remote/LAN access is Pro.
-   Recommend `guide/remote-dashboard.md` for everything (with a Pro badge on the LAN/TLS/push
-   parts) plus `pro/mobile-setup.md` for PWA install, which the release checklist requires.
-   (`pro/mobile-setup.md` exists now and covers the LAN/TLS/QR/PWA flow. `guide/remote-dashboard.md`
-   is still unwritten. `cli/server.md` covers the standalone server.)
+2. **Remote dashboard page placement — DONE 2026-10-17.** `guide/remote-dashboard.md`
+   covers hosting, LAN access, TLS, the QR code, browser views and the free/Pro boundary;
+   `pro/mobile-setup.md` covers phone setup and PWA installation, and links to
+   `pro/remote-access.md` for VPN access including Tailscale. `cli/server.md` covers the
+   standalone server.
 3. **C14:** should the server commands be palette-visible? **DECIDED 2026-10-10:** Start and
    Stop yes, Regenerate stays dashboard-only.
 4. **Public source links in `compatibility.md`.** Every row links
@@ -358,14 +358,14 @@ Priority key:
 | --- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ----- |
 | P0  | Installation (blocked on §3.1) | **Done 2026-09-25** in `cli/index.md` and `guide/installation.md`. How to get `ctrlyoke` and `ctrlyoke-mcp` onto PATH on each OS, and the Node `>=22.12` requirement.                                                                                                                                    | `package.json` `bin`, `cli-binary.instructions.md`              | none  |
 | P0  | **new `cli/ci.md`**            | **Done 2026-09-25.** `--headless --json`, exit codes, the headless `dangerouslyAllowAll` default and why to set `--permission-mode`, env-var secrets, `trust-* --yes`, harness auth on CI runners, a `--json` field reference, a GitHub Actions example, `validate --strict` as a pre-commit or CI gate. | `CliJsonResultBuilder.ts`, `cli.ts`                             | none  |
-| P1  | `cli/ctrlyoke.md`              | A "Continuing and editing runs" walkthrough (lineage keys, run refs, `rerun`/`append`/`continue`/`step`), cross-linked from `dynamic-queue.md`, plus how CLI runs mirror live in the dashboard.                                                                                                          | `CliRunCommandDefinitions.ts`, `ExternalRunWatchCoordinator.ts` | D16   |
+| P1  | `cli/ctrlyoke.md`              | **Done 2026-10-17.** Walkthrough of a stopped run, run refs, history inspection, editing a pending step, and continuing; links to dynamic workflows and dashboard history, which documents live CLI-run mirroring.                                                                                       | `CliRunCommandDefinitions.ts`, `ExternalRunWatchCoordinator.ts` | D16   |
 
 ### 4.5 Pro (`docs/pro/`)
 
-| Pri | Page / section                          | Content                                                                                                                                                                                                                                                                                                                                                                             | Sources                                                | Shots                |
-| --- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | -------------------- |
-| P0  | **new `pro/mobile-setup.md`**           | **Mostly done** (`b32f403fd`, with desktop, iOS and Android screenshots). Still missing: the Tailscale off-LAN option (no docs page mentions Tailscale) and any Web Push setup beyond one sentence. PWA install for iOS and Android (release-checklist requirement), the HTTPS/certificate requirement, the Tailscale option, and Web Push. See `SCREENSHOTS_AND_MEDIA_PLAN.md` #7. | `SERVER_SECURITY_PLAN`, `MOBILE_LAYOUT_REDESIGN_PLAN`  | #3, #7, #10 (mobile) |
-| P2  | `pro/index.md`: License tab walkthrough | The machine list, deactivating a remote machine, the trial end date, and the enterprise support-email path.                                                                                                                                                                                                                                                                         | `PRO_LICENSE_MANAGEMENT_UX_PLAN`; `LicenseSection.tsx` | D28                  |
+| Pri | Page / section                          | Content                                                                                                                                                                                                                                       | Sources                                                | Shots                |
+| --- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | -------------------- |
+| P0  | **new `pro/mobile-setup.md`**           | **Done 2026-10-17.** Phone HTTPS/certificate and PWA setup is on this page; it links to `pro/remote-access.md` for Tailscale and other off-LAN VPN setup, with push-notification connectivity explained in that page's troubleshooting table. | `SERVER_SECURITY_PLAN`, `MOBILE_LAYOUT_REDESIGN_PLAN`  | #3, #7, #10 (mobile) |
+| P2  | `pro/index.md`: License tab walkthrough | The machine list, deactivating a remote machine, the trial end date, and the enterprise support-email path.                                                                                                                                   | `PRO_LICENSE_MANAGEMENT_UX_PLAN`; `LicenseSection.tsx` | D28                  |
 
 ### 4.6 Troubleshooting and examples
 
