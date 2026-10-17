@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-17 by release-ready audit workflow (Claude, landing auditor, confirmed by verifier)
 - **Area:** `.github/workflows/deploy.yml` (~L12-27), `.github/workflows/deploy-preview.yml` (~L8-20)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

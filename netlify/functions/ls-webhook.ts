@@ -53,6 +53,7 @@ import {
   updateLicenseMetadata,
   type KeygenLicense,
 } from "../lib/keygen";
+import { shouldIssueTestModeLicense } from "../lib/test-mode-orders";
 
 const KEYGEN_POLICY_BY_PRODUCT = {
   [LS_PRODUCT.PRO]: KEYGEN_PRO_POLICY_ID,
@@ -62,7 +63,8 @@ const KEYGEN_POLICY_BY_PRODUCT = {
 // Single source of truth for "which LS purchase issues which Keygen license type".
 // Route by variant_id rather than product_id: it's present directly on both the
 // Order and Subscription webhook resources, and each product has exactly one
-// variant. Both modes are mapped so test-mode purchases keep working after launch.
+// variant. Test variants stay mapped for preview use, but issuance is skipped
+// unless ALLOW_TEST_MODE_ORDERS is explicitly enabled.
 // The Enterprise policy's own 1-year duration (Expiration Basis: From Creation)
 // is what gives an Enterprise license its 1yr initial expiry — no separate expiry
 // needs to be passed at issuance here.
@@ -435,6 +437,17 @@ export default async (req: Request): Promise<Response> => {
         if (status !== "paid") {
           return new Response("Ignored (not paid)", { status: 200 });
         }
+        if (
+          !shouldIssueTestModeLicense(
+            payload.meta.test_mode,
+            process.env.ALLOW_TEST_MODE_ORDERS
+          )
+        ) {
+          console.info(
+            `ls-webhook: skipped license issuance for test-mode order ${orderId}`
+          );
+          return new Response("Ignored (test-mode order)", { status: 200 });
+        }
         const policyId = KEYGEN_POLICY_BY_LS_VARIANT[variantId];
         if (!policyId) {
           throw new Error(
@@ -469,6 +482,8 @@ export default async (req: Request): Promise<Response> => {
       }
       case LS_EVENT.ORDER_REFUNDED: {
         // Fires for full *and* partial refunds; only a full refund revokes.
+        // Refund handling remains enabled for test-mode events so any license
+        // issued before this guard can still be revoked.
         const payload = rawPayload as LemonSqueezyOrderPayload;
         if (!payload.data.attributes.refunded) {
           return new Response("Ignored (partial refund)", { status: 200 });
@@ -509,6 +524,17 @@ export default async (req: Request): Promise<Response> => {
           // proration, not a renewal cycle. Neither should extend expiry.
           return new Response("Ignored (not a renewal)", { status: 200 });
         }
+        if (
+          !shouldIssueTestModeLicense(
+            payload.meta.test_mode,
+            process.env.ALLOW_TEST_MODE_ORDERS
+          )
+        ) {
+          console.info(
+            `ls-webhook: skipped license renewal for test-mode subscription ${subscriptionId}`
+          );
+          return new Response("Ignored (test-mode renewal)", { status: 200 });
+        }
         await renewLicenseForSubscription(
           String(subscriptionId),
           payload.data.id
@@ -525,6 +551,8 @@ export default async (req: Request): Promise<Response> => {
         if (!refunded) {
           return new Response("Ignored (partial refund)", { status: 200 });
         }
+        // Refund handling remains enabled for test-mode events to clean up
+        // licenses issued before the issuance guard was added.
         if (billingReason === LS_BILLING_REASON.UPDATED) {
           // Refunding a plan-change proration doesn't undo the paid term.
           return new Response("Ignored (proration refund)", { status: 200 });

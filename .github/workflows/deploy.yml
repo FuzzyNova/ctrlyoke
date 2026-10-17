@@ -6,7 +6,7 @@ name: Deploy Site to Netlify
 # site is not Git-linked (would require a paid plan), so this workflow is the
 # only way anything reaches Netlify — use workflow_dispatch (Actions tab ->
 # Run workflow) to redeploy when only env vars changed, or when a change
-# lands outside the path filter (e.g. netlify/functions/**).
+# lands outside the path filter (e.g. a change to site environment settings).
 on:
   push:
     branches: [main]
@@ -15,6 +15,13 @@ on:
       - "docs/**"
       - "images/**"
       - "schemas/**"
+      - "LICENSE.md"
+      - "PRIVACY.md"
+      - "DPA.md"
+      - "ENTERPRISE_TERMS.md"
+      - "TRUST_PAGE.md"
+      - "src/license/**"
+      - "netlify/**"
       - "README.md"
       - "scripts/merge-docs-into-landing.mjs"
       - "scripts/sync-docs-screenshots.mjs"
