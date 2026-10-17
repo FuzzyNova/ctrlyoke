@@ -37,6 +37,12 @@ change into the checklist.
 run in parallel. Item 11 waits for release day. Every owner decision is made; nothing here needs
 Nathan before work starts.
 
+**Sequencing note (orchestrator, 2026-10-17):** agents work in the `bug-fix` worktree and do not
+push, so two steps happen only after Nathan merges this work to `main`: the item 1 redeploy
+(`workflow_dispatch` of `deploy.yml`, or the push itself once item 9 has put `netlify/**` in the
+filter) and item 3 (running `ci.yml` and full-suite). Running `ci.yml` before the merge would not
+exercise the `format:check` gate that item 7 adds, so item 3 is effectively owner-run after merge.
+
 ## Before the repo flip
 
 - [ ] **1. Test-mode orders mint production licenses (was BLOCKER; mitigated).** Bug:
