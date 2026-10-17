@@ -30,7 +30,9 @@ authoritative text. This page is a plain-language summary, not legal advice.
 - Browser and mobile push notifications.
 - Air-gapped activation from a signed license file.
 - Custom icon colors.
-- Future Pro features included with the same perpetual license.
+- Updates within your major version are included with the same perpetual license. Buying any 0.x
+  version includes 1.x; if a future major version such as 2.0 is ever paid, the version you own
+  keeps working.
 - Email support at [support@ctrlyoke.dev](mailto:support@ctrlyoke.dev).
 
 Workflow execution, notifications inside the local app, custom hooks, the MCP
@@ -57,8 +59,11 @@ working for free; only remote reach requires Pro.
 
 ## Buy Pro
 
-ctrlyoke Pro costs **$59 USD one time**. It is a perpetual license that includes
-future Pro features and activates on up to 10 machines. It comes with a 30-day
+ctrlyoke Pro costs **$59 USD one time**. Your license never expires, so you can
+keep using the version you bought forever. Updates within your major version are
+included, and buying any 0.x version includes 1.x. We do not plan to charge for
+upgrades; if a future major version such as 2.0 is ever paid, the version you
+own keeps working. It activates on up to 10 machines and comes with a 30-day
 money-back guarantee: email `billing@ctrlyoke.dev` within 30 days of purchase for
 a full refund, and the license is deactivated when the refund is processed.
 

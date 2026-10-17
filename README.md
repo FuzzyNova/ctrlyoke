@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="images/icon.png" alt="ctrlyoke logo" width="128" height="128">
+  <img src="https://ctrlyoke.dev/docs/screenshots/ctrlyoke-logo.png" alt="ctrlyoke logo" width="128" height="128">
 </p>
 
 # ctrlyoke
@@ -360,12 +360,10 @@ The full documentation is at [ctrlyoke.dev/docs](https://ctrlyoke.dev/docs/).
 
 ## Privacy & Telemetry
 
-ctrlyoke collects limited usage telemetry (harness type, execution mode, step counts,
-durations, outcome and error type names, and standard environment metadata such as
-extension/VS Code version and OS) to improve the extension. It does not collect prompt
-content, code, file paths, or workspace names. Telemetry respects your VS Code
-`telemetry.telemetryLevel` setting — set it to `off` to disable. See our
-[Privacy Policy](https://ctrlyoke.dev/privacy) for details.
+ctrlyoke collects limited usage telemetry, including redacted error reports and pseudonymous
+machine, device, and per-launch session IDs. It does not collect prompt content, code, file paths,
+or workspace names. Telemetry respects your VS Code `telemetry.telemetryLevel` setting — set it to
+`off` to disable. See our [Privacy Policy](https://ctrlyoke.dev/privacy) for details.
 
 ---
 
@@ -380,5 +378,7 @@ content, code, file paths, or workspace names. Telemetry respects your VS Code
 ## License
 
 ctrlyoke is distributed under the commercial license in [LICENSE.md](LICENSE.md).
+The free tier covers individuals and small teams. Organizations with $10M or more in annual revenue
+or 250 or more staff need Pro; see the [Pro license guide](https://ctrlyoke.dev/docs/pro).
 
 Third-party runtime dependency notices and attribution information are recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-17 by release-ready audit workflow (Claude, legal-metadata auditor)
 - **Area:** `README.md` (L2)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

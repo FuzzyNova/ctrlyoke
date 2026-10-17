@@ -1,6 +1,7 @@
 /**
  * Copy the screenshots the docs reference from images/screenshots/ (the single
- * canonical copy) into docs/public/screenshots/, which is gitignored.
+ * canonical copy) into docs/public/screenshots/, along with the README logo
+ * from images/icon.png. The output location is gitignored.
  *
  * VitePress leaves a markdown image path that points outside docs/ as a literal
  * URL instead of bundling it, so docs pages reference `/screenshots/<file>` and
@@ -40,9 +41,18 @@ const EXTRA_SOURCES = ["README.md"];
 const SCREENSHOT_REF =
   /(?:(?<=["'(])|https:\/\/ctrlyoke\.dev\/docs)\/screenshots\/([^"'()\s?#]+)/g;
 
+/** The README logo URL, served from images/icon.png in the ignored output. */
+const README_LOGO_REF =
+  /https:\/\/ctrlyoke\.dev\/docs\/screenshots\/(ctrlyoke-logo\.png)/g;
+
 /** File names referenced as `/screenshots/<file>` in one markdown source. */
 export function findScreenshotReferences(markdown) {
   return [...markdown.matchAll(SCREENSHOT_REF)].map((match) => match[1]);
+}
+
+/** The logo file linked from README.md. */
+export function findReadmeLogoReferences(markdown) {
+  return [...markdown.matchAll(README_LOGO_REF)].map((match) => match[1]);
 }
 
 function collectMarkdown(directory) {
@@ -63,11 +73,14 @@ export function syncDocsScreenshots({
   docsDir = join(ROOT, "docs"),
   sourceDir = join(ROOT, "images", "screenshots"),
   targetDir = join(ROOT, "docs", "public", "screenshots"),
+  logoSource = join(ROOT, "images", "icon.png"),
   extraSources = EXTRA_SOURCES.map((file) => join(ROOT, file)),
 } = {}) {
   const pagesByFile = new Map();
   const addReferences = (page, label) => {
-    for (const file of findScreenshotReferences(readFileSync(page, "utf8"))) {
+    const markdown = readFileSync(page, "utf8");
+    for (const file of findScreenshotReferences(markdown)) {
+      if (label === "README.md" && file === "ctrlyoke-logo.png") continue;
       const pages = pagesByFile.get(file) ?? new Set();
       pages.add(label);
       pagesByFile.set(file, pages);
@@ -78,6 +91,12 @@ export function syncDocsScreenshots({
   }
   for (const page of extraSources.filter((file) => existsSync(file))) {
     addReferences(page, relative(ROOT, page).replaceAll("\\", "/"));
+  }
+
+  const logoFiles = new Set();
+  for (const page of extraSources.filter((file) => existsSync(file))) {
+    for (const file of findReadmeLogoReferences(readFileSync(page, "utf8")))
+      logoFiles.add(file);
   }
 
   const missing = [...pagesByFile]
@@ -91,11 +110,21 @@ export function syncDocsScreenshots({
     );
   }
 
+  if (logoFiles.size > 0 && !existsSync(logoSource)) {
+    throw new Error(
+      `README references the logo, but it is missing from ${relative(ROOT, logoSource)}`
+    );
+  }
+
   rmSync(targetDir, { recursive: true, force: true });
   mkdirSync(targetDir, { recursive: true });
   const files = [...pagesByFile.keys()].sort();
   for (const file of files) {
     copyFileSync(join(sourceDir, file), join(targetDir, file));
+  }
+  if (logoFiles.size > 0) {
+    mkdirSync(targetDir, { recursive: true });
+    copyFileSync(logoSource, join(targetDir, "ctrlyoke-logo.png"));
   }
   return files;
 }
