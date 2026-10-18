@@ -28,6 +28,7 @@ import { NO_WORKSPACE_FOLDER_MESSAGE } from "../platform/PlatformAdapter";
 import { MESSAGE_TYPES } from "../types/DashboardConstants";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { attachStreamTextDecoder } from "../utils/StreamTextDecoder";
+import { canonicalizeSpawnCwd } from "../utils/PathCasing";
 
 export type DevDashboardAction =
   | "buildExtension"
@@ -137,7 +138,10 @@ async function runNpmBuild(
 
   return await new Promise<DevBuildResult>((resolve) => {
     const child = spawn(npmCommand, ["run", scriptName], {
-      cwd: context.extensionUri.fsPath,
+      // fsPath has a lowercase drive letter, which makes Vite bundle every
+      // module twice (two React copies → "Cannot read properties of null
+      // (reading 'useState')" on load). See canonicalizeDriveLetter.
+      cwd: canonicalizeSpawnCwd(context.extensionUri.fsPath),
       // On Windows, .cmd files must be launched through the shell (cmd.exe);
       // spawning them directly with shell:false causes EINVAL.
       shell: process.platform === "win32",

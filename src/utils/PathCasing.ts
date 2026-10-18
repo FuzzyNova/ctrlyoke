@@ -21,7 +21,10 @@ import * as path from "node:path";
  *    lowercase-drive `cwd` makes it resolve the `vitest` package under a second
  *    module-cache key, so every test file imports a duplicate copy with no
  *    runner attached and fails at `describe()` with "Vitest failed to find the
- *    runner". `c8` has the same sensitivity (see `test.instructions.md`).
+ *    runner". `vite build` duplicates modules the same way: the dashboard
+ *    bundle gets two React copies and crashes on load with "Cannot read
+ *    properties of null (reading 'useState')". `c8` has the same sensitivity
+ *    (see `test.instructions.md`).
  *
  * Uses only Node built-ins so it is safe for the CLI bundle, the MCP server,
  * and anything else that must stay `vscode`-free.
