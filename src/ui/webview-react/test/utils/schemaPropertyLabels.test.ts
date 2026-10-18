@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  discoveryLocationTitle,
   schemaAriaLabel,
   schemaFieldTitle,
   schemaOptionTitle,
@@ -50,6 +51,46 @@ describe("schemaPropertyLabels", () => {
     expect(schemaFieldTitle("Format", "general.defaultFormat")).toBe(
       "Format\n\nDefault file format for new workflows.\n\nproperty: general.defaultFormat"
     );
+  });
+
+  it("lists where a discovered agent or skill is saved and its same-named copies", () => {
+    expect(discoveryLocationTitle({})).toBeUndefined();
+    expect(
+      discoveryLocationTitle({ displayPath: ".ctrlyoke/skills/a/SKILL.md" })
+    ).toBe("Saved at: .ctrlyoke/skills/a/SKILL.md");
+    expect(
+      discoveryLocationTitle({
+        displayPath: ".ctrlyoke/skills/a/SKILL.md",
+        shadowedCopies: [
+          { displayPath: "~/.ctrlyoke/skills/a/SKILL.md", identical: true },
+        ],
+      })
+    ).toBe(
+      "Saved at: .ctrlyoke/skills/a/SKILL.md\nIdentical copy: ~/.ctrlyoke/skills/a/SKILL.md"
+    );
+    // Only a differing copy earns the "how to pick it" hint.
+    expect(
+      discoveryLocationTitle({
+        displayPath: ".ctrlyoke/skills/a/SKILL.md",
+        shadowedCopies: [
+          { displayPath: "~/.claude/skills/a/SKILL.md", identical: false },
+        ],
+      })
+    ).toBe(
+      "Saved at: .ctrlyoke/skills/a/SKILL.md\nDifferent copy, not used: ~/.claude/skills/a/SKILL.md\nTo use a different copy, move it into .ctrlyoke/ (workspace) or ~/.ctrlyoke/ (user). Workspace wins over user."
+    );
+  });
+
+  it("places option detail between the description and the YAML", () => {
+    expect(
+      schemaOptionTitle(
+        "lint",
+        "Lints code.",
+        "skills",
+        undefined,
+        "Saved at: x"
+      )
+    ).toBe("lint\n\nLints code.\n\nSaved at: x\n\nproperty: skills");
   });
 
   it("keeps accessible names prefixed by the visible label", () => {

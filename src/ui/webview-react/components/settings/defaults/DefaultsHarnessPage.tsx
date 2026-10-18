@@ -15,6 +15,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { agentWarning, skillsWarning } from "@utils/dropdownValidation";
 import { CustomSelect } from "../../shared/CustomSelect";
 import { toAgentSelectOption } from "../../shared/agentSelectOptions";
+import { toSkillSelectOption } from "../../shared/skillSelectOptions";
 import { MultiCheckboxDropdown } from "../../shared/MultiCheckboxDropdown";
 import { SettingInputRow } from "../../shared/SettingInputRow";
 import { LocalTextInput } from "../../shared/LocalInputs";
@@ -324,11 +325,7 @@ export function DefaultsHarnessPage({
             id="defaults-skills"
             selectedValues={wf.skills}
             onChange={(values) => onUpdate("defaults.skills", values)}
-            options={availableSkills.map((skill) => ({
-              value: skill.name,
-              label: skill.name,
-              description: skill.description,
-            }))}
+            options={availableSkills.map(toSkillSelectOption)}
             placeholder="No skills selected"
             warning={skillsWarn ?? undefined}
           />

@@ -48,6 +48,7 @@ import {
   PanelBar,
   CustomSelect,
   toAgentSelectOption,
+  toSkillSelectOption,
   MultiCheckboxDropdown,
   HarnessDropdown,
   PriorContextSelect,
@@ -1829,11 +1830,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     schemaPath="skills"
                     selectedValues={effectiveSkills}
                     onChange={handleSkillsChange}
-                    options={availableSkills.map((s) => ({
-                      value: s.name,
-                      label: s.name,
-                      description: s.description || undefined,
-                    }))}
+                    options={availableSkills.map(toSkillSelectOption)}
                     placeholder="No skills selected"
                     namespace={DROPDOWN_NAMESPACES.SKILLS}
                     hiddenValues={

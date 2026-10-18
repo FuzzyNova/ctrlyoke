@@ -1,11 +1,17 @@
 import * as path from "path";
 import * as fs from "fs";
 import { Log } from "./Log";
-import { formatDisplayName, isAccessibleDirectory } from "./DiscoveryUtils";
+import {
+  collapseDiscoveredByName,
+  formatDisplayName,
+  isAccessibleDirectory,
+} from "./DiscoveryUtils";
 import { splitMarkdownFrontmatter } from "./MarkdownFrontmatter";
 import { loadYamlDocument } from "../core/WorkflowYamlSchema";
 import {
   getHarnessAgentDirs,
+  getHarnessUserAgentDirs,
+  getAgentsUserAgentDir,
   getCtrlYokeAgentDir,
   getCtrlYokeUserAgentDir,
   getVSCodeUserAgentDirs,
@@ -18,11 +24,12 @@ import {
   DISCOVERY_SOURCES,
   type DiscoverySource,
 } from "../types/DashboardConstants";
+import type { DiscoveredFileLocationInfo } from "../types/WebviewMessageTypes";
 
 /**
  * Represents a discovered agent file
  */
-export interface AgentInfo {
+export interface AgentInfo extends DiscoveredFileLocationInfo {
   /** Agent name (without .agent.md extension) */
   name: string;
   /** Display name for UI (formatted from filename) */
@@ -109,9 +116,14 @@ export function getBuiltInAgentsDirectoryCandidates(
  * RESPONSIBILITY: Discover bundled and custom agent files from multiple locations
  *
  * Agent discovery locations, in precedence order:
- * 1. User ~/.ctrlyoke/agents/ overrides
- * 2. VS Code user prompts directory and workspace harness directories
- * 3. Bundled ctrlyoke agents (immutable fallback)
+ * 1. Workspace .ctrlyoke/agents/ (ctrlyoke folders always win, workspace
+ * 2. User ~/.ctrlyoke/agents/      before user, like settings)
+ * 3. VS Code user prompts directory
+ * 4. Harness user agent directories and ~/.agents/
+ * 5. Workspace harness directories
+ * 6. Bundled ctrlyoke agents (immutable fallback)
+ *
+ * The result has one entry per name (see collapseDiscoveredByName).
  *
  * AGENT COMPATIBILITY: ✅ ALL PROVIDERS SUPPORTED
  * - Agents now work with ALL harnesses (Copilot CLI, Claude CLI, Codex CLI, Chat)
@@ -130,57 +142,54 @@ export class AgentDiscovery {
   static async discoverAgents(workspaceRoot?: string): Promise<AgentInfo[]> {
     const agents: AgentInfo[] = [];
 
-    try {
-      // 1. User ctrlyoke agents are explicit portable overrides.
-      agents.push(
-        ...(await this.discoverAgentsInDirectory(
-          getCtrlYokeUserAgentDir(),
-          DISCOVERY_SOURCES.USER
-        ))
-      );
+    const scanned = new Set<string>();
+    const discoverOnce = async (dir: string, source: DiscoverySource) => {
+      const normalized = path.normalize(dir);
+      if (scanned.has(normalized)) return;
+      scanned.add(normalized);
+      agents.push(...(await this.discoverAgentsInDirectory(dir, source)));
+    };
 
-      // 2. Discover from VS Code's user prompts directory.
+    try {
+      // 1-2. ctrlyoke folders always win a same-name collision. Moving an
+      // agent into one of these is how a user picks which copy runs;
+      // workspace beats user, like settings. No harness scrapes these
+      // folders, which prevents duplicate context injection.
+      if (workspaceRoot) {
+        await discoverOnce(
+          getCtrlYokeAgentDir(workspaceRoot),
+          DISCOVERY_SOURCES.WORKSPACE_CTRLYOKE
+        );
+      }
+      await discoverOnce(getCtrlYokeUserAgentDir(), DISCOVERY_SOURCES.USER);
+
+      // 3. Discover from VS Code's user prompts directory.
       const userAgents = await this.discoverUserAgents();
       agents.push(...userAgents);
 
-      // 3. Discover from workspace harness agent dirs (Claude, Copilot, Codex, etc.)
-      if (workspaceRoot) {
-        const scanned = new Set<string>();
+      // 4. Harness user agent dirs (~/.claude/agents, ~/.copilot/agents, ...)
+      //    and the shared ~/.agents dir — the same set the Agents & Skills
+      //    manager enumerates.
+      for (const harnessId of Object.values(HARNESS_IDS)) {
+        for (const dir of getHarnessUserAgentDirs(harnessId)) {
+          await discoverOnce(dir, DISCOVERY_SOURCES.USER);
+        }
+      }
+      await discoverOnce(getAgentsUserAgentDir(), DISCOVERY_SOURCES.USER);
 
+      // 5. Discover from workspace harness agent dirs (Claude, Copilot, Codex, etc.)
+      if (workspaceRoot) {
         for (const harnessId of Object.values(HARNESS_IDS)) {
           for (const dir of getHarnessAgentDirs(harnessId, workspaceRoot)) {
-            const normalized = path.normalize(dir);
-            if (scanned.has(normalized)) continue;
-            scanned.add(normalized);
-            const harnessAgents = await this.discoverAgentsInDirectory(
-              dir,
-              DISCOVERY_SOURCES.WORKSPACE
-            );
-            agents.push(...harnessAgents);
+            await discoverOnce(dir, DISCOVERY_SOURCES.WORKSPACE);
           }
         }
-
-        // Discover from workspace .ctrlyoke/agents/ (ctrlyoke-exclusive agents)
-        // Agents placed here are only discovered by ctrlyoke — no harness scrapes this
-        // directory, preventing duplicate context injection when using harness-native dirs.
-        const fpDir = getCtrlYokeAgentDir(workspaceRoot);
-        const fpAgents = await this.discoverAgentsInDirectory(
-          fpDir,
-          DISCOVERY_SOURCES.WORKSPACE_CTRLYOKE
-        );
-        agents.push(...fpAgents);
       }
 
       // Bundled agents are immutable fallbacks. A same-named user or workspace
       // agent deliberately shadows the bundled version, so customization survives
       // extension updates without ever copying files during activation.
-      const discoveredNames = new Set(agents.map((agent) => agent.name));
-      const builtInAgents = await this.discoverBuiltInAgents();
-      agents.push(
-        ...builtInAgents.filter((agent) => !discoveredNames.has(agent.name))
-      );
-
-      Log.trace(`[AgentDiscovery] Discovered ${agents.length} agents`);
+      agents.push(...(await this.discoverBuiltInAgents()));
     } catch (error) {
       Log.warn(
         "[AgentDiscovery] Error discovering agents; returning partial results:",
@@ -188,7 +197,11 @@ export class AgentDiscovery {
       );
     }
 
-    return agents;
+    // One entry per name: the first in precedence order is the copy that
+    // runs; the rest are reported as its shadowed copies.
+    const collapsed = await collapseDiscoveredByName(agents, workspaceRoot);
+    Log.trace(`[AgentDiscovery] Discovered ${collapsed.length} agents`);
+    return collapsed;
   }
 
   /**

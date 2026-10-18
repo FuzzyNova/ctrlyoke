@@ -1,7 +1,9 @@
+import type { DiscoveredFileLocationInfo } from "@root/types/WebviewMessageTypes";
+import { discoveryLocationTitle } from "@utils/schemaPropertyLabels";
 import type { SelectOption } from "./CustomSelect";
 
 /** The agent fields shared by every agent picker. */
-export interface AgentSelectEntry {
+export interface AgentSelectEntry extends DiscoveredFileLocationInfo {
   name: string;
   displayName?: string;
   path: string;
@@ -22,5 +24,6 @@ export function toAgentSelectOption(
     value,
     label: getAgentDisplayName(agent),
     description: agent.description,
+    tooltipDetail: discoveryLocationTitle(agent),
   };
 }

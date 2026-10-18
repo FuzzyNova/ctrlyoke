@@ -324,7 +324,8 @@ export class WebviewMessageRouter {
     );
     this.harnessFiles = new HarnessFileMessageService(
       () => this.getWorkspaceRoot(),
-      this.hostDependencies.actions
+      this.hostDependencies.actions,
+      async () => this.callbacks.onHarnessFilesChanged?.()
     );
     this.mcpManager = new McpManagerService(() => this.getWorkspaceRoot());
     this.languageServerManager = new LanguageServerManagerService(() =>
@@ -3105,6 +3106,12 @@ export interface WebviewRouterCallbacks {
     result: { approvedValues: string[]; deniedValues: string[] } | undefined
   ) => void;
   handleChoiceResponse?: (id: string, value: string | undefined) => void;
+  /**
+   * An Agents & Skills manager op changed agent/skill files on disk. Every
+   * client's agent and skill pickers must be re-discovered, not just the one
+   * that made the change.
+   */
+  onHarnessFilesChanged?: () => Promise<void>;
 }
 
 export interface WebviewRouteOptions {

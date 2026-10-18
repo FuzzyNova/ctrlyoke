@@ -225,30 +225,36 @@ export class WebviewSettingsSync {
   // ============================================================================
 
   /**
-   * Discover available agents in the workspace (called during construction).
+   * Discover available agents in the workspace (called at startup and after
+   * the Agents & Skills manager changes files on disk).
    */
-  async discoverAgents(): Promise<void> {
+  async discoverAgents(
+    postMessage: PostMessageFn = this.postMessage
+  ): Promise<void> {
     try {
       this.availableAgents = await AgentDiscovery.discoverAgents(
         this.host.getWorkspaceRoot()
       );
 
-      this.sendAgentsUpdate();
+      this.sendAgentsUpdate(postMessage);
     } catch (error) {
       Log.warn("[WebviewSettingsSync] Failed to discover agents:", error);
     }
   }
 
   /**
-   * Discover available skills in the workspace (called during construction).
+   * Discover available skills in the workspace (called at startup and after
+   * the Agents & Skills manager changes files on disk).
    */
-  async discoverSkills(): Promise<void> {
+  async discoverSkills(
+    postMessage: PostMessageFn = this.postMessage
+  ): Promise<void> {
     try {
       this.availableSkills = await SkillDiscovery.discoverSkills(
         this.host.getWorkspaceRoot()
       );
 
-      this.sendSkillsUpdate();
+      this.sendSkillsUpdate(postMessage);
     } catch (error) {
       Log.warn("[WebviewSettingsSync] Failed to discover skills:", error);
     }

@@ -128,6 +128,68 @@ Agent instructions`);
     assert.ok(supportAgent.description?.includes("ctrlyoke setup"));
   });
 
+  test("discovers harness user agents and lets ctrlyoke folders win same-named agents, workspace before user", async () => {
+    const tempRoot = makeTempDir("ctrlyoke-agent-precedence-");
+    const workspaceRoot = path.join(tempRoot, "workspace");
+    const homeRoot = path.join(tempRoot, "home");
+    const priorHome = process.env.HOME;
+    const priorUserProfile = process.env.USERPROFILE;
+    process.env.HOME = homeRoot;
+    process.env.USERPROFILE = homeRoot;
+    const writeAgent = (filePath: string, body: string) => {
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      fs.writeFileSync(filePath, body);
+    };
+    try {
+      const body = "---\nname: Shared\ndescription: shared agent\n---\nBody";
+      const workspaceCopy = path.join(
+        workspaceRoot,
+        ".ctrlyoke",
+        "agents",
+        "shared.agent.md"
+      );
+      writeAgent(workspaceCopy, body);
+      writeAgent(
+        path.join(homeRoot, ".ctrlyoke", "agents", "shared.agent.md"),
+        body
+      );
+      writeAgent(
+        path.join(workspaceRoot, ".github", "agents", "shared.agent.md"),
+        `${body}\nchanged`
+      );
+      const claudeUserAgent = path.join(
+        homeRoot,
+        ".claude",
+        "agents",
+        "claude-only.md"
+      );
+      writeAgent(
+        claudeUserAgent,
+        "---\nname: Claude Only\ndescription: user harness agent\n---\nBody"
+      );
+
+      const agents = await AgentDiscovery.discoverAgents(workspaceRoot);
+      const shared = agents.filter((agent) => agent.name === "shared");
+
+      assert.strictEqual(shared.length, 1);
+      assert.strictEqual(shared[0].path, workspaceCopy);
+      assert.deepStrictEqual(shared[0].shadowedCopies, [
+        { displayPath: "~/.ctrlyoke/agents/shared.agent.md", identical: true },
+        { displayPath: ".github/agents/shared.agent.md", identical: false },
+      ]);
+      assert.strictEqual(
+        agents.find((agent) => agent.name === "claude-only")?.path,
+        claudeUserAgent
+      );
+    } finally {
+      if (priorHome === undefined) delete process.env.HOME;
+      else process.env.HOME = priorHome;
+      if (priorUserProfile === undefined) delete process.env.USERPROFILE;
+      else process.env.USERPROFILE = priorUserProfile;
+      removeTempDir(tempRoot);
+    }
+  });
+
   test("includes built-in agents when no workspace is supplied", async () => {
     const agents = await AgentDiscovery.discoverAgents();
 

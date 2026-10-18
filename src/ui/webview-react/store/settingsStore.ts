@@ -37,6 +37,7 @@ import {
 import type {
   CommitMessageGenerationRecord,
   DevStatus,
+  DiscoveredFileLocationInfo,
   ExternalFileRootsByScope,
   FullGlobalSettings,
   PreCondition,
@@ -70,7 +71,7 @@ export interface ModelOption {
 /**
  * Agent option for dropdowns
  */
-export interface AgentOption {
+export interface AgentOption extends DiscoveredFileLocationInfo {
   name: string;
   /** User-facing name from agent metadata, or a formatted filename fallback. */
   displayName?: string;
@@ -81,7 +82,7 @@ export interface AgentOption {
 /**
  * Skill option for multi-select dropdowns
  */
-export interface SkillOption {
+export interface SkillOption extends DiscoveredFileLocationInfo {
   name: string;
   path: string;
   description?: string;

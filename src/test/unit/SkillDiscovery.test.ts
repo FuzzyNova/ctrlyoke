@@ -368,6 +368,104 @@ suite("SkillDiscovery helpers", () => {
     assert.strictEqual(matches[0].source, DISCOVERY_SOURCES.WORKSPACE);
   });
 
+  /** Run `body` with os.homedir() redirected to a temp folder. */
+  async function withHome(
+    body: (homeRoot: string) => Promise<void>
+  ): Promise<void> {
+    const homeRoot = path.join(tempRoot, "home");
+    const priorHome = process.env.HOME;
+    const priorUserProfile = process.env.USERPROFILE;
+    process.env.HOME = homeRoot;
+    process.env.USERPROFILE = homeRoot;
+    try {
+      await body(homeRoot);
+    } finally {
+      if (priorHome === undefined) delete process.env.HOME;
+      else process.env.HOME = priorHome;
+      if (priorUserProfile === undefined) delete process.env.USERPROFILE;
+      else process.env.USERPROFILE = priorUserProfile;
+    }
+  }
+
+  test("discovers user skills from ~/.ctrlyoke/skills and every harness user dir", async () => {
+    await withHome(async (homeRoot) => {
+      const ctrlyokePath = await createSkill(
+        path.join(homeRoot, ".ctrlyoke", "skills"),
+        "user-ctrlyoke-skill"
+      );
+      const qwenPath = await createSkill(
+        path.join(homeRoot, ".qwen", "skills"),
+        "user-qwen-skill"
+      );
+
+      const discovered = await SkillDiscovery.discoverSkills(workspaceRoot);
+
+      for (const [name, expectedPath] of [
+        ["user-ctrlyoke-skill", ctrlyokePath],
+        ["user-qwen-skill", qwenPath],
+      ]) {
+        const match = discovered.find((candidate) => candidate.name === name);
+        assert.strictEqual(match?.path, expectedPath, name);
+        assert.strictEqual(match?.source, DISCOVERY_SOURCES.USER, name);
+      }
+    });
+  });
+
+  test("ctrlyoke folders win same-named skills, workspace before user, with the rest reported as shadowed copies", async () => {
+    await withHome(async (homeRoot) => {
+      const workspaceCopy = await createSkill(
+        path.join(workspaceRoot, ".ctrlyoke", "skills"),
+        "shared"
+      );
+      // Identical text to the winner (createSkill writes the same body).
+      await createSkill(path.join(homeRoot, ".ctrlyoke", "skills"), "shared");
+      const claudeCopy = await createSkill(
+        path.join(homeRoot, ".claude", "skills"),
+        "shared"
+      );
+      await fsp.writeFile(claudeCopy, "# a different skill\n");
+
+      const discovered = await SkillDiscovery.discoverSkills(workspaceRoot);
+      const matches = discovered.filter(
+        (candidate) => candidate.name === "shared"
+      );
+
+      assert.strictEqual(matches.length, 1);
+      assert.strictEqual(matches[0].path, workspaceCopy);
+      assert.strictEqual(
+        matches[0].displayPath,
+        ".ctrlyoke/skills/shared/SKILL.md"
+      );
+      assert.deepStrictEqual(matches[0].shadowedCopies, [
+        {
+          displayPath: "~/.ctrlyoke/skills/shared/SKILL.md",
+          identical: true,
+        },
+        {
+          displayPath: "~/.claude/skills/shared/SKILL.md",
+          identical: false,
+        },
+      ]);
+    });
+  });
+
+  test("user ~/.ctrlyoke skills win over harness folders", async () => {
+    await withHome(async (homeRoot) => {
+      await createSkill(path.join(workspaceRoot, ".claude", "skills"), "pick");
+      const userCopy = await createSkill(
+        path.join(homeRoot, ".ctrlyoke", "skills"),
+        "pick"
+      );
+
+      const discovered = await SkillDiscovery.discoverSkills(workspaceRoot);
+
+      assert.strictEqual(
+        discovered.find((candidate) => candidate.name === "pick")?.path,
+        userCopy
+      );
+    });
+  });
+
   test("parses skill frontmatter with inline fences and a BOM", async () => {
     const skillPath = path.join(
       workspaceRoot,

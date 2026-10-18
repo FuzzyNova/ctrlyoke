@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SkillsSelect } from "@components/shared/SkillsSelect";
+import { toSkillSelectOption } from "@components/shared/skillSelectOptions";
 
 const SKILLS = [
   { name: "lint", description: "Run linting" },
@@ -105,6 +106,39 @@ describe("SkillsSelect", () => {
         normalizer: (title) => title,
       })
     ).toHaveTextContent("lint");
+  });
+
+  it("shows where a discovered skill is saved in its row tooltip", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <SkillsSelect
+        value={undefined}
+        onChange={vi.fn()}
+        availableSkills={[
+          toSkillSelectOption({
+            name: "lint",
+            description: "Run linting",
+            displayPath: ".ctrlyoke/skills/lint/SKILL.md",
+            shadowedCopies: [
+              {
+                displayPath: "~/.claude/skills/lint/SKILL.md",
+                identical: false,
+              },
+            ],
+          }),
+        ]}
+      />
+    );
+
+    await user.click(screen.getByRole("button"));
+
+    const row = screen.getByTitle(/^lint\n\nRun linting\n\nSaved at: /, {
+      normalizer: (title) => title,
+    });
+    expect(row.getAttribute("title")).toContain(
+      "Saved at: .ctrlyoke/skills/lint/SKILL.md\nDifferent copy, not used: ~/.claude/skills/lint/SKILL.md"
+    );
   });
 
   it("reveals hidden skills and lets the user unhide them", async () => {

@@ -6,6 +6,8 @@ export interface SelectOption {
   short?: string;
   /** Optional muted secondary text rendered below the label in the menu. */
   description?: string;
+  /** Extra tooltip-only text, shown after the description (e.g. a saved location). */
+  tooltipDetail?: string;
   /** Optional className override for the secondary text. */
   descriptionClassName?: string;
   disabled?: boolean;

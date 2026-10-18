@@ -1104,17 +1104,39 @@ export interface HarnessCapabilitySnapshotMessage {
 }
 
 /**
+ * Another on-disk copy of a discovered agent or skill. Workflows reference
+ * agents and skills by bare name and the first copy in discovery order wins,
+ * so a same-named copy elsewhere is never the one that runs.
+ */
+export interface ShadowedDiscoveryCopy {
+  /** Workspace-relative, `~/`-prefixed, or absolute path, with `/` separators. */
+  displayPath: string;
+  /** True when this copy's file text exactly matches the copy that runs. */
+  identical: boolean;
+}
+
+/** Location fields every discovered agent or skill carries to the dashboard. */
+export interface DiscoveredFileLocationInfo {
+  /** Where the copy that runs is saved (same format as `ShadowedDiscoveryCopy.displayPath`). */
+  displayPath?: string;
+  /** Other same-named copies, in discovery order. Absent when there are none. */
+  shadowedCopies?: ShadowedDiscoveryCopy[];
+}
+
+/**
  * Agents update message (extension -> webview)
  */
 export interface AgentsUpdateMessage {
   type: typeof MESSAGE_TYPES.AGENTS_UPDATE;
   data: {
-    availableAgents: Array<{
-      name: string;
-      displayName?: string;
-      path: string;
-      description?: string;
-    }>;
+    availableAgents: Array<
+      {
+        name: string;
+        displayName?: string;
+        path: string;
+        description?: string;
+      } & DiscoveredFileLocationInfo
+    >;
   };
 }
 
@@ -1124,11 +1146,13 @@ export interface AgentsUpdateMessage {
 export interface SkillsUpdateMessage {
   type: typeof MESSAGE_TYPES.SKILLS_UPDATE;
   data: {
-    availableSkills: Array<{
-      name: string;
-      path: string;
-      description?: string;
-    }>;
+    availableSkills: Array<
+      {
+        name: string;
+        path: string;
+        description?: string;
+      } & DiscoveredFileLocationInfo
+    >;
   };
 }
 

@@ -209,6 +209,34 @@ suite("HarnessFileMessageService", () => {
     ]);
   });
 
+  test("a successful op refreshes the dashboard's agent and skill lists; a failed one does not", async () => {
+    let refreshes = 0;
+    service = new HarnessFileMessageService(
+      () => workspaceRoot,
+      { revealInOs: async () => ({ status: "opened" }) },
+      async () => {
+        refreshes++;
+      }
+    );
+    const exportSkill = (overwrite: boolean) =>
+      service.handleExportToHarness(ctx(), {
+        type: MESSAGE_TYPES.EXPORT_TO_HARNESS,
+        sourcePath: sourceSkillPath(),
+        harnessId,
+        fileType: skillType,
+        overwrite,
+        scope,
+      });
+
+    await exportSkill(true);
+    assert.strictEqual(lastResult().success, true);
+    assert.strictEqual(refreshes, 1);
+
+    await exportSkill(false);
+    assert.strictEqual(lastResult().success, false);
+    assert.strictEqual(refreshes, 1);
+  });
+
   test("unsupported OS reveal returns the directory for the browser viewer", async () => {
     const targetDirectory = HarnessFileManager.getTargetDir(
       harnessId,

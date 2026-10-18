@@ -30,6 +30,10 @@ export {
   toAgentSelectOption,
   type AgentSelectEntry,
 } from "./agentSelectOptions";
+export {
+  toSkillSelectOption,
+  type SkillSelectEntry,
+} from "./skillSelectOptions";
 export { Modal } from "./Modal";
 export { BatchApprovalModal } from "./BatchApprovalModal";
 export {

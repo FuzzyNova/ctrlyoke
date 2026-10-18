@@ -188,6 +188,13 @@ export class DashboardApplication
           this.interactionPort.handleResponse(id, result ?? undefined),
         handleChoiceResponse: (id, value) =>
           this.interactionPort.handleChoiceResponse(id, value),
+        onHarnessFilesChanged: async () => {
+          const broadcast = this.getSettingsBroadcast() ?? postMessage;
+          await Promise.all([
+            this.settingsSync.discoverAgents(broadcast),
+            this.settingsSync.discoverSkills(broadcast),
+          ]);
+        },
       },
       this.secretRegistry,
       licenseService,

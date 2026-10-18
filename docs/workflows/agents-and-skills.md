@@ -28,16 +28,20 @@ ctrlyoke discovers agents from `*.agent.md` files, and from plain `*.md` files
 whose frontmatter has a `name` or `description`. It searches these locations
 in order, and the first agent with a matching name wins:
 
-1. `~/.ctrlyoke/agents/`
-2. the VS Code user `prompts` directory
-3. workspace harness directories: `.github/agents/`, `.claude/agents/`,
+1. `.ctrlyoke/agents/` in the workspace, which no harness scans natively
+2. `~/.ctrlyoke/agents/`
+3. the VS Code user `prompts` directory
+4. each harness's own user agents directory (`~/.claude/agents/`,
+   `~/.copilot/agents/`, `~/.codex/agents/`, `~/.gemini/agents/`,
+   `~/.config/opencode/agents/`, and `~/.qwen/agents/`), then `~/.agents/`
+5. workspace harness directories: `.github/agents/`, `.claude/agents/`,
    `.agents/`, `.opencode/agents/`, and `.qwen/agents/`
-4. `.ctrlyoke/agents/` in the workspace, which no harness scans natively
-5. the agents bundled with ctrlyoke, such as `ctrlyoke-workflow-composer`,
+6. the agents bundled with ctrlyoke, such as `ctrlyoke-workflow-composer`,
    `ctrlyoke-tech-support`, `workflow-orchestrator`, and `test-repair`
 
 Put an agent with the same name in any of the earlier locations to override a
-bundled one.
+bundled one. See [Same name in more than one place](#duplicates) for how to
+choose between two of your own copies.
 
 ### Skills an agent needs
 
@@ -72,15 +76,35 @@ skills:
 Prompt-level skills replace workflow-level skills rather than merging with them.
 
 Each skill is a directory containing a `SKILL.md` file, and the directory name
-is the skill name. ctrlyoke searches:
+is the skill name. ctrlyoke searches these locations in order, and the first
+skill with a matching name wins:
 
-- user directories: `~/.claude/skills/`, `~/.copilot/skills/`, and `~/.agents/skills/`
-- workspace directories: `.ctrlyoke/skills/` (which no harness scans natively),
-  plus each harness's own skills directory: `.claude/skills/`,
-  `.github/skills/`, `.codex/skills/`, `.agents/skills/`, `.opencode/skills/`,
-  and `.qwen/skills/`
-- `.agents/skills/` in the workspace's parent directory and at the Git repository root
-- the skills bundled with ctrlyoke, which any skill of the same name overrides
+1. `.ctrlyoke/skills/` in the workspace, which no harness scans natively
+2. `~/.ctrlyoke/skills/`
+3. each harness's own user skills directory (`~/.claude/skills/`,
+   `~/.copilot/skills/`, `~/.codex/skills/`, `~/.config/opencode/skills/`,
+   `~/.qwen/skills/`, `~/.gemini/skills/`, and
+   `~/.gemini/antigravity-cli/skills/`), then `~/.agents/skills/`
+4. each harness's own workspace skills directory: `.claude/skills/`,
+   `.github/skills/`, `.codex/skills/`, `.agents/skills/`, `.opencode/skills/`,
+   and `.qwen/skills/`
+5. `.agents/skills/` in the workspace's parent directory and at the Git
+   repository root
+6. the skills bundled with ctrlyoke, which any skill of the same name overrides
+
+### Same name in more than one place {#duplicates}
+
+A workflow names an agent or skill, not a file, so when the same name is saved
+in several places only the first one in the order above is used. The pickers
+show that name once. Hover it to see where the copy in use is saved, and every
+other copy, each marked as identical or different.
+
+To use a different copy, save or move it into a ctrlyoke folder:
+`.ctrlyoke/agents/` or `.ctrlyoke/skills/` in the workspace, or
+`~/.ctrlyoke/agents/` or `~/.ctrlyoke/skills/` in your home folder. ctrlyoke
+folders always come first, and the workspace one wins over your home folder,
+just as workspace settings override user settings. The [Agents & Skills
+settings](#manager-save) **Save** menu does this for you.
 
 ### Inline skill references
 
@@ -149,6 +173,8 @@ An agent is saved as `<name>.md` for Claude and Antigravity, and as
 
 Saving to **ctrlyoke** is how you import an agent or skill that a harness
 already has, so you can edit your own copy and pick it in workflow properties.
+The agent and skill pickers in workflow properties update as soon as a save or
+delete finishes.
 Saving to a harness folder is how you export one so that harness can find it
 on its own.
 

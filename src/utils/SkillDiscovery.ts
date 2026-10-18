@@ -1,13 +1,19 @@
 import * as path from "path";
 import * as fs from "fs";
-import * as os from "os";
 import { Log } from "./Log";
-import { formatDisplayName, isAccessibleDirectory } from "./DiscoveryUtils";
+import {
+  collapseDiscoveredByName,
+  formatDisplayName,
+  isAccessibleDirectory,
+} from "./DiscoveryUtils";
 import { splitMarkdownFrontmatter } from "./MarkdownFrontmatter";
 import { loadYamlDocument } from "../core/WorkflowYamlSchema";
 import {
   getHarnessSkillDirs,
+  getHarnessUserSkillDirs,
   getCtrlYokeSkillDir,
+  getCtrlYokeUserSkillDir,
+  getAgentsUserSkillDir,
 } from "./HarnessDirectoryUtils";
 import {
   HARNESS_IDS,
@@ -15,6 +21,7 @@ import {
   type HarnessId,
   type DiscoverySource,
 } from "../types/DashboardConstants";
+import type { DiscoveredFileLocationInfo } from "../types/WebviewMessageTypes";
 
 /** Candidate locations for bundled skills across source, test, and esbuild layouts. */
 export function getBuiltInSkillsDirectoryCandidates(
@@ -29,7 +36,7 @@ export function getBuiltInSkillsDirectoryCandidates(
 /**
  * Represents a discovered skill
  */
-export interface SkillInfo {
+export interface SkillInfo extends DiscoveredFileLocationInfo {
   /** Directory name (= skill name per AgentSkills.io spec) */
   name: string;
   /** Formatted display name for UI */
@@ -47,20 +54,24 @@ export interface SkillInfo {
  *
  * RESPONSIBILITY: Discover skill files from multiple locations
  *
- * Skill discovery locations (in priority order):
+ * Skill discovery locations (in priority order — the first same-named skill
+ * wins, see collapseDiscoveredByName):
+ *
+ * ctrlyoke folders (always win, workspace before user, like settings):
+ *   1. .ctrlyoke/skills/<skill-name>/SKILL.md     (ctrlyoke-exclusive workspace skills — not scraped by any harness)
+ *   2. ~/.ctrlyoke/skills/<skill-name>/SKILL.md   (ctrlyoke-exclusive user skills)
  *
  * User-level:
- *   1. ~/.claude/skills/<skill-name>/SKILL.md       (Claude Code user skills)
- *   2. ~/.copilot/skills/<skill-name>/SKILL.md      (Copilot user skills)
- *   3. ~/.agents/skills/<skill-name>/SKILL.md       (Codex $HOME user skills)
+ *   3. Every harness user skill dir from HarnessDirectoryUtils
+ *      (~/.claude/skills, ~/.copilot/skills, ~/.codex/skills, ...)
+ *   4. ~/.agents/skills/<skill-name>/SKILL.md       (Codex $HOME user skills)
  *
  * Workspace-level (relative to current workspace folder):
- *   4. .ctrlyoke/skills/<skill-name>/SKILL.md     (ctrlyoke-exclusive skills — not scraped by any harness)
- *   5. .claude/skills/<skill-name>/SKILL.md         (Claude Code workspace skills)
- *   6. .github/skills/<skill-name>/SKILL.md         (Copilot workspace skills)
- *   7. .agents/skills/<skill-name>/SKILL.md         (Codex $CWD workspace skills)
- *   8. ../.agents/skills/<skill-name>/SKILL.md      (Codex $CWD/../ parent folder skills)
- *   9. <git-root>/.agents/skills/<skill-name>/SKILL.md  (Codex $REPO_ROOT skills, if different from workspace)
+ *   5. Every harness workspace skill dir from HarnessDirectoryUtils
+ *      (.claude/skills, .github/skills, .agents/skills, ...)
+ *   6. ../.agents/skills/<skill-name>/SKILL.md      (Codex $CWD/../ parent folder skills)
+ *   7. <git-root>/.agents/skills/<skill-name>/SKILL.md  (Codex $REPO_ROOT skills, if different from workspace)
+ *   8. Bundled ctrlyoke skills (immutable fallback)
  *
  * Path deduplication prevents scanning the same directory twice (e.g., when
  * the workspace folder IS the git repository root).
@@ -78,39 +89,12 @@ export class SkillDiscovery {
     const scannedPaths = new Set<string>();
 
     try {
-      // --- User-level locations ---
+      // --- ctrlyoke folders: always win a same-name collision ---
+      // Moving a skill into one of these is how a user picks which copy
+      // runs; workspace beats user, like settings.
 
-      // 1. ~/.claude/skills/
-      skills.push(
-        ...(await this.discoverInPath(
-          this.getUserPath(".claude", "skills"),
-          DISCOVERY_SOURCES.USER,
-          scannedPaths
-        ))
-      );
-
-      // 2. ~/.copilot/skills/
-      skills.push(
-        ...(await this.discoverInPath(
-          this.getUserPath(".copilot", "skills"),
-          DISCOVERY_SOURCES.USER,
-          scannedPaths
-        ))
-      );
-
-      // 3. ~/.agents/skills/
-      skills.push(
-        ...(await this.discoverInPath(
-          this.getUserPath(".agents", "skills"),
-          DISCOVERY_SOURCES.USER,
-          scannedPaths
-        ))
-      );
-
-      // --- Workspace-level locations ---
-
+      // 1. <workspace>/.ctrlyoke/skills/
       if (workspaceRoot) {
-        // 4. <workspace>/.ctrlyoke/skills/ (ctrlyoke-exclusive skills)
         skills.push(
           ...(await this.discoverInPath(
             getCtrlYokeSkillDir(workspaceRoot),
@@ -118,8 +102,35 @@ export class SkillDiscovery {
             scannedPaths
           ))
         );
+      }
 
-        // 5-10. All harness workspace skill dirs (via HarnessDirectoryUtils)
+      // 2. ~/.ctrlyoke/skills/
+      skills.push(
+        ...(await this.discoverInPath(
+          this.getUserPath(getCtrlYokeUserSkillDir),
+          DISCOVERY_SOURCES.USER,
+          scannedPaths
+        ))
+      );
+
+      // --- User-level harness locations ---
+
+      // 3. All harness user skill dirs (via HarnessDirectoryUtils)
+      // 4. ~/.agents/skills/
+      for (const dir of this.getUserSkillDirs()) {
+        skills.push(
+          ...(await this.discoverInPath(
+            dir,
+            DISCOVERY_SOURCES.USER,
+            scannedPaths
+          ))
+        );
+      }
+
+      // --- Workspace-level harness locations ---
+
+      if (workspaceRoot) {
+        // 5. All harness workspace skill dirs (via HarnessDirectoryUtils)
         for (const harnessId of Object.values(HARNESS_IDS)) {
           for (const dir of getHarnessSkillDirs(harnessId, workspaceRoot)) {
             skills.push(
@@ -156,13 +167,7 @@ export class SkillDiscovery {
 
       // Bundled skills are immutable fallbacks. A same-named user or
       // workspace skill deliberately shadows the bundled version.
-      const discoveredNames = new Set(skills.map((skill) => skill.name));
-      const builtInSkills = await this.discoverBuiltInSkills();
-      skills.push(
-        ...builtInSkills.filter((skill) => !discoveredNames.has(skill.name))
-      );
-
-      Log.trace(`[SkillDiscovery] Discovered ${skills.length} skills`);
+      skills.push(...(await this.discoverBuiltInSkills()));
     } catch (error) {
       Log.warn(
         "[SkillDiscovery] Error discovering skills; returning partial results:",
@@ -170,7 +175,11 @@ export class SkillDiscovery {
       );
     }
 
-    return skills;
+    // One entry per name: the first in precedence order is the copy that
+    // runs; the rest are reported as its shadowed copies.
+    const collapsed = await collapseDiscoveredByName(skills, workspaceRoot);
+    Log.trace(`[SkillDiscovery] Discovered ${collapsed.length} skills`);
+    return collapsed;
   }
 
   /**
@@ -190,12 +199,28 @@ export class SkillDiscovery {
   }
 
   /**
-   * Build a path under the user's home directory.
-   * Returns null if the home directory cannot be determined.
+   * Harness-owned user-level skill directories in precedence order — the
+   * same set the Agents & Skills manager enumerates. ~/.ctrlyoke/skills is
+   * scanned separately, ahead of these.
    */
-  private static getUserPath(...parts: string[]): string | null {
+  private static getUserSkillDirs(): string[] {
+    return (
+      this.getUserPath(() => [
+        ...Object.values(HARNESS_IDS).flatMap((harnessId) =>
+          getHarnessUserSkillDirs(harnessId)
+        ),
+        getAgentsUserSkillDir(),
+      ]) ?? []
+    );
+  }
+
+  /**
+   * Build home-directory path(s), returning null when the home directory
+   * cannot be determined.
+   */
+  private static getUserPath<T>(build: () => T): T | null {
     try {
-      return path.join(os.homedir(), ...parts);
+      return build();
     } catch (error) {
       Log.warn("[SkillDiscovery] Error building user directory path:", error);
       return null;

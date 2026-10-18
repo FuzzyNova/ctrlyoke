@@ -34,7 +34,8 @@ import type { WebviewClientContext } from "./WebviewClientContext";
 export class HarnessFileMessageService {
   constructor(
     private readonly getWorkspaceRoot: () => string,
-    private readonly hostActions: Pick<DashboardHostActions, "revealInOs">
+    private readonly hostActions: Pick<DashboardHostActions, "revealInOs">,
+    private readonly onFilesChanged: () => Promise<void> = async () => {}
   ) {}
 
   /**
@@ -42,7 +43,9 @@ export class HarnessFileMessageService {
    * hand the client a fresh view of the world. `targetDirectories` is a pure
    * function of (workspaceRoot, fileType) rather than of what is on disk, but it
    * ships alongside `files` on every success so a client that somehow missed the
-   * initial `HARNESS_FILES_RESULT` still gets one.
+   * initial `HARNESS_FILES_RESULT` still gets one. The op also changes what the
+   * dashboard's agent/skill pickers can offer, so `onFilesChanged` refreshes
+   * those too.
    */
   private async runFileOp(
     ctx: WebviewClientContext,
@@ -57,6 +60,7 @@ export class HarnessFileMessageService {
         success: true,
         ...(await this.resolveFileView(workspaceRoot, fileType)),
       });
+      await this.onFilesChanged();
     } catch (error) {
       ctx.emit({
         type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,

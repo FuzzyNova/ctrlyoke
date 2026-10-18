@@ -1,4 +1,5 @@
 import { SCHEMA_DESCRIPTIONS } from "@root/types/generated/SchemaDescriptions";
+import type { DiscoveredFileLocationInfo } from "@root/types/WebviewMessageTypes";
 
 export type SchemaPropertyValue =
   | string
@@ -52,19 +53,49 @@ export function schemaTitle(
  * the YAML it writes. The field's general schema help is deliberately left
  * out — the field label's tooltip already carries it, and repeating it made
  * every row tooltip a wall of text. Omit `path` for options that are not
- * schema-backed.
+ * schema-backed. `detail` (e.g. {@link discoveryLocationTitle}) goes between
+ * the description and the YAML.
  */
 export function schemaOptionTitle(
   label: string,
   optionDescription?: string,
   path?: string,
-  value?: SchemaPropertyValue
+  value?: SchemaPropertyValue,
+  detail?: string
 ): string {
   return tooltipParagraphs(
     label,
     optionDescription,
+    detail,
     path ? schemaTitle(path, value, "") : undefined
   );
+}
+
+/**
+ * Tooltip section naming where a discovered agent or skill is saved, plus
+ * any same-named copies elsewhere. Workflows select by bare name and the
+ * first copy wins (ctrlyoke folders first), so the others are listed as not
+ * used, with how to choose one of them instead.
+ */
+export function discoveryLocationTitle(
+  entry: DiscoveredFileLocationInfo
+): string | undefined {
+  if (!entry.displayPath) return undefined;
+  const lines = [`Saved at: ${entry.displayPath}`];
+  const copies = entry.shadowedCopies ?? [];
+  for (const copy of copies) {
+    lines.push(
+      copy.identical
+        ? `Identical copy: ${copy.displayPath}`
+        : `Different copy, not used: ${copy.displayPath}`
+    );
+  }
+  if (copies.some((copy) => !copy.identical)) {
+    lines.push(
+      "To use a different copy, move it into .ctrlyoke/ (workspace) or ~/.ctrlyoke/ (user). Workspace wins over user."
+    );
+  }
+  return lines.join("\n");
 }
 
 /** Build an accessible option name that starts with its visible label. */

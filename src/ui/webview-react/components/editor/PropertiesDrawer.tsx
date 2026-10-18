@@ -42,6 +42,7 @@ import {
   CustomSelect,
   getAgentDisplayName,
   toAgentSelectOption,
+  toSkillSelectOption,
   DrawerRow,
   HarnessDropdown,
   HARNESS_DISPLAY_NAMES,
@@ -839,10 +840,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                           string[] | null | undefined)
                   }
                   onChange={(v) => setProperty(PROMPT_PROPERTIES.SKILLS, v)}
-                  availableSkills={availableSkills.map((s) => ({
-                    name: s.name,
-                    description: s.description || undefined,
-                  }))}
+                  availableSkills={availableSkills.map(toSkillSelectOption)}
                   defaultLabel={defaultSkillsLabel}
                   warning={skillsWarn ?? undefined}
                   disabled={

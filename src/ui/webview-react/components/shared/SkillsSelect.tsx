@@ -24,16 +24,18 @@ import {
   toSelectOptions,
 } from "@root/types/SchemaUiMetadata";
 
-interface SkillOption {
+export interface SkillsSelectEntry {
   name: string;
   description?: string;
+  /** Extra tooltip-only text, shown after the description. */
+  tooltipDetail?: string;
 }
 
 interface SkillsSelectProps extends HideableProps {
   id?: string;
   value: string[] | null | undefined;
   onChange: (v: string[] | null | undefined) => void;
-  availableSkills: SkillOption[];
+  availableSkills: SkillsSelectEntry[];
   defaultLabel?: string;
   placeholder?: string;
   dropdownMaxHeight?: string;
@@ -256,7 +258,9 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
                 title={schemaOptionTitle(
                   skill.name,
                   skill.description,
-                  schemaPath
+                  schemaPath,
+                  undefined,
+                  skill.tooltipDetail
                 )}
                 className={`group w-full flex items-start focus:outline-hidden border-none ${
                   isChecked
@@ -317,7 +321,9 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
                     title={schemaOptionTitle(
                       skill.name,
                       skill.description,
-                      schemaPath
+                      schemaPath,
+                      undefined,
+                      skill.tooltipDetail
                     )}
                     className="group w-full flex items-start opacity-60 italic hover:bg-list-hover-bg cy-dropdown-row"
                   >

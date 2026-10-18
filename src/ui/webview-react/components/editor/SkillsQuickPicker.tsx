@@ -9,7 +9,7 @@ import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
 import { DROPDOWN_NAMESPACES } from "../../types/dropdownNamespaces";
 import { FOOTER_PICKERS } from "../../types/messages";
-import { SkillsSelect } from "../shared";
+import { SkillsSelect, toSkillSelectOption } from "../shared";
 import { FooterQuickPicker } from "./FooterQuickPicker";
 import { Icon } from "../shared/Icon";
 
@@ -109,10 +109,7 @@ export const SkillsQuickPicker: React.FC<SkillsQuickPickerProps> = ({
       <SkillsSelect
         value={skillsValue}
         onChange={(v) => setProperty("skills", v)}
-        availableSkills={availableSkills.map((s) => ({
-          name: s.name,
-          description: s.description || undefined,
-        }))}
+        availableSkills={availableSkills.map(toSkillSelectOption)}
         defaultLabel={defaultSkillsLabel}
         namespace={DROPDOWN_NAMESPACES.SKILLS}
         hiddenValues={hiddenDropdownOptions[DROPDOWN_NAMESPACES.SKILLS] ?? []}

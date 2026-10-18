@@ -20,6 +20,8 @@ interface MultiCheckboxDropdownOption {
   value: string;
   label: string;
   description?: string;
+  /** Extra tooltip-only text, shown after the description. */
+  tooltipDetail?: string;
   group?: string;
 }
 
@@ -166,7 +168,13 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
   };
 
   const optionTitle = (option: MultiCheckboxDropdownOption) =>
-    schemaOptionTitle(option.label, option.description, schemaPath);
+    schemaOptionTitle(
+      option.label,
+      option.description,
+      schemaPath,
+      undefined,
+      option.tooltipDetail
+    );
 
   const canHide = (value: string) =>
     hideEnabled && !nonHideable.includes(value);

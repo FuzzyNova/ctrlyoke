@@ -138,13 +138,20 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   const optionTitle = (option: CustomSelectOption) => {
     const path = optionSchemaPath(option);
     if (!schemaPath || !path) {
-      return schemaOptionTitle(option.label, option.description);
+      return schemaOptionTitle(
+        option.label,
+        option.description,
+        undefined,
+        undefined,
+        option.tooltipDetail
+      );
     }
     return schemaOptionTitle(
       option.label,
       option.description,
       path,
-      option.pseudo ?? option.value
+      option.pseudo ?? option.value,
+      option.tooltipDetail
     );
   };
   const optionAriaLabel = (option: CustomSelectOption) => {
