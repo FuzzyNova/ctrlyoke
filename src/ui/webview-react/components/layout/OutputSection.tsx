@@ -25,6 +25,8 @@ import {
 import { useOutputRowsModel } from "@hooks/useOutputRowsModel";
 import { useOutputScrollSeek } from "@hooks/useOutputScrollSeek";
 import { useOutputScrollTarget } from "@hooks/useOutputScrollTarget";
+import { useOutputAutoscrollGlide } from "@hooks/useOutputAutoscrollGlide";
+import { useOutputRowEntrance } from "@hooks/useOutputRowEntrance";
 import { useOutputUndoActions } from "@hooks/useOutputUndoActions";
 import { useOutputVirtualization } from "@hooks/useOutputVirtualization";
 import { useOutputFind } from "@hooks/useOutputFind";
@@ -42,6 +44,7 @@ import {
 } from "../../types/messages";
 import {
   DIFF_VIEW_TYPES,
+  OUTPUT_SCROLL_APPLY_PHASES,
   OUTPUT_SCROLL_TARGET_KINDS,
   OUTPUT_TABS,
   type DiffViewType,
@@ -790,6 +793,33 @@ const OutputSectionInner: React.FC = () => {
     );
   }, [rows, scrollTargetRef, outputRef]);
 
+  // Live-output motion (row fade-in, autoscroll glide) runs only while a live
+  // run streams into a visible pane; history, collapsed panes and the terminal
+  // tab always land instantly.
+  const isLiveOutputMotionEnabled =
+    isExecutionActive &&
+    !isViewingHistory &&
+    !outputCollapsed &&
+    activeOutputTab === OUTPUT_TABS.OUTPUT;
+  const isLiveOutputMotionEnabledRef = useRef(isLiveOutputMotionEnabled);
+  isLiveOutputMotionEnabledRef.current = isLiveOutputMotionEnabled;
+
+  const { glideAfterScrollWrite, settleGlide } = useOutputAutoscrollGlide({
+    autoscrollEnabledRef: autoscrollEnabled,
+    isEnabledRef: isLiveOutputMotionEnabledRef,
+    outputRef,
+    pendingNavigationRef,
+    scrollSeekPlaceholderRef,
+  });
+
+  useOutputRowEntrance({
+    autoscrollEnabledRef: autoscrollEnabled,
+    isEnabled: isLiveOutputMotionEnabled,
+    outputRef,
+    rowRenderIdentity,
+    rows,
+  });
+
   const {
     applyScrollTarget,
     scheduleScrollTargetCommit,
@@ -809,6 +839,7 @@ const OutputSectionInner: React.FC = () => {
     lastUserScrollInputAtRef,
     layoutApplyTrigger: `${measurementVersion}:${outputOverscan}:${rows.length}:${scrollSeekPlaceholderActive}`,
     latestActivityRowKey,
+    onScrollTopWritten: glideAfterScrollWrite,
     outputOverscanRef,
     outputRef,
     pendingNavigationRef,
@@ -820,6 +851,7 @@ const OutputSectionInner: React.FC = () => {
     savedOutputScrollTarget,
     scrollTargetRef,
     setOutputScrollTarget,
+    settleScrollMotion: settleGlide,
     userScrollInputGraceMs: OUTPUT_USER_SCROLL_INPUT_GRACE_MS,
     workflowScrollTargetId,
   });
@@ -1043,6 +1075,7 @@ const OutputSectionInner: React.FC = () => {
     ) {
       scrollTargetRef.current = DEFAULT_OUTPUT_SCROLL_TARGET;
     } else if (!autoscrollEnabled.current) {
+      settleGlide();
       const anchor = captureViewportRowAnchor(el, "visible-top");
       if (anchor) {
         scrollTargetRef.current = {
@@ -1103,6 +1136,7 @@ const OutputSectionInner: React.FC = () => {
     schedulePendingMeasurementFlush,
     scheduleScrollTargetCommit,
     scrollSeekPlaceholderRef,
+    settleGlide,
     updateScrollSeekForScroll,
   ]);
 
@@ -1249,9 +1283,12 @@ const OutputSectionInner: React.FC = () => {
         "auto-scroll-latest-activity"
       );
     } else if (!isLatestActivityFollowEnabled) {
-      setCurrentScrollTarget(DEFAULT_OUTPUT_SCROLL_TARGET, "auto-scroll");
+      setCurrentScrollTarget(
+        DEFAULT_OUTPUT_SCROLL_TARGET,
+        OUTPUT_SCROLL_APPLY_PHASES.AUTO_SCROLL
+      );
     }
-    applyScrollTarget("auto-scroll");
+    applyScrollTarget(OUTPUT_SCROLL_APPLY_PHASES.AUTO_SCROLL);
   }, [
     applyScrollTarget,
     rows,
@@ -1743,6 +1780,7 @@ const OutputSectionInner: React.FC = () => {
               onTouchEnd={handleOutputTouchEnd}
               onTouchMove={handleOutputTouchMove}
               onTouchStart={handleOutputTouchStart}
+              onUserInputCapture={settleGlide}
               onWheel={handleWheel}
             />
           </OutputTogglePinContext.Provider>

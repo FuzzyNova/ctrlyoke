@@ -5,6 +5,7 @@ import {
   type OutputScrollTarget,
 } from "@store/uiStore";
 import {
+  OUTPUT_ROW_CONTAINER_SELECTOR,
   captureViewportRowAnchor,
   findRenderedRowElementByKey,
 } from "@utils/outputDom";
@@ -22,6 +23,7 @@ import { WebviewLog } from "@utils/logger";
 import {
   OUTPUT_ROW_KINDS,
   OUTPUT_SCROLL_ANCHOR_MODES,
+  OUTPUT_SCROLL_APPLY_PHASES,
   OUTPUT_SCROLL_TARGET_KINDS,
   type OutputRowKind,
 } from "@root/types/DashboardConstants";
@@ -93,6 +95,18 @@ interface UseOutputScrollTargetInput {
   commitMaxRetries: number;
   layoutApplyTrigger: string;
   userScrollInputGraceMs: number;
+  /** Called after each scrollTop write, with the delta it moved the pane. */
+  onScrollTopWritten?: (
+    phase: string,
+    target: OutputScrollTarget,
+    appliedDeltaPx: number
+  ) => void;
+  /**
+   * Ends any visual scroll motion before row geometry is read. Client rects
+   * include an in-flight glide's translation, so every rect read outside a
+   * pinned-bottom apply must run after this.
+   */
+  settleScrollMotion?: () => void;
 }
 
 interface OutputScrollRow {
@@ -145,6 +159,8 @@ export function useOutputScrollTarget({
   commitMaxRetries,
   layoutApplyTrigger,
   userScrollInputGraceMs,
+  onScrollTopWritten,
+  settleScrollMotion,
 }: UseOutputScrollTargetInput) {
   const scrollTargetCommitTimerRef = useRef<ReturnType<
     typeof setTimeout
@@ -281,7 +297,7 @@ export function useOutputScrollTarget({
       }
 
       const rowContainer = scrollElement.querySelector<HTMLElement>(
-        "[data-output-row-container]"
+        OUTPUT_ROW_CONTAINER_SELECTOR
       );
       const rowContainerOffset = rowContainer
         ? scrollElement.scrollTop +
@@ -362,6 +378,7 @@ export function useOutputScrollTarget({
         return;
       }
 
+      settleScrollMotion?.();
       const anchor = captureViewportRowAnchor(
         scrollElement,
         OUTPUT_SCROLL_ANCHOR_MODES.VISIBLE_TOP
@@ -397,6 +414,7 @@ export function useOutputScrollTarget({
       outputRef,
       rowsRef,
       setCurrentScrollTarget,
+      settleScrollMotion,
     ]
   );
 
@@ -441,6 +459,15 @@ export function useOutputScrollTarget({
       if (deferredScrollTargetApplyTimerRef.current !== null) {
         clearTimeout(deferredScrollTargetApplyTimerRef.current);
         deferredScrollTargetApplyTimerRef.current = null;
+      }
+
+      // Only a pinned-bottom apply resolves without reading row rects, so it
+      // is the only one that may run while a glide is still translating them.
+      if (
+        scrollTargetRef.current.kind !== OUTPUT_SCROLL_TARGET_KINDS.BOTTOM ||
+        !autoscrollEnabledRef.current
+      ) {
+        settleScrollMotion?.();
       }
 
       if (scrollTargetCommitTimerRef.current !== null) {
@@ -501,6 +528,7 @@ export function useOutputScrollTarget({
         requestAnimationFrame(() => {
           isProgrammaticScrollRef.current = false;
         });
+        onScrollTopWritten?.(phase, target, scrollElement.scrollTop - previous);
       }
 
       if (
@@ -551,6 +579,7 @@ export function useOutputScrollTarget({
       lastScrollEventAtRef,
       lastScrollTopRef,
       lastUserScrollInputAtRef,
+      onScrollTopWritten,
       outputOverscanRef,
       outputRef,
       pendingNavigationRef,
@@ -558,6 +587,7 @@ export function useOutputScrollTarget({
       rowsRef,
       scrollTargetRef,
       setCurrentScrollTarget,
+      settleScrollMotion,
       userScrollInputGraceMs,
     ]
   );
@@ -706,7 +736,7 @@ export function useOutputScrollTarget({
 
   useLayoutEffect(() => {
     void layoutApplyTrigger;
-    applyScrollTarget("layout-effect");
+    applyScrollTarget(OUTPUT_SCROLL_APPLY_PHASES.LAYOUT_EFFECT);
   }, [applyScrollTarget, layoutApplyTrigger]);
 
   useEffect(() => {

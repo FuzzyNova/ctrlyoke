@@ -119,6 +119,11 @@ interface OutputPaneProps {
     expanded: boolean
   ) => void;
   onWheel: React.WheelEventHandler<HTMLDivElement>;
+  /**
+   * Fires in the capture phase for any pointer, wheel, touch or key input in
+   * the pane, before its own handlers read geometry.
+   */
+  onUserInputCapture: () => void;
   activeMatch?: OutputFindMatch | null;
 }
 
@@ -214,6 +219,7 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
     onTouchEnd,
     onTouchMove,
     onTouchStart,
+    onUserInputCapture,
     onWheel,
   } = props;
 
@@ -277,6 +283,10 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
 
   return (
     <div
+      onPointerDownCapture={onUserInputCapture}
+      onWheelCapture={onUserInputCapture}
+      onTouchStartCapture={onUserInputCapture}
+      onKeyDownCapture={onUserInputCapture}
       aria-hidden={activeOutputTab !== OUTPUT_TABS.OUTPUT || isOutputCollapsed}
       className={`absolute inset-0 flex flex-row min-h-0 ${
         isOutputCollapsed
@@ -331,81 +341,85 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
             Output will appear here during execution
           </p>
         ) : (
-          <Profiler
-            id={isOutputVirtualized ? "OutputVirtualRows" : "OutputRows"}
-            onRender={onOutputProfilerRender}
-          >
-            {isOutputVirtualized ? (
-              <div
-                data-output-row-container
-                style={{
-                  height: `${virtualizedTotalSize}px`,
-                  position: "relative",
-                  width: "100%",
-                }}
-              >
-                {virtualRows.map((virtualRow) => {
-                  const row = rows[virtualRow.index];
-                  if (!row) return null;
+          // The autoscroll glide clips this box while it translates the row
+          // container, so the translated overflow never reaches scrollHeight.
+          <div data-output-glide-clip>
+            <Profiler
+              id={isOutputVirtualized ? "OutputVirtualRows" : "OutputRows"}
+              onRender={onOutputProfilerRender}
+            >
+              {isOutputVirtualized ? (
+                <div
+                  data-output-row-container
+                  style={{
+                    height: `${virtualizedTotalSize}px`,
+                    position: "relative",
+                    width: "100%",
+                  }}
+                >
+                  {virtualRows.map((virtualRow) => {
+                    const row = rows[virtualRow.index];
+                    if (!row) return null;
 
-                  const renderScrollSeekPlaceholder =
-                    isOutputScrollSeeking &&
-                    !isNavigationTargetVirtualized &&
-                    !renderedScrollSeekIndices.has(virtualRow.index) &&
-                    shouldRenderScrollSeekPlaceholder(row);
+                    const renderScrollSeekPlaceholder =
+                      isOutputScrollSeeking &&
+                      !isNavigationTargetVirtualized &&
+                      !renderedScrollSeekIndices.has(virtualRow.index) &&
+                      shouldRenderScrollSeekPlaceholder(row);
 
-                  return (
+                    return (
+                      <div
+                        key={virtualRow.key}
+                        ref={
+                          renderScrollSeekPlaceholder
+                            ? undefined
+                            : measureRowElement
+                        }
+                        data-index={virtualRow.index}
+                        data-row-key={row.key}
+                        className="flow-root"
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          transform: `translateY(${virtualRow.start}px)`,
+                          width: "100%",
+                        }}
+                      >
+                        {renderScrollSeekPlaceholder ? (
+                          <OutputScrollSeekPlaceholder
+                            row={row}
+                            height={virtualRow.size}
+                          />
+                        ) : (
+                          renderOutputRow(row, props)
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div data-output-row-container>
+                  {nonVirtualRows.map((row, rowIndex) => (
                     <div
-                      key={virtualRow.key}
-                      ref={
-                        renderScrollSeekPlaceholder
-                          ? undefined
-                          : measureRowElement
-                      }
-                      data-index={virtualRow.index}
+                      key={row.key}
+                      ref={measureStaticRowElement}
+                      data-index={rowIndex}
                       data-row-key={row.key}
                       className="flow-root"
-                      style={{
-                        position: "absolute",
-                        top: 0,
-                        transform: `translateY(${virtualRow.start}px)`,
-                        width: "100%",
-                      }}
                     >
-                      {renderScrollSeekPlaceholder ? (
-                        <OutputScrollSeekPlaceholder
-                          row={row}
-                          height={virtualRow.size}
-                        />
-                      ) : (
-                        renderOutputRow(row, props)
-                      )}
+                      {renderOutputRow(row, props)}
                     </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div data-output-row-container>
-                {nonVirtualRows.map((row, rowIndex) => (
-                  <div
-                    key={row.key}
-                    ref={measureStaticRowElement}
-                    data-index={rowIndex}
-                    data-row-key={row.key}
-                    className="flow-root"
-                  >
-                    {renderOutputRow(row, props)}
-                  </div>
-                ))}
-                {nonVirtualSpacerHeight > 0 && (
-                  <div
-                    aria-hidden="true"
-                    style={{ height: `${nonVirtualSpacerHeight}px` }}
-                  />
-                )}
-              </div>
-            )}
-          </Profiler>
+                  ))}
+                  {nonVirtualSpacerHeight > 0 && (
+                    <div
+                      aria-hidden="true"
+                      style={{ height: `${nonVirtualSpacerHeight}px` }}
+                    />
+                  )}
+                </div>
+              )}
+            </Profiler>
+          </div>
         )}
       </div>
 

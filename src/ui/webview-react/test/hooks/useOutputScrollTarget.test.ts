@@ -590,4 +590,113 @@ describe("useOutputScrollTarget", () => {
       viewportOffsetPx: 20,
     });
   });
+
+  describe("scroll motion hooks", () => {
+    function renderMotionHook(
+      scrollTargetRef: { current: OutputScrollTarget },
+      autoscrollEnabled: boolean
+    ) {
+      const scrollElement = document.createElement("div");
+      let scrollTop = 100;
+      Object.defineProperties(scrollElement, {
+        clientHeight: { configurable: true, value: 200 },
+        scrollHeight: { configurable: true, value: 1000 },
+        scrollTop: {
+          configurable: true,
+          get: () => scrollTop,
+          set: (value: number) => {
+            scrollTop = value;
+          },
+        },
+      });
+      const onScrollTopWritten = vi.fn();
+      const settleScrollMotion = vi.fn();
+      const hook = renderHook(() =>
+        useOutputScrollTarget({
+          applyScrollTargetRef: {
+            current: () => ({ resolved: false, appliedDelta: 0 }),
+          },
+          autoscrollEnabledRef: { current: autoscrollEnabled },
+          bottomThresholdPx: 24,
+          commitMaxRetries: 2,
+          commitScrollTargetFromViewportRef: { current: () => undefined },
+          defaultTarget: { kind: "bottom" },
+          isProgrammaticScrollRef: { current: false },
+          lastProgrammaticScrollTopRef: { current: null },
+          lastScrollEventAtRef: { current: null },
+          lastScrollTopRef: { current: null },
+          lastUserScrollInputAtRef: { current: null },
+          layoutApplyTrigger: "initial",
+          onScrollTopWritten,
+          outputOverscanRef: { current: 6 },
+          outputRef: { current: scrollElement },
+          pendingNavigationRef: { current: null },
+          restoreTrigger: "workflow",
+          rowLayout: {
+            rowStartsByKey: new Map([["row-1", 500]]),
+            totalSize: 1000,
+          },
+          rowsRef: { current: [{ key: "row-1" }] },
+          rowVirtualizer: { measurementsCache: [] },
+          savedOutputScrollTarget: scrollTargetRef.current,
+          scrollTargetRef,
+          setOutputScrollTarget: vi.fn(),
+          settleScrollMotion,
+          userScrollInputGraceMs: 200,
+          workflowScrollTargetId: "workflow",
+        })
+      );
+      return {
+        ...hook,
+        onScrollTopWritten,
+        scrollElement,
+        settleScrollMotion,
+      };
+    }
+
+    it("reports each scrollTop write and leaves a pinned-bottom glide running", () => {
+      const scrollTargetRef = {
+        current: { kind: "bottom" } as OutputScrollTarget,
+      };
+      const { result, onScrollTopWritten, scrollElement, settleScrollMotion } =
+        renderMotionHook(scrollTargetRef, true);
+      // The mount-time layout-effect apply already pinned the bottom; move
+      // the pane back up so the next apply has a delta to report.
+      scrollElement.scrollTop = 100;
+      onScrollTopWritten.mockClear();
+      settleScrollMotion.mockClear();
+
+      act(() => {
+        result.current.applyScrollTarget("auto-scroll");
+      });
+
+      expect(settleScrollMotion).not.toHaveBeenCalled();
+      expect(onScrollTopWritten).toHaveBeenLastCalledWith(
+        "auto-scroll",
+        { kind: "bottom" },
+        700
+      );
+    });
+
+    it("settles motion before resolving a row target from geometry", () => {
+      const scrollTargetRef = {
+        current: {
+          kind: "row",
+          rowKey: "row-1",
+          viewportOffsetPx: 0,
+        } as OutputScrollTarget,
+      };
+      const { result, settleScrollMotion } = renderMotionHook(
+        scrollTargetRef,
+        false
+      );
+      settleScrollMotion.mockClear();
+
+      act(() => {
+        result.current.applyScrollTarget("layout-effect");
+      });
+
+      expect(settleScrollMotion).toHaveBeenCalled();
+    });
+  });
 });

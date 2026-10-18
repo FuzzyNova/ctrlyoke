@@ -65,6 +65,7 @@ function buildProps(
     onTouchMove: vi.fn(),
     onTouchStart: vi.fn(),
     onToolCallExpansionChange: vi.fn(),
+    onUserInputCapture: vi.fn(),
     onWheel: vi.fn(),
     ...overrides,
   };

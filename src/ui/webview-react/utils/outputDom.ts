@@ -10,6 +10,11 @@ import {
 } from "@root/types/DashboardConstants";
 import { WebviewLog } from "./logger";
 
+/** The element holding every output row (virtualized or not). */
+export const OUTPUT_ROW_CONTAINER_SELECTOR = "[data-output-row-container]";
+/** The box the autoscroll glide clips while it translates the row container. */
+export const OUTPUT_GLIDE_CLIP_SELECTOR = "[data-output-glide-clip]";
+
 export interface ViewportRowAnchor {
   rowKey: string;
   offsetTop: number;

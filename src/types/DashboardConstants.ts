@@ -4428,6 +4428,19 @@ export const OUTPUT_SCROLL_ANCHOR_MODES = {
 export type OutputScrollAnchorMode =
   (typeof OUTPUT_SCROLL_ANCHOR_MODES)[keyof typeof OUTPUT_SCROLL_ANCHOR_MODES];
 
+/**
+ * `applyScrollTarget` phases that follow live output. Only these may animate
+ * the autoscroll glide; every other phase (restores, width changes, deferred
+ * retries after user input) lands instantly.
+ */
+export const OUTPUT_SCROLL_APPLY_PHASES = {
+  AUTO_SCROLL: "auto-scroll",
+  LAYOUT_EFFECT: "layout-effect",
+} as const;
+
+export type OutputScrollApplyPhase =
+  (typeof OUTPUT_SCROLL_APPLY_PHASES)[keyof typeof OUTPUT_SCROLL_APPLY_PHASES];
+
 /** Default labels used by structured output renderers. */
 export const OUTPUT_DEFAULT_LABELS = {
   THINKING: "Thinking",
