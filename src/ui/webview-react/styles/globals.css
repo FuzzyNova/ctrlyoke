@@ -1785,10 +1785,15 @@ button .cy-lucide-icon {
    Place one as the last flex child of the root h-dvh container (App.tsx) so the
    flex-1 content area is automatically shortened by the home indicator height.
    Every element inside — panels, absolute overlays, footers — then clears the
-   indicator without per-component padding. */
+   indicator without per-component padding. Non-selectable (same pair as
+   .cy-no-select): it holds no text, and a long-press there otherwise starts an
+   iOS selection with a Copy callout. */
 @utility safe-area-spacer {
   height: var(--safe-area-bottom);
   flex-shrink: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 /* Background logo - uses CSS mask to apply foreground color to SVG */

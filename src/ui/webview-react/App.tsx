@@ -82,6 +82,16 @@ import { ToastViewport } from "@components/shared/ToastViewport";
 import { BatchApprovalModal } from "@components/shared/BatchApprovalModal";
 import { ChoiceModal } from "@components/shared/ChoiceModal";
 import { startPanelMemorySampler } from "@utils/memorySampler";
+import { isIosDevice } from "@utils/platform";
+
+// iOS 26 blurs the strip under the status bar once a full-screen fixed overlay
+// closes and nothing fixed covers the top edge any more; it only re-evaluates
+// when a fixed element there appears again. Keeping the mobile root itself
+// fixed means one always does. See
+// dev/bugs/backlog/ios26-liquid-glass-pwa-top-edge-glitches.md.
+const MOBILE_ROOT_POSITION_CLASS = isIosDevice()
+  ? "fixed inset-0"
+  : "h-dvh relative";
 
 function App() {
   const vscode = useVsCodeApi();
@@ -552,7 +562,7 @@ function App() {
   if (isMobile) {
     return (
       <div
-        className="h-dvh w-full flex flex-col bg-editor-bg text-foreground border-l border-r relative"
+        className={`${MOBILE_ROOT_POSITION_CLASS} w-full flex flex-col bg-editor-bg text-foreground border-l border-r`}
         style={iosVisualViewportRootStyle}
       >
         <Header
