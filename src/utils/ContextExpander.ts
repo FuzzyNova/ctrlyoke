@@ -41,13 +41,23 @@ import {
   isImageRefPath,
   MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES,
   MAX_CONTENT_SIZE,
+  MAX_EXCERPT_BYTES,
 } from "../types/DashboardConstants";
 import { getErrorMessage } from "./ErrorUtils";
 import { quoteReferenceField } from "../completions/ContextReferenceBuilder";
-import { splitLines, streamFileLines } from "./TextLines";
+import { LineTooLongError, splitLines, streamFileLines } from "./TextLines";
 import { hasLineRange, isValidLineRange } from "./LineRangeUtils";
 
-const EXCERPT_SIZE_LIMIT_REASON = `Excerpt skipped: file exceeds the ${Math.round(MAX_CONTENT_SIZE / 1024)} KB excerpt size limit`;
+const EXCERPT_SIZE_LIMIT_LABEL = `${Math.round(MAX_EXCERPT_BYTES / (1024 * 1024))} MB excerpt size limit`;
+const EXCERPT_SIZE_LIMIT_REASON = `Excerpt skipped: the requested lines exceed the ${EXCERPT_SIZE_LIMIT_LABEL}`;
+
+function invalidLineRangeReason(
+  startLine: number,
+  endLine: number,
+  lineCount: number
+): string {
+  return `Invalid line range ${startLine}-${endLine} for file with ${lineCount} lines`;
+}
 
 const CONTEXT_REFERENCE_BASES = {
   WORKFLOW: "workflow",
@@ -324,7 +334,11 @@ export class ContextExpander {
     }
   }
 
-  /** Estimate oversized selection/symbol refs without loading their contents. */
+  /**
+   * Estimate selection/symbol refs into files over `MAX_CONTENT_SIZE` from the
+   * streamed size of just the requested lines, without tokenizing them or
+   * loading the file. Smaller files return null and are tokenized exactly.
+   */
   async estimateExcerptReferenceTokens(
     rawRef: string
   ): Promise<FileTokenEstimate | null> {
@@ -332,15 +346,21 @@ export class ContextExpander {
       ...parseSelectionReferences(rawRef),
       ...parseSymbolReferences(rawRef),
     ][0];
-    if (!ref) return null;
+    if (!ref || !hasLineRange(ref)) return null;
     try {
       await this.prepareSourceRuntimeResolutions([ref]);
-      const stat = await fs.promises.stat(
-        await this.resolveWorkspacePath(ref.path)
-      );
-      return stat.size > MAX_CONTENT_SIZE
-        ? estimateFileTokensFromSize(stat.size, stat.mtimeMs)
-        : null;
+      const absolutePath = await this.resolveWorkspacePath(ref.path);
+      const stat = await fs.promises.stat(absolutePath);
+      if (stat.size <= MAX_CONTENT_SIZE) return null;
+      let excerptBytes = 0;
+      for await (const line of this.streamLineRange(
+        absolutePath,
+        ref.startLine,
+        ref.endLine
+      )) {
+        excerptBytes += Buffer.byteLength(line, "utf8") + 1;
+      }
+      return estimateFileTokensFromSize(excerptBytes, stat.mtimeMs);
     } catch {
       return null;
     }
@@ -370,10 +390,12 @@ export class ContextExpander {
     const sourceRuntimeReadReferences: string[] = [];
     const excerptParts: string[] = [];
     const skippedReferences: SkippedReference[] = [];
+    let fileReferences: FileReference[] = [];
+    let gitRefs: ReturnType<typeof parseGitChangeReferences> = [];
 
     try {
-      const fileReferences = parseAllFileReferences(promptText);
-      const gitRefs = parseGitChangeReferences(promptText);
+      fileReferences = parseAllFileReferences(promptText);
+      gitRefs = parseGitChangeReferences(promptText);
 
       await this.prepareSourceRuntimeResolutions(fileReferences);
 
@@ -389,17 +411,15 @@ export class ContextExpander {
       }
 
       for (const ref of fileReferences) {
+        const token = getReferenceToken(ref, promptText);
         if (
           ref.isDirectory &&
           this.blockedSourceRuntimeDirectories.has(ref.path)
         ) {
-          const token =
-            ref.startOffset !== undefined && ref.endOffset !== undefined
-              ? promptText.slice(ref.startOffset, ref.endOffset)
-              : `@${ref.path}`;
           skippedReferences.push({
-            ref: ref.path,
-            reason: `Directory reference "${token}" resolves to the source checkout runtime store and was blocked`,
+            ref: token,
+            reason:
+              "Directory reference resolves to the source checkout runtime store and was blocked",
           });
           continue;
         }
@@ -413,7 +433,7 @@ export class ContextExpander {
             `[ContextExpander] Skipping unresolvable reference: ${ref.path}.`,
             err
           );
-          skippedReferences.push({ ref: ref.path, reason });
+          skippedReferences.push({ ref: token, reason });
           continue;
         }
 
@@ -439,7 +459,7 @@ export class ContextExpander {
               err
             );
             skippedReferences.push({
-              ref: ref.path,
+              ref: token,
               reason: getErrorMessage(err),
             });
             return null;
@@ -460,7 +480,7 @@ export class ContextExpander {
               err
             );
             skippedReferences.push({
-              ref: ref.path,
+              ref: token,
               reason: getErrorMessage(err),
             });
             return null;
@@ -468,9 +488,7 @@ export class ContextExpander {
           if (xml) {
             excerptParts.push(xml);
             if (this.sourceRuntimeResolutions.has(ref.path)) {
-              sourceRuntimeReadReferences.push(
-                getReferenceToken(ref, promptText)
-              );
+              sourceRuntimeReadReferences.push(token);
             }
           }
         } else {
@@ -505,7 +523,7 @@ export class ContextExpander {
                 imageFileRefs.push(destinationPath);
               }
               sourceRuntimeCopies.push({
-                reference: getReferenceToken(ref, promptText),
+                reference: token,
                 sourcePath: sourceRuntimePath,
                 destinationPath,
               });
@@ -527,7 +545,7 @@ export class ContextExpander {
               err
             );
             skippedReferences.push({
-              ref: ref.path,
+              ref: token,
               reason: `${getErrorMessage(err)}${suggestion}`,
             });
           }
@@ -549,13 +567,22 @@ export class ContextExpander {
       };
     } catch (error) {
       Log.error("[ContextExpander] Error in expandContextSplit:", error);
+      // Nothing is attached on this path, so every reference the prompt
+      // named must be reported rather than silently dropped.
+      const reason = `Context expansion failed: ${getErrorMessage(error)}`;
       return {
         directFileRefs: [],
         imageFileRefs: [],
         sourceRuntimeCopies: [],
         sourceRuntimeReadReferences: [],
         excerptBlocks: "",
-        skippedReferences: [],
+        skippedReferences: [
+          ...fileReferences.map((ref) => ({
+            ref: getReferenceToken(ref, promptText),
+            reason,
+          })),
+          ...gitRefs.map((ref) => ({ ref: ref.raw, reason })),
+        ],
       };
     }
   }
@@ -1009,18 +1036,21 @@ export class ContextExpander {
 
     const stat = await fs.promises.stat(absolutePath);
     const lineRange = { startLine, endLine };
-    const overExcerptCap =
-      hasLineRange(lineRange) && stat.size > MAX_CONTENT_SIZE;
-    // A symbol excerpt needs the whole file to locate the symbol, so an
-    // over-cap one is refused outright; an over-cap line range is streamed
-    // and refused only if the range lies past the cap.
-    if (overExcerptCap && symbolName) {
-      throw new Error(EXCERPT_SIZE_LIMIT_REASON);
-    }
+    // Selection and symbol excerpts both address a line range, so in a file
+    // over the cap either is streamed and only the requested lines are kept.
+    const streamRange = hasLineRange(lineRange) && stat.size > MAX_CONTENT_SIZE;
     const t0 = Date.now();
-    const streamedLines = overExcerptCap
-      ? await this.readCappedLineRange(absolutePath, startLine!, endLine!)
-      : undefined;
+    let streamedLines: string[] | undefined;
+    if (streamRange) {
+      streamedLines = [];
+      for await (const line of this.streamLineRange(
+        absolutePath,
+        startLine!,
+        endLine!
+      )) {
+        streamedLines.push(line);
+      }
+    }
     const rawContent = streamedLines
       ? undefined
       : await fs.promises.readFile(absolutePath, "utf8");
@@ -1062,7 +1092,7 @@ ${rawContent}
       const lines = splitLines(rawContent!);
       if (!isValidLineRange(rangeStartLine, rangeEndLine, lines.length)) {
         throw new Error(
-          `Invalid line range ${rangeStartLine}-${rangeEndLine} for file with ${lines.length} lines`
+          invalidLineRangeReason(rangeStartLine, rangeEndLine, lines.length)
         );
       }
       slicedLines = lines.slice(rangeStartLine - 1, rangeEndLine);
@@ -1097,26 +1127,43 @@ ${content}
   }
 
   /**
-   * Read lines `startLine..endLine` of a file larger than the excerpt cap,
-   * reading at most `MAX_CONTENT_SIZE` bytes. The read is cut at the cap, so
-   * the last line it yields may be partial; the range is only trusted once a
-   * line *after* `endLine` has been seen, which proves `endLine` is complete.
+   * Stream lines `startLine..endLine` of a file without materializing it.
+   * Where the range sits in the file does not matter; memory is bounded by
+   * `MAX_EXCERPT_BYTES` because only the requested lines are retained, the
+   * excerpt they form is capped, and so is any single line read on the way.
    */
-  private async readCappedLineRange(
+  private async *streamLineRange(
     absolutePath: string,
     startLine: number,
     endLine: number
-  ): Promise<string[]> {
-    const result: string[] = [];
-    let lineNumber = 0;
-    for await (const line of streamFileLines(absolutePath, {
-      maxBytes: MAX_CONTENT_SIZE,
-    })) {
-      lineNumber++;
-      if (lineNumber > endLine) return result;
-      if (lineNumber >= startLine) result.push(line);
+  ): AsyncGenerator<string, void, undefined> {
+    if (!isValidLineRange(startLine, endLine, Number.MAX_SAFE_INTEGER)) {
+      throw new Error(invalidLineRangeReason(startLine, endLine, 0));
     }
-    throw new Error(EXCERPT_SIZE_LIMIT_REASON);
+    let lineNumber = 0;
+    let excerptBytes = 0;
+    try {
+      for await (const line of streamFileLines(absolutePath, {
+        maxLineLength: MAX_EXCERPT_BYTES,
+      })) {
+        lineNumber++;
+        if (lineNumber < startLine) continue;
+        excerptBytes += Buffer.byteLength(line, "utf8") + 1;
+        if (excerptBytes > MAX_EXCERPT_BYTES) {
+          throw new Error(EXCERPT_SIZE_LIMIT_REASON);
+        }
+        yield line;
+        if (lineNumber >= endLine) return;
+      }
+    } catch (error) {
+      if (error instanceof LineTooLongError) {
+        throw new Error(
+          `Excerpt skipped: line ${error.lineNumber} alone exceeds the ${EXCERPT_SIZE_LIMIT_LABEL}`
+        );
+      }
+      throw error;
+    }
+    throw new Error(invalidLineRangeReason(startLine, endLine, lineNumber));
   }
 
   /**

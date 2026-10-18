@@ -15,6 +15,7 @@ import {
 } from "../completions/ContextReferenceBuilder";
 import {
   MAX_CONTENT_SIZE,
+  MAX_EXCERPT_BYTES,
   MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
@@ -71,59 +72,109 @@ suite("ContextExpander.expandContextSplit", () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  test("caps oversized selection and symbol excerpts before reading content", async () => {
-    const root = freshWorkspace();
-    const filePath = path.join(root, "large.ts");
-    fs.writeFileSync(filePath, "small fixture\n");
-    const originalStat = fs.promises.stat;
-    fs.promises.stat = (async (target: fs.PathLike, ...args: unknown[]) => {
-      if (path.resolve(String(target)) === filePath) {
-        return { size: MAX_CONTENT_SIZE + 1, mtimeMs: 0 } as fs.Stats;
-      }
-      return (originalStat as (...values: unknown[]) => Promise<fs.Stats>)(
-        target,
-        ...args
-      );
-    }) as typeof fs.promises.stat;
-    try {
-      const expander = new ContextExpander({ workspaceRoot: root });
-      for (const reference of [
-        "#selection:large.ts:1-1",
-        "#sym:large.ts:Thing:1-1",
-      ]) {
-        const result = await expander.expandContextSplit(reference);
-        assert.strictEqual(result.excerptBlocks, "");
-        assert.ok(
-          result.skippedReferences[0].reason.includes("excerpt size limit")
-        );
-      }
-    } finally {
-      fs.promises.stat = originalStat;
-    }
-  });
-
-  test("streams a line range near the top of an over-cap file and refuses one past the cap", async () => {
+  test("streams selection and symbol ranges anywhere in a file over MAX_CONTENT_SIZE", async () => {
+    // Mirrors a multi-megabyte session log referenced near its end, which the
+    // old byte-position cap refused.
     const root = freshWorkspace();
     const filePath = path.join(root, "huge.log");
     const line = "x".repeat(1023);
-    const lineCount = Math.ceil((MAX_CONTENT_SIZE + 64 * 1024) / 1024);
+    const lineCount = Math.ceil((MAX_CONTENT_SIZE * 3) / 1024);
+    const target = lineCount - 1;
     fs.writeFileSync(
       filePath,
       Array.from({ length: lineCount }, (_, i) =>
-        i === 1 ? "second line" : line
+        i === 1 || i === target - 1 ? `marker ${i + 1}` : line
       ).join("\n")
     );
     const expander = new ContextExpander({ workspaceRoot: root });
 
     const near = await expander.expandContextSplit("#selection:huge.log:2-2");
     assert.deepStrictEqual(near.skippedReferences, []);
-    assert.ok(near.excerptBlocks.includes("    2→second line"));
+    assert.ok(near.excerptBlocks.includes("    2→marker 2"));
 
-    const far = await expander.expandContextSplit(
-      `#selection:huge.log:${lineCount}-${lineCount}`
+    for (const reference of [
+      `#selection:huge.log:${target}-${target}`,
+      `#sym:huge.log:Thing:${target}-${target}`,
+    ]) {
+      const far = await new ContextExpander({
+        workspaceRoot: root,
+      }).expandContextSplit(reference);
+      assert.deepStrictEqual(far.skippedReferences, [], reference);
+      assert.ok(
+        far.excerptBlocks.includes(`    ${target}→marker ${target}`),
+        reference
+      );
+    }
+
+    const estimate = await expander.estimateExcerptReferenceTokens(
+      `#selection:huge.log:${target}-${target}`
     );
-    assert.strictEqual(far.excerptBlocks, "");
-    assert.ok(far.skippedReferences[0].reason.includes("excerpt size limit"));
+    assert.ok(estimate?.estimated);
+    assert.ok(
+      estimate.tokens > 0 && estimate.tokens < 10,
+      `${estimate.tokens}`
+    );
+  });
+
+  test("skips an over-cap range past the end of the file with the full reference token", async () => {
+    const root = freshWorkspace();
+    fs.writeFileSync(
+      path.join(root, "huge.log"),
+      Buffer.alloc(MAX_CONTENT_SIZE + 1024, "x\n")
+    );
+    const reference = "#selection:huge.log:999999-999999";
+
+    const result = await new ContextExpander({
+      workspaceRoot: root,
+    }).expandContextSplit(`see ${reference} for context`);
+
+    assert.strictEqual(result.excerptBlocks, "");
+    assert.strictEqual(result.skippedReferences.length, 1);
+    assert.strictEqual(result.skippedReferences[0].ref, reference);
+    assert.match(result.skippedReferences[0].reason, /Invalid line range/u);
+  });
+
+  test("skips an excerpt larger than MAX_EXCERPT_BYTES instead of embedding it", async () => {
+    const root = freshWorkspace();
+    const line = "y".repeat(1023);
+    const lineCount = Math.ceil(MAX_EXCERPT_BYTES / 1024) + 16;
+    fs.writeFileSync(
+      path.join(root, "huge.log"),
+      Array.from({ length: lineCount }, () => line).join("\n")
+    );
+    const reference = `#selection:huge.log:1-${lineCount}`;
+    const expander = new ContextExpander({ workspaceRoot: root });
+
+    const result = await expander.expandContextSplit(reference);
+
+    assert.strictEqual(result.excerptBlocks, "");
+    assert.strictEqual(result.skippedReferences[0].ref, reference);
+    assert.match(
+      result.skippedReferences[0].reason,
+      /requested lines exceed the 4 MB excerpt size limit/u
+    );
+    assert.strictEqual(
+      await expander.estimateExcerptReferenceTokens(reference),
+      null
+    );
+  });
+
+  test("skips a range behind one line longer than MAX_EXCERPT_BYTES without buffering the file", async () => {
+    const root = freshWorkspace();
+    fs.writeFileSync(
+      path.join(root, "oneline.log"),
+      `${"z".repeat(MAX_EXCERPT_BYTES + 1024)}\nafter\n`
+    );
+
+    const result = await new ContextExpander({
+      workspaceRoot: root,
+    }).expandContextSplit("#selection:oneline.log:2-2");
+
+    assert.strictEqual(result.excerptBlocks, "");
+    assert.match(
+      result.skippedReferences[0].reason,
+      /line 1 alone exceeds the 4 MB excerpt size limit/u
+    );
   });
 
   test("blocks file, directory, selection, and symbol references through an outside link", async () => {
@@ -488,7 +539,7 @@ suite("ContextExpander.expandContextSplit", () => {
 
       assert.deepStrictEqual(result.sourceRuntimeCopies, []);
       const skipped = result.skippedReferences.find(
-        (ref) => ref.ref === "runtime/too-large.log"
+        (ref) => ref.ref === "@runtime/too-large.log"
       );
       assert.ok(skipped);
       assert.ok(
@@ -555,10 +606,7 @@ suite("ContextExpander.expandContextSplit", () => {
       assert.strictEqual(result.excerptBlocks, "");
       assert.ok(
         result.skippedReferences.some(
-          (ref) =>
-            ref.ref === "runtime/" &&
-            ref.reason.includes("@runtime/") &&
-            ref.reason.includes("blocked")
+          (ref) => ref.ref === "@runtime/" && ref.reason.includes("blocked")
         )
       );
     });
@@ -590,7 +638,7 @@ suite("ContextExpander.expandContextSplit", () => {
 
       assert.deepStrictEqual(result.directFileRefs, []);
       assert.ok(
-        result.skippedReferences.some((ref) => ref.ref === "tracked.log")
+        result.skippedReferences.some((ref) => ref.ref === "@tracked.log")
       );
       assert.ok(fs.existsSync(sourcePath));
     });
@@ -1153,13 +1201,13 @@ suite("ContextExpander.expandContextSplit", () => {
 
       const missing = await expander.expandContextSplit("@nope/");
       assert.strictEqual(missing.skippedReferences.length, 1);
-      assert.strictEqual(missing.skippedReferences[0].ref, "nope/");
+      assert.strictEqual(missing.skippedReferences[0].ref, "@nope/");
       assert.match(missing.skippedReferences[0].reason, /Directory not found/u);
       assert.strictEqual(missing.excerptBlocks, "");
 
       const outside = await expander.expandContextSplit("@../outside/");
       assert.strictEqual(outside.skippedReferences.length, 1);
-      assert.strictEqual(outside.skippedReferences[0].ref, "../outside/");
+      assert.strictEqual(outside.skippedReferences[0].ref, "@../outside/");
       assert.match(
         outside.skippedReferences[0].reason,
         /outside the workspace and was blocked/u

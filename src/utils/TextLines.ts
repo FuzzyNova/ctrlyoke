@@ -38,6 +38,19 @@ export const LINE_BREAK_PATTERN = /\r\n?|\n/;
 
 const CARRIAGE_RETURN = "\r";
 
+/** Thrown by {@link streamFileLines} when one line exceeds `maxLineLength`. */
+export class LineTooLongError extends Error {
+  constructor(
+    readonly lineNumber: number,
+    readonly maxLineLength: number
+  ) {
+    super(
+      `Line ${lineNumber} is longer than the ${maxLineLength}-character line limit`
+    );
+    this.name = "LineTooLongError";
+  }
+}
+
 /**
  * Splits already-loaded content into lines. Content ending in a line break
  * yields a final empty line, exactly as `String.prototype.split` does;
@@ -75,19 +88,25 @@ export function splitCompleteLines(content: string): {
  * trailing break is yielded as-is, so callers keep the option of tolerating a
  * partially written last record.
  *
- * `maxBytes` stops reading after that many bytes. The last line yielded may
- * then be cut short (possibly mid-character), so a caller that sets it must
- * only trust lines followed by another yielded line.
+ * `maxLineLength` bounds memory on a file with no (or very rare) line breaks:
+ * once a single unfinished line grows past that many UTF-16 code units the
+ * stream stops with a {@link LineTooLongError} naming the 1-based line.
  */
 export async function* streamFileLines(
   filePath: string,
-  options?: { maxBytes?: number }
+  options?: { maxLineLength?: number }
 ): AsyncGenerator<string, void, undefined> {
-  const stream = fs.createReadStream(filePath, {
-    encoding: "utf8",
-    ...(options?.maxBytes !== undefined && { end: options.maxBytes - 1 }),
-  });
+  const stream = fs.createReadStream(filePath, { encoding: "utf8" });
+  const maxLineLength = options?.maxLineLength;
   let buffered = "";
+  let completedLines = 0;
+  // Applied to every line, finished or not, so the limit does not depend on
+  // where read chunks happen to split the file.
+  const assertLineLength = (line: string, lineNumber: number): void => {
+    if (maxLineLength !== undefined && line.length > maxLineLength) {
+      throw new LineTooLongError(lineNumber, maxLineLength);
+    }
+  };
 
   try {
     for await (const chunk of stream) {
@@ -105,8 +124,14 @@ export async function* streamFileLines(
         (lines.pop() ?? "") + (endsWithCarriageReturn ? CARRIAGE_RETURN : "");
 
       for (const line of lines) {
+        completedLines++;
+        assertLineLength(line, completedLines);
         yield line;
       }
+
+      // Only the unfinished tail is retained between chunks, so checking it
+      // bounds memory to the limit plus one read chunk.
+      assertLineLength(buffered, completedLines + 1);
     }
 
     if (buffered.length > 0) {

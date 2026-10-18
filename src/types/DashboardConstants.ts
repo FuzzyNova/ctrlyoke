@@ -2879,6 +2879,14 @@ export const MAX_OUTPUT_SNAPSHOT_BYTES = MAX_PASTED_IMAGE_BYTES;
 /** Maximum UTF-8 content size captured for workspace and undo diffs (512 KB). */
 export const MAX_CONTENT_SIZE = 512 * 1024;
 
+/**
+ * Maximum UTF-8 size of one `#selection`/`#sym` excerpt embedded in a prompt
+ * (4 MB, roughly a million tokens — more than any harness's context window).
+ * Bounds what is attached, not where in the file the range may sit: ranges in
+ * larger files are streamed and only the requested lines are retained.
+ */
+export const MAX_EXCERPT_BYTES = 4 * 1024 * 1024;
+
 /** Maximum size of a source-checkout artifact copied into an execution checkout (32 MB). */
 export const MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES = 32 * 1024 * 1024;
 

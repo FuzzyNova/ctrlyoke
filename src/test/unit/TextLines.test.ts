@@ -4,6 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
 import {
+  LineTooLongError,
   splitCompleteLines,
   splitLines,
   streamFileLines,
@@ -141,6 +142,41 @@ suite("TextLines", () => {
     const lines = await streamOf(`${long}${LINE_SEPARATOR}end\nnext\n`);
 
     assert.deepStrictEqual(lines, [`${long}${LINE_SEPARATOR}end`, "next"]);
+  });
+
+  test("stops with LineTooLongError once one unfinished line passes maxLineLength", async () => {
+    const limit = READ_CHUNK_BYTES;
+    await fs.writeFile(
+      filePath,
+      `short\n${"x".repeat(limit * 3)}\nnever reached\n`,
+      "utf8"
+    );
+    const lines: string[] = [];
+
+    await assert.rejects(
+      async () => {
+        for await (const line of streamFileLines(filePath, {
+          maxLineLength: limit,
+        })) {
+          lines.push(line);
+        }
+      },
+      (error: unknown) =>
+        error instanceof LineTooLongError && error.lineNumber === 2
+    );
+    assert.deepStrictEqual(lines, ["short"]);
+  });
+
+  test("allows lines up to maxLineLength across many chunks", async () => {
+    const line = "y".repeat(READ_CHUNK_BYTES - 1);
+    await fs.writeFile(filePath, `${line}\n${line}\n${line}\n`, "utf8");
+    const lines: string[] = [];
+    for await (const streamed of streamFileLines(filePath, {
+      maxLineLength: READ_CHUNK_BYTES,
+    })) {
+      lines.push(streamed);
+    }
+    assert.deepStrictEqual(lines, [line, line, line]);
   });
 
   test("propagates ENOENT so callers can treat a missing file as empty", async () => {
