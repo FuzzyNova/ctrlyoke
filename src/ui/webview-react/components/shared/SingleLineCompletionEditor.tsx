@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import {
   acceptCompletion,
   autocompletion,
@@ -144,7 +144,24 @@ const singleLineTheme = EditorView.theme({
   },
 });
 
+// Grow the editor and its scroller to fill the wrapper (a flex column in
+// multiline mode, see `MULTILINE_WRAPPER_STYLE`) so a caller-sized box (e.g.
+// `flex-1`) is one scroll area with its horizontal scrollbar at the bottom
+// edge, not under the last line. Percentage heights cannot do this: a flexed
+// wrapper's height is not a definite percentage basis, so CodeMirror's own
+// `.cm-scroller { height: 100% }` and any `height: 100%` here resolve to
+// `auto`. Scoped to `&.cm-editor` rather than bare `&` so the rule does not
+// leak onto the tooltip container that shares the theme class (see the
+// `singleLineTheme` comment above); that container never carries `cm-editor`.
 const multilineTheme = EditorView.theme({
+  "&.cm-editor": {
+    flexGrow: "1",
+    display: "flex",
+    flexDirection: "column",
+  },
+  ".cm-scroller": {
+    flexGrow: "1",
+  },
   ".cm-content": {
     padding: "4px 0",
   },
@@ -180,6 +197,11 @@ const wrapSingleLineTheme = EditorView.theme({
     backgroundColor: "transparent",
   },
 });
+
+const MULTILINE_WRAPPER_STYLE: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+};
 
 function replaceNewlines(text: string, multiline: boolean): string {
   return multiline ? text : text.replace(/[\r\n]/g, "");
@@ -506,5 +528,11 @@ export function SingleLineCompletionEditor({
     if (view) syncDocument(view, value, multiline);
   }, [multiline, value]);
 
-  return <div ref={editorRef} className={className} />;
+  return (
+    <div
+      ref={editorRef}
+      className={className}
+      style={multiline ? MULTILINE_WRAPPER_STYLE : undefined}
+    />
+  );
 }
