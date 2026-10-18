@@ -17,9 +17,14 @@ import type {
   UserFeedback,
   UserFeedbackSink,
 } from "../../core/UserFeedbackSink";
-import type { QueueState } from "../../types/CtrlYokeTypes";
+import type {
+  PromptStep,
+  QueueState,
+  WorkingFile,
+} from "../../types/CtrlYokeTypes";
 import type { RunnerHostIdentity } from "../../types/CtrlYokeTypes";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
+import { PromptQueue } from "../../core/PromptQueue";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import { RunDidNotPrepareError } from "../../core/orchestration/RunLifecycleService";
 import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
@@ -39,6 +44,7 @@ import {
   EXECUTION_STATES,
   MESSAGE_TYPES,
   PANEL_CLIENT_ID,
+  PROMPT_TERMINAL_STATUS,
   QUEUE_POSITION,
   RUNNER_IDS,
   VSCODE_CONTEXT_KEYS,
@@ -3334,6 +3340,126 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
     }
   });
 
+  test("reconciles a retired instance with a run another process advanced before editing through it", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-run-stale-retired-")
+    );
+    try {
+      const queue = new PromptQueue();
+      const initialSteps: PromptStep[] = [
+        { prompt: "s0" },
+        { prompt: "s1" },
+        { prompt: "s2" },
+      ];
+      const draftPath = await queue.createWorkingFile(
+        "stale-retired",
+        initialSteps,
+        workspace
+      );
+      queue.loadPrompts({ steps: initialSteps }, draftPath);
+      const promotion = await queue.promoteToNewRun(workspace, 100);
+      assert.ok(promotion);
+      const workflowKey = queue.getState().workflowKey!;
+      const readRunFile = async () =>
+        fs.readFile(promotion.workingFilePath, "utf8");
+      const finishRun = async (
+        prompts: string[],
+        definitionRevision: number,
+        costUsd: number
+      ) => {
+        const file = JSON.parse(await readRunFile()) as WorkingFile;
+        const finished = {
+          ...file,
+          definitionRevision,
+          steps: prompts.map((prompt, index) => ({
+            ...(file.steps?.[index] ?? {}),
+            prompt,
+            _runtime: {
+              ...file.steps?.[index]?._runtime,
+              startedAt: 1_000 + index,
+              completedAt: 2_000 + index,
+              terminalStatus: PROMPT_TERMINAL_STATUS.COMPLETED,
+            },
+          })),
+          _runtime: {
+            ...file._runtime,
+            currentIndex: prompts.length,
+            executionState: EXECUTION_STATES.COMPLETED,
+            tokenTotals: { attemptCount: prompts.length, costUsd },
+          },
+        } as WorkingFile;
+        await fs.writeFile(promotion.workingFilePath, JSON.stringify(finished));
+      };
+
+      // This process ran the first three steps and retired the instance...
+      const ownRevision = queue.getState().definitionRevision;
+      await finishRun(["s0", "s1", "s2"], ownRevision, 1.37);
+      await queue.resyncFromDisk();
+      assert.strictEqual(queue.getState().currentIndex, 3);
+      // ...then another process sharing the state home appended and ran two.
+      await finishRun(["s0", "s1", "s2", "s3", "s4"], ownRevision + 2, 2.28);
+      const advanced = await readRunFile();
+
+      const retired = {
+        id: "instance-retired",
+        getQueueState: () => queue.getState(),
+        getExecutionRunRef: () => undefined,
+        ownsRunnerLock: () => false,
+        resyncWorkingFileFromDisk: () => queue.resyncFromDisk(),
+        reorderPendingPrompts: (order: number[]) =>
+          queue.reorderPendingPrompts(order),
+      };
+      const orchestrator = createTestOrchestrator();
+      const internal = orchestrator as any;
+      internal.currentWorkspaceFolderPath = workspace;
+      internal.lineageRepository = new WorkflowLineageRepository();
+      internal.instances = new Map();
+      internal.retiredInstances = new Map([["instance-retired", retired]]);
+      internal.externalRunWatchCoordinator =
+        createEmptyExternalRunWatchCoordinator();
+      internal.viewAddressRegistry = new Map([
+        [
+          "client-a",
+          {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: promotion.runRef,
+          },
+        ],
+      ]);
+      internal.viewMessageSinks = new Map();
+      const descriptor = await internal.lineageRepository.readDescriptor(
+        workspace,
+        workflowKey
+      );
+
+      // The stale cache would treat steps 4 and 5 as pending and accept this
+      // reorder, writing `currentIndex: 3` and three steps' totals back.
+      await assert.rejects(() =>
+        orchestrator.reorderPendingPrompts(
+          {
+            address: {
+              workflowKey,
+              kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+              runRef: promotion.runRef,
+            },
+            expectedDefinitionRevision: ownRevision + 2,
+            expectedDescriptorRevision: descriptor.revision,
+          },
+          [1, 0],
+          "client-a"
+        )
+      );
+
+      assert.strictEqual(await readRunFile(), advanced);
+      assert.strictEqual(queue.getState().currentIndex, 5);
+      assert.strictEqual(queue.getState().steps.length, 5);
+      assert.strictEqual(queue.getState().tokenTotals?.costUsd, 2.28);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("routes to the run's own live instance, not the client's unrelated bound instance", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-run-live-edit-")
@@ -3367,6 +3493,8 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
       const deletedFrom: string[] = [];
       const runOwningInstance = {
         getQueueState: () => ({ workflowKey: wf1, runRef: run1 }),
+        ownsRunnerLock: () => false,
+        resyncWorkingFileFromDisk: async () => undefined,
         deletePromptFromQueue: async () => {
           deletedFrom.push("run-owning-instance");
         },
@@ -4697,6 +4825,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
     try {
       const run = await createRun(workspace);
       let instanceAppend: unknown[] | undefined;
+      const calls: string[] = [];
       const boundInstance = {
         id: "bound-owner",
         getQueueState: () => ({
@@ -4707,7 +4836,14 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
           totalSteps: 1,
           executionState: EXECUTION_STATES.COMPLETED,
         }),
+        ownsRunnerLock: () => false,
+        // A finished instance is only a cache of the run file; another
+        // process may have advanced the run since, so it is reconciled first.
+        resyncWorkingFileFromDisk: async () => {
+          calls.push("resync");
+        },
         executeEphemeralPrompt: async (...args: unknown[]) => {
+          calls.push("append");
           instanceAppend = args;
         },
       };
@@ -4745,6 +4881,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         ACTION_TYPES.RUN,
         undefined,
       ]);
+      assert.deepStrictEqual(calls, ["resync", "append"]);
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }
@@ -5593,6 +5730,8 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
           workflowKey: run.workflowKey,
           runRef: run.runRef,
         }),
+        ownsRunnerLock: () => false,
+        resyncWorkingFileFromDisk: async () => undefined,
         updateWorkflowName: async (name: string) => {
           liveRenames.push(name);
         },

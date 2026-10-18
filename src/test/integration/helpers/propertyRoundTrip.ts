@@ -61,7 +61,9 @@ const VIEW_ONLY_KEY = "__view_only__" as WorkflowKey;
 
 class SeedRunTestDouble implements Pick<
   RunLifecycleService,
-  "seedAndExecuteAtRun" | "findResidentInstanceForRun"
+  | "seedAndExecuteAtRun"
+  | "findResidentInstanceForRun"
+  | "findCurrentResidentInstanceForRun"
 > {
   constructor(
     private readonly workspace: string,
@@ -73,6 +75,13 @@ class SeedRunTestDouble implements Pick<
     _runRef: RunRef
   ): RunLifecycleInstancePort | undefined {
     return undefined;
+  }
+
+  async findCurrentResidentInstanceForRun(
+    workflowKey: WorkflowKey,
+    runRef: RunRef
+  ): Promise<RunLifecycleInstancePort | undefined> {
+    return this.findResidentInstanceForRun(workflowKey, runRef);
   }
 
   async seedAndExecuteAtRun(

@@ -16,6 +16,7 @@ import type {
 } from "../types/CtrlYokeTypes";
 import type { FinalStepRuntimeState } from "../types/CtrlYokeTypes";
 import {
+  ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
   IN_FLIGHT_EXECUTION_STATES,
   PROMPT_PROPERTIES,
@@ -2243,7 +2244,9 @@ export class WorkingFileManager {
    * changed the definition the mutation never saw, and writing memory would
    * drop that change under a fresh revision number. On rejection the queue is
    * re-synchronized from disk (discarding the unpersisted local mutation), so
-   * memory and disk agree again. On success the written revision is strictly
+   * memory and disk agree again: a queue that is not executing adopts disk's
+   * runtime too, since the writer that moved the definition may also have
+   * advanced the run. On success the written revision is strictly
    * greater than the one on disk it replaces.
    */
   public async persistDefinitionMutationDirect(
@@ -2260,8 +2263,11 @@ export class WorkingFileManager {
   /**
    * Discard an unpersisted local definition mutation by adopting disk's
    * definition and revision. `mergeDiskSteps` is disk-authoritative for step
-   * definitions, order and topology, so memory-only edits are dropped while the
-   * queue's runtime metadata survives.
+   * definitions, order and topology, so memory-only edits are dropped. With
+   * `authoritativeRuntime` the step and workflow `_runtime` (`currentIndex`,
+   * totals, execution state) come from disk as well; without it the queue's
+   * runtime metadata survives, which is only correct while this queue owns
+   * the run's execution.
    */
   private resyncQueueFromWorkingFile(
     workingFile: WorkingFile,
@@ -2330,7 +2336,15 @@ export class WorkingFileManager {
         }
       } catch (error) {
         if (isDefinitionMutation) {
-          this.resyncQueueFromWorkingFile(workingFile);
+          // All or nothing. An executing queue's runtime is newer than disk's,
+          // so it keeps its own. Any other queue is only a cached copy of the
+          // run, and taking the other writer's steps without its
+          // `currentIndex` and totals leaves completed steps rendering as
+          // pending (and editable) and lets the next write persist that mix.
+          this.resyncQueueFromWorkingFile(
+            workingFile,
+            !ACTIVE_EXECUTION_STATES.has(this.queueAccess.getStatus())
+          );
         }
         throw error;
       }

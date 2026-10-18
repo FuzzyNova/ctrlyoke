@@ -2385,6 +2385,90 @@ suite("PromptQueue State Machine Tests", () => {
       );
     });
 
+    test("a rejected append on a finished queue adopts the other writer's runtime with its steps", async () => {
+      const run = await promoteRun([
+        { prompt: "s0" },
+        { prompt: "s1" },
+        { prompt: "s2" },
+      ]);
+      // Stand in for another process sharing the state home: it finishes
+      // the three steps, then appends two more and runs them as well.
+      const finishRun = async (
+        prompts: string[],
+        definitionRevision: number,
+        costUsd: number
+      ) => {
+        const file = await run.readRunFile();
+        const steps = prompts.map((prompt, index) => ({
+          ...(file.steps?.[index] ?? {}),
+          prompt,
+          _runtime: {
+            ...file.steps?.[index]?._runtime,
+            startedAt: 1_000 + index,
+            completedAt: 2_000 + index,
+            terminalStatus: PROMPT_TERMINAL_STATUS.COMPLETED,
+          },
+        }));
+        const finished = {
+          ...file,
+          steps,
+          definitionRevision,
+          _runtime: {
+            ...file._runtime,
+            currentIndex: prompts.length,
+            executionState: EXECUTION_STATES.COMPLETED,
+            tokenTotals: { attemptCount: prompts.length, costUsd },
+          },
+        } as WorkingFile;
+        await fs.writeFile(run.runFilePath, JSON.stringify(finished));
+      };
+      const ownRevision = queue.getState().definitionRevision;
+      await finishRun(["s0", "s1", "s2"], ownRevision, 1.37);
+      await queue.resyncFromDisk();
+      assert.strictEqual(queue.getState().currentIndex, 3);
+
+      await finishRun(["s0", "s1", "s2", "s3", "s4"], ownRevision + 2, 2.28);
+
+      await assert.rejects(
+        () => queue.appendSteps([{ prompt: "local" }]),
+        /Definition revision conflict/
+      );
+
+      // All or nothing: the newer steps arrive with the run position and
+      // totals that belong to them, so steps 4 and 5 stay completed.
+      const state = queue.getState();
+      assert.deepStrictEqual(promptsOf(state.steps), [
+        "s0",
+        "s1",
+        "s2",
+        "s3",
+        "s4",
+      ]);
+      assert.strictEqual(state.currentIndex, 5);
+      assert.strictEqual(state.status, EXECUTION_STATES.COMPLETED);
+      assert.strictEqual(state.tokenTotals?.costUsd, 2.28);
+      assert.strictEqual(state.definitionRevision, ownRevision + 2);
+
+      // The retry lands after step 5 and leaves that progress on disk.
+      await queue.appendSteps([{ prompt: "local" }]);
+      const persisted = await run.readRunFile();
+      assert.deepStrictEqual(promptsOf(persisted.steps), [
+        "s0",
+        "s1",
+        "s2",
+        "s3",
+        "s4",
+        "local",
+      ]);
+      assert.strictEqual(persisted._runtime?.currentIndex, 5);
+      assert.strictEqual(persisted._runtime?.tokenTotals?.costUsd, 2.28);
+      assert.strictEqual(persisted._runtime?.tokenTotals?.attemptCount, 5);
+      assert.strictEqual(
+        persisted.steps?.[4]?._runtime?.terminalStatus,
+        PROMPT_TERMINAL_STATUS.COMPLETED
+      );
+    });
+
     test("a local edit on a stale queue is rejected and resyncs the edited step", async () => {
       const run = await promoteRun([{ prompt: "s0" }, { prompt: "s1" }]);
       const mcp = await run.appendFromMcp(

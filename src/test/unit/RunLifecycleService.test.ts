@@ -67,13 +67,19 @@ class FakeInstance implements RunLifecycleInstancePort {
     return this.state.runRef;
   }
 
+  ownsLock = false;
+
   ownsRunnerLock(): boolean {
-    return false;
+    return this.ownsLock;
   }
 
   clearPendingRewind(): void {}
 
-  async resyncWorkingFileFromDisk(): Promise<void> {}
+  resyncCount = 0;
+
+  async resyncWorkingFileFromDisk(): Promise<void> {
+    this.resyncCount++;
+  }
 
   async beginPendingRewind(): Promise<{
     definitionRevision: number;
@@ -415,5 +421,61 @@ suite("RunLifecycleService continuation validation", () => {
         ),
       /Another run in this workflow lineage is executing/
     );
+  });
+});
+
+suite("RunLifecycleService resident reconciliation", () => {
+  function createService(resident: FakeInstance): RunLifecycleService {
+    const registry = new FakeRegistry();
+    registry.retiredInstances.set(resident.id, resident);
+    return new RunLifecycleService(
+      createHost(
+        registry,
+        new FakeViews(),
+        new FakeLineageRepository(descriptor())
+      )
+    );
+  }
+
+  test("resyncs a finished resident before handing it back", async () => {
+    const resident = new FakeInstance(queueState(EXECUTION_STATES.COMPLETED));
+    const service = createService(resident);
+
+    const found = await service.findCurrentResidentInstanceForRun(
+      workflowKey,
+      runRef
+    );
+
+    assert.strictEqual(found, resident);
+    assert.strictEqual(resident.resyncCount, 1);
+  });
+
+  test("trusts the run's execution owner and the runner-lock holder", async () => {
+    const executing = new FakeInstance(queueState(EXECUTION_STATES.PAUSED));
+    await createService(executing).findCurrentResidentInstanceForRun(
+      workflowKey,
+      runRef
+    );
+    const lockHolder = new FakeInstance(queueState(EXECUTION_STATES.COMPLETED));
+    lockHolder.ownsLock = true;
+    await createService(lockHolder).findCurrentResidentInstanceForRun(
+      workflowKey,
+      runRef
+    );
+
+    assert.strictEqual(executing.resyncCount, 0);
+    assert.strictEqual(lockHolder.resyncCount, 0);
+  });
+
+  test("resyncs a resident executing a different run of the lineage", async () => {
+    const resident = new FakeInstance(queueState(EXECUTION_STATES.COMPLETED));
+    const service = createService(resident);
+    const other = new FakeInstance(
+      queueState(EXECUTION_STATES.RUNNING, "run-other" as RunRef)
+    );
+
+    await service.reconcileResidentWithRunFile(other, runRef);
+
+    assert.strictEqual(other.resyncCount, 1);
   });
 });

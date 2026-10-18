@@ -322,7 +322,7 @@ export class RunLifecycleService {
       );
     }
 
-    const loadedTarget = this.findResidentInstanceForRun(
+    const loadedTarget = await this.findCurrentResidentInstanceForRun(
       address.workflowKey,
       address.runRef
     );
@@ -1353,6 +1353,47 @@ export class RunLifecycleService {
     runRef: RunRef
   ): RunLifecycleInstancePort | undefined {
     return this.findResidentInstancesForRun(workflowKey, runRef)[0];
+  }
+
+  /**
+   * {@link findResidentInstanceForRun}, reconciled with the run file before it
+   * is handed back to act on. Use this whenever the instance is about to
+   * mutate or execute the run, never a bare lookup.
+   */
+  async findCurrentResidentInstanceForRun(
+    workflowKey: WorkflowKey,
+    runRef: RunRef
+  ): Promise<RunLifecycleInstancePort | undefined> {
+    const resident = this.findResidentInstanceForRun(workflowKey, runRef);
+    if (resident) {
+      await this.reconcileResidentWithRunFile(resident, runRef);
+    }
+    return resident;
+  }
+
+  /**
+   * Bring a resident instance's queue up to date with `runRef`'s working file
+   * unless this instance owns that run's execution. A resident that is not
+   * executing (typically a retired one, kept after its run finished) is only
+   * a cache of the file as this process last wrote it, and another process
+   * sharing the state home (a shared-state dev host, the CLI) may have
+   * appended to and run it since. Acting on that cache rejects appends as
+   * revision conflicts and writes its stale `currentIndex` and totals back
+   * over the other writer's progress. The executing owner (or the holder of
+   * the runner lock) is the newest copy and is left alone.
+   */
+  async reconcileResidentWithRunFile(
+    instance: RunLifecycleInstancePort,
+    runRef: RunRef
+  ): Promise<void> {
+    const state = instance.getQueueState();
+    const executesRun =
+      isExecutionOwnerState(state.status) &&
+      (instance.getExecutionRunRef() ?? state.runRef) === runRef;
+    if (executesRun || instance.ownsRunnerLock()) {
+      return;
+    }
+    await instance.resyncWorkingFileFromDisk();
   }
 
   /** Every live, then retired, instance whose queue is bound to this run. */

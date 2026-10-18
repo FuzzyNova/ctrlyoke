@@ -3160,10 +3160,14 @@ export class WorkflowOrchestrator {
     staticEdit: (workspaceRoot: string) => Promise<number | undefined>,
     invalidation: "snapshot" | "properties" | StepColorInvalidation = "snapshot"
   ): Promise<void> {
-    const live = this.findResidentInstanceForRun(
-      runAddress.workflowKey,
-      runAddress.runRef
-    );
+    // Reconciled first: a resident that is not executing this run may be a
+    // stale cache of a run another process advanced, and the live edit writes
+    // the instance's whole queue, runtime included.
+    const live =
+      (await this.runLifecycleService.findCurrentResidentInstanceForRun(
+        runAddress.workflowKey,
+        runAddress.runRef
+      )) as WorkflowInstance | undefined;
     let newDefinitionRevision: number | undefined;
     if (live) {
       await liveEdit(live);
@@ -4625,6 +4629,12 @@ export class WorkflowOrchestrator {
           clientId
         );
       }
+      // The append below and the start decision both read the instance's
+      // queue, so it must reflect the run file, not this process's last write.
+      await this.runLifecycleService.reconcileResidentWithRunFile(
+        instance,
+        runAddress.runRef
+      );
     }
 
     // When this action will trigger a new workflow run, register the initiating client

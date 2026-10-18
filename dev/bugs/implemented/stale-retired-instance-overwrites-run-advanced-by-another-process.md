@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-18 by user, while working in one run from both the main VS Code window and a shared-state dev host (`npm run dev:host:start:shared`)
 - **Area:** `src/core/WorkflowOrchestrator.ts` (retired-instance reuse, `applyRunAddressedMutation`), `src/core/WorkflowInstance.ts` (`executeEphemeralPrompt` append), `src/core/PromptQueue.ts` (conflict recovery)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
