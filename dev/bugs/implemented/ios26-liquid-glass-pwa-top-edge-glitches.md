@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-18 by user (hosted dashboard installed as a PWA on iPhone, right after updating to iOS 26 and choosing the Liquid Glass setting)
 - **Area:** `src/ui/webview-react/components/workspace-viewer/WorkspaceViewerModal.tsx`, `src/ui/webview-react/styles/globals.css`, hosted PWA meta tags in `src/server/CtrlYokeHostedServer.ts`
-- **Severity:** low
+- **Resolution:** fixed in 5d7dd002f (fixed mobile root on iOS; all three symptoms confirmed gone on device)
 
 ## Symptom
 
