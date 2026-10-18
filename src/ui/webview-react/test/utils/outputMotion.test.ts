@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  OUTPUT_AUTOSCROLL_GLIDE_CURVE,
   OUTPUT_AUTOSCROLL_GLIDE_MAX_VIEWPORT_FRACTION,
   findEnteringRowKeys,
-  readTranslateYPx,
+  resolveAutoscrollGlideCurve,
   resolveAutoscrollGlideOffsetPx,
+  sampleAutoscrollGlide,
+  sampleCubicBezier,
 } from "@utils/outputMotion";
 
 const rowsOf = (...keys: string[]) => keys.map((key) => ({ key }));
@@ -91,20 +94,46 @@ describe("resolveAutoscrollGlideOffsetPx", () => {
   });
 });
 
-describe("readTranslateYPx", () => {
-  it("reads ty from a 2D and a 3D matrix", () => {
-    const element = document.createElement("div");
-    document.body.appendChild(element);
-    element.style.transform = "matrix(1, 0, 0, 1, 0, 12.5)";
-    expect(readTranslateYPx(element)).toBe(12.5);
-    element.style.transform =
-      "matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 7, 0, 1)";
-    expect(readTranslateYPx(element)).toBe(7);
-    element.remove();
+describe("sampleCubicBezier", () => {
+  it("matches the endpoints and a linear curve exactly", () => {
+    const curve = OUTPUT_AUTOSCROLL_GLIDE_CURVE;
+    expect(sampleCubicBezier(curve, 0).progress).toBeCloseTo(0, 6);
+    expect(sampleCubicBezier(curve, 1).progress).toBeCloseTo(1, 6);
+    const linear = { x1: 1 / 3, y1: 1 / 3, x2: 2 / 3, y2: 2 / 3 };
+    expect(sampleCubicBezier(linear, 0.37).progress).toBeCloseTo(0.37, 6);
+    expect(sampleCubicBezier(linear, 0.37).slope).toBeCloseTo(1, 6);
   });
 
-  it("treats no transform as zero", () => {
-    const element = document.createElement("div");
-    expect(readTranslateYPx(element)).toBe(0);
+  // The complaint this curve answers: the old one was at full speed almost
+  // immediately. From rest it must start slow and be fastest mid-glide.
+  it("eases in from rest on the glide curve", () => {
+    const curve = OUTPUT_AUTOSCROLL_GLIDE_CURVE;
+    expect(sampleCubicBezier(curve, 0).slope).toBeCloseTo(0, 6);
+    expect(sampleCubicBezier(curve, 0.1).slope).toBeLessThan(
+      sampleCubicBezier(curve, 0.4).slope
+    );
   });
+});
+
+describe("resolveAutoscrollGlideCurve", () => {
+  it("keeps the rest curve when nothing is moving", () => {
+    expect(resolveAutoscrollGlideCurve(0, 40)).toEqual(
+      OUTPUT_AUTOSCROLL_GLIDE_CURVE
+    );
+  });
+
+  it.each([0.3, 1.5, 6])(
+    "hands a running glide over at its speed (slope %s)",
+    (slope) => {
+      const offsetPx = 50;
+      const speedPx = slope * offsetPx;
+      const curve = resolveAutoscrollGlideCurve(speedPx, offsetPx);
+      expect(curve.y1).toBeLessThanOrEqual(1);
+      expect(curve.x1).toBeLessThanOrEqual(OUTPUT_AUTOSCROLL_GLIDE_CURVE.x1);
+      expect(sampleAutoscrollGlide(offsetPx, curve, 0).speedPx).toBeCloseTo(
+        speedPx,
+        3
+      );
+    }
+  );
 });

@@ -6,11 +6,20 @@ import {
   OUTPUT_SCROLL_APPLY_PHASES,
   OUTPUT_SCROLL_TARGET_KINDS,
 } from "@root/types/DashboardConstants";
+import {
+  OUTPUT_AUTOSCROLL_GLIDE_CURVE,
+  OUTPUT_AUTOSCROLL_GLIDE_DURATION_MS,
+  resolveAutoscrollGlideCurve,
+  sampleAutoscrollGlide,
+  toCssCubicBezier,
+} from "@utils/outputMotion";
 
 const BOTTOM: OutputScrollTarget = { kind: OUTPUT_SCROLL_TARGET_KINDS.BOTTOM };
 
 interface FakeAnimation {
   cancel: ReturnType<typeof vi.fn>;
+  currentTime: number;
+  easing: string | undefined;
   onfinish: (() => void) | null;
   keyframes: Keyframe[];
 }
@@ -30,23 +39,21 @@ function buildPane() {
   });
 
   const animations: FakeAnimation[] = [];
-  // jsdom has no Web Animations API. The fake applies the first keyframe as
-  // an inline transform so readTranslateYPx sees an in-flight offset.
-  container.animate = vi.fn((keyframes: Keyframe[]) => {
-    const animation: FakeAnimation = {
-      cancel: vi.fn(() => {
-        container.style.removeProperty("transform");
-      }),
-      onfinish: null,
-      keyframes,
-    };
-    const start = /translateY\((.+)px\)/.exec(
-      String(keyframes[0]?.transform)
-    )?.[1];
-    container.style.transform = `matrix(1, 0, 0, 1, 0, ${start ?? 0})`;
-    animations.push(animation);
-    return animation as unknown as Animation;
-  }) as unknown as HTMLElement["animate"];
+  // jsdom has no Web Animations API. Tests advance a glide by setting its
+  // `currentTime`, which is all the hook reads back.
+  container.animate = vi.fn(
+    (keyframes: Keyframe[], options?: KeyframeAnimationOptions) => {
+      const animation: FakeAnimation = {
+        cancel: vi.fn(),
+        currentTime: 0,
+        easing: options?.easing,
+        onfinish: null,
+        keyframes,
+      };
+      animations.push(animation);
+      return animation as unknown as Animation;
+    }
+  ) as unknown as HTMLElement["animate"];
 
   return { animations, clip, container, scrollElement };
 }
@@ -101,7 +108,22 @@ describe("useOutputAutoscrollGlide", () => {
     expect(clip.style.overflowY).toBe("");
   });
 
-  it("continues a running glide from its remaining offset", () => {
+  it("starts from rest on the ease-in curve", () => {
+    const { animations, scrollElement } = buildPane();
+    const { result } = renderGlide(scrollElement);
+
+    result.current.glideAfterScrollWrite(
+      OUTPUT_SCROLL_APPLY_PHASES.AUTO_SCROLL,
+      BOTTOM,
+      30
+    );
+
+    expect(animations[0]?.easing).toBe(
+      toCssCubicBezier(OUTPUT_AUTOSCROLL_GLIDE_CURVE)
+    );
+  });
+
+  it("continues a running glide from its remaining offset and speed", () => {
     const { animations, scrollElement } = buildPane();
     const { result } = renderGlide(scrollElement);
 
@@ -110,16 +132,28 @@ describe("useOutputAutoscrollGlide", () => {
       BOTTOM,
       30
     );
+    const first = animations[0];
+    if (!first) throw new Error("first glide did not start");
+    first.currentTime = OUTPUT_AUTOSCROLL_GLIDE_DURATION_MS / 2;
+    const before = sampleAutoscrollGlide(
+      30,
+      OUTPUT_AUTOSCROLL_GLIDE_CURVE,
+      0.5
+    );
     result.current.glideAfterScrollWrite(
       OUTPUT_SCROLL_APPLY_PHASES.LAYOUT_EFFECT,
       BOTTOM,
       20
     );
 
-    expect(animations[0]?.cancel).toHaveBeenCalled();
+    expect(first.cancel).toHaveBeenCalled();
+    const offsetPx = before.remainingOffsetPx + 20;
     expect(animations[1]?.keyframes[0]).toEqual({
-      transform: "translateY(50px)",
+      transform: `translateY(${offsetPx}px)`,
     });
+    expect(animations[1]?.easing).toBe(
+      toCssCubicBezier(resolveAutoscrollGlideCurve(before.speedPx, offsetPx))
+    );
   });
 
   it("settles a running glide when a write is not eligible to glide", () => {

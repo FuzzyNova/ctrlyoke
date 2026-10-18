@@ -7,10 +7,12 @@ import {
 } from "@root/types/DashboardConstants";
 import {
   OUTPUT_AUTOSCROLL_GLIDE_DURATION_MS,
-  OUTPUT_AUTOSCROLL_GLIDE_EASING,
+  type CubicBezierCurve,
   prefersReducedMotion,
-  readTranslateYPx,
+  resolveAutoscrollGlideCurve,
   resolveAutoscrollGlideOffsetPx,
+  sampleAutoscrollGlide,
+  toCssCubicBezier,
 } from "@utils/outputMotion";
 import {
   OUTPUT_GLIDE_CLIP_SELECTOR,
@@ -33,7 +35,20 @@ interface UseOutputAutoscrollGlideInput {
 interface RunningGlide {
   animation: Animation;
   clipElement: HTMLElement;
+  curve: CubicBezierCurve;
   element: HTMLElement;
+  offsetPx: number;
+}
+
+/** Where a running glide is right now, read from its own clock and curve. */
+function sampleRunningGlide(glide: RunningGlide) {
+  const currentTime = glide.animation.currentTime;
+  const elapsedMs = typeof currentTime === "number" ? currentTime : 0;
+  return sampleAutoscrollGlide(
+    glide.offsetPx,
+    glide.curve,
+    elapsedMs / OUTPUT_AUTOSCROLL_GLIDE_DURATION_MS
+  );
 }
 
 /**
@@ -85,10 +100,10 @@ export function useOutputAutoscrollGlide({
         OUTPUT_ROW_CONTAINER_SELECTOR
       );
       const running = runningGlideRef.current;
-      const currentOffsetPx =
+      const { remainingOffsetPx, speedPx } =
         running && container && running.element === container
-          ? readTranslateYPx(container)
-          : 0;
+          ? sampleRunningGlide(running)
+          : { remainingOffsetPx: 0, speedPx: 0 };
       settleGlide();
 
       const clipElement = container?.parentElement;
@@ -109,13 +124,15 @@ export function useOutputAutoscrollGlide({
       }
       const offsetPx = resolveAutoscrollGlideOffsetPx({
         appliedDeltaPx,
-        currentOffsetPx,
+        currentOffsetPx: remainingOffsetPx,
         viewportHeightPx: scrollElement.clientHeight,
       });
       if (offsetPx === null) {
         return;
       }
 
+      // A glide that takes over from a running one starts at its speed.
+      const curve = resolveAutoscrollGlideCurve(speedPx, offsetPx);
       clipElement.style.overflowY = "clip";
       const animation = container.animate(
         [
@@ -124,13 +141,15 @@ export function useOutputAutoscrollGlide({
         ],
         {
           duration: OUTPUT_AUTOSCROLL_GLIDE_DURATION_MS,
-          easing: OUTPUT_AUTOSCROLL_GLIDE_EASING,
+          easing: toCssCubicBezier(curve),
         }
       );
       const glide: RunningGlide = {
         animation,
         clipElement,
+        curve,
         element: container,
+        offsetPx,
       };
       runningGlideRef.current = glide;
       animation.onfinish = () => releaseGlide(glide);

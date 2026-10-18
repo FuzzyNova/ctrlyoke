@@ -11,8 +11,27 @@
 
 export const OUTPUT_ROW_ENTER_DURATION_MS = 200;
 export const OUTPUT_ROW_ENTER_EASING = "ease-out";
-export const OUTPUT_AUTOSCROLL_GLIDE_DURATION_MS = 160;
-export const OUTPUT_AUTOSCROLL_GLIDE_EASING = "cubic-bezier(0.2, 0, 0, 1)";
+export const OUTPUT_AUTOSCROLL_GLIDE_DURATION_MS = 300;
+
+export interface CubicBezierCurve {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+/**
+ * Curve for a glide that starts from rest: a gentle ease-in (the long, flat
+ * first handle) into a soft landing. A glide that takes over from a running
+ * one keeps this shape but bends its first handle to start at the running
+ * glide's speed (`resolveAutoscrollGlideCurve`).
+ */
+export const OUTPUT_AUTOSCROLL_GLIDE_CURVE: CubicBezierCurve = {
+  x1: 0.4,
+  y1: 0,
+  x2: 0.2,
+  y2: 1,
+};
 /**
  * Largest glide offset, as a fraction of the viewport. While the glide runs
  * the user briefly sees up to that much content above the final viewport, and
@@ -102,17 +121,82 @@ export function resolveAutoscrollGlideOffsetPx({
   return offsetPx;
 }
 
-/** Current vertical translation of an element, from its computed transform. */
-export function readTranslateYPx(element: Element): number {
-  const transform = getComputedStyle(element).transform;
-  if (!transform || transform === "none") {
-    return 0;
+export function toCssCubicBezier({ x1, y1, x2, y2 }: CubicBezierCurve): string {
+  return `cubic-bezier(${x1}, ${y1}, ${x2}, ${y2})`;
+}
+
+/** One axis of a cubic bezier anchored at 0 and 1, at parameter `t`. */
+function bezierAxis(p1: number, p2: number, t: number): number {
+  const u = 1 - t;
+  return 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t;
+}
+
+function bezierAxisDerivative(p1: number, p2: number, t: number): number {
+  const u = 1 - t;
+  return 3 * u * u * p1 + 6 * u * t * (p2 - p1) + 3 * t * t * (1 - p2);
+}
+
+/**
+ * Progress and its rate of change for a CSS `cubic-bezier` easing at time
+ * fraction `x` in [0, 1] — the same function the browser animates with, so a
+ * running glide's offset and speed can be read without a style flush.
+ */
+export function sampleCubicBezier(
+  curve: CubicBezierCurve,
+  x: number
+): { progress: number; slope: number } {
+  const clampedX = Math.min(1, Math.max(0, x));
+  // Newton's method on x(t) = x; x(t) is monotone for handles in [0, 1].
+  let t = clampedX;
+  for (let iteration = 0; iteration < 8; iteration++) {
+    const dx = bezierAxisDerivative(curve.x1, curve.x2, t);
+    if (Math.abs(dx) < 1e-6) break;
+    t -= (bezierAxis(curve.x1, curve.x2, t) - clampedX) / dx;
+    t = Math.min(1, Math.max(0, t));
   }
-  const values = /^matrix(3d)?\((.+)\)$/.exec(transform)?.[2]?.split(",");
-  if (!values) {
-    return 0;
+  const dx = bezierAxisDerivative(curve.x1, curve.x2, t);
+  const dy = bezierAxisDerivative(curve.y1, curve.y2, t);
+  return {
+    progress: bezierAxis(curve.y1, curve.y2, t),
+    slope: Math.abs(dx) < 1e-6 ? 0 : dy / dx,
+  };
+}
+
+/**
+ * State of a running glide at time fraction `x`: how much offset is left and
+ * how fast it is closing, in px per unit of time fraction.
+ */
+export function sampleAutoscrollGlide(
+  offsetPx: number,
+  curve: CubicBezierCurve,
+  x: number
+): { remainingOffsetPx: number; speedPx: number } {
+  const { progress, slope } = sampleCubicBezier(curve, x);
+  return {
+    remainingOffsetPx: offsetPx * (1 - progress),
+    speedPx: offsetPx * slope,
+  };
+}
+
+/**
+ * Curve for a glide of `offsetPx` that must start at `initialSpeedPx`.
+ *
+ * Restarting on the rest curve would drop the content to zero speed every
+ * time a new chunk lands mid-glide, and a fast-start curve would kick it
+ * forward instead — either reads as a stutter in a burst of short events.
+ * A CSS bezier's starting slope is `y1 / x1`, so bending the first handle to
+ * `speed / offset` hands the motion over at the speed it already had. `x1`
+ * shortens only when the slope needs `y1` above 1, which would overshoot.
+ */
+export function resolveAutoscrollGlideCurve(
+  initialSpeedPx: number,
+  offsetPx: number
+): CubicBezierCurve {
+  const base = OUTPUT_AUTOSCROLL_GLIDE_CURVE;
+  const slope = offsetPx > 0 ? initialSpeedPx / offsetPx : 0;
+  if (!(slope > 0)) {
+    return base;
   }
-  // matrix(a, b, c, d, tx, ty) / matrix3d(..., tx, ty, tz, 1)
-  const ty = Number(values[transform.startsWith("matrix3d") ? 13 : 5]);
-  return Number.isFinite(ty) ? ty : 0;
+  const x1 = Math.min(base.x1, 1 / slope);
+  return { ...base, x1, y1: slope * x1 };
 }
