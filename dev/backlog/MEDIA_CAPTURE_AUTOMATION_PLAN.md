@@ -2,7 +2,8 @@
 
 **Status (2026-10-18):** Backlog. Not started. This is the "how" for
 [`SCREENSHOTS_AND_MEDIA_PLAN.md`](SCREENSHOTS_AND_MEDIA_PLAN.md), which stays the shot list and
-slotting plan.
+slotting plan. Where scripts, fixtures and the demo project live is decided (see "Demo project and
+fixtures" below), and the phases put replay ahead of the hero clip.
 
 ## Goal
 
@@ -48,6 +49,7 @@ Remotion and its dependencies never reach the extension's `node_modules` or the 
 ```
 media/
   package.json          # remotion, @remotion/cli, playwright
+  demo-app.json         # demo project repo URL, pinned ref, named start tags (see 7)
   shots/                # one capture script per shot list entry
     hero.capture.ts
     properties-tabs.capture.ts
@@ -162,6 +164,19 @@ scaled), and no harness is started.
 Fixtures to record first: the hero demo workflow (#6), the rate-limiter run behind the harness
 deck (#1), and a run with a multi-file change (#11).
 
+**The first two already exist and don't need re-recording.** The hero workflow's completed run
+from 2026-09-08 (`hero-gif-2026-09-03T03-48-14-807/run-2026-09-08T03-14-04-220Z`, 191 events, all
+six steps) and the six `rate-limiter-middleware-*` runs are in demo-app's user-scoped run history.
+Replay renders them in the current UI, so the outdated heading row in the old clip doesn't matter.
+Because that history is machine-local, raw copies are backed up outside any repo in
+`~/ctrlyoke-media-raw-runs/` on Nathan's desktop. They are not committed raw: they hold absolute
+paths and unredacted transcripts. They go into `media/fixtures/runs/` only as exported bundles.
+
+Replay removes the harness, not the workspace. File-change events, diffs, Undo and the
+workspace-viewer stills need the demo project's real files at the run's starting commit. **A
+fixture is therefore a run bundle plus a demo-app start tag**, and that pair is the only coupling
+between the two repos (see 7).
+
 ### 6. Phone recordings
 
 The capture stays manual (real device, see `SCREENSHOTS_AND_MEDIA_PLAN.md` #7). The edit becomes
@@ -175,19 +190,55 @@ The capture stays manual (real device, see `SCREENSHOTS_AND_MEDIA_PLAN.md` #7). 
 4. Export the stills at the listed timestamps (750×1532 PNG) and the overview as an animated WebP
    with alpha.
 
+### 7. Demo project and fixtures (decided 2026-10-18)
+
+- **Capture scripts and fixtures live in this repo, under `media/`.** They depend on ctrlyoke's
+  selectors, the `dev:host:*` scripts, `server-url.txt` and the `events.jsonl` schema, so they break
+  when the UI changes and must be versioned with it. demo-app is what gets filmed, not the tool.
+- **demo-app stays its own git repo**, published privately as
+  `https://github.com/nhickster/ctrlyoke-demo-app` (tags included). It has to be a real repo: the workflows commit, the Source Control shots show its history graph, and
+  `prompt-editor-demo.ctrlyoke.yaml` cites a `~commit`. Vendoring a copy into this repo would give
+  it new commit hashes on every machine.
+- **`media/demo-app.json` pins it:** the repo URL, the ref to check out, and the named start tags
+  the fixtures use. `npm run media -- setup` clones it into a gitignored work folder. A git
+  submodule was considered and rejected: it has to be initialized again in every long-lived
+  worktree (`big-feature`, `small-feature`, `bug-fix`), and agents trip over it.
+- **Each starting state is a tag in demo-app, not a hash in a comment.** Tags today:
+  `hero-start` (`5d8ae81`) and `hero-end` (`61af34a`, the 2026-09-08 run's output) for #6;
+  `rate-limiter-start` (`c1e9eef`) for #1. `baseline` is not a start state; it tracks the latest
+  capture-workflow commit.
+- **Live takes run in a worktree at the start tag** (`git worktree add ../demo-app-hero
+hero-start`), never in the main checkout, where `git reset --hard` plus `git clean -fd` would
+  wipe later workflows and uncommitted work. Replay's scratch copy follows the same rule: the
+  capture script materializes it from the tag in the work folder.
+- **Fixtures are committed as exported, redacted run bundles** in `media/fixtures/runs/`, each
+  naming its demo-app start tag. The hero run's `events.jsonl` is about 850 KB, so plain git is fine
+  for now. Reconsider compression or LFS only if fixtures grow past a few MB each.
+
 ## Phases
 
-1. **Spike on the hero clip.** Build the `media/` package, `lib/devHost.ts`, `lib/timeline.ts`, one
-   capture script and `Hero.tsx`, against a live run. Settle the HiDPI question from 3. Outcome: a
-   new hero clip with the current heading row.
-2. **Stills.** Port #12's tab shots and the hosted-dashboard walkthrough stills to scripts. Retire
-   the MCP-driven retakes for those.
-3. **Run replay.** Depends on `RUN_EXPORT_PLAN.md`'s bundle format. Record the first fixtures and
-   switch the hero script to replay.
+The original order spiked the hero clip against a live run because no fixture existed. One does
+(see 5), so the hero clip now waits for replay and never needs a paid re-run.
+
+1. **Scaffolding plus stills.** Build the `media/` package, `lib/devHost.ts`, `media/demo-app.json`
+   with `setup`, and port #12's tab shots and the hosted-dashboard walkthrough stills to scripts.
+   This proves the pipeline with no harness and no cost. Retire the MCP-driven retakes for those
+   shots.
+2. **Minimal export plus replay.** Only the parts of `RUN_EXPORT_PLAN.md` replay needs:
+   `RunBundleExporter` core (path rewrite, identity demotion, redaction) and a CLI command, not the
+   UI. Then the dev-only replay command (see 5). Export the hero and rate-limiter runs as the first
+   fixtures.
+3. **Hero clip on replay.** `lib/timeline.ts`, the hero capture script and `Hero.tsx`, replaying
+   the 2026-09-08 run into a scratch copy at `hero-start`. Settle the HiDPI question from 3.
+   Outcome: a new hero clip with the current heading row, retakeable for free.
 4. **Phone pipeline.** Rebuild one existing iOS still set from its raw recording and compare it to
    the Resolve output.
 5. **New media.** Capture the shots that were never taken (#9, #14, #10's phone clip) on the new
    pipeline.
+
+If the hero clip is needed before phase 2 lands, run `hero-gif.ctrlyoke.yaml` once more in a
+`hero-start` worktree. That costs one six-harness run and gives a second fixture. Check the models
+it names are still available first.
 
 ## Rejected: embedding live dashboard components in the site
 
@@ -212,9 +263,7 @@ could screenshot that same page, so it would be groundwork for both.
 
 ## Open questions
 
-1. Fixtures in git: a recorded run bundle may be large. Commit it compressed, use Git LFS, or keep
-   fixtures outside the repo like the `demo-app` project?
-2. Should the `demo-app` project move into the repo (or a submodule), so capture scripts and
-   fixtures can reference it by a stable path?
-3. Does replay belong behind the dev build only, or should the CLI ship a `ctrlyoke replay` for
+1. Does replay belong behind the dev build only, or should the CLI ship a `ctrlyoke replay` for
    users from the start?
+
+(Fixture storage and where demo-app lives were decided 2026-10-18; see 7.)
