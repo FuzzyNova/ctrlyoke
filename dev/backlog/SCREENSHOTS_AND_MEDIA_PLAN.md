@@ -28,6 +28,10 @@ a `hero-poster-1350x900.webp` poster frame. Everything else below is post-launch
 **Status:** Partial. The release-blocking README media is complete; remaining captures and slotting
 are post-launch polish.
 
+**Automation:** scripted capture, code-driven video editing and run replay for repeatable retakes
+are planned in [`MEDIA_CAPTURE_AUTOMATION_PLAN.md`](MEDIA_CAPTURE_AUTOMATION_PLAN.md). This doc
+stays the shot list.
+
 > **2026-10-17 audit:** `README.md` now has the 10-second hero GIF and two dashboard stills, linked
 > with absolute `https://ctrlyoke.dev/docs/screenshots/` URLs. The docs sync script scans README
 > references and copies those images into the docs build. The walkthrough has themed static captures
