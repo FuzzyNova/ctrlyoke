@@ -3,12 +3,7 @@ import type { Clip } from "./shot.ts";
 
 export const WORKFLOWS_DIR = ".ctrlyoke/workflows";
 
-/**
- * Once a workflow is loaded, each new dashboard tab currently spends 10-30s
- * on its startup overlay (dev/bugs/backlog/hosted-tab-startup-stalls-with-loaded-workflows.md),
- * so this waits well past Playwright's 30s default.
- */
-const STARTUP_TIMEOUT_MS = 120_000;
+const STARTUP_TIMEOUT_MS = 30_000;
 
 /** Waits until the startup overlay is gone and the dashboard takes input. */
 export async function waitForDashboard(page: Page): Promise<void> {

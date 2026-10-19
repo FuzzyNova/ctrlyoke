@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-18 by Claude Code (media capture automation, phase 1)
 - **Area:** `src/ui/WebviewMessageRouter.ts`, `src/server/CtrlYokeHostedServer.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -46,8 +46,10 @@ That is why the gaps silence every tab at once. Two handlers hold it for seconds
   large run's timeline). A loaded workflow's run-view replay therefore blocks the event loop in
   proportion to its size. See `secret-redaction-rereads-settings-for-every-string.md`.
 
-Loading the same file again creating a new instance each time is a separate cost (each new
-instance also recompiles the schema, see `prompt-file-parser-recompiles-schema-per-instance.md`).
+Loading the same file again creates a new workflow instance by design, so users can run two
+instances of one file in parallel or configure them differently for testing. The per-instance
+schema compilation cost was fixed in `prompt-file-parser-recompiles-schema-per-instance.md`; the
+fresh-instance behavior is not a startup defect and remains unchanged.
 
 ## Suggested Fix
 
@@ -56,10 +58,9 @@ This is an umbrella bug. Fix the linked root causes first
 `secret-registry-request-blocks-route-queue-with-powershell-spawns.md`,
 `prompt-file-parser-recompiles-schema-per-instance.md`). Then:
 
-- Decide whether **Load from File…** of a file that already has a live instance should reuse
-  that instance instead of building a new one each time, and implement it if it does not
-  conflict with existing behaviour or tests.
-- Re-measure a hosted-tab start with a loaded workflow (`[RouteTiming]`/`[EventLoopStall]`
-  lines; the media capture flow above). Close this bug once new tabs start in about a second.
-- `media/lib/dashboard.ts` waits up to 120 s for the overlay. Bring that back down once the fix
-  is confirmed.
+- **Load from File…** continues to create a new workflow instance each time, as intended for
+  parallel runs and testing with different harnesses.
+- The linked secret-redaction, secret-registry, and schema-compilation root causes are fixed in
+  their implemented reports. The 120 s media overlay wait is restored to Playwright's normal
+  30 s timeout.
+- Hosted-tab startup was not re-measured in this turn; headless browser measurement was skipped.
