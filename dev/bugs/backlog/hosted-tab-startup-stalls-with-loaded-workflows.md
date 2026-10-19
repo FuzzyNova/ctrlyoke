@@ -51,8 +51,15 @@ instance also recompiles the schema, see `prompt-file-parser-recompiles-schema-p
 
 ## Suggested Fix
 
-Profile the extension host during a slow client start (CPU profile from the dev host's
-`Developer: Show Running Extensions`, or timestamps around `handleClientReady`,
-`replayWorkflowStateTo` and `sendInitialState`). Check whether the per-instance replay or summary
-work grows with the registry, and whether reloading an already-open file should reuse its
-instance. `media/lib/dashboard.ts` waits up to 120 s for the overlay until this is fixed.
+This is an umbrella bug. Fix the linked root causes first
+(`secret-redaction-rereads-settings-for-every-string.md`,
+`secret-registry-request-blocks-route-queue-with-powershell-spawns.md`,
+`prompt-file-parser-recompiles-schema-per-instance.md`). Then:
+
+- Decide whether **Load from File…** of a file that already has a live instance should reuse
+  that instance instead of building a new one each time, and implement it if it does not
+  conflict with existing behaviour or tests.
+- Re-measure a hosted-tab start with a loaded workflow (`[RouteTiming]`/`[EventLoopStall]`
+  lines; the media capture flow above). Close this bug once new tabs start in about a second.
+- `media/lib/dashboard.ts` waits up to 120 s for the overlay. Bring that back down once the fix
+  is confirmed.
