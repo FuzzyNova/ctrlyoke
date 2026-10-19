@@ -22,6 +22,8 @@ Keep those two surfaces aligned. If you add or rename a dashboard action, update
 
 `IS_DEV_MODE` comes from `src/utils/BuildConfig.ts` and is replaced at build time by esbuild. Dev builds keep this module reachable; production builds dead-strip it.
 
+Run replay (`src/dev/replay/`, used by `media/`) swaps execution below the engine, not the dashboard feed: `WorkflowOrchestrator.setExecutionOverride` hands new instances a factory whose harness integrations and `ScriptProcessRunner`s play back a run bundle, so the state machine, history and dashboard all run for real. A `WorkflowInstance` captures its `IntegrationFactory` when built, so the override must be set at activation before any instance exists; arming it later silently leaves restored instances on real harnesses. Anything that starts a process for a step must go through `IntegrationFactory` (as `createScriptProcessRunner` does) or replay will run it for real.
+
 Dashboard build actions are intentionally in-process and serialized by the module-level `isBuilding` flag. `runNpmBuild()` always runs from the extension root, uses `npm.cmd` with `shell: true` on Windows, and only supports the existing scripts: `compile:extension`, `compile:webview`, `compile`, and `test`.
 </architecture>
 

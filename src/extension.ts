@@ -647,6 +647,17 @@ export async function activate(context: vscode.ExtensionContext) {
       userInteractionPort: webviewProvider.getUserInteractionPort(),
     });
 
+    // Dev-only run replay for the media capture host. Must be armed before
+    // any workflow instance exists (see armRunReplayFromEnvironment).
+    if (IS_DEV_MODE && windowWorkspaceRoot) {
+      const { armRunReplayFromEnvironment } = require("./dev/replay/RunReplay");
+      armRunReplayFromEnvironment(
+        workflowOrchestrator,
+        platform,
+        windowWorkspaceRoot
+      );
+    }
+
     // With no folder open, or ctrlyoke not yet initialized in this workspace,
     // gate startup behind the matching prompt. Must be set before initialize()
     // so the check is in place when READY arrives.

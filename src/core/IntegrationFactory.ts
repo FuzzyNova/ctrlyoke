@@ -19,6 +19,18 @@ import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { detectHarness } from "./harness/shared/HarnessDetection";
 import { harnessAvailability } from "../utils/HarnessAvailability";
 import type { DisposableRegistry } from "./HostPorts";
+import { ScriptProcessRunner } from "./orchestration/ScriptProcessRunner";
+
+/**
+ * Replaces the harnesses and script processes behind every execution a host
+ * starts, while the rest of the engine runs unchanged. Dev-only run replay
+ * (`src/dev/replay/`) is the one implementation.
+ */
+export interface ExecutionHarnessOverride {
+  readonly integrationFactory: IntegrationFactory;
+  /** Stands in for the detector singletons that gate a run's start. */
+  resolveDetectorIntegration(harness?: HarnessId): HarnessIntegration;
+}
 
 /**
  * IntegrationFactory
@@ -246,6 +258,16 @@ export class IntegrationFactory {
     );
     integration.markAsReady();
     return integration;
+  }
+
+  /**
+   * Create the process transport a workflow's conditions and script steps run
+   * on. With `createForExecution`, this is everything an execution starts
+   * outside ctrlyoke, so overriding both replaces all of it (see
+   * `ExecutionHarnessOverride`).
+   */
+  createScriptProcessRunner(executionRoot: string): ScriptProcessRunner {
+    return new ScriptProcessRunner(executionRoot);
   }
 
   /**

@@ -2,7 +2,10 @@ import * as fs from "fs";
 import * as path from "path";
 import { HarnessIntegration, HarnessStatus } from "./HarnessIntegration";
 import { CliIntegration } from "./harness/CliIntegration";
-import { IntegrationFactory } from "./IntegrationFactory";
+import {
+  IntegrationFactory,
+  type ExecutionHarnessOverride,
+} from "./IntegrationFactory";
 import { HarnessCapabilityRegistry } from "./HarnessCapabilityRegistry";
 import { WorkflowInstance } from "./WorkflowInstance";
 import {
@@ -299,9 +302,13 @@ export class WorkflowOrchestrator {
         return orchestrator.dashboardBroadcastHub;
       },
       get integrationFactory() {
-        return orchestrator.integrationFactory;
+        return (
+          orchestrator.executionOverride?.integrationFactory ??
+          orchestrator.integrationFactory
+        );
       },
       resolveDetectorIntegration: (harnessOverride) =>
+        this.executionOverride?.resolveDetectorIntegration(harnessOverride) ??
         this.resolveDetectorIntegration(harnessOverride),
       propagateWorkflowNameToIntegrations: (name) =>
         this.propagateWorkflowNameToIntegrations(name),
@@ -590,6 +597,7 @@ export class WorkflowOrchestrator {
   private readonly harnessUsageService?: HarnessUsageService;
   private readonly workspaceStatsService?: WorkspaceStatsService;
   private readonly integrationFactory: IntegrationFactory;
+  private executionOverride?: ExecutionHarnessOverride;
   private readonly compatibilityRegistry: HarnessCapabilityRegistry;
   private readonly platform: PlatformAdapter;
   private readonly dashboardHostActions: DashboardHostActions;
@@ -815,6 +823,18 @@ export class WorkflowOrchestrator {
     this.updateStatusBar();
     void this.harnessUsageService?.initialize();
     Log.debug("[WorkflowOrchestrator] WorkflowOrchestrator initialized");
+  }
+
+  /**
+   * Runs every workflow instance created from now on against `override`
+   * instead of the real harnesses and script processes. An instance keeps the
+   * factory it was built with, so install this before the first one exists.
+   * Dev-only run replay (`src/dev/replay/`) is the only caller.
+   */
+  public setExecutionOverride(
+    override: ExecutionHarnessOverride | undefined
+  ): void {
+    this.executionOverride = override;
   }
 
   // ─────────────────────────────────────────────────────────────────────────

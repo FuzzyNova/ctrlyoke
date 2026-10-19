@@ -3795,7 +3795,7 @@ export class WorkflowInstance
       this.registerTargetProcessRunner(target, existing);
       return existing;
     }
-    const runner = new ScriptProcessRunner(
+    const runner = this.integrationFactory.createScriptProcessRunner(
       this.executionWorkspace.executionRoot
     );
     this.targetScriptProcessRunners.set(targetKey, runner);
@@ -4325,7 +4325,9 @@ export class WorkflowInstance
   ): WorktreeSetupRunner {
     return {
       run: async (args) => {
-        const processRunner = new ScriptProcessRunner(args.executionRoot);
+        const processRunner = this.integrationFactory.createScriptProcessRunner(
+          args.executionRoot
+        );
         const reporter = new ScriptExecutionReporter(
           this.endConditionEvaluator
         );
