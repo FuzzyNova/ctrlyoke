@@ -233,6 +233,24 @@ suite("SecretRegistryService", () => {
     assert.strictEqual(store.getCalls, readsAfterInitialList.gets + 2);
   });
 
+  test("reading a newly referenced name does not extend the cache TTL", async () => {
+    let now = 1_700_000_000_000;
+    const store = new InMemorySecretStore();
+    await store.store(userSecretKey("FIRST_TOKEN"), "first");
+    const service = serviceFor(store, {}, [], [], () => now);
+
+    await service.list(SETTING_SCOPES.USER);
+    now += 20_000;
+    await service.list(SETTING_SCOPES.USER, ["LATER_TOKEN"]);
+    const keysBeforeExpiry = store.keysCalls;
+
+    now += 10_000;
+    store.values.delete(userSecretKey("FIRST_TOKEN"));
+    const refreshed = await service.list(SETTING_SCOPES.USER);
+    assert.strictEqual(store.keysCalls, keysBeforeExpiry + 1);
+    assert.deepStrictEqual(refreshed, []);
+  });
+
   test("validates names before writing any value", async () => {
     const store = new InMemorySecretStore();
     const service = serviceFor(store, {});

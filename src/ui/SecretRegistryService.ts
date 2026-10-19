@@ -437,7 +437,6 @@ export class SecretRegistryService {
         metadata: parseSecretMetadata(values.get(this.metadataKey(scope, name))),
       });
     }
-    snapshot.refreshedAt = this.currentTime();
     return snapshot;
   }
 
