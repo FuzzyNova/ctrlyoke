@@ -168,6 +168,110 @@ export function buildReplayScript(
 }
 
 /**
+ * Shortens every idle stretch of the recording to at most `maxGapMs`: a gap
+ * between an attempt's deliveries (or from its start to the first, or from
+ * the last to its end) longer than the cap plays as the cap, shorter gaps play
+ * as recorded. The rhythm of short gaps survives while minutes of thinking
+ * time collapse. Event timestamps move with their delivery, so the elapsed
+ * times the dashboard shows match the shortened run. Scripts are capped too.
+ */
+export function capIdleGaps(
+  script: ReplayScript,
+  maxGapMs: number
+): ReplayScript {
+  const attempts = new Map(
+    [...script.attempts].map(([key, recorded]) => [
+      key,
+      recorded.map((attempt) => capAttemptGaps(attempt, maxGapMs)),
+    ])
+  );
+  const scripts = script.scripts.map((recorded) => ({
+    ...recorded,
+    durationMs: Math.min(recorded.durationMs, maxGapMs),
+  }));
+  return { attempts, scripts };
+}
+
+function capAttemptGaps(
+  attempt: RecordedAiAttempt,
+  maxGapMs: number
+): RecordedAiAttempt {
+  const toCapped = cappedClock(
+    [...attempt.items.map((item) => item.offsetMs), attempt.durationMs],
+    maxGapMs
+  );
+  const moveEvents = (events: readonly CliEvent[]): CliEvent[] =>
+    events.map((event) =>
+      typeof event.timestamp === "number"
+        ? {
+            ...event,
+            timestamp: Math.round(
+              attempt.startedAt + toCapped(event.timestamp - attempt.startedAt)
+            ),
+          }
+        : event
+    );
+  const structured = attempt.finalOutput?.structured;
+  return {
+    ...attempt,
+    durationMs: toCapped(attempt.durationMs),
+    items: attempt.items.map((item) => ({
+      ...item,
+      offsetMs: toCapped(item.offsetMs),
+      ...(item.events ? { events: moveEvents(item.events) } : {}),
+    })),
+    ...(attempt.finalOutput
+      ? {
+          finalOutput: {
+            ...attempt.finalOutput,
+            ...(structured
+              ? {
+                  structured: {
+                    ...structured,
+                    events: moveEvents(structured.events),
+                  },
+                }
+              : {}),
+          },
+        }
+      : {}),
+  };
+}
+
+/**
+ * Maps a recorded offset onto the capped timeline. `knots` are the recorded
+ * delivery offsets; each gap between neighbours shrinks to at most `maxGapMs`
+ * and a time inside a gap shrinks with it, so the mapping never reorders.
+ */
+function cappedClock(
+  knots: readonly number[],
+  maxGapMs: number
+): (offsetMs: number) => number {
+  const recorded = [0];
+  const capped = [0];
+  for (const knot of knots) {
+    const previous = recorded[recorded.length - 1];
+    if (knot <= previous) continue;
+    recorded.push(knot);
+    capped.push(
+      capped[capped.length - 1] + Math.min(knot - previous, maxGapMs)
+    );
+  }
+  return (offsetMs) => {
+    if (offsetMs <= 0) return offsetMs;
+    for (let index = 1; index < recorded.length; index++) {
+      if (offsetMs > recorded[index]) continue;
+      const from = recorded[index - 1];
+      const scale =
+        (capped[index] - capped[index - 1]) / (recorded[index] - from);
+      return capped[index - 1] + (offsetMs - from) * scale;
+    }
+    const last = recorded.length - 1;
+    return capped[last] + Math.min(offsetMs - recorded[last], maxGapMs);
+  };
+}
+
+/**
  * Moves recorded event timestamps onto the replay's clock: the recorded
  * attempt start maps to `replayStartedAt`, later times scale by `speed`.
  */

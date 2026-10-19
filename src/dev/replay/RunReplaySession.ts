@@ -13,6 +13,7 @@ import {
 import { Log } from "../../utils/Log";
 import {
   buildReplayScript,
+  capIdleGaps,
   replayTargetKey,
   type RecordedAiAttempt,
   type RecordedScript,
@@ -24,6 +25,8 @@ export interface RunReplayOptions {
   workspaceRoot: string;
   /** Multiplies recorded timing; 0 plays everything at once (the end state). */
   speed: number;
+  /** Plays any recorded idle gap longer than this as this, before `speed` applies. */
+  maxGapMs?: number;
   /** Holds playback before the recorded event with this sequence number. */
   pauseAtSequence?: number;
 }
@@ -111,14 +114,19 @@ export class RunReplaySession {
       this.options.bundleDir,
       this.options.workspaceRoot
     );
-    this.script = buildReplayScript(bundle.events);
+    const recorded = buildReplayScript(bundle.events);
+    const { maxGapMs } = this.options;
+    this.script =
+      maxGapMs !== undefined ? capIdleGaps(recorded, maxGapMs) : recorded;
     this.workflowFilePath = await materializeWorkflow(
       bundle,
       this.options.workspaceRoot
     );
     Log.info(
       `[RunReplay] armed ${bundle.manifest.lineage.workflowName} from ${bundle.bundleDir} ` +
-        `at speed ${this.options.speed}; run ${this.workflowFilePath}`
+        `at speed ${this.options.speed}` +
+        (maxGapMs !== undefined ? `, idle gaps capped at ${maxGapMs} ms` : "") +
+        `; run ${this.workflowFilePath}`
     );
   }
 }

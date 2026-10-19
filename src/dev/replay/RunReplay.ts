@@ -19,6 +19,8 @@ export const RUN_REPLAY_ENV = {
   BUNDLE: "CTRLYOKE_DEV_REPLAY",
   /** Multiplies recorded timing (default 1); 0 jumps straight to the end state. */
   SPEED: "CTRLYOKE_DEV_REPLAY_SPEED",
+  /** Plays any recorded idle gap longer than this many ms as this; applied before the speed. */
+  MAX_GAP_MS: "CTRLYOKE_DEV_REPLAY_MAX_GAP_MS",
   /** Holds playback before the recorded event with this sequence number. */
   PAUSE_AT: "CTRLYOKE_DEV_REPLAY_PAUSE_AT",
 } as const;
@@ -61,6 +63,10 @@ export function armRunReplayFromEnvironment(
           RUN_REPLAY_ENV.SPEED,
           environment[RUN_REPLAY_ENV.SPEED]
         ) ?? 1,
+      maxGapMs: parseNonNegative(
+        RUN_REPLAY_ENV.MAX_GAP_MS,
+        environment[RUN_REPLAY_ENV.MAX_GAP_MS]
+      ),
       pauseAtSequence: parseNonNegative(
         RUN_REPLAY_ENV.PAUSE_AT,
         environment[RUN_REPLAY_ENV.PAUSE_AT]
