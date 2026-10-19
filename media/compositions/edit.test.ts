@@ -9,6 +9,8 @@ import {
   pointerAt,
   recordedTimeAt,
   resolveAt,
+  sequencePanes,
+  typingCuts,
 } from "./edit.ts";
 
 const FPS = 30;
@@ -133,4 +135,72 @@ test("draws the pointer gliding between beats and fading when idle", () => {
   const gliding = pointerAt(timeline, 50 - 0.45 / 2);
   assert.ok(gliding && gliding.x > 920 && gliding.x < 985);
   assert.equal(gliding?.opacity, 1);
+});
+
+test("crops to a frame narrower than the page, never past its edges", () => {
+  const frame = { width: 400, height: 500 };
+  // No box: the least zoom that fills the frame, centred on the page.
+  assert.deepEqual(frameBox(undefined, VIEWPORT, 1.8, frame), {
+    zoom: 1,
+    cx: 500,
+    cy: 250,
+  });
+  // A box at the right edge: the frame's right edge meets the page's.
+  const right = frameBox(
+    { x: 700, y: 0, w: 300, h: 500 },
+    VIEWPORT,
+    1.8,
+    frame
+  );
+  assert.equal(right.zoom, 1);
+  assert.equal(right.cx, 1000 - 200);
+});
+
+test("plays side-by-side panes in turn, holding the others", () => {
+  const short = { cuts: [{ from: "start", to: "run" }] };
+  const { specs, active, frames } = sequencePanes(
+    [
+      { spec: short, timeline },
+      { spec: { cuts: [{ from: "run", to: "done", rate: 2 }] }, timeline },
+    ],
+    FPS
+  );
+  assert.deepEqual(active, [
+    { from: 0, to: 60 },
+    { from: 60, to: 630 },
+  ]);
+  assert.equal(frames, 630);
+  // Each padded edit lasts the whole side-by-side.
+  for (const spec of specs) {
+    assert.equal(planEdit(spec, timeline, FPS).frames, frames);
+  }
+  assert.deepEqual(specs[1].cuts[0], { hold: "start", seconds: 2 });
+});
+
+test("plays typing fast and each completion list at real speed", () => {
+  const cuts = typingCuts("start", [{ open: "run", pick: "output" }], "done", {
+    rate: 2,
+  });
+  assert.deepEqual(cuts, [
+    { from: "start", to: "run:typed", rate: 2 },
+    { from: "run:listed", to: { beat: "output", offset: 0.35 }, rate: 1 },
+    { from: { beat: "output", offset: 0.35 }, to: "done", rate: 2 },
+  ]);
+});
+
+test("glides the pointer over a drag's own travel time", () => {
+  const drag: TimelineFile = {
+    ...timeline,
+    beats: [
+      { t: 1, kind: "click", label: "grab", point: { x: 0, y: 0 } },
+      {
+        t: 3,
+        kind: "hover",
+        label: "drop",
+        point: { x: 100, y: 0 },
+        travel: 2,
+      },
+    ],
+  };
+  assert.equal(pointerAt(drag, 2)?.x, 50);
 });

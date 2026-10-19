@@ -20,6 +20,8 @@ npm run media -- host properties-tabs   # start the capture host and leave it ru
 npm run media -- replay hero --speed 0  # host on a recorded run's start state, armed to replay it
 npm run media -- hero                   # record, edit and encode the hero video
 npm run media -- hero --edit-only       # re-render the last take after changing its composition
+npm run media -- prompt-editor          # the prompt editor's references clip (#9)
+npm run media -- visual-or-yaml         # "Build visually or edit as YAML", side by side (#14)
 ```
 
 Each capture compiles the extension, so it shows the current source. Stop any running dev host
@@ -43,21 +45,28 @@ because stills render headless at 2×. `quantize` shots (media that ships in the
 
 ## Videos
 
-A video shot (`VideoShot` in `lib/video.ts`) is one take of the dashboard, replaying a recorded
-run, cut by a Remotion composition and encoded. `npm run media -- <video>` runs all three:
+A video shot (`VideoShot` in `lib/video.ts`) is one or more takes of the dashboard, cut by a
+Remotion composition and encoded. A shot that shows a run replays a recorded one (`run`); the
+others drive the dashboard directly. `npm run media -- <video>` runs all three stages:
 
-1. **Take.** The host starts on the run's start tag with replay armed. The shot's `prepare` gets
-   the dashboard to its opening frame unrecorded, then `record` performs the take through a
-   `Timeline` (`lib/timeline.ts`): `timeline.click(locator, "run")`, `hover`, `focus` and `mark`
-   each record a named beat with its time and the element's box. `lib/recorder.ts` records at 2×
-   from Chromium's screencast. The take lands in `.work/video/<id>/` as `raw.mp4` and
-   `timeline.json`.
+1. **Takes.** The host starts once, on the run's start tag with replay armed if the shot has a
+   `run`, with the shot's `workflows` fixtures and `env`. Each take then gets a fresh page: its
+   own `workflows` are installed (so two takes can start one file from different states), its
+   `prepare` gets the dashboard to the opening frame unrecorded, and `record` performs it through
+   a `Timeline` (`lib/timeline.ts`): `click`, `clickAt` (a point, with shift or the right
+   button), `drag` (a pointer drag, which dnd-kit needs), `hover`, `focus` and `mark` each record
+   a named beat with its time and box. `lib/typing.ts` types into an editor and picks completions,
+   marking around the wait for each list so the edit can cut it. `lib/recorder.ts` records at 2×
+   from Chromium's screencast. Each take lands in `.work/video/<id>/` as `<take>.raw.mp4` and
+   `<take>.timeline.json`.
 2. **Edit.** `compositions/<Name>.tsx` lists cuts over the take by beat name: which stretch plays
    at what rate, which beat's box the camera frames, and holds. `compositions/edit.ts` turns
-   that into frames, an eased camera and a drawn pointer (headless Chromium draws none).
+   that into frames, an eased camera and a drawn pointer (headless Chromium draws none). An
+   edit's `frame` crops the take to a smaller window, and `SideBySide.tsx` plays panes in turn,
+   dimming the one that waits.
    Change the edit, then `--edit-only` re-renders the last take without recording again.
    `npx remotion studio compositions/index.ts --public-dir .work/video/<id>` previews it live
-   (paste the take's `timeline.json` as the props).
+   (paste `{ "takes": { "<take>": <its timeline.json> } }` as the props).
 3. **Encode.** `lib/encode.ts` writes the AV1 file, the H.264 fallback, the WebP poster and,
    if the shot asks for one, a GIF of the opening (the README's). Every video stage is converted
    to limited-range BT.709 and tagged as such, because that is what browsers assume. Then
@@ -65,7 +74,9 @@ run, cut by a Remotion composition and encoded. `npm run media -- <video>` runs 
    colours differ.
 
 Videos need `ffmpeg` with `libsvtav1` on `PATH`. A hero take replays the whole run, so it takes
-about four minutes before rendering starts.
+about four minutes before rendering starts. The browser context always uses Dark 2026's colour
+scheme: the hosted dashboard picks its theme from `prefers-color-scheme` when it loads, so a
+browser left on light (the Playwright MCP's default) shows light whatever VS Code uses.
 
 ## Recorded runs
 

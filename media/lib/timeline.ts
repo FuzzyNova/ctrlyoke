@@ -39,6 +39,12 @@ export interface Beat {
   label: string;
   box?: Box;
   point?: { x: number; y: number };
+  /**
+   * Seconds the pointer took to get here from the previous beat, when the page
+   * saw it move (a drag); the edit draws the pointer gliding over the same
+   * stretch, so it stays on the dragged element.
+   */
+  travel?: number;
 }
 
 export interface TimelineFile {
@@ -52,6 +58,20 @@ export interface TimelineFile {
   duration: number;
   beats: Beat[];
 }
+
+/** The cubic ease the edit moves its camera and pointer with, and drags move by. */
+export function easeInOut(progress: number): number {
+  return progress < 0.5 ? 4 * progress ** 3 : 1 - (-2 * progress + 2) ** 3 / 2;
+}
+
+/** A point on the page in CSS pixels. */
+export interface Point {
+  x: number;
+  y: number;
+}
+
+/** Updates per second while a drag moves the real pointer. */
+const DRAG_STEPS_PER_SECOND = 30;
 
 async function boxOf(locator: Locator): Promise<Box> {
   const box = await locator.boundingBox();
@@ -89,6 +109,69 @@ export class Timeline {
     await this.page.mouse.move(point.x, point.y, { steps: 8 });
     this.add({ kind: BEAT_KINDS.CLICK, label, box, point });
     await this.page.mouse.click(point.x, point.y);
+  }
+
+  /**
+   * Clicks a point that isn't one element's centre, e.g. a text position in
+   * an editor. `shift` extends a selection; `button: "right"` opens a context
+   * menu.
+   */
+  async clickAt(
+    point: Point,
+    label: string,
+    options: { button?: "left" | "right"; shift?: boolean } = {}
+  ): Promise<void> {
+    await this.page.mouse.move(point.x, point.y, { steps: 8 });
+    this.add({
+      kind: BEAT_KINDS.CLICK,
+      label,
+      box: { x: point.x, y: point.y, w: 1, h: 1 },
+      point,
+    });
+    if (options.shift) await this.page.keyboard.down("Shift");
+    await this.page.mouse.click(point.x, point.y, { button: options.button });
+    if (options.shift) await this.page.keyboard.up("Shift");
+  }
+
+  /**
+   * Presses on `handle`, moves to `to` over `seconds` on the edit's own ease,
+   * and releases: a pointer drag (dnd-kit ignores the HTML5 drag events
+   * Playwright's `dragTo` sends). Records a click beat `grab` and a hover
+   * beat `drop` whose `travel` is the drag, so the drawn pointer moves with
+   * the dragged element.
+   */
+  async drag(
+    handle: Locator,
+    to: Point,
+    labels: { grab: string; drop: string },
+    seconds = 1.2
+  ): Promise<void> {
+    const box = await boxOf(handle);
+    const from = centre(box);
+    const mouse = this.page.mouse;
+    await mouse.move(from.x, from.y, { steps: 8 });
+    this.add({ kind: BEAT_KINDS.CLICK, label: labels.grab, box, point: from });
+    await mouse.down();
+    const start = this.clock();
+    const steps = Math.max(2, Math.round(seconds * DRAG_STEPS_PER_SECOND));
+    for (let step = 1; step <= steps; step++) {
+      const amount = easeInOut(step / steps);
+      await mouse.move(
+        from.x + (to.x - from.x) * amount,
+        from.y + (to.y - from.y) * amount
+      );
+      await this.page.waitForTimeout((seconds * 1000) / steps);
+    }
+    this.add({
+      kind: BEAT_KINDS.HOVER,
+      label: labels.drop,
+      box: { x: to.x, y: to.y, w: 1, h: 1 },
+      point: to,
+      travel: this.clock() - start,
+    });
+    // Let the drop target settle under the pointer before letting go.
+    await this.page.waitForTimeout(250);
+    await mouse.up();
   }
 
   /** Moves the pointer over the element and leaves it there. */

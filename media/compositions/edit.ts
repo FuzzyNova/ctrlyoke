@@ -1,9 +1,11 @@
 import {
   BEAT_KINDS,
+  easeInOut,
   type Beat,
   type Box,
   type TimelineFile,
 } from "../lib/timeline.ts";
+import { completionWaitLabels } from "../lib/typing.ts";
 
 /**
  * Edit-as-code (MEDIA_CAPTURE_AUTOMATION_PLAN.md §4): a video's edit is a list
@@ -39,10 +41,22 @@ export interface Hold {
 
 export type Cut = Play | Hold;
 
+/** A width and height in CSS pixels. */
+export interface Size {
+  width: number;
+  height: number;
+}
+
 export interface EditSpec {
   cuts: Cut[];
   /** Seconds the camera takes to move between cuts' framings. */
   cameraMove?: number;
+  /**
+   * The window the edit shows the page through, in CSS pixels. Defaults to
+   * the take's viewport; a narrower frame crops it, e.g. one pane of a
+   * side-by-side, and the camera never shows past the page's edges.
+   */
+  frame?: Size;
 }
 
 /** What the camera shows: zoom factor and the centre point, in CSS pixels. */
@@ -98,21 +112,30 @@ export function resolveAt(at: At, timeline: TimelineFile): number {
   return Math.min(Math.max(seconds, 0), timeline.duration);
 }
 
-/** The camera that frames `box` as large as `maxZoom` allows, kept inside the frame. */
+/**
+ * The camera that frames `box` as large as `maxZoom` allows in a `frame`-sized
+ * window (the viewport when omitted), never showing past the page's edges.
+ */
 export function frameBox(
   box: Box | undefined,
-  viewport: TimelineFile["viewport"],
-  maxZoom = MAX_ZOOM
+  viewport: Size,
+  maxZoom = MAX_ZOOM,
+  frame: Size = viewport
 ): Camera {
   const { width, height } = viewport;
-  if (!box) return { zoom: 1, cx: width / 2, cy: height / 2 };
+  // The least zoom at which the page still fills the frame.
+  const minZoom = Math.max(frame.width / width, frame.height / height);
+  if (!box) return { zoom: minZoom, cx: width / 2, cy: height / 2 };
   const margin = 1 + FOCUS_MARGIN * 2;
   const zoom = Math.min(
-    Math.max(Math.min(width / (box.w * margin), height / (box.h * margin)), 1),
-    maxZoom
+    Math.max(
+      Math.min(frame.width / (box.w * margin), frame.height / (box.h * margin)),
+      minZoom
+    ),
+    Math.max(maxZoom, minZoom)
   );
-  const halfW = width / zoom / 2;
-  const halfH = height / zoom / 2;
+  const halfW = frame.width / zoom / 2;
+  const halfH = frame.height / zoom / 2;
   const clamp = (value: number, low: number, high: number): number =>
     Math.min(Math.max(value, low), high);
   return {
@@ -143,7 +166,8 @@ export function planEdit(
     const camera = frameBox(
       focusBox(cut.focus, timeline),
       timeline.viewport,
-      cut.maxZoom
+      cut.maxZoom,
+      spec.frame
     );
     if ("hold" in cut) {
       const at = resolveAt(cut.hold, timeline);
@@ -190,6 +214,91 @@ export function planEdit(
   };
 }
 
+/** Recorded seconds a picked completion stays at real speed, to see what it inserted. */
+const PICK_SETTLE = 0.35;
+
+/**
+ * Cuts over a stretch of typing with completions (lib/typing.ts): the typing
+ * plays at `rate`, the wait for each completion list is cut out, and each
+ * list from opening to just after its pick plays at real speed.
+ */
+export function typingCuts(
+  from: At,
+  completions: readonly { open: string; pick: string }[],
+  to: At,
+  camera: { rate: number; focus?: string | Box; maxZoom?: number }
+): Cut[] {
+  const { rate, ...framing } = camera;
+  const cuts: Cut[] = [];
+  let typingFrom = from;
+  for (const { open, pick } of completions) {
+    const settled = { beat: pick, offset: PICK_SETTLE };
+    const wait = completionWaitLabels(open);
+    cuts.push({ from: typingFrom, to: wait.typed, rate, ...framing });
+    cuts.push({ from: wait.listed, to: settled, rate: 1, ...framing });
+    typingFrom = settled;
+  }
+  cuts.push({ from: typingFrom, to, rate, ...framing });
+  return cuts;
+}
+
+export interface Pane {
+  spec: EditSpec;
+  timeline: TimelineFile;
+}
+
+/**
+ * Lays panes shown side by side out one after another: each pane plays its
+ * own edit in turn and holds its first frame before its turn and its last
+ * frame after. Returns the padded specs and the frames each pane is active.
+ */
+export function sequencePanes(
+  panes: readonly Pane[],
+  fps: number
+): {
+  specs: EditSpec[];
+  active: { from: number; to: number }[];
+  frames: number;
+} {
+  const lengths = panes.map(
+    ({ spec, timeline }) => planEdit(spec, timeline, fps).frames
+  );
+  const frames = lengths.reduce((sum, length) => sum + length, 0);
+  let from = 0;
+  const active = lengths.map((length) => {
+    const range = { from, to: from + length };
+    from += length;
+    return range;
+  });
+  const specs = panes.map(({ spec }, index): EditSpec => {
+    const before = active[index].from;
+    const after = frames - active[index].to;
+    const first = spec.cuts[0];
+    const last = spec.cuts[spec.cuts.length - 1];
+    return {
+      ...spec,
+      cuts: [
+        ...(before
+          ? [{ ...framing(first), hold: "start", seconds: before / fps }]
+          : []),
+        ...spec.cuts,
+        ...(after
+          ? [{ ...framing(last), hold: "end", seconds: after / fps }]
+          : []),
+      ],
+    };
+  });
+  return { specs, active, frames };
+}
+
+/** A cut's camera settings, so a padding hold frames what its neighbour does. */
+function framing(cut: Cut): Pick<Cut, "focus" | "maxZoom"> {
+  return {
+    ...(cut.focus !== undefined ? { focus: cut.focus } : {}),
+    ...(cut.maxZoom !== undefined ? { maxZoom: cut.maxZoom } : {}),
+  };
+}
+
 export function segmentAt(plan: EditPlan, frame: number): Segment {
   return (
     plan.segments.find(
@@ -207,10 +316,6 @@ export function recordedTimeAt(
   const segment = segmentAt(plan, frame);
   if (segment.hold) return segment.from;
   return segment.from + ((frame - segment.startFrame) / fps) * segment.rate;
-}
-
-function easeInOut(progress: number): number {
-  return progress < 0.5 ? 4 * progress ** 3 : 1 - (-2 * progress + 2) ** 3 / 2;
 }
 
 function mix(a: number, b: number, amount: number): number {
@@ -269,8 +374,9 @@ export function pointerAt(
   const next = nextIndex === -1 ? undefined : beats[nextIndex];
 
   let position = (last ?? next!).point!;
-  if (last && next && t > next.t - POINTER_TRAVEL) {
-    const amount = easeInOut((t - (next.t - POINTER_TRAVEL)) / POINTER_TRAVEL);
+  const travel = next?.travel ?? POINTER_TRAVEL;
+  if (last && next && t > next.t - travel) {
+    const amount = easeInOut((t - (next.t - travel)) / travel);
     position = {
       x: mix(last.point!.x, next.point!.x, amount),
       y: mix(last.point!.y, next.point!.y, amount),

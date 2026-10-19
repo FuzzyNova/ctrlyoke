@@ -406,8 +406,12 @@ Each item: what to capture, what prep it needs, where it's used.
   open on an "Add Selection to ctrlyoke" beat in the hosted dashboard's workspace viewer (its editor
   context menu has the same action as VS Code's, and unlike VS Code it can be scripted), then zoom
   in on the prompt editor and type the rest. Automated as phase 4 of
-  `MEDIA_CAPTURE_AUTOMATION_PLAN.md`; the file's header still says VS Code. It covers `#selection`, `#sym`, `@` file and directory, `$previous`, a `~` commit, `!` secret
+  `MEDIA_CAPTURE_AUTOMATION_PLAN.md`; the file's header still says VS Code and `/sk`. It covers `#selection`, `#sym`, `@` file and directory, `$previous`, a `~` commit, `!` secret
   and `/skill:`. The prep and the exact text are in the file's header comment.
+- **Status — captured 2026-10-19** by `npm run media -- prompt-editor`:
+  `prompt-editor-av1-1920x1280.mp4`, `prompt-editor-h264-960x640.mp4` and
+  `prompt-editor-poster-1920x1280.webp` (31 s, under 1 MB). Video rather than GIF, like the hero.
+  Not slotted yet.
 
 ### 10. Built-in code editor (`WorkspaceViewerModal`)
 
@@ -654,6 +658,10 @@ line, where it renders as a button. Descriptions support `code`, **bold** and li
 - **Use:** that landing section, with the heading change landing in the same commit as the clip;
   `docs/workflows/yaml-format.md`.
 - **Dimensions:** category D (motion). Automated as phase 5 of `MEDIA_CAPTURE_AUTOMATION_PLAN.md`.
+- **Status — captured 2026-10-19** by `npm run media -- visual-or-yaml`:
+  `visual-or-yaml-av1-2560x1600.mp4`, `visual-or-yaml-h264-1280x800.mp4` and
+  `visual-or-yaml-poster-2560x1600.webp` (27 s, 1.4 MB). The panes play in turn. The landing
+  section and heading change are not done yet.
 
 ## Slotting summary
 

@@ -14,12 +14,25 @@ import {
   planEdit,
   pointerAt,
   recordedTimeAt,
+  segmentAt,
   type EditPlan,
   type EditSpec,
 } from "./edit.ts";
 
+/** A composition's props: each take's timeline, by take id (`VideoShot.takes`). */
 export interface EditProps extends Record<string, unknown> {
-  timeline: TimelineFile;
+  takes: Record<string, TimelineFile>;
+}
+
+/** The named take's timeline, or a clear error naming the takes there are. */
+export function takeOf(props: EditProps, id: string): TimelineFile {
+  const timeline = props.takes[id];
+  if (!timeline) {
+    throw new Error(
+      `the composition needs take '${id}' (it has: ${Object.keys(props.takes).join(", ")})`
+    );
+  }
+  return timeline;
 }
 
 /** Output frames for `spec` over `timeline`, for a composition's `calculateMetadata`. */
@@ -40,6 +53,8 @@ const PointerLayer: React.FC<{ plan: EditPlan; timeline: TimelineFile }> = ({
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+  // A held frame is a freeze; a pointer standing still on it reads as a hang.
+  if (segmentAt(plan, frame).hold) return null;
   const pointer = pointerAt(timeline, recordedTimeAt(plan, frame, fps));
   if (!pointer || pointer.opacity <= 0) return null;
   return (
@@ -88,24 +103,27 @@ const PointerLayer: React.FC<{ plan: EditPlan; timeline: TimelineFile }> = ({
 /**
  * Renders an edit: each cut plays its stretch of the raw recording at its
  * rate (or holds one frame), under a camera that eases between the cuts'
- * framings, with the pointer drawn on top in page coordinates.
+ * framings, with the pointer drawn on top in page coordinates. It fills its
+ * parent, `width` output pixels wide (the whole video's width by default).
  */
-export const Edit: React.FC<{ spec: EditSpec; timeline: TimelineFile }> = ({
-  spec,
-  timeline,
-}) => {
+export const Edit: React.FC<{
+  spec: EditSpec;
+  timeline: TimelineFile;
+  width?: number;
+}> = ({ spec, timeline, width }) => {
   const frame = useCurrentFrame();
-  const { fps, width } = useVideoConfig();
+  const { fps, width: videoWidth } = useVideoConfig();
   const plan = planEdit(spec, timeline, fps);
   const camera = cameraAt(plan, frame);
   const { width: pageWidth, height: pageHeight } = timeline.viewport;
-  const outputScale = width / pageWidth;
+  const view = spec.frame ?? timeline.viewport;
+  const outputScale = (width ?? videoWidth) / view.width;
   const video = staticFile(timeline.video);
   // Maps page point p to outputScale * zoom * (p + translate), which puts the
   // camera centre in the middle of the frame.
   const transform =
     `scale(${outputScale * camera.zoom}) ` +
-    `translate(${pageWidth / (2 * camera.zoom) - camera.cx}px, ${pageHeight / (2 * camera.zoom) - camera.cy}px)`;
+    `translate(${view.width / (2 * camera.zoom) - camera.cx}px, ${view.height / (2 * camera.zoom) - camera.cy}px)`;
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#000", overflow: "hidden" }}>

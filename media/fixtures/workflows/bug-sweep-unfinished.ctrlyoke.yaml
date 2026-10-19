@@ -1,0 +1,28 @@
+# Bug sweep: three parallel bug hunts, then triage and fix them one at a time.
+harness: claude-cli
+model: sonnet
+steps:
+  - parallel:
+      - name: Hunt API bugs
+        harness: claude-cli
+        prompt: Find one real bug in @src/routes/ that a client could hit.
+      - name: Hunt store bugs
+        harness: codex-cli
+        model: gpt-6.1-sol
+        prompt: Find one real bug in @src/store/ that could corrupt or lose notes.
+    failFast: false
+
+  - name: Triage
+    prompt: |
+      Summarize the three findings in $step:1-3. Write each one up as
+      bugs/<slug>.md with a repro, then commit the bug reports.
+
+  - name: Fix API bug
+    prompt: Fix the API bug from $step:4, add a regression test, and commit.
+    endCondition:
+      script: npm test
+
+  - name: Fix store bug
+    prompt: Fix the store bug from $step:4, add a regression test, and commit.
+    endCondition:
+      script: npm test

@@ -59,12 +59,19 @@ export function prepareDemoApp(
     git(DEMO_APP_DIR, "checkout", pin.ref, "--", SETTINGS_FILE);
   }
   serveOnLoopback();
-  for (const fixture of workflowFixtures) {
-    cpSync(
-      path.join(WORKFLOW_FIXTURES_DIR, fixture),
-      path.join(DEMO_APP_DIR, ".ctrlyoke", "workflows", fixture)
-    );
-  }
+  for (const fixture of workflowFixtures) installWorkflowFixture(fixture);
+}
+
+/**
+ * Copies a fixtures/workflows/ file into demo-app's .ctrlyoke/workflows/,
+ * named `as` there (its own name by default). Works while the host runs: a
+ * workflow file is read when it is loaded or opened.
+ */
+export function installWorkflowFixture(fixture: string, as = fixture): void {
+  cpSync(
+    path.join(WORKFLOW_FIXTURES_DIR, fixture),
+    path.join(DEMO_APP_DIR, ".ctrlyoke", "workflows", as)
+  );
 }
 
 /**

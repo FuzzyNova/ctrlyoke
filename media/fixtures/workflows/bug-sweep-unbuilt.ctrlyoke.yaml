@@ -1,0 +1,39 @@
+# Media capture fixture: the start of the visual half of shot list #14
+# (media/shots/visual-or-yaml.capture.ts), installed as bug-sweep.ctrlyoke.yaml.
+# The take drags "Hunt doc bugs" into the parallel group, moves Triage up to
+# follow it, and gives the hunt its harness and model. The prompts leave out
+# their $step references: moving a step that one points at raises a warning
+# toast over the step list. Never run; it only needs to load.
+harness: claude-cli
+model: sonnet
+steps:
+  - parallel:
+      - name: Hunt API bugs
+        harness: claude-cli
+        prompt: Find one real bug in @src/routes/ that a client could hit.
+      - name: Hunt store bugs
+        harness: codex-cli
+        model: gpt-6.1-sol
+        prompt: Find one real bug in @src/store/ that could corrupt or lose notes.
+    failFast: false
+
+  - name: Fix API bug
+    prompt: Fix the API bug from triage, add a regression test, and commit.
+    endCondition:
+      script: npm test
+
+  - name: Fix store bug
+    prompt: Fix the store bug from triage, add a regression test, and commit.
+    endCondition:
+      script: npm test
+
+  - name: Fix doc bug
+    prompt: Fix the README bug from triage and commit.
+
+  - name: Triage
+    prompt: |
+      Summarize the three findings above. Write each one up as
+      bugs/<slug>.md with a repro, then commit the bug reports.
+
+  - name: Hunt doc bugs
+    prompt: Find one place where @README.md disagrees with the code.

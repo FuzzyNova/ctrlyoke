@@ -551,6 +551,7 @@ export const WorkspaceFileEditor = forwardRef<
           }
         }),
         ...(readOnly ? [EditorState.readOnly.of(true)] : []),
+        EditorView.contentAttributes.of({ "aria-label": "File editor" }),
       ];
     }, [
       filePath,

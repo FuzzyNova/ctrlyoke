@@ -1,6 +1,6 @@
 import type React from "react";
-import { HERO_BEATS, HERO_JUMPS } from "../shots/hero.beats.ts";
-import { Edit, type EditProps } from "./Edit.tsx";
+import { HERO_BEATS, HERO_JUMPS, HERO_TAKE } from "../shots/hero.beats.ts";
+import { Edit, takeOf, type EditProps } from "./Edit.tsx";
 import type { Cut, EditSpec } from "./edit.ts";
 
 const { step, peek, jump } = HERO_BEATS;
@@ -46,6 +46,6 @@ export const HERO_EDIT: EditSpec = {
   ],
 };
 
-export const Hero: React.FC<EditProps> = ({ timeline }) => (
-  <Edit spec={HERO_EDIT} timeline={timeline} />
+export const Hero: React.FC<EditProps> = (props) => (
+  <Edit spec={HERO_EDIT} timeline={takeOf(props, HERO_TAKE)} />
 );

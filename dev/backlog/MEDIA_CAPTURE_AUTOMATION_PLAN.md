@@ -1,12 +1,13 @@
 # Media Capture Automation Plan
 
-**Status (2026-10-18):** Phase 1 done: `media/` exists and retakes #12's ten tab shots and the
+**Status (2026-10-19):** Phase 1 done: `media/` exists and retakes #12's ten tab shots and the
 walkthrough's `verifyHarness` image (four themes) with `npm run media -- --all`. Phase 2 done
 2026-10-18: `ctrlyoke export` writes run bundles, a dev build replays one, and the hero and six
 rate-limiter runs are fixtures (`npm run media -- replay <run>`). Phase 3 done 2026-10-18: the
 video pipeline (2× take, beat timeline, Remotion edit, encode) and a new hero
-(`npm run media -- hero`). Phases 4-7 are open; the two desktop clips (#9, #14) were moved ahead
-of the phone pipeline on 2026-10-18. This is the "how"
+(`npm run media -- hero`). Phases 4 and 5 done 2026-10-19: the prompt editor clip (#9) and the
+"Build visually or edit as YAML" side-by-side (#14), neither slotted yet. Phases 6-7 (phone) are
+open. This is the "how"
 for [`SCREENSHOTS_AND_MEDIA_PLAN.md`](SCREENSHOTS_AND_MEDIA_PLAN.md), which stays the shot list and
 slotting plan. `media/README.md` covers using it and adding shots.
 
@@ -289,8 +290,8 @@ The capture stays manual (real device, see `SCREENSHOTS_AND_MEDIA_PLAN.md` #7). 
   submodule was considered and rejected: it has to be initialized again in every long-lived
   worktree (`big-feature`, `small-feature`, `bug-fix`), and agents trip over it.
 - **Each starting state is a tag in demo-app, not a hash in a comment.** Tags today:
-  `hero-start` (`5d8ae81`) and `hero-end` (`61af34a`, the 2026-09-08 run's output) for #6;
-  `rate-limiter-start` (`c1e9eef`) for #1. `baseline` is not a start state; it tracks the latest
+  `hero-start` (`f0ae011`) and `hero-end` (`2cdbcd5`, the 2026-09-08 run's output) for #6;
+  `rate-limiter-start` (`663e205`) for #1. `baseline` is not a start state; it tracks the latest
   capture-workflow commit.
 - **Live takes run in a worktree at the start tag** (`git worktree add ../demo-app-hero
 hero-start`), never in the main checkout, where `git reset --hard` plus `git clean -fd` would
@@ -328,7 +329,15 @@ The original order spiked the hero clip against a live run because no fixture ex
    converts and tags limited-range BT.709 (`webVideoColorArgs`, Remotion `colorSpace: "bt709"`),
    and `lib/colorCheck.ts` decodes a frame in Chromium and in ffmpeg after each encode and fails
    the shot when they disagree.
-4. **Prompt editor clip (#9).** Typed live by Playwright into the hosted dashboard with
+4. **Prompt editor clip (#9). Done 2026-10-19** as `npm run media -- prompt-editor`
+   (`prompt-editor-av1-1920x1280.mp4`, H.264 960×640, WebP poster; 31 s). Video shots now take
+   no run (`run` is optional), and `lib/typing.ts` types and picks completions. As built: the
+   Workflow Properties panel stays open so the editor wraps into a column the camera can zoom on;
+   `!` lists the fixture-declared `CODECOV_TOKEN` set by the host's environment, so nothing is
+   written to the OS credential store; the first `!` list takes about 10 s
+   (`dev/bugs/backlog/secret-completion-first-list-takes-seconds.md`), which the edit cuts using
+   the `:typed`/`:listed` marks; `/syn` replaces the header's `/sk` (no skill name contains
+   "sk"); `@tes` picks the `tests/` folder. The plan as first written follows. Typed live by Playwright into the hosted dashboard with
    `pressSequentially` and a per-key delay, so completions open as they would for a person. The
    opening "Add Selection to ctrlyoke" beat moves from VS Code to the workspace viewer: open
    `src/routes/notes.ts` in it, select lines 17-37 with the mouse (click the start of line 17,
@@ -336,7 +345,15 @@ The original order spiked the hero clip against a live run because no fixture ex
    (`useWorkspaceEditorContextMenu`), close the viewer and continue typing the beats in
    `prompt-editor-demo.ctrlyoke.yaml`. Prep the header asks for (`atomicContextReferences` on, a
    dummy `CODECOV_TOKEN` secret) goes in the capture's fixtures, not by hand. Needs no replay.
-5. **"Build visually or edit as YAML" clip (#14).** Two pages on the same host, recorded
+5. **"Build visually or edit as YAML" clip (#14). Done 2026-10-19** as
+   `npm run media -- visual-or-yaml` (`visual-or-yaml-av1-2560x1600.mp4`, H.264 1280×800, WebP
+   poster; 27 s). A `VideoShot` has `takes`; each take can install its own fixture under the same
+   file name. As built: the panes play in turn (dashboard, then YAML), the waiting one dimmed
+   (`compositions/SideBySide.tsx`); the YAML take records at 900 wide and its edit's `frame`
+   crops it to the editor; the visual start fixture drops its `$step:` references, because moving
+   a referenced step raises a warning toast over the list; YAML auto-indent is unreliable, so each
+   line is typed with its own indentation. The YAML half ends with Save. The plan as first
+   written follows. Two pages on the same host, recorded
    separately and composed side by side; they show the same workflow but are not live-synced.
    Left: the dashboard step list building `bug-sweep.ctrlyoke.yaml`, dragging a step into the
    parallel group and reordering, then setting harness and model in the properties panel. Steps

@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { renameSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import { run } from "./exec.ts";
@@ -42,7 +43,11 @@ export interface VideoOutputs {
    * `width`: at 2× it would be about twice the AV1 file for a few visitors.
    */
   h264: { file: string; width: number };
-  /** WebP still at full size, shown while the video loads or when autoplay is blocked. */
+  /**
+   * WebP still at full size, shown while the video loads or when autoplay is
+   * blocked. A negative `atSeconds` counts back from the end, for a poster of
+   * the finished state when the take's length varies.
+   */
   poster: { file: string; atSeconds: number };
   /**
    * An animated GIF of the edit's opening `seconds`, for places that can't
@@ -89,8 +94,40 @@ function encodeGif(
 /** Shipped frame rate: smooth enough for the camera moves, a fifth smaller than 30. */
 const SHIPPED_FPS = "24";
 
+/** The edit's duration in seconds, from ffprobe. */
+function durationSeconds(file: string): number {
+  const result = spawnSync(
+    "ffprobe",
+    ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file],
+    { encoding: "utf8" }
+  );
+  if (result.error) throw result.error;
+  const seconds = Number(result.stdout.trim());
+  if (result.status !== 0 || !Number.isFinite(seconds)) {
+    throw new Error(`ffprobe could not read the duration of ${file}`);
+  }
+  return seconds;
+}
+
 /**
- * Encodes a rendered edit into the shipped formats. Dashboard footage is flat
+ * Resolves the poster's `atSeconds` against the edit's length. ffmpeg writes
+ * an empty file, without an error, for a time past the end, which takes
+ * change length enough to reach.
+ */
+function posterSeconds(edit: string, atSeconds: number): number {
+  const duration = durationSeconds(edit);
+  const at = atSeconds < 0 ? duration + atSeconds : atSeconds;
+  if (at < 0 || at >= duration) {
+    throw new Error(
+      `poster time ${atSeconds}s is outside the ${duration.toFixed(2)}s edit`
+    );
+  }
+  return at;
+}
+
+/**
+ * Encodes a rendered edit into the shipped formats and returns the poster's
+ * time in seconds. Dashboard footage is flat
  * colour and mostly static between deliveries, which AV1 compresses far
  * better than H.264 at the same look. The CRFs were picked on the 2026-10-18
  * hero: at AV1 CRF 48 its 2× text is still sharp when paused, at about a third
@@ -100,7 +137,8 @@ export function encodeVideoOutputs(
   edit: string,
   outDir: string,
   outputs: VideoOutputs
-): void {
+): number {
+  const posterAt = posterSeconds(edit, outputs.poster.atSeconds);
   const av1 = path.join(outDir, outputs.av1);
   run(
     "ffmpeg",
@@ -155,7 +193,7 @@ export function encodeVideoOutputs(
     [
       ...FFMPEG_QUIET,
       "-ss",
-      String(outputs.poster.atSeconds),
+      String(posterAt),
       "-i",
       edit,
       "-frames:v",
@@ -178,6 +216,7 @@ export function encodeVideoOutputs(
     const kb = Math.round(statSync(file).size / 1024);
     console.log(`encoded ${path.basename(file)} (${kb} KB)`);
   }
+  return posterAt;
 }
 
 /**

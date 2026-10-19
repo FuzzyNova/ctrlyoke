@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { chromium, type Page } from "playwright";
-import { prepareDemoApp } from "./demoApp.ts";
+import { chromium, type Browser, type Page } from "playwright";
+import { installWorkflowFixture, prepareDemoApp } from "./demoApp.ts";
 import { startHost, stopHost, type ReplayOptions } from "./devHost.ts";
 import { checkBrowserColors } from "./colorCheck.ts";
 import { encodeVideoOutputs, type VideoOutputs } from "./encode.ts";
@@ -18,55 +18,101 @@ import { Timeline, type TimelineFile } from "./timeline.ts";
 import { THEMES, DEFAULT_THEME } from "./themes.ts";
 
 /**
- * A video asset: one recorded take of the hosted dashboard, replaying a
- * recorded run, then cut by a Remotion composition and encoded
- * (MEDIA_CAPTURE_AUTOMATION_PLAN.md §3-4).
+ * One recording of the hosted dashboard in a fresh page. A video shot has one
+ * take, or several that its composition shows together (side by side).
  */
-export interface VideoShot {
+export interface Take {
+  /** Names the take's files and its timeline in the composition's props. */
   id: string;
-  description: string;
-  /** The run fixture replayed during the take (fixtures/runs/fixtures.json). */
-  run: string;
-  replay?: Omit<ReplayOptions, "bundleDir">;
   /** CSS viewport; the take records at `RECORDING_SCALE` times this. */
   viewport: { width: number; height: number };
+  /**
+   * fixtures/workflows/ files installed into demo-app's .ctrlyoke/workflows/
+   * just before this take, keyed by the name they get there. Lets takes on
+   * one host start the same workflow file from different states.
+   */
+  workflows?: Record<string, string>;
   /** Gets the dashboard to the opening frame. Not recorded. */
   prepare(page: Page): Promise<void>;
   /** Performs the take, recording each beat through `timeline`. */
   record(page: Page, timeline: Timeline): Promise<void>;
+}
+
+/**
+ * A video asset: takes of the hosted dashboard, cut by a Remotion composition
+ * and encoded (MEDIA_CAPTURE_AUTOMATION_PLAN.md §3-4). Shots that show a run
+ * replay a recorded one; the rest drive the dashboard directly.
+ */
+export interface VideoShot {
+  id: string;
+  description: string;
+  /**
+   * The run fixture replayed during the takes (fixtures/runs/fixtures.json);
+   * demo-app then starts at the run's start tag.
+   */
+  run?: string;
+  replay?: Omit<ReplayOptions, "bundleDir">;
+  /** Files from fixtures/workflows/ installed for every take. */
+  workflows?: string[];
+  /** Extra environment variables for the host. */
+  env?: Record<string, string>;
+  /** Recorded in order on one host. */
+  takes: Take[];
   /** Remotion composition id in compositions/Root.tsx. */
   composition: string;
   outputs: VideoOutputs;
 }
 
-const RAW_VIDEO = "raw.mp4";
-const TIMELINE_FILE = "timeline.json";
 const EDIT_FILE = "edit.mp4";
 const COMPOSITIONS_ENTRY = path.join(MEDIA_DIR, "compositions", "index.ts");
 
-function takeDir(shot: VideoShot): string {
+function shotDir(shot: VideoShot): string {
   return path.join(WORK_DIR, "video", shot.id);
 }
 
-/** Records a take into the work folder: raw.mp4 plus timeline.json. */
-async function recordTake(shot: VideoShot): Promise<void> {
+/** A take's raw recording, relative to the shot's folder (Remotion's public dir). */
+function rawVideoFile(take: Take): string {
+  return `${take.id}.raw.mp4`;
+}
+
+function timelineFile(take: Take): string {
+  return `${take.id}.timeline.json`;
+}
+
+/** Starts the host the shot needs and returns the dashboard URL. */
+async function startShotHost(shot: VideoShot): Promise<string> {
+  if (!shot.run) {
+    prepareDemoApp(shot.workflows ?? []);
+    return startHost({ env: shot.env });
+  }
   const fixture = findRunFixture(shot.run);
-  const dir = takeDir(shot);
-  mkdirSync(dir, { recursive: true });
-  prepareDemoApp([], fixture.startTag);
-  const url = await startHost({
+  prepareDemoApp(shot.workflows ?? [], fixture.startTag);
+  return startHost({
+    env: shot.env,
     replay: { bundleDir: fixture.bundleDir, ...shot.replay },
   });
-  const browser = await chromium.launch({ args: RECORDING_LAUNCH_ARGS });
+}
+
+/** Records one take into the shot's folder: its raw video and timeline. */
+async function recordTake(
+  shot: VideoShot,
+  take: Take,
+  browser: Browser,
+  url: string
+): Promise<void> {
+  const dir = shotDir(shot);
+  for (const [as, fixture] of Object.entries(take.workflows ?? {})) {
+    installWorkflowFixture(fixture, as);
+  }
+  const context = await browser.newContext({
+    viewport: take.viewport,
+    deviceScaleFactor: RECORDING_SCALE,
+    colorScheme: THEMES[DEFAULT_THEME].colorScheme,
+  });
   try {
-    const context = await browser.newContext({
-      viewport: shot.viewport,
-      deviceScaleFactor: RECORDING_SCALE,
-      colorScheme: THEMES[DEFAULT_THEME].colorScheme,
-    });
     const page = await context.newPage();
     await page.goto(url);
-    await shot.prepare(page);
+    await take.prepare(page);
     await page.mouse.move(0, 0);
     // Beats record boxes at take time; a scrolled document would put every
     // later click somewhere the edit doesn't expect (see lib/stills.ts).
@@ -75,50 +121,76 @@ async function recordTake(shot: VideoShot): Promise<void> {
     );
     if (bodyScroll) {
       throw new Error(
-        `${shot.id}: the page body is scrolled by ${bodyScroll}px`
+        `${shot.id}/${take.id}: the page body is scrolled by ${bodyScroll}px`
       );
     }
     const recorder = await Recorder.start(
       context,
       page,
-      path.join(dir, "frames")
+      path.join(dir, `${take.id}-frames`)
     );
     const timeline = new Timeline(page, () => recorder.now());
     try {
-      await shot.record(page, timeline);
+      await take.record(page, timeline);
     } finally {
-      const duration = await recorder.stop(path.join(dir, RAW_VIDEO));
+      const duration = await recorder.stop(path.join(dir, rawVideoFile(take)));
       const file: TimelineFile = {
-        video: RAW_VIDEO,
-        viewport: shot.viewport,
+        video: rawVideoFile(take),
+        viewport: take.viewport,
         scale: RECORDING_SCALE,
         fps: RECORDING_FPS,
         duration,
         beats: timeline.beats,
       };
       writeFileSync(
-        path.join(dir, TIMELINE_FILE),
+        path.join(dir, timelineFile(take)),
         `${JSON.stringify(file, null, 2)}\n`
       );
     }
   } finally {
-    await browser.close();
+    await context.close();
+  }
+}
+
+/** Records every take of the shot on one host. */
+async function recordTakes(shot: VideoShot): Promise<void> {
+  mkdirSync(shotDir(shot), { recursive: true });
+  const url = await startShotHost(shot);
+  try {
+    const browser = await chromium.launch({ args: RECORDING_LAUNCH_ARGS });
+    try {
+      for (const take of shot.takes) {
+        await recordTake(shot, take, browser, url);
+      }
+    } finally {
+      await browser.close();
+    }
+  } finally {
     stopHost();
   }
 }
 
-/** Renders the shot's composition from the last take. */
-async function renderEdit(shot: VideoShot): Promise<string> {
-  const dir = takeDir(shot);
-  const timelinePath = path.join(dir, TIMELINE_FILE);
-  if (!existsSync(timelinePath)) {
-    throw new Error(
-      `${shot.id} has no take yet. Run \`npm run media -- ${shot.id}\` without --edit-only.`
-    );
+/** Reads the last recording of every take. */
+function readTakes(shot: VideoShot): Record<string, TimelineFile> {
+  const takes: Record<string, TimelineFile> = {};
+  for (const take of shot.takes) {
+    const timelinePath = path.join(shotDir(shot), timelineFile(take));
+    if (!existsSync(timelinePath)) {
+      throw new Error(
+        `${shot.id} has no '${take.id}' take yet. Run \`npm run media -- ${shot.id}\` without --edit-only.`
+      );
+    }
+    takes[take.id] = JSON.parse(
+      readFileSync(timelinePath, "utf8")
+    ) as TimelineFile;
   }
-  const timeline = JSON.parse(
-    readFileSync(timelinePath, "utf8")
-  ) as TimelineFile;
+  return takes;
+}
+
+/** Renders the shot's composition from the last takes. */
+async function renderEdit(shot: VideoShot): Promise<string> {
+  const dir = shotDir(shot);
+  const takes = readTakes(shot);
   // Loaded lazily: only video shots need Remotion.
   const { bundle } = await import("@remotion/bundler");
   const { renderMedia, selectComposition } = await import("@remotion/renderer");
@@ -127,7 +199,7 @@ async function renderEdit(shot: VideoShot): Promise<string> {
     entryPoint: COMPOSITIONS_ENTRY,
     publicDir: dir,
   });
-  const inputProps = { timeline };
+  const inputProps = { takes };
   const composition = await selectComposition({
     serveUrl,
     id: shot.composition,
@@ -165,11 +237,10 @@ export async function captureVideo(
   shot: VideoShot,
   { outDir, editOnly }: CaptureOptions
 ): Promise<void> {
-  if (!editOnly) await recordTake(shot);
+  if (!editOnly) await recordTakes(shot);
   const edit = await renderEdit(shot);
   mkdirSync(outDir, { recursive: true });
-  encodeVideoOutputs(edit, outDir, shot.outputs);
-  const at = shot.outputs.poster.atSeconds;
+  const at = encodeVideoOutputs(edit, outDir, shot.outputs);
   for (const [file, mimeType] of [
     [shot.outputs.av1, 'video/mp4; codecs="av01.0.08M.08"'],
     [shot.outputs.h264.file, 'video/mp4; codecs="avc1.640028"'],

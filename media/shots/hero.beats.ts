@@ -14,6 +14,8 @@ export const HERO_BEATS = {
   jump: (step: string) => `jump-${step}`,
 } as const;
 
+/** The hero's one take. */
+export const HERO_TAKE = "run";
 export const HERO_STEP_COUNT = 6;
 /** The steps the clip jumps back to through the minimap, in order. */
 export const HERO_JUMPS = ["plan", "implement"] as const;

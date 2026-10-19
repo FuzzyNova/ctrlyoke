@@ -23,6 +23,8 @@ export interface HostOptions {
   noHarnesses?: boolean;
   /** Replay a recorded run instead of calling harnesses (src/dev/replay/). */
   replay?: ReplayOptions;
+  /** Extra environment variables for the host, e.g. a dummy secret value. */
+  env?: Record<string, string>;
 }
 
 export interface ReplayOptions {
@@ -116,12 +118,10 @@ export async function startHost(options: HostOptions = {}): Promise<string> {
   resetHostState();
   const args = [DEV_HOST_SCRIPT, "start", "media"];
   if (options.noHarnesses) args.push("--no-harnesses");
-  run(
-    process.execPath,
-    args,
-    REPO_ROOT,
-    options.replay ? replayEnvironment(options.replay) : undefined
-  );
+  run(process.execPath, args, REPO_ROOT, {
+    ...options.env,
+    ...(options.replay ? replayEnvironment(options.replay) : {}),
+  });
   if (!existsSync(SERVER_URL_FILE)) {
     throw new Error(`dev host started but ${SERVER_URL_FILE} is missing`);
   }

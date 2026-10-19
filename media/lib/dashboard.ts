@@ -1,5 +1,6 @@
 import type { Locator, Page } from "playwright";
 import type { Clip } from "./shot.ts";
+import type { Point } from "./timeline.ts";
 
 export const WORKFLOWS_DIR = ".ctrlyoke/workflows";
 
@@ -7,9 +8,8 @@ const STARTUP_TIMEOUT_MS = 30_000;
 
 /** Waits until the startup overlay is gone and the dashboard takes input. */
 export async function waitForDashboard(page: Page): Promise<void> {
-  await page
-    .getByRole("button", { name: "Toggle workflow properties" })
-    .waitFor();
+  // In every layout; Toggle workflow properties only shows below wide ones.
+  await page.getByRole("button", { name: "Open workflow menu" }).waitFor();
   await page
     .getByLabel("Loading ctrlyoke…")
     .waitFor({ state: "hidden", timeout: STARTUP_TIMEOUT_MS });
@@ -117,4 +117,83 @@ export async function stripFrom(page: Page, element: Locator): Promise<Clip> {
     width: viewport.width,
     height: viewport.height - box.y,
   };
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Opens a workspace file in the workspace viewer the way a person would:
+ * Explore files and changes, then each folder and the file in the Explorer.
+ * Returns the viewer's file editor once it shows the file.
+ */
+export async function openWorkspaceFile(
+  page: Page,
+  relativePath: string
+): Promise<Locator> {
+  await waitForDashboard(page);
+  await page.getByRole("button", { name: "Explore files and changes" }).click();
+  const parts = relativePath.split("/");
+  for (const [index, part] of parts.entries()) {
+    const isFolder = index < parts.length - 1;
+    // Explorer rows are named "<name>[/], <path>, modified <date>".
+    await page
+      .getByRole("button", {
+        name: new RegExp(`^${escapeRegExp(part)}${isFolder ? "/" : ""}, `),
+      })
+      .click();
+  }
+  const editor = page.getByRole("textbox", { name: "File editor" });
+  await editor.waitFor();
+  return editor;
+}
+
+/**
+ * Where a CodeMirror line starts and ends on screen, to click the caret there
+ * or drag a selection. `editor` is the editor's textbox; `line` is a 1-based
+ * line number or text the line contains. A wrapped line ends on its last row.
+ */
+export async function editorLine(
+  editor: Locator,
+  line: number | string
+): Promise<{ start: Point; end: Point }> {
+  const found = await editor.evaluate((content, wanted) => {
+    const lines = [...content.querySelectorAll(":scope > .cm-line")];
+    let element: Element | undefined;
+    if (typeof wanted === "string") {
+      element = lines.find((candidate) =>
+        candidate.textContent?.includes(wanted)
+      );
+    } else {
+      // Line numbers live in the gutter; match its row to a content line.
+      const number = [
+        ...(content
+          .closest(".cm-editor")
+          ?.querySelectorAll(".cm-lineNumbers .cm-gutterElement") ?? []),
+      ].find((gutter) => gutter.textContent === String(wanted));
+      const top = number?.getBoundingClientRect().top;
+      element =
+        top === undefined
+          ? undefined
+          : lines.find(
+              (candidate) =>
+                Math.abs(candidate.getBoundingClientRect().top - top) < 2
+            );
+    }
+    if (!element) return undefined;
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const rows = [...range.getClientRects()];
+    const box = element.getBoundingClientRect();
+    const first = rows[0] ?? box;
+    const last = rows[rows.length - 1] ?? box;
+    return {
+      start: { x: box.left + 1, y: first.top + first.height / 2 },
+      end: { x: last.right + 1, y: last.top + last.height / 2 },
+    };
+  }, line);
+  if (!found)
+    throw new Error(`the editor shows no line ${JSON.stringify(line)}`);
+  return found;
 }
