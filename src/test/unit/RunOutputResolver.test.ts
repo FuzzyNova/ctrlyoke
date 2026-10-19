@@ -1928,6 +1928,147 @@ suite("RunOutputResolver", () => {
     assert.match(preview, /Review done\./);
   });
 
+  test("appends a follow-up recorded only as streamed events to the settled attempt", async () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const identity = { target, runIndex: 0, attemptIndex: 0 } as const;
+    // Shape `recordFollowUpResponse` writes: a content-free marker plus the
+    // burst as a streamed batch, with no re-recorded aggregate.
+    const followUp = (
+      timestampMs: number,
+      events: CliEvent[]
+    ): WorkflowTimelineEventDraft[] => [
+      {
+        eventType: TIMELINE_EVENT_TYPES.FOLLOW_UP_RESPONSE_APPENDED,
+        timestampMs,
+        ...identity,
+        definitionRevision: 1,
+        payload: { responseTextLength: 0, eventCount: events.length },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED,
+        timestampMs,
+        ...identity,
+        payload: { events },
+      },
+    ];
+    await recorder.appendEvents(manifestPath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+        timestampMs: 1,
+        ...identity,
+        definitionRevision: 1,
+        payload: { kind: "ai", startReason: "initial", prompt: "plan it" },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        timestampMs: 2,
+        ...identity,
+        definitionRevision: 1,
+        responseKind: "ai",
+        payload: {
+          cliOutput: {
+            structured: {
+              events: [
+                {
+                  type: CLI_EVENT_TYPES.FILE_EDIT,
+                  data: {
+                    path: "src/plan.md",
+                    oldContent: "one\n",
+                    newContent: "two\n",
+                  },
+                },
+                { type: CLI_EVENT_TYPES.TEXT, data: { text: "Plan updated." } },
+              ],
+              metadata: {},
+            },
+            elapsed: 1,
+            isStreaming: false,
+          },
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
+        timestampMs: 3,
+        ...identity,
+        definitionRevision: 1,
+        payload: { terminalState: "completed" },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.RUN_TERMINATED,
+        timestampMs: 4,
+        payload: { executionState: EXECUTION_STATES.COMPLETED, stepCount: 1 },
+      },
+      ...followUp(5, [
+        { type: CLI_EVENT_TYPES.FOLLOW_UP_RESUMED, data: { resumedAt: 5 } },
+        { type: CLI_EVENT_TYPES.USER_STEER, data: { text: "commit it" } },
+        { type: CLI_EVENT_TYPES.TEXT, data: { text: " Creating the repo." } },
+      ]),
+      ...followUp(6, [
+        {
+          type: CLI_EVENT_TYPES.FILE_EDIT,
+          data: {
+            path: "src/plan.md",
+            oldContent: "two\n",
+            newContent: "three\n",
+          },
+        },
+        { type: CLI_EVENT_TYPES.TEXT, data: { text: " Committed." } },
+      ]),
+    ]);
+
+    const resolver = new RunOutputResolver(recorder);
+    const expected = "Plan updated. Creating the repo. Committed.";
+    const inOrder =
+      /Plan updated\.[\s\S]*Creating the repo\.[\s\S]*Committed\./;
+    const single = await resolver.resolveAttempt(manifestPath, target, 0, 0);
+    assert.match(
+      getStepOutputText(
+        { output: single?.output },
+        StepOutputTextMode.TRANSCRIPT
+      ),
+      inOrder
+    );
+    assert.strictEqual(single?.prompt, "plan it");
+    const latest = (
+      await resolver.resolveLatestAttempts(manifestPath, [target])
+    ).get("queue:0");
+    assert.match(
+      getStepOutputText(
+        { output: latest?.output },
+        StepOutputTextMode.TRANSCRIPT
+      ),
+      inOrder
+    );
+
+    const steps = [{ prompt: "plan it" }, { prompt: "next" }];
+    const summaryItems = await resolver.resolvePriorContextItems(
+      manifestPath,
+      [{ context: [1], detail: "summary" }],
+      steps,
+      1,
+      { workspaceRoot }
+    );
+    assert.deepStrictEqual(summaryItems.map(getPriorText), [expected]);
+    assert.deepStrictEqual(summaryItems[0].filesChanged, [
+      { path: "src/plan.md", operation: "modified", added: 2, removed: 2 },
+    ]);
+    const summary = buildPriorContextXmlFromItems(summaryItems);
+    assert.match(summary, /Plan updated\.\n Creating the repo\.\n Committed\./);
+    assert.ok(summary.includes("Edited src/plan.md +2 -2"), summary);
+
+    const fullItems = await resolver.resolvePriorContextItems(
+      manifestPath,
+      [[1]],
+      steps,
+      1,
+      { workspaceRoot }
+    );
+    assert.deepStrictEqual(
+      fullItems[0].transcript?.map((entry) => entry.kind),
+      ["edit", "text", "userSteer", "text", "edit", "text"]
+    );
+  });
+
   test("yields interleaved parallel attempts once in settle order", async () => {
     const firstTarget = {
       kind: FINAL_STEP_PHASES.QUEUE,
