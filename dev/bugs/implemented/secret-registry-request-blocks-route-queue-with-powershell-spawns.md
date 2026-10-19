@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-19 by Claude Code (performance investigation, `[RouteTiming]` instrumentation)
 - **Area:** `src/ui/SecretRegistryService.ts`, `src/platform/OsCredentialStore.ts`, `src/ui/WebviewMessageRouter.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

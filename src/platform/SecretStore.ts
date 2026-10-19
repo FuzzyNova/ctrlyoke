@@ -7,6 +7,8 @@
  */
 export interface SecretStore {
   get(key: string): PromiseLike<string | undefined>;
+  /** Optional batched read; implementations without native batching may loop. */
+  getMany?(keys: readonly string[]): PromiseLike<Map<string, string | undefined>>;
   store(key: string, value: string): PromiseLike<void>;
   delete(key: string): PromiseLike<void>;
   keys(): PromiseLike<string[]>;

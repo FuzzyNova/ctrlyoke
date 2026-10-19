@@ -246,6 +246,11 @@ function usageForName(
 
 /** Extension-host registry for safe secret names, metadata, and usage. */
 export class SecretRegistryService {
+  private readonly registryCache = new Map<
+    SettingWriteScope,
+    { managedNames: Set<string>; credentials: Map<string, { isSet: boolean; metadata?: SecretMetadata }> }
+  >();
+
   constructor(private readonly options: SecretRegistryServiceOptions) {}
 
   /** Return registry names only; secret values never cross this boundary. */
@@ -296,14 +301,13 @@ export class SecretRegistryService {
       ...workflows.flatMap((workflow) => workflow.secretNames),
       ...mcpServers.flatMap((server) => server.secretNames),
     ]);
+    const credentialCache = await this.ensureCredentialSnapshot(scope, managedNames, names);
     const entries: SecretRegistryEntry[] = [];
 
     for (const name of names) {
-      const key = this.secretKey(scope, name);
-      const managedValue = await this.options.secretStore.get(key);
-      const metadata = await this.readMetadata(scope, name);
+      const credential = credentialCache.credentials.get(name)!;
       const state =
-        managedValue !== undefined
+        credential.isSet
           ? SECRET_REGISTRY_STATES.MANAGED_AND_SET
           : this.hasEnvironmentValue(name)
             ? SECRET_REGISTRY_STATES.FROM_ENVIRONMENT_AND_DETECTED
@@ -313,9 +317,9 @@ export class SecretRegistryService {
         name,
         scope,
         state,
-        ...(metadata?.description ? { description: metadata.description } : {}),
-        ...(metadata?.lastUpdated !== undefined
-          ? { lastUpdated: metadata.lastUpdated }
+        ...(credential.metadata?.description ? { description: credential.metadata.description } : {}),
+        ...(credential.metadata?.lastUpdated !== undefined
+          ? { lastUpdated: credential.metadata.lastUpdated }
           : {}),
         usedBy: usageForName(name, workflows, mcpServers),
       });
@@ -337,6 +341,7 @@ export class SecretRegistryService {
     }
 
     const now = this.options.now?.() ?? Date.now();
+    this.registryCache.delete(scope);
     await this.options.secretStore.store(this.secretKey(scope, name), value);
     await this.options.secretStore.store(
       this.metadataKey(scope, name),
@@ -350,6 +355,7 @@ export class SecretRegistryService {
   async delete(name: string, scope: SettingWriteScope): Promise<void> {
     assertWriteScope(scope);
     validateSecretName(name);
+    this.registryCache.delete(scope);
     await this.options.secretStore.delete(this.secretKey(scope, name));
     await this.options.secretStore.delete(this.metadataKey(scope, name));
   }
@@ -375,6 +381,8 @@ export class SecretRegistryService {
   }
 
   private async getManagedNames(scope: SettingWriteScope): Promise<string[]> {
+    const cached = this.registryCache.get(scope);
+    if (cached) return [...cached.managedNames];
     const keys = await this.options.secretStore.keys();
     const names = new Set<string>();
     for (const key of keys) {
@@ -390,13 +398,29 @@ export class SecretRegistryService {
     return [...names];
   }
 
-  private async readMetadata(
+  private async ensureCredentialSnapshot(
     scope: SettingWriteScope,
-    name: string
-  ): Promise<SecretMetadata | undefined> {
-    return parseSecretMetadata(
-      await this.options.secretStore.get(this.metadataKey(scope, name))
-    );
+    managedNames: readonly string[],
+    names: readonly string[]
+  ): Promise<{ managedNames: Set<string>; credentials: Map<string, { isSet: boolean; metadata?: SecretMetadata }> }> {
+    let snapshot = this.registryCache.get(scope);
+    if (!snapshot) {
+      snapshot = { managedNames: new Set(managedNames), credentials: new Map() };
+      this.registryCache.set(scope, snapshot);
+    }
+    const missing = names.filter((name) => !snapshot!.credentials.has(name));
+    if (missing.length === 0) return snapshot;
+    const keys = missing.flatMap((name) => [this.secretKey(scope, name), this.metadataKey(scope, name)]);
+    const values = this.options.secretStore.getMany
+      ? await this.options.secretStore.getMany(keys)
+      : new Map(await Promise.all(keys.map(async (key) => [key, await this.options.secretStore.get(key)] as const)));
+    for (const name of missing) {
+      snapshot.credentials.set(name, {
+        isSet: values.get(this.secretKey(scope, name)) !== undefined,
+        metadata: parseSecretMetadata(values.get(this.metadataKey(scope, name))),
+      });
+    }
+    return snapshot;
   }
 
   private hasEnvironmentValue(name: string): boolean {

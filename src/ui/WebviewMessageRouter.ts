@@ -282,6 +282,7 @@ export class WebviewMessageRouter {
     string,
     WebviewUserInteractionPort
   >();
+  private readonly clientRouteEpochs = new Map<string, number>();
   private themeVarsCapturedCallback?: (vars: Record<string, string>) => void;
 
   private readonly handlers: DispatchTable;
@@ -403,6 +404,23 @@ export class WebviewMessageRouter {
       options?.postMessage ?? this.defaultPostMessage,
       interactionPort
     );
+    if (message?.type === MESSAGE_TYPES.REQUEST_SECRET_REGISTRY) {
+      // Credential-store reads can take seconds on Windows. Keep them outside
+      // the shared routeQueue, and suppress a reply if this browser disconnected
+      // while its snapshot was loading.
+      const epoch = this.clientRouteEpochs.get(clientId) ?? 0;
+      const originalEmit = ctx.emit;
+      ctx = {
+        ...ctx,
+        emit: (reply) => {
+          if ((this.clientRouteEpochs.get(clientId) ?? 0) === epoch) {
+            originalEmit(reply);
+          }
+        },
+      };
+      await this.routeSingleMessage(message, ctx);
+      return;
+    }
     let releaseHistorySearch: (() => void) | undefined;
     if (message?.type === MESSAGE_TYPES.SEARCH_HISTORY) {
       // Called synchronously, before this message is queued behind whatever
@@ -480,6 +498,10 @@ export class WebviewMessageRouter {
   }
 
   disposeClient(clientId: string): void {
+    this.clientRouteEpochs.set(
+      clientId,
+      (this.clientRouteEpochs.get(clientId) ?? 0) + 1
+    );
     this.languageServerManager.disposeClient(clientId);
     this.clientInteractionPorts.get(clientId)?.disposeAllPending();
     this.clientInteractionPorts.delete(clientId);

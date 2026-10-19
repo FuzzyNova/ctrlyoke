@@ -24,9 +24,17 @@ const OPENAI_API_KEY = "OPENAI_API_KEY";
 class InMemorySecretStore implements SecretStore {
   readonly values = new Map<string, string>();
   storeCalls = 0;
+  getCalls = 0;
+  keysCalls = 0;
 
   get(key: string): Thenable<string | undefined> {
+    this.getCalls += 1;
     return Promise.resolve(this.values.get(key));
+  }
+
+  getMany(keys: readonly string[]): Thenable<Map<string, string | undefined>> {
+    this.getCalls += keys.length;
+    return Promise.resolve(new Map(keys.map((key) => [key, this.values.get(key)])));
   }
 
   store(key: string, value: string): Thenable<void> {
@@ -41,6 +49,7 @@ class InMemorySecretStore implements SecretStore {
   }
 
   keys(): Thenable<string[]> {
+    this.keysCalls += 1;
     return Promise.resolve([...this.values.keys()]);
   }
 }
@@ -146,6 +155,33 @@ suite("SecretRegistryService", () => {
     );
   });
 
+  test("caches registry credentials until set or delete invalidates the scope", async () => {
+    const store = new InMemorySecretStore();
+    await store.store(userSecretKey("API_TOKEN"), "secret");
+    const service = serviceFor(store, {}, [
+      { workflow: "deploy.ctrlyoke.yaml", secretNames: ["API_TOKEN"] },
+    ]);
+
+    await service.list(SETTING_SCOPES.USER);
+    const readsAfterFirstList = store.getCalls + store.keysCalls;
+    await service.list(SETTING_SCOPES.USER);
+    assert.strictEqual(store.getCalls + store.keysCalls, readsAfterFirstList);
+
+    await service.set("API_TOKEN", SETTING_SCOPES.USER, "rotated");
+    const readsBeforeSecondSnapshot = store.getCalls + store.keysCalls;
+    await service.list(SETTING_SCOPES.USER);
+    assert.ok(store.getCalls + store.keysCalls > readsBeforeSecondSnapshot);
+
+    await service.delete("API_TOKEN", SETTING_SCOPES.USER);
+    const readsBeforeThirdSnapshot = store.getCalls + store.keysCalls;
+    const entries = await service.list(SETTING_SCOPES.USER);
+    assert.ok(store.getCalls + store.keysCalls > readsBeforeThirdSnapshot);
+    assert.strictEqual(
+      entries.find((entry) => entry.name === "API_TOKEN")?.state,
+      SECRET_REGISTRY_STATES.FROM_ENVIRONMENT_AND_NOT_FOUND
+    );
+  });
+
   test("validates names before writing any value", async () => {
     const store = new InMemorySecretStore();
     const service = serviceFor(store, {});
@@ -248,5 +284,50 @@ suite("SecretRegistryService", () => {
       update.secrets.find((entry) => entry.name === OPENAI_API_KEY)?.state,
       SECRET_REGISTRY_STATES.FROM_ENVIRONMENT_AND_DETECTED
     );
+  });
+
+  test("a slow registry request does not block another client's later route", async () => {
+    let releaseRead!: () => void;
+    const store = new InMemorySecretStore();
+    store.values.set(userSecretKey("API_TOKEN"), "secret");
+    store.getMany = async (keys) => {
+      await new Promise<void>((resolve) => { releaseRead = resolve; });
+      return new Map(keys.map((key) => [key, store.values.get(key)]));
+    };
+    const service = new SecretRegistryService({
+      secretStore: store,
+      getWorkspaceRoot: () => "/workspace",
+      environment: {},
+      getWorkflowReferences: async () => [],
+      getMcpReferences: async () => [],
+    });
+    const firstClientMessages: unknown[] = [];
+    const secondClientMessages: unknown[] = [];
+    const router = new WebviewMessageRouter(
+      () => {},
+      { sendWorkflowPropertiesToSettings: async () => {} } as any,
+      {} as any,
+      () => ({
+        getWorkflowSummaries: () => [],
+        getActiveTerminalWorkflowRefs: () => [],
+      }) as any,
+      {} as any,
+      { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} },
+      service
+    );
+
+    const slowRequest = router.route(
+      { type: MESSAGE_TYPES.REQUEST_SECRET_REGISTRY, scope: SETTING_SCOPES.USER },
+      { clientTag: "browser:slow", postMessage: (message) => firstClientMessages.push(message) }
+    );
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await router.route(
+      { type: MESSAGE_TYPES.GET_WORKFLOWS_LIST },
+      { clientTag: "browser:fast", postMessage: (message) => secondClientMessages.push(message) }
+    );
+    assert.ok(secondClientMessages.length > 0);
+    releaseRead();
+    await slowRequest;
+    assert.ok(firstClientMessages.some((message) => (message as any).type === MESSAGE_TYPES.SECRET_REGISTRY_UPDATE));
   });
 });

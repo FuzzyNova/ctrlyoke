@@ -93,6 +93,68 @@ public static class CtrlYokeCredentialManager {
 
 $credential = [IntPtr]::Zero
 
+if ($operation -eq 'batch') {
+  $keysJson = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([Console]::In.ReadToEnd()))
+  $keys = ConvertFrom-Json -InputObject $keysJson
+  $results = @{}
+  foreach ($keyName in $keys) {
+    $targetName = "$target$keyName"
+    $credential = [IntPtr]::Zero
+    if ([CtrlYokeCredentialManager]::CredRead($targetName, 1, 0, [ref]$credential)) {
+      try {
+        $native = [Runtime.InteropServices.Marshal]::PtrToStructure($credential, [type][CtrlYokeCredentialManager+CREDENTIAL])
+        $bytes = New-Object byte[] $native.CredentialBlobSize
+        if ($bytes.Length -gt 0) { [Runtime.InteropServices.Marshal]::Copy($native.CredentialBlob, $bytes, 0, $bytes.Length) }
+        $value = [Text.Encoding]::Unicode.GetString($bytes)
+      } finally { [CtrlYokeCredentialManager]::CredFree($credential) }
+      if ($value.Length -ge 1279) {
+        $countCredential = [IntPtr]::Zero
+        if ([CtrlYokeCredentialManager]::CredRead("$targetName#count", 1, 0, [ref]$countCredential)) {
+          try {
+            $countNative = [Runtime.InteropServices.Marshal]::PtrToStructure($countCredential, [type][CtrlYokeCredentialManager+CREDENTIAL])
+            $countBytes = New-Object byte[] $countNative.CredentialBlobSize
+            if ($countBytes.Length -gt 0) { [Runtime.InteropServices.Marshal]::Copy($countNative.CredentialBlob, $countBytes, 0, $countBytes.Length) }
+            $countRaw = [Text.Encoding]::Unicode.GetString($countBytes)
+            $countParts = $countRaw -split ':', 2
+            $count = [int]$countParts[0]
+            if ($count -gt 1) {
+              $parts = @($value)
+              for ($index = 1; $index -lt $count; $index++) {
+                $chunkCredential = [IntPtr]::Zero
+                if (-not [CtrlYokeCredentialManager]::CredRead("$targetName#$index", 1, 0, [ref]$chunkCredential)) { throw "CredRead failed with Win32 error $([Runtime.InteropServices.Marshal]::GetLastWin32Error())." }
+                try {
+                  $chunkNative = [Runtime.InteropServices.Marshal]::PtrToStructure($chunkCredential, [type][CtrlYokeCredentialManager+CREDENTIAL])
+                  $chunkBytes = New-Object byte[] $chunkNative.CredentialBlobSize
+                  if ($chunkBytes.Length -gt 0) { [Runtime.InteropServices.Marshal]::Copy($chunkNative.CredentialBlob, $chunkBytes, 0, $chunkBytes.Length) }
+                  $parts += [Text.Encoding]::Unicode.GetString($chunkBytes)
+                } finally { [CtrlYokeCredentialManager]::CredFree($chunkCredential) }
+              }
+              $value = $parts -join ''
+              if ($countParts.Length -gt 1) {
+                $sha = [Security.Cryptography.SHA256]::Create()
+                try { $actualTag = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($value))).Replace('-', '').ToLowerInvariant() }
+                finally { $sha.Dispose() }
+                if ($actualTag -ne $countParts[1]) { throw 'Credential chunk integrity check failed.' }
+              }
+            }
+          } finally { [CtrlYokeCredentialManager]::CredFree($countCredential) }
+        } else {
+          $lastError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+          if ($lastError -ne 1168) { [Console]::Error.Write("CredRead failed with Win32 error $lastError."); exit 45 }
+        }
+      }
+      $results[$keyName] = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($value))
+    } else {
+      $lastError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+      if ($lastError -ne 1168) { [Console]::Error.Write("CredRead failed with Win32 error $lastError."); exit 45 }
+      $results[$keyName] = $null
+    }
+  }
+  $json = ConvertTo-Json -InputObject $results -Compress
+  [Console]::Out.Write([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json)))
+  exit 0
+}
+
 if ($operation -eq 'get') {
   if (-not [CtrlYokeCredentialManager]::CredRead($target, 1, 0, [ref]$credential)) {
     $lastError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
@@ -174,6 +236,7 @@ type CommandRunner = (
 
 interface CredentialBackend {
   get(key: string): Promise<string | undefined>;
+  getMany?(keys: readonly string[]): Promise<Map<string, string | undefined>>;
   store(key: string, value: string): Promise<void>;
   delete(key: string): Promise<void>;
 }
@@ -236,6 +299,14 @@ export class OsCredentialStore implements SecretStore {
 
   async get(key: string): Promise<string | undefined> {
     return this.withAvailability(() => this.backend.get(key));
+  }
+
+  async getMany(keys: readonly string[]): Promise<Map<string, string | undefined>> {
+    return this.withAvailability(async () => {
+      if (this.backend.getMany) return this.backend.getMany(keys);
+      const values = await Promise.all(keys.map((key) => this.backend.get(key)));
+      return new Map(keys.map((key, index) => [key, values[index]]));
+    });
   }
 
   async store(key: string, value: string): Promise<void> {
@@ -551,6 +622,18 @@ class WindowsCredentialBackend implements CredentialBackend {
     return value;
   }
 
+  async getMany(keys: readonly string[]): Promise<Map<string, string | undefined>> {
+    if (keys.length === 0) return new Map();
+    const result = await this.execute("batch", "", JSON.stringify(keys));
+    throwIfBackendUnavailable("win32", result);
+    if (result.exitCode !== 0) return throwCommandFailure("CredMan", result);
+    const raw = JSON.parse(Buffer.from(result.stdout, "base64").toString("utf8")) as Record<string, string | null>;
+    return new Map(keys.map((key) => {
+      const encoded = raw[key];
+      return [key, encoded == null ? undefined : Buffer.from(encoded, "base64").toString("utf8")];
+    }));
+  }
+
   async store(key: string, value: string): Promise<void> {
     const chunks = splitIntoCredentialChunks(value);
     // Read the previous layout first so shrinking a value cannot leave
@@ -651,7 +734,7 @@ class WindowsCredentialBackend implements CredentialBackend {
   }
 
   private execute(
-    operation: "get" | "store" | "delete",
+    operation: "get" | "store" | "delete" | "batch",
     key: string,
     value?: string
   ): Promise<CommandResult> {

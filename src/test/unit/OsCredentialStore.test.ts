@@ -46,15 +46,28 @@ class FakeWindowsCredentialVault {
     }
     assert.strictEqual(command, "powershell.exe");
     const { operation, target, script } = decodeScript(args);
-    assert.match(
-      script,
-      /UTF8\.GetString\(\[Convert\]::FromBase64String\(\$valueBase64\)\)/
-    );
-    assert.match(
-      script,
-      /ToBase64String\(\$utf8\)/,
-      "get should return a base64-encoded UTF-8 value"
-    );
+    if (operation === "batch") {
+      const keys = JSON.parse(Buffer.from(input ?? "", "base64").toString("utf8")) as string[];
+      const values: Record<string, string | null> = {};
+      for (const key of keys) {
+        const target = `ctrlyoke.${key}`;
+        const first = this.credentials.get(target);
+        if (first === undefined) {
+          values[key] = null;
+          continue;
+        }
+        let value = first;
+        const [countText] = (this.credentials.get(`${target}#count`) ?? "1").split(":");
+        const count = Number.parseInt(countText, 10);
+        for (let index = 1; index < count; index++) {
+          value += this.credentials.get(`${target}#${index}`) ?? "";
+        }
+        values[key] = Buffer.from(value, "utf8").toString("base64");
+      }
+      return result(0, Buffer.from(JSON.stringify(values), "utf8").toString("base64"));
+    }
+    assert.match(script, /UTF8\.GetString\(\[Convert\]::FromBase64String\(\$valueBase64\)\)/);
+    assert.match(script, /ToBase64String\(\$utf8\)/, "get should return a base64-encoded UTF-8 value");
 
     if (operation === "get") {
       this.beforeRead?.(target);
@@ -206,6 +219,26 @@ suite("OsCredentialStore", () => {
     assert.deepStrictEqual(vault.secretTargets(), [
       "ctrlyoke.ctrlyoke.pro.license-key",
     ]);
+  });
+
+  test("batches Windows reads into one PowerShell invocation, including chunked values", async () => {
+    const { store, vault } = createWindowsStore();
+    const small = "short-value";
+    const long = textOfLength(WINDOWS_CHUNK_LENGTH + 20);
+    await store.store("ctrlyoke.registry.small", small);
+    await store.store("ctrlyoke.registry.large", long);
+    const callsBeforeBatch = vault.commandCount;
+
+    const values = await store.getMany([
+      "ctrlyoke.registry.small",
+      "ctrlyoke.registry.large",
+      "ctrlyoke.registry.missing",
+    ]);
+
+    assert.strictEqual(vault.commandCount - callsBeforeBatch, 1);
+    assert.strictEqual(values.get("ctrlyoke.registry.small"), small);
+    assert.strictEqual(values.get("ctrlyoke.registry.large"), long);
+    assert.strictEqual(values.get("ctrlyoke.registry.missing"), undefined);
   });
 
   test("transports non-ASCII and non-BMP values as UTF-8 base64", async () => {
