@@ -35,6 +35,8 @@ import {
 } from "../core/WorkflowYamlSchema";
 import { getCtrlYokeFileKind } from "../completions/CtrlYokeFileKind";
 
+const SECRET_REGISTRY_CACHE_TTL_MS = 30_000;
+
 export interface SecretRegistryWorkflowReference {
   workflow: string;
   secretNames: readonly string[];
@@ -248,7 +250,11 @@ function usageForName(
 export class SecretRegistryService {
   private readonly registryCache = new Map<
     SettingWriteScope,
-    { managedNames: Set<string>; credentials: Map<string, { isSet: boolean; metadata?: SecretMetadata }> }
+    {
+      managedNames: Set<string>;
+      credentials: Map<string, { isSet: boolean; metadata?: SecretMetadata }>;
+      refreshedAt: number;
+    }
   >();
 
   constructor(private readonly options: SecretRegistryServiceOptions) {}
@@ -289,6 +295,13 @@ export class SecretRegistryService {
       !this.options.getWorkspaceRoot()
     ) {
       return [];
+    }
+    const cached = this.registryCache.get(scope);
+    if (
+      cached &&
+      this.currentTime() - cached.refreshedAt >= SECRET_REGISTRY_CACHE_TTL_MS
+    ) {
+      this.registryCache.delete(scope);
     }
     const [managedNames, workflows, mcpServers] = await Promise.all([
       this.getManagedNames(scope),
@@ -340,7 +353,7 @@ export class SecretRegistryService {
       throw new Error("Secret value must be a string.");
     }
 
-    const now = this.options.now?.() ?? Date.now();
+    const now = this.currentTime();
     this.registryCache.delete(scope);
     await this.options.secretStore.store(this.secretKey(scope, name), value);
     await this.options.secretStore.store(
@@ -405,7 +418,11 @@ export class SecretRegistryService {
   ): Promise<{ managedNames: Set<string>; credentials: Map<string, { isSet: boolean; metadata?: SecretMetadata }> }> {
     let snapshot = this.registryCache.get(scope);
     if (!snapshot) {
-      snapshot = { managedNames: new Set(managedNames), credentials: new Map() };
+      snapshot = {
+        managedNames: new Set(managedNames),
+        credentials: new Map(),
+        refreshedAt: this.currentTime(),
+      };
       this.registryCache.set(scope, snapshot);
     }
     const missing = names.filter((name) => !snapshot!.credentials.has(name));
@@ -420,7 +437,12 @@ export class SecretRegistryService {
         metadata: parseSecretMetadata(values.get(this.metadataKey(scope, name))),
       });
     }
+    snapshot.refreshedAt = this.currentTime();
     return snapshot;
+  }
+
+  private currentTime(): number {
+    return this.options.now?.() ?? Date.now();
   }
 
   private hasEnvironmentValue(name: string): boolean {

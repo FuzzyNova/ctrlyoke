@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-19 by Claude Code (bug-drain review of ~2a9bee28a)
 - **Area:** `src/ui/SecretRegistryService.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

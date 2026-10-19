@@ -25,6 +25,7 @@ class InMemorySecretStore implements SecretStore {
   readonly values = new Map<string, string>();
   storeCalls = 0;
   getCalls = 0;
+  getManyCalls = 0;
   keysCalls = 0;
 
   get(key: string): Thenable<string | undefined> {
@@ -33,6 +34,7 @@ class InMemorySecretStore implements SecretStore {
   }
 
   getMany(keys: readonly string[]): Thenable<Map<string, string | undefined>> {
+    this.getManyCalls += 1;
     this.getCalls += keys.length;
     return Promise.resolve(new Map(keys.map((key) => [key, this.values.get(key)])));
   }
@@ -58,13 +60,14 @@ function serviceFor(
   store: InMemorySecretStore,
   environment: NodeJS.ProcessEnv,
   workflows: SecretRegistryWorkflowReference[] = [],
-  mcpServers: SecretRegistryMcpReference[] = []
+  mcpServers: SecretRegistryMcpReference[] = [],
+  now: () => number = () => 1_700_000_000_000
 ): SecretRegistryService {
   return new SecretRegistryService({
     secretStore: store,
     getWorkspaceRoot: () => "/workspace",
     environment,
-    now: () => 1_700_000_000_000,
+    now,
     getWorkflowReferences: async () => workflows,
     getMcpReferences: async () => mcpServers,
   });
@@ -180,6 +183,54 @@ suite("SecretRegistryService", () => {
       entries.find((entry) => entry.name === "API_TOKEN")?.state,
       SECRET_REGISTRY_STATES.FROM_ENVIRONMENT_AND_NOT_FOUND
     );
+  });
+
+  test("refreshes credentials changed outside the service after the cache TTL", async () => {
+    let now = 1_700_000_000_000;
+    const store = new InMemorySecretStore();
+    await store.store(userSecretKey("REMOVED_TOKEN"), "old-secret");
+    const service = serviceFor(store, {}, [], [], () => now);
+
+    const initialEntries = await service.list(SETTING_SCOPES.USER);
+    assert.deepStrictEqual(initialEntries.map((entry) => entry.name), [
+      "REMOVED_TOKEN",
+    ]);
+    const readsAfterInitialList = {
+      gets: store.getCalls,
+      keys: store.keysCalls,
+      batches: store.getManyCalls,
+    };
+
+    store.values.delete(userSecretKey("REMOVED_TOKEN"));
+    store.values.delete(userSecretMetadataKey("REMOVED_TOKEN"));
+    store.values.set(userSecretKey("ADDED_TOKEN"), "new-secret");
+    store.values.set(
+      userSecretMetadataKey("ADDED_TOKEN"),
+      JSON.stringify({ description: "Added externally", lastUpdated: now })
+    );
+
+    const cachedEntries = await service.list(SETTING_SCOPES.USER);
+    assert.deepStrictEqual(cachedEntries.map((entry) => entry.name), [
+      "REMOVED_TOKEN",
+    ]);
+    assert.deepStrictEqual(
+      { gets: store.getCalls, keys: store.keysCalls, batches: store.getManyCalls },
+      readsAfterInitialList
+    );
+
+    now += 30_000;
+    const refreshedEntries = await service.list(SETTING_SCOPES.USER);
+    assert.deepStrictEqual(refreshedEntries.map((entry) => entry.name), [
+      "ADDED_TOKEN",
+    ]);
+    assert.strictEqual(
+      refreshedEntries[0].state,
+      SECRET_REGISTRY_STATES.MANAGED_AND_SET
+    );
+    assert.strictEqual(refreshedEntries[0].description, "Added externally");
+    assert.strictEqual(store.keysCalls, readsAfterInitialList.keys + 1);
+    assert.strictEqual(store.getManyCalls, readsAfterInitialList.batches + 1);
+    assert.strictEqual(store.getCalls, readsAfterInitialList.gets + 2);
   });
 
   test("validates names before writing any value", async () => {
