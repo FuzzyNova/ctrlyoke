@@ -2,7 +2,7 @@
   "hero": {
     "bundle": "hero.ctrlyokerun",
     "startTag": "hero-start",
-    "description": "Hero workflow (#6): six steps, one per harness, from the 2026-09-08 run."
+    "description": "Hero workflow (#6): six steps, one per harness, from the 2026-09-08 run. Edited 2026-10-19: Codex's encrypted reasoning rows given concise summaries, Antigravity's 'stream was interrupted' rows removed, workflow named."
   },
   "rate-limiter-agy": {
     "bundle": "rate-limiter-agy.ctrlyokerun",

@@ -83,6 +83,18 @@ export async function scrollToEnd(container: Locator): Promise<void> {
   throw new Error("scrollable content never settled");
 }
 
+/**
+ * Scrolls the document back to the top. The dashboard never scrolls its
+ * document, but automation can: loading a workflow through the Load Workflow
+ * File dialog leaves the body scrolled with the heading row off-screen.
+ */
+export async function resetPageScroll(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  });
+}
+
 /** Waits until an element stops moving, e.g. after a panel's open animation. */
 export async function waitForStableBox(element: Locator): Promise<void> {
   let previous = "";

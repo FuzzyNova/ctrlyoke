@@ -3,8 +3,10 @@
 **Status (2026-10-18):** Phase 1 done: `media/` exists and retakes #12's ten tab shots and the
 walkthrough's `verifyHarness` image (four themes) with `npm run media -- --all`. Phase 2 done
 2026-10-18: `ctrlyoke export` writes run bundles, a dev build replays one, and the hero and six
-rate-limiter runs are fixtures (`npm run media -- replay <run>`). Phases 3-7 are open; the two
-desktop clips (#9, #14) were moved ahead of the phone pipeline on 2026-10-18. This is the "how"
+rate-limiter runs are fixtures (`npm run media -- replay <run>`). Phase 3 done 2026-10-18: the
+video pipeline (2× take, beat timeline, Remotion edit, encode) and a new hero
+(`npm run media -- hero`). Phases 4-7 are open; the two desktop clips (#9, #14) were moved ahead
+of the phone pipeline on 2026-10-18. This is the "how"
 for [`SCREENSHOTS_AND_MEDIA_PLAN.md`](SCREENSHOTS_AND_MEDIA_PLAN.md), which stays the shot list and
 slotting plan. `media/README.md` covers using it and adding shots.
 
@@ -51,21 +53,26 @@ Remotion and its dependencies never reach the extension's `node_modules` or the 
 
 ```
 media/
-  package.json          # playwright, typescript (remotion arrives with phase 3)
+  package.json          # playwright, remotion, react, typescript
   cli.ts                # `npm run media -- ...` (run by Node's type stripping, no build)
   demo-app.json         # demo project repo URL, pinned ref, named start tags (see 7)
   shots/                # one capture script per shot list entry
     properties-tabs.capture.ts
     walkthrough.capture.ts
-    hero.capture.ts     # phase 3
-  compositions/         # phase 3: Remotion compositions, one per video asset
+    hero.capture.ts     # a VideoShot: the take
+    hero.beats.ts       # beat names shared by the take and its edit
+  compositions/         # Remotion: index.ts, Root.tsx, one <Name>.tsx edit per video
+    edit.ts             # cuts -> frames, camera, pointer (unit-tested: `npm test` in media/)
+    Edit.tsx            # renders an edit over a take
   lib/
     devHost.ts          # start/stop the dev host, switch its theme
     demoApp.ts          # clone, reset and seed the demo-app work copy
     dashboard.ts        # Playwright helpers for the hosted dashboard
     stills.ts           # capture, composite, size check
-    encode.ts           # the ffmpeg recipes (palette compression so far)
-    timeline.ts         # phase 3: the beat recorder (see 3)
+    encode.ts           # the ffmpeg recipes (palette compression, AV1/H.264/poster)
+    recorder.ts         # 2× screencast over CDP (see 3)
+    timeline.ts         # the beat recorder (see 3)
+    video.ts            # take -> render -> encode
   vscode-helper/        # opens the ctrlyoke panel in the capture host (see 2)
   fixtures/workflows/   # the workflows the stills show
   fixtures/home/        # seeds the capture host's user home
@@ -146,10 +153,21 @@ The capture script knows exactly what it clicks and when. While it records, it w
 the timestamp and `boundingBox()` at the moment it happens. No one has to find timestamps by
 scrubbing.
 
-To check before building on it: whether `page.screencast` frames are captured at the context's
-device scale factor. Third-party reports say the older `recordVideo` option records at 1× and
-looks soft on HiDPI. If screencast is also 1×, either assemble the frames from `onFrame` (JPEG,
-`quality: 100`), or record the headed browser window with ffmpeg `ddagrab`.
+**HiDPI, settled 2026-10-18:** Playwright's `page.screencast` (both `path` and `onFrame`) and
+`recordVideo` deliver CSS-size frames whatever the context's `deviceScaleFactor`; a "2×" video
+from them is an upscaled 1× one. Chromium's own `Page.startScreencast` sends device-pixel frames
+only when the browser runs at that scale, so `lib/recorder.ts` launches Chromium with
+`--force-device-scale-factor=2`, keeps `deviceScaleFactor: 2` on the context, and reads the
+screencast over a CDP session. Frames arrive on repaint (about 26 fps at 2700×1800 on the
+dashboard) with their own timestamps and are laid onto 30 fps by ffmpeg's concat demuxer.
+
+**As built (phase 3).** Beats are `click`, `hover`, `focus` and `mark`, each with a label, time
+and box. Holds are an edit decision, so they live in the composition, not the timeline. Headless
+Chromium draws no cursor, so the edit draws one from the click and hover beats (it glides between
+them, ripples on a click and fades when idle) rather than relying on Playwright's `showActions`
+overlay. A take's `prepare` reaches the opening frame unrecorded and must leave the document
+unscrolled: loading a workflow through the Load Workflow File dialog scrolls the body, and the
+take refuses to start if it is.
 
 ### 4. Edit as code
 
@@ -222,7 +240,8 @@ between the two repos (see 7).
 - **Arming:** environment variables read once at activation in a dev build (`IS_DEV_MODE`), before
   any instance exists, because an instance captures its factory when built:
   `CTRLYOKE_DEV_REPLAY=<bundle dir>`, `CTRLYOKE_DEV_REPLAY_SPEED` (default 1; `0` jumps each step
-  to its end state) and `CTRLYOKE_DEV_REPLAY_PAUSE_AT=<event seq>` (holds until the host stops).
+  to its end state), `CTRLYOKE_DEV_REPLAY_MAX_GAP_MS` (idle-gap cap, see phase 3) and
+  `CTRLYOKE_DEV_REPLAY_PAUSE_AT=<event seq>` (holds until the host stops).
   The bundle's workflow is written to `.ctrlyoke/workflows/<slug>.ctrlyoke.json` with every step
   forced headless; the capture script loads and runs it like any workflow.
 - **Workspace side effects** are real: streamed `fileWrite` events are applied as they arrive,
@@ -293,13 +312,22 @@ The original order spiked the hero clip against a live run because no fixture ex
    identity demotion, redaction) and `ctrlyoke export`, no UI; dev-only replay (see "As built" in
    5); the hero and six rate-limiter runs exported to `media/fixtures/runs/` and listed in its
    `fixtures.json` with their start tags.
-3. **Hero clip on replay.** `lib/timeline.ts`, the hero capture script and `Hero.tsx`, replaying
-   the 2026-09-08 run into a scratch copy at `hero-start`. Settle the HiDPI question from 3.
-   Add an idle-gap cap to replay (`CTRLYOKE_DEV_REPLAY_MAX_GAP_MS`): a gap between deliveries
-   longer than the cap plays as the cap, shorter gaps play as recorded, so the irregular rhythm
-   survives and the 18-minute run fits a clip. Apply it before `--speed`. Outcome: a new hero clip
-   with the current heading row, retakeable for free, and the video pipeline the next two phases
-   reuse.
+3. **Hero clip on replay. Done 2026-10-18.** `lib/timeline.ts`, `lib/recorder.ts`,
+   `lib/video.ts`, `shots/hero.capture.ts` and `compositions/Hero.tsx`. Replay gained an idle-gap
+   cap (`CTRLYOKE_DEV_REPLAY_MAX_GAP_MS`, `--max-gap`): a gap between deliveries longer than the
+   cap plays as the cap, shorter gaps as recorded, applied before `--speed`; event timestamps
+   move with their delivery. At 1.2 s the 18-minute run records in about 2.3 minutes, and the edit
+   cuts that to 31 s. The hero now ships as `hero-av1-2700x1800.mp4` (2×, AV1 CRF 48, 24 fps,
+   about 4 MB), the 1× fallback `hero-h264-1350x900.mp4` and `hero-poster-2700x1800.webp`.
+   It is larger than the old 1×, 5 fps clip (720 KB) because it is twice the resolution and
+   five times the frame rate; raise the CRF or drop to 1× in `lib/encode.ts` if weight matters
+   more than sharpness. The same edit also writes the README's `readme-demo-900x600.gif`.
+   **Colour, found 2026-10-19:** screencast JPEGs are full-range BT.601 and ffmpeg passes that
+   through untouched, so stills made with ffmpeg looked right while browsers (which treat web
+   video as limited-range BT.709) showed crushed, shifted colours. Every video stage now
+   converts and tags limited-range BT.709 (`webVideoColorArgs`, Remotion `colorSpace: "bt709"`),
+   and `lib/colorCheck.ts` decodes a frame in Chromium and in ffmpeg after each encode and fails
+   the shot when they disagree.
 4. **Prompt editor clip (#9).** Typed live by Playwright into the hosted dashboard with
    `pressSequentially` and a per-key delay, so completions open as they would for a person. The
    opening "Add Selection to ctrlyoke" beat moves from VS Code to the workspace viewer: open

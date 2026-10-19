@@ -60,6 +60,8 @@ export interface CaptureOptions {
   only?: string;
   /** Where the PNGs go; images/screenshots/ unless previewing elsewhere. */
   outDir: string;
+  /** Video shots: re-render and re-encode the last take instead of recording a new one. */
+  editOnly?: boolean;
 }
 
 /** Every file a shot writes to the output folder. */

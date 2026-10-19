@@ -30,6 +30,8 @@ export interface ReplayOptions {
   bundleDir: string;
   /** Playback speed; 0 jumps each step to its end state. Defaults to 1. */
   speed?: number;
+  /** Play any recorded idle gap longer than this many ms as this, before `speed`. */
+  maxGapMs?: number;
   /** Pause playback indefinitely before this event sequence number. */
   pauseAt?: number;
 }
@@ -41,6 +43,9 @@ function replayEnvironment(replay: ReplayOptions): Record<string, string> {
   };
   if (replay.speed !== undefined) {
     environment.CTRLYOKE_DEV_REPLAY_SPEED = String(replay.speed);
+  }
+  if (replay.maxGapMs !== undefined) {
+    environment.CTRLYOKE_DEV_REPLAY_MAX_GAP_MS = String(replay.maxGapMs);
   }
   if (replay.pauseAt !== undefined) {
     environment.CTRLYOKE_DEV_REPLAY_PAUSE_AT = String(replay.pauseAt);

@@ -18,6 +18,8 @@ npm run media -- properties-tabs --only mcp-tab-800x1600.png
 npm run media -- --all --out ../preview # write somewhere else to compare first
 npm run media -- host properties-tabs   # start the capture host and leave it running
 npm run media -- replay hero --speed 0  # host on a recorded run's start state, armed to replay it
+npm run media -- hero                   # record, edit and encode the hero video
+npm run media -- hero --edit-only       # re-render the last take after changing its composition
 ```
 
 Each capture compiles the extension, so it shows the current source. Stop any running dev host
@@ -41,6 +43,32 @@ because stills render headless at 2×. `quantize` shots (media that ships in the
 4. Composites join part stills side by side, and the PNG size is checked against the file name's
    `-<w>x<h>` suffix.
 
+## Videos
+
+A video shot (`VideoShot` in `lib/video.ts`) is one take of the dashboard, replaying a recorded
+run, cut by a Remotion composition and encoded. `npm run media -- <video>` runs all three:
+
+1. **Take.** The host starts on the run's start tag with replay armed. The shot's `prepare` gets
+   the dashboard to its opening frame unrecorded, then `record` performs the take through a
+   `Timeline` (`lib/timeline.ts`): `timeline.click(locator, "run")`, `hover`, `focus` and `mark`
+   each record a named beat with its time and the element's box. `lib/recorder.ts` records at 2×
+   from Chromium's screencast. The take lands in `.work/video/<id>/` as `raw.mp4` and
+   `timeline.json`.
+2. **Edit.** `compositions/<Name>.tsx` lists cuts over the take by beat name: which stretch plays
+   at what rate, which beat's box the camera frames, and holds. `compositions/edit.ts` turns
+   that into frames, an eased camera and a drawn pointer (headless Chromium draws none).
+   Change the edit, then `--edit-only` re-renders the last take without recording again.
+   `npx remotion studio compositions/index.ts --public-dir .work/video/<id>` previews it live
+   (paste the take's `timeline.json` as the props).
+3. **Encode.** `lib/encode.ts` writes the AV1 file, the H.264 fallback, the WebP poster and,
+   if the shot asks for one, a GIF of the opening (the README's). Every video stage is converted
+   to limited-range BT.709 and tagged as such, because that is what browsers assume. Then
+   `lib/colorCheck.ts` decodes one frame in Chromium and in ffmpeg and fails the shot if the
+   colours differ.
+
+Videos need `ffmpeg` with `libsvtav1` on `PATH`. A hero take replays the whole run, so it takes
+about four minutes before rendering starts.
+
 ## Recorded runs
 
 A shot that shows a run replays a recorded one instead of calling a harness, so every take shows
@@ -51,7 +79,9 @@ the same output and costs nothing. `fixtures/runs/` holds run bundles from `ctrl
 which arms the dev build's replay (`src/dev/replay/`) through `CTRLYOKE_DEV_REPLAY*` environment
 variables. The host writes the run's workflow to `.ctrlyoke/workflows/`; loading and running it
 plays the recording through the real engine, file changes included. `--speed 0` jumps each step to
-its end state, and `--pause-at <seq>` holds playback before that event in `events.jsonl`. Replay
+its end state, and `--pause-at <seq>` holds playback before that event in `events.jsonl`.
+`--max-gap <ms>` plays any idle stretch longer than that as that (before `--speed`), so long
+thinking pauses shrink while the uneven rhythm of the rest survives. Replay
 makes no git commits.
 
 To add a run, export it from the workspace that recorded it and add it to `fixtures.json`:

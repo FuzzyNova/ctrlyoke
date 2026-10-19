@@ -5,11 +5,19 @@
   "private": true,
   "description": "Rerunnable capture scripts for ctrlyoke's screenshots and videos. See dev/backlog/MEDIA_CAPTURE_AUTOMATION_PLAN.md.",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test compositions/edit.test.ts"
   },
   "devDependencies": {
+    "@remotion/bundler": "4.0.532",
+    "@remotion/cli": "4.0.532",
+    "@remotion/renderer": "4.0.532",
     "@types/node": "^22.19.0",
+    "@types/react": "19.2.7",
     "playwright": "^1.64.1",
+    "react": "19.2.9",
+    "react-dom": "19.2.9",
+    "remotion": "4.0.532",
     "typescript": "^6.0.3"
   }
 }

@@ -5,7 +5,7 @@
   "exportedByVersion": "0.2.0",
   "sourceRoot": "C:\\dev\\demo-app",
   "lineage": {
-    "workflowName": "notes tagging and search api",
+    "workflowName": "Notes Tagging and Search API",
     "originalFile": "${workspaceFolder}/.ctrlyoke/workflows/hero-gif.ctrlyoke.yaml"
   },
   "provenance": {

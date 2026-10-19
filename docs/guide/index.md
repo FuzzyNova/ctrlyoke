@@ -3,7 +3,7 @@
 Use this section for the shortest path from install to a working ctrlyoke run.
 
 <video width="675" autoplay muted loop playsinline preload="metadata" aria-label="A six-step workflow running in the browser dashboard, one step per harness, with output streaming and the output minimap filling in">
-  <source src="/screenshots/hero-av1-1350x900.mp4" type='video/mp4; codecs="av01.0.08M.08"'>
+  <source src="/screenshots/hero-av1-2700x1800.mp4" type='video/mp4; codecs="av01.0.12M.08"'>
   <source src="/screenshots/hero-h264-1350x900.mp4" type="video/mp4">
 </video>
 

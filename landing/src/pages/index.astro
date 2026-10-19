@@ -6,11 +6,13 @@ import { LAUNCHED, MARKETPLACE_URL } from "../config";
 // Canonical screenshots live at repo-root images/screenshots/, not duplicated into
 // landing/public/ — see "Screenshot assets" in .github/copilot-instructions.md.
 // The hero ships as AV1 with an H.264 fallback for browsers without AV1 decode
-// (older Safari); browsers fetch only the first source they can play.
-import heroAv1 from "../../../images/screenshots/hero-av1-1350x900.mp4";
+// (older Safari); browsers fetch only the first source they can play. The AV1
+// file is 2× (AV1 level 5.0, hence `av01.0.12M.08`) and the fallback is 1×.
+// Both come from `npm run media -- hero` (media/README.md).
+import heroAv1 from "../../../images/screenshots/hero-av1-2700x1800.mp4";
 import heroH264 from "../../../images/screenshots/hero-h264-1350x900.mp4";
 // Shown while the video loads, and in place of it when autoplay is blocked.
-import heroPoster from "../../../images/screenshots/hero-poster-1350x900.webp";
+import heroPoster from "../../../images/screenshots/hero-poster-2700x1800.webp";
 import takeControlVideo from "../../../images/screenshots/ctrlyoke-take-control-1080p.mp4";
 
 const features = [
@@ -134,7 +136,7 @@ const steps = [
           aria-label="ctrlyoke running a multi-step workflow across several CLI coding agents, with live output and the output minimap"
           class="w-full"
         >
-          <source src={heroAv1} type='video/mp4; codecs="av01.0.08M.08"' />
+          <source src={heroAv1} type='video/mp4; codecs="av01.0.12M.08"' />
           <source src={heroH264} type="video/mp4" />
         </video>
       </div>

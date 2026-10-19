@@ -17,7 +17,8 @@ import {
   type CaptureOptions,
   type Shot,
 } from "./lib/shot.ts";
-import { SHOTS } from "./shots/index.ts";
+import type { VideoShot } from "./lib/video.ts";
+import { SHOTS, VIDEOS } from "./shots/index.ts";
 
 const USAGE = `usage: npm run media -- <command> [options]
 
@@ -25,7 +26,7 @@ commands:
   setup          install media dependencies and Chromium, clone demo-app
   list           list the shots, their files and the recorded runs
   <shot>...      capture these shots
-  --all          capture every shot
+  --all          capture every shot and video
   host [<shot>]  start the capture host with that shot's fixtures, print its
                  URL and leave it running (stop it: npm run dev:host:stop)
   replay <run>   like host, but on that recorded run's start state, armed to
@@ -33,8 +34,10 @@ commands:
 
 options:
   --only <file>     capture only this still
-  --out <dir>       write PNGs here instead of images/screenshots/ (to preview)
+  --out <dir>       write output here instead of images/screenshots/ (to preview)
+  --edit-only       videos: re-render and re-encode the last take, don't record
   --speed <n>       replay speed (default 1; 0 jumps to each step's end state)
+  --max-gap <ms>    play any recorded idle gap longer than this as this
   --pause-at <seq>  pause the replay before this event sequence number`;
 
 function setup(): void {
@@ -51,11 +54,22 @@ function findShot(id: string): Shot {
   return shot;
 }
 
-async function capture(shots: Shot[], options: CaptureOptions): Promise<void> {
+function findVideo(id: string): VideoShot | undefined {
+  return VIDEOS.find((candidate) => candidate.id === id);
+}
+
+async function capture(ids: string[], options: CaptureOptions): Promise<void> {
   if (!existsSync(path.join(MEDIA_DIR, "node_modules", "playwright"))) {
     throw new Error(
       "media dependencies are missing. Run `npm run media -- setup`."
     );
+  }
+  const videos = ids.map(findVideo).filter((video) => video !== undefined);
+  const shots = ids.filter((id) => !findVideo(id)).map(findShot);
+  if (videos.length) {
+    // Loaded lazily, like the stills below; only videos need Remotion.
+    const { captureVideo } = await import("./lib/video.ts");
+    for (const video of videos) await captureVideo(video, options);
   }
   // Loaded lazily so `setup` works before playwright is installed.
   const { captureStage, compose } = await import("./lib/stills.ts");
@@ -93,6 +107,17 @@ function list(): void {
     for (const file of outputFiles(shot))
       console.log(`${"".padEnd(21)}${file}`);
   }
+  for (const video of VIDEOS) {
+    console.log(`${video.id.padEnd(20)} ${video.description}`);
+    const { av1, h264, poster, gif } = video.outputs;
+    for (const file of [
+      av1,
+      h264.file,
+      poster.file,
+      ...(gif ? [gif.file] : []),
+    ])
+      console.log(`${"".padEnd(21)}${file}`);
+  }
   console.log("\nrecorded runs (replay <run>):");
   for (const fixture of listRunFixtures()) {
     console.log(`${fixture.name.padEnd(22)} ${fixture.description}`);
@@ -116,9 +141,11 @@ async function main(): Promise<void> {
     allowPositionals: true,
     options: {
       all: { type: "boolean" },
+      "edit-only": { type: "boolean" },
       only: { type: "string" },
       out: { type: "string" },
       speed: { type: "string" },
+      "max-gap": { type: "string" },
       "pause-at": { type: "string" },
       help: { type: "boolean" },
     },
@@ -126,11 +153,17 @@ async function main(): Promise<void> {
   const options: CaptureOptions = {
     only: values.only,
     outDir: values.out ? path.resolve(values.out) : SCREENSHOTS_DIR,
+    editOnly: values["edit-only"],
   };
   const [command, ...rest] = positionals;
 
   if (values.help) return console.log(USAGE);
-  if (values.all) return capture(SHOTS, options);
+  if (values.all) {
+    return capture(
+      [...SHOTS, ...VIDEOS].map((shot) => shot.id),
+      options
+    );
+  }
   switch (command) {
     case undefined:
     case "help":
@@ -154,13 +187,14 @@ async function main(): Promise<void> {
       const replay = {
         bundleDir: fixture.bundleDir,
         speed: parseCount("speed", values.speed),
+        maxGapMs: parseCount("max-gap", values["max-gap"]),
         pauseAt: parseCount("pause-at", values["pause-at"]),
       };
       console.log(await startHost({ replay }));
       return;
     }
     default:
-      return capture(positionals.map(findShot), options);
+      return capture(positionals, options);
   }
 }
 

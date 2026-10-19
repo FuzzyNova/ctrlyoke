@@ -22,7 +22,8 @@ because the small palette greyed every accent colour) plus `output-pane-find-dif
 `https://ctrlyoke.dev/docs/screenshots/` URLs. `scripts/sync-docs-screenshots.mjs` now scans
 `README.md`, so those files publish with the docs site. The full 23 s hero came out at 4–5 MB
 as a GIF at any legible size, which is why the README cut is shorter. The landing hero also has
-a `hero-poster-1350x900.webp` poster frame. Everything else below is post-launch polish.
+a poster frame (`hero-poster-2700x1800.webp` since the 2026-10-18 retake). Everything else below
+is post-launch polish.
 
 **Status:** Partial. The release-blocking README media is complete; remaining captures and slotting
 are post-launch polish.
@@ -263,6 +264,14 @@ Each item: what to capture, what prep it needs, where it's used.
   2026-10-11 to `hero-av1-1350x900.mp4` (720 KB) plus an H.264 fallback
   `hero-h264-1350x900.mp4` (1.7 MB), and the GIF removed. Used as the landing hero and on
   `docs/guide/index.md`; not yet in `README.md` (the Marketplace needs a GIF or image there).
+  **Retaken 2026-10-18 by script** (`npm run media -- hero`, MEDIA_CAPTURE_AUTOMATION_PLAN.md
+  phase 3): the 2026-09-08 run replayed into the current UI, cut to 31 s, ending on two output
+  minimap jumps. Now `hero-av1-2700x1800.mp4` (2×), `hero-h264-1350x900.mp4` (1× fallback) and
+  `hero-poster-2700x1800.webp`, plus `readme-demo-900x600.gif` (the opening 10 s, same recipe
+  as below). Retaken again 2026-10-19 with every diff expanded, Codex's encrypted reasoning rows
+  shown as concise summaries and Antigravity's "stream was interrupted" rows removed (edits to
+  the fixture, see its `fixtures.json` entry), the readable name "Notes Tagging and Search API",
+  and colours fixed for browsers (limited-range BT.709).
 
 ### 7. Built-in mobile editor section, plus the QR-scan/PWA-install walkthrough (iOS & Android)
 
