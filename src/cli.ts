@@ -143,6 +143,10 @@ import {
   type RunCommandOptions,
 } from "./cli/CliRunCommandDefinitions";
 import { registerHistoryCommands } from "./cli/HistoryCommandDefinitions";
+import {
+  exportRunCommand,
+  registerExportCommand,
+} from "./cli/RunExportCommand";
 import { registerStatusCommand } from "./cli/StatusCommandDefinitions";
 import { registerServerCommand } from "./cli/ServerCommand";
 import { statusCommand } from "./cli/CliStatusCommand";
@@ -380,6 +384,15 @@ registerHistoryCommands(program, {
       ),
   },
 });
+
+registerExportCommand(program, (options) =>
+  handleHistoryCommand(
+    exportRunCommand(version, options, {
+      writeOut: (message) => console.log(message),
+      writeErr: (message) => console.error(chalk.yellow(message)),
+    })
+  )
+);
 
 registerStatusCommand(program, {
   status: (options) =>

@@ -1,6 +1,26 @@
 # Run Export / Import
 
-> **Status:** Proposed — not implemented. Written 2026-08-14 against current code.
+> **Status:** Export half built 2026-10-18 (for media replay, `MEDIA_CAPTURE_AUTOMATION_PLAN.md`
+> phase 2); import, the dashboard UI and asset bundling are not. Written 2026-08-14 against
+> current code.
+>
+> **Built 2026-10-18:** `exportRunBundle` (`src/core/orchestration/RunBundleExporter.ts`), the
+> loader `readRunBundle` (`RunBundleReader.ts`), the format types (`src/types/RunBundleTypes.ts`)
+> and `ctrlyoke export` (see `docs/cli/ctrlyoke.md`). Where it differs from the text below:
+>
+> - **Paths are tokenized, not root-relative** (`src/utils/RunBundlePaths.ts`): the workspace
+>   becomes `${workspaceFolder}/…` and the exporter's home `~/…`, matched in every spelling a run
+>   contains (either separator, doubled `\\`, any drive-letter case, MSYS `/c/…`, `file:///c%3A/…`,
+>   paths after an ANSI escape). The token makes the rewrite reversible at load time; a relative
+>   path would be ambiguous inside prose. A home path a shell flattened (`C:Usersalex…`) keeps
+>   all but the user name, which becomes `<user>`.
+> - **`--run`, not `--from`**, matching `history show/steps`; `--redact <policy>` is not offered,
+>   the policy is fixed at `secrets-v1` (heuristics plus re-resolved declared secrets).
+> - **The definition is the authored workflow** (`buildAuthoredWorkflow`, shared with
+>   `WorkflowSerializer`), so no `_runtime` reaches the bundle.
+> - **Snapshots are dropped unless `--with-snapshots`** (open question 4, settled as proposed).
+> - Export refuses a run whose runner lock is live, and writes through a staging directory and
+>   an atomic rename.
 >
 > **2026-10-10 audit:** Still not started (no exporter, bundle format, materializer, or
 > `export`/`import` CLI command). Since writing, user-scoped run history

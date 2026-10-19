@@ -3,8 +3,6 @@ import * as fs from "fs/promises";
 import * as yaml from "js-yaml";
 import {
   MESSAGE_TYPES,
-  WORKFLOW_PROPERTY_KEYS,
-  PROMPT_PROPERTIES,
   PANEL_CLIENT_ID,
   CLEAR_HISTORY_CONFIRMATION_PHRASE,
   EMPTY_TRASH_CONFIRMATION_PHRASE,
@@ -27,10 +25,6 @@ import { shouldClearTemplateVariableDefaults } from "../utils/TemplateVariableDe
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import { AsyncWriteQueue } from "../config/AsyncWriteQueue";
 import { Log } from "../utils/Log";
-import {
-  CURRENT_SCHEMA_VERSIONS,
-  PERSISTED_STORES,
-} from "../utils/PersistedSchemaGuard";
 import { readJsonFile } from "../utils/FileSystemUtils";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import type {
@@ -55,11 +49,7 @@ import {
 } from "../utils/HistoryTrashDescriptions";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import type { PostMessageFn } from "./WebviewSettingsSync";
-import {
-  EXECUTION_PROPERTY_KEYS,
-  type WorkflowViewAddress,
-  type WorkflowKey,
-} from "../types/CtrlYokeTypes";
+import type { WorkflowViewAddress, WorkflowKey } from "../types/CtrlYokeTypes";
 import { extractExtensionsFromGlobs } from "../utils/fileFilterUtils";
 import { isPathWithinDirectory } from "../utils/PathSecurity";
 import { pathsEqual } from "../utils/PathCasing";
@@ -70,7 +60,7 @@ import {
 } from "../utils/WorkflowBundleAnalyzer";
 import type { SaveWorkflowBundlePreview } from "../types/WebviewMessageTypes";
 import { writeWorkflowBundle } from "../utils/WorkflowBundleWriter";
-import { normalizeParallelGroupTopology } from "../core/ParallelGroupTopology";
+import { buildAuthoredWorkflow } from "../core/WorkflowStepSanitizer";
 import type {
   DashboardHostActions,
   KeyValueStore,
@@ -522,7 +512,7 @@ export class WorkflowSerializer {
     try {
       const absolutePath = await this.resolveSafeExportPath(filePath);
       const workingFile = await readJsonFile(workingFilePath);
-      const clean = this.buildCleanWorkflow(workingFile);
+      const clean = buildAuthoredWorkflow(workingFile);
       const analysis = await this.analyzeSaveBundle(
         clean,
         absolutePath,
@@ -543,117 +533,6 @@ export class WorkflowSerializer {
         error: getErrorMessage(error),
       });
     }
-  }
-
-  // WORKFLOW_FIELDS: top-level properties to preserve when stripping a working
-  // file down to a durable workflow (excludes originalFile, workflowName,
-  // startedAt, _runtime, and other working-file-only fields).
-  private static readonly WORKFLOW_FIELDS = [
-    PROMPT_PROPERTIES.PROMPT,
-    PROMPT_PROPERTIES.STEPS,
-    PROMPT_PROPERTIES.FINAL_STEP,
-    PROMPT_PROPERTIES.VARS,
-    ...WORKFLOW_PROPERTY_KEYS,
-  ] as const;
-
-  // PROMPT_FIELDS: per-step properties to preserve (covers both prompt steps
-  // and script steps; fields absent from a step are silently skipped).
-  private static readonly PROMPT_FIELDS = [
-    PROMPT_PROPERTIES.NAME,
-    PROMPT_PROPERTIES.ENABLED,
-    PROMPT_PROPERTIES.COLOR,
-    PROMPT_PROPERTIES.STEP_TYPE,
-    PROMPT_PROPERTIES.PROMPT,
-    PROMPT_PROPERTIES.SCRIPT,
-    PROMPT_PROPERTIES.ENV,
-    PROMPT_PROPERTIES.TIMEOUT,
-    PROMPT_PROPERTIES.ON_PASS,
-    PROMPT_PROPERTIES.ON_FAIL,
-    PROMPT_PROPERTIES.COMPARE_SOURCE,
-    PROMPT_PROPERTIES.OPERATOR,
-    PROMPT_PROPERTIES.EXPECTED,
-    PROMPT_PROPERTIES.IGNORE_CASE,
-    PROMPT_PROPERTIES.SHELL,
-    ...EXECUTION_PROPERTY_KEYS,
-  ] as const;
-
-  /**
-   * Strip a working file down to a durable workflow shape: only real
-   * workflow/prompt fields survive (WORKFLOW_FIELDS/PROMPT_FIELDS), so
-   * `_runtime`, `originalFile`, `workflowName`, `startedAt`, and other
-   * working-file-only fields are dropped. Shared by `handleSaveWorkflow`
-   * and `handleSaveWorkflowAsTemplate`.
-   */
-  private buildCleanWorkflow(
-    workingFile: Record<string, any>
-  ): Record<string, unknown> {
-    const clean: Record<string, unknown> = {
-      schemaVersion:
-        CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.WORKFLOW_DEFINITION],
-    };
-
-    for (const field of WorkflowSerializer.WORKFLOW_FIELDS) {
-      if (
-        field in workingFile &&
-        field !== PROMPT_PROPERTIES.STEPS &&
-        field !== PROMPT_PROPERTIES.FINAL_STEP
-      ) {
-        clean[field] = workingFile[field];
-      }
-    }
-
-    if (workingFile.finalStep && typeof workingFile.finalStep === "object") {
-      const cleanFinalStep: Record<string, unknown> = {};
-      for (const field of WorkflowSerializer.PROMPT_FIELDS) {
-        if (field in workingFile.finalStep) {
-          cleanFinalStep[field] = workingFile.finalStep[field];
-        }
-      }
-      clean.finalStep = cleanFinalStep;
-    }
-
-    if (Array.isArray(workingFile.steps)) {
-      const cleanSteps = workingFile.steps.map(
-        (step: Record<string, unknown>) => {
-          const cleanStep: Record<string, unknown> = {};
-          for (const field of WorkflowSerializer.PROMPT_FIELDS) {
-            if (field in step) {
-              cleanStep[field] = step[field];
-            }
-          }
-          return cleanStep;
-        }
-      );
-      const topology = normalizeParallelGroupTopology({
-        steps: workingFile.steps,
-        parallelGroups: workingFile.parallelGroups,
-      });
-      const parallelGroups = topology.parallelGroups;
-      const groupsByStart = new Map(
-        parallelGroups.map((group) => [group.startIndex, group])
-      );
-      const authoredSteps: Record<string, unknown>[] = [];
-
-      for (let index = 0; index < cleanSteps.length;) {
-        const group = groupsByStart.get(index);
-        if (!group) {
-          authoredSteps.push(cleanSteps[index]);
-          index++;
-          continue;
-        }
-
-        authoredSteps.push({
-          parallel: cleanSteps.slice(group.startIndex, group.endIndex + 1),
-          failFast: group.failFast,
-        });
-        index = group.endIndex + 1;
-      }
-      clean.steps = authoredSteps;
-    } else if (workingFile.prompt !== undefined) {
-      clean.prompt = workingFile.prompt;
-    }
-
-    return clean;
   }
 
   /**
@@ -691,7 +570,7 @@ export class WorkflowSerializer {
 
     try {
       const workingFile = await readJsonFile(workingFilePath);
-      const clean = this.buildCleanWorkflow(workingFile);
+      const clean = buildAuthoredWorkflow(workingFile);
       const absolutePath = await this.resolveSafeExportPath(filePath);
       const analysis = await this.analyzeSaveBundle(
         clean,
@@ -815,7 +694,7 @@ export class WorkflowSerializer {
 
     try {
       const workingFile = await readJsonFile(workingFilePath);
-      const clean = this.buildCleanWorkflow(workingFile);
+      const clean = buildAuthoredWorkflow(workingFile);
       const analysis = await this.analyzeSaveBundle(
         clean,
         undefined,

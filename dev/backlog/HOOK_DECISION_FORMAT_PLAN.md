@@ -90,7 +90,7 @@ so existing harness-specific scripts keep receiving native payloads. A hook with
 `format: "ctrlyoke"` is valid only on decision events (`preToolUse`, `permissionRequest`); reject
 it elsewhere in schema validation. Schema change: describe the format in the property
 `description`, then run `npm run schema:update`. `HooksEditor.tsx` gets the control, and the field
-goes into `WorkflowSerializer.PROMPT_FIELDS` coverage (see `test.instructions.md`, the round-trip
+goes into `AUTHORED_STEP_FIELDS` (`WorkflowStepSanitizer.ts`) coverage (see `test.instructions.md`, the round-trip
 suites).
 
 **Input** (stdin, one JSON object):

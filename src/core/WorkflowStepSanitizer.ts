@@ -7,8 +7,15 @@ import {
   type ScriptOperator,
   EXECUTION_MODES,
   type ExecutionMode,
+  PROMPT_PROPERTIES,
+  WORKFLOW_PROPERTY_KEYS,
 } from "../types/DashboardConstants";
 import {
+  CURRENT_SCHEMA_VERSIONS,
+  PERSISTED_STORES,
+} from "../utils/PersistedSchemaGuard";
+import {
+  EXECUTION_PROPERTY_KEYS,
   isScriptStep,
   isPriorContextRunSource,
   type ErrorBehavior,
@@ -108,6 +115,120 @@ export function buildDefinitionSnapshot(
     ...(finalStep ? { finalStep: stripStepRuntime([finalStep])[0] } : {}),
     ...(rewindBoundary !== undefined ? { rewindBoundary } : {}),
   };
+}
+
+/**
+ * Top-level properties an authored workflow keeps when a working file is
+ * stripped down to one (`originalFile`, `workflowName`, `startedAt`, `_runtime`
+ * and the other working-file-only fields are dropped).
+ */
+export const AUTHORED_WORKFLOW_FIELDS = [
+  PROMPT_PROPERTIES.PROMPT,
+  PROMPT_PROPERTIES.STEPS,
+  PROMPT_PROPERTIES.FINAL_STEP,
+  PROMPT_PROPERTIES.VARS,
+  ...WORKFLOW_PROPERTY_KEYS,
+] as const;
+
+/**
+ * Per-step properties an authored workflow keeps (prompt and script steps;
+ * fields absent from a step are skipped). Anything missing from this list is
+ * silently dropped on save.
+ */
+export const AUTHORED_STEP_FIELDS = [
+  PROMPT_PROPERTIES.NAME,
+  PROMPT_PROPERTIES.ENABLED,
+  PROMPT_PROPERTIES.COLOR,
+  PROMPT_PROPERTIES.STEP_TYPE,
+  PROMPT_PROPERTIES.PROMPT,
+  PROMPT_PROPERTIES.SCRIPT,
+  PROMPT_PROPERTIES.ENV,
+  PROMPT_PROPERTIES.TIMEOUT,
+  PROMPT_PROPERTIES.ON_PASS,
+  PROMPT_PROPERTIES.ON_FAIL,
+  PROMPT_PROPERTIES.COMPARE_SOURCE,
+  PROMPT_PROPERTIES.OPERATOR,
+  PROMPT_PROPERTIES.EXPECTED,
+  PROMPT_PROPERTIES.IGNORE_CASE,
+  PROMPT_PROPERTIES.SHELL,
+  ...EXECUTION_PROPERTY_KEYS,
+] as const;
+
+/**
+ * Strip a working file down to a durable, authored workflow: only
+ * `AUTHORED_WORKFLOW_FIELDS`/`AUTHORED_STEP_FIELDS` survive, and parallel
+ * groups fold back into `parallel:` blocks. Shared by Save As, save as
+ * template and run bundle export.
+ */
+export function buildAuthoredWorkflow(
+  workingFile: Record<string, any>
+): Record<string, unknown> {
+  const clean: Record<string, unknown> = {
+    schemaVersion:
+      CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.WORKFLOW_DEFINITION],
+  };
+
+  for (const field of AUTHORED_WORKFLOW_FIELDS) {
+    if (
+      field in workingFile &&
+      field !== PROMPT_PROPERTIES.STEPS &&
+      field !== PROMPT_PROPERTIES.FINAL_STEP
+    ) {
+      clean[field] = workingFile[field];
+    }
+  }
+
+  if (workingFile.finalStep && typeof workingFile.finalStep === "object") {
+    const cleanFinalStep: Record<string, unknown> = {};
+    for (const field of AUTHORED_STEP_FIELDS) {
+      if (field in workingFile.finalStep) {
+        cleanFinalStep[field] = workingFile.finalStep[field];
+      }
+    }
+    clean.finalStep = cleanFinalStep;
+  }
+
+  if (Array.isArray(workingFile.steps)) {
+    const cleanSteps = workingFile.steps.map(
+      (step: Record<string, unknown>) => {
+        const cleanStep: Record<string, unknown> = {};
+        for (const field of AUTHORED_STEP_FIELDS) {
+          if (field in step) {
+            cleanStep[field] = step[field];
+          }
+        }
+        return cleanStep;
+      }
+    );
+    const topology = normalizeParallelGroupTopology({
+      steps: workingFile.steps,
+      parallelGroups: workingFile.parallelGroups,
+    });
+    const groupsByStart = new Map(
+      topology.parallelGroups.map((group) => [group.startIndex, group])
+    );
+    const authoredSteps: Record<string, unknown>[] = [];
+
+    for (let index = 0; index < cleanSteps.length;) {
+      const group = groupsByStart.get(index);
+      if (!group) {
+        authoredSteps.push(cleanSteps[index]);
+        index++;
+        continue;
+      }
+
+      authoredSteps.push({
+        parallel: cleanSteps.slice(group.startIndex, group.endIndex + 1),
+        failFast: group.failFast,
+      });
+      index = group.endIndex + 1;
+    }
+    clean.steps = authoredSteps;
+  } else if (workingFile.prompt !== undefined) {
+    clean.prompt = workingFile.prompt;
+  }
+
+  return clean;
 }
 
 /**

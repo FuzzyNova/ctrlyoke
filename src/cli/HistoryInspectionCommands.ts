@@ -336,9 +336,9 @@ export async function runsHistoryCommand(
  * command reports a missing lineage, and a lineage with only a draft, the
  * same way `history runs` does.
  */
-async function resolveHistoryRun(
+export async function resolveHistoryRun(
   workspace: HistoryInspectionWorkspace,
-  io: HistoryInspectionCommandIo,
+  io: Pick<HistoryInspectionCommandIo, "writeErr">,
   workflowKey: string,
   runSelector: string | undefined
 ): Promise<{

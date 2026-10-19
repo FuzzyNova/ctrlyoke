@@ -25,6 +25,7 @@ ctrlyoke history steps --workflow <key-or-name> [--run <ref|runId>] [--json] [--
 ctrlyoke history show --workflow <key-or-name> [--run <ref|runId>] [--step <selector>] [--attempt <n|latest|all>] [--json] [--summary|--events]
 ctrlyoke history search <query> [filters] [--json]
 ctrlyoke history trash list|restore <id>|purge <id>|empty [--yes]
+ctrlyoke export --workflow <key-or-name> [--run <ref|runId>] --out <dir> [--with-snapshots] [--force] [--cwd <path>] [--json]
 ctrlyoke step edit [file] --workflow <key-or-name> --run <ref|runId> --index <index> [--prompt <text>]
 ctrlyoke step remove --workflow <key-or-name> --run <ref|runId> --index <index>
 ctrlyoke step reorder --workflow <key-or-name> --run <ref|runId> --order <indices>
@@ -855,6 +856,32 @@ versioned document. `restore` puts an entry back; a run whose slot has been
 taken again stays in Recently deleted and is reported. `purge` and `empty`
 delete permanently, so they ask first, and refuse without `--yes` when not run
 interactively.
+
+## `ctrlyoke export`
+
+Write one finished run to a portable run bundle, a `<name>.ctrlyokerun`
+directory you can attach to a bug report or keep outside your history:
+
+```bash
+ctrlyoke export --workflow release --out release-run
+ctrlyoke export --workflow release --run 7 --out release-run --with-snapshots --force
+```
+
+`--run` defaults to the lineage's latest run, and `.ctrlyokerun` is appended to
+`--out` when missing. A run that is still executing is refused, as is an
+existing bundle unless you pass `--force`.
+
+The bundle holds the run's workflow as authored (no runtime state), its step
+summary and its recorded timeline. Paths under the workspace are written as
+`${workspaceFolder}/…` and paths under your home folder as `~/…`, so the bundle
+names neither your checkout nor your user. Values of the secrets the workflow
+declares, and values that look like credentials, are replaced with
+`[REDACTED]`. Workspace snapshots carry file contents, so they are left out
+unless you pass `--with-snapshots`.
+
+The summary lists how many values were redacted and every path outside the
+workspace and home folder, which stays as written. Redaction is best effort:
+review a bundle before you share it.
 
 ## `ctrlyoke step`
 

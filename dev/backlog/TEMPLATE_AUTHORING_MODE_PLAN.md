@@ -113,7 +113,7 @@ TemplateScope; templateId?: string }`. `path` is unset until the first save of a
 - The working file **keeps `_templateMeta` at the top level**, so the schema's
   conditional (fact 3) admits placeholders in harness fields everywhere in the
   draft. This means auditing every path that rebuilds or cleans a working file
-  (`buildCleanWorkflow`, the working-file writers in `WorkflowSerializer`, the
+  (`buildAuthoredWorkflow`, the working-file writers in `WorkflowSerializer`, the
   normalizer behind `validateAndNormalize`) so none of them strips the key or
   replaces a placeholder with a resolved harness. Add a regression test that a
   template draft round-trips byte-stable through load → edit → save.
