@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "kind": "ctrlyoke.run.bundle",
+  "exportedAt": "2026-10-19T02:11:45.885Z",
+  "exportedByVersion": "0.2.0",
+  "sourceRoot": "C:\\dev\\demo-app",
+  "lineage": {
+    "workflowName": "rate limiter middleware - agy",
+    "originalFile": "${workspaceFolder}/.ctrlyoke/workflows/marketing-script.ctrlyoke.yaml"
+  },
+  "provenance": {
+    "workflowKey": "rate-limiter-middleware-agy-2026-09-01T03-40-52-321",
+    "runRef": "run-2026-09-01T03-41-39-935Z",
+    "runId": 1,
+    "steps": [
+      {
+        "stepIndex": 0,
+        "harness": "antigravity-cli",
+        "model": "gemini-3.6-flash-low",
+        "sessionId": "2e853cc2-3d57-43e4-b95f-7bab6c2b3d30"
+      },
+      {
+        "stepIndex": 1,
+        "harness": "antigravity-cli",
+        "model": "gemini-3.6-flash-low",
+        "sessionId": "2e853cc2-3d57-43e4-b95f-7bab6c2b3d30"
+      },
+      {
+        "stepIndex": 2,
+        "harness": "antigravity-cli",
+        "model": "gemini-3.6-flash-low",
+        "sessionId": "2e853cc2-3d57-43e4-b95f-7bab6c2b3d30"
+      }
+    ]
+  },
+  "includesSnapshots": true,
+  "redaction": {
+    "policy": "secrets-v1",
+    "removedCount": 0,
+    "byRule": {}
+  },
+  "externalPaths": []
+}

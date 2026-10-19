@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "kind": "ctrlyoke.run.bundle",
+  "exportedAt": "2026-10-19T02:11:47.593Z",
+  "exportedByVersion": "0.2.0",
+  "sourceRoot": "C:\\dev\\demo-app",
+  "lineage": {
+    "workflowName": "rate limiter middleware - opencode",
+    "originalFile": "${workspaceFolder}/.ctrlyoke/workflows/marketing-script.ctrlyoke.yaml"
+  },
+  "provenance": {
+    "workflowKey": "rate-limiter-middleware-opencode-2026-09-01T03-53-58-638",
+    "runRef": "run-2026-09-01T03-54-15-517Z",
+    "runId": 1,
+    "steps": [
+      {
+        "stepIndex": 0,
+        "harness": "opencode-cli",
+        "model": "opencode/big-pickle",
+        "sessionId": "ses_fa4e5798effeT19Kks4Tycxw6J"
+      },
+      {
+        "stepIndex": 1,
+        "harness": "opencode-cli",
+        "model": "opencode/big-pickle",
+        "sessionId": "ses_fa4e5798effeT19Kks4Tycxw6J"
+      },
+      {
+        "stepIndex": 2,
+        "harness": "opencode-cli",
+        "model": "opencode/big-pickle",
+        "sessionId": "ses_fa4e5798effeT19Kks4Tycxw6J"
+      }
+    ]
+  },
+  "includesSnapshots": true,
+  "redaction": {
+    "policy": "secrets-v1",
+    "removedCount": 0,
+    "byRule": {}
+  },
+  "externalPaths": []
+}

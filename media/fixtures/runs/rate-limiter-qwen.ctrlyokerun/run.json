@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "kind": "ctrlyoke.run.bundle",
+  "exportedAt": "2026-10-19T02:11:48.153Z",
+  "exportedByVersion": "0.2.0",
+  "sourceRoot": "C:\\dev\\demo-app",
+  "lineage": {
+    "workflowName": "rate limiter middleware - qwen",
+    "originalFile": "${workspaceFolder}/.ctrlyoke/workflows/marketing-script.ctrlyoke.yaml"
+  },
+  "provenance": {
+    "workflowKey": "rate-limiter-middleware-qwen-2026-09-01T03-58-49-074",
+    "runRef": "run-2026-09-01T03-59-10-633Z",
+    "runId": 1,
+    "steps": [
+      {
+        "stepIndex": 0,
+        "harness": "qwen-cli",
+        "model": "qwen3.5-plus",
+        "sessionId": "2c6b14f6-a3bd-4cb8-92a7-9f4e03bc30ed"
+      },
+      {
+        "stepIndex": 1,
+        "harness": "qwen-cli",
+        "model": "qwen3.5-plus",
+        "sessionId": "2c6b14f6-a3bd-4cb8-92a7-9f4e03bc30ed"
+      },
+      {
+        "stepIndex": 2,
+        "harness": "qwen-cli",
+        "model": "qwen3.5-plus",
+        "sessionId": "2c6b14f6-a3bd-4cb8-92a7-9f4e03bc30ed"
+      }
+    ]
+  },
+  "includesSnapshots": true,
+  "redaction": {
+    "policy": "secrets-v1",
+    "removedCount": 0,
+    "byRule": {}
+  },
+  "externalPaths": []
+}

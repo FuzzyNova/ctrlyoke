@@ -10,6 +10,7 @@ import { startHost, stopHost } from "./lib/devHost.ts";
 import { quantizePng } from "./lib/encode.ts";
 import { run } from "./lib/exec.ts";
 import { MEDIA_DIR, SCREENSHOTS_DIR } from "./lib/paths.ts";
+import { findRunFixture, listRunFixtures } from "./lib/runs.ts";
 import {
   outputFiles,
   selectStills,
@@ -22,15 +23,19 @@ const USAGE = `usage: npm run media -- <command> [options]
 
 commands:
   setup          install media dependencies and Chromium, clone demo-app
-  list           list the shots and their files
+  list           list the shots, their files and the recorded runs
   <shot>...      capture these shots
   --all          capture every shot
   host [<shot>]  start the capture host with that shot's fixtures, print its
                  URL and leave it running (stop it: npm run dev:host:stop)
+  replay <run>   like host, but on that recorded run's start state, armed to
+                 replay the run when its workflow is run
 
 options:
-  --only <file>  capture only this still
-  --out <dir>    write PNGs here instead of images/screenshots/ (to preview)`;
+  --only <file>     capture only this still
+  --out <dir>       write PNGs here instead of images/screenshots/ (to preview)
+  --speed <n>       replay speed (default 1; 0 jumps to each step's end state)
+  --pause-at <seq>  pause the replay before this event sequence number`;
 
 function setup(): void {
   run("npm", ["install"], MEDIA_DIR);
@@ -88,6 +93,22 @@ function list(): void {
     for (const file of outputFiles(shot))
       console.log(`${"".padEnd(21)}${file}`);
   }
+  console.log("\nrecorded runs (replay <run>):");
+  for (const fixture of listRunFixtures()) {
+    console.log(`${fixture.name.padEnd(22)} ${fixture.description}`);
+  }
+}
+
+function parseCount(
+  name: string,
+  value: string | undefined
+): number | undefined {
+  if (value === undefined) return undefined;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`--${name} must be a non-negative number`);
+  }
+  return parsed;
 }
 
 async function main(): Promise<void> {
@@ -97,6 +118,8 @@ async function main(): Promise<void> {
       all: { type: "boolean" },
       only: { type: "string" },
       out: { type: "string" },
+      speed: { type: "string" },
+      "pause-at": { type: "string" },
       help: { type: "boolean" },
     },
   });
@@ -122,6 +145,18 @@ async function main(): Promise<void> {
       const stage = rest[0] ? findShot(rest[0]).stages[0] : undefined;
       prepareDemoApp(stage?.workflows ?? []);
       console.log(await startHost(stage?.host));
+      return;
+    }
+    case "replay": {
+      if (!rest[0]) throw new Error("usage: npm run media -- replay <run>");
+      const fixture = findRunFixture(rest[0]);
+      prepareDemoApp([], fixture.startTag);
+      const replay = {
+        bundleDir: fixture.bundleDir,
+        speed: parseCount("speed", values.speed),
+        pauseAt: parseCount("pause-at", values["pause-at"]),
+      };
+      console.log(await startHost({ replay }));
       return;
     }
     default:

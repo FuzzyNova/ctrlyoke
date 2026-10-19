@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "kind": "ctrlyoke.run.bundle",
+  "exportedAt": "2026-10-19T02:11:48.688Z",
+  "exportedByVersion": "0.2.0",
+  "sourceRoot": "C:\\dev\\demo-app",
+  "lineage": {
+    "workflowName": "rate limiter middleware - claude",
+    "originalFile": "${workspaceFolder}/.ctrlyoke/workflows/marketing-script.ctrlyoke.yaml"
+  },
+  "provenance": {
+    "workflowKey": "rate-limiter-middleware-claude-2026-09-01T04-07-35-475",
+    "runRef": "run-2026-09-01T04-07-59-522Z",
+    "runId": 1,
+    "steps": [
+      {
+        "stepIndex": 0,
+        "harness": "claude-cli",
+        "model": "haiku",
+        "sessionId": "4f58ce40-4189-4179-a5c0-5c97191d7621"
+      },
+      {
+        "stepIndex": 1,
+        "harness": "claude-cli",
+        "model": "haiku",
+        "sessionId": "4f58ce40-4189-4179-a5c0-5c97191d7621"
+      },
+      {
+        "stepIndex": 2,
+        "harness": "claude-cli",
+        "model": "haiku",
+        "sessionId": "4f58ce40-4189-4179-a5c0-5c97191d7621"
+      }
+    ]
+  },
+  "includesSnapshots": true,
+  "redaction": {
+    "policy": "secrets-v1",
+    "removedCount": 0,
+    "byRule": {}
+  },
+  "externalPaths": []
+}

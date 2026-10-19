@@ -394,8 +394,10 @@ Each item: what to capture, what prep it needs, where it's used.
 - **Use:** landing "Point at the context you mean" feature card (`📎`, currently icon-only); a new
   `docs/workflows/context-files.md` visual walkthrough.
 - **Capture script:** `demo-app/.ctrlyoke/workflows/prompt-editor-demo.ctrlyoke.yaml`. Desktop take:
-  open on a VS Code "Add Selection to ctrlyoke" beat, then zoom in on the prompt editor and type the
-  rest. It covers `#selection`, `#sym`, `@` file and directory, `$previous`, a `~` commit, `!` secret
+  open on an "Add Selection to ctrlyoke" beat in the hosted dashboard's workspace viewer (its editor
+  context menu has the same action as VS Code's, and unlike VS Code it can be scripted), then zoom
+  in on the prompt editor and type the rest. Automated as phase 4 of
+  `MEDIA_CAPTURE_AUTOMATION_PLAN.md`; the file's header still says VS Code. It covers `#selection`, `#sym`, `@` file and directory, `$previous`, a `~` commit, `!` secret
   and `/skill:`. The prep and the exact text are in the file's header comment.
 
 ### 10. Built-in code editor (`WorkspaceViewerModal`)
@@ -628,17 +630,21 @@ line, where it renders as a button. Descriptions support `code`, **bold** and li
 | `installCli`     | ``The `ctrlyoke` command already works in VS Code's terminals. For other shells and CI, install the matching version from npm (needs Node.js 22.12 or later).\n[Install CLI](command:ctrlyoke.installCli)``                                                                                                                       |
 | `getHelp`        | `Pick the **ctrlyoke-tech-support** agent in the Agent picker and ask it anything about the dashboard, workflow files or harnesses.\n[Open the docs](https://ctrlyoke.dev/docs)`                                                                                                                                                  |
 
-### 14. "Build visually or in code" — the same workflow in the dashboard and in VS Code
+### 14. "Build visually or edit as YAML" — the same workflow in the dashboard and as a file
 
 - **What:** replaces the hand-highlighted YAML block in `landing/src/pages/index.astro` ("Build
-  visually. This is the file underneath."). The pitch is "edit workflows visually or in a text
-  editor", not "here is what's underneath". Two synced captures of
-  `demo-app/.ctrlyoke/workflows/bug-sweep.ctrlyoke.yaml`: the dashboard step list and properties, and
-  the same file being edited in VS Code with ctrlyoke's YAML completions (harness values, `@` paths,
-  `$step:`). It's a parallel group of three bug hunts on three harnesses, then triage, then a fix
-  for each bug.
-- **Use:** that landing section, with the heading reworded to match; `docs/workflows/yaml-format.md`.
-- **Dimensions:** category D if it ships as motion, category G if it ships as a still pair.
+  visually. This is the file underneath.") with a side-by-side clip, and the heading with "Build
+  visually or edit as YAML". The pitch is "edit workflows visually or in a text editor", not "here
+  is what's underneath". Two captures of `demo-app/.ctrlyoke/workflows/bug-sweep.ctrlyoke.yaml`,
+  shown side by side (same workflow, not live-synced): on the left the dashboard step list being
+  built by dragging, including a step dragged into the parallel group, plus harness and model set
+  in the properties panel; on the right the same file edited in the dashboard's workspace viewer
+  (`WorkspaceFileEditor`) with ctrlyoke's YAML completions (harness values, `@` paths, `$step:`).
+  The workflow is a parallel group of three bug hunts on three harnesses, then triage, then a fix
+  for each bug. The workspace viewer replaces VS Code so the whole clip can be scripted.
+- **Use:** that landing section, with the heading change landing in the same commit as the clip;
+  `docs/workflows/yaml-format.md`.
+- **Dimensions:** category D (motion). Automated as phase 5 of `MEDIA_CAPTURE_AUTOMATION_PLAN.md`.
 
 ## Slotting summary
 

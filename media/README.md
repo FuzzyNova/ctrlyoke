@@ -17,6 +17,7 @@ npm run media -- --all                  # retake every shot
 npm run media -- properties-tabs --only mcp-tab-800x1600.png
 npm run media -- --all --out ../preview # write somewhere else to compare first
 npm run media -- host properties-tabs   # start the capture host and leave it running
+npm run media -- replay hero --speed 0  # host on a recorded run's start state, armed to replay it
 ```
 
 Each capture compiles the extension, so it shows the current source. Stop any running dev host
@@ -39,6 +40,30 @@ because stills render headless at 2×. `quantize` shots (media that ships in the
    dashboard serves the new theme.
 4. Composites join part stills side by side, and the PNG size is checked against the file name's
    `-<w>x<h>` suffix.
+
+## Recorded runs
+
+A shot that shows a run replays a recorded one instead of calling a harness, so every take shows
+the same output and costs nothing. `fixtures/runs/` holds run bundles from `ctrlyoke export`, and
+`fixtures/runs/fixtures.json` names each one with the demo-app tag its run started from.
+
+`replay <run>` checks demo-app out at that tag, then starts the host with `HostOptions.replay`,
+which arms the dev build's replay (`src/dev/replay/`) through `CTRLYOKE_DEV_REPLAY*` environment
+variables. The host writes the run's workflow to `.ctrlyoke/workflows/`; loading and running it
+plays the recording through the real engine, file changes included. `--speed 0` jumps each step to
+its end state, and `--pause-at <seq>` holds playback before that event in `events.jsonl`. Replay
+makes no git commits.
+
+To add a run, export it from the workspace that recorded it and add it to `fixtures.json`:
+
+```sh
+ctrlyoke export --cwd <demo-app checkout> --workflow <key> --run <ref> --with-snapshots \
+  --out media/fixtures/runs/<name>
+```
+
+Snapshots carry the file contents replay applies, so keep `--with-snapshots`. Check the export
+summary for paths outside the workspace and the redaction count, then grep the bundle for your user
+name before committing it.
 
 ## Adding a shot
 

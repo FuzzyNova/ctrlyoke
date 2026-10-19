@@ -21,6 +21,31 @@ import { DEFAULT_THEME, THEMES, type ThemeName } from "./themes.ts";
 export interface HostOptions {
   /** Hide every harness CLI from the host's PATH (dev-host `--no-harnesses`). */
   noHarnesses?: boolean;
+  /** Replay a recorded run instead of calling harnesses (src/dev/replay/). */
+  replay?: ReplayOptions;
+}
+
+export interface ReplayOptions {
+  /** Absolute path of the run bundle. */
+  bundleDir: string;
+  /** Playback speed; 0 jumps each step to its end state. Defaults to 1. */
+  speed?: number;
+  /** Pause playback indefinitely before this event sequence number. */
+  pauseAt?: number;
+}
+
+/** Keep in sync with RUN_REPLAY_ENV in src/dev/replay/RunReplay.ts. */
+function replayEnvironment(replay: ReplayOptions): Record<string, string> {
+  const environment: Record<string, string> = {
+    CTRLYOKE_DEV_REPLAY: path.resolve(replay.bundleDir),
+  };
+  if (replay.speed !== undefined) {
+    environment.CTRLYOKE_DEV_REPLAY_SPEED = String(replay.speed);
+  }
+  if (replay.pauseAt !== undefined) {
+    environment.CTRLYOKE_DEV_REPLAY_PAUSE_AT = String(replay.pauseAt);
+  }
+  return environment;
 }
 
 const DEV_HOST_SCRIPT = path.join(REPO_ROOT, "scripts", "dev-host.mjs");
@@ -86,7 +111,12 @@ export async function startHost(options: HostOptions = {}): Promise<string> {
   resetHostState();
   const args = [DEV_HOST_SCRIPT, "start", "media"];
   if (options.noHarnesses) args.push("--no-harnesses");
-  run(process.execPath, args, REPO_ROOT);
+  run(
+    process.execPath,
+    args,
+    REPO_ROOT,
+    options.replay ? replayEnvironment(options.replay) : undefined
+  );
   if (!existsSync(SERVER_URL_FILE)) {
     throw new Error(`dev host started but ${SERVER_URL_FILE} is missing`);
   }

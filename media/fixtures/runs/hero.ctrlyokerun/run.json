@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "kind": "ctrlyoke.run.bundle",
+  "exportedAt": "2026-10-19T02:11:45.305Z",
+  "exportedByVersion": "0.2.0",
+  "sourceRoot": "C:\\dev\\demo-app",
+  "lineage": {
+    "workflowName": "notes tagging and search api",
+    "originalFile": "${workspaceFolder}/.ctrlyoke/workflows/hero-gif.ctrlyoke.yaml"
+  },
+  "provenance": {
+    "workflowKey": "hero-gif-2026-09-03T03-48-14-807",
+    "runRef": "run-2026-09-08T03-14-04-220Z",
+    "runId": 4,
+    "steps": [
+      {
+        "stepIndex": 0,
+        "harness": "qwen-cli",
+        "model": "qwen3.5-plus",
+        "sessionId": "8bb1db7a-3662-4c93-b7fd-9da67500b17d"
+      },
+      {
+        "stepIndex": 1,
+        "harness": "claude-cli",
+        "model": "opus",
+        "sessionId": "00427f88-4c7e-41e9-95d9-1920d7623085"
+      },
+      {
+        "stepIndex": 2,
+        "harness": "codex-cli",
+        "model": "gpt-5.6-sol",
+        "sessionId": "01a07f04-a36c-7c71-84fb-d7d2ca58baf5"
+      },
+      {
+        "stepIndex": 3,
+        "harness": "copilot-cli",
+        "model": "gpt-5.6-luna",
+        "sessionId": "ca119ba3-372b-4ab4-bee1-1705fbecbe47"
+      },
+      {
+        "stepIndex": 4,
+        "harness": "antigravity-cli",
+        "model": "gemini-3.6-flash-medium",
+        "sessionId": "ae6732b6-0960-4be6-bfb9-9deec877a288"
+      },
+      {
+        "stepIndex": 5,
+        "harness": "opencode-cli",
+        "model": "opencode/big-pickle",
+        "sessionId": "ses_f80ee52b3ffeBJlbS5iBQ0vtw4"
+      }
+    ]
+  },
+  "includesSnapshots": true,
+  "redaction": {
+    "policy": "secrets-v1",
+    "removedCount": 0,
+    "byRule": {}
+  },
+  "externalPaths": []
+}

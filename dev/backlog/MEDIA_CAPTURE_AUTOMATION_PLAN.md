@@ -1,9 +1,12 @@
 # Media Capture Automation Plan
 
 **Status (2026-10-18):** Phase 1 done: `media/` exists and retakes #12's ten tab shots and the
-walkthrough's `verifyHarness` image (four themes) with `npm run media -- --all`. Phases 2-5 are
-open. This is the "how" for [`SCREENSHOTS_AND_MEDIA_PLAN.md`](SCREENSHOTS_AND_MEDIA_PLAN.md), which
-stays the shot list and slotting plan. `media/README.md` covers using it and adding shots.
+walkthrough's `verifyHarness` image (four themes) with `npm run media -- --all`. Phase 2 done
+2026-10-18: `ctrlyoke export` writes run bundles, a dev build replays one, and the hero and six
+rate-limiter runs are fixtures (`npm run media -- replay <run>`). Phases 3-7 are open; the two
+desktop clips (#9, #14) were moved ahead of the phone pipeline on 2026-10-18. This is the "how"
+for [`SCREENSHOTS_AND_MEDIA_PLAN.md`](SCREENSHOTS_AND_MEDIA_PLAN.md), which stays the shot list and
+slotting plan. `media/README.md` covers using it and adding shots.
 
 ## Goal
 
@@ -206,6 +209,40 @@ workspace-viewer stills need the demo project's real files at the run's starting
 fixture is therefore a run bundle plus a demo-app start tag**, and that pair is the only coupling
 between the two repos (see 7).
 
+**As built (phase 2).** The design above held except for the seam:
+
+- **Seam: the harness, not the publisher.** `src/dev/replay/` swaps the harness and script
+  runners, not the run-view publisher. `WorkflowOrchestrator.setExecutionOverride` gives new
+  instances a `ReplayIntegrationFactory`, whose `ReplayIntegration` (an `HarnessIntegration`)
+  plays back each step's recorded stream and output, and whose `ReplayScriptProcessRunner`
+  returns each pre/end-condition and script step's recorded result without running it. Everything
+  above that (state machine, retries, end-condition policy, history, timeline, dashboard sink) is
+  the real engine, so the run being shown is a live run that the dashboard and history record
+  like any other. Feeding the publisher instead would have meant re-deriving all of that state.
+- **Arming:** environment variables read once at activation in a dev build (`IS_DEV_MODE`), before
+  any instance exists, because an instance captures its factory when built:
+  `CTRLYOKE_DEV_REPLAY=<bundle dir>`, `CTRLYOKE_DEV_REPLAY_SPEED` (default 1; `0` jumps each step
+  to its end state) and `CTRLYOKE_DEV_REPLAY_PAUSE_AT=<event seq>` (holds until the host stops).
+  The bundle's workflow is written to `.ctrlyoke/workflows/<slug>.ctrlyoke.json` with every step
+  forced headless; the capture script loads and runs it like any workflow.
+- **Workspace side effects** are real: streamed `fileWrite` events are applied as they arrive,
+  and each step's end state is rebuilt from its snapshot's patches, so the bundles carry
+  snapshots (`--with-snapshots`). A hero replay at `hero-start` in the real capture host completed
+  all six steps and left every tracked file byte-identical to `hero-end` (checked 2026-10-18).
+- **Timing is the recording's own.** Each streamed delivery plays at its recorded offset from
+  its attempt's start, divided by the speed, and is scheduled against that start, so waits never
+  drift. There is no fixed tick and nothing was trimmed from the fixtures. A delivery is whatever
+  the live run appended at once (a message, a tool call, a batch of up to four events), not
+  single tokens, because that is what `events.jsonl` records and what the live dashboard showed.
+  The gaps are uneven and sometimes long: the hero run is 18 minutes, with step 3 (Codex, 7
+  minutes) waiting a median 4.7 s between deliveries and up to 92 s. A uniform speed-up keeps
+  the variation but also keeps the dead air in proportion, so the hero clip needs idle gaps
+  capped (see phase 3).
+- **Limits:** git commits are not recreated (the hero's `commit` step plays its output but makes
+  no commit); interactive steps play headless; arming applies to every run in that host;
+  harness-availability badges still come from the real detectors; payload session ids are kept;
+  workflow assets are not bundled yet.
+
 ### 6. Phone recordings
 
 The capture stays manual (real device, see `SCREENSHOTS_AND_MEDIA_PLAN.md` #7). The edit becomes
@@ -252,21 +289,46 @@ The original order spiked the hero clip against a live run because no fixture ex
 1. **Scaffolding plus stills. Done 2026-10-18.** `media/` with `setup`, the `media` dev host
    mode, #12's ten tab shots and the walkthrough's `verifyHarness` image in four themes, all
    retaken by script. The MCP-driven retakes for those shots are retired.
-2. **Minimal export plus replay.** Only the parts of `RUN_EXPORT_PLAN.md` replay needs:
-   `RunBundleExporter` core (path rewrite, identity demotion, redaction) and a CLI command, not the
-   UI. Then the dev-only replay command (see 5). Export the hero and rate-limiter runs as the first
-   fixtures.
+2. **Minimal export plus replay. Done 2026-10-18.** `RunBundleExporter` core (path rewrite,
+   identity demotion, redaction) and `ctrlyoke export`, no UI; dev-only replay (see "As built" in
+   5); the hero and six rate-limiter runs exported to `media/fixtures/runs/` and listed in its
+   `fixtures.json` with their start tags.
 3. **Hero clip on replay.** `lib/timeline.ts`, the hero capture script and `Hero.tsx`, replaying
    the 2026-09-08 run into a scratch copy at `hero-start`. Settle the HiDPI question from 3.
-   Outcome: a new hero clip with the current heading row, retakeable for free.
-4. **Phone pipeline.** Rebuild one existing iOS still set from its raw recording and compare it to
-   the Resolve output.
-5. **New media.** Capture the shots that were never taken (#9, #14, #10's phone clip) on the new
+   Add an idle-gap cap to replay (`CTRLYOKE_DEV_REPLAY_MAX_GAP_MS`): a gap between deliveries
+   longer than the cap plays as the cap, shorter gaps play as recorded, so the irregular rhythm
+   survives and the 18-minute run fits a clip. Apply it before `--speed`. Outcome: a new hero clip
+   with the current heading row, retakeable for free, and the video pipeline the next two phases
+   reuse.
+4. **Prompt editor clip (#9).** Typed live by Playwright into the hosted dashboard with
+   `pressSequentially` and a per-key delay, so completions open as they would for a person. The
+   opening "Add Selection to ctrlyoke" beat moves from VS Code to the workspace viewer: open
+   `src/routes/notes.ts` in it, select lines 17-37 with the mouse (click the start of line 17,
+   shift-click the end of line 37: the editor's handle isn't reachable from the page), right-click, pick "Add Selection to ctrlyoke"
+   (`useWorkspaceEditorContextMenu`), close the viewer and continue typing the beats in
+   `prompt-editor-demo.ctrlyoke.yaml`. Prep the header asks for (`atomicContextReferences` on, a
+   dummy `CODECOV_TOKEN` secret) goes in the capture's fixtures, not by hand. Needs no replay.
+5. **"Build visually or edit as YAML" clip (#14).** Two pages on the same host, recorded
+   separately and composed side by side; they show the same workflow but are not live-synced.
+   Left: the dashboard step list building `bug-sweep.ctrlyoke.yaml`, dragging a step into the
+   parallel group and reordering, then setting harness and model in the properties panel. Steps
+   drag with dnd-kit's pointer sensor, so the script drives `page.mouse` down, a multi-step move
+   past the 5 px activation distance, and up (Playwright's `dragTo` dispatches HTML5 drag events,
+   which dnd-kit ignores). Right: the same file open in the workspace viewer's
+   `WorkspaceFileEditor`, typing a step and accepting ctrlyoke's YAML completions (a `harness:`
+   value, an `@` path, `$step:`). Ships with the landing heading change in
+   `SCREENSHOTS_AND_MEDIA_PLAN.md` #14.
+6. **Phone pipeline.** Rebuild one existing iOS still set from its raw recording and compare it to
+   the Resolve output. Deferred behind the two clips above because the phone stills already
+   exist.
+7. **New media.** The rest of the shots that were never taken (#10's phone clip) on the new
    pipeline.
 
-If the hero clip is needed before phase 2 lands, run `hero-gif.ctrlyoke.yaml` once more in a
-`hero-start` worktree. That costs one six-harness run and gives a second fixture. Check the models
-it names are still available first.
+**VS Code itself stays manual.** The capture host is driven through the hosted dashboard in
+headless Chromium: it can't select text in a VS Code editor, open VS Code's own menus, or record
+the VS Code window. Anything that has to show VS Code (the walkthrough frames in #13, the
+integrated terminal) is captured by hand; a shot that only needs a VS Code feature that the
+dashboard also has (selection to prompt, YAML editing) is moved onto the dashboard instead.
 
 ## Rejected: embedding live dashboard components in the site
 
@@ -291,7 +353,7 @@ could screenshot that same page, so it would be groundwork for both.
 
 ## Open questions
 
-1. Does replay belong behind the dev build only, or should the CLI ship a `ctrlyoke replay` for
-   users from the start?
-
-(Fixture storage and where demo-app lives were decided 2026-10-18; see 7.)
+None open. Fixture storage and where demo-app lives were decided 2026-10-18 (see 7). Replay is
+dev-only for now (decided 2026-10-18 with phase 2): a user-facing `ctrlyoke replay` would need
+the limits in 5 lifted first, commits above all, and the `ExecutionHarnessOverride` seam leaves
+room for it.

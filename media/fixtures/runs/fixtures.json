@@ -1,0 +1,37 @@
+{
+  "hero": {
+    "bundle": "hero.ctrlyokerun",
+    "startTag": "hero-start",
+    "description": "Hero workflow (#6): six steps, one per harness, from the 2026-09-08 run."
+  },
+  "rate-limiter-agy": {
+    "bundle": "rate-limiter-agy.ctrlyokerun",
+    "startTag": "rate-limiter-start",
+    "description": "Harness deck (#1): the rate-limiter workflow on antigravity-cli."
+  },
+  "rate-limiter-claude": {
+    "bundle": "rate-limiter-claude.ctrlyokerun",
+    "startTag": "rate-limiter-start",
+    "description": "Harness deck (#1): the rate-limiter workflow on claude-cli."
+  },
+  "rate-limiter-codex": {
+    "bundle": "rate-limiter-codex.ctrlyokerun",
+    "startTag": "rate-limiter-start",
+    "description": "Harness deck (#1): the rate-limiter workflow on codex-cli."
+  },
+  "rate-limiter-copilot": {
+    "bundle": "rate-limiter-copilot.ctrlyokerun",
+    "startTag": "rate-limiter-start",
+    "description": "Harness deck (#1): the rate-limiter workflow on copilot-cli."
+  },
+  "rate-limiter-opencode": {
+    "bundle": "rate-limiter-opencode.ctrlyokerun",
+    "startTag": "rate-limiter-start",
+    "description": "Harness deck (#1): the rate-limiter workflow on opencode-cli."
+  },
+  "rate-limiter-qwen": {
+    "bundle": "rate-limiter-qwen.ctrlyokerun",
+    "startTag": "rate-limiter-start",
+    "description": "Harness deck (#1): the rate-limiter workflow on qwen-cli."
+  }
+}

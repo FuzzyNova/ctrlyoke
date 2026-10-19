@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "kind": "ctrlyoke.run.bundle",
+  "exportedAt": "2026-10-19T02:11:47.032Z",
+  "exportedByVersion": "0.2.0",
+  "sourceRoot": "C:\\dev\\demo-app",
+  "lineage": {
+    "workflowName": "rate limiter middleware - copilot",
+    "originalFile": "${workspaceFolder}/.ctrlyoke/workflows/marketing-script.ctrlyoke.yaml"
+  },
+  "provenance": {
+    "workflowKey": "rate-limiter-middleware-copilot-2026-09-01T03-44-39-544",
+    "runRef": "run-2026-09-01T03-45-03-138Z",
+    "runId": 1,
+    "steps": [
+      {
+        "stepIndex": 0,
+        "harness": "copilot-cli",
+        "model": "gpt-5.6-luna",
+        "sessionId": "a9bfc203-793d-4cae-85cf-902c0a07e037"
+      },
+      {
+        "stepIndex": 1,
+        "harness": "copilot-cli",
+        "model": "gpt-5.6-luna",
+        "sessionId": "a9bfc203-793d-4cae-85cf-902c0a07e037"
+      },
+      {
+        "stepIndex": 2,
+        "harness": "copilot-cli",
+        "model": "gpt-5.6-luna",
+        "sessionId": "a9bfc203-793d-4cae-85cf-902c0a07e037"
+      }
+    ]
+  },
+  "includesSnapshots": true,
+  "redaction": {
+    "policy": "secrets-v1",
+    "removedCount": 0,
+    "byRule": {}
+  },
+  "externalPaths": []
+}

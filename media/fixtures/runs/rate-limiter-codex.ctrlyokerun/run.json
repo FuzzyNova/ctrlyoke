@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "kind": "ctrlyoke.run.bundle",
+  "exportedAt": "2026-10-19T02:11:46.453Z",
+  "exportedByVersion": "0.2.0",
+  "sourceRoot": "C:\\dev\\demo-app",
+  "lineage": {
+    "workflowName": "rate limiter middleware - codex",
+    "originalFile": "${workspaceFolder}/.ctrlyoke/workflows/marketing-script.ctrlyoke.yaml"
+  },
+  "provenance": {
+    "workflowKey": "rate-limiter-middleware-codex-2026-09-01T03-49-29-041",
+    "runRef": "run-2026-09-01T03-49-47-678Z",
+    "runId": 1,
+    "steps": [
+      {
+        "stepIndex": 0,
+        "harness": "codex-cli",
+        "model": "gpt-5.6-luna",
+        "sessionId": "01a05b16-7160-7ce2-994c-4b38565e0558"
+      },
+      {
+        "stepIndex": 1,
+        "harness": "codex-cli",
+        "model": "gpt-5.6-luna",
+        "sessionId": "01a05b16-7160-7ce2-994c-4b38565e0558"
+      },
+      {
+        "stepIndex": 2,
+        "harness": "codex-cli",
+        "model": "gpt-5.6-luna",
+        "sessionId": "01a05b16-7160-7ce2-994c-4b38565e0558"
+      }
+    ]
+  },
+  "includesSnapshots": true,
+  "redaction": {
+    "policy": "secrets-v1",
+    "removedCount": 0,
+    "byRule": {}
+  },
+  "externalPaths": []
+}

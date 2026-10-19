@@ -10,6 +10,7 @@ interface DemoAppPin {
 }
 
 const WORKFLOW_FIXTURES_DIR = path.join(FIXTURES_DIR, "workflows");
+const SETTINGS_FILE = ".ctrlyoke/settings.json";
 
 function readPin(): DemoAppPin {
   return JSON.parse(
@@ -35,17 +36,28 @@ export function setupDemoApp(): void {
 }
 
 /**
- * Resets the demo-app clone to the pinned ref and installs this capture's
- * workflow fixtures. The clone is a disposable copy owned by the media scripts,
- * so it is reset hard, including ignored runtime state under `.ctrlyoke/`.
+ * Resets the demo-app clone to the pinned ref, or to `startTag` for a replay,
+ * and installs this capture's workflow fixtures. The clone is a disposable copy
+ * owned by the media scripts, so it is reset hard, including ignored runtime
+ * state under `.ctrlyoke/`.
  */
-export function prepareDemoApp(workflowFixtures: readonly string[]): void {
+export function prepareDemoApp(
+  workflowFixtures: readonly string[],
+  startTag?: string
+): void {
   if (!existsSync(path.join(DEMO_APP_DIR, ".git"))) {
     throw new Error("demo-app is not set up. Run `npm run media -- setup`.");
   }
   const pin = readPin();
-  git(DEMO_APP_DIR, "checkout", "--force", "--detach", pin.ref);
+  if (startTag && !(startTag in pin.startTags)) {
+    throw new Error(`'${startTag}' is not a start tag in demo-app.json`);
+  }
+  git(DEMO_APP_DIR, "checkout", "--force", "--detach", startTag ?? pin.ref);
   git(DEMO_APP_DIR, "clean", "-fdx", "-e", "node_modules");
+  if (startTag) {
+    // Start tags predate the committed settings; the server needs them.
+    git(DEMO_APP_DIR, "checkout", pin.ref, "--", SETTINGS_FILE);
+  }
   serveOnLoopback();
   for (const fixture of workflowFixtures) {
     cpSync(
@@ -60,7 +72,7 @@ export function prepareDemoApp(workflowFixtures: readonly string[]): void {
  * shots. Captures only need plain HTTP on loopback, started with the host.
  */
 function serveOnLoopback(): void {
-  const settingsPath = path.join(DEMO_APP_DIR, ".ctrlyoke", "settings.json");
+  const settingsPath = path.join(DEMO_APP_DIR, SETTINGS_FILE);
   const settings = JSON.parse(readFileSync(settingsPath, "utf8"));
   settings.server = {
     ...settings.server,

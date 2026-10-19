@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "harness": "opencode-cli",
+  "model": "opencode/big-pickle",
+  "executionMode": "interactive",
+  "agent": null,
+  "skills": [],
+  "resumeSession": true,
+  "mcpServers": [],
+  "hooks": [],
+  "endCondition": null,
+  "preCondition": null,
+  "errorBehavior": null,
+  "priorContext": "none",
+  "additionalArgs": "",
+  "toolPermissions": {
+    "mode": "dangerouslyAllowAll",
+    "allowedTools": [
+      "write",
+      "shell(git status)",
+      "shell(git diff)",
+      "shell(git add:*)",
+      "shell(git commit:*)",
+      "shell(git log:*)",
+      "shell(npm:*)",
+      "shell(yarn:*)",
+      "shell(pnpm:*)",
+      "shell(node:*)",
+      "shell(npx:*)"
+    ],
+    "deniedTools": [
+      "shell(rm:*)",
+      "shell(del:*)",
+      "shell(Remove-Item:*)",
+      "shell(rd:*)",
+      "shell(rmdir:*)",
+      "shell(sudo:*)",
+      "shell(chmod:*)",
+      "shell(chown:*)",
+      "shell(git push:*)",
+      "shell(git reset:*)",
+      "shell(git checkout:*)",
+      "shell(git clean:*)",
+      "shell(docker rm:*)",
+      "shell(docker rmi:*)",
+      "shell(kubectl delete:*)"
+    ]
+  },
+  "steps": [
+    {
+      "name": "plan",
+      "prompt": "Design rate-limiting middleware for this Notes API (Express, TypeScript).\nPropose the algorithm (e.g. fixed window vs. token bucket), where it\nshould sit in the middleware chain relative to the notes router, what\nthe default limit should be, and what response the API should send\nwhen a client is rate-limited. Keep this to a short design summary —\ndon't write any code yet.\n"
+    },
+    {
+      "name": "implement",
+      "prompt": "Implement the rate limiter you just designed:\n- Add `src/middleware/rateLimiter.ts`.\n- Wire it into `src/server.ts` ahead of the notes router.\n- Add `tests/rateLimiter.test.ts` covering both the limit being\n  enforced and the window resetting.\n- Add a short \"Rate limiting\" section to README.md documenting the\n  default limit and how to configure it."
+    },
+    {
+      "name": "review",
+      "prompt": "Review the rate limiter implementation for correctness,\nconcurrency/thread-safety issues, and edge cases — multiple\nconcurrent clients, limit-window reset timing, and requests with no\nidentifiable client IP. Make any small fixes directly in the code if\nyou find real issues, then summarize your review findings in a short\nparagraph."
+    }
+  ]
+}
