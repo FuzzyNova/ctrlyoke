@@ -32,9 +32,7 @@
     "attemptCount": 3,
     "isFinal": true,
     "costUsd": 0.32798320000000003,
-    "costSources": [
-      "price-table"
-    ],
+    "costSources": ["price-table"],
     "byHarness": {
       "qwen-cli": {
         "input": 791386,
@@ -45,9 +43,7 @@
         "reportedAttemptCount": 3,
         "attemptCount": 3,
         "costUsd": 0.32798320000000003,
-        "costSources": [
-          "price-table"
-        ]
+        "costSources": ["price-table"]
       }
     },
     "byLocalDay": {
@@ -61,9 +57,7 @@
           "reportedAttemptCount": 3,
           "attemptCount": 3,
           "costUsd": 0.32798320000000003,
-          "costSources": [
-            "price-table"
-          ]
+          "costSources": ["price-table"]
         }
       }
     }
