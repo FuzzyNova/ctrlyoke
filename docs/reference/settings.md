@@ -325,7 +325,7 @@ Fields:
 - **Type:** `{ mode?, allowedTools?, deniedTools? }` or `null`
 - **Workflow field:** [`toolPermissions`](/reference/workflow-schema#execution-properties-toolpermissions) — a workflow or step value overrides this default
 
-Default tool permission settings for prompt execution. Allowed Tools and Denied Tools are currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline granular support and OpenCode uses OPENCODE\_CONFIG\_CONTENT without writing a workspace opencode.json. Codex and Antigravity only support an overall permission mode, not individual tool patterns, and do NOT ENFORCE these lists.
+Default tool permission settings for prompt execution. Allowed Tools and Denied Tools are currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline granular support and OpenCode uses OPENCODE\_CONFIG\_CONTENT without writing a workspace opencode.json. Codex and Antigravity only support an overall permission mode, not individual tool patterns, and do NOT ENFORCE these lists, except that Codex enforces denied `mcp__<server>__<tool>` entries for MCP servers the workflow attaches. While a list is still the shipped default, a harness that can't enforce it reports an information note rather than a compatibility warning.
 
 Accepted forms:
 
@@ -339,11 +339,14 @@ Accepted forms:
   "mode": "allowAll",
   "allowedTools": [
     "write",
-    "shell(git status)",
-    "shell(git diff)",
+    "shell(git status:*)",
+    "shell(git diff:*)",
+    "shell(git show:*)",
+    "shell(git log:*)",
     "shell(git add:*)",
     "shell(git commit:*)",
-    "shell(git log:*)",
+    "shell(git mv:*)",
+    "shell(git rm:*)",
     "shell(npm:*)",
     "shell(yarn:*)",
     "shell(pnpm:*)",
@@ -351,20 +354,15 @@ Accepted forms:
     "shell(npx:*)"
   ],
   "deniedTools": [
-    "shell(rm:*)",
-    "shell(del:*)",
-    "shell(Remove-Item:*)",
-    "shell(rd:*)",
-    "shell(rmdir:*)",
     "shell(sudo:*)",
-    "shell(chmod:*)",
-    "shell(chown:*)",
     "shell(git push:*)",
-    "shell(git reset:*)",
+    "shell(git reset --hard:*)",
     "shell(git checkout:*)",
+    "shell(git restore:*)",
     "shell(git clean:*)",
-    "shell(docker rm:*)",
-    "shell(docker rmi:*)",
+    "shell(npm publish:*)",
+    "shell(yarn publish:*)",
+    "shell(pnpm publish:*)",
     "shell(kubectl delete:*)"
   ]
 }
@@ -376,7 +374,7 @@ Fields:
 
 - `mode` · `"dangerouslyAllowAll" | "allowAll" | "custom" | "none"` — Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects deny list. 'custom' uses allowedTools + deniedTools only. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config).
 - `allowedTools` · `string[]` — Tool patterns to allow (used in custom mode). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE\_CONFIG\_CONTENT and writes no workspace opencode.json. Codex and Antigravity only support an overall permission mode, not individual tool patterns; Allowed Tools are NOT ENFORCED by those harnesses.
-- `deniedTools` · `string[]` — Tool patterns to deny (takes precedence over allow list). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE\_CONFIG\_CONTENT and writes no workspace opencode.json. Codex and Antigravity only support an overall permission mode, not individual tool patterns; Denied Tools are NOT ENFORCED by those harnesses.
+- `deniedTools` · `string[]` — Tool patterns to deny (takes precedence over allow list). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE\_CONFIG\_CONTENT and writes no workspace opencode.json. Antigravity only supports an overall permission mode and does NOT ENFORCE Denied Tools. Codex enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT ENFORCE shell or other tool patterns.
 
 ### `defaults.endCondition` {#defaults-endcondition}
 

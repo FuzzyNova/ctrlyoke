@@ -21,6 +21,7 @@ import {
   type PermissionMode,
   type CtrlYokeMcpMode,
   CTRLYOKE_MCP_MODES,
+  PERMISSION_CAPABILITY_KEYS,
   RUN_HISTORY_LOCATIONS,
   DEFAULT_TRASH_RETENTION_DAYS,
   STATUS_LINE_HARNESS_IDS,
@@ -487,34 +488,37 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     errorBehavior: null,
     toolPermissions: {
       mode: "allowAll",
+      // Only read in `custom` mode; `allowAll` ignores it.
       allowedTools: [
         "write",
-        "shell(git status)",
-        "shell(git diff)",
+        "shell(git status:*)",
+        "shell(git diff:*)",
+        "shell(git show:*)",
+        "shell(git log:*)",
         "shell(git add:*)",
         "shell(git commit:*)",
-        "shell(git log:*)",
+        "shell(git mv:*)",
+        "shell(git rm:*)",
         "shell(npm:*)",
         "shell(yarn:*)",
         "shell(pnpm:*)",
         "shell(node:*)",
         "shell(npx:*)",
       ],
+      // Speed bumps for reflexive commands git can't undo or that reach past
+      // the machine; not a security boundary (a sandbox is). Ordinary file
+      // deletion is deliberately allowed: denying `rm` only pushed agents to
+      // `node -e`/`python -c` equivalents.
       deniedTools: [
-        "shell(rm:*)",
-        "shell(del:*)",
-        "shell(Remove-Item:*)",
-        "shell(rd:*)",
-        "shell(rmdir:*)",
         "shell(sudo:*)",
-        "shell(chmod:*)",
-        "shell(chown:*)",
         "shell(git push:*)",
-        "shell(git reset:*)",
+        "shell(git reset --hard:*)",
         "shell(git checkout:*)",
+        "shell(git restore:*)",
         "shell(git clean:*)",
-        "shell(docker rm:*)",
-        "shell(docker rmi:*)",
+        "shell(npm publish:*)",
+        "shell(yarn publish:*)",
+        "shell(pnpm publish:*)",
         "shell(kubectl delete:*)",
       ],
     },
@@ -714,3 +718,23 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
   },
   diagnostics: { verboseLogging: false, logRawCliOutput: false },
 };
+
+/**
+ * True when `patterns` is exactly the shipped default `key` list, in any
+ * order, wherever it was written. Compatibility diagnostics report such a list
+ * as info instead of a warning on a harness that can't enforce it.
+ */
+export function isShippedDefaultToolList(
+  key:
+    | typeof PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS
+    | typeof PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS,
+  patterns: readonly string[]
+): boolean {
+  const shipped = CTRLYOKE_SETTINGS_DEFAULTS.defaults.toolPermissions?.[key];
+  if (!shipped || patterns.length !== shipped.length) return false;
+  const unique = new Set(patterns);
+  return (
+    unique.size === shipped.length &&
+    shipped.every((pattern) => unique.has(pattern))
+  );
+}

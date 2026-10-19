@@ -84,12 +84,34 @@ and a wildcard outside parentheses is a warning.
 ### The default lists
 
 The [`defaults.toolPermissions`](/reference/settings#defaults-toolpermissions)
-setting starts in `allowAll` mode with a deny list of destructive commands
-(`rm`, `del`, `Remove-Item`, `sudo`, `chmod`, `git push`, `git reset`,
-`git checkout`, `git clean`, `docker rm`, `kubectl delete` and a few more) and
-an allow list of common development commands (`write`, `git status`,
-`git diff`, `git add`, `git commit`, `git log`, `npm`, `yarn`, `pnpm`, `node`,
-`npx`). The allow list only matters once you switch to `custom` mode.
+setting starts in `allowAll` mode with a short deny list, plus a starter allow
+list for when you switch to `custom` mode. `allowAll` ignores the allow list.
+
+The starter allow list covers everyday development commands: `write`,
+`git status`, `git diff`, `git show`, `git log`, `git add`, `git commit`,
+`git mv`, `git rm`, `npm`, `yarn`, `pnpm`, `node` and `npx`. It's meant to get
+an unattended `custom` run working, not to lock it down. `node`, `npx` and
+package-manager scripts can run any code, so with this list `custom` is close
+to `allowAll`. To restrict a workflow, replace the list with only the commands
+it needs, such as `shell(npm test)` instead of `shell(npm:*)`.
+
+The deny list covers commands that git can't undo or that reach beyond your
+machine: `sudo`, `git push`, `git reset --hard`, `git checkout`,
+`git restore`, `git clean`, `npm publish`, `yarn publish`, `pnpm publish` and
+`kubectl delete`. It doesn't deny deleting files. Agents delete and rename
+files as a normal part of development, and a denied `rm` only sends them to an
+equivalent `node` or `python` command.
+
+A deny list catches an agent's usual command. It is not a security boundary,
+because an agent can reach the same result another way. If you need a hard
+boundary, run the harness in a container or sandbox. Inside one,
+`dangerouslyAllowAll` is a reasonable choice. Copilot CLI, Claude Code,
+OpenCode and Qwen Code enforce the deny list. Codex enforces only its MCP tool
+entries, and Antigravity doesn't enforce it (see
+[How each harness applies them](#how-each-harness-applies-them)). Because
+nobody chose the default list, a harness that can't enforce it shows an
+information note rather than a compatibility warning. Once you change the list,
+it warns.
 
 Edit the defaults in **Settings → Workflow Defaults → Permissions**.
 
@@ -138,24 +160,28 @@ Each mode reads only some of the lists, whatever harness runs the step:
 
 A list the mode ignores is not passed to the harness and never produces a
 compatibility warning. Not every harness can enforce individual tool patterns
-either: Codex and Antigravity only have coarse modes, so they ignore both lists
-in every mode.
+either. Antigravity only has coarse modes, so it ignores both lists in every
+mode. Codex ignores the allow list. From the deny list it enforces only
+`mcp__<server>__<tool>` entries for MCP servers the workflow attaches, which it
+receives as that server's `disabled_tools`. It can't enforce an entry for a
+server configured only in Codex's own `config.toml`, a wildcard tool name, or
+a shell pattern.
 
-| Harness                                   | `dangerouslyAllowAll`                         | `allowAll`                                                                     | `custom`                                                                                                            |
-| ----------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| [Copilot CLI](/harnesses/copilot-cli)     | `--yolo`                                      | `--allow-all-tools` plus `--deny-tool`                                         | `--allow-tool` plus `--deny-tool`                                                                                   |
-| [Claude Code](/harnesses/claude-cli)      | `--dangerously-skip-permissions`              | `--permission-mode bypassPermissions --tools default` plus `--disallowedTools` | Headless: `--permission-mode dontAsk`; interactive: default mode; both use `--allowedTools` and `--disallowedTools` |
-| [Codex](/harnesses/codex-cli)             | `--dangerously-bypass-approvals-and-sandbox`  | `--sandbox workspace-write --ask-for-approval on-request`                      | `-s` and `-a` from the `permissions.codex*` settings; lists ignored                                                 |
-| [OpenCode](/harnesses/opencode-cli)       | no permission block (OpenCode's own defaults) | allow everything, plus the deny list                                           | ask for everything, allow the allow list, deny the deny list                                                        |
-| [Qwen Code](/harnesses/qwen-cli)          | `-y`                                          | `--approval-mode auto-edit` plus `--exclude-tools`                             | `--approval-mode default` with `--allowed-tools` and `--exclude-tools`                                              |
-| [Antigravity](/harnesses/antigravity-cli) | `--dangerously-skip-permissions`              | no flag (agy's own approvals); lists ignored                                   | `--sandbox`; lists ignored                                                                                          |
+| Harness                                   | `dangerouslyAllowAll`                         | `allowAll`                                                                          | `custom`                                                                                                            |
+| ----------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| [Copilot CLI](/harnesses/copilot-cli)     | `--yolo`                                      | `--allow-all-tools` plus `--deny-tool`                                              | `--allow-tool` plus `--deny-tool`                                                                                   |
+| [Claude Code](/harnesses/claude-cli)      | `--dangerously-skip-permissions`              | `--permission-mode bypassPermissions --tools default` plus `--disallowedTools`      | Headless: `--permission-mode dontAsk`; interactive: default mode; both use `--allowedTools` and `--disallowedTools` |
+| [Codex](/harnesses/codex-cli)             | `--dangerously-bypass-approvals-and-sandbox`  | `--sandbox workspace-write --ask-for-approval on-request` plus MCP `disabled_tools` | `-s` and `-a` from the `permissions.codex*` settings, plus MCP `disabled_tools`; allow list ignored                 |
+| [OpenCode](/harnesses/opencode-cli)       | no permission block (OpenCode's own defaults) | allow everything, plus the deny list                                                | ask for everything, allow the allow list, deny the deny list                                                        |
+| [Qwen Code](/harnesses/qwen-cli)          | `-y`                                          | `--approval-mode auto-edit` plus `--exclude-tools`                                  | `--approval-mode default` with `--allowed-tools` and `--exclude-tools`                                              |
+| [Antigravity](/harnesses/antigravity-cli) | `--dangerously-skip-permissions`              | no flag (agy's own approvals); lists ignored                                        | `--sandbox`; lists ignored                                                                                          |
 
 For example, `allowAll` with [the default lists](#the-default-lists) starts
 Claude Code with:
 
 ```text
 --permission-mode bypassPermissions --tools default
---disallowedTools "Bash(rm:*)" "Bash(del:*)" "Bash(Remove-Item:*)" "Bash(rd:*)" ...
+--disallowedTools "Bash(sudo:*)" "Bash(git push:*)" "Bash(git reset --hard:*)" ...
 ```
 
 The deny list is translated to Claude's syntax and the allow list is left out.

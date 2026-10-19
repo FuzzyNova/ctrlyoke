@@ -14,7 +14,11 @@ import {
 import { CliParseUtils } from "../shared/CliParseUtils";
 import { CODEX_STDOUT_EVENT_TYPES } from "./CodexProtocolConstants";
 import { CodexNotificationMonitor } from "./CodexNotificationMonitor";
-import { CodexToolPermissionMapper } from "./CodexToolPermissionMapper";
+import {
+  CODEX_FOLD_EXCLUDED_SERVER_IDS,
+  CodexToolPermissionMapper,
+} from "./CodexToolPermissionMapper";
+import { foldMcpToolDenialsIntoServers } from "../../../types/ToolPermissionUtils";
 import { CodexLogParser } from "./CodexLogParser";
 import {
   CliMcpConfigGenerator,
@@ -102,6 +106,32 @@ const CODEX_REASONING_SUMMARY_ARGS = [
 ] as const;
 
 const CODEX_SECRET_REFERENCE_PATTERN = /^\$\{secret:([A-Z][A-Z0-9_]*)\}$/u;
+
+/**
+ * Return `workflowContext` with its tool-permission MCP denials folded into the
+ * attached servers' `deniedTools`, which `planMcpConfigArgs` emits as Codex
+ * `disabled_tools`. `CodexToolPermissionMapper` reports what can't be folded.
+ */
+function withMcpToolDenialsOnServers<
+  T extends { resolvedProperties?: ResolvedProperties },
+>(workflowContext: T): T {
+  const resolved = workflowContext.resolvedProperties;
+  if (!resolved) return workflowContext;
+  const { mcpServers } = foldMcpToolDenialsIntoServers(
+    ConfigurationUtils.resolveSpawnToolPermissions(resolved.toolPermissions),
+    resolved.mcpServers,
+    CODEX_FOLD_EXCLUDED_SERVER_IDS
+  );
+  return mcpServers === resolved.mcpServers
+    ? workflowContext
+    : {
+        ...workflowContext,
+        resolvedProperties: {
+          ...resolved,
+          mcpServers: mcpServers ? [...mcpServers] : mcpServers,
+        },
+      };
+}
 
 function splitCodexEnvironment(env: Record<string, string> | undefined): {
   staticValues: Record<string, string>;
@@ -351,9 +381,11 @@ export class CodexCliProvider implements ICliProvider {
     const resolvedResumeSession =
       workflowContext?.resolvedProperties?.resumeSession;
 
-    // MCP configuration (when dynamic queue extension is enabled)
+    // MCP configuration (when dynamic queue extension is enabled). Codex
+    // filters MCP tools in each server's config, so `mcp__<server>__<tool>`
+    // denials travel as that server's `disabled_tools`.
     const mcpPreparation = await CliProviderUtils.planMcpConfigBlock(
-      workflowContext,
+      workflowContext && withMcpToolDenialsOnServers(workflowContext),
       workspaceRoot,
       extensionPath,
       (serverPath, wsRoot, workingFile, additionalEnv, userServers) =>

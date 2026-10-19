@@ -1,4 +1,8 @@
-import { PERMISSION_MODES } from "./DashboardConstants";
+import {
+  PERMISSION_CAPABILITY_KEYS,
+  PERMISSION_MODES,
+  permissionModeAppliesToolList,
+} from "./DashboardConstants";
 import type { McpServerConfig } from "./CtrlYokeTypes";
 import type { ToolPermissionConfig } from "./ExecutionPropertyTypes";
 
@@ -48,4 +52,99 @@ export function mergeServerDeniedTools(
 /** Match Claude Code's MCP server name normalization for permission rules. */
 export function normalizeClaudeMcpServerId(serverId: string): string {
   return serverId.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+/** Result of {@link foldMcpToolDenialsIntoServers}. */
+export interface FoldedMcpToolDenials {
+  /** `mcpServers` with each foldable denial added to its server's `deniedTools`. */
+  readonly mcpServers: readonly (string | McpServerConfig)[] | undefined;
+  /** The `deniedTools` patterns that no attached server could take. */
+  readonly unfolded: readonly string[];
+}
+
+/**
+ * Move `mcp__<server>__<tool>` denials onto the attached server entry they
+ * name, for harnesses that filter MCP tools in the server's own config rather
+ * than through permission patterns (Codex `disabled_tools`). The inverse of
+ * {@link mergeServerDeniedTools}.
+ *
+ * Only object entries in `mcpServers` can take a denial: a server the harness
+ * loads from its own config is not known to ctrlyoke, and Codex refuses to
+ * start when an override names a server it has no transport for. A wildcard
+ * tool name stays unfolded because `disabled_tools` matches exact names.
+ * The ctrlyoke server is left alone: its denials are enforced by the server
+ * itself from its `mcpServers` entry.
+ */
+export function foldMcpToolDenialsIntoServers(
+  toolPermissions: ToolPermissionConfig | null | undefined,
+  mcpServers: readonly (string | McpServerConfig)[] | null | undefined,
+  excludedServerIds: ReadonlySet<string> = new Set()
+): FoldedMcpToolDenials {
+  const servers = mcpServers ?? undefined;
+  if (
+    !toolPermissions ||
+    !permissionModeAppliesToolList(
+      toolPermissions.mode,
+      PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
+    )
+  ) {
+    return { mcpServers: servers, unfolded: [] };
+  }
+
+  const attached = (servers ?? []).filter(
+    (server): server is McpServerConfig =>
+      typeof server === "object" &&
+      server !== null &&
+      !excludedServerIds.has(server.id)
+  );
+  const added = new Map<McpServerConfig, string[]>();
+  const unfolded: string[] = [];
+  for (const pattern of toolPermissions.deniedTools) {
+    const match = findMcpToolDenialTarget(pattern, attached);
+    if (match) {
+      added.set(match.server, [
+        ...(added.get(match.server) ?? []),
+        match.toolName,
+      ]);
+    } else {
+      unfolded.push(pattern);
+    }
+  }
+  if (added.size === 0) {
+    return { mcpServers: servers, unfolded };
+  }
+
+  return {
+    mcpServers: servers?.map((server) => {
+      const tools = typeof server === "object" ? added.get(server) : undefined;
+      return tools && typeof server === "object"
+        ? {
+            ...server,
+            deniedTools: [
+              ...new Set([...(server.deniedTools ?? []), ...tools]),
+            ],
+          }
+        : server;
+    }),
+    unfolded,
+  };
+}
+
+function findMcpToolDenialTarget(
+  pattern: string,
+  servers: readonly McpServerConfig[]
+): { server: McpServerConfig; toolName: string } | undefined {
+  // Prefer the longest matching id so `mcp__a__b__c` picks server `a__b`
+  // over server `a` when both are attached.
+  let best: { server: McpServerConfig; toolName: string } | undefined;
+  for (const server of servers) {
+    const prefix = `mcp__${server.id}__`;
+    if (!pattern.startsWith(prefix)) continue;
+    const toolName = pattern.slice(prefix.length);
+    if (!toolName || toolName.includes("*")) continue;
+    if (!best || server.id.length > best.server.id.length) {
+      best = { server, toolName };
+    }
+  }
+  return best;
 }

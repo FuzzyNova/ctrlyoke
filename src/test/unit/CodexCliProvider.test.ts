@@ -149,6 +149,53 @@ suite("CodexCliProvider", () => {
     assert.ok(serverConfigs[0].includes('command="first"'));
   });
 
+  test("sends tool-permission MCP denials as the attached server's disabled_tools", async () => {
+    const args = await new CodexCliProvider().buildCliArgs(
+      {} as any,
+      false,
+      "/ext",
+      "/workspace",
+      undefined,
+      {
+        promptIndex: 0,
+        allPrompts: [],
+        resolvedProperties: {
+          mcpServers: [
+            {
+              id: "github",
+              command: "github-mcp",
+              deniedTools: ["delete_repo"],
+            },
+          ],
+          toolPermissions: {
+            mode: "allowAll",
+            allowedTools: [],
+            deniedTools: [
+              "mcp__github__create_issue",
+              "mcp__github__delete_repo",
+              "mcp__unattached__tool",
+              "shell(git push:*)",
+            ],
+          },
+        },
+      } as any
+    );
+    const serverConfig = args.find((arg) =>
+      arg.startsWith("mcp_servers.github=")
+    );
+    assert.ok(serverConfig, JSON.stringify(args));
+    const parsed = parse(serverConfig) as {
+      mcp_servers: { github: { disabled_tools: string[] } };
+    };
+
+    assert.deepStrictEqual(parsed.mcp_servers.github.disabled_tools, [
+      "delete_repo",
+      "create_issue",
+    ]);
+    // Codex refuses to start on an override for a server it can't launch.
+    assert.ok(!args.some((arg) => arg.includes("mcp_servers.unattached")));
+  });
+
   suite("MCP capability declaration", () => {
     test("declares native per-server filtering for server-owned denials", () => {
       const filtering = new CodexCliProvider().capabilities.mcp

@@ -21,21 +21,21 @@ declarations that drive the dashboard's compatibility warnings.
 | --- | :-: | :-: | :-: | :-: | :-: | :-: |
 | **Permissions** |  |  |  |  |  |  |
 | Allowed Tools | <span title="Supported">✅</span> | <span title="Partially supported">◐</span><sup><a href="#note-1">1</a></sup> | <span title="Not supported">❌</span><sup><a href="#note-2">2</a></sup> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-3">3</a></sup> |
-| Denied Tools | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-2">2</a></sup> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-3">3</a></sup> |
-| Mode | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Partially supported">◐</span><sup><a href="#note-4">4</a></sup> |
+| Denied Tools | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Partially supported">◐</span><sup><a href="#note-4">4</a></sup> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-3">3</a></sup> |
+| Mode | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Partially supported">◐</span><sup><a href="#note-5">5</a></sup> |
 | **Prompt Inputs** |  |  |  |  |  |  |
-| Images | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span><sup><a href="#note-5">5</a></sup> | <span title="Not supported">❌</span><sup><a href="#note-6">6</a></sup> | <span title="Not supported">❌</span><sup><a href="#note-6">6</a></sup> |
+| Images | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span><sup><a href="#note-6">6</a></sup> | <span title="Not supported">❌</span><sup><a href="#note-7">7</a></sup> | <span title="Not supported">❌</span><sup><a href="#note-7">7</a></sup> |
 | **Hooks** |  |  |  |  |  |  |
-| Error | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-7">7</a></sup> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-7">7</a></sup> | <span title="Not supported">❌</span><sup><a href="#note-7">7</a></sup> |
-| Notification | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-7">7</a></sup> | <span title="Not supported">❌</span><sup><a href="#note-7">7</a></sup> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-7">7</a></sup> |
-| Permission Request | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Partially supported">◐</span><sup><a href="#note-8">8</a></sup> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-7">7</a></sup> |
+| Error | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-8">8</a></sup> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-8">8</a></sup> | <span title="Not supported">❌</span><sup><a href="#note-8">8</a></sup> |
+| Notification | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-8">8</a></sup> | <span title="Not supported">❌</span><sup><a href="#note-8">8</a></sup> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-8">8</a></sup> |
+| Permission Request | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Partially supported">◐</span><sup><a href="#note-9">9</a></sup> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-8">8</a></sup> |
 | Post Tool Use | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> |
-| Pre Tool Use | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Partially supported">◐</span><sup><a href="#note-9">9</a></sup> | <span title="Supported">✅</span> | <span title="Supported">✅</span> |
-| Session Start | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Partially supported">◐</span><sup><a href="#note-10">10</a></sup> | <span title="Supported">✅</span> | <span title="Supported">✅</span> |
+| Pre Tool Use | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Partially supported">◐</span><sup><a href="#note-10">10</a></sup> | <span title="Supported">✅</span> | <span title="Supported">✅</span> |
+| Session Start | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Partially supported">◐</span><sup><a href="#note-11">11</a></sup> | <span title="Supported">✅</span> | <span title="Supported">✅</span> |
 | Stop | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> |
-| User Prompt Submit | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-7">7</a></sup> |
+| User Prompt Submit | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-8">8</a></sup> |
 | **MCP** |  |  |  |  |  |  |
-| Per Server Tool Filtering | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-11">11</a></sup> |
+| Per Server Tool Filtering | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-12">12</a></sup> |
 
 ### Notes
 
@@ -43,33 +43,36 @@ declarations that drive the dashboard's compatibility warnings.
 Applies to **Claude Code**: Allowed Tools.
 
 <a id="note-2"></a>**2.** Not supported because this harness uses sandbox/approval modes instead of individual tool patterns. _What to do:_ Remove the rule or select a harness that enforces individual tool patterns.<br>
-Applies to **Codex**: Allowed Tools, Denied Tools.
+Applies to **Codex**: Allowed Tools.
 
 <a id="note-3"></a>**3.** Not supported because this harness uses coarse permission modes instead of individual tool patterns. _What to do:_ Remove the rule or select a harness that enforces individual tool patterns.<br>
 Applies to **Antigravity**: Allowed Tools, Denied Tools.
 
-<a id="note-4"></a>**4.** Partially supported because this harness uses coarse permission modes instead of individual tool patterns. _What to do:_ Use a harness with exact permission-mode support when the distinction matters.<br>
+<a id="note-4"></a>**4.** Partially supported because this harness enforces only mcp__<server>__<tool> denials for MCP servers the workflow attaches, and uses sandbox/approval modes instead of other tool patterns. _What to do:_ Narrow the rule to the supported subset or select a harness with exact list support.<br>
+Applies to **Codex**: Denied Tools.
+
+<a id="note-5"></a>**5.** Partially supported because this harness uses coarse permission modes instead of individual tool patterns. _What to do:_ Use a harness with exact permission-mode support when the distinction matters.<br>
 Applies to **Antigravity**: Mode.
 
-<a id="note-5"></a>**5.** Partially supported because interactive mode keeps the image path in the prompt without attaching it as vision input. _What to do:_ Use a harness with exact image-input support when the image must reach the model as vision input.<br>
+<a id="note-6"></a>**6.** Partially supported because interactive mode keeps the image path in the prompt without attaching it as vision input. _What to do:_ Use a harness with exact image-input support when the image must reach the model as vision input.<br>
 Applies to **OpenCode**: Images (interactive).
 
-<a id="note-6"></a>**6.** Not supported because this harness has no verified native image-attachment path in the ctrlyoke CLI adapter. _What to do:_ Remove the image reference or select a harness with verified native image-input support.<br>
+<a id="note-7"></a>**7.** Not supported because this harness has no verified native image-attachment path in the ctrlyoke CLI adapter. _What to do:_ Remove the image reference or select a harness with verified native image-input support.<br>
 Applies to **Qwen Code**: Images · **Antigravity**: Images.
 
-<a id="note-7"></a>**7.** Not supported because this harness exposes no native event ctrlyoke can map it to. _What to do:_ Remove the affected hook event or select a harness with verified support for it.<br>
+<a id="note-8"></a>**8.** Not supported because this harness exposes no native event ctrlyoke can map it to. _What to do:_ Remove the affected hook event or select a harness with verified support for it.<br>
 Applies to **Codex**: Error, Notification · **OpenCode**: Notification · **Qwen Code**: Error · **Antigravity**: Error, Notification, Permission Request, User Prompt Submit.
 
-<a id="note-8"></a>**8.** Partially supported because the hook fires but this harness's allow/deny response contract is unverified, so a returned decision may be ignored. _What to do:_ Remove the affected hook event or select a harness with verified support for it.<br>
+<a id="note-9"></a>**9.** Partially supported because the hook fires but this harness's allow/deny response contract is unverified, so a returned decision may be ignored. _What to do:_ Remove the affected hook event or select a harness with verified support for it.<br>
 Applies to **OpenCode**: Permission Request.
 
-<a id="note-9"></a>**9.** Partially supported because this harness's pre-tool hook fires but cannot block the tool call. _What to do:_ Remove the affected hook event or select a harness with verified support for it.<br>
+<a id="note-10"></a>**10.** Partially supported because this harness's pre-tool hook fires but cannot block the tool call. _What to do:_ Remove the affected hook event or select a harness with verified support for it.<br>
 Applies to **OpenCode**: Pre Tool Use.
 
-<a id="note-10"></a>**10.** Partially supported because this harness can start the main session before its plugin is listening, so the hook may not fire for it. _What to do:_ Remove the affected hook event or select a harness with verified support for it.<br>
+<a id="note-11"></a>**11.** Partially supported because this harness can start the main session before its plugin is listening, so the hook may not fire for it. _What to do:_ Remove the affected hook event or select a harness with verified support for it.<br>
 Applies to **OpenCode**: Session Start.
 
-<a id="note-11"></a>**11.** Not supported because this harness exposes no documented per-server tool filtering mechanism. _What to do:_ Remove the server filter or select a harness with verified per-server MCP filtering.<br>
+<a id="note-12"></a>**12.** Not supported because this harness exposes no documented per-server tool filtering mechanism. _What to do:_ Remove the server filter or select a harness with verified per-server MCP filtering.<br>
 Applies to **Antigravity**: Per Server Tool Filtering.
 
 ## How to read the matrix
@@ -127,7 +130,7 @@ versions outside these ranges are shown as unverified by the dashboard.
 | --- | :-: | :-: | :-: | :-: | :-: | :-: |
 | **Permissions** |  |  |  |  |  |  |
 | Allowed Tools | native | translated-cli | none | translated-cli | translated-cli | none |
-| Denied Tools | native | translated-cli | none | translated-cli | translated-cli | none |
+| Denied Tools | native | translated-cli | native | translated-cli | translated-cli | none |
 | Mode | native | native | native | translated-cli | translated-cli | native |
 | **Prompt Inputs** |  |  |  |  |  |  |
 | Images | native | native | native | native | none | none |

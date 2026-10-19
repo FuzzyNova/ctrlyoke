@@ -73,7 +73,7 @@ a model the list doesn't have, set `model: none` and put `--model <id>` in `addi
 
 ## Notes
 
-- Codex uses sandbox and approval modes rather than individual tool patterns, so `allowedTools` / `deniedTools` are **not enforced** on this harness. The permission `mode` maps to Codex flags:
+- Codex uses sandbox and approval modes rather than individual tool patterns, so `allowedTools` is **not enforced** on this harness. `deniedTools` is enforced only for `mcp__<server>__<tool>` entries naming an MCP server the workflow attaches; they're passed as that server's `disabled_tools`. Shell patterns, wildcard tool names, and servers configured only in Codex's own `config.toml` are not enforced. The permission `mode` maps to Codex flags:
   - `dangerouslyAllowAll` → `--dangerously-bypass-approvals-and-sandbox`
   - `allowAll` → `--sandbox workspace-write --ask-for-approval on-request`
   - `custom` → `-s <permissions.codexSandboxMode> -a <permissions.codexApprovalPolicy>`

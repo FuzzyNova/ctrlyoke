@@ -12,8 +12,10 @@ import {
 import { Log } from "../../../utils/Log";
 import {
   HARNESS_IDS,
+  MCP_SERVER_IDS,
   PERMISSION_MODES,
 } from "../../../types/DashboardConstants";
+import { foldMcpToolDenialsIntoServers } from "../../../types/ToolPermissionUtils";
 
 const CODEX_PERMISSION_VERIFICATION = {
   kind: "manual",
@@ -36,12 +38,20 @@ export const CODEX_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
     caveatCode: PERMISSION_CAVEAT_CODES.SANDBOX_APPROVAL_MODES,
   },
   deniedTools: {
-    fidelity: "unsupported",
-    mechanism: "none",
+    fidelity: "partial",
+    mechanism: "native",
     verification: CODEX_PERMISSION_VERIFICATION,
-    caveatCode: PERMISSION_CAVEAT_CODES.SANDBOX_APPROVAL_MODES,
+    caveatCode: PERMISSION_CAVEAT_CODES.MCP_TOOL_DENIALS_ONLY,
   },
 };
+
+/**
+ * Servers whose `mcp__<server>__<tool>` denials are not folded into Codex
+ * `disabled_tools`: the ctrlyoke server enforces its own denials.
+ */
+export const CODEX_FOLD_EXCLUDED_SERVER_IDS: ReadonlySet<string> = new Set([
+  MCP_SERVER_IDS.CTRLYOKE,
+]);
 
 /**
  * Bare tool names whose denial Codex can only express as a read-only sandbox.
@@ -73,8 +83,10 @@ function deniesWriteCapableTool(config: ToolPermissionConfig): boolean {
  * - custom → -s <sandboxMode> -a <approvalPolicy>
  *
  * Note: Codex does not expose ctrlyoke's general tool-pattern contract.
- * Its command rules, MCP filters, and permission profiles are separate
- * mechanisms and are not substituted here for arbitrary tool patterns.
+ * Denied `mcp__<server>__<tool>` patterns for servers the workflow attaches
+ * become that server's `disabled_tools` (folded in by CodexCliProvider).
+ * Codex command rules and permission profiles load only from config files,
+ * so other patterns are not enforced.
  *
  * Sandbox modes (-s / --sandbox):
  * - "read-only": Read-only filesystem access
@@ -121,8 +133,19 @@ export class CodexToolPermissionMapper
         context.approvalPolicy,
         context.isInteractive
       ),
+      // CodexCliProvider folds MCP tool denials into the attached servers'
+      // `disabled_tools`; only the rest of the deny list goes unenforced.
       diagnostics: this.getToolTranslationDiagnostics(
-        config,
+        {
+          ...config,
+          deniedTools: [
+            ...foldMcpToolDenialsIntoServers(
+              config,
+              context.mcpServers,
+              CODEX_FOLD_EXCLUDED_SERVER_IDS
+            ).unfolded,
+          ],
+        },
         HARNESS_IDS.CODEX_CLI
       ),
     };

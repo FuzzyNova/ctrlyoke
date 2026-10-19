@@ -202,6 +202,7 @@ export const PERMISSION_CAVEAT_CODES = {
   SANDBOX_APPROVAL_MODES: "permissions.sandboxApprovalModes",
   COARSE_PERMISSION_MODES: "permissions.coarsePermissionModes",
   CLAUDE_PREAPPROVED_SETTINGS: "permissions.claudePreapprovedSettings",
+  MCP_TOOL_DENIALS_ONLY: "permissions.mcpToolDenialsOnly",
 } as const;
 
 export const MCP_CAVEAT_CODES = {
@@ -270,6 +271,8 @@ export function getCompatibilityCaveatMessage(
       return "because this harness uses coarse permission modes instead of individual tool patterns";
     case PERMISSION_CAVEAT_CODES.CLAUDE_PREAPPROVED_SETTINGS:
       return "Claude's own settings allow rules can add to this list in headless mode";
+    case PERMISSION_CAVEAT_CODES.MCP_TOOL_DENIALS_ONLY:
+      return "because this harness enforces only mcp__<server>__<tool> denials for MCP servers the workflow attaches, and uses sandbox/approval modes instead of other tool patterns";
     case MCP_CAVEAT_CODES.NO_PER_SERVER_FILTERING:
       return "because this harness exposes no documented per-server tool filtering mechanism";
     case PROMPT_INPUT_CAVEAT_CODES.NO_NATIVE_IMAGE_ATTACHMENT:
@@ -491,13 +494,19 @@ export function getPermissionFidelityDiagnosticCode(
   }
 }
 
-/** Severity for a permission fidelity diagnostic: a partial fidelity with an advisory caveat is informational. */
+/**
+ * Severity for a permission fidelity diagnostic. Informational for a partial
+ * fidelity with an advisory caveat, and for a tool list that is still the
+ * shipped default (see `isShippedDefaultToolList`): nobody chose that list, so
+ * a harness that can't enforce it is not something to warn about.
+ */
 export function getPermissionFidelityDiagnosticSeverity(
   fidelity: CapabilityFidelity,
-  caveatCode?: CompatibilityCaveatCode
+  caveatCode?: CompatibilityCaveatCode,
+  isShippedDefaultList = false
 ): CompatibilityDiagnosticSeverity {
-  return fidelity === CAPABILITY_FIDELITIES.PARTIAL &&
-    isAdvisoryCaveat(caveatCode)
+  return isShippedDefaultList ||
+    (fidelity === CAPABILITY_FIDELITIES.PARTIAL && isAdvisoryCaveat(caveatCode))
     ? COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO
     : COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING;
 }

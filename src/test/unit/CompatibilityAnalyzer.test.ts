@@ -27,6 +27,7 @@ import {
 } from "../../types/CompatibilityTypes";
 import { CODEX_PERMISSION_CAPABILITIES } from "../../core/harness/codex/CodexToolPermissionMapper";
 import type { PromptFile } from "../../types/CtrlYokeTypes";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import { mergeServerDeniedTools } from "../../types/ToolPermissionUtils";
 
 const defaults = {
@@ -838,6 +839,41 @@ suite("CompatibilityAnalyzer", () => {
           capability: "deniedTools",
         },
       ]
+    );
+  });
+
+  test("reports an unenforced shipped-default deny list as info, not a warning", () => {
+    const deniedToolSeverity = (deniedTools: string[]) => {
+      const antigravity = installed(
+        HARNESS_IDS.ANTIGRAVITY_CLI,
+        true,
+        "partial",
+        "verified"
+      );
+      antigravity.effective!.permissions!.deniedTools = {
+        fidelity: "unsupported",
+        mechanism: "none",
+        verification: "verified",
+      };
+      return analyze(
+        mixedWorkflow({
+          harness: HARNESS_IDS.ANTIGRAVITY_CLI,
+          toolPermissions: { mode: "allowAll", allowedTools: [], deniedTools },
+          steps: [{ prompt: "Antigravity target" }],
+        }),
+        snapshot({ [HARNESS_IDS.ANTIGRAVITY_CLI]: antigravity })
+      ).find(({ capability }) => capability === "deniedTools")?.severity;
+    };
+    const shipped =
+      CTRLYOKE_SETTINGS_DEFAULTS.defaults.toolPermissions!.deniedTools;
+
+    assert.strictEqual(
+      deniedToolSeverity([...shipped]),
+      COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO
+    );
+    assert.strictEqual(
+      deniedToolSeverity(shipped.slice(1)),
+      COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
     );
   });
 

@@ -290,7 +290,7 @@ Tool patterns to allow (used in custom mode). Currently supported by Copilot CLI
 
 - **Type:** `string[]`
 
-Tool patterns to deny (takes precedence over allow list). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE\_CONFIG\_CONTENT and writes no workspace opencode.json. Codex and Antigravity only support an overall permission mode, not individual tool patterns; Denied Tools are NOT ENFORCED by those harnesses.
+Tool patterns to deny (takes precedence over allow list). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE\_CONFIG\_CONTENT and writes no workspace opencode.json. Antigravity only supports an overall permission mode and does NOT ENFORCE Denied Tools. Codex enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT ENFORCE shell or other tool patterns.
 
 ### `errorBehavior` {#execution-properties-errorbehavior}
 

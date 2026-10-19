@@ -17,6 +17,7 @@ import {
 } from "../../types/DashboardConstants";
 import { COMPATIBILITY_DIAGNOSTIC_CODES } from "../../types/CompatibilityTypes";
 import { Log } from "../../utils/Log";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -1320,7 +1321,7 @@ suite("HarnessToolPermissionMappers", () => {
         codex.diagnostics.map((diagnostic) => diagnostic.code),
         [
           COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_NOT_ENFORCED,
-          COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_NOT_ENFORCED,
+          COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL,
         ]
       );
 
@@ -1361,7 +1362,7 @@ suite("HarnessToolPermissionMappers", () => {
       );
       assert.deepStrictEqual(
         codex.diagnostics.map((diagnostic) => diagnostic.code),
-        [COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_NOT_ENFORCED]
+        [COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL]
       );
 
       const claude = await new ClaudeToolPermissionMapper().prepare(
@@ -1369,6 +1370,61 @@ suite("HarnessToolPermissionMappers", () => {
         {}
       );
       assert.deepStrictEqual(claude.diagnostics, []);
+    });
+
+    test("Codex reports only the denials it can't fold into an attached server", async () => {
+      const mapper = new CodexToolPermissionMapper();
+      const mcpServers = [
+        { id: "github", command: "github-mcp" },
+        { id: "ctrlyoke" },
+      ];
+
+      const folded = await mapper.prepare(
+        cfg(PERMISSION_MODES.ALLOW_ALL, [], ["mcp__github__create_issue"]),
+        { mcpServers }
+      );
+      assert.deepStrictEqual(folded.diagnostics, []);
+
+      for (const unfoldable of [
+        "shell(git push:*)",
+        "mcp__github__*",
+        "mcp__ctrlyoke__append_step",
+        "mcp__unattached__tool",
+      ]) {
+        const application = await mapper.prepare(
+          cfg(
+            PERMISSION_MODES.ALLOW_ALL,
+            [],
+            ["mcp__github__create_issue", unfoldable]
+          ),
+          { mcpServers }
+        );
+        assert.deepStrictEqual(
+          application.diagnostics.map(({ code }) => code),
+          [COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL],
+          unfoldable
+        );
+      }
+    });
+
+    test("an unenforced list that is still the shipped default is info, not a warning", async () => {
+      const shipped = CTRLYOKE_SETTINGS_DEFAULTS.defaults.toolPermissions!;
+      const severityFor = async (deniedTools: string[]) =>
+        (
+          await new CodexToolPermissionMapper().prepare(
+            cfg(PERMISSION_MODES.ALLOW_ALL, [], deniedTools),
+            {}
+          )
+        ).diagnostics.map(({ severity }) => severity);
+
+      assert.deepStrictEqual(
+        await severityFor([...shipped.deniedTools].reverse()),
+        [COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO]
+      );
+      assert.deepStrictEqual(
+        await severityFor([...shipped.deniedTools, "shell(curl:*)"]),
+        [COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING]
+      );
     });
 
     test("prepare reports Claude's advisory allow-list caveat with the analyzer's code and severity", async () => {
