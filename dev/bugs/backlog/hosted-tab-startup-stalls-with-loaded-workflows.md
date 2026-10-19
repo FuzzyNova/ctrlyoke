@@ -31,12 +31,23 @@ with no workflow loaded all start in about 0.8 s.
 
 ## Root Cause
 
-Not yet identified. The silent gaps cover forwarded browser logs too, so something
-on the extension host holds the message route queue (or the event loop) for about 10 s at a time
-while a new client starts. No 10 s timer was found on the READY path; the only 10 s timeouts
-nearby (`WorkflowOrchestrator.ts` sibling stop request, `ExternalRunWatchSession.ts`) don't log
-in these runs. Also note that loading the same file again creates a new workflow instance each
-time (`Show workflows: 11 total` after 12 loads), so the registry grows with every load.
+Identified 2026-10-19 with the `[RouteTiming]` and `[EventLoopStall]` session-log lines and a
+CPU profile of the extension host. `WebviewMessageRouter.route()` runs every message from
+every client, forwarded browser `logMessage`s included, through one serialized `routeQueue`.
+That is why the gaps silence every tab at once. Two handlers hold it for seconds:
+
+- **`requestSecretRegistry`**, sent for both scopes by every page load that mounts the
+  workflow properties/secret-grant UI, takes 1.4–3.7 s per request on Windows because
+  each credential read spawns its own `powershell.exe`. Requests from tabs that already closed
+  still run, so back-to-back loads add ~5 s of backlog each, matching the 10 → 25 → 30 s+
+  growth above. See `secret-registry-request-blocks-route-queue-with-powershell-spawns.md`.
+- **Payload redaction.** Every message the new client is sent is recursively redacted, and each
+  string leaf re-reads and deep-merges the full settings (64 µs per string; ~2.9 s for one
+  large run's timeline). A loaded workflow's run-view replay therefore blocks the event loop in
+  proportion to its size. See `secret-redaction-rereads-settings-for-every-string.md`.
+
+Loading the same file again creating a new instance each time is a separate cost (each new
+instance also recompiles the schema, see `prompt-file-parser-recompiles-schema-per-instance.md`).
 
 ## Suggested Fix
 
