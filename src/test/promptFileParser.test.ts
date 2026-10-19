@@ -44,13 +44,20 @@ suite("PromptFileParser Tests", () => {
     };
 
     test("does not flag valid workflow keys beside an unknown root key", () => {
-      const warnings = parser.getSchemaWarnings({ ...workflow, name: "k" });
+      const warnings = parser.getSchemaWarnings({ ...workflow, label: "k" });
 
       assert.deepStrictEqual(
         warnings.map((warning) => warning.propertyPointer),
-        ["/name"]
+        ["/label"]
       );
-      assert.ok(!warnings[0].message.includes("Did you mean 'name'?"));
+      assert.ok(!warnings[0].message.includes("Did you mean 'label'?"));
+    });
+
+    test("accepts a root workflow name", () => {
+      assert.deepStrictEqual(
+        parser.getSchemaWarnings({ ...workflow, name: "Release prep" }),
+        []
+      );
     });
 
     test("flags only color when it is the only unknown root key", () => {
@@ -69,12 +76,13 @@ suite("PromptFileParser Tests", () => {
       const warnings = parser.getSchemaWarnings({
         ...workflow,
         name: "k",
+        label: "k",
         color: "#ff0000",
       });
 
       assert.deepStrictEqual(
         warnings.map((warning) => warning.propertyPointer).sort(),
-        ["/color", "/name"]
+        ["/color", "/label"]
       );
     });
   });
@@ -101,6 +109,42 @@ suite("PromptFileParser Tests", () => {
         const scriptStep = result.steps?.[0];
         assert.ok(scriptStep && "shell" in scriptStep);
         assert.strictEqual(scriptStep.shell, "bash");
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("reads the workflow name from a multi-step root only", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-parser-workflow-name-")
+      );
+
+      try {
+        const multi = path.join(tempDir, "multi.ctrlyoke.json");
+        await fs.writeFile(
+          multi,
+          JSON.stringify({
+            name: "  Release prep  ",
+            steps: [{ name: "Bump", prompt: "bump" }],
+          }),
+          "utf8"
+        );
+        const single = path.join(tempDir, "single.ctrlyoke.json");
+        await fs.writeFile(
+          single,
+          JSON.stringify({ name: "Only step", prompt: "do it" }),
+          "utf8"
+        );
+
+        const multiResult = await parser.parsePromptFile(multi);
+        assertValidResult(multiResult);
+        assert.strictEqual(multiResult.name, "Release prep");
+        assert.strictEqual(multiResult.steps[0].name, "Bump");
+
+        const singleResult = await parser.parsePromptFile(single);
+        assertValidResult(singleResult);
+        assert.strictEqual(singleResult.name, undefined);
+        assert.strictEqual(singleResult.steps[0].name, "Only step");
       } finally {
         await fs.rm(tempDir, { recursive: true, force: true });
       }
@@ -855,6 +899,37 @@ suite("PromptFileParser Tests", () => {
           (nonStringResult.steps[0] as PromptStep).name,
           undefined
         );
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("names the workflow from the frontmatter name", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-parser-markdown-name-")
+      );
+
+      try {
+        const named = path.join(tempDir, "named.prompt.md");
+        await fs.writeFile(
+          named,
+          "---\nname: Review\n  staged diff\ndescription: Check it\n---\nReview it.",
+          "utf8"
+        );
+        const unnamed = path.join(tempDir, "unnamed.prompt.md");
+        await fs.writeFile(unnamed, "---\nname: 42\n---\nBody", "utf8");
+
+        const namedResult = await parser.parsePromptFile(named);
+        assertValidResult(namedResult);
+        assert.strictEqual(namedResult.name, "Review staged diff");
+        assert.strictEqual(
+          (namedResult.steps[0] as PromptStep).name,
+          "Check it"
+        );
+
+        const unnamedResult = await parser.parsePromptFile(unnamed);
+        assertValidResult(unnamedResult);
+        assert.strictEqual(unnamedResult.name, undefined);
       } finally {
         await fs.rm(tempDir, { recursive: true, force: true });
       }

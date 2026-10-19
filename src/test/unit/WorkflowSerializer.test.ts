@@ -143,6 +143,9 @@ function schemaBackedFieldNames(): {
     "definitionRevision",
     "_runtime",
     "parallelGroups",
+    // Saved from the lineage descriptor, never from the working file; see
+    // "writes the lineage name as the root name".
+    PROMPT_PROPERTIES.NAME,
   ]);
   const singleStepWorkflowFields = promptFields.filter(
     (field) => field === PROMPT_PROPERTIES.PROMPT
@@ -1228,6 +1231,78 @@ suite("WorkflowSerializer", () => {
       } finally {
         await fs.rm(tempDir, { recursive: true, force: true });
       }
+    });
+
+    test("writes the lineage name as the root name; templates omit it", async () => {
+      await withWorkspace(
+        "ctrlyoke-serializer-name-",
+        async (workspaceRoot) => {
+          const repository = new WorkflowLineageRepository();
+          const lineage = await repository.createLineage(
+            workspaceRoot,
+            "release-prep",
+            "Release prep"
+          );
+          await fs.writeFile(
+            WorkflowPaths.draftFilePath(workspaceRoot, lineage.workflowKey),
+            JSON.stringify({
+              definitionRevision: 1,
+              steps: [{ prompt: "bump" }],
+              _runtime: { currentIndex: 0, executionState: "idle" },
+            })
+          );
+          // A dashboard rename writes only the descriptor.
+          await repository.updateDescriptor(
+            workspaceRoot,
+            lineage.workflowKey,
+            (current) => ({ ...current, workflowName: "Release prep v2" })
+          );
+          const address = {
+            workflowKey: lineage.workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+          } as WorkflowViewAddress;
+          const outputPath = path.join(workspaceRoot, "saved.ctrlyoke.yaml");
+          let templateWorkflow: Record<string, unknown> | undefined;
+          const serializer = createWorkflowSerializer(
+            () => undefined,
+            {
+              saveWorkflowAsTemplate: async (
+                _name: string,
+                _scope: string,
+                workflow: Record<string, unknown>
+              ) => {
+                templateWorkflow = workflow;
+                return path.join(workspaceRoot, "template.ctrlyoke.json");
+              },
+              getAvailableTemplates: async () => [],
+            } as any,
+            () => ({ getViewAddress: () => address }) as any,
+            () => undefined,
+            fakeWorkspaceState()
+          );
+
+          await serializer.handleSaveWorkflow(
+            "name-save",
+            address,
+            outputPath,
+            "yaml"
+          );
+          await serializer.handleSaveWorkflowAsTemplate(
+            "name-template",
+            address,
+            "Release template",
+            "workspace",
+            "json"
+          );
+
+          const saved = yaml.load(await fs.readFile(outputPath, "utf8")) as {
+            name?: string;
+          };
+          assert.strictEqual(saved.name, "Release prep v2");
+          assert.ok(templateWorkflow);
+          assert.strictEqual(templateWorkflow.name, undefined);
+        }
+      );
     });
 
     test("reconstructs authored parallel items without persisting normalized groups", async () => {

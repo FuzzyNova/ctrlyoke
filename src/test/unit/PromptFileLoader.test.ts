@@ -26,6 +26,7 @@ import { writeWorkflowBundle } from "../../utils/WorkflowBundleWriter";
 import { parseAllFileReferences } from "../../utils/FileReferenceParser";
 import { resolveReferencePath } from "../../platform/WorkspaceRootResolver";
 import { StatusMessageReporter } from "../../core/orchestration/StatusMessageReporter";
+import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import { PostMessageDashboardSink } from "../../ui/PostMessageDashboardSink";
 import {
   MESSAGE_TYPES,
@@ -310,6 +311,94 @@ suite("PromptFileLoader Tests", () => {
         const workingFile = await queue.readWorkingFile(workingFilePath);
         assert.deepStrictEqual(workingFile.worktree, form.expected);
       }
+    });
+  });
+
+  suite("authored workflow name", () => {
+    async function loadWorkflowFile(
+      fileName: string,
+      content: string
+    ): Promise<{
+      queue: PromptQueue;
+      workspaceRoot: string;
+      workingFilePath: string;
+      selectedNames: Array<string | undefined>;
+    }> {
+      const workspaceRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-workflow-name-")
+      );
+      tempDirs.push(workspaceRoot);
+      const filePath = path.join(workspaceRoot, fileName);
+      await fs.writeFile(filePath, content, "utf8");
+      const queue = new PromptQueue();
+      const selectedNames: Array<string | undefined> = [];
+      const loader = new PromptFileLoader(
+        new PromptFileParser(),
+        queue,
+        () =>
+          ({
+            updateFileSelected: async (
+              _fileName: string,
+              _steps: WorkflowStep[],
+              workflowName: string | undefined
+            ) => {
+              selectedNames.push(workflowName);
+            },
+          }) as any
+      );
+      const workingFilePath = await loader.loadPromptFile(
+        filePath,
+        workspaceRoot
+      );
+      if (!workingFilePath) {
+        throw new Error("working file should be created");
+      }
+      return { queue, workspaceRoot, workingFilePath, selectedNames };
+    }
+
+    async function descriptorName(
+      queue: PromptQueue,
+      workspaceRoot: string
+    ): Promise<string> {
+      const { workflowKey } = queue.getState();
+      assert.ok(workflowKey, "the load should create a lineage");
+      const descriptor = await new WorkflowLineageRepository().readDescriptor(
+        workspaceRoot,
+        workflowKey
+      );
+      return descriptor.workflowName;
+    }
+
+    test("names the new lineage from the file's root name, outside the working file", async () => {
+      const { queue, workspaceRoot, workingFilePath, selectedNames } =
+        await loadWorkflowFile(
+          "release-prep.ctrlyoke.yaml",
+          "name: Release prep\nsteps:\n  - prompt: bump the version\n"
+        );
+
+      assert.strictEqual(
+        await descriptorName(queue, workspaceRoot),
+        "Release prep"
+      );
+      assert.strictEqual(queue.getState().workflowName, "Release prep");
+      assert.deepStrictEqual(selectedNames, ["Release prep"]);
+      const workingFile = JSON.parse(
+        await fs.readFile(workingFilePath, "utf8")
+      ) as Record<string, unknown>;
+      assert.ok(!("name" in workingFile), "working files never store it");
+    });
+
+    test("falls back to the file name without a root name", async () => {
+      const { queue, workspaceRoot, selectedNames } = await loadWorkflowFile(
+        "release-prep.ctrlyoke.yaml",
+        "steps:\n  - prompt: bump the version\n"
+      );
+
+      assert.strictEqual(
+        await descriptorName(queue, workspaceRoot),
+        "release-prep"
+      );
+      assert.deepStrictEqual(selectedNames, [undefined]);
     });
   });
 

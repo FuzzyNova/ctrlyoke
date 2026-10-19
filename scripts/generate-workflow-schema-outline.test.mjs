@@ -101,6 +101,7 @@ test("a $ref sibling description wins over the referenced one", () => {
 test("a .prompt.md frontmatter offers only the keys ctrlyoke reads", () => {
   assert.deepEqual(Object.keys(outline.promptFileFrontmatter.properties), [
     "schemaVersion",
+    "name",
     "description",
   ]);
 });

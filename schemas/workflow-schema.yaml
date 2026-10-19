@@ -96,6 +96,15 @@ oneOf:
       - $ref: '#/$defs/executionProperties'
       - $ref: '#/$defs/workflowOnlyProperties'
       - properties:
+          name:
+            type: string
+            description: >-
+              Optional workflow display name shown in the dashboard heading, recent workflows and
+              history. If omitted, the file name without its extension is used. Renaming the
+              workflow in the dashboard does not edit this file; the next Save writes the current
+              name back here. In a single-step file (a root `prompt` or `script`), `name` labels
+              that step instead.
+            title: Name
           steps:
             description: >-
               The ordered step queue. Each item is a prompt step, a script step, or a parallel
@@ -285,6 +294,13 @@ $defs:
           Workflow definition format version. Absent means format 1. An older ctrlyoke refuses to
           load a file with a newer version.
         title: Schema Version
+      name:
+        type: string
+        description: >-
+          Workflow display name used when the file runs on its own (cut to 100 characters). If
+          omitted, the file name without `.prompt.md` is used. It is display metadata only and is
+          never sent to the harness.
+        title: Name
       description:
         type: string
         description: >-

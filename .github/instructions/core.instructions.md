@@ -34,6 +34,10 @@ Top-level ctrlyoke core orchestration only: workflow registry, per-workflow runt
   for dashboard views; never derive it from a run-storage working-copy path.
   The descriptor is also the sole owner of lineage-wide `workflowName`,
   `isFavorite`, and `lastModifiedAt`; run files hold per-run `startedAt` only.
+  An authored file's root `name` is not a second copy: it only seeds a new
+  lineage's descriptor on load (`PromptFileLoader`), and Save writes the
+  descriptor's name back through `buildAuthoredWorkflow`'s `workflowName`
+  argument. Never copy it into a draft/run file.
   Descriptor `lastModifiedAt` is **not** a lineage's recency on its own:
   appending to or continuing a run never writes the descriptor, so every
   recency sort/label goes through `resolveLineageLastModifiedAt`

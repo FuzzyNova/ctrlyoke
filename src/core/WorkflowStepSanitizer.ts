@@ -159,13 +159,21 @@ export const AUTHORED_STEP_FIELDS = [
  * `AUTHORED_WORKFLOW_FIELDS`/`AUTHORED_STEP_FIELDS` survive, and parallel
  * groups fold back into `parallel:` blocks. Shared by Save As, save as
  * template and run bundle export.
+ * @param workflowName The lineage descriptor's name, written as the root
+ *   `name`. Working files never hold it, so callers that want it in the
+ *   authored file pass it here; save as template omits it, because a
+ *   template's workflows are named in the template dialog.
  */
 export function buildAuthoredWorkflow(
-  workingFile: Record<string, any>
+  workingFile: Record<string, any>,
+  workflowName?: string
 ): Record<string, unknown> {
   const clean: Record<string, unknown> = {
     schemaVersion:
       CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.WORKFLOW_DEFINITION],
+    ...(workflowName?.trim()
+      ? { [PROMPT_PROPERTIES.NAME]: workflowName.trim() }
+      : {}),
   };
 
   for (const field of AUTHORED_WORKFLOW_FIELDS) {

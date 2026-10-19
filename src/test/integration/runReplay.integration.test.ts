@@ -402,6 +402,11 @@ suite("Run replay (bundle -> live engine)", function () {
       "replays run headless"
     );
     assert.ok(session.workflowFile!.endsWith(`replay-test.ctrlyoke.json`));
+    assert.strictEqual(
+      workflow.name,
+      "Replay Test",
+      "the recorded workflow's name becomes the file's root name"
+    );
 
     const streamedText = events
       .filter(
@@ -508,6 +513,17 @@ suite("Run replay (bundle -> live engine)", function () {
     assert.ok(
       !bundleText.includes(`"_runtime"`),
       "the definition carries no runtime state"
+    );
+    const exportedDefinition = JSON.parse(
+      await fs.readFile(
+        path.join(exported.bundleDir, RUN_BUNDLE_FILES.DEFINITION),
+        "utf8"
+      )
+    ) as { name?: string };
+    assert.strictEqual(
+      exportedDefinition.name,
+      "Replay Test",
+      "the definition carries the lineage name as its root name"
     );
 
     const secondWorkspace = path.join(root, "second");

@@ -97,7 +97,8 @@ export class PromptFileLoader {
         path.basename(filePath),
         workspaceFolderPath,
         filePath, // real source file path — stored as originalFile
-        promptFile.warnings
+        promptFile.warnings,
+        promptFile.name
       );
     } catch (error) {
       Log.error("[PromptFileLoader] Failed to load prompt file:", error);
@@ -151,13 +152,18 @@ export class PromptFileLoader {
    * Shared tail of loadPromptFile/loadFromMemory: validate steps, create the
    * working file, copy/backfill workflow-level properties, load the queue,
    * and notify the dashboard.
+   * @param authoredName The file's own workflow `name`. It becomes the new
+   *   lineage's descriptor name in place of one derived from `displayName`;
+   *   it is never copied into the working file. Template loads pass none,
+   *   since the name chosen in the template dialog arrives as `displayName`.
    */
   private async loadParsedPromptFile(
     promptFile: PromptFile,
     displayName: string,
     workspaceFolderPath: string | undefined,
     originalFilePath: string | undefined,
-    schemaWarnings: WorkflowValidationWarning[]
+    schemaWarnings: WorkflowValidationWarning[],
+    authoredName?: string
   ): Promise<string | undefined> {
     this.lastSchemaWarnings = [...schemaWarnings];
     if (!promptFile.steps) {
@@ -191,6 +197,11 @@ export class PromptFileLoader {
     }
 
     await this.validateAndReportCompatibility(promptFile);
+
+    // createWorkingFile prefers the queue's name over the file stem.
+    if (authoredName) {
+      this.promptQueue.setWorkflowName(authoredName);
+    }
 
     // Create the lineage's draft under run storage/<workflowKey>/draft/.
     let workingFilePath: string | undefined;
@@ -260,7 +271,7 @@ export class PromptFileLoader {
       dashboard.updateFileSelected(
         displayName,
         promptFile.steps,
-        undefined,
+        authoredName,
         promptFile.finalStep ?? null,
         this.promptQueue.getFinalStepRuntime(),
         undefined,

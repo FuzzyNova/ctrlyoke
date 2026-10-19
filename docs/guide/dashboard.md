@@ -46,6 +46,10 @@ From left to right:
   workflows and runs you viewed.
 - The **workflow name and state** badge, which opens the
   [workflow menu](#the-workflow-menu). Click the name to rename the workflow.
+  A workflow loaded from a file starts with the file's
+  [`name`](/reference/workflow-schema#workflow-file-name), or its file name
+  when it has none. Renaming doesn't edit the file; the next Save writes the
+  new name into it.
 - The [run controls](#run-controls).
 - **Search History** (`Ctrl+Shift+F`), **Explore files and changes** (browser
   dashboard only; see [Workspace viewer](/guide/workspace-viewer)) and **Global

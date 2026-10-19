@@ -121,7 +121,10 @@ const NOT_AUTHORABLE = new Map<string, string>([
   ["type", "step-kind discriminator carried by the message"],
   ["prompt", "step content carried by the message's `text`"],
   ["script", "step content carried by the message's `text`"],
-  ["name", "carried by the message's dedicated `promptName` field"],
+  [
+    "name",
+    "a step's travels in the message's `promptName`; the workflow's is the lineage descriptor's, edited by the heading-row rename",
+  ],
   ["enabled", "carried explicitly by every save payload; see the toggle tests"],
   [
     "returns",

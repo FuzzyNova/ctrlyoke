@@ -108,19 +108,20 @@ function hasOwn(value: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
 }
 
-/** A prompt step's `name` is capped at this length by the workflow schema. */
-const PROMPT_STEP_NAME_MAX_LENGTH = 100;
+/** A step's `name` is capped at this length by the workflow schema. */
+const DISPLAY_NAME_MAX_LENGTH = 100;
 
 /**
- * The step `name` for a `.prompt.md` file's frontmatter `description`: one
- * line, cut to the schema's limit. Anything that isn't a non-empty string
- * gives no name, so the dashboard falls back to the prompt preview.
+ * A display name from a `.prompt.md` frontmatter value (`description` for the
+ * step, `name` for the workflow): one line, cut to the schema's limit.
+ * Anything that isn't a non-empty string gives no name, so the dashboard
+ * falls back to the prompt preview or the file name.
  */
-function promptFileStepName(description: unknown): string | undefined {
-  if (typeof description !== "string") return undefined;
-  const oneLine = description.replace(/\s+/g, " ").trim();
+function frontmatterDisplayName(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const oneLine = value.replace(/\s+/g, " ").trim();
   return oneLine
-    ? truncateText(oneLine, PROMPT_STEP_NAME_MAX_LENGTH - 1)
+    ? truncateText(oneLine, DISPLAY_NAME_MAX_LENGTH - 1)
     : undefined;
 }
 
@@ -841,6 +842,7 @@ export class PromptFileParser {
 
       const frontmatterSplit = splitMarkdownFrontmatter(content);
       let description: unknown;
+      let workflowName: unknown;
       if (frontmatterSplit) {
         const frontmatterText = frontmatterSplit.frontmatter;
         const frontmatter = loadYamlDocument(frontmatterText, {
@@ -863,13 +865,15 @@ export class PromptFileParser {
           true
         );
         if (isObject(frontmatter)) {
-          description = (validation.parsed as Record<string, unknown>)
-            .description;
+          const fields = validation.parsed as Record<string, unknown>;
+          description = fields.description;
+          workflowName = fields.name;
         }
       }
 
       const promptText = getPromptMarkdownText(content);
-      const name = promptFileStepName(description);
+      const name = frontmatterDisplayName(description);
+      const displayName = frontmatterDisplayName(workflowName);
 
       if (!promptText) {
         throw new Error("Prompt file is empty");
@@ -879,6 +883,7 @@ export class PromptFileParser {
         {
           schemaVersion:
             CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.WORKFLOW_DEFINITION],
+          ...(displayName ? { name: displayName } : {}),
           steps: [
             {
               ...(name ? { name } : {}),
@@ -1106,10 +1111,17 @@ export class PromptFileParser {
         );
       }
 
-      // Build PromptFile with workflow-level properties and prompts array
+      // Build PromptFile with workflow-level properties and prompts array.
+      // Only this multi-step form has a workflow `name`; in the single-step
+      // forms above a root `name` belongs to the step.
       const promptFile: PromptFile = {
         steps: resolvedPrompts,
       };
+      const workflowName =
+        typeof parsed.name === "string" ? parsed.name.trim() : "";
+      if (workflowName) {
+        promptFile.name = workflowName;
+      }
       if (hasParallelGroups) {
         promptFile.parallelGroups = normalizedTopology.parallelGroups;
       }

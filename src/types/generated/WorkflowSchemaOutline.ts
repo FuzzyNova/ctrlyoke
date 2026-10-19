@@ -958,6 +958,10 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "valueKind": "number",
         "description": "Workflow definition format version. Absent means format 1. An older ctrlyoke refuses to load a file with a newer version."
       },
+      "name": {
+        "valueKind": "string",
+        "description": "Workflow display name used when the file runs on its own (cut to 100 characters). If omitted, the file name without `.prompt.md` is used. It is display metadata only and is never sent to the harness."
+      },
       "description": {
         "valueKind": "string",
         "description": "Short summary of the prompt. When the file runs on its own, it becomes the step's `name` in the dashboard (cut to 100 characters). It is display metadata only and is never sent to the harness."

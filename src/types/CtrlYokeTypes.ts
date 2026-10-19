@@ -412,6 +412,12 @@ export const EXECUTION_PROPERTY_KEYS = [
 export interface PromptFile extends ExecutionProperties {
   /** Workflow definition schema version; omitted on hand-authored legacy files (format 1). */
   schemaVersion?: number;
+  /**
+   * Authored workflow display name (multi-step root `name`, or `.prompt.md`
+   * frontmatter `name`). Only seeds a new lineage's descriptor `workflowName`;
+   * the descriptor stays the sole runtime owner, so working files never store it.
+   */
+  name?: string;
   /** Maximum number of workflow steps for this run; omitted inherits settings. */
   maxSteps?: number;
   /** Worktree selection authored at the workflow root. */

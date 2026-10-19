@@ -105,7 +105,7 @@ const WORKFLOW_PAGES = [
         properties: [
           {
             pointer: WORKFLOW_ROOT_PROPERTIES,
-            include: ["steps", "finalStep"],
+            include: ["name", "steps", "finalStep"],
           },
           { pointer: "#/$defs/workflowOnlyProperties/properties" },
           { pointer: "#/properties" },

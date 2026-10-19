@@ -9,6 +9,7 @@ and type checking, but do not recognize the schema's unknown-key closures.
 ## Example
 
 ```yaml
+name: Reliability pass
 harness: copilot-cli
 model: claude-sonnet-4.6
 
@@ -38,6 +39,7 @@ finalStep:
 
 | Field                  | Purpose                                                               |
 | ---------------------- | --------------------------------------------------------------------- |
+| `name`                 | Workflow name shown in the dashboard; defaults to the file name       |
 | `harness`              | Select the harness                                                    |
 | `model`                | Override the harness model                                            |
 | `steps`                | Ordered list of work to run                                           |

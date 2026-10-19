@@ -136,9 +136,11 @@ function normalizeCommand(command: string): string {
 }
 
 /**
- * Writes the bundle's workflow into the workspace, named after the recorded
- * workflow so the dashboard shows that name. Every step runs headless: a
- * replay has output events to show, not a terminal to attach.
+ * Writes the bundle's workflow into the workspace with the recorded
+ * workflow's name as its root `name` (and file name), so the dashboard shows
+ * that name; bundles exported before workflow files had a `name` carry it
+ * only in the lineage. Every step runs headless: a replay has output events
+ * to show, not a terminal to attach.
  */
 async function materializeWorkflow(
   bundle: LoadedRunBundle,
@@ -162,6 +164,7 @@ async function materializeWorkflow(
     : definition.steps;
   const workflow = {
     ...definition,
+    [PROMPT_PROPERTIES.NAME]: bundle.manifest.lineage.workflowName,
     [PROMPT_PROPERTIES.EXECUTION_MODE]: EXECUTION_MODES.HEADLESS,
     ...(steps !== undefined ? { steps } : {}),
     ...(definition.finalStep

@@ -154,7 +154,9 @@ export async function exportRunBundle(
     );
     await writeJson(
       path.join(stagingDir, RUN_BUNDLE_FILES.DEFINITION),
-      transform.apply(buildAuthoredWorkflow(workingFile))
+      transform.apply(
+        buildAuthoredWorkflow(workingFile, descriptor.workflowName)
+      )
     );
     const bundleManifest: RunBundleManifest = {
       schemaVersion: RUN_BUNDLE_SCHEMA_VERSION,

@@ -27,12 +27,7 @@ async function loadHeroWorkflow(page: Page): Promise<void> {
   await stepCount(page)
     .getByText(`${HERO_STEP_COUNT} steps`, { exact: true })
     .waitFor();
-  // A workflow file has no name of its own: the dashboard shows its file
-  // name until it is renamed here, as the recorded run's author did.
-  await page.getByRole("button", { name: "Edit workflow name" }).click();
-  const name = page.getByRole("textbox", { name: "Edit workflow name" });
-  await name.fill(HERO_WORKFLOW_NAME);
-  await name.press("Enter");
+  // Replay writes the recorded workflow's name into the file's root `name`.
   await page
     .getByRole("button", { name: "Edit workflow name" })
     .getByText(HERO_WORKFLOW_NAME, { exact: true })

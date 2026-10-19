@@ -256,6 +256,26 @@ export class WorkflowSerializer {
     return resolved;
   }
 
+  /**
+   * The authored workflow Save writes for `address`: the working file's
+   * definition plus the lineage descriptor's name as the root `name`, which
+   * the working file never holds.
+   */
+  private async readAuthoredWorkflowForSave(
+    workingFilePath: string,
+    address: WorkflowViewAddress
+  ): Promise<Record<string, unknown>> {
+    const workingFile = await readJsonFile(workingFilePath);
+    const workspaceRoot = this.workspaceRoot;
+    const descriptor = workspaceRoot
+      ? await this.lineageRepository.tryReadDescriptor(
+          workspaceRoot,
+          address.workflowKey
+        )
+      : undefined;
+    return buildAuthoredWorkflow(workingFile, descriptor?.workflowName);
+  }
+
   private async pathExists(filePath: string): Promise<boolean> {
     try {
       await fs.access(filePath);
@@ -511,8 +531,10 @@ export class WorkflowSerializer {
     }
     try {
       const absolutePath = await this.resolveSafeExportPath(filePath);
-      const workingFile = await readJsonFile(workingFilePath);
-      const clean = buildAuthoredWorkflow(workingFile);
+      const clean = await this.readAuthoredWorkflowForSave(
+        workingFilePath,
+        address
+      );
       const analysis = await this.analyzeSaveBundle(
         clean,
         absolutePath,
@@ -569,8 +591,10 @@ export class WorkflowSerializer {
     }
 
     try {
-      const workingFile = await readJsonFile(workingFilePath);
-      const clean = buildAuthoredWorkflow(workingFile);
+      const clean = await this.readAuthoredWorkflowForSave(
+        workingFilePath,
+        address
+      );
       const absolutePath = await this.resolveSafeExportPath(filePath);
       const analysis = await this.analyzeSaveBundle(
         clean,

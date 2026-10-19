@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Workflow files can name their workflow.** A multi-step workflow file's root `name` (or a
+  `.prompt.md` file's frontmatter `name`) sets the name shown in the dashboard, recent workflows and
+  history; without one, the file name is used as before. Save writes the workflow's current name,
+  including a rename made in the dashboard, back to the file's `name`.
+
 ## [0.2.0] - 2026-10-16
 
 This release renames many settings and workflow fields. Old keys are not migrated: they are

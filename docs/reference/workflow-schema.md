@@ -65,6 +65,12 @@ say what it does.
 
 Properties authored only at the workflow root.
 
+### `name` {#workflow-file-name}
+
+- **Type:** `string`
+
+Optional workflow display name shown in the dashboard heading, recent workflows and history. If omitted, the file name without its extension is used. Renaming the workflow in the dashboard does not edit this file; the next Save writes the current name back here. In a single-step file (a root `prompt` or `script`), `name` labels that step instead.
+
 ### `steps` {#workflow-file-steps}
 
 - **Type:** array of ([Prompt step](#prompt-step) or [Script step](#script-step) or [Parallel group](#parallel-group))
@@ -761,6 +767,12 @@ The optional YAML frontmatter block at the top of a `.prompt.md` file. ctrlyoke 
 - **Constraints:** minimum 1
 
 Workflow definition format version. Absent means format 1. An older ctrlyoke refuses to load a file with a newer version.
+
+### `name` {#prompt-file-frontmatter-name}
+
+- **Type:** `string`
+
+Workflow display name used when the file runs on its own (cut to 100 characters). If omitted, the file name without `.prompt.md` is used. It is display metadata only and is never sent to the harness.
 
 ### `description` {#prompt-file-frontmatter-description}
 

@@ -4,9 +4,10 @@
 
 ## Frontmatter
 
-ctrlyoke reads two fields and ignores every other key:
+ctrlyoke reads three fields and ignores every other key:
 
 - `schemaVersion`: the workflow format version. An older ctrlyoke refuses a newer one.
+- `name`: the workflow name shown in the dashboard when the file runs on its own, cut to 100 characters. Without it, the file name without `.prompt.md` is used.
 - `description`: a short summary. When the file runs on its own, it becomes the step's name in the dashboard, cut to 100 characters. It is never sent to the harness.
 
 Because other keys are ignored, a prompt file written for another tool, such as a GitHub Copilot prompt file with `model`, `tools` or `agent`, still loads. ctrlyoke does not apply those keys: their values mean something different there.
