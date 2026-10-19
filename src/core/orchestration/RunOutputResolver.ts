@@ -268,10 +268,16 @@ export type RunOutputResolverAttemptEvent =
        * True when this attempt was already settled earlier in the stream and
        * this value carries records appended afterwards (a post-completion
        * follow-up recorded after RUN_TERMINATED or another attempt's events).
-       * Its aggregate output is cumulative, so it supersedes the earlier
+       * A re-recorded aggregate is cumulative and supersedes the earlier
        * value; the prompt and terminal state live only on that earlier value.
        */
       continuation: boolean;
+      /**
+       * True when a continuation recorded only streamed events and no fresh
+       * aggregate. Its `output` then holds just the follow-up's own events,
+       * which extend the earlier value's output rather than replace it.
+       */
+      appendsOutput: boolean;
     }
   | {
       kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUNTIME_TRANSITION;
@@ -619,22 +625,31 @@ export class RunOutputResolver {
     state: OpenAttemptState,
     key: string
   ): RunOutputResolverAttemptEvent {
+    const appendsOutput = state.continuation && !state.value.output;
     return {
       kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED,
-      attempt: this.finishAttemptState(state, key),
+      attempt: this.finishAttemptState(state, key, appendsOutput),
       // A continuation's attempt already terminated; follow-ups never record
       // their own ATTEMPT_TERMINATED, so its absence is not an interruption.
       unterminated: !state.terminated && !state.continuation,
       continuation: state.continuation,
+      appendsOutput,
     };
   }
 
   private finishAttemptState(
     state: OpenAttemptState,
-    key: string
+    key: string,
+    appendsOutput: boolean
   ): ResolvedRunAttemptValue {
     if (state.value.output?.isStreaming) {
       state.value.output = state.deltas.flush(key, state.value.output);
+    } else if (appendsOutput) {
+      // `recordFollowUpResponse` writes a follow-up burst as streamed events
+      // only, so they are the continuation's entire output.
+      const empty: CliOutput = { elapsed: 0, isStreaming: false };
+      const appended = state.deltas.flush(key, empty);
+      if (appended !== empty) state.value.output = appended;
     }
     return state.value;
   }
@@ -1123,11 +1138,12 @@ export class RunOutputResolver {
         event.continuation &&
         sameProjectionAttempt(prior.latest.identity, value)
       ) {
-        // A continuation carries cumulative output when it recorded any; one
-        // that recorded none (a follow-up turn with no captured events) must
-        // not erase the transcript the attempt already settled with.
+        // A re-recorded aggregate is cumulative and supersedes the held
+        // projection. A follow-up recorded as streamed events only extends
+        // it, and one that recorded nothing must not erase the transcript the
+        // attempt already settled with.
         const held = latestValues.get(key);
-        if (value.output || !held) {
+        if (!held || (value.output && !event.appendsOutput)) {
           prior.latest.changes = changes;
           latestValues.set(key, {
             value: { ...value, output: undefined },
@@ -1135,8 +1151,15 @@ export class RunOutputResolver {
             legacyText,
           });
         } else {
+          const mergedChanges = new Map<string, PriorContextFileChange>();
+          mergePriorFileChanges(mergedChanges, prior.latest.changes);
+          mergePriorFileChanges(mergedChanges, changes);
+          prior.latest.changes = [...mergedChanges.values()];
           latestValues.set(key, {
             ...held,
+            ...(transcript?.length
+              ? { transcript: [...(held.transcript ?? []), ...transcript] }
+              : {}),
             value: {
               ...foldSettledAttempt(held.value, event),
               output: undefined,
@@ -1763,9 +1786,10 @@ function isNewerAttempt(
 
 /**
  * Reduce one settled attempt into the value already held for it. A
- * continuation of that same attempt carries its cumulative output, while the
- * prompt, start metadata, and terminal state exist only on the earlier value;
- * anything else replaces the held value outright.
+ * continuation of that same attempt either re-recorded its cumulative output,
+ * which supersedes the held output, or recorded only follow-up events, which
+ * are appended to it. The prompt, start metadata, and terminal state exist
+ * only on the earlier value; anything else replaces the held value outright.
  */
 function foldSettledAttempt(
   existing: ResolvedRunAttemptValue | undefined,
@@ -1786,8 +1810,28 @@ function foldSettledAttempt(
     ...existing,
     definition: continued.definition ?? existing.definition,
     kind: continued.kind ?? existing.kind,
-    output: continued.output ?? existing.output,
+    output:
+      event.appendsOutput && existing.output && continued.output
+        ? appendFollowUpOutput(existing.output, continued.output)
+        : (continued.output ?? existing.output),
     scriptOutput: continued.scriptOutput ?? existing.scriptOutput,
+  };
+}
+
+function appendFollowUpOutput(
+  existing: CliOutput,
+  followUp: CliOutput
+): CliOutput {
+  return {
+    ...existing,
+    structured: {
+      ...existing.structured,
+      events: [
+        ...(existing.structured?.events ?? []),
+        ...(followUp.structured?.events ?? []),
+      ],
+      metadata: existing.structured?.metadata ?? {},
+    },
   };
 }
 
