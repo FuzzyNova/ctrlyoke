@@ -427,9 +427,11 @@ suite("UserHookEnvironment", () => {
     );
     const envFile = path.join(tempDirectory, "env.json");
     const childPidPath = path.join(tempDirectory, "child.pid");
+    // Long enough for the shell and child node to start while all test suites
+    // run concurrently; at 1 s the tree was killed before the child wrote its PID.
     await fs.writeFile(
       envFile,
-      JSON.stringify({ "hook-0": { env: {}, timeoutSec: 1 } })
+      JSON.stringify({ "hook-0": { env: {}, timeoutSec: 5 } })
     );
     const command = `node -e "require('fs').writeFileSync(process.env.HOOK_CHILD_PID_FILE, String(process.pid)); setInterval(() => {}, 1000)"`;
     const launcher = spawn(
