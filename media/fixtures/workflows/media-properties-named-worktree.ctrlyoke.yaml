@@ -1,0 +1,12 @@
+# Media capture fixture: the Harness tab with a named worktree (shot list #12). Never run.
+harness: claude-cli
+model: sonnet
+executionMode: headless
+skills: [ctrlyoke-syntax]
+worktree:
+  mode: named
+  branch: bug-fix
+
+steps:
+  - name: Fix the bug
+    prompt: Fix the failing notes test.

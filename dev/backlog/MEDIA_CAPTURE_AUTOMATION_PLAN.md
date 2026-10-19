@@ -1,9 +1,9 @@
 # Media Capture Automation Plan
 
-**Status (2026-10-18):** Backlog. Not started. This is the "how" for
-[`SCREENSHOTS_AND_MEDIA_PLAN.md`](SCREENSHOTS_AND_MEDIA_PLAN.md), which stays the shot list and
-slotting plan. Where scripts, fixtures and the demo project live is decided (see "Demo project and
-fixtures" below), and the phases put replay ahead of the hero clip.
+**Status (2026-10-18):** Phase 1 done: `media/` exists and retakes #12's ten tab shots and the
+walkthrough's `verifyHarness` image (four themes) with `npm run media -- --all`. Phases 2-5 are
+open. This is the "how" for [`SCREENSHOTS_AND_MEDIA_PLAN.md`](SCREENSHOTS_AND_MEDIA_PLAN.md), which
+stays the shot list and slotting plan. `media/README.md` covers using it and adding shots.
 
 ## Goal
 
@@ -48,40 +48,69 @@ Remotion and its dependencies never reach the extension's `node_modules` or the 
 
 ```
 media/
-  package.json          # remotion, @remotion/cli, playwright
+  package.json          # playwright, typescript (remotion arrives with phase 3)
+  cli.ts                # `npm run media -- ...` (run by Node's type stripping, no build)
   demo-app.json         # demo project repo URL, pinned ref, named start tags (see 7)
   shots/                # one capture script per shot list entry
-    hero.capture.ts
     properties-tabs.capture.ts
-  compositions/         # Remotion compositions, one per video asset
-    Hero.tsx
-    PhoneFrame.tsx
+    walkthrough.capture.ts
+    hero.capture.ts     # phase 3
+  compositions/         # phase 3: Remotion compositions, one per video asset
   lib/
-    devHost.ts          # start/stop the dev host, read server-url.txt
-    timeline.ts         # the beat recorder (see 3)
-    encode.ts           # the ffmpeg recipes from SCREENSHOTS_AND_MEDIA_PLAN.md
-  fixtures/runs/        # recorded run bundles used by replay (see 5)
+    devHost.ts          # start/stop the dev host, switch its theme
+    demoApp.ts          # clone, reset and seed the demo-app work copy
+    dashboard.ts        # Playwright helpers for the hosted dashboard
+    stills.ts           # capture, composite, size check
+    encode.ts           # the ffmpeg recipes (palette compression so far)
+    timeline.ts         # phase 3: the beat recorder (see 3)
+  vscode-helper/        # opens the ctrlyoke panel in the capture host (see 2)
+  fixtures/workflows/   # the workflows the stills show
+  fixtures/home/        # seeds the capture host's user home
+  fixtures/runs/        # phase 2: recorded run bundles used by replay (see 5)
+  .work/                # gitignored: demo-app clone, VS Code profile, user home
 ```
 
-`npm run media -- hero` captures, renders and encodes one asset into `images/screenshots/` under
-its final name. `npm run media -- --all` retakes everything that doesn't need a device.
+`npm run media -- <shot>` captures one asset into `images/screenshots/` under its final name.
+`npm run media -- --all` retakes everything that doesn't need a device.
 
 ### 2. Stills
 
 Each still is one entry: a dev-host mode, the dashboard state to reach (seeded settings, an opened
 workflow, a replayed run), the element to clip to, and the output name. The script:
 
-1. Starts the dev host with `npm run dev:host:start:onboarding` (or `:shared`) and reads the URL
-   from `.ctrlyoke/dev/server-url.txt`.
+1. Starts the dev host in its `media` mode on a demo-app work copy and reads the URL from
+   `.ctrlyoke/dev/server-url.txt`.
 2. Opens a browser context at `deviceScaleFactor: 2` and the shot's viewport.
 3. Drives the UI to the state, sets the theme, hides the cursor, and screenshots the clip.
 4. Runs every theme variant the shot needs without changing anything else (the walkthrough's four
    themes, for example).
 
-This replaces the agent-driven MCP retakes for #12's tab shots, #4/#5's settings pages, #10's
-desktop stills and the walkthrough stills that come from the hosted dashboard. Shots that need the
-real VS Code window (the walkthrough's activity-bar frame, the integrated terminal) still need a
-native window capture; leave those manual until we have a way to drive VS Code itself.
+What phase 1 found out, which the code depends on:
+
+- **The capture host replaces the whole user home**, not just `CTRLYOKE_HOME`. ctrlyoke reads
+  user settings, MCP servers, skills and agents from `os.homedir()` (`createUserConfigBackend`);
+  `CTRLYOKE_HOME` only moves run state. Without the fake home, a capture showed the capturing
+  user's default model, skills and permission mode. Harness detection only needs `PATH`.
+- **The VS Code panel has to open.** Hosted tabs only finish startup after the panel's READY
+  (`dev/bugs/backlog/hosted-tabs-wait-for-vscode-panel-to-open.md`), and a fresh profile never
+  shows it. `media/vscode-helper/`, a second `--extensionDevelopmentPath`, runs
+  `ctrlyoke.dashboard.focus` at startup. It is also the obvious place to add commands later for
+  driving VS Code itself.
+- **Themes come from VS Code, not the browser.** The panel captures VS Code's theme colors and the
+  server serves them. Rewriting `workbench.colorTheme` in the capture profile switches all four
+  themes live, and the page's `<body>` class confirms the switch.
+- **New tabs are slow once workflows are loaded**, 10-30 s each
+  (`dev/bugs/backlog/hosted-tab-startup-stalls-with-loaded-workflows.md`). `--all` takes about
+  6 minutes, mostly that wait.
+- Two Playwright traps, both now guarded: clicking a drawer tab mid-slide scrolls the page body,
+  and a mouse wheel at the end of a panel scrolls the page too. A capture fails if the body is
+  scrolled.
+
+This replaces the agent-driven MCP retakes for #12's tab shots and the walkthrough's
+`verifyHarness` image; #4/#5's settings pages and #10's desktop stills can follow the same
+pattern. Of the walkthrough stills, only `verifyHarness` comes from the dashboard alone. The others
+frame VS Code itself (activity bar, integrated terminal, the panel inside the window) and stay
+manual until something can drive and capture a VS Code window.
 
 ### 3. Video capture writes its own edit list
 
@@ -220,10 +249,9 @@ hero-start`), never in the main checkout, where `git reset --hard` plus `git cle
 The original order spiked the hero clip against a live run because no fixture existed. One does
 (see 5), so the hero clip now waits for replay and never needs a paid re-run.
 
-1. **Scaffolding plus stills.** Build the `media/` package, `lib/devHost.ts`, `media/demo-app.json`
-   with `setup`, and port #12's tab shots and the hosted-dashboard walkthrough stills to scripts.
-   This proves the pipeline with no harness and no cost. Retire the MCP-driven retakes for those
-   shots.
+1. **Scaffolding plus stills. Done 2026-10-18.** `media/` with `setup`, the `media` dev host
+   mode, #12's ten tab shots and the walkthrough's `verifyHarness` image in four themes, all
+   retaken by script. The MCP-driven retakes for those shots are retired.
 2. **Minimal export plus replay.** Only the parts of `RUN_EXPORT_PLAN.md` replay needs:
    `RunBundleExporter` core (path rewrite, identity demotion, redaction) and a CLI command, not the
    UI. Then the dev-only replay command (see 5). Export the hero and rate-limiter runs as the first

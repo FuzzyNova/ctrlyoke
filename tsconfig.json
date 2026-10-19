@@ -25,6 +25,7 @@
     "manual-test",
     "src/ui/webview-react",
     "landing",
+    "media",
     "docs",
     "netlify"
   ]

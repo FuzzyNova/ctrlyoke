@@ -61,3 +61,6 @@ ctrlyoke-fuzzno.code-workspace
 # Merge-conflict artifacts (a committed *.orig once shipped conflict markers into src/test)
 *.orig
 *.rej
+
+# Media capture work folder (demo-app clone and dev host state; see media/lib/paths.ts)
+media/.work/

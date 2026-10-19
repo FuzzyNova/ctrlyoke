@@ -769,6 +769,7 @@
     "docs:preview": "vitepress preview docs",
     "build:site": "npm run build:landing && npm run build:docs",
     "build:landing": "npm --prefix landing ci && npm --prefix landing run build",
+    "media": "node --experimental-strip-types --no-warnings=ExperimentalWarning media/cli.ts",
     "build:docs": "npm run docs:build && node scripts/merge-docs-into-landing.mjs && node scripts/publish-schemas-to-landing.mjs",
     "vscode:prepublish": "npm run build:prod",
     "vscode:uninstall": "node ./out/vscode-uninstall.js",

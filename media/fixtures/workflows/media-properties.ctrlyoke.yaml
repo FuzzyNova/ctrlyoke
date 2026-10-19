@@ -1,0 +1,52 @@
+# Media capture fixture: workflow-level values for every Workflow Properties tab
+# (shot list #12, media/shots/properties-tabs.capture.ts). Never run; it only needs to load.
+harness: claude-cli
+model: sonnet
+executionMode: headless
+skills: [ctrlyoke-syntax]
+worktree:
+  mode: managed
+  base: main
+  setup: npm ci
+  keep: true
+  merge: false
+resumeSession: true
+priorContext:
+  previous: 2
+priorContextDetail: summary
+vars:
+  planDocument: .ctrlyoke/plans/notes-tags.md
+toolPermissions:
+  mode: custom
+  allowedTools:
+    - write
+    - shell(npm test)
+    - shell(git diff:*)
+  deniedTools:
+    - shell(git push:*)
+    - shell(rm:*)
+mcpServers:
+  - id: ctrlyoke
+    deniedTools: [remove_step]
+  - playwright
+hooks:
+  - event: sessionStart
+    command: node scripts/hooks/announce.js
+  - event: stop
+    command: node scripts/hooks/log-turn.js
+  - event: error
+    command: node scripts/hooks/notify-error.js
+endCondition:
+  script: npm test
+  compareSource: stdout
+  operator: contains
+  expected: passed
+  onFail: retry
+  maxRetries: 2
+  retryPrompt: "The tests still fail. Fix these failures: $endCondition:stdout"
+
+steps:
+  - name: Implement tags
+    prompt: Implement the plan in @{{planDocument}}.
+  - name: Review
+    prompt: Review the changes for the plan in @{{planDocument}}.

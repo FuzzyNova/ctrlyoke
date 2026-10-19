@@ -1,0 +1,8 @@
+# Media capture fixture: the Validation tab with no conditions set (shot list #12). Never run.
+harness: claude-cli
+model: sonnet
+executionMode: headless
+
+steps:
+  - name: Implement tags
+    prompt: Add tags to notes.

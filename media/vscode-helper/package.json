@@ -1,0 +1,15 @@
+{
+  "name": "ctrlyoke-media-helper",
+  "displayName": "ctrlyoke media capture helper",
+  "description": "Loaded only by the `media` dev host (scripts/dev-host.mjs). Opens the ctrlyoke panel at startup, because hosted dashboard tabs only finish startup once the panel has loaded.",
+  "version": "0.0.1",
+  "publisher": "ctrlyoke-media",
+  "private": true,
+  "engines": {
+    "vscode": "^1.106.0"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js"
+}

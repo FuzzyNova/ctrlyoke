@@ -14,15 +14,18 @@
  * for which of those is empirically confirmed vs. the standard-idiom default.
  *
  * Usage:
- *   node scripts/dev-host.mjs start [isolated|shared|onboarding] [--no-harnesses]
+ *   node scripts/dev-host.mjs start [isolated|shared|onboarding|media] [--no-harnesses]
  *   node scripts/dev-host.mjs stop
- *   node scripts/dev-host.mjs restart [isolated|shared|onboarding] [--no-harnesses]
+ *   node scripts/dev-host.mjs restart [isolated|shared|onboarding|media] [--no-harnesses]
  *
  * The default `isolated` mode preserves the original behavior. `shared` omits
  * CTRLYOKE_HOME so ctrlyoke uses the normal user-scoped directory. `onboarding`
  * mirrors .vscode/launch.json's isolated onboarding config: it resets the temp
  * workspace, uses independent VS Code and ctrlyoke state, and disables all
- * extensions.
+ * extensions. `media` is the same for the media capture scripts: it opens the
+ * demo-app clone in media/.work/ with that folder's own VS Code state and user
+ * home (USERPROFILE/HOME), so captures never show your ~/.ctrlyoke settings.
+ * `npm run media` prepares and resets both before each start.
  *
  * `--no-harnesses` launches the host with every PATH directory that holds a
  * harness CLI removed, so all six harnesses detect as missing. Harness
@@ -59,6 +62,15 @@ const ONBOARDING_CTRLYOKE_HOME = path.join(
   ONBOARDING_TEMP_DIR,
   "ctrlyoke-home"
 );
+// Keep in sync with media/lib/paths.ts.
+const MEDIA_WORK_DIR = path.join(REPO_ROOT, "media", ".work");
+const MEDIA_WORKSPACE = path.join(MEDIA_WORK_DIR, "demo-app");
+const MEDIA_USER_DATA_DIR = path.join(MEDIA_WORK_DIR, "vscode-userdata");
+// The whole user home, not just CTRLYOKE_HOME: ctrlyoke reads user settings,
+// MCP servers, skills and agents from os.homedir() regardless of CTRLYOKE_HOME.
+const MEDIA_HOME = path.join(MEDIA_WORK_DIR, "home");
+// Opens the ctrlyoke panel at startup; see media/vscode-helper/package.json.
+const MEDIA_HELPER_EXTENSION = path.join(REPO_ROOT, "media", "vscode-helper");
 const DEV_SERVER_URL_RELATIVE_PATH = path.join(
   ".ctrlyoke",
   "dev",
@@ -93,6 +105,17 @@ const MODES = {
     workspace: ONBOARDING_WORKSPACE,
     workspaceRoot: ONBOARDING_WORKSPACE,
   },
+  media: {
+    ctrlyokeHome: undefined,
+    home: MEDIA_HOME,
+    disableExtensions: true,
+    extraExtensionPaths: [MEDIA_HELPER_EXTENSION],
+    name: "media",
+    resetTempDir: false,
+    userDataDir: MEDIA_USER_DATA_DIR,
+    workspace: MEDIA_WORKSPACE,
+    workspaceRoot: MEDIA_WORKSPACE,
+  },
 };
 
 const MODE_ALIASES = {
@@ -103,6 +126,7 @@ const MODE_ALIASES = {
 const USER_DATA_MARKERS = [
   path.relative(REPO_ROOT, USER_DATA_DIR),
   path.relative(REPO_ROOT, ONBOARDING_USER_DATA_DIR),
+  path.relative(REPO_ROOT, MEDIA_USER_DATA_DIR),
 ];
 
 const IS_WINDOWS = process.platform === "win32";
@@ -258,7 +282,7 @@ function getMode(rawMode) {
   if (Object.hasOwn(MODES, modeName)) return MODES[modeName];
 
   console.error(
-    `unknown dev host mode '${rawMode}'. Choose isolated, shared, or onboarding.`
+    `unknown dev host mode '${rawMode}'. Choose isolated, shared, onboarding, or media.`
   );
   process.exit(1);
 }
@@ -343,6 +367,11 @@ function buildEnvironment(mode, { noHarnesses }) {
   } else {
     delete environment.CTRLYOKE_HOME;
   }
+  if (mode.home) {
+    // os.homedir() reads USERPROFILE on Windows and HOME elsewhere.
+    environment.USERPROFILE = mode.home;
+    environment.HOME = mode.home;
+  }
   if (noHarnesses) stripHarnessesFromPath(environment);
   return environment;
 }
@@ -386,6 +415,9 @@ async function start(mode, launchOptions) {
     "--disable-extension=vscode.github-authentication",
   ];
   if (mode.disableExtensions) args.unshift("--disable-extensions");
+  for (const extensionPath of mode.extraExtensionPaths ?? []) {
+    args.push(`--extensionDevelopmentPath=${extensionPath}`);
+  }
   args.push(mode.workspace);
 
   const child = spawnShim(CODE_BIN, args, {
@@ -431,7 +463,7 @@ async function main() {
       break;
     default:
       console.error(
-        `usage: node scripts/dev-host.mjs <start|stop|restart> [isolated|shared|onboarding] [${NO_HARNESSES_FLAG}]`
+        `usage: node scripts/dev-host.mjs <start|stop|restart> [isolated|shared|onboarding|media] [${NO_HARNESSES_FLAG}]`
       );
       process.exit(1);
   }

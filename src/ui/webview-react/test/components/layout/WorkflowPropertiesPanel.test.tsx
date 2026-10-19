@@ -66,6 +66,14 @@ describe("WorkflowPropertiesPanel permissions", () => {
 
   afterEach(cleanup);
 
+  it("exposes the open panel as a named region", () => {
+    render(<WorkflowPropertiesPanel />);
+
+    expect(
+      screen.getByRole("region", { name: "Workflow Properties" })
+    ).toContainElement(screen.getByRole("tab", { name: "Harness" }));
+  });
+
   it("labels workflow fields with their workflow-relative schema path", () => {
     render(<WorkflowPropertiesPanel />);
 

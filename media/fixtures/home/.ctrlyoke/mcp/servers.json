@@ -1,0 +1,7 @@
+[
+  {
+    "id": "playwright",
+    "command": "npx",
+    "args": ["@playwright/mcp@latest", "--isolated"]
+  }
+]

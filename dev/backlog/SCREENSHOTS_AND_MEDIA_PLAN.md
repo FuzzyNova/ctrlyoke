@@ -6,10 +6,9 @@ landing page's code-window style at 2× and transparent outside the rounded corn
 slotted anywhere yet, because a picture of code doesn't belong in docs: `templates.md` has the
 same template as a real code block plus `template-modal-variable-types-840x965.png`. #12: the
 Context tab is retaken for the new Prior Context detail dropdown (Previous 2, Summary), and the
-MCP tab no longer has the `cclsp` row. The Permissions tab still shows the old capture, because
-the live tab carries the false "Ignored by" warning from
-`dev/bugs/backlog/claude-allowed-tools-warning-says-ignored.md`. Retake it after that fix. Until
-then, other tab shots hide the warning badge on the Permissions tab icon.
+MCP tab no longer has the `cclsp` row. **2026-10-18:** all ten tab shots are now retaken by
+`npm run media -- properties-tabs`, including the Permissions tab, since the false "Ignored by"
+warning is fixed.
 
 **Recaptures done 2026-10-12:** `secrets-tab-810x360` (the demo's `DEMO_API_KEY` has a
 dummy managed value again) and `template-modal-full-feature-840x1119` (default
@@ -457,12 +456,11 @@ Each item: what to capture, what prep it needs, where it's used.
 - **Crop — decided: panel only.** No surrounding dashboard; at docs width a half-dashboard crop
   shrinks the form text to unreadable. Where the panel lives is shown once by #13a, which leads the
   docs page.
-- **Status:** re-shot 2026-10-12 at 2× as `images/screenshots/*-tab-*-800x1600.png` (a
-  400×800 CSS viewport at `deviceScaleFactor: 2`, cropped to the panel) from the demo project's
-  throwaway `docs-properties.ctrlyoke.yaml`, and slotted into `docs/workflows/properties-panel.md`,
-  `permissions.md` and `mcp-servers.md` with `{.panel-shot}` so they display at 400 px. The MCP
-  tab's cclsp path has the Windows username replaced with `you` before capture. 800 px is still
-  a little under category A's 880 px floor, but it is the panel's real 2× width. Open
+- **Status:** scripted 2026-10-18: `npm run media -- properties-tabs` retakes all ten
+  `images/screenshots/*-tab-*-800x1600.png` (a 400 CSS px wide panel at 2×) from the workflows in
+  `media/fixtures/workflows/`. They are slotted into `docs/workflows/properties-panel.md`,
+  `permissions.md` and `mcp-servers.md` with `{.panel-shot}` so they display at 400 px. 800 px is
+  still a little under category A's 880 px floor, but it is the panel's real 2× width. Open
   follow-up: add #13a to the top of the page once captured.
 
 ### 13. VS Code "Getting Started with ctrlyoke" walkthrough — one media asset per step
@@ -477,8 +475,11 @@ with ffmpeg's `palettegen`/`paletteuse` (`dither=none`, 256 colours), because no
 exists for winget, scoop or choco, and the result matched the original at 100%; `runWorkflow` shows
 step-to-step progress, not an end condition, because Simple Feature has none. Still open: the
 `harness-preflight-missing-660x1270.png` docs screenshot predates the new "No CLI coding agent is
-available" title, and D9's walkthrough-page capture (see "Wiring" step 7). The rest of this section
-stays as the capture runbook for a re-take.
+available" title, and D9's walkthrough-page capture (see "Wiring" step 7). **2026-10-18:**
+`verifyHarness` is scripted (`npm run media -- walkthrough-verify-harness`, all four themes,
+palette-compressed). It now shows a fresh install's defaults, so the picker has Antigravity CLI
+auto-detected rather than Claude Code. The other walkthrough stills frame VS Code itself, so the
+rest of this section stays as the manual capture runbook for them.
 
 The walkthrough (`package.json` → `contributes.walkthroughs`, id `ctrlyoke.gettingStarted`) has six
 steps: `openPanel`, `verifyHarness`, `createWorkflow`, `runWorkflow`, `installCli`, `getHelp`. On
