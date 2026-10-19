@@ -37,6 +37,7 @@ import {
   getPermissionFidelityDiagnosticSeverity,
 } from "./CompatibilityTypes";
 import type { CompatibilityCaveatCode } from "./CompatibilityTypes";
+import { isShippedDefaultToolList } from "./CtrlYokeSettings";
 
 export interface CompatibilityExecutionTarget {
   consumer: CompatibilityConsumerTarget;
@@ -194,6 +195,7 @@ export function analyzeCompatibility({
       caveatCode?: CompatibilityCaveatCode;
       sourceTier?: ResolvedExecutionTarget["sources"]["toolPermissions"];
       propertyPointer?: string;
+      isShippedDefaultList?: boolean;
     }> = [
       {
         key: PERMISSION_CAPABILITY_KEYS.MODE,
@@ -211,6 +213,10 @@ export function analyzeCompatibility({
           ),
         state: effective.allowedTools,
         caveatCode: declarations?.allowedTools.caveatCode,
+        isShippedDefaultList: isShippedDefaultToolList(
+          PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS,
+          permissions.allowedTools
+        ),
       },
       {
         key: PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS,
@@ -223,6 +229,10 @@ export function analyzeCompatibility({
         state: effective.deniedTools,
         caveatCode: declarations?.deniedTools.caveatCode,
         sourceTier,
+        isShippedDefaultList: isShippedDefaultToolList(
+          PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS,
+          permissions.deniedTools
+        ),
       },
     ];
 
@@ -237,7 +247,8 @@ export function analyzeCompatibility({
         target,
         field.sourceTier ?? sourceTier,
         field.caveatCode,
-        field.propertyPointer
+        field.propertyPointer,
+        field.isShippedDefaultList
       )) {
         diagnostics.push(diagnostic);
       }
@@ -506,7 +517,8 @@ function diagnosticsForPermissionField(
   target: CompatibilityExecutionTarget,
   sourceTier: ResolvedExecutionTarget["sources"]["toolPermissions"],
   caveatCode?: CompatibilityCaveatCode,
-  propertyPointer?: string
+  propertyPointer?: string,
+  isShippedDefaultList = false
 ): CompatibilityDiagnostic[] {
   const diagnostics: CompatibilityDiagnostic[] = [];
   const base = {
@@ -526,7 +538,11 @@ function diagnosticsForPermissionField(
     diagnostics.push(
       createDiagnostic(
         fidelityCode,
-        getPermissionFidelityDiagnosticSeverity(state.fidelity, caveatCode),
+        getPermissionFidelityDiagnosticSeverity(
+          state.fidelity,
+          caveatCode,
+          isShippedDefaultList
+        ),
         base.harnessId,
         base.capability,
         base.target,

@@ -21,6 +21,7 @@ import {
   type PermissionMode,
   type CtrlYokeMcpMode,
   CTRLYOKE_MCP_MODES,
+  PERMISSION_CAPABILITY_KEYS,
   RUN_HISTORY_LOCATIONS,
   DEFAULT_TRASH_RETENTION_DAYS,
   STATUS_LINE_HARNESS_IDS,
@@ -717,3 +718,23 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
   },
   diagnostics: { verboseLogging: false, logRawCliOutput: false },
 };
+
+/**
+ * True when `patterns` is exactly the shipped default `key` list, in any
+ * order, wherever it was written. Compatibility diagnostics report such a list
+ * as info instead of a warning on a harness that can't enforce it.
+ */
+export function isShippedDefaultToolList(
+  key:
+    | typeof PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS
+    | typeof PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS,
+  patterns: readonly string[]
+): boolean {
+  const shipped = CTRLYOKE_SETTINGS_DEFAULTS.defaults.toolPermissions?.[key];
+  if (!shipped || patterns.length !== shipped.length) return false;
+  const unique = new Set(patterns);
+  return (
+    unique.size === shipped.length &&
+    shipped.every((pattern) => unique.has(pattern))
+  );
+}

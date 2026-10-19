@@ -297,6 +297,7 @@ export class ExecutionPlanBuilder {
       workspaceRoot,
       workingFilePath: session.workflowContext?.workingFilePath,
       environment: CliProviderUtils.buildProcessEnv(),
+      mcpServers: session.resolvedProperties?.mcpServers,
     };
     const permissionApplication: ToolPermissionApplication = this.deps.provider
       .planToolPermissions

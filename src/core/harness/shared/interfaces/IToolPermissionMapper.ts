@@ -17,6 +17,8 @@ import {
   getPermissionFidelityDiagnosticSeverity,
 } from "../../../../types/CompatibilityTypes";
 import type { ToolPermissionConfig } from "../../../../types/ExecutionPropertyTypes";
+import type { McpServerConfig } from "../../../../types/CtrlYokeTypes";
+import { isShippedDefaultToolList } from "../../../../types/CtrlYokeSettings";
 import type { PreparedMutation } from "./PreparedMutation";
 
 export type { PreparedMutation } from "./PreparedMutation";
@@ -36,6 +38,8 @@ export interface PermissionContext {
   /** Codex-only mode settings, supplied by the provider. */
   readonly sandboxMode?: string;
   readonly approvalPolicy?: string;
+  /** The step's resolved MCP servers, for harnesses that filter MCP tools per server (Codex). */
+  readonly mcpServers?: readonly (string | McpServerConfig)[] | null;
   /** Existing permission keys used by config-driven harnesses for collision safety. */
   readonly permissionCollisionContext?: {
     readonly topLevelKeys: ReadonlySet<string>;
@@ -139,7 +143,8 @@ export abstract class ToolPermissionMapperBase implements IToolPermissionMapper 
         code,
         severity: getPermissionFidelityDiagnosticSeverity(
           declaration.fidelity,
-          declaration.caveatCode
+          declaration.caveatCode,
+          isShippedDefaultToolList(key, patterns)
         ),
         harnessId,
         capability: key,
