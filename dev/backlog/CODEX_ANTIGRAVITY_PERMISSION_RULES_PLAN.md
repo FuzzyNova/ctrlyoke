@@ -102,6 +102,7 @@ Lean towards A, plus a lease and a stale-file sweep, but only once Codex rules a
 experimental.
 
 Translating ctrlyoke patterns into Codex rules:
+
 - A `shell(cmd:*)` entry becomes `prefix_rule(pattern=[...cmd tokens], decision=...)`:
   `forbidden` for a deny entry, `allow` for an allow entry.
 - A Codex rule pattern is a literal token prefix. So a wildcard that isn't at the end, a
@@ -113,11 +114,13 @@ Translating ctrlyoke patterns into Codex rules:
 ### Antigravity
 
 There is no per-run delivery that doesn't touch the user's state:
+
 - Merging a ctrlyoke-tagged block into the global `settings.json` and restoring it afterwards
   is invasive, and it races with other agy sessions.
 - Redirecting `HOME` breaks login, because `oauth_creds.json` lives under `~/.gemini`.
 
 Wait for one of these:
+
 - a flag or env var for rules;
 - documented project-scope rule paths;
 - the rules engine reaching Windows.
