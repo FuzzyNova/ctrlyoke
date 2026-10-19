@@ -1,6 +1,6 @@
 {
   "repo": "https://github.com/nhickster/ctrlyoke-demo-app.git",
-  "ref": "d6be8364568868d5c406bf3573daa097eb27ce22",
+  "ref": "7ff068d29dc711bd747c57ddfbec0044219fd133",
   "startTags": {
     "hero-start": "Hero workflow (#6) start state; the 2026-09-08 run began here.",
     "hero-end": "Output of the 2026-09-08 hero run.",
