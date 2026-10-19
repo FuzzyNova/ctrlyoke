@@ -127,6 +127,12 @@ sensitive: anyone who can read it can use the user's harness accounts.
   anything the harness credentials and any mounted git credentials allow.
 - Recommend a deploy key or fine-grained token scoped to the mounted repos, not the user's main
   SSH key.
+- **Default to `dangerouslyAllowAll` inside the image.** The container is the boundary, so
+  a deny list adds approvals and blocked commands without adding safety, and an always-on
+  server mostly runs unattended loops. Ship it as the image's `defaults.toolPermissions.mode`
+  in the user settings on the home volume, so a user can still change it. Outside a
+  container, ctrlyoke's default stays `allowAll` with the deny list; yolo there is opt-in
+  only. `docs/guide/docker.md` should say this is why the image differs.
 - Never mount the Docker socket or the host home directory. Mounting the home directory would
   also expose host-installed CLIs, e.g. a native Claude install in `~/.local/bin`.
 

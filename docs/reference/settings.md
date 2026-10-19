@@ -339,11 +339,14 @@ Accepted forms:
   "mode": "allowAll",
   "allowedTools": [
     "write",
-    "shell(git status)",
-    "shell(git diff)",
+    "shell(git status:*)",
+    "shell(git diff:*)",
+    "shell(git show:*)",
+    "shell(git log:*)",
     "shell(git add:*)",
     "shell(git commit:*)",
-    "shell(git log:*)",
+    "shell(git mv:*)",
+    "shell(git rm:*)",
     "shell(npm:*)",
     "shell(yarn:*)",
     "shell(pnpm:*)",
@@ -351,20 +354,15 @@ Accepted forms:
     "shell(npx:*)"
   ],
   "deniedTools": [
-    "shell(rm:*)",
-    "shell(del:*)",
-    "shell(Remove-Item:*)",
-    "shell(rd:*)",
-    "shell(rmdir:*)",
     "shell(sudo:*)",
-    "shell(chmod:*)",
-    "shell(chown:*)",
     "shell(git push:*)",
-    "shell(git reset:*)",
+    "shell(git reset --hard:*)",
     "shell(git checkout:*)",
+    "shell(git restore:*)",
     "shell(git clean:*)",
-    "shell(docker rm:*)",
-    "shell(docker rmi:*)",
+    "shell(npm publish:*)",
+    "shell(yarn publish:*)",
+    "shell(pnpm publish:*)",
     "shell(kubectl delete:*)"
   ]
 }
