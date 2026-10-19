@@ -3,6 +3,7 @@ import type {
   CompletionContext,
   CompletionResult,
 } from "@codemirror/autocomplete";
+import type { Text } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import {
   COMPLETION_TRIGGERS,
@@ -40,6 +41,9 @@ interface PendingCompletionEntry {
   /** Nulled (not deleted) once a progressive partial response has resolved it. */
   resolve: ((value: CompletionResult | null) => void) | null;
   request: PendingCompletionRequest;
+  requestPosition: number;
+  doc: Text;
+  cursor: number;
   /** Escapes inserted text for the string it lands in, e.g. a JSON string. */
   escapeInsertText?: InsertTextEscape;
 }
@@ -105,8 +109,13 @@ export class PromptCompletionClient {
     path: null,
   };
   // A full result that arrived after its (already-resolved) partial response.
-  // Keyed by trigger+query so the re-triggered source serves it synchronously.
-  private cache: { key: string; result: CompletionResult } | null = null;
+  // Its trigger position and document identity keep it scoped to its request.
+  private cache: {
+    key: string;
+    from: number;
+    doc: Text;
+    result: CompletionResult;
+  } | null = null;
 
   constructor(private readonly options: PromptCompletionClientOptions) {}
 
@@ -128,18 +137,27 @@ export class PromptCompletionClient {
       textBefore,
       lineObj.from
     );
-    if (!completionContext) return null;
+    if (!completionContext) {
+      this.cache = null;
+      return null;
+    }
     const { trigger, query, from } = completionContext;
 
     // Serve a full result cached by a progressive (partial→full) response for
     // this exact trigger+query synchronously, with no second round trip.
     // Checked before the empty-query guard so it also applies when only the
     // trigger char has been typed (e.g. `#` with an active selection).
-    if (this.cache?.key === completionCacheKey(trigger, query)) {
+    if (
+      this.cache?.key === completionCacheKey(trigger, query) &&
+      this.cache.from === from &&
+      this.cache.doc === context.state.doc &&
+      this.isValidResult(this.cache.result, context.state.doc.length, context.pos)
+    ) {
       const cached = this.cache.result;
       this.cache = null;
       return cached;
     }
+    this.cache = null;
 
     if (from === context.pos && !context.explicit) return null;
 
@@ -152,6 +170,7 @@ export class PromptCompletionClient {
       { trigger, query },
       trigger + query,
       from,
+      context,
       escapeInsertText
     );
   };
@@ -187,7 +206,8 @@ export class PromptCompletionClient {
       "path",
       { trigger: COMPLETION_TRIGGERS.PATH, query: before.text },
       before.text,
-      before.from
+      before.from,
+      context
     );
   };
 
@@ -200,6 +220,11 @@ export class PromptCompletionClient {
     this.pending.clear();
     this.inFlight.custom = null;
     this.inFlight.path = null;
+    this.cache = null;
+  }
+
+  /** Clear a progressive result when the editor value is replaced externally. */
+  clearCache(): void {
     this.cache = null;
   }
 
@@ -227,22 +252,27 @@ export class PromptCompletionClient {
       this.options.onOutputCapturePicked,
       entry.escapeInsertText
     );
+    const validResult = this.isValidResult(result, entry.doc.length, entry.cursor);
 
     if (partial) {
       // Deliver the instant items now, but keep the entry (request context)
       // so the forthcoming full response can be keyed and re-applied.
       if (entry.resolve) {
-        entry.resolve(result);
+        entry.resolve(validResult ? result : null);
         entry.resolve = null;
         return;
       }
 
       // The original promise already opened the dropdown. Refresh its contents
       // without ending the request; more partials and the final may follow.
-      this.cache = {
-        key: completionCacheKey(entry.request.trigger, entry.request.query),
-        result,
-      };
+      this.cache = validResult
+        ? {
+            key: completionCacheKey(entry.request.trigger, entry.request.query),
+            from: entry.requestPosition,
+            doc: entry.doc,
+            result,
+          }
+        : null;
       const view = this.options.getView();
       if (view) {
         startCompletion(view);
@@ -253,7 +283,7 @@ export class PromptCompletionClient {
     // Final response. If the promise is still pending (no partial was sent,
     // e.g. there was no selection), resolve it directly.
     if (entry.resolve) {
-      entry.resolve(result);
+      entry.resolve(validResult ? result : null);
       this.forget(seq);
       return;
     }
@@ -262,10 +292,14 @@ export class PromptCompletionClient {
     // the result and re-trigger completion so the source can serve it from
     // cache without another round trip.
     this.forget(seq);
-    this.cache = {
-      key: completionCacheKey(entry.request.trigger, entry.request.query),
-      result,
-    };
+    this.cache = validResult
+      ? {
+          key: completionCacheKey(entry.request.trigger, entry.request.query),
+          from: entry.requestPosition,
+          doc: entry.doc,
+          result,
+        }
+      : null;
     const view = this.options.getView();
     if (view) {
       startCompletion(view);
@@ -277,6 +311,7 @@ export class PromptCompletionClient {
     request: PendingCompletionRequest,
     prefix: string,
     position: number,
+    context: CompletionContext,
     escapeInsertText?: InsertTextEscape
   ): Promise<CompletionResult | null> {
     const seq = ++nextCompletionSeq;
@@ -289,7 +324,14 @@ export class PromptCompletionClient {
     this.inFlight[source] = seq;
 
     return new Promise<CompletionResult | null>((resolve) => {
-      this.pending.set(seq, { resolve, request, escapeInsertText });
+      this.pending.set(seq, {
+        resolve,
+        request,
+        requestPosition: position,
+        doc: context.state.doc,
+        cursor: context.pos,
+        escapeInsertText,
+      });
       trackSeq(seq, this);
       this.options.transport.postMessage({
         type: MESSAGE_TYPES.REQUEST_COMPLETIONS,
@@ -304,6 +346,14 @@ export class PromptCompletionClient {
   private forget(seq: number): void {
     this.pending.delete(seq);
     untrackSeq(seq);
+  }
+
+  private isValidResult(
+    result: CompletionResult,
+    docLength: number,
+    cursor: number
+  ): boolean {
+    return result.from <= docLength && result.from <= cursor;
   }
 }
 

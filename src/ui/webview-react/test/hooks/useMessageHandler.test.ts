@@ -18,6 +18,7 @@ import {
   THEME_KIND_CSS_VAR,
   TEMPLATE_VARIABLE_DEFAULT_SOURCES,
   VSCODE_THEME_BODY_CLASSES,
+  WINDOW_LISTENER_REPLY_TYPES,
 } from "@root/types/DashboardConstants";
 
 const { handleCompletionNotificationEventMock } = vi.hoisted(() => ({
@@ -5525,6 +5526,20 @@ describe("cleanup", () => {
 });
 
 describe("message passthroughs", () => {
+  it("silently skips replies consumed by window listeners", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      for (const type of WINDOW_LISTENER_REPLY_TYPES) {
+        dispatch(type);
+      }
+    });
+
+    expect(webviewWarnMock).not.toHaveBeenCalledWith(
+      expect.stringContaining("Unknown message type")
+    );
+  });
+
   it("queues prompt-editor insert requests and opens the editor section", () => {
     renderHook(() => useMessageHandler());
     useUiStore.getState().setEditorCollapsed(true);

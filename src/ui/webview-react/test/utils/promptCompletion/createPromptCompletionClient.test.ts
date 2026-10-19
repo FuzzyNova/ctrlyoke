@@ -96,7 +96,8 @@ describe("PromptCompletionClient", () => {
     const transport = new RecordingTransport();
     const client = makeClient(transport);
 
-    const explicit = client.customSource(contextFor("#")) as Promise<unknown>;
+    const context = contextFor("#");
+    const explicit = client.customSource(context) as Promise<unknown>;
     const { seq } = transport.sent[0];
 
     respond(seq, ["selection"], { partial: true });
@@ -108,7 +109,7 @@ describe("PromptCompletionClient", () => {
     // The full response arrives after the promise settled: it is cached and
     // the next source call for the same trigger+query returns it synchronously.
     respond(seq, ["selection", "sym:a"]);
-    const cached = client.customSource(contextFor("#")) as unknown as {
+    const cached = client.customSource(context) as unknown as {
       options: { label: string }[];
     };
     expect(cached.options.map((option) => option.label)).toEqual([
@@ -118,14 +119,41 @@ describe("PromptCompletionClient", () => {
     expect(transport.sent).toHaveLength(1);
   });
 
+  it("does not serve a late progressive result after dismissal and document shortening", async () => {
+    const transport = new RecordingTransport();
+    const client = makeClient(transport);
+    const longDoc = `${"x".repeat(720)} #`;
+
+    const originalContext = contextFor(longDoc);
+    const original = client.customSource(originalContext) as Promise<unknown>;
+    const { seq } = transport.sent[0];
+    respond(seq, ["partial"], { from: 721, partial: true });
+    await expect(original).resolves.toMatchObject({
+      options: [{ label: "partial" }],
+    });
+
+    // Dismissing the dropdown clears the then-current cache, but the delayed
+    // final response may still arrive afterward and populate it.
+    expect(client.customSource(contextFor("plain text"))).toBeNull();
+    respond(seq, ["stale"], { from: 721 });
+
+    // A shorter document with the same trigger must start a fresh request;
+    // returning the old result would put its range past this cursor and doc.
+    const shortened = client.customSource(contextFor("#")) as Promise<unknown>;
+    expect(transport.sent).toHaveLength(2);
+    respond(transport.sent[1].seq, ["fresh"], { from: 0 });
+    await expect(shortened).resolves.toMatchObject({
+      options: [{ label: "fresh" }],
+    });
+  });
+
   it("refreshes an open dropdown for later partials and the final response", async () => {
     const transport = new RecordingTransport();
     const view = {} as EditorView;
     const client = makeClient(transport, () => view);
+    const context = contextFor("@src");
 
-    const pending = client.customSource(
-      contextFor("@src")
-    ) as unknown as Promise<{
+    const pending = client.customSource(context) as unknown as Promise<{
       options: readonly { label: string }[];
     }>;
     const { seq } = transport.sent[0];
@@ -138,14 +166,14 @@ describe("PromptCompletionClient", () => {
     respond(seq, ["second.ts"], { partial: true });
     expect(startCompletionMock).toHaveBeenCalledTimes(1);
     expect(startCompletionMock).toHaveBeenCalledWith(view);
-    const second = client.customSource(contextFor("@src")) as unknown as {
+    const second = client.customSource(context) as unknown as {
       options: readonly { label: string }[];
     };
     expect(second.options.map((option) => option.label)).toEqual(["second.ts"]);
 
     respond(seq, ["final.ts"]);
     expect(startCompletionMock).toHaveBeenCalledTimes(2);
-    const final = client.customSource(contextFor("@src")) as unknown as {
+    const final = client.customSource(context) as unknown as {
       options: readonly { label: string }[];
     };
     expect(final.options.map((option) => option.label)).toEqual(["final.ts"]);

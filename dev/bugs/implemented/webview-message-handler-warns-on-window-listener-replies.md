@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-19 by Claude Code (log review)
 - **Area:** `src/ui/webview-react/hooks/useMessageHandler.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

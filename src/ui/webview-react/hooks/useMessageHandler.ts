@@ -90,6 +90,7 @@ import {
   THEME_KIND_CSS_VAR,
   USER_FEEDBACK_SEVERITY,
   UX_SNAPSHOT_STATUSES,
+  WINDOW_LISTENER_REPLY_TYPES,
   type UserFeedbackSeverity,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
@@ -2370,35 +2371,6 @@ export function createMessageHandlers(
   };
 
   // --------------------------------------------------------------------------
-  // COMPLETIONS_RESPONSE - Autocomplete suggestions for editor
-  // --------------------------------------------------------------------------
-  // Completions are handled by the editor component directly — no action needed here.
-  handlers[MESSAGE_TYPES.COMPLETIONS_RESPONSE] = () => {};
-
-  // --------------------------------------------------------------------------
-  // CONTEXT_REFS_VALIDATION - Handled by CodeMirrorEditor.tsx
-  // --------------------------------------------------------------------------
-  // The editor listens for validation results directly so it can resolve the
-  // per-request promise. Register a no-op here so the central router doesn't
-  // misclassify this valid extension message as unknown.
-  handlers[MESSAGE_TYPES.CONTEXT_REFS_VALIDATION] = () => {};
-
-  // --------------------------------------------------------------------------
-  // PASTED_IMAGE_SAVED - Handled by CodeMirrorEditor.tsx
-  // --------------------------------------------------------------------------
-  // The editor listens for the save result directly so it can reconcile the
-  // per-paste placeholder by seq. No-op here so the router doesn't misclassify
-  // this valid extension message as unknown.
-  handlers[MESSAGE_TYPES.PASTED_IMAGE_SAVED] = () => {};
-
-  // --------------------------------------------------------------------------
-  // FILE_PREVIEW_URI_RESPONSE - Handled by ImageRefThumbnail (MarkdownText.tsx)
-  // --------------------------------------------------------------------------
-  // The thumbnail component listens directly to resolve its per-request URI
-  // promise by seq. No-op here for the same reason as above.
-  handlers[MESSAGE_TYPES.FILE_PREVIEW_URI_RESPONSE] = () => {};
-
-  // --------------------------------------------------------------------------
   // PRIOR_CONTEXT_PREVIEW_RESULT
   // --------------------------------------------------------------------------
   // GIT_CHANGE_PREVIEW_RESULT removed — browser now uses openToGitRef() →
@@ -2413,11 +2385,6 @@ export function createMessageHandlers(
       ref,
     });
   };
-
-  // Host-native actions are not available in the browser. The browser already
-  // selects its own file-browser/editor/diff surface before sending these
-  // messages; acknowledge the scoped result without changing that flow.
-  handlers[MESSAGE_TYPES.DASHBOARD_HOST_ACTION_RESULT] = () => {};
 
   // --------------------------------------------------------------------------
   // MCP_CONFIG_PREVIEW_RESULT
@@ -2438,23 +2405,6 @@ export function createMessageHandlers(
       ref: mcpServerName,
     });
   };
-
-  // --------------------------------------------------------------------------
-  // ATTACHMENT_TOKEN_COUNTS_RESPONSE - Handled by useAttachmentTokenCount.ts
-  // --------------------------------------------------------------------------
-  // This message is consumed by a module-level window listener in
-  // useAttachmentTokenCount.ts (singleton pattern for cross-mount caching).
-  // Register a no-op here so the central router doesn't log "Unknown message type".
-  handlers[MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE] = () => {};
-
-  // --------------------------------------------------------------------------
-  // EXECUTE_PROMPT_ERROR - Handled by PromptEditor.tsx
-  // --------------------------------------------------------------------------
-  // Restoring a rejected dispatch's draft needs the editor's own component
-  // state (`setPromptText` plus the pending new-workflow toast ref), so it is
-  // consumed by a window listener there rather than routed through a store.
-  // Register a no-op here so the central router doesn't log "Unknown message type".
-  handlers[MESSAGE_TYPES.EXECUTE_PROMPT_ERROR] = () => {};
 
   // --------------------------------------------------------------------------
   // OUTPUT_HISTORY_LOADED - Load a historical run for display
@@ -3527,6 +3477,7 @@ export function useMessageHandler(): UseMessageHandlerReturn {
       ) {
         return;
       }
+      if (WINDOW_LISTENER_REPLY_TYPES.has(message?.type)) return;
       const handler = handlers[message.type];
 
       if (handler) {

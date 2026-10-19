@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-19 by Claude Code (log review)
 - **Area:** `src/ui/webview-react/utils/promptCompletion/createPromptCompletionClient.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

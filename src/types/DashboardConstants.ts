@@ -4980,6 +4980,23 @@ export type CtrlYokeSlashTokenKind =
 // TYPE HELPERS - For TypeScript type safety
 // ============================================================================
 export type MessageType = (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES];
+
+/** Replies consumed by request-scoped window listeners instead of the router. */
+export const WINDOW_LISTENER_REPLY_TYPES: ReadonlySet<MessageType> = new Set([
+  MESSAGE_TYPES.COMPLETIONS_RESPONSE,
+  MESSAGE_TYPES.CONTEXT_REFS_VALIDATION,
+  MESSAGE_TYPES.PASTED_IMAGE_SAVED,
+  MESSAGE_TYPES.FILE_PREVIEW_URI_RESPONSE,
+  MESSAGE_TYPES.DASHBOARD_HOST_ACTION_RESULT,
+  MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE,
+  MESSAGE_TYPES.EXECUTE_PROMPT_ERROR,
+  MESSAGE_TYPES.WORKSPACE_SNAPSHOT_CONTENT,
+  MESSAGE_TYPES.BRANCH_LIST_RESPONSE,
+  MESSAGE_TYPES.PERMISSION_COMPLETIONS_RESPONSE,
+  MESSAGE_TYPES.FILE_REF_VALIDATION,
+  MESSAGE_TYPES.SCRIPT_COMPLETIONS_RESPONSE,
+]);
+
 export type ExecutionState =
   (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES];
 export type StepStatus = (typeof STEP_STATUS)[keyof typeof STEP_STATUS];

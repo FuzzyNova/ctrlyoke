@@ -1161,6 +1161,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 
     const currentValue = viewRef.current.state.doc.toString();
     if (currentValue !== value) {
+      completionClient.clearCache();
       viewRef.current.dispatch({
         changes: {
           from: 0,
@@ -1169,7 +1170,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         },
       });
     }
-  }, [value]);
+  }, [completionClient, value]);
 
   const editorClassName = [
     surface === "input"
