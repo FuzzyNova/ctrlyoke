@@ -140,6 +140,100 @@ suite("WorkflowOrchestrator unseen failed runs", () => {
   });
 });
 
+suite("WorkflowOrchestrator preferred view recovery", () => {
+  test("silently falls back when a remembered run no longer exists", async () => {
+    const feedback = new TestUserFeedbackSink();
+    const orchestrator = createTestOrchestrator({ userFeedbackSink: feedback });
+    const internal = orchestrator as any;
+    internal.runLifecycleServiceInstance = {
+      runAddressExists: async () => false,
+    };
+    internal.currentWorkspaceFolderPath = undefined;
+    internal.workspaceSessionManager.getMostRecentWorkingFilePath = async () =>
+      undefined;
+    internal.getWorkflowSummaries = () => [];
+    const sent: unknown[] = [];
+
+    await orchestrator.handleClientReady(
+      "browser:stale-view",
+      (message) => sent.push(message),
+      {
+        preferredViewAddress: {
+          workflowKey: "deleted-lineage" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "deleted-run" as never,
+        },
+      }
+    );
+
+    assert.ok(sent.some((message) =>
+      (message as { type?: string }).type === MESSAGE_TYPES.WORKFLOWS_LIST
+    ));
+    assert.deepStrictEqual(feedback.messages, []);
+  });
+
+  test("disposes an instance whose working file fails to load", async () => {
+    const orchestrator = createTestOrchestrator();
+    const internal = orchestrator as any;
+    let disposed = false;
+    const instance = {
+      id: "discarded-instance",
+      loadWorkingFile: async () => {
+        throw new Error("missing working file");
+      },
+      dispose: () => {
+        disposed = true;
+      },
+    };
+    internal.buildWorkflowInstance = () => instance;
+    internal.viewerRegistry = new Map();
+    internal.viewAddressRegistry = new Map();
+    internal.instances = new Map();
+    internal.getViewedWorkflowId = () => undefined;
+    internal.setViewedWorkflowId = () => {};
+
+    await assert.rejects(
+      internal.loadFreshInstanceAndReplay("missing.json", "browser:test", () => {}),
+      /missing working file/
+    );
+    assert.strictEqual(disposed, true);
+  });
+});
+
+suite("WorkflowOrchestrator panel READY grace period", () => {
+  test("settles startup without a panel and accepts a later panel READY", async () => {
+    const orchestrator = createTestOrchestrator();
+    const internal = orchestrator as any;
+    for (const integration of [
+      internal.copilotCliIntegration,
+      internal.claudeCliIntegration,
+      internal.codexCliIntegration,
+      internal.openCodeCliIntegration,
+      internal.qwenCliIntegration,
+      internal.antigravityCliIntegration,
+    ]) {
+      integration.initialize = async () => {};
+    }
+    internal.viewerRegistry = new Map();
+    internal.instances = new Map();
+    internal.retiredInstances = new Map();
+    internal.replayWorkflowStateTo = async (workflowId: string) => {
+      replayed.push(workflowId);
+    };
+    const replayed: string[] = [];
+
+    await orchestrator.initialize();
+    await orchestrator.awaitStartupAutoLoad();
+    assert.strictEqual(orchestrator.isAutoLoadTriggered, true);
+
+    internal.viewerRegistry.set(PANEL_CLIENT_ID, "late-panel-view");
+    const panelSend = () => {};
+    await orchestrator.setDashboardReady(panelSend);
+
+    assert.deepStrictEqual(replayed, ["late-panel-view"]);
+  });
+});
+
 suite("WorkflowOrchestrator running workflow count", () => {
   test("counts only locally running or pausing workflows", () => {
     const orchestrator = createTestOrchestrator();

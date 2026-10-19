@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-18 by Claude Code (media capture automation, phase 1)
 - **Area:** `src/ui/WebviewMessageRouter.ts`, `src/core/WorkflowOrchestrator.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -34,9 +34,7 @@ because stills render headless at 2×. `quantize` shots (media that ships in the
    `fixtures/workflows/` files in.
 2. `startHost` starts the `media` mode of `scripts/dev-host.mjs` on that clone. The host gets a
    fresh VS Code profile and a fresh user home (`USERPROFILE`/`HOME` = `.work/home`, seeded from
-   `fixtures/home/`), so your own `~/.ctrlyoke` settings, MCP servers and skills never show up. It
-   also loads `vscode-helper/`, which opens the ctrlyoke panel: hosted tabs don't finish starting
-   until the panel has loaded.
+   `fixtures/home/`), so your own `~/.ctrlyoke` settings, MCP servers and skills never show up.
 3. Each still opens a fresh page at the shot's viewport, drives the dashboard to its state,
    and screenshots it. A theme switch rewrites the host's VS Code settings and waits until the
    dashboard serves the new theme.

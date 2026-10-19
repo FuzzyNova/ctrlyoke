@@ -69,8 +69,6 @@ const MEDIA_USER_DATA_DIR = path.join(MEDIA_WORK_DIR, "vscode-userdata");
 // The whole user home, not just CTRLYOKE_HOME: ctrlyoke reads user settings,
 // MCP servers, skills and agents from os.homedir() regardless of CTRLYOKE_HOME.
 const MEDIA_HOME = path.join(MEDIA_WORK_DIR, "home");
-// Opens the ctrlyoke panel at startup; see media/vscode-helper/package.json.
-const MEDIA_HELPER_EXTENSION = path.join(REPO_ROOT, "media", "vscode-helper");
 const DEV_SERVER_URL_RELATIVE_PATH = path.join(
   ".ctrlyoke",
   "dev",
@@ -109,7 +107,6 @@ const MODES = {
     ctrlyokeHome: undefined,
     home: MEDIA_HOME,
     disableExtensions: true,
-    extraExtensionPaths: [MEDIA_HELPER_EXTENSION],
     name: "media",
     resetTempDir: false,
     userDataDir: MEDIA_USER_DATA_DIR,

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-19 by Claude Code (log review)
 - **Area:** `src/core/WorkflowOrchestrator.ts` (`handleClientReady`, `loadFreshInstanceAndReplay`), `src/core/WorkflowInstance.ts` (`loadWorkingFile`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

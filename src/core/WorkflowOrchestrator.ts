@@ -164,6 +164,8 @@ import {
 } from "../ui/UserInteractionPort";
 import { TypedEmitter } from "../utils/TypedEmitter";
 
+const PANEL_READY_GRACE_PERIOD_MS = 1_000;
+
 /**
  * WorkflowOrchestrator
  *
@@ -643,6 +645,7 @@ export class WorkflowOrchestrator {
   private orchestratorInitialized: boolean = false;
   /** Guards triggerStartupAutoLoadIfReady so triggerAutoLoad fires at most once. */
   private startupAutoLoadTriggered: boolean = false;
+  private panelReadyGraceTimer: ReturnType<typeof setTimeout> | undefined;
   /** Timestamp (ms) when setDashboardReady was first called — used to compute READY→STARTUP_COMPLETE latency. */
   private dashboardReadyAt: number = 0;
   /**
@@ -1432,6 +1435,7 @@ export class WorkflowOrchestrator {
     } catch (error) {
       this.instances.delete(instance.id);
       this.setViewedWorkflowId(clientId, previousViewedId);
+      instance.dispose();
       throw error;
     }
     const pendingRoots =
@@ -1576,6 +1580,17 @@ export class WorkflowOrchestrator {
         USER_FEEDBACK_SEVERITY.ERROR,
         `ctrlyoke: Initialization failed: ${error}`
       );
+    }
+    if (!this.dashboardReady) {
+      // Hosted browsers can be the only dashboard client. Give the VS Code
+      // panel a brief chance to send READY (including during extension reload),
+      // then allow startup to proceed without a panel send function.
+      this.panelReadyGraceTimer = setTimeout(() => {
+        this.panelReadyGraceTimer = undefined;
+        if (!this.dashboardReady) {
+          void this.setDashboardReady();
+        }
+      }, PANEL_READY_GRACE_PERIOD_MS);
     }
   }
 
@@ -2287,34 +2302,44 @@ export class WorkflowOrchestrator {
       this.panelStartupReplayedWorkflowId !== null;
 
     if (options?.preferredViewAddress) {
-      try {
-        await this.loadRunViewForClient(
-          options.preferredViewAddress,
-          send,
-          clientId,
-          undefined,
-          undefined,
-          true
+      const preferredAddress = options.preferredViewAddress;
+      const preferredRunExists =
+        preferredAddress.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN ||
+        (await this.runLifecycleService.runAddressExists(preferredAddress));
+      if (!preferredRunExists) {
+        Log.debug(
+          `[WorkflowOrchestrator] handleClientReady: remembered run is missing, falling back: ${JSON.stringify(preferredAddress)}`
         );
-        // Record the replayed workflowId after the first successful panel startup replay.
-        if (
-          !skipPanelStartupReplay &&
-          clientId === this.PANEL_CLIENT_ID &&
-          !this._autoLoadHasSettled
-        ) {
-          const replayedId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
-          if (replayedId) this.panelStartupReplayedWorkflowId = replayedId;
+      } else {
+        try {
+          await this.loadRunViewForClient(
+            preferredAddress,
+            send,
+            clientId,
+            undefined,
+            undefined,
+            true
+          );
+          // Record the replayed workflowId after the first successful panel startup replay.
+          if (
+            !skipPanelStartupReplay &&
+            clientId === this.PANEL_CLIENT_ID &&
+            !this._autoLoadHasSettled
+          ) {
+            const replayedId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
+            if (replayedId) this.panelStartupReplayedWorkflowId = replayedId;
+          }
+          send({
+            type: MESSAGE_TYPES.WORKFLOWS_LIST,
+            workflows: this.getWorkflowSummaries(),
+          });
+          return;
+        } catch (error) {
+          Log.warn(
+            `[WorkflowOrchestrator] handleClientReady: preferred view is not available, falling back: ${JSON.stringify(preferredAddress)}`,
+            error
+          );
         }
-        send({
-          type: MESSAGE_TYPES.WORKFLOWS_LIST,
-          workflows: this.getWorkflowSummaries(),
-        });
-        return;
-      } catch (error) {
-        Log.warn(
-          `[WorkflowOrchestrator] handleClientReady: preferred view is not available, falling back: ${JSON.stringify(options.preferredViewAddress)}`,
-          error
-        );
       }
     }
     let viewedId = this.getViewedWorkflowId(clientId);
@@ -4936,6 +4961,10 @@ export class WorkflowOrchestrator {
     disposeInstances: boolean,
     disposeEndConditionEvaluator = true
   ): void {
+    if (this.panelReadyGraceTimer) {
+      clearTimeout(this.panelReadyGraceTimer);
+      this.panelReadyGraceTimer = undefined;
+    }
     this.activeQueueStateChangedEmitter?.dispose();
     this.activeQueueStateChangedEmitter = undefined;
     this.workflowActivityTracker?.dispose();
