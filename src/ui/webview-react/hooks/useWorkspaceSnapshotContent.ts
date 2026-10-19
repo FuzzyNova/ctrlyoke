@@ -12,8 +12,7 @@ import { getVsCodeApi } from "./useVsCodeApi";
 import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
 import { notifyUser } from "@utils/notifyUser";
 
-const SNAPSHOT_CONTENT_RETRY_INTERVAL_MS = 5000;
-const SNAPSHOT_CONTENT_MAX_RETRIES = 4;
+const SNAPSHOT_CONTENT_RESPONSE_TIMEOUT_MS = 120_000;
 const SNAPSHOT_CONTENT_FAILURE_MESSAGE =
   "Couldn't load the file snapshot — check the connection and try again.";
 
@@ -34,8 +33,7 @@ export class WorkspaceSnapshotContentClient {
     ) => void,
     private readonly makeRequestId: () => string = () =>
       `snapshot-content-${++this.nextRequestId}-${generateId()}`,
-    private readonly retryIntervalMs = SNAPSHOT_CONTENT_RETRY_INTERVAL_MS,
-    private readonly maxRetries = SNAPSHOT_CONTENT_MAX_RETRIES
+    private readonly responseTimeoutMs = SNAPSHOT_CONTENT_RESPONSE_TIMEOUT_MS
   ) {}
 
   request(
@@ -49,19 +47,17 @@ export class WorkspaceSnapshotContentClient {
       target,
       path,
     ]);
-    const cached = this.cache.get(key);
-    if (cached) return Promise.resolve(cached);
+    if (this.cache.has(key)) return Promise.resolve(this.cache.get(key)!);
     const existing = this.pending.get(key);
     if (existing) return existing;
 
     const requestId = this.makeRequestId();
     let startRequest: () => void = () => undefined;
     const response = new Promise<SnapshotContent>((resolve, reject) => {
-      let retries = 0;
-      let retryTimer: ReturnType<typeof setInterval> | undefined;
+      let timeout: ReturnType<typeof setTimeout> | undefined;
       const cleanup = () => {
         window.removeEventListener("message", listener);
-        if (retryTimer !== undefined) clearInterval(retryTimer);
+        if (timeout !== undefined) clearTimeout(timeout);
         if (this.pending.get(key) === response) this.pending.delete(key);
       };
       const fail = (error: Error) => {
@@ -93,6 +89,7 @@ export class WorkspaceSnapshotContentClient {
           content.contentCaptureSkipped !== true
         ) {
           cleanup();
+          this.cache.set(key, content);
           resolve(content);
           return;
         }
@@ -108,7 +105,11 @@ export class WorkspaceSnapshotContentClient {
         target,
         path,
       };
-      const sendRequest = () => {
+      startRequest = () => {
+        timeout = setTimeout(
+          () => fail(new Error("Snapshot content request timed out.")),
+          this.responseTimeoutMs
+        );
         try {
           this.send(request);
         } catch (error) {
@@ -118,17 +119,6 @@ export class WorkspaceSnapshotContentClient {
               : new Error("Could not send snapshot content request.")
           );
         }
-      };
-      startRequest = () => {
-        retryTimer = setInterval(() => {
-          if (retries >= this.maxRetries) {
-            fail(new Error("Snapshot content request timed out."));
-            return;
-          }
-          retries += 1;
-          sendRequest();
-        }, this.retryIntervalMs);
-        sendRequest();
       };
     });
     this.pending.set(key, response);

@@ -262,6 +262,18 @@ export type ResumableSession = Awaited<
   ReturnType<WorkspaceSessionManager["discoverSessions"]>
 >[number];
 
+const snapshotContentRequests = new Map<
+  string,
+  Promise<
+    | {
+        beforeContent?: string;
+        contentToRestore?: string;
+        contentCaptureSkipped?: boolean;
+      }
+    | undefined
+  >
+>();
+
 export class WorkflowOrchestrator {
   // ─────────────────────────────────────────────────────────────────────────
   // Instance registry
@@ -2944,6 +2956,47 @@ export class WorkflowOrchestrator {
   }
 
   async getWorkspaceSnapshotFileContent(
+    address: WorkflowRunAddress,
+    target: OutputExecutionTarget,
+    filePath: string
+  ): Promise<
+    | {
+        beforeContent?: string;
+        contentToRestore?: string;
+        contentCaptureSkipped?: boolean;
+      }
+    | undefined
+  > {
+    const key = JSON.stringify([
+      address.workflowKey,
+      address.runRef,
+      target,
+      filePath,
+    ]);
+    const existing = snapshotContentRequests.get(key);
+    if (existing) return existing;
+    const request = this.readWorkspaceSnapshotFileContent(
+      address,
+      target,
+      filePath
+    );
+    snapshotContentRequests.set(key, request);
+    void request.then(
+      () => {
+        if (snapshotContentRequests.get(key) === request) {
+          snapshotContentRequests.delete(key);
+        }
+      },
+      () => {
+        if (snapshotContentRequests.get(key) === request) {
+          snapshotContentRequests.delete(key);
+        }
+      }
+    );
+    return request;
+  }
+
+  private async readWorkspaceSnapshotFileContent(
     address: WorkflowRunAddress,
     target: OutputExecutionTarget,
     filePath: string

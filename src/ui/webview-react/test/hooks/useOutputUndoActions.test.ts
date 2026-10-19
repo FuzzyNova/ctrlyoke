@@ -231,7 +231,7 @@ describe("useOutputUndoActions", () => {
       opening = result.current.handlePromptViewMeta(target, promptUndo);
     });
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(25000);
+      await vi.advanceTimersByTimeAsync(120_000);
       await opening;
     });
 

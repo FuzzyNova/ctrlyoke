@@ -1357,6 +1357,19 @@ export class WorkspaceSnapshotService {
     return { ...snapshot, changedFiles: enrichedFiles };
   }
 
+  /** Enrich one requested file without running git lookups for its siblings. */
+  async enrichSnapshotFileBeforeContent(
+    snapshot: WorkspaceSnapshot,
+    change: SnapshotFileChange,
+    workspaceFolderPath: string
+  ): Promise<SnapshotFileChange | undefined> {
+    const enriched = await this.enrichSnapshotBeforeContent(
+      { ...snapshot, changedFiles: [change] },
+      workspaceFolderPath
+    );
+    return enriched.changedFiles[0];
+  }
+
   /** Reconstruct a repo-toplevel-relative git path from a change's viewer path. */
   private gitRelFromChange(
     repoInfo: SnapshotRepoInfo,

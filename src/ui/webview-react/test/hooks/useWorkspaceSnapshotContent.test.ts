@@ -129,14 +129,13 @@ describe("WorkspaceSnapshotContentClient", () => {
     await expect(differentPath).resolves.toEqual({});
   });
 
-  it("reissues dropped requests, rejects, and lets a later call start fresh", async () => {
+  it("does not resend a request while its response is pending", async () => {
     vi.useFakeTimers();
     const sent: any[] = [];
     const client = new WorkspaceSnapshotContentClient(
       (message) => sent.push(message),
       () => `request-${sent.length + 1}`,
-      100,
-      2
+      100
     );
     const address = {
       workflowKey: "workflow-a" as WorkflowKey,
@@ -144,37 +143,30 @@ describe("WorkspaceSnapshotContentClient", () => {
     };
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 } as const;
 
-    const failedLookup = client.request(address, target, "src/retry.ts");
-    const failedExpectation = expect(failedLookup).rejects.toThrow("timed out");
-    await vi.advanceTimersByTimeAsync(300);
-    await failedExpectation;
-    expect(sent).toHaveLength(3);
-    expect(new Set(sent.map((message) => message.requestId))).toEqual(
-      new Set([sent[0].requestId])
-    );
-
-    const retriedLookup = client.request(address, target, "src/retry.ts");
-    expect(sent).toHaveLength(4);
-    expect(sent[3].requestId).not.toBe(sent[0].requestId);
+    const lookup = client.request(address, target, "src/retry.ts");
+    const pendingLookup = client.request(address, target, "src/retry.ts");
+    await vi.advanceTimersByTimeAsync(99);
+    expect(sent).toHaveLength(1);
+    expect(pendingLookup).toBe(lookup);
     window.dispatchEvent(
       new MessageEvent("message", {
         data: {
           type: MESSAGE_TYPES.WORKSPACE_SNAPSHOT_CONTENT,
-          requestId: sent[3].requestId,
+          requestId: sent[0].requestId,
           beforeContent: "original",
         },
       })
     );
-    await expect(retriedLookup).resolves.toEqual({
+    await expect(lookup).resolves.toEqual({
       beforeContent: "original",
     });
     await expect(
       client.request(address, target, "src/retry.ts")
     ).resolves.toEqual({ beforeContent: "original" });
-    expect(sent).toHaveLength(4);
+    expect(sent).toHaveLength(1);
   });
 
-  it("settles empty replies without caching them", async () => {
+  it("caches empty replies so remounted rows do not re-request", async () => {
     const sent: any[] = [];
     const client = new WorkspaceSnapshotContentClient((message) =>
       sent.push(message)
@@ -196,19 +188,9 @@ describe("WorkspaceSnapshotContentClient", () => {
     );
     await expectation;
 
-    const retry = client.request(address, target, "src/missing.ts");
-    expect(sent).toHaveLength(2);
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        data: {
-          type: MESSAGE_TYPES.WORKSPACE_SNAPSHOT_CONTENT,
-          requestId: sent[1].requestId,
-          contentToRestore: "restored content",
-        },
-      })
-    );
-    await expect(retry).resolves.toEqual({
-      contentToRestore: "restored content",
-    });
+    await expect(
+      client.request(address, target, "src/missing.ts")
+    ).resolves.toEqual({});
+    expect(sent).toHaveLength(1);
   });
 });

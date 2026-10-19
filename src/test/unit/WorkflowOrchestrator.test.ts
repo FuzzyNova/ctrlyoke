@@ -198,6 +198,40 @@ function createTestOrchestrator(
   return orchestrator;
 }
 
+suite("WorkflowOrchestrator snapshot content requests", () => {
+  test("deduplicates concurrent requests for the same address, target, and path", async () => {
+    const orchestrator = createTestOrchestrator();
+    let resolveRead!: (value: { beforeContent: string }) => void;
+    const result = new Promise<{ beforeContent: string }>((resolve) => {
+      resolveRead = resolve;
+    });
+    let reads = 0;
+    (orchestrator as any).readWorkspaceSnapshotFileContent = () => {
+      reads += 1;
+      return result;
+    };
+    const address = { workflowKey: "wf-dedupe", runRef: "run-dedupe" } as any;
+    const target = { kind: "queue", stepIndex: 0 } as any;
+
+    const first = orchestrator.getWorkspaceSnapshotFileContent(
+      address,
+      target,
+      "src/file.ts"
+    );
+    const second = orchestrator.getWorkspaceSnapshotFileContent(
+      address,
+      target,
+      "src/file.ts"
+    );
+    assert.strictEqual(reads, 1);
+    resolveRead({ beforeContent: "before" });
+    assert.deepStrictEqual(await Promise.all([first, second]), [
+      { beforeContent: "before" },
+      { beforeContent: "before" },
+    ]);
+  });
+});
+
 function createEmptyExternalRunWatchCoordinator() {
   return {
     getEntry: () => undefined,

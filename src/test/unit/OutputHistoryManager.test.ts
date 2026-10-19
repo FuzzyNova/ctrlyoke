@@ -2839,6 +2839,75 @@ suite("OutputHistoryManager snapshot enrichment on loadHistory", () => {
     assert.strictEqual(onDemand?.beforeContent, historySnapshot?.beforeContent);
   });
 
+  test("scans a run once and enriches only the requested snapshot file", async () => {
+    const { filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-fetch-shared-scan"
+    );
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const snapshot: WorkspaceSnapshot = {
+      capturedAt: 1000,
+      strategy: SNAPSHOT_STRATEGIES.FILESYSTEM,
+      changedFiles: [
+        { path: "src/one.ts", changeType: "modified", beforeContent: "one" },
+        { path: "src/two.ts", changeType: "modified", beforeContent: "two" },
+      ],
+    };
+    const separateManager = new OutputHistoryManager(tempWorkspace);
+    let scans = 0;
+    (separateManager as any).runMetadataScanner.findLatestWorkspaceSnapshot =
+      async () => {
+        scans += 1;
+        return snapshot;
+      };
+    const enrichedPaths: string[] = [];
+    (separateManager as any).snapshotService.enrichSnapshotFileBeforeContent =
+      async (_snapshot: WorkspaceSnapshot, change: { path: string }) => {
+        enrichedPaths.push(change.path);
+        return change;
+      };
+
+    await separateManager.getSnapshotFileContent(filePath, target, "src/one.ts");
+    await separateManager.getSnapshotFileContent(filePath, target, "src/two.ts");
+
+    assert.strictEqual(scans, 1);
+    assert.deepStrictEqual(enrichedPaths, ["src/one.ts", "src/two.ts"]);
+  });
+
+  test("coalesces concurrent snapshot scans for identical requests", async () => {
+    const { filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-fetch-shared-concurrent"
+    );
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const separateManager = new OutputHistoryManager(tempWorkspace);
+    let scans = 0;
+    (separateManager as any).runMetadataScanner.findLatestWorkspaceSnapshot =
+      async () => {
+        scans += 1;
+        await Promise.resolve();
+        return {
+          capturedAt: 1000,
+          strategy: SNAPSHOT_STRATEGIES.FILESYSTEM,
+          changedFiles: [
+            { path: "src/concurrent.ts", changeType: "deleted", contentToRestore: "old" },
+          ],
+        } satisfies WorkspaceSnapshot;
+      };
+    (separateManager as any).snapshotService.enrichSnapshotFileBeforeContent =
+      async (_snapshot: WorkspaceSnapshot, change: unknown) => change;
+
+    const results = await Promise.all([
+      separateManager.getSnapshotFileContent(filePath, target, "src/concurrent.ts"),
+      separateManager.getSnapshotFileContent(filePath, target, "src/concurrent.ts"),
+    ]);
+
+    assert.strictEqual(scans, 1);
+    assert.deepStrictEqual(results[0], results[1]);
+  });
+
   test("on-demand content only reads paths in the target snapshot", async () => {
     const { filePath } = await initTestRun(
       manager,

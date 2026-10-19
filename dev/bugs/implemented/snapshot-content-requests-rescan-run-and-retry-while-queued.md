@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-19 by Claude Code (performance investigation, session-log review)
 - **Area:** `src/core/orchestration/OutputHistoryManager.ts`, `src/core/WorkflowOrchestrator.ts`, `src/ui/webview-react/hooks/useWorkspaceSnapshotContent.ts`, `src/ui/webview-react/components/output/OutputRow.tsx`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

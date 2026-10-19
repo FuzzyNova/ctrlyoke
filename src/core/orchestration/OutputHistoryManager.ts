@@ -117,6 +117,49 @@ function undoFilePathKey(value: string): string {
  * run rows.
  */
 const RUN_SUMMARY_READ_BATCH_SIZE = 32;
+const SNAPSHOT_CACHE_MAX_BYTES = 32 * 1024 * 1024;
+const SNAPSHOT_CACHE_MAX_ENTRIES = 128;
+const snapshotCache = new Map<
+  string,
+  { snapshot: WorkspaceSnapshot | undefined; bytes: number }
+>();
+const snapshotLoads = new Map<string, Promise<WorkspaceSnapshot | undefined>>();
+let snapshotCacheBytes = 0;
+
+function readCachedSnapshot(key: string):
+  | { hit: true; snapshot: WorkspaceSnapshot | undefined }
+  | { hit: false } {
+  const entry = snapshotCache.get(key);
+  if (!entry) return { hit: false };
+  snapshotCache.delete(key);
+  snapshotCache.set(key, entry);
+  return { hit: true, snapshot: entry.snapshot };
+}
+
+function cacheSnapshot(
+  key: string,
+  snapshot: WorkspaceSnapshot | undefined
+): void {
+  const previous = snapshotCache.get(key);
+  if (previous) {
+    snapshotCacheBytes -= previous.bytes;
+    snapshotCache.delete(key);
+  }
+  const bytes = snapshot ? Buffer.byteLength(JSON.stringify(snapshot)) : 0;
+  if (bytes > SNAPSHOT_CACHE_MAX_BYTES) return;
+  snapshotCache.set(key, { snapshot, bytes });
+  snapshotCacheBytes += bytes;
+  while (
+    (snapshotCacheBytes > SNAPSHOT_CACHE_MAX_BYTES ||
+      snapshotCache.size > SNAPSHOT_CACHE_MAX_ENTRIES) &&
+    snapshotCache.size > 0
+  ) {
+    const oldestKey = snapshotCache.keys().next().value as string;
+    const oldest = snapshotCache.get(oldestKey);
+    snapshotCache.delete(oldestKey);
+    snapshotCacheBytes -= oldest?.bytes ?? 0;
+  }
+}
 
 export function isTerminalExecutionState(state: string | undefined): boolean {
   return (
@@ -930,6 +973,7 @@ export class OutputHistoryManager {
         existingSnapshot &&
         JSON.stringify(existingSnapshot) === JSON.stringify(snapshot)
       ) {
+        cacheSnapshot(this.getSnapshotCacheKey(historyFilePath, target), snapshot);
         return;
       }
 
@@ -943,6 +987,7 @@ export class OutputHistoryManager {
           },
         },
       ]);
+      cacheSnapshot(this.getSnapshotCacheKey(historyFilePath, target), snapshot);
       this.refreshSearchIndex();
     } catch (error) {
       Log.warn(
@@ -965,22 +1010,36 @@ export class OutputHistoryManager {
     | undefined
   > {
     if (!historyFilePath || !filePath) return undefined;
-    const snapshot =
-      this.liveSnapshots.get(
-        this.getSnapshotCacheKey(historyFilePath, target)
-      ) ??
-      (await this.runMetadataScanner.findLatestWorkspaceSnapshot(
-        historyFilePath,
-        target
-      ));
+    const cacheKey = this.getSnapshotCacheKey(historyFilePath, target);
+    let snapshot = this.liveSnapshots.get(cacheKey);
+    if (!snapshot) {
+      const cached = readCachedSnapshot(cacheKey);
+      if (cached.hit) {
+        snapshot = cached.snapshot;
+      } else {
+        let loading = snapshotLoads.get(cacheKey);
+        if (!loading) {
+          loading = this.runMetadataScanner
+            .findLatestWorkspaceSnapshot(historyFilePath, target)
+            .then((loaded) => {
+              cacheSnapshot(cacheKey, loaded);
+              return loaded;
+            })
+            .finally(() => snapshotLoads.delete(cacheKey));
+          snapshotLoads.set(cacheKey, loading);
+        }
+        snapshot = await loading;
+      }
+    }
     const fileChange =
       snapshot?.changedFiles.find((change) => change.path === filePath) ??
       this.findSnapshotChangeForUndoPath(snapshot, filePath);
     if (!snapshot || !fileChange) return undefined;
 
-    const enriched = await this.enrichWorkspaceSnapshot(snapshot);
-    const enrichedChange = enriched.changedFiles.find(
-      (change) => change.path === fileChange.path
+    const enrichedChange = await this.snapshotService.enrichSnapshotFileBeforeContent(
+      snapshot,
+      fileChange,
+      this._workspaceFolderPath
     );
     if (!enrichedChange) return undefined;
     return {
