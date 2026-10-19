@@ -418,6 +418,9 @@ async function start(mode, launchOptions) {
   for (const extensionPath of mode.extraExtensionPaths ?? []) {
     args.push(`--extensionDevelopmentPath=${extensionPath}`);
   }
+  // Opt-in inspector port for CPU profiling the extension host over CDP.
+  const inspectPort = process.env.CTRLYOKE_DEV_HOST_INSPECT_PORT;
+  if (inspectPort) args.push(`--inspect-extensions=${inspectPort}`);
   args.push(mode.workspace);
 
   const child = spawnShim(CODE_BIN, args, {

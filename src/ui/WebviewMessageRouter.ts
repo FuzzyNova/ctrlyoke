@@ -169,6 +169,15 @@ const WORKFLOW_VARIANT_REQUEST_CACHE_TTL_MS = 10 * 60 * 1000;
 const WORKFLOW_VARIANT_REQUEST_CACHE_MAX_ENTRIES = 256;
 
 /**
+ * Every client shares one `routeQueue`, so a slow handler delays every later
+ * message from every client, forwarded logs included. A message that runs or
+ * waits longer than these is logged with its type and client so a stall can be
+ * pinned on the handler that caused it.
+ */
+const SLOW_ROUTE_RUN_MS = 250;
+const SLOW_ROUTE_WAIT_MS = 1000;
+
+/**
  * The history searches one client currently has in flight, all of them for
  * the same `listingKey`. See `WebviewMessageRouter.beginHistorySearch`.
  */
@@ -205,6 +214,20 @@ function getHistorySearchListingKey(message: {
     deep: message.deep === true,
     regex,
   });
+}
+
+function logSlowRoute(
+  type: unknown,
+  clientId: string,
+  enqueuedAt: number,
+  startedAt: number
+): void {
+  const waitMs = Math.round(startedAt - enqueuedAt);
+  const runMs = Math.round(performance.now() - startedAt);
+  if (runMs < SLOW_ROUTE_RUN_MS && waitMs < SLOW_ROUTE_WAIT_MS) return;
+  Log.debug(
+    `[RouteTiming] slow route type=${String(type)} client=${clientId} waitMs=${waitMs} runMs=${runMs}`
+  );
 }
 
 function isUserFeedbackSeverity(value: unknown): value is UserFeedbackSeverity {
@@ -401,11 +424,14 @@ export class WebviewMessageRouter {
       await this.routeSingleMessage(message, ctx);
       return;
     }
+    const enqueuedAt = performance.now();
     this.routeQueue = this.routeQueue.then(async () => {
+      const startedAt = performance.now();
       try {
         await this.routeSingleMessage(message, ctx);
       } finally {
         releaseHistorySearch?.();
+        logSlowRoute(message?.type, clientId, enqueuedAt, startedAt);
       }
     });
 

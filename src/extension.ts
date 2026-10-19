@@ -97,6 +97,7 @@ import {
   heapSnapshotThresholdFromEnv,
   MemoryWatchdog,
 } from "./utils/MemoryWatchdog";
+import { EventLoopStallMonitor } from "./utils/EventLoopStallMonitor";
 import {
   createPtyDimensionsPersistence,
   initPtyProcessManager,
@@ -158,6 +159,7 @@ let licenseService: LicenseService;
 let machineSecretStore: FallbackSecretStore;
 let hostedServer: CtrlYokeHostedServer | undefined;
 let memoryWatchdog: MemoryWatchdog | undefined;
+let eventLoopStallMonitor: EventLoopStallMonitor | undefined;
 let notificationManager: NotificationManager | undefined;
 let workspaceSettingsTrustPrompter: WorkspaceSettingsTrustPrompter | undefined;
 // Exempts the running server's own connection token from heuristic secret
@@ -331,6 +333,8 @@ export async function activate(context: vscode.ExtensionContext) {
       },
     });
     memoryWatchdog.start();
+    eventLoopStallMonitor = new EventLoopStallMonitor();
+    eventLoopStallMonitor.start();
 
     // Bundled CLI on PATH for integrated terminals and, before any harness
     // can spawn, for the processes the orchestrator launches.
@@ -2046,6 +2050,8 @@ export async function deactivate(): Promise<void> {
     disposeTelemetry();
     memoryWatchdog?.dispose();
     memoryWatchdog = undefined;
+    eventLoopStallMonitor?.dispose();
+    eventLoopStallMonitor = undefined;
 
     Log.debug("[Extension] ctrlyoke: Extension deactivated");
   } finally {
