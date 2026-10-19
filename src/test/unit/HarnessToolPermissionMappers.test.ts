@@ -16,6 +16,7 @@ import {
   PERMISSION_MODES,
 } from "../../types/DashboardConstants";
 import { COMPATIBILITY_DIAGNOSTIC_CODES } from "../../types/CompatibilityTypes";
+import { Log } from "../../utils/Log";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -542,6 +543,46 @@ suite("HarnessToolPermissionMappers", () => {
     const mapper = new CodexToolPermissionMapper();
 
     suite("prepare", () => {
+      test("reports unsupported lists only when the permission mode applies them", async () => {
+        const originalWarn = Log.warn;
+        const warnings: unknown[][] = [];
+        Log.warn = (...args: unknown[]) => {
+          warnings.push(args);
+        };
+        try {
+          const ignored = await mapper.prepare(
+            cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL, ["write"], ["shell"]),
+            { sandboxMode: "workspace-write", approvalPolicy: "on-request" }
+          );
+          assert.deepStrictEqual(ignored.diagnostics, []);
+          assert.deepStrictEqual(warnings, []);
+
+          const applied = await mapper.prepare(
+            cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"]),
+            { sandboxMode: "workspace-write", approvalPolicy: "on-request" }
+          );
+          assert.deepStrictEqual(
+            applied.diagnostics.map(({ code, capability }) => ({
+              code,
+              capability,
+            })),
+            [
+              {
+                code: COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_NOT_ENFORCED,
+                capability: "allowedTools",
+              },
+              {
+                code: COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_NOT_ENFORCED,
+                capability: "deniedTools",
+              },
+            ]
+          );
+          assert.deepStrictEqual(warnings, []);
+        } finally {
+          Log.warn = originalWarn;
+        }
+      });
+
       test("dangerouslyAllowAll → --dangerously-bypass-approvals-and-sandbox", async () => {
         const args = await mapperArgs(
           mapper,

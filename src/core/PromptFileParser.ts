@@ -80,6 +80,14 @@ type ParallelValidationProperties = Pick<
   "priorContext" | "sessionId" | "maxSteps"
 >;
 
+interface CompiledWorkflowSchema {
+  schema: unknown;
+  strictValidator: ValidateFunction;
+  relaxedValidator: ValidateFunction;
+}
+
+const compiledWorkflowSchemas = new Map<string, CompiledWorkflowSchema>();
+
 export interface WorkflowTextValidationIssue {
   instancePath: string;
   message: string;
@@ -142,7 +150,6 @@ export class PromptFileParser {
   private promptSchema: any;
   private strictValidator?: ValidateFunction;
   private relaxedValidator?: ValidateFunction;
-  private ajv = new Ajv({ allErrors: true, allowUnionTypes: true });
 
   private async readWorkflowFileContent(filePath: string): Promise<string> {
     const content = await fs.readFile(filePath, "utf8");
@@ -153,7 +160,6 @@ export class PromptFileParser {
     private readonly platform?: PlatformAdapter,
     private readonly userFeedbackSink?: UserFeedbackSink
   ) {
-    addFormats(this.ajv);
     this.loadSchemas();
   }
 
@@ -175,20 +181,32 @@ export class PromptFileParser {
         );
       }
 
-      // Use synchronous read to avoid race condition where parsePromptFile
-      // is called before the schema finishes loading
-      const promptSchemaContent = require("fs").readFileSync(
-        promptSchemaPath,
-        "utf8"
-      );
+      const schemaPath = path.resolve(promptSchemaPath);
+      let compiled = compiledWorkflowSchemas.get(schemaPath);
+      if (!compiled) {
+        // Use synchronous read to avoid racing parsePromptFile. The bundled
+        // schema is process-wide, so compile its validators only once.
+        const promptSchemaContent = require("fs").readFileSync(
+          schemaPath,
+          "utf8"
+        );
+        const schema = JSON.parse(promptSchemaContent);
+        const ajv = new Ajv({ allErrors: true, allowUnionTypes: true });
+        addFormats(ajv);
+        compiled = {
+          schema,
+          strictValidator: ajv.compile(schema),
+          relaxedValidator: ajv.compile(
+            PromptFileParser.createRelaxedSchema(schema)
+          ),
+        };
+        compiledWorkflowSchemas.set(schemaPath, compiled);
+        Log.debug("[PromptFileParser] JSON schema loaded successfully");
+      }
 
-      this.promptSchema = JSON.parse(promptSchemaContent);
-      this.strictValidator = this.ajv.compile(this.promptSchema);
-      this.relaxedValidator = this.ajv.compile(
-        PromptFileParser.createRelaxedSchema(this.promptSchema)
-      );
-
-      Log.debug("[PromptFileParser] JSON schema loaded successfully");
+      this.promptSchema = compiled.schema;
+      this.strictValidator = compiled.strictValidator;
+      this.relaxedValidator = compiled.relaxedValidator;
     } catch (error) {
       Log.error("[PromptFileParser] Failed to load JSON schema:", error);
       notifyUserFeedback(

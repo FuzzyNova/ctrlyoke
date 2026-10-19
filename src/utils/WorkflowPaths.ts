@@ -23,7 +23,7 @@ import type { RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
 
 export const WORKING_FILE_NAME = "workflow.ctrlyoke.json";
 const DESCRIPTOR_FILE_NAME = "workflow.json";
-const RUNNER_LOCK_FILE_NAME = "runner.json";
+export const RUNNER_LOCK_FILE_NAME = "runner.json";
 const STOP_REQUEST_FILE_PREFIX = "stop-request-";
 const DRAFT_DIR_NAME = "draft";
 const CREATING_PREFIX = ".creating-";

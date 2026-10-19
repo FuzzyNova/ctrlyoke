@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-19 by Claude Code (log review)
 - **Area:** `src/core/harness/codex/CodexToolPermissionMapper.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

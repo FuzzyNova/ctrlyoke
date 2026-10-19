@@ -1072,4 +1072,56 @@ suite("ExternalRunWatchCoordinator ownership", () => {
       await fs.rm(workspace, { recursive: true, force: true });
     }
   });
+
+  test("skips an overlapping runner discovery poll and finds newly created locks", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-runner-poll-guard-")
+    );
+    const runsRoot = path.join(workspace, "runs");
+    const firstRunnerPath = path.join(
+      runsRoot,
+      "lineage-one",
+      WorkflowPaths.RUNNER_LOCK_FILE_NAME
+    );
+    const secondRunnerPath = path.join(
+      runsRoot,
+      "lineage-two",
+      WorkflowPaths.RUNNER_LOCK_FILE_NAME
+    );
+    try {
+      await fs.mkdir(path.dirname(firstRunnerPath), { recursive: true });
+      await fs.writeFile(firstRunnerPath, "{}");
+      const { coordinator } = createCoordinator(workspace);
+      const discovered: string[] = [];
+      let releaseFirstHandler!: () => void;
+      let markHandlerEntered!: () => void;
+      const handlerEntered = new Promise<void>((resolve) => {
+        markHandlerEntered = resolve;
+      });
+      const holdFirstHandler = new Promise<void>((resolve) => {
+        releaseFirstHandler = resolve;
+      });
+      coordinator.handleRunnerJsonEvent = async (runnerPath) => {
+        discovered.push(runnerPath);
+        if (runnerPath === firstRunnerPath) {
+          markHandlerEntered();
+          await holdFirstHandler;
+        }
+      };
+
+      const firstPoll = coordinator.pollRunnerJsonDiscovery(runsRoot, workspace);
+      await handlerEntered;
+      await coordinator.pollRunnerJsonDiscovery(runsRoot, workspace);
+      assert.deepStrictEqual(discovered, [firstRunnerPath]);
+
+      await fs.mkdir(path.dirname(secondRunnerPath), { recursive: true });
+      await fs.writeFile(secondRunnerPath, "{}");
+      releaseFirstHandler();
+      await firstPoll;
+      await coordinator.pollRunnerJsonDiscovery(runsRoot, workspace);
+      assert.deepStrictEqual(discovered, [firstRunnerPath, secondRunnerPath]);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
 });

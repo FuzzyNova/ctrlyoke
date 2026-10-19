@@ -54,6 +54,9 @@ import { WorkingFileManager } from "../WorkingFileManager";
 import { stripLegacyWorkingFileLineageMetadata } from "../../utils/WorkingFileMetadata";
 import type { RunViewPublisherExternalRunWatchPort } from "./RunViewPublisher";
 
+const RUNNER_JSON_DISCOVERY_POLL_INTERVAL_MS = 10_000;
+const RUNNER_JSON_DISCOVERY_STAT_CONCURRENCY = 4;
+
 export interface ExternalRunWatchBroadcast {
   notifyWorkflowAdded(summary: WorkflowSummary): void;
   notifyWorkflowDismissed(workflowId: string): void;
@@ -136,6 +139,7 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
   private readonly pendingStarts = new Map<string, Promise<boolean>>();
   private runnerJsonCreateWatcher?: import("../HostPorts").FileWatcher;
   private runnerJsonDiscoveryPollInterval?: ReturnType<typeof setInterval>;
+  private runnerJsonDiscoveryPollInProgress = false;
   private readonly polledRunnerJsonMtimes = new Map<string, number>();
   private lastLoggedExternalExecutionDecision?: Map<string, string>;
   private activationWorktreeOwnership?: WorkspaceWorktreeOwnership;
@@ -321,46 +325,62 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
     });
     this.runnerJsonDiscoveryPollInterval = setInterval(() => {
       void this.pollRunnerJsonDiscovery(runsRootDir, workspaceFolderPath);
-    }, 1_000);
+    }, RUNNER_JSON_DISCOVERY_POLL_INTERVAL_MS);
   }
 
   async pollRunnerJsonDiscovery(
     runsRootDir: string,
     workspaceFolderPath: string
   ): Promise<void> {
+    if (this.runnerJsonDiscoveryPollInProgress) {
+      return;
+    }
+    this.runnerJsonDiscoveryPollInProgress = true;
     try {
       const entries = await fs.promises.readdir(runsRootDir, {
         withFileTypes: true,
       });
       const seenRunnerPaths = new Set<string>();
-      await Promise.all(
-        entries
-          .filter((entry) => entry.isDirectory())
-          .filter((entry) => !this.externalRunSessions.has(entry.name))
-          .map(async (entry) => {
+      const lineages = entries
+        .filter((entry) => entry.isDirectory())
+        .filter((entry) => !this.externalRunSessions.has(entry.name));
+      let nextLineageIndex = 0;
+      const statWorkers = Array.from(
+        {
+          length: Math.min(
+            RUNNER_JSON_DISCOVERY_STAT_CONCURRENCY,
+            lineages.length
+          ),
+        },
+        async () => {
+          while (nextLineageIndex < lineages.length) {
+            const entry = lineages[nextLineageIndex++];
             let runnerPath: string;
             try {
-              runnerPath = WorkflowPaths.runnerLockPath(
-                workspaceFolderPath,
-                entry.name as WorkflowKey
+              runnerPath = path.join(
+                runsRootDir,
+                entry.name,
+                WorkflowPaths.RUNNER_LOCK_FILE_NAME
               );
             } catch {
-              return;
+              continue;
             }
             let mtimeMs: number;
             try {
               ({ mtimeMs } = await fs.promises.stat(runnerPath));
             } catch {
-              return;
+              continue;
             }
             seenRunnerPaths.add(runnerPath);
             if (this.polledRunnerJsonMtimes.get(runnerPath) === mtimeMs) {
-              return;
+              continue;
             }
             this.polledRunnerJsonMtimes.set(runnerPath, mtimeMs);
             await this.handleRunnerJsonEvent(runnerPath, workspaceFolderPath);
-          })
+          }
+        }
       );
+      await Promise.all(statWorkers);
       for (const trackedPath of this.polledRunnerJsonMtimes.keys()) {
         if (!seenRunnerPaths.has(trackedPath)) {
           this.polledRunnerJsonMtimes.delete(trackedPath);
@@ -374,6 +394,8 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
         `[WorkflowOrchestrator] pollRunnerJsonDiscovery: unable to scan "${runsRootDir}":`,
         err
       );
+    } finally {
+      this.runnerJsonDiscoveryPollInProgress = false;
     }
   }
 

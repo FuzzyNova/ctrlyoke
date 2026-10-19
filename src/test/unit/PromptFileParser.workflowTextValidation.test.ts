@@ -9,6 +9,14 @@ import {
 suite("PromptFileParser.validateWorkflowText", () => {
   const parser = new PromptFileParser();
 
+  test("reuses compiled workflow validators across parser instances", () => {
+    const first = new PromptFileParser() as any;
+    const second = new PromptFileParser() as any;
+
+    assert.strictEqual(second.strictValidator, first.strictValidator);
+    assert.strictEqual(second.relaxedValidator, first.relaxedValidator);
+  });
+
   test("accepts a valid workflow without normalizing it", () => {
     assert.deepStrictEqual(
       parser.validateWorkflowText(

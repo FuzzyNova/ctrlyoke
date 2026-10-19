@@ -151,13 +151,6 @@ export class CodexToolPermissionMapper
     approvalPolicy?: string,
     isInteractive?: boolean
   ): string[] {
-    // Warn if tool patterns are configured (unsupported by Codex)
-    if (config.allowedTools.length > 0 || config.deniedTools.length > 0) {
-      Log.warn(
-        "[CodexToolPermissionMapper] Codex CLI does not support granular tool patterns (cliAllowedTools/cliDeniedTools). Use Codex-specific sandbox/approval settings for custom control."
-      );
-    }
-
     // --ask-for-approval / -a is an interactive-only flag: not recognised by `codex exec`.
     // Only suppress it when isInteractive is explicitly false (headless exec mode).
     // When undefined (e.g. tests that don't pass the flag), behave as before.

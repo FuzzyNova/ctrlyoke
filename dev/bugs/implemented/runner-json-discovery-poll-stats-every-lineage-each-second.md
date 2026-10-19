@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-19 by Claude Code (performance investigation, extension-host CPU profile)
 - **Area:** `src/core/orchestration/ExternalRunWatchCoordinator.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
