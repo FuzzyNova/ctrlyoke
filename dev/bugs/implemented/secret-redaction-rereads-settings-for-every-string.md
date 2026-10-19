@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-19 by Claude Code (performance investigation, extension-host CPU profile)
 - **Area:** `src/utils/SecretRedactionService.ts`, `src/utils/ConfigurationUtils.ts`, `src/config/CtrlYokeConfigService.ts`, `src/config/FileConfigBackend.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

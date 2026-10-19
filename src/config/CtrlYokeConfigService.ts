@@ -156,6 +156,21 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function cloneSettingsValue<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => cloneSettingsValue(item)) as T;
+  }
+  if (isPlainObject(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        cloneSettingsValue(item),
+      ])
+    ) as T;
+  }
+  return value;
+}
+
 function getSettingDefault(settingPath: string): unknown {
   return settingPath.split(".").reduce<unknown>((current, part) => {
     if (!isPlainObject(current)) return undefined;
@@ -297,13 +312,27 @@ export class CtrlYokeConfigService {
     requests: WorkspaceSensitiveSettingRequest[];
   };
   private workspaceIdentityMemo?: { root: string; identity: string };
+  private mergedSettingsCache?: {
+    settings: CtrlYokeGlobalSettings;
+    userSettings: PartialCtrlYokeSettings | undefined;
+    workspaceSettings: PartialCtrlYokeSettings | undefined;
+    cliOverlay: PartialCtrlYokeSettings | undefined;
+  };
+
+  private invalidateMergedSettings(): void {
+    this.mergedSettingsCache = undefined;
+  }
 
   setWorkspaceBackend(backend: ConfigBackend): void {
     this.workspaceBackend = backend;
+    this.sensitiveRequestsMemo = undefined;
+    this.invalidateMergedSettings();
   }
 
   setUserBackend(backend: ConfigBackend): void {
     this.userBackend = backend;
+    this.sensitiveRequestsMemo = undefined;
+    this.invalidateMergedSettings();
   }
 
   /**
@@ -317,12 +346,14 @@ export class CtrlYokeConfigService {
   ): void {
     this.cliOverlay = overlay;
     this.cliOverlaySeedPaths = new Set(seedPaths);
+    this.invalidateMergedSettings();
   }
 
   /** Replace the trust-decision source (tests only; defaults to the user store). */
   setWorkspaceSettingsTrust(trust: WorkspaceSettingsTrustDecisions): void {
     this.workspaceSettingsTrust = trust;
     this.sensitiveRequestsMemo = undefined;
+    this.invalidateMergedSettings();
   }
 
   /**
@@ -444,14 +475,30 @@ export class CtrlYokeConfigService {
 
   /** Get all settings merged from all backends */
   getAll(): CtrlYokeGlobalSettings {
+    // FileConfigBackend.getAll() retains its per-read stat check so external
+    // edits remain visible even if a file watcher event is missed. Comparing
+    // the returned object identities keeps the merged tree cached while still
+    // detecting those edits without repeating the deep merges.
+    const userSettings = this.userBackend?.getAll();
+    const workspaceSettings = this.workspaceBackend?.getAll();
+    const cached = this.mergedSettingsCache;
+    if (
+      cached &&
+      cached.userSettings === userSettings &&
+      cached.workspaceSettings === workspaceSettings &&
+      cached.cliOverlay === this.cliOverlay
+    ) {
+      return cloneSettingsValue(cached.settings);
+    }
+
     let result: CtrlYokeGlobalSettings = {
       ...CTRLYOKE_SETTINGS_DEFAULTS,
     } as CtrlYokeGlobalSettings;
 
-    if (this.userBackend) {
+    if (userSettings) {
       result = deepMerge(
         result as unknown as Record<string, unknown>,
-        this.userBackend.getAll() as unknown as Record<string, unknown>
+        userSettings as unknown as Record<string, unknown>
       ) as unknown as CtrlYokeGlobalSettings;
     }
 
@@ -469,7 +516,13 @@ export class CtrlYokeConfigService {
       ) as unknown as CtrlYokeGlobalSettings;
     }
 
-    return result;
+    this.mergedSettingsCache = {
+      settings: result,
+      userSettings,
+      workspaceSettings,
+      cliOverlay: this.cliOverlay,
+    };
+    return cloneSettingsValue(result);
   }
 
   /** Set a setting at workspace or user scope using dot notation path */
@@ -609,6 +662,7 @@ export class CtrlYokeConfigService {
 
   /** Notify all subscribers */
   notify(): void {
+    this.invalidateMergedSettings();
     this.listeners.forEach((listener) => listener());
   }
 

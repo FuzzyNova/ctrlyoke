@@ -151,6 +151,67 @@ suite("CtrlYokeConfigService", () => {
     );
   });
 
+  test("invalidates merged settings after a service write", async () => {
+    let values: PartialCtrlYokeSettings = {
+      diagnostics: { verboseLogging: false },
+    };
+    service.setUserBackend({
+      getAll: () => values,
+      set: async () => {
+        const before = values;
+        values = { diagnostics: { verboseLogging: true } };
+        return before;
+      },
+    });
+
+    assert.strictEqual(service.get("diagnostics").verboseLogging, false);
+    await service.set("diagnostics.verboseLogging", true, "user");
+    assert.strictEqual(service.get("diagnostics").verboseLogging, true);
+  });
+
+  test("external settings file edits invalidate the merged cache", () => {
+    const configPath = path.join(
+      makeTempDir("cy-merged-cache-"),
+      "settings.json"
+    );
+    try {
+      fs.writeFileSync(
+        configPath,
+        JSON.stringify({ diagnostics: { verboseLogging: false } })
+      );
+      service.setUserBackend(new FileConfigBackend(configPath));
+      assert.strictEqual(service.get("diagnostics").verboseLogging, false);
+
+      fs.writeFileSync(
+        configPath,
+        JSON.stringify({ diagnostics: { verboseLogging: true } })
+      );
+      assert.strictEqual(service.get("diagnostics").verboseLogging, true);
+    } finally {
+      removeTempDir(path.dirname(configPath));
+    }
+  });
+
+  test("returns defensive copies of merged settings", () => {
+    service.setUserBackend(
+      makeBackend({ diagnostics: { verboseLogging: true } })
+    );
+    const returned = service.getAll();
+    returned.diagnostics.verboseLogging = false;
+    returned.defaults.hooks.push({
+      event: "stop",
+      command: "mutated-test-value",
+    });
+
+    assert.strictEqual(service.get("diagnostics").verboseLogging, true);
+    assert.notStrictEqual(
+      service
+        .get("defaults")
+        .hooks.some((hook) => hook.command === "mutated-test-value"),
+      true
+    );
+  });
+
   test("malformed object sections cannot replace object defaults", () => {
     service.setUserBackend(
       makeBackend({

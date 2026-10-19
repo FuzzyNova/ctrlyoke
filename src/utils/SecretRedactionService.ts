@@ -57,7 +57,11 @@ export class SecretRedactionService {
   }
 
   redactText(text: string): string {
-    return this.redactTextWithSecrets(text, this.getActiveExactSecrets());
+    return this.redactTextWithSettings(
+      text,
+      this.getActiveExactSecrets(),
+      ConfigurationUtils.isHeuristicSecretRedactionEnabled()
+    );
   }
 
   /** Exact values currently registered by active runs, excluding exemptions. */
@@ -75,26 +79,45 @@ export class SecretRedactionService {
 
   /** Apply the same matcher as redactText with a caller's active-secret snapshot. */
   redactTextWithSecrets(text: string, exactSecrets: readonly string[]): string {
+    return this.redactTextWithSettings(
+      text,
+      exactSecrets,
+      ConfigurationUtils.isHeuristicSecretRedactionEnabled()
+    );
+  }
+
+  private redactTextWithSettings(
+    text: string,
+    exactSecrets: readonly string[],
+    heuristicEnabled: boolean
+  ): string {
     return redactPreviewText(
       text,
       [],
       exactSecrets,
       [...this.protectedValues],
-      ConfigurationUtils.isHeuristicSecretRedactionEnabled()
+      heuristicEnabled
     ).text;
   }
 
   /** Redact a transport/persistence DTO without mutating the caller's object. */
   redactValue<T>(value: T): T {
-    return this.redactValueInternal(value, new WeakMap<object, unknown>()) as T;
+    return this.redactValueInternal(
+      value,
+      new WeakMap<object, unknown>(),
+      this.getActiveExactSecrets(),
+      ConfigurationUtils.isHeuristicSecretRedactionEnabled()
+    ) as T;
   }
 
   private redactValueInternal(
     value: unknown,
-    seen: WeakMap<object, unknown>
+    seen: WeakMap<object, unknown>,
+    exactSecrets: readonly string[],
+    heuristicEnabled: boolean
   ): unknown {
     if (typeof value === "string") {
-      return this.redactText(value);
+      return this.redactTextWithSettings(value, exactSecrets, heuristicEnabled);
     }
     if (value === null || typeof value !== "object") {
       return value;
@@ -109,7 +132,9 @@ export class SecretRedactionService {
       const result: unknown[] = [];
       seen.set(value, result);
       for (const item of value) {
-        result.push(this.redactValueInternal(item, seen));
+        result.push(
+          this.redactValueInternal(item, seen, exactSecrets, heuristicEnabled)
+        );
       }
       return result;
     }
@@ -117,7 +142,12 @@ export class SecretRedactionService {
     const result: Record<string, unknown> = {};
     seen.set(value, result);
     for (const [key, item] of Object.entries(value)) {
-      result[key] = this.redactValueInternal(item, seen);
+      result[key] = this.redactValueInternal(
+        item,
+        seen,
+        exactSecrets,
+        heuristicEnabled
+      );
     }
     return result;
   }

@@ -7,6 +7,7 @@ import {
   StreamingSecretRedactor,
 } from "../../utils/SecretRedactionService";
 import { configService } from "../../config/CtrlYokeConfigService";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
 suite("SecretRedactionService", () => {
   test("streaming redaction handles secrets split across two and three chunks", () => {
@@ -130,6 +131,28 @@ suite("SecretRedactionService", () => {
       message: "failure: [REDACTED]",
       nested: ["[REDACTED]"],
     });
+  });
+
+  test("reads the heuristic setting once for a recursive payload", () => {
+    const original = ConfigurationUtils.isHeuristicSecretRedactionEnabled;
+    let reads = 0;
+    ConfigurationUtils.isHeuristicSecretRedactionEnabled = () => {
+      reads += 1;
+      return true;
+    };
+
+    try {
+      const payload = {
+        messages: Array.from({ length: 100 }, (_, index) => ({
+          text: `message ${index}`,
+          nested: [`nested ${index}`, `token=secret${index}`],
+        })),
+      };
+      secretRedactionService.redactValue(payload);
+      assert.strictEqual(reads, 1);
+    } finally {
+      ConfigurationUtils.isHeuristicSecretRedactionEnabled = original;
+    }
   });
 
   test("retains heuristic redaction when no exact value was resolved", () => {
