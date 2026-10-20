@@ -2967,9 +2967,24 @@ export class CtrlYokeHostedServer
   }
 
   private broadcast(message: unknown): void {
+    this.sendToSockets(message, () => true);
+  }
+
+  /** Sends only to the sockets registered under one browser client tag. */
+  private sendToClient(clientTag: string, message: unknown): void {
+    this.sendToSockets(
+      message,
+      (ws) => this.socketClientTags.get(ws) === clientTag
+    );
+  }
+
+  private sendToSockets(
+    message: unknown,
+    accepts: (ws: WebSocket) => boolean
+  ): void {
     const json = JSON.stringify(redactHostedTransportMessage(message));
     for (const ws of this.connections) {
-      if (ws.readyState === WebSocket.OPEN) {
+      if (ws.readyState === WebSocket.OPEN && accepts(ws)) {
         ws.send(json);
         this.noteLargeSend(message, json, ws);
       }
@@ -3007,8 +3022,13 @@ export class CtrlYokeHostedServer
         } catch {
           // A delete event has no current modification time.
         }
-        for (const subscribedViewerPath of subscribedClients.values()) {
-          this.broadcastWorkspaceFileChanged(subscribedViewerPath, modifiedAt);
+        // Each subscriber hears the change under its own viewer path, so a tab
+        // that opened a symlink is not told its alias's path changed.
+        for (const [subscriberTag, subscribedViewerPath] of subscribedClients) {
+          this.sendToClient(
+            subscriberTag,
+            this.workspaceFileChangedMessage(subscribedViewerPath, modifiedAt)
+          );
           void this.languageIntelligenceHost.notifyWorkspaceFileChanged(
             subscribedViewerPath,
             type
@@ -3040,12 +3060,22 @@ export class CtrlYokeHostedServer
     modifiedAt: number | undefined,
     clientId?: string
   ): void {
-    this.broadcast({
+    this.broadcast(
+      this.workspaceFileChangedMessage(filePath, modifiedAt, clientId)
+    );
+  }
+
+  private workspaceFileChangedMessage(
+    filePath: string,
+    modifiedAt: number | undefined,
+    clientId?: string
+  ) {
+    return {
       type: MESSAGE_TYPES.WORKSPACE_FILE_CHANGED,
       path: filePath.replace(/\\/g, "/"),
       ...(modifiedAt === undefined ? {} : { modifiedAt }),
       ...(clientId ? { clientId } : {}),
-    });
+    };
   }
 
   /**

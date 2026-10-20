@@ -48,7 +48,7 @@ Applies to **Codex**: Allowed Tools.
 <a id="note-3"></a>**3.** Not supported because this harness uses coarse permission modes instead of individual tool patterns. _What to do:_ Remove the rule or select a harness that enforces individual tool patterns.<br>
 Applies to **Antigravity**: Allowed Tools, Denied Tools.
 
-<a id="note-4"></a>**4.** Partially supported because this harness enforces only mcp__<server>__<tool> denials for MCP servers the workflow attaches, and uses sandbox/approval modes instead of other tool patterns. _What to do:_ Narrow the rule to the supported subset or select a harness with exact list support.<br>
+<a id="note-4"></a>**4.** Partially supported because this harness enforces only mcp__&lt;server&gt;__&lt;tool&gt; denials for MCP servers the workflow attaches, and uses sandbox/approval modes instead of other tool patterns. _What to do:_ Narrow the rule to the supported subset or select a harness with exact list support.<br>
 Applies to **Codex**: Denied Tools.
 
 <a id="note-5"></a>**5.** Partially supported because this harness uses coarse permission modes instead of individual tool patterns. _What to do:_ Use a harness with exact permission-mode support when the distinction matters.<br>

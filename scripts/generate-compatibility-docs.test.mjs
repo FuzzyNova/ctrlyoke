@@ -123,6 +123,25 @@ test("compatibility documentation passes the hand-written docs leak check", () =
   assert.deepEqual(findInternalLeaks(generated), []);
 });
 
+test("compatibility notes escape angle-bracket placeholders for the Vue compiler", () => {
+  const { facts, compatibilityTypes } = loadFacts();
+  const generated = buildCompatibilityDocumentation(facts, compatibilityTypes);
+  const notesStart = generated.indexOf("### Notes");
+  const notes = generated.slice(
+    notesStart,
+    generated.indexOf("\n## ", notesStart)
+  );
+
+  assert.match(notes, /mcp__&lt;server&gt;__&lt;tool&gt;/);
+  const tags = [...notes.matchAll(/<\/?([a-zA-Z][\w-]*)/g)].map(
+    ([, name]) => name
+  );
+  assert.deepEqual(
+    [...new Set(tags)].filter((name) => !["a", "br"].includes(name)),
+    []
+  );
+});
+
 test("checked-in compatibility documentation matches the generator output", () => {
   const { facts, compatibilityTypes } = loadFacts();
   const generated = buildCompatibilityDocumentation(facts, compatibilityTypes);
