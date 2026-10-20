@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import {
   workspaceCommit,
@@ -14,6 +14,14 @@ interface WorkspaceCommitAreaProps {
   onRefresh: () => Promise<unknown>;
   outgoingCommitCount: number;
 }
+
+/**
+ * The in-flight generation's controller. Module scope rather than a ref
+ * because `generatingCommitMessage` lives in the store and outlives this
+ * component: switching to another viewer tab unmounts the SCM pane, and a
+ * ref would leave the remounted Stop button with nothing to abort.
+ */
+let generateAbortController: AbortController | null = null;
 
 function formatSyncActionLabel(baseLabel: string, count: number): string {
   return count > 0 ? `${baseLabel} (${count})` : baseLabel;
@@ -48,7 +56,6 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
   const setScmError = useWorkspaceViewerStore((s) => s.setScmError);
   const clearDiff = useWorkspaceViewerStore((s) => s.clearDiff);
 
-  const generateAbortControllerRef = useRef<AbortController | null>(null);
   const [generationDotCount, setGenerationDotCount] = useState(0);
 
   useEffect(() => {
@@ -67,7 +74,7 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
   const handleGenerate = useCallback(async () => {
     if (generatingCommitMessage) return;
     const abortController = new AbortController();
-    generateAbortControllerRef.current = abortController;
+    generateAbortController = abortController;
     setGeneratingCommitMessage(true);
     setScmError(null);
     try {
@@ -86,7 +93,9 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
       if (abortController.signal.aborted) return;
       setScmError(String(err));
     } finally {
-      generateAbortControllerRef.current = null;
+      if (generateAbortController === abortController) {
+        generateAbortController = null;
+      }
       setGeneratingCommitMessage(false);
     }
   }, [
@@ -99,7 +108,7 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
   ]);
 
   const handleCancelGenerate = useCallback(() => {
-    generateAbortControllerRef.current?.abort();
+    generateAbortController?.abort();
   }, []);
 
   const handleCommit = useCallback(async () => {

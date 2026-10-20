@@ -429,6 +429,10 @@ export const useWorkspaceViewerStore = create<
         set({ isOpen: true });
       },
 
+      // Leaves committing/generatingCommitMessage/pushing/pulling alone: the
+      // modal stays mounted while hidden, so those requests keep running and
+      // their own `finally` clears the flag. Resetting them here dropped the
+      // spinner mid-push and let a reopened viewer start a second one.
       close() {
         set({
           isOpen: false,
@@ -450,10 +454,6 @@ export const useWorkspaceViewerStore = create<
           fileHistoryActive: false,
           fileHistoryPath: null,
           fileHistoryRepoId: null,
-          committing: false,
-          generatingCommitMessage: false,
-          pushing: false,
-          pulling: false,
           scmError: null,
           error: null,
           languageReferences: null,

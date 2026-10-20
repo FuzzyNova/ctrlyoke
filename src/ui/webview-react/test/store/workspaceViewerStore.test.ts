@@ -97,6 +97,20 @@ describe("search state", () => {
       "src/draft.ts": { content: "draft" },
     });
   });
+
+  it("close keeps in-flight SCM action flags for the still-mounted viewer", () => {
+    store().setCommitting(true);
+    store().setGeneratingCommitMessage(true);
+    store().setPushing(true);
+    store().setPulling(true);
+
+    store().close();
+
+    expect(store().committing).toBe(true);
+    expect(store().generatingCommitMessage).toBe(true);
+    expect(store().pushing).toBe(true);
+    expect(store().pulling).toBe(true);
+  });
 });
 
 describe("markFileSaved", () => {

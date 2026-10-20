@@ -22,6 +22,7 @@ describe("WorkspaceCommitArea", () => {
     useWorkspaceViewerStore.setState({
       commitMessage: "Ship it",
       committing: false,
+      generatingCommitMessage: false,
       pulling: false,
       pushing: false,
       scmError: null,
@@ -58,6 +59,33 @@ describe("WorkspaceCommitArea", () => {
     expect(screen.getByRole("button", { name: "Commit" }).className).toContain(
       "w-full"
     );
+  });
+
+  it("keeps the push spinner through a viewer close until the push settles", async () => {
+    const user = userEvent.setup();
+    let resolvePush!: () => void;
+    vi.mocked(workspacePush).mockReturnValue(
+      new Promise((resolve) => {
+        resolvePush = () => resolve({ branch: "main", remote: "origin" });
+      })
+    );
+    render(
+      <WorkspaceCommitArea
+        incomingCommitCount={0}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+        outgoingCommitCount={0}
+      />
+    );
+
+    const pushButton = screen.getByRole("button", { name: "Push commits" });
+    await user.click(pushButton);
+    useWorkspaceViewerStore.getState().close();
+
+    expect(pushButton).toBeDisabled();
+    expect(pushButton.querySelector(".animate-spin")).not.toBeNull();
+
+    resolvePush();
+    await waitFor(() => expect(pushButton).not.toBeDisabled());
   });
 
   describe("generate button", () => {
@@ -181,6 +209,38 @@ describe("WorkspaceCommitArea", () => {
 
       await waitFor(() => expect(commitMessageInput).not.toBeDisabled());
       expect(commitMessageInput).toHaveValue("Ship it");
+    });
+
+    it("can still cancel generation after the commit area remounts", async () => {
+      const user = userEvent.setup();
+      vi.mocked(workspaceGenerateCommitMessage).mockImplementation(
+        (_instructions, signal) =>
+          new Promise<never>((_resolve, reject) => {
+            signal?.addEventListener(
+              "abort",
+              () => reject(new DOMException("Aborted", "AbortError")),
+              { once: true }
+            );
+          })
+      );
+      const { unmount } = renderCommitArea();
+      await user.click(
+        screen.getByRole("button", { name: "Generate commit message" })
+      );
+      unmount();
+
+      renderCommitArea();
+      await user.click(
+        screen.getByRole("button", {
+          name: "Cancel commit message generation",
+        })
+      );
+
+      await waitFor(() =>
+        expect(
+          screen.getByRole("textbox", { name: "Commit message" })
+        ).not.toBeDisabled()
+      );
     });
 
     it("does not crash when workspaceGenerateCommitMessage rejects", async () => {
