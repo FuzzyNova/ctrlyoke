@@ -15,31 +15,42 @@ import {
   HARNESS_IDS,
 } from "@root/types/DashboardConstants";
 
-const { attachmentTokenCount, promptFileAction, isElementNarrow } = vi.hoisted(
-  () => ({
-    attachmentTokenCount: { value: 128 },
-    promptFileAction: {
-      value: null as null | {
-        icon: string;
-        tooltip: string;
-        disabled: boolean;
-        onClick: () => void;
-      },
+const {
+  attachmentTokenCount,
+  countedText,
+  promptFileAction,
+  promptFileContent,
+  isElementNarrow,
+} = vi.hoisted(() => ({
+  attachmentTokenCount: { value: 128 },
+  countedText: { value: undefined as string | undefined },
+  promptFileContent: { value: null as string | null },
+  promptFileAction: {
+    value: null as null | {
+      icon: string;
+      tooltip: string;
+      disabled: boolean;
+      onClick: () => void;
     },
-    isElementNarrow: { value: false },
-  })
-);
+  },
+  isElementNarrow: { value: false },
+}));
 
 vi.mock("../../../components/editor/PromptEditor", () => ({
   PromptEditor: ({
     onPromptFileActionChange,
+    onPromptFileContentChange,
   }: {
     onPromptFileActionChange?: (action: typeof promptFileAction.value) => void;
+    onPromptFileContentChange?: (content: string | null) => void;
   }) => {
     React.useEffect(() => {
       onPromptFileActionChange?.(promptFileAction.value);
       return () => onPromptFileActionChange?.(null);
     }, [onPromptFileActionChange]);
+    React.useEffect(() => {
+      onPromptFileContentChange?.(promptFileContent.value);
+    }, [onPromptFileContentChange]);
     return <div data-testid="prompt-editor" />;
   },
 }));
@@ -73,7 +84,10 @@ vi.mock("../../../components/shared", async (importOriginal) => {
 });
 
 vi.mock("../../../hooks/useAttachmentTokenCount", () => ({
-  useAttachmentTokenCount: () => attachmentTokenCount.value,
+  useAttachmentTokenCount: (text: string) => {
+    countedText.value = text;
+    return attachmentTokenCount.value;
+  },
 }));
 
 vi.mock("../../../hooks/useElementNarrow", () => ({
@@ -105,7 +119,9 @@ function resetStores() {
 describe("EditorSection", () => {
   beforeEach(() => {
     attachmentTokenCount.value = 128;
+    countedText.value = undefined;
     promptFileAction.value = null;
+    promptFileContent.value = null;
     isElementNarrow.value = false;
     resetStores();
   });
@@ -236,6 +252,25 @@ describe("EditorSection", () => {
     render(<EditorSection />);
 
     expect(screen.getByText("1.2M tokens")).toBeInTheDocument();
+  });
+
+  it("counts tokens from the prompt text when no prompt file has resolved", () => {
+    useEditorStore.getState().setPromptText("Review @src/app.ts");
+
+    render(<EditorSection />);
+
+    expect(countedText.value).toBe("Review @src/app.ts");
+  });
+
+  it("counts a file-reference prompt's resolved content instead of its path", () => {
+    useEditorStore
+      .getState()
+      .setPromptText(".ctrlyoke/prompts/review.prompt.md");
+    promptFileContent.value = "Review @src/app.ts and @src/util.ts";
+
+    render(<EditorSection />);
+
+    expect(countedText.value).toBe("Review @src/app.ts and @src/util.ts");
   });
 
   it("abbreviates the token label to 'tks' at narrow width", () => {

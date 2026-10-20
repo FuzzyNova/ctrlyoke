@@ -128,6 +128,149 @@ suite("PromptEditorSupportService", () => {
     }
   });
 
+  test("counts ./ attachment refs against a requested source file instead of the view's", async () => {
+    await fs.mkdir(path.join(workspaceRoot, "prompts"), { recursive: true });
+    await fs.writeFile(
+      path.join(workspaceRoot, "prompts", "notes.md"),
+      "alpha beta gamma delta epsilon",
+      "utf8"
+    );
+    const viewWorkflow = path.join(workspaceRoot, "other", "w.ctrlyoke.yaml");
+    const emitted: unknown[] = [];
+    const service = new PromptEditorSupportService(
+      () => workspaceRoot,
+      () =>
+        ({
+          // The displayed workflow lives elsewhere; it must not be the base.
+          getViewSourceDefinitionPath: async () => viewWorkflow,
+        }) as any,
+      () => undefined
+    );
+    const ctx = createWebviewClientContext("test-client", (message) =>
+      emitted.push(message)
+    );
+
+    await service.handleAttachmentTokenCountRequest(
+      ctx,
+      ["@./notes.md"],
+      "prompts/review.prompt.md"
+    );
+    await service.handleAttachmentTokenCountRequest(ctx, ["@./notes.md"]);
+
+    const [withBase, withViewBase] = emitted as {
+      counts: Record<string, number>;
+      sourceDefinitionPath?: string;
+    }[];
+    assert.ok(withBase.counts["@./notes.md"] > 0);
+    assert.strictEqual(
+      withBase.sourceDefinitionPath,
+      "prompts/review.prompt.md"
+    );
+    assert.strictEqual(withViewBase.counts["@./notes.md"], 0);
+    assert.strictEqual(withViewBase.sourceDefinitionPath, undefined);
+  });
+
+  test("never uses a requested source file outside the trusted roots as a base", async () => {
+    const outside = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-untrusted-base-")
+    );
+    try {
+      // The target is a readable workspace file, so only the rejected base
+      // can make it count as zero.
+      await fs.writeFile(
+        path.join(workspaceRoot, "inside.md"),
+        "inside text that would count",
+        "utf8"
+      );
+      const ref = `@./${path
+        .relative(outside, path.join(workspaceRoot, "inside.md"))
+        .split(path.sep)
+        .join("/")}`;
+      const emitted: unknown[] = [];
+      const service = new PromptEditorSupportService(
+        () => workspaceRoot,
+        () => undefined,
+        () => undefined
+      );
+      const ctx = createWebviewClientContext("test-client", (message) =>
+        emitted.push(message)
+      );
+      await service.handleAttachmentTokenCountRequest(
+        ctx,
+        [ref],
+        path.join(outside, "x.prompt.md")
+      );
+      // Control: both temp dirs share a parent, so the same ref from a trusted
+      // base inside the workspace reaches the same file.
+      await service.handleAttachmentTokenCountRequest(
+        ctx,
+        [ref],
+        path.join(workspaceRoot, "x.prompt.md")
+      );
+
+      const [untrusted, trusted] = emitted as {
+        counts: Record<string, number>;
+      }[];
+      assert.strictEqual(untrusted.counts[ref], 0);
+      assert.ok(trusted.counts[ref] > 0);
+    } finally {
+      await fs.rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  test("returns a resolved prompt file's frontmatter-free text for token counting", async () => {
+    const promptFile = path.join(
+      workspaceRoot,
+      ".ctrlyoke",
+      "prompts",
+      "review.prompt.md"
+    );
+    await fs.mkdir(path.dirname(promptFile), { recursive: true });
+    await fs.writeFile(
+      promptFile,
+      "---\nname: Review\n---\n\nReview @src/app.ts\n",
+      "utf8"
+    );
+
+    const emitted: unknown[] = [];
+    const service = new PromptEditorSupportService(
+      () => workspaceRoot,
+      () => undefined,
+      () => undefined
+    );
+    await service.handleFileRefValidation(
+      createWebviewClientContext("test-client", (message) => {
+        emitted.push(message);
+      }),
+      "./.ctrlyoke/prompts/review.prompt.md",
+      7
+    );
+
+    const validation = emitted[0] as { exists: boolean; content?: string };
+    assert.strictEqual(validation.exists, true);
+    assert.strictEqual(validation.content, "Review @src/app.ts");
+  });
+
+  test("omits content for a prompt file that does not resolve", async () => {
+    const emitted: unknown[] = [];
+    const service = new PromptEditorSupportService(
+      () => workspaceRoot,
+      () => undefined,
+      () => undefined
+    );
+    await service.handleFileRefValidation(
+      createWebviewClientContext("test-client", (message) => {
+        emitted.push(message);
+      }),
+      "./.ctrlyoke/prompts/missing.prompt.md",
+      8
+    );
+
+    const validation = emitted[0] as { exists: boolean; content?: string };
+    assert.strictEqual(validation.exists, false);
+    assert.strictEqual(validation.content, undefined);
+  });
+
   test("reports empty prompt files with the request sequence and resolved path", async () => {
     const promptFile = path.join(
       workspaceRoot,

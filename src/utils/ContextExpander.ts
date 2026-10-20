@@ -44,6 +44,7 @@ import {
   MAX_EXCERPT_BYTES,
 } from "../types/DashboardConstants";
 import { getErrorMessage } from "./ErrorUtils";
+import { isWorkflowRelativeReferencePath } from "./promptPathUtils";
 import { quoteReferenceField } from "../completions/ContextReferenceBuilder";
 import { LineTooLongError, splitLines, streamFileLines } from "./TextLines";
 import { hasLineRange, isValidLineRange } from "./LineRangeUtils";
@@ -1185,10 +1186,9 @@ ${content}
       throw new Error("No workspace folder open");
     }
 
-    const normalizedPath = relativePath.replace(/\\/g, "/");
     if (
       !this.allowWorkflowRelativeReferences &&
-      (normalizedPath.startsWith("./") || normalizedPath.startsWith("../"))
+      isWorkflowRelativeReferencePath(relativePath)
     ) {
       throw new Error(
         `Workflow-relative reference "${relativePath}" cannot be mapped into the execution checkout`

@@ -75,6 +75,23 @@ vi.mock("@hooks/useVsCodeApi", () => ({
   useVsCodeApi: () => ({ postMessage: vi.fn() }),
 }));
 
+// Record the text the pane counts; the counting pipeline has its own tests.
+const { countedText, countedBase } = vi.hoisted(() => ({
+  countedText: { value: undefined as string | undefined },
+  countedBase: { value: undefined as string | undefined },
+}));
+vi.mock("@hooks/useAttachmentTokenCount", () => ({
+  useAttachmentTokenCount: (
+    text: string,
+    _stepCount?: number,
+    sourceDefinitionPath?: string
+  ) => {
+    countedText.value = text;
+    countedBase.value = sourceDefinitionPath;
+    return text.length;
+  },
+}));
+
 // Force desktop layout so both the toolbar and editor column render together.
 vi.mock("@hooks/useMediaQuery", () => ({
   useIsMobile: () => false,
@@ -160,6 +177,52 @@ describe("WorkspaceExplorerPane — markdown preview toggle", () => {
     expect(screen.queryByTestId("markdown-preview")).not.toBeInTheDocument();
     const editorWrapper = screen.getByTestId("file-editor").parentElement;
     expect(editorWrapper).not.toHaveClass("hidden");
+  });
+});
+
+describe("WorkspaceExplorerPane — prompt file token count", () => {
+  beforeEach(() => {
+    countedText.value = undefined;
+  });
+
+  it("counts a .prompt.md file's frontmatter-free body beside the Preview button", () => {
+    openFileInStore(
+      ".ctrlyoke/prompts/review.prompt.md",
+      "---\nname: Review\n---\n\nReview @src/app.ts\n"
+    );
+    render(<WorkspaceExplorerPane />);
+
+    expect(countedText.value).toBe("Review @src/app.ts");
+    // `./` references in the file resolve against the file itself.
+    expect(countedBase.value).toBe(".ctrlyoke/prompts/review.prompt.md");
+    const count = screen.getByTestId("prompt-token-count");
+    expect(count).toHaveTextContent("18 tokens");
+    // Sits immediately after the Preview toggle in the toolbar.
+    expect(
+      screen.getByRole("button", { name: /preview/i }).nextElementSibling
+    ).toContainElement(count);
+  });
+
+  it("recounts as the file is edited", () => {
+    openFileInStore(".ctrlyoke/prompts/review.prompt.md", "Short");
+    render(<WorkspaceExplorerPane />);
+
+    act(() => {
+      useWorkspaceViewerStore.getState().setFileContent("Longer prompt");
+    });
+
+    expect(screen.getByTestId("prompt-token-count")).toHaveTextContent(
+      "13 tokens"
+    );
+  });
+
+  it("shows no token count for ordinary markdown files", () => {
+    openFileInStore("docs/readme.md", "# Hello");
+    render(<WorkspaceExplorerPane />);
+
+    expect(screen.queryByTestId("prompt-token-count")).not.toBeInTheDocument();
+    expect(countedText.value).toBe("");
+    expect(countedBase.value).toBeUndefined();
   });
 });
 

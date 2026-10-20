@@ -79,7 +79,7 @@ import {
   type CompletionCore,
 } from "../completions/CompletionCore";
 import { getCtrlYokeSlashCompletions } from "../completions/SlashTokenCompletionHelpers";
-import { toViewerPath } from "../platform/WorkspaceViewerPath";
+import { fromViewerPath, toViewerPath } from "../platform/WorkspaceViewerPath";
 import { savePendingOutputSnapshot } from "./OutputSnapshotService";
 import {
   getScriptCommandCompletions,
@@ -682,19 +682,18 @@ export class PromptEditorSupportService {
       sourceDefinitionPath ?? undefined
     );
 
+    const exists =
+      resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED ||
+      resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.EMPTY;
     ctx.emit({
       type: MESSAGE_TYPES.FILE_REF_VALIDATION,
       seq,
       filePath,
-      exists:
-        resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED ||
-        resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.EMPTY,
+      exists,
       isEmpty: resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.EMPTY,
-      resolvedPath:
-        resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED ||
-        resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.EMPTY
-          ? resolution.path
-          : undefined,
+      resolvedPath: exists ? resolution.path : undefined,
+      // The editor counts tokens for the text execution sends, not the path.
+      content: exists ? resolution.content : undefined,
     });
   }
 
@@ -1584,18 +1583,28 @@ export class PromptEditorSupportService {
 
   /**
    * Handle request to count tokens for attachment references.
+   *
+   * `./`/`../` refs resolve against the displayed workflow's source file, as
+   * at execution, unless the request names its own `sourceDefinitionPath` (a
+   * viewer path). The response echoes it so the webview can key its cache.
    */
   async handleAttachmentTokenCountRequest(
     ctx: WebviewClientContext,
-    references: string[]
+    references: string[],
+    sourceDefinitionPath?: string
   ): Promise<void> {
     const requestedReferences = references ?? [];
-    const workspaceRoot = this.getWorkspaceRoot() || undefined;
-    if (!workspaceRoot || requestedReferences.length === 0) {
+    const emitCounts = (counts: Record<string, number>) =>
       ctx.emit({
         type: MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE,
-        counts: Object.fromEntries(requestedReferences.map((ref) => [ref, 0])),
+        counts,
+        ...(sourceDefinitionPath !== undefined && { sourceDefinitionPath }),
       });
+    const workspaceRoot = this.getWorkspaceRoot() || undefined;
+    if (!workspaceRoot || requestedReferences.length === 0) {
+      emitCounts(
+        Object.fromEntries(requestedReferences.map((ref) => [ref, 0]))
+      );
       return;
     }
 
@@ -1612,10 +1621,18 @@ export class PromptEditorSupportService {
         ),
       ];
       const namedRoots = [...this.getNamedRoots()];
-      const sourceDefinitionDir = await this.getViewSourceDefinitionDir(
-        ctx,
-        trustedRoots
-      );
+      // A requested base outside the trusted roots yields no base at all (its
+      // relative refs count as unresolvable), never the view's base.
+      const sourceDefinitionDir =
+        sourceDefinitionPath !== undefined
+          ? getTrustedSourceDefinitionDir(
+              fromViewerPath(sourceDefinitionPath, {
+                primaryRoot: workspaceRoot,
+                namedRoots,
+              }),
+              trustedRoots
+            )
+          : await this.getViewSourceDefinitionDir(ctx, trustedRoots);
 
       await Promise.all(
         requestedReferences.map(async (rawRef) => {
@@ -1698,10 +1715,7 @@ export class PromptEditorSupportService {
       );
     }
 
-    ctx.emit({
-      type: MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE,
-      counts,
-    });
+    emitCounts(counts);
   }
 
   private async getViewSourceDefinitionDir(

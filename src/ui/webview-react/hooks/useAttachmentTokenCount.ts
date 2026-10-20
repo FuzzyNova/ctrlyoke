@@ -4,6 +4,8 @@
  * Counts tokens for the full expanded prompt (raw text + attachments).
  * Attachment token counts are fetched from the extension on first encounter
  * and then cached by reference string to avoid recomputation while typing.
+ * A `./`/`../` reference counted against an explicit source file is cached
+ * per source file, since the same text names a different file per base.
  *
  * Cache is module-level so it persists across hook re-mounts.
  */
@@ -14,6 +16,7 @@ import { sendMessage } from "./useMessageHandler";
 import { useUiStore } from "@store/uiStore";
 import { workflowViewAddressKey } from "@utils/viewAddress";
 import { decodePriorContextTokenRef } from "@root/utils/FileReferenceParser";
+import { isWorkflowRelativeReferencePath } from "@root/utils/promptPathUtils";
 import {
   parseAtReferences,
   parseSelectionReferences,
@@ -33,7 +36,33 @@ import {
 // Module-level cache (persists across renders and re-mounts)
 // ============================================================================
 
-/** Token count cache: raw reference string → token count */
+/** The path a file, line-range or symbol reference names, if it is one. */
+function referencedPath(rawRef: string): string | undefined {
+  const [ref] = rawRef.startsWith("@")
+    ? parseAtReferences(rawRef)
+    : rawRef.startsWith("#selection:")
+      ? parseSelectionReferences(rawRef)
+      : parseSymbolReferences(rawRef);
+  return ref?.path;
+}
+
+/**
+ * Cache key for a raw reference. Only a `./`/`../` reference counted against
+ * an explicit `sourceDefinitionPath` depends on that base; every other key is
+ * the raw reference itself, shared by every caller.
+ */
+function attachmentCacheKey(
+  rawRef: string,
+  sourceDefinitionPath: string | undefined
+): string {
+  if (sourceDefinitionPath === undefined) return rawRef;
+  const refPath = referencedPath(rawRef);
+  return refPath !== undefined && isWorkflowRelativeReferencePath(refPath)
+    ? `${sourceDefinitionPath}\u0000${rawRef}`
+    : rawRef;
+}
+
+/** Token count cache: cache key (see attachmentCacheKey) → token count */
 const attachmentTokenCache = new Map<string, number>();
 
 /** References currently being fetched (avoid duplicate requests) */
@@ -70,23 +99,29 @@ function ensureGlobalListener(): void {
     if (message?.type !== MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE)
       return;
 
-    const counts: Record<string, number> = message.counts ?? {};
-    let changed = false;
+    const sourceDefinitionPath: string | undefined =
+      typeof message.sourceDefinitionPath === "string"
+        ? message.sourceDefinitionPath
+        : undefined;
+    const keyedCounts: Record<string, number> = {};
 
-    for (const [ref, count] of Object.entries(counts)) {
+    for (const [ref, count] of Object.entries(
+      (message.counts ?? {}) as Record<string, number>
+    )) {
+      const key = attachmentCacheKey(ref, sourceDefinitionPath);
       // Prior-context counts depend on the displayed run's output. They are
       // delivered to the current hook instances but never persisted globally.
       const isPriorContext = !!decodePriorContextTokenRef(ref);
-      if (!isPriorContext) attachmentTokenCache.set(ref, count);
-      pendingRequests.delete(ref);
-      retiredRequests.delete(ref);
-      if (isPriorContext) completedRequests.add(ref);
-      changed = true;
+      if (!isPriorContext) attachmentTokenCache.set(key, count);
+      pendingRequests.delete(key);
+      retiredRequests.delete(key);
+      if (isPriorContext) completedRequests.add(key);
+      keyedCounts[key] = count;
     }
 
-    if (changed) {
+    if (Object.keys(keyedCounts).length > 0) {
       // Notify all registered hooks to re-compute their totals
-      countUpdateCallbacks.forEach((cb) => cb(counts));
+      countUpdateCallbacks.forEach((cb) => cb(keyedCounts));
     }
   });
 }
@@ -162,10 +197,15 @@ function extractRawReferences(promptText: string, stepCount: number): string[] {
  *   reference string, and requested on a debounce so mid-typing partial paths
  *   don't each trigger a round-trip.
  * - While attachment counts are loading, only raw prompt tokens are returned.
+ *
+ * `sourceDefinitionPath` (a viewer path) makes that file the `./`/`../` base,
+ * as when it runs on its own. Omitted, the displayed workflow's source file is
+ * the base, as at execution.
  */
 export function useAttachmentTokenCount(
   promptText: string,
-  stepCount = 0
+  stepCount = 0,
+  sourceDefinitionPath?: string
 ): number {
   ensureGlobalListener();
 
@@ -180,16 +220,30 @@ export function useAttachmentTokenCount(
     viewKey: string;
     counts: Record<string, number>;
   }>({ viewKey, counts: {} });
+  // Ordinary counts live in the module cache, so their arrival re-renders
+  // through this revision rather than through component state.
+  const [, setCacheRevision] = useState(0);
   const callbackRef = useRef<(counts: Record<string, number>) => void>(
     () => {}
+  );
+
+  // Parse once per prompt/position change; reused by the request effect and the
+  // cached-total sum below so the regex passes don't run twice per render.
+  const references = useMemo(
+    () =>
+      extractRawReferences(promptText, stepCount).map((ref) => ({
+        ref,
+        key: attachmentCacheKey(ref, sourceDefinitionPath),
+      })),
+    [promptText, stepCount, sourceDefinitionPath]
   );
 
   // Keep callback ref up-to-date
   useEffect(() => {
     callbackRef.current = (counts) => {
       const priorCounts = Object.fromEntries(
-        Object.entries(counts).filter(([ref]) =>
-          decodePriorContextTokenRef(ref)
+        Object.entries(counts).filter(([key]) =>
+          decodePriorContextTokenRef(key)
         )
       );
       if (Object.keys(priorCounts).length > 0) {
@@ -200,6 +254,9 @@ export function useAttachmentTokenCount(
             ...priorCounts,
           },
         }));
+      }
+      if (references.some(({ key }) => key in counts)) {
+        setCacheRevision((revision) => revision + 1);
       }
     };
   });
@@ -214,21 +271,14 @@ export function useAttachmentTokenCount(
     };
   }, []);
 
-  // Parse once per prompt/position change; reused by the request effect and the
-  // cached-total sum below so the regex passes don't run twice per render.
-  const refs = useMemo(
-    () => extractRawReferences(promptText, stepCount),
-    [promptText, stepCount]
-  );
-
   // Ordinary references are cached. Prior-context references are always
   // requested for the current view because their output changes across runs.
   useEffect(() => {
-    if (refs.length === 0) return;
-    for (const ref of refs) {
-      if (decodePriorContextTokenRef(ref)) {
-        completedRequests.delete(ref);
-        retiredRequests.delete(ref);
+    if (references.length === 0) return;
+    for (const { key } of references) {
+      if (decodePriorContextTokenRef(key)) {
+        completedRequests.delete(key);
+        retiredRequests.delete(key);
       }
     }
 
@@ -238,26 +288,24 @@ export function useAttachmentTokenCount(
         const now = Date.now();
         const requestRefs: string[] = [];
         let hasActiveRequest = false;
-        for (const ref of refs) {
+        for (const { ref, key } of references) {
           const isPriorContext = !!decodePriorContextTokenRef(ref);
-          if (retiredRequests.has(ref)) continue;
-          if (completedRequests.has(ref)) continue;
-          if (!isPriorContext && attachmentTokenCache.has(ref)) continue;
-          const pending = pendingRequests.get(ref);
+          if (retiredRequests.has(key)) continue;
+          if (completedRequests.has(key)) continue;
+          if (!isPriorContext && attachmentTokenCache.has(key)) continue;
+          const pending = pendingRequests.get(key);
           if (pending && now - pending.sentAt < REQUEST_RETRY_INTERVAL_MS) {
             hasActiveRequest = true;
             continue;
           }
           if (pending && pending.attempts >= MAX_REQUEST_ATTEMPTS) {
-            if (!isPriorContext) attachmentTokenCache.set(ref, 0);
-            pendingRequests.delete(ref);
-            retiredRequests.add(ref);
-            if (isPriorContext) {
-              countUpdateCallbacks.forEach((cb) => cb({ [ref]: 0 }));
-            }
+            if (!isPriorContext) attachmentTokenCache.set(key, 0);
+            pendingRequests.delete(key);
+            retiredRequests.add(key);
+            countUpdateCallbacks.forEach((cb) => cb({ [key]: 0 }));
             continue;
           }
-          pendingRequests.set(ref, {
+          pendingRequests.set(key, {
             sentAt: now,
             attempts: (pending?.attempts ?? 0) + 1,
           });
@@ -267,6 +315,7 @@ export function useAttachmentTokenCount(
         if (requestRefs.length > 0) {
           sendMessage(MESSAGE_TYPES.REQUEST_ATTACHMENT_TOKEN_COUNTS, {
             references: requestRefs,
+            ...(sourceDefinitionPath !== undefined && { sourceDefinitionPath }),
           });
         }
         if (hasActiveRequest) {
@@ -279,20 +328,20 @@ export function useAttachmentTokenCount(
       clearTimeout(timer);
       if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [refs, viewKey]);
+  }, [references, sourceDefinitionPath, viewKey]);
 
   // Raw prompt tokens are re-encoded only when the text actually changes, not on
   // every unrelated re-render (e.g. an incoming cached-count notification).
   const rawTokens = useMemo(() => countTokens(promptText), [promptText]);
 
   // Total: raw prompt tokens + cached attachments + view-scoped prior context.
-  const attachmentTokens = refs.reduce((sum, ref) => {
-    const priorCount = decodePriorContextTokenRef(ref)
+  const attachmentTokens = references.reduce((sum, { key }) => {
+    const priorCount = decodePriorContextTokenRef(key)
       ? priorContextCounts.viewKey === viewKey
-        ? priorContextCounts.counts[ref]
+        ? priorContextCounts.counts[key]
         : undefined
       : undefined;
-    return sum + (priorCount ?? attachmentTokenCache.get(ref) ?? 0);
+    return sum + (priorCount ?? attachmentTokenCache.get(key) ?? 0);
   }, 0);
 
   return rawTokens + attachmentTokens;
