@@ -8,7 +8,7 @@ ctrlyoke is built by **Fuzzy Nova LLC**, a Texas limited liability company, and 
 
 ctrlyoke runs your AI coding workflows on your own machine, against your own workspace, using the AI harnesses you already have installed (GitHub Copilot CLI, Claude Code, Codex, OpenCode, Qwen Code, Antigravity CLI). The extension, its optional local dashboard, and the workflow engine all execute locally.
 
-Except for the limited telemetry and license data described below, ctrlyoke does not intentionally transmit to Fuzzy Nova:
+Except for the limited telemetry and license data described below, ctrlyoke does **not** intentionally transmit to Fuzzy Nova:
 
 - prompt text or workflow content
 - source code or file contents
