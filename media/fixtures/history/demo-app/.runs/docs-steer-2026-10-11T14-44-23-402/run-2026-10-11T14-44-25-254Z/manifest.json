@@ -28,9 +28,7 @@
     "attemptCount": 1,
     "isFinal": true,
     "costUsd": 0,
-    "costSources": [
-      "harness-reported"
-    ],
+    "costSources": ["harness-reported"],
     "byHarness": {
       "opencode-cli": {
         "input": 13279,
@@ -43,9 +41,7 @@
         "reportedAttemptCount": 1,
         "attemptCount": 1,
         "costUsd": 0,
-        "costSources": [
-          "harness-reported"
-        ]
+        "costSources": ["harness-reported"]
       }
     },
     "byLocalDay": {
@@ -61,9 +57,7 @@
           "reportedAttemptCount": 1,
           "attemptCount": 1,
           "costUsd": 0,
-          "costSources": [
-            "harness-reported"
-          ]
+          "costSources": ["harness-reported"]
         }
       }
     }

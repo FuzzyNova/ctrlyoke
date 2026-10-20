@@ -25,9 +25,7 @@
     "attemptCount": 1,
     "isFinal": true,
     "costUsd": 0.0042425499999999994,
-    "costSources": [
-      "price-table"
-    ],
+    "costSources": ["price-table"],
     "byHarness": {
       "copilot-cli": {
         "input": 3,
@@ -38,9 +36,7 @@
         "reportedAttemptCount": 1,
         "attemptCount": 1,
         "costUsd": 0.0042425499999999994,
-        "costSources": [
-          "price-table"
-        ]
+        "costSources": ["price-table"]
       }
     },
     "byLocalDay": {
@@ -54,9 +50,7 @@
           "reportedAttemptCount": 1,
           "attemptCount": 1,
           "costUsd": 0.0042425499999999994,
-          "costSources": [
-            "price-table"
-          ]
+          "costSources": ["price-table"]
         }
       }
     }

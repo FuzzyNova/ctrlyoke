@@ -27,9 +27,7 @@
         "harness": "claude-cli",
         "model": "haiku",
         "executionMode": "headless",
-        "skills": [
-          "ctrlyoke-syntax"
-        ],
+        "skills": ["ctrlyoke-syntax"],
         "elapsed": 10.1,
         "completedAt": 1792002572091,
         "terminalStatus": "completed"
@@ -47,9 +45,7 @@
       "attemptCount": 3,
       "isFinal": true,
       "costUsd": 0.013150110000000001,
-      "costSources": [
-        "harness-reported"
-      ],
+      "costSources": ["harness-reported"],
       "byHarness": {
         "claude-cli": {
           "input": 18,
@@ -61,9 +57,7 @@
           "reportedAttemptCount": 3,
           "attemptCount": 3,
           "costUsd": 0.013150110000000001,
-          "costSources": [
-            "harness-reported"
-          ]
+          "costSources": ["harness-reported"]
         }
       },
       "byLocalDay": {
@@ -78,9 +72,7 @@
             "reportedAttemptCount": 3,
             "attemptCount": 3,
             "costUsd": 0.013150110000000001,
-            "costSources": [
-              "harness-reported"
-            ]
+            "costSources": ["harness-reported"]
           }
         }
       }
@@ -105,25 +97,19 @@
   "resumeSession": false,
   "finalStep": {
     "prompt": "Call the ctrlyoke workflow_status tool. If no step named \"Build\" exists, call append_step exactly once to append a script step named \"Build\" with the script \"npm run build\" at the end. If a \"Build\" step already exists, append nothing. Do not read or edit any files. Reply with one short sentence.",
-    "mcpServers": [
-      "ctrlyoke"
-    ],
+    "mcpServers": ["ctrlyoke"],
     "_runtime": {
       "secrets": [],
       "harness": "claude-cli",
       "model": "haiku",
       "executionMode": "headless",
-      "skills": [
-        "ctrlyoke-syntax"
-      ],
+      "skills": ["ctrlyoke-syntax"],
       "sessionId": "3c2ac296-c382-42a4-8207-6fc656adc6dd",
       "completedAt": 1792002561299
     }
   },
   "agent": null,
-  "skills": [
-    "ctrlyoke-syntax"
-  ],
+  "skills": ["ctrlyoke-syntax"],
   "mcpServers": [],
   "hooks": [],
   "endCondition": null,

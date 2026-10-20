@@ -46,9 +46,7 @@
       "attemptCount": 2,
       "isFinal": true,
       "costUsd": 0.8948944,
-      "costSources": [
-        "price-table"
-      ],
+      "costSources": ["price-table"],
       "byHarness": {
         "claude-cli": {
           "input": 36,
@@ -60,9 +58,7 @@
           "reportedAttemptCount": 2,
           "attemptCount": 2,
           "costUsd": 0.8948944,
-          "costSources": [
-            "price-table"
-          ]
+          "costSources": ["price-table"]
         }
       },
       "byLocalDay": {
@@ -77,9 +73,7 @@
             "reportedAttemptCount": 2,
             "attemptCount": 2,
             "costUsd": 0.8948944,
-            "costSources": [
-              "price-table"
-            ]
+            "costSources": ["price-table"]
           }
         }
       }
@@ -94,20 +88,14 @@
   "model": "opus",
   "executionMode": "interactive",
   "agent": "senior-developer",
-  "skills": [
-    "ctrlyoke-mcp-tools",
-    "ctrlyoke-coordination-tools"
-  ],
+  "skills": ["ctrlyoke-mcp-tools", "ctrlyoke-coordination-tools"],
   "resumeSession": true,
   "mcpServers": [
     "ctrlyoke",
     {
       "id": "playwright",
       "command": "npx",
-      "args": [
-        "@playwright/mcp@latest",
-        "--isolated"
-      ]
+      "args": ["@playwright/mcp@latest", "--isolated"]
     }
   ],
   "hooks": [
@@ -179,7 +167,5 @@
     "log_file": "CURRENT_LOG_FILE"
   },
   "maxSteps": -1,
-  "secrets": [
-    "TEST_SECRET"
-  ]
+  "secrets": ["TEST_SECRET"]
 }

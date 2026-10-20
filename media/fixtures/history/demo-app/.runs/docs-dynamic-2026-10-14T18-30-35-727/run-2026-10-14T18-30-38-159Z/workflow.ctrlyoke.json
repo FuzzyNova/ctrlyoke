@@ -27,9 +27,7 @@
         "harness": "claude-cli",
         "model": "haiku",
         "executionMode": "headless",
-        "skills": [
-          "ctrlyoke-syntax"
-        ],
+        "skills": ["ctrlyoke-syntax"],
         "elapsed": 11.9,
         "completedAt": 1792002662018,
         "terminalStatus": "completed"
@@ -47,9 +45,7 @@
       "attemptCount": 3,
       "isFinal": true,
       "costUsd": 0.01282439,
-      "costSources": [
-        "harness-reported"
-      ],
+      "costSources": ["harness-reported"],
       "byHarness": {
         "claude-cli": {
           "input": 20,
@@ -61,9 +57,7 @@
           "reportedAttemptCount": 3,
           "attemptCount": 3,
           "costUsd": 0.01282439,
-          "costSources": [
-            "harness-reported"
-          ]
+          "costSources": ["harness-reported"]
         }
       },
       "byLocalDay": {
@@ -78,9 +72,7 @@
             "reportedAttemptCount": 3,
             "attemptCount": 3,
             "costUsd": 0.01282439,
-            "costSources": [
-              "harness-reported"
-            ]
+            "costSources": ["harness-reported"]
           }
         }
       }
@@ -105,25 +97,19 @@
   "resumeSession": false,
   "finalStep": {
     "prompt": "Call the ctrlyoke workflow_status tool. If no step named \"Summarize test results\" exists, call append_step exactly once with position \"end\" and one step named \"Summarize test results\" whose prompt is \"Reply with one sentence saying the notes API tests passed.\" If that step already exists, append nothing. Do not read or edit any files. Reply with one short sentence.",
-    "mcpServers": [
-      "ctrlyoke"
-    ],
+    "mcpServers": ["ctrlyoke"],
     "_runtime": {
       "secrets": [],
       "harness": "claude-cli",
       "model": "haiku",
       "executionMode": "headless",
-      "skills": [
-        "ctrlyoke-syntax"
-      ],
+      "skills": ["ctrlyoke-syntax"],
       "sessionId": "530efb7e-3247-49c4-b6e1-dd4b7956ddfe",
       "completedAt": 1792002649424
     }
   },
   "agent": null,
-  "skills": [
-    "ctrlyoke-syntax"
-  ],
+  "skills": ["ctrlyoke-syntax"],
   "mcpServers": [],
   "hooks": [],
   "endCondition": null,

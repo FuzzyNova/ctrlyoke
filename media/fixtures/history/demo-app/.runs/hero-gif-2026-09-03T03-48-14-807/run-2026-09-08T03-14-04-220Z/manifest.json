@@ -71,10 +71,7 @@
     "isFinal": true,
     "costUsd": 1.9129356000000002,
     "costPartial": true,
-    "costSources": [
-      "harness-reported",
-      "price-table"
-    ],
+    "costSources": ["harness-reported", "price-table"],
     "byHarness": {
       "qwen-cli": {
         "input": 58730,
@@ -85,9 +82,7 @@
         "reportedAttemptCount": 1,
         "attemptCount": 1,
         "costUsd": 0.024718399999999998,
-        "costSources": [
-          "price-table"
-        ]
+        "costSources": ["price-table"]
       },
       "claude-cli": {
         "input": 20,
@@ -99,9 +94,7 @@
         "reportedAttemptCount": 1,
         "attemptCount": 1,
         "costUsd": 1.1527910000000001,
-        "costSources": [
-          "price-table"
-        ]
+        "costSources": ["price-table"]
       },
       "codex-cli": {
         "input": 235630,
@@ -113,9 +106,7 @@
         "reportedAttemptCount": 1,
         "attemptCount": 1,
         "costUsd": 0.6129260000000001,
-        "costSources": [
-          "price-table"
-        ]
+        "costSources": ["price-table"]
       },
       "copilot-cli": {
         "input": 452418,
@@ -127,9 +118,7 @@
         "reportedAttemptCount": 1,
         "attemptCount": 1,
         "costUsd": 0.12250019999999999,
-        "costSources": [
-          "price-table"
-        ]
+        "costSources": ["price-table"]
       },
       "antigravity-cli": {
         "input": 5627,
@@ -153,9 +142,7 @@
         "reportedAttemptCount": 1,
         "attemptCount": 1,
         "costUsd": 0,
-        "costSources": [
-          "harness-reported"
-        ]
+        "costSources": ["harness-reported"]
       }
     },
     "byLocalDay": {
@@ -169,9 +156,7 @@
           "reportedAttemptCount": 1,
           "attemptCount": 1,
           "costUsd": 0.024718399999999998,
-          "costSources": [
-            "price-table"
-          ]
+          "costSources": ["price-table"]
         },
         "claude-cli": {
           "input": 20,
@@ -183,9 +168,7 @@
           "reportedAttemptCount": 1,
           "attemptCount": 1,
           "costUsd": 1.1527910000000001,
-          "costSources": [
-            "price-table"
-          ]
+          "costSources": ["price-table"]
         },
         "codex-cli": {
           "input": 235630,
@@ -197,9 +180,7 @@
           "reportedAttemptCount": 1,
           "attemptCount": 1,
           "costUsd": 0.6129260000000001,
-          "costSources": [
-            "price-table"
-          ]
+          "costSources": ["price-table"]
         },
         "copilot-cli": {
           "input": 452418,
@@ -211,9 +192,7 @@
           "reportedAttemptCount": 1,
           "attemptCount": 1,
           "costUsd": 0.12250019999999999,
-          "costSources": [
-            "price-table"
-          ]
+          "costSources": ["price-table"]
         },
         "antigravity-cli": {
           "input": 5627,
@@ -237,9 +216,7 @@
           "reportedAttemptCount": 1,
           "attemptCount": 1,
           "costUsd": 0,
-          "costSources": [
-            "harness-reported"
-          ]
+          "costSources": ["harness-reported"]
         }
       }
     }

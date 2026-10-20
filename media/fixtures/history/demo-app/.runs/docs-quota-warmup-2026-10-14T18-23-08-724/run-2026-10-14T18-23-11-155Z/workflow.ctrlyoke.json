@@ -12,9 +12,7 @@
         "harness": "claude-cli",
         "model": "haiku",
         "executionMode": "interactive",
-        "skills": [
-          "ctrlyoke-syntax"
-        ],
+        "skills": ["ctrlyoke-syntax"],
         "sessionId": "6c619387-1aa1-4752-b213-5cf1a5a3193a",
         "elapsed": 6,
         "completedAt": 1792002197784,
@@ -33,9 +31,7 @@
       "attemptCount": 1,
       "isFinal": true,
       "costUsd": 0.00216833,
-      "costSources": [
-        "price-table"
-      ],
+      "costSources": ["price-table"],
       "byHarness": {
         "claude-cli": {
           "input": 2,
@@ -47,9 +43,7 @@
           "reportedAttemptCount": 1,
           "attemptCount": 1,
           "costUsd": 0.00216833,
-          "costSources": [
-            "price-table"
-          ]
+          "costSources": ["price-table"]
         }
       },
       "byLocalDay": {
@@ -64,9 +58,7 @@
             "reportedAttemptCount": 1,
             "attemptCount": 1,
             "costUsd": 0.00216833,
-            "costSources": [
-              "price-table"
-            ]
+            "costSources": ["price-table"]
           }
         }
       }
@@ -81,9 +73,7 @@
   "model": "haiku",
   "executionMode": "interactive",
   "agent": null,
-  "skills": [
-    "ctrlyoke-syntax"
-  ],
+  "skills": ["ctrlyoke-syntax"],
   "resumeSession": true,
   "mcpServers": [],
   "hooks": [],

@@ -17,17 +17,12 @@
     "schemaVersion": 2
   },
   "schemaVersion": 1,
-  "trustedExternalRoots": [
-    "C:/dev/shared-specs",
-    "C:/dev/design-assets"
-  ],
+  "trustedExternalRoots": ["C:/dev/shared-specs", "C:/dev/design-assets"],
   "harness": "claude-cli",
   "model": "opus",
   "executionMode": "interactive",
   "agent": null,
-  "skills": [
-    "ctrlyoke-syntax"
-  ],
+  "skills": ["ctrlyoke-syntax"],
   "resumeSession": true,
   "mcpServers": [],
   "hooks": [],

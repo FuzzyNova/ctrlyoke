@@ -20,9 +20,7 @@
       "harness": "claude-cli",
       "model": "opus",
       "resumeSession": false,
-      "mcpServers": [
-        "ctrlyoke"
-      ],
+      "mcpServers": ["ctrlyoke"],
       "priorContext": "finalStepPrevious",
       "enabled": false
     }

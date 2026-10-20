@@ -11,9 +11,7 @@
         "harness": "claude-cli",
         "model": "haiku",
         "executionMode": "interactive",
-        "skills": [
-          "ctrlyoke-syntax"
-        ],
+        "skills": ["ctrlyoke-syntax"],
         "sessionId": "6fdd16e4-20c3-4c57-a616-b163e74b0caa",
         "elapsed": 7.9,
         "completedAt": 1791831359923,
@@ -70,9 +68,7 @@
   "harness": "claude-cli",
   "executionMode": "interactive",
   "agent": null,
-  "skills": [
-    "ctrlyoke-syntax"
-  ],
+  "skills": ["ctrlyoke-syntax"],
   "resumeSession": true,
   "mcpServers": [],
   "hooks": [],

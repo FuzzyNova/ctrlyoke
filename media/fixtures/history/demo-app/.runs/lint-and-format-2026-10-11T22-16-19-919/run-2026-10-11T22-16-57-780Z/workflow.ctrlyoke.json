@@ -31,9 +31,7 @@
   "model": "opus",
   "executionMode": "interactive",
   "agent": null,
-  "skills": [
-    "ctrlyoke-syntax"
-  ],
+  "skills": ["ctrlyoke-syntax"],
   "resumeSession": true,
   "mcpServers": [],
   "hooks": [],

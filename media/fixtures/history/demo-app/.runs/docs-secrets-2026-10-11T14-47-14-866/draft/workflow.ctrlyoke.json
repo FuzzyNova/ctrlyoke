@@ -28,9 +28,7 @@
     "schemaVersion": 2
   },
   "schemaVersion": 1,
-  "secrets": [
-    "DEMO_DB_PASSWORD"
-  ],
+  "secrets": ["DEMO_DB_PASSWORD"],
   "harness": "claude-cli",
   "model": "opus",
   "executionMode": "interactive",

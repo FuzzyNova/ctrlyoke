@@ -50,9 +50,7 @@
       "attemptCount": 2,
       "isFinal": true,
       "costUsd": 0.17484680000000002,
-      "costSources": [
-        "price-table"
-      ],
+      "costSources": ["price-table"],
       "byHarness": {
         "claude-cli": {
           "input": 10,
@@ -64,9 +62,7 @@
           "reportedAttemptCount": 2,
           "attemptCount": 2,
           "costUsd": 0.17484680000000002,
-          "costSources": [
-            "price-table"
-          ]
+          "costSources": ["price-table"]
         }
       },
       "byLocalDay": {
@@ -81,9 +77,7 @@
             "reportedAttemptCount": 1,
             "attemptCount": 1,
             "costUsd": 0.09641750000000002,
-            "costSources": [
-              "price-table"
-            ]
+            "costSources": ["price-table"]
           }
         },
         "2026-10-05": {
@@ -97,9 +91,7 @@
             "reportedAttemptCount": 1,
             "attemptCount": 1,
             "costUsd": 0.07842930000000001,
-            "costSources": [
-              "price-table"
-            ]
+            "costSources": ["price-table"]
           }
         }
       }

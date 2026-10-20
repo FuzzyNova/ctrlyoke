@@ -17,9 +17,7 @@
     ],
     "finalStep": {
       "prompt": "Call the ctrlyoke workflow_status tool. If no step named \"Build\" exists, call append_step exactly once to append a script step named \"Build\" with the script \"npm run build\" at the end. If a \"Build\" step already exists, append nothing. Do not read or edit any files. Reply with one short sentence.",
-      "mcpServers": [
-        "ctrlyoke"
-      ]
+      "mcpServers": ["ctrlyoke"]
     }
   },
   "stepCount": 2,
@@ -33,9 +31,7 @@
     "attemptCount": 3,
     "isFinal": true,
     "costUsd": 0.013150110000000001,
-    "costSources": [
-      "harness-reported"
-    ],
+    "costSources": ["harness-reported"],
     "byHarness": {
       "claude-cli": {
         "input": 18,
@@ -47,9 +43,7 @@
         "reportedAttemptCount": 3,
         "attemptCount": 3,
         "costUsd": 0.013150110000000001,
-        "costSources": [
-          "harness-reported"
-        ]
+        "costSources": ["harness-reported"]
       }
     },
     "byLocalDay": {
@@ -64,9 +58,7 @@
           "reportedAttemptCount": 3,
           "attemptCount": 3,
           "costUsd": 0.013150110000000001,
-          "costSources": [
-            "harness-reported"
-          ]
+          "costSources": ["harness-reported"]
         }
       }
     }

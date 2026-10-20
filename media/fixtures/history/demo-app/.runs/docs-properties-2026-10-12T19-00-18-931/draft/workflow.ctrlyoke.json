@@ -48,34 +48,20 @@
   "endCondition": null,
   "toolPermissions": {
     "mode": "custom",
-    "allowedTools": [
-      "write",
-      "shell(npm test)",
-      "shell(git diff:*)"
-    ],
-    "deniedTools": [
-      "shell(git push:*)",
-      "shell(rm:*)"
-    ]
+    "allowedTools": ["write", "shell(npm test)", "shell(git diff:*)"],
+    "deniedTools": ["shell(git push:*)", "shell(rm:*)"]
   },
   "agent": null,
-  "skills": [
-    "ctrlyoke-syntax"
-  ],
+  "skills": ["ctrlyoke-syntax"],
   "mcpServers": [
     {
       "id": "ctrlyoke",
-      "deniedTools": [
-        "remove_step"
-      ]
+      "deniedTools": ["remove_step"]
     },
     {
       "id": "playwright",
       "command": "npx",
-      "args": [
-        "@playwright/mcp@latest",
-        "--isolated"
-      ]
+      "args": ["@playwright/mcp@latest", "--isolated"]
     }
   ],
   "preCondition": null,

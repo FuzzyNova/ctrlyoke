@@ -708,7 +708,7 @@ line, where it renders as a button. Descriptions support `code`, **bold** and li
 | "Build visually, or edit as YAML" (was the YAML block)   | #14 (done)                                                    |
 | Features grid — `⬛` One reversible view of every result | #11                                                           |
 | New: Statistics/telemetry section                        | #4, #5                                                        |
-| "Your project, in any browser" (was the `🗂` card)       | #10 (done)                                                    |
+| "Your project, in any browser" (was the `🗂` card)        | #10 (done)                                                    |
 | "Every session, searchable" (was the `🔍` card)          | #15 (done)                                                    |
 | New: Templates section                                   | #8                                                            |
 | New: Mobile section                                      | #3, #7                                                        |
