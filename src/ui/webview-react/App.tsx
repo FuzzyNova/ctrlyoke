@@ -12,6 +12,7 @@ import { useUndoRedoKeyHandler } from "@hooks/useUndoRedoKeyHandler";
 import { useFontSizeSync } from "@hooks/useFontSizeSync";
 import { useNewWorkflowKeyHandler } from "@hooks/useNewWorkflowKeyHandler";
 import { useHistorySearchKeyHandler } from "@hooks/useHistorySearchKeyHandler";
+import { useScopedSelectAll } from "@hooks/useScopedSelectAll";
 import { useRunViewLoadWatchdog } from "@hooks/useRunViewLoadWatchdog";
 import { useDuplicateWorkflowWatchdog } from "@hooks/useDuplicateWorkflowWatchdog";
 import {
@@ -406,6 +407,7 @@ function App() {
   useUndoRedoKeyHandler();
   useNewWorkflowKeyHandler();
   useHistorySearchKeyHandler();
+  useScopedSelectAll();
   // Bounds how long a run-view request may stay outstanding — a lost one
   // suppresses every server-initiated view update until it is retired.
   useRunViewLoadWatchdog();

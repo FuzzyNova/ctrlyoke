@@ -9,6 +9,8 @@ import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import {
   DOCS_URLS,
   KEYBOARD_KEYS,
+  SELECT_ALL_SCOPE_ATTRIBUTE,
+  SELECT_ALL_SCOPES,
   STEP_TYPES,
 } from "@root/types/DashboardConstants";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
@@ -1862,6 +1864,7 @@ const WorkflowStepsPanelInner: React.FC<{
         className={`flex-1 overflow-y-auto min-h-0${isLineageReadOnly ? " pointer-events-none opacity-60 select-none" : ""}`}
         role="listbox"
         tabIndex={0}
+        {...{ [SELECT_ALL_SCOPE_ATTRIBUTE]: SELECT_ALL_SCOPES.HANDLED }}
         onClick={(e) => {
           // Deselect the current step when clicking blank space in the list.
           // Only fire when the click target is this container itself (not a child).

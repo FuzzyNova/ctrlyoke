@@ -41,10 +41,10 @@ export function SegmentedTabBar<Id extends string>({
 }: SegmentedTabBarProps<Id>): React.ReactElement {
   return (
     <div
-      className={
+      className={`${
         className ??
         "flex items-center border-t border-panel-border bg-sidebar-bg overflow-x-hidden h-10"
-      }
+      } cy-no-select`}
       role="tablist"
       aria-label={ariaLabel}
     >

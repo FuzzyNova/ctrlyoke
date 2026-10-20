@@ -1,4 +1,8 @@
-import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
+import {
+  KEYBOARD_KEYS,
+  SELECT_ALL_SCOPE_ATTRIBUTE,
+  SELECT_ALL_SCOPES,
+} from "@root/types/DashboardConstants";
 import React, { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useIsMobile } from "@hooks/useMediaQuery";
@@ -154,6 +158,7 @@ export const Modal: React.FC<ModalProps> = ({
           tabIndex={-1}
           role="dialog"
           aria-modal="true"
+          {...{ [SELECT_ALL_SCOPE_ATTRIBUTE]: SELECT_ALL_SCOPES.CONTENTS }}
           aria-labelledby={titleId}
         >
           {/* Header */}

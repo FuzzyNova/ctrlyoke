@@ -1707,6 +1707,15 @@ button .cy-lucide-icon {
     -webkit-touch-callout: none;
   }
 
+  /* Free-text fields inside chrome stay selectable. WebKit applies an
+     inherited `user-select: none` to inputs and contenteditable too, which
+     blocks selecting and even typing in them on iOS Safari. */
+  .cy-no-select
+    :is(input, textarea, [contenteditable]:not([contenteditable="false"])) {
+    @apply select-text;
+    -webkit-touch-callout: default;
+  }
+
   /* Generic full-height segmented button group used in header actions. */
   .cy-button-group {
     /* The outer group owns the corner radius. Inner buttons stay square so

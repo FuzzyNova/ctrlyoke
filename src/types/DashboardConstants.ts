@@ -4406,6 +4406,22 @@ export const OUTPUT_TABS = {
 export type OutputTab = (typeof OUTPUT_TABS)[keyof typeof OUTPUT_TABS];
 
 // ============================================================================
+// SELECT-ALL SCOPES - Dashboard regions that bound Ctrl/Cmd+A
+// ============================================================================
+/** Attribute marking a region that Ctrl/Cmd+A is confined to. */
+export const SELECT_ALL_SCOPE_ATTRIBUTE = "data-select-all-scope";
+
+export const SELECT_ALL_SCOPES = {
+  /** Select-all selects the text inside the marked element. */
+  CONTENTS: "contents",
+  /** The region implements select-all itself; suppress the text selection. */
+  HANDLED: "handled",
+} as const;
+
+export type SelectAllScope =
+  (typeof SELECT_ALL_SCOPES)[keyof typeof SELECT_ALL_SCOPES];
+
+// ============================================================================
 // OUTPUT SCROLL TARGETS - Persisted output-pane anchor discriminants
 // ============================================================================
 export const OUTPUT_SCROLL_TARGET_KINDS = {

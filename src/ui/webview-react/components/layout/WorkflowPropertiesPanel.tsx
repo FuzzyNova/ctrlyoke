@@ -1609,7 +1609,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       ref={drawerRef}
       role="region"
       aria-label="Workflow Properties"
-      className="flex flex-col h-full bg-sidebar-bg overflow-x-hidden"
+      className="flex flex-col h-full bg-sidebar-bg overflow-x-hidden cy-no-select"
     >
       {/* Section Header — clickable to collapse in desktop mode; non-interactive in mobile */}
       <div

@@ -1,5 +1,10 @@
 import React, { memo, Profiler, useLayoutEffect, useRef } from "react";
-import { OUTPUT_TABS, type OutputTab } from "@root/types/DashboardConstants";
+import {
+  OUTPUT_TABS,
+  SELECT_ALL_SCOPE_ATTRIBUTE,
+  SELECT_ALL_SCOPES,
+  type OutputTab,
+} from "@root/types/DashboardConstants";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import {
   OutputRow,
@@ -301,6 +306,7 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
       <div
         ref={outputRef}
         id="output-content"
+        {...{ [SELECT_ALL_SCOPE_ATTRIBUTE]: SELECT_ALL_SCOPES.CONTENTS }}
         className="font-mono text-(length:--cy-output-font-size-sm) min-h-0 p-0 flex-1 overflow-y-auto scrollbar-hide"
         style={{ overflowAnchor: "none" }}
         onScroll={onScroll}

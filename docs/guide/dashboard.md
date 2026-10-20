@@ -157,6 +157,9 @@ footer at the bottom.
 - `Ctrl+Click` (`Cmd+Click` on macOS) adds a step to a selection, and
   `Shift+Click` selects a range, so you can enable, disable, move or delete
   several steps at once.
+- `Ctrl+A` (`Cmd+A` on macOS) selects every step. Select All applies only to
+  the panel you're working in: in the output pane it selects the output text,
+  and elsewhere on the dashboard it selects nothing.
 
 ### Context window bar {#context-window}
 
