@@ -29,6 +29,7 @@ import { useOutputAutoscrollGlide } from "@hooks/useOutputAutoscrollGlide";
 import { useOutputRowEntrance } from "@hooks/useOutputRowEntrance";
 import { useOutputUndoActions } from "@hooks/useOutputUndoActions";
 import { useOutputVirtualization } from "@hooks/useOutputVirtualization";
+import { useOutputViewIdentity } from "@hooks/useOutputViewIdentity";
 import { useOutputFind } from "@hooks/useOutputFind";
 import { useFontSizeControls } from "@hooks/useFontSizeControls";
 import {
@@ -575,9 +576,11 @@ const OutputSectionInner: React.FC = () => {
     totalSteps,
   });
 
-  const rowRenderIdentity = `${fileName ?? ""}:${
-    isViewingHistory ? (displayedRunRef ?? "history") : "live"
-  }:${outputStepFilterVersion}`;
+  const outputViewKey = useOutputViewIdentity({
+    isViewingHistory,
+    displayedRunRef,
+  });
+  const rowRenderIdentity = `${fileName ?? ""}:${outputViewKey}:${outputStepFilterVersion}`;
   const scrollSeekRowsRef = useRef(rows);
   scrollSeekRowsRef.current = rows;
   const isOutputVirtualizedRef = useRef(false);
@@ -901,19 +904,15 @@ const OutputSectionInner: React.FC = () => {
   // heights — e.g., a row measured as 500 px during a live run where diffs were
   // expanded will still be in the cache when the same run is opened in history
   // view with diffs collapsed (74 px estimate).  Flush the cache so rowLayout
-  // re-estimates from scratch for the incoming content.
-  const previousIsViewingHistory = useRef(isViewingHistory);
-  const previousDisplayedRunRef = useRef(displayedRunRef);
+  // re-estimates from scratch for the incoming content. A continuation that
+  // promotes a run's history into its live view keeps the same rows, so the
+  // view key (and the cache) survives it.
+  const previousOutputViewKey = useRef(outputViewKey);
   useEffect(() => {
-    const viewChanged =
-      previousIsViewingHistory.current !== isViewingHistory ||
-      previousDisplayedRunRef.current !== displayedRunRef;
-    previousIsViewingHistory.current = isViewingHistory;
-    previousDisplayedRunRef.current = displayedRunRef;
-    if (!viewChanged) return;
-
+    if (previousOutputViewKey.current === outputViewKey) return;
+    previousOutputViewKey.current = outputViewKey;
     clearMeasurements();
-  }, [clearMeasurements, isViewingHistory, displayedRunRef]);
+  }, [clearMeasurements, outputViewKey]);
 
   // Smart scroll: detect user scrolling away from bottom
   const handleScroll = useCallback(() => {
