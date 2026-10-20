@@ -71,16 +71,19 @@ jobs:
         # v2 declares node20, which GitHub Actions no longer runs as of the September 2025
         # Node 20 deprecation -- it gets force-run on node24 and fails asset upload with
         # "Error creating asset temp dir". v3 declares node24 and doesn't hit this.
-        uses: softprops/action-gh-release@v3
+        # Pinned to a commit SHA, not the movable tag, because this job holds the
+        # publish secrets.
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           body_path: release-notes.md
           files: ctrlyoke-*.vsix
 
       - name: Stage npm CLI package
-        # `npm stage` needs npm >= 11.15.0; Node 22 bundles npm 10. Provenance
-        # is left to npm's default: it is generated automatically for a public
-        # repo and is unsupported from a private one.
+        # `npm stage` needs npm >= 11.15.0; Node 22 bundles npm 10. Pinned to an
+        # exact version because it runs with the trusted-publishing OIDC token.
+        # Provenance is left to npm's default: it is generated automatically for
+        # a public repo and is unsupported from a private one.
         working-directory: dist/npm
         run: |
-          npm install -g npm@^11.15.0
+          npm install -g npm@11.21.0
           npm stage publish
