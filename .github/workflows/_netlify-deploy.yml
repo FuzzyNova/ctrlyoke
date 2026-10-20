@@ -36,8 +36,13 @@ jobs:
       # metacharacters in those, so it reaches the shell only as a quoted env
       # var -- never spliced into the script with ${{ }}. Quoting also keeps it
       # one argument, which is why it must be a single flag.
+      #
+      # netlify-cli is pinned because this step holds the deploy secrets, and
+      # because @latest broke us once: 27.14.0 failed with "Project not found.
+      # Please rerun netlify link" against a site 27.13.0 deployed to that
+      # morning. Bump it deliberately and watch the next deploy.
       - name: Deploy to Netlify
-        run: npx netlify-cli@latest deploy --dir=landing/dist "$DEPLOY_ARGS"
+        run: npx --yes netlify-cli@27.13.0 deploy --dir=landing/dist "$DEPLOY_ARGS"
         env:
           DEPLOY_ARGS: ${{ inputs.deploy-args }}
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
