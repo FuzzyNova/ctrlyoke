@@ -97,6 +97,29 @@ suite("WorkspacePathQuery", () => {
     );
   });
 
+  test("a scoped query naming no root folder falls back to a whole-path fuzzy match", async () => {
+    const { query } = create([
+      "dev/bugs/backlog/secret-completion-first-list-takes-seconds.md",
+      "dev/bugs/backlog/context-menus-lack-menu-roles.md",
+      "src/ui/SecretRegistryService.ts",
+    ]);
+    const results = await query.queryFiles("backlog/secre");
+    assert.strictEqual(
+      results[0]?.relativePath,
+      "dev/bugs/backlog/secret-completion-first-list-takes-seconds.md"
+    );
+    assert.ok(
+      !results.some((item) => item.relativePath.includes("SecretRegistry"))
+    );
+    assert.ok(
+      (await query.queryFiles("backlog/")).some(
+        (item) =>
+          item.relativePath ===
+          "dev/bugs/backlog/context-menus-lack-menu-roles.md"
+      )
+    );
+  });
+
   test("matches prompt files by path, extension and fuzzy child name", async () => {
     const { query } = create([
       "prompts/seed.prompt.md",

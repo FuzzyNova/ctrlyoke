@@ -259,13 +259,20 @@ export class SecretRegistryService {
 
   constructor(private readonly options: SecretRegistryServiceOptions) {}
 
-  /** Return registry names only; secret values never cross this boundary. */
+  /**
+   * Return registry names only; secret values never cross this boundary.
+   * Completion needs no state, so this never reads a value or metadata from
+   * the credential store (one OS call per key, seconds on a cold Windows
+   * Credential Manager), and scans the workflow files once for both scopes.
+   */
   async getCompletionNames(): Promise<string[]> {
-    const entries = await Promise.all([
-      this.list(SETTING_SCOPES.USER),
-      this.list(SETTING_SCOPES.WORKSPACE),
-    ]);
-    return uniqueValidNames(entries.flat().map((entry) => entry.name));
+    const workflows = this.getWorkflowReferences();
+    const scopes = await Promise.all(
+      [SETTING_SCOPES.USER, SETTING_SCOPES.WORKSPACE]
+        .filter((scope) => this.hasScope(scope))
+        .map((scope) => this.collectScopeNames(scope, workflows))
+    );
+    return uniqueValidNames(scopes.flatMap((scope) => scope.names));
   }
 
   /** Check whether a name can resolve from the environment or managed store. */
@@ -290,30 +297,13 @@ export class SecretRegistryService {
     additionalKnownNames: readonly string[] = []
   ): Promise<SecretRegistryEntry[]> {
     assertWriteScope(scope);
-    if (
-      scope === SETTING_SCOPES.WORKSPACE &&
-      !this.options.getWorkspaceRoot()
-    ) {
-      return [];
-    }
-    const cached = this.registryCache.get(scope);
-    if (
-      cached &&
-      this.currentTime() - cached.refreshedAt >= SECRET_REGISTRY_CACHE_TTL_MS
-    ) {
-      this.registryCache.delete(scope);
-    }
-    const [managedNames, workflows, mcpServers] = await Promise.all([
-      this.getManagedNames(scope),
-      this.getWorkflowReferences(),
-      this.getMcpReferences(scope),
-    ]);
-    const names = uniqueValidNames([
-      ...managedNames,
-      ...additionalKnownNames,
-      ...workflows.flatMap((workflow) => workflow.secretNames),
-      ...mcpServers.flatMap((server) => server.secretNames),
-    ]);
+    if (!this.hasScope(scope)) return [];
+    const { managedNames, workflows, mcpServers, names } =
+      await this.collectScopeNames(
+        scope,
+        this.getWorkflowReferences(),
+        additionalKnownNames
+      );
     const credentialCache = await this.ensureCredentialSnapshot(
       scope,
       managedNames,
@@ -376,6 +366,48 @@ export class SecretRegistryService {
     this.registryCache.delete(scope);
     await this.options.secretStore.delete(this.secretKey(scope, name));
     await this.options.secretStore.delete(this.metadataKey(scope, name));
+  }
+
+  /** Workspace secrets exist only while a folder is open. */
+  private hasScope(scope: SettingWriteScope): boolean {
+    return (
+      scope !== SETTING_SCOPES.WORKSPACE || !!this.options.getWorkspaceRoot()
+    );
+  }
+
+  /**
+   * Every name the scope knows about, from the managed-name index (one
+   * `keys()` call) and the workflow/MCP references. Reads no credential.
+   */
+  private async collectScopeNames(
+    scope: SettingWriteScope,
+    workflowReferences: Promise<SecretRegistryWorkflowReference[]>,
+    additionalKnownNames: readonly string[] = []
+  ): Promise<{
+    managedNames: string[];
+    workflows: SecretRegistryWorkflowReference[];
+    mcpServers: SecretRegistryMcpReference[];
+    names: string[];
+  }> {
+    const cached = this.registryCache.get(scope);
+    if (
+      cached &&
+      this.currentTime() - cached.refreshedAt >= SECRET_REGISTRY_CACHE_TTL_MS
+    ) {
+      this.registryCache.delete(scope);
+    }
+    const [managedNames, workflows, mcpServers] = await Promise.all([
+      this.getManagedNames(scope),
+      workflowReferences,
+      this.getMcpReferences(scope),
+    ]);
+    const names = uniqueValidNames([
+      ...managedNames,
+      ...additionalKnownNames,
+      ...workflows.flatMap((workflow) => workflow.secretNames),
+      ...mcpServers.flatMap((server) => server.secretNames),
+    ]);
+    return { managedNames, workflows, mcpServers, names };
   }
 
   private secretKey(scope: SettingWriteScope, name: string): string {

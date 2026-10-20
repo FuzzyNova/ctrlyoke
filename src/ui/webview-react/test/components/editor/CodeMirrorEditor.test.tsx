@@ -2,7 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { EditorView } from "@codemirror/view";
 import { EditorState, type Extension } from "@codemirror/state";
-import type { Completion } from "@codemirror/autocomplete";
+import {
+  autocompletion,
+  closeCompletion,
+  startCompletion,
+  type Completion,
+} from "@codemirror/autocomplete";
 import { forEachDiagnostic, forceLinting } from "@codemirror/lint";
 import {
   buildCodeMirrorCompletionResult,
@@ -1673,6 +1678,69 @@ describe("CodeMirrorEditor atomic reference chips", () => {
     try {
       const chip = view.dom.querySelector<HTMLElement>(".cm-atomic-ref");
       expect(chip?.hasAttribute("title")).toBe(false);
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
+  it("keeps the reference being typed as text and chips it once the caret leaves or a space follows", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const view = new EditorView({
+      parent,
+      doc: "see ",
+      selection: { anchor: 4 },
+      extensions: [createAtomicReferenceExtension()],
+    });
+    const type = (text: string) =>
+      view.dispatch({
+        changes: { from: view.state.selection.main.head, insert: text },
+        selection: { anchor: view.state.selection.main.head + text.length },
+        userEvent: "input.type",
+      });
+    const chips = () => view.dom.querySelectorAll(".cm-atomic-ref").length;
+
+    try {
+      type("@backlog/secre");
+      expect(chips()).toBe(0);
+      view.dispatch({ selection: { anchor: 0 } });
+      expect(chips()).toBe(1);
+
+      view.dispatch({ selection: { anchor: view.state.doc.length } });
+      type("t");
+      expect(chips()).toBe(0);
+      type(" ");
+      expect(chips()).toBe(1);
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
+  it("shows a chip as text while a completion is open at its end (Ctrl+Space)", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const doc = "@src/deep/file.ts";
+    const view = new EditorView({
+      parent,
+      doc,
+      selection: { anchor: doc.length },
+      extensions: [
+        createAtomicReferenceExtension(),
+        autocompletion({
+          override: [(context) => ({ from: context.pos, options: [] })],
+        }),
+      ],
+    });
+    const chips = () => view.dom.querySelectorAll(".cm-atomic-ref").length;
+
+    try {
+      expect(chips()).toBe(1);
+      startCompletion(view);
+      expect(chips()).toBe(0);
+      closeCompletion(view);
+      expect(chips()).toBe(1);
     } finally {
       view.destroy();
       parent.remove();

@@ -35,7 +35,7 @@ import {
 } from "@utils/atomicReferences";
 import { Compartment, EditorState } from "@codemirror/state";
 import { minimalSetup } from "codemirror";
-import { completionKeymap } from "@codemirror/autocomplete";
+import { completionKeymap, completionStatus } from "@codemirror/autocomplete";
 import { syntaxTree } from "@codemirror/language";
 import { history, historyKeymap, insertTab } from "@codemirror/commands";
 import {
@@ -49,7 +49,12 @@ import {
   forceLinting,
   type Diagnostic,
 } from "@codemirror/lint";
-import { Prec, RangeSetBuilder, StateEffect } from "@codemirror/state";
+import {
+  Prec,
+  RangeSetBuilder,
+  StateEffect,
+  StateField,
+} from "@codemirror/state";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
 import {
   asAtomicReferenceKind,
@@ -1409,7 +1414,7 @@ export function createAtomicReferenceExtension(
     ? (referenceToken: string) => referenceValidity.get(referenceToken)
     : undefined;
 
-  const buildDecorations = (view: EditorView) => {
+  const buildDecorations = (view: EditorView, pendingCaret: number | null) => {
     const builder = new RangeSetBuilder<Decoration>();
     for (const chip of findAtomicReferences(
       view.state.doc.toString(),
@@ -1417,7 +1422,12 @@ export function createAtomicReferenceExtension(
       getValidity
     ).filter(
       (candidate) =>
-        !rangeLimiter || rangeLimiter(view, candidate.from, candidate.to)
+        (!rangeLimiter || rangeLimiter(view, candidate.from, candidate.to)) &&
+        !(
+          pendingCaret !== null &&
+          candidate.from < pendingCaret &&
+          pendingCaret <= candidate.to
+        )
     )) {
       builder.add(
         chip.from,
@@ -1428,12 +1438,14 @@ export function createAtomicReferenceExtension(
     return builder.finish();
   };
 
-  return ViewPlugin.fromClass(
+  const chipPlugin = ViewPlugin.fromClass(
     class implements PluginValue {
       decorations;
+      private pendingCaret: number | null;
 
       constructor(view: EditorView) {
-        this.decorations = buildDecorations(view);
+        this.pendingCaret = pendingReferenceCaret(view.state);
+        this.decorations = buildDecorations(view, this.pendingCaret);
       }
 
       update(update: any) {
@@ -1444,8 +1456,14 @@ export function createAtomicReferenceExtension(
               effect.is(referenceValidityUpdatedEffect)
           )
         );
-        if (update.docChanged || chipStateUpdated) {
-          this.decorations = buildDecorations(update.view);
+        const pendingCaret = pendingReferenceCaret(update.state);
+        if (
+          update.docChanged ||
+          chipStateUpdated ||
+          pendingCaret !== this.pendingCaret
+        ) {
+          this.pendingCaret = pendingCaret;
+          this.decorations = buildDecorations(update.view, pendingCaret);
         }
       }
     },
@@ -1457,6 +1475,37 @@ export function createAtomicReferenceExtension(
         ),
     }
   );
+  return [typingCaretField, chipPlugin];
+}
+
+// The caret position while the user is typing or deleting there with an empty
+// selection; anything else that moves the caret (a click, an arrow key, a
+// picked completion) clears it. Lets the chip plugin leave the reference being
+// typed as plain text instead of chipping a half-typed `@backlog/secre`.
+const typingCaretField = StateField.define<number | null>({
+  create: () => null,
+  update(value, tr) {
+    if (tr.docChanged) {
+      const selection = tr.state.selection.main;
+      return selection.empty &&
+        (tr.isUserEvent("input.type") || tr.isUserEvent("delete"))
+        ? selection.head
+        : null;
+    }
+    return tr.selection ? null : value;
+  },
+});
+
+// Where a reference is still being edited, so it stays text: the caret while
+// typing, or while a completion list is open or loading (which also covers
+// Ctrl+Space with the caret at a chip's end, so its options can be seen).
+function pendingReferenceCaret(state: EditorState): number | null {
+  const selection = state.selection.main;
+  if (!selection.empty) return null;
+  return state.field(typingCaretField, false) === selection.head ||
+    completionStatus(state) !== null
+    ? selection.head
+    : null;
 }
 
 // Prompt-editor-specific decoration styles (link, file-ref, code-range, prior-context).

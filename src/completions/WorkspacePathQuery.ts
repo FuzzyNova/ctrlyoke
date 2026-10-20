@@ -213,6 +213,15 @@ export class WorkspacePathQuery {
         candidates.push(position);
       }
     }
+    // `backlog/secre` names no root-level `backlog/`: rather than an empty
+    // list, match the whole query fuzzily against every path, so it finds
+    // `dev/bugs/backlog/secret-...` the way a slash-free query would.
+    if (candidates.length === 0) {
+      const scanned = await this.scan(undefined, options, limit, (position) =>
+        this.scoreAt(position, filter, fileKeys)
+      );
+      return scanned.entries.map(asResult);
+    }
     if (!child) return orderedResults(store, candidates, limit);
     return this.rankCandidates(candidates, child, fileKeys, options, limit);
   }

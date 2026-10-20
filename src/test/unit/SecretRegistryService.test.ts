@@ -275,6 +275,38 @@ suite("SecretRegistryService", () => {
     );
   });
 
+  test("completion names read no credential and scan the workflows once", async () => {
+    const store = new InMemorySecretStore();
+    await store.store(userSecretKey("USER_TOKEN"), "user-value");
+    await store.store(
+      workspaceSecretKeyForRoot("/workspace", "WORKSPACE_TOKEN"),
+      "workspace-value"
+    );
+    let workflowScans = 0;
+    const service = new SecretRegistryService({
+      secretStore: store,
+      getWorkspaceRoot: () => "/workspace",
+      environment: {},
+      getWorkflowReferences: async () => {
+        workflowScans += 1;
+        return [{ workflow: "a.ctrlyoke.yaml", secretNames: [OPENAI_API_KEY] }];
+      },
+      getMcpReferences: async (scope) =>
+        scope === SETTING_SCOPES.USER
+          ? [{ server: "github", secretNames: ["GITHUB_TOKEN"] }]
+          : [],
+    });
+
+    assert.deepStrictEqual((await service.getCompletionNames()).sort(), [
+      "GITHUB_TOKEN",
+      OPENAI_API_KEY,
+      "USER_TOKEN",
+      "WORKSPACE_TOKEN",
+    ]);
+    assert.strictEqual(store.getCalls, 0);
+    assert.strictEqual(workflowScans, 1);
+  });
+
   test("with no folder open there are no workspace secrets, only user ones", async () => {
     const store = new InMemorySecretStore();
     await store.store(userSecretKey(OPENAI_API_KEY), "user-value");

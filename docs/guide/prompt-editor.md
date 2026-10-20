@@ -38,7 +38,7 @@ bold in each row.
 
 | Trigger | Offers                                                                                                                                                                  |
 | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@`     | Files and folders in the workspace. Type a `/` to narrow to a folder.                                                                                                   |
+| `@`     | Files and folders in the workspace. Type a `/` to narrow to a folder; a folder name that isn't at the workspace root, like `@backlog/`, matches anywhere in the path.   |
 | `#`     | Symbols from the language servers, as `#sym:` references. In VS Code, the current selection in each visible editor appears first, as a `#selection:` reference.         |
 | `~`     | `diff` (uncommitted changes), `staged`, your stashes, and recent commits. Typing searches commit subjects and hashes beyond the most recent 50.                         |
 | `$`     | `previous`, `previous:`, `all`, `step:`, `finalStep`, `allFinalStep`, and the `preCondition:` / `endCondition:` script output fields.                                   |
@@ -54,6 +54,11 @@ By default (`ui.atomicContextReferences`), a reference in the editor collapses
 into a compact chip that shows just the file, folder, commit or step name, with
 an icon for its kind. A chip behaves like a single character: the arrow keys
 skip over it, and `Backspace` or `Delete` removes the whole reference.
+
+A reference stays as plain text while you're typing it, and becomes a chip
+when you type a space, pick a completion or move the cursor away. To see the
+completions for a chip again, put the cursor right after it and press
+`Ctrl+Space`.
 
 - Click or tap a chip to open what it points to.
 - Right-click or long-press a chip for **Go to Reference**, **Copy Reference**
