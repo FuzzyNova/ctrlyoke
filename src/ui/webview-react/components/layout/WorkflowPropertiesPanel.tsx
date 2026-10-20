@@ -29,6 +29,7 @@ import { useIsViewingDeletedWorkflow } from "../../hooks/useIsViewingDeletedWork
 import { useIsSystemGeneratedWorkflow } from "../../hooks/useIsSystemGeneratedWorkflow";
 import { useDrawerTabOverrides } from "../../hooks/useDrawerTabOverrides";
 import { useCompatibilityDiagnostics } from "../../hooks/useCompatibilityDiagnostics";
+import { usePickerShortcutRequest } from "../../hooks/usePickerShortcutRequest";
 import {
   MESSAGE_TYPES,
   SESSION_ID_SENTINELS,
@@ -92,6 +93,8 @@ import {
   SETTING_SCOPES,
   TRUSTED_ROOTS_MODES,
   DEFAULT_MAX_STEPS,
+  PICKER_SHORTCUT_TARGETS,
+  type PickerShortcutTarget,
 } from "../../../../types/DashboardConstants";
 import { isUnlimited } from "../../../../utils/LimitUtils";
 import {
@@ -281,6 +284,19 @@ const FormField: React.FC<{
   </div>
 );
 
+/** The drawer page each workflow-level picker shortcut's control lives on. */
+const WORKFLOW_PICKER_SHORTCUT_PAGES = {
+  [PICKER_SHORTCUT_TARGETS.WORKFLOW_HARNESS]: DRAWER_PAGES.HARNESS,
+  [PICKER_SHORTCUT_TARGETS.WORKFLOW_MODEL]: DRAWER_PAGES.HARNESS,
+  [PICKER_SHORTCUT_TARGETS.WORKFLOW_RESUME]: DRAWER_PAGES.CONTEXT,
+} as const satisfies Partial<Record<PickerShortcutTarget, DrawerPage>>;
+
+type WorkflowPickerShortcutTarget = keyof typeof WORKFLOW_PICKER_SHORTCUT_PAGES;
+
+const WORKFLOW_PICKER_SHORTCUT_TARGETS = Object.keys(
+  WORKFLOW_PICKER_SHORTCUT_PAGES
+) as WorkflowPickerShortcutTarget[];
+
 /**
  * WorkflowPropertiesPanel Component
  *
@@ -360,6 +376,12 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const [activePage, setActivePage] = useState<DrawerPage>(
     DRAWER_PAGES.HARNESS
   );
+
+  // Alt+H/M/R: show the page holding the targeted picker. The store has
+  // already expanded the panel; the picker claims the request once mounted.
+  usePickerShortcutRequest(WORKFLOW_PICKER_SHORTCUT_TARGETS, (request) => {
+    setActivePage(WORKFLOW_PICKER_SHORTCUT_PAGES[request.target]);
+  });
 
   // End condition enabled state
   const [endConditionEnabled, setEndConditionEnabled] = useState(
@@ -1688,6 +1710,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <HarnessDropdown
                     id="settings-harness"
+                    shortcutTarget={PICKER_SHORTCUT_TARGETS.WORKFLOW_HARNESS}
                     triggerAriaLabel="Harness"
                     value={effectiveHarness}
                     onChange={handleHarnessChange}
@@ -1729,6 +1752,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   <CustomSelect
                     id="settings-model"
                     schemaPath="model"
+                    shortcutTarget={PICKER_SHORTCUT_TARGETS.WORKFLOW_MODEL}
                     triggerAriaLabel="Model"
                     value={effectiveModel}
                     onChange={handleModelChange}
@@ -2110,6 +2134,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   <CustomSelect
                     id="settings-resume-session"
                     schemaPath="resumeSession"
+                    shortcutTarget={PICKER_SHORTCUT_TARGETS.WORKFLOW_RESUME}
                     triggerAriaLabel="Resume Session"
                     value={
                       workflowProperties.sessionId ===

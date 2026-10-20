@@ -200,6 +200,8 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     setScriptShell,
     pendingPromptEditorInserts,
     consumePromptEditorInsert,
+    pendingPromptEditorFocus,
+    consumePromptEditorFocus,
   } = useEditorStore();
 
   const {
@@ -1448,6 +1450,8 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             }
             pendingInsertRequest={pendingPromptEditorInsert}
             onInsertApplied={consumePromptEditorInsert}
+            pendingFocusRequest={pendingPromptEditorFocus}
+            onFocusApplied={consumePromptEditorFocus}
           />
 
           {/* Properties Drawer (slides up from bottom, overlays only editor) */}

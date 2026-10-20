@@ -9,6 +9,7 @@ import { useWorkflowStore } from "@store/workflowStore";
 import { EXECUTION_STATES } from "@/types/messages";
 import type { ExecutionState, WorkflowSummary } from "@/types/messages";
 import {
+  PICKER_SHORTCUT_TARGETS,
   RUNNER_IDS,
   TOAST_LEVEL_MODES,
   USER_FEEDBACK_SEVERITY,
@@ -80,6 +81,49 @@ describe("revealWorkflowVariable", () => {
     expect(store().workflowVariableRevealRequest).not.toBe(first);
     store().clearWorkflowVariableRevealRequest();
     expect(store().workflowVariableRevealRequest).toBeNull();
+  });
+});
+
+describe("requestPickerShortcut", () => {
+  it("opens the mobile workflow overlay for a workflow target on mobile", () => {
+    useUiStore.setState({ settingsCollapsed: true });
+    store().requestPickerShortcut(PICKER_SHORTCUT_TARGETS.WORKFLOW_RESUME, {
+      mobile: true,
+    });
+    expect(store().mobileWorkflowPropsOpen).toBe(true);
+    expect(store().settingsCollapsed).toBe(true);
+  });
+
+  it("leaves both workflow surfaces alone for a step target", () => {
+    // resetUi() keeps the persisted mobile overlay flag, so pin it here.
+    useUiStore.setState({
+      settingsCollapsed: true,
+      mobileWorkflowPropsOpen: false,
+    });
+    store().requestPickerShortcut(PICKER_SHORTCUT_TARGETS.STEP_RESUME, {
+      mobile: true,
+    });
+    expect(store().mobileWorkflowPropsOpen).toBe(false);
+    expect(store().settingsCollapsed).toBe(true);
+    expect(store().pickerShortcutRequest?.target).toBe(
+      PICKER_SHORTCUT_TARGETS.STEP_RESUME
+    );
+  });
+
+  it("clears only the request it was asked to clear", () => {
+    store().requestPickerShortcut(PICKER_SHORTCUT_TARGETS.STEP_MODEL, {
+      mobile: false,
+    });
+    const stale = store().pickerShortcutRequest?.nonce ?? -1;
+    store().requestPickerShortcut(PICKER_SHORTCUT_TARGETS.STEP_MODEL, {
+      mobile: false,
+    });
+
+    store().clearPickerShortcutRequest(stale);
+    expect(store().pickerShortcutRequest).not.toBeNull();
+
+    store().clearPickerShortcutRequest(stale + 1);
+    expect(store().pickerShortcutRequest).toBeNull();
   });
 });
 

@@ -4577,8 +4577,82 @@ export const KEYBOARD_KEYS = {
   F3: "F3",
   ARROW_UP: "ArrowUp",
   ARROW_DOWN: "ArrowDown",
+  HOME: "Home",
+  END: "End",
+  BACKSPACE: "Backspace",
   TAB: "Tab",
 } as const;
+
+// ============================================================================
+// PICKER SHORTCUTS - Alt (workflow) / Alt+Shift (step) property pickers
+// ============================================================================
+export const PICKER_SHORTCUT_TARGETS = {
+  WORKFLOW_HARNESS: "workflowHarness",
+  WORKFLOW_MODEL: "workflowModel",
+  WORKFLOW_RESUME: "workflowResume",
+  STEP_HARNESS: "stepHarness",
+  STEP_MODEL: "stepModel",
+  STEP_RESUME: "stepResume",
+} as const;
+
+export type PickerShortcutTarget =
+  (typeof PICKER_SHORTCUT_TARGETS)[keyof typeof PICKER_SHORTCUT_TARGETS];
+
+export interface PickerShortcutBinding {
+  /**
+   * `KeyboardEvent.code`, not `key`: Option+letter on macOS types a symbol
+   * (Option+M is "µ"), so `key` never equals the letter there.
+   */
+  code: string;
+  /** The letter shown in shortcut labels. */
+  letter: string;
+  /** Shift selects the step-level picker; plain Alt the workflow-level one. */
+  shift: boolean;
+}
+
+export const PICKER_SHORTCUT_BINDINGS: Record<
+  PickerShortcutTarget,
+  PickerShortcutBinding
+> = {
+  [PICKER_SHORTCUT_TARGETS.WORKFLOW_HARNESS]: {
+    code: "KeyH",
+    letter: "H",
+    shift: false,
+  },
+  [PICKER_SHORTCUT_TARGETS.WORKFLOW_MODEL]: {
+    code: "KeyM",
+    letter: "M",
+    shift: false,
+  },
+  [PICKER_SHORTCUT_TARGETS.WORKFLOW_RESUME]: {
+    code: "KeyR",
+    letter: "R",
+    shift: false,
+  },
+  [PICKER_SHORTCUT_TARGETS.STEP_HARNESS]: {
+    code: "KeyH",
+    letter: "H",
+    shift: true,
+  },
+  [PICKER_SHORTCUT_TARGETS.STEP_MODEL]: {
+    code: "KeyM",
+    letter: "M",
+    shift: true,
+  },
+  [PICKER_SHORTCUT_TARGETS.STEP_RESUME]: {
+    code: "KeyR",
+    letter: "R",
+    shift: true,
+  },
+};
+
+/**
+ * How long a picker shortcut request stays claimable. A request can outlive
+ * the press only while its picker mounts (the workflow properties panel
+ * expanding, a footer popup opening); one nothing claimed in that window is
+ * ignored rather than popping a picker open on some later, unrelated mount.
+ */
+export const PICKER_SHORTCUT_REQUEST_TTL_MS = 3000;
 
 /** Friendly host-OS tag detected client-side from `navigator`, distinct from Node's `process.platform`. */
 export const UI_PLATFORMS = {

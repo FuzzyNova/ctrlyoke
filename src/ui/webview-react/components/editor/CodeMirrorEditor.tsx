@@ -193,6 +193,10 @@ interface CodeMirrorEditorProps {
   pendingInsertRequest?: PromptEditorInsertRequest | null;
   /** Called after a pending external insert has been applied. */
   onInsertApplied?: (requestId: string) => void;
+  /** Nonce of a pending request to focus the editor (caret at the end). */
+  pendingFocusRequest?: number | null;
+  /** Called after a pending focus request has been applied. */
+  onFocusApplied?: (nonce: number) => void;
 }
 
 export type { ContextReferenceValidationResult };
@@ -299,6 +303,8 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     onBlur,
     pendingInsertRequest,
     onInsertApplied,
+    pendingFocusRequest,
+    onFocusApplied,
   } = props;
   const stepCountRef = useRef(props.stepCount ?? 0);
   const hasFinalStepRef = useRef(props.hasFinalStep ?? false);
@@ -480,6 +486,19 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     view.focus();
     onInsertApplied?.(pendingInsertRequest.requestId);
   }, [mode, onInsertApplied, pendingInsertRequest, viewReady]);
+
+  // viewReady re-runs this once a freshly mounted view exists, for a request
+  // made while the editor panel was collapsed (see the insert effect above).
+  useEffect(() => {
+    const view = viewRef.current;
+    if (pendingFocusRequest == null || !view) return;
+    view.dispatch({
+      selection: { anchor: view.state.doc.length },
+      scrollIntoView: true,
+    });
+    view.focus();
+    onFocusApplied?.(pendingFocusRequest);
+  }, [onFocusApplied, pendingFocusRequest, viewReady]);
 
   // Remeasure CodeMirror geometry on visual viewport changes (tooltip repositioning
   // on scroll; caret scroll-into-view on resize when the mobile keyboard opens).

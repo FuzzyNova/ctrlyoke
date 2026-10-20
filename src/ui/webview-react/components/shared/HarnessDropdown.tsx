@@ -1,6 +1,8 @@
 import React, { useId, useState, useRef, useEffect } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
+import { usePickerListbox } from "@hooks/usePickerListbox";
+import { LISTBOX_OPTION_VALUE_ATTRIBUTE } from "@hooks/useListboxKeyboardNavigation";
 import { DropdownPortal } from "./DropdownPortal";
 import { DropdownHiddenToggle } from "./DropdownHiddenToggle";
 import {
@@ -13,10 +15,12 @@ import {
   HARNESS_DISPLAY_ORDER,
   INHERIT_DEFAULT_OPTION,
   USER_FEEDBACK_SEVERITY,
+  type PickerShortcutTarget,
 } from "@root/types/DashboardConstants";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { notifyUser } from "@utils/notifyUser";
+import { withPickerShortcutHint } from "@utils/platform";
 import { useUiStore } from "@store/uiStore";
 import { HarnessIcon } from "./HarnessIcon";
 import { useHarnessUsageStore } from "@store/harnessUsageStore";
@@ -83,12 +87,22 @@ const StatusIndicator: React.FC<{ status: HarnessAvailabilityStatus }> = ({
   />
 );
 
+/** Unavailable harnesses can't be picked; one still being checked can. */
+function isHarnessSelectable(status: HarnessAvailabilityStatus | undefined) {
+  return (
+    status?.available !== false ||
+    status?.status === HARNESS_STATUS_STRINGS.CHECKING
+  );
+}
+
 // ─── Harness row ──────────────────────────────────────────────────────────────
 
 interface HarnessRowProps {
   harness: HarnessId;
   schemaPath: string;
   isSelected: boolean;
+  /** Keyboard highlight (see usePickerListbox). */
+  isActive: boolean;
   isHidden: boolean;
   showStatus: boolean;
   narrow: boolean;
@@ -104,6 +118,7 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
   harness,
   schemaPath,
   isSelected,
+  isActive,
   isHidden,
   showStatus,
   narrow,
@@ -115,8 +130,7 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
   onUnhide,
 }) => {
   const status = harnessStatus?.[harness];
-  const isAvailable = status?.available !== false;
-  const isChecking = status?.status === HARNESS_STATUS_STRINGS.CHECKING;
+  const isSelectable = isHarnessSelectable(status);
   const name = HARNESS_DISPLAY_NAMES[harness] ?? harness;
 
   const usageSnapshot = useHarnessUsageStore(
@@ -176,22 +190,21 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
   return (
     <div
       title={rowTooltip}
+      {...{ [LISTBOX_OPTION_VALUE_ATTRIBUTE]: harness }}
       className={`group flex items-center pr-2 gap-1 ${
         isSelected
           ? "bg-dropdown-selected-bg text-list-active-fg cy-dropdown-row-selected"
-          : !isAvailable && !isChecking
+          : !isSelectable
             ? "opacity-50 cursor-not-allowed"
             : "hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer cy-dropdown-row"
-      }`}
+      }${isActive ? " cy-dropdown-row-active" : ""}`}
     >
       <button
         type="button"
         title={schemaOptionTitle(name, rowTooltip, schemaPath, harness)}
         aria-label={schemaAriaLabel(name, schemaPath, harness)}
-        onClick={() =>
-          isAvailable || isChecking ? onSelect(harness) : undefined
-        }
-        disabled={!isAvailable && !isChecking}
+        onClick={() => (isSelectable ? onSelect(harness) : undefined)}
+        disabled={!isSelectable}
         className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left focus:outline-hidden border-none bg-transparent disabled:cursor-not-allowed cursor-inherit flex items-center gap-1.5"
       >
         <HarnessIcon harnessId={harness} size={13} />
@@ -253,6 +266,10 @@ export interface HarnessDropdownProps {
   /** When true, renders the list inline without a trigger button. Used in FooterQuickPicker. */
   inline?: boolean;
   disabled?: boolean;
+  /** The Alt/Alt+Shift picker shortcut that opens this dropdown. */
+  shortcutTarget?: PickerShortcutTarget;
+  /** Inline mode: close the host popup (Escape/Tab from the keyboard). */
+  onRequestClose?: () => void;
 }
 
 export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
@@ -275,6 +292,8 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
   dropdownMaxHeight = "60vh",
   inline = false,
   disabled = false,
+  shortcutTarget,
+  onRequestClose,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const reactId = useId();
@@ -339,24 +358,55 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
     });
   };
 
-  useClickOutside(
-    [buttonRef, popupRef],
-    isOpen,
-    () => {
-      setIsOpen(false);
-      setShowHidden(false);
-    },
-    !inline
-  );
-
-  const handleSelect = (harnessId: string) => {
-    onChange(harnessId);
+  const closeDropdown = () => {
     setIsOpen(false);
     setShowHidden(false);
   };
 
+  useClickOutside([buttonRef, popupRef], isOpen, closeDropdown, !inline);
+
+  const handleSelect = (harnessId: string) => {
+    onChange(harnessId);
+    closeDropdown();
+  };
+
   // ── Hide helpers ──────────────────────────────────────────────────────────
   const isHiddenValue = (h: HarnessId) => hiddenValues.includes(h);
+
+  const defaultOptionLabel = defaultHarnessId
+    ? `Inherit (${HARNESS_DISPLAY_NAMES[defaultHarnessId] ?? defaultHarnessId})`
+    : (defaultLabel ?? "Default");
+
+  // Rows in display order, as the keyboard sees them: hidden and
+  // unavailable harnesses are skipped.
+  const navigation = usePickerListbox({
+    shortcutTarget,
+    inline,
+    isOpen: inline || isOpen,
+    onOpen: () => setIsOpen(true),
+    disabled,
+    options: [
+      ...(value === BULK_MIXED_OPTION
+        ? [{ value: BULK_MIXED_OPTION, label: "(mixed)" }]
+        : []),
+      ...(showDefault
+        ? [{ value: INHERIT_DEFAULT_OPTION, label: defaultOptionLabel }]
+        : []),
+      ...HARNESS_DISPLAY_ORDER.filter(
+        (harness) =>
+          !isHiddenValue(harness) &&
+          isHarnessSelectable(harnessStatus?.[harness])
+      ).map((harness) => ({
+        value: harness,
+        label: HARNESS_DISPLAY_NAMES[harness] ?? harness,
+      })),
+    ],
+    selectedValue: value,
+    onCommit: handleSelect,
+    onDismiss: inline ? () => onRequestClose?.() : closeDropdown,
+  });
+  const activeRowClass = (rowValue: string) =>
+    navigation.activeValue === rowValue ? " cy-dropdown-row-active" : "";
 
   const canHide = (h: HarnessId) =>
     !NON_HIDEABLE.includes(h) &&
@@ -376,6 +426,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
           harness={harness}
           schemaPath={schemaPath}
           isSelected={value === harness}
+          isActive={navigation.activeValue === harness}
           isHidden={hidden}
           showStatus={showStatus}
           narrow={isNarrow}
@@ -406,9 +457,19 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
   );
 
   const scrollableList = (
-    <div className="overflow-y-auto min-h-0 flex-1">
+    <div
+      ref={navigation.listRef}
+      id={listboxId}
+      role="listbox"
+      tabIndex={-1}
+      onKeyDown={navigation.onKeyDown}
+      className="overflow-y-auto min-h-0 flex-1 outline-hidden"
+    >
       {value === BULK_MIXED_OPTION && (
-        <div className="flex items-center">
+        <div
+          {...{ [LISTBOX_OPTION_VALUE_ATTRIBUTE]: BULK_MIXED_OPTION }}
+          className={`flex items-center${activeRowClass(BULK_MIXED_OPTION)}`}
+        >
           <button
             type="button"
             onClick={() => handleSelect(BULK_MIXED_OPTION)}
@@ -422,11 +483,12 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
       {/* "Default" sentinel (PropertiesDrawer / FooterQuickPicker) */}
       {showDefault && (
         <div
+          {...{ [LISTBOX_OPTION_VALUE_ATTRIBUTE]: INHERIT_DEFAULT_OPTION }}
           className={`flex items-center ${
             value === INHERIT_DEFAULT_OPTION
               ? "bg-dropdown-selected-bg text-list-active-fg cy-dropdown-row-selected"
               : "hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer cy-dropdown-row"
-          }`}
+          }${activeRowClass(INHERIT_DEFAULT_OPTION)}`}
         >
           <button
             type="button"
@@ -521,10 +583,13 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
           title={
             disabled && triggerTitle
               ? triggerTitle
-              : schemaTitle(
-                  schemaPath,
-                  triggerSchemaValue,
-                  triggerTitle ?? triggerStatusHint
+              : withPickerShortcutHint(
+                  schemaTitle(
+                    schemaPath,
+                    triggerSchemaValue,
+                    triggerTitle ?? triggerStatusHint
+                  ),
+                  shortcutTarget
                 )
           }
           className="cy-select-trigger cy-dropdown-row flex-1 min-w-0"
@@ -576,13 +641,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
         )}
       </div>
 
-      <DropdownPortal
-        isOpen={isOpen}
-        popupPos={popupPos}
-        ref={popupRef}
-        id={listboxId}
-        role="listbox"
-      >
+      <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
         {scrollableList}
         {toggleBar()}
       </DropdownPortal>

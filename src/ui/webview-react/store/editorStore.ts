@@ -298,6 +298,12 @@ interface EditorState {
   // Validation state
   validationErrors: Record<string, string>;
   pendingPromptEditorInserts: PromptEditorInsertRequest[];
+  /**
+   * Nonce of an unclaimed request to focus the prompt editor (Tab/Enter out of
+   * the workflow name). CodeMirrorEditor claims it once its view exists, which
+   * covers a request made while the editor panel was collapsed.
+   */
+  pendingPromptEditorFocus: number | null;
 }
 
 /** The single source for draft capture, persistence, and restoration. */
@@ -371,6 +377,9 @@ function replyContextAfterPropertyChange(
     ? replyContext
     : null;
 }
+
+// Module-level so a request after a consumed one never reuses its nonce.
+let promptEditorFocusNonce = 0;
 
 function expandPromptEditorIfCollapsed(): void {
   const uiState = useUiStore.getState();
@@ -449,6 +458,9 @@ interface EditorActions {
   preparePromptEditorForInsert: () => void;
   enqueuePromptEditorInsert: (request: PromptEditorInsertRequest) => void;
   consumePromptEditorInsert: (requestId: string) => void;
+  /** Focus the prompt editor, expanding its panel first if collapsed. */
+  requestPromptEditorFocus: () => void;
+  consumePromptEditorFocus: (nonce: number) => void;
 
   // Pending edit cache
   clearAllPendingEdits: () => void;
@@ -524,6 +536,7 @@ const initialState: EditorState = {
   isDirty: false,
   validationErrors: {},
   pendingPromptEditorInserts: [],
+  pendingPromptEditorFocus: null,
 };
 
 export const useEditorStore = create<
@@ -1487,6 +1500,19 @@ export const useEditorStore = create<
         (request) => request.requestId !== requestId
       ),
     })),
+
+  requestPromptEditorFocus: () => {
+    expandPromptEditorIfCollapsed();
+    promptEditorFocusNonce += 1;
+    set({ pendingPromptEditorFocus: promptEditorFocusNonce });
+  },
+
+  consumePromptEditorFocus: (nonce) =>
+    set((state) =>
+      state.pendingPromptEditorFocus === nonce
+        ? { pendingPromptEditorFocus: null }
+        : {}
+    ),
 
   // ============================================================================
   // PENDING EDIT CACHE

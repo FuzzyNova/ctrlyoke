@@ -531,6 +531,29 @@ describe("prompt editor inserts", () => {
   });
 });
 
+describe("prompt editor focus requests", () => {
+  it("expands a collapsed editor so it can mount and claim the request", () => {
+    useUiStore.setState({ editorCollapsed: true });
+
+    store().requestPromptEditorFocus();
+
+    expect(useUiStore.getState().editorCollapsed).toBe(false);
+    expect(store().pendingPromptEditorFocus).not.toBeNull();
+  });
+
+  it("consumes only the request it was handed", () => {
+    store().requestPromptEditorFocus();
+    const stale = store().pendingPromptEditorFocus ?? -1;
+    store().requestPromptEditorFocus();
+
+    store().consumePromptEditorFocus(stale);
+    expect(store().pendingPromptEditorFocus).not.toBeNull();
+
+    store().consumePromptEditorFocus(stale + 1);
+    expect(store().pendingPromptEditorFocus).toBeNull();
+  });
+});
+
 describe("step enabled state", () => {
   it("preserves a toggled enabled state in pending edits", () => {
     store().enterEditMode(0, makePromptStep({ enabled: false }));

@@ -17,6 +17,7 @@ import { useHarnessUsageStore } from "@store/harnessUsageStore";
 import {
   INHERIT_DEFAULT_OPTION,
   MESSAGE_TYPES,
+  PICKER_SHORTCUT_TARGETS,
 } from "@root/types/DashboardConstants";
 import { sendMessage } from "@hooks/useMessageHandler";
 import { buildHarnessChangeCascade } from "@utils/harnessChangeCascade";
@@ -131,8 +132,11 @@ export const HarnessQuickPicker: React.FC<HarnessQuickPickerProps> = ({
       popupMinWidth="220px"
       disabled={disabled}
       disabledReason={disabledReason}
+      shortcutTarget={PICKER_SHORTCUT_TARGETS.STEP_HARNESS}
     >
       <HarnessDropdown
+        shortcutTarget={PICKER_SHORTCUT_TARGETS.STEP_HARNESS}
+        onRequestClose={() => setFooterOpenPicker(null)}
         schemaPath="harness"
         value={
           harnessValue === MIXED_VALUE

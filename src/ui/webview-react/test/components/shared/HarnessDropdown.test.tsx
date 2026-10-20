@@ -1,7 +1,17 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { HarnessDropdown } from "@components/shared/HarnessDropdown";
 import {
+  HARNESS_DISPLAY_ORDER,
+  INHERIT_DEFAULT_OPTION,
+  PICKER_SHORTCUT_TARGETS,
+  type PickerShortcutTarget,
   HARNESS_IDS,
   HARNESS_QUOTA_SOURCES,
   HARNESS_USAGE_CONFIDENCE,
@@ -386,5 +396,73 @@ describe("HarnessDropdown", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("Install codex-cli")).toBeNull();
     expect(screen.getByText("Install claude-cli")).toBeInTheDocument();
+  });
+});
+
+describe("HarnessDropdown — picker shortcut and keyboard navigation", () => {
+  function press(target: PickerShortcutTarget) {
+    act(() => {
+      useUiStore.getState().requestPickerShortcut(target, { mobile: false });
+    });
+  }
+
+  function activeValue() {
+    return document
+      .querySelector(".cy-dropdown-row-active")
+      ?.getAttribute("data-listbox-value");
+  }
+
+  afterEach(() => {
+    useUiStore.setState({ pickerShortcutRequest: null });
+  });
+
+  it("opens on the shortcut, skips unavailable and hidden harnesses, and commits", async () => {
+    const onChange = vi.fn();
+    render(
+      <HarnessDropdown
+        value={HARNESS_IDS.CLAUDE_CLI}
+        onChange={onChange}
+        shortcutTarget={PICKER_SHORTCUT_TARGETS.WORKFLOW_HARNESS}
+        hiddenValues={[HARNESS_IDS.COPILOT_CLI]}
+        harnessStatus={{
+          [HARNESS_IDS.CODEX_CLI]: {
+            available: false,
+            status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
+          },
+        }}
+      />
+    );
+
+    press(PICKER_SHORTCUT_TARGETS.WORKFLOW_HARNESS);
+    const listbox = await screen.findByRole("listbox");
+    await waitFor(() => expect(listbox).toHaveFocus());
+    expect(activeValue()).toBe(HARNESS_IDS.CLAUDE_CLI);
+
+    // Codex (unavailable) and Copilot (hidden) are skipped.
+    fireEvent.keyDown(listbox, { key: "ArrowDown" });
+    expect(activeValue()).toBe(HARNESS_IDS.OPENCODE_CLI);
+
+    fireEvent.keyDown(listbox, { key: "Enter" });
+    expect(onChange).toHaveBeenCalledWith(HARNESS_IDS.OPENCODE_CLI);
+  });
+
+  it("includes the Inherit sentinel inline and advances on a repeat press", async () => {
+    render(
+      <HarnessDropdown
+        value={INHERIT_DEFAULT_OPTION}
+        onChange={vi.fn()}
+        showDefault
+        inline
+        shortcutTarget={PICKER_SHORTCUT_TARGETS.STEP_HARNESS}
+      />
+    );
+
+    press(PICKER_SHORTCUT_TARGETS.STEP_HARNESS);
+    const listbox = screen.getByRole("listbox");
+    await waitFor(() => expect(listbox).toHaveFocus());
+    expect(activeValue()).toBe(INHERIT_DEFAULT_OPTION);
+
+    press(PICKER_SHORTCUT_TARGETS.STEP_HARNESS);
+    expect(activeValue()).toBe(HARNESS_DISPLAY_ORDER[0]);
   });
 });

@@ -11,6 +11,7 @@ import { CustomSelect } from "../shared";
 import { FooterQuickPicker } from "./FooterQuickPicker";
 import {
   INHERIT_DEFAULT_OPTION,
+  PICKER_SHORTCUT_TARGETS,
   PROMPT_PROPERTIES,
   RESUME_SESSION_SELECTIONS,
 } from "@root/types/DashboardConstants";
@@ -125,10 +126,13 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
       popupMinWidth="260px"
       disabled={disabled}
       disabledReason={disabledReason}
+      shortcutTarget={PICKER_SHORTCUT_TARGETS.STEP_RESUME}
     >
       <div className="flex flex-col gap-3 p-3">
         <div className="flex flex-col gap-1.5">
           <CustomSelect
+            shortcutTarget={PICKER_SHORTCUT_TARGETS.STEP_RESUME}
+            onRequestClose={() => setFooterOpenPicker(null)}
             value={resumeSessionValue}
             onChange={handleResumeSessionChange}
             schemaPath="resumeSession"

@@ -147,6 +147,47 @@ describe("CodeMirrorEditor ui.wordWrap", () => {
   });
 });
 
+// Tab/Enter out of the workflow name hands focus to the prompt editor.
+describe("CodeMirrorEditor focus requests", () => {
+  const renderEditor = (
+    pendingFocusRequest: number | null,
+    onFocusApplied = vi.fn()
+  ) =>
+    render(
+      <CodeMirrorEditor
+        value="draft prompt"
+        onChange={vi.fn()}
+        affUri=""
+        dicUri=""
+        pendingFocusRequest={pendingFocusRequest}
+        onFocusApplied={onFocusApplied}
+      />
+    );
+
+  it("claims a request pending at mount: focus, caret at the end", () => {
+    const onFocusApplied = vi.fn();
+    const { container } = renderEditor(7, onFocusApplied);
+
+    const view = EditorView.findFromDOM(
+      container.querySelector(".cm-editor") as HTMLElement
+    );
+    expect(view?.hasFocus).toBe(true);
+    expect(view?.state.selection.main.head).toBe("draft prompt".length);
+    expect(onFocusApplied).toHaveBeenCalledWith(7);
+  });
+
+  it("does nothing without a request", () => {
+    const onFocusApplied = vi.fn();
+    const { container } = renderEditor(null, onFocusApplied);
+
+    const view = EditorView.findFromDOM(
+      container.querySelector(".cm-editor") as HTMLElement
+    );
+    expect(view?.hasFocus).toBe(false);
+    expect(onFocusApplied).not.toHaveBeenCalled();
+  });
+});
+
 describe("CodeMirrorEditor condition-output references", () => {
   it("offers both condition-output namespaces through the dollar completion source", () => {
     expect(findCustomCompletionContext("$preCondition:", 0)).toEqual({

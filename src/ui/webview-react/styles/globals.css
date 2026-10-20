@@ -1557,6 +1557,14 @@ button .cy-lucide-icon {
     outline: 1px solid var(--vscode-contrastActiveBorder, transparent);
     outline-offset: -1px;
   }
+  /* Keyboard highlight in a focused option list (usePickerListbox) — drawn
+     the way VS Code marks the focused row of its own lists. Declared after
+     -selected so it wins on the selected row too. */
+  .cy-dropdown-row-active {
+    outline: 1px solid
+      var(--vscode-list-focusOutline, var(--vscode-focusBorder));
+    outline-offset: -1px;
+  }
 
   /* Reserve the scrollbar's track permanently instead of only while it's
      shown. Without this, VS Code's webview can render the scrollbar as a

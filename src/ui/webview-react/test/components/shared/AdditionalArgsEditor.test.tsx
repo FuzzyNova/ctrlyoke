@@ -95,6 +95,9 @@ describe("AdditionalArgsEditor", () => {
   });
 
   it("uses the new harness after a harness id change", async () => {
+    // Under a full `npm test` this case has taken 7s+ to type its input, so
+    // waitFor's 1s default gave up before the completion request landed.
+    const waitOptions = { timeout: 5000 };
     const user = userEvent.setup();
     const rendered = renderEditor({
       harnessId: HARNESS_IDS.COPILOT_CLI,
@@ -110,7 +113,7 @@ describe("AdditionalArgsEditor", () => {
             message.harnessId === HARNESS_IDS.COPILOT_CLI
         )
       ).toBe(true);
-    });
+    }, waitOptions);
 
     postMessage.mockClear();
     rendered.rerender(
@@ -138,7 +141,7 @@ describe("AdditionalArgsEditor", () => {
             message.text === "--c"
         )
       ).toBe(true);
-    });
+    }, waitOptions);
   });
 
   it("offers value hints after a flag token", async () => {

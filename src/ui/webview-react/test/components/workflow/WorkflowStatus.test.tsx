@@ -12,10 +12,12 @@ import {
   act,
   within,
   fireEvent,
+  createEvent,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { WorkflowStatus } from "@components/workflow/WorkflowStatus";
 import { useWorkflowStore } from "@store/workflowStore";
+import { useEditorStore } from "@store/editorStore";
 import { useUiStore, type RecentWorkflow } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useTerminalStore } from "@store/terminalStore";
@@ -298,6 +300,89 @@ describe("WorkflowStatus — loaded state", () => {
       screen.queryByPlaceholderText("Name your workflow...")
     ).not.toBeInTheDocument();
     expect(screen.getAllByText("New Workflow").length).toBeGreaterThan(0);
+  });
+
+  describe("handing focus on to the prompt editor", () => {
+    beforeEach(() => {
+      useEditorStore.setState({ pendingPromptEditorFocus: null });
+    });
+
+    async function nameNewWorkflow() {
+      render(<WorkflowStatus />);
+      act(() => {
+        useWorkflowStore.setState({
+          fileName: DEFAULT_WORKFLOW_NAME,
+          workflowName: null,
+          totalSteps: 0,
+        });
+      });
+      const input = await screen.findByPlaceholderText("Name your workflow...");
+      fireEvent.change(input, { target: { value: "Fix login" } });
+      return input;
+    }
+
+    it("saves the name and requests prompt focus on Tab", async () => {
+      const input = await nameNewWorkflow();
+
+      const event = createEvent.keyDown(input, { key: "Tab" });
+      fireEvent(input, event);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(postMessageSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: MESSAGE_TYPES.UPDATE_WORKFLOW_NAME,
+          workflowName: "Fix login",
+        })
+      );
+      expect(useEditorStore.getState().pendingPromptEditorFocus).not.toBeNull();
+    });
+
+    it("leaves Shift+Tab to the browser", async () => {
+      const input = await nameNewWorkflow();
+
+      fireEvent.keyDown(input, { key: "Tab", shiftKey: true });
+
+      expect(useEditorStore.getState().pendingPromptEditorFocus).toBeNull();
+    });
+
+    it("requests prompt focus on Enter while naming a fresh workflow", async () => {
+      const input = await nameNewWorkflow();
+
+      fireEvent.keyDown(input, { key: "Enter" });
+
+      expect(useEditorStore.getState().pendingPromptEditorFocus).not.toBeNull();
+    });
+
+    it("only saves on Enter when renaming an existing workflow", () => {
+      render(<WorkflowStatus />);
+      fireEvent.click(
+        screen.getByRole("button", { name: "Edit workflow name" })
+      );
+      const input = screen.getByPlaceholderText("Name your workflow...");
+      fireEvent.change(input, { target: { value: "Renamed" } });
+
+      fireEvent.keyDown(input, { key: "Enter" });
+
+      expect(postMessageSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: MESSAGE_TYPES.UPDATE_WORKFLOW_NAME,
+          workflowName: "Renamed",
+        })
+      );
+      expect(useEditorStore.getState().pendingPromptEditorFocus).toBeNull();
+    });
+
+    it("still moves on with Tab when renaming an existing workflow", () => {
+      render(<WorkflowStatus />);
+      fireEvent.click(
+        screen.getByRole("button", { name: "Edit workflow name" })
+      );
+      const input = screen.getByPlaceholderText("Name your workflow...");
+
+      fireEvent.keyDown(input, { key: "Tab" });
+
+      expect(useEditorStore.getState().pendingPromptEditorFocus).not.toBeNull();
+    });
   });
 
   it("copies the displayed run directory from the header target", async () => {

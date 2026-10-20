@@ -43,13 +43,24 @@ export interface StatusBarView {
 const PRODUCT_LABEL = "ctrlyoke";
 
 /**
+ * The logo glyph package.json contributes under `contributes.icons`, built by
+ * `scripts/generate-icon-font.mjs`.
+ */
+export const PRODUCT_ICON_ID = "ctrlyoke-logo";
+const PRODUCT_ICON = `$(${PRODUCT_ICON_ID})`;
+
+/**
  * Describe the status bar for the session's workflow activity. Severity picks
  * the icon and color: an unseen failure, then a paused workflow, then running
  * work, then a just-completed run, then harness readiness when nothing is live.
+ * Running work and readiness both show the logo; the text tells them apart.
+ * `label` names the product in the item's text (e.g. "ctrlyoke Pro"); the
+ * tooltip always says plain "ctrlyoke".
  */
 export function buildStatusBarView(
   activity: WorkflowActivitySummary,
-  harnessStatus?: DefaultHarnessStatus
+  harnessStatus?: DefaultHarnessStatus,
+  label: string = PRODUCT_LABEL
 ): StatusBarView {
   const { running, paused, unseenFailures, recentCompletion } = activity;
   const failureCount = unseenFailures.length;
@@ -58,13 +69,16 @@ export function buildStatusBarView(
   if (failureCount === 0 && liveCount === 0) {
     if (recentCompletion) {
       return {
-        text: `$(check) ${PRODUCT_LABEL} Complete`,
+        text: `$(check) ${label} Complete`,
         tooltip: `${PRODUCT_LABEL} - ${displayName(recentCompletion)} completed successfully`,
         background: undefined,
         command: VSCODE_COMMANDS.OPEN_PANEL,
       };
     }
-    return { ...getHarnessStatusDisplay(harnessStatus), background: undefined };
+    return {
+      ...getHarnessStatusDisplay(harnessStatus, label),
+      background: undefined,
+    };
   }
 
   const tooltipLines = [
@@ -75,7 +89,7 @@ export function buildStatusBarView(
 
   if (failureCount > 0) {
     return {
-      text: `$(error) ${PRODUCT_LABEL} ${joinCounts(failureCount, paused.length, running.length)}`,
+      text: `$(error) ${label} ${joinCounts(failureCount, paused.length, running.length)}`,
       tooltip: [
         PRODUCT_LABEL,
         ...tooltipLines,
@@ -89,12 +103,12 @@ export function buildStatusBarView(
     };
   }
 
-  const icon = paused.length > 0 ? "$(debug-pause)" : "$(compass-dot)";
+  const icon = paused.length > 0 ? "$(debug-pause)" : PRODUCT_ICON;
   const onlyLive = liveCount === 1 ? (paused[0] ?? running[0]) : undefined;
   return {
     text: onlyLive
-      ? `${icon} ${PRODUCT_LABEL} ${onlyLive.progressLabel}`
-      : `${icon} ${PRODUCT_LABEL} ${joinCounts(0, paused.length, running.length)}`,
+      ? `${icon} ${label} ${onlyLive.progressLabel}`
+      : `${icon} ${label} ${joinCounts(0, paused.length, running.length)}`,
     tooltip: [PRODUCT_LABEL, ...tooltipLines, "", "Click to open"].join("\n"),
     background: paused.length > 0 ? STATUS_BAR_BACKGROUNDS.WARNING : undefined,
     command: VSCODE_COMMANDS.OPEN_PANEL,
@@ -120,12 +134,13 @@ function describeLive(entry: LiveWorkflowActivity): string {
 }
 
 function getHarnessStatusDisplay(
-  harnessStatus: DefaultHarnessStatus | undefined
+  harnessStatus: DefaultHarnessStatus | undefined,
+  label: string
 ): Omit<StatusBarView, "background"> {
   const openPanel = VSCODE_COMMANDS.OPEN_PANEL;
   if (!harnessStatus) {
     return {
-      text: `$(compass) ${PRODUCT_LABEL}`,
+      text: `${PRODUCT_ICON} ${label}`,
       tooltip: `${PRODUCT_LABEL} - Click to open`,
       command: openPanel,
     };
@@ -134,19 +149,19 @@ function getHarnessStatusDisplay(
   switch (harnessStatus.initializationStatus) {
     case HarnessStatus.Initializing:
       return {
-        text: `$(compass) ${PRODUCT_LABEL} - Initializing...`,
+        text: `${PRODUCT_ICON} ${label} - Initializing...`,
         tooltip: `${PRODUCT_LABEL} - Checking ${harnessName} availability...`,
         command: openPanel,
       };
     case HarnessStatus.Ready:
       return {
-        text: `$(compass-active) ${PRODUCT_LABEL} - Ready`,
+        text: `${PRODUCT_ICON} ${label} - Ready`,
         tooltip: `${PRODUCT_LABEL} - Ready to run workflows with ${harnessName}`,
         command: openPanel,
       };
     case HarnessStatus.Unavailable:
       return {
-        text: `$(warning) ${PRODUCT_LABEL} - Setup Required`,
+        text: `$(warning) ${label} - Setup Required`,
         tooltip: `${PRODUCT_LABEL} - ${harnessName} was not found. Install it and sign in, then click to check again.`,
         command: VSCODE_COMMANDS.RETRY_HARNESS_DETECTION,
       };
@@ -155,16 +170,16 @@ function getHarnessStatusDisplay(
 
 /**
  * A single VS Code status bar item for ctrlyoke. Renders the session's
- * workflow activity (see {@link buildStatusBarView}) together with the current
- * license tier, so the two previous displays — the compass status and the
- * license key indicator — live in one place.
+ * workflow activity (see {@link buildStatusBarView}) with the current license
+ * tier folded into the product name ("ctrlyoke Pro", "ctrlyoke Free").
  */
 export class StatusBarManager implements vscode.Disposable, StatusBarSink {
   private readonly statusBarItem: vscode.StatusBarItem;
   private readonly entitlementSubscription: vscode.Disposable | undefined;
   private readonly showLicense: boolean;
   private entitlement: Entitlement = createDefaultEntitlement();
-  private baseView: StatusBarView = buildStatusBarView(EMPTY_WORKFLOW_ACTIVITY);
+  private activity: WorkflowActivitySummary = EMPTY_WORKFLOW_ACTIVITY;
+  private harnessStatus: DefaultHarnessStatus | undefined;
 
   constructor(
     context: Pick<vscode.ExtensionContext, "subscriptions">,
@@ -205,7 +220,8 @@ export class StatusBarManager implements vscode.Disposable, StatusBarSink {
     activity: WorkflowActivitySummary,
     harnessStatus?: DefaultHarnessStatus
   ): void {
-    this.baseView = buildStatusBarView(activity, harnessStatus);
+    this.activity = activity;
+    this.harnessStatus = harnessStatus;
     this.render();
   }
 
@@ -226,41 +242,34 @@ export class StatusBarManager implements vscode.Disposable, StatusBarSink {
   }
 
   /**
-   * Re-apply the base activity view combined with the current license tier.
+   * Rebuild the activity view, naming the product with the current license
+   * tier when a license service is present.
    */
   private render(): void {
-    if (this.showLicense) {
-      this.statusBarItem.text = `${this.baseView.text} ${this.getLicenseText()}`;
-      this.statusBarItem.tooltip = `${this.baseView.tooltip}\n\n${this.getLicenseTooltip()}`;
-    } else {
-      this.statusBarItem.text = this.baseView.text;
-      this.statusBarItem.tooltip = this.baseView.tooltip;
-    }
-    this.statusBarItem.backgroundColor = this.baseView.background
-      ? new vscode.ThemeColor(this.baseView.background)
+    const tierName = getTierName(this.entitlement);
+    const view = buildStatusBarView(
+      this.activity,
+      this.harnessStatus,
+      this.showLicense ? `${PRODUCT_LABEL} ${tierName}` : PRODUCT_LABEL
+    );
+    this.statusBarItem.text = view.text;
+    this.statusBarItem.tooltip = this.showLicense
+      ? `${view.tooltip}\n\n${this.getLicenseTooltip(tierName)}`
+      : view.tooltip;
+    this.statusBarItem.backgroundColor = view.background
+      ? new vscode.ThemeColor(view.background)
       : undefined;
-    this.statusBarItem.command = this.baseView.command;
+    this.statusBarItem.command = view.command;
     this.statusBarItem.show();
   }
 
-  private getLicenseText(): string {
-    const tierLabel =
-      this.entitlement.tier === LICENSE_TIERS.PRO
-        ? this.entitlement.isEnterprise
-          ? "Enterprise"
-          : "Pro"
-        : "Free";
-    return `$(key) ${tierLabel}`;
-  }
-
-  private getLicenseTooltip(): string {
+  private getLicenseTooltip(tierName: string): string {
     if (this.entitlement.tier === LICENSE_TIERS.PRO) {
-      const tierName = this.entitlement.isEnterprise ? "Enterprise" : "Pro";
-      return `ctrlyoke ${tierName} license — ${formatEntitlementDetails(
+      return `${PRODUCT_LABEL} ${tierName} license — ${formatEntitlementDetails(
         this.entitlement
       )}`;
     }
-    return "ctrlyoke Free tier";
+    return `${PRODUCT_LABEL} ${tierName} tier`;
   }
 
   /**
@@ -278,6 +287,13 @@ function createDefaultEntitlement(): Entitlement {
     features: new Set<string>(),
     expiresAt: null,
   };
+}
+
+function getTierName(entitlement: Entitlement): string {
+  if (entitlement.tier !== LICENSE_TIERS.PRO) {
+    return "Free";
+  }
+  return entitlement.isEnterprise ? "Enterprise" : "Pro";
 }
 
 function formatEntitlementDetails(entitlement: Entitlement): string {

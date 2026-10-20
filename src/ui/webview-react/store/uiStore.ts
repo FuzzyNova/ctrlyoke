@@ -13,10 +13,12 @@ import { EXECUTION_STATES, type FooterPicker } from "../types/messages";
 import { isExecutionFinished } from "../utils/status";
 import type {
   OutputTab,
+  PickerShortcutTarget,
   TemplateVariableType,
   TemplateVariableDefaultSource,
 } from "@root/types/DashboardConstants";
 import {
+  PICKER_SHORTCUT_BINDINGS,
   SETTING_SCOPES,
   TEMPLATE_VARIABLE_DEFAULT_SOURCES,
 } from "@root/types/DashboardConstants";
@@ -377,6 +379,19 @@ function withHiddenOutputKeys(
 export interface WorkflowVariableRevealRequest {
   name: string;
   nonce: number;
+}
+
+/**
+ * An Alt/Alt+Shift picker shortcut press (see usePickerShortcutKeyHandler).
+ * The picker for `target` claims it: the first press opens and focuses it, a
+ * repeat press while it has focus moves to the next option. `issuedAt` lets a
+ * picker that mounts in response (the workflow properties panel expanding)
+ * still claim it, within PICKER_SHORTCUT_REQUEST_TTL_MS.
+ */
+export interface PickerShortcutRequest {
+  target: PickerShortcutTarget;
+  nonce: number;
+  issuedAt: number;
 }
 
 export interface PendingOutputFindRequest {
@@ -830,6 +845,9 @@ interface UiState {
   // Transient, not persisted: consumed by WorkflowPropertiesPanel.
   workflowVariableRevealRequest: WorkflowVariableRevealRequest | null;
 
+  // Transient, not persisted: claimed by the targeted picker.
+  pickerShortcutRequest: PickerShortcutRequest | null;
+
   // Global settings drawer state
   globalSettingsOpen: boolean;
   globalSettingsActiveTab: string;
@@ -1172,6 +1190,17 @@ interface UiActions {
    */
   revealWorkflowVariable: (name: string, options: { mobile: boolean }) => void;
   clearWorkflowVariableRevealRequest: () => void;
+  /**
+   * Record a picker shortcut press. A workflow-level target also opens the
+   * workflow properties panel (the mobile overlay when `mobile`), so its
+   * picker can mount and claim the request.
+   */
+  requestPickerShortcut: (
+    target: PickerShortcutTarget,
+    options: { mobile: boolean }
+  ) => void;
+  /** Drop the request, but only if it is still the one with `nonce`. */
+  clearPickerShortcutRequest: (nonce: number) => void;
 
   // Global settings drawer actions
   toggleGlobalSettings: () => void;
@@ -1307,6 +1336,7 @@ const initialState: UiState = {
   mobileStepsMode: "fullwidth",
   mobileWorkflowPropsOpen: false,
   workflowVariableRevealRequest: null,
+  pickerShortcutRequest: null,
   globalSettingsOpen: false,
   globalSettingsActiveTab: "general",
   startupReady: false,
@@ -2496,6 +2526,27 @@ export const useUiStore = create<UiState & UiActions>()(
       clearWorkflowVariableRevealRequest: () =>
         set({ workflowVariableRevealRequest: null }),
 
+      requestPickerShortcut: (target, { mobile }) =>
+        set((state) => ({
+          pickerShortcutRequest: {
+            target,
+            nonce: (state.pickerShortcutRequest?.nonce ?? 0) + 1,
+            issuedAt: Date.now(),
+          },
+          ...(PICKER_SHORTCUT_BINDINGS[target].shift
+            ? {}
+            : mobile
+              ? { mobileWorkflowPropsOpen: true }
+              : { settingsCollapsed: false }),
+        })),
+
+      clearPickerShortcutRequest: (nonce) =>
+        set((state) =>
+          state.pickerShortcutRequest?.nonce === nonce
+            ? { pickerShortcutRequest: null }
+            : {}
+        ),
+
       // ============================================================================
       // GLOBAL SETTINGS DRAWER
       // ============================================================================
@@ -2592,6 +2643,7 @@ export const useUiStore = create<UiState & UiActions>()(
           pendingHistorySearchNavigation: null,
           pendingFindRequest: null,
           workflowVariableRevealRequest: null,
+          pickerShortcutRequest: null,
           recentWorkflows: [],
           recentWorkflowsLoaded: false,
           recentWorkflowsListSeq: 0,
