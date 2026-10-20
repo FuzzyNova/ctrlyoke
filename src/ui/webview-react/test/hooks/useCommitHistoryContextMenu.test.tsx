@@ -70,7 +70,7 @@ describe("useCommitHistoryContextMenu", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
     fireEvent.click(
-      screen.getByRole("button", { name: "Checkout Commit (Detach HEAD)" })
+      screen.getByRole("menuitem", { name: "Checkout Commit (Detach HEAD)" })
     );
 
     await act(async () => {
@@ -93,7 +93,7 @@ describe("useCommitHistoryContextMenu", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
     fireEvent.click(
-      screen.getByRole("button", { name: "Checkout Commit (Detach HEAD)" })
+      screen.getByRole("menuitem", { name: "Checkout Commit (Detach HEAD)" })
     );
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Checkout" }));

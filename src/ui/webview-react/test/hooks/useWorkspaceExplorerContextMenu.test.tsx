@@ -79,7 +79,9 @@ describe("useWorkspaceExplorerContextMenu file history", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "View File History" }));
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: "View File History" })
+    );
     expect(onViewFileHistory).toHaveBeenCalledWith("src/file.ts");
 
     cleanup();
@@ -109,8 +111,8 @@ describe("useWorkspaceExplorerContextMenu workflow actions", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
     for (const label of workflowLabels)
-      expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Load Workflow" }));
+      expect(screen.getByRole("menuitem", { name: label })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Load Workflow" }));
     expect(postMessage).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.LOAD_WORKFLOW,
       filePath: "flows/build.ctrlyoke.yaml",
@@ -148,7 +150,7 @@ describe("useWorkspaceExplorerContextMenu file mutations", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
 
     expect(screen.getByRole("dialog")).toHaveTextContent(
       "Delete “file.ts” permanently?"
@@ -177,7 +179,7 @@ describe("useWorkspaceExplorerContextMenu file mutations", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(apiMocks.workspaceDeleteEntry).not.toHaveBeenCalled();
@@ -195,7 +197,7 @@ describe("useWorkspaceExplorerContextMenu file mutations", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
 
     await vi.waitFor(() =>
       expect(apiMocks.workspaceDeleteEntry).toHaveBeenCalledWith({
@@ -225,9 +227,9 @@ describe("useWorkspaceExplorerContextMenu file mutations", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Cut" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Cut" }));
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Paste" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Paste" }));
 
     await vi.waitFor(() =>
       expect(useWorkspaceViewerStore.getState().selectedFilePath).toBe(

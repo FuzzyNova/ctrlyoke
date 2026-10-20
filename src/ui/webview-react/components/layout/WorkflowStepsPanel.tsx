@@ -884,7 +884,8 @@ const WorkflowStepsPanelInner: React.FC<{
       ]),
     [multiSelectionIndices, selectionTarget]
   );
-  const { workflowProperties, globalSettings } = useSettingsStore();
+  const { workflowProperties, globalSettings, getEffectiveModel } =
+    useSettingsStore();
   const [headerRef, isHeaderNarrow] = useElementNarrow<HTMLDivElement>(200);
   // Determine if workflow is running
   const isRunning = isWorkflowRunning(executionState);
@@ -946,6 +947,27 @@ const WorkflowStepsPanelInner: React.FC<{
   //
   // For pending steps, compute from the three-tier precedence (step →
   // workflow → global) so the display stays live and reflects any changes.
+  // The model is harness-scoped as at execution: a step on another harness
+  // than the workflow's shows that harness's default, never the workflow's.
+  const getPendingHarnessModel = useCallback(
+    (step: { harness?: string; model?: string }) => {
+      const effectiveHarness = (step.harness ??
+        workflowProperties.harness ??
+        globalSettings.harness) as HarnessId | undefined;
+      return {
+        harnessId: effectiveHarness,
+        harnessLabel:
+          effectiveHarness && getHarnessDisplayName(effectiveHarness),
+        harnessIsDefault: step.harness === undefined,
+        modelLabel:
+          step.model ??
+          getEffectiveModel(step.harness as HarnessId | undefined),
+        modelIsDefault: step.model === undefined,
+      };
+    },
+    [globalSettings, workflowProperties, getEffectiveModel]
+  );
+
   const getStepHarnessModel = useCallback(
     (step: (typeof steps)[0], status?: StepStatus) => {
       if (isScriptStep(step))
@@ -981,22 +1003,9 @@ const WorkflowStepsPanelInner: React.FC<{
       }
 
       // Pending / queued — reflect live settings with default indicators
-      const harnessIsDefault = step.harness === undefined;
-      const modelIsDefault = step.model === undefined;
-      const effectiveHarness =
-        step.harness ?? workflowProperties.harness ?? globalSettings.harness;
-      const effectiveModel =
-        step.model ?? workflowProperties.model ?? globalSettings.model;
-      return {
-        harnessId: effectiveHarness as HarnessId | undefined,
-        harnessLabel:
-          effectiveHarness && getHarnessDisplayName(effectiveHarness),
-        harnessIsDefault,
-        modelLabel: effectiveModel,
-        modelIsDefault,
-      };
+      return getPendingHarnessModel(step);
     },
-    [globalSettings, workflowProperties]
+    [getPendingHarnessModel]
   );
 
   // Step-level property overrides to surface as chips. Recomputed whenever
@@ -1440,19 +1449,7 @@ const WorkflowStepsPanelInner: React.FC<{
         modelIsDefault: false,
       };
     }
-    const harnessIsDefault = finalStep.harness === undefined;
-    const modelIsDefault = finalStep.model === undefined;
-    const effectiveHarness =
-      finalStep.harness ?? workflowProperties.harness ?? globalSettings.harness;
-    const effectiveModel =
-      finalStep.model ?? workflowProperties.model ?? globalSettings.model;
-    return {
-      harnessId: effectiveHarness as HarnessId | undefined,
-      harnessLabel: effectiveHarness && getHarnessDisplayName(effectiveHarness),
-      harnessIsDefault,
-      modelLabel: effectiveModel,
-      modelIsDefault,
-    };
+    return getPendingHarnessModel(finalStep);
   };
 
   const finalStepColor = finalStep

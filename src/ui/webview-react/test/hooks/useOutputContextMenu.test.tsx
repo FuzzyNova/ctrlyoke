@@ -92,7 +92,7 @@ describe("useOutputContextMenu", () => {
     render(<TestHarness />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
-    const copyAll = screen.getByRole("button", {
+    const copyAll = screen.getByRole("menuitem", {
       name: "Copy All (1 step hidden)",
     });
     expect(copyAll).toBeInTheDocument();
@@ -112,11 +112,11 @@ describe("useOutputContextMenu", () => {
     render(<TestHarness />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy Step Output" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy Step Output" }));
     expect(writeText).toHaveBeenLastCalledWith("visible output one");
 
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Copy Full Output" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy Full Output" }));
     expect(writeText).toHaveBeenLastCalledWith(
       expect.stringContaining("visible output one")
     );
@@ -133,7 +133,7 @@ describe("useOutputContextMenu", () => {
       />
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Copy All" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy All" }));
 
     const copiedText = writeText.mock.calls[0][0] as string;
     expect(copiedText).toContain("=== Step 1 ===");
@@ -152,7 +152,7 @@ describe("useOutputContextMenu", () => {
       />
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Copy All" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy All" }));
 
     const copiedText = writeText.mock.calls[0][0] as string;
     expect(copiedText).toMatch(

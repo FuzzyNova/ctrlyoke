@@ -346,10 +346,9 @@ describe("Header execution controls", () => {
     fireEvent.contextMenu(runButton, { clientX: 120, clientY: 80 });
 
     expect(
-      within(document.querySelector(".step-context-menu")!).getByRole(
-        "button",
-        { name: "Dry Run" }
-      )
+      within(screen.getByRole("menu")).getByRole("menuitem", {
+        name: "Dry Run",
+      })
     ).toBeInTheDocument();
     fireEvent.click(runButton);
     expect(postMessage).not.toHaveBeenCalledWith(

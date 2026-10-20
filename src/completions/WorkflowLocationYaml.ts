@@ -144,6 +144,35 @@ function rangeContains(node: YamlNode | null | undefined, offset: number) {
   return !!node?.range && offset >= node.range[0] && offset <= node.range[1];
 }
 
+/**
+ * `prompt: fix it from $step:` parses as a block mapping nested on the key's
+ * own line, which YAML forbids. It is a plain value with a `:` typed into it,
+ * so return that value's source range (to the end of the line, before any
+ * comment) for callers to treat as plain text.
+ */
+function compactBlockMapText(
+  text: string,
+  keyNode: unknown,
+  value: unknown
+): WorkflowTextRange | undefined {
+  if (
+    !isMap(value) ||
+    value.flow === true ||
+    !value.range ||
+    !isScalar(keyNode) ||
+    !keyNode.range
+  ) {
+    return undefined;
+  }
+  const start = value.range[0];
+  if (text.slice(keyNode.range[1], start).includes("\n")) return undefined;
+  const line = text.slice(start, lineEndFrom(text, start));
+  const comment = line.search(/\s#/);
+  const end =
+    start + (comment < 0 ? line : line.slice(0, comment)).trimEnd().length;
+  return { start, end };
+}
+
 function locateInAst(
   text: string,
   parsed: YamlParse,
@@ -183,6 +212,12 @@ function locateInAst(
           if (firstKey) return firstKey;
           const hit = scalarHit(value, path, key, undefined, inFlow);
           if (hit) return hit;
+        } else if (
+          compactBlockMapText(text, pair.key, value) &&
+          rangeContains(value, offset)
+        ) {
+          // Plain text being typed; the line scan reads it as that value.
+          return undefined;
         } else if (value && rangeContains(value, offset)) {
           return visit(value, [...path, key], inFlow);
         }
@@ -615,6 +650,20 @@ function decodeScalar(
   return { sourceRange: valueRange, decoded };
 }
 
+function decodePlainRange(
+  text: string,
+  range: WorkflowTextRange
+): { sourceRange: WorkflowTextRange; decoded: DecodedText } {
+  return {
+    sourceRange: range,
+    decoded: decodeYamlFlowScalar(
+      text.slice(range.start, range.end),
+      range.start,
+      YAML_FLOW_STYLES.PLAIN
+    ),
+  };
+}
+
 /** Every string value whose field has `role` (e.g. every prompt), decoded. */
 export function getYamlTextSpans(
   text: string,
@@ -630,13 +679,11 @@ export function getYamlTextSpans(
         if (!isScalar(pair.key)) continue;
         const field = String(pair.key.value);
         const value = pair.value;
-        if (
-          isScalar(value) &&
-          typeof value.value === "string" &&
-          getTextRole(objectKind, field) === role
-        ) {
-          const decoded = decodeScalar(text, value);
-          if (!decoded) continue;
+        const isTextField = getTextRole(objectKind, field) === role;
+        const pushSpan = (
+          { sourceRange, decoded }: ReturnType<typeof decodePlainRange>,
+          parsedValue?: string
+        ) =>
           spans.push(
             createTextSpan(
               {
@@ -645,15 +692,25 @@ export function getYamlTextSpans(
                 field,
                 objectKind,
                 role,
-                sourceRange: decoded.sourceRange,
+                sourceRange,
               },
-              decoded.decoded,
-              value.value
+              decoded,
+              parsedValue
             )
           );
-        } else {
-          visit(value, [...path, field]);
+        if (isTextField && isScalar(value) && typeof value.value === "string") {
+          const decoded = decodeScalar(text, value);
+          if (decoded) pushSpan(decoded, value.value);
+          continue;
         }
+        const compactRange = isTextField
+          ? compactBlockMapText(text, pair.key, value)
+          : undefined;
+        if (compactRange) {
+          pushSpan(decodePlainRange(text, compactRange));
+          continue;
+        }
+        visit(value, [...path, field]);
       }
     } else if (isSeq(node)) {
       node.items.forEach((item, index) => visit(item, [...path, index]));

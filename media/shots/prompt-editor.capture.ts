@@ -83,7 +83,7 @@ async function record(page: Page, timeline: Timeline): Promise<void> {
     BEATS.MENU,
     { button: "right" }
   );
-  const addSelection = page.getByRole("button", {
+  const addSelection = page.getByRole("menuitem", {
     name: "Add Selection to ctrlyoke",
   });
   await addSelection.waitFor();

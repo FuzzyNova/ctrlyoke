@@ -417,7 +417,7 @@ describe("WorkflowStatus — loaded state", () => {
       screen.getByRole("button", { name: "Edit workflow name" })
     );
     fireEvent.click(
-      screen.getByRole("button", { name: "Copy Run Directory Path" })
+      screen.getByRole("menuitem", { name: "Copy Run Directory Path" })
     );
 
     expect(writeText).toHaveBeenCalledWith("/runs/wf-1/run-2");
@@ -454,7 +454,7 @@ describe("WorkflowStatus — loaded state", () => {
       screen.getByRole("button", { name: "Edit workflow name" })
     );
     fireEvent.click(
-      screen.getByRole("button", { name: "Copy Run Directory Path" })
+      screen.getByRole("menuitem", { name: "Copy Run Directory Path" })
     );
 
     expect(document.querySelector(".workflow-dropdown-menu")).toHaveClass(
@@ -480,7 +480,7 @@ describe("WorkflowStatus — loaded state", () => {
     });
     fireEvent.contextMenu(mainButton);
     fireEvent.click(
-      screen.getByRole("button", { name: "Duplicate Workflow…" })
+      screen.getByRole("menuitem", { name: "Duplicate Workflow…" })
     );
 
     expect(useUiStore.getState().duplicateWorkflowDialogData?.invoker).toBe(
@@ -519,7 +519,7 @@ describe("WorkflowStatus — loaded state", () => {
     fireEvent.contextMenu(
       screen.getByRole("button", { name: "Edit workflow name" })
     );
-    const favoriteMenuItem = screen.getByRole("button", {
+    const favoriteMenuItem = screen.getByRole("menuitem", {
       name: "Add to Favorites",
     });
     fireEvent.mouseDown(favoriteMenuItem);
@@ -548,7 +548,7 @@ describe("WorkflowStatus — loaded state", () => {
     fireEvent.contextMenu(
       screen.getByRole("button", { name: "Edit workflow name" })
     );
-    fireEvent.click(screen.getByRole("button", { name: "Delete Workflow" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete Workflow" }));
 
     expect(postMessageSpy).not.toHaveBeenCalledWith(
       expect.objectContaining({
@@ -588,7 +588,7 @@ describe("WorkflowStatus — loaded state", () => {
     fireEvent.contextMenu(
       screen.getByRole("listitem", { name: /Some Other Workflow/ })
     );
-    fireEvent.click(screen.getByRole("button", { name: "Delete Workflow" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete Workflow" }));
 
     expect(postMessageSpy).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY,
@@ -2151,7 +2151,7 @@ describe("WorkflowStatus — run navigation panel", () => {
     fireEvent.contextMenu(row);
 
     expect(document.querySelectorAll(".step-context-menu")).toHaveLength(1);
-    await user.click(screen.getByRole("button", { name: "Delete Run" }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete Run" }));
     expect(postMessageSpy).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.DELETE_RUN_HISTORY,
       address: {
@@ -2182,7 +2182,7 @@ describe("WorkflowStatus — run navigation panel", () => {
       .getByRole("button", { name: /^Run 1\b/ })
       .closest(".run-panel-row")!;
     fireEvent.contextMenu(row);
-    await user.click(screen.getByRole("button", { name: "Delete Run" }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete Run" }));
 
     const modal = screen.getByRole("dialog");
     expect(within(modal).getByText(/^Delete run "/i)).toBeInTheDocument();
@@ -2219,14 +2219,14 @@ describe("WorkflowStatus — run navigation panel", () => {
       .getByRole("button", { name: /^Draft$/ })
       .closest(".run-panel-row")!;
     fireEvent.contextMenu(draftRow);
-    expect(screen.getByRole("button", { name: "Delete Run" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Delete Run" })).toBeDisabled();
 
     fireEvent.pointerDown(document.body);
     const liveRow = screen
       .getByRole("button", { name: /^Run 2 — live\b/ })
       .closest(".run-panel-row")!;
     fireEvent.contextMenu(liveRow);
-    expect(screen.getByRole("button", { name: "Delete Run" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Delete Run" })).toBeDisabled();
   });
 
   it("closes the whole dropdown when the viewed run row is selected again", async () => {

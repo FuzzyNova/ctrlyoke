@@ -118,8 +118,7 @@ describe("useFinalStepContextMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
     const labels = screen
-      .getAllByRole("button")
-      .slice(1)
+      .getAllByRole("menuitem")
       .map((button) => button.textContent?.trim());
 
     expect(labels).toEqual([
@@ -135,7 +134,7 @@ describe("useFinalStepContextMenu", () => {
     ]);
     expect(screen.getAllByRole("separator")).toHaveLength(3);
     expect(
-      screen.getByRole("button", { name: "Reply to Step" })
+      screen.getByRole("menuitem", { name: "Reply to Step" })
     ).toBeDisabled();
 
     for (const missing of [
@@ -159,10 +158,10 @@ describe("useFinalStepContextMenu", () => {
       screen.queryByRole("button", { name: "Hide output" })
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Show output" })
+      screen.getByRole("menuitem", { name: "Show output" })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Show only final step output" })
+      screen.getByRole("menuitem", { name: "Show only final step output" })
     ).toBeInTheDocument();
   });
 
@@ -172,7 +171,7 @@ describe("useFinalStepContextMenu", () => {
     render(<TestHarness finalStep={{ prompt: "Final prompt" }} />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
     fireEvent.click(
-      screen.getByRole("button", { name: "Show only final step output" })
+      screen.getByRole("menuitem", { name: "Show only final step output" })
     );
 
     expect(hiddenKeys()).toEqual(["queue:0", "queue:1"]);
@@ -185,7 +184,7 @@ describe("useFinalStepContextMenu", () => {
     for (let i = 0; i < 2; i++) {
       fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
       fireEvent.click(
-        screen.getByRole("button", { name: "Show only final step output" })
+        screen.getByRole("menuitem", { name: "Show only final step output" })
       );
     }
 
@@ -197,11 +196,11 @@ describe("useFinalStepContextMenu", () => {
 
     render(<TestHarness finalStep={{ prompt: "Final prompt" }} />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Hide output" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Hide output" }));
     expect(hiddenKeys()).toEqual(["finalStep:0", "finalStep:1"]);
 
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Show output" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Show output" }));
     expect(hiddenKeys()).toEqual([]);
   });
 
@@ -214,13 +213,13 @@ describe("useFinalStepContextMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
     expect(
-      screen.getByRole("button", { name: "Copy Script" })
+      screen.getByRole("menuitem", { name: "Copy Script" })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Reply to Step" })
+      screen.getByRole("menuitem", { name: "Reply to Step" })
     ).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: "Reply to Step" })
+      screen.getByRole("menuitem", { name: "Reply to Step" })
     ).toHaveAttribute("title", "Script steps have no AI session to reply to");
   });
 
@@ -229,10 +228,10 @@ describe("useFinalStepContextMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
     expect(
-      screen.getByRole("button", { name: "Reply to Step" })
+      screen.getByRole("menuitem", { name: "Reply to Step" })
     ).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: "Reply to Step" })
+      screen.getByRole("menuitem", { name: "Reply to Step" })
     ).toHaveAttribute("title", "This step has no session to resume yet");
   });
 
@@ -252,7 +251,7 @@ describe("useFinalStepContextMenu", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
-    const replyItem = screen.getByRole("button", { name: "Reply to Step" });
+    const replyItem = screen.getByRole("menuitem", { name: "Reply to Step" });
     expect(replyItem).toBeEnabled();
     fireEvent.click(replyItem);
 
@@ -271,7 +270,9 @@ describe("useFinalStepContextMenu", () => {
     render(<TestHarness finalStep={{ prompt: "Final prompt" }} />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
-    expect(screen.getByRole("button", { name: "Copy Output" })).toBeDisabled();
+    expect(
+      screen.getByRole("menuitem", { name: "Copy Output" })
+    ).toBeDisabled();
   });
 
   it("copies the final step's metadata with a final-step header, not a numbered slot", () => {
@@ -290,7 +291,7 @@ describe("useFinalStepContextMenu", () => {
       />
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Copy Metadata" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy Metadata" }));
 
     const copiedText = writeText.mock.calls[0][0] as string;
     expect(copiedText).toContain("Final prompt step");
@@ -305,7 +306,7 @@ describe("useFinalStepContextMenu", () => {
       />
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Copy Output" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy Output" }));
 
     expect(writeText).toHaveBeenCalledWith("final output text");
   });
@@ -332,7 +333,7 @@ describe("useFinalStepContextMenu", () => {
       />
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Copy Full Output" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy Full Output" }));
     expect(writeText).toHaveBeenCalledWith(
       generateSingleStepMarkdownExport(latestOutput, {
         kind: FINAL_STEP_PHASES.FINAL_STEP,
@@ -369,7 +370,7 @@ describe("useFinalStepContextMenu", () => {
       />
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Copy Full Output" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy Full Output" }));
 
     const copiedText = writeText.mock.calls[0][0] as string;
     expect(copiedText).toContain("### Prompt");
@@ -381,14 +382,13 @@ describe("useFinalStepContextMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
     const labels = screen
-      .getAllByRole("button")
-      .slice(1)
+      .getAllByRole("menuitem")
       .map((button) => button.textContent?.trim());
 
     expect(labels).toEqual(["Disable final step"]);
     expect(screen.queryAllByRole("separator")).toHaveLength(0);
     expect(
-      screen.getByRole("button", { name: "Disable final step" })
+      screen.getByRole("menuitem", { name: "Disable final step" })
     ).toBeDisabled();
   });
 });

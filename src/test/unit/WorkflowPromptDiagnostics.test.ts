@@ -150,6 +150,25 @@ suite("getWorkflowPromptDiagnostics", () => {
     );
   });
 
+  test("completion context lists earlier steps after `$step:` in a plain value", () => {
+    const text = [
+      "steps:",
+      "  - name: Hunt bugs",
+      "    prompt: hunt",
+      "  - name: Fix doc bug",
+      "    prompt: Fix the README bug from $step:",
+      "",
+    ].join("\n");
+    const context = getWorkflowPromptCompletionContext(
+      text,
+      CTRLYOKE_FILE_KINDS.WORKFLOW_YAML,
+      text.indexOf("$step:") + "$step:".length
+    );
+
+    assert.deepStrictEqual(context?.stepNames, ["Hunt bugs"]);
+    assert.strictEqual(context?.stepCount, 1);
+  });
+
   test("completion context includes a settings default pre-condition", () => {
     const text = 'steps:\n  - prompt: "Check $preC now"\n';
     const offset = text.indexOf("$preC") + "$preC".length;

@@ -194,7 +194,7 @@ describe("AtomicReferenceChip", () => {
     ).toBeNull();
 
     fireEvent.click(
-      screen.getByRole("button", { name: REFERENCE_CHIP_MENU_LABELS.COPY })
+      screen.getByRole("menuitem", { name: REFERENCE_CHIP_MENU_LABELS.COPY })
     );
     expect(writeClipboardText).toHaveBeenCalledWith(
       "#selection:src/file.ts:10-20"
@@ -203,7 +203,7 @@ describe("AtomicReferenceChip", () => {
 
     fireEvent.contextMenu(button);
     fireEvent.click(
-      screen.getByRole("button", { name: REFERENCE_CHIP_MENU_LABELS.GO_TO })
+      screen.getByRole("menuitem", { name: REFERENCE_CHIP_MENU_LABELS.GO_TO })
     );
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
@@ -222,7 +222,7 @@ describe("AtomicReferenceChip", () => {
 
       expect(outerTouch).not.toHaveBeenCalled();
       expect(
-        screen.getByRole("button", { name: REFERENCE_CHIP_MENU_LABELS.COPY })
+        screen.getByRole("menuitem", { name: REFERENCE_CHIP_MENU_LABELS.COPY })
       ).toBeInTheDocument();
     } finally {
       vi.useRealTimers();

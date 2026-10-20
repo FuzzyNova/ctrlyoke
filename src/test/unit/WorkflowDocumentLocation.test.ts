@@ -119,6 +119,24 @@ suite("WorkflowDocumentLocation: YAML", () => {
     );
   });
 
+  test("a plain value ending in a colon is still prompt text", () => {
+    // `a: b:` parses as a nested mapping, which YAML forbids on one line.
+    for (const marked of [
+      "steps:\n  - name: A\n    prompt: hi\n  - prompt: Fix it from $step:§\n",
+      "steps:\n  - prompt: Fix it from $step:§ # note\n",
+    ]) {
+      const { text, loc } = locate(marked, WORKFLOW_YAML);
+      assert.strictEqual(loc.role, ROLE.PROMPT_TEXT, marked);
+      assert.strictEqual(loc.key, "prompt");
+      assert.strictEqual(loc.scalarStyle, "plain");
+      assert.strictEqual(
+        slice(text, loc.valueRange),
+        "Fix it from $step:",
+        marked
+      );
+    }
+  });
+
   test("the block scalar header and the line after the block are not text", () => {
     const header = locate(
       "steps:\n  - prompt: |§\n      body\n",

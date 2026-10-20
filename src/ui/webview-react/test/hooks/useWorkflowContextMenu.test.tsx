@@ -86,9 +86,10 @@ describe("useWorkflowContextMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
     expect(
-      screen.getAllByRole("button").map((button) => button.textContent?.trim())
+      screen
+        .getAllByRole("menuitem")
+        .map((button) => button.textContent?.trim())
     ).toEqual([
-      "Open menu",
       "New Run (Don't Start)",
       "Duplicate Workflow…",
       "Copy Workflow Key",
@@ -98,7 +99,7 @@ describe("useWorkflowContextMenu", () => {
     ]);
     expect(screen.getAllByRole("separator")).toHaveLength(2);
     expect(
-      screen.getByRole("button", { name: "Copy Run Directory Path" })
+      screen.getByRole("menuitem", { name: "Copy Run Directory Path" })
     ).toHaveAttribute("title", expect.stringContaining("server's filesystem"));
   });
 
@@ -111,7 +112,7 @@ describe("useWorkflowContextMenu", () => {
     render(<TestHarness />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
     fireEvent.click(
-      screen.getByRole("button", { name: "New Run (Don't Start)" })
+      screen.getByRole("menuitem", { name: "New Run (Don't Start)" })
     );
 
     expect(postMessage).toHaveBeenCalledWith({
@@ -126,14 +127,14 @@ describe("useWorkflowContextMenu", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
     expect(
-      screen.getByRole("button", { name: "Open Unstarted Run" })
+      screen.getByRole("menuitem", { name: "Open Unstarted Run" })
     ).toBeEnabled();
     unmount();
 
     render(<TestHarness menuTarget={{ ...target, isExecuting: true }} />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
     expect(
-      screen.getByRole("button", { name: "New Run (Don't Start)" })
+      screen.getByRole("menuitem", { name: "New Run (Don't Start)" })
     ).toBeDisabled();
   });
 
@@ -164,13 +165,13 @@ describe("useWorkflowContextMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
     expect(
-      screen.getByRole("button", { name: "Copy Run Directory Path" })
+      screen.getByRole("menuitem", { name: "Copy Run Directory Path" })
     ).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: "Delete Workflow" })
+      screen.getByRole("menuitem", { name: "Delete Workflow" })
     ).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: "Delete Workflow" })
+      screen.getByRole("menuitem", { name: "Delete Workflow" })
     ).toHaveAttribute(
       "title",
       "Cannot delete a workflow while it is executing"
@@ -193,8 +194,10 @@ describe("useWorkflowContextMenu", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
-    expect(screen.getByRole("button", { name: "Delete Run" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Delete Run" })).toHaveAttribute(
+    expect(screen.getByRole("menuitem", { name: "Delete Run" })).toBeDisabled();
+    expect(
+      screen.getByRole("menuitem", { name: "Delete Run" })
+    ).toHaveAttribute(
       "title",
       "The draft cannot be deleted from the run panel"
     );
@@ -205,7 +208,7 @@ describe("useWorkflowContextMenu", () => {
     render(<TestHarness />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
     fireEvent.click(
-      screen.getByRole("button", { name: "Copy Run Directory Path" })
+      screen.getByRole("menuitem", { name: "Copy Run Directory Path" })
     );
 
     expect(writeText).toHaveBeenCalledWith("/runs/workflow-1/run-2");
@@ -224,7 +227,9 @@ describe("useWorkflowContextMenu", () => {
     const writeText = vi.mocked(navigator.clipboard.writeText);
     render(<TestHarness />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Copy Workflow Key" }));
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: "Copy Workflow Key" })
+    );
 
     expect(writeText).toHaveBeenCalledWith("workflow-1");
     await waitFor(() =>
@@ -244,7 +249,7 @@ describe("useWorkflowContextMenu", () => {
     const opener = screen.getByRole("button", { name: "Open menu" });
     fireEvent.click(opener);
     fireEvent.click(
-      screen.getByRole("button", { name: "Duplicate Workflow…" })
+      screen.getByRole("menuitem", { name: "Duplicate Workflow…" })
     );
 
     expect(onDuplicate).toHaveBeenCalledWith(target, opener);

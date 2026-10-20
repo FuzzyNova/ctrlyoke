@@ -1572,6 +1572,42 @@ describe("WorkflowStepsPanel parallel group boundaries", () => {
   });
 });
 
+describe("WorkflowStepsPanel inherited model", () => {
+  beforeEach(() => {
+    resetStores();
+    const settings = useSettingsStore.getState();
+    settings.updateGlobalSetting("harness", HARNESS_IDS.ANTIGRAVITY_CLI);
+    settings.updateGlobalSetting("model", "gemini-3.8-flash-medium");
+    settings.updateGlobalSetting("harnessDefaultModels", {
+      [HARNESS_IDS.ANTIGRAVITY_CLI]: "gemini-3.8-flash-medium",
+      [HARNESS_IDS.CLAUDE_CLI]: "sonnet",
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("shows a step's own harness default, not another harness's model", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.ctrlyoke.yaml",
+      steps: [
+        { prompt: "Inherits everything" },
+        { prompt: "Hunt API bugs", harness: HARNESS_IDS.CLAUDE_CLI },
+      ],
+      finalStep: { prompt: "Summarize", harness: HARNESS_IDS.CLAUDE_CLI },
+    });
+    useUiStore.setState({ finalStepFooterExpanded: true });
+
+    render(<WorkflowStepsPanel />);
+
+    expect(
+      screen.getAllByTitle("gemini-3.8-flash-medium (default)")
+    ).toHaveLength(1);
+    expect(screen.getAllByTitle("sonnet (default)")).toHaveLength(2);
+  });
+});
+
 describe("WorkflowStepsPanel identity rails", () => {
   beforeEach(() => {
     resetStores();

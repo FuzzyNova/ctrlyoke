@@ -501,7 +501,7 @@ describe("WorkspaceCommitHistoryPane", () => {
     });
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Checkout Commit (Detach HEAD)" })
+      screen.getByRole("menuitem", { name: "Checkout Commit (Detach HEAD)" })
     );
 
     // Regression guard: the confirm dialog must use the elevated z-layer so it
@@ -530,7 +530,7 @@ describe("WorkspaceCommitHistoryPane", () => {
 
     fireEvent.contextMenu(commitRow());
     fireEvent.click(
-      screen.getByRole("button", {
+      screen.getByRole("menuitem", {
         name: "Checkout Commit (Detach HEAD)",
       })
     );
@@ -575,7 +575,7 @@ describe("WorkspaceCommitHistoryPane", () => {
 
     fireEvent.contextMenu(commitRow());
     fireEvent.click(
-      screen.getByRole("button", {
+      screen.getByRole("menuitem", {
         name: "Checkout Commit (Detach HEAD)",
       })
     );

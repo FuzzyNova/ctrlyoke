@@ -112,12 +112,11 @@ describe("useStepContextMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
     expect(
-      screen.getByRole("button", { name: "Paste Step" })
+      screen.getByRole("menuitem", { name: "Paste Step" })
     ).not.toBeDisabled();
 
     const labels = screen
-      .getAllByRole("button")
-      .slice(1)
+      .getAllByRole("menuitem")
       .map((button) => button.textContent?.trim());
 
     expect(labels).toEqual([
@@ -140,7 +139,7 @@ describe("useStepContextMenu", () => {
     ]);
     expect(screen.getAllByRole("separator")).toHaveLength(6);
     expect(
-      screen.getByRole("button", { name: "Reply to Step" })
+      screen.getByRole("menuitem", { name: "Reply to Step" })
     ).toBeDisabled();
   });
 
@@ -159,20 +158,20 @@ describe("useStepContextMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
     expect(
-      screen.getByRole("button", { name: "Select All" })
+      screen.getByRole("menuitem", { name: "Select All" })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Select to Here" })
+      screen.getByRole("menuitem", { name: "Select to Here" })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Add to Selection" })
+      screen.getByRole("menuitem", { name: "Add to Selection" })
     ).toBeInTheDocument();
     expect(useEditorStore.getState().selectionTarget).toEqual({
       kind: "queue",
       index: 1,
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Add to Selection" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Add to Selection" }));
     expect(useEditorStore.getState().multiSelection?.indices).toEqual([0, 1]);
   });
 
@@ -186,12 +185,12 @@ describe("useStepContextMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Remove from Selection" })
+      screen.getByRole("menuitem", { name: "Remove from Selection" })
     );
     expect(useEditorStore.getState().multiSelection?.indices).toEqual([1, 2]);
 
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Clear Selection" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Clear Selection" }));
     expect(useEditorStore.getState().multiSelection).toBeNull();
   });
 
@@ -205,12 +204,12 @@ describe("useStepContextMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
     expect(
-      screen.getByRole("button", { name: "Disable 2 steps" })
+      screen.getByRole("menuitem", { name: "Disable 2 steps" })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Delete 2 steps" })
+      screen.getByRole("menuitem", { name: "Delete 2 steps" })
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Disable 2 steps" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Disable 2 steps" }));
     expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.UPDATE_STEPS,
       indices: [0, 1],
@@ -232,7 +231,7 @@ describe("useStepContextMenu", () => {
       />
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Delete 2 steps" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete 2 steps" }));
 
     expect(screen.getAllByText("Delete 2 steps?")).toHaveLength(2);
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
@@ -256,9 +255,9 @@ describe("useStepContextMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
     for (const label of ["Disable 2 steps", "Delete 2 steps"]) {
-      expect(screen.getByRole("button", { name: label })).toBeDisabled();
+      expect(screen.getByRole("menuitem", { name: label })).toBeDisabled();
       expect(
-        screen.getByRole("button", { name: label }).getAttribute("title")
+        screen.getByRole("menuitem", { name: label }).getAttribute("title")
       ).toContain("Remove completed or running steps from the selection");
     }
   });
@@ -273,10 +272,10 @@ describe("useStepContextMenu", () => {
       screen.queryByRole("button", { name: "Hide output" })
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Show output" })
+      screen.getByRole("menuitem", { name: "Show output" })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Show only this step's output" })
+      screen.getByRole("menuitem", { name: "Show only this step's output" })
     ).toBeInTheDocument();
   });
 
@@ -284,9 +283,9 @@ describe("useStepContextMenu", () => {
     render(<TestHarness step={{ prompt: "Original prompt" }} />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
-    expect(screen.getByRole("button", { name: "Move Up" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Move Up" })).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: "Move Down" })
+      screen.getByRole("menuitem", { name: "Move Down" })
     ).not.toBeDisabled();
   });
 
@@ -307,7 +306,7 @@ describe("useStepContextMenu", () => {
       <TestHarness step={{ prompt: "Two" }} totalSteps={4} deleteIndex={1} />
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Move Up" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Move Up" }));
 
     expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -338,7 +337,7 @@ describe("useStepContextMenu", () => {
       <TestHarness step={{ prompt: "Three" }} totalSteps={4} deleteIndex={2} />
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Move Down" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Move Down" }));
 
     expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -375,12 +374,12 @@ describe("useStepContextMenu", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
-    expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Delete" })).toHaveAttribute(
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toHaveAttribute(
       "title",
       "Cannot change a completed step"
     );
-    expect(screen.getByRole("button", { name: "Disable" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Disable" })).toBeDisabled();
   });
 
   it("disables preserved-prefix deletion during a pending rewind", () => {
@@ -392,8 +391,8 @@ describe("useStepContextMenu", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
-    expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Delete" })).toHaveAttribute(
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toHaveAttribute(
       "title",
       "Cannot change a preserved step while a continuation is pending"
     );
@@ -412,18 +411,20 @@ describe("useStepContextMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
     expect(
-      screen.getByRole("button", { name: "Paste Step" })
+      screen.getByRole("menuitem", { name: "Paste Step" })
     ).not.toBeDisabled();
 
     expect(
-      screen.getByRole("button", { name: "Copy Script" })
+      screen.getByRole("menuitem", { name: "Copy Script" })
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Enable" })).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Reply to Step" })
+      screen.getByRole("menuitem", { name: "Enable" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "Reply to Step" })
     ).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: "Reply to Step" })
+      screen.getByRole("menuitem", { name: "Reply to Step" })
     ).toHaveAttribute("title", "Script steps have no AI session to reply to");
   });
 
@@ -432,10 +433,10 @@ describe("useStepContextMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
     expect(
-      screen.getByRole("button", { name: "Reply to Step" })
+      screen.getByRole("menuitem", { name: "Reply to Step" })
     ).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: "Reply to Step" })
+      screen.getByRole("menuitem", { name: "Reply to Step" })
     ).toHaveAttribute("title", "This step has no session to resume yet");
   });
 
@@ -457,7 +458,7 @@ describe("useStepContextMenu", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
-    const replyItem = screen.getByRole("button", { name: "Reply to Step" });
+    const replyItem = screen.getByRole("menuitem", { name: "Reply to Step" });
     expect(replyItem).toBeEnabled();
     fireEvent.click(replyItem);
 
@@ -475,7 +476,7 @@ describe("useStepContextMenu", () => {
   it("opens a step-scoped Dry Run from the step menu", () => {
     render(<TestHarness step={{ prompt: "Original prompt" }} />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Dry Run Step" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Dry Run Step" }));
 
     expect(useExecutionPreviewStore.getState().scope).toEqual({
       kind: "step",
@@ -487,7 +488,7 @@ describe("useStepContextMenu", () => {
     render(<TestHarness step={{ prompt: "Original prompt" }} />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
-    const copyMetadataButton = screen.getByRole("button", {
+    const copyMetadataButton = screen.getByRole("menuitem", {
       name: "Copy Metadata",
     });
     expect(copyMetadataButton).not.toBeDisabled();
@@ -530,7 +531,7 @@ describe("useStepContextMenu", () => {
       />
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Copy Full Output" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy Full Output" }));
 
     const copiedText = writeText.mock.calls[0][0] as string;
     expect(copiedText).toContain("### Prompt");
@@ -562,7 +563,7 @@ describe("useStepContextMenu", () => {
       />
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Copy Metadata" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy Metadata" }));
 
     const copiedText = writeText.mock.calls[0][0] as string;
     expect(copiedText).toContain("Session ID: abc123-session");
@@ -581,7 +582,7 @@ describe("useStepContextMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
     expect(
-      screen.getByRole("button", { name: "Discard Continuation" })
+      screen.getByRole("menuitem", { name: "Discard Continuation" })
     ).toBeInTheDocument();
   });
 
@@ -593,7 +594,7 @@ describe("useStepContextMenu", () => {
     render(<TestHarness step={{ prompt: "one" }} totalSteps={2} />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
     fireEvent.click(
-      screen.getByRole("button", { name: "Group with next step" })
+      screen.getByRole("menuitem", { name: "Group with next step" })
     );
 
     expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
@@ -621,7 +622,7 @@ describe("useStepContextMenu", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
     fireEvent.click(
-      screen.getByRole("button", { name: "Ungroup parallel steps" })
+      screen.getByRole("menuitem", { name: "Ungroup parallel steps" })
     );
 
     expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
@@ -659,7 +660,7 @@ describe("useStepContextMenu", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
-    const groupWithPrevious = screen.getByRole("button", {
+    const groupWithPrevious = screen.getByRole("menuitem", {
       name: "Group with previous step",
     });
     expect(groupWithPrevious).toBeDisabled();
@@ -689,7 +690,7 @@ describe("useStepContextMenu", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
-    const groupWithNext = screen.getByRole("button", {
+    const groupWithNext = screen.getByRole("menuitem", {
       name: "Group with next step",
     });
     expect(groupWithNext).toBeDisabled();
