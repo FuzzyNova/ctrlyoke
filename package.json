@@ -61,6 +61,15 @@
     "ctrlyoke": "./out/cli.js"
   },
   "contributes": {
+    "icons": {
+      "ctrlyoke-logo": {
+        "description": "ctrlyoke logo",
+        "default": {
+          "fontPath": "images/ctrlyoke-icons.woff",
+          "fontCharacter": "\\E001"
+        }
+      }
+    },
     "configuration": {
       "title": "ctrlyoke",
       "properties": {
@@ -735,7 +744,8 @@
     "generate-sidebar-icon": "node scripts/generate-sidebar-icon.mjs",
     "generate-custom-icons": "node scripts/generate-custom-icons.mjs",
     "generate-app-icons": "node scripts/generate-app-icons.mjs",
-    "generate-icons": "npm run generate-sidebar-icon && npm run generate-app-icons && npm run generate-custom-icons",
+    "generate-icon-font": "node scripts/generate-icon-font.mjs",
+    "generate-icons": "npm run generate-sidebar-icon && npm run generate-app-icons && npm run generate-icon-font && npm run generate-custom-icons",
     "precompile": "npm run generate-schema && npm run generate-schema-ui-descriptions && npm run generate-workflow-schema-outline && npm run generate-prompt-markdown-injection && npm run generate-icons && node scripts/generate-step-palette.mjs",
     "compile": "npm run compile:extension && npm run compile:webview",
     "server": "node out/cli.js server",
@@ -786,7 +796,7 @@
     "test:extension": "npm run compile-tests && npm run test:extension:run",
     "test:extension:run": "node ./out/test/runTest.js",
     "test:ui": "vitest run --config src/ui/webview-react/vitest.config.ts",
-    "test:packaging": "node --test --experimental-strip-types netlify/lib/test-mode-orders.test.mjs scripts/assert-no-copilot-runtime.test.mjs scripts/check-docs-content.test.mjs scripts/generate-compatibility-docs.test.mjs scripts/generate-schema-docs.test.mjs scripts/generate-workflow-schema-outline.test.mjs scripts/generate-yaml-schema.test.mjs scripts/generate-prompt-markdown-injection.test.mjs scripts/generate-step-palette.test.mjs scripts/statusline-format-packaging.test.mjs scripts/bundle-load-packaging.test.mjs scripts/cli-distribution-packaging.test.mjs scripts/build-npm-package.test.mjs scripts/find-hardcoded-strings.test.mjs scripts/check-a11y-names.test.mjs scripts/verify-release-tag.test.mjs scripts/run-test-suites.test.mjs scripts/clean-stale-test-temp.test.mjs scripts/sync-docs-screenshots.test.mjs scripts/publish-schemas-to-landing.test.mjs scripts/schema-bump.test.mjs scripts/spawn-windows-shim.test.mjs scripts/strip-dev-commands.test.mjs",
+    "test:packaging": "node --test --experimental-strip-types netlify/lib/test-mode-orders.test.mjs scripts/assert-no-copilot-runtime.test.mjs scripts/check-docs-content.test.mjs scripts/generate-compatibility-docs.test.mjs scripts/generate-schema-docs.test.mjs scripts/generate-workflow-schema-outline.test.mjs scripts/generate-yaml-schema.test.mjs scripts/generate-prompt-markdown-injection.test.mjs scripts/generate-step-palette.test.mjs scripts/statusline-format-packaging.test.mjs scripts/bundle-load-packaging.test.mjs scripts/cli-distribution-packaging.test.mjs scripts/icon-font-packaging.test.mjs scripts/build-npm-package.test.mjs scripts/find-hardcoded-strings.test.mjs scripts/check-a11y-names.test.mjs scripts/verify-release-tag.test.mjs scripts/run-test-suites.test.mjs scripts/clean-stale-test-temp.test.mjs scripts/sync-docs-screenshots.test.mjs scripts/publish-schemas-to-landing.test.mjs scripts/schema-bump.test.mjs scripts/spawn-windows-shim.test.mjs scripts/strip-dev-commands.test.mjs",
     "clean:stale-test-temp": "node scripts/clean-stale-test-temp.mjs",
     "test:ui:watch": "vitest --config src/ui/webview-react/vitest.config.ts",
     "test:ui:coverage": "vitest run --coverage --config src/ui/webview-react/vitest.config.ts",
@@ -856,7 +866,10 @@
     "npm-run-all": "^4.1.5",
     "prettier": "^3.6.2",
     "sass": "^1.97.2",
+    "svg2ttf": "^6.1.0",
+    "svgicons2svgfont": "^15.0.1",
     "tailwindcss": "^4.3.3",
+    "ttf2woff": "^3.0.0",
     "typescript": "^6.0.3",
     "unified": "^11.0.5",
     "unist-util-visit": "^5.1.0",

@@ -2,6 +2,7 @@ import { suite, test } from "mocha";
 import * as assert from "assert";
 import * as vscode from "vscode";
 import {
+  PRODUCT_ICON_ID,
   STATUS_BAR_BACKGROUNDS,
   StatusBarManager,
   buildStatusBarView,
@@ -13,6 +14,7 @@ import {
 } from "../../core/HostPorts";
 import { HarnessStatus } from "../../core/HarnessIntegration";
 import {
+  EXTENSION_IDENTIFIERS,
   HARNESS_IDS,
   VSCODE_COMMANDS,
   VSCODE_CONTEXT_KEYS,
@@ -37,13 +39,40 @@ suite("StatusBarManager view", () => {
       message: "",
     });
 
-    assert.strictEqual(view.text, "$(compass-active) ctrlyoke - Ready");
+    assert.strictEqual(view.text, "$(ctrlyoke-logo) ctrlyoke - Ready");
     assert.strictEqual(
       view.tooltip,
       "ctrlyoke - Ready to run workflows with Claude Code"
     );
     assert.strictEqual(view.background, undefined);
     assert.strictEqual(view.command, VSCODE_COMMANDS.OPEN_PANEL);
+  });
+
+  test("the product label carries the license tier in the text but not the tooltip", () => {
+    const view = buildStatusBarView(
+      EMPTY_WORKFLOW_ACTIVITY,
+      {
+        harnessId: HARNESS_IDS.CLAUDE_CLI,
+        initializationStatus: HarnessStatus.Ready,
+        isReady: true,
+        message: "",
+      },
+      "ctrlyoke Pro"
+    );
+
+    assert.strictEqual(view.text, "$(ctrlyoke-logo) ctrlyoke Pro - Ready");
+    assert.strictEqual(
+      view.tooltip,
+      "ctrlyoke - Ready to run workflows with Claude Code"
+    );
+    assert.strictEqual(
+      buildStatusBarView(
+        activity({ running: [live("a")] }),
+        undefined,
+        "ctrlyoke Free"
+      ).text,
+      "$(ctrlyoke-logo) ctrlyoke Free 3/7"
+    );
   });
 
   test("an unavailable default harness is named and the click re-checks it", () => {
@@ -62,7 +91,7 @@ suite("StatusBarManager view", () => {
   test("a single running workflow shows its progress without a color", () => {
     const view = buildStatusBarView(activity({ running: [live("a")] }));
 
-    assert.strictEqual(view.text, "$(compass-dot) ctrlyoke 3/7");
+    assert.strictEqual(view.text, "$(ctrlyoke-logo) ctrlyoke 3/7");
     assert.strictEqual(view.background, undefined);
     assert.match(view.tooltip, /Running: Workflow a \(3\/7\)/);
   });
@@ -103,7 +132,21 @@ suite("StatusBarManager view", () => {
     assert.strictEqual(
       buildStatusBarView(activity({ recentCompletion, running: [live("b")] }))
         .text,
-      "$(compass-dot) ctrlyoke 3/7"
+      "$(ctrlyoke-logo) ctrlyoke 3/7"
+    );
+  });
+});
+
+suite("StatusBarManager product icon", () => {
+  test("uses an icon that the extension's package.json contributes", () => {
+    const extension = vscode.extensions.all.find(
+      (ext) => ext.packageJSON.name === EXTENSION_IDENTIFIERS.PACKAGE_NAME
+    );
+    assert.ok(extension, "ctrlyoke extension is not loaded");
+    const icons = extension.packageJSON.contributes?.icons ?? {};
+    assert.ok(
+      Object.hasOwn(icons, PRODUCT_ICON_ID),
+      `package.json contributes.icons must define ${PRODUCT_ICON_ID}`
     );
   });
 });
