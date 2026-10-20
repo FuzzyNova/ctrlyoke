@@ -1,6 +1,6 @@
 # Trust & Security
 
-**Last updated:** October 16, 2026
+**Last updated:** October 20, 2026
 
 ctrlyoke is built by **Fuzzy Nova LLC**, a Texas limited liability company, and is designed local-first. This page explains what that means in practice, what data we do and don't handle, who we rely on to run the business, and how to reach us. It's meant to let your security or legal team review ctrlyoke without a call — if you need something this page doesn't answer, email `security@ctrlyoke.dev` or `privacy@ctrlyoke.dev`.
 
@@ -66,6 +66,8 @@ Please don't file a public GitHub issue for a security vulnerability. Email `sec
 
 ctrlyoke is a small, focused business — we don't yet hold formal certifications like SOC 2 or ISO 27001. What we do instead is design for minimal data exposure in the first place: most of what a compliance audit would scrutinize (workspace content, prompts, source code) never reaches us at all, because the architecture doesn't send it. For enterprise reviews, we offer a standard [Data Processing Agreement](https://ctrlyoke.dev/dpa) and can complete reasonable security questionnaires — email `security@ctrlyoke.dev`.
 
+Fuzzy Nova has no establishment in the EU/EEA, the UK, or Switzerland, so it has appointed DataRep as its data protection representative in those jurisdictions under Article 27 of the EU GDPR and the UK GDPR and under the Swiss Federal Act on Data Protection. We keep a record of processing activities, which DataRep holds as our representative.
+
 ## Legal documents
 
 - [Terms / Commercial License](https://ctrlyoke.dev/terms)
@@ -77,6 +79,7 @@ ctrlyoke is a small, focused business — we don't yet hold formal certification
 
 **Security:** `security@ctrlyoke.dev`
 **Privacy:** `privacy@ctrlyoke.dev`
+**EU/EEA, UK and Swiss representative:** DataRep, for data-protection requests from individuals and authorities in those jurisdictions only — contact details in our [Privacy Policy](https://ctrlyoke.dev/privacy) (Section 14)
 **Sales / procurement:** `sales@ctrlyoke.dev`
 **Postal:** Fuzzy Nova LLC, 5518 Roosevelt Ave, Austin, TX 78756, USA
 

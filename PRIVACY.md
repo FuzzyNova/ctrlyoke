@@ -3,8 +3,8 @@
 **Controller:** Fuzzy Nova LLC
 **Product:** ctrlyoke VS Code extension and companion CLI / MCP server binaries
 **Effective Date:** October 16, 2026
-**Last Updated:** October 16, 2026
-**Version:** 1.5
+**Last Updated:** October 20, 2026
+**Version:** 1.6
 
 ## 1. Scope
 
@@ -78,7 +78,7 @@ We use **Resend** to deliver license keys and other transactional service email.
 
 ### 3.4 Support and communications
 
-If you contact us by email at `privacy@ctrlyoke.dev`, `support@ctrlyoke.dev`, `billing@ctrlyoke.dev`, `security@ctrlyoke.dev`, `sales@ctrlyoke.dev`, or `hello@fuzzno.com`, we receive your email address and the contents of your message.
+If you contact us by email at `privacy@ctrlyoke.dev`, `support@ctrlyoke.dev`, `billing@ctrlyoke.dev`, `security@ctrlyoke.dev`, `sales@ctrlyoke.dev`, `licensing@ctrlyoke.dev`, or `hello@fuzzno.com`, we receive your email address and the contents of your message.
 
 Email is hosted on **Google Workspace**. Public bug reports or discussions on GitHub are governed by GitHub's privacy policy and are visible to others.
 
@@ -173,7 +173,7 @@ Depending on where you live, you may have rights to:
 - appeal our refusal of a request, where applicable
 - lodge a complaint with your local data protection authority
 
-To exercise these rights, contact us at `privacy@ctrlyoke.dev`. We may need to verify your identity before acting on your request.
+To exercise these rights, contact us at `privacy@ctrlyoke.dev`. If you are in the EU/EEA, the UK, or Switzerland, you may instead contact our data protection representative, DataRep (see Section 14). We may need to verify your identity before acting on your request.
 
 Because some information is held by our vendors, we may need to coordinate with them to fulfill your request.
 
@@ -198,6 +198,55 @@ We may update this Privacy Policy from time to time. If we make material changes
 **Privacy inquiries:** `privacy@ctrlyoke.dev`
 **Data controller:** Fuzzy Nova LLC, a Texas limited liability company — `hello@fuzzno.com`
 **Postal address:** 5518 Roosevelt Ave, Austin, TX 78756, USA
+
+### EU/EEA, UK and Swiss representative
+
+Fuzzy Nova LLC (trading as ctrlyoke) has appointed **Data Protection Representative Limited (trading as DataRep)** as its data protection representative in the European Union and European Economic Area (under Article 27 of the EU GDPR), in the United Kingdom (under Article 27 of the UK GDPR), and in Switzerland (under the Swiss Federal Act on Data Protection).
+
+DataRep's contact details are only for individuals in the EU/EEA, the UK, or Switzerland, and for the data protection authorities there, to raise questions or requests about how we process personal data. For support, billing, licensing, or anything else about the Software, use the addresses above, as DataRep cannot help with those.
+
+To contact us through DataRep:
+
+- email [datarequest@datarep.com](mailto:datarequest@datarep.com) with "ctrlyoke" in the subject line;
+- use DataRep's web form at [datarep.com/data-request](https://www.datarep.com/data-request); or
+- write to DataRep at the address for your country below.
+
+**Address letters to "DataRep", not to ctrlyoke or Fuzzy Nova, or they may not reach DataRep.** Please refer clearly to ctrlyoke in your message. We may ask you for evidence of your identity before acting on your request. DataRep's own handling of your personal data is described in its privacy notice at [datarep.com/privacy-policy](https://www.datarep.com/privacy-policy/).
+
+| Country        | Address                                                                                              |
+| -------------- | ---------------------------------------------------------------------------------------------------- |
+| Austria        | DataRep, City Tower, Brückenkopfgasse 1/6. Stock, Graz, 8020, Austria                                |
+| Belgium        | DataRep, Rue des Colonies 11, Brussels, 1000, Belgium                                                |
+| Bulgaria       | DataRep, 25 Vitosha blvd. Fl. 2, office 4, 1000, Sofia, Bulgaria                                     |
+| Croatia        | DataRep, Ground & 9th Floor, Hoto Tower, Savska cesta 32, Zagreb, 10000, Croatia                     |
+| Cyprus         | DataRep, Victory House, 205 Archbishop Makarios Avenue, Limassol, 3030, Cyprus                       |
+| Czech Republic | DataRep, Platan Office, 28. Října 205/45, Floor 3&4, Ostrava, 70200, Czech Republic                  |
+| Denmark        | DataRep, Lautruphøj 1-3, Ballerup, 2750, Denmark                                                     |
+| Estonia        | DataRep, 2nd Floor, Tornimae 5, Tallinn, 10145, Estonia                                              |
+| Finland        | DataRep, Luna House, 5.krs, Mannerheimintie 12 B, Helsinki, 00100, Finland                           |
+| France         | DataRep, 72 rue de Lessard, Rouen, 76100, France                                                     |
+| Germany        | DataRep, 3rd and 4th floor, Altmarkt 10 B/D, Dresden, 01067, Germany                                 |
+| Greece         | DataRep, Ippodamias Sq. 8, 4th floor, Piraeus, Attica, Greece                                        |
+| Hungary        | DataRep, 1054 Honved street, 8 1/2, Budapest, Hungary                                                |
+| Iceland        | DataRep, Laugavegur 13, 101 Reykjavik, Iceland                                                       |
+| Ireland        | DataRep, 77 Camden Street Lower, Dublin, D02 XE80, Ireland                                           |
+| Italy          | DataRep, Viale Giorgio Ribotta 11, Piano 1, Rome, Lazio, 00144, Italy                                |
+| Latvia         | DataRep, 4th & 5th floors, 14 Terbatas Street, Riga, LV-1011, Latvia                                 |
+| Liechtenstein  | DataRep, City Tower, Brückenkopfgasse 1/6. Stock, Graz, 8020, Austria                                |
+| Lithuania      | DataRep, 44A Gedimino Avenue, 01110 Vilnius, Lithuania                                               |
+| Luxembourg     | DataRep, BPM 335368, Banzelt 4 A, 6921, Roodt-sur-Syre, Luxembourg                                   |
+| Malta          | DataRep, Tower Business Centre, 2nd floor, Tower Street, Swatar, BKR4013, Malta                      |
+| Netherlands    | DataRep, De Nieuwe Erven 3 Unit – 15162, 5431 NV Cuijk, Netherlands                                  |
+| Norway         | DataRep, C.J. Hambros Plass 2c, Oslo, 0164, Norway                                                   |
+| Poland         | DataRep, Budynek Fronton ul Kamienna 21, Krakow, 31-403, Poland                                      |
+| Portugal       | DataRep, Torre de Monsanto, Rua Afonso Praça 30, 7th floor, Algès, Lisbon, 1495-061, Portugal        |
+| Romania        | DataRep, 15 Piaţa Charles de Gaulle, nr. 1-T, Bucureşti, Sectorul 1, 011857, Romania                 |
+| Slovakia       | DataRep, Apollo Business Centre II, Block E / 9th floor, 4D Prievozska, Bratislava, 821 09, Slovakia |
+| Slovenia       | DataRep, Trg. Republike 3, Floor 3, Ljubljana, 1000, Slovenia                                        |
+| Spain          | DataRep, Calle de Manzanares 4, Madrid, 28005, Spain                                                 |
+| Sweden         | DataRep, S:t Johannesgatan 2, 4th floor, Malmo, SE - 211 46, Sweden                                  |
+| Switzerland    | DataRep, Leutschenbachstrasse 95, ZURICH, 8050, Switzerland                                          |
+| United Kingdom | DataRep, 107-111 Fleet Street, London, EC4A 2AB, United Kingdom                                      |
 
 ---
 
