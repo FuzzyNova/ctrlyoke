@@ -946,6 +946,7 @@
   "allowScripts": {
     "@parcel/watcher": true,
     "@vscode/vsce-sign": true,
-    "esbuild": true
+    "esbuild": true,
+    "fsevents@2.3.3": true
   }
 }
