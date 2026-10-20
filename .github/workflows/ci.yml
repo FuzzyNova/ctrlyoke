@@ -1,11 +1,16 @@
 name: CI
 
-# The checks every pull request must pass: `npm run check:fast`, the same gate
-# the local pre-push hook runs (typecheck, lint, UI tests, packaging tests),
-# then a production build and the npm tarball test against it.
+# The checks every pull request must pass: the same gate as `npm run
+# check:fast`, which the local pre-push hook runs (typecheck, lint, UI tests,
+# packaging tests), then a production build and the npm tarball test against
+# it. A 2-vCPU runner takes ~30 minutes over the UI suite alone, so it runs in
+# two shards on their own runners, as in full-suite.yml.
+#
 # The `fast-checks` job is a required status check in the `main` ruleset
-# (scripts/apply-github-guardrails.mjs), so it deliberately has no path
-# filter -- a required check that never reports blocks the PR forever.
+# (scripts/apply-github-guardrails.mjs). It only reports the other jobs'
+# results, so the split jobs can change without touching the ruleset. The
+# workflow deliberately has no path filter -- a required check that never
+# reports blocks the PR forever.
 #
 # Runs on `pull_request`, never `pull_request_target`: a fork PR gets a
 # read-only token and no repo secrets, so code from the PR cannot reach them.
@@ -22,7 +27,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  fast-checks:
+  checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -37,8 +42,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck, lint, UI and packaging tests
-        run: npm run check:fast
+      - name: Typecheck, lint and packaging tests
+        run: npm run check:fast:no-ui
 
       # check:fast only makes a dev build without the webview, so the tarball
       # test skips there. Build what release.yml ships and test that instead.
@@ -48,3 +53,41 @@ jobs:
 
       - name: npm package installs and runs
         run: node --test scripts/build-npm-package.test.mjs
+
+  ui:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: UI tests (shard ${{ matrix.shard }}/2)
+        run: npm run test:ui -- --shard=${{ matrix.shard }}/2
+
+  fast-checks:
+    needs: [checks, ui]
+    # Always report, so a failed or cancelled dependency fails this check
+    # instead of leaving it skipped.
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: All checks passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Results: $RESULTS"
+          for result in $RESULTS; do
+            [ "$result" = "success" ] || exit 1
+          done
