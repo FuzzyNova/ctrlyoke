@@ -37,6 +37,6 @@ need to switch to `menuitem`.
 default) of `role="menuitem"` buttons with `tabIndex={-1}`. Once the menu is measured and
 visible it focuses the first enabled item. ArrowUp/ArrowDown wrap through enabled items,
 Home/End jump to the ends, and Escape or Tab closes it. Escape, Tab and choosing an item
-return focus to the element that held it when the menu opened, *before* the item's action
+return focus to the element that held it when the menu opened, _before_ the item's action
 runs. The workspace editor's Cut runs `execCommand("cut")`, which needs CodeMirror focused
 again. The Vitest queries and `media/shots/prompt-editor.capture.ts` now use `menuitem`.

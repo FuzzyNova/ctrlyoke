@@ -22,7 +22,7 @@ Properties panel showed "9 compatibility warnings across 2 harnesses" for the sa
 
 A display bug only. `WorkflowStepsPanel` resolved a pending step's model as
 `step.model ?? workflowProperties.model ?? globalSettings.model`. The final step did the same.
-`globalSettings.model` is the default model of the *default* harness (Antigravity's, when it is
+`globalSettings.model` is the default model of the _default_ harness (Antigravity's, when it is
 the detected one), and the chain never checked which harness the step runs on.
 
 Execution was already right. `resolveExecutionProperties` (`src/types/ExecutionPropertyResolver.ts`)
