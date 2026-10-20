@@ -15,7 +15,7 @@ import {
  * At launch, flip this to `true` (one change) to restore all CTAs, drop the banner,
  * and allow search indexing.
  */
-export const LAUNCHED = false;
+export const LAUNCHED = true;
 
 /** VS Code Marketplace listing — live once the extension is published. */
 export const MARKETPLACE_URL =
