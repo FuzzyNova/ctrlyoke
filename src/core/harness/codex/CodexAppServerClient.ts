@@ -3,6 +3,7 @@ import * as readline from "readline";
 import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
 import { HARNESS_USAGE_STATUS_CODES } from "../../../types/DashboardConstants";
 import { normalizeCodexAppServerQuota } from "./CodexUsageNormalization";
+import { CTRLYOKE_VERSION } from "../../../utils/BuildConfig";
 
 export const CODEX_APP_SERVER_PROBE_TIMEOUT_MS = 5_000;
 
@@ -129,7 +130,7 @@ export class CodexAppServerClient {
         clientInfo: {
           name: "ctrlyoke",
           title: "ctrlyoke harness usage",
-          version: "0.1.0",
+          version: CTRLYOKE_VERSION,
         },
       });
       this.send(process, { method: "initialized", params: {} });

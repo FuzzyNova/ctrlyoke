@@ -250,6 +250,7 @@ import {
   type CliValidationTarget,
 } from "./cli/CliValidation";
 import { formatFinalPassLabel } from "./utils/FinalStepLabels";
+import { CTRLYOKE_VERSION } from "./utils/BuildConfig";
 
 // Mark this process as the standalone CLI binary before anything else runs.
 setRuntimeMode(RUNNER_IDS.CLI);
@@ -279,9 +280,7 @@ const cliRunnerHostIdentity: RunnerHostIdentity = {
   pid: process.pid,
 };
 
-// VERSION is injected by esbuild define
-declare const VERSION: string;
-const version = typeof VERSION !== "undefined" ? VERSION : "0.0.0-dev";
+const version = CTRLYOKE_VERSION;
 
 const program = new Command();
 program.exitOverride((error) => {

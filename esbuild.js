@@ -52,7 +52,16 @@ const telemetryConnectionString = production
 // Build-time constants for conditional compilation
 // In production: dev commands are stripped via dead code elimination
 const buildDate = new Date().toISOString();
+const packageJson = JSON.parse(
+  fs.readFileSync(path.join(__dirname, "package.json"), "utf-8")
+);
+// The only define the MCP bundle gets: it is built without defineConstants, so
+// it keeps IS_DEV_MODE's fallback and never compiles in telemetry.
+const versionDefine = {
+  __CTRLYOKE_VERSION__: JSON.stringify(packageJson.version || "0.0.0"),
+};
 const defineConstants = {
+  ...versionDefine,
   __DEV_MODE__: production ? "false" : "true",
   __BUILD_DATE__: JSON.stringify(buildDate),
   __TELEMETRY_CONNECTION_STRING__: JSON.stringify(telemetryConnectionString),
@@ -442,6 +451,7 @@ async function main() {
     metafile: true,
     logLevel: "silent",
     plugins: [nodeBundleVscodeGuardPlugin("mcp-server")],
+    define: versionDefine,
     // npm links `ctrlyoke-mcp` straight to this file, so it needs a shebang
     // like out/cli.js (dev/backlog/CLI_DISTRIBUTION_PLAN.md §3.2).
     banner: {
@@ -535,9 +545,6 @@ async function main() {
   });
 
   // Build standalone CLI binary
-  const packageJson = JSON.parse(
-    fs.readFileSync(path.join(__dirname, "package.json"), "utf-8")
-  );
   const cliCtx = await esbuild.context({
     entryPoints: ["src/cli.ts"],
     bundle: true,
@@ -558,7 +565,6 @@ async function main() {
     },
     define: {
       ...defineConstants,
-      VERSION: JSON.stringify(packageJson.version || "0.0.0"),
       IS_DEV_MODE: "false", // CLI is always production-like
     },
   });

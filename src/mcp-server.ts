@@ -170,6 +170,7 @@ import {
   getCoordinationAttribution,
   resolveCoordinationParticipantKind,
 } from "./utils/CoordinationAttribution";
+import { CTRLYOKE_VERSION } from "./utils/BuildConfig";
 import { PromptFileParser } from "./core/PromptFileParser";
 import type { WorkflowValidationWarning } from "./types/CtrlYokeTypes";
 
@@ -431,7 +432,7 @@ export class CtrlYokeMCPServer {
     this.server = new Server(
       {
         name: "ctrlyoke",
-        version: "1.0.0",
+        version: CTRLYOKE_VERSION,
       },
       {
         capabilities: {

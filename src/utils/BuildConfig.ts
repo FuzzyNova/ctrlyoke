@@ -36,6 +36,17 @@ export const IS_DEV_MODE: boolean =
   typeof __DEV_MODE__ !== "undefined" ? __DEV_MODE__ : true;
 
 /**
+ * package.json#version, for anything that reports ctrlyoke's own version
+ * (CLI --version, MCP server info, harness client info). `0.0.0-dev` only in
+ * code that esbuild didn't bundle, such as the tsc-compiled tests.
+ */
+declare const __CTRLYOKE_VERSION__: string;
+export const CTRLYOKE_VERSION: string =
+  typeof __CTRLYOKE_VERSION__ !== "undefined"
+    ? __CTRLYOKE_VERSION__
+    : "0.0.0-dev";
+
+/**
  * Build timestamp - useful for debugging version issues
  */
 declare const __BUILD_DATE__: string;
