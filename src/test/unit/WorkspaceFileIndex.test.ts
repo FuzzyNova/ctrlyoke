@@ -1,12 +1,16 @@
 import * as assert from "assert";
 import * as path from "path";
 import { suite, test } from "mocha";
+import { Worker } from "worker_threads";
 import {
+  WORKSPACE_FILE_INDEX_WARNINGS,
   WorkspaceFileIndex,
   WorkspaceFileIndexPipeline,
+  workerFailureWarning,
   type WorkspaceFileIndexDependencies,
   type WorkspaceFileIndexRoot,
 } from "../../completions/WorkspaceFileIndex";
+import { WorkspacePathStore } from "../../completions/WorkspacePathStore";
 import type { SearchWalkResult } from "../../utils/WorkspaceSearchFileWalker";
 import {
   WORKSPACE_FILE_CHANGE_KINDS,
@@ -308,7 +312,11 @@ suite("WorkspaceFileIndex", () => {
         harness.advance(1_000);
         onFiles?.(["node_modules/pkg/early-target.js"]);
         return new Promise((resolve) => {
-          releaseWalk = resolve;
+          // Like the real walker, every file is streamed before the result.
+          releaseWalk = (result) => {
+            onFiles?.(["late.js"]);
+            resolve(result);
+          };
         });
       },
     });
@@ -394,6 +402,151 @@ suite("WorkspaceFileIndex", () => {
     pipeline.dispose();
   });
 
+  test("stops walking ignored trees at the memory budget but keeps every Git path", async () => {
+    const walkedDirectories: number[] = [];
+    const budgetReached: number[] = [];
+    const warnings: string[] = [];
+    const directory = (n: number) =>
+      Array.from({ length: 100 }, (_, i) => `ignored/d${n}/file-${i}.ts`);
+    const harness = makeHarness({
+      getGitTrackedFiles: async () => ["visible/tracked.ts"],
+      walkSearchFiles: async (
+        _root,
+        _startedAt,
+        _maxFiles,
+        _maxDuration,
+        _skip,
+        _excludeLogs,
+        onFiles,
+        signal
+      ) => {
+        const files: string[] = [];
+        for (let n = 0; n < 10 && !signal?.aborted; n++) {
+          walkedDirectories.push(n);
+          files.push(...directory(n));
+          onFiles?.(directory(n));
+        }
+        return { files, truncated: Boolean(signal?.aborted) };
+      },
+    });
+    const pipeline = new WorkspaceFileIndexPipeline(
+      harness.roots,
+      false,
+      harness.dependencies,
+      {
+        // Room for the Git path and about two and a half walked directories.
+        memoryBudgetBytes:
+          WorkspacePathStore.estimateBytes(["visible", "visible/tracked.ts"]) +
+          WorkspacePathStore.estimateBytes(directory(0)) * 2.5,
+        onBudgetReached: (indexed) => budgetReached.push(indexed),
+        onWarning: (message) => warnings.push(message),
+      }
+    );
+    await pipeline.build();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepStrictEqual(walkedDirectories, [0, 1, 2]);
+    assert.deepStrictEqual(pipeline.getStatus(), {
+      state: WORKSPACE_FILE_INDEX_STATES.READY,
+      indexed: 301,
+    });
+    assert.deepStrictEqual(budgetReached, [301]);
+    assert.strictEqual(warnings.length, 1);
+    assert.ok(
+      (await pipeline.queryFiles("tracked")).some(
+        (item) => item.relativePath === "visible/tracked.ts"
+      )
+    );
+    pipeline.dispose();
+  });
+
+  test("a failed build degrades and logs instead of rejecting", async () => {
+    const harness = makeHarness();
+    const warnings: string[] = [];
+    // The first status is reported before the build starts; fail the next.
+    let statusCalls = 0;
+    const pipeline = new WorkspaceFileIndexPipeline(
+      harness.roots,
+      true,
+      harness.dependencies,
+      {
+        onStatus: () => {
+          if (++statusCalls === 2) {
+            throw new Error("status channel closed");
+          }
+        },
+        onWarning: (message) => warnings.push(message),
+      }
+    );
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      await pipeline.build();
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+    assert.deepStrictEqual(unhandled, []);
+    assert.deepStrictEqual(warnings, [
+      "Workspace file index build failed: status channel closed",
+    ]);
+    assert.strictEqual(
+      pipeline.getStatus().state,
+      WORKSPACE_FILE_INDEX_STATES.DEGRADED
+    );
+    pipeline.dispose();
+  });
+
+  test("only an out-of-memory failure is reported as a memory limit", () => {
+    const oom = Object.assign(new Error("heap"), {
+      code: "ERR_WORKER_OUT_OF_MEMORY",
+    });
+    assert.strictEqual(
+      workerFailureWarning(oom, 2048),
+      WORKSPACE_FILE_INDEX_WARNINGS.OUT_OF_MEMORY(2048)
+    );
+    assert.match(workerFailureWarning(oom, 2048), /2048 MB/);
+    assert.strictEqual(
+      workerFailureWarning(new Error("exited with code 1"), 2048),
+      WORKSPACE_FILE_INDEX_WARNINGS.WORKER_FAILED
+    );
+  });
+
+  test("a worker failure with gitignore respected falls back without a warning", async () => {
+    const feedback: string[] = [];
+    const index = new WorkspaceFileIndex(
+      [{ path: path.resolve(__dirname, "../../.."), name: "repo" }],
+      true,
+      undefined,
+      {
+        userFeedbackSink: {
+          notify: (message) => feedback.push(message.message),
+        },
+        workerFactory: () =>
+          new Worker("throw new Error('worker boom')", { eval: true }),
+      }
+    );
+    try {
+      for (
+        let attempt = 0;
+        attempt < 100 &&
+        index.getStatus().state !== WORKSPACE_FILE_INDEX_STATES.DEGRADED;
+        attempt++
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      assert.ok(
+        (await index.queryFiles("package")).some(
+          (entry) => entry.relativePath === "package.json"
+        )
+      );
+      assert.deepStrictEqual(feedback, []);
+    } finally {
+      index.dispose();
+    }
+  });
+
   test("real worker starts on the first query and cancellation stops a scan", async function () {
     const workspaceRoot = path.resolve(__dirname, "../../..");
     const index = new WorkspaceFileIndex(
@@ -457,7 +610,7 @@ suite("WorkspaceFileIndex", () => {
         )
       );
       assert.deepStrictEqual(feedback, [
-        "Workspace file index stopped at its 2 GB memory limit; ignored files may be missing from @ completions.",
+        WORKSPACE_FILE_INDEX_WARNINGS.OUT_OF_MEMORY(8),
       ]);
     } finally {
       index.dispose();

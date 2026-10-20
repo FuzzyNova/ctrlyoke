@@ -16,7 +16,27 @@ if (!isMainThread && port) {
   const index = new WorkspaceFileIndexPipeline([], false, undefined, {
     onStatus: (status) =>
       post({ type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.STATUS, status }),
+    onWarning: (message) =>
+      post({
+        type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.LOG,
+        level: WORKSPACE_FILE_INDEX_LOG_LEVELS.WARN,
+        message,
+      }),
+    onBudgetReached: (indexed) =>
+      post({
+        type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.BUDGET_REACHED,
+        indexed,
+      }),
   });
+  // An unhandled rejection terminates a worker thread, which would drop the
+  // whole index to the host's Git-only fallback. Log it and keep serving.
+  process.on("unhandledRejection", (reason) =>
+    post({
+      type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.LOG,
+      level: WORKSPACE_FILE_INDEX_LOG_LEVELS.ERROR,
+      message: `Workspace file index worker: unhandled rejection: ${reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)}`,
+    })
+  );
   const controllers = new Map<string, AbortController>();
   port.on("message", async (message: WorkspaceFileIndexRequest) => {
     try {

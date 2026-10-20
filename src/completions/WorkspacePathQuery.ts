@@ -4,10 +4,7 @@ import {
   type WorkspacePathEntry,
 } from "./WorkspacePathStore";
 import { normalizeReferencePath } from "./ContextReferenceBuilder";
-import {
-  WORKSPACE_ENTRY_KINDS,
-  type WorkspaceFileTreeEntryKind,
-} from "../types/DashboardConstants";
+import { type WorkspaceFileTreeEntryKind } from "../types/DashboardConstants";
 
 const FILE_LIMIT = 500;
 const PROMPT_LIMIT = 200;
@@ -38,6 +35,9 @@ interface ScoredEntry {
   score: number;
 }
 
+/** Store positions to scan; `undefined` scans the whole store in order. */
+type Positions = readonly number[] | undefined;
+
 const fileKeys: readonly FuzzyKey<WorkspacePathEntry>[] = [
   (entry) => entry.name,
   (entry) => entry.relativePath,
@@ -65,23 +65,31 @@ export class WorkspacePathQuery {
     query: string,
     options: WorkspacePathQueryOptions = {}
   ): Promise<WorkspacePathResult[]> {
-    const entries = this.store.entries;
+    const store = this.store;
     const filter = normalizeReferencePath(query)
       .replace(/^\.\.?\//, "")
       .replace(/^\//, "")
       .toLowerCase();
     const { hasPath, parent, child } = splitScopedQuery(filter);
-    const selected = entries.filter(
-      (entry) =>
-        entry.kind === WORKSPACE_ENTRY_KINDS.FILE &&
-        PROMPT_EXTENSIONS.some((ext) => entry.lowerPath.endsWith(ext)) &&
-        (!filter ||
-          (hasPath
-            ? entry.lowerParent === parent &&
-              (!child || fuzzyMatches(entry.name, child))
-            : subsequenceWordsMatch(entry.lowerPath, filter) &&
-              fuzzyMatches(`${entry.name} ${entry.relativePath}`, filter)))
-    );
+    const selected: WorkspacePathEntry[] = [];
+    for (let position = 0; position < store.size; position++) {
+      if (!store.isFileAt(position)) continue;
+      const lowerPath = store.lowerPathAt(position);
+      if (!PROMPT_EXTENSIONS.some((ext) => lowerPath.endsWith(ext))) continue;
+      if (filter) {
+        if (hasPath && !store.hasLowerParent(position, parent)) continue;
+        if (!hasPath && !subsequenceWordsMatch(lowerPath, filter)) continue;
+      }
+      const entry = store.entryAt(position);
+      if (
+        !filter ||
+        (hasPath
+          ? !child || fuzzyMatches(entry.name, child)
+          : fuzzyMatches(`${entry.name} ${entry.relativePath}`, filter))
+      ) {
+        selected.push(entry);
+      }
+    }
     const shouldRank = Boolean(child || (filter && !hasPath));
     if (!shouldRank) {
       selected.sort((a, b) =>
@@ -97,7 +105,7 @@ export class WorkspacePathQuery {
       ? selected.filter((entry) => fuzzyMatches(entry.name, child))
       : selected;
     return this.rankCandidates(
-      candidates,
+      candidates.map((entry) => entry.position),
       rankQuery,
       keys,
       options,
@@ -121,27 +129,31 @@ export class WorkspacePathQuery {
     const parent = normalized.includes("/")
       ? normalized.slice(0, normalized.lastIndexOf("/"))
       : ".";
-    const entries = this.store.entries;
+    const store = this.store;
     const matches: Array<{
       entry: WorkspacePathEntry;
       tier: number;
       delta: number;
     }> = [];
-    for (let start = 0; start < entries.length; start += SCAN_CHUNK_SIZE) {
+    for (let start = 0; start < store.size; start += SCAN_CHUNK_SIZE) {
       if (options.signal?.aborted) break;
-      const end = Math.min(entries.length, start + SCAN_CHUNK_SIZE);
+      const end = Math.min(store.size, start + SCAN_CHUNK_SIZE);
       for (let i = start; i < end; i++) {
-        const entry = entries[i];
-        if (entry.kind !== kind) continue;
-        const tier = suggestionTier(entry, base, parent);
-        if (tier < 0 || entry.relativePath === normalized) continue;
+        if (store.kindAt(i) !== kind) continue;
+        const lowerName = store.lowerNameAt(i);
+        const tier = suggestionTier(
+          lowerName,
+          store.hasParent(i, parent),
+          base
+        );
+        if (tier < 0 || store.pathAt(i) === normalized) continue;
         matches.push({
-          entry,
+          entry: store.entryAt(i),
           tier,
-          delta: Math.abs(entry.lowerName.length - base.length),
+          delta: Math.abs(lowerName.length - base.length),
         });
       }
-      if (end < entries.length) {
+      if (end < store.size) {
         await new Promise<void>((resolve) => setImmediate(resolve));
       }
     }
@@ -161,7 +173,7 @@ export class WorkspacePathQuery {
     query: string,
     options: WorkspacePathQueryOptions
   ): Promise<WorkspacePathResult[]> {
-    const entries = this.store.entries;
+    const store = this.store;
     const filter = normalizeReferencePath(query)
       .replace(/^"/, "")
       .toLowerCase();
@@ -176,18 +188,11 @@ export class WorkspacePathQuery {
     const child =
       hasPath && !endsInSlash ? filter.slice(filter.lastIndexOf("/") + 1) : "";
     if (!hasPath && filter) {
-      const source = this.narrowedPositions(filter);
       const scanned = await this.scan(
-        source
-          .map((position) => entries[position])
-          .filter((entry) => entry !== undefined),
+        this.narrowedPositions(filter),
         options,
         options.limit ?? FILE_LIMIT,
-        (entry) => {
-          if (!subsequenceWordsMatch(entry.lowerPath, filter)) return undefined;
-          const score = scoreFuzzyQuery(filter, entry, fileKeys);
-          return score === undefined ? undefined : { score, entry };
-        }
+        (position) => this.scoreAt(position, filter, fileKeys)
       );
       // An aborted scan saw only part of the store, so its survivors are not
       // a superset of the next query's matches.
@@ -197,27 +202,23 @@ export class WorkspacePathQuery {
       return scanned.entries.map(asResult);
     }
 
-    const candidates = hasPath
-      ? entries.filter(
-          (entry) =>
-            entry.lowerParent === parent &&
-            (!child || fuzzyMatches(entry.name, child))
-        )
-      : entries;
-    if (!child) return orderedResults(candidates, options.limit ?? FILE_LIMIT);
-    const narrowed = candidates.filter((entry) =>
-      fuzzyMatches(entry.name, child)
-    );
-    return this.rankCandidates(
-      narrowed,
-      child,
-      fileKeys,
-      options,
-      options.limit ?? FILE_LIMIT
-    );
+    const limit = options.limit ?? FILE_LIMIT;
+    if (!hasPath) return orderedResults(store, undefined, limit);
+    const candidates: number[] = [];
+    for (let position = 0; position < store.size; position++) {
+      if (
+        store.hasLowerParent(position, parent) &&
+        (!child || fuzzyMatches(store.entryAt(position).name, child))
+      ) {
+        candidates.push(position);
+      }
+    }
+    if (!child) return orderedResults(store, candidates, limit);
+    return this.rankCandidates(candidates, child, fileKeys, options, limit);
   }
 
-  private narrowedPositions(query: string): number[] {
+  /** The previous query's survivors when this one extends it, else all. */
+  private narrowedPositions(query: string): Positions {
     if (
       this.previousVersion === this.store.version &&
       query.startsWith(this.previousQuery) &&
@@ -225,7 +226,20 @@ export class WorkspacePathQuery {
     ) {
       return this.previousSurvivors;
     }
-    return this.store.entries.map((entry) => entry.position);
+    return undefined;
+  }
+
+  private scoreAt(
+    position: number,
+    query: string,
+    keys: readonly FuzzyKey<WorkspacePathEntry>[]
+  ): ScoredEntry | undefined {
+    if (!subsequenceWordsMatch(this.store.lowerPathAt(position), query)) {
+      return undefined;
+    }
+    const entry = this.store.entryAt(position);
+    const score = scoreFuzzyQuery(query, entry, keys);
+    return score === undefined ? undefined : { score, entry };
   }
 
   private rememberNarrowing(query: string, positions: number[]): void {
@@ -235,7 +249,7 @@ export class WorkspacePathQuery {
   }
 
   private async rankCandidates(
-    candidates: readonly WorkspacePathEntry[],
+    candidates: readonly number[],
     query: string,
     keys: readonly FuzzyKey<WorkspacePathEntry>[],
     options: WorkspacePathQueryOptions,
@@ -245,24 +259,19 @@ export class WorkspacePathQuery {
       candidates,
       options,
       limit,
-      (entry) => {
-        if (!subsequenceWordsMatch(entry.lowerPath, query)) return undefined;
-        const score = scoreFuzzyQuery(query, entry, keys);
-        return score === undefined ? undefined : { score, entry };
-      }
+      (position) => this.scoreAt(position, query, keys)
     );
     return results.map(asResult);
   }
 
   private async scan(
-    candidates: readonly WorkspacePathEntry[],
+    candidates: Positions,
     options: WorkspacePathQueryOptions,
     limit: number,
-    score: (entry: WorkspacePathEntry) => ScoredEntry | undefined
+    score: (position: number) => ScoredEntry | undefined
   ): Promise<{ entries: WorkspacePathEntry[]; survivors: number[] }> {
-    const heap = new TopKHeap(
-      limit === 0 ? candidates.length : Math.max(0, limit)
-    );
+    const total = candidates?.length ?? this.store.size;
+    const heap = new TopKHeap(limit === 0 ? total : Math.max(0, limit));
     const survivors: number[] = [];
     let scanned = 0;
     let lastProgress = Date.now();
@@ -274,25 +283,26 @@ export class WorkspacePathQuery {
         return;
       options.onProgress({
         scanned,
-        total: candidates.length,
+        total,
         results: heap.sorted().map(({ entry }, rank) => asResult(entry, rank)),
       });
       lastProgress = Date.now();
     };
-    for (let start = 0; start < candidates.length; start += SCAN_CHUNK_SIZE) {
+    for (let start = 0; start < total; start += SCAN_CHUNK_SIZE) {
       if (options.signal?.aborted) break;
-      const end = Math.min(candidates.length, start + SCAN_CHUNK_SIZE);
+      const end = Math.min(total, start + SCAN_CHUNK_SIZE);
       for (let i = start; i < end; i++) {
         if (options.signal?.aborted) break;
         scanned++;
-        const match = score(candidates[i]);
+        const position = candidates ? candidates[i] : i;
+        const match = score(position);
         if (match) {
           heap.push(match);
-          survivors.push(candidates[i].position);
+          survivors.push(position);
         }
       }
       publish();
-      if (end < candidates.length && !options.signal?.aborted) {
+      if (end < total && !options.signal?.aborted) {
         await new Promise<void>((resolve) => setImmediate(resolve));
       }
     }
@@ -324,12 +334,10 @@ function splitScopedQuery(filter: string): {
  * directory fuzzy match, 2 exact name elsewhere, 3 prefix elsewhere, -1 none.
  */
 function suggestionTier(
-  entry: WorkspacePathEntry,
-  base: string,
-  parent: string
+  candidate: string,
+  sameDir: boolean,
+  base: string
 ): number {
-  const candidate = entry.lowerName;
-  const sameDir = entry.parent === parent;
   const prefix = base.startsWith(candidate) || candidate.startsWith(base);
   if (sameDir && prefix) return 0;
   if (sameDir && fuzzyMatches(candidate, base)) return 1;
@@ -357,17 +365,23 @@ function asResult(entry: WorkspacePathEntry, rank = 0): WorkspacePathResult {
   return { kind: entry.kind, relativePath: entry.relativePath, rank };
 }
 
+/** Directories, then files, each in store order, stopping at `limit`. */
 function orderedResults(
-  entries: readonly WorkspacePathEntry[],
+  store: WorkspacePathStore,
+  candidates: Positions,
   limit: number
 ): WorkspacePathResult[] {
-  const directories = entries.filter(
-    (entry) => entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY
-  );
-  const files = entries.filter(
-    (entry) => entry.kind === WORKSPACE_ENTRY_KINDS.FILE
-  );
-  return [...directories, ...files].slice(0, limit).map(asResult);
+  const total = candidates?.length ?? store.size;
+  const results: WorkspacePathResult[] = [];
+  for (const wantFile of [false, true]) {
+    for (let i = 0; i < total && results.length < limit; i++) {
+      const position = candidates ? candidates[i] : i;
+      if (store.isFileAt(position) === wantFile) {
+        results.push(asResult(store.entryAt(position)));
+      }
+    }
+  }
+  return results;
 }
 
 /** Min-heap whose root is the worst retained item. */

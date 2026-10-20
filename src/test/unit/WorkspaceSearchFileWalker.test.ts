@@ -130,4 +130,36 @@ suite("WorkspaceSearchFileWalker", () => {
       await fs.rm(root, { recursive: true, force: true });
     }
   });
+
+  test("stops before the next directory once its signal aborts", async () => {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-search-abort-")
+    );
+    try {
+      for (const dir of ["a", "b", "c"]) {
+        await fs.mkdir(path.join(root, dir));
+        await fs.writeFile(path.join(root, dir, "file.ts"), "");
+      }
+      const controller = new AbortController();
+      const batches: string[][] = [];
+      const result = await walkSearchFiles(
+        root,
+        Date.now(),
+        Number.POSITIVE_INFINITY,
+        Number.POSITIVE_INFINITY,
+        new Set([".git"]),
+        false,
+        (files) => {
+          batches.push([...files]);
+          controller.abort();
+        },
+        controller.signal
+      );
+      assert.strictEqual(batches.length, 1);
+      assert.deepStrictEqual(result.files, batches[0]);
+      assert.strictEqual(result.truncated, true);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
 });

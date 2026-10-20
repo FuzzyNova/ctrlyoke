@@ -1,4 +1,3 @@
-import * as path from "path";
 import { normalizeReferencePath } from "./ContextReferenceBuilder";
 import {
   WORKSPACE_ENTRY_KINDS,
@@ -17,24 +16,117 @@ export interface WorkspacePathEntry {
   readonly position: number;
 }
 
-/** Ordered, in-memory projection of workspace files and their directories. */
+/**
+ * Estimated heap cost of one entry beyond its path characters: the string
+ * headers, the column slots and the dedupe-set slot. Measured with
+ * `--expose-gc` over a real repository's paths; it only has to be close
+ * enough to keep the index well under its worker's heap limit.
+ */
+const ENTRY_OVERHEAD_BYTES = 72;
+const KIND_FILE = 0;
+const KIND_DIRECTORY = 1;
+const INITIAL_CAPACITY = 1024;
+
+/** A path, its lowercase form (counted even when shared) and its overhead. */
+function entryBytes(relativePath: string): number {
+  return ENTRY_OVERHEAD_BYTES + 2 * relativePath.length;
+}
+
+/**
+ * Ordered, in-memory projection of workspace files and their directories.
+ *
+ * Stored as columns rather than one object per entry, because the index can
+ * hold millions of paths: the lowercase path shares the original string when
+ * they are equal, and name and parent are offsets into the path. Queries scan
+ * the columns and build a {@link WorkspacePathEntry} only for candidates.
+ */
 export class WorkspacePathStore {
-  private filePaths: string[] = [];
+  private paths: string[] = [];
+  private lowerPaths: string[] = [];
+  private kinds = new Uint8Array(INITIAL_CAPACITY);
+  /** Index in the path where the name starts (0 for a top-level entry). */
+  private nameStarts = new Uint32Array(INITIAL_CAPACITY);
   private fileSet = new Set<string>();
   private directorySet = new Set<string>();
-  private pathEntries: WorkspacePathEntry[] = [];
   private currentVersion = 0;
+  private bytes = 0;
+
+  /** Heap estimate, in bytes, of the same paths held in a store. */
+  static estimateBytes(paths: readonly string[]): number {
+    let total = 0;
+    for (const item of paths) total += entryBytes(item);
+    return total;
+  }
 
   get version(): number {
     return this.currentVersion;
   }
 
-  get entries(): readonly WorkspacePathEntry[] {
-    return this.pathEntries;
+  /** Number of entries, files and directories together. */
+  get size(): number {
+    return this.paths.length;
   }
 
-  get files(): readonly string[] {
-    return this.filePaths;
+  get fileCount(): number {
+    return this.fileSet.size;
+  }
+
+  /** Heap estimate of everything the store holds. */
+  get estimatedBytes(): number {
+    return this.bytes;
+  }
+
+  /** Files in store order. Allocates; for tests and rare rewrites only. */
+  get files(): string[] {
+    return this.paths.filter((_, i) => this.kinds[i] === KIND_FILE);
+  }
+
+  kindAt(position: number): WorkspaceFileTreeEntryKind {
+    return this.kinds[position] === KIND_FILE
+      ? WORKSPACE_ENTRY_KINDS.FILE
+      : WORKSPACE_ENTRY_KINDS.DIRECTORY;
+  }
+
+  isFileAt(position: number): boolean {
+    return this.kinds[position] === KIND_FILE;
+  }
+
+  pathAt(position: number): string {
+    return this.paths[position];
+  }
+
+  lowerPathAt(position: number): string {
+    return this.lowerPaths[position];
+  }
+
+  lowerNameAt(position: number): string {
+    return this.lowerPaths[position].slice(this.nameStarts[position]);
+  }
+
+  /** True when the entry's parent is `parent` ("." for the root). */
+  hasParent(position: number, parent: string): boolean {
+    return this.parentIs(this.paths[position], position, parent);
+  }
+
+  /** {@link hasParent} against the lowercase path. */
+  hasLowerParent(position: number, lowerParent: string): boolean {
+    return this.parentIs(this.lowerPaths[position], position, lowerParent);
+  }
+
+  entryAt(position: number): WorkspacePathEntry {
+    const relativePath = this.paths[position];
+    const lowerPath = this.lowerPaths[position];
+    const start = this.nameStarts[position];
+    return {
+      kind: this.kindAt(position),
+      relativePath,
+      lowerPath,
+      name: relativePath.slice(start),
+      lowerName: lowerPath.slice(start),
+      parent: start === 0 ? "." : relativePath.slice(0, start - 1),
+      lowerParent: start === 0 ? "." : lowerPath.slice(0, start - 1),
+      position,
+    };
   }
 
   replaceAll(paths: readonly string[]): void {
@@ -71,18 +163,33 @@ export class WorkspacePathStore {
     const removed = (item: string): boolean =>
       targets.includes(item) ||
       prefixes.some((prefix) => item.startsWith(prefix));
-    const remaining = this.filePaths.filter((item) => !removed(item));
-    if (remaining.length === this.filePaths.length) return;
+    const files = this.files;
+    const remaining = files.filter((item) => !removed(item));
+    if (remaining.length === files.length) return;
     this.reset();
     this.appendNew(remaining);
     this.currentVersion++;
   }
 
+  /** Compares without allocating the parent string. */
+  private parentIs(
+    relativePath: string,
+    position: number,
+    parent: string
+  ): boolean {
+    const start = this.nameStarts[position];
+    if (parent === ".") return start === 0;
+    return start === parent.length + 1 && relativePath.startsWith(parent);
+  }
+
   private reset(): void {
-    this.filePaths = [];
+    this.paths = [];
+    this.lowerPaths = [];
+    this.kinds = new Uint8Array(INITIAL_CAPACITY);
+    this.nameStarts = new Uint32Array(INITIAL_CAPACITY);
     this.fileSet = new Set();
     this.directorySet = new Set();
-    this.pathEntries = [];
+    this.bytes = 0;
   }
 
   /** Appends unseen files (and their unseen parent directories) in order. */
@@ -92,37 +199,40 @@ export class WorkspacePathStore {
       const file = normalizeReferencePath(raw);
       if (!file || file.startsWith("../") || this.fileSet.has(file)) continue;
       this.fileSet.add(file);
-      this.filePaths.push(file);
       // A directory is listed where its first file is rather than after them
       // all, because store order breaks ranking ties.
-      let parent = path.posix.dirname(file);
-      while (
-        parent !== "." &&
-        parent !== "" &&
-        !this.directorySet.has(parent)
-      ) {
+      let slash = file.lastIndexOf("/");
+      while (slash > 0) {
+        const parent = file.slice(0, slash);
+        if (this.directorySet.has(parent)) break;
         this.directorySet.add(parent);
-        this.append(WORKSPACE_ENTRY_KINDS.DIRECTORY, parent);
-        parent = path.posix.dirname(parent);
+        this.append(KIND_DIRECTORY, parent);
+        slash = parent.lastIndexOf("/");
       }
-      this.append(WORKSPACE_ENTRY_KINDS.FILE, file);
+      this.append(KIND_FILE, file);
       added++;
     }
     return added;
   }
 
-  private append(kind: WorkspaceFileTreeEntryKind, relativePath: string): void {
-    const name = path.posix.basename(relativePath);
-    const parent = path.posix.dirname(relativePath);
-    this.pathEntries.push({
-      kind,
-      relativePath,
-      lowerPath: relativePath.toLowerCase(),
-      name,
-      lowerName: name.toLowerCase(),
-      parent,
-      lowerParent: parent.toLowerCase(),
-      position: this.pathEntries.length,
-    });
+  private append(kind: number, relativePath: string): void {
+    const position = this.paths.length;
+    if (position === this.kinds.length) this.grow();
+    const lower = relativePath.toLowerCase();
+    this.paths.push(relativePath);
+    // V8 copies even an unchanged string, so share the original instead.
+    this.lowerPaths.push(lower === relativePath ? relativePath : lower);
+    this.kinds[position] = kind;
+    this.nameStarts[position] = relativePath.lastIndexOf("/") + 1;
+    this.bytes += entryBytes(relativePath);
+  }
+
+  private grow(): void {
+    const kinds = new Uint8Array(this.kinds.length * 2);
+    kinds.set(this.kinds);
+    this.kinds = kinds;
+    const nameStarts = new Uint32Array(this.nameStarts.length * 2);
+    nameStarts.set(this.nameStarts);
+    this.nameStarts = nameStarts;
   }
 }

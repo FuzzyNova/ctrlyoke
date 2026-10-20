@@ -11,6 +11,7 @@ import {
   type WorkspacePathEntry,
 } from "../../completions/WorkspacePathStore";
 import { WORKSPACE_ENTRY_KINDS } from "../../types/DashboardConstants";
+import { workspacePathStoreEntries } from "../helpers/workspacePathStoreEntries";
 
 function create(files: string[]): {
   store: WorkspacePathStore;
@@ -210,6 +211,7 @@ suite("WorkspacePathQuery", () => {
         `src/${i % 5 === 0 ? "prompt files" : "completions"}/${parts[Math.floor(random() * parts.length)]}${i}.ts`
     );
     const { store, query } = create(files);
+    const entries = workspacePathStoreEntries(store);
     for (const search of [
       "cme",
       "workspacepath",
@@ -218,10 +220,10 @@ suite("WorkspacePathQuery", () => {
       "prompt files",
       "fuzzy ranking",
     ]) {
-      const expected = rankByFuzzyQuery(search, store.entries, keys).map(
+      const expected = rankByFuzzyQuery(search, entries, keys).map(
         (entry) => entry.relativePath
       );
-      const scored = store.entries
+      const scored = entries
         .map((entry, position) => ({
           entry,
           position,
@@ -235,7 +237,7 @@ suite("WorkspacePathQuery", () => {
         (item) => item.relativePath
       );
       assert.deepStrictEqual(actual, expected, `parity for ${search}`);
-      for (const entry of store.entries) {
+      for (const entry of entries) {
         const expectedMatch =
           rankByFuzzyQuery(search, [entry], keys).length > 0;
         assert.strictEqual(

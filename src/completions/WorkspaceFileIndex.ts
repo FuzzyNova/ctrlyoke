@@ -1,5 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import * as v8 from "v8";
 import { Worker } from "worker_threads";
 import {
   COMPLETION_ALL_FILES_SKIP_DIRECTORIES,
@@ -84,7 +85,8 @@ export interface WorkspaceFileIndexDependencies {
     maxDurationMs: number,
     skip: ReadonlySet<string>,
     excludeLogs?: boolean,
-    onFiles?: (files: readonly string[]) => void
+    onFiles?: (files: readonly string[]) => void,
+    signal?: AbortSignal
   ) => Promise<SearchWalkResult>;
   readonly stat: (
     absolutePath: string
@@ -116,6 +118,15 @@ export interface WorkspaceFileIndexPipelineOptions {
   readonly gitVisibleOnly?: boolean;
   /** Called whenever the state or indexed count changes. */
   readonly onStatus?: (status: WorkspaceFileIndexStatus) => void;
+  /** Receives failures the pipeline recovers from, for the host's log. */
+  readonly onWarning?: (message: string) => void;
+  /** Called once per build that stops walking because of the budget. */
+  readonly onBudgetReached?: (indexed: number) => void;
+  /**
+   * Estimated store size at which walking ignored trees stops. Git-visible
+   * paths are always indexed. Defaults to a share of this thread's heap.
+   */
+  readonly memoryBudgetBytes?: number;
 }
 
 const CHANGE_BATCH_MS = 200;
@@ -123,6 +134,12 @@ const REBUILD_STALE_MS = 5 * 60_000;
 /** How often the initial walk publishes what it has found so far. */
 const BUILD_PROGRESS_MS = 250;
 export const FILE_INDEX_WORKER_HEAP_MB = 2048;
+/**
+ * Share of the heap one store may fill with walked paths. A rebuild holds the
+ * old store and its replacement at once, plus the walk's own lists, so two
+ * full stores must still leave room below the worker's limit.
+ */
+const STORE_BUDGET_HEAP_FRACTION = 0.35;
 export const WORKSPACE_FILE_INDEX_MESSAGE_TYPES = {
   BUILD: "build",
   APPLY_CHANGES: "applyChanges",
@@ -136,15 +153,42 @@ export const WORKSPACE_FILE_INDEX_MESSAGE_TYPES = {
   STATUS: "status",
   LOG: "log",
   ERROR: "error",
+  BUDGET_REACHED: "budgetReached",
 } as const;
 export const WORKSPACE_FILE_INDEX_LOG_LEVELS = {
   INFO: "info",
   WARN: "warn",
   ERROR: "error",
 } as const;
-const WORKER_MEMORY_WARNING =
-  "Workspace file index stopped at its 2 GB memory limit; ignored files may be missing from @ completions.";
+export const WORKSPACE_FILE_INDEX_WARNINGS = {
+  OUT_OF_MEMORY: (heapMb: number): string =>
+    `Workspace file index ran out of memory (${heapMb} MB limit); ignored files may be missing from @ completions.`,
+  WORKER_FAILED:
+    "Workspace file index stopped unexpectedly; ignored files may be missing from @ completions. The ctrlyoke log has details.",
+  BUDGET_REACHED: (indexed: number): string =>
+    `Workspace file index reached its memory budget at ${indexed.toLocaleString("en-US")} files; some ignored files are missing from @ completions.`,
+} as const;
 let workerFailureWarningShown = false;
+let budgetWarningShown = false;
+
+function defaultMemoryBudgetBytes(): number {
+  return v8.getHeapStatistics().heap_size_limit * STORE_BUDGET_HEAP_FRACTION;
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isWorkerOutOfMemory(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException)?.code === "ERR_WORKER_OUT_OF_MEMORY";
+}
+
+/** The user-facing warning for a worker failure: only an OOM names memory. */
+export function workerFailureWarning(error: unknown, heapMb: number): string {
+  return isWorkerOutOfMemory(error)
+    ? WORKSPACE_FILE_INDEX_WARNINGS.OUT_OF_MEMORY(heapMb)
+    : WORKSPACE_FILE_INDEX_WARNINGS.WORKER_FAILED;
+}
 
 function isIgnoreRuleFile(relative: string): boolean {
   return (
@@ -212,9 +256,21 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
       this.roots,
       this.respectGitignore
     )
+      // Nothing awaits the build itself, so a rejection here would be
+      // unhandled, and an unhandled rejection terminates a worker thread.
       .catch((error: unknown) => {
         markGitReady();
-        throw error;
+        this.options.onWarning?.(
+          `Workspace file index build failed: ${errorText(error)}`
+        );
+        // Retried by the next query after the usual staleness interval.
+        this.lastBuildAt = this.dependencies.now();
+        if (initialBuild) {
+          this.setStatus({
+            ...this.status,
+            state: WORKSPACE_FILE_INDEX_STATES.DEGRADED,
+          });
+        }
       })
       .finally(() => {
         this.buildPromise = undefined;
@@ -289,6 +345,10 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
     }
   }
 
+  private memoryBudget(): number {
+    return this.options.memoryBudgetBytes ?? defaultMemoryBudgetBytes();
+  }
+
   private setStatus(status: WorkspaceFileIndexStatus): void {
     this.status = status;
     this.options.onStatus?.(status);
@@ -335,56 +395,7 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
     const walk =
       (!respectGitignore || !gitSucceeded) && !this.options.gitVisibleOnly;
     if (walk) {
-      // The first build has nothing better to show, so it publishes the walk
-      // as it goes. A rebuild keeps answering from the old store and swaps.
-      const progressive = initialBuild && gitSucceeded;
-      let buffered: string[] = [];
-      let publishedAt = this.dependencies.now();
-      const publish = (): void => {
-        if (buffered.length === 0 || this.disposed) return;
-        staging.add(buffered);
-        buffered = [];
-        publishedAt = this.dependencies.now();
-        this.setStatus({ ...this.status, indexed: staging.files.length });
-      };
-      await Promise.all(
-        roots.map(async (root) => {
-          try {
-            const result = await this.dependencies.walkSearchFiles(
-              root.path,
-              this.dependencies.now(),
-              Number.POSITIVE_INFINITY,
-              Number.POSITIVE_INFINITY,
-              gitSucceeded
-                ? this.skipDirectories(respectGitignore)
-                : DEFAULT_SKIP_DIRECTORIES,
-              !gitSucceeded || respectGitignore,
-              progressive
-                ? (files) => {
-                    buffered.push(...this.prefix(root, files, roots));
-                    if (
-                      this.dependencies.now() - publishedAt >=
-                      BUILD_PROGRESS_MS
-                    ) {
-                      publish();
-                    }
-                  }
-                : undefined
-            );
-            // `add` skips paths already published progressively.
-            if (gitSucceeded)
-              staging.add(this.prefix(root, result.files, roots));
-            else buffered.push(...this.prefix(root, result.files, roots));
-          } catch {
-            // A failed walk of one root still leaves the others useful.
-          }
-        })
-      );
-      if (!gitSucceeded) {
-        staging.replaceAll(buffered);
-        buffered = [];
-      }
-      publish();
+      await this.walkInto(staging, roots, respectGitignore, gitSucceeded);
     }
 
     if (this.disposed) {
@@ -409,6 +420,82 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
     markGitReady();
   }
 
+  /**
+   * Streams every root's walk into `staging` until the memory budget is
+   * reached, then stops walking. When `staging` is already live (the first
+   * build) it is published as it grows; a rebuild's staging store is not
+   * queried until the swap.
+   */
+  private async walkInto(
+    staging: WorkspacePathStore,
+    roots: readonly WorkspaceFileIndexRoot[],
+    respectGitignore: boolean,
+    gitSucceeded: boolean
+  ): Promise<void> {
+    const budget = this.memoryBudget();
+    const stop = new AbortController();
+    let buffered: string[] = [];
+    let bufferedBytes = 0;
+    let publishedAt = this.dependencies.now();
+    const publish = (): void => {
+      if (buffered.length === 0 || this.disposed) return;
+      staging.add(buffered);
+      buffered = [];
+      bufferedBytes = 0;
+      publishedAt = this.dependencies.now();
+      if (staging === this.store) {
+        this.setStatus({ ...this.status, indexed: staging.fileCount });
+      }
+    };
+    const accept = (root: WorkspaceFileIndexRoot, files: readonly string[]) => {
+      if (stop.signal.aborted) return;
+      const prefixed = this.prefix(root, files, roots);
+      for (const file of prefixed) buffered.push(file);
+      bufferedBytes += WorkspacePathStore.estimateBytes(prefixed);
+      // The buffer overcounts paths the store already holds, so only the
+      // store's own figure, after publishing, decides to stop.
+      if (staging.estimatedBytes + bufferedBytes >= budget) {
+        publish();
+        if (staging.estimatedBytes >= budget) stop.abort();
+      } else if (this.dependencies.now() - publishedAt >= BUILD_PROGRESS_MS) {
+        publish();
+      }
+    };
+    await Promise.all(
+      roots.map(async (root) => {
+        try {
+          let streamed = false;
+          const result = await this.dependencies.walkSearchFiles(
+            root.path,
+            this.dependencies.now(),
+            Number.POSITIVE_INFINITY,
+            Number.POSITIVE_INFINITY,
+            gitSucceeded
+              ? this.skipDirectories(respectGitignore)
+              : DEFAULT_SKIP_DIRECTORIES,
+            !gitSucceeded || respectGitignore,
+            (files) => {
+              streamed = true;
+              accept(root, files);
+            },
+            stop.signal
+          );
+          // A streaming walk's result repeats what it streamed.
+          if (!streamed) accept(root, result.files);
+        } catch {
+          // A failed walk of one root still leaves the others useful.
+        }
+      })
+    );
+    publish();
+    if (stop.signal.aborted && !this.disposed) {
+      this.options.onWarning?.(
+        `Workspace file index stopped walking at its ${Math.round(budget / 1_048_576)} MB budget with ${staging.fileCount} files`
+      );
+      this.options.onBudgetReached?.(staging.fileCount);
+    }
+  }
+
   private activate(
     store: WorkspacePathStore,
     state: WorkspaceFileIndexState
@@ -417,7 +504,7 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
       this.store = store;
       this.query = new WorkspacePathQuery(store);
     }
-    this.setStatus({ state, indexed: store.files.length });
+    this.setStatus({ state, indexed: store.fileCount });
   }
 
   private prefix(
@@ -456,6 +543,14 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
       }
     }
     if (rebuild) void this.build();
+    // In all-files mode a created path may be ignored, and ignored paths stop
+    // at the budget. The next rebuild re-adds any Git-visible ones.
+    if (
+      !this.respectGitignore &&
+      this.store.estimatedBytes >= this.memoryBudget()
+    ) {
+      created.length = 0;
+    }
 
     const added: string[] = [];
     for (const { root, relative } of created) {
@@ -493,7 +588,7 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
     if (this.disposed) return;
     this.store.removeTrees(removed);
     this.store.add(added);
-    this.setStatus({ ...this.status, indexed: this.store.files.length });
+    this.setStatus({ ...this.status, indexed: this.store.fileCount });
   }
 }
 
@@ -558,6 +653,10 @@ export type WorkspaceFileIndexResponse =
       id?: number;
       type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.ERROR;
       message: string;
+    }
+  | {
+      type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.BUDGET_REACHED;
+      indexed: number;
     };
 
 type WorkerRequestInput = WorkspaceFileIndexRequest extends infer Request
@@ -640,7 +739,8 @@ export class WorkspaceFileIndex implements WorkspaceFileQueries {
       this.fallback = new WorkspaceFileIndexPipeline(
         roots,
         respectGitignore,
-        dependencies
+        dependencies,
+        this.pipelineOptions()
       );
       return;
     }
@@ -837,6 +937,9 @@ export class WorkspaceFileIndex implements WorkspaceFileQueries {
           Log.error(message.message);
         } else Log.info(message.message);
         return;
+      case WORKSPACE_FILE_INDEX_MESSAGE_TYPES.BUDGET_REACHED:
+        this.warnBudgetReached(message.indexed);
+        return;
       case WORKSPACE_FILE_INDEX_MESSAGE_TYPES.PROGRESS: {
         const id = this.queryRequestIds.get(message.queryId);
         if (id !== undefined)
@@ -856,23 +959,51 @@ export class WorkspaceFileIndex implements WorkspaceFileQueries {
     pending.resolve(message.value);
   }
 
+  /** Options for a pipeline running on this (the host) thread. */
+  private pipelineOptions(): WorkspaceFileIndexPipelineOptions {
+    return {
+      onWarning: (message) => Log.warn(message),
+      onBudgetReached: (indexed) => this.warnBudgetReached(indexed),
+    };
+  }
+
+  private warnBudgetReached(indexed: number): void {
+    if (budgetWarningShown || !this.options.userFeedbackSink) return;
+    budgetWarningShown = true;
+    this.notify(WORKSPACE_FILE_INDEX_WARNINGS.BUDGET_REACHED(indexed));
+  }
+
+  private notify(message: string): void {
+    if (!this.options.userFeedbackSink) return;
+    notifyUserFeedback(
+      this.options.userFeedbackSink,
+      USER_FEEDBACK_SEVERITY.WARNING,
+      message
+    );
+  }
+
   private async fail(error: unknown): Promise<void> {
     if (this.failureStarted || this.fallback || this.disposed) return;
     this.failureStarted = true;
     this.worker?.removeAllListeners();
     void this.worker?.terminate();
     this.worker = undefined;
-    const outOfMemory =
-      (error as NodeJS.ErrnoException)?.code === "ERR_WORKER_OUT_OF_MEMORY";
     Log.warn(
-      `Workspace file index worker failed${outOfMemory ? " with ERR_WORKER_OUT_OF_MEMORY" : ""}: ${error instanceof Error ? error.message : String(error)}`
+      `Workspace file index worker failed${isWorkerOutOfMemory(error) ? " with ERR_WORKER_OUT_OF_MEMORY" : ""}: ${errorText(error)}`
     );
-    if (!workerFailureWarningShown && this.options.userFeedbackSink) {
+    // With gitignore respected the fallback indexes the same Git-visible
+    // paths, so the user loses nothing worth interrupting them for.
+    if (
+      !workerFailureWarningShown &&
+      !this.respectGitignore &&
+      this.options.userFeedbackSink
+    ) {
       workerFailureWarningShown = true;
-      notifyUserFeedback(
-        this.options.userFeedbackSink,
-        USER_FEEDBACK_SEVERITY.WARNING,
-        WORKER_MEMORY_WARNING
+      this.notify(
+        workerFailureWarning(
+          error,
+          this.options.workerHeapMb ?? FILE_INDEX_WORKER_HEAP_MB
+        )
       );
     }
     // D4: no respawn. The in-process fallback holds only the Git-visible
@@ -881,7 +1012,7 @@ export class WorkspaceFileIndex implements WorkspaceFileQueries {
       this.roots,
       this.respectGitignore,
       DEFAULT_DEPENDENCIES,
-      { gitVisibleOnly: true }
+      { ...this.pipelineOptions(), gitVisibleOnly: true }
     );
     this.fallback = fallback;
     await fallback.build();
