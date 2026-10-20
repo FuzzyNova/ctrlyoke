@@ -51,6 +51,11 @@ import {
   useReferenceChipContextMenu,
   type ReferenceChipMenuOpener,
 } from "@hooks/useReferenceChipContextMenu";
+import type { StepContextMenuEntry } from "@components/shared/StepContextMenu";
+import {
+  buildEditorEditMenuItems,
+  placeCaretForContextMenu,
+} from "@utils/editorEditMenuItems";
 import { getCtrlYokeFileKind } from "@root/completions/CtrlYokeFileKind";
 import { createPromptCompletionClient } from "@utils/promptCompletion/createPromptCompletionClient";
 import {
@@ -94,13 +99,10 @@ export interface WorkspaceFileEditorHandle {
   getSelectionText: () => string;
   getSelectionRange: () => { startLine: number; endLine: number } | null;
   getLanguageCapabilities: () => Record<string, unknown>;
-  /**
-   * Moves the caret to the given client coordinates, as a right-click does in
-   * VS Code, unless they land inside the current selection (which is kept so
-   * Cut/Copy still act on it). CodeMirror itself only moves the caret for the
-   * primary button.
-   */
+  /** See {@link placeCaretForContextMenu}. */
   placeCaretAtCoords: (x: number, y: number) => void;
+  /** Cut/Copy/Paste and Select Word/Line/All, shared with the prompt editor. */
+  getEditMenuItems: () => StepContextMenuEntry[];
   /** True when the caret touches a word the symbol actions can act on. */
   hasSymbolAtCaret: () => boolean;
   goToDefinition: () => Promise<void>;
@@ -361,15 +363,13 @@ export const WorkspaceFileEditor = forwardRef<
         getLanguageCapabilities: () =>
           languageIntelligenceRef.current.capabilities,
         placeCaretAtCoords: (x: number, y: number) => {
+          if (viewRef.current) placeCaretForContextMenu(viewRef.current, x, y);
+        },
+        getEditMenuItems: () => {
           const view = viewRef.current;
-          const pos = view?.posAtCoords({ x, y });
-          if (!view || pos == null) return;
-          const { from, to } = view.state.selection.main;
-          if (from !== to && pos >= from && pos <= to) return;
-          view.dispatch({
-            selection: EditorSelection.cursor(pos),
-            userEvent: "select.pointer",
-          });
+          return view
+            ? buildEditorEditMenuItems(view, view.state.readOnly)
+            : [];
         },
         hasSymbolAtCaret: () => {
           const view = viewRef.current;

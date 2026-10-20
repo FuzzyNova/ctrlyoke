@@ -143,7 +143,10 @@ don't have open, the viewer lists them and asks you to confirm with **Apply
 Rename**.
 
 The same menu has **Add Selection to ctrlyoke** and **Add File to ctrlyoke**, to
-reference what you're reading in the next prompt.
+reference what you're reading in the next prompt. It opens with the same
+editing items as the [prompt editor's menu](/guide/prompt-editor#chips):
+**Cut**, **Copy**, **Paste**, **Select Word**, **Select Line** and **Select
+All**.
 
 ## Search
 

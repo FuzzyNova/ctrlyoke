@@ -58,13 +58,20 @@ skip over it, and `Backspace` or `Delete` removes the whole reference.
 A reference stays as plain text while you're typing it, and becomes a chip
 when you type a space, pick a completion or move the cursor away. To see the
 completions for a chip again, put the cursor right after it and press
-`Ctrl+Space`.
+`Ctrl+Space`. Backspacing through other text up to a chip leaves it a chip, so
+the next `Backspace` removes the whole reference.
 
 - Click or tap a chip to open what it points to.
 - Right-click or long-press a chip for **Go to Reference**, **Copy Reference**
   and **Send as Plain Text**. **Send as Plain Text** wraps the reference in
   backticks, so it is sent as written instead of expanded (see
   [Writing references literally](/workflows/context-files#writing-references-literally)).
+
+Right-click or long-press anywhere else in the editor for **Cut**, **Copy**,
+**Paste**, **Select Word**, **Select Line** and **Select All**. Selecting and
+then pressing `Backspace` is the quick way to clear text on a phone. **Select
+Word** takes the whole run of text around the cursor, so it selects a complete
+reference such as `@src/app.ts` at once.
 
 Turn the setting off to edit references character by character. They then
 show as underlined links; `Ctrl+Click` (`Cmd+Click` on macOS) opens one.

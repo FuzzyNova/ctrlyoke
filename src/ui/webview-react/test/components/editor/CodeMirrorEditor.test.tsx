@@ -9,6 +9,7 @@ import {
   type Completion,
 } from "@codemirror/autocomplete";
 import { forEachDiagnostic, forceLinting } from "@codemirror/lint";
+import { deleteCharBackward } from "@codemirror/commands";
 import {
   buildCodeMirrorCompletionResult,
   buildPromptReferenceInsertion,
@@ -1712,6 +1713,42 @@ describe("CodeMirrorEditor atomic reference chips", () => {
       expect(chips()).toBe(0);
       type(" ");
       expect(chips()).toBe(1);
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
+  it("backspacing up to a chip leaves it whole, so the next Backspace removes it", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const view = new EditorView({
+      parent,
+      doc: "see ",
+      selection: { anchor: 4 },
+      extensions: [createAtomicReferenceExtension()],
+    });
+    const type = (text: string) =>
+      view.dispatch({
+        changes: { from: view.state.selection.main.head, insert: text },
+        selection: { anchor: view.state.selection.main.head + text.length },
+        userEvent: "input.type",
+      });
+    const chips = () => view.dom.querySelectorAll(".cm-atomic-ref").length;
+
+    try {
+      type("@src/deep/file.ts and more");
+      for (let i = 0; i < " and more".length; i++) deleteCharBackward(view);
+      expect(view.state.doc.toString()).toBe("see @src/deep/file.ts");
+      expect(chips()).toBe(1);
+      deleteCharBackward(view);
+      expect(view.state.doc.toString()).toBe("see ");
+
+      // A reference still being typed stays editable one character at a time.
+      type("@src/deep/file.tsx");
+      deleteCharBackward(view);
+      expect(view.state.doc.toString()).toBe("see @src/deep/file.ts");
+      expect(chips()).toBe(0);
     } finally {
       view.destroy();
       parent.remove();

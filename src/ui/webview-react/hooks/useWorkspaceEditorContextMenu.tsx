@@ -8,7 +8,6 @@ import { type WorkspaceFileEditorHandle } from "@components/workspace-viewer/Wor
 import { useLongPress } from "@hooks/useLongPress";
 import { useWorkflowFileMenuItems } from "@hooks/useWorkflowFileMenuItems";
 import { useEditorStore } from "@store/editorStore";
-import { writeClipboardText } from "@utils/stepClipboard";
 import { PROMPT_EDITOR_INSERT_MODES } from "@/types/messages";
 
 const NO_SYMBOL_TITLE = "No symbol at cursor";
@@ -125,32 +124,7 @@ export function useWorkspaceEditorContextMenu({
       );
 
       const items: StepContextMenuEntry[] = [
-        {
-          label: "Cut",
-          icon: "codicon-screen-cut",
-          disabled: !hasSelection,
-          disabledTitle: "No text selected",
-          onClick: () => {
-            if (!selectionText) return;
-            if (document.queryCommandSupported?.("cut")) {
-              const didCut = document.execCommand("cut");
-              if (didCut) {
-                return;
-              }
-            }
-            void writeClipboardText(selectionText);
-          },
-        },
-        {
-          label: "Copy",
-          icon: "codicon-copy",
-          disabled: !hasSelection,
-          disabledTitle: "No text selected",
-          onClick: () => {
-            if (!selectionText) return;
-            void writeClipboardText(selectionText);
-          },
-        },
+        ...(editorRef.current?.getEditMenuItems() ?? []),
         ...(languageItems.length
           ? [{ type: "divider" as const }, ...languageItems]
           : []),

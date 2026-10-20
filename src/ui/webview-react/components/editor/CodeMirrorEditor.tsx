@@ -111,6 +111,11 @@ import {
   type ReferenceChipMenuOpener,
 } from "@hooks/useReferenceChipContextMenu";
 import type { StepContextMenuEntry } from "@components/shared/StepContextMenu";
+import { useLongPress } from "@hooks/useLongPress";
+import {
+  buildEditorEditMenuItems,
+  placeCaretForContextMenu,
+} from "@utils/editorEditMenuItems";
 import { createPromptCompletionClient } from "@utils/promptCompletion/createPromptCompletionClient";
 import { toCodeMirrorPromptDiagnostic } from "@utils/promptDiagnosticCodeMirror";
 import { promptTokenCompletionExtension } from "@utils/promptCompletion/promptTokenCompletionExtension";
@@ -1207,9 +1212,39 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     .filter(Boolean)
     .join(" ");
 
+  // Right-click or long press anywhere but a chip (whose own handler stops
+  // the event) opens Cut/Copy/Paste and Select Word/Line/All.
+  const openEditMenu = useCallback(
+    (x: number, y: number) => {
+      const view = viewRef.current;
+      if (!view) return;
+      placeCaretForContextMenu(view, x, y);
+      openReferenceChipMenu(
+        x,
+        y,
+        buildEditorEditMenuItems(
+          view,
+          readOnlyRef.current || view.state.readOnly
+        )
+      );
+    },
+    [openReferenceChipMenu]
+  );
+  const editMenuLongPressHandlers = useLongPress(openEditMenu);
+
   return (
     <>
-      <div id={id} ref={editorRef} className={editorClassName} />
+      <div
+        id={id}
+        ref={editorRef}
+        className={editorClassName}
+        role="presentation"
+        onContextMenu={(event) => {
+          event.preventDefault();
+          openEditMenu(event.clientX, event.clientY);
+        }}
+        {...editMenuLongPressHandlers}
+      />
       {referenceChipMenuPortal}
     </>
   );
@@ -1478,23 +1513,39 @@ export function createAtomicReferenceExtension(
   return [typingCaretField, chipPlugin];
 }
 
-// The caret position while the user is typing or deleting there with an empty
-// selection; anything else that moves the caret (a click, an arrow key, a
-// picked completion) clears it. Lets the chip plugin leave the reference being
-// typed as plain text instead of chipping a half-typed `@backlog/secre`.
+// The caret position while the user is typing there with an empty selection;
+// anything else that moves the caret (a click, an arrow key, a picked
+// completion) clears it. Lets the chip plugin leave the reference being typed
+// as plain text instead of chipping a half-typed `@backlog/secre`. A delete
+// keeps it only while the caret was inside a reference already being typed:
+// backspacing through other text up to a chip's end must leave the chip
+// whole, so the next Backspace removes it in one press.
 const typingCaretField = StateField.define<number | null>({
   create: () => null,
   update(value, tr) {
     if (tr.docChanged) {
       const selection = tr.state.selection.main;
-      return selection.empty &&
-        (tr.isUserEvent("input.type") || tr.isUserEvent("delete"))
+      if (!selection.empty) return null;
+      if (tr.isUserEvent("input.type")) return selection.head;
+      return tr.isUserEvent("delete") &&
+        value !== null &&
+        isInsideReference(tr.startState, value)
         ? selection.head
         : null;
     }
     return tr.selection ? null : value;
   },
 });
+
+// Whether `pos` is inside or at the end of a reference. References never
+// span lines, so only the caret's line is scanned.
+function isInsideReference(state: EditorState, pos: number): boolean {
+  const line = state.doc.lineAt(pos);
+  const offset = pos - line.from;
+  return findAtomicReferences(line.text).some(
+    (reference) => reference.from < offset && offset <= reference.to
+  );
+}
 
 // Where a reference is still being edited, so it stays text: the caret while
 // typing, or while a completion list is open or loading (which also covers
