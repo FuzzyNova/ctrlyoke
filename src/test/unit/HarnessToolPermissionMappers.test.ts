@@ -573,7 +573,9 @@ suite("HarnessToolPermissionMappers", () => {
                 capability: "allowedTools",
               },
               {
-                code: COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_NOT_ENFORCED,
+                // Codex enforces only folded MCP denials, so a non-MCP denial
+                // list is partial (with that caveat), not unenforced.
+                code: COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL,
                 capability: "deniedTools",
               },
             ]

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-20 by Claude while running `npm test` on the `bug-fix` worktree
 - **Area:** `src/test/unit/HarnessToolPermissionMappers.test.ts`, `src/core/harness/codex/CodexToolPermissionMapper.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
