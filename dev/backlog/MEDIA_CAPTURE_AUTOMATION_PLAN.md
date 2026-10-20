@@ -6,7 +6,7 @@ walkthrough's `verifyHarness` image (four themes) with `npm run media -- --all`.
 rate-limiter runs are fixtures (`npm run media -- replay <run>`). Phase 3 done 2026-10-18: the
 video pipeline (2× take, beat timeline, Remotion edit, encode) and a new hero
 (`npm run media -- hero`). Phases 4 and 5 done 2026-10-19: the prompt editor clip (#9) and the
-"Build visually or edit as YAML" side-by-side (#14), neither slotted yet. Phases 6-7 (phone) are
+"Build visually or edit as YAML" side-by-side (#14), both on the landing page since 2026-10-19. Phases 6-7 (phone) are
 open. This is the "how"
 for [`SCREENSHOTS_AND_MEDIA_PLAN.md`](SCREENSHOTS_AND_MEDIA_PLAN.md), which stays the shot list and
 slotting plan. `media/README.md` covers using it and adding shots.

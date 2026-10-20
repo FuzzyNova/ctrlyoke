@@ -1,0 +1,36 @@
+---
+// A looping, muted product clip from `npm run media -- <shot>` (media/README.md).
+// Each clip ships as AV1 with an H.264 fallback for browsers without AV1 decode
+// (older Safari); browsers fetch only the first source they can play. The AV1
+// file is 2× (AV1 level 5.0, hence `av01.0.12M.08`) and the fallback is 1×.
+// The poster shows while the video loads, and in place of it when autoplay is
+// blocked.
+interface Props {
+  av1: string;
+  h264: string;
+  poster: ImageMetadata;
+  /** The 1× size, which reserves the box before the video loads. */
+  width: number;
+  height: number;
+  label: string;
+}
+
+const { av1, h264, poster, width, height, label } = Astro.props;
+---
+
+<div class="overflow-hidden rounded-2xl border border-white/10 shadow-2xl shadow-black/50">
+  <video
+    width={width}
+    height={height}
+    poster={poster.src}
+    autoplay
+    muted
+    loop
+    playsinline
+    aria-label={label}
+    class="w-full"
+  >
+    <source src={av1} type='video/mp4; codecs="av01.0.12M.08"' />
+    <source src={h264} type="video/mp4" />
+  </video>
+</div>

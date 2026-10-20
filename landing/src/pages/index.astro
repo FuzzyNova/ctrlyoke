@@ -2,35 +2,34 @@
 import Layout from "../layouts/Layout.astro";
 import Cta from "../components/Cta.astro";
 import HarnessDeck from "../components/HarnessDeck.astro";
+import DemoVideo from "../components/DemoVideo.astro";
 import { LAUNCHED, MARKETPLACE_URL } from "../config";
 // Canonical screenshots live at repo-root images/screenshots/, not duplicated into
 // landing/public/ — see "Screenshot assets" in .github/copilot-instructions.md.
-// The hero ships as AV1 with an H.264 fallback for browsers without AV1 decode
-// (older Safari); browsers fetch only the first source they can play. The AV1
-// file is 2× (AV1 level 5.0, hence `av01.0.12M.08`) and the fallback is 1×.
-// Both come from `npm run media -- hero` (media/README.md).
+// The AV1/H.264/poster sets come from `npm run media -- <shot>` (media/README.md).
 import heroAv1 from "../../../images/screenshots/hero-av1-2700x1800.mp4";
 import heroH264 from "../../../images/screenshots/hero-h264-1350x900.mp4";
-// Shown while the video loads, and in place of it when autoplay is blocked.
 import heroPoster from "../../../images/screenshots/hero-poster-2700x1800.webp";
+import visualOrYamlAv1 from "../../../images/screenshots/visual-or-yaml-av1-2560x1600.mp4";
+import visualOrYamlH264 from "../../../images/screenshots/visual-or-yaml-h264-1280x800.mp4";
+import visualOrYamlPoster from "../../../images/screenshots/visual-or-yaml-poster-2560x1600.webp";
+import promptEditorAv1 from "../../../images/screenshots/prompt-editor-av1-1920x1280.mp4";
+import promptEditorH264 from "../../../images/screenshots/prompt-editor-h264-960x640.mp4";
+import promptEditorPoster from "../../../images/screenshots/prompt-editor-poster-1920x1280.webp";
 import takeControlVideo from "../../../images/screenshots/ctrlyoke-take-control-1080p.mp4";
 
+// One per reference kind the prompt editor clip shows. Chip colours follow the
+// dashboard's own reference chips.
+const references = [
+  { token: "@src/routes/", body: "Files and folders", chip: "border-sky-400/40 text-sky-300" },
+  { token: "#sym:normalizeTag", body: "Symbols and line selections", chip: "border-violet-400/40 text-violet-300" },
+  { token: "~0f2072a", body: "Commits, staged and working-tree diffs", chip: "border-emerald-400/40 text-emerald-300" },
+  { token: "$previous", body: "Output from earlier steps", chip: "border-rose-400/40 text-rose-300" },
+  { token: "!API_TOKEN", body: "Secrets, granted without entering the prompt", chip: "border-amber-400/40 text-amber-300" },
+  { token: "/skill:commit", body: "Skills and MCP servers, per step", chip: "border-slate-400/40 text-slate-300" },
+];
+
 const features = [
-  {
-    title: "Point at the context you mean",
-    body: "Reference files, symbols, selections, Git changes, commits, and prior-step output — readable in the prompt, expanded before the harness sees it.",
-    icon: "📎",
-  },
-  {
-    title: "A prompt editor for real work",
-    body: "Context-aware completions, reference validation, expanded-context token estimates, image paste, and spell check.",
-    icon: "✎",
-  },
-  {
-    title: "Build visually. Save as code.",
-    body: "Compose and rearrange workflows in the dashboard, then keep the result as ordinary YAML or JSON that travels with the project.",
-    icon: "🧩",
-  },
   {
     title: "One reversible view of every result",
     body: "Normalized output, inline diffs, an output minimap, and undo/redo down to a single file — no matter which harness ran it.",
@@ -50,6 +49,11 @@ const features = [
     title: "Searchable, replayable history",
     body: "Find the prompt, command, diff, or answer you remember, then reopen and rerun the complete workflow around it.",
     icon: "🔍",
+  },
+  {
+    title: "Your project, in any browser",
+    body: "Browse, search, and edit files, review diffs, and commit from the browser dashboard's workspace viewer — no VS Code window needed.",
+    icon: "🗂",
   },
   {
     title: "One place for your toolkit",
@@ -124,22 +128,14 @@ const steps = [
       </p>
     </div>
     <div class="relative mx-auto mt-10 max-w-6xl">
-      <div class="overflow-hidden rounded-2xl border border-white/10 shadow-2xl shadow-black/50">
-        <video
-          width={1350}
-          height={900}
-          poster={heroPoster.src}
-          autoplay
-          muted
-          loop
-          playsinline
-          aria-label="ctrlyoke running a multi-step workflow across several CLI coding agents, with live output and the output minimap"
-          class="w-full"
-        >
-          <source src={heroAv1} type='video/mp4; codecs="av01.0.12M.08"' />
-          <source src={heroH264} type="video/mp4" />
-        </video>
-      </div>
+      <DemoVideo
+        av1={heroAv1}
+        h264={heroH264}
+        poster={heroPoster}
+        width={1350}
+        height={900}
+        label="ctrlyoke running a multi-step workflow across several CLI coding agents, with live output and the output minimap"
+      />
     </div>
     <div class="relative mx-auto mt-10 max-w-4xl text-center">
       <div class="mb-6 inline-flex items-center gap-2 rounded-full border border-sky-400/20 bg-sky-400/5 px-4 py-1.5 text-sm text-sky-400">
@@ -200,35 +196,64 @@ const steps = [
     </div>
   </section>
 
-  <!-- Workflow snippet -->
-  <section class="border-b border-white/5 bg-brand-900/30 px-6 py-20">
-    <div class="mx-auto max-w-4xl">
-      <p class="mb-8 text-center text-sm font-medium uppercase tracking-widest text-slate-500">
-        Build visually. This is the file underneath.
-      </p>
-      <div class="overflow-hidden rounded-xl border border-white/8 bg-brand-900">
-        <div class="flex items-center gap-1.5 border-b border-white/5 px-4 py-3">
-          <span class="h-3 w-3 rounded-full bg-red-500/60"></span>
-          <span class="h-3 w-3 rounded-full bg-yellow-500/60"></span>
-          <span class="h-3 w-3 rounded-full bg-green-500/60"></span>
-          <span class="ml-2 text-xs text-slate-500">implement-feature.ctrlyoke.yaml</span>
-        </div>
-        <pre class="overflow-x-auto p-6 text-sm leading-relaxed"><code class="text-slate-300"><span class="text-sky-400">harness</span><span class="text-slate-500">:</span> claude-cli
-
-<span class="text-sky-400">steps</span><span class="text-slate-500">:</span>
-  <span class="text-slate-500">-</span> <span class="text-sky-400">prompt</span><span class="text-slate-500">:</span> <span class="text-slate-300">|</span>
-      <span class="text-slate-400">Implement the UserAuth service in </span><span class="text-amber-300">@src/auth.ts</span><span class="text-slate-400">,</span>
-      <span class="text-slate-400">using the interface in </span><span class="text-amber-300">@src/types/auth.ts</span><span class="text-slate-400">.</span>
-    <span class="text-sky-400">endCondition</span><span class="text-slate-500">:</span>
-      <span class="text-sky-400">script</span><span class="text-slate-500">:</span> npm run typecheck <span class="text-slate-500">&&</span> npm test
-
-  <span class="text-slate-500">-</span> <span class="text-sky-400">harness</span><span class="text-slate-500">:</span> codex-cli
-    <span class="text-sky-400">prompt</span><span class="text-slate-500">:</span> <span class="text-slate-300">|</span>
-      <span class="text-slate-400">Review </span><span class="text-amber-300">$previous</span><span class="text-slate-400"> and write integration tests for</span>
-      <span class="text-slate-400">login, logout, and token refresh.</span>
-    <span class="text-sky-400">endCondition</span><span class="text-slate-500">:</span>
-      <span class="text-sky-400">script</span><span class="text-slate-500">:</span> npx c8 <span class="text-slate-500">--branches 90 --check-coverage</span> npm test</code></pre>
+  <!-- Build visually or edit as YAML -->
+  <section class="border-b border-white/5 bg-brand-900/30 px-6 py-24">
+    <div class="mx-auto max-w-6xl">
+      <div class="mb-12 text-center">
+        <h2 class="mb-4 text-3xl font-bold text-white md:text-4xl">Build visually, or edit as YAML</h2>
+        <p class="mx-auto max-w-2xl text-slate-400">
+          Drag steps into parallel groups and pick a harness and model for each one, or open the
+          same workflow as a file and type it with completions. Either way, it's plain YAML or JSON
+          that lives in your repo.
+        </p>
       </div>
+      <DemoVideo
+        av1={visualOrYamlAv1}
+        h264={visualOrYamlH264}
+        poster={visualOrYamlPoster}
+        width={1280}
+        height={800}
+        label="On the left, dragging a step into a parallel group in the ctrlyoke dashboard and setting its harness and model; on the right, adding the same step to the workflow's YAML file with completions"
+      />
+      <div class="mt-4 grid grid-cols-2 text-sm text-slate-500">
+        <span class="text-center">The dashboard's step list</span>
+        <span class="text-center">The same workflow as YAML</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Prompt editor -->
+  <section class="border-b border-white/5 px-6 py-24">
+    <div class="mx-auto max-w-4xl">
+      <div class="mb-12 text-center">
+        <h2 class="mb-4 text-3xl font-bold text-white md:text-4xl">Point at the context you mean</h2>
+        <p class="mx-auto max-w-2xl text-slate-400">
+          The prompt editor completes files, symbols, commits, and earlier steps as you type, and
+          turns each one into a chip you can read at a glance. ctrlyoke expands them into real
+          context before the harness sees the prompt.
+        </p>
+      </div>
+      <DemoVideo
+        av1={promptEditorAv1}
+        h264={promptEditorH264}
+        poster={promptEditorPoster}
+        width={960}
+        height={640}
+        label="Typing a prompt in the ctrlyoke prompt editor: a code selection, a symbol, a file, a folder, an earlier step's output, a commit, a secret, and a skill, each picked from completions and shown as a chip"
+      />
+      <div class="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
+        {references.map((r) => (
+          <div class="flex flex-col items-start gap-2 rounded-xl border border-white/8 bg-brand-900/40 p-4">
+            <code class={`rounded-md border bg-brand-950/60 px-2 py-0.5 font-mono text-sm ${r.chip}`}>{r.token}</code>
+            <p class="text-sm text-slate-400">{r.body}</p>
+          </div>
+        ))}
+      </div>
+      <p class="mx-auto mt-8 max-w-2xl text-center text-sm text-slate-400">
+        Plus spell check, image paste, token estimates that include the attached context, and a
+        warning before you run a reference that won't resolve.{" "}
+        <a href="/docs/workflows/context-files" class="text-sky-400 hover:text-sky-300 transition-colors">See the full reference syntax.</a>
+      </p>
     </div>
   </section>
 
@@ -318,7 +343,7 @@ const steps = [
           ctrlyoke Pro unlocks the remote dashboard — open the workflows running on your
           computer from any browser or phone that can reach it: across your home or office
           network, or from anywhere over your own VPN. Start a long task, step away from your
-          desk, and check in from your phone.
+          desk, and check in from your phone.{" "}
           <a href="/docs/pro/remote-access" class="text-sky-400 hover:text-sky-300 transition-colors">See how to connect from anywhere.</a>
         </p>
         <div class="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2">

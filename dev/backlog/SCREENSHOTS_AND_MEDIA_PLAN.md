@@ -411,7 +411,9 @@ Each item: what to capture, what prep it needs, where it's used.
 - **Status — captured 2026-10-19** by `npm run media -- prompt-editor`:
   `prompt-editor-av1-1920x1280.mp4`, `prompt-editor-h264-960x640.mp4` and
   `prompt-editor-poster-1920x1280.webp` (31 s, under 1 MB). Video rather than GIF, like the hero.
-  Not slotted yet.
+  Slotted on landing 2026-10-19 as its own "Point at the context you mean" section (below #14),
+  with a six-chip reference legend linking to `docs/workflows/context-files.md`; it replaced the
+  `📎` and `✎` feature cards. Docs use is still open.
 
 ### 10. Built-in code editor (`WorkspaceViewerModal`)
 
@@ -660,8 +662,9 @@ line, where it renders as a button. Descriptions support `code`, **bold** and li
 - **Dimensions:** category D (motion). Automated as phase 5 of `MEDIA_CAPTURE_AUTOMATION_PLAN.md`.
 - **Status — captured 2026-10-19** by `npm run media -- visual-or-yaml`:
   `visual-or-yaml-av1-2560x1600.mp4`, `visual-or-yaml-h264-1280x800.mp4` and
-  `visual-or-yaml-poster-2560x1600.webp` (27 s, 1.4 MB). The panes play in turn. The landing
-  section and heading change are not done yet.
+  `visual-or-yaml-poster-2560x1600.webp` (27 s, 1.4 MB). The panes play in turn. Slotted on
+  landing 2026-10-19 under the heading "Build visually, or edit as YAML", replacing the YAML
+  block and the `🧩` feature card. `docs/workflows/yaml-format.md` use is still open.
 
 ## Slotting summary
 
@@ -670,7 +673,8 @@ line, where it renders as a button. Descriptions support `code`, **bold** and li
 | Hero                                                     | #6 (workflow-run GIF) replacing/joining the static YAML block |
 | "Harness grid" / new "looks like your editor" section    | #2                                                            |
 | Features grid — `⚡` One interface, six harnesses        | #1                                                            |
-| Features grid — `📎` Point at the context you mean       | #9                                                            |
+| "Point at the context you mean" section (was `📎` card)  | #9 (done)                                                     |
+| "Build visually, or edit as YAML" (was the YAML block)   | #14 (done)                                                    |
 | Features grid — `⬛` One reversible view of every result | #11                                                           |
 | New: Statistics/telemetry section                        | #4, #5                                                        |
 | New: Built-in editor section                             | #10                                                           |
