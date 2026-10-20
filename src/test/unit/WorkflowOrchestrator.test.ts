@@ -166,9 +166,12 @@ suite("WorkflowOrchestrator preferred view recovery", () => {
       }
     );
 
-    assert.ok(sent.some((message) =>
-      (message as { type?: string }).type === MESSAGE_TYPES.WORKFLOWS_LIST
-    ));
+    assert.ok(
+      sent.some(
+        (message) =>
+          (message as { type?: string }).type === MESSAGE_TYPES.WORKFLOWS_LIST
+      )
+    );
     assert.deepStrictEqual(feedback.messages, []);
   });
 
@@ -193,7 +196,11 @@ suite("WorkflowOrchestrator preferred view recovery", () => {
     internal.setViewedWorkflowId = () => {};
 
     await assert.rejects(
-      internal.loadFreshInstanceAndReplay("missing.json", "browser:test", () => {}),
+      internal.loadFreshInstanceAndReplay(
+        "missing.json",
+        "browser:test",
+        () => {}
+      ),
       /missing working file/
     );
     assert.strictEqual(disposed, true);

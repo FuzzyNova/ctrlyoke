@@ -151,7 +151,11 @@ export class PromptCompletionClient {
       this.cache?.key === completionCacheKey(trigger, query) &&
       this.cache.from === from &&
       this.cache.doc === context.state.doc &&
-      this.isValidResult(this.cache.result, context.state.doc.length, context.pos)
+      this.isValidResult(
+        this.cache.result,
+        context.state.doc.length,
+        context.pos
+      )
     ) {
       const cached = this.cache.result;
       this.cache = null;
@@ -252,7 +256,11 @@ export class PromptCompletionClient {
       this.options.onOutputCapturePicked,
       entry.escapeInsertText
     );
-    const validResult = this.isValidResult(result, entry.doc.length, entry.cursor);
+    const validResult = this.isValidResult(
+      result,
+      entry.doc.length,
+      entry.cursor
+    );
 
     if (partial) {
       // Deliver the instant items now, but keep the entry (request context)

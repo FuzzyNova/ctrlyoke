@@ -314,23 +314,28 @@ export class SecretRegistryService {
       ...workflows.flatMap((workflow) => workflow.secretNames),
       ...mcpServers.flatMap((server) => server.secretNames),
     ]);
-    const credentialCache = await this.ensureCredentialSnapshot(scope, managedNames, names);
+    const credentialCache = await this.ensureCredentialSnapshot(
+      scope,
+      managedNames,
+      names
+    );
     const entries: SecretRegistryEntry[] = [];
 
     for (const name of names) {
       const credential = credentialCache.credentials.get(name)!;
-      const state =
-        credential.isSet
-          ? SECRET_REGISTRY_STATES.MANAGED_AND_SET
-          : this.hasEnvironmentValue(name)
-            ? SECRET_REGISTRY_STATES.FROM_ENVIRONMENT_AND_DETECTED
-            : SECRET_REGISTRY_STATES.FROM_ENVIRONMENT_AND_NOT_FOUND;
+      const state = credential.isSet
+        ? SECRET_REGISTRY_STATES.MANAGED_AND_SET
+        : this.hasEnvironmentValue(name)
+          ? SECRET_REGISTRY_STATES.FROM_ENVIRONMENT_AND_DETECTED
+          : SECRET_REGISTRY_STATES.FROM_ENVIRONMENT_AND_NOT_FOUND;
 
       entries.push({
         name,
         scope,
         state,
-        ...(credential.metadata?.description ? { description: credential.metadata.description } : {}),
+        ...(credential.metadata?.description
+          ? { description: credential.metadata.description }
+          : {}),
         ...(credential.metadata?.lastUpdated !== undefined
           ? { lastUpdated: credential.metadata.lastUpdated }
           : {}),
@@ -415,7 +420,10 @@ export class SecretRegistryService {
     scope: SettingWriteScope,
     managedNames: readonly string[],
     names: readonly string[]
-  ): Promise<{ managedNames: Set<string>; credentials: Map<string, { isSet: boolean; metadata?: SecretMetadata }> }> {
+  ): Promise<{
+    managedNames: Set<string>;
+    credentials: Map<string, { isSet: boolean; metadata?: SecretMetadata }>;
+  }> {
     let snapshot = this.registryCache.get(scope);
     if (!snapshot) {
       snapshot = {
@@ -427,14 +435,26 @@ export class SecretRegistryService {
     }
     const missing = names.filter((name) => !snapshot!.credentials.has(name));
     if (missing.length === 0) return snapshot;
-    const keys = missing.flatMap((name) => [this.secretKey(scope, name), this.metadataKey(scope, name)]);
+    const keys = missing.flatMap((name) => [
+      this.secretKey(scope, name),
+      this.metadataKey(scope, name),
+    ]);
     const values = this.options.secretStore.getMany
       ? await this.options.secretStore.getMany(keys)
-      : new Map(await Promise.all(keys.map(async (key) => [key, await this.options.secretStore.get(key)] as const)));
+      : new Map(
+          await Promise.all(
+            keys.map(
+              async (key) =>
+                [key, await this.options.secretStore.get(key)] as const
+            )
+          )
+        );
     for (const name of missing) {
       snapshot.credentials.set(name, {
         isSet: values.get(this.secretKey(scope, name)) !== undefined,
-        metadata: parseSecretMetadata(values.get(this.metadataKey(scope, name))),
+        metadata: parseSecretMetadata(
+          values.get(this.metadataKey(scope, name))
+        ),
       });
     }
     return snapshot;

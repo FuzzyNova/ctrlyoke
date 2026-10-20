@@ -301,10 +301,14 @@ export class OsCredentialStore implements SecretStore {
     return this.withAvailability(() => this.backend.get(key));
   }
 
-  async getMany(keys: readonly string[]): Promise<Map<string, string | undefined>> {
+  async getMany(
+    keys: readonly string[]
+  ): Promise<Map<string, string | undefined>> {
     return this.withAvailability(async () => {
       if (this.backend.getMany) return this.backend.getMany(keys);
-      const values = await Promise.all(keys.map((key) => this.backend.get(key)));
+      const values = await Promise.all(
+        keys.map((key) => this.backend.get(key))
+      );
       return new Map(keys.map((key, index) => [key, values[index]]));
     });
   }
@@ -622,16 +626,27 @@ class WindowsCredentialBackend implements CredentialBackend {
     return value;
   }
 
-  async getMany(keys: readonly string[]): Promise<Map<string, string | undefined>> {
+  async getMany(
+    keys: readonly string[]
+  ): Promise<Map<string, string | undefined>> {
     if (keys.length === 0) return new Map();
     const result = await this.execute("batch", "", JSON.stringify(keys));
     throwIfBackendUnavailable("win32", result);
     if (result.exitCode !== 0) return throwCommandFailure("CredMan", result);
-    const raw = JSON.parse(Buffer.from(result.stdout, "base64").toString("utf8")) as Record<string, string | null>;
-    return new Map(keys.map((key) => {
-      const encoded = raw[key];
-      return [key, encoded == null ? undefined : Buffer.from(encoded, "base64").toString("utf8")];
-    }));
+    const raw = JSON.parse(
+      Buffer.from(result.stdout, "base64").toString("utf8")
+    ) as Record<string, string | null>;
+    return new Map(
+      keys.map((key) => {
+        const encoded = raw[key];
+        return [
+          key,
+          encoded == null
+            ? undefined
+            : Buffer.from(encoded, "base64").toString("utf8"),
+        ];
+      })
+    );
   }
 
   async store(key: string, value: string): Promise<void> {

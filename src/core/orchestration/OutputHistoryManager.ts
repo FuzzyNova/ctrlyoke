@@ -126,9 +126,9 @@ const snapshotCache = new Map<
 const snapshotLoads = new Map<string, Promise<WorkspaceSnapshot | undefined>>();
 let snapshotCacheBytes = 0;
 
-function readCachedSnapshot(key: string):
-  | { hit: true; snapshot: WorkspaceSnapshot | undefined }
-  | { hit: false } {
+function readCachedSnapshot(
+  key: string
+): { hit: true; snapshot: WorkspaceSnapshot | undefined } | { hit: false } {
   const entry = snapshotCache.get(key);
   if (!entry) return { hit: false };
   snapshotCache.delete(key);
@@ -973,7 +973,10 @@ export class OutputHistoryManager {
         existingSnapshot &&
         JSON.stringify(existingSnapshot) === JSON.stringify(snapshot)
       ) {
-        cacheSnapshot(this.getSnapshotCacheKey(historyFilePath, target), snapshot);
+        cacheSnapshot(
+          this.getSnapshotCacheKey(historyFilePath, target),
+          snapshot
+        );
         return;
       }
 
@@ -987,7 +990,10 @@ export class OutputHistoryManager {
           },
         },
       ]);
-      cacheSnapshot(this.getSnapshotCacheKey(historyFilePath, target), snapshot);
+      cacheSnapshot(
+        this.getSnapshotCacheKey(historyFilePath, target),
+        snapshot
+      );
       this.refreshSearchIndex();
     } catch (error) {
       Log.warn(
@@ -1036,11 +1042,12 @@ export class OutputHistoryManager {
       this.findSnapshotChangeForUndoPath(snapshot, filePath);
     if (!snapshot || !fileChange) return undefined;
 
-    const enrichedChange = await this.snapshotService.enrichSnapshotFileBeforeContent(
-      snapshot,
-      fileChange,
-      this._workspaceFolderPath
-    );
+    const enrichedChange =
+      await this.snapshotService.enrichSnapshotFileBeforeContent(
+        snapshot,
+        fileChange,
+        this._workspaceFolderPath
+      );
     if (!enrichedChange) return undefined;
     return {
       ...(enrichedChange.beforeContent !== undefined

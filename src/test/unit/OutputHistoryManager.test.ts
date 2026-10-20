@@ -2868,8 +2868,16 @@ suite("OutputHistoryManager snapshot enrichment on loadHistory", () => {
         return change;
       };
 
-    await separateManager.getSnapshotFileContent(filePath, target, "src/one.ts");
-    await separateManager.getSnapshotFileContent(filePath, target, "src/two.ts");
+    await separateManager.getSnapshotFileContent(
+      filePath,
+      target,
+      "src/one.ts"
+    );
+    await separateManager.getSnapshotFileContent(
+      filePath,
+      target,
+      "src/two.ts"
+    );
 
     assert.strictEqual(scans, 1);
     assert.deepStrictEqual(enrichedPaths, ["src/one.ts", "src/two.ts"]);
@@ -2892,7 +2900,11 @@ suite("OutputHistoryManager snapshot enrichment on loadHistory", () => {
           capturedAt: 1000,
           strategy: SNAPSHOT_STRATEGIES.FILESYSTEM,
           changedFiles: [
-            { path: "src/concurrent.ts", changeType: "deleted", contentToRestore: "old" },
+            {
+              path: "src/concurrent.ts",
+              changeType: "deleted",
+              contentToRestore: "old",
+            },
           ],
         } satisfies WorkspaceSnapshot;
       };
@@ -2900,8 +2912,16 @@ suite("OutputHistoryManager snapshot enrichment on loadHistory", () => {
       async (_snapshot: WorkspaceSnapshot, change: unknown) => change;
 
     const results = await Promise.all([
-      separateManager.getSnapshotFileContent(filePath, target, "src/concurrent.ts"),
-      separateManager.getSnapshotFileContent(filePath, target, "src/concurrent.ts"),
+      separateManager.getSnapshotFileContent(
+        filePath,
+        target,
+        "src/concurrent.ts"
+      ),
+      separateManager.getSnapshotFileContent(
+        filePath,
+        target,
+        "src/concurrent.ts"
+      ),
     ]);
 
     assert.strictEqual(scans, 1);

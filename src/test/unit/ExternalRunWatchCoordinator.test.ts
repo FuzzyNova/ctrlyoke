@@ -1109,7 +1109,10 @@ suite("ExternalRunWatchCoordinator ownership", () => {
         }
       };
 
-      const firstPoll = coordinator.pollRunnerJsonDiscovery(runsRoot, workspace);
+      const firstPoll = coordinator.pollRunnerJsonDiscovery(
+        runsRoot,
+        workspace
+      );
       await handlerEntered;
       await coordinator.pollRunnerJsonDiscovery(runsRoot, workspace);
       assert.deepStrictEqual(discovered, [firstRunnerPath]);

@@ -36,7 +36,9 @@ class InMemorySecretStore implements SecretStore {
   getMany(keys: readonly string[]): Thenable<Map<string, string | undefined>> {
     this.getManyCalls += 1;
     this.getCalls += keys.length;
-    return Promise.resolve(new Map(keys.map((key) => [key, this.values.get(key)])));
+    return Promise.resolve(
+      new Map(keys.map((key) => [key, this.values.get(key)]))
+    );
   }
 
   store(key: string, value: string): Thenable<void> {
@@ -192,9 +194,10 @@ suite("SecretRegistryService", () => {
     const service = serviceFor(store, {}, [], [], () => now);
 
     const initialEntries = await service.list(SETTING_SCOPES.USER);
-    assert.deepStrictEqual(initialEntries.map((entry) => entry.name), [
-      "REMOVED_TOKEN",
-    ]);
+    assert.deepStrictEqual(
+      initialEntries.map((entry) => entry.name),
+      ["REMOVED_TOKEN"]
+    );
     const readsAfterInitialList = {
       gets: store.getCalls,
       keys: store.keysCalls,
@@ -210,19 +213,25 @@ suite("SecretRegistryService", () => {
     );
 
     const cachedEntries = await service.list(SETTING_SCOPES.USER);
-    assert.deepStrictEqual(cachedEntries.map((entry) => entry.name), [
-      "REMOVED_TOKEN",
-    ]);
     assert.deepStrictEqual(
-      { gets: store.getCalls, keys: store.keysCalls, batches: store.getManyCalls },
+      cachedEntries.map((entry) => entry.name),
+      ["REMOVED_TOKEN"]
+    );
+    assert.deepStrictEqual(
+      {
+        gets: store.getCalls,
+        keys: store.keysCalls,
+        batches: store.getManyCalls,
+      },
       readsAfterInitialList
     );
 
     now += 30_000;
     const refreshedEntries = await service.list(SETTING_SCOPES.USER);
-    assert.deepStrictEqual(refreshedEntries.map((entry) => entry.name), [
-      "ADDED_TOKEN",
-    ]);
+    assert.deepStrictEqual(
+      refreshedEntries.map((entry) => entry.name),
+      ["ADDED_TOKEN"]
+    );
     assert.strictEqual(
       refreshedEntries[0].state,
       SECRET_REGISTRY_STATES.MANAGED_AND_SET
@@ -360,7 +369,9 @@ suite("SecretRegistryService", () => {
     const store = new InMemorySecretStore();
     store.values.set(userSecretKey("API_TOKEN"), "secret");
     store.getMany = async (keys) => {
-      await new Promise<void>((resolve) => { releaseRead = resolve; });
+      await new Promise<void>((resolve) => {
+        releaseRead = resolve;
+      });
       return new Map(keys.map((key) => [key, store.values.get(key)]));
     };
     const service = new SecretRegistryService({
@@ -376,27 +387,42 @@ suite("SecretRegistryService", () => {
       () => {},
       { sendWorkflowPropertiesToSettings: async () => {} } as any,
       {} as any,
-      () => ({
-        getWorkflowSummaries: () => [],
-        getActiveTerminalWorkflowRefs: () => [],
-      }) as any,
+      () =>
+        ({
+          getWorkflowSummaries: () => [],
+          getActiveTerminalWorkflowRefs: () => [],
+        }) as any,
       {} as any,
       { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} },
       service
     );
 
     const slowRequest = router.route(
-      { type: MESSAGE_TYPES.REQUEST_SECRET_REGISTRY, scope: SETTING_SCOPES.USER },
-      { clientTag: "browser:slow", postMessage: (message) => firstClientMessages.push(message) }
+      {
+        type: MESSAGE_TYPES.REQUEST_SECRET_REGISTRY,
+        scope: SETTING_SCOPES.USER,
+      },
+      {
+        clientTag: "browser:slow",
+        postMessage: (message) => firstClientMessages.push(message),
+      }
     );
     await new Promise<void>((resolve) => setImmediate(resolve));
     await router.route(
       { type: MESSAGE_TYPES.GET_WORKFLOWS_LIST },
-      { clientTag: "browser:fast", postMessage: (message) => secondClientMessages.push(message) }
+      {
+        clientTag: "browser:fast",
+        postMessage: (message) => secondClientMessages.push(message),
+      }
     );
     assert.ok(secondClientMessages.length > 0);
     releaseRead();
     await slowRequest;
-    assert.ok(firstClientMessages.some((message) => (message as any).type === MESSAGE_TYPES.SECRET_REGISTRY_UPDATE));
+    assert.ok(
+      firstClientMessages.some(
+        (message) =>
+          (message as any).type === MESSAGE_TYPES.SECRET_REGISTRY_UPDATE
+      )
+    );
   });
 });
