@@ -46,6 +46,11 @@ export interface UseCompatibilityDiagnosticsResult {
 export interface UseCompatibilityDiagnosticsOptions {
   /** Unsaved prompt properties to evaluate for the selected target. */
   promptProperties?: PropertyValues;
+  /**
+   * The prompt being edited. When set, `diagnostics` holds only the ones that
+   * target consumes, so another step's harness never warns in this prompt's
+   * properties. `executionTargets` still covers the whole workflow.
+   */
   promptTarget?: EditorSelectionTarget;
   /** Build the workflow-level projection only for the report surface. */
   includePortabilityReport?: boolean;
@@ -61,6 +66,24 @@ function authoredImageRefs(prompt: string): readonly string[] {
         isImageRefPath(reference.path)
     )
     .map((reference) => reference.path);
+}
+
+/** Whether a diagnostic belongs to the prompt at `target`. A new prompt has no consumer yet. */
+function isConsumedBy(
+  diagnostic: CompatibilityDiagnostic,
+  target: EditorSelectionTarget
+): boolean {
+  const consumer = diagnostic.consumer;
+  if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+    return (
+      consumer?.kind === FINAL_STEP_PHASES.QUEUE &&
+      consumer.stepIndex === target.index
+    );
+  }
+  return (
+    target.kind === FINAL_STEP_PHASES.FINAL_STEP &&
+    consumer?.kind === FINAL_STEP_PHASES.FINAL_STEP
+  );
 }
 
 function applyPromptProperties(
@@ -178,13 +201,18 @@ export function useCompatibilityDiagnostics(
       imageFileRefs: imageFileRefsForTarget(target),
     }));
 
+    const diagnostics = analyzeCompatibility({
+      workflow,
+      executionTargets,
+      capabilities: capabilitySnapshot,
+      workspace: { workspaceRoot: globalSettings.workspaceRoot },
+    });
     return {
-      diagnostics: analyzeCompatibility({
-        workflow,
-        executionTargets,
-        capabilities: capabilitySnapshot,
-        workspace: { workspaceRoot: globalSettings.workspaceRoot },
-      }),
+      diagnostics: promptTarget
+        ? diagnostics.filter((diagnostic) =>
+            isConsumedBy(diagnostic, promptTarget)
+          )
+        : diagnostics,
       executionTargets,
       portabilityReport: includePortabilityReport
         ? buildPortabilityReport({

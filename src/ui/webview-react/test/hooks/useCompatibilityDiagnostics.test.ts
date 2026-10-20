@@ -386,6 +386,47 @@ describe("useCompatibilityDiagnostics", () => {
 
     expect(result.current.diagnostics).toEqual([]);
   });
+
+  it("scopes prompt diagnostics to the edited target", () => {
+    useSettingsStore.getState().setWorkflowProperties({
+      harness: HARNESS_IDS.CLAUDE_CLI,
+      toolPermissions: {
+        mode: PERMISSION_MODES.CUSTOM,
+        allowedTools: ["shell(git:*)"],
+        deniedTools: ["shell(rm:*)"],
+      },
+    });
+    useWorkflowStore.setState({
+      steps: [
+        { prompt: "Inherits Claude Code" },
+        { prompt: "Runs on Codex", harness: HARNESS_IDS.CODEX_CLI },
+      ],
+    });
+    useCompatibilityStore.getState().setCapabilitySnapshot(makeSnapshot());
+
+    let index = 0;
+    const { result, rerender } = renderHook(() =>
+      useCompatibilityDiagnostics({
+        promptProperties: {
+          ...PROPERTY_DEFAULTS,
+          harness: index === 1 ? HARNESS_IDS.CODEX_CLI : undefined,
+          toolPermissions: undefined,
+        },
+        promptTarget: { kind: FINAL_STEP_PHASES.QUEUE, index },
+      })
+    );
+    expect(result.current.diagnostics).toEqual([]);
+    expect(result.current.executionTargets).toHaveLength(2);
+
+    index = 1;
+    rerender();
+    expect(
+      result.current.diagnostics.map((item) => [item.harnessId, item.consumer])
+    ).toEqual([
+      [HARNESS_IDS.CODEX_CLI, { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 }],
+      [HARNESS_IDS.CODEX_CLI, { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 }],
+    ]);
+  });
 });
 
 function projectDiagnostic(diagnostic: {

@@ -262,11 +262,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   const imageCompatibilityDiagnostics = promptCompatibility.diagnostics
     .filter(
       (diagnostic) =>
-        diagnostic.capability === PROMPT_INPUT_CAPABILITY_KEYS.IMAGES &&
-        (selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
-          ? diagnostic.consumer?.kind === FINAL_STEP_PHASES.QUEUE &&
-            diagnostic.consumer.stepIndex === selectionTarget.index
-          : diagnostic.consumer?.kind === FINAL_STEP_PHASES.FINAL_STEP)
+        diagnostic.capability === PROMPT_INPUT_CAPABILITY_KEYS.IMAGES
     )
     .map((diagnostic) => toFieldDiagnostic(diagnostic));
 
