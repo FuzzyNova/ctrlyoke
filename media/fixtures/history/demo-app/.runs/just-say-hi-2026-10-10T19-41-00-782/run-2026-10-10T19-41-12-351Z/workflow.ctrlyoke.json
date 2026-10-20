@@ -1,0 +1,75 @@
+{
+  "startedAt": 1791661272346,
+  "definitionRevision": 1,
+  "steps": [
+    {
+      "prompt": "just say hi",
+      "_runtime": {
+        "stepId": "7cd825ef-a7e9-41bd-94c6-073b8779a84b",
+        "startedAt": 1791661272544,
+        "secrets": [],
+        "harness": "copilot-cli",
+        "model": "gpt-5.6-luna",
+        "executionMode": "interactive",
+        "completedAt": 1791661308187,
+        "terminalStatus": "cancelled"
+      }
+    }
+  ],
+  "parallelGroups": [],
+  "_runtime": {
+    "currentIndex": 1,
+    "executionState": "stopped",
+    "startTime": 1791661272513,
+    "totalPausedDuration": 0,
+    "executionEndTime": 1791661307982,
+    "schemaVersion": 2
+  },
+  "schemaVersion": 1,
+  "harness": "copilot-cli",
+  "model": "gpt-5.6-luna",
+  "executionMode": "interactive",
+  "agent": null,
+  "skills": [],
+  "resumeSession": true,
+  "mcpServers": [],
+  "hooks": [],
+  "endCondition": null,
+  "preCondition": null,
+  "priorContext": "none",
+  "errorBehavior": null,
+  "additionalArgs": "",
+  "toolPermissions": {
+    "mode": "dangerouslyAllowAll",
+    "allowedTools": [
+      "write",
+      "shell(git status)",
+      "shell(git diff)",
+      "shell(git add:*)",
+      "shell(git commit:*)",
+      "shell(git log:*)",
+      "shell(npm:*)",
+      "shell(yarn:*)",
+      "shell(pnpm:*)",
+      "shell(node:*)",
+      "shell(npx:*)"
+    ],
+    "deniedTools": [
+      "shell(rm:*)",
+      "shell(del:*)",
+      "shell(Remove-Item:*)",
+      "shell(rd:*)",
+      "shell(rmdir:*)",
+      "shell(sudo:*)",
+      "shell(chmod:*)",
+      "shell(chown:*)",
+      "shell(git push:*)",
+      "shell(git reset:*)",
+      "shell(git checkout:*)",
+      "shell(git clean:*)",
+      "shell(docker rm:*)",
+      "shell(docker rmi:*)",
+      "shell(kubectl delete:*)"
+    ]
+  }
+}

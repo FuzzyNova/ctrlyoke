@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "workflowKey": "docs-secrets-2026-10-11T14-47-14-866",
+  "workflowName": "docs-secrets",
+  "originalFile": "@@MEDIA_WORKSPACE@@\\.ctrlyoke\\workflows\\docs-secrets.ctrlyoke.yaml",
+  "isFavorite": false,
+  "createdAt": 1791730034866,
+  "lastModifiedAt": 1791730034866,
+  "nextRunId": 1,
+  "revision": 1
+}

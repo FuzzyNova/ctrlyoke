@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "workflowKey": "rate-limiter-middleware-copilot-2026-09-01T03-44-39-544",
+  "workflowName": "rate limiter middleware - copilot",
+  "originalFile": "@@MEDIA_WORKSPACE@@/.ctrlyoke/workflows/marketing-script.ctrlyoke.yaml",
+  "sourceWorkflowKey": "rate-limiter-middleware-agy-2026-09-01T03-40-52-321",
+  "sourceRunRef": "run-2026-09-01T03-41-39-935Z",
+  "sourceWorkflowName": "rate limiter middleware - agy",
+  "variantCreatedAt": 1788234279543,
+  "isFavorite": false,
+  "createdAt": 1788234279544,
+  "lastModifiedAt": 1788234303151,
+  "nextRunId": 2,
+  "revision": 2,
+  "latestRunRef": "run-2026-09-01T03-45-03-138Z"
+}

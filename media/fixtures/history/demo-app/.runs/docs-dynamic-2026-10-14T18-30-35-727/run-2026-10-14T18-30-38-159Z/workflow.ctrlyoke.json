@@ -1,0 +1,167 @@
+{
+  "startedAt": 1792002638149,
+  "definitionRevision": 2,
+  "steps": [
+    {
+      "type": "script",
+      "script": "npm test",
+      "name": "Run tests",
+      "_runtime": {
+        "stepId": "104a2c04-ed8b-4a30-9052-66a3d1ca689b",
+        "startedAt": 1792002638417,
+        "secrets": [],
+        "executionMode": "headless",
+        "elapsed": 2.096,
+        "completedAt": 1792002640849,
+        "terminalStatus": "completed"
+      }
+    },
+    {
+      "name": "Summarize test results",
+      "prompt": "Reply with one sentence saying the notes API tests passed.",
+      "_runtime": {
+        "stepId": "ca96f793-6021-4b94-bab1-1c612dc652ca",
+        "sessionId": "c7390f7c-084a-4a5b-b3fa-610a70c99333",
+        "startedAt": 1792002649754,
+        "secrets": [],
+        "harness": "claude-cli",
+        "model": "haiku",
+        "executionMode": "headless",
+        "skills": [
+          "ctrlyoke-syntax"
+        ],
+        "elapsed": 11.9,
+        "completedAt": 1792002662018,
+        "terminalStatus": "completed"
+      }
+    }
+  ],
+  "parallelGroups": [],
+  "_runtime": {
+    "currentIndex": 2,
+    "executionState": "completed",
+    "tokenTotals": {
+      "total": 1458,
+      "coverage": "complete",
+      "reportedAttemptCount": 3,
+      "attemptCount": 3,
+      "isFinal": true,
+      "costUsd": 0.01282439,
+      "costSources": [
+        "harness-reported"
+      ],
+      "byHarness": {
+        "claude-cli": {
+          "input": 20,
+          "output": 1438,
+          "cachedInput": 286179,
+          "cacheCreated": 46208,
+          "total": 1458,
+          "coverage": "complete",
+          "reportedAttemptCount": 3,
+          "attemptCount": 3,
+          "costUsd": 0.01282439,
+          "costSources": [
+            "harness-reported"
+          ]
+        }
+      },
+      "byLocalDay": {
+        "2026-10-14": {
+          "claude-cli": {
+            "input": 20,
+            "output": 1438,
+            "cachedInput": 286179,
+            "cacheCreated": 46208,
+            "total": 1458,
+            "coverage": "complete",
+            "reportedAttemptCount": 3,
+            "attemptCount": 3,
+            "costUsd": 0.01282439,
+            "costSources": [
+              "harness-reported"
+            ]
+          }
+        }
+      }
+    },
+    "startTime": 1792002638345,
+    "totalPausedDuration": 0,
+    "executionEndTime": 1792002672076,
+    "finalStep": {
+      "phase": "finalStep",
+      "loopCount": 1,
+      "status": "completed",
+      "startedAt": 1792002662236,
+      "completedAt": 1792002672070
+    },
+    "lastActivityAt": 1792002647544,
+    "schemaVersion": 2
+  },
+  "schemaVersion": 1,
+  "harness": "claude-cli",
+  "model": "haiku",
+  "executionMode": "headless",
+  "resumeSession": false,
+  "finalStep": {
+    "prompt": "Call the ctrlyoke workflow_status tool. If no step named \"Summarize test results\" exists, call append_step exactly once with position \"end\" and one step named \"Summarize test results\" whose prompt is \"Reply with one sentence saying the notes API tests passed.\" If that step already exists, append nothing. Do not read or edit any files. Reply with one short sentence.",
+    "mcpServers": [
+      "ctrlyoke"
+    ],
+    "_runtime": {
+      "secrets": [],
+      "harness": "claude-cli",
+      "model": "haiku",
+      "executionMode": "headless",
+      "skills": [
+        "ctrlyoke-syntax"
+      ],
+      "sessionId": "530efb7e-3247-49c4-b6e1-dd4b7956ddfe",
+      "completedAt": 1792002649424
+    }
+  },
+  "agent": null,
+  "skills": [
+    "ctrlyoke-syntax"
+  ],
+  "mcpServers": [],
+  "hooks": [],
+  "endCondition": null,
+  "preCondition": null,
+  "priorContext": "none",
+  "errorBehavior": null,
+  "additionalArgs": "",
+  "toolPermissions": {
+    "mode": "dangerouslyAllowAll",
+    "allowedTools": [
+      "write",
+      "shell(git status)",
+      "shell(git diff)",
+      "shell(git add:*)",
+      "shell(git commit:*)",
+      "shell(git log:*)",
+      "shell(npm:*)",
+      "shell(yarn:*)",
+      "shell(pnpm:*)",
+      "shell(node:*)",
+      "shell(npx:*)"
+    ],
+    "deniedTools": [
+      "shell(rm:*)",
+      "shell(del:*)",
+      "shell(Remove-Item:*)",
+      "shell(rd:*)",
+      "shell(rmdir:*)",
+      "shell(sudo:*)",
+      "shell(chmod:*)",
+      "shell(chown:*)",
+      "shell(git push:*)",
+      "shell(git reset:*)",
+      "shell(git checkout:*)",
+      "shell(git clean:*)",
+      "shell(docker rm:*)",
+      "shell(docker rmi:*)",
+      "shell(kubectl delete:*)"
+    ]
+  }
+}

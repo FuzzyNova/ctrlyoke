@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "workflowKey": "docs-script-2026-10-11T14-49-02-739",
+  "workflowName": "docs-script",
+  "originalFile": "@@MEDIA_WORKSPACE@@\\.ctrlyoke\\workflows\\docs-script.ctrlyoke.yaml",
+  "isFavorite": false,
+  "createdAt": 1791730142740,
+  "lastModifiedAt": 1791730144616,
+  "nextRunId": 2,
+  "revision": 2,
+  "latestRunRef": "run-2026-10-11T14-49-04-603Z"
+}

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "workflowKey": "hero-gif-2026-09-03T03-48-14-807",
+  "workflowName": "notes tagging and search api",
+  "originalFile": "@@MEDIA_WORKSPACE@@/.ctrlyoke/workflows/hero-gif.ctrlyoke.yaml",
+  "isFavorite": false,
+  "createdAt": 1788407294808,
+  "lastModifiedAt": 1791830410484,
+  "nextRunId": 5,
+  "revision": 10,
+  "latestRunRef": "run-2026-09-08T03-14-04-220Z"
+}

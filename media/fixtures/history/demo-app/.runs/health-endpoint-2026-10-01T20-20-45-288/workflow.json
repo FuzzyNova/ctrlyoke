@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "workflowKey": "health-endpoint-2026-10-01T20-20-45-288",
+  "workflowName": "health-endpoint",
+  "originalFile": "@@MEDIA_WORKSPACE@@/.ctrlyoke/workflows/health-endpoint.ctrlyoke.yaml",
+  "isFavorite": false,
+  "createdAt": 1790886045288,
+  "lastModifiedAt": 1790890528782,
+  "nextRunId": 2,
+  "revision": 2,
+  "latestRunRef": "run-2026-10-01T21-35-28-768Z"
+}

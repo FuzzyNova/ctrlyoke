@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "storageKind": "timeline",
+  "workflowId": "docs-steer-2026-10-11T14-44-23-402",
+  "runId": 1,
+  "startedAt": 1791729865243,
+  "executionState": "stopped",
+  "definitionRevision": 1,
+  "initialDefinition": {
+    "workflowName": "docs-steer",
+    "steps": [
+      {
+        "prompt": "Read every file in @src/ and @tests/ one at a time, then write a short review of each.\nDo not change any files.\n",
+        "name": "Review the API",
+        "harness": "opencode-cli",
+        "model": "opencode/big-pickle"
+      }
+    ]
+  },
+  "stepCount": 1,
+  "eventCount": 20,
+  "nextSequence": 21,
+  "lastUpdatedAt": 1791729893242,
+  "tokenTotals": {
+    "total": 14268,
+    "coverage": "complete",
+    "reportedAttemptCount": 1,
+    "attemptCount": 1,
+    "isFinal": true,
+    "costUsd": 0,
+    "costSources": [
+      "harness-reported"
+    ],
+    "byHarness": {
+      "opencode-cli": {
+        "input": 13279,
+        "output": 832,
+        "cachedInput": 49792,
+        "cacheCreated": 0,
+        "reasoningOutput": 157,
+        "total": 14268,
+        "coverage": "complete",
+        "reportedAttemptCount": 1,
+        "attemptCount": 1,
+        "costUsd": 0,
+        "costSources": [
+          "harness-reported"
+        ]
+      }
+    },
+    "byLocalDay": {
+      "2026-10-11": {
+        "opencode-cli": {
+          "input": 13279,
+          "output": 832,
+          "cachedInput": 49792,
+          "cacheCreated": 0,
+          "reasoningOutput": 157,
+          "total": 14268,
+          "coverage": "complete",
+          "reportedAttemptCount": 1,
+          "attemptCount": 1,
+          "costUsd": 0,
+          "costSources": [
+            "harness-reported"
+          ]
+        }
+      }
+    }
+  },
+  "completedAt": 1791729893242,
+  "activeExecutionMs": 26465
+}

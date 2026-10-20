@@ -1,0 +1,94 @@
+{
+  "startedAt": 1791831618934,
+  "definitionRevision": 17,
+  "steps": [
+    {
+      "prompt": "Implement the plan in @{{planDocument}}.",
+      "name": "Implement tags",
+      "_runtime": {
+        "stepId": "2f9f1752-c894-40db-9d46-3074f8005415"
+      }
+    },
+    {
+      "prompt": "Review the changes for the plan in @{{planDocument}}.",
+      "name": "Review",
+      "_runtime": {
+        "stepId": "5c73f599-1687-498a-85fa-bb65fe6ce7fe"
+      }
+    }
+  ],
+  "parallelGroups": [],
+  "_runtime": {
+    "currentIndex": 0,
+    "executionState": "idle",
+    "schemaVersion": 2
+  },
+  "schemaVersion": 1,
+  "harness": "claude-cli",
+  "model": "sonnet",
+  "executionMode": "headless",
+  "vars": {
+    "planDocument": ".ctrlyoke/plans/notes-tags.md"
+  },
+  "resumeSession": true,
+  "hooks": [
+    {
+      "event": "sessionStart",
+      "command": "node scripts/hooks/announce.js"
+    },
+    {
+      "event": "stop",
+      "command": "node scripts/hooks/log-turn.js"
+    },
+    {
+      "event": "error",
+      "command": "node scripts/hooks/notify-error.js"
+    }
+  ],
+  "endCondition": null,
+  "toolPermissions": {
+    "mode": "custom",
+    "allowedTools": [
+      "write",
+      "shell(npm test)",
+      "shell(git diff:*)"
+    ],
+    "deniedTools": [
+      "shell(git push:*)",
+      "shell(rm:*)"
+    ]
+  },
+  "agent": null,
+  "skills": [
+    "ctrlyoke-syntax"
+  ],
+  "mcpServers": [
+    {
+      "id": "ctrlyoke",
+      "deniedTools": [
+        "remove_step"
+      ]
+    },
+    {
+      "id": "playwright",
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest",
+        "--isolated"
+      ]
+    }
+  ],
+  "preCondition": null,
+  "priorContext": {
+    "previous": 2
+  },
+  "errorBehavior": null,
+  "additionalArgs": "",
+  "worktree": {
+    "mode": "named",
+    "branch": "bug-fix",
+    "base": "",
+    "setup": ""
+  },
+  "priorContextDetail": "summary"
+}

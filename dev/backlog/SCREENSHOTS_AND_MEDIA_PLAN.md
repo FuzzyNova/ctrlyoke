@@ -1,5 +1,10 @@
 # Marketing & Docs Media Plan — Screenshots and GIFs
 
+**Captures done 2026-10-19:** #15 (run history, three stills) and #10's desktop set at 2×
+(two stills), both scripted (`npm run media -- history`, `npm run media -- workspace-viewer`)
+and slotted on landing as the tabbed sections "Every session, searchable" and "Your project,
+in any browser". They replace the `🔍` and `🗂` feature cards.
+
 **Captures done 2026-10-14:** #8 as `template-yaml-snippet-1792x1594.png`. It is the demo
 project's custom Bug Fix template (`.ctrlyoke/templates/bug-fix.ctrlyoke.yaml`), drawn in the
 landing page's code-window style at 2× and transparent outside the rounded corners. It isn't
@@ -432,6 +437,14 @@ Each item: what to capture, what prep it needs, where it's used.
 - **Status:** wide desktop stills done and slotted (2026-10-11) into `docs/guide/workspace-viewer.md`
   and `docs/guide/source-control.md`: `workspace-viewer-explorer-references`, `-editor-menu`,
   `-search-1600x830`, `-source-control` and `-commit-diff`. Still to capture: the iPhone set.
+- **Scripted 2026-10-19** as `npm run media -- workspace-viewer`, for landing:
+  `workspace-viewer-references-2560x1600.png` (notesStore.ts with the language server's
+  References panel for `normalizeTag`) and `workspace-viewer-commit-2560x1600.png` (the hero
+  run's five changed files staged, notes.ts's diff, hero-end's commit message). demo-app sits at
+  `hero-start` with `hero-end`'s files as uncommitted edits, on `main` with no upstream and its
+  tags parked (see `media/README.md`). The Search pane was left out: its header shows the
+  capture clone's absolute path and the results are sparse. The 1× docs stills above can be
+  retaken from the same stage when they need replacing.
 - **Plus a phone clip: edit a file and commit it** (~10–15s, category H motion, animated WebP with
   alpha like #7's). The motion version of the iPhone set, and a stronger "real IDE on your phone"
   demo than any still: Explorer → open a file and change a line (`WorkspaceFileEditor`) → save →
@@ -666,6 +679,24 @@ line, where it renders as a button. Descriptions support `code`, **bold** and li
   landing 2026-10-19 under the heading "Build visually, or edit as YAML", replacing the YAML
   block and the `🧩` feature card. `docs/workflows/yaml-format.md` use is still open.
 
+### 15. Run history: the workflow list, history search, and a reopened run
+
+- **What:** the point that ctrlyoke keeps every session on every harness and lets you search,
+  reopen, continue and rerun it. Three stills: the workflow list (`WorkflowStatus.tsx`'s
+  dropdown) open over the hero run, with favorites and run counts; history search
+  (`HistorySearchDrawer.tsx`) for "per IP" narrowed to responses, which lists how Claude Code,
+  Qwen Code, OpenCode, Codex and Antigravity answered the same rate-limiting task; and the
+  OpenCode run reopened from a result, with each match highlighted.
+- **Prep:** demo-app's real run history, committed tokenized as `media/fixtures/history/`
+  (`npm run media -- snapshot-history`; see `media/README.md`). The favorited script-only
+  workflows in it were run repeatedly for their run counts. The `docs-*` workflows are left out
+  of these shots by name, and the browser clock is fixed at 2026-10-15 so relative times hold.
+- **Use:** landing "Every session, searchable" (tabbed). Candidate for a docs page on history
+  and search, which today uses the 1× `history-search-1180x813.png`.
+- **Status — captured and slotted 2026-10-19** by `npm run media -- history`:
+  `history-workflows-2560x1600.png`, `history-search-2560x1600.png`,
+  `history-reopened-run-2560x1600.png`.
+
 ## Slotting summary
 
 | Landing section (existing or new)                        | Asset(s)                                                      |
@@ -677,7 +708,8 @@ line, where it renders as a button. Descriptions support `code`, **bold** and li
 | "Build visually, or edit as YAML" (was the YAML block)   | #14 (done)                                                    |
 | Features grid — `⬛` One reversible view of every result | #11                                                           |
 | New: Statistics/telemetry section                        | #4, #5                                                        |
-| New: Built-in editor section                             | #10                                                           |
+| "Your project, in any browser" (was the `🗂` card)       | #10 (done)                                                    |
+| "Every session, searchable" (was the `🔍` card)          | #15 (done)                                                    |
 | New: Templates section                                   | #8                                                            |
 | New: Mobile section                                      | #3, #7                                                        |
 | Pro callout (`Code from anywhere`)                       | #3, #7 (non-Pro-UI parts only — see Non-goals)                |

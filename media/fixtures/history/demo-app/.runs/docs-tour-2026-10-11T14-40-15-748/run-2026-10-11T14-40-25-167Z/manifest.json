@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 2,
+  "storageKind": "timeline",
+  "workflowId": "docs-tour-2026-10-11T14-40-15-748",
+  "runId": 1,
+  "startedAt": 1791729625165,
+  "executionState": "completed",
+  "definitionRevision": 2,
+  "initialDefinition": {
+    "workflowName": "docs-tour",
+    "steps": [
+      {
+        "type": "script",
+        "script": "npm test",
+        "name": "Run tests"
+      },
+      {
+        "prompt": "Review @src/routes/ for input-validation gaps a client could hit.\nDo not change any files. List up to five findings with file and line.\n",
+        "name": "Review routes",
+        "harness": "opencode-cli",
+        "model": "opencode/big-pickle"
+      },
+      {
+        "prompt": "Review @src/store/ for ways a note could be lost or corrupted.\nDo not change any files. List up to five findings with file and line.\n",
+        "name": "Review store",
+        "harness": "opencode-cli",
+        "model": "opencode/big-pickle"
+      },
+      {
+        "type": "script",
+        "script": "npx tsc --noEmit",
+        "name": "Type check"
+      },
+      {
+        "prompt": "Merge the two reviews from $step:2-3 into one prioritized list.\nDo not change any files.\n",
+        "name": "Summarize",
+        "harness": "opencode-cli",
+        "model": "opencode/big-pickle"
+      },
+      {
+        "prompt": "For the top three findings in $previous, describe the fix in two sentences each.\nDo not change any files.\n",
+        "name": "Draft fixes plan",
+        "harness": "opencode-cli",
+        "model": "opencode/big-pickle"
+      }
+    ],
+    "parallelGroups": [
+      {
+        "startIndex": 1,
+        "endIndex": 3,
+        "failFast": false,
+        "id": "a080eabb-6ef0-4349-bdb6-3f99b91e4240"
+      }
+    ]
+  },
+  "stepCount": 6,
+  "eventCount": 60,
+  "nextSequence": 61,
+  "lastUpdatedAt": 1791729817138,
+  "tokenTotals": {
+    "total": 50559,
+    "coverage": "complete",
+    "reportedAttemptCount": 4,
+    "attemptCount": 4,
+    "isFinal": true,
+    "costUsd": 0,
+    "costSources": [
+      "harness-reported"
+    ],
+    "byHarness": {
+      "opencode-cli": {
+        "input": 45262,
+        "output": 2205,
+        "cachedInput": 144531,
+        "cacheCreated": 0,
+        "reasoningOutput": 3092,
+        "total": 50559,
+        "coverage": "complete",
+        "reportedAttemptCount": 4,
+        "attemptCount": 4,
+        "costUsd": 0,
+        "costSources": [
+          "harness-reported"
+        ]
+      }
+    },
+    "byLocalDay": {
+      "2026-10-11": {
+        "opencode-cli": {
+          "input": 45262,
+          "output": 2205,
+          "cachedInput": 144531,
+          "cacheCreated": 0,
+          "reasoningOutput": 3092,
+          "total": 50559,
+          "coverage": "complete",
+          "reportedAttemptCount": 4,
+          "attemptCount": 4,
+          "costUsd": 0,
+          "costSources": [
+            "harness-reported"
+          ]
+        }
+      }
+    }
+  },
+  "completedAt": 1791729743930,
+  "activeExecutionMs": 118540
+}

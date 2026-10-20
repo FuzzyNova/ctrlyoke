@@ -1,0 +1,80 @@
+{
+  "startedAt": 1791730034868,
+  "definitionRevision": 3,
+  "steps": [
+    {
+      "prompt": "Use !DEMO_API_KEY to call the staging notes API and report the response time.\n",
+      "name": "Call the staging API",
+      "_runtime": {
+        "stepId": "0645a9e9-626c-4d76-bc67-18353f246f75"
+      }
+    },
+    {
+      "type": "script",
+      "script": "node scripts/notify.js",
+      "name": "Notify",
+      "env": {
+        "WEBHOOK_TOKEN": "${secret:DEMO_WEBHOOK_TOKEN}"
+      },
+      "_runtime": {
+        "stepId": "7d697aef-419e-44b0-a1e6-212d16bc01d0"
+      }
+    }
+  ],
+  "parallelGroups": [],
+  "_runtime": {
+    "currentIndex": 0,
+    "executionState": "idle",
+    "schemaVersion": 2
+  },
+  "schemaVersion": 1,
+  "secrets": [
+    "DEMO_DB_PASSWORD"
+  ],
+  "harness": "claude-cli",
+  "model": "opus",
+  "executionMode": "interactive",
+  "agent": null,
+  "skills": [],
+  "resumeSession": true,
+  "mcpServers": [],
+  "hooks": [],
+  "endCondition": null,
+  "preCondition": null,
+  "priorContext": "none",
+  "errorBehavior": null,
+  "additionalArgs": "",
+  "toolPermissions": {
+    "mode": "dangerouslyAllowAll",
+    "allowedTools": [
+      "write",
+      "shell(git status)",
+      "shell(git diff)",
+      "shell(git add:*)",
+      "shell(git commit:*)",
+      "shell(git log:*)",
+      "shell(npm:*)",
+      "shell(yarn:*)",
+      "shell(pnpm:*)",
+      "shell(node:*)",
+      "shell(npx:*)"
+    ],
+    "deniedTools": [
+      "shell(rm:*)",
+      "shell(del:*)",
+      "shell(Remove-Item:*)",
+      "shell(rd:*)",
+      "shell(rmdir:*)",
+      "shell(sudo:*)",
+      "shell(chmod:*)",
+      "shell(chown:*)",
+      "shell(git push:*)",
+      "shell(git reset:*)",
+      "shell(git checkout:*)",
+      "shell(git clean:*)",
+      "shell(docker rm:*)",
+      "shell(docker rmi:*)",
+      "shell(kubectl delete:*)"
+    ]
+  }
+}

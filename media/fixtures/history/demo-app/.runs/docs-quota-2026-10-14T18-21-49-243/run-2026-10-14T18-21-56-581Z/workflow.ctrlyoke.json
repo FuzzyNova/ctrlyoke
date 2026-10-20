@@ -1,0 +1,84 @@
+{
+  "startedAt": 1792002116579,
+  "definitionRevision": 1,
+  "steps": [
+    {
+      "type": "script",
+      "script": "node -e \"setTimeout(() => {}, 30000)\"",
+      "name": "Wait",
+      "_runtime": {
+        "stepId": "7e792b93-0eb9-49f5-81e8-6764f5cd6136",
+        "startedAt": 1792002116864,
+        "secrets": [],
+        "executionMode": "headless",
+        "completedAt": 1792002123355,
+        "terminalStatus": "cancelled"
+      }
+    },
+    {
+      "prompt": "Summarize src/notes.ts in two sentences.",
+      "name": "Summarize the notes API",
+      "_runtime": {
+        "stepId": "317d85ee-995d-4e2c-82e2-1a09b3c0b003"
+      }
+    }
+  ],
+  "parallelGroups": [],
+  "_runtime": {
+    "currentIndex": 1,
+    "executionState": "stopped",
+    "startTime": 1792002116797,
+    "totalPausedDuration": 0,
+    "executionEndTime": 1792002122810,
+    "schemaVersion": 2
+  },
+  "schemaVersion": 1,
+  "harness": "claude-cli",
+  "model": "haiku",
+  "executionMode": "headless",
+  "agent": null,
+  "skills": [
+    "ctrlyoke-syntax"
+  ],
+  "resumeSession": true,
+  "mcpServers": [],
+  "hooks": [],
+  "endCondition": null,
+  "preCondition": null,
+  "priorContext": "none",
+  "errorBehavior": null,
+  "additionalArgs": "",
+  "toolPermissions": {
+    "mode": "dangerouslyAllowAll",
+    "allowedTools": [
+      "write",
+      "shell(git status)",
+      "shell(git diff)",
+      "shell(git add:*)",
+      "shell(git commit:*)",
+      "shell(git log:*)",
+      "shell(npm:*)",
+      "shell(yarn:*)",
+      "shell(pnpm:*)",
+      "shell(node:*)",
+      "shell(npx:*)"
+    ],
+    "deniedTools": [
+      "shell(rm:*)",
+      "shell(del:*)",
+      "shell(Remove-Item:*)",
+      "shell(rd:*)",
+      "shell(rmdir:*)",
+      "shell(sudo:*)",
+      "shell(chmod:*)",
+      "shell(chown:*)",
+      "shell(git push:*)",
+      "shell(git reset:*)",
+      "shell(git checkout:*)",
+      "shell(git clean:*)",
+      "shell(docker rm:*)",
+      "shell(docker rmi:*)",
+      "shell(kubectl delete:*)"
+    ]
+  }
+}

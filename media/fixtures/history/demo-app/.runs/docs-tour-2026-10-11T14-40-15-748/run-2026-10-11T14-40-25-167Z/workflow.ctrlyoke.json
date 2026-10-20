@@ -1,0 +1,216 @@
+{
+  "startedAt": 1791729625165,
+  "definitionRevision": 1,
+  "steps": [
+    {
+      "type": "script",
+      "script": "npm test",
+      "name": "Run tests",
+      "_runtime": {
+        "stepId": "a7f00e14-0f3e-4a19-a2a8-3e9059ba4b4e",
+        "startedAt": 1791729625383,
+        "secrets": [],
+        "executionMode": "headless",
+        "elapsed": 7.69,
+        "completedAt": 1791729633387,
+        "terminalStatus": "completed"
+      }
+    },
+    {
+      "prompt": "Review @src/routes/ for input-validation gaps a client could hit.\nDo not change any files. List up to five findings with file and line.\n",
+      "name": "Review routes",
+      "harness": "opencode-cli",
+      "model": "opencode/big-pickle",
+      "_runtime": {
+        "stepId": "d8840f80-21ed-4851-a330-2d34dfb5f52d",
+        "startedAt": 1791729633595,
+        "secrets": [],
+        "harness": "opencode-cli",
+        "model": "opencode/big-pickle",
+        "executionMode": "headless",
+        "sessionId": "ses_ed4976ffbffePRSzwHdsopvcx2",
+        "elapsed": 29.6,
+        "completedAt": 1791729711519,
+        "terminalStatus": "completed"
+      }
+    },
+    {
+      "prompt": "Review @src/store/ for ways a note could be lost or corrupted.\nDo not change any files. List up to five findings with file and line.\n",
+      "name": "Review store",
+      "harness": "opencode-cli",
+      "model": "opencode/big-pickle",
+      "_runtime": {
+        "stepId": "0036dfdf-3ccb-48f7-a402-27c8d138f70d",
+        "startedAt": 1791729633595,
+        "secrets": [],
+        "harness": "opencode-cli",
+        "model": "opencode/big-pickle",
+        "executionMode": "headless",
+        "sessionId": "ses_ed4976ffeffeYqTRVYJM2b31Lc",
+        "elapsed": 77.5,
+        "completedAt": 1791729711520,
+        "terminalStatus": "completed"
+      }
+    },
+    {
+      "type": "script",
+      "script": "npx tsc --noEmit",
+      "name": "Type check",
+      "_runtime": {
+        "stepId": "035e5617-3586-446d-a76e-62b7269ba8a3",
+        "startedAt": 1791729633595,
+        "secrets": [],
+        "executionMode": "headless",
+        "elapsed": 3.042,
+        "completedAt": 1791729711521,
+        "terminalStatus": "completed"
+      }
+    },
+    {
+      "prompt": "Merge the two reviews from $step:2-3 into one prioritized list.\nDo not change any files.\n",
+      "name": "Summarize",
+      "harness": "opencode-cli",
+      "model": "opencode/big-pickle",
+      "_runtime": {
+        "stepId": "45efd919-f787-4396-a838-a5c497111866",
+        "startedAt": 1791729711687,
+        "secrets": [],
+        "harness": "opencode-cli",
+        "model": "opencode/big-pickle",
+        "executionMode": "headless",
+        "sessionId": "ses_ed4963fd4ffeBJbHfMx1p6CJBs",
+        "elapsed": 16.5,
+        "completedAt": 1791729728442,
+        "terminalStatus": "completed"
+      }
+    },
+    {
+      "prompt": "For the top three findings in $previous, describe the fix in two sentences each.\nDo not change any files.\n",
+      "name": "Draft fixes plan",
+      "harness": "opencode-cli",
+      "model": "opencode/big-pickle",
+      "_runtime": {
+        "stepId": "e107013f-e841-40aa-8e08-bb0f7ef5a041",
+        "startedAt": 1791729728545,
+        "secrets": [],
+        "harness": "opencode-cli",
+        "model": "opencode/big-pickle",
+        "executionMode": "headless",
+        "sessionId": "ses_ed495fdebffe1rkirIX9onGo5X",
+        "elapsed": 14.9,
+        "completedAt": 1791729743770,
+        "terminalStatus": "completed"
+      }
+    }
+  ],
+  "parallelGroups": [
+    {
+      "startIndex": 1,
+      "endIndex": 3,
+      "failFast": false,
+      "id": "a080eabb-6ef0-4349-bdb6-3f99b91e4240"
+    }
+  ],
+  "_runtime": {
+    "currentIndex": 6,
+    "executionState": "completed",
+    "tokenTotals": {
+      "total": 50559,
+      "coverage": "complete",
+      "reportedAttemptCount": 4,
+      "attemptCount": 4,
+      "isFinal": true,
+      "costUsd": 0,
+      "costSources": [
+        "harness-reported"
+      ],
+      "byHarness": {
+        "opencode-cli": {
+          "input": 45262,
+          "output": 2205,
+          "cachedInput": 144531,
+          "cacheCreated": 0,
+          "reasoningOutput": 3092,
+          "total": 50559,
+          "coverage": "complete",
+          "reportedAttemptCount": 4,
+          "attemptCount": 4,
+          "costUsd": 0,
+          "costSources": [
+            "harness-reported"
+          ]
+        }
+      },
+      "byLocalDay": {
+        "2026-10-11": {
+          "opencode-cli": {
+            "input": 45262,
+            "output": 2205,
+            "cachedInput": 144531,
+            "cacheCreated": 0,
+            "reasoningOutput": 3092,
+            "total": 50559,
+            "coverage": "complete",
+            "reportedAttemptCount": 4,
+            "attemptCount": 4,
+            "costUsd": 0,
+            "costSources": [
+              "harness-reported"
+            ]
+          }
+        }
+      }
+    },
+    "startTime": 1791729625334,
+    "totalPausedDuration": 0,
+    "executionEndTime": 1791729743874,
+    "schemaVersion": 2
+  },
+  "schemaVersion": 1,
+  "executionMode": "headless",
+  "resumeSession": false,
+  "harness": "claude-cli",
+  "model": "opus",
+  "agent": null,
+  "skills": [],
+  "mcpServers": [],
+  "hooks": [],
+  "endCondition": null,
+  "preCondition": null,
+  "priorContext": "none",
+  "errorBehavior": null,
+  "additionalArgs": "",
+  "toolPermissions": {
+    "mode": "dangerouslyAllowAll",
+    "allowedTools": [
+      "write",
+      "shell(git status)",
+      "shell(git diff)",
+      "shell(git add:*)",
+      "shell(git commit:*)",
+      "shell(git log:*)",
+      "shell(npm:*)",
+      "shell(yarn:*)",
+      "shell(pnpm:*)",
+      "shell(node:*)",
+      "shell(npx:*)"
+    ],
+    "deniedTools": [
+      "shell(rm:*)",
+      "shell(del:*)",
+      "shell(Remove-Item:*)",
+      "shell(rd:*)",
+      "shell(rmdir:*)",
+      "shell(sudo:*)",
+      "shell(chmod:*)",
+      "shell(chown:*)",
+      "shell(git push:*)",
+      "shell(git reset:*)",
+      "shell(git checkout:*)",
+      "shell(git clean:*)",
+      "shell(docker rm:*)",
+      "shell(docker rmi:*)",
+      "shell(kubectl delete:*)"
+    ]
+  }
+}

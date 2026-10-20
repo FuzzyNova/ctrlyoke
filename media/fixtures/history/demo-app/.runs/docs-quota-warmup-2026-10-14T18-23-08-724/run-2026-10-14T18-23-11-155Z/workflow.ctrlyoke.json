@@ -1,0 +1,128 @@
+{
+  "startedAt": 1792002191153,
+  "definitionRevision": 1,
+  "steps": [
+    {
+      "prompt": "Reply with just the word OK.",
+      "name": "Say OK",
+      "_runtime": {
+        "stepId": "3d5cde4d-45b0-4635-a64e-97ac3166b928",
+        "startedAt": 1792002191401,
+        "secrets": [],
+        "harness": "claude-cli",
+        "model": "haiku",
+        "executionMode": "interactive",
+        "skills": [
+          "ctrlyoke-syntax"
+        ],
+        "sessionId": "6c619387-1aa1-4752-b213-5cf1a5a3193a",
+        "elapsed": 6,
+        "completedAt": 1792002197784,
+        "terminalStatus": "completed"
+      }
+    }
+  ],
+  "parallelGroups": [],
+  "_runtime": {
+    "currentIndex": 1,
+    "executionState": "completed",
+    "tokenTotals": {
+      "total": 82,
+      "coverage": "complete",
+      "reportedAttemptCount": 1,
+      "attemptCount": 1,
+      "isFinal": true,
+      "costUsd": 0.00216833,
+      "costSources": [
+        "price-table"
+      ],
+      "byHarness": {
+        "claude-cli": {
+          "input": 2,
+          "output": 80,
+          "cachedInput": 30963,
+          "cacheCreated": 14548,
+          "total": 82,
+          "coverage": "complete",
+          "reportedAttemptCount": 1,
+          "attemptCount": 1,
+          "costUsd": 0.00216833,
+          "costSources": [
+            "price-table"
+          ]
+        }
+      },
+      "byLocalDay": {
+        "2026-10-14": {
+          "claude-cli": {
+            "input": 2,
+            "output": 80,
+            "cachedInput": 30963,
+            "cacheCreated": 14548,
+            "total": 82,
+            "coverage": "complete",
+            "reportedAttemptCount": 1,
+            "attemptCount": 1,
+            "costUsd": 0.00216833,
+            "costSources": [
+              "price-table"
+            ]
+          }
+        }
+      }
+    },
+    "startTime": 1792002191340,
+    "totalPausedDuration": 0,
+    "executionEndTime": 1792002197925,
+    "schemaVersion": 2
+  },
+  "schemaVersion": 1,
+  "harness": "claude-cli",
+  "model": "haiku",
+  "executionMode": "interactive",
+  "agent": null,
+  "skills": [
+    "ctrlyoke-syntax"
+  ],
+  "resumeSession": true,
+  "mcpServers": [],
+  "hooks": [],
+  "endCondition": null,
+  "preCondition": null,
+  "priorContext": "none",
+  "errorBehavior": null,
+  "additionalArgs": "",
+  "toolPermissions": {
+    "mode": "dangerouslyAllowAll",
+    "allowedTools": [
+      "write",
+      "shell(git status)",
+      "shell(git diff)",
+      "shell(git add:*)",
+      "shell(git commit:*)",
+      "shell(git log:*)",
+      "shell(npm:*)",
+      "shell(yarn:*)",
+      "shell(pnpm:*)",
+      "shell(node:*)",
+      "shell(npx:*)"
+    ],
+    "deniedTools": [
+      "shell(rm:*)",
+      "shell(del:*)",
+      "shell(Remove-Item:*)",
+      "shell(rd:*)",
+      "shell(rmdir:*)",
+      "shell(sudo:*)",
+      "shell(chmod:*)",
+      "shell(chown:*)",
+      "shell(git push:*)",
+      "shell(git reset:*)",
+      "shell(git checkout:*)",
+      "shell(git clean:*)",
+      "shell(docker rm:*)",
+      "shell(docker rmi:*)",
+      "shell(kubectl delete:*)"
+    ]
+  }
+}

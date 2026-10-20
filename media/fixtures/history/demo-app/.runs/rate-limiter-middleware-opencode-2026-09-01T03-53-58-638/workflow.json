@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "workflowKey": "rate-limiter-middleware-opencode-2026-09-01T03-53-58-638",
+  "workflowName": "rate limiter middleware - opencode",
+  "originalFile": "@@MEDIA_WORKSPACE@@/.ctrlyoke/workflows/marketing-script.ctrlyoke.yaml",
+  "sourceWorkflowKey": "rate-limiter-middleware-codex-2026-09-01T03-49-29-041",
+  "sourceRunRef": "run-2026-09-01T03-49-47-678Z",
+  "sourceWorkflowName": "rate limiter middleware - codex",
+  "variantCreatedAt": 1788234838638,
+  "isFavorite": false,
+  "createdAt": 1788234838639,
+  "lastModifiedAt": 1788234855532,
+  "nextRunId": 2,
+  "revision": 2,
+  "latestRunRef": "run-2026-09-01T03-54-15-517Z"
+}

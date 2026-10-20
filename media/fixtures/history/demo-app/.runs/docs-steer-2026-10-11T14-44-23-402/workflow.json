@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "workflowKey": "docs-steer-2026-10-11T14-44-23-402",
+  "workflowName": "docs-steer",
+  "originalFile": "@@MEDIA_WORKSPACE@@\\.ctrlyoke\\workflows\\docs-steer.ctrlyoke.yaml",
+  "isFavorite": false,
+  "createdAt": 1791729863403,
+  "lastModifiedAt": 1791729865270,
+  "nextRunId": 2,
+  "revision": 2,
+  "latestRunRef": "run-2026-10-11T14-44-25-254Z"
+}

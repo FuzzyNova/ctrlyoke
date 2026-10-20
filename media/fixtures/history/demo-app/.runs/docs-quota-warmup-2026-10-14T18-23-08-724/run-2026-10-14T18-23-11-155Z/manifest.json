@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 2,
+  "storageKind": "timeline",
+  "workflowId": "docs-quota-warmup-2026-10-14T18-23-08-724",
+  "runId": 1,
+  "startedAt": 1792002191153,
+  "executionState": "completed",
+  "definitionRevision": 1,
+  "initialDefinition": {
+    "workflowName": "docs-quota-warmup",
+    "steps": [
+      {
+        "prompt": "Reply with just the word OK.",
+        "name": "Say OK"
+      }
+    ]
+  },
+  "stepCount": 1,
+  "eventCount": 9,
+  "nextSequence": 10,
+  "lastUpdatedAt": 1792002197996,
+  "tokenTotals": {
+    "total": 82,
+    "coverage": "complete",
+    "reportedAttemptCount": 1,
+    "attemptCount": 1,
+    "isFinal": true,
+    "costUsd": 0.00216833,
+    "costSources": [
+      "price-table"
+    ],
+    "byHarness": {
+      "claude-cli": {
+        "input": 2,
+        "output": 80,
+        "cachedInput": 30963,
+        "cacheCreated": 14548,
+        "total": 82,
+        "coverage": "complete",
+        "reportedAttemptCount": 1,
+        "attemptCount": 1,
+        "costUsd": 0.00216833,
+        "costSources": [
+          "price-table"
+        ]
+      }
+    },
+    "byLocalDay": {
+      "2026-10-14": {
+        "claude-cli": {
+          "input": 2,
+          "output": 80,
+          "cachedInput": 30963,
+          "cacheCreated": 14548,
+          "total": 82,
+          "coverage": "complete",
+          "reportedAttemptCount": 1,
+          "attemptCount": 1,
+          "costUsd": 0.00216833,
+          "costSources": [
+            "price-table"
+          ]
+        }
+      }
+    }
+  },
+  "completedAt": 1792002197996,
+  "activeExecutionMs": 6585
+}

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "storageKind": "timeline",
+  "workflowId": "just-say-hi-2026-10-10T19-41-00-782",
+  "runId": 2,
+  "startedAt": 1791663847683,
+  "executionState": "completed",
+  "definitionRevision": 1,
+  "initialDefinition": {
+    "workflowName": "just say hi",
+    "steps": [
+      {
+        "prompt": "just say hi"
+      }
+    ]
+  },
+  "stepCount": 1,
+  "eventCount": 9,
+  "nextSequence": 10,
+  "lastUpdatedAt": 1791663863631,
+  "tokenTotals": {
+    "total": 9,
+    "coverage": "complete",
+    "reportedAttemptCount": 1,
+    "attemptCount": 1,
+    "isFinal": true,
+    "costUsd": 0.0042425499999999994,
+    "costSources": [
+      "price-table"
+    ],
+    "byHarness": {
+      "copilot-cli": {
+        "input": 3,
+        "output": 6,
+        "cacheCreated": 16939,
+        "total": 9,
+        "coverage": "complete",
+        "reportedAttemptCount": 1,
+        "attemptCount": 1,
+        "costUsd": 0.0042425499999999994,
+        "costSources": [
+          "price-table"
+        ]
+      }
+    },
+    "byLocalDay": {
+      "2026-10-10": {
+        "copilot-cli": {
+          "input": 3,
+          "output": 6,
+          "cacheCreated": 16939,
+          "total": 9,
+          "coverage": "complete",
+          "reportedAttemptCount": 1,
+          "attemptCount": 1,
+          "costUsd": 0.0042425499999999994,
+          "costSources": [
+            "price-table"
+          ]
+        }
+      }
+    }
+  },
+  "completedAt": 1791663863631,
+  "activeExecutionMs": 15536
+}

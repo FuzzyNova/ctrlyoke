@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "workflowKey": "bug-drain-2026-10-11T22-15-57-561",
+  "workflowName": "bug drain",
+  "isFavorite": true,
+  "createdAt": 1791756957561,
+  "lastModifiedAt": 1791757055217,
+  "nextRunId": 4,
+  "revision": 5,
+  "latestRunRef": "run-2026-10-11T22-17-35-193Z"
+}

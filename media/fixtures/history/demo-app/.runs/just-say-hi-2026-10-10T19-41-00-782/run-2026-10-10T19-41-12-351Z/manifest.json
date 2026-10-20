@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "storageKind": "timeline",
+  "workflowId": "just-say-hi-2026-10-10T19-41-00-782",
+  "runId": 1,
+  "startedAt": 1791661272346,
+  "executionState": "stopped",
+  "definitionRevision": 1,
+  "initialDefinition": {
+    "workflowName": "just say hi",
+    "steps": [
+      {
+        "prompt": "just say hi"
+      }
+    ]
+  },
+  "stepCount": 1,
+  "eventCount": 10,
+  "nextSequence": 11,
+  "lastUpdatedAt": 1791661308276,
+  "completedAt": 1791661308276,
+  "activeExecutionMs": 35469
+}

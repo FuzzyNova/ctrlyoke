@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "workflowKey": "docs-dynamic-2026-10-14T18-30-35-727",
+  "workflowName": "docs-dynamic",
+  "originalFile": "@@MEDIA_WORKSPACE@@\\.ctrlyoke\\workflows\\docs-dynamic.ctrlyoke.yaml",
+  "isFavorite": false,
+  "createdAt": 1792002635727,
+  "lastModifiedAt": 1792002638174,
+  "nextRunId": 2,
+  "revision": 2,
+  "latestRunRef": "run-2026-10-14T18-30-38-159Z"
+}

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "workflowKey": "lint-and-format-2026-10-11T22-16-19-919",
+  "workflowName": "lint and format",
+  "isFavorite": true,
+  "createdAt": 1791756979920,
+  "lastModifiedAt": 1791757024692,
+  "nextRunId": 6,
+  "revision": 8,
+  "latestRunRef": "run-2026-10-11T22-17-00-399Z"
+}

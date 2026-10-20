@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "workflowKey": "docs-quota-2026-10-14T18-21-49-243",
+  "workflowName": "docs-quota",
+  "originalFile": "@@MEDIA_WORKSPACE@@\\.ctrlyoke\\workflows\\docs-quota.ctrlyoke.yaml",
+  "isFavorite": false,
+  "createdAt": 1792002109244,
+  "lastModifiedAt": 1792002432790,
+  "nextRunId": 5,
+  "revision": 5,
+  "latestRunRef": "run-2026-10-14T18-27-12-772Z"
+}

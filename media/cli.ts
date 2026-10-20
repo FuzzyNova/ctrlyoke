@@ -31,6 +31,9 @@ commands:
                  URL and leave it running (stop it: npm run dev:host:stop)
   replay <run>   like host, but on that recorded run's start state, armed to
                  replay the run when its workflow is run
+  snapshot-history [<project dir>]
+                 copy demo-app's run history from ~/.ctrlyoke/projects into
+                 fixtures/history/, tokenized (review before committing)
 
 options:
   --only <file>     capture only this still
@@ -77,7 +80,7 @@ async function capture(ids: string[], options: CaptureOptions): Promise<void> {
     const files = selectStills(shot, options.only);
     for (const stage of shot.stages) {
       if (!stage.stills.some((still) => files.has(still.file))) continue;
-      prepareDemoApp(stage.workflows ?? []);
+      prepareDemoApp(stage.workflows ?? [], stage.startTag, stage.changesFrom);
       const url = await startHost(stage.host);
       try {
         await captureStage(stage, url, files, options);
@@ -176,9 +179,17 @@ async function main(): Promise<void> {
     case "host": {
       // The first stage's host and fixtures, for exploring a shot by hand.
       const stage = rest[0] ? findShot(rest[0]).stages[0] : undefined;
-      prepareDemoApp(stage?.workflows ?? []);
+      prepareDemoApp(
+        stage?.workflows ?? [],
+        stage?.startTag,
+        stage?.changesFrom
+      );
       console.log(await startHost(stage?.host));
       return;
+    }
+    case "snapshot-history": {
+      const { snapshotHistory } = await import("./lib/history.ts");
+      return snapshotHistory(rest[0]);
     }
     case "replay": {
       if (!rest[0]) throw new Error("usage: npm run media -- replay <run>");

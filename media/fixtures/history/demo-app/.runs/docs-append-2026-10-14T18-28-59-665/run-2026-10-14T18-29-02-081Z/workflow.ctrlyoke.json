@@ -1,0 +1,167 @@
+{
+  "startedAt": 1792002542077,
+  "definitionRevision": 2,
+  "steps": [
+    {
+      "type": "script",
+      "script": "npm test",
+      "name": "Run tests",
+      "_runtime": {
+        "stepId": "21cbcf77-715d-4c42-99ad-d1b00f627b93",
+        "startedAt": 1792002542522,
+        "secrets": [],
+        "executionMode": "headless",
+        "elapsed": 8.89,
+        "completedAt": 1792002551883,
+        "terminalStatus": "completed"
+      }
+    },
+    {
+      "name": "Build",
+      "prompt": "(script) npm run build",
+      "_runtime": {
+        "stepId": "f42dc361-0e24-486f-91be-e2a111085ef0",
+        "sessionId": "96297723-9b5f-4d00-893e-f76aeea44052",
+        "startedAt": 1792002561621,
+        "secrets": [],
+        "harness": "claude-cli",
+        "model": "haiku",
+        "executionMode": "headless",
+        "skills": [
+          "ctrlyoke-syntax"
+        ],
+        "elapsed": 10.1,
+        "completedAt": 1792002572091,
+        "terminalStatus": "completed"
+      }
+    }
+  ],
+  "parallelGroups": [],
+  "_runtime": {
+    "currentIndex": 2,
+    "executionState": "completed",
+    "tokenTotals": {
+      "total": 1241,
+      "coverage": "complete",
+      "reportedAttemptCount": 3,
+      "attemptCount": 3,
+      "isFinal": true,
+      "costUsd": 0.013150110000000001,
+      "costSources": [
+        "harness-reported"
+      ],
+      "byHarness": {
+        "claude-cli": {
+          "input": 18,
+          "output": 1223,
+          "cachedInput": 248161,
+          "cacheCreated": 50276,
+          "total": 1241,
+          "coverage": "complete",
+          "reportedAttemptCount": 3,
+          "attemptCount": 3,
+          "costUsd": 0.013150110000000001,
+          "costSources": [
+            "harness-reported"
+          ]
+        }
+      },
+      "byLocalDay": {
+        "2026-10-14": {
+          "claude-cli": {
+            "input": 18,
+            "output": 1223,
+            "cachedInput": 248161,
+            "cacheCreated": 50276,
+            "total": 1241,
+            "coverage": "complete",
+            "reportedAttemptCount": 3,
+            "attemptCount": 3,
+            "costUsd": 0.013150110000000001,
+            "costSources": [
+              "harness-reported"
+            ]
+          }
+        }
+      }
+    },
+    "startTime": 1792002542436,
+    "totalPausedDuration": 0,
+    "executionEndTime": 1792002579297,
+    "finalStep": {
+      "phase": "finalStep",
+      "loopCount": 1,
+      "status": "completed",
+      "startedAt": 1792002572219,
+      "completedAt": 1792002579289
+    },
+    "lastActivityAt": 1792002559315,
+    "schemaVersion": 2
+  },
+  "schemaVersion": 1,
+  "harness": "claude-cli",
+  "model": "haiku",
+  "executionMode": "headless",
+  "resumeSession": false,
+  "finalStep": {
+    "prompt": "Call the ctrlyoke workflow_status tool. If no step named \"Build\" exists, call append_step exactly once to append a script step named \"Build\" with the script \"npm run build\" at the end. If a \"Build\" step already exists, append nothing. Do not read or edit any files. Reply with one short sentence.",
+    "mcpServers": [
+      "ctrlyoke"
+    ],
+    "_runtime": {
+      "secrets": [],
+      "harness": "claude-cli",
+      "model": "haiku",
+      "executionMode": "headless",
+      "skills": [
+        "ctrlyoke-syntax"
+      ],
+      "sessionId": "3c2ac296-c382-42a4-8207-6fc656adc6dd",
+      "completedAt": 1792002561299
+    }
+  },
+  "agent": null,
+  "skills": [
+    "ctrlyoke-syntax"
+  ],
+  "mcpServers": [],
+  "hooks": [],
+  "endCondition": null,
+  "preCondition": null,
+  "priorContext": "none",
+  "errorBehavior": null,
+  "additionalArgs": "",
+  "toolPermissions": {
+    "mode": "dangerouslyAllowAll",
+    "allowedTools": [
+      "write",
+      "shell(git status)",
+      "shell(git diff)",
+      "shell(git add:*)",
+      "shell(git commit:*)",
+      "shell(git log:*)",
+      "shell(npm:*)",
+      "shell(yarn:*)",
+      "shell(pnpm:*)",
+      "shell(node:*)",
+      "shell(npx:*)"
+    ],
+    "deniedTools": [
+      "shell(rm:*)",
+      "shell(del:*)",
+      "shell(Remove-Item:*)",
+      "shell(rd:*)",
+      "shell(rmdir:*)",
+      "shell(sudo:*)",
+      "shell(chmod:*)",
+      "shell(chown:*)",
+      "shell(git push:*)",
+      "shell(git reset:*)",
+      "shell(git checkout:*)",
+      "shell(git clean:*)",
+      "shell(docker rm:*)",
+      "shell(docker rmi:*)",
+      "shell(kubectl delete:*)"
+    ]
+  }
+}

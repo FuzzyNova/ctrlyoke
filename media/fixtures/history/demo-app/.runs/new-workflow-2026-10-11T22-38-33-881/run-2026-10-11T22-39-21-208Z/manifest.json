@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "storageKind": "timeline",
+  "workflowId": "new-workflow-2026-10-11T22-38-33-881",
+  "runId": 1,
+  "startedAt": 1791758361202,
+  "executionState": "completed",
+  "definitionRevision": 1,
+  "initialDefinition": {
+    "workflowName": "docs-terminal",
+    "steps": [
+      {
+        "prompt": "Read package.json and README.md, then summarize what this project does in three short bullet points. Do not edit any files."
+      }
+    ]
+  },
+  "stepCount": 1,
+  "eventCount": 13,
+  "nextSequence": 14,
+  "lastUpdatedAt": 1791758370649,
+  "tokenTotals": {
+    "total": 668,
+    "coverage": "complete",
+    "reportedAttemptCount": 1,
+    "attemptCount": 1,
+    "isFinal": true,
+    "costPartial": true,
+    "byHarness": {
+      "claude-cli": {
+        "input": 4,
+        "output": 664,
+        "cachedInput": 53699,
+        "cacheCreated": 17921,
+        "total": 668,
+        "coverage": "complete",
+        "reportedAttemptCount": 1,
+        "attemptCount": 1,
+        "costPartial": true
+      }
+    },
+    "byLocalDay": {
+      "2026-10-11": {
+        "claude-cli": {
+          "input": 4,
+          "output": 664,
+          "cachedInput": 53699,
+          "cacheCreated": 17921,
+          "total": 668,
+          "coverage": "complete",
+          "reportedAttemptCount": 1,
+          "attemptCount": 1,
+          "costPartial": true
+        }
+      }
+    }
+  },
+  "completedAt": 1791758370649,
+  "activeExecutionMs": 9191
+}

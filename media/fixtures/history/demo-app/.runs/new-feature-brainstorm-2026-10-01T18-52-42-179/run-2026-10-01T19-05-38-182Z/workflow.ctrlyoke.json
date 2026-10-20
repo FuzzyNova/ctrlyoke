@@ -1,0 +1,185 @@
+{
+  "startedAt": 1790881538175,
+  "definitionRevision": 50,
+  "steps": [
+    {
+      "prompt": "this is a demo app for taking screenshots for ctrlyoke (see full source in c:/dev/ctrlyoke). Also see C:\\dev\\ctrlyoke\\dev\\backlog\\SCREENSHOTS_AND_MEDIA_PLAN.md)\n\nCan you check the state of this notes app, and propos some more features to add. I want to show a more filled out workflow dropdown. I could also. Help me figure out some small features to add to the notes app, and maybe clean it up too if needed.",
+      "agent": "ctrlyoke-tech-support",
+      "_runtime": {
+        "stepId": "8542083b-46bc-4a07-8df7-8ea4f2bc273f",
+        "startedAt": 1790881538381,
+        "secrets": [],
+        "harness": "claude-cli",
+        "model": "opus",
+        "executionMode": "interactive",
+        "agent": "ctrlyoke-tech-support",
+        "sessionId": "fedb6e6d-16d5-4b49-88bb-25ada9e9e785",
+        "elapsed": 49.8,
+        "completedAt": 1790881588476,
+        "terminalStatus": "completed"
+      }
+    },
+    {
+      "prompt": "do the startup fix and cleanup, then commit and move the baseline. Then create the 7-8 workflow files",
+      "_runtime": {
+        "stepId": "384437c5-235e-4941-b8dd-6fa553786a61",
+        "startedAt": 1790882939955,
+        "secrets": [],
+        "harness": "claude-cli",
+        "model": "opus",
+        "executionMode": "interactive",
+        "sessionId": "fedb6e6d-16d5-4b49-88bb-25ada9e9e785",
+        "elapsed": 132.4,
+        "completedAt": 1790883073141,
+        "terminalStatus": "completed"
+      }
+    }
+  ],
+  "parallelGroups": [],
+  "_runtime": {
+    "currentIndex": 2,
+    "executionState": "completed",
+    "tokenTotals": {
+      "total": 18034,
+      "coverage": "complete",
+      "reportedAttemptCount": 2,
+      "attemptCount": 2,
+      "isFinal": true,
+      "costUsd": 0.8948944,
+      "costSources": [
+        "price-table"
+      ],
+      "byHarness": {
+        "claude-cli": {
+          "input": 36,
+          "output": 17998,
+          "cachedInput": 1259527,
+          "cacheCreated": 56577,
+          "total": 18034,
+          "coverage": "complete",
+          "reportedAttemptCount": 2,
+          "attemptCount": 2,
+          "costUsd": 0.8948944,
+          "costSources": [
+            "price-table"
+          ]
+        }
+      },
+      "byLocalDay": {
+        "2026-10-01": {
+          "claude-cli": {
+            "input": 36,
+            "output": 17998,
+            "cachedInput": 1259527,
+            "cacheCreated": 56577,
+            "total": 18034,
+            "coverage": "complete",
+            "reportedAttemptCount": 2,
+            "attemptCount": 2,
+            "costUsd": 0.8948944,
+            "costSources": [
+              "price-table"
+            ]
+          }
+        }
+      }
+    },
+    "startTime": 1790881538337,
+    "totalPausedDuration": 1351325,
+    "executionEndTime": 1790883073233,
+    "schemaVersion": 2
+  },
+  "schemaVersion": 1,
+  "harness": "claude-cli",
+  "model": "opus",
+  "executionMode": "interactive",
+  "agent": "senior-developer",
+  "skills": [
+    "ctrlyoke-mcp-tools",
+    "ctrlyoke-coordination-tools"
+  ],
+  "resumeSession": true,
+  "mcpServers": [
+    "ctrlyoke",
+    {
+      "id": "playwright",
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest",
+        "--isolated"
+      ]
+    }
+  ],
+  "hooks": [
+    {
+      "event": "sessionStart",
+      "command": "node ./scripts/custom-start-hook.js"
+    },
+    {
+      "event": "stop",
+      "command": "node ./scripts/custom-stop-hook.js"
+    },
+    {
+      "event": "error",
+      "command": "node ./scripts/custom-error-hook.js"
+    }
+  ],
+  "endCondition": {
+    "script": "npm test",
+    "onPass": "continue",
+    "onFail": "retry",
+    "retryPrompt": "`npm test` failed with these results:\n\nstdout:$endCondition:stdout \nstderr: $endCondition:stderr \nexpected: $endCondition:expected \nactual $endCondition:actual \nsource: $endCondition:compareSource \n\nFix the test failure and commit your changes",
+    "maxRetries": 3
+  },
+  "preCondition": null,
+  "priorContext": "previous",
+  "errorBehavior": null,
+  "additionalArgs": "",
+  "toolPermissions": {
+    "mode": "custom",
+    "allowedTools": [
+      "write",
+      "shell(git status)",
+      "shell(git diff)",
+      "shell(git add:*)",
+      "shell(git commit:*)",
+      "shell(git log:*)",
+      "shell(npm:*)",
+      "shell(yarn:*)",
+      "shell(pnpm:*)",
+      "shell(node:*)",
+      "shell(npx:*)"
+    ],
+    "deniedTools": [
+      "shell(rm:*)",
+      "shell(del:*)",
+      "shell(Remove-Item:*)",
+      "shell(rd:*)",
+      "shell(rmdir:*)",
+      "shell(sudo:*)",
+      "shell(chmod:*)",
+      "shell(chown:*)",
+      "shell(git push:*)",
+      "shell(git reset:*)",
+      "shell(git checkout:*)",
+      "shell(git clean:*)",
+      "shell(docker rm:*)",
+      "shell(docker rmi:*)",
+      "shell(kubectl delete:*)"
+    ]
+  },
+  "worktree": {
+    "mode": "managed",
+    "base": "",
+    "setup": "npm ci",
+    "merge": false,
+    "keep": true
+  },
+  "vars": {
+    "log_file": "CURRENT_LOG_FILE"
+  },
+  "maxSteps": -1,
+  "secrets": [
+    "TEST_SECRET"
+  ]
+}

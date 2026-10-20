@@ -1,0 +1,114 @@
+---
+// A set of 2× dashboard stills from `npm run media -- <shot>` (media/README.md),
+// one shown at a time behind a row of tabs. Without JavaScript the first still
+// shows and the tabs do nothing.
+interface Shot {
+  img: ImageMetadata;
+  tab: string;
+  caption: string;
+  alt: string;
+}
+interface Props {
+  /** Unique on the page; ties each tab to its panel. */
+  id: string;
+  shots: Shot[];
+  /** The 1× size every still shares, which reserves the box before it loads. */
+  width: number;
+  height: number;
+}
+
+const { id, shots, width, height } = Astro.props;
+---
+
+<div class="screenshot-tabs" data-screenshot-tabs>
+  <div role="tablist" class="mb-4 flex flex-wrap justify-center gap-2">
+    {
+      shots.map((shot, index) => (
+        <button
+          type="button"
+          role="tab"
+          id={`${id}-tab-${index}`}
+          aria-controls={`${id}-panel-${index}`}
+          aria-selected={index === 0 ? "true" : "false"}
+          tabindex={index === 0 ? 0 : -1}
+          class="rounded-full border px-4 py-1.5 text-sm transition-colors"
+        >
+          {shot.tab}
+        </button>
+      ))
+    }
+  </div>
+  <div class="overflow-hidden rounded-2xl border border-white/10 shadow-2xl shadow-black/50">
+    {
+      shots.map((shot, index) => (
+        <img
+          role="tabpanel"
+          id={`${id}-panel-${index}`}
+          aria-labelledby={`${id}-tab-${index}`}
+          src={shot.img.src}
+          width={width}
+          height={height}
+          alt={shot.alt}
+          loading={index === 0 ? "eager" : "lazy"}
+          decoding="async"
+          hidden={index !== 0}
+          class="block h-auto w-full"
+        />
+      ))
+    }
+  </div>
+  {
+    shots.map((shot, index) => (
+      <p
+        data-caption={index}
+        hidden={index !== 0}
+        class="mx-auto mt-4 max-w-2xl text-center text-sm text-slate-400"
+      >
+        {shot.caption}
+      </p>
+    ))
+  }
+</div>
+
+<style>
+  [role="tab"] {
+    border-color: rgb(255 255 255 / 0.1);
+    color: rgb(148 163 184);
+  }
+  [role="tab"]:hover {
+    color: white;
+  }
+  [role="tab"][aria-selected="true"] {
+    border-color: rgb(56 189 248 / 0.4);
+    background: rgb(56 189 248 / 0.1);
+    color: rgb(56 189 248);
+  }
+</style>
+
+<script>
+  for (const root of document.querySelectorAll<HTMLElement>("[data-screenshot-tabs]")) {
+    const tabs = [...root.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    const panels = [...root.querySelectorAll<HTMLElement>('[role="tabpanel"]')];
+    const captions = [...root.querySelectorAll<HTMLElement>("[data-caption]")];
+    const select = (selected: number, focus = false) => {
+      tabs.forEach((tab, index) => {
+        const active = index === selected;
+        tab.setAttribute("aria-selected", String(active));
+        tab.tabIndex = active ? 0 : -1;
+        panels[index].hidden = !active;
+        captions[index].hidden = !active;
+      });
+      if (focus) tabs[selected].focus();
+    };
+    tabs.forEach((tab, index) => {
+      tab.addEventListener("click", () => select(index));
+      // Arrow keys move between tabs, as in any tablist.
+      tab.addEventListener("keydown", (event) => {
+        const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+        if (!step) return;
+        event.preventDefault();
+        select((index + step + tabs.length) % tabs.length, true);
+      });
+    });
+  }
+</script>

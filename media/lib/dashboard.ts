@@ -150,6 +150,44 @@ export async function openWorkspaceFile(
 }
 
 /**
+ * The middle of the first occurrence of `word` on the CodeMirror line that
+ * contains `lineText`, to hover or right-click a symbol. The line must be
+ * rendered: CodeMirror only draws what is in view.
+ */
+export async function editorWord(
+  editor: Locator,
+  lineText: string,
+  word: string
+): Promise<Point> {
+  const found = await editor.evaluate(
+    (content, [wantedLine, wantedWord]) => {
+      const line = [...content.querySelectorAll(":scope > .cm-line")].find(
+        (candidate) => candidate.textContent?.includes(wantedLine)
+      );
+      if (!line) return undefined;
+      const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const index = node.textContent?.indexOf(wantedWord) ?? -1;
+        if (index < 0) continue;
+        const range = document.createRange();
+        range.setStart(node, index);
+        range.setEnd(node, index + wantedWord.length);
+        const box = range.getBoundingClientRect();
+        return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+      }
+      return undefined;
+    },
+    [lineText, word] as const
+  );
+  if (!found) {
+    throw new Error(
+      `the editor shows no "${word}" on a line with "${lineText}"`
+    );
+  }
+  return found;
+}
+
+/**
  * Where a CodeMirror line starts and ends on screen, to click the caret there
  * or drag a selection. `editor` is the editor's textbox; `line` is a 1-based
  * line number or text the line contains. A wrapped line ends on its last row.

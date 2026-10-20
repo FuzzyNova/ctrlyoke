@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "workflowKey": "docs-append-2026-10-14T18-28-59-665",
+  "workflowName": "docs-append",
+  "originalFile": "@@MEDIA_WORKSPACE@@\\.ctrlyoke\\workflows\\docs-append.ctrlyoke.yaml",
+  "isFavorite": false,
+  "createdAt": 1792002539665,
+  "lastModifiedAt": 1792002542109,
+  "nextRunId": 2,
+  "revision": 2,
+  "latestRunRef": "run-2026-10-14T18-29-02-081Z"
+}

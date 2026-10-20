@@ -1,0 +1,95 @@
+{
+  "startedAt": 1791831440314,
+  "definitionRevision": 1,
+  "steps": [
+    {
+      "type": "script",
+      "script": "node -e \"console.log('Building notes API...'); setTimeout(() => console.log('Build complete'), 4000)\"",
+      "name": "Build",
+      "_runtime": {
+        "stepId": "c6b9c39d-60c1-4b76-9ac8-f68bdb5c95be",
+        "startedAt": 1791831440415,
+        "secrets": [],
+        "executionMode": "headless",
+        "elapsed": 4.368,
+        "completedAt": 1791831444962,
+        "terminalStatus": "completed"
+      }
+    },
+    {
+      "type": "script",
+      "script": "node -e \"console.log('Running integration tests...'); setTimeout(() => console.log('42 passed'), 120000)\"",
+      "name": "Integration tests",
+      "compareSource": "stdout",
+      "operator": "contains",
+      "expected": "passed",
+      "_runtime": {
+        "stepId": "c07c7920-4ad2-491a-ab59-d47f9cb069ef",
+        "startedAt": 1791831445011,
+        "secrets": [],
+        "executionMode": "headless",
+        "elapsed": 120.353,
+        "completedAt": 1791831565533,
+        "terminalStatus": "completed"
+      }
+    }
+  ],
+  "parallelGroups": [],
+  "_runtime": {
+    "currentIndex": 2,
+    "executionState": "completed",
+    "startTime": 1791831440395,
+    "totalPausedDuration": 0,
+    "executionEndTime": 1791831565580,
+    "schemaVersion": 2
+  },
+  "schemaVersion": 1,
+  "harness": "claude-cli",
+  "model": "opus",
+  "executionMode": "headless",
+  "agent": null,
+  "skills": [
+    "ctrlyoke-syntax"
+  ],
+  "resumeSession": true,
+  "mcpServers": [],
+  "hooks": [],
+  "endCondition": null,
+  "preCondition": null,
+  "priorContext": "none",
+  "errorBehavior": null,
+  "additionalArgs": "",
+  "toolPermissions": {
+    "mode": "dangerouslyAllowAll",
+    "allowedTools": [
+      "write",
+      "shell(git status)",
+      "shell(git diff)",
+      "shell(git add:*)",
+      "shell(git commit:*)",
+      "shell(git log:*)",
+      "shell(npm:*)",
+      "shell(yarn:*)",
+      "shell(pnpm:*)",
+      "shell(node:*)",
+      "shell(npx:*)"
+    ],
+    "deniedTools": [
+      "shell(rm:*)",
+      "shell(del:*)",
+      "shell(Remove-Item:*)",
+      "shell(rd:*)",
+      "shell(rmdir:*)",
+      "shell(sudo:*)",
+      "shell(chmod:*)",
+      "shell(chown:*)",
+      "shell(git push:*)",
+      "shell(git reset:*)",
+      "shell(git checkout:*)",
+      "shell(git clean:*)",
+      "shell(docker rm:*)",
+      "shell(docker rmi:*)",
+      "shell(kubectl delete:*)"
+    ]
+  }
+}

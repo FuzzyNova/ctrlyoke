@@ -1,0 +1,125 @@
+{
+  "startedAt": 1791729994552,
+  "definitionRevision": 1,
+  "steps": [
+    {
+      "type": "script",
+      "script": "npx tsc --noEmit",
+      "name": "Type check",
+      "_runtime": {
+        "stepId": "2c65a52a-01d9-4475-9cee-58bb8ff2efe0",
+        "startedAt": 1791729998934,
+        "secrets": [],
+        "executionMode": "interactive",
+        "elapsed": 3.194,
+        "completedAt": 1791730002383,
+        "terminalStatus": "completed"
+      }
+    },
+    {
+      "type": "script",
+      "script": "npm test",
+      "name": "Run tests",
+      "_runtime": {
+        "stepId": "d44d6334-9ac0-44ed-adab-bdcea9ec2140",
+        "startedAt": 1791730002482,
+        "secrets": [],
+        "executionMode": "interactive",
+        "elapsed": 5.468,
+        "completedAt": 1791730008207,
+        "terminalStatus": "completed"
+      }
+    }
+  ],
+  "parallelGroups": [],
+  "_runtime": {
+    "currentIndex": 2,
+    "executionState": "completed",
+    "startTime": 1791729998891,
+    "totalPausedDuration": 0,
+    "executionEndTime": 1791730008303,
+    "worktree": {
+      "lifecycleState": "settled",
+      "directoryState": "present",
+      "branchState": "present",
+      "setupOutcome": "succeeded",
+      "updatedAt": 1791730008776,
+      "schemaVersion": 1,
+      "mode": "managed",
+      "origin": "created",
+      "branchName": "ctrlyoke/docs-worktree/run-2026-10-11T14-46-34-553Z",
+      "worktreePath": "@@MEDIA_WORKSPACE@@.worktrees\\docs-worktree-cc9d2ccab63a",
+      "executionRoot": "@@MEDIA_WORKSPACE@@.worktrees\\docs-worktree-cc9d2ccab63a",
+      "executionCheckoutRoot": "@@MEDIA_WORKSPACE@@.worktrees\\docs-worktree-cc9d2ccab63a",
+      "sourceCheckoutRoot": "@@MEDIA_WORKSPACE@@",
+      "namedWorkspaceRoots": [
+        {
+          "name": "demo-app",
+          "fsPath": "@@MEDIA_WORKSPACE@@.worktrees\\docs-worktree-cc9d2ccab63a"
+        }
+      ],
+      "baseCommit": "5503008323788d89d2ecb3c26cb863170ee76af0",
+      "sourceCheckoutDirty": true,
+      "targetBranch": "main",
+      "lifecycleOwner": "ctrlyoke",
+      "dirty": false,
+      "landingOutcome": "no-changes",
+      "finalBranchTip": "5503008323788d89d2ecb3c26cb863170ee76af0",
+      "changedFileCount": 0
+    },
+    "schemaVersion": 2
+  },
+  "schemaVersion": 1,
+  "worktree": {
+    "mode": "managed",
+    "keep": true,
+    "merge": false,
+    "setup": "npm ci --prefer-offline --no-audit"
+  },
+  "harness": "claude-cli",
+  "model": "opus",
+  "executionMode": "interactive",
+  "agent": null,
+  "skills": [],
+  "resumeSession": true,
+  "mcpServers": [],
+  "hooks": [],
+  "endCondition": null,
+  "preCondition": null,
+  "priorContext": "none",
+  "errorBehavior": null,
+  "additionalArgs": "",
+  "toolPermissions": {
+    "mode": "dangerouslyAllowAll",
+    "allowedTools": [
+      "write",
+      "shell(git status)",
+      "shell(git diff)",
+      "shell(git add:*)",
+      "shell(git commit:*)",
+      "shell(git log:*)",
+      "shell(npm:*)",
+      "shell(yarn:*)",
+      "shell(pnpm:*)",
+      "shell(node:*)",
+      "shell(npx:*)"
+    ],
+    "deniedTools": [
+      "shell(rm:*)",
+      "shell(del:*)",
+      "shell(Remove-Item:*)",
+      "shell(rd:*)",
+      "shell(rmdir:*)",
+      "shell(sudo:*)",
+      "shell(chmod:*)",
+      "shell(chown:*)",
+      "shell(git push:*)",
+      "shell(git reset:*)",
+      "shell(git checkout:*)",
+      "shell(git clean:*)",
+      "shell(docker rm:*)",
+      "shell(docker rmi:*)",
+      "shell(kubectl delete:*)"
+    ]
+  }
+}

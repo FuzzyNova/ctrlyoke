@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "workflowKey": "rate-limiter-middleware-claude-2026-09-01T04-07-35-475",
+  "workflowName": "rate limiter middleware - claude",
+  "originalFile": "@@MEDIA_WORKSPACE@@/.ctrlyoke/workflows/marketing-script.ctrlyoke.yaml",
+  "sourceWorkflowKey": "marketing-script-2026-08-29T04-44-53-373",
+  "sourceRunRef": "run-2026-08-29T05-02-29-300Z",
+  "sourceWorkflowName": "marketing-script",
+  "variantCreatedAt": 1788235655474,
+  "isFavorite": false,
+  "createdAt": 1788235655475,
+  "lastModifiedAt": 1789157511439,
+  "nextRunId": 3,
+  "revision": 3,
+  "latestRunRef": "run-2026-09-11T20-11-51-425Z"
+}

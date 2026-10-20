@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "workflowKey": "rate-limiter-middleware-qwen-2026-09-01T03-58-49-074",
+  "workflowName": "rate limiter middleware - qwen",
+  "originalFile": "@@MEDIA_WORKSPACE@@/.ctrlyoke/workflows/marketing-script.ctrlyoke.yaml",
+  "sourceWorkflowKey": "rate-limiter-middleware-opencode-2026-09-01T03-53-58-638",
+  "sourceRunRef": "run-2026-09-01T03-54-15-517Z",
+  "sourceWorkflowName": "rate limiter middleware - opencode",
+  "variantCreatedAt": 1788235129073,
+  "isFavorite": false,
+  "createdAt": 1788235129074,
+  "lastModifiedAt": 1788235150649,
+  "nextRunId": 2,
+  "revision": 2,
+  "latestRunRef": "run-2026-09-01T03-59-10-633Z"
+}

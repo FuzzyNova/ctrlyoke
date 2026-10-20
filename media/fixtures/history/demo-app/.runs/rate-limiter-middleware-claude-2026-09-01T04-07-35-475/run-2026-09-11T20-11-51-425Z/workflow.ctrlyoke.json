@@ -1,0 +1,157 @@
+{
+  "workflowName": "Rate Limiter Middleware",
+  "definitionRevision": 2,
+  "steps": [
+    {
+      "prompt": "Design rate-limiting middleware for this Notes API (Express, TypeScript).\nPropose the algorithm (e.g. fixed window vs. token bucket), where it\nshould sit in the middleware chain relative to the notes router, what\nthe default limit should be, and what response the API should send\nwhen a client is rate-limited. Keep this to a short design summary —\ndon't write any code yet.\n",
+      "name": "plan",
+      "_runtime": {
+        "startedAt": 1789157511753,
+        "secrets": [],
+        "harness": "claude-cli",
+        "model": "haiku",
+        "executionMode": "interactive",
+        "sessionId": "cae67d78-0309-4238-b7fc-048e173a872b",
+        "elapsed": 20.4,
+        "completedAt": 1789157532303,
+        "terminalStatus": "completed",
+        "stepId": "e56aef02-9c71-47ff-84a2-131f1bf77623"
+      }
+    },
+    {
+      "prompt": "Implement the rate limiter you just designed:\n- Add `src/middleware/rateLimiter.ts`.\n- Wire it into `src/server.ts` ahead of the notes router.\n- Add `tests/rateLimiter.test.ts` covering both the limit being\n  enforced and the window resetting.\n- Add a short \"Rate limiting\" section to README.md documenting the\n  default limit and how to configure it.",
+      "name": "implement",
+      "_runtime": {
+        "startedAt": 1789157532429,
+        "secrets": [],
+        "harness": "claude-cli",
+        "model": "haiku",
+        "executionMode": "interactive",
+        "sessionId": "cae67d78-0309-4238-b7fc-048e173a872b",
+        "elapsed": 149.5,
+        "completedAt": 1789157682245,
+        "terminalStatus": "completed",
+        "stepId": "068b790c-08a4-4fbb-940b-d5115219ea1e"
+      }
+    },
+    {
+      "prompt": "Review the rate limiter implementation for correctness,\nconcurrency/thread-safety issues, and edge cases — multiple\nconcurrent clients, limit-window reset timing, and requests with no\nidentifiable client IP. Make any small fixes directly in the code if\nyou find real issues, then summarize your review findings in a short\nparagraph.",
+      "name": "review",
+      "_runtime": {
+        "startedAt": 1789157682342,
+        "secrets": [],
+        "harness": "claude-cli",
+        "model": "haiku",
+        "executionMode": "interactive",
+        "sessionId": "cae67d78-0309-4238-b7fc-048e173a872b",
+        "elapsed": 54.1,
+        "completedAt": 1789157736566,
+        "terminalStatus": "completed",
+        "stepId": "bf0d2918-89da-4a66-b48b-cda4dff1b7e0"
+      }
+    }
+  ],
+  "harness": "claude-cli",
+  "model": "haiku",
+  "executionMode": "interactive",
+  "agent": null,
+  "skills": [],
+  "resumeSession": true,
+  "mcpServers": [],
+  "hooks": [],
+  "endCondition": null,
+  "preCondition": null,
+  "priorContext": "none",
+  "errorBehavior": null,
+  "additionalArgs": "",
+  "toolPermissions": {
+    "mode": "none",
+    "allowedTools": [
+      "write",
+      "shell(git status)",
+      "shell(git diff)",
+      "shell(git add:*)",
+      "shell(git commit:*)",
+      "shell(git log:*)",
+      "shell(npm:*)",
+      "shell(yarn:*)",
+      "shell(pnpm:*)",
+      "shell(node:*)",
+      "shell(npx:*)"
+    ],
+    "deniedTools": [
+      "shell(rm:*)",
+      "shell(del:*)",
+      "shell(Remove-Item:*)",
+      "shell(rd:*)",
+      "shell(rmdir:*)",
+      "shell(sudo:*)",
+      "shell(chmod:*)",
+      "shell(chown:*)",
+      "shell(git push:*)",
+      "shell(git reset:*)",
+      "shell(git checkout:*)",
+      "shell(git clean:*)",
+      "shell(docker rm:*)",
+      "shell(docker rmi:*)",
+      "shell(kubectl delete:*)"
+    ]
+  },
+  "originalFile": "@@MEDIA_WORKSPACE@@/.ctrlyoke/workflows/marketing-script.ctrlyoke.yaml",
+  "startedAt": 1789157511432,
+  "lastModifiedAt": 1790389394743,
+  "isFavorite": false,
+  "_runtime": {
+    "currentIndex": 3,
+    "executionState": "completed",
+    "tokenTotals": {
+      "total": 49856,
+      "coverage": "complete",
+      "reportedAttemptCount": 3,
+      "attemptCount": 3,
+      "isFinal": true,
+      "costUsd": 0.853687,
+      "costSources": [
+        "price-table"
+      ],
+      "byHarness": {
+        "claude-cli": {
+          "input": 566,
+          "output": 49290,
+          "cachedInput": 4203435,
+          "cacheCreated": 149062,
+          "total": 49856,
+          "coverage": "complete",
+          "reportedAttemptCount": 3,
+          "attemptCount": 3,
+          "costUsd": 0.853687,
+          "costSources": [
+            "price-table"
+          ]
+        }
+      },
+      "byLocalDay": {
+        "2026-09-11": {
+          "claude-cli": {
+            "input": 566,
+            "output": 49290,
+            "cachedInput": 4203435,
+            "cacheCreated": 149062,
+            "total": 49856,
+            "coverage": "complete",
+            "reportedAttemptCount": 3,
+            "attemptCount": 3,
+            "costUsd": 0.853687,
+            "costSources": [
+              "price-table"
+            ]
+          }
+        }
+      }
+    },
+    "startTime": 1789157511600,
+    "totalPausedDuration": 0,
+    "executionEndTime": 1789157736575
+  },
+  "parallelGroups": []
+}

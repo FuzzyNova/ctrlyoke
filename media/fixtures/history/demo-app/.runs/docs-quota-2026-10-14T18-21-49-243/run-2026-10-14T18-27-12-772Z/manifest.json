@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 2,
+  "storageKind": "timeline",
+  "workflowId": "docs-quota-2026-10-14T18-21-49-243",
+  "runId": 4,
+  "startedAt": 1792002432780,
+  "executionState": "stopped",
+  "definitionRevision": 1,
+  "initialDefinition": {
+    "workflowName": "docs-quota",
+    "steps": [
+      {
+        "type": "script",
+        "script": "node -e \"setTimeout(() => {}, 30000)\"",
+        "name": "Wait"
+      },
+      {
+        "prompt": "Summarize src/notes.ts in two sentences.",
+        "name": "Summarize the notes API"
+      }
+    ]
+  },
+  "stepCount": 2,
+  "eventCount": 10,
+  "nextSequence": 11,
+  "lastUpdatedAt": 1792002438494,
+  "completedAt": 1792002438494,
+  "activeExecutionMs": 4623
+}

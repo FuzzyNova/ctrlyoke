@@ -1,0 +1,78 @@
+{
+  "startedAt": 1791757017786,
+  "definitionRevision": 1,
+  "steps": [
+    {
+      "type": "script",
+      "script": "ls",
+      "name": "lint and format",
+      "_runtime": {
+        "stepId": "202ecfaa-26db-4523-b9a0-f33fc4340807",
+        "startedAt": 1791757018110,
+        "secrets": [],
+        "executionMode": "interactive",
+        "elapsed": 1.408,
+        "completedAt": 1791757019792,
+        "terminalStatus": "completed"
+      }
+    }
+  ],
+  "parallelGroups": [],
+  "_runtime": {
+    "currentIndex": 1,
+    "executionState": "completed",
+    "startTime": 1791757018055,
+    "totalPausedDuration": 0,
+    "executionEndTime": 1791757019904,
+    "schemaVersion": 2
+  },
+  "schemaVersion": 1,
+  "harness": "claude-cli",
+  "model": "opus",
+  "executionMode": "interactive",
+  "agent": null,
+  "skills": [
+    "ctrlyoke-syntax"
+  ],
+  "resumeSession": true,
+  "mcpServers": [],
+  "hooks": [],
+  "endCondition": null,
+  "preCondition": null,
+  "priorContext": "none",
+  "errorBehavior": null,
+  "additionalArgs": "",
+  "toolPermissions": {
+    "mode": "dangerouslyAllowAll",
+    "allowedTools": [
+      "write",
+      "shell(git status)",
+      "shell(git diff)",
+      "shell(git add:*)",
+      "shell(git commit:*)",
+      "shell(git log:*)",
+      "shell(npm:*)",
+      "shell(yarn:*)",
+      "shell(pnpm:*)",
+      "shell(node:*)",
+      "shell(npx:*)"
+    ],
+    "deniedTools": [
+      "shell(rm:*)",
+      "shell(del:*)",
+      "shell(Remove-Item:*)",
+      "shell(rd:*)",
+      "shell(rmdir:*)",
+      "shell(sudo:*)",
+      "shell(chmod:*)",
+      "shell(chown:*)",
+      "shell(git push:*)",
+      "shell(git reset:*)",
+      "shell(git checkout:*)",
+      "shell(git clean:*)",
+      "shell(docker rm:*)",
+      "shell(docker rmi:*)",
+      "shell(kubectl delete:*)"
+    ]
+  }
+}

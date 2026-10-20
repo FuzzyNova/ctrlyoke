@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "workflowKey": "new-workflow-2026-10-11T22-38-33-881",
+  "workflowName": "docs-terminal",
+  "isFavorite": false,
+  "createdAt": 1791758313882,
+  "lastModifiedAt": 1791831351179,
+  "nextRunId": 4,
+  "revision": 5,
+  "latestRunRef": "run-2026-10-12T18-55-51-158Z"
+}

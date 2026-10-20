@@ -6,7 +6,9 @@ walkthrough's `verifyHarness` image (four themes) with `npm run media -- --all`.
 rate-limiter runs are fixtures (`npm run media -- replay <run>`). Phase 3 done 2026-10-18: the
 video pipeline (2× take, beat timeline, Remotion edit, encode) and a new hero
 (`npm run media -- hero`). Phases 4 and 5 done 2026-10-19: the prompt editor clip (#9) and the
-"Build visually or edit as YAML" side-by-side (#14), both on the landing page since 2026-10-19. Phases 6-7 (phone) are
+"Build visually or edit as YAML" side-by-side (#14), both on the landing page since 2026-10-19.
+Also 2026-10-19: scripted stills of run history (#15) and the workspace viewer (#10 desktop),
+on a seeded run history and a demo-app with uncommitted changes (§7). Phases 6-7 (phone) are
 open. This is the "how"
 for [`SCREENSHOTS_AND_MEDIA_PLAN.md`](SCREENSHOTS_AND_MEDIA_PLAN.md), which stays the shot list and
 slotting plan. `media/README.md` covers using it and adding shots.
@@ -300,6 +302,15 @@ hero-start`), never in the main checkout, where `git reset --hard` plus `git cle
 - **Fixtures are committed as exported, redacted run bundles** in `media/fixtures/runs/`, each
   naming its demo-app start tag. The hero run's `events.jsonl` is about 850 KB, so plain git is fine
   for now. Reconsider compression or LFS only if fixtures grow past a few MB each.
+- **A whole run history is a fixture too (2026-10-19)**, for shots of the history itself
+  (#15): `media/fixtures/history/` is demo-app's `.runs` tree, about 4 MB, with demo-app's path
+  and the home directory tokenized and the user name replaced (`snapshot-history`). Replaying
+  bundles couldn't stand in: replay arms one bundle per host, every replayed run would read
+  "just now", and the favorites' run counts come from many runs of the same workflow. It is not
+  a bundle and has no secret redaction pass, so each refresh is reviewed by hand before commit.
+- **Source Control shots need a presentable checkout:** a stage's `changesFrom` puts demo-app
+  on a local `main` with no upstream and moves its tags out of `refs/tags/` (restored on the
+  next prepare), so the commit graph shows neither "Detached HEAD" nor the capture's tags.
 
 ## Phases
 

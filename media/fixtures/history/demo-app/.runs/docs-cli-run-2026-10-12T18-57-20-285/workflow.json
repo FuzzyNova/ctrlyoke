@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "workflowKey": "docs-cli-run-2026-10-12T18-57-20-285",
+  "workflowName": "docs-cli-run",
+  "originalFile": "@@MEDIA_WORKSPACE@@\\.ctrlyoke\\workflows\\docs-cli-run.ctrlyoke.yaml",
+  "isFavorite": false,
+  "createdAt": 1791831440292,
+  "lastModifiedAt": 1791831440330,
+  "nextRunId": 2,
+  "revision": 2,
+  "latestRunRef": "run-2026-10-12T18-57-20-318Z"
+}

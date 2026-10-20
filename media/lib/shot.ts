@@ -37,6 +37,15 @@ export interface Stage {
   host?: HostOptions;
   /** Files from fixtures/workflows/ installed into demo-app's .ctrlyoke/workflows/. */
   workflows?: string[];
+  /** demo-app start tag (demo-app.json) to check out instead of the pinned ref. */
+  startTag?: string;
+  /** A later tag whose changes are laid over the start as uncommitted edits. */
+  changesFrom?: string;
+  /**
+   * The browser's clock, as an ISO time. Relative times ("3 days ago") in a
+   * recorded history otherwise drift with every retake.
+   */
+  now?: string;
   stills: Still[];
 }
 

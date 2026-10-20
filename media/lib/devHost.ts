@@ -9,6 +9,7 @@ import {
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { run } from "./exec.ts";
+import { seedHistory, type HistoryOptions } from "./history.ts";
 import {
   DEMO_APP_DIR,
   FIXTURES_DIR,
@@ -25,6 +26,8 @@ export interface HostOptions {
   replay?: ReplayOptions;
   /** Extra environment variables for the host, e.g. a dummy secret value. */
   env?: Record<string, string>;
+  /** Start with demo-app's recorded run history (lib/history.ts) instead of none. */
+  history?: HistoryOptions;
 }
 
 export interface ReplayOptions {
@@ -116,6 +119,7 @@ function resetHostState(): void {
  */
 export async function startHost(options: HostOptions = {}): Promise<string> {
   resetHostState();
+  if (options.history) seedHistory(options.history);
   const args = [DEV_HOST_SCRIPT, "start", "media"];
   if (options.noHarnesses) args.push("--no-harnesses");
   run(process.execPath, args, REPO_ROOT, {

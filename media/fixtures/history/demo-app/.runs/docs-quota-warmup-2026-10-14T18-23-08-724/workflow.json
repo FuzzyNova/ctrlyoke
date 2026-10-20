@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "workflowKey": "docs-quota-warmup-2026-10-14T18-23-08-724",
+  "workflowName": "docs-quota-warmup",
+  "originalFile": "@@MEDIA_WORKSPACE@@\\.ctrlyoke\\workflows\\docs-quota-warmup.ctrlyoke.yaml",
+  "isFavorite": false,
+  "createdAt": 1792002188733,
+  "lastModifiedAt": 1792002191171,
+  "nextRunId": 2,
+  "revision": 2,
+  "latestRunRef": "run-2026-10-14T18-23-11-155Z"
+}

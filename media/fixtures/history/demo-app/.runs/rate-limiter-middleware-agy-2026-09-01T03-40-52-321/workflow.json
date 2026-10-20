@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "workflowKey": "rate-limiter-middleware-agy-2026-09-01T03-40-52-321",
+  "workflowName": "rate limiter middleware - agy",
+  "originalFile": "@@MEDIA_WORKSPACE@@/.ctrlyoke/workflows/marketing-script.ctrlyoke.yaml",
+  "sourceWorkflowKey": "marketing-script-2026-08-29T04-44-53-373",
+  "sourceRunRef": "run-2026-08-29T05-02-29-300Z",
+  "sourceWorkflowName": "marketing-script",
+  "variantCreatedAt": 1788234052321,
+  "isFavorite": false,
+  "createdAt": 1788234052322,
+  "lastModifiedAt": 1788234099950,
+  "nextRunId": 2,
+  "revision": 2,
+  "latestRunRef": "run-2026-09-01T03-41-39-935Z"
+}

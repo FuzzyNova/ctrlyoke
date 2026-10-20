@@ -31,7 +31,8 @@ async function captureStill(
   browser: Browser,
   url: string,
   still: Still,
-  outDir: string
+  outDir: string,
+  now: string | undefined
 ): Promise<void> {
   const context = await browser.newContext({
     viewport: still.viewport,
@@ -39,6 +40,8 @@ async function captureStill(
     colorScheme: THEMES[still.theme ?? DEFAULT_THEME].colorScheme,
   });
   try {
+    // Fixes Date.now() only; timers keep running, so the dashboard does too.
+    if (now) await context.clock.setFixedTime(now);
     const page = await context.newPage();
     await page.goto(url);
     const target = await still.setup(page);
@@ -94,7 +97,7 @@ export async function captureStage(
         await setTheme(url, wanted);
         theme = wanted;
       }
-      await captureStill(browser, url, still, outDir);
+      await captureStill(browser, url, still, outDir, stage.now);
     }
   } finally {
     await browser.close();

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "storageKind": "timeline",
+  "workflowId": "lint-and-format-2026-10-11T22-16-19-919",
+  "runId": 3,
+  "startedAt": 1791757015230,
+  "executionState": "completed",
+  "definitionRevision": 1,
+  "initialDefinition": {
+    "workflowName": "lint and format",
+    "steps": [
+      {
+        "type": "script",
+        "script": "ls",
+        "name": "lint and format"
+      }
+    ]
+  },
+  "stepCount": 1,
+  "eventCount": 11,
+  "nextSequence": 12,
+  "lastUpdatedAt": 1791757017361,
+  "completedAt": 1791757017361,
+  "activeExecutionMs": 1853
+}

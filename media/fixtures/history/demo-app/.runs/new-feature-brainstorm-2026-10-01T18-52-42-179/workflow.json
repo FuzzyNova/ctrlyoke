@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "workflowKey": "new-feature-brainstorm-2026-10-01T18-52-42-179",
+  "workflowName": "new feature brainstorm",
+  "isFavorite": false,
+  "createdAt": 1790880762180,
+  "lastModifiedAt": 1790881538208,
+  "nextRunId": 2,
+  "revision": 3,
+  "latestRunRef": "run-2026-10-01T19-05-38-182Z"
+}

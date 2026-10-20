@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "workflowKey": "docs-worktree-2026-10-11T14-46-32-604",
+  "workflowName": "docs-worktree",
+  "originalFile": "@@MEDIA_WORKSPACE@@\\.ctrlyoke\\workflows\\docs-worktree.ctrlyoke.yaml",
+  "isFavorite": false,
+  "createdAt": 1791729992604,
+  "lastModifiedAt": 1791729994566,
+  "nextRunId": 2,
+  "revision": 2,
+  "latestRunRef": "run-2026-10-11T14-46-34-553Z"
+}

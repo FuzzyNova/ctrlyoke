@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "storageKind": "timeline",
+  "workflowId": "docs-worktree-2026-10-11T14-46-32-604",
+  "runId": 1,
+  "startedAt": 1791729994552,
+  "executionState": "completed",
+  "definitionRevision": 1,
+  "initialDefinition": {
+    "workflowName": "docs-worktree",
+    "steps": [
+      {
+        "type": "script",
+        "script": "npx tsc --noEmit",
+        "name": "Type check"
+      },
+      {
+        "type": "script",
+        "script": "npm test",
+        "name": "Run tests"
+      }
+    ],
+    "worktree": {
+      "mode": "managed",
+      "keep": true,
+      "merge": false,
+      "setup": "npm ci --prefer-offline --no-audit"
+    }
+  },
+  "stepCount": 2,
+  "eventCount": 28,
+  "nextSequence": 29,
+  "lastUpdatedAt": 1791730008786,
+  "completedAt": 1791730008786,
+  "activeExecutionMs": 9412
+}

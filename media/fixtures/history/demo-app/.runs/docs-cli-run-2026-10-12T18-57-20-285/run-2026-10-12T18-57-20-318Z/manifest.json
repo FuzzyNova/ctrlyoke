@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "storageKind": "timeline",
+  "workflowId": "docs-cli-run-2026-10-12T18-57-20-285",
+  "runId": 1,
+  "startedAt": 1791831440314,
+  "executionState": "completed",
+  "definitionRevision": 1,
+  "initialDefinition": {
+    "workflowName": "docs-cli-run",
+    "steps": [
+      {
+        "type": "script",
+        "script": "node -e \"console.log('Building notes API...'); setTimeout(() => console.log('Build complete'), 4000)\"",
+        "name": "Build"
+      },
+      {
+        "type": "script",
+        "script": "node -e \"console.log('Running integration tests...'); setTimeout(() => console.log('42 passed'), 120000)\"",
+        "name": "Integration tests",
+        "compareSource": "stdout",
+        "operator": "contains",
+        "expected": "passed"
+      }
+    ]
+  },
+  "stepCount": 2,
+  "eventCount": 21,
+  "nextSequence": 22,
+  "lastUpdatedAt": 1791831565604,
+  "completedAt": 1791831565604,
+  "activeExecutionMs": 125185
+}

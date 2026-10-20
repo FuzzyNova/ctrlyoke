@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "storageKind": "timeline",
+  "workflowId": "docs-script-2026-10-11T14-49-02-739",
+  "runId": 1,
+  "startedAt": 1791730144593,
+  "executionState": "completed",
+  "definitionRevision": 1,
+  "initialDefinition": {
+    "workflowName": "docs-script",
+    "steps": [
+      {
+        "prompt": "In one sentence, say what GET /health in @src/server.ts returns. Do not change any files.\n",
+        "name": "Describe the health check",
+        "harness": "opencode-cli",
+        "model": "opencode/big-pickle",
+        "endCondition": {
+          "script": "node .ctrlyoke/workflows/docs-gate.cjs",
+          "compareSource": "stdout",
+          "operator": "eq",
+          "expected": "ready",
+          "onFail": "retry",
+          "maxRetries": 2,
+          "retryPrompt": "The release gate is not ready yet. Answer again in one sentence."
+        }
+      },
+      {
+        "type": "script",
+        "script": "npm test",
+        "name": "Tests pass",
+        "compareSource": "stdout",
+        "operator": "contains",
+        "expected": "passed"
+      }
+    ]
+  },
+  "stepCount": 2,
+  "eventCount": 39,
+  "nextSequence": 40,
+  "lastUpdatedAt": 1791730170113,
+  "tokenTotals": {
+    "total": 1835,
+    "coverage": "complete",
+    "reportedAttemptCount": 2,
+    "attemptCount": 2,
+    "isFinal": true,
+    "costUsd": 0,
+    "costSources": [
+      "harness-reported"
+    ],
+    "byHarness": {
+      "opencode-cli": {
+        "input": 1559,
+        "output": 112,
+        "cachedInput": 38400,
+        "cacheCreated": 0,
+        "reasoningOutput": 164,
+        "total": 1835,
+        "coverage": "complete",
+        "reportedAttemptCount": 2,
+        "attemptCount": 2,
+        "costUsd": 0,
+        "costSources": [
+          "harness-reported"
+        ]
+      }
+    },
+    "byLocalDay": {
+      "2026-10-11": {
+        "opencode-cli": {
+          "input": 1559,
+          "output": 112,
+          "cachedInput": 38400,
+          "cacheCreated": 0,
+          "reasoningOutput": 164,
+          "total": 1835,
+          "coverage": "complete",
+          "reportedAttemptCount": 2,
+          "attemptCount": 2,
+          "costUsd": 0,
+          "costSources": [
+            "harness-reported"
+          ]
+        }
+      }
+    }
+  },
+  "completedAt": 1791730170113,
+  "activeExecutionMs": 25324
+}

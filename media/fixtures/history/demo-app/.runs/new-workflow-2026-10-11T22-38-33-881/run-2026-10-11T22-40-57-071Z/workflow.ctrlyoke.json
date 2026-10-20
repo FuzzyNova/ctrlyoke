@@ -1,0 +1,118 @@
+{
+  "startedAt": 1791758457083,
+  "definitionRevision": 1,
+  "steps": [
+    {
+      "prompt": "Read package.json and README.md, then summarize what this project does in three short bullet points. Do not edit any files.",
+      "_runtime": {
+        "stepId": "a2060e1b-df9c-4166-8266-608d664dacdd",
+        "startedAt": 1791758457966,
+        "secrets": [],
+        "harness": "claude-cli",
+        "model": "haiku",
+        "executionMode": "interactive",
+        "skills": [
+          "ctrlyoke-syntax"
+        ],
+        "sessionId": "28382716-1a2f-4866-9319-bbc16ca3d9ea",
+        "elapsed": 9.8,
+        "completedAt": 1791758468417,
+        "terminalStatus": "completed"
+      }
+    }
+  ],
+  "parallelGroups": [],
+  "_runtime": {
+    "currentIndex": 1,
+    "executionState": "completed",
+    "tokenTotals": {
+      "total": 764,
+      "coverage": "complete",
+      "reportedAttemptCount": 1,
+      "attemptCount": 1,
+      "isFinal": true,
+      "costPartial": true,
+      "byHarness": {
+        "claude-cli": {
+          "input": 4,
+          "output": 760,
+          "cachedInput": 56340,
+          "cacheCreated": 15304,
+          "total": 764,
+          "coverage": "complete",
+          "reportedAttemptCount": 1,
+          "attemptCount": 1,
+          "costPartial": true
+        }
+      },
+      "byLocalDay": {
+        "2026-10-11": {
+          "claude-cli": {
+            "input": 4,
+            "output": 760,
+            "cachedInput": 56340,
+            "cacheCreated": 15304,
+            "total": 764,
+            "coverage": "complete",
+            "reportedAttemptCount": 1,
+            "attemptCount": 1,
+            "costPartial": true
+          }
+        }
+      }
+    },
+    "startTime": 1791758457660,
+    "totalPausedDuration": 0,
+    "executionEndTime": 1791758468674,
+    "schemaVersion": 2
+  },
+  "schemaVersion": 1,
+  "harness": "claude-cli",
+  "executionMode": "interactive",
+  "agent": null,
+  "skills": [
+    "ctrlyoke-syntax"
+  ],
+  "resumeSession": true,
+  "mcpServers": [],
+  "hooks": [],
+  "endCondition": null,
+  "preCondition": null,
+  "priorContext": "none",
+  "errorBehavior": null,
+  "additionalArgs": "",
+  "toolPermissions": {
+    "mode": "dangerouslyAllowAll",
+    "allowedTools": [
+      "write",
+      "shell(git status)",
+      "shell(git diff)",
+      "shell(git add:*)",
+      "shell(git commit:*)",
+      "shell(git log:*)",
+      "shell(npm:*)",
+      "shell(yarn:*)",
+      "shell(pnpm:*)",
+      "shell(node:*)",
+      "shell(npx:*)"
+    ],
+    "deniedTools": [
+      "shell(rm:*)",
+      "shell(del:*)",
+      "shell(Remove-Item:*)",
+      "shell(rd:*)",
+      "shell(rmdir:*)",
+      "shell(sudo:*)",
+      "shell(chmod:*)",
+      "shell(chown:*)",
+      "shell(git push:*)",
+      "shell(git reset:*)",
+      "shell(git checkout:*)",
+      "shell(git clean:*)",
+      "shell(docker rm:*)",
+      "shell(docker rmi:*)",
+      "shell(kubectl delete:*)"
+    ]
+  },
+  "model": "haiku"
+}

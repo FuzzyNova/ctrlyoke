@@ -22,6 +22,9 @@ npm run media -- hero                   # record, edit and encode the hero video
 npm run media -- hero --edit-only       # re-render the last take after changing its composition
 npm run media -- prompt-editor          # the prompt editor's references clip (#9)
 npm run media -- visual-or-yaml         # "Build visually or edit as YAML", side by side (#14)
+npm run media -- history                # workflow list, history search, a reopened run (#15)
+npm run media -- workspace-viewer       # the workspace viewer's editor and Source Control (#10)
+npm run media -- snapshot-history       # refresh fixtures/history/ from your demo-app history
 ```
 
 Each capture compiles the extension, so it shows the current source. Stop any running dev host
@@ -103,6 +106,28 @@ ctrlyoke export --cwd <demo-app checkout> --workflow <key> --run <ref> --with-sn
 Snapshots carry the file contents replay applies, so keep `--with-snapshots`. Check the export
 summary for paths outside the workspace and the redaction count, then grep the bundle for your user
 name before committing it.
+
+## Run history
+
+A stage with `host.history` starts with a run history instead of none: `fixtures/history/` is a
+copy of demo-app's user-scoped history (`~/.ctrlyoke/projects/demo-app-<hash>/.runs`), and
+`lib/history.ts` installs it in the capture home under the project key of `.work/demo-app`.
+`exclude` leaves workflows out by name (the history shot drops the `docs-*` ones made for docs
+captures). Some workflows in it exist only for these shots: the favorited script-only ones were
+run many times, at no token cost, so their rows carry run counts.
+
+`snapshot-history` replaces the fixture from your own machine. It turns demo-app's path and your
+home directory into tokens in every path form a run file holds (raw, JSON-escaped, escaped
+twice, forward slashes) and replaces your user name wherever else it appears. It is still every
+transcript in full, so read the diff for anything personal before committing it.
+
+Relative times in a history ("3 days ago") would drift with every retake, so such a stage sets
+`now`, which fixes the browser's `Date.now()` for its stills.
+
+A stage with `startTag` and `changesFrom` shows a project mid-review: demo-app on `main` at the
+start tag, with every file the later tag changed as an uncommitted edit, no upstream, and its
+tags moved out of `refs/tags/`, so Source Control shows neither a detached HEAD nor the capture's
+tags. The capture's own settings edits are hidden from Git in every stage.
 
 ## Adding a shot
 

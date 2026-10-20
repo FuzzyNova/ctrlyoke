@@ -1,0 +1,120 @@
+{
+  "startedAt": 1791663847683,
+  "definitionRevision": 1,
+  "steps": [
+    {
+      "prompt": "just say hi",
+      "_runtime": {
+        "stepId": "7d8dcb4d-f865-4dfe-9883-d19e3a54df8d",
+        "startedAt": 1791663848027,
+        "secrets": [],
+        "harness": "copilot-cli",
+        "model": "gpt-5.6-luna",
+        "executionMode": "interactive",
+        "sessionId": "f4063d35-4366-4df6-8e09-92bfc38a2bf5",
+        "elapsed": 15.1,
+        "completedAt": 1791663863445,
+        "terminalStatus": "completed"
+      }
+    }
+  ],
+  "parallelGroups": [],
+  "_runtime": {
+    "currentIndex": 1,
+    "executionState": "completed",
+    "tokenTotals": {
+      "total": 9,
+      "coverage": "complete",
+      "reportedAttemptCount": 1,
+      "attemptCount": 1,
+      "isFinal": true,
+      "costUsd": 0.0042425499999999994,
+      "costSources": [
+        "price-table"
+      ],
+      "byHarness": {
+        "copilot-cli": {
+          "input": 3,
+          "output": 6,
+          "cacheCreated": 16939,
+          "total": 9,
+          "coverage": "complete",
+          "reportedAttemptCount": 1,
+          "attemptCount": 1,
+          "costUsd": 0.0042425499999999994,
+          "costSources": [
+            "price-table"
+          ]
+        }
+      },
+      "byLocalDay": {
+        "2026-10-10": {
+          "copilot-cli": {
+            "input": 3,
+            "output": 6,
+            "cacheCreated": 16939,
+            "total": 9,
+            "coverage": "complete",
+            "reportedAttemptCount": 1,
+            "attemptCount": 1,
+            "costUsd": 0.0042425499999999994,
+            "costSources": [
+              "price-table"
+            ]
+          }
+        }
+      }
+    },
+    "startTime": 1791663847994,
+    "totalPausedDuration": 0,
+    "executionEndTime": 1791663863530,
+    "schemaVersion": 2
+  },
+  "schemaVersion": 1,
+  "harness": "copilot-cli",
+  "model": "gpt-5.6-luna",
+  "executionMode": "interactive",
+  "agent": null,
+  "skills": [],
+  "resumeSession": true,
+  "mcpServers": [],
+  "hooks": [],
+  "endCondition": null,
+  "preCondition": null,
+  "priorContext": "none",
+  "errorBehavior": null,
+  "additionalArgs": "",
+  "toolPermissions": {
+    "mode": "dangerouslyAllowAll",
+    "allowedTools": [
+      "write",
+      "shell(git status)",
+      "shell(git diff)",
+      "shell(git add:*)",
+      "shell(git commit:*)",
+      "shell(git log:*)",
+      "shell(npm:*)",
+      "shell(yarn:*)",
+      "shell(pnpm:*)",
+      "shell(node:*)",
+      "shell(npx:*)"
+    ],
+    "deniedTools": [
+      "shell(rm:*)",
+      "shell(del:*)",
+      "shell(Remove-Item:*)",
+      "shell(rd:*)",
+      "shell(rmdir:*)",
+      "shell(sudo:*)",
+      "shell(chmod:*)",
+      "shell(chown:*)",
+      "shell(git push:*)",
+      "shell(git reset:*)",
+      "shell(git checkout:*)",
+      "shell(git clean:*)",
+      "shell(docker rm:*)",
+      "shell(docker rmi:*)",
+      "shell(kubectl delete:*)"
+    ]
+  }
+}

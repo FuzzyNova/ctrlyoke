@@ -3,6 +3,7 @@ import Layout from "../layouts/Layout.astro";
 import Cta from "../components/Cta.astro";
 import HarnessDeck from "../components/HarnessDeck.astro";
 import DemoVideo from "../components/DemoVideo.astro";
+import ScreenshotTabs from "../components/ScreenshotTabs.astro";
 import { LAUNCHED, MARKETPLACE_URL } from "../config";
 // Canonical screenshots live at repo-root images/screenshots/, not duplicated into
 // landing/public/ — see "Screenshot assets" in .github/copilot-instructions.md.
@@ -17,6 +18,54 @@ import promptEditorAv1 from "../../../images/screenshots/prompt-editor-av1-1920x
 import promptEditorH264 from "../../../images/screenshots/prompt-editor-h264-960x640.mp4";
 import promptEditorPoster from "../../../images/screenshots/prompt-editor-poster-1920x1280.webp";
 import takeControlVideo from "../../../images/screenshots/ctrlyoke-take-control-1080p.mp4";
+import historyWorkflows from "../../../images/screenshots/history-workflows-2560x1600.png";
+import historySearch from "../../../images/screenshots/history-search-2560x1600.png";
+import historyReopenedRun from "../../../images/screenshots/history-reopened-run-2560x1600.png";
+import viewerReferences from "../../../images/screenshots/workspace-viewer-references-2560x1600.png";
+import viewerCommit from "../../../images/screenshots/workspace-viewer-commit-2560x1600.png";
+
+// `npm run media -- history`, over demo-app's recorded run history.
+const historyShots = [
+  {
+    img: historyWorkflows,
+    tab: "Every workflow",
+    caption:
+      "Every workflow you've run, with its harness, tokens, cost, and run count. Star the ones you come back to and they stay on top.",
+    alt: "The ctrlyoke workflow list open over a six-step workflow: favorited workflows with run counts, and runs on Claude Code, Codex, Copilot CLI, OpenCode, Qwen Code, and Antigravity",
+  },
+  {
+    img: historySearch,
+    tab: "Search every session",
+    caption:
+      "Search prompts, answers, commands, and diffs across every run and every harness. Here, how five agents handled the same rate-limiting task.",
+    alt: "ctrlyoke history search for “per IP”, filtered to responses, listing matches from the Claude Code, Qwen Code, and OpenCode runs of the same task",
+  },
+  {
+    img: historyReopenedRun,
+    tab: "Pick up where you left off",
+    caption:
+      "Open a result to land in that run with every match highlighted. Resume its session, or run the workflow again.",
+    alt: "An OpenCode run from six weeks earlier reopened from a search result, its output with each “per IP” highlighted and the find bar showing 1 of 2",
+  },
+];
+
+// `npm run media -- workspace-viewer`: demo-app with an agent's changes uncommitted.
+const viewerShots = [
+  {
+    img: viewerReferences,
+    tab: "Edit with language features",
+    caption:
+      "Browse and edit files with syntax highlighting and a real language server: Go to Definition, Find All References, Rename Symbol, and Format Document.",
+    alt: "The ctrlyoke workspace viewer in a browser: a TypeScript file open in the editor, with a References panel listing five uses of normalizeTag in two files",
+  },
+  {
+    img: viewerCommit,
+    tab: "Review and commit",
+    caption:
+      "Review what the agent changed file by file, stage it, and commit, with the branch history alongside.",
+    alt: "The workspace viewer's Source Control tab: five staged files, a diff of notes.ts, a commit message ready to commit, and the branch's commit history",
+  },
+];
 
 // One per reference kind the prompt editor clip shows. Chip colours follow the
 // dashboard's own reference chips.
@@ -44,16 +93,6 @@ const features = [
     title: "Validation, not vibes",
     body: "Pre- and end-conditions gate each step with the scripts your project already trusts — continue, retry, skip, or stop.",
     icon: "✓",
-  },
-  {
-    title: "Searchable, replayable history",
-    body: "Find the prompt, command, diff, or answer you remember, then reopen and rerun the complete workflow around it.",
-    icon: "🔍",
-  },
-  {
-    title: "Your project, in any browser",
-    body: "Browse, search, and edit files, review diffs, and commit from the browser dashboard's workspace viewer — no VS Code window needed.",
-    icon: "🗂",
   },
   {
     title: "One place for your toolkit",
@@ -257,9 +296,42 @@ const steps = [
     </div>
   </section>
 
-  <!-- Features -->
+  <!-- Run history -->
+  <section class="border-b border-white/5 bg-brand-900/30 px-6 py-24">
+    <div class="mx-auto max-w-6xl">
+      <div class="mb-10 text-center">
+        <h2 class="mb-4 text-3xl font-bold text-white md:text-4xl">Every session, searchable</h2>
+        <p class="mx-auto max-w-2xl text-slate-400">
+          ctrlyoke keeps every run on every harness: the prompts, the answers, the commands, and
+          the diffs. Search all of it at once, reopen any run, and continue its session or run it
+          again.
+        </p>
+      </div>
+      <ScreenshotTabs id="history" shots={historyShots} width={1280} height={800} />
+    </div>
+  </section>
+
+  <!-- Workspace viewer -->
   <section class="border-b border-white/5 px-6 py-24">
     <div class="mx-auto max-w-6xl">
+      <div class="mb-10 text-center">
+        <h2 class="mb-4 text-3xl font-bold text-white md:text-4xl">Your project, in any browser</h2>
+        <p class="mx-auto max-w-2xl text-slate-400">
+          The browser dashboard comes with a workspace viewer: a code editor with language
+          servers, search, diffs, and Git. Check what an agent did and commit it without a VS
+          Code window.
+        </p>
+      </div>
+      <ScreenshotTabs id="workspace-viewer" shots={viewerShots} width={1280} height={800} />
+      <p class="mx-auto mt-6 max-w-2xl text-center text-sm text-slate-400">
+        <a href="/docs/guide/workspace-viewer" class="text-sky-400 hover:text-sky-300 transition-colors">See what the workspace viewer can do.</a>
+      </p>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="border-b border-white/5 px-6 py-24">
+    <div class="mx-auto max-w-4xl">
       <div class="mb-16 text-center">
         <h2 class="mb-4 text-3xl font-bold text-white md:text-4xl">
           One control surface for everything you do with AI harnesses
@@ -269,7 +341,7 @@ const steps = [
           prompt language, one output view, one reusable toolkit underneath.
         </p>
       </div>
-      <div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
         {features.map((f) => (
           <div class="rounded-xl border border-white/8 bg-brand-900/40 p-6 hover:border-sky-400/20 transition-colors">
             <div class="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-sky-400/10 font-mono text-sky-400">

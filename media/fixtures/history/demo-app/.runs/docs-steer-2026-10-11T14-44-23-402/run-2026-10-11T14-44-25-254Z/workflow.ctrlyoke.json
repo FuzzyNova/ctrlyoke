@@ -1,0 +1,126 @@
+{
+  "startedAt": 1791729865243,
+  "definitionRevision": 1,
+  "steps": [
+    {
+      "prompt": "Read every file in @src/ and @tests/ one at a time, then write a short review of each.\nDo not change any files.\n",
+      "name": "Review the API",
+      "harness": "opencode-cli",
+      "model": "opencode/big-pickle",
+      "_runtime": {
+        "stepId": "827406b2-74b7-4002-b945-0fc55b2c3cdd",
+        "startedAt": 1791729865440,
+        "secrets": [],
+        "harness": "opencode-cli",
+        "model": "opencode/big-pickle",
+        "executionMode": "interactive",
+        "sessionId": "ses_ed493db8dffecVi3AAf6l53l6y",
+        "completedAt": 1791729893136,
+        "terminalStatus": "cancelled"
+      }
+    }
+  ],
+  "parallelGroups": [],
+  "_runtime": {
+    "currentIndex": 1,
+    "executionState": "stopped",
+    "tokenTotals": {
+      "total": 14268,
+      "coverage": "complete",
+      "reportedAttemptCount": 1,
+      "attemptCount": 1,
+      "isFinal": true,
+      "costUsd": 0,
+      "costSources": [
+        "harness-reported"
+      ],
+      "byHarness": {
+        "opencode-cli": {
+          "input": 13279,
+          "output": 832,
+          "cachedInput": 49792,
+          "cacheCreated": 0,
+          "reasoningOutput": 157,
+          "total": 14268,
+          "coverage": "complete",
+          "reportedAttemptCount": 1,
+          "attemptCount": 1,
+          "costUsd": 0,
+          "costSources": [
+            "harness-reported"
+          ]
+        }
+      },
+      "byLocalDay": {
+        "2026-10-11": {
+          "opencode-cli": {
+            "input": 13279,
+            "output": 832,
+            "cachedInput": 49792,
+            "cacheCreated": 0,
+            "reasoningOutput": 157,
+            "total": 14268,
+            "coverage": "complete",
+            "reportedAttemptCount": 1,
+            "attemptCount": 1,
+            "costUsd": 0,
+            "costSources": [
+              "harness-reported"
+            ]
+          }
+        }
+      }
+    },
+    "startTime": 1791729865393,
+    "totalPausedDuration": 0,
+    "executionEndTime": 1791729891858,
+    "schemaVersion": 2
+  },
+  "schemaVersion": 1,
+  "executionMode": "interactive",
+  "resumeSession": false,
+  "harness": "claude-cli",
+  "model": "opus",
+  "agent": null,
+  "skills": [],
+  "mcpServers": [],
+  "hooks": [],
+  "endCondition": null,
+  "preCondition": null,
+  "priorContext": "none",
+  "errorBehavior": null,
+  "additionalArgs": "",
+  "toolPermissions": {
+    "mode": "dangerouslyAllowAll",
+    "allowedTools": [
+      "write",
+      "shell(git status)",
+      "shell(git diff)",
+      "shell(git add:*)",
+      "shell(git commit:*)",
+      "shell(git log:*)",
+      "shell(npm:*)",
+      "shell(yarn:*)",
+      "shell(pnpm:*)",
+      "shell(node:*)",
+      "shell(npx:*)"
+    ],
+    "deniedTools": [
+      "shell(rm:*)",
+      "shell(del:*)",
+      "shell(Remove-Item:*)",
+      "shell(rd:*)",
+      "shell(rmdir:*)",
+      "shell(sudo:*)",
+      "shell(chmod:*)",
+      "shell(chown:*)",
+      "shell(git push:*)",
+      "shell(git reset:*)",
+      "shell(git checkout:*)",
+      "shell(git clean:*)",
+      "shell(docker rm:*)",
+      "shell(docker rmi:*)",
+      "shell(kubectl delete:*)"
+    ]
+  }
+}

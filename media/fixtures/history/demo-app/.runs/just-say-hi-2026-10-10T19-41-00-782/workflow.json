@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "workflowKey": "just-say-hi-2026-10-10T19-41-00-782",
+  "workflowName": "just say hi",
+  "isFavorite": false,
+  "createdAt": 1791661260783,
+  "lastModifiedAt": 1791663847710,
+  "nextRunId": 3,
+  "revision": 4,
+  "latestRunRef": "run-2026-10-10T20-24-07-672Z"
+}

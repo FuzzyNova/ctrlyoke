@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "workflowKey": "docs-tour-2026-10-11T14-40-15-748",
+  "workflowName": "docs-tour",
+  "originalFile": "@@MEDIA_WORKSPACE@@\\.ctrlyoke\\workflows\\docs-tour.ctrlyoke.yaml",
+  "isFavorite": false,
+  "createdAt": 1791729615749,
+  "lastModifiedAt": 1791730487877,
+  "nextRunId": 2,
+  "revision": 6,
+  "latestRunRef": "run-2026-10-11T14-40-25-167Z"
+}

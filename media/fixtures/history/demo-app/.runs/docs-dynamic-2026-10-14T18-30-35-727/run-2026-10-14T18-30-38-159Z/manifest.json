@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 2,
+  "storageKind": "timeline",
+  "workflowId": "docs-dynamic-2026-10-14T18-30-35-727",
+  "runId": 1,
+  "startedAt": 1792002638149,
+  "executionState": "completed",
+  "definitionRevision": 2,
+  "initialDefinition": {
+    "workflowName": "docs-dynamic",
+    "steps": [
+      {
+        "type": "script",
+        "script": "npm test",
+        "name": "Run tests"
+      }
+    ],
+    "finalStep": {
+      "prompt": "Call the ctrlyoke workflow_status tool. If no step named \"Summarize test results\" exists, call append_step exactly once with position \"end\" and one step named \"Summarize test results\" whose prompt is \"Reply with one sentence saying the notes API tests passed.\" If that step already exists, append nothing. Do not read or edit any files. Reply with one short sentence.",
+      "mcpServers": [
+        "ctrlyoke"
+      ]
+    }
+  },
+  "stepCount": 2,
+  "eventCount": 45,
+  "nextSequence": 46,
+  "lastUpdatedAt": 1792002672142,
+  "tokenTotals": {
+    "total": 1458,
+    "coverage": "complete",
+    "reportedAttemptCount": 3,
+    "attemptCount": 3,
+    "isFinal": true,
+    "costUsd": 0.01282439,
+    "costSources": [
+      "harness-reported"
+    ],
+    "byHarness": {
+      "claude-cli": {
+        "input": 20,
+        "output": 1438,
+        "cachedInput": 286179,
+        "cacheCreated": 46208,
+        "total": 1458,
+        "coverage": "complete",
+        "reportedAttemptCount": 3,
+        "attemptCount": 3,
+        "costUsd": 0.01282439,
+        "costSources": [
+          "harness-reported"
+        ]
+      }
+    },
+    "byLocalDay": {
+      "2026-10-14": {
+        "claude-cli": {
+          "input": 20,
+          "output": 1438,
+          "cachedInput": 286179,
+          "cacheCreated": 46208,
+          "total": 1458,
+          "coverage": "complete",
+          "reportedAttemptCount": 3,
+          "attemptCount": 3,
+          "costUsd": 0.01282439,
+          "costSources": [
+            "harness-reported"
+          ]
+        }
+      }
+    }
+  },
+  "completedAt": 1792002672142,
+  "activeExecutionMs": 33731
+}

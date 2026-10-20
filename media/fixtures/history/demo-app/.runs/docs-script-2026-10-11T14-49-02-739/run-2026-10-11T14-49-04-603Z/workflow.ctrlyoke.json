@@ -1,0 +1,153 @@
+{
+  "startedAt": 1791730144593,
+  "definitionRevision": 1,
+  "steps": [
+    {
+      "prompt": "In one sentence, say what GET /health in @src/server.ts returns. Do not change any files.\n",
+      "name": "Describe the health check",
+      "harness": "opencode-cli",
+      "model": "opencode/big-pickle",
+      "endCondition": {
+        "script": "node .ctrlyoke/workflows/docs-gate.cjs",
+        "compareSource": "stdout",
+        "operator": "eq",
+        "expected": "ready",
+        "onFail": "retry",
+        "maxRetries": 2,
+        "retryPrompt": "The release gate is not ready yet. Answer again in one sentence."
+      },
+      "_runtime": {
+        "stepId": "13e4a8e0-8da5-49a5-81ef-f6b18605a79d",
+        "startedAt": 1791730144777,
+        "secrets": [],
+        "harness": "opencode-cli",
+        "model": "opencode/big-pickle",
+        "executionMode": "headless",
+        "sessionId": "ses_ed48f7a94ffeeNYUO978pwjz2Z",
+        "elapsed": 10.1,
+        "completedAt": 1791730167711,
+        "terminalStatus": "completed"
+      }
+    },
+    {
+      "type": "script",
+      "script": "npm test",
+      "name": "Tests pass",
+      "compareSource": "stdout",
+      "operator": "contains",
+      "expected": "passed",
+      "_runtime": {
+        "stepId": "6008c63e-9269-4e56-8674-b17c37116b57",
+        "startedAt": 1791730167812,
+        "secrets": [],
+        "executionMode": "headless",
+        "elapsed": 1.879,
+        "completedAt": 1791730169968,
+        "terminalStatus": "completed"
+      }
+    }
+  ],
+  "parallelGroups": [],
+  "_runtime": {
+    "currentIndex": 2,
+    "executionState": "completed",
+    "tokenTotals": {
+      "total": 1835,
+      "coverage": "complete",
+      "reportedAttemptCount": 2,
+      "attemptCount": 2,
+      "isFinal": true,
+      "costUsd": 0,
+      "costSources": [
+        "harness-reported"
+      ],
+      "byHarness": {
+        "opencode-cli": {
+          "input": 1559,
+          "output": 112,
+          "cachedInput": 38400,
+          "cacheCreated": 0,
+          "reasoningOutput": 164,
+          "total": 1835,
+          "coverage": "complete",
+          "reportedAttemptCount": 2,
+          "attemptCount": 2,
+          "costUsd": 0,
+          "costSources": [
+            "harness-reported"
+          ]
+        }
+      },
+      "byLocalDay": {
+        "2026-10-11": {
+          "opencode-cli": {
+            "input": 1559,
+            "output": 112,
+            "cachedInput": 38400,
+            "cacheCreated": 0,
+            "reasoningOutput": 164,
+            "total": 1835,
+            "coverage": "complete",
+            "reportedAttemptCount": 2,
+            "attemptCount": 2,
+            "costUsd": 0,
+            "costSources": [
+              "harness-reported"
+            ]
+          }
+        }
+      }
+    },
+    "startTime": 1791730144734,
+    "totalPausedDuration": 0,
+    "executionEndTime": 1791730170058,
+    "schemaVersion": 2
+  },
+  "schemaVersion": 1,
+  "executionMode": "headless",
+  "resumeSession": false,
+  "harness": "claude-cli",
+  "model": "opus",
+  "agent": null,
+  "skills": [],
+  "mcpServers": [],
+  "hooks": [],
+  "endCondition": null,
+  "preCondition": null,
+  "priorContext": "none",
+  "errorBehavior": null,
+  "additionalArgs": "",
+  "toolPermissions": {
+    "mode": "dangerouslyAllowAll",
+    "allowedTools": [
+      "write",
+      "shell(git status)",
+      "shell(git diff)",
+      "shell(git add:*)",
+      "shell(git commit:*)",
+      "shell(git log:*)",
+      "shell(npm:*)",
+      "shell(yarn:*)",
+      "shell(pnpm:*)",
+      "shell(node:*)",
+      "shell(npx:*)"
+    ],
+    "deniedTools": [
+      "shell(rm:*)",
+      "shell(del:*)",
+      "shell(Remove-Item:*)",
+      "shell(rd:*)",
+      "shell(rmdir:*)",
+      "shell(sudo:*)",
+      "shell(chmod:*)",
+      "shell(chown:*)",
+      "shell(git push:*)",
+      "shell(git reset:*)",
+      "shell(git checkout:*)",
+      "shell(git clean:*)",
+      "shell(docker rm:*)",
+      "shell(docker rmi:*)",
+      "shell(kubectl delete:*)"
+    ]
+  }
+}
