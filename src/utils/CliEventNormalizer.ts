@@ -622,7 +622,34 @@ function mergeInitiatedWithResult(
   }
 }
 
+/**
+ * Merging keeps the INITIATED timestamp as the event's own, so the moment the
+ * operation finished would otherwise be lost. The first completion wins: a
+ * semantic completion carrying the diff can follow the tool result.
+ */
+function withCompletedTimestamp(
+  merged: CliEvent,
+  previous: CliEvent,
+  completedTimestamp: number | undefined
+): CliEvent {
+  const completedAt = previous.completedTimestamp ?? completedTimestamp;
+  return completedAt === undefined
+    ? merged
+    : { ...merged, completedTimestamp: completedAt };
+}
+
 function mergeInitiatedWithCompleted(
+  initiated: CliEvent,
+  completed: CliEvent
+): CliEvent {
+  return withCompletedTimestamp(
+    mergeCompletedData(initiated, completed),
+    initiated,
+    completed.timestamp
+  );
+}
+
+function mergeCompletedData(
   initiated: CliEvent,
   completed: CliEvent
 ): CliEvent {
@@ -849,7 +876,15 @@ export class CliEventNormalizer {
             resultData.result
           );
           if (merged) {
-            this.replaceSlot(pendingMatch.index, merged, changedSlots);
+            this.replaceSlot(
+              pendingMatch.index,
+              withCompletedTimestamp(
+                merged,
+                this.output[pendingMatch.index],
+                event.timestamp
+              ),
+              changedSlots
+            );
             if (pendingMatch.kind !== PENDING_KINDS.SEMANTIC) {
               removePending(this.pending, pendingMatch);
             }
@@ -867,7 +902,15 @@ export class CliEventNormalizer {
             resultData.result
           );
           if (merged) {
-            this.replaceSlot(fallbackIndex, merged, changedSlots);
+            this.replaceSlot(
+              fallbackIndex,
+              withCompletedTimestamp(
+                merged,
+                this.output[fallbackIndex],
+                event.timestamp
+              ),
+              changedSlots
+            );
             continue;
           }
         }

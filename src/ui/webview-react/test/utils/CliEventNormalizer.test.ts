@@ -414,4 +414,33 @@ describe("CliEventNormalizer", () => {
       questions: [{ question: "Ship it?" }],
     });
   });
+
+  it("keeps the start as the timestamp and records when the operation finished", () => {
+    const normalized = normalizeCliEvents([
+      {
+        type: CLI_EVENT_TYPES.FILE_READ,
+        timestamp: 1_000,
+        data: { path: "src/a.ts", status: OPERATION_STATUS.INITIATED },
+      },
+      {
+        type: CLI_EVENT_TYPES.TOOL_RESULT,
+        timestamp: 1_500,
+        data: { toolCallId: "read-1", result: { success: true } },
+      },
+      {
+        type: CLI_EVENT_TYPES.FILE_READ,
+        timestamp: 3_000,
+        data: {
+          path: "src/a.ts",
+          status: OPERATION_STATUS.COMPLETED,
+          success: true,
+        },
+      },
+    ]);
+
+    expect(normalized).toHaveLength(1);
+    expect(normalized[0].timestamp).toBe(1_000);
+    // The first completion wins; a later semantic completion adds the diff.
+    expect(normalized[0].completedTimestamp).toBe(1_500);
+  });
 });

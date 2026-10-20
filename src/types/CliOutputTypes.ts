@@ -25,6 +25,11 @@ export interface CliEvent {
   type: CliEventType;
   /** Timestamp when this event occurred (milliseconds since epoch) */
   timestamp?: number;
+  /**
+   * When the operation finished, on a tool-call event merged from its
+   * initiated and completed halves (`timestamp` stays the start).
+   */
+  completedTimestamp?: number;
   /** Event-specific data based on type */
   data: CliEventData;
   /**
