@@ -2,6 +2,10 @@ import React, { useId, useState, useRef } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
 import { useHideableOptions } from "@hooks/useHideableOptions";
+import { usePickerListbox } from "@hooks/usePickerListbox";
+import { LISTBOX_OPTION_VALUE_ATTRIBUTE } from "@hooks/useListboxKeyboardNavigation";
+import type { PickerShortcutTarget } from "@root/types/DashboardConstants";
+import { withPickerShortcutHint } from "@utils/platform";
 import { DropdownPortal } from "./DropdownPortal";
 import { DropdownHiddenToggle } from "./DropdownHiddenToggle";
 import {
@@ -81,6 +85,10 @@ interface CustomSelectProps extends HideableProps {
   warningSeverity?: ValidationSeverity;
   /** Id of the message that explains the warning to assistive technology. */
   warningId?: string;
+  /** The Alt/Alt+Shift picker shortcut that opens this select. */
+  shortcutTarget?: PickerShortcutTarget;
+  /** Inline mode: close the host popup (Escape/Tab from the keyboard). */
+  onRequestClose?: () => void;
 }
 
 const DEFAULT_NON_HIDEABLE = ["default", ""];
@@ -119,6 +127,8 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   warning,
   warningSeverity,
   warningId,
+  shortcutTarget,
+  onRequestClose,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const reactId = useId();
@@ -181,6 +191,28 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
     setShowHidden(false);
   };
 
+  const closeDropdown = () => {
+    setIsOpen(false);
+    setShowHidden(false);
+  };
+
+  const navigation = usePickerListbox({
+    shortcutTarget,
+    inline,
+    isOpen: inline || isOpen,
+    onOpen: () => setIsOpen(true),
+    disabled,
+    options: visibleOptions
+      .filter((option) => !option.disabled)
+      .map((option) => ({ value: option.value, label: option.label })),
+    selectedValue: value,
+    onCommit: handleSelect,
+    onDismiss: inline ? () => onRequestClose?.() : closeDropdown,
+  });
+  const activeOptionIndex = visibleOptions.findIndex(
+    (option) => option.value === navigation.activeValue
+  );
+
   const handleToggle = () => {
     if (!disabled) {
       setIsOpen((prev) => {
@@ -195,15 +227,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
     isOpen,
     dropdownMaxHeight
   );
-  useClickOutside(
-    [buttonRef, popupRef],
-    isOpen,
-    () => {
-      setIsOpen(false);
-      setShowHidden(false);
-    },
-    !inline
-  );
+  useClickOutside([buttonRef, popupRef], isOpen, closeDropdown, !inline);
 
   const canHide = (option: CustomSelectOption) =>
     hideEnabled &&
@@ -213,20 +237,28 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
 
   // ── Shared parts ─────────────────────────────────────────────────────────
   const scrollableList = (
-    <div className="overflow-y-auto min-h-0 flex-1">
+    <div
+      ref={navigation.listRef}
+      id={listboxId}
+      role="listbox"
+      tabIndex={-1}
+      onKeyDown={navigation.onKeyDown}
+      className="overflow-y-auto min-h-0 flex-1 outline-hidden"
+    >
       {/* Visible options */}
-      {visibleOptions.map((option) => {
+      {visibleOptions.map((option, index) => {
         const isSelected = value === option.value;
         return (
           <div
             key={option.value}
+            {...{ [LISTBOX_OPTION_VALUE_ATTRIBUTE]: option.value }}
             className={`group w-full flex items-center focus:outline-hidden border-none ${
               isSelected
                 ? "bg-dropdown-selected-bg text-list-active-fg cy-dropdown-row-selected"
                 : option.disabled
                   ? "opacity-50 cursor-not-allowed"
                   : "hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer cy-dropdown-row"
-            }`}
+            }${index === activeOptionIndex ? " cy-dropdown-row-active" : ""}`}
           >
             <button
               type="button"
@@ -357,11 +389,12 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
               : triggerAriaLabel
         }
         aria-describedby={warning ? warningId : undefined}
-        title={
+        title={withPickerShortcutHint(
           schemaPath
             ? schemaTitle(schemaPath, undefined, triggerTitle)
-            : triggerTitle
-        }
+            : triggerTitle,
+          shortcutTarget
+        )}
         className={`cy-select-trigger cy-dropdown-row ${dropdownBorderClass(
           warning,
           warningSeverity
@@ -390,13 +423,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
       )}
 
       {!disabled && (
-        <DropdownPortal
-          isOpen={isOpen}
-          popupPos={popupPos}
-          ref={popupRef}
-          id={listboxId}
-          role="listbox"
-        >
+        <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
           {scrollableList}
           {toggleBar()}
         </DropdownPortal>

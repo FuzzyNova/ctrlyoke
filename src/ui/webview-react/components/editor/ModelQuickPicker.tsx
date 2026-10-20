@@ -1,4 +1,7 @@
-import { INHERIT_DEFAULT_OPTION } from "@root/types/DashboardConstants";
+import {
+  INHERIT_DEFAULT_OPTION,
+  PICKER_SHORTCUT_TARGETS,
+} from "@root/types/DashboardConstants";
 import React from "react";
 import {
   useEditorStore,
@@ -94,8 +97,11 @@ export const ModelQuickPicker: React.FC<ModelQuickPickerProps> = ({
       popupMinWidth="220px"
       disabled={disabled}
       disabledReason={disabledReason}
+      shortcutTarget={PICKER_SHORTCUT_TARGETS.STEP_MODEL}
     >
       <CustomSelect
+        shortcutTarget={PICKER_SHORTCUT_TARGETS.STEP_MODEL}
+        onRequestClose={() => setFooterOpenPicker(null)}
         value={
           modelValue === MIXED_VALUE
             ? BULK_MIXED_OPTION

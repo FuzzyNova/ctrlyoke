@@ -1,6 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { detectPlatform, formatShortcut, isIosDevice } from "@utils/platform";
-import { UI_PLATFORMS } from "@root/types/DashboardConstants";
+import {
+  detectPlatform,
+  formatPickerShortcut,
+  formatShortcut,
+  isIosDevice,
+  withPickerShortcutHint,
+} from "@utils/platform";
+import {
+  PICKER_SHORTCUT_TARGETS,
+  UI_PLATFORMS,
+} from "@root/types/DashboardConstants";
 
 function mockNavigator(platform: string, userAgent: string) {
   vi.spyOn(window.navigator, "platform", "get").mockReturnValue(platform);
@@ -56,6 +65,38 @@ describe("formatShortcut", () => {
   it("leaves non-Ctrl parts untouched on macOS", () => {
     mockNavigator("MacIntel", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)");
     expect(formatShortcut("Shift", "Ctrl", "Enter")).toBe("Shift+Cmd+Enter");
+  });
+
+  it("names Alt as Option on macOS", () => {
+    mockNavigator("MacIntel", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)");
+    expect(formatShortcut("Alt", "Shift", "M")).toBe("Option+Shift+M");
+  });
+});
+
+describe("formatPickerShortcut / withPickerShortcutHint", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("labels workflow and step shortcuts", () => {
+    mockNavigator("Win32", "Mozilla/5.0 (Windows NT 10.0)");
+    expect(formatPickerShortcut(PICKER_SHORTCUT_TARGETS.WORKFLOW_HARNESS)).toBe(
+      "Alt+H"
+    );
+    expect(formatPickerShortcut(PICKER_SHORTCUT_TARGETS.STEP_RESUME)).toBe(
+      "Alt+Shift+R"
+    );
+  });
+
+  it("appends the hint as its own paragraph, or stands alone", () => {
+    mockNavigator("Win32", "Mozilla/5.0 (Windows NT 10.0)");
+    expect(
+      withPickerShortcutHint("Model", PICKER_SHORTCUT_TARGETS.WORKFLOW_MODEL)
+    ).toBe("Model\n\nShortcut: Alt+M");
+    expect(
+      withPickerShortcutHint(undefined, PICKER_SHORTCUT_TARGETS.WORKFLOW_MODEL)
+    ).toBe("Shortcut: Alt+M");
+    expect(withPickerShortcutHint("Model", undefined)).toBe("Model");
   });
 });
 

@@ -1,10 +1,23 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import type React from "react";
+import { beforeEach, describe, it, expect, vi } from "vitest";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   CustomSelect,
   type SelectOption,
 } from "@components/shared/CustomSelect";
+import { useUiStore } from "@store/uiStore";
+import {
+  PICKER_SHORTCUT_REQUEST_TTL_MS,
+  PICKER_SHORTCUT_TARGETS,
+  type PickerShortcutTarget,
+} from "@root/types/DashboardConstants";
 
 const OPTIONS: SelectOption[] = [
   { value: "a", label: "Option A" },
@@ -434,5 +447,205 @@ describe("CustomSelect — hide/unhide feature", () => {
 
     const wrapper = container.firstElementChild;
     expect(wrapper?.lastElementChild?.textContent).toContain("Show hidden");
+  });
+});
+
+describe("CustomSelect — picker shortcut and keyboard navigation", () => {
+  const GREEK: SelectOption[] = [
+    { value: "alpha", label: "Alpha" },
+    { value: "beta", label: "Beta" },
+    { value: "off", label: "Unavailable", disabled: true },
+    { value: "gamma", label: "Gamma" },
+  ];
+
+  function renderWithEditor(
+    props: Partial<React.ComponentProps<typeof CustomSelect>> = {}
+  ) {
+    const onChange = vi.fn();
+    render(
+      <>
+        <textarea aria-label="Prompt editor" />
+        <CustomSelect
+          id="shortcut-select"
+          triggerAriaLabel="Model"
+          value="alpha"
+          onChange={onChange}
+          options={GREEK}
+          shortcutTarget={PICKER_SHORTCUT_TARGETS.WORKFLOW_MODEL}
+          {...props}
+        />
+      </>
+    );
+    const editor = screen.getByRole("textbox", { name: "Prompt editor" });
+    editor.focus();
+    return { onChange, editor };
+  }
+
+  function press(
+    target: PickerShortcutTarget = PICKER_SHORTCUT_TARGETS.WORKFLOW_MODEL
+  ) {
+    act(() => {
+      useUiStore.getState().requestPickerShortcut(target, { mobile: false });
+    });
+  }
+
+  function activeValue() {
+    return document
+      .querySelector(".cy-dropdown-row-active")
+      ?.getAttribute("data-listbox-value");
+  }
+
+  beforeEach(() => {
+    useUiStore.setState({ pickerShortcutRequest: null });
+  });
+
+  it("opens on the shortcut and focuses the list on the current value", async () => {
+    renderWithEditor();
+
+    press();
+
+    const listbox = await screen.findByRole("listbox");
+    await waitFor(() => expect(listbox).toHaveFocus());
+    expect(activeValue()).toBe("alpha");
+    expect(useUiStore.getState().pickerShortcutRequest).toBeNull();
+  });
+
+  it("moves with the arrow keys, skips disabled options, and commits on Enter", async () => {
+    const { onChange, editor } = renderWithEditor();
+    press();
+    const listbox = await screen.findByRole("listbox");
+    await waitFor(() => expect(listbox).toHaveFocus());
+
+    fireEvent.keyDown(listbox, { key: "ArrowDown" });
+    fireEvent.keyDown(listbox, { key: "ArrowDown" });
+    expect(activeValue()).toBe("gamma");
+
+    fireEvent.keyDown(listbox, { key: "Enter" });
+
+    expect(onChange).toHaveBeenCalledWith("gamma");
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(editor).toHaveFocus();
+  });
+
+  it("advances to the next option, wrapping, on a repeat press", async () => {
+    renderWithEditor({ value: "gamma" });
+    press();
+    const listbox = await screen.findByRole("listbox");
+    await waitFor(() => expect(listbox).toHaveFocus());
+    expect(activeValue()).toBe("gamma");
+
+    press();
+
+    expect(activeValue()).toBe("alpha");
+  });
+
+  it("jumps to a typed label, preferring a prefix match", async () => {
+    renderWithEditor();
+    press();
+    const listbox = await screen.findByRole("listbox");
+    await waitFor(() => expect(listbox).toHaveFocus());
+
+    fireEvent.keyDown(listbox, { key: "g" });
+    expect(activeValue()).toBe("gamma");
+
+    // "et" matches no label's start, so it falls back to a substring match.
+    fireEvent.keyDown(listbox, { key: "Home" });
+    fireEvent.keyDown(listbox, { key: "Escape" });
+    press();
+    await waitFor(() => expect(screen.getByRole("listbox")).toHaveFocus());
+    fireEvent.keyDown(screen.getByRole("listbox"), { key: "e" });
+    fireEvent.keyDown(screen.getByRole("listbox"), { key: "t" });
+    expect(activeValue()).toBe("beta");
+  });
+
+  it("closes on Escape without changing the value and returns focus", async () => {
+    const { onChange, editor } = renderWithEditor();
+    press();
+    const listbox = await screen.findByRole("listbox");
+    await waitFor(() => expect(listbox).toHaveFocus());
+
+    fireEvent.keyDown(listbox, { key: "ArrowDown" });
+    fireEvent.keyDown(listbox, { key: "Escape" });
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(editor).toHaveFocus();
+  });
+
+  it("ignores a shortcut aimed at another picker", () => {
+    renderWithEditor();
+
+    press(PICKER_SHORTCUT_TARGETS.WORKFLOW_HARNESS);
+
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(useUiStore.getState().pickerShortcutRequest?.target).toBe(
+      PICKER_SHORTCUT_TARGETS.WORKFLOW_HARNESS
+    );
+  });
+
+  it("consumes but ignores the shortcut while disabled", () => {
+    renderWithEditor({ disabled: true });
+
+    press();
+
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(useUiStore.getState().pickerShortcutRequest).toBeNull();
+  });
+
+  it("keeps mouse opening as it was: focus stays on the trigger", async () => {
+    const user = userEvent.setup();
+    renderWithEditor();
+
+    const trigger = screen.getByRole("button", { name: /Model/ });
+    await user.click(trigger);
+
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+    expect(document.querySelector(".cy-dropdown-row-active")).toBeNull();
+  });
+
+  it("names the shortcut in the trigger tooltip", () => {
+    renderWithEditor();
+
+    expect(screen.getByRole("button", { name: /Model/ })).toHaveAttribute(
+      "title",
+      expect.stringMatching(/Shortcut: Alt\+M$/)
+    );
+  });
+
+  it("closes an inline list through onRequestClose on Escape", async () => {
+    const onRequestClose = vi.fn();
+    render(
+      <CustomSelect
+        value="alpha"
+        onChange={vi.fn()}
+        options={GREEK}
+        inline
+        shortcutTarget={PICKER_SHORTCUT_TARGETS.STEP_MODEL}
+        onRequestClose={onRequestClose}
+      />
+    );
+
+    press(PICKER_SHORTCUT_TARGETS.STEP_MODEL);
+    const listbox = screen.getByRole("listbox");
+    await waitFor(() => expect(listbox).toHaveFocus());
+    fireEvent.keyDown(listbox, { key: "Escape" });
+
+    expect(onRequestClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops a request that has outlived its window", () => {
+    useUiStore.setState({
+      pickerShortcutRequest: {
+        target: PICKER_SHORTCUT_TARGETS.WORKFLOW_MODEL,
+        nonce: 1,
+        issuedAt: Date.now() - PICKER_SHORTCUT_REQUEST_TTL_MS - 1,
+      },
+    });
+
+    renderWithEditor();
+
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(useUiStore.getState().pickerShortcutRequest).toBeNull();
   });
 });

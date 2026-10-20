@@ -30,8 +30,10 @@ import {
   HARNESS_IDS,
   MESSAGE_TYPES,
   PERMISSION_MODES,
+  PICKER_SHORTCUT_TARGETS,
   PROMPT_PROPERTIES,
   WORKTREE_MODES,
+  type PickerShortcutTarget,
 } from "@root/types/DashboardConstants";
 
 const postMessage = vi.fn();
@@ -981,5 +983,60 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     });
 
     expect(collapseButton).not.toContainElement(resetButton);
+  });
+});
+
+describe("WorkflowPropertiesPanel picker shortcuts", () => {
+  beforeEach(() => {
+    resetStores();
+    postMessage.mockClear();
+    (
+      window.vscodeApi as unknown as { postMessage: typeof postMessage }
+    ).postMessage = postMessage;
+  });
+
+  afterEach(cleanup);
+
+  function press(target: PickerShortcutTarget) {
+    act(() => {
+      useUiStore.getState().requestPickerShortcut(target, { mobile: false });
+    });
+  }
+
+  it("expands a collapsed panel and opens the harness picker", async () => {
+    useUiStore.setState({ settingsCollapsed: true });
+    render(<WorkflowPropertiesPanel />);
+    expect(screen.queryByRole("tab", { name: "Harness" })).toBeNull();
+
+    press(PICKER_SHORTCUT_TARGETS.WORKFLOW_HARNESS);
+
+    // Mounting the whole expanded panel has outrun findByRole's 1s default
+    // under a full `npm test`.
+    const listbox = await screen.findByRole("listbox", {}, { timeout: 5000 });
+    expect(listbox).toHaveAttribute("id", "settings-harness-listbox");
+    await waitFor(() => expect(listbox).toHaveFocus());
+  });
+
+  it("switches to the Context page for the resume-session picker", async () => {
+    render(<WorkflowPropertiesPanel />);
+    expect(screen.getByRole("tab", { name: "Harness" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+
+    press(PICKER_SHORTCUT_TARGETS.WORKFLOW_RESUME);
+
+    const listbox = await screen.findByRole("listbox");
+    expect(listbox).toHaveAttribute("id", "settings-resume-session-listbox");
+    await waitFor(() => expect(listbox).toHaveFocus());
+
+    fireEvent.keyDown(listbox, { key: "ArrowDown" });
+    fireEvent.keyDown(listbox, { key: "Enter" });
+
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTIES,
+      })
+    );
   });
 });

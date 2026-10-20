@@ -233,6 +233,39 @@ Right-click a workflow or run for:
 - **Delete Workflow** / **Delete Run**: moves it to Recently deleted. You can
   restore it from **Settings → General → Run History**.
 
+## Keyboard shortcuts {#keyboard-shortcuts}
+
+These work while the dashboard has focus. On macOS, use `Cmd` for `Ctrl` and
+`Option` for `Alt`, except Run and Queue, which use `Ctrl` on every platform.
+
+| Shortcut           | Action                                                      |
+| ------------------ | ----------------------------------------------------------- |
+| `Ctrl+N`           | New blank workflow, with the cursor in its name             |
+| `Ctrl+Shift+N`     | New workflow from a template                                |
+| `Ctrl+Enter`       | Run the prompt in the editor                                |
+| `Ctrl+Shift+Enter` | Queue the prompt in the editor                              |
+| `Ctrl+Shift+F`     | Search history                                              |
+| `Alt+H`            | Pick the workflow harness                                   |
+| `Alt+M`            | Pick the workflow model                                     |
+| `Alt+R`            | Pick the workflow's resume session setting                  |
+| `Alt+Shift+H`      | Pick the harness for the step you're editing                |
+| `Alt+Shift+M`      | Pick the model for the step you're editing                  |
+| `Alt+Shift+R`      | Pick the resume session setting for the step you're editing |
+
+A new workflow takes no mouse at all: press `Ctrl+N`, type its name, press
+`Tab` (or `Enter`) to move to the prompt editor, type the prompt and press
+`Ctrl+Enter`. `Tab` out of the name also moves to the prompt editor when you
+rename an existing workflow; there `Enter` just saves the name.
+
+The `Alt` shortcuts open their picker with the current value highlighted:
+the workflow ones in Workflow Properties (expanding it if collapsed), the step
+ones in the prompt editor's footer. Press the same shortcut again to move to
+the next option, or use the arrow keys, `Home` and `End`, or type part of a
+name to jump to it. `Enter` applies the highlighted option and `Escape` closes
+the picker; either way the cursor returns to where it was. The shortcuts are
+left alone while the terminal has focus, where `Alt` + letter belongs to the
+shell.
+
 ## Related
 
 - [The output pane](/guide/output)

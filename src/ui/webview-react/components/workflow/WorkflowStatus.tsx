@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { useUiStore, type RecentWorkflow } from "../../store/uiStore";
+import { useEditorStore } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
@@ -753,6 +754,12 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     }
   }, [closeDropdown, isDropdownOpen]);
 
+  // True while naming a fresh Ctrl+N workflow (see handleKeyDown).
+  const namingNewWorkflowRef = useRef(false);
+  const requestPromptEditorFocus = useEditorStore(
+    (state) => state.requestPromptEditorFocus
+  );
+
   // Focus input when editing starts
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -770,6 +777,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     }
 
     setEditValue("");
+    namingNewWorkflowRef.current = true;
     setIsEditing(true);
   }, [isNewWorkflow]);
 
@@ -781,6 +789,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     // the old name with the new address. Wait for the snapshot.
     if (pendingRunViewSwitch) return;
     setEditValue(workflowName || getWorkflowNameFromPath(fileName));
+    namingNewWorkflowRef.current = false;
     setIsEditing(true);
   }, [fileName, pendingRunViewSwitch, workflowName]);
 
@@ -812,10 +821,19 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     setIsEditing(false);
   }, []);
 
-  // Handle input key events
+  // Handle input key events. Ctrl+N → name → Tab → prompt is the keyboard
+  // path through a new workflow: the prompt editor is far away in DOM order,
+  // so Tab hands focus to it explicitly. Enter does too while naming a fresh
+  // Ctrl+N workflow, but only saves when renaming an existing one.
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === KEYBOARD_KEYS.ENTER) {
+      const continueToPrompt = namingNewWorkflowRef.current;
       saveEdit();
+      if (continueToPrompt) requestPromptEditorFocus();
+    } else if (e.key === KEYBOARD_KEYS.TAB && !e.shiftKey) {
+      e.preventDefault();
+      saveEdit();
+      requestPromptEditorFocus();
     } else if (e.key === KEYBOARD_KEYS.ESCAPE) {
       cancelEdit();
     }

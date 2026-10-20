@@ -2,6 +2,10 @@ import React, { useRef } from "react";
 import { createPortal } from "react-dom";
 import { useClickOutside } from "@hooks/useClickOutside";
 import { useAnchoredPopupPosition } from "@hooks/useAnchoredPopupPosition";
+import { usePickerShortcutRequest } from "@hooks/usePickerShortcutRequest";
+import { useUiStore } from "@store/uiStore";
+import type { PickerShortcutTarget } from "@root/types/DashboardConstants";
+import { withPickerShortcutHint } from "@utils/platform";
 
 interface FooterQuickPickerProps {
   /** Icon-only mode (narrow, < 380px) */
@@ -35,6 +39,11 @@ interface FooterQuickPickerProps {
   /** When true, button and popup are disabled (CLI watch mode) */
   disabled?: boolean;
   disabledReason?: string;
+  /**
+   * The Alt+Shift picker shortcut for this picker. Its press opens the popup;
+   * the select inside it (given the same target) then claims the request.
+   */
+  shortcutTarget?: PickerShortcutTarget;
 }
 
 /**
@@ -64,9 +73,22 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
   popupMaxWidth,
   disabled = false,
   disabledReason,
+  shortcutTarget,
 }) => {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
+
+  usePickerShortcutRequest(
+    shortcutTarget ? [shortcutTarget] : undefined,
+    (request) => {
+      if (disabled) {
+        useUiStore.getState().clearPickerShortcutRequest(request.nonce);
+      } else if (!isOpen) {
+        onToggle();
+      }
+    }
+  );
+  const buttonTitle = withPickerShortcutHint(title, shortcutTarget);
 
   const [popupPos] = useAnchoredPopupPosition(
     buttonRef,
@@ -85,7 +107,7 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
         type="button"
         onClick={disabled ? undefined : onToggle}
         disabled={disabled}
-        title={disabled ? (disabledReason ?? title) : title}
+        title={disabled ? (disabledReason ?? title) : buttonTitle}
         aria-label={title}
         className={`px-2 py-1 text-xs rounded-sm flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
           isOverride || isOpen
