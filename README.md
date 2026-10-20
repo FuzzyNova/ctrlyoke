@@ -379,6 +379,7 @@ or workspace names. Telemetry respects your VS Code `telemetry.telemetryLevel` s
 
 ctrlyoke is distributed under the commercial license in [LICENSE.md](LICENSE.md).
 The free tier covers individuals and small teams. Organizations with $10M or more in annual revenue
-or 250 or more staff need Pro; see the [Pro license guide](https://ctrlyoke.dev/docs/pro).
+or 250 or more staff need a Pro license for each user, or an Enterprise site license; see the
+[Pro license guide](https://ctrlyoke.dev/docs/pro).
 
 Third-party runtime dependency notices and attribution information are recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
