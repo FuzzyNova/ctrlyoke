@@ -1,7 +1,8 @@
 name: CI
 
 # The checks every pull request must pass: `npm run check:fast`, the same gate
-# the local pre-push hook runs (typecheck, lint, UI tests, packaging tests).
+# the local pre-push hook runs (typecheck, lint, UI tests, packaging tests),
+# then a production build and the npm tarball test against it.
 # The `fast-checks` job is a required status check in the `main` ruleset
 # (scripts/apply-github-guardrails.mjs), so it deliberately has no path
 # filter -- a required check that never reports blocks the PR forever.
@@ -38,3 +39,12 @@ jobs:
 
       - name: Typecheck, lint, UI and packaging tests
         run: npm run check:fast
+
+      # check:fast only makes a dev build without the webview, so the tarball
+      # test skips there. Build what release.yml ships and test that instead.
+      # build:extension strips dev commands from package.json; restore it.
+      - name: Production build
+        run: npm run build:prod && npm run restore-package
+
+      - name: npm package installs and runs
+        run: node --test scripts/build-npm-package.test.mjs
