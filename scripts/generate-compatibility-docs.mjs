@@ -151,6 +151,17 @@ function formatEvidence({ kind, reference }) {
     : `[${kind}](${formatReference(reference)})`;
 }
 
+/**
+ * VitePress compiles each page as a Vue template, so a literal `<server>` in
+ * prose is parsed as an unclosed element and fails the docs build.
+ */
+function escapeHtmlText(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
 function escapeCell(value) {
   return String(value).replaceAll("|", "\\|").replaceAll("\n", "<br>");
 }
@@ -364,9 +375,9 @@ function buildNotesSection(facts, notes) {
         )
         .join(" · ");
       const remediation = note.remediation
-        ? ` _What to do:_ ${note.remediation}`
+        ? ` _What to do:_ ${escapeHtmlText(note.remediation)}`
         : "";
-      return `<a id="${noteAnchor(note)}"></a>**${note.number}.** ${note.explanation}${remediation}<br>\nApplies to ${appliesTo}.`;
+      return `<a id="${noteAnchor(note)}"></a>**${note.number}.** ${escapeHtmlText(note.explanation)}${remediation}<br>\nApplies to ${appliesTo}.`;
     })
     .join("\n\n");
 }
