@@ -310,6 +310,8 @@ export interface PlainResponseRow extends OutputRowBase<
   text: string;
   rawTextOutput: boolean;
   animated: boolean;
+  /** When the message this text belongs to started; feeds the hover tooltip. */
+  timestampMs?: number;
 }
 
 /**
@@ -2735,6 +2737,7 @@ export function buildOutputRows(
         text: streamingChunk,
         rawTextOutput,
         animated: !isScriptOutput(output),
+        timestampMs: message.timestamp,
         ...activityMeta,
         estimateSize: 120,
       });
@@ -2879,6 +2882,7 @@ export function buildOutputRows(
             text: streamingChunk,
             rawTextOutput,
             animated: true,
+            timestampMs: message.timestamp,
             ...activityMeta,
             estimateSize: 120,
           });
@@ -2917,6 +2921,7 @@ export function buildOutputRows(
             text: responseText ?? "",
             rawTextOutput,
             animated: false,
+            timestampMs: message.timestamp,
             ...activityMeta,
             estimateSize: 120,
           });

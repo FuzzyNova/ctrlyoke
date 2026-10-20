@@ -5,7 +5,11 @@ import {
 } from "@root/types/DashboardConstants";
 import type { CliEvent } from "@root/types/CliOutputTypes";
 import { describeRowTiming } from "@utils/outputRowTiming";
-import type { OutputRenderRow, StructuredEventRow } from "@utils/outputRows";
+import type {
+  OutputRenderRow,
+  PlainResponseRow,
+  StructuredEventRow,
+} from "@utils/outputRows";
 
 function eventRow(
   event: Partial<CliEvent>,
@@ -47,6 +51,26 @@ describe("describeRowTiming", () => {
     const text = describeRowTiming(eventRow({ timestamp: 1_000 }));
     expect(text).toContain("Started:");
     expect(text).not.toContain("Took:");
+  });
+
+  it("covers plain response rows with a start time and step only", () => {
+    const row: PlainResponseRow = {
+      key: "p",
+      rowKind: OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+      estimateSize: 10,
+      text: "hi",
+      rawTextOutput: false,
+      animated: false,
+      timestampMs: 5_000,
+    };
+    const text = describeRowTiming(row);
+    expect(text).toContain("Started:");
+    expect(text).toContain("Step 1");
+    expect(text).not.toContain("Took:");
+    expect(
+      describeRowTiming({ ...row, timestampMs: undefined })
+    ).toBeUndefined();
   });
 
   it("returns undefined without a start time or for other row kinds", () => {

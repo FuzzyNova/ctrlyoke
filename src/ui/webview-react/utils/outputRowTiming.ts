@@ -20,8 +20,13 @@ function formatElapsed(durationMs: number): string {
  * timing to show.
  */
 export function describeRowTiming(row: OutputRenderRow): string | undefined {
-  if (row.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT) return undefined;
-  const { timestamp, completedTimestamp } = row.event;
+  let timestamp: number | undefined;
+  let completedTimestamp: number | undefined;
+  if (row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT) {
+    ({ timestamp, completedTimestamp } = row.event);
+  } else if (row.rowKind === OUTPUT_ROW_KINDS.PLAIN_RESPONSE) {
+    timestamp = row.timestampMs;
+  }
   if (timestamp === undefined) return undefined;
 
   const lines = [`Started: ${formatTimestamp(timestamp)}`];
