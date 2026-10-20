@@ -10,13 +10,13 @@ CI runners have no VS Code, so use the npm package. Pin the version so a pipelin
 underneath you, and match the extension version your team uses:
 
 ```bash
-npx --yes ctrlyoke@0.1.2 --version
+npx --yes ctrlyoke@0.2.0 --version
 ```
 
 or install it once per job:
 
 ```bash
-npm install -g ctrlyoke@0.1.2
+npm install -g ctrlyoke@0.2.0
 ```
 
 The runner needs Node.js 22.12 or later, plus the harness CLI your workflow uses, installed and
@@ -185,7 +185,7 @@ jobs:
       - name: Validate workflows
         run: |
           for f in workflows/*.ctrlyoke.yaml; do
-            npx --yes ctrlyoke@0.1.2 validate "$f"
+            npx --yes ctrlyoke@0.2.0 validate "$f"
           done
 
   fix-tests:
@@ -197,7 +197,7 @@ jobs:
         with:
           node-version: "22"
       - name: Install ctrlyoke and the harness
-        run: npm install -g ctrlyoke@0.1.2 @anthropic-ai/claude-code
+        run: npm install -g ctrlyoke@0.2.0 @anthropic-ai/claude-code
       - name: Run the workflow
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

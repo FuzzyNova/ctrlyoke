@@ -7,19 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- **Workflow files can name their workflow.** A multi-step workflow file's root `name` (or a
-  `.prompt.md` file's frontmatter `name`) sets the name shown in the dashboard, recent workflows and
-  history; without one, the file name is used as before. Save writes the workflow's current name,
-  including a rename made in the dashboard, back to the file's `name`.
-
-## [0.2.0] - 2026-10-16
+## [0.2.0] - 2026-10-20
 
 This release renames many settings and workflow fields. Old keys are not migrated: they are
 ignored, and unknown workflow fields now produce a warning. See **Changed** for the full list.
 
 ### Added
+
+- **Telemetry.** The VS Code extension now sends operational telemetry (harness and execution
+  mode, counts and durations, outcome and error types, versions) through Microsoft's
+  `@vscode/extension-telemetry` library. It follows VS Code's `telemetry.telemetryLevel`; set it
+  to `off` to turn telemetry off. Prompts, code and AI output are never sent, and the headless
+  CLI and `ctrlyoke-mcp` send no telemetry. See the Privacy and telemetry docs page.
+- **Workflow files can name their workflow.** A multi-step workflow file's root `name` (or a
+  `.prompt.md` file's frontmatter `name`) sets the name shown in the dashboard, recent workflows and
+  history; without one, the file name is used as before. Save writes the workflow's current name,
+  including a rename made in the dashboard, back to the file's `name`.
 
 - **Language intelligence in the dashboard editor.** ctrlyoke can install and manage language
   servers (Settings > Language Servers, `languageServers.*`), so the workspace file editor gets
@@ -56,7 +59,27 @@ ignored, and unknown workflow fields now produce a warning. See **Changed** for 
   `ctrlyoke about` and `ctrlyoke uninstall` commands; `ctrlyoke history show` gains step selectors,
   filters and paging. Runs render tool calls,
   file edits, commands, user steers and ctrlyoke MCP calls live, matching the dashboard summary.
-  `--force` applies run flags to individual steps.
+  `--force` applies run flags to individual steps. `ctrlyoke export` writes a finished run to a
+  portable `.ctrlyokerun` bundle with workspace and home paths tokenized and secrets redacted.
+- **Pro on headless machines.** `ctrlyoke license status`, `activate` and `deactivate` manage a
+  license without the dashboard; the key is read from a hidden prompt or `--stdin`, never an
+  argument. `ctrlyoke server` can also activate from `CTRLYOKE_LICENSE_KEY` or
+  `CTRLYOKE_LICENSE_KEY_FILE`. On hosts without an OS keyring (containers, headless Linux), the
+  license, server token and managed secrets persist in an owner-only `secrets.json` instead of
+  living only in memory.
+- **Keyboard flow.** A new workflow needs no mouse: Ctrl+N, type the name, Tab, write the prompt,
+  Ctrl+Enter. Alt+H/M/R open the workflow's harness, model and resume-session pickers, and
+  Alt+Shift+H/M/R open the step footer's pickers.
+- Right-click or long-press in the prompt editor and the workspace file editor opens Cut, Copy,
+  Paste, Select Word, Select Line and Select All.
+- Output rows show their start time, duration and step on hover. New rows fade in and the live
+  autoscroll glides, both respecting reduced-motion preferences.
+- The status bar shows the ctrlyoke logo with the license tier ("ctrlyoke Pro", "ctrlyoke Free").
+- User skills are discovered in `~/.ctrlyoke/skills` and every harness's user skill folder, and
+  user agents in `~/.agents` and each harness's user agent folder. Agent and skill tooltips show
+  where the copy that runs is saved and list any other copies.
+- The editor's token count for a file-reference prompt counts the referenced file's content, and
+  the workspace viewer shows the estimate for `.prompt.md` files.
 - **Recently deleted.** Every history delete, including Clear all history, now moves runs to a
   per-project trash with an Undo toast; they can be restored for `storage.trashRetentionDays`
   (default 30). Clear all history moved to Settings > General > Run History behind a typed
@@ -139,6 +162,17 @@ ignored, and unknown workflow fields now produce a warning. See **Changed** for 
   share a stable `~/.ctrlyoke/bin` status line launcher.
 - `.ctrlyoke/` is only created after you opt a folder in, and settings that run programs, or add
   external workspace roots, require approval when they come from workspace settings.
+- **Default tool permissions.** The default deny list now targets commands git can't undo or
+  that reach beyond the machine: it no longer blocks `rm`/`del`/`Remove-Item`/`rd`/`rmdir`,
+  `chmod`/`chown` or `docker rm`/`rmi`, narrows `git reset` to `git reset --hard`, and adds
+  `git restore` and `npm`/`yarn`/`pnpm publish`. The starter allow list matches `git status` and
+  `git diff` with arguments and adds `git show`, `git mv` and `git rm`. The deny list is not a
+  security boundary. Codex and Antigravity no longer warn about the shipped default lists, and
+  Codex now enforces `mcp__<server>__<tool>` denials.
+- When agents or skills share a name, the copy in the workspace `.ctrlyoke` folder wins, then
+  `~/.ctrlyoke`, then harness folders.
+- A resumed session is no longer re-sent agents and skills it already received, including when it
+  is resumed from another run, workflow, the CLI or MCP.
 
 ### Removed
 
@@ -181,9 +215,26 @@ ignored, and unknown workflow fields now produce a warning. See **Changed** for 
   and large staged diffs are read instead of falling back to unstaged changes.
 - Many file-lock, runner-lock and credential-store fixes for Windows (delete-pending `EPERM`,
   torn writes, stale-lock recovery).
+- Resuming a session across final-step passes reuses the terminal that holds it, and resuming a
+  closed session no longer kills a reusable terminal holding a different conversation.
+- `$previous` and `$previous:summary` include a follow-up sent after a step finished.
+  `#selection` and `#sym` references work anywhere in files over 512 KB, skipped-reference
+  warnings name the reference as typed, and context references that resolve through a link to
+  outside the workspace are blocked.
+- Completions stay reachable while a reference is typed (`@dir/` queries fall back to a fuzzy
+  path match), Backspace deletes a reference chip in one press, and `$step:` completion opens in
+  plain YAML prompt values.
+- The hosted dashboard no longer stalls on startup, and the extension host does less work
+  redacting secrets and scanning snapshots. The workspace file index is bounded by a memory
+  budget.
+- Ctrl/Cmd+A selects only within the focused panel, output stays rendered when a continuation
+  starts on a finished run, and the step list shows each pending step's inherited model for its
+  own harness.
+- Inline `[mcp_servers]` entries in Codex `config.toml` are parsed, and Qwen file references with
+  spaces are formatted correctly.
 - Many dashboard fixes, including High Contrast Light preflight commands, narrow and mobile
-  layouts, the minimap, modal Escape handling, and machine deactivation feedback in the License
-  tab.
+  layouts, the minimap, modal Escape handling, keyboard navigation in the step context menu, and
+  machine deactivation feedback in the License tab.
 
 ## [0.1.2] - 2026-09-25
 
