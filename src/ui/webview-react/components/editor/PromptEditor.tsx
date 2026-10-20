@@ -92,6 +92,12 @@ interface PromptEditorProps {
   externalReadOnlyLabel?: string;
   /** Supplies the header action without moving its state out of the editor. */
   onPromptFileActionChange?: (action: PromptFileAction | null) => void;
+  /**
+   * Reports the resolved prompt text of a file-reference prompt (null when the
+   * prompt is not a file reference or the file has not resolved), so the
+   * header can count the tokens execution actually sends.
+   */
+  onPromptFileContentChange?: (content: string | null) => void;
 }
 
 function includeEmptyPromptNameClear(
@@ -150,6 +156,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   bulkHarnessOptionsDisabled = false,
   externalReadOnlyLabel,
   onPromptFileActionChange,
+  onPromptFileContentChange,
 }) => {
   const {
     selectionTarget,
@@ -294,6 +301,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     exists: boolean;
     isEmpty: boolean;
     resolvedPath?: string;
+    content?: string;
   } | null>(null);
   const [fileRefValidationPending, setFileRefValidationPending] =
     useState(false);
@@ -473,10 +481,12 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     [properties, promptText, stepEnabled]
   );
 
+  // A silent request refreshes an already-resolved target's content without
+  // flipping the badge and file action back to their pending state.
   const validateFileRef = useCallback(
-    (target: string) => {
+    (target: string, silent = false) => {
       const seq = ++validationSeqRef.current;
-      setFileRefValidationPending(true);
+      if (!silent) setFileRefValidationPending(true);
       vscode.postMessage({
         type: MESSAGE_TYPES.VALIDATE_FILE_REF,
         filePath: target,
@@ -540,6 +550,8 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           typeof message.resolvedPath === "string"
             ? message.resolvedPath
             : undefined,
+        content:
+          typeof message.content === "string" ? message.content : undefined,
       });
     };
     window.addEventListener("message", handleMessage);
@@ -589,6 +601,38 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     isFileRef,
     revalidateMissingOrEmptyFileRef,
   ]);
+
+  // A resolved file can still be edited elsewhere; refresh its content (and so
+  // the header token count) when the user comes back to the dashboard.
+  useEffect(() => {
+    if (!isFileRef || fileRefValidationPending || !fileRefValidation?.exists) {
+      return;
+    }
+    const refreshResolvedFileRef = () => {
+      const target = promptText.trim();
+      if (target === validationTargetRef.current) validateFileRef(target, true);
+    };
+    window.addEventListener("focus", refreshResolvedFileRef);
+    return () => window.removeEventListener("focus", refreshResolvedFileRef);
+  }, [
+    fileRefValidation?.exists,
+    fileRefValidationPending,
+    isFileRef,
+    promptText,
+    validateFileRef,
+  ]);
+
+  const promptFileContent =
+    isFileRef && fileRefValidation?.exists
+      ? (fileRefValidation.content ?? null)
+      : null;
+  useEffect(() => {
+    onPromptFileContentChange?.(promptFileContent);
+  }, [onPromptFileContentChange, promptFileContent]);
+  useEffect(
+    () => () => onPromptFileContentChange?.(null),
+    [onPromptFileContentChange]
+  );
 
   const persistPromptFileReference = useCallback(
     (reference: string) => {

@@ -11,13 +11,13 @@ import {
 import { useElementTier } from "../../hooks/useElementNarrow";
 import { useAttachmentTokenCount } from "../../hooks/useAttachmentTokenCount";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
-import { formatMagnitude } from "../../utils/number";
 import { PromptEditor, type PromptFileAction } from "../editor/PromptEditor";
 import { ExecutionModeQuickPicker } from "../editor/ExecutionModeQuickPicker";
 import { StepColorQuickPicker } from "../editor/StepColorQuickPicker";
 import { PanelBar, IconToggleButton } from "../shared";
 import { HARNESS_DISPLAY_NAMES } from "../shared/HarnessDropdown";
 import { StatusBanner, STATUS_BANNER_TONES } from "../shared/StatusBanner";
+import { PromptTokenCount } from "../shared/PromptTokenCount";
 import {
   FINAL_STEP_PHASES,
   EDITOR_TARGET_KINDS,
@@ -138,6 +138,11 @@ const EditorSectionInner: React.FC = () => {
   const totalPrompts = steps.length;
   const [promptFileAction, setPromptFileAction] =
     useState<PromptFileAction | null>(null);
+  // A file-reference prompt sends the file's text, so count that (with its
+  // own references expanded) instead of the path once the file resolves.
+  const [promptFileContent, setPromptFileContent] = useState<string | null>(
+    null
+  );
 
   // Steps preceding this prompt — folds into prior-context ($previous, $step:N)
   // token estimates. Editing queue step i: steps 0..i-1 precede it. New prompt
@@ -146,7 +151,10 @@ const EditorSectionInner: React.FC = () => {
     selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
       ? selectionTarget.index
       : steps.length;
-  const tokenCount = useAttachmentTokenCount(promptText, stepCount);
+  const tokenCount = useAttachmentTokenCount(
+    promptFileContent ?? promptText,
+    stepCount
+  );
 
   const [sectionRef, headerTier] = useElementTier<
     EditorHeaderTier,
@@ -416,17 +424,10 @@ const EditorSectionInner: React.FC = () => {
               ) : !isScriptMode ? (
                 <>
                   {!showStackedTokens && " — "}
-                  <span
-                    className={`font-bold tabular-nums ${
-                      tokenCount >= 100_000
-                        ? "text-error-fg"
-                        : tokenCount >= 50_000
-                          ? "text-warning-fg"
-                          : ""
-                    }`}
-                  >
-                    {formatMagnitude(tokenCount)} {isNarrow ? "tks" : "tokens"}
-                  </span>
+                  <PromptTokenCount
+                    tokenCount={tokenCount}
+                    compact={isNarrow}
+                  />
                 </>
               ) : null)}
           </span>
@@ -501,6 +502,7 @@ const EditorSectionInner: React.FC = () => {
           bulkHarnessOptionsDisabled={bulkHarnessOptionsDisabled}
           externalReadOnlyLabel={externalReadOnlyLabel}
           onPromptFileActionChange={setPromptFileAction}
+          onPromptFileContentChange={setPromptFileContent}
         />
       </div>
     </section>

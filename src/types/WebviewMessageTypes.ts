@@ -1569,6 +1569,18 @@ export interface ValidateFileRefMessage {
   address?: WorkflowViewAddress;
 }
 
+/** Webview → Extension: count the tokens each attachment reference expands to. */
+export interface RequestAttachmentTokenCountsMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_ATTACHMENT_TOKEN_COUNTS;
+  references: string[];
+  /**
+   * Viewer path of the file the references belong to, which then serves as
+   * the `./`/`../` base instead of the displayed workflow's source file (e.g.
+   * a `.prompt.md` open in the workspace viewer, counted as if run alone).
+   */
+  sourceDefinitionPath?: string;
+}
+
 /** Extension → Webview: addressed validation result for a prompt-file reference. */
 export interface FileRefValidationMessage {
   type: typeof MESSAGE_TYPES.FILE_REF_VALIDATION;
@@ -1576,6 +1588,8 @@ export interface FileRefValidationMessage {
   exists: boolean;
   isEmpty: boolean;
   resolvedPath?: string;
+  /** The prompt text execution would send (frontmatter-stripped for `.prompt.md`). */
+  content?: string;
   seq?: number;
 }
 
@@ -3315,8 +3329,10 @@ export type IncomingMessage =
   | WorkflowDocumentDiagnosticsMessage
   | {
       type: typeof MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE;
-      /** Map from reference key (e.g. "file:src/foo.ts") to token count */
+      /** Map from requested raw reference to token count */
       counts: Record<string, number>;
+      /** Echo of the request's `sourceDefinitionPath`, which scopes relative refs. */
+      sourceDefinitionPath?: string;
     }
   | SaveWorkflowDialogDataMessage
   | SavePathCheckedMessage

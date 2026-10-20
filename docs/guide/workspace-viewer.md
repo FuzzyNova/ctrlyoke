@@ -84,7 +84,10 @@ Select a file to open it in the editor. It has syntax highlighting, follows your
 - **Save** (`Ctrl+S`, or `Cmd+S` on a Mac)
 - **Undo** and **Redo**
 - **Preview** / **Edit**, for markdown files, to switch between the rendered page
-  and its source
+  and its source. A `.prompt.md` file also shows an estimate of the tokens it
+  sends beside it: its text without the frontmatter, plus the files and other
+  references it attaches. The estimate treats the file as run on its own, so a
+  `./` or `../` reference is counted relative to the file's own folder.
 - **Discard**, which drops your unsaved changes and reloads the file from disk
 
 Saving keeps the file's line endings. Your unsaved edits survive closing the

@@ -19,6 +19,7 @@ import {
   isPathWithinDirectory,
 } from "./PathSecurity";
 import { foldPathForCompare } from "./PathCasing";
+import { isWorkflowRelativeReferencePath } from "./promptPathUtils";
 import {
   BUNDLE_MANIFEST_FILE_NAME,
   PROMPT_FILE_RESOLUTION_STATUSES,
@@ -574,7 +575,7 @@ async function resolveInlineReference(
   // filesystem-dependent meaning §2.1 exists to prevent.
   const candidates = resolver.getCandidatePaths(
     reference.path,
-    isWorkflowRelativeReference(reference.path)
+    isWorkflowRelativeReferencePath(reference.path)
       ? sourceDefinitionPath
       : undefined
   );
@@ -1141,15 +1142,6 @@ function toWorkflowRelativePath(
   return `./${path
     .relative(path.dirname(destinationPath), assetPath)
     .replace(/\\/g, "/")}`;
-}
-
-/**
- * True when a reference explicitly selects the workflow-file base. Mirrors
- * `resolveReferencePath`'s step 2 so both agree on what `./` and `../` mean.
- */
-function isWorkflowRelativeReference(referencePath: string): boolean {
-  const normalized = referencePath.replace(/\\/g, "/");
-  return normalized.startsWith("./") || normalized.startsWith("../");
 }
 
 function isGeneratedStorePath(

@@ -6,6 +6,7 @@ import {
 } from "../utils/PathSecurity";
 import { pathsEqual } from "../utils/PathCasing";
 import { REFERENCE_PATH_BASES } from "../types/DashboardConstants";
+import { isWorkflowRelativeReferencePath } from "../utils/promptPathUtils";
 
 /**
  * A workspace folder reduced to the fields the resolver needs.
@@ -271,7 +272,7 @@ export function resolveReferencePath(
   }
 
   const normalized = referencePath.replace(/\\/g, "/");
-  if (normalized.startsWith("./") || normalized.startsWith("../")) {
+  if (isWorkflowRelativeReferencePath(normalized)) {
     if (!options.sourceDefinitionDir) {
       throw new Error(
         "This reference is relative to the workflow file, which has no known location."

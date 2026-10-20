@@ -953,6 +953,63 @@ describe("PromptEditor — prompt-file action", () => {
     expect(useEditorStore.getState().promptText).toBe("keep this text");
   });
 
+  it("reports a resolved prompt file's content and refreshes it on window focus", async () => {
+    useEditorStore
+      .getState()
+      .setPromptText("./.ctrlyoke/prompts/review.prompt.md");
+    const onPromptFileContentChange = vi.fn();
+    render(
+      <PromptEditor onPromptFileContentChange={onPromptFileContentChange} />
+    );
+
+    const latestValidationRequest = () => {
+      const requests = postMessageSpy.mock.calls
+        .map(([message]) => message as { type?: string; seq?: number })
+        .filter((message) => message.type === MESSAGE_TYPES.VALIDATE_FILE_REF);
+      return requests[requests.length - 1];
+    };
+    const respond = (seq: number | undefined, content: string) =>
+      fireEvent(
+        window,
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.FILE_REF_VALIDATION,
+            seq,
+            filePath: "./.ctrlyoke/prompts/review.prompt.md",
+            exists: true,
+            isEmpty: false,
+            resolvedPath: "C:/workspace/.ctrlyoke/prompts/review.prompt.md",
+            content,
+          },
+        })
+      );
+
+    await waitFor(() => expect(latestValidationRequest()).toBeDefined());
+    expect(onPromptFileContentChange).toHaveBeenLastCalledWith(null);
+    respond(latestValidationRequest()!.seq, "Review @src/app.ts");
+    await waitFor(() =>
+      expect(onPromptFileContentChange).toHaveBeenLastCalledWith(
+        "Review @src/app.ts"
+      )
+    );
+
+    const firstSeq = latestValidationRequest()!.seq;
+    fireEvent(window, new Event("focus"));
+    await waitFor(() =>
+      expect(latestValidationRequest()!.seq).toBeGreaterThan(firstSeq!)
+    );
+    // The silent refresh keeps the resolved state instead of going pending.
+    expect(onPromptFileContentChange).toHaveBeenLastCalledWith(
+      "Review @src/app.ts"
+    );
+    respond(latestValidationRequest()!.seq, "Review @src/app.ts again");
+    await waitFor(() =>
+      expect(onPromptFileContentChange).toHaveBeenLastCalledWith(
+        "Review @src/app.ts again"
+      )
+    );
+  });
+
   it("shows the empty-file state and opens using the latest resolved validation path", async () => {
     useEditorStore
       .getState()

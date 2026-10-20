@@ -88,6 +88,7 @@ import type {
   InstallLspServerMessage,
   RestartLspServerMessage,
   ValidateWorkflowDocumentMessage,
+  RequestAttachmentTokenCountsMessage,
 } from "../types/WebviewMessageTypes";
 import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
 import type {
@@ -1432,9 +1433,11 @@ export class WebviewMessageRouter {
     table.set(
       MESSAGE_TYPES.REQUEST_ATTACHMENT_TOKEN_COUNTS,
       async (message, ctx) => {
+        const request = message as RequestAttachmentTokenCountsMessage;
         await this.promptEditorSupport.handleAttachmentTokenCountRequest(
           ctx,
-          message.references
+          request.references,
+          request.sourceDefinitionPath
         );
       }
     );

@@ -65,10 +65,15 @@ import type { WorkspaceEntrySortKey } from "@root/types/HostedWorkspaceViewerTyp
 import { nextWorkspaceEntrySort } from "@utils/workspaceEntrySort";
 import {
   CLIPBOARD_OPERATIONS,
+  CTRLYOKE_FILE_KINDS,
   SCM_FILE_KINDS,
   WORKSPACE_ENTRY_KINDS,
 } from "@root/types/DashboardConstants";
+import { getCtrlYokeFileKind } from "@root/completions/CtrlYokeFileKind";
+import { getPromptMarkdownText } from "@root/utils/MarkdownFrontmatter";
+import { useAttachmentTokenCount } from "@hooks/useAttachmentTokenCount";
 import { Icon } from "../shared/Icon";
+import { PromptTokenCount } from "../shared/PromptTokenCount";
 
 /**
  * Resolves the git-status text color class for an explorer entry, mirroring
@@ -215,6 +220,26 @@ export const WorkspaceExplorerPane: React.FC = () => {
     [selectedFilePath]
   );
   const showPreview = previewMode && isMarkdownFile && !fileReadOnly;
+
+  // A `.prompt.md` file shows the token count of the text it sends — the
+  // frontmatter-free body with its references expanded, as when it runs on its
+  // own: no earlier steps (so no prior context), and `./` refs relative to it.
+  const isPromptMarkdownFile = useMemo(
+    () =>
+      !!selectedFilePath &&
+      getCtrlYokeFileKind(selectedFilePath) ===
+        CTRLYOKE_FILE_KINDS.PROMPT_MARKDOWN,
+    [selectedFilePath]
+  );
+  const promptMarkdownText = useMemo(
+    () => (isPromptMarkdownFile ? getPromptMarkdownText(fileContent) : ""),
+    [fileContent, isPromptMarkdownFile]
+  );
+  const promptTokenCount = useAttachmentTokenCount(
+    promptMarkdownText,
+    0,
+    isPromptMarkdownFile ? (selectedFilePath ?? undefined) : undefined
+  );
 
   // Reset to the editor view whenever the open file changes so a newly-opened
   // (possibly non-markdown) file never lands in a stale preview state.
@@ -1002,6 +1027,14 @@ export const WorkspaceExplorerPane: React.FC = () => {
                     />
                     {previewMode ? "Edit" : "Preview"}
                   </button>
+                )}
+                {isPromptMarkdownFile && !fileLoading && (
+                  <span className="shrink-0 text-xs text-description-fg">
+                    <PromptTokenCount
+                      tokenCount={promptTokenCount}
+                      compact={isMobile}
+                    />
+                  </span>
                 )}
                 <button
                   onClick={handleDiscardUnsaved}

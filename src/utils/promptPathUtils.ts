@@ -13,6 +13,17 @@
 export const PROMPT_FILE_EXTENSIONS = [".prompt.md", ".md", ".txt"] as const;
 
 /**
+ * True when a reference path explicitly selects the workflow-file base — a
+ * leading `./` or `../` (either separator) — rather than the workspace root.
+ */
+export function isWorkflowRelativeReferencePath(
+  referencePath: string
+): boolean {
+  const normalized = referencePath.replace(/\\/g, "/");
+  return normalized.startsWith("./") || normalized.startsWith("../");
+}
+
+/**
  * Returns true when `promptValue` looks like a lone file-path reference rather
  * than inline prompt text.
  *
