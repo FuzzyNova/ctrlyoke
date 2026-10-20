@@ -99,8 +99,13 @@ test("every packaged out/ entry also ships in the VSIX", () => {
 });
 
 test("the packed tarball installs and runs", async (t) => {
-  if (!fs.existsSync(path.join(ROOT_DIR, "out", "cli.js"))) {
-    t.skip("out/cli.js not built");
+  // `compile-tests` (as in check:fast) writes out/cli.js but not the webview,
+  // so a partial build must skip rather than fail.
+  const unbuilt = NPM_PACKAGE_ENTRIES.find(
+    (entry) => !fs.existsSync(path.join(ROOT_DIR, entry))
+  );
+  if (unbuilt) {
+    t.skip(`${unbuilt} not built`);
     return;
   }
   const tempDir = makeTempDir(t);
