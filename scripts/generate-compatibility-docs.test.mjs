@@ -86,7 +86,11 @@ test("every limited matrix cell links to a note with a reason", () => {
   const { facts, compatibilityTypes } = loadFacts();
   const generated = buildCompatibilityDocumentation(facts, compatibilityTypes);
 
-  const limitedCells = matrixSection(generated).match(/[◐❌]<\/span>(<sup>)?/g);
+  const limitedCells = matrixSection(generated)
+    .split("\n")
+    .filter((line) => line.startsWith("| "))
+    .join("\n")
+    .match(/compat-(?:partial|unsupported)"[^>]*><\/span>(<sup>)?/g);
   assert.ok(limitedCells.length > 0);
   for (const cell of limitedCells) {
     assert.ok(cell.endsWith("<sup>"), `limited cell has no note: ${cell}`);

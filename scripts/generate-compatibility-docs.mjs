@@ -209,12 +209,32 @@ function cellKey(harness, domain, capability) {
   return `${harness.harnessId}|${domain}|${capability}`;
 }
 
+/**
+ * Codicon and colour class per fidelity. The docs theme loads codicon.css and
+ * colours the `compat-*` classes (docs/.vitepress/theme/custom.css).
+ */
 function fidelityPresentation(fidelities) {
   return {
-    [fidelities.EXACT]: { symbol: "✅", status: "Supported" },
-    [fidelities.PARTIAL]: { symbol: "◐", status: "Partially supported" },
-    [fidelities.UNSUPPORTED]: { symbol: "❌", status: "Not supported" },
+    [fidelities.EXACT]: {
+      icon: "pass-compact",
+      tone: "supported",
+      status: "Supported",
+    },
+    [fidelities.PARTIAL]: {
+      icon: "color-mode",
+      tone: "partial",
+      status: "Partially supported",
+    },
+    [fidelities.UNSUPPORTED]: {
+      icon: "error-compact",
+      tone: "unsupported",
+      status: "Not supported",
+    },
   };
+}
+
+function fidelityIcon({ icon, tone, status }) {
+  return `<span class="codicon codicon-${icon} compat-icon compat-${tone}" role="img" aria-label="${status}" title="${status}"></span>`;
 }
 
 function presentFidelity(presentation, fidelity) {
@@ -334,10 +354,6 @@ function buildMatrix(facts, presentation, noteByCell) {
     "Capability",
     facts.harnesses.map(harnessHeader),
     (harness, domain, capability, declaration) => {
-      const { symbol, status } = presentFidelity(
-        presentation,
-        declaration.fidelity
-      );
       const notes = noteByCell.get(cellKey(harness, domain, capability)) ?? [];
       const marker = notes
         .map(
@@ -345,17 +361,8 @@ function buildMatrix(facts, presentation, noteByCell) {
             `<sup><a href="#${noteAnchor(note)}">${note.number}</a></sup>`
         )
         .join("");
-      return `<span title="${status}">${symbol}</span>${marker}`;
+      return `${fidelityIcon(presentFidelity(presentation, declaration.fidelity))}${marker}`;
     }
-  );
-}
-
-function buildMechanismTable(facts) {
-  return buildPivotTable(
-    facts,
-    "Capability",
-    facts.harnesses.map(({ displayName }) => shortHarnessName(displayName)),
-    (_harness, _domain, _capability, declaration) => declaration.mechanism
   );
 }
 
@@ -443,7 +450,7 @@ export function buildCompatibilityDocumentation(facts, compatibilityTypes) {
     presentation
   );
   const legend = Object.values(presentation)
-    .map(({ symbol, status }) => `${symbol} ${status.toLowerCase()}`)
+    .map((entry) => `${fidelityIcon(entry)} ${entry.status.toLowerCase()}`)
     .join(" · ");
 
   return `${FRONTMATTER}
@@ -477,7 +484,7 @@ ${buildNotesSection(facts, notes)}
   capability.
 - The notes share their wording with author-time and preflight diagnostics.
   Simplify the value, or choose a harness that supports it, when a cell is
-  not ✅.
+  not marked supported.
 
 ## Supported versions
 
@@ -498,20 +505,6 @@ Each claim is backed by evidence for a harness version range. Installed
 versions outside these ranges are shown as unverified by the dashboard.
 
 ${buildVersionTable(facts)}
-
-::: details How each harness implements these capabilities
-
-- **native**: the harness supports the workflow value directly.
-- **translated-cli**: ctrlyoke translates the value into the harness's CLI
-  flags or inline configuration for each run.
-- **workspace-config**: ctrlyoke writes the harness's workspace configuration
-  (for example its hooks file) for the run.
-- **mixed**: a combination of the mechanisms above.
-- **none**: there is no mechanism; the capability is not supported.
-
-${buildMechanismTable(facts)}
-
-:::
 
 ## Portable workflow attachments and native discovery
 

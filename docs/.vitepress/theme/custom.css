@@ -43,3 +43,20 @@
   width: 400px;
   height: auto;
 }
+
+/* Fidelity icons in the generated harness compatibility matrix. */
+.vp-doc .compat-icon {
+  vertical-align: text-bottom;
+}
+
+.vp-doc .compat-supported {
+  color: var(--vp-c-green-1);
+}
+
+.vp-doc .compat-partial {
+  color: var(--vp-c-yellow-1);
+}
+
+.vp-doc .compat-unsupported {
+  color: var(--vp-c-red-1);
+}
