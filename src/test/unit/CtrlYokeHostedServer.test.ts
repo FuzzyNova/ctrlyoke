@@ -732,6 +732,47 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
       }
     });
   });
+
+  // Runs everywhere, unlike the symlink case above, which Windows skips
+  // without symlink privilege.
+  test("file watcher changes reach only the tabs watching that file", async () => {
+    await withServer(async (root, port, token, watcherFactory) => {
+      const aPath = path.join(root, "a.txt");
+      const bPath = path.join(root, "b.txt");
+      fs.writeFileSync(aPath, "a\n");
+      fs.writeFileSync(bPath, "b\n");
+      const tabA = await openBrowserTab(port, token, "tab-a");
+      const tabB = await openBrowserTab(port, token, "tab-b");
+      try {
+        for (const [clientId, viewerPath] of [
+          ["tab-a", "a.txt"],
+          ["tab-b", "b.txt"],
+        ]) {
+          const watch = await sendJsonRequest(
+            port,
+            `/api/workspace-viewer/file/watch?token=${token}`,
+            "POST",
+            { path: viewerPath },
+            { "x-ctrlyoke-client-id": clientId }
+          );
+          assert.strictEqual(watch.statusCode, 200);
+        }
+        const [aWatcher, bWatcher] = watcherFactory.watchers;
+
+        // Each socket delivers in send order, so had tab B been sent a.txt's
+        // change it would arrive ahead of b.txt's.
+        const tabBChange = nextWorkspaceFileChanged(tabB);
+        const tabAChange = nextWorkspaceFileChanged(tabA);
+        aWatcher.fireChange(aPath);
+        assert.strictEqual((await tabAChange).path, "a.txt");
+        bWatcher.fireChange(bPath);
+        assert.strictEqual((await tabBChange).path, "b.txt");
+      } finally {
+        tabA.close();
+        tabB.close();
+      }
+    });
+  });
 });
 
 suite("CtrlYokeHostedServer theme defaults", () => {
