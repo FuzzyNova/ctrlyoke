@@ -2,7 +2,7 @@
 
 **Created:** June 19, 2026 (as `FlightPath Release Checklist`)
 **Rewritten:** August 25, 2026 — consolidated into the single canonical, ctrlyoke-branded release checklist.
-**Status:** Business/domain cutover and the Pro/Enterprise licensing paths are configured; the site checkout and Enterprise purchase flows have been exercised live. Phase 8's README media is DONE; the `0.2.0` package was inspected October 16, with a rebuild and reinspection after the October 17 notices update still required. The full suite is green (last run October 13, 2026), and `npm run check:docs`, typecheck, lint, and compile pass per the October 17 final-release audit. The remaining release path is the ordered set of post-merge CI/deploy, repo visibility, DataRep, `v0.2.0`/npm, Marketplace-public, and site-launch gates below. The Lemon Squeezy storefront is already on and directly purchasable; the site's `LAUNCHED` flag separately controls purchases initiated on ctrlyoke.dev. Business-side work (LLC vendor re-association to Fuzzy Nova LLC + the Mercury account/card, trademark filing) is tracked outside this repo in the Fuzzy Nova LLC business Drive (`Formation & Legal/LLC_FORMATION_GUIDE.md`, `Trademark & IP/TRADEMARK_FILING_GUIDE.md`); only its release-gating touchpoints are mirrored here.
+**Status: RELEASED October 20, 2026.** The repo is public with its guardrails applied, `v0.2.0` is on the public Marketplace listing, `ctrlyoke@0.2.0` is `latest` on npm with provenance, the GitHub Release carries the VSIX, and ctrlyoke.dev is launched (`LAUNCHED = true`, `18c30c73b`). Still open: a live Pro checkout through the site, the clean-profile install check, the fork-PR check, the trademark specimens, the `/terms` plain-language summary, and the post-flip repo-settings follow-ups. The Lemon Squeezy storefront is already on and directly purchasable; the site's `LAUNCHED` flag separately controls purchases initiated on ctrlyoke.dev. Business-side work (LLC vendor re-association to Fuzzy Nova LLC + the Mercury account/card, trademark filing) is tracked outside this repo in the Fuzzy Nova LLC business Drive (`Formation & Legal/LLC_FORMATION_GUIDE.md`, `Trademark & IP/TRADEMARK_FILING_GUIDE.md`); only its release-gating touchpoints are mirrored here.
 **Purpose:** the one place to look for "what's left before `ctrlyoke` ships" — product release, vendor/licensing setup with exact click-by-click steps, legal, and launch verification.
 
 > **This document supersedes [`RELEASE_PLAN.md`](../implemented/RELEASE_PLAN.md) and [`CTRLYOKE_REBRAND_CUTOVER.md`](../implemented/CTRLYOKE_REBRAND_CUTOVER.md).** Both are kept as historical record (their content described real work, most of it now done) but are no longer the place to look for open items — that's here. [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md) remains the engineering design doc for `LicenseService`; this checklist is the execution tracker. [`RELEASE_GUIDE.md`](../implemented/RELEASE_GUIDE.md) is left untouched as a FlightPath-era generic how-to-use-`vsce` reference — its mechanics (package/login/publish commands) are still accurate, just still branded FlightPath; Phase 9 below has the ctrlyoke-branded equivalent commands.
@@ -757,10 +757,10 @@ _Checked 2026-10-16 against a local `npm run package` of `0.2.0` (334 files, 20.
 - [x] Generate/verify an Azure DevOps PAT with Marketplace **Manage** scope (see [`RELEASE_GUIDE.md`](../implemented/RELEASE_GUIDE.md) §"Create a Personal Access Token" — mechanics unchanged, just ignore the FlightPath naming in that doc). Done September 8, 2026 — set as the `VSCE_PAT` GitHub repo secret, which `release.yml` reads directly; the `vsce login`/interactive-paste flow below is only needed for a manual local publish, not the CI path.
 - [x] `npx vsce login fuzzynova`
 - [x] `npm run package && npx vsce publish` (or `npx vsce publish --packagePath ctrlyoke-0.1.0.vsix`) — done; listing is live on the Marketplace, currently set to unpublished/private visibility since public release hasn't been announced yet.
-- [ ] **Make the Marketplace listing public** after DataRep is effective and `v0.2.0` is released and staged on npm. Confirm the README images and CHANGELOG render on the public listing.
-- [ ] Post-publish: confirm listing loads, README renders, CHANGELOG tab shows `0.2.0`, install into a clean profile, run one workflow.
+- [x] **Make the Marketplace listing public** after DataRep is effective and `v0.2.0` is released and staged on npm. Confirm the README images and CHANGELOG render on the public listing. _Done by Nathan, October 20, 2026; the gallery API reports `fuzzynova.ctrlyoke` 0.2.0 as `validated, public`. `vsce publish` did not change visibility by itself._
+- [ ] Post-publish: confirm listing loads, README renders, CHANGELOG tab shows `0.2.0`, install into a clean profile, run one workflow. _The listing is public at 0.2.0; the clean-profile install and workflow run are still to do._
 - [ ] **Trademark filing (business-side, tracked in the Drive `Trademark & IP/TRADEMARK_FILING_GUIDE.md`):** once the listing is public, capture dated screenshots of the live Marketplace listing (IC 009 specimen) and `ctrlyoke.dev` (IC 042 specimen), then submit the saved §1(a) USPTO draft — **edited first to name Fuzzy Nova LLC as owner**, not Nathan individually.
-- [ ] Flip `LAUNCHED = true` only after Phase 5 checkout is verified end-to-end **and Phase 7's DataRep EU/EEA + UK appointments are effective and published in the Privacy Policy**. The live LS storefront is already directly purchasable; this flag enables the site's purchase links. If launching without those appointments, geo-block EU/EEA/UK sales and do not intentionally monitor people there until counsel confirms the Article 27 position.
+- [x] _Done October 20, 2026 (`18c30c73b`, deploy run `39506532028`): `/`, `/docs/`, `/pricing/` and `/enterprise/checkout/` serve no `noindex` and no "Coming soon", and the checkout buttons use the live-mode `LS_CHECKOUT_URLS`. A live Pro checkout through the site is still to do._ Flip `LAUNCHED = true` only after Phase 5 checkout is verified end-to-end **and Phase 7's DataRep EU/EEA + UK appointments are effective and published in the Privacy Policy**. The live LS storefront is already directly purchasable; this flag enables the site's purchase links. If launching without those appointments, geo-block EU/EEA/UK sales and do not intentionally monitor people there until counsel confirms the Article 27 position.
 
 ---
 
@@ -771,10 +771,16 @@ _2026-10-10:_ `release.yml` automates this phase. GitHub Releases `v0.1.1` (2026
 No `v0.1.0` tag was ever cut. **`0.2.0` is the planned first public release** (decided
 2026-10-16); its `CHANGELOG.md` entry is dated 2026-10-16, so re-date it if the tag is pushed later.
 
-- [ ] Tag `v0.2.0`.
-- [ ] Create GitHub Release from the `CHANGELOG.md` `[0.2.0]` entry (`release.yml` does this).
-- [ ] Attach the final `ctrlyoke-0.2.0.vsix` (`release.yml` does this).
-- [ ] Confirm the release URL is under `FuzzyNova/ctrlyoke` (already renamed — just a sanity check).
+_Done October 20, 2026:_ `v0.2.0` tagged on `ac018f861` after `ci.yml` (run `39499989982`) and
+`full-suite.yml` (run `39499993995`) passed on `d691f9329`, the last code commit. Release run
+`39500767419` succeeded at every step (package, npm tarball test, Marketplace publish, GitHub
+Release, npm stage). The `[0.2.0]` entry was re-dated to 2026-10-20 and completed with the
+changes landed after the October 16 cut, including the telemetry notice.
+
+- [x] Tag `v0.2.0`.
+- [x] Create GitHub Release from the `CHANGELOG.md` `[0.2.0]` entry (`release.yml` does this).
+- [x] Attach the final `ctrlyoke-0.2.0.vsix` (`release.yml` does this).
+- [x] Confirm the release URL is under `FuzzyNova/ctrlyoke`: https://github.com/FuzzyNova/ctrlyoke/releases/tag/v0.2.0.
 
 ---
 
@@ -788,9 +794,9 @@ No `v0.1.0` tag was ever cut. **`0.2.0` is the planned first public release** (d
 - [x] Coexistence guard, rule 3 — done September 25, 2026: `schemaVersion` on shared run/lock/trust/board state with refuse-to-write on a newer format, and a newer `runner.json` treated as held.
 - [x] Coexistence guard, rule 2 — done September 25, 2026: the `~/.ctrlyoke/installations.json` host registry with once-per-version-pair mismatch warnings (CLI on stderr, extension as a notification). **Must land before or with the first npm publish** — that is the first moment two ctrlyoke versions can touch the same state.
 - [x] npm package build (`scripts/build-npm-package.mjs`), packaging test (`scripts/build-npm-package.test.mjs`), and the staged-publish step in `release.yml` (plan §3.2) — done September 25, 2026. Not yet exercised by a real tag.
-- [ ] **Every release:** after `release.yml` finishes, approve the staged version on npmjs.com → `ctrlyoke` → Staged Packages (or `npm stage approve <id>` from an interactive terminal). Approval needs the passkey. Until it's approved, the npm version lags the Marketplace, and the Install CLI command types a version that doesn't exist yet.
-- [ ] **Every release:** `npm view ctrlyoke version` matches the tag; `npx ctrlyoke --version` works on a clean machine. Checked for `0.1.2` on September 25, 2026 (npx from an empty cache: `--version`, `validate --json`, `ctrlyoke-mcp`).
-- [x] First staged release: `v0.1.2` (September 25, 2026) staged `ctrlyoke@0.1.2` from the private repo with no provenance setting. npm skipped provenance and did not fail, and the tarball test passed on the Linux runner. After the Phase 14 flip, check that provenance shows on the package page.
+- **Every release:** after `release.yml` finishes, approve the staged version on npmjs.com → `ctrlyoke` → Staged Packages (or `npm stage approve <id>` from an interactive terminal). Approval needs the passkey. Until it's approved, the npm version lags the Marketplace, and the Install CLI command types a version that doesn't exist yet. _`0.2.0` approved by Nathan, October 20, 2026._
+- **Every release:** `npm view ctrlyoke version` matches the tag; `npx ctrlyoke --version` works on a clean machine. Checked for `0.1.2` on September 25, 2026 (npx from an empty cache: `--version`, `validate --json`, `ctrlyoke-mcp`). _`0.2.0`, October 20, 2026: `latest` is `0.2.0`, and `npx --yes ctrlyoke@0.2.0 --version` from an empty cache prints `0.2.0`._
+- [x] First staged release: `v0.1.2` (September 25, 2026) staged `ctrlyoke@0.1.2` from the private repo with no provenance setting. npm skipped provenance and did not fail, and the tarball test passed on the Linux runner. After the Phase 14 flip, check that provenance shows on the package page. _`ctrlyoke@0.2.0`, the first release staged from the public repo, carries an SLSA v1 provenance attestation (`npm view ctrlyoke@0.2.0 dist.attestations`)._
 
 ---
 
@@ -950,7 +956,7 @@ package`, `npx vsce publish --packagePath ctrlyoke-<version>.vsix`, then
       `git switch -c release/X.Y <tag>` recipe now lives in `CONTRIBUTING.md`'s
       "Cutting a release" section, alongside the reasoning for why standing
       release branches aren't used otherwise.
-- [ ] **Flip the repo to public** — Phase 14's pre-flip gates (EULA, secret
+- [x] **Flip the repo to public** — done October 20, 2026, and the guardrails script applied the same session (14.5). Phase 14's pre-flip gates (EULA, secret
       scan, Issues/PRs skim, MFA hardening) all cleared September 7, 2026; the
       actual toggle in 14.5 remains Nathan's call to trigger. **The same
       session as the toggle, run `node scripts/apply-github-guardrails.mjs`**
@@ -986,7 +992,7 @@ grows).
 
 ## Phase 14 — Repo Visibility Flip (private → public)
 
-`FuzzyNova/ctrlyoke` is **private today** (re-confirmed 2026-10-10 via `gh api repos/FuzzyNova/ctrlyoke`). Phase 7's public GitHub Issues, the
+**Done October 20, 2026: `FuzzyNova/ctrlyoke` is public.** (It was private through the 2026-10-10 re-check via `gh api repos/FuzzyNova/ctrlyoke`.) Phase 7's public GitHub Issues, the
 source-available EULA, and Phase 13's free Actions minutes all assume it becomes
 public, so this is a real launch step — and it has a real prerequisite, because
 **publishing exposes every commit on every branch and tag, not the working
@@ -1123,11 +1129,13 @@ public**.
 - [x] Final EULA is in `LICENSE.md` (Phase 7) — attorney sign-off landed September 7, 2026. The repo is
       forkable the instant it is public, and every fork inherits whatever license
       text is present at that moment, so this gate is what made the flip safe to schedule.
-- [ ] Actions minutes become free and unlimited on standard runners (Phase 13).
+- [x] Actions minutes become free and unlimited on standard runners (Phase 13).
 - [x] Existing Issues and PRs become world-readable — skim them for internal
       notes before flipping, not after. Verified: 0 Issues and 0 PRs.
-- [ ] Immediately after: run `node scripts/apply-github-guardrails.mjs` and
-      confirm every step prints `ok`. On the free plan these settings need a
+- [x] Immediately after: run `node scripts/apply-github-guardrails.mjs` and
+      confirm every step prints `ok`. _Done October 20, 2026: all 7 steps
+      printed `ok`. The next direct push to `main` reported the bypassed
+      `fast-checks` requirement, confirming the ruleset is active._ On the free plan these settings need a
       public repo, so the 2026-10-12 run while private applied only the
       read-only `GITHUB_TOKEN` default and **Dependabot alerts**. It applies:
   - the `main` ruleset: no force push or deletion; a PR with a passing
@@ -1143,7 +1151,7 @@ public**.
     GitHub's private advisory form.
 - [ ] After the flip, open a throwaway PR from a fork (or another account) and
       confirm `fast-checks` runs after approval and is required.
-- [ ] After the flip, upload `images/social-preview.png` as the social preview image (Settings →
+- [x] _Done by Nathan, October 20, 2026._ After the flip, upload `images/social-preview.png` as the social preview image (Settings →
       General → Social preview → Edit; 1280×640 PNG under 1 MB). GitHub hides
       this option on private repos. Repos have no avatar of their own, so this
       image is what a shared `FuzzyNova/ctrlyoke` link shows instead of the
@@ -1154,6 +1162,10 @@ public**.
 ## Pre-Release Compatibility Window — plans to consider landing before launch
 
 **Added:** October 10, 2026, from a full audit of `dev/backlog/` and `dev/active/`.
+
+> **Closed October 20, 2026 by the `0.2.0` release.** Kept as a record. From here on, breaking
+> changes to these contracts need a schema bump or format version plus a migration; see
+> "Project Status" in `CLAUDE.md`.
 
 None of these is a launch blocker the way Phase 8 is. Each is something that is cheap to change
 while nobody depends on ctrlyoke's contracts, and expensive afterwards. Doing it after launch would
@@ -1272,6 +1284,8 @@ otherwise dispatch `deploy.yml`) and run `ci.yml` plus the full suite on GitHub.
 Confirm the required checks are green before applying the rulesets. Running CI
 before the merge does not exercise the `format:check` gate added to `ci.yml`.
 
+_Steps 1–7 done October 20, 2026; see Phases 9, 10, 11 and 14.5 for the records._
+
 1. Finish pre-release items 1–3 above and any other selected prep items; merge the
    work to `main`, then complete the post-merge redeploy and CI runs described above.
 2. Flip the repository public, then run
@@ -1291,7 +1305,8 @@ before the merge does not exercise the `format:check` gate added to `ci.yml`.
 
 Carried over from the 2026-10-17 release-prep audit (`dev/implemented/FINAL_RELEASE_PREP.md`).
 
-- [ ] Release day: bump the `ctrlyoke@0.1.2` pins in `docs/cli/ci.md` to the released version.
+- [x] Release day: bump the `ctrlyoke@0.1.2` pins in `docs/cli/ci.md` to the released version.
+      Done in `ac018f861` (now `0.2.0`).
       (The MCP server and Codex app-server client now report the package version through
       `BuildConfig.CTRLYOKE_VERSION`, `175597cb8`.)
 - [ ] After the flip: optional repo settings not covered by `apply-github-guardrails.mjs`
@@ -1309,34 +1324,35 @@ Carried over from the 2026-10-17 release-prep audit (`dev/implemented/FINAL_RELE
 
 ## Summary Table
 
-| Item                                                                       | Status                | Notes                                                                                                                                                                                                                                     |
-| -------------------------------------------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Extension packaging/build readiness                                        | DONE                  | Phase 1                                                                                                                                                                                                                                   |
-| Website + docs                                                             | DONE                  | Phase 2                                                                                                                                                                                                                                   |
-| Business/domain cutover (DNS, email, GitHub, Marketplace item reservation) | DONE                  | Phase 3                                                                                                                                                                                                                                   |
-| Keygen product + Pro policy                                                | DONE                  | Phase 4.1 — renamed live this session                                                                                                                                                                                                     |
-| Keygen admin token custody confirmed                                       | DONE                  | Phase 4.2 — `fuzzynova-admin` in 1Password                                                                                                                                                                                                |
-| Keygen billing tier decision (Dev vs. paid)                                | DONE                  | Phase 4.3 — Dev 1 now, upgrade after first 2 sales                                                                                                                                                                                        |
-| Enterprise SKU (Keygen policy, LS product, webhook routing, legal docs)    | DONE                  | Phase 4.4 — Keygen policy, live LS product ($4,499/yr), webhook routing, machine-count alerting, checkout assent and renewal reminder all built and verified live by October 16, 2026; `sales@` confirmed monitored October 20, 2026      |
-| Lemon Squeezy store rebrand                                                | DONE                  | Phase 5.1 — done live this session                                                                                                                                                                                                        |
-| Lemon Squeezy product (ctrlyoke Pro, published)                            | DONE                  | Phase 5.1/5.3 — published August 26, 2026                                                                                                                                                                                                 |
-| Lemon Squeezy identity verification                                        | DONE                  | Phase 5.1 — approved September 7, 2026                                                                                                                                                                                                    |
-| Lemon Squeezy payout tax info                                              | DONE                  | Phase 5.1 — submitted August 25, 2026                                                                                                                                                                                                     |
-| Netlify webhook function (deployed + smoke-tested)                         | DONE                  | Phase 5.3 — end-to-end test purchase verified August 26, 2026 (webhook 200 OK, Keygen license created, Resend email delivered)                                                                                                            |
-| Transactional email provider for key delivery                              | DONE                  | Phase 5.2 — Resend, verified working live                                                                                                                                                                                                 |
-| Live-mode LS webhook (separate from test-mode one)                         | DONE                  | Phase 5.3 step 6 — live webhook `143280` created and smoke-tested with live Pro and Enterprise orders, October 16, 2026                                                                                                                   |
-| **`LicenseService` implementation**                                        | **DONE**              | Phase 6 — implementation, gate sites, trial, docs, and unlicensed free-path production review complete; QR scanning deferred                                                                                                              |
-| Attorney sign-off on final EULA                                            | DONE                  | Phase 7 — approved September 7, 2026                                                                                                                                                                                                      |
-| EU/EEA + UK Article 27 representatives (DataRep)                           | DONE                  | Phase 7 — appointment in effect October 20, 2026 to October 19, 2027 (FUZZ01). `PRIVACY.md` v1.6 and `TRUST_PAGE.md` live; Article 30 record v1 sent October 20 (business Drive, `Formation & Legal/DataRep/`). Renew by late August 2027 |
-| Screenshots + demo GIF                                                     | DONE                  | Phase 8 — README GIF and stills in 2026-10-12; verify in the Marketplace listing after publish                                                                                                                                            |
-| Final `vsce ls` package inspection                                         | DONE                  | Phase 8 — `0.2.0` package inspected and `npm audit --omit=dev` clean, 2026-10-16                                                                                                                                                          |
-| Marketplace publish                                                        | OPEN — gated          | Phase 9 — `v0.1.2` is published to the private listing; make it public after DataRep is effective and `v0.2.0` is released and staged on npm, then complete the post-publish checks                                                       |
-| GitHub release                                                             | AUTOMATED             | Phase 10 — `release.yml` created `v0.1.1`/`v0.1.2` Releases on the private repo; the public launch release follows the same path                                                                                                          |
-| CLI distribution (VSIX + npm)                                              | DONE (0.1.2 on npm)   | Phase 11                                                                                                                                                                                                                                  |
-| Post-launch branching + tag-driven release workflow                        | MOSTLY DONE           | Phase 13 — pre-push hook, full-suite/release workflows, docs, `format:check` CI gate, and the `VSCE_PAT` secret are in place; `full-suite.yml` is green (manual run 2026-10-13)                                                           |
-| Repo visibility flip to public                                             | READY — Nathan's call | Phase 14 — every pre-flip gate (EULA, scan, Issues/PRs skim, MFA hardening) cleared Sept 7, 2026; the actual visibility toggle (14.5) is a deliberate action, not automated here                                                          |
-| Pre-release compatibility window                                           | DONE                  | Every item is landed, including the prior-context rework (`PRIOR_CONTEXT_DETAIL_PLAN.md` Phases 0–3) and blank optional template variables (`TEMPLATE_REQUIRED_VARIABLES_PLAN.md` Phase 2), both 2026-10-13. See the section above        |
-| Vendor-account MFA hardening                                               | DONE                  | Phase 14.4 — all 7 listed accounts plus Microsoft/Azure DevOps hardened; recovery-fallback chain confirmed to terminate in the 2FA-enforced Google Workspace, not a weak point                                                            |
+| Item                                                                       | Status              | Notes                                                                                                                                                                                                                                     |
+| -------------------------------------------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Extension packaging/build readiness                                        | DONE                | Phase 1                                                                                                                                                                                                                                   |
+| Website + docs                                                             | DONE                | Phase 2                                                                                                                                                                                                                                   |
+| Business/domain cutover (DNS, email, GitHub, Marketplace item reservation) | DONE                | Phase 3                                                                                                                                                                                                                                   |
+| Keygen product + Pro policy                                                | DONE                | Phase 4.1 — renamed live this session                                                                                                                                                                                                     |
+| Keygen admin token custody confirmed                                       | DONE                | Phase 4.2 — `fuzzynova-admin` in 1Password                                                                                                                                                                                                |
+| Keygen billing tier decision (Dev vs. paid)                                | DONE                | Phase 4.3 — Dev 1 now, upgrade after first 2 sales                                                                                                                                                                                        |
+| Enterprise SKU (Keygen policy, LS product, webhook routing, legal docs)    | DONE                | Phase 4.4 — Keygen policy, live LS product ($4,499/yr), webhook routing, machine-count alerting, checkout assent and renewal reminder all built and verified live by October 16, 2026; `sales@` confirmed monitored October 20, 2026      |
+| Lemon Squeezy store rebrand                                                | DONE                | Phase 5.1 — done live this session                                                                                                                                                                                                        |
+| Lemon Squeezy product (ctrlyoke Pro, published)                            | DONE                | Phase 5.1/5.3 — published August 26, 2026                                                                                                                                                                                                 |
+| Lemon Squeezy identity verification                                        | DONE                | Phase 5.1 — approved September 7, 2026                                                                                                                                                                                                    |
+| Lemon Squeezy payout tax info                                              | DONE                | Phase 5.1 — submitted August 25, 2026                                                                                                                                                                                                     |
+| Netlify webhook function (deployed + smoke-tested)                         | DONE                | Phase 5.3 — end-to-end test purchase verified August 26, 2026 (webhook 200 OK, Keygen license created, Resend email delivered)                                                                                                            |
+| Transactional email provider for key delivery                              | DONE                | Phase 5.2 — Resend, verified working live                                                                                                                                                                                                 |
+| Live-mode LS webhook (separate from test-mode one)                         | DONE                | Phase 5.3 step 6 — live webhook `143280` created and smoke-tested with live Pro and Enterprise orders, October 16, 2026                                                                                                                   |
+| **`LicenseService` implementation**                                        | **DONE**            | Phase 6 — implementation, gate sites, trial, docs, and unlicensed free-path production review complete; QR scanning deferred                                                                                                              |
+| Attorney sign-off on final EULA                                            | DONE                | Phase 7 — approved September 7, 2026                                                                                                                                                                                                      |
+| EU/EEA + UK Article 27 representatives (DataRep)                           | DONE                | Phase 7 — appointment in effect October 20, 2026 to October 19, 2027 (FUZZ01). `PRIVACY.md` v1.6 and `TRUST_PAGE.md` live; Article 30 record v1 sent October 20 (business Drive, `Formation & Legal/DataRep/`). Renew by late August 2027 |
+| Screenshots + demo GIF                                                     | DONE                | Phase 8 — README GIF and stills in 2026-10-12; verify in the Marketplace listing after publish                                                                                                                                            |
+| Final `vsce ls` package inspection                                         | DONE                | Phase 8 — `0.2.0` package inspected and `npm audit --omit=dev` clean, 2026-10-16                                                                                                                                                          |
+| Marketplace publish                                                        | DONE                | Phase 9 — `0.2.0` public on the Marketplace, October 20, 2026; clean-profile install check still open                                                                                                                                     |
+| GitHub release                                                             | DONE                | Phase 10 — `v0.2.0` Release with the VSIX, created by `release.yml` run `39500767419`, October 20, 2026                                                                                                                                   |
+| CLI distribution (VSIX + npm)                                              | DONE (0.2.0 on npm) | Phase 11 — `latest` with provenance                                                                                                                                                                                                       |
+| Post-launch branching + tag-driven release workflow                        | MOSTLY DONE         | Phase 13 — pre-push hook, full-suite/release workflows, docs, `format:check` CI gate, and the `VSCE_PAT` secret are in place; `full-suite.yml` is green (manual run 2026-10-13)                                                           |
+| Repo visibility flip to public                                             | DONE                | Phase 14 — public October 20, 2026, guardrails applied the same session; the fork-PR check is still open                                                                                                                                  |
+| Site launch (`LAUNCHED = true`)                                            | DONE                | Phase 9 — `18c30c73b`, October 20, 2026; `noindex` gone, live checkout links. A live Pro checkout through the site is still open                                                                                                          |
+| Pre-release compatibility window                                           | DONE                | Every item is landed, including the prior-context rework (`PRIOR_CONTEXT_DETAIL_PLAN.md` Phases 0–3) and blank optional template variables (`TEMPLATE_REQUIRED_VARIABLES_PLAN.md` Phase 2), both 2026-10-13. See the section above        |
+| Vendor-account MFA hardening                                               | DONE                | Phase 14.4 — all 7 listed accounts plus Microsoft/Azure DevOps hardened; recovery-fallback chain confirmed to terminate in the 2FA-enforced Google Workspace, not a weak point                                                            |
 
 ---
 

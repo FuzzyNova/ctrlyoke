@@ -2,14 +2,16 @@
 
 **Last updated:** October 10, 2026
 
-**Current version:** 0.1.2 in `package.json`. Tags `v0.1.1` (2026-09-17) and
-`v0.1.2` (2026-09-25) ran `release.yml`: the Marketplace listing exists but is
-still private/unpublished, and `ctrlyoke@0.1.2` is live on npm. There has been no
-public launch yet.
+**Current version:** 0.2.0, the first public release (October 20, 2026): public
+Marketplace listing, `ctrlyoke@0.2.0` on npm, public GitHub repo, and ctrlyoke.dev
+launched. Earlier tags `v0.1.1` and `v0.1.2` were private-listing releases.
 
-**Status:** Pre-release — no backward-compatibility constraints. That budget is
-finite and it is spent at publication: see "P0 — Pre-release one-way doors" for
-the work that must land while it still exists.
+**Status:** Released — `0.2.0` shipped publicly on October 20, 2026 (Marketplace,
+npm, public repo). The pre-release compatibility budget is spent: breaking
+changes to workflow files, settings, persisted run state or the CLI/MCP contracts
+now need a schema bump or format version plus a migration (see "Project Status"
+in `CLAUDE.md`). The "P0 — Pre-release one-way doors" section below is kept as a
+record.
 
 > **2026-10-10 audit:** All three pre-release one-way doors are closed. User-scoped run
 > history, secrets/redaction, and the full `/skill:` syntax shipped, and their plans are in

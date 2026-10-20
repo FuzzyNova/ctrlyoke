@@ -939,9 +939,9 @@ Priority order:
 
 ## 12. Versioning & Maintenance Considerations
 
-### Pre-Release Phase (Current)
+### Pre-Release Phase (ended October 20, 2026 with the `0.2.0` release)
 
-During pre-release, a single `latest` version of docs is appropriate. No versioning needed. All docs live in `main` branch.
+During pre-release, a single `latest` version of docs was appropriate, and it still is until the triggers below apply. No versioning needed. All docs live in `main` branch.
 
 ### When Versioning Becomes Necessary
 
