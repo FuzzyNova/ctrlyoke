@@ -127,6 +127,87 @@ class FakeWindowsCredentialVault {
   }
 }
 
+/** `security -i` cuts its command line here, splitting longer input. */
+const SECURITY_INTERACTIVE_LINE_LIMIT = 4096;
+
+/**
+ * Stands in for macOS `security`, reproducing the behaviour the backend must
+ * work around: `-i` truncates long lines, and `-g` prints a value as hex
+ * unless it is plain printable ASCII.
+ */
+class FakeMacKeychain {
+  readonly items = new Map<string, string>();
+  readonly invocations: { args: readonly string[]; input?: string }[] = [];
+
+  run = async (
+    command: string,
+    args: readonly string[],
+    input?: string
+  ): Promise<FakeCommandResult> => {
+    assert.strictEqual(command, "security");
+    this.invocations.push({ args, input });
+    const [subcommand] = args;
+    const account = args[args.indexOf("-a") + 1];
+
+    if (subcommand === "-i") {
+      const line = (input ?? "").replace(/\n$/, "");
+      if (line.length >= SECURITY_INTERACTIVE_LINE_LIMIT) {
+        return result(1, "", 'security: unknown command "…"');
+      }
+      const match =
+        /^add-generic-password -U -s ctrlyoke -a "((?:[^"\\]|\\.)*)" (?:-X ([0-9a-f]+)|-w "")$/.exec(
+          line
+        );
+      if (!match) return result(2, "", "add-generic-password: returned 2");
+      const key = match[1].replace(/\\(.)/g, "$1");
+      this.items.set(key, Buffer.from(match[2] ?? "", "hex").toString("utf8"));
+      return result(0);
+    }
+
+    if (subcommand === "find-generic-password") {
+      assert.ok(args.includes("-g"), "reads must use -g, not -w");
+      const value = this.items.get(account);
+      if (value === undefined) {
+        return result(
+          44,
+          "",
+          "security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain."
+        );
+      }
+      const password =
+        value === ""
+          ? "password: "
+          : /^[\x20-\x7e]*$/.test(value) && !/["\\]/.test(value)
+            ? `password: "${value}"`
+            : `password: 0x${Buffer.from(value, "utf8").toString("hex").toUpperCase()}  "…"`;
+      return result(0, 'keychain: "login.keychain-db"\n', `${password}\n`);
+    }
+
+    if (subcommand === "delete-generic-password") {
+      return this.items.delete(account)
+        ? result(0)
+        : result(44, "", "The specified item could not be found");
+    }
+
+    throw new Error(`Unexpected security command: ${args.join(" ")}`);
+  };
+}
+
+function createMacStore(): {
+  store: OsCredentialStore;
+  keychain: FakeMacKeychain;
+} {
+  const keychain = new FakeMacKeychain();
+  return {
+    store: new OsCredentialStore({
+      platform: "darwin",
+      runCommand: keychain.run,
+      indexLockTarget: tempIndexLockTarget(),
+    }),
+    keychain,
+  };
+}
+
 function decodeScript(args: readonly string[]): {
   operation: string;
   target: string;
@@ -647,6 +728,57 @@ suite("OsCredentialStore", () => {
     await assert.rejects(
       store.get("license"),
       (error: unknown) => error instanceof SecretStoreUnavailableError
+    );
+  });
+
+  test("stores a multi-KB macOS secret without putting it on argv", async () => {
+    const { store, keychain } = createMacStore();
+    const license = `-----BEGIN LICENSE FILE-----\n${textOfLength(6000)}\n\u{1F680} é\n-----END LICENSE FILE-----\n`;
+
+    await store.store("ctrlyoke.pro.license-key", license);
+
+    assert.strictEqual(await store.get("ctrlyoke.pro.license-key"), license);
+    assert.ok(keychain.items.has("ctrlyoke.pro.license-key#count"));
+    const hexLicense = Buffer.from(license, "utf8").toString("hex");
+    for (const { args } of keychain.invocations) {
+      assert.ok(
+        !args.some((arg) => arg.includes(hexLicense.slice(0, 64))),
+        `secret leaked onto argv: ${args.join(" ")}`
+      );
+      assert.ok(!args.includes("-w"), "a bare -w reads the 128-byte prompt");
+    }
+  });
+
+  test("round-trips macOS values that -w would print ambiguously", async () => {
+    const { store } = createMacStore();
+    const values = {
+      HEXLIKE: "deadbeef",
+      QUOTED: 'has "quote" and \\ back',
+      EMPTY: "",
+    };
+
+    for (const [key, value] of Object.entries(values)) {
+      await store.store(key, value);
+    }
+
+    for (const [key, value] of Object.entries(values)) {
+      assert.strictEqual(await store.get(key), value);
+    }
+    assert.deepStrictEqual(await store.keys(), Object.keys(values).sort());
+  });
+
+  test("removes every macOS chunk when a secret is deleted", async () => {
+    const { store, keychain } = createMacStore();
+
+    await store.store("ctrlyoke.pro.license-key", textOfLength(2000));
+    await store.delete("ctrlyoke.pro.license-key");
+
+    assert.strictEqual(await store.get("ctrlyoke.pro.license-key"), undefined);
+    assert.deepStrictEqual(
+      [...keychain.items.keys()].filter((key) =>
+        key.startsWith("ctrlyoke.pro.license-key")
+      ),
+      []
     );
   });
 });

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Pro license activation on macOS.** Activating a license no longer fails with "could not save
+  it to this machine's credential store". Secrets of any length (including license files) are now
+  saved to the macOS keychain intact; previously, values were truncated or saved empty. If an
+  earlier activation on macOS seemed to succeed, activate again to save the license properly.
+
 ## [0.2.0] - 2026-10-20
 
 This release renames many settings and workflow fields. Old keys are not migrated: they are

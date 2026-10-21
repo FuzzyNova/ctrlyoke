@@ -18,21 +18,31 @@ const WINDOWS_TARGET_PREFIX = "ctrlyoke.";
  * (5 * 512 = 2560 bytes) with a bare `ERROR_INVALID_PARAMETER`. The blob is
  * written as UTF-16, so the real ceiling is exactly 1280 UTF-16 code units per
  * credential — far below a multi-KB value such as a signed Keygen license file
- * or a PEM private key. macOS keychain items and `secret-tool` have no
- * comparable limit, so `WindowsCredentialBackend` is the only backend that
- * splits a value across several credentials to honour the `SecretStore`
- * contract.
+ * or a PEM private key, so `ChunkedCredentialBackend` splits a value across
+ * several credentials to honour the `SecretStore` contract.
  */
 const WINDOWS_MAX_BLOB_BYTES = 2560;
 const WINDOWS_CHUNK_LENGTH = WINDOWS_MAX_BLOB_BYTES / 2;
+/**
+ * `security` has no safe way to take a secret as an argument: `-w <value>`
+ * and `-X <hex>` put it on argv, which `ps` shows to every user on macOS, and
+ * a bare trailing `-w` reads it from the password prompt, which keeps only the
+ * first 128 bytes, wants it typed twice, and stores an empty password (exit 0)
+ * when stdin holds it once. So the command goes to `security -i` on stdin with
+ * the value as `-X <hex>`. That interactive reader cuts a line at 4 KB, so a
+ * keychain value is chunked too: 600 UTF-16 code units are at most 1800 UTF-8
+ * bytes, 3600 hex digits, which leaves room for the command and the key.
+ */
+const MACOS_CHUNK_LENGTH = 600;
+const MACOS_MAX_COMMAND_LINE_LENGTH = 4000;
 /**
  * Continuation chunks live at `<target>#<index>` and the chunk count at
  * `<target>#count`. `#` cannot appear in a ctrlyoke secret key (see
  * `SecretKey.ts`), so a chunk target can never collide with a real key's own
  * target, and `count` is not a number so it cannot collide with a chunk index.
  */
-const WINDOWS_CHUNK_SEPARATOR = "#";
-const WINDOWS_CHUNK_COUNT_SUFFIX = `${WINDOWS_CHUNK_SEPARATOR}count`;
+const CHUNK_SEPARATOR = "#";
+const CHUNK_COUNT_SUFFIX = `${CHUNK_SEPARATOR}count`;
 
 /** Native command failures that mean the credential backend cannot be used. */
 const BACKEND_UNAVAILABLE_PATTERNS: Partial<
@@ -382,7 +392,9 @@ export class OsCredentialStore implements SecretStore {
   private createBackend(): CredentialBackend {
     switch (this.platform) {
       case "darwin":
-        return new MacOsCredentialBackend(this.runCommand);
+        return new ChunkedCredentialBackend(
+          new MacOsCredentialItems(this.runCommand)
+        );
       case "linux":
         return new LinuxCredentialBackend(this.runCommand);
       case "win32":
@@ -468,47 +480,50 @@ class UnavailableCredentialBackend implements CredentialBackend {
   }
 }
 
-class MacOsCredentialBackend implements CredentialBackend {
+/** macOS keychain items, written through `security -i` (see `MACOS_CHUNK_LENGTH`). */
+class MacOsCredentialItems implements CredentialItems {
+  readonly chunkLength = MACOS_CHUNK_LENGTH;
+  readonly label = "Keychain";
+
   constructor(private readonly run: CommandRunner) {}
 
-  async get(key: string): Promise<string | undefined> {
+  async read(key: string): Promise<string | undefined> {
     const result = await this.run("security", [
       "find-generic-password",
       "-s",
       CREDENTIAL_SERVICE,
       "-a",
       key,
-      "-w",
+      "-g",
     ]);
     throwIfBackendUnavailable("darwin", result);
     return result.exitCode === 0
-      ? withoutCommandNewline(result.stdout)
+      ? parseKeychainPassword(result.stderr)
       : isMissingCredential(result)
         ? undefined
         : throwCommandFailure("security", result);
   }
 
-  async store(key: string, value: string): Promise<void> {
+  async write(key: string, value: string): Promise<void> {
+    // `-X` rejects an empty hex string, and `-w ""` on stdin leaks nothing.
+    const password =
+      value === ""
+        ? '-w ""'
+        : `-X ${Buffer.from(value, "utf8").toString("hex")}`;
+    const command = `add-generic-password -U -s ${CREDENTIAL_SERVICE} -a ${quoteSecurityArgument(key)} ${password}`;
+    if (command.length > MACOS_MAX_COMMAND_LINE_LENGTH) {
+      throw new Error(
+        `Keychain item "${key}" does not fit in one security command line.`
+      );
+    }
     await requireSuccessfulCommand(
-      this.run(
-        "security",
-        [
-          "add-generic-password",
-          "-U",
-          "-s",
-          CREDENTIAL_SERVICE,
-          "-a",
-          key,
-          "-w",
-        ],
-        value
-      ),
+      this.run("security", ["-i"], `${command}\n`),
       "security",
       "darwin"
     );
   }
 
-  async delete(key: string): Promise<void> {
+  async remove(key: string): Promise<void> {
     const result = await this.run("security", [
       "delete-generic-password",
       "-s",
@@ -576,20 +591,32 @@ class LinuxCredentialBackend implements CredentialBackend {
   }
 }
 
+/** Single native credential items that hold at most `chunkLength` code units. */
+interface CredentialItems {
+  readonly chunkLength: number;
+  /** Names the native store in error messages. */
+  readonly label: string;
+  read(key: string): Promise<string | undefined>;
+  write(key: string, value: string): Promise<void>;
+  remove(key: string): Promise<void>;
+}
+
 /**
- * Windows Credential Manager backend. Values longer than one credential blob
- * are split across `<key>`, `<key>#1`, `<key>#2`, … with the chunk count in
- * `<key>#count`; a value that fits stays a single plain credential, so
- * credentials written before chunking existed still read back unchanged.
+ * Backend for a native store with a per-item size limit. Values longer than
+ * one item are split across `<key>`, `<key>#1`, `<key>#2`, … with the chunk
+ * count in `<key>#count`; a value that fits stays a single plain item, so
+ * items written before chunking existed still read back unchanged.
  */
-class WindowsCredentialBackend implements CredentialBackend {
-  constructor(private readonly run: CommandRunner) {}
+class ChunkedCredentialBackend<
+  TItems extends CredentialItems = CredentialItems,
+> implements CredentialBackend {
+  constructor(protected readonly items: TItems) {}
 
   async get(key: string): Promise<string | undefined> {
-    const first = await this.readCredential(key);
+    const first = await this.items.read(key);
     // Only a value that filled its first chunk can have continuations, so the
     // common case costs no extra subprocess for the count lookup.
-    if (first === undefined || !isFullChunk(first)) {
+    if (first === undefined || !isFullChunk(first, this.items.chunkLength)) {
       return first;
     }
 
@@ -601,7 +628,7 @@ class WindowsCredentialBackend implements CredentialBackend {
 
     const continuations = await Promise.all(
       Array.from({ length: count - 1 }, (_unused, index) =>
-        this.readCredential(chunkKey(key, index + 1))
+        this.items.read(chunkKey(key, index + 1))
       )
     );
     const missingIndex = continuations.findIndex(
@@ -609,7 +636,7 @@ class WindowsCredentialBackend implements CredentialBackend {
     );
     if (missingIndex >= 0) {
       throw new TornCredentialReadError(
-        `CredMan credential "${key}" claims ${count} chunks but chunk ` +
+        `${this.items.label} credential "${key}" claims ${count} chunks but chunk ` +
           `${missingIndex + 1} is missing. Re-store the secret to repair it.`
       );
     }
@@ -619,18 +646,94 @@ class WindowsCredentialBackend implements CredentialBackend {
       createIntegrityTag(value) !== chunkMetadata.integrityTag
     ) {
       throw new TornCredentialReadError(
-        `CredMan credential "${key}" failed its integrity check. ` +
+        `${this.items.label} credential "${key}" failed its integrity check. ` +
           "Re-store the secret to repair it."
       );
     }
     return value;
   }
 
+  async store(key: string, value: string): Promise<void> {
+    const chunks = splitIntoCredentialChunks(value, this.items.chunkLength);
+    // Read the previous layout first so shrinking a value cannot leave
+    // orphaned chunks behind in the user's credential vault.
+    const previousCount = await this.readChunkCount(key);
+
+    // Write the chunk count before the chunks it describes. A multi-credential
+    // write cannot be atomic, so a failure partway through must leave a state
+    // that `get` rejects loudly rather than one it reads as a complete but
+    // truncated value — an unnoticed truncated license file or private key is
+    // far worse than a failed store the caller can retry.
+    if (chunks.length > 1) {
+      await this.items.write(
+        `${key}${CHUNK_COUNT_SUFFIX}`,
+        `${chunks.length}:${createIntegrityTag(value)}`
+      );
+      for (const [index, chunk] of chunks.entries()) {
+        await this.items.write(chunkKey(key, index), chunk);
+      }
+    } else {
+      // Keep a chunked integrity record while replacing chunk 0. Updating its
+      // tag first makes a failed write detectable; the old chunks cannot
+      // accidentally pass as the requested replacement.
+      if (previousCount > 1) {
+        await this.items.write(
+          `${key}${CHUNK_COUNT_SUFFIX}`,
+          `${previousCount}:${createIntegrityTag(value)}`
+        );
+      }
+      await this.items.write(chunkKey(key, 0), chunks[0]);
+      if (previousCount > 1) {
+        await this.items.remove(`${key}${CHUNK_COUNT_SUFFIX}`);
+      }
+    }
+
+    for (let index = chunks.length; index < previousCount; index++) {
+      await this.items.remove(chunkKey(key, index));
+    }
+  }
+
+  async delete(key: string): Promise<void> {
+    const count = await this.readChunkCount(key);
+    for (let index = 0; index < count; index++) {
+      await this.items.remove(chunkKey(key, index));
+    }
+    if (count > 1) {
+      await this.items.remove(`${key}${CHUNK_COUNT_SUFFIX}`);
+    }
+  }
+
+  /** The chunk count, or 1 for a plain single-credential value. */
+  private async readChunkCount(key: string): Promise<number> {
+    return (await this.readChunkMetadata(key)).count;
+  }
+
+  private async readChunkMetadata(
+    key: string
+  ): Promise<{ count: number; integrityTag?: string }> {
+    const raw = await this.items.read(`${key}${CHUNK_COUNT_SUFFIX}`);
+    if (raw === undefined) {
+      return { count: 1 };
+    }
+    const [countText, integrityTag] = raw.trim().split(":", 2);
+    const parsed = Number.parseInt(countText, 10);
+    return Number.isInteger(parsed) && parsed > 1
+      ? { count: parsed, ...(integrityTag ? { integrityTag } : {}) }
+      : { count: 1 };
+  }
+}
+
+/** Windows Credential Manager, which also batches reads in one PowerShell run. */
+class WindowsCredentialBackend extends ChunkedCredentialBackend<WindowsCredentialItems> {
+  constructor(run: CommandRunner) {
+    super(new WindowsCredentialItems(run));
+  }
+
   async getMany(
     keys: readonly string[]
   ): Promise<Map<string, string | undefined>> {
     if (keys.length === 0) return new Map();
-    const result = await this.execute("batch", "", JSON.stringify(keys));
+    const result = await this.items.execute("batch", "", JSON.stringify(keys));
     throwIfBackendUnavailable("win32", result);
     if (result.exitCode !== 0) return throwCommandFailure("CredMan", result);
     const raw = JSON.parse(
@@ -648,79 +751,15 @@ class WindowsCredentialBackend implements CredentialBackend {
       })
     );
   }
+}
 
-  async store(key: string, value: string): Promise<void> {
-    const chunks = splitIntoCredentialChunks(value);
-    // Read the previous layout first so shrinking a value cannot leave
-    // orphaned chunks behind in the user's credential vault.
-    const previousCount = await this.readChunkCount(key);
+class WindowsCredentialItems implements CredentialItems {
+  readonly chunkLength = WINDOWS_CHUNK_LENGTH;
+  readonly label = "CredMan";
 
-    // Write the chunk count before the chunks it describes. A multi-credential
-    // write cannot be atomic, so a failure partway through must leave a state
-    // that `get` rejects loudly rather than one it reads as a complete but
-    // truncated value — an unnoticed truncated license file or private key is
-    // far worse than a failed store the caller can retry.
-    if (chunks.length > 1) {
-      await this.writeCredential(
-        `${key}${WINDOWS_CHUNK_COUNT_SUFFIX}`,
-        `${chunks.length}:${createIntegrityTag(value)}`
-      );
-      for (const [index, chunk] of chunks.entries()) {
-        await this.writeCredential(chunkKey(key, index), chunk);
-      }
-    } else {
-      // Keep a chunked integrity record while replacing chunk 0. Updating its
-      // tag first makes a failed write detectable; the old chunks cannot
-      // accidentally pass as the requested replacement.
-      if (previousCount > 1) {
-        await this.writeCredential(
-          `${key}${WINDOWS_CHUNK_COUNT_SUFFIX}`,
-          `${previousCount}:${createIntegrityTag(value)}`
-        );
-      }
-      await this.writeCredential(chunkKey(key, 0), chunks[0]);
-      if (previousCount > 1) {
-        await this.deleteCredential(`${key}${WINDOWS_CHUNK_COUNT_SUFFIX}`);
-      }
-    }
+  constructor(private readonly run: CommandRunner) {}
 
-    for (let index = chunks.length; index < previousCount; index++) {
-      await this.deleteCredential(chunkKey(key, index));
-    }
-  }
-
-  async delete(key: string): Promise<void> {
-    const count = await this.readChunkCount(key);
-    for (let index = 0; index < count; index++) {
-      await this.deleteCredential(chunkKey(key, index));
-    }
-    if (count > 1) {
-      await this.deleteCredential(`${key}${WINDOWS_CHUNK_COUNT_SUFFIX}`);
-    }
-  }
-
-  /** The chunk count, or 1 for a plain single-credential value. */
-  private async readChunkCount(key: string): Promise<number> {
-    return (await this.readChunkMetadata(key)).count;
-  }
-
-  private async readChunkMetadata(
-    key: string
-  ): Promise<{ count: number; integrityTag?: string }> {
-    const raw = await this.readCredential(
-      `${key}${WINDOWS_CHUNK_COUNT_SUFFIX}`
-    );
-    if (raw === undefined) {
-      return { count: 1 };
-    }
-    const [countText, integrityTag] = raw.trim().split(":", 2);
-    const parsed = Number.parseInt(countText, 10);
-    return Number.isInteger(parsed) && parsed > 1
-      ? { count: parsed, ...(integrityTag ? { integrityTag } : {}) }
-      : { count: 1 };
-  }
-
-  private async readCredential(key: string): Promise<string | undefined> {
+  async read(key: string): Promise<string | undefined> {
     const result = await this.execute("get", key);
     throwIfBackendUnavailable("win32", result);
     if (result.exitCode === 0) {
@@ -732,7 +771,7 @@ class WindowsCredentialBackend implements CredentialBackend {
     return throwCommandFailure("CredMan", result);
   }
 
-  private async writeCredential(key: string, value: string): Promise<void> {
+  async write(key: string, value: string): Promise<void> {
     await requireSuccessfulCommand(
       this.execute("store", key, value),
       "CredMan",
@@ -740,7 +779,7 @@ class WindowsCredentialBackend implements CredentialBackend {
     );
   }
 
-  private async deleteCredential(key: string): Promise<void> {
+  async remove(key: string): Promise<void> {
     const result = await this.execute("delete", key);
     throwIfBackendUnavailable("win32", result);
     if (result.exitCode !== 0 && !isMissingCredential(result)) {
@@ -748,7 +787,7 @@ class WindowsCredentialBackend implements CredentialBackend {
     }
   }
 
-  private execute(
+  execute(
     operation: "get" | "store" | "delete" | "batch",
     key: string,
     value?: string
@@ -791,19 +830,23 @@ function createIntegrityTag(value: string): string {
 
 /** Chunk 0 keeps the plain key so unchunked values stay readable as-is. */
 function chunkKey(key: string, index: number): string {
-  return index === 0 ? key : `${key}${WINDOWS_CHUNK_SEPARATOR}${index}`;
+  return index === 0 ? key : `${key}${CHUNK_SEPARATOR}${index}`;
 }
 
-function splitIntoCredentialChunks(value: string): string[] {
-  if (value.length <= WINDOWS_CHUNK_LENGTH) {
+function splitIntoCredentialChunks(
+  value: string,
+  chunkLength: number
+): string[] {
+  if (value.length <= chunkLength) {
     return [value];
   }
   const chunks: string[] = [];
   let start = 0;
   while (start < value.length) {
-    let end = Math.min(start + WINDOWS_CHUNK_LENGTH, value.length);
-    // Never split a surrogate pair: .NET's UTF-16 encoder replaces a lone
-    // surrogate with U+FFFD, which would silently corrupt the joined value.
+    let end = Math.min(start + chunkLength, value.length);
+    // Never split a surrogate pair: both .NET's UTF-16 encoder and Node's
+    // UTF-8 encoder replace a lone surrogate with U+FFFD, which would silently
+    // corrupt the joined value.
     if (end < value.length && isHighSurrogate(value.charCodeAt(end - 1))) {
       end -= 1;
     }
@@ -818,8 +861,33 @@ function splitIntoCredentialChunks(value: string): string[] {
  * surrogate guard above can shorten a full chunk by one code unit, so both
  * lengths count as full.
  */
-function isFullChunk(chunk: string): boolean {
-  return chunk.length >= WINDOWS_CHUNK_LENGTH - 1;
+function isFullChunk(chunk: string, chunkLength: number): boolean {
+  return chunk.length >= chunkLength - 1;
+}
+
+/**
+ * `find-generic-password -w` prints a value holding any non-printable byte as
+ * bare hex, indistinguishable from a printable value that happens to be hex.
+ * `-g` tells them apart on stderr: `password: 0x<HEX>  "<escaped>"`,
+ * `password: "<value>"`, or a bare `password: ` for an empty value.
+ */
+function parseKeychainPassword(output: string): string {
+  const line = output
+    .split(/\r?\n/)
+    .find((candidate) => candidate.startsWith("password:"));
+  if (line === undefined) {
+    throw new Error("security did not report the keychain item's password.");
+  }
+  const hex = /^password: 0x([0-9A-F]*)/i.exec(line);
+  if (hex) {
+    return Buffer.from(hex[1], "hex").toString("utf8");
+  }
+  return /^password: "(.*)"$/.exec(line)?.[1] ?? "";
+}
+
+/** Quotes one argument for the `security -i` command-line reader. */
+function quoteSecurityArgument(value: string): string {
+  return `"${value.replace(/[\\"]/g, "\\$&")}"`;
 }
 
 function isHighSurrogate(codeUnit: number): boolean {
