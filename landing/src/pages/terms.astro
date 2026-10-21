@@ -1,12 +1,28 @@
 ---
 import LegalPage from "../layouts/LegalPage.astro";
+import { readLegalDocumentVersion } from "../../../src/license/LemonSqueezyConstants";
 // Canonical source: repo-root LICENSE.md (single source of truth — do not duplicate).
 import { Content } from "../../../LICENSE.md";
+import licenseText from "../../../LICENSE.md?raw";
+import {
+  Content as Summary,
+  frontmatter as summaryFrontmatter,
+} from "../legal/license-summary.md";
+
+const licenseVersion = readLegalDocumentVersion(licenseText, "LICENSE.md");
+if (summaryFrontmatter.licenseVersion !== licenseVersion) {
+  throw new Error(
+    `landing/src/legal/license-summary.md was written for LICENSE.md version ${summaryFrontmatter.licenseVersion}, but LICENSE.md is version ${licenseVersion}. Review the summary against the new license, then update its licenseVersion.`
+  );
+}
 ---
 
 <LegalPage
   title="License — ctrlyoke"
   description="The ctrlyoke commercial license — source-available software under a custom commercial EULA."
 >
+  <div class="mb-12 rounded-xl border border-sky-400/20 bg-sky-400/5 px-6 py-1 prose-h2:mt-6">
+    <Summary />
+  </div>
   <Content />
 </LegalPage>

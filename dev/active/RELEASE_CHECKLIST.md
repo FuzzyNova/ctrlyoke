@@ -2,7 +2,7 @@
 
 **Created:** June 19, 2026 (as `FlightPath Release Checklist`)
 **Rewritten:** August 25, 2026 — consolidated into the single canonical, ctrlyoke-branded release checklist.
-**Status: RELEASED October 20, 2026.** The repo is public with its guardrails applied, `v0.2.0` is on the public Marketplace listing, `ctrlyoke@0.2.0` is `latest` on npm with provenance, the GitHub Release carries the VSIX, and ctrlyoke.dev is launched (`LAUNCHED = true`, `18c30c73b`). Still open: the trademark specimens, the `/terms` plain-language summary, and the post-flip repo-settings follow-ups. The Lemon Squeezy storefront is already on and directly purchasable; the site's `LAUNCHED` flag separately controls purchases initiated on ctrlyoke.dev. Business-side work (LLC vendor re-association to Fuzzy Nova LLC + the Mercury account/card, trademark filing) is tracked outside this repo in the Fuzzy Nova LLC business Drive (`Formation & Legal/LLC_FORMATION_GUIDE.md`, `Trademark & IP/TRADEMARK_FILING_GUIDE.md`); only its release-gating touchpoints are mirrored here.
+**Status: RELEASED October 20, 2026.** The repo is public with its guardrails applied, `v0.2.0` is on the public Marketplace listing, `ctrlyoke@0.2.0` is `latest` on npm with provenance, the GitHub Release carries the VSIX, and ctrlyoke.dev is launched (`LAUNCHED = true`, `18c30c73b`). Still open: the trademark specimens. The Lemon Squeezy storefront is already on and directly purchasable; the site's `LAUNCHED` flag separately controls purchases initiated on ctrlyoke.dev. Business-side work (LLC vendor re-association to Fuzzy Nova LLC + the Mercury account/card, trademark filing) is tracked outside this repo in the Fuzzy Nova LLC business Drive (`Formation & Legal/LLC_FORMATION_GUIDE.md`, `Trademark & IP/TRADEMARK_FILING_GUIDE.md`); only its release-gating touchpoints are mirrored here.
 **Purpose:** the one place to look for "what's left before `ctrlyoke` ships" — product release, vendor/licensing setup with exact click-by-click steps, legal, and launch verification.
 
 > **This document supersedes [`RELEASE_PLAN.md`](../implemented/RELEASE_PLAN.md) and [`CTRLYOKE_REBRAND_CUTOVER.md`](../implemented/CTRLYOKE_REBRAND_CUTOVER.md).** Both are kept as historical record (their content described real work, most of it now done) but are no longer the place to look for open items — that's here. [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md) remains the engineering design doc for `LicenseService`; this checklist is the execution tracker. [`RELEASE_GUIDE.md`](../implemented/RELEASE_GUIDE.md) is left untouched as a FlightPath-era generic how-to-use-`vsce` reference — its mechanics (package/login/publish commands) are still accurate, just still branded FlightPath; Phase 9 below has the ctrlyoke-branded equivalent commands.
@@ -716,7 +716,7 @@ You can't create the LS webhook without a target URL, and the Netlify function's
      processing changes materially.
 
 - [x] Publish the refund policy decided in [`REFUND_POLICY.md`](../implemented/REFUND_POLICY.md): Pro gets a 30-day money-back guarantee, and Enterprise stays non-refundable under the existing terms. Add the pricing FAQ, docs, and LS product copy, fix the partial-refund webhook bug, and add the live-mode webhook events. Lemon Squeezy has no auto-refund setting, so each refund is approved by hand. _Repo-side progress (2026-10-10):_ the pricing FAQ and Pro card carry the 30-day guarantee, `docs/pro/index.md` mentions refunds, and the partial-refund webhook bug is fixed (`87ba0728a`; `dev/bugs/implemented/partial-refund-suspends-license.md`). The LS product copy and the live-mode webhook events cannot be checked from the repo. _October 16, 2026:_ the live webhook `143280` subscribes to `subscription_payment_refunded`, and a live Pro refund was verified end to end (5.3 step 6). _October 16, 2026:_ the live Pro product's description, confirmation message, and receipt note now carry "30-day money-back guarantee: email billing@ctrlyoke.dev". The same edit replaced the old "ctrlyoke: Activate Pro License" instructions on both live products, the license-key email, the Enterprise checkout and offline pages, and `docs/pro/index.md` with **Settings → License**.
-- [ ] Publish `ctrlyoke.dev/terms` plain-language summary (the legal page itself is already live rendering `LICENSE.md` directly).
+- [x] Publish `ctrlyoke.dev/terms` plain-language summary (the legal page itself is already live rendering `LICENSE.md` directly). _Done October 21, 2026:_ `landing/src/legal/license-summary.md` renders in a box above the full license and says the license controls. Its `licenseVersion` front matter names the `LICENSE.md` version it was checked against, and `terms.astro` fails the build when they differ, so a license change forces a review of the summary. It was written without attorney review; have the Phase 7 attorney look at it with the next review packet.
 - [x] Keep public GitHub Issues for community reports; `support@ctrlyoke.dev` stays private for Pro/Enterprise support (both already exist — verified as the intended steady state, not a pending action).
 
 ---
@@ -1317,11 +1317,16 @@ Carried over from the 2026-10-17 release-prep audit (`dev/implemented/FINAL_RELE
       Done in `ac018f861` (now `0.2.0`).
       (The MCP server and Codex app-server client now report the package version through
       `BuildConfig.CTRLYOKE_VERSION`, `175597cb8`.)
-- [ ] After the flip: optional repo settings not covered by `apply-github-guardrails.mjs`
+- [x] After the flip: optional repo settings not covered by `apply-github-guardrails.mjs`
       (squash-only merges, auto-delete head branches, disable Projects, Dependabot security
-      updates); consider versioning them in the script.
-- [ ] After the flip: update `full-suite.yml`'s "private-repo 2-vCPU runner" comment. Public
-      repos get 4 vCPUs, so also reconsider the raised 60 s UI timeout.
+      updates); consider versioning them in the script. _Done October 21, 2026:_ all four
+      are now steps in the script and were applied with it. The squash commit takes the PR
+      title and body, and the `main` ruleset also allows only squash merges.
+- [x] After the flip: update `full-suite.yml`'s "private-repo 2-vCPU runner" comment. Public
+      repos get 4 vCPUs, so also reconsider the raised 60 s UI timeout. _Done October 21,
+      2026:_ the `full-suite.yml` and `ci.yml` comments describe the 4-vCPU runners (PR #1's
+      CI run took about 5 minutes). The 60 s Vitest timeout stays: it is a hang budget, not a
+      speed assertion, and one public-runner run is not enough evidence to tighten it.
 - [x] Pin `softprops/action-gh-release` to a SHA, and pin the `npm@^11` upgrade to an exact
       version. Both run in jobs that hold publish secrets. Done October 20, 2026 (`f42719002`):
       `efb35369` (`v3.0.3`) and `npm@11.21.0`; `netlify-cli` is pinned to `27.13.0` in
