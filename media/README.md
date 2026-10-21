@@ -24,6 +24,7 @@ npm run media -- prompt-editor          # the prompt editor's references clip (#
 npm run media -- visual-or-yaml         # "Build visually or edit as YAML", side by side (#14)
 npm run media -- history                # workflow list, history search, a reopened run (#15)
 npm run media -- workspace-viewer       # the workspace viewer's editor and Source Control (#10)
+npm run media -- license                # Settings → License, ready to activate (docs/pro)
 npm run media -- snapshot-history       # refresh fixtures/history/ from your demo-app history
 ```
 
@@ -40,6 +41,8 @@ because stills render headless at 2×. `quantize` shots (media that ships in the
 2. `startHost` starts the `media` mode of `scripts/dev-host.mjs` on that clone. The host gets a
    fresh VS Code profile and a fresh user home (`USERPROFILE`/`HOME` = `.work/home`, seeded from
    `fixtures/home/`), so your own `~/.ctrlyoke` settings, MCP servers and skills never show up.
+   Its secrets and license go to a file in that home instead of the OS credential store
+   (`CTRLYOKE_DEV_ISOLATED_SECRETS`), so your own license never shows up either.
 3. Each still opens a fresh page at the shot's viewport, drives the dashboard to its state,
    and screenshots it. A theme switch rewrites the host's VS Code settings and waits until the
    dashboard serves the new theme.

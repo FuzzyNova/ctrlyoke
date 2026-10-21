@@ -25,6 +25,8 @@
  * extensions. `media` is the same for the media capture scripts: it opens the
  * demo-app clone in media/.work/ with that folder's own VS Code state and user
  * home (USERPROFILE/HOME), so captures never show your ~/.ctrlyoke settings.
+ * Its secrets and license live in a file in that home, not in the OS
+ * credential store, so captures never show your license either.
  * `npm run media` prepares and resets both before each start.
  *
  * `--no-harnesses` launches the host with every PATH directory that holds a
@@ -106,6 +108,7 @@ const MODES = {
   media: {
     ctrlyokeHome: undefined,
     home: MEDIA_HOME,
+    isolatedSecrets: true,
     disableExtensions: true,
     name: "media",
     resetTempDir: false,
@@ -368,6 +371,13 @@ function buildEnvironment(mode, { noHarnesses }) {
     // os.homedir() reads USERPROFILE on Windows and HOME elsewhere.
     environment.USERPROFILE = mode.home;
     environment.HOME = mode.home;
+  }
+  if (mode.isolatedSecrets) {
+    // Keep in sync with ISOLATED_SECRETS_ENV in src/dev/IsolatedSecrets.ts:
+    // secrets go to a file in the fake home, not the real credential store.
+    environment.CTRLYOKE_DEV_ISOLATED_SECRETS = "1";
+  } else {
+    delete environment.CTRLYOKE_DEV_ISOLATED_SECRETS;
   }
   if (noHarnesses) stripHarnessesFromPath(environment);
   return environment;

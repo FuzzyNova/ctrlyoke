@@ -44,6 +44,7 @@ import {
 import { VsCodeSecretStore } from "./platform/VsCodeSecretStore";
 import { OsCredentialStore } from "./platform/OsCredentialStore";
 import { FallbackSecretStore } from "./platform/FallbackSecretStore";
+import type { SecretStore } from "./platform/SecretStore";
 import { migrateManagedSecrets } from "./platform/ManagedSecretMigration";
 import {
   CtrlYokeHostedServer,
@@ -345,8 +346,17 @@ export async function activate(context: vscode.ExtensionContext) {
     // per-profile secret storage is the fallback for hosts without an
     // accessible OS credential store.
     const profileSecretStore = new VsCodeSecretStore(context.secrets);
+    // Dev builds started by the media capture host keep secrets out of the
+    // real credential store (see ISOLATED_SECRETS_ENV).
+    let devIsolatedSecretStore: SecretStore | undefined;
+    if (IS_DEV_MODE) {
+      const {
+        isolatedSecretStoreFromEnvironment,
+      } = require("./dev/IsolatedSecrets");
+      devIsolatedSecretStore = isolatedSecretStoreFromEnvironment();
+    }
     machineSecretStore = new FallbackSecretStore(
-      new OsCredentialStore(),
+      devIsolatedSecretStore ?? new OsCredentialStore(),
       profileSecretStore,
       (error) =>
         Log.warn(

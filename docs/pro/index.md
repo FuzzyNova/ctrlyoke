@@ -71,7 +71,9 @@ a full refund, and the license is deactivated when the refund is processed.
 
 Lemon Squeezy is the checkout and Merchant of Record. Keygen is the licensing
 backend that issues and validates ctrlyoke license keys and signed license
-files. After checkout, your license key arrives in a separate email.
+files. Checkout opens over the pricing page, and when the payment goes through
+you land on the activation steps below. Your license key arrives in a separate
+email.
 
 ## Activate online
 
@@ -84,6 +86,8 @@ This is the normal flow for a connected machine:
 4. Paste the key into **Activate with license key** and click **Activate**.
 5. Confirm the success message. Pro unlocks immediately; no restart is
    required.
+
+![Settings → License on a Free install, with a license key pasted into Activate with license key and the Activate button next to it](/screenshots/license-activate-1520x1120.png)
 
 The license is stored in the computer's credential store, so one activation
 covers both the VS Code extension and the [CLI](/cli/) on that computer. In a
