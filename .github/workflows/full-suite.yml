@@ -7,9 +7,9 @@ name: Full Test Suite
 # for).
 #
 # Covers the same suites as `npm test`, but as separate jobs rather than through
-# scripts/run-test-suites.mjs: a private-repo runner has 2 vCPUs, too few for
-# that script to shard anything, so the parallelism comes from running each
-# suite (and each half of the UI suite) on its own runner instead.
+# scripts/run-test-suites.mjs: a hosted runner has only 4 vCPUs (2 while the
+# repo was private), so the parallelism comes from running each suite (and
+# each half of the UI suite) on its own runner instead of sharing one.
 on:
   workflow_dispatch: {}
   schedule:

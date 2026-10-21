@@ -33,6 +33,23 @@ const GITHUB_ACTIONS_APP_ID = 15368;
 /** Job id in .github/workflows/ci.yml. */
 const REQUIRED_CHECK = "fast-checks";
 
+/**
+ * Squash is the only merge method, in both the repo settings and the `main`
+ * ruleset. The squash commit takes the PR title and body, so an outside PR
+ * lands as one conventional commit whatever its branch history looks like.
+ */
+const MERGE_METHODS = ["squash"];
+
+const REPO_SETTINGS = {
+  allow_squash_merge: true,
+  allow_merge_commit: false,
+  allow_rebase_merge: false,
+  squash_merge_commit_title: "PR_TITLE",
+  squash_merge_commit_message: "PR_BODY",
+  delete_branch_on_merge: true,
+  has_projects: false,
+};
+
 const RULESETS = [
   {
     name: "main",
@@ -51,6 +68,7 @@ const RULESETS = [
           dismiss_stale_reviews_on_push: true,
           require_last_push_approval: true,
           required_review_thread_resolution: false,
+          allowed_merge_methods: MERGE_METHODS,
         },
       },
       {
@@ -104,6 +122,11 @@ console.log(
 );
 
 const steps = [
+  {
+    label:
+      "Repo settings: squash-only merges, delete head branches, no Projects",
+    apply: () => gh(["api", "-X", "PATCH", base], REPO_SETTINGS),
+  },
   ...RULESETS.map((ruleset) => ({
     label: `ruleset "${ruleset.name}"`,
     apply() {
@@ -144,6 +167,11 @@ const steps = [
   {
     label: "Dependabot alerts",
     apply: () => gh(["api", "-X", "PUT", `${base}/vulnerability-alerts`]),
+  },
+  {
+    // Needs Dependabot alerts, so it runs after that step.
+    label: "Dependabot security updates",
+    apply: () => gh(["api", "-X", "PUT", `${base}/automated-security-fixes`]),
   },
   {
     label: "Secret scanning + push protection",

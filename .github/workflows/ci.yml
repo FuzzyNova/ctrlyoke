@@ -3,8 +3,10 @@ name: CI
 # The checks every pull request must pass: the same gate as `npm run
 # check:fast`, which the local pre-push hook runs (typecheck, lint, UI tests,
 # packaging tests), then a production build and the npm tarball test against
-# it. A 2-vCPU runner takes ~30 minutes over the UI suite alone, so it runs in
-# two shards on their own runners, as in full-suite.yml.
+# it. The UI suite is the slowest part, so it runs in two shards on their own
+# runners, as in full-suite.yml. On the public repo's 4-vCPU runners a whole
+# PR run takes about 5 minutes (it was ~30 for the UI suite alone on the
+# private repo's 2-vCPU runners).
 #
 # The `fast-checks` job is a required status check in the `main` ruleset
 # (scripts/apply-github-guardrails.mjs). It only reports the other jobs'
