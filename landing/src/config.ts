@@ -45,6 +45,20 @@ export const LEMON_JS_URL = "https://app.lemonsqueezy.com/js/lemon.js";
 export const LS_OVERLAY_CLASS = "lemonsqueezy-button";
 
 /**
+ * Checkout-link options added only when the checkout opens as an overlay. The
+ * overlay card has a fixed width, so hiding the product image and description
+ * (which the buyer just read on our page) keeps it short; `dark` makes
+ * Lemon.js draw its loading screen dark instead of white. The hosted-page
+ * fallback keeps the defaults. The overlay's colors are set in the Lemon
+ * Squeezy dashboard under Design → Overlay.
+ */
+export const LS_OVERLAY_PARAMS: Readonly<Record<string, string>> = {
+  media: "0",
+  desc: "0",
+  dark: "1",
+};
+
+/**
  * Where a buyer lands after a successful overlay checkout: the activation steps.
  * The Lemon Squeezy products' confirmation-modal and receipt buttons should
  * link here too (absolute), so storefront purchases find their way back.

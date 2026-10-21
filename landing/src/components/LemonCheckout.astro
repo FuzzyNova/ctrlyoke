@@ -4,13 +4,25 @@
 // payment succeeds. Anchors with LS_OVERLAY_CLASS open in the overlay; scripts
 // can call window.openLemonCheckout(url). If Lemon.js fails to load, both fall
 // back to the hosted checkout page.
-import { LEMON_JS_URL, POST_PURCHASE_PATH } from "../config";
+import { LEMON_JS_URL, LS_OVERLAY_CLASS, LS_OVERLAY_PARAMS, POST_PURCHASE_PATH } from "../config";
 ---
 
 <script is:inline src={LEMON_JS_URL} defer></script>
-<script is:inline define:vars={{ postPurchasePath: POST_PURCHASE_PATH }}>
+<script
+  is:inline
+  define:vars={{
+    postPurchasePath: POST_PURCHASE_PATH,
+    overlayClass: LS_OVERLAY_CLASS,
+    overlayParams: LS_OVERLAY_PARAMS,
+  }}
+>
+  const overlayUrl = (url) => {
+    const withParams = new URL(url, window.location.href);
+    for (const [key, value] of Object.entries(overlayParams)) withParams.searchParams.set(key, value);
+    return withParams.toString();
+  };
   window.openLemonCheckout = (url) => {
-    if (window.LemonSqueezy) window.LemonSqueezy.Url.Open(url);
+    if (window.LemonSqueezy) window.LemonSqueezy.Url.Open(overlayUrl(url));
     else window.location.assign(url);
   };
   // Lemon.js creates window.LemonSqueezy in its own "load" listener, which is
@@ -19,6 +31,8 @@ import { LEMON_JS_URL, POST_PURCHASE_PATH } from "../config";
   window.addEventListener("load", () =>
     setTimeout(() => {
       if (!window.LemonSqueezy) return;
+      // Lemon.js reads the anchor's href at click time.
+      for (const anchor of document.querySelectorAll(`a.${overlayClass}`)) anchor.href = overlayUrl(anchor.href);
       window.LemonSqueezy.Setup({
         eventHandler: (event) => {
           if (event.event === "Checkout.Success") window.location.assign(postPurchasePath);
