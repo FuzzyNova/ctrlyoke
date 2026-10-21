@@ -416,7 +416,8 @@ Each item: what to capture, what prep it needs, where it's used.
 - **Status — captured 2026-10-19** by `npm run media -- prompt-editor`:
   `prompt-editor-av1-1920x1280.mp4`, `prompt-editor-h264-960x640.mp4` and
   `prompt-editor-poster-1920x1280.webp` (31 s, under 1 MB). Video rather than GIF, like the hero.
-  Slotted on landing 2026-10-19 as its own "Point at the context you mean" section (below #14),
+  Slotted on landing 2026-10-19 as its own "Point at the context you mean" section (below #14,
+  retitled "A prompt language for your whole project" on 2026-10-20),
   with a six-chip reference legend linking to `docs/workflows/context-files.md`; it replaced the
   `📎` and `✎` feature cards. Docs use is still open.
 
@@ -699,20 +700,20 @@ line, where it renders as a button. Descriptions support `code`, **bold** and li
 
 ## Slotting summary
 
-| Landing section (existing or new)                        | Asset(s)                                                      |
-| -------------------------------------------------------- | ------------------------------------------------------------- |
-| Hero                                                     | #6 (workflow-run GIF) replacing/joining the static YAML block |
-| "Harness grid" / new "looks like your editor" section    | #2                                                            |
-| Features grid — `⚡` One interface, six harnesses        | #1                                                            |
-| "Point at the context you mean" section (was `📎` card)  | #9 (done)                                                     |
-| "Build visually, or edit as YAML" (was the YAML block)   | #14 (done)                                                    |
-| Features grid — `⬛` One reversible view of every result | #11                                                           |
-| New: Statistics/telemetry section                        | #4, #5                                                        |
-| "Your project, in any browser" (was the `🗂` card)        | #10 (done)                                                    |
-| "Every session, searchable" (was the `🔍` card)          | #15 (done)                                                    |
-| New: Templates section                                   | #8                                                            |
-| New: Mobile section                                      | #3, #7                                                        |
-| Pro callout (`Code from anywhere`)                       | #3, #7 (non-Pro-UI parts only — see Non-goals)                |
+| Landing section (existing or new)                                  | Asset(s)                                                      |
+| ------------------------------------------------------------------ | ------------------------------------------------------------- |
+| Hero                                                               | #6 (workflow-run GIF) replacing/joining the static YAML block |
+| "Harness grid" / new "looks like your editor" section              | #2                                                            |
+| Features grid — `⚡` One interface, six harnesses                  | #1                                                            |
+| "A prompt language for your whole project" section (was `📎` card) | #9 (done)                                                     |
+| "Build visually, or edit as YAML" (was the YAML block)             | #14 (done)                                                    |
+| Features grid — `⬛` One reversible view of every result           | #11                                                           |
+| New: Statistics/telemetry section                                  | #4, #5                                                        |
+| "Your project, in any browser" (was the `🗂` card)                  | #10 (done)                                                    |
+| "Every session, searchable" (was the `🔍` card)                    | #15 (done)                                                    |
+| New: Templates section                                             | #8                                                            |
+| New: Mobile section                                                | #3, #7                                                        |
+| Pro callout (`Code from anywhere`)                                 | #3, #7 (non-Pro-UI parts only — see Non-goals)                |
 
 | Docs page (existing or new)                                       | Asset(s) |
 | ----------------------------------------------------------------- | -------- |
