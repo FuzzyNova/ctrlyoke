@@ -1150,7 +1150,15 @@ public**.
   - private vulnerability reporting, so `SECURITY.md` reporters can also use
     GitHub's private advisory form.
 - [x] After the flip, open a throwaway PR from a fork (or another account) and
-      confirm `fast-checks` runs after approval and is required.
+      confirm `fast-checks` runs after approval and is required. _Done October 21,
+      2026, with [PR #1](https://github.com/FuzzyNova/ctrlyoke/pull/1) from the
+      outside account `TuringTheServer` (a fork with no org membership; a fork
+      on `nhickster` would not test this, since org members skip the approval
+      gate and repo admins can bypass the ruleset). The checks showed "Approval
+      required" and did not start until approved. CI run `39636234033` then ran
+      `checks`, both `ui` shards and `fast-checks`, all passing. The merge box listed
+      `fast-checks` and a code-owner review as required. `nhickster` approved
+      it once the checks passed and squash-merged it as `59a7e4a58`._
 - [x] _Done by Nathan, October 20, 2026._ After the flip, upload `images/social-preview.png` as the social preview image (Settings →
       General → Social preview → Edit; 1280×640 PNG under 1 MB). GitHub hides
       this option on private repos. Repos have no avatar of their own, so this
@@ -1349,7 +1357,7 @@ Carried over from the 2026-10-17 release-prep audit (`dev/implemented/FINAL_RELE
 | GitHub release                                                             | DONE                | Phase 10 — `v0.2.0` Release with the VSIX, created by `release.yml` run `39500767419`, October 20, 2026                                                                                                                                   |
 | CLI distribution (VSIX + npm)                                              | DONE (0.2.0 on npm) | Phase 11 — `latest` with provenance                                                                                                                                                                                                       |
 | Post-launch branching + tag-driven release workflow                        | MOSTLY DONE         | Phase 13 — pre-push hook, full-suite/release workflows, docs, `format:check` CI gate, and the `VSCE_PAT` secret are in place; `full-suite.yml` is green (manual run 2026-10-13)                                                           |
-| Repo visibility flip to public                                             | DONE                | Phase 14 — public October 20, 2026, guardrails applied the same session;                                                                                                                                                                  |
+| Repo visibility flip to public                                             | DONE                | Phase 14 — public October 20, 2026, guardrails applied the same session; fork-PR check passed October 21, 2026 (PR #1)                                                                                                                    |
 | Site launch (`LAUNCHED = true`)                                            | DONE                | Phase 9 — `18c30c73b`, October 20, 2026; `noindex` gone, live checkout links. A live Pro checkout through the site is still open                                                                                                          |
 | Pre-release compatibility window                                           | DONE                | Every item is landed, including the prior-context rework (`PRIOR_CONTEXT_DETAIL_PLAN.md` Phases 0–3) and blank optional template variables (`TEMPLATE_REQUIRED_VARIABLES_PLAN.md` Phase 2), both 2026-10-13. See the section above        |
 | Vendor-account MFA hardening                                               | DONE                | Phase 14.4 — all 7 listed accounts plus Microsoft/Azure DevOps hardened; recovery-fallback chain confirmed to terminate in the 2FA-enforced Google Workspace, not a weak point                                                            |
