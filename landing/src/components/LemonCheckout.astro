@@ -13,12 +13,17 @@ import { LEMON_JS_URL, POST_PURCHASE_PATH } from "../config";
     if (window.LemonSqueezy) window.LemonSqueezy.Url.Open(url);
     else window.location.assign(url);
   };
-  window.addEventListener("load", () => {
-    if (!window.LemonSqueezy) return;
-    window.LemonSqueezy.Setup({
-      eventHandler: (event) => {
-        if (event.event === "Checkout.Success") window.location.assign(postPurchasePath);
-      },
-    });
-  });
+  // Lemon.js creates window.LemonSqueezy in its own "load" listener, which is
+  // registered after this one (this inline script runs before the deferred
+  // Lemon.js), so wait until every load listener has run.
+  window.addEventListener("load", () =>
+    setTimeout(() => {
+      if (!window.LemonSqueezy) return;
+      window.LemonSqueezy.Setup({
+        eventHandler: (event) => {
+          if (event.event === "Checkout.Success") window.location.assign(postPurchasePath);
+        },
+      });
+    }),
+  );
 </script>
