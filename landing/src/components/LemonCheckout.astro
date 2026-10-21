@@ -1,0 +1,24 @@
+---
+// Opens Lemon Squeezy checkouts as an overlay on ctrlyoke.dev instead of
+// navigating away, and sends the buyer to the activation guide once the
+// payment succeeds. Anchors with LS_OVERLAY_CLASS open in the overlay; scripts
+// can call window.openLemonCheckout(url). If Lemon.js fails to load, both fall
+// back to the hosted checkout page.
+import { LEMON_JS_URL, POST_PURCHASE_PATH } from "../config";
+---
+
+<script is:inline src={LEMON_JS_URL} defer></script>
+<script is:inline define:vars={{ postPurchasePath: POST_PURCHASE_PATH }}>
+  window.openLemonCheckout = (url) => {
+    if (window.LemonSqueezy) window.LemonSqueezy.Url.Open(url);
+    else window.location.assign(url);
+  };
+  window.addEventListener("load", () => {
+    if (!window.LemonSqueezy) return;
+    window.LemonSqueezy.Setup({
+      eventHandler: (event) => {
+        if (event.event === "Checkout.Success") window.location.assign(postPurchasePath);
+      },
+    });
+  });
+</script>

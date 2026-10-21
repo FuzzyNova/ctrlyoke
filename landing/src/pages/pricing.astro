@@ -1,7 +1,8 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import Cta from "../components/Cta.astro";
-import { MARKETPLACE_URL, CHECKOUT_URL, ENTERPRISE_CHECKOUT_PATH } from "../config";
+import LemonCheckout from "../components/LemonCheckout.astro";
+import { MARKETPLACE_URL, CHECKOUT_URL, ENTERPRISE_CHECKOUT_PATH, LS_OVERLAY_CLASS } from "../config";
 
 const freeTier = [
   "Works with all 6 supported CLIs: Copilot, Claude Code, Codex, OpenCode, Qwen, Antigravity (installed separately)",
@@ -136,7 +137,7 @@ const faq = [
         <p class="mb-6 text-sm text-slate-400">Pay once, use forever.</p>
         <Cta
           href={CHECKOUT_URL}
-          class="mb-8 block rounded-lg bg-sky-400 py-3 text-center font-semibold text-brand-950 hover:bg-sky-300 transition-colors"
+          class={`${LS_OVERLAY_CLASS} mb-8 block rounded-lg bg-sky-400 py-3 text-center font-semibold text-brand-950 hover:bg-sky-300 transition-colors`}
           comingSoonLabel="Coming soon — $59"
         >
           Buy Pro — $59
@@ -251,4 +252,5 @@ const faq = [
     </div>
   </section>
 
+  <LemonCheckout />
 </Layout>

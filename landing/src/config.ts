@@ -38,6 +38,19 @@ export const CHECKOUT_URL = LS_CHECKOUT_URLS[LS_CHECKOUT_MODE][LS_PRODUCT.PRO];
 export const ENTERPRISE_LS_CHECKOUT_URL =
   LS_CHECKOUT_URLS[LS_CHECKOUT_MODE][LS_PRODUCT.ENTERPRISE];
 
+/** Lemon Squeezy's overlay checkout script; Lemon Squeezy asks that it not be self-hosted. */
+export const LEMON_JS_URL = "https://app.lemonsqueezy.com/js/lemon.js";
+
+/** Class Lemon.js looks for on an anchor to open its checkout as an overlay. */
+export const LS_OVERLAY_CLASS = "lemonsqueezy-button";
+
+/**
+ * Where a buyer lands after a successful overlay checkout: the activation steps.
+ * The Lemon Squeezy products' confirmation-modal and receipt buttons should
+ * link here too (absolute), so storefront purchases find their way back.
+ */
+export const POST_PURCHASE_PATH = "/docs/pro/#activate-online";
+
 /** ctrlyoke.dev page that collects Enterprise terms acceptance before checkout. */
 export const ENTERPRISE_CHECKOUT_PATH = "/enterprise/checkout/";
 

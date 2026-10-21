@@ -6,6 +6,7 @@
 // can't collect that, so this page does, then forwards everything as checkout
 // custom data; the Lemon Squeezy order is the acceptance record (PRIVACY.md §3.3).
 import Layout from "../../layouts/Layout.astro";
+import LemonCheckout from "../../components/LemonCheckout.astro";
 import {
   ENTERPRISE_CHECKOUT_ENABLED,
   ENTERPRISE_LS_CHECKOUT_URL,
@@ -150,6 +151,7 @@ const linkClass = "text-sky-400 underline hover:text-sky-300";
       </aside>
     </div>
   </section>
+  <LemonCheckout />
 </Layout>
 
 <script
@@ -205,6 +207,6 @@ const linkClass = "text-sky-400 underline hover:text-sky-300";
     for (const [key, val] of Object.entries(custom)) {
       if (val) url.searchParams.set(`checkout[custom][${key}]`, val);
     }
-    window.location.assign(url.toString());
+    window.openLemonCheckout(url.toString());
   });
 </script>
