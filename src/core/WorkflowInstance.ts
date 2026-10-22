@@ -5498,7 +5498,7 @@ export class WorkflowInstance
 
       if (hasNewPrompts) {
         Log.info(
-          `[inst:${this.id.slice(0, 8)}] Detected prompt count increase: ${this.lastKnownStepCount} ${state.steps.length}. Notifying dashboard.`
+          `[inst:${this.id.slice(0, 8)}] Detected prompt count increase: ${this.lastKnownStepCount} -> ${state.steps.length}. Notifying dashboard.`
         );
         // Include executionState so both updates reach the webview in one message.
         this.dashboardSink.updateStepsExtended(

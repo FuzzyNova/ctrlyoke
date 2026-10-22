@@ -1,7 +1,8 @@
 import * as assert from "assert";
-import { setup, suite, test } from "mocha";
+import { setup, suite, teardown, test } from "mocha";
 import * as vscode from "vscode";
-import { LogLevel } from "../../utils/Log";
+import { Log, LogLevel } from "../../utils/Log";
+import { captureLog } from "../helpers/logCapture";
 import { SafeLogOutputChannel } from "../../platform/VsCodeLogOutputChannel";
 
 /**
@@ -80,6 +81,36 @@ const ALL_LEVELS = [
   LogLevel.WARN,
   LogLevel.ERROR,
 ];
+
+suite("Log argument formatting", () => {
+  let capture: ReturnType<typeof captureLog>;
+
+  setup(() => {
+    capture = captureLog();
+  });
+
+  teardown(() => {
+    capture.restore();
+  });
+
+  test("an Error argument is written as its message, not {}", () => {
+    Log.warn("[Test] discovery failed:", new Error("not a git repository"));
+
+    assert.deepStrictEqual(
+      capture.lines.map((line) => line.message),
+      ['[Test] discovery failed: ["not a git repository"]']
+    );
+  });
+
+  test("an Error nested in an argument object is written as its message", () => {
+    Log.debug("[Test] context", { attempt: 2, cause: new Error("EBUSY") });
+
+    assert.deepStrictEqual(
+      capture.lines.map((line) => line.message),
+      ['[Test] context [{"attempt":2,"cause":"EBUSY"}]']
+    );
+  });
+});
 
 suite("SafeLogOutputChannel", () => {
   let channel: FakeLogOutputChannel;

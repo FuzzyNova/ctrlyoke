@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`general.autoLoadRecentSession` (now labelled "Reopen last workflow on startup") works
+  when turned off.** Off now starts every new window on a new workflow. Before, the dashboard
+  reopened the workflow it was last showing regardless, and the setting only mattered when there
+  was nothing to reopen. A hosted browser without a workflow in its URL now shows the panel's
+  workflow instead of the most recently modified one while the setting is off. On (the default)
+  behaves as before: the last viewed workflow, otherwise the most recently modified one.
 - **Harness CLI version policy.** A CLI below its minimum supported version is no longer refused:
   ctrlyoke launches it, warns when a workflow that uses it starts, and repeats the update command
   if a step fails. A CLI at or above the minimum never warns, even when a newer release exists, so
@@ -34,6 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it to this machine's credential store". Secrets of any length (including license files) are now
   saved to the macOS keychain intact; previously, values were truncated or saved empty. If an
   earlier activation on macOS seemed to succeed, activate again to save the license properly.
+- Opening a folder could land the dashboard on an empty New Workflow instead of the previous or
+  most recent session, when the dashboard was slow to load during startup.
+- Warnings that include an error now show the error's message in the log instead of `{}`.
+- Opening a folder that isn't in a Git repository no longer logs a worktree discovery warning.
 
 ## [0.2.0] - 2026-10-20
 

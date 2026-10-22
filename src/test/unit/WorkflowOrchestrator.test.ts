@@ -207,6 +207,113 @@ suite("WorkflowOrchestrator preferred view recovery", () => {
   });
 });
 
+suite(
+  "WorkflowOrchestrator autoLoadRecentSession and the remembered view",
+  () => {
+    const originalShouldAutoLoad =
+      ConfigurationUtils.shouldAutoLoadRecentSession;
+    const rememberedAddress = {
+      workflowKey: "remembered" as never,
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+      runRef: "run-remembered" as never,
+    };
+
+    teardown(() => {
+      ConfigurationUtils.shouldAutoLoadRecentSession = originalShouldAutoLoad;
+    });
+
+    function createReadyHarness(autoLoad: boolean) {
+      ConfigurationUtils.shouldAutoLoadRecentSession = () => autoLoad;
+      const orchestrator = createTestOrchestrator();
+      const internal = orchestrator as any;
+      const loadedViews: unknown[] = [];
+      let mostRecentLookups = 0;
+      internal.runLifecycleServiceInstance = {
+        runAddressExists: async () => true,
+      };
+      internal.loadRunViewForClient = async (address: unknown) => {
+        loadedViews.push(address);
+      };
+      internal.currentWorkspaceFolderPath = "C:\\workspace";
+      internal.workspaceSessionManager.getMostRecentWorkingFilePath =
+        async () => {
+          mostRecentLookups += 1;
+          return undefined;
+        };
+      internal.getWorkflowSummaries = () => [];
+      return {
+        orchestrator,
+        internal,
+        loadedViews,
+        getMostRecentLookups: () => mostRecentLookups,
+      };
+    }
+
+    test("reopens the panel's last workflow at startup when on", async () => {
+      const { orchestrator, loadedViews } = createReadyHarness(true);
+
+      await orchestrator.handleClientReady(PANEL_CLIENT_ID, () => {}, {
+        preferredViewAddress: rememberedAddress,
+      });
+
+      assert.deepStrictEqual(loadedViews, [rememberedAddress]);
+    });
+
+    test("starts a fresh window on a new workflow when off", async () => {
+      const { orchestrator, loadedViews } = createReadyHarness(false);
+
+      await orchestrator.handleClientReady(PANEL_CLIENT_ID, () => {}, {
+        preferredViewAddress: rememberedAddress,
+      });
+
+      assert.deepStrictEqual(loadedViews, []);
+    });
+
+    test("keeps the panel's view on a reload later in the session when off", async () => {
+      const { orchestrator, internal, loadedViews } = createReadyHarness(false);
+      await orchestrator.handleClientReady(PANEL_CLIENT_ID, () => {});
+      internal._autoLoadHasSettled = true;
+
+      await orchestrator.handleClientReady(PANEL_CLIENT_ID, () => {}, {
+        preferredViewAddress: rememberedAddress,
+      });
+
+      assert.deepStrictEqual(loadedViews, [rememberedAddress]);
+    });
+
+    test("drops the remembered view on a first panel READY that arrives after startup settled", async () => {
+      const { orchestrator, internal, loadedViews } = createReadyHarness(false);
+      internal._autoLoadHasSettled = true;
+
+      await orchestrator.handleClientReady(PANEL_CLIENT_ID, () => {}, {
+        preferredViewAddress: rememberedAddress,
+      });
+
+      assert.deepStrictEqual(loadedViews, []);
+    });
+
+    test("still honours a browser's own route when off", async () => {
+      const { orchestrator, loadedViews } = createReadyHarness(false);
+
+      await orchestrator.handleClientReady("browser:1", () => {}, {
+        preferredViewAddress: rememberedAddress,
+      });
+
+      assert.deepStrictEqual(loadedViews, [rememberedAddress]);
+    });
+
+    test("a browser without a route mirrors the panel instead of loading the most recent workflow when off", async () => {
+      const off = createReadyHarness(false);
+      await off.orchestrator.handleClientReady("browser:1", () => {});
+      assert.strictEqual(off.getMostRecentLookups(), 0);
+
+      const on = createReadyHarness(true);
+      await on.orchestrator.handleClientReady("browser:1", () => {});
+      assert.strictEqual(on.getMostRecentLookups(), 1);
+    });
+  }
+);
+
 suite("WorkflowOrchestrator panel READY grace period", () => {
   test("settles startup without a panel and accepts a later panel READY", async () => {
     const orchestrator = createTestOrchestrator();
@@ -655,6 +762,67 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
     await orchestrator.setDashboardReady();
 
     assert.strictEqual(internal.startupPanelViewedId, "startup-hydrated");
+  });
+
+  suite("panel READY grace timer", () => {
+    const waitPastGrace = () =>
+      new Promise((resolve) => setTimeout(resolve, 30));
+    let internalRef: any;
+
+    teardown(() => {
+      if (internalRef?.panelReadyGraceTimer) {
+        clearTimeout(internalRef.panelReadyGraceTimer);
+      }
+      internalRef = undefined;
+    });
+
+    function createGraceHarness() {
+      const harness = createOrchestratorHarness();
+      harness.internal.orchestratorInitialized = true;
+      harness.internal.panelReadyGracePeriodMs = 5;
+      internalRef = harness.internal;
+      return harness;
+    }
+
+    test("starts the auto-load without the panel when no READY arrived", async () => {
+      const { internal, getAutoLoadCalls } = createGraceHarness();
+
+      internal.armPanelReadyGraceTimer(Date.now() + 60_000);
+      await waitPastGrace();
+
+      assert.strictEqual(getAutoLoadCalls(), 1);
+    });
+
+    test("waits for a panel READY that is still being handled", async () => {
+      // The panel READY hydrates the persisted view before it marks the
+      // dashboard ready. Starting the auto-load during that window loaded two
+      // workflows into two instances and left the panel on a blank one.
+      const { orchestrator, internal, getAutoLoadCalls } = createGraceHarness();
+      orchestrator.notePanelReadyStarted();
+
+      internal.armPanelReadyGraceTimer(Date.now() + 60_000);
+      await waitPastGrace();
+
+      assert.strictEqual(getAutoLoadCalls(), 0);
+      assert.ok(internal.panelReadyGraceTimer, "grace timer re-armed");
+
+      await orchestrator.setDashboardReady(() => {});
+      await waitPastGrace();
+
+      assert.strictEqual(getAutoLoadCalls(), 1);
+      assert.strictEqual(internal.panelReadyInFlight, false);
+      assert.strictEqual(internal.panelReadyGraceTimer, undefined);
+    });
+
+    test("stops waiting on an in-flight READY once its deadline passes", async () => {
+      const { orchestrator, internal, getAutoLoadCalls } = createGraceHarness();
+      orchestrator.notePanelReadyStarted();
+
+      internal.armPanelReadyGraceTimer(Date.now());
+      await waitPastGrace();
+
+      assert.strictEqual(getAutoLoadCalls(), 1);
+    });
   });
 
   test("freezes the hydrated view once startup has settled", async () => {
