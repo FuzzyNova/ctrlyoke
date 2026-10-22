@@ -16,8 +16,6 @@ import {
 import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
-  CAPABILITY_VERIFICATION_BASES,
-  CAPABILITY_VERIFICATION_KINDS,
 } from "../../../types/DashboardConstants";
 
 const OPENCODE_HOOK_VERIFICATION = capabilitySuiteVerification([">=1.3.16"]);
@@ -63,16 +61,8 @@ export class OpenCodeNotificationMonitor
     ),
     postToolUse: OpenCodeNotificationMonitor.verifiedHook(),
     userPromptSubmit: OpenCodeNotificationMonitor.verifiedHook(),
-    // The capability suite finds it never fires:
-    // dev/bugs/backlog/opencode-permission-request-hook-never-fires.md.
     permissionRequest: OpenCodeNotificationMonitor.partialHook(
-      HOOK_CAVEAT_CODES.UNVERIFIED_DECISION_CONTRACT,
-      {
-        kind: CAPABILITY_VERIFICATION_KINDS.MANUAL,
-        reference: "src/scripts/ctrlyoke-opencode-plugin.ts",
-        basis: CAPABILITY_VERIFICATION_BASES.CLI_VERSION,
-        verifiedVersions: [">=1.3.16"],
-      }
+      HOOK_CAVEAT_CODES.DECISION_UNSUPPORTED
     ),
     notification: OpenCodeNotificationMonitor.unsupportedHook(),
     error: OpenCodeNotificationMonitor.verifiedHook(),

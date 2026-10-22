@@ -16,7 +16,10 @@ interface SpawnCall {
 
 async function loadPlugin(
   hooks: unknown[],
-  pluginOptions: { platform?: string; holdHookProcess?: boolean } = {}
+  pluginOptions: {
+    platform?: string;
+    holdHookProcess?: boolean;
+  } = {}
 ): Promise<{
   plugin: Record<string, (...args: any[]) => unknown>;
   spawnCalls: SpawnCall[];
@@ -72,7 +75,9 @@ async function loadPlugin(
           } else {
             hookChildren.push(child);
             if (!pluginOptions.holdHookProcess) {
-              queueMicrotask(() => child.emit("close", 0));
+              queueMicrotask(() => {
+                child.emit("close", 0);
+              });
             }
           }
           return child;
@@ -136,26 +141,40 @@ suite("OpenCode plugin user hooks", () => {
     );
   });
 
-  test("applies timeoutSec to decision hooks too", async () => {
+  test("runs permissionRequest when permission.asked reaches the event handler", async () => {
     const { plugin, spawnCalls } = await loadPlugin([
       {
         event: "permissionRequest",
-        command: "node decision.js",
+        command: "node permission.js",
         timeoutSec: 2,
       },
     ]);
-    await plugin["permission.asked"]({
-      sessionID: "session-2",
-      permission: "write",
+    await plugin.event({
+      event: {
+        type: "permission.asked",
+        properties: {
+          sessionID: "session-2",
+          type: "edit",
+          title: "write a file",
+          id: "permission-1",
+        },
+      },
     });
 
     assert.strictEqual(spawnCalls.length, 1);
     assert.deepStrictEqual(JSON.parse(spawnCalls[0].options.input as string), {
       sessionID: "session-2",
-      permission: "write",
+      type: "edit",
+      title: "write a file",
+      id: "permission-1",
       hook_event_name: "permissionRequest",
       session_id: "session-2",
+      tool_name: "edit",
     });
+    assert.deepStrictEqual(
+      Array.from(spawnCalls[0].options.stdio as string[]),
+      ["pipe", "inherit", "inherit"]
+    );
   });
 
   test("sends payloads for sessionStart, userPromptSubmit, stop, error, and postToolUse", async () => {

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-21 by a research subagent (OpenCode minimum-version review), from OpenCode source
 - **Area:** `src/scripts/ctrlyoke-opencode-plugin.ts` (around the `"permission.asked"` hook)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -30,3 +30,7 @@ OpenCode 1.3.0 and later, so renaming the hook alone may not be enough.
 Handle the `permission.asked` bus event in the plugin's `event` handler, or register
 `permission.ask` if current OpenCode still calls it. Then decide whether the matrix should say
 "Not supported" until a decision can actually be returned.
+
+## Resolution details
+
+The plugin now handles OpenCode 1.19.4's `permission.asked` event in its generic `event` callback and runs the workflow hook. The SDK declares a `permission.ask` plugin hook, but the installed runtime did not invoke it. The bus event has no decision response channel, so OpenCode permission hooks notify only; allow/deny decisions are listed as unsupported. The custom-mode OpenCode harness case verifies hook delivery against 1.19.4.

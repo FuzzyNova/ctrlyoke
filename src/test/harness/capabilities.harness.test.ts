@@ -528,7 +528,7 @@ suite("Harness capability tests", function () {
           assertSucceeded(harness, result);
           assertHooksFired(harness, workspace, events, claims, result);
           console.log(
-            `  ↳ command ${fs.existsSync(workspace.marker) ? "ran" : "did not run"} after the hook's allow decision`
+            `  ↳ command ${fs.existsSync(workspace.marker) ? "ran" : "did not run"} after the permissionRequest hook`
           );
         });
       }

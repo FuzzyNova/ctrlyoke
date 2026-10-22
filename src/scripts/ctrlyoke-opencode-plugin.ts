@@ -28,6 +28,7 @@
 //  - On session.status busy: fires userPromptSubmit hooks for non-child sessions
 //  - Writes {runId}-start.json on session.created / session.updated for main sessions
 //  - Writes {sessionId}-stop.json on session.status idle for completion detection
+//  - permission.asked event: runs permissionRequest hooks as notifications
 //  - tool.execute.before/after handled as trigger hooks (not via event callback)
 //
 // Session tracking rationale:
@@ -162,53 +163,6 @@ async function _runUserHooks(
       } catch (_e) {}
     }
   }
-}
-
-/**
- * Run the first user hook matching `event`, pipe `payloadJson` on stdin,
- * capture stdout, and return the parsed decision object. Returns undefined
- * when no hook is configured or the hook produces no output.
- *
- * Used for decision hooks (permissionRequest) where the hook script's stdout
- * is the harness decision rather than a fire-and-forget side-effect.
- */
-async function _runDecisionUserHook(
-  event: string,
-  payloadJson: string
-): Promise<unknown | undefined> {
-  for (const hook of _userHooks) {
-    if (hook.event === event) {
-      try {
-        const result = await _runHook(hook.command, payloadJson, {
-          cwd: workspaceRoot,
-          env: _getUserHookEnv(hook),
-          timeoutSec: hook.timeoutSec,
-          captureStdout: true,
-        });
-        _debugLog("🔐 _runDecisionUserHook: ran", {
-          event,
-          command: hook.command,
-          exitCode: result.exitCode,
-          stdout: result.stdout,
-        });
-        if (result.stdout && result.stdout.trim()) {
-          try {
-            return JSON.parse(result.stdout.trim());
-          } catch (_parseErr) {
-            // Hook produced non-JSON stdout — ignore, let OpenCode decide natively
-            _debugLog("⚠️ _runDecisionUserHook: non-JSON stdout ignored", {
-              stdout: result.stdout,
-            });
-          }
-        }
-      } catch (_e) {
-        _debugLog("❌ _runDecisionUserHook: error", { error: String(_e) });
-      }
-      // Only run the first matching hook per event
-      break;
-    }
-  }
-  return undefined;
 }
 
 interface UserHookRunOptions {
@@ -545,6 +499,31 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
     }) => {
       _debugLog("📥 Event received", { type: event.type });
 
+      // OpenCode 1.19.4 publishes permission.asked through the event callback.
+      // The permission.ask plugin hook is present in the SDK types but is not
+      // invoked by the installed runtime. This bus event can notify the user
+      // hook, but it has no response channel for an allow/deny decision.
+      if (event.type === "permission.asked") {
+        _writeHookArtifact(
+          "permissionRequest",
+          "permission.asked",
+          event.properties,
+          {
+            sessionId: _resolveSessionId(event.properties) ?? undefined,
+            toolName:
+              typeof event.properties.type === "string"
+                ? event.properties.type
+                : undefined,
+          }
+        );
+        await _runUserHooks("permissionRequest", {
+          ...event.properties,
+          hook_event_name: "permissionRequest",
+          session_id: _resolveSessionId(event.properties),
+          tool_name: event.properties.type,
+        });
+      }
+
       if (event.type === "session.created") {
         const session = event.properties.info as {
           id: string;
@@ -698,36 +677,6 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
           session_id: sessionId,
         });
       }
-    },
-
-    // permission.asked is an OpenCode trigger hook — called directly by the
-    // runtime (not via the event bus). Return a decision object from the user
-    // hook's stdout, or undefined to let OpenCode show the dialog normally.
-    // NOTE: The exact response contract (field names, envelope shape) should be
-    // verified against @opencode-ai/plugin SDK types before relying on this in
-    // production. The implementation below follows the same pattern as Claude's
-    // PermissionRequest hook (hookSpecificOutput.decision.behavior).
-    "permission.asked": async (_input: unknown) => {
-      _debugLog("🔐 permission.asked", { input: _input });
-      _writeHookArtifact("permissionRequest", "permission.asked", _input);
-      const decisionInput =
-        _input && typeof _input === "object"
-          ? (_input as Record<string, unknown>)
-          : {};
-      const decisionPayload = {
-        ...decisionInput,
-        hook_event_name: "permissionRequest",
-        session_id: _resolveSessionId(decisionInput),
-      };
-      const decision = await _runDecisionUserHook(
-        "permissionRequest",
-        JSON.stringify(decisionPayload)
-      );
-      if (decision !== undefined) {
-        _debugLog("🔐 permission.asked: returning user decision", { decision });
-        return decision;
-      }
-      // No user hook or empty output — let OpenCode handle natively
     },
 
     // tool.execute.before and tool.execute.after are OpenCode trigger hooks —

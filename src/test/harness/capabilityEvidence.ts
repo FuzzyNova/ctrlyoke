@@ -64,8 +64,6 @@ export const KNOWN_BROKEN_CLAIMS: Partial<
   Record<HarnessId, Partial<Record<CapabilityPath, string>>>
 > = {
   "opencode-cli": {
-    "hooks.permissionRequest":
-      "dev/bugs/backlog/opencode-permission-request-hook-never-fires.md",
     "mcp.perServerToolFiltering":
       "dev/bugs/backlog/opencode-mcp-tool-deny-rules-never-match.md",
   },

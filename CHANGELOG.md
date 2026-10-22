@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **OpenCode permission request hooks now run when a tool needs approval.** OpenCode delivers the
+  request through its plugin event handler; the compatibility matrix now reflects that the event
+  is available but allow/deny decisions are not supported.
 - **OpenCode enforces per-server MCP tool denials.** Denied tool names now match OpenCode's
   sanitized `<server>_<tool>` names, including server IDs with punctuation.
 - **Qwen remote MCP servers use their configured transport.** Streamable HTTP servers now use

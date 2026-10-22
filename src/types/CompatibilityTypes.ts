@@ -249,6 +249,8 @@ export const HOOK_CAVEAT_CODES = {
   UNVERIFIED_DECISION_CONTRACT: "hooks.unverifiedDecisionContract",
   /** The hook fires, but cannot block the tool call. */
   CANNOT_BLOCK: "hooks.cannotBlock",
+  /** The hook fires as a notification, but cannot return a permission decision. */
+  DECISION_UNSUPPORTED: "hooks.decisionUnsupported",
 } as const;
 
 export type PermissionCaveatCode =
@@ -306,6 +308,8 @@ export function getCompatibilityCaveatMessage(
       return "because the hook fires but this harness's allow/deny response contract is unverified, so a returned decision may be ignored";
     case HOOK_CAVEAT_CODES.CANNOT_BLOCK:
       return "because this harness's pre-tool hook fires but cannot block the tool call";
+    case HOOK_CAVEAT_CODES.DECISION_UNSUPPORTED:
+      return "because OpenCode delivers this event as notification-only; allow and deny decisions are not supported";
     default:
       return undefined;
   }
