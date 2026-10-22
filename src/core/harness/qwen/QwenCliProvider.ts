@@ -360,7 +360,8 @@ export class QwenCliProvider implements ICliProvider {
     // Hook setup (interactive notification hooks + headless user hooks) is dispatched
     // by CliIntegration.runExecutionSession() via buildNotificationHookArgs() /
     // buildHeadlessUserHookArgs() — not here in buildCliArgs().
-    // NOTE: buildHeadlessUserHookArgs returns ["--experimental-hooks"] for Qwen headless.
+    // Qwen hooks are registered in workspace .qwen/settings.json and enabled by default since 0.14.0.
+    // buildHeadlessUserHookArgs() applies hook setup and returns no CLI args.
     // Permission preparation is similarly dispatched by CliIntegration — not here.
 
     Log.trace(
@@ -993,25 +994,26 @@ export class QwenCliProvider implements ICliProvider {
   }
 
   /**
-   * Check whether stderr or an error describes a rejected Qwen session.
+   * Check whether CLI output or an error describes a rejected Qwen session.
    *
    * This classifies a process result so the runner can retry without
    * the resume flag; it is intentionally a provider concern, not output
    * parsing.
    */
   isRecoverableSessionError(
-    input: string | Error | { stderr?: string }
+    input: string | Error | { stdout?: string; stderr?: string }
   ): boolean {
     const message =
       typeof input === "string"
         ? input
         : input instanceof Error
           ? getErrorMessage(input)
-          : (input.stderr ?? "");
+          : `${input.stdout ?? ""}\n${input.stderr ?? ""}`;
     return (
       message.includes("invalid session") ||
       message.includes("session not found") ||
-      message.includes("--resume requires a valid session")
+      message.includes("--resume requires a valid session") ||
+      /No saved session found with (?:ID|title)\s+["']?[^\s"']+/i.test(message)
     );
   }
 }

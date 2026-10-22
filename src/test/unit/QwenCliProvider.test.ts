@@ -32,6 +32,28 @@ function parseMcpConfig(args: string[]): Record<string, unknown> {
 // ============================================================================
 
 suite("QwenCliProvider", () => {
+  test("recognizes Qwen's missing saved session message from stdout", () => {
+    const provider = new QwenCliProvider();
+
+    assert.strictEqual(
+      provider.isRecoverableSessionError({
+        stdout:
+          'No saved session found with title "00000000-0000-0000-0000-000000000000".',
+      }),
+      true
+    );
+    assert.strictEqual(
+      provider.isRecoverableSessionError({
+        stderr: "invalid session: session not found",
+      }),
+      true
+    );
+    assert.strictEqual(
+      provider.isRecoverableSessionError({ stdout: "Another Qwen error" }),
+      false
+    );
+  });
+
   test("formats file references with spaces for the current platform", () => {
     const provider = new QwenCliProvider();
     const originalPlatform = Object.getOwnPropertyDescriptor(
