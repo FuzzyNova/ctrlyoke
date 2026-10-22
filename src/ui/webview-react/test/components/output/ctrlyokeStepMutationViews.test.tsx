@@ -187,7 +187,7 @@ describe("step mutation ctrlyoke tool views", () => {
       data(MCP_EDIT_STEP_TOOL_NAME, editResult, params)
     )!;
     expect(findSegments(MCP_EDIT_STEP_TOOL_NAME, editResult, params)).toEqual([
-      resolvedEdit.summary,
+      resolvedEdit.heading,
       ...resolvedEdit.searchText,
     ]);
 
@@ -292,7 +292,7 @@ describe("step mutation ctrlyoke tool views", () => {
     ).toEqual([
       resolveCtrlYokeToolView(
         data(MCP_REMOVE_STEP_TOOL_NAME, removeResult, params)
-      )!.summary,
+      )!.heading,
     ]);
   });
 
@@ -371,7 +371,7 @@ describe("step mutation ctrlyoke tool views", () => {
     ).toEqual([
       resolveCtrlYokeToolView(
         data(MCP_REORDER_STEPS_TOOL_NAME, reorderResult, params)
-      )!.summary,
+      )!.heading,
       ...resolveCtrlYokeToolView(
         data(MCP_REORDER_STEPS_TOOL_NAME, reorderResult, params)
       )!.searchText,
@@ -452,7 +452,7 @@ describe("step mutation ctrlyoke tool views", () => {
           params,
           server
         )
-      ).toEqual([resolved!.summary, ...resolved!.searchText]);
+      ).toEqual([resolved!.heading, ...resolved!.searchText]);
       const { container } = render(
         <SubmitCommitMessageBody
           {...bodyProps(

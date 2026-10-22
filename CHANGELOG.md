@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **ctrlyoke tool calls in the output pane name the tool that was called.** Rows for ctrlyoke's
+  own MCP tools showed only a result summary such as "Step 7/7 · running · Codex"; the header now
+  starts with the tool name (`workflow_status · Step 7/7 · running · Codex`), find-in-output
+  matches it, and hovering it shows the full `MCP: <server>.<tool>` label.
 - **OpenCode permission request hooks now run when a tool needs approval.** OpenCode delivers the
   request through its plugin event handler; the compatibility matrix now reflects that the event
   is available but allow/deny decisions are not supported.

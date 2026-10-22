@@ -36,6 +36,26 @@ import {
   estimateGenericToolCallHeight,
   type ToolCallExpansionState,
 } from "../../../utils/toolCallLayout";
+import { toolCallLineHeight } from "../../../utils/outputLineMetrics";
+import { wrappedTextLines } from "./shared";
+
+/** Separates the called tool's name from its result summary in the header. */
+export const CTRLYOKE_TOOL_HEADING_SEPARATOR = " · ";
+
+/** Header text for a ctrlyoke tool view: the tool the agent called, then what it returned. */
+export function ctrlYokeToolHeading(tool: string, summary: string): string {
+  return `${tool}${CTRLYOKE_TOOL_HEADING_SEPARATOR}${summary}`;
+}
+
+/** Height the header adds beyond the one line every estimator already counts. */
+function getExtraHeadingHeight(
+  heading: string,
+  width: number | undefined,
+  fontSize: number
+): number {
+  const lines = wrappedTextLines(heading, width ?? 640, fontSize, 12);
+  return Math.max(0, lines - 1) * toolCallLineHeight(fontSize);
+}
 
 export type CtrlYokeToolView<P, R> = CtrlYokeToolModel<P, R> & {
   estimateHeight(
@@ -76,10 +96,16 @@ function withHeight(
     fontSize: number
   ) => number
 ): CtrlYokeToolView<unknown, unknown> {
+  const model = CTRLYOKE_TOOL_MODELS[tool];
   return {
-    ...CTRLYOKE_TOOL_MODELS[tool],
+    ...model,
     estimateHeight: (params, result, data, expansion, width, fontSize) =>
-      estimate(params, result, data, expansion, width, fontSize),
+      estimate(params, result, data, expansion, width, fontSize) +
+      getExtraHeadingHeight(
+        ctrlYokeToolHeading(tool, model.summary(params, result)),
+        width,
+        fontSize
+      ),
   };
 }
 
@@ -240,6 +266,8 @@ export interface ResolvedCtrlYokeToolView {
   params: unknown;
   result: unknown;
   summary: string;
+  /** `summary` prefixed with the tool name; the header's searchable text. */
+  heading: string;
   searchText: string[];
   warning: boolean;
 }
@@ -254,6 +282,7 @@ export function resolveCtrlYokeToolView(
     params: resolved.params,
     result: resolved.result,
     summary: resolved.summary,
+    heading: ctrlYokeToolHeading(data.tool, resolved.summary),
     searchText: resolved.searchText,
     warning: resolved.warning,
   };

@@ -45,6 +45,7 @@ import { ScriptVerdict } from "./ScriptVerdict";
 import { BackgroundWorkHoldOutput } from "./BackgroundWorkHoldOutput";
 import { resolveCtrlYokeToolView } from "./ctrlyoke-tools/registry";
 import { CTRLYOKE_TOOL_VIEW_BODIES } from "./ctrlyoke-tools/viewComponents";
+import { CtrlYokeToolHeading } from "./ctrlyoke-tools/CtrlYokeToolHeading";
 import { ToolCallBlock } from "./ToolCallBlock";
 import { ToolDot } from "./FileOperationOutput";
 import type { McpToolName } from "@root/utils/McpToolDefinitions";
@@ -1110,14 +1111,13 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
                 />
               }
               header={
-                <span
-                  className={customView.warning ? "text-warning-fg" : undefined}
-                >
-                  {highlightText(
-                    customView.summary,
-                    getFieldMatches("toolLabel")
-                  )}
-                </span>
+                <CtrlYokeToolHeading
+                  server={data.server}
+                  tool={data.tool}
+                  summary={customView.summary}
+                  warning={customView.warning}
+                  findMatches={getFieldMatches("toolLabel")}
+                />
               }
             >
               <Body

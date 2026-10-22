@@ -55,9 +55,10 @@ A workflow can even start with an empty `steps` list and let the `finalStep` bui
 
 An appended step joins the steps panel as soon as the tool call returns, in the
 position it was given, and runs like any authored step. The output pane shows
-each ctrlyoke tool call as its own row: `workflow_status` as a table of the
-run's steps, and `append_step` as "Appended N steps at #X" with the new steps'
-names, harness and model, and prompts. **Raw** shows the call's full response.
+each ctrlyoke tool call as its own row, headed by the tool's name and a summary
+of what it returned: `workflow_status` as a table of the run's steps, and
+`append_step` as "Appended N steps at #X" with the new steps' names, harness
+and model, and prompts. **Raw** shows the call's full response.
 The **Final Step** bar counts the passes, so **Pass 2** means the final step has
 run again after the steps it appended.
 

@@ -307,7 +307,7 @@ describe("ctrlyoke MCP tool views", () => {
     };
     expect(
       getOutputRowSearchSegments(row).map((segment) => segment.text)
-    ).toEqual([resolved.summary, ...resolved.searchText]);
+    ).toEqual([resolved.heading, ...resolved.searchText]);
     expect(
       estimateClaimPathsHeight(undefined, result, 280, 13)
     ).toBeGreaterThan(estimateClaimPathsHeight(undefined, result, 900, 13));
@@ -393,7 +393,7 @@ describe("ctrlyoke MCP tool views", () => {
     expect(
       getOutputRowSearchSegments(row).map((segment) => segment.text)
     ).toEqual([
-      resolveCtrlYokeToolView(data)!.summary,
+      resolveCtrlYokeToolView(data)!.heading,
       ...resolveCtrlYokeToolView(data)!.searchText,
     ]);
     expect(
@@ -565,7 +565,7 @@ describe("ctrlyoke MCP tool views", () => {
     expect(
       getOutputRowSearchSegments(row).map((segment) => segment.text)
     ).toEqual([
-      resolveCtrlYokeToolView(data)!.summary,
+      resolveCtrlYokeToolView(data)!.heading,
       ...resolveCtrlYokeToolView(data)!.searchText,
     ]);
     const result = parseReadNotesResultText(raw)!;
@@ -868,7 +868,7 @@ describe("ctrlyoke MCP tool views", () => {
     expect(renderedLine).toBe(resolved.searchText.join("\n"));
     expect(
       getOutputRowSearchSegments(outputRow).map((segment) => segment.text)
-    ).toEqual([resolved.summary, renderedLine]);
+    ).toEqual([resolved.heading, renderedLine]);
     expect(estimateAppendStepHeight(params, result, 280, 13)).toBeGreaterThan(
       estimateAppendStepHeight(params, result, 900, 13)
     );
@@ -970,7 +970,92 @@ describe("ctrlyoke MCP tool views", () => {
     };
     expect(
       getOutputRowSearchSegments(row).map((segment) => segment.text)
-    ).toEqual(["Note → reviewer", "note body"]);
+    ).toEqual(["post_note · Note → reviewer", "note body"]);
+  });
+
+  it("heads the view with the called tool name, highlights it, and measures its wrap", () => {
+    const parameters = { text: "note body", to: ["reviewer"] };
+    const data = {
+      server: MCP_SERVER_IDS.CTRLYOKE,
+      tool: "post_note",
+      parameters,
+      result: {
+        success: true,
+        output: JSON.stringify({ text: "note body", to: ["reviewer"], seq: 1 }),
+      },
+    };
+    const expansion = { ...DEFAULT_TOOL_CALL_EXPANSION_STATE };
+    const row: OutputRenderRow = {
+      key: "note-heading-row",
+      rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
+      target: { kind: "queue", index: 0 },
+      event: { type: CLI_EVENT_TYPES.MCP_TOOL_CALL, data },
+      eventIndex: 0,
+      rawTextOutput: false,
+      hideDiff: false,
+      estimateSize: 80,
+      toolCall: {
+        expansion,
+        renderPlan: buildToolCallRenderPlan({
+          parameters,
+          result: data.result,
+          expansion,
+        }),
+      },
+    };
+    const { container } = render(
+      <OutputRow
+        row={row}
+        isExecutionActive={false}
+        findDecorations={{
+          matches: [
+            { start: 0, end: "post_note".length, active: true },
+            {
+              start: "post_note · ".length,
+              end: "post_note · Note".length,
+              active: false,
+            },
+          ],
+        }}
+      />
+    );
+    const heading = container.querySelector(
+      "[title='MCP: ctrlyoke.post_note']"
+    );
+    expect(heading).not.toBeNull();
+    expect(heading).toHaveTextContent("post_note · Note → reviewer");
+    expect(
+      [...heading!.querySelectorAll("mark")].map((mark) => mark.textContent)
+    ).toEqual(["post_note", "Note"]);
+
+    const resolved = resolveCtrlYokeToolView(data)!;
+    const estimate = (width: number) =>
+      resolved.view.estimateHeight(
+        resolved.params,
+        resolved.result,
+        data,
+        expansion,
+        width,
+        13
+      );
+    // At 160px the heading wraps once; the body estimate alone does not see it.
+    expect(estimate(160)).toBeCloseTo(
+      estimatePostNoteHeight(
+        resolved.params as never,
+        resolved.result as never,
+        160,
+        13
+      ) +
+        13 * 1.625
+    );
+    expect(estimate(900)).toBeCloseTo(
+      estimatePostNoteHeight(
+        resolved.params as never,
+        resolved.result as never,
+        900,
+        13
+      )
+    );
   });
 
   it("Raw is store-controlled and contributes its measured height", () => {
