@@ -389,10 +389,13 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
                         data-index={virtualRow.index}
                         data-row-key={row.key}
                         className="flow-root"
+                        // Positioned by `top`, not translateY: sticky offsets are
+                        // computed from layout and ignore ancestor transforms, so
+                        // a translated row pins an expanded section's sticky
+                        // "Hide full output" toggle to the section's bottom.
                         style={{
                           position: "absolute",
-                          top: 0,
-                          transform: `translateY(${virtualRow.start}px)`,
+                          top: virtualRow.start,
                           width: "100%",
                         }}
                       >

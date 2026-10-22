@@ -52,7 +52,7 @@ export const STEP_IDENTITY_BAR_OFFSET_PX = 1;
  * Chromium paints an inset shadow as the difference of two rects whose top,
  * bottom and right edges coincide exactly; when the element's box lands on a
  * fractional device pixel — which virtualized output rows, positioned by
- * `translateY(<measured px>)`, do constantly — those coincident edges are
+ * `top: <measured px>`, do constantly — those coincident edges are
  * anti-aliased independently and leave a faint full-width hairline of the step
  * color along the row's top and bottom. That reads as a thin border wrapping
  * every event, and is visible at exactly the row boundaries where the fraction

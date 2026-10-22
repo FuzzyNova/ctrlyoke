@@ -547,7 +547,7 @@ export function useOutputVirtualization({
   // in `useOutputScrollTarget` is the single owner of scrollTop.
   //
   // The two cannot coexist, because they act on different clocks. Rows are
-  // absolutely positioned at `translateY(virtualRow.start)`, so a row growing
+  // absolutely positioned at `top: virtualRow.start`, so a row growing
   // does not displace its siblings — the anchor row only moves once React
   // commits the new starts. The virtualizer's compensation runs from the
   // ResizeObserver, *before* that commit: it writes `scrollTop += delta` while

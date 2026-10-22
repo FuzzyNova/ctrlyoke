@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Ctrl/Cmd+C copies selected output text again in the VS Code panel.** Since VS Code 1.143,
   the copy shortcut moved focus back to the last focused control (such as the prompt editor)
   before copying, so the output selection was lost and nothing was copied.
+- **"Hide full output" stays at the top of the output pane while you scroll an expanded result.**
+  It now sticks below the pinned run banner, so a long output can be collapsed from anywhere
+  inside it. Before, it scrolled away with the output, and with the run banner pinned it was
+  drawn over the output's first lines.
 - **OpenCode permission request hooks now run when a tool needs approval.** OpenCode delivers the
   request through its plugin event handler; the compatibility matrix now reflects that the event
   is available but allow/deny decisions are not supported.

@@ -71,7 +71,7 @@ function renderVirtualization(
 // The anchor lock in useOutputScrollTarget owns scrollTop outright. The
 // virtualizer's own compensation acts on a different clock — it writes
 // `scrollTop += delta` from the ResizeObserver, while every row is still
-// painted at its pre-commit `translateY` — so allowing it paints a viewport
+// painted at its pre-commit `top` — so allowing it paints a viewport
 // slide that the lock only undoes once the (450-650ms on a phone) commit
 // lands. That round trip is the "jumps ~40px then jumps back" symptom.
 describe("useOutputVirtualization scroll compensation", () => {

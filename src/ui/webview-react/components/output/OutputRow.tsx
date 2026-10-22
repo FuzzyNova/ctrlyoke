@@ -2076,7 +2076,10 @@ function OutputRowComponent({
   return (
     <div
       className={[
-        "bg-(--bg-primary) px-(--spacing-md) overflow-x-hidden",
+        // clip, not hidden: overflow-x: hidden turns the row into a scroll
+        // container, which captures a sticky "Hide full output" toggle so it
+        // offsets from the row instead of sticking to the pane.
+        "bg-(--bg-primary) px-(--spacing-md) overflow-x-clip",
         isActiveRow ? "rounded-xs ring-1 ring-focus-border" : "",
         row.groupStart ? "pt-(--spacing-sm)" : "",
         row.groupEnd
