@@ -988,6 +988,12 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
 
 describe("WorkflowPropertiesPanel picker shortcuts", () => {
   beforeEach(() => {
+    // A shortcut request expires PICKER_SHORTCUT_REQUEST_TTL_MS after the
+    // press, and the picker only claims it once the panel around it mounts.
+    // Under a loaded full `npm test` that mount has taken longer than the TTL,
+    // so the request was dropped and no wait could open the listbox. Freeze
+    // Date (only Date — timers stay real for findBy/waitFor) so it can't age.
+    vi.useFakeTimers({ toFake: ["Date"] });
     resetStores();
     postMessage.mockClear();
     (
@@ -995,7 +1001,10 @@ describe("WorkflowPropertiesPanel picker shortcuts", () => {
     ).postMessage = postMessage;
   });
 
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
 
   function press(target: PickerShortcutTarget) {
     act(() => {
