@@ -95,8 +95,14 @@ To move a minimum:
    specific fallbacks should say which versions they serve (for example
    `// legacy: Copilot < 1.0.30`) so this step is a search, not an
    archaeology project.
-4. `npm run generate-compatibility-docs`, and note the new minimums under
-   **Changed** in `CHANGELOG.md`.
+4. `npm run test:harness:minimum` installs each npm harness at its new minimum
+   into `.ctrlyoke/harness-minimums/`, puts it first on `PATH` and runs the
+   harness suite (it keeps your sign-ins and restores `~/.codex/config.toml`
+   and `~/.qwen/settings.json` afterwards). Pass mocha arguments after `--`,
+   such as `-- --grep codex-cli`. Antigravity is not on npm and `agy update`
+   cannot pick a version, so test its minimum by hand.
+5. `npm run generate-compatibility-docs`, and note the new minimums and the
+   minimum-run result under **Changed** in `CHANGELOG.md`.
 
 ## Before each ctrlyoke release: refresh `testedWith`
 
@@ -106,9 +112,10 @@ nothing, so it is done as late as possible:
 1. Update every harness CLI on the release machine (CHORES.md, chore 1).
 2. Run `npm run test:harness` once (it costs money and takes 30+ minutes). It
    must pass.
-3. `npm run harness:version-floors` shows the installed version beside each
-   `testedWith`. Set each provider's `versionPolicy.testedWith` to the installed
-   version the suite just passed against.
+3. The run ends with a version report, also written to
+   `.ctrlyoke/logs/test-runs/harness-<time>.json`: each harness's detected
+   version and its passed and failed cases. Set each provider's
+   `versionPolicy.testedWith` to the version that harness passed with.
 4. `npm run generate-compatibility-docs` and commit before the version bump.
 
 If a new CLI release fails the suite, either fix it in this release or roll

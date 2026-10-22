@@ -8,13 +8,19 @@ import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
 import {
   HOOK_CAVEAT_CODES,
+  capabilitySuiteVerification,
   type CapabilityDeclaration,
+  type CapabilityVerification,
   type HookCaveatCode,
 } from "../../../types/CompatibilityTypes";
 import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
+  CAPABILITY_VERIFICATION_BASES,
+  CAPABILITY_VERIFICATION_KINDS,
 } from "../../../types/DashboardConstants";
+
+const OPENCODE_HOOK_VERIFICATION = capabilitySuiteVerification([">=1.3.16"]);
 
 /**
  * OpenCode CLI Notification Monitor
@@ -57,8 +63,16 @@ export class OpenCodeNotificationMonitor
     ),
     postToolUse: OpenCodeNotificationMonitor.verifiedHook(),
     userPromptSubmit: OpenCodeNotificationMonitor.verifiedHook(),
+    // The capability suite finds it never fires:
+    // dev/bugs/backlog/opencode-permission-request-hook-never-fires.md.
     permissionRequest: OpenCodeNotificationMonitor.partialHook(
-      HOOK_CAVEAT_CODES.UNVERIFIED_DECISION_CONTRACT
+      HOOK_CAVEAT_CODES.UNVERIFIED_DECISION_CONTRACT,
+      {
+        kind: CAPABILITY_VERIFICATION_KINDS.MANUAL,
+        reference: "src/scripts/ctrlyoke-opencode-plugin.ts",
+        basis: CAPABILITY_VERIFICATION_BASES.CLI_VERSION,
+        verifiedVersions: [">=1.3.16"],
+      }
     ),
     notification: OpenCodeNotificationMonitor.unsupportedHook(),
     error: OpenCodeNotificationMonitor.verifiedHook(),
@@ -68,28 +82,19 @@ export class OpenCodeNotificationMonitor
     return {
       fidelity: CAPABILITY_FIDELITIES.EXACT,
       mechanism: CAPABILITY_MECHANISMS.NATIVE,
-      verification: {
-        kind: "manual",
-        reference: "src/scripts/ctrlyoke-opencode-plugin.ts",
-        basis: "cli-version",
-        verifiedVersions: [">=1.3.16"],
-      },
+      verification: OPENCODE_HOOK_VERIFICATION,
     };
   }
 
   private static partialHook(
-    caveatCode: HookCaveatCode
+    caveatCode: HookCaveatCode,
+    verification: CapabilityVerification = OPENCODE_HOOK_VERIFICATION
   ): CapabilityDeclaration {
     return {
       fidelity: CAPABILITY_FIDELITIES.PARTIAL,
       mechanism: CAPABILITY_MECHANISMS.NATIVE,
       caveatCode,
-      verification: {
-        kind: "manual",
-        reference: "src/scripts/ctrlyoke-opencode-plugin.ts",
-        basis: "cli-version",
-        verifiedVersions: [">=1.3.16"],
-      },
+      verification,
     };
   }
 

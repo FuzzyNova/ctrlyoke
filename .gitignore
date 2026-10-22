@@ -24,6 +24,7 @@ package.json.backup
 .ctrlyoke/snapshots/
 .ctrlyoke/attachments/
 .ctrlyoke/dev/
+.ctrlyoke/harness-minimums/
 .ctrlyoke-dev-home/
 .vscode-dev-userdata/
 .vscode-dev-tempdir/

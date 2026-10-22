@@ -315,13 +315,16 @@ suite("ToolPermissionMappers", () => {
         );
       });
 
-      test("interactive custom omits permission mode and keeps tool rules", async () => {
+      test("interactive custom prompts in default mode and keeps tool rules", async () => {
         const args = await mapperArgs(
           mapper,
           cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"]),
           { isInteractive: true }
         );
-        assert.ok(!args.includes("--permission-mode"));
+        assert.deepStrictEqual(args.slice(0, 2), [
+          "--permission-mode",
+          "default",
+        ]);
         assert.ok(args.includes("--allowedTools"));
         assert.ok(args.includes("--disallowedTools"));
       });
@@ -349,13 +352,13 @@ suite("ToolPermissionMappers", () => {
         assert.ok(!args.includes("--disallowedTools"));
       });
 
-      test("interactive custom with no tool rules leaves Claude's default mode", async () => {
+      test("interactive custom with no tool rules overrides the user's default mode", async () => {
         const args = await mapperArgs(
           mapper,
           cfg(PERMISSION_MODES.CUSTOM, [], []),
           { isInteractive: true }
         );
-        assert.deepStrictEqual(args, []);
+        assert.deepStrictEqual(args, ["--permission-mode", "default"]);
       });
 
       test("dangerouslyAllowAll ignores deny list completely", async () => {

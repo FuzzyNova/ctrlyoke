@@ -12,8 +12,16 @@ import { spawn, spawnSync } from "child_process";
 import * as nodePty from "node-pty";
 import type { PromptFile } from "../../../types/CtrlYokeTypes";
 import type { CliJsonResult } from "../../../cli/CliJsonResultBuilder";
-import type { HarnessId } from "../../../types/DashboardConstants";
+import type { CliEvent, TextData } from "../../../types/CliOutputTypes";
+import {
+  CLI_EVENT_TYPES,
+  type HarnessId,
+} from "../../../types/DashboardConstants";
+import { TIMELINE_EVENT_TYPES } from "../../../types/WorkflowTimelineTypes";
 import { getCodexHomeDir } from "../../../utils/CodexHome";
+import { makeTempDir } from "../../helpers/tempWorkspace";
+import { projectStateRoot } from "../../../utils/ProjectStatePaths";
+import { runsRootForProjectState } from "../../../utils/WorkflowPaths";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -54,19 +62,6 @@ export const HARNESS_MODELS: Record<HarnessId, string | undefined> = {
   "opencode-cli": "opencode/big-pickle",
   "qwen-cli": "qwen3.5-plus",
   "antigravity-cli": "gemini-3.8-flash-low",
-};
-
-/**
- * CLI versions used when the inline-config behavior was verified.
- *
- * These are fixture pins, not a runtime upgrade mechanism.  The merge/layer
- * behavior covered by the tests is partly emergent, so it must be re-verified
- * whenever one of these harnesses is upgraded.
- */
-export const PINNED_HARNESS_VERSIONS: Partial<Record<HarnessId, string>> = {
-  "codex-cli": "0.146.0",
-  "opencode-cli": "1.18.10",
-  "qwen-cli": "0.20.1",
 };
 
 // ---------------------------------------------------------------------------
@@ -203,6 +198,21 @@ function parseJsonResultLine(stdout: string): CliJsonResult | undefined {
 }
 
 /**
+ * Folder-trust questions a harness TUI asks on first sight of a workspace, and
+ * the keys that accept them. Matched against the terminal output with escape
+ * sequences and whitespace removed. Only `makeHarnessWorkspaceDir`'s fixed
+ * folders reach these, so each is answered once per machine.
+ */
+const FOLDER_TRUST_ANSWERS: readonly { prompt: RegExp; keys: string[] }[] = [
+  // Claude Code: "Is this a project you created or one you trust?", with
+  // "No, exit" selected above "Yes, I trust this folder".
+  { prompt: /Yes,Itrustthisfolder/, keys: ["\x1b[B", "\r"] },
+];
+
+/** Pause before each answer keystroke: a TUI drops keys sent while it redraws. */
+const ANSWER_KEY_DELAY_MS = 750;
+
+/**
  * Invoke a workflow through ctrlyoke's interactive path, with ctrlyoke itself
  * running inside a real pseudo-terminal.
  *
@@ -217,7 +227,12 @@ export function runInteractiveWorkflowFile(
   tmpDir: string,
   label: string,
   vars?: Record<string, string>,
-  timeoutMs: number = HARNESS_TIMEOUT_MS
+  timeoutMs: number = HARNESS_TIMEOUT_MS,
+  /**
+   * Polled every second; the run is killed as soon as it returns true. For a
+   * case that ends waiting on a person, such as an unanswered approval prompt.
+   */
+  stopWhen?: () => boolean
 ): Promise<RunResult> {
   const args = prepareRun(workflow, tmpDir, label, "--interactive", vars);
 
@@ -230,18 +245,43 @@ export function runInteractiveWorkflowFile(
       env: { ...process.env, PWD: tmpDir } as Record<string, string>,
     });
     let output = "";
-    let timedOut = false;
-    terminal.onData((chunk) => (output += chunk));
-    const timer = setTimeout(() => {
-      timedOut = true;
+    let killed = false;
+    const kill = () => {
+      killed = true;
       terminal.kill();
-    }, timeoutMs);
+    };
+    const unanswered = [...FOLDER_TRUST_ANSWERS];
+    terminal.onData((chunk) => {
+      output += chunk;
+      const screen = output
+        .slice(-4000)
+        .replace(/\x1b\[[0-9;?>]*[a-zA-Z]/g, "")
+        .replace(/\s+/g, "");
+      for (const answer of [...unanswered]) {
+        if (answer.prompt.test(screen)) {
+          unanswered.splice(unanswered.indexOf(answer), 1);
+          answer.keys.forEach((key, index) =>
+            setTimeout(
+              () => terminal.write(key),
+              (index + 1) * ANSWER_KEY_DELAY_MS
+            )
+          );
+        }
+      }
+    });
+    const timer = setTimeout(kill, timeoutMs);
+    const poller = stopWhen
+      ? setInterval(() => {
+          if (stopWhen()) kill();
+        }, 1000)
+      : undefined;
     terminal.onExit(({ exitCode }) => {
       clearTimeout(timer);
+      clearInterval(poller);
       resolve({
-        skipped: !timedOut && exitCode === 3,
-        // Mirror spawnSync: a run killed at the deadline has no exit code.
-        exitCode: timedOut ? null : exitCode,
+        skipped: !killed && exitCode === 3,
+        // Mirror spawnSync: a killed run has no exit code.
+        exitCode: killed ? null : exitCode,
         // A PTY merges both streams into one.
         stdout: output,
         stderr: "",
@@ -343,6 +383,126 @@ export async function withIsolatedCodexHome<T>(
     }
     fs.rmSync(isolatedHome, { recursive: true, force: true, maxRetries: 3 });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Workspace and run-state fixtures
+// ---------------------------------------------------------------------------
+
+/** Set to keep each case's workspace after the run, for inspection. */
+export const KEEP_WORKSPACES_ENV = "CTRLYOKE_HARNESS_KEEP_WORKSPACES";
+
+/**
+ * Harnesses whose TUI asks "do you trust this folder?" for a folder it has not
+ * seen, and records the answer per path in the user's own config. Their
+ * workspaces reuse one fixed path, so the question is answered once
+ * (`FOLDER_TRUST_ANSWERS`) instead of adding a dead temp path to that config
+ * on every run. Codex gets an isolated home instead (`withIsolatedCodexHome`).
+ */
+const FIXED_WORKSPACE_HARNESSES: ReadonlySet<HarnessId> = new Set([
+  "claude-cli",
+]);
+
+/**
+ * An empty workspace folder for one case: a fresh temp folder, or the
+ * harness's fixed folder emptied. Remove it with `removeTempDir`.
+ */
+export function makeHarnessWorkspaceDir(
+  harness: HarnessId,
+  prefix: string
+): string {
+  if (!FIXED_WORKSPACE_HARNESSES.has(harness)) return makeTempDir(prefix);
+  const dir = path.join(os.tmpdir(), `ctrlyoke-harness-${harness}`);
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+  fs.mkdirSync(dir);
+  return dir;
+}
+
+/**
+ * Make `dir` the root of its own git repository. Copilot discovers hooks under
+ * the repository root's `.github/hooks/`, so without this a temp folder inside
+ * some other checkout would put ctrlyoke's hook file in the wrong place.
+ */
+export function initGitRepo(dir: string): void {
+  const result = spawnSync("git", ["init", "--quiet"], {
+    cwd: dir,
+    stdio: "ignore",
+  });
+  if (result.status !== 0) {
+    throw new Error(`git init failed in ${dir}`);
+  }
+}
+
+/**
+ * Point `CTRLYOKE_HOME` at `<tmpDir>/state` until the returned restore
+ * function runs, so each case's run history is its own and can be read back.
+ */
+export function isolateRunState(tmpDir: string): () => void {
+  const prior = process.env.CTRLYOKE_HOME;
+  process.env.CTRLYOKE_HOME = path.join(tmpDir, "state");
+  return () => {
+    if (prior === undefined) delete process.env.CTRLYOKE_HOME;
+    else process.env.CTRLYOKE_HOME = prior;
+  };
+}
+
+/** Run storage of a workspace whose state was isolated by `isolateRunState`. */
+export function runsRootFor(workspace: string): string {
+  return runsRootForProjectState(projectStateRoot(workspace, "user"));
+}
+
+/** Every file named `fileName` under `directory`, depth first. */
+export function findRunFiles(directory: string, fileName: string): string[] {
+  if (!fs.existsSync(directory)) return [];
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const fullPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) return findRunFiles(fullPath, fileName);
+    return entry.name === fileName ? [fullPath] : [];
+  });
+}
+
+/** The CLI events a run recorded in its `events.jsonl` timeline. */
+export function readRecordedCliEvents(eventsPath: string): CliEvent[] {
+  const cliEvents: CliEvent[] = [];
+  for (const line of fs.readFileSync(eventsPath, "utf8").split(/\r?\n/)) {
+    if (!line) continue;
+    const event = JSON.parse(line) as {
+      eventType?: string;
+      payload?: {
+        cliOutput?: { events?: CliEvent[] };
+        events?: CliEvent[];
+      };
+    };
+    if (event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED) {
+      cliEvents.push(...(event.payload?.cliOutput?.events ?? []));
+    } else if (
+      event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED
+    ) {
+      cliEvents.push(...(event.payload?.events ?? []));
+    }
+  }
+  return cliEvents;
+}
+
+/** All AI response text recorded for the runs under `workspace`. */
+export function readResponseText(workspace: string): string {
+  return findRunFiles(runsRootFor(workspace), "events.jsonl")
+    .flatMap(readRecordedCliEvents)
+    .filter((event) => event.type === CLI_EVENT_TYPES.TEXT)
+    .map((event) => (event.data as TextData).text)
+    .join("\n");
+}
+
+/** The logical hook events `buildHookRecorderScript` wrote to `outputPath`. */
+export function readRecordedHookEvents(outputPath: string): Set<string> {
+  if (!fs.existsSync(outputPath)) return new Set();
+  return new Set(
+    fs
+      .readFileSync(outputPath, "utf8")
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => (JSON.parse(line) as { event: string }).event)
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -469,14 +629,17 @@ if (event === "permissionRequest") {
 
 /**
  * Source for a tiny line-delimited MCP server used by the inline-config
- * regression cases.  It records each tool call, which lets a test prove that
- * two concurrent workflows did not expose one another's dynamic tool.
+ * and capability cases.  It records each tool call, which lets a test prove
+ * that two concurrent workflows did not expose one another's dynamic tool, or
+ * that a denied tool was never called.
+ *
+ * Invocation: node mcp-probe.js <toolName>[,<toolName>...] <markerFile>
  */
 export function buildMcpProbeServerScript(): string {
   return `"use strict";
 const fs = require("fs");
 const readline = require("readline");
-const toolName = process.argv[2];
+const toolNames = process.argv[2].split(",");
 const markerFile = process.argv[3];
 function send(id, result) {
   process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id, result }) + "\\n");
@@ -495,17 +658,17 @@ rl.on("line", (line) => {
   }
   if (request.method === "tools/list") {
     send(request.id, {
-      tools: [{
-        name: toolName,
+      tools: toolNames.map((name) => ({
+        name,
         description: "Record this isolated harness fixture tool call.",
         inputSchema: { type: "object", properties: {} }
-      }]
+      }))
     });
     return;
   }
   if (request.method === "tools/call") {
-    if (request.params && request.params.name === toolName) {
-      fs.appendFileSync(markerFile, toolName + "\\n");
+    if (request.params && toolNames.includes(request.params.name)) {
+      fs.appendFileSync(markerFile, request.params.name + "\\n");
       send(request.id, { content: [{ type: "text", text: "probe-called" }] });
     } else {
       send(request.id, { isError: true, content: [{ type: "text", text: "unknown tool" }] });

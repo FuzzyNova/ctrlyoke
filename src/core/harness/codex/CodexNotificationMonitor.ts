@@ -9,6 +9,7 @@ import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
 import {
   HOOK_CAVEAT_CODES,
+  capabilitySuiteVerification,
   type CapabilityDeclaration,
 } from "../../../types/CompatibilityTypes";
 import {
@@ -76,12 +77,7 @@ export class CodexNotificationMonitor
     return {
       fidelity: CAPABILITY_FIDELITIES.EXACT,
       mechanism: CAPABILITY_MECHANISMS.TRANSLATED_CLI,
-      verification: {
-        kind: "manual",
-        reference: "src/core/harness/codex/CodexNotificationMonitor.ts",
-        basis: "cli-version",
-        verifiedVersions: [">=0.129.0"],
-      },
+      verification: capabilitySuiteVerification([">=0.129.0"]),
     };
   }
 

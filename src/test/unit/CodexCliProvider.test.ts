@@ -210,7 +210,7 @@ suite("CodexCliProvider", () => {
         {
           fidelity: "exact",
           mechanism: "native",
-          verificationKind: "manual",
+          verificationKind: "behavioral-test",
         }
       );
     });

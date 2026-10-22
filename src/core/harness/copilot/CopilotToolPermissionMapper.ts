@@ -5,20 +5,19 @@ import {
   ToolPermissionMapperBase,
   ToolPermissionApplication,
 } from "../shared/interfaces/IToolPermissionMapper";
-import type { PermissionCapabilityDescriptor } from "../../../types/CompatibilityTypes";
+import {
+  capabilitySuiteVerification,
+  type PermissionCapabilityDescriptor,
+} from "../../../types/CompatibilityTypes";
 import { Log } from "../../../utils/Log";
 import {
   HARNESS_IDS,
   PERMISSION_MODES,
 } from "../../../types/DashboardConstants";
 
-const COPILOT_PERMISSION_VERIFICATION = {
-  kind: "manual",
-  reference:
-    "dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping",
-  basis: "cli-version",
-  verifiedVersions: [">=0.0.384"],
-} as const;
+const COPILOT_PERMISSION_VERIFICATION = capabilitySuiteVerification([
+  ">=0.0.384",
+]);
 
 const COPILOT_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
   mode: {

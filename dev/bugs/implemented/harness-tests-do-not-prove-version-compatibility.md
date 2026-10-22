@@ -2,7 +2,11 @@
 
 - **Found:** 2026-10-21 by Claude (harness version-support review)
 - **Area:** `src/test/harness/**`, every provider's capability declarations and `config.versionPolicy`
-- **Severity:** medium
+- **Resolution:** fixed in this commit. `capabilities.harness.test.ts` runs one case per published
+  claim, generated from the registry, and declarations it proves now cite it; the suite records
+  the CLI versions it ran in a version report; `npm run test:harness:minimum` runs it against the
+  npm minimums. Claims it shows broken are filed separately (`KNOWN_BROKEN_CLAIMS` in
+  `src/test/harness/capabilityEvidence.ts`).
 
 ## Symptom
 

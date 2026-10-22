@@ -54,9 +54,10 @@ import type {
   UserHookConfig,
 } from "../../../types/CtrlYokeTypes";
 import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
-import type {
-  CompatibilityDiagnostic,
-  HarnessCapabilityFacts,
+import {
+  capabilitySuiteVerification,
+  type CompatibilityDiagnostic,
+  type HarnessCapabilityFacts,
 } from "../../../types/CompatibilityTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import {
@@ -67,24 +68,13 @@ import {
 const CODEX_MCP_FILTERING_CAPABILITY = {
   fidelity: "exact",
   mechanism: "native",
-  verification: {
-    kind: "manual",
-    reference:
-      "dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#codex-partial-support-investigation",
-    basis: "cli-version",
-    verifiedVersions: [">=0.129.0"],
-  },
+  verification: capabilitySuiteVerification([">=0.129.0"]),
 } as const;
 
 const CODEX_IMAGE_INPUT_CAPABILITY = {
   fidelity: "exact",
   mechanism: "native",
-  verification: {
-    kind: "manual",
-    reference: "https://developers.openai.com/codex/cli/reference/",
-    basis: "cli-version",
-    verifiedVersions: [">=0.129.0"],
-  },
+  verification: capabilitySuiteVerification([">=0.129.0"]),
 } as const;
 
 /**

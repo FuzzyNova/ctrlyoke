@@ -7,6 +7,7 @@ import {
 } from "../shared/interfaces/IToolPermissionMapper";
 import {
   PERMISSION_CAVEAT_CODES,
+  capabilitySuiteVerification,
   type PermissionCapabilityDescriptor,
 } from "../../../types/CompatibilityTypes";
 import {
@@ -14,12 +15,9 @@ import {
   PERMISSION_MODES,
 } from "../../../types/DashboardConstants";
 
-const ANTIGRAVITY_PERMISSION_VERIFICATION = {
-  kind: "manual",
-  reference: "dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#antigravity",
-  basis: "cli-version",
-  verifiedVersions: [">=1.1.12"],
-} as const;
+const ANTIGRAVITY_PERMISSION_VERIFICATION = capabilitySuiteVerification([
+  ">=1.1.12",
+]);
 
 export const ANTIGRAVITY_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor =
   {

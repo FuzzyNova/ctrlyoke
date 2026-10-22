@@ -7,6 +7,7 @@ import {
 } from "../shared/interfaces/IToolPermissionMapper";
 import {
   PERMISSION_CAVEAT_CODES,
+  capabilitySuiteVerification,
   type PermissionCapabilityDescriptor,
 } from "../../../types/CompatibilityTypes";
 import { Log } from "../../../utils/Log";
@@ -17,13 +18,9 @@ import {
 } from "../../../types/DashboardConstants";
 import { foldMcpToolDenialsIntoServers } from "../../../types/ToolPermissionUtils";
 
-const CODEX_PERMISSION_VERIFICATION = {
-  kind: "manual",
-  reference:
-    "dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#codex-partial-support-investigation",
-  basis: "cli-version",
-  verifiedVersions: [">=0.129.0"],
-} as const;
+const CODEX_PERMISSION_VERIFICATION = capabilitySuiteVerification([
+  ">=0.129.0",
+]);
 
 export const CODEX_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
   mode: {

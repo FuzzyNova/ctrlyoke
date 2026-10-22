@@ -36,6 +36,7 @@ import type {
 import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import {
   MCP_CAVEAT_CODES,
+  capabilitySuiteVerification,
   type HarnessCapabilityFacts,
 } from "../../../types/CompatibilityTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
@@ -84,12 +85,7 @@ const ANTIGRAVITY_MCP_FILTERING_CAPABILITY = {
 const ANTIGRAVITY_IMAGE_INPUT_CAPABILITY = {
   fidelity: "exact",
   mechanism: "native",
-  verification: {
-    kind: "manual",
-    reference: "https://antigravity.google/docs/cli/using",
-    basis: "cli-version",
-    verifiedVersions: [">=1.4.4"],
-  },
+  verification: capabilitySuiteVerification([">=1.4.4"]),
 } as const;
 
 type AntigravityHookGroup = Record<

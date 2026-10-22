@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Claude Code asks before unlisted tools in interactive `custom` mode.** ctrlyoke now starts
+  Claude with `--permission-mode default`. Before, it passed no mode, so a `defaultMode` such as
+  `bypassPermissions` in your own Claude settings ran every tool without asking and the allow list
+  had no effect.
 - **Codex errors are shown instead of an exit code.** When Codex rejects a request (for example a
   model that doesn't exist or that your account can't use), the step now fails with Codex's own
   message instead of "Process exited with code 1".

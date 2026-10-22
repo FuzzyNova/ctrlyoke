@@ -2,17 +2,13 @@
  * Inline harness configuration regression tests.
  *
  * These are real-harness tests and are intentionally not part of `npm test`.
- * Run with `npm run test:harness` only when authenticated installations of the
- * pinned CLIs are available.  Exit code 3 means that the target CLI is absent
- * and skips the case.
- *
- * Verified fixture pins:
- *   - OpenCode 1.18.10
- *   - codex-cli 0.146.0
- *   - Qwen Code 0.20.1
+ * Run with `npm run test:harness` only when authenticated CLIs are installed.
+ * Exit code 3 means that the target CLI is absent and skips the case.
  *
  * OpenCode's merge behavior and Codex's config-layer behavior are emergent
  * rather than documented contracts; re-verify these fixtures on CLI upgrade.
+ * The CLI versions each run exercised are recorded by the suite's version
+ * report (see helpers/harnessVersionReport.ts).
  */
 
 import * as assert from "assert";
@@ -30,10 +26,10 @@ import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import {
   HARNESS_MODELS,
   HARNESS_TIMEOUT_MS,
-  PINNED_HARNESS_VERSIONS,
   buildHookRecorderScript,
   buildMcpProbeServerScript,
   logAndMaybeSkip,
+  readRecordedHookEvents,
   runInteractiveWorkflowFile,
   runWorkflowFile,
   runWorkflowFileAsync,
@@ -118,11 +114,7 @@ function makeHook(
 }
 
 function hasRecordedEvent(outputPath: string, event: string): boolean {
-  if (!fs.existsSync(outputPath)) return false;
-  return fs
-    .readFileSync(outputPath, "utf8")
-    .split(/\r?\n/)
-    .some((line) => line.includes(`"event":"${event}"`));
+  return readRecordedHookEvents(outputPath).has(event);
 }
 
 function openCodePermissionWorkflow(
@@ -218,7 +210,7 @@ suite("Inline harness configuration regression tests", function () {
     );
   });
 
-  suite(`OpenCode ${PINNED_HARNESS_VERSIONS[OPENCODE]}`, function () {
+  suite(OPENCODE, function () {
     for (const permissionCase of [
       {
         name: "allow proceeds",
@@ -406,7 +398,7 @@ suite("Inline harness configuration regression tests", function () {
     });
   });
 
-  suite(`Codex ${PINNED_HARNESS_VERSIONS[CODEX]}`, function () {
+  suite(CODEX, function () {
     test("interactive completion uses inline hooks without .codex/hooks.json", async function () {
       const outputPath = path.join(tmpDir, "codex-inline-stop.jsonl");
       const result = await withIsolatedCodexHome([tmpDir], () =>
@@ -561,7 +553,7 @@ suite("Inline harness configuration regression tests", function () {
     });
   });
 
-  suite(`Qwen ${PINNED_HARNESS_VERSIONS[QWEN]}`, function () {
+  suite(QWEN, function () {
     for (const permissionCase of [
       {
         name: "allow proceeds",

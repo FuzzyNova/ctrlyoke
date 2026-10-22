@@ -407,13 +407,16 @@ suite("HarnessToolPermissionMappers", () => {
         );
       });
 
-      test("interactive custom mode omits permission mode and keeps allow and deny lists", async () => {
+      test("interactive custom mode prompts in default mode and keeps allow and deny lists", async () => {
         const args = await mapperArgs(
           mapper,
           cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"]),
           { isInteractive: true }
         );
-        assert.ok(!args.includes("--permission-mode"));
+        assert.deepStrictEqual(args.slice(0, 2), [
+          "--permission-mode",
+          "default",
+        ]);
         assert.ok(args.includes("--allowedTools"));
         assert.ok(args.includes("--disallowedTools"));
       });
@@ -427,13 +430,13 @@ suite("HarnessToolPermissionMappers", () => {
         assert.deepStrictEqual(args, ["--permission-mode", "dontAsk"]);
       });
 
-      test("interactive custom mode with no tools leaves Claude's default mode", async () => {
+      test("interactive custom mode with no tools overrides the user's default mode", async () => {
         const args = await mapperArgs(
           mapper,
           cfg(PERMISSION_MODES.CUSTOM, [], []),
           { isInteractive: true }
         );
-        assert.deepStrictEqual(args, []);
+        assert.deepStrictEqual(args, ["--permission-mode", "default"]);
       });
 
       test("custom mode deduplicates converted tool names", async () => {

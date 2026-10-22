@@ -7,6 +7,7 @@ import {
 } from "../shared/interfaces/IToolPermissionMapper";
 import {
   PERMISSION_CAVEAT_CODES,
+  capabilitySuiteVerification,
   type PermissionCapabilityDescriptor,
 } from "../../../types/CompatibilityTypes";
 import { COPILOT_TO_CLAUDE_MAP } from "../shared/CliToolPermissionMapper";
@@ -16,13 +17,9 @@ import {
   PERMISSION_MODES,
 } from "../../../types/DashboardConstants";
 
-const CLAUDE_PERMISSION_VERIFICATION = {
-  kind: "manual",
-  reference:
-    "dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping",
-  basis: "cli-version",
-  verifiedVersions: [">=2.1.17"],
-} as const;
+const CLAUDE_PERMISSION_VERIFICATION = capabilitySuiteVerification([
+  ">=2.1.17",
+]);
 
 const CLAUDE_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
   mode: {
@@ -52,7 +49,7 @@ const CLAUDE_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
  * Permission modes:
  * - dangerouslyAllowAll: --dangerously-skip-permissions (bypasses ALL checks)
  * - allowAll: --permission-mode bypassPermissions --tools "default" (respects deny list)
- * - custom: headless uses --permission-mode dontAsk; interactive uses the default mode.
+ * - custom: --permission-mode dontAsk headless, --permission-mode default interactive.
  *   Both apply --allowedTools and --disallowedTools.
  *
  * Tool name conversion:
@@ -64,7 +61,7 @@ const CLAUDE_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
  * Claude CLI specifics:
  * - Uses --permission-mode bypassPermissions for allowAll
  * - Uses --permission-mode dontAsk for headless custom runs, which deny tools
- *   that are not pre-approved; interactive custom runs keep the default mode
+ *   that are not pre-approved; interactive custom runs use the default (prompting) mode
  * - Uses --tools "default" for all default tools
  * - Uses --allowedTools for specific tools
  * - Uses --disallowedTools for deny patterns
@@ -99,8 +96,13 @@ export class ClaudeToolPermissionMapper
         args.push("--tools", "default");
       } else {
         // In headless mode dontAsk auto-denies tools that are not pre-approved.
-        // Interactive mode keeps Claude's default prompting behavior.
-        args = context.isInteractive ? [] : ["--permission-mode", "dontAsk"];
+        // Interactive mode prompts for them. It is named explicitly: left
+        // out, Claude would use the user's own `defaultMode`, and a default of
+        // bypassPermissions or acceptEdits would never ask.
+        args = [
+          "--permission-mode",
+          context.isInteractive ? "default" : "dontAsk",
+        ];
         const convertedAllowTools = this.convertUnique(
           config.allowedTools,
           (t) => this.convertToClaudeFormat(t)

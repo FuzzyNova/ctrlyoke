@@ -52,7 +52,10 @@ import type {
   UserHookConfig,
 } from "../../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
-import { type HarnessCapabilityFacts } from "../../../types/CompatibilityTypes";
+import {
+  capabilitySuiteVerification,
+  type HarnessCapabilityFacts,
+} from "../../../types/CompatibilityTypes";
 import {
   applyPreparedMutations,
   type CliProviderPreparation,
@@ -72,13 +75,7 @@ const QWEN_MCP_FILTERING_CAPABILITY = {
 const QWEN_IMAGE_INPUT_CAPABILITY = {
   fidelity: "exact",
   mechanism: "native",
-  verification: {
-    kind: "manual",
-    reference:
-      "https://qwenlm.github.io/qwen-code-docs/en/users/features/commands/",
-    basis: "cli-version",
-    verifiedVersions: [">=0.15.5"],
-  },
+  verification: capabilitySuiteVerification([">=0.15.5"]),
 } as const;
 
 /**

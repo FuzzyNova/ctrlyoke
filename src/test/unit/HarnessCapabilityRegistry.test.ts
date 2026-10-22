@@ -1,4 +1,6 @@
 import * as assert from "assert";
+import * as fs from "fs";
+import * as path from "path";
 import { suite, test } from "mocha";
 import { HarnessCapabilityRegistry } from "../../core/HarnessCapabilityRegistry";
 import type { HarnessCapabilitySource } from "../../core/HarnessCapabilityRegistry";
@@ -18,6 +20,7 @@ import type {
 import type { HarnessConfig } from "../../core/harness/shared/interfaces/ICliProvider";
 import {
   CAPABILITY_DOMAINS,
+  CAPABILITY_VERIFICATION_KINDS,
   HARNESS_IDS,
   HOOK_EVENT_ORDER,
   type HarnessId,
@@ -28,7 +31,13 @@ import type {
   PermissionCapabilityDescriptor,
 } from "../../types/CompatibilityTypes";
 import { TEST_VERSION_POLICY } from "../helpers/mockHarness";
+import {
+  KNOWN_BROKEN_CLAIMS,
+  UNPROVEN_CLAIMS,
+  collectClaims,
+} from "../harness/capabilityEvidence";
 
+const REPO_ROOT = path.resolve(__dirname, "../../..");
 const HARNESS_ID_LIST = Object.values(HARNESS_IDS) as HarnessId[];
 type CapabilityProvider = HarnessCapabilitySource["provider"];
 
@@ -395,6 +404,32 @@ suite("HarnessCapabilityRegistry", () => {
       assert.strictEqual(declaration?.fidelity, "unsupported");
       assert.strictEqual(declaration?.mechanism, "none");
     }
+  });
+
+  test("backs every supported claim with a live harness case, unless listed", () => {
+    const problems: string[] = [];
+    for (const {
+      harnessId,
+      capabilities,
+    } of HarnessCapabilityRegistry.getDocumentationFacts().harnesses) {
+      for (const [claim, declaration] of collectClaims(capabilities)) {
+        if (KNOWN_BROKEN_CLAIMS[harnessId]?.[claim]) continue;
+        const { kind, reference } = declaration.verification ?? {};
+        const where = `${harnessId} ${claim}: ${kind} ${reference}`;
+        if (UNPROVEN_CLAIMS[harnessId]?.[claim]) {
+          if (kind !== CAPABILITY_VERIFICATION_KINDS.MANUAL) {
+            problems.push(`${where} (listed as unproven)`);
+          }
+        } else if (
+          kind !== CAPABILITY_VERIFICATION_KINDS.BEHAVIORAL_TEST ||
+          !reference?.startsWith("src/test/harness/") ||
+          !fs.existsSync(path.join(REPO_ROOT, reference))
+        ) {
+          problems.push(where);
+        }
+      }
+    }
+    assert.deepStrictEqual(problems, []);
   });
 
   test("rejects incomplete enabled domains and invalid declarations", () => {

@@ -47,6 +47,7 @@ import {
 } from "../shared/StatuslineManager";
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import {
+  capabilitySuiteVerification,
   type CompatibilityDiagnostic,
   type HarnessCapabilityFacts,
 } from "../../../types/CompatibilityTypes";
@@ -70,25 +71,13 @@ import { COPILOT_EVENT_TYPES } from "./CopilotProtocolConstants";
 const COPILOT_MCP_FILTERING_CAPABILITY = {
   fidelity: "exact",
   mechanism: "translated-cli",
-  verification: {
-    kind: "manual",
-    reference:
-      "dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping",
-    basis: "cli-version",
-    verifiedVersions: [">=0.0.384"],
-  },
+  verification: capabilitySuiteVerification([">=0.0.384"]),
 } as const;
 
 const COPILOT_IMAGE_INPUT_CAPABILITY = {
   fidelity: "exact",
   mechanism: "native",
-  verification: {
-    kind: "manual",
-    reference:
-      "https://docs.github.com/en/copilot/github-copilot-in-the-cli/using-github-copilot-in-the-cli#adding-files-to-your-prompt",
-    basis: "cli-version",
-    verifiedVersions: [">=0.0.384"],
-  },
+  verification: capabilitySuiteVerification([">=0.0.384"]),
 } as const;
 
 /**
@@ -133,7 +122,7 @@ export class CopilotCliProvider implements ICliProvider {
     npmPackage: "@github/copilot",
     versionPolicy: {
       minimum: "1.0.19",
-      testedWith: "1.0.92",
+      testedWith: "1.0.102",
       updateCommand: "copilot update",
     },
     shouldStreamHeadlessOutput: true,

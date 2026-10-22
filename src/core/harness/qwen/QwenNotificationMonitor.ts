@@ -10,6 +10,7 @@ import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
 import {
   HOOK_CAVEAT_CODES,
+  capabilitySuiteVerification,
   type CapabilityDeclaration,
 } from "../../../types/CompatibilityTypes";
 import {
@@ -116,12 +117,7 @@ export class QwenNotificationMonitor
     return {
       fidelity: CAPABILITY_FIDELITIES.EXACT,
       mechanism: CAPABILITY_MECHANISMS.WORKSPACE_CONFIG,
-      verification: {
-        kind: "manual",
-        reference: "src/core/harness/qwen/QwenNotificationMonitor.ts",
-        basis: "cli-version",
-        verifiedVersions: [">=0.15.5"],
-      },
+      verification: capabilitySuiteVerification([">=0.15.5"]),
     };
   }
 

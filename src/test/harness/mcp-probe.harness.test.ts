@@ -4,8 +4,6 @@
  */
 
 import * as assert from "assert";
-import * as fs from "fs";
-import * as path from "path";
 import type { CliEvent } from "../../types/CliOutputTypes";
 import type { PromptFile } from "../../types/CtrlYokeTypes";
 import {
@@ -13,64 +11,20 @@ import {
   HARNESS_IDS,
   MCP_SERVER_IDS,
 } from "../../types/DashboardConstants";
-import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
-import { projectStateRoot } from "../../utils/ProjectStatePaths";
-import { runsRootForProjectState } from "../../utils/WorkflowPaths";
 import { normalizeCliEvents } from "../../utils/CliEventNormalizer";
 import { MCP_PROBE_CALLS } from "./mcpProbeContract";
 import {
   HARNESS_MODELS,
   HARNESS_TIMEOUT_MS,
+  findRunFiles,
+  isolateRunState,
   logAndMaybeSkip,
+  readRecordedCliEvents,
   runWorkflowFile,
+  runsRootFor,
   type HarnessId,
 } from "./helpers/harnessRunner";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
-
-function findEventsJsonl(directory: string): string {
-  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-    const fullPath = path.join(directory, entry.name);
-    if (entry.isDirectory()) {
-      try {
-        const found = findEventsJsonl(fullPath);
-        if (found) return found;
-      } catch {
-        // Continue through the run storage tree.
-      }
-    } else if (entry.name === "events.jsonl") {
-      return fullPath;
-    }
-  }
-  throw new Error(`No events.jsonl found under ${directory}`);
-}
-
-function readRecordedCliEvents(eventsPath: string): CliEvent[] {
-  const timelineEvents = fs
-    .readFileSync(eventsPath, "utf8")
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map(
-      (line) =>
-        JSON.parse(line) as {
-          eventType?: string;
-          payload?: {
-            cliOutput?: { events?: CliEvent[] };
-            events?: CliEvent[];
-          };
-        }
-    );
-  const cliEvents: CliEvent[] = [];
-  for (const event of timelineEvents) {
-    if (event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED) {
-      cliEvents.push(...(event.payload?.cliOutput?.events ?? []));
-    } else if (
-      event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED
-    ) {
-      cliEvents.push(...(event.payload?.events ?? []));
-    }
-  }
-  return cliEvents;
-}
 
 function assertProbeCalls(
   harness: HarnessId,
@@ -144,17 +98,15 @@ function assertProbeCalls(
 suite("MCP event pipeline harness probe", function () {
   this.timeout(HARNESS_TIMEOUT_MS);
   let tmpDir: string;
-  let priorCtrlyokeHome: string | undefined;
+  let restoreRunState: () => void;
 
   setup(function () {
     tmpDir = makeTempDir("cy-mcp-probe-");
-    priorCtrlyokeHome = process.env.CTRLYOKE_HOME;
-    process.env.CTRLYOKE_HOME = path.join(tmpDir, "state");
+    restoreRunState = isolateRunState(tmpDir);
   });
 
   teardown(function () {
-    if (priorCtrlyokeHome === undefined) delete process.env.CTRLYOKE_HOME;
-    else process.env.CTRLYOKE_HOME = priorCtrlyokeHome;
+    restoreRunState();
     removeTempDir(tmpDir, (dir) =>
       console.log(`  ⚠  Could not clean up ${dir} (may still be in use)`)
     );
@@ -190,8 +142,8 @@ suite("MCP event pipeline harness probe", function () {
         `${harness}: CLI exited with code ${result.exitCode}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`
       );
 
-      const projectRoot = projectStateRoot(tmpDir, "user");
-      const eventsPath = findEventsJsonl(runsRootForProjectState(projectRoot));
+      const [eventsPath] = findRunFiles(runsRootFor(tmpDir), "events.jsonl");
+      assert.ok(eventsPath, `${harness}: no events.jsonl was recorded`);
       const events = readRecordedCliEvents(eventsPath);
       assertProbeCalls(harness, events);
     });

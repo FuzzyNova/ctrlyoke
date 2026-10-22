@@ -11,10 +11,15 @@ import type {
   PreparedUserHookConfig,
   UserHookConfig,
 } from "../../../types/CtrlYokeTypes";
-import type { CapabilityDeclaration } from "../../../types/CompatibilityTypes";
+import {
+  capabilitySuiteVerification,
+  type CapabilityDeclaration,
+} from "../../../types/CompatibilityTypes";
 import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
+  CAPABILITY_VERIFICATION_BASES,
+  CAPABILITY_VERIFICATION_KINDS,
   HOOK_EVENT_NAMES,
 } from "../../../types/DashboardConstants";
 import { lowercaseDriveLetter } from "../../../utils/PathCasing";
@@ -56,12 +61,18 @@ export class CopilotNotificationMonitor
         {
           fidelity: CAPABILITY_FIDELITIES.EXACT,
           mechanism: CAPABILITY_MECHANISMS.WORKSPACE_CONFIG,
-          verification: {
-            kind: "manual",
-            reference: "src/core/harness/copilot/CopilotNotificationMonitor.ts",
-            basis: "cli-version",
-            verifiedVersions: [">=1.0.19"],
-          },
+          // errorOccurred fires only for a failure inside a session, which
+          // no short live case can provoke.
+          verification:
+            event === HOOK_EVENT_NAMES.ERROR
+              ? {
+                  kind: CAPABILITY_VERIFICATION_KINDS.MANUAL,
+                  reference:
+                    "src/core/harness/copilot/CopilotNotificationMonitor.ts",
+                  basis: CAPABILITY_VERIFICATION_BASES.CLI_VERSION,
+                  verifiedVersions: [">=1.0.19"],
+                }
+              : capabilitySuiteVerification([">=1.0.19"]),
         },
       ])
     ) as unknown as Record<HookEvent, CapabilityDeclaration>;

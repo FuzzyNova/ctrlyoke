@@ -76,20 +76,41 @@ export type CompatibilitySourceTier =
 /** A semver range expression for a harness CLI version. */
 export type HarnessVersionRange = string;
 
+export interface CapabilityVerification {
+  kind: CapabilityVerificationKind;
+  reference: string;
+  basis: CapabilityVerificationBasis;
+  /** Ranges for which this exact capability claim has evidence. */
+  readonly verifiedVersions: readonly HarnessVersionRange[];
+}
+
 export interface CapabilityDeclaration {
   fidelity: CapabilityFidelity;
   mechanism: CapabilityMechanism;
-  verification?: {
-    kind: CapabilityVerificationKind;
-    reference: string;
-    basis: CapabilityVerificationBasis;
-    /** Ranges for which this exact capability claim has evidence. */
-    readonly verifiedVersions: readonly HarnessVersionRange[];
-  };
+  verification?: CapabilityVerification;
   caveatCode?: CompatibilityCaveatCode;
   remediationCode?: string;
   /** Capability refinements for harness execution modes. */
   modeOverrides?: Partial<Record<ExecutionMode, CapabilityModeOverride>>;
+}
+
+/**
+ * The live suite (`npm run test:harness`) that proves a capability claim
+ * against the real CLI, one case per claim.
+ */
+export const CAPABILITY_SUITE_REFERENCE =
+  "src/test/harness/capabilities.harness.test.ts";
+
+/** Evidence for a claim the capability suite proves. */
+export function capabilitySuiteVerification(
+  verifiedVersions: readonly HarnessVersionRange[]
+): CapabilityVerification {
+  return {
+    kind: CAPABILITY_VERIFICATION_KINDS.BEHAVIORAL_TEST,
+    reference: CAPABILITY_SUITE_REFERENCE,
+    basis: CAPABILITY_VERIFICATION_BASES.CLI_VERSION,
+    verifiedVersions,
+  };
 }
 
 export interface CapabilityModeOverride {

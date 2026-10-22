@@ -9,13 +9,25 @@ import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
 import {
   HOOK_CAVEAT_CODES,
+  capabilitySuiteVerification,
   type CapabilityDeclaration,
+  type CapabilityVerification,
 } from "../../../types/CompatibilityTypes";
 import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
+  CAPABILITY_VERIFICATION_BASES,
+  CAPABILITY_VERIFICATION_KINDS,
   HARNESS_IDS,
 } from "../../../types/DashboardConstants";
+
+/** Evidence for a hook claim no live case backs: the adapter source. */
+const ANTIGRAVITY_HOOK_SOURCE_VERIFICATION: CapabilityVerification = {
+  kind: CAPABILITY_VERIFICATION_KINDS.MANUAL,
+  reference: "src/core/harness/antigravity/AntigravityNotificationMonitor.ts",
+  basis: CAPABILITY_VERIFICATION_BASES.CLI_VERSION,
+  verifiedVersions: [">=1.1.12"],
+};
 
 type AntigravityHookKey =
   "PreToolUse" | "PostToolUse" | "PreInvocation" | "PostInvocation" | "Stop";
@@ -36,25 +48,29 @@ export class AntigravityNotificationMonitor
   static readonly CAPABILITIES: Record<HookEvent, CapabilityDeclaration> = {
     stop: AntigravityNotificationMonitor.verifiedHook(),
     sessionStart: AntigravityNotificationMonitor.verifiedHook(),
-    preToolUse: AntigravityNotificationMonitor.verifiedHook(),
-    postToolUse: AntigravityNotificationMonitor.verifiedHook(),
+    // The capability suite finds these never fire:
+    // dev/bugs/backlog/antigravity-tool-hooks-never-fire.md.
+    preToolUse: AntigravityNotificationMonitor.verifiedHook(
+      ANTIGRAVITY_HOOK_SOURCE_VERIFICATION
+    ),
+    postToolUse: AntigravityNotificationMonitor.verifiedHook(
+      ANTIGRAVITY_HOOK_SOURCE_VERIFICATION
+    ),
     userPromptSubmit: AntigravityNotificationMonitor.unsupportedHook(),
     permissionRequest: AntigravityNotificationMonitor.unsupportedHook(),
     notification: AntigravityNotificationMonitor.unsupportedHook(),
     error: AntigravityNotificationMonitor.unsupportedHook(),
   };
 
-  private static verifiedHook(): CapabilityDeclaration {
+  private static verifiedHook(
+    verification: CapabilityVerification = capabilitySuiteVerification([
+      ">=1.1.12",
+    ])
+  ): CapabilityDeclaration {
     return {
       fidelity: CAPABILITY_FIDELITIES.EXACT,
       mechanism: CAPABILITY_MECHANISMS.WORKSPACE_CONFIG,
-      verification: {
-        kind: "manual",
-        reference:
-          "src/core/harness/antigravity/AntigravityNotificationMonitor.ts",
-        basis: "cli-version",
-        verifiedVersions: [">=1.1.12"],
-      },
+      verification,
     };
   }
 
@@ -63,13 +79,7 @@ export class AntigravityNotificationMonitor
       fidelity: CAPABILITY_FIDELITIES.UNSUPPORTED,
       mechanism: CAPABILITY_MECHANISMS.NONE,
       caveatCode: HOOK_CAVEAT_CODES.NO_NATIVE_EVENT,
-      verification: {
-        kind: "manual",
-        reference:
-          "src/core/harness/antigravity/AntigravityNotificationMonitor.ts",
-        basis: "cli-version",
-        verifiedVersions: [">=1.1.12"],
-      },
+      verification: ANTIGRAVITY_HOOK_SOURCE_VERIFICATION,
     };
   }
 

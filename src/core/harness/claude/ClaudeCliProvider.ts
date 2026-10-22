@@ -50,7 +50,10 @@ import type {
   CliExecutionSidecarDeps,
 } from "../shared/interfaces/ICliProvider";
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
-import type { HarnessCapabilityFacts } from "../../../types/CompatibilityTypes";
+import {
+  capabilitySuiteVerification,
+  type HarnessCapabilityFacts,
+} from "../../../types/CompatibilityTypes";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   HookEvent,
@@ -69,25 +72,13 @@ import {
 const CLAUDE_MCP_FILTERING_CAPABILITY = {
   fidelity: "exact",
   mechanism: "translated-cli",
-  verification: {
-    kind: "manual",
-    reference:
-      "dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping",
-    basis: "cli-version",
-    verifiedVersions: [">=2.1.17"],
-  },
+  verification: capabilitySuiteVerification([">=2.1.17"]),
 } as const;
 
 const CLAUDE_IMAGE_INPUT_CAPABILITY = {
   fidelity: "exact",
   mechanism: "native",
-  verification: {
-    kind: "manual",
-    reference:
-      "https://support.claude.com/en/articles/14554922-claude-code-user-faq",
-    basis: "cli-version",
-    verifiedVersions: [">=2.1.17"],
-  },
+  verification: capabilitySuiteVerification([">=2.1.17"]),
 } as const;
 
 /**
@@ -157,7 +148,7 @@ export class ClaudeCliProvider implements ICliProvider {
     npmPackage: "@anthropic-ai/claude-code",
     versionPolicy: {
       minimum: "2.1.94",
-      testedWith: "2.1.289",
+      testedWith: "2.1.308",
       updateCommand: "claude update",
     },
     shouldStreamHeadlessOutput: true,

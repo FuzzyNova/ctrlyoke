@@ -5,7 +5,10 @@ import {
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
-import type { CapabilityDeclaration } from "../../../types/CompatibilityTypes";
+import {
+  capabilitySuiteVerification,
+  type CapabilityDeclaration,
+} from "../../../types/CompatibilityTypes";
 import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
@@ -52,12 +55,7 @@ export class ClaudeNotificationMonitor
         {
           fidelity: CAPABILITY_FIDELITIES.EXACT,
           mechanism: CAPABILITY_MECHANISMS.WORKSPACE_CONFIG,
-          verification: {
-            kind: "manual",
-            reference: "src/core/harness/claude/ClaudeNotificationMonitor.ts",
-            basis: "cli-version",
-            verifiedVersions: [">=2.1.94"],
-          },
+          verification: capabilitySuiteVerification([">=2.1.94"]),
         },
       ])
     ) as unknown as Record<HookEvent, CapabilityDeclaration>;
