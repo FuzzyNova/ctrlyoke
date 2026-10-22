@@ -1,9 +1,17 @@
+---
+# The Pro sidebar starts with a Pricing link to the landing page; don't
+# offer it as this page's "Previous page".
+prev: false
+---
+
 # ctrlyoke Pro
 
 ctrlyoke is source-available and the local product is free for individuals and
 small businesses. Pro covers the remote-access features that let you use a
 running workflow away from your development machine, plus support for
 enterprise and air-gapped activation.
+
+Pro is **$59 USD, one time**. [See pricing →](https://ctrlyoke.dev/pricing/)
 
 ## Who needs a license?
 

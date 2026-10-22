@@ -1,7 +1,18 @@
 import { defineConfig } from "vitepress";
-import { LAUNCHED } from "../../landing/src/config.ts";
+import { LAUNCHED, SITE_URL } from "../../landing/src/config.ts";
 
 const base = process.env.DOCS_BASE ?? "/docs/";
+
+// Root-relative links get the docs `base` prepended, so links to the landing
+// site must be absolute. `_self` keeps them in the same tab, and `noIcon`
+// drops the external-link arrow, since they are the same site.
+const PRICING_LINK = {
+  text: "Pricing",
+  link: `${SITE_URL}/pricing/`,
+  target: "_self",
+  noIcon: true,
+} as const;
+const SOCIAL_PREVIEW_URL = `${SITE_URL}/assets/social-preview.png`;
 
 export default defineConfig({
   title: "ctrlyoke",
@@ -11,33 +22,44 @@ export default defineConfig({
   // Hand-written sections that scripts/generate-schema-docs.mjs inlines into
   // the generated reference pages; they are not pages of their own.
   srcExclude: ["reference/_partials/**"],
+  markdown: {
+    config(md) {
+      // VitePress opens every absolute markdown link in a new tab. Links to the
+      // landing site are the same site, so they open in place; VitePress keeps a
+      // `target` that is already set.
+      md.core.ruler.after("inline", "ctrlyoke_same_site_links", (state) => {
+        for (const token of state.tokens) {
+          for (const child of token.children ?? []) {
+            if (
+              child.type === "link_open" &&
+              child.attrGet("href")?.startsWith(`${SITE_URL}/`) &&
+              child.attrIndex("target") < 0
+            ) {
+              child.attrSet("target", "_self");
+            }
+          }
+        }
+      });
+    },
+  },
   lastUpdated: true,
   // Same pre-launch switch as the landing pages, which the docs are merged into.
   sitemap: {
-    hostname: "https://ctrlyoke.dev/docs/",
+    hostname: `${SITE_URL}/docs/`,
   },
   head: [
     ...(LAUNCHED ? [] : [["meta", { name: "robots", content: "noindex" }]]),
     ["meta", { property: "og:site_name", content: "ctrlyoke" }],
     ["meta", { property: "og:type", content: "website" }],
-    [
-      "meta",
-      {
-        property: "og:image",
-        content: "https://ctrlyoke.dev/assets/social-preview.png",
-      },
-    ],
+    ["meta", { property: "og:image", content: SOCIAL_PREVIEW_URL }],
     ["meta", { name: "twitter:card", content: "summary_large_image" }],
-    [
-      "meta",
-      {
-        name: "twitter:image",
-        content: "https://ctrlyoke.dev/assets/social-preview.png",
-      },
-    ],
+    ["meta", { name: "twitter:image", content: SOCIAL_PREVIEW_URL }],
   ],
   themeConfig: {
     logo: "/ctrlyoke-icon.svg",
+    // The logo returns to the landing page; Guide and each sidebar's Overview
+    // lead back into the docs.
+    logoLink: { link: `${SITE_URL}/`, target: "_self" },
     nav: [
       { text: "Guide", link: "/guide/" },
       { text: "Harnesses", link: "/harnesses/" },
@@ -45,6 +67,7 @@ export default defineConfig({
       { text: "Reference", link: "/reference/workflow-schema" },
       { text: "CLI", link: "/cli/" },
       { text: "Pro", link: "/pro/" },
+      PRICING_LINK,
       { text: "GitHub", link: "https://github.com/FuzzyNova/ctrlyoke" },
     ],
     sidebar: {
@@ -182,6 +205,7 @@ export default defineConfig({
         {
           text: "ctrlyoke Pro",
           items: [
+            PRICING_LINK,
             { text: "Overview & activation", link: "/pro/" },
             { text: "Use ctrlyoke on your phone", link: "/pro/mobile-setup" },
             { text: "Connect from anywhere", link: "/pro/remote-access" },

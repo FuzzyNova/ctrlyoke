@@ -1,3 +1,12 @@
+/*
+ * Links back to the landing site are absolute URLs with target="_self" (see
+ * docs/.vitepress/config.mts). VitePress's sidebar ignores `noIcon` and marks
+ * them external; they are the same site, so drop the arrow.
+ */
+.vp-external-link-icon[target="_self"]::after {
+  content: none;
+}
+
 .vp-doc video {
   max-width: 100%;
   height: auto;

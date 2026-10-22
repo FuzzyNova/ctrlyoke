@@ -17,6 +17,13 @@ import {
  */
 export const LAUNCHED = true;
 
+/**
+ * Public origin of the ctrlyoke site. The VitePress docs under /docs/ build
+ * their links back to the landing pages from it, because VitePress prefixes
+ * every root-relative link with its own `/docs/` base.
+ */
+export const SITE_URL = "https://ctrlyoke.dev";
+
 /** VS Code Marketplace listing — live once the extension is published. */
 export const MARKETPLACE_URL =
   "https://marketplace.visualstudio.com/items?itemName=fuzzynova.ctrlyoke";
