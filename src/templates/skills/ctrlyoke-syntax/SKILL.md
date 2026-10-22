@@ -12,7 +12,9 @@ ctrlyoke recognizes a small set of inline reference tokens. They do two jobs:
 
 ## Citing things in your reply
 
-When you summarize work, cite what you touched with these tokens instead of plain prose. Each one renders as a link (or a compact chip) that opens the exact target:
+When you summarize work, cite what you touched with these tokens instead of plain prose. Each one renders as a link (or a compact chip) that opens the exact target.
+
+**Never put a citation in backticks or a code block.** Code formatting shows text literally, so a backticked token renders as plain code with no link. This includes the commit hashes, file paths and symbols you would normally format as code: write ~3f9c2a1 bare, not as inline code. The backticks in the table below only display the syntax; leave them out when you cite.
 
 | To cite                    | Write                                        |
 | -------------------------- | -------------------------------------------- |
@@ -27,7 +29,6 @@ When you summarize work, cite what you touched with these tokens instead of plai
 For example: "I fixed the expiry check in #sym:src/auth/login.ts:validateToken:42-57, which ~3f9c2a1 broke, and added a case to @src/auth/login.test.ts."
 
 - Use workspace-relative paths with forward slashes. Quote a path that contains spaces: `@"docs/release notes.md"`.
-- Write tokens as plain text. In a reply, text inside backticks or a code block is shown literally and is not linked, which is how you show the syntax itself.
 - A token ends at whitespace or punctuation (`,` `.` `)` `;`). Do not glue letters or digits onto one: `~3f9c2a1x` is not a commit reference.
 - A slash reference can begin at the start of the text or after whitespace and punctuation such as an opening parenthesis or quotation mark. It cannot follow a filename character, slash, dot, or colon, which keeps URL and path segments literal.
 - Use real line numbers from the current file; the link opens exactly the range you write.
