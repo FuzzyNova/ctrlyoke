@@ -307,12 +307,17 @@ export class CodexCliProvider implements ICliProvider {
   /**
    * Codex reports a rejected request (an unknown model, for example) only on
    * stdout, as `turn.failed` / `error` events whose message is often the API's
-   * JSON error body; the session log never records it.
+   * JSON error body; the session log never records it. Codex also emits
+   * non-fatal `error` events while retrying a dropped stream ("Reconnecting…"),
+   * so an error followed by `turn.completed` is not a failure.
    */
   extractErrorFromStdout(stdout: string): string | undefined {
     const events = CliParseUtils.parseJsonLines(stdout);
     for (let i = events.length - 1; i >= 0; i--) {
       const event = events[i];
+      if (event.type === CODEX_STDOUT_EVENT_TYPES.TURN_COMPLETED) {
+        return undefined;
+      }
       const message =
         event.type === CODEX_STDOUT_EVENT_TYPES.TURN_FAILED
           ? (event.error as { message?: unknown } | undefined)?.message

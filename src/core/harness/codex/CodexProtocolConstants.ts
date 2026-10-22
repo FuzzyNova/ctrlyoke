@@ -8,6 +8,8 @@ export const CODEX_STDOUT_EVENT_TYPES = {
   ERROR: "error",
   /** Failed turn: `{ type, error: { message } }`. */
   TURN_FAILED: "turn.failed",
+  /** Completed turn; supersedes earlier retried stream `error` events. */
+  TURN_COMPLETED: "turn.completed",
 } as const;
 
 /** Wire-level values from Codex's response-item log protocol. */

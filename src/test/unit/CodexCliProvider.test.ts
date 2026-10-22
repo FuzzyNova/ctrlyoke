@@ -605,6 +605,17 @@ suite("CodexCliProvider", () => {
         provider.extractErrorFromStdout('{"type":"turn.completed"}'),
         undefined
       );
+      // A retried stream error is superseded by the turn that completed.
+      assert.strictEqual(
+        provider.extractErrorFromStdout(
+          [
+            '{"type":"turn.started"}',
+            '{"type":"error","message":"Reconnecting... 1/5 (stream disconnected before completion)"}',
+            '{"type":"turn.completed","usage":{}}',
+          ].join("\n")
+        ),
+        undefined
+      );
     });
   });
 });
