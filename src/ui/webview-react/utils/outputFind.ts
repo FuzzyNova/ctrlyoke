@@ -241,7 +241,7 @@ export function getOutputRowSearchSegments(
           const customView = resolveCtrlYokeToolView(data);
           if (customView) {
             return createSegments([
-              { field: "toolLabel", text: customView.summary },
+              { field: "toolLabel", text: customView.heading },
               ...customView.searchText.map((text) => ({
                 field: "toolBody" as const,
                 text,
