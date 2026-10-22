@@ -430,7 +430,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "finalStep.toolPermissions.mode": "Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects deny list. 'custom' uses allowedTools + deniedTools only. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config).",
   "finalStep.type": "Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible).",
   "general": "General format, template, and behavior settings.",
-  "general.autoLoadRecentSession": "Automatically load the most recent session on startup.",
+  "general.autoLoadRecentSession": "When a window opens, reopen the workflow the dashboard was last showing, or the most recently modified workflow if there is none or its run no longer exists. When off, every new window starts on a new workflow, and a hosted browser without a workflow in its URL shows the same workflow as the VS Code panel. Reloading the dashboard later in the same session always keeps its current workflow.",
   "general.defaultFormat": "Default file format for new workflows.",
   "general.defaultTemplate": "Default template to use for new workflows.",
   "general.omitPreviouslyAttachedAgentsSkillsOnResume": "When resuming an existing session, omit only agent/skill declarations that were already attached earlier in that same session.",

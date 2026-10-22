@@ -39,6 +39,15 @@ const LOG_LEVEL_LABELS: Record<LogLevel, string> = {
 };
 
 /**
+ * `JSON.stringify` replacer for extra log arguments. An `Error`'s fields are
+ * non-enumerable, so without this every `Log.warn("…failed:", error)` wrote
+ * `[{}]` and the failure reason was lost.
+ */
+function serializeErrorArg(_key: string, value: unknown): unknown {
+  return value instanceof Error ? getErrorMessage(value) : value;
+}
+
+/**
  * Host destination for log lines, such as the VS Code extension's output
  * channel (`src/platform/VsCodeLogOutputChannel.ts`). Implementations must
  * never throw: logging runs inside cleanup paths that a throw would abort.
@@ -326,7 +335,9 @@ export class Log {
   ): void {
     const timestamp = new Date().toISOString();
     const formattedMessage = secretRedactionService.redactText(
-      args.length > 0 ? `${message} ${JSON.stringify(args)}` : message
+      args.length > 0
+        ? `${message} ${JSON.stringify(args, serializeErrorArg)}`
+        : message
     );
     // Manual timestamp/level prefix — only needed where VS Code's
     // LogOutputChannel isn't doing that decoration itself (file/CLI output).

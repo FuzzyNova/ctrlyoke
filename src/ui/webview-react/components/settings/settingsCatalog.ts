@@ -63,9 +63,9 @@ const STATIC_SETTINGS_CATALOG = {
     id: "general.autoLoadRecentSession",
     path: "general.autoLoadRecentSession",
     tab: GLOBAL_SETTINGS_TABS.GENERAL,
-    label: "Auto-load recent session",
+    label: "Reopen last workflow on startup",
     description:
-      "Automatically load the most recently used workflow when the extension starts.",
+      "Reopen the workflow you were last viewing, or the most recently modified one. When off, each new window starts on a new workflow.",
   },
   "general.omitPreviouslyAttachedAgentsSkillsOnResume": {
     id: "general.omitPreviouslyAttachedAgentsSkillsOnResume",

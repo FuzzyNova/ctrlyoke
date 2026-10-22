@@ -127,7 +127,7 @@ Default template to use for new workflows.
 - **Type:** `boolean`
 - **Default:** `true`
 
-Automatically load the most recent session on startup.
+When a window opens, reopen the workflow the dashboard was last showing, or the most recently modified workflow if there is none or its run no longer exists. When off, every new window starts on a new workflow, and a hosted browser without a workflow in its URL shows the same workflow as the VS Code panel. Reloading the dashboard later in the same session always keeps its current workflow.
 
 ### `general.omitPreviouslyAttachedAgentsSkillsOnResume` {#general-omitpreviouslyattachedagentsskillsonresume}
 

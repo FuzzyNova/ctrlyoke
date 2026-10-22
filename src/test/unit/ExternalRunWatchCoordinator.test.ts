@@ -1,6 +1,6 @@
 import { getStepOutputText } from "../../utils/StepOutputText";
 import { StepOutputTextMode } from "../../types/DashboardConstants";
-import { suite, test } from "mocha";
+import { suite, teardown, test } from "mocha";
 import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as os from "os";
@@ -33,6 +33,9 @@ import {
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
+import { repoToplevel } from "../../utils/GitUtils";
+import { LogLevel } from "../../utils/Log";
+import { captureLog } from "../helpers/logCapture";
 
 class TestLineageRepository implements ExternalRunWatchLineageRepository {
   constructor(private readonly keys: WorkflowKey[] = []) {}
@@ -1123,6 +1126,41 @@ suite("ExternalRunWatchCoordinator ownership", () => {
       await firstPoll;
       await coordinator.pollRunnerJsonDiscovery(runsRoot, workspace);
       assert.deepStrictEqual(discovered, [firstRunnerPath, secondRunnerPath]);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+});
+
+suite("ExternalRunWatchCoordinator worktree discovery", () => {
+  let capture: ReturnType<typeof captureLog> | undefined;
+
+  teardown(() => {
+    capture?.restore();
+    capture = undefined;
+  });
+
+  test("skips discovery quietly when the workspace is not in a Git repository", async function () {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-coordinator-no-git-")
+    );
+    try {
+      if (await repoToplevel(workspace)) {
+        this.skip();
+      }
+      const { coordinator } = createCoordinator(workspace);
+      capture = captureLog();
+
+      await coordinator.discoverWorktreesOnActivation();
+
+      assert.deepStrictEqual(
+        capture.lines.filter((line) => line.level >= LogLevel.WARN),
+        []
+      );
+      assert.strictEqual(
+        coordinator.getActivationWorktreeOwnership(),
+        undefined
+      );
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }

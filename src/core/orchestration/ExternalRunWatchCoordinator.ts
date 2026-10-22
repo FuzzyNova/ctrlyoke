@@ -32,6 +32,7 @@ import {
   type StepWithRuntimeStatus,
 } from "../../utils/StepStatusDerivation";
 import { Log } from "../../utils/Log";
+import { repoToplevel } from "../../utils/GitUtils";
 import {
   assertWritableSchema,
   PERSISTED_STORES,
@@ -262,6 +263,14 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
     this.activationWorktreeOwnership = undefined;
 
     try {
+      // A folder outside any Git repository has no worktrees to discover.
+      // Asking anyway threw on every activation and logged a warning.
+      if (!(await repoToplevel(workspaceFolderPath))) {
+        Log.debug(
+          "[WorktreeRecovery] activation discovery skipped: workspace is not in a Git repository"
+        );
+        return;
+      }
       const report = await new WorktreeManager().discoverActivationState({
         sourceCheckoutRoot: workspaceFolderPath,
       });

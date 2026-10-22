@@ -165,6 +165,12 @@ import {
 import { TypedEmitter } from "../utils/TypedEmitter";
 
 const PANEL_READY_GRACE_PERIOD_MS = 1_000;
+/**
+ * How long the grace timer keeps waiting on a panel READY that has already
+ * arrived but not yet finished. Bounded so a READY that throws midway can't
+ * hold startup forever; the grace fallback then proceeds without the panel.
+ */
+const PANEL_READY_IN_FLIGHT_MAX_WAIT_MS = 30_000;
 
 /**
  * WorkflowOrchestrator
@@ -646,6 +652,17 @@ export class WorkflowOrchestrator {
   /** Guards triggerStartupAutoLoadIfReady so triggerAutoLoad fires at most once. */
   private startupAutoLoadTriggered: boolean = false;
   private panelReadyGraceTimer: ReturnType<typeof setTimeout> | undefined;
+  /**
+   * True from the moment the panel's READY starts being handled until it
+   * reaches `setDashboardReady(panelSend)`. That handler hydrates the
+   * persisted view before marking the dashboard ready, which on a cold start
+   * can take seconds; the grace timer must not mistake it for an absent panel
+   * and start the auto-load concurrently with it.
+   */
+  private panelReadyInFlight: boolean = false;
+  /** Overridable so tests can exercise the grace timer without real waits. */
+  protected readonly panelReadyGracePeriodMs: number =
+    PANEL_READY_GRACE_PERIOD_MS;
   /** Timestamp (ms) when setDashboardReady was first called — used to compute READY→STARTUP_COMPLETE latency. */
   private dashboardReadyAt: number = 0;
   /**
@@ -669,6 +686,13 @@ export class WorkflowOrchestrator {
    * _autoLoadHasSettled, replays are always allowed (reconnect / webview reload).
    */
   private panelStartupReplayedWorkflowId: string | null = null;
+
+  /**
+   * Set once the panel's first READY has been handled in this extension host.
+   * Until then a panel READY is a fresh window opening, which is the only time
+   * `general.autoLoadRecentSession` decides what the panel shows.
+   */
+  private panelHasConnected: boolean = false;
 
   /**
    * The panel's viewed workflowId as of the last `setDashboardReady()`, i.e. the
@@ -1585,13 +1609,38 @@ export class WorkflowOrchestrator {
       // Hosted browsers can be the only dashboard client. Give the VS Code
       // panel a brief chance to send READY (including during extension reload),
       // then allow startup to proceed without a panel send function.
-      this.panelReadyGraceTimer = setTimeout(() => {
-        this.panelReadyGraceTimer = undefined;
-        if (!this.dashboardReady) {
-          void this.setDashboardReady();
-        }
-      }, PANEL_READY_GRACE_PERIOD_MS);
+      this.armPanelReadyGraceTimer(
+        Date.now() + PANEL_READY_IN_FLIGHT_MAX_WAIT_MS
+      );
     }
+  }
+
+  /**
+   * Start the auto-load without the panel once the grace period passes, unless
+   * the panel's READY is already being handled. Firing during that READY ran
+   * the auto-load concurrently with its persisted-view hydration: the two
+   * loaded different workflows into different instances, STARTUP_COMPLETE
+   * reached the webview before either was on screen, and the webview's
+   * "nothing loaded" fallback replaced both with a blank New Workflow.
+   */
+  private armPanelReadyGraceTimer(inFlightDeadline: number): void {
+    this.panelReadyGraceTimer = setTimeout(() => {
+      this.panelReadyGraceTimer = undefined;
+      if (this.dashboardReady) return;
+      if (this.panelReadyInFlight && Date.now() < inFlightDeadline) {
+        this.armPanelReadyGraceTimer(inFlightDeadline);
+        return;
+      }
+      void this.setDashboardReady();
+    }, this.panelReadyGracePeriodMs);
+  }
+
+  /**
+   * Called when the panel's READY starts being handled, before its awaited
+   * startup work. See {@link panelReadyInFlight}.
+   */
+  notePanelReadyStarted(): void {
+    this.panelReadyInFlight = true;
   }
 
   /**
@@ -1712,6 +1761,7 @@ export class WorkflowOrchestrator {
     }
 
     if (panelSend) {
+      this.panelReadyInFlight = false;
       this.storedPanelSend = panelSend;
       if (this._autoLoadHasSettled) {
         // Startup already finished (webview reload or reconnect) — replay now so
@@ -2301,7 +2351,25 @@ export class WorkflowOrchestrator {
       !this._autoLoadHasSettled &&
       this.panelStartupReplayedWorkflowId !== null;
 
-    if (options?.preferredViewAddress) {
+    // With general.autoLoadRecentSession off, a fresh window starts on a new
+    // workflow: the panel's remembered view is dropped at startup, so nothing
+    // is loaded and the webview creates a blank workflow on STARTUP_COMPLETE.
+    // A reload or reconnect later in the session still keeps its view.
+    const isPanelStartupReady =
+      clientId === this.PANEL_CLIENT_ID &&
+      (!this._autoLoadHasSettled || !this.panelHasConnected);
+    if (clientId === this.PANEL_CLIENT_ID) {
+      this.panelHasConnected = true;
+    }
+    const restoresStartupView =
+      !isPanelStartupReady || ConfigurationUtils.shouldAutoLoadRecentSession();
+    if (options?.preferredViewAddress && !restoresStartupView) {
+      Log.debug(
+        "[WorkflowOrchestrator] handleClientReady: autoLoadRecentSession is off — not reopening the panel's last workflow"
+      );
+    }
+
+    if (options?.preferredViewAddress && restoresStartupView) {
       const preferredAddress = options.preferredViewAddress;
       const preferredRunExists =
         preferredAddress.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN ||
@@ -2347,10 +2415,14 @@ export class WorkflowOrchestrator {
     // Browser clients connecting for the first time have no viewed workflow.
     // Re-check the queue on disk at READY time so reconnects without persisted
     // tab state fall back to the actual most recently modified workflow, not
-    // whatever the panel happened to load earlier in the session.
+    // whatever the panel happened to load earlier in the session. With
+    // autoLoadRecentSession off they mirror the panel instead.
     if (!viewedId && clientId !== this.PANEL_CLIENT_ID) {
       const workspaceFolderPath = this.currentWorkspaceFolderPath;
-      if (workspaceFolderPath) {
+      if (
+        workspaceFolderPath &&
+        ConfigurationUtils.shouldAutoLoadRecentSession()
+      ) {
         const mostRecentWorkingFilePath =
           await this.workspaceSessionManager.getMostRecentWorkingFilePath(
             workspaceFolderPath

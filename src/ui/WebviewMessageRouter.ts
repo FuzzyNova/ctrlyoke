@@ -703,6 +703,9 @@ export class WebviewMessageRouter {
           );
           return;
         }
+        // Before any await: the orchestrator's panel-absent grace timer must
+        // see this READY as in flight, not missing.
+        this.getOrchestrator()?.notePanelReadyStarted();
       }
       await this.settingsSync.sendInitialState(ctx.postMessage, ctx.clientId);
       // Tell the webview its own client identity so it can compute isController

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`general.autoLoadRecentSession` (now labelled "Reopen last workflow on startup") works
+  when turned off.** Off now starts every new window on a new workflow. Before, the dashboard
+  reopened the workflow it was last showing regardless, and the setting only mattered when there
+  was nothing to reopen. A hosted browser without a workflow in its URL now shows the panel's
+  workflow instead of the most recently modified one while the setting is off. On (the default)
+  behaves as before: the last viewed workflow, otherwise the most recently modified one.
+
+### Fixed
+
+- Opening a folder could land the dashboard on an empty New Workflow instead of the previous or
+  most recent session, when the dashboard was slow to load during startup.
+- Warnings that include an error now show the error's message in the log instead of `{}`.
+- Opening a folder that isn't in a Git repository no longer logs a worktree discovery warning.
+
 ## [0.2.0] - 2026-10-20
 
 This release renames many settings and workflow fields. Old keys are not migrated: they are
