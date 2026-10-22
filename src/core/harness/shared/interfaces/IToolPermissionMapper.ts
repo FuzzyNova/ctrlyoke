@@ -74,6 +74,12 @@ export interface ToolPermissionApplication {
  */
 export interface IToolPermissionMapper {
   /**
+   * Format a server's bare denied tool name in the harness's permission syntax.
+   * Defaults to `mcp__<server>__<tool>` when omitted.
+   */
+  readonly formatMcpToolName?: (serverId: string, toolName: string) => string;
+
+  /**
    * Static permission facts owned by this harness mapper and referenced by the
    * harness descriptor. The backend registry evaluates these declarations
    * against the installed version.

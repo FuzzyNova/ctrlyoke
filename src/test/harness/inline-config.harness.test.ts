@@ -403,6 +403,43 @@ suite("Inline harness configuration regression tests", function () {
       assertNoWorkspaceConfig(tmpDir, ["opencode.json", ".opencode"]);
     });
 
+    test("refuses a denied MCP tool with a sanitized server name", function () {
+      const markerPath = path.join(tmpDir, "opencode-denied-mcp.calls");
+      const server = makeUserMcpServer(
+        "opencode.probe-server",
+        "blocked.probe",
+        mcpServerScript,
+        markerPath
+      );
+      server.deniedTools = ["blocked.probe"];
+      const result = runWorkflowFile(
+        {
+          harness: OPENCODE,
+          model: HARNESS_MODELS[OPENCODE],
+          toolPermissions: { mode: "allowAll" },
+          mcpServers: [server],
+          steps: [
+            {
+              name: "opencode-denied-mcp-tool",
+              prompt: [
+                "Call the MCP tool opencode_probe-server_blocked_probe exactly once.",
+                "Do not call any other tool or try another way to cause the same effect.",
+              ].join(" "),
+            },
+          ],
+        },
+        tmpDir,
+        "opencode-denied-mcp"
+      );
+      if (logAndMaybeSkip("opencode-cli (denied MCP tool)", result)) return;
+      assertSuccessfulRun("opencode-cli (denied MCP tool)", result);
+      assert.ok(
+        !fs.existsSync(markerPath),
+        "OpenCode called the denied MCP tool"
+      );
+      assertNoWorkspaceConfig(tmpDir, ["opencode.json", ".opencode"]);
+    });
+
     for (const mode of ["headless", "interactive"] as const) {
       test(`completion plugin loads from an external file URL in ${mode} mode`, async function () {
         const outputPath = path.join(tmpDir, `opencode-${mode}-hooks.jsonl`);

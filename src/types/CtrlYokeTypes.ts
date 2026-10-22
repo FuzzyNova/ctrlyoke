@@ -166,8 +166,8 @@ export interface McpServerConfig {
   /**
    * Tool names from this server to deny at execution time.
    * Use bare tool names without the `mcp__serverid__` prefix (e.g. `["append_step"]`).
-   * Translated to `mcp__<id>__<tool>` deny patterns and merged into the harness permission args.
-   * Supported on harnesses that accept tool deny patterns (e.g. Claude CLI `--disallowedTools`).
+   * Translated to each harness's MCP tool name and merged into its permission configuration.
+   * Supported on harnesses that accept per-tool deny rules (e.g. Claude CLI `--disallowedTools`).
    */
   deniedTools?: string[];
 }

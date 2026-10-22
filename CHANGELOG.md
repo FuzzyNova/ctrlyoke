@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **OpenCode enforces per-server MCP tool denials.** Denied tool names now match OpenCode's
+  sanitized `<server>_<tool>` names, including server IDs with punctuation.
 - **Qwen remote MCP servers use their configured transport.** Streamable HTTP servers now use
   Qwen's `httpUrl` field, while SSE servers continue to use `url`.
 - **Qwen MCP servers receive resolved managed secrets.** Secret values are substituted into the

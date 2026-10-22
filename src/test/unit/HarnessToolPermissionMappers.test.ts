@@ -3,7 +3,10 @@ import { suite, test } from "mocha";
 import { CopilotToolPermissionMapper } from "../../core/harness/copilot/CopilotToolPermissionMapper";
 import { ClaudeToolPermissionMapper } from "../../core/harness/claude/ClaudeToolPermissionMapper";
 import { CodexToolPermissionMapper } from "../../core/harness/codex/CodexToolPermissionMapper";
-import { OpenCodeToolPermissionMapper } from "../../core/harness/opencode/OpenCodeToolPermissionMapper";
+import {
+  formatOpenCodeMcpToolName,
+  OpenCodeToolPermissionMapper,
+} from "../../core/harness/opencode/OpenCodeToolPermissionMapper";
 import { QwenToolPermissionMapper } from "../../core/harness/qwen/QwenToolPermissionMapper";
 import { AntigravityToolPermissionMapper } from "../../core/harness/antigravity/AntigravityToolPermissionMapper";
 import type {
@@ -18,6 +21,7 @@ import {
 import { COMPATIBILITY_DIAGNOSTIC_CODES } from "../../types/CompatibilityTypes";
 import { Log } from "../../utils/Log";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
+import { mergeServerDeniedTools } from "../../types/ToolPermissionUtils";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -1170,6 +1174,23 @@ suite("HarnessToolPermissionMappers", () => {
             "*": "allow",
             edit: "deny",
             bash: { "rm *": "deny" },
+          }
+        );
+      });
+
+      test("formats per-server denials as sanitized OpenCode MCP tool names", () => {
+        const permissions = mergeServerDeniedTools(
+          cfg(PERMISSION_MODES.ALLOW_ALL),
+          [{ id: "my.server-name", deniedTools: ["read.file"] }],
+          undefined,
+          formatOpenCodeMcpToolName
+        );
+
+        assert.deepStrictEqual(
+          mapper.buildPermissionPolicy(permissions!),
+          {
+            "*": "allow",
+            "my_server-name_read_file": "deny",
           }
         );
       });

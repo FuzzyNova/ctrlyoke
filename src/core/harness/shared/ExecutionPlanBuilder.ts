@@ -289,7 +289,8 @@ export class ExecutionPlanBuilder {
           session.resolvedProperties?.mcpServers,
           this.deps.provider.config.harnessId === HARNESS_IDS.CLAUDE_CLI
             ? normalizeClaudeMcpServerId
-            : undefined
+            : undefined,
+          this.deps.provider.toolPermissionMapper.formatMcpToolName
         )
       : session.resolvedProperties?.toolPermissions;
     const permissionContext: PermissionContext = {
