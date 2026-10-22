@@ -194,6 +194,32 @@ export class QwenCliProvider implements ICliProvider {
     return sessionEvent?.session_id as string | undefined;
   }
 
+  /** Extract Qwen's in-band API error from its Claude-shaped headless stream. */
+  extractErrorFromStdout(stdout: string): string | undefined {
+    const { objects } = CliParseUtils.extractJsonObjectsFromStream(stdout);
+    const resultEvent = objects.find(
+      (event) => event.type === "result" && event.is_error === true
+    );
+    if (!resultEvent) {
+      return undefined;
+    }
+
+    const error = resultEvent.error;
+    if (typeof error === "string" && error.trim()) {
+      return error;
+    }
+    if (
+      error &&
+      typeof error === "object" &&
+      typeof (error as { message?: unknown }).message === "string"
+    ) {
+      return (error as { message: string }).message;
+    }
+    return typeof resultEvent.result === "string" && resultEvent.result.trim()
+      ? resultEvent.result
+      : "Qwen reported an error while executing the request";
+  }
+
   /**
    * Build complete CLI arguments array for Qwen Code CLI execution
    *

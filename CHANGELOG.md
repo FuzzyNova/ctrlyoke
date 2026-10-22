@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Qwen API errors now fail the step.** Qwen stream-json can exit with code 0 after an API
+  rejection; ctrlyoke now reports its in-band error instead of completing the step successfully.
 - **Codex approval settings remain compatible with current CLI releases.** The deprecated
   `untrusted` setting maps to `on-request` for Codex 0.149.0 and newer while retaining its
   original behavior on older supported releases.

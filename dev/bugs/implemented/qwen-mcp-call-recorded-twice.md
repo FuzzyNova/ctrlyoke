@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-22 by Claude (full `npm run test:harness` run), with Qwen Code 0.25.3
 - **Area:** Qwen output parsing (`src/core/harness/qwen/`), `src/utils/CliEventNormalizer.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -15,12 +15,15 @@ two rows (or the model made a fifth call that the per-tool count check would the
 1. `npm run test:harness -- --grep "qwen-cli: records each ctrlyoke MCP call once"`
 2. The assertion `expected exactly four MCP call rows` fails with `5 !== 4`.
 
-## Root Cause
+## Investigation
 
-Not yet investigated. Check the run's `events.jsonl` for which tool appears twice and whether both
-rows share a `toolCallId` (a parser duplicate) or not (a real second call).
+The case passed twice with the installed Qwen Code 0.26.0, using the configured `qwen3.5-plus`
+model. The retained first run's `events.jsonl` contains exactly four `mcpToolCall` rows: one each
+for `workflow_status`, `post_note`, `claim_paths`, and `release_paths`. Their `toolCallId` values
+are all distinct. The 0.25.3 failure could not be reproduced, so the available evidence does not
+identify whether that older run was a parser duplicate or a fifth model call. No parser dedupe or
+probe-prompt change was justified by the current capture.
 
-## Suggested Fix
+## Resolution
 
-If the rows share a `toolCallId`, merge them in the Qwen parser or `normalizeCliEvents`; otherwise
-make the probe prompt stricter.
+Verified fixed with Qwen Code 0.26.0; the MCP probe records each of its four calls once.

@@ -176,6 +176,30 @@ suite("ClaudeLogParser", () => {
   });
 
   suite("headless golden output", () => {
+    test("surfaces Claude result errors in output metadata", () => {
+      const provider = new ClaudeCliProvider();
+      const output = provider.logParser.extractResponse(
+        provider.parseHeadlessStdout(
+          [
+            {
+              type: "system",
+              subtype: "init",
+              session_id: "claude-api-error-session",
+            },
+            {
+              type: "result",
+              is_error: true,
+              error: { message: "API rejected the request" },
+            },
+          ]
+            .map((event) => JSON.stringify(event))
+            .join("\n")
+        )
+      );
+
+      assert.strictEqual(output.metadata.error, "API rejected the request");
+    });
+
     test("maps Claude stdout and session-log events to equivalent universal output", () => {
       const fixtureRoot = path.resolve(
         __dirname,
@@ -6907,6 +6931,20 @@ suite("QwenLogParser", () => {
   });
 
   suite("headless golden output", () => {
+    test("extracts in-band API errors from captured stream-json stdout", () => {
+      const fixturePath = path.resolve(
+        __dirname,
+        "../../../../src/test/fixtures/qwen/headless-api-error.stdout.jsonl"
+      );
+      const provider = new QwenCliProvider();
+      const stdout = fs.readFileSync(fixturePath, "utf8");
+
+      assert.strictEqual(
+        provider.extractErrorFromStdout(stdout),
+        "[API Error: 401 Incorrect API key provided (request_id: sanitized)]"
+      );
+    });
+
     test("maps the real stdout/log pair and preserves richer log semantics", () => {
       const fixtureRoot = path.resolve(
         __dirname,

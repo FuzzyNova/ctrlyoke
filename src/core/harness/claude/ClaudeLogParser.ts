@@ -253,6 +253,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     let cacheCreationTokens = 0;
     let cacheReadTokens = 0;
     let resultUsage: ClaudeProviderEvent["usage"];
+    let reportedError: string | undefined;
     let resultTotalTokens: number | undefined;
     let harnessReportedCostUsd: number | undefined;
     let modelUsage: Record<string, ProviderModelUsage> | undefined;
@@ -283,6 +284,22 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       // in the session JSONL. Fold its billing/session metadata into the same
       // output metadata used by the log path; it is never a user-facing event.
       if (event.type === CLAUDE_EVENT_TYPES.RESULT) {
+        if (event.is_error === true) {
+          const error = event.error;
+          if (typeof error === "string" && error.trim()) {
+            reportedError = error;
+          } else if (
+            error &&
+            typeof error === "object" &&
+            typeof (error as { message?: unknown }).message === "string"
+          ) {
+            reportedError = (error as { message: string }).message;
+          } else if (typeof event.result === "string" && event.result.trim()) {
+            reportedError = event.result;
+          } else {
+            reportedError = "Claude reported an error while executing the request";
+          }
+        }
         if (event.sessionId) {
           sessionId = event.sessionId;
         }
@@ -491,6 +508,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         sessionId,
         model,
         harness: HARNESS_IDS.CLAUDE_CLI,
+        ...(reportedError ? { error: reportedError } : {}),
         ...(harnessReportedCostUsd === undefined
           ? {}
           : { harnessReportedCostUsd }),

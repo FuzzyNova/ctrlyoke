@@ -181,10 +181,11 @@ export interface ICliProvider {
   extractSessionIdFromStdout?(chunk: string): string | undefined;
 
   /**
-   * The CLI's own reason for a failed headless run, read from complete stdout
-   * after a non-zero exit. For log-sourced providers whose stdout carries a
-   * fatal error event (an unknown model, a rejected request) that the session
-   * log does not, so the user sees that reason instead of a bare exit code.
+   * The CLI's own reason for a failed headless run, read from complete stdout.
+   * For providers whose stdout carries a fatal error event (an unknown model,
+   * a rejected request) that the session log does not, so the user sees that
+   * reason instead of a bare exit code. Some CLIs report these errors with a
+   * zero exit code, so the collector also checks this hook on clean exits.
    */
   extractErrorFromStdout?(stdout: string): string | undefined;
 
