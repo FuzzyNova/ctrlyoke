@@ -114,6 +114,23 @@ suite("MCP probe raw vendor parser contract fixtures", () => {
     assertProbeContract("codex-cli", events);
   });
 
+  test("Codex completed MCP items retain each call", () => {
+    const events = new CodexLogParser().extractResponse(
+      readJsonLines(
+        fixturePath("mcp-probe", "codex-cli-item-completed.jsonl")
+      )
+    ).events;
+    assertProbeContract("codex-cli", events);
+  });
+
+  test("Codex streaming completed MCP items retain each call", () => {
+    const parser = new CodexLogParser();
+    const events = readJsonLines(
+      fixturePath("mcp-probe", "codex-cli-item-completed.jsonl")
+    ).flatMap((event) => parser.extractStructuredEventsFromEvent(event));
+    assertProbeContract("codex-cli", events);
+  });
+
   test("Copilot structured MCP identity fixture passes through its log parser", () => {
     const parser = new CopilotLogParser();
     const events = readJsonLines(

@@ -38,6 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Codex MCP calls appear in the run timeline.** Codex rollout logs now report MCP
+  calls as completed `McpToolCall` items in `event_msg`; ctrlyoke records those rows
+  while continuing to read the earlier response-item representation.
 - **Claude Code asks before unlisted tools in interactive `custom` mode.** ctrlyoke now starts
   Claude with `--permission-mode default`. Before, it passed no mode, so a `defaultMode` such as
   `bypassPermissions` in your own Claude settings ran every tool without asking and the allow list

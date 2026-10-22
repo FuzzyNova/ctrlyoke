@@ -16,6 +16,7 @@ import {
   TextData,
   ToolResultData,
   CompactionData,
+  McpToolCallData,
   FileEditData,
   FileWriteData,
   UnifiedDiffHunk,
@@ -37,6 +38,7 @@ import {
 import {
   CODEX_CONTENT_BLOCK_TYPES,
   CODEX_EVENT_TYPES,
+  CODEX_ITEM_TYPES,
   CODEX_MESSAGE_ROLES,
   CODEX_PAYLOAD_TYPES,
   CODEX_TOOL_NAMES,
@@ -268,6 +270,73 @@ export class CodexLogParser extends BaseLogParser {
       const timestamp = event.timestamp
         ? new Date(event.timestamp).getTime()
         : Date.now();
+
+      // Codex's rollout log records MCP calls as completed items in newer
+      // versions. Older versions expose the same calls inside response_item
+      // tool inputs, which are still handled below.
+      if (
+        event.type === CODEX_EVENT_TYPES.EVENT_MSG &&
+        event.payload?.type === CODEX_PAYLOAD_TYPES.ITEM_COMPLETED &&
+        event.payload.item?.type === CODEX_ITEM_TYPES.MCP_TOOL_CALL
+      ) {
+        const item = event.payload.item;
+        const server = item.server;
+        const tool = item.tool;
+        const parameters = item.arguments;
+        const toolCallId = item.id;
+        if (
+          typeof server === "string" &&
+          typeof tool === "string" &&
+          parameters &&
+          typeof parameters === "object" &&
+          !Array.isArray(parameters)
+        ) {
+          const result = item.result as
+            | { content?: Array<{ text?: unknown }>; isError?: boolean }
+            | undefined;
+          const output = result?.content
+            ?.map((part) => part.text)
+            .filter((part): part is string => typeof part === "string")
+            .join("\n");
+          const resultData = { success: !result?.isError, output: output ?? "" };
+          const alreadyParsedIndex = outputEvents.findIndex((outputEvent) => {
+            if (outputEvent.type !== CLI_EVENT_TYPES.MCP_TOOL_CALL) {
+              return false;
+            }
+            const data = outputEvent.data as McpToolCallData;
+            return (
+              data.server === server &&
+              data.tool === tool &&
+              JSON.stringify(data.parameters ?? {}) ===
+                JSON.stringify(parameters) &&
+              !data.result
+            );
+          });
+          if (alreadyParsedIndex >= 0) {
+            const alreadyParsed = outputEvents[alreadyParsedIndex];
+            outputEvents[alreadyParsedIndex] = {
+              ...alreadyParsed,
+              data: {
+                ...(alreadyParsed.data as McpToolCallData),
+                result: resultData,
+              } as McpToolCallData,
+            };
+          } else {
+            outputEvents.push({
+              type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+              timestamp,
+              data: {
+                server,
+                tool,
+                toolCallId:
+                  typeof toolCallId === "string" ? toolCallId : undefined,
+                parameters: parameters as Record<string, unknown>,
+                result: resultData,
+              } as McpToolCallData,
+            });
+          }
+        }
+      }
 
       if (isModelOutputEvent(event)) {
         hasSeenModelOutput = true;
@@ -1186,6 +1255,60 @@ export class CodexLogParser extends BaseLogParser {
       ? new Date(e.timestamp).getTime()
       : Date.now();
     const results: CliEvent[] = [];
+
+    if (
+      e.type === CODEX_EVENT_TYPES.EVENT_MSG &&
+      e.payload?.type === CODEX_PAYLOAD_TYPES.ITEM_COMPLETED &&
+      e.payload.item?.type === CODEX_ITEM_TYPES.MCP_TOOL_CALL
+    ) {
+      const item = e.payload.item;
+      const server = item.server;
+      const tool = item.tool;
+      const parameters = item.arguments;
+      const alreadyParsed = [...this.pendingStreamingCalls.values()].some(
+        ({ initiatedEvents }) =>
+          (initiatedEvents ?? []).some((initiated) => {
+            if (initiated.type !== CLI_EVENT_TYPES.MCP_TOOL_CALL) {
+              return false;
+            }
+            const data = initiated.data as McpToolCallData;
+            return (
+              data.server === server &&
+              data.tool === tool &&
+              JSON.stringify(data.parameters ?? {}) ===
+                JSON.stringify(parameters)
+            );
+          })
+      );
+      if (
+        !alreadyParsed &&
+        typeof server === "string" &&
+        typeof tool === "string" &&
+        parameters &&
+        typeof parameters === "object" &&
+        !Array.isArray(parameters)
+      ) {
+        const result = item.result as
+          | { content?: Array<{ text?: unknown }>; isError?: boolean }
+          | undefined;
+        const output = result?.content
+          ?.map((part) => part.text)
+          .filter((part): part is string => typeof part === "string")
+          .join("\n");
+        results.push({
+          type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+          timestamp,
+          data: {
+            server,
+            tool,
+            toolCallId: typeof item.id === "string" ? item.id : undefined,
+            parameters: parameters as Record<string, unknown>,
+            result: { success: !result?.isError, output: output ?? "" },
+          } as McpToolCallData,
+        });
+      }
+      return results;
+    }
 
     // event_msg:patch_apply_end - Correct apply_patch diff line numbers in place
     // on the pending (streaming) tool call so the COMPLETED event renders the

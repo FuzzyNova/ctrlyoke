@@ -27,6 +27,7 @@ export const CODEX_PAYLOAD_TYPES = {
   TASK_COMPLETE: "task_complete",
   TOKEN_COUNT: "token_count",
   PATCH_APPLY_END: "patch_apply_end",
+  ITEM_COMPLETED: "item_completed",
   TURN_COMPLETED: "turn.completed",
   USER_MESSAGE: "user_message",
   AGENT_MESSAGE: "agent_message",
@@ -36,6 +37,10 @@ export const CODEX_PAYLOAD_TYPES = {
   FUNCTION_CALL_OUTPUT: "function_call_output",
   CUSTOM_TOOL_CALL: "custom_tool_call",
   CUSTOM_TOOL_CALL_OUTPUT: "custom_tool_call_output",
+} as const;
+
+export const CODEX_ITEM_TYPES = {
+  MCP_TOOL_CALL: "McpToolCall",
 } as const;
 
 export const CODEX_MESSAGE_ROLES = {
