@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Ctrl/Cmd+C copies selected output text again in the VS Code panel.** Since VS Code 1.143,
+  the copy shortcut moved focus back to the last focused control (such as the prompt editor)
+  before copying, so the output selection was lost and nothing was copied.
 - **OpenCode permission request hooks now run when a tool needs approval.** OpenCode delivers the
   request through its plugin event handler; the compatibility matrix now reflects that the event
   is available but allow/deny decisions are not supported.

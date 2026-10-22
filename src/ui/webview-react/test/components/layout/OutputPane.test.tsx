@@ -98,3 +98,19 @@ describe("OutputPane sticky offset", () => {
     ).toBe("");
   });
 });
+
+describe("OutputPane focus", () => {
+  // VS Code's webview copy refocuses the last focused element when focus is
+  // on <body>, stealing the output selection; the pane must take focus itself.
+  it("can take focus so Ctrl/Cmd+C copies the output selection", () => {
+    const scrollContainerRef: { current: HTMLDivElement | null } = {
+      current: null,
+    };
+    render(<OutputPane {...buildProps(scrollContainerRef)} />);
+    const scrollElement = scrollContainerRef.current!;
+    expect(scrollElement.tabIndex).toBe(-1);
+
+    scrollElement.focus();
+    expect(document.activeElement).toBe(scrollElement);
+  });
+});

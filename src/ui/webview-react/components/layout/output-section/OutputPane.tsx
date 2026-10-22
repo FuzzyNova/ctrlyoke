@@ -302,12 +302,17 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
       }`}
     >
       {findBar}
+      {/* Focusable so a press on output text takes focus. VS Code's webview
+          host runs Ctrl/Cmd+C as execCommand("copy") and, when focus is on
+          <body>, first refocuses the last focused element (a prompt editor or
+          button), which moves the selection away and copies nothing. */}
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div
         ref={outputRef}
         id="output-content"
+        tabIndex={-1}
         {...{ [SELECT_ALL_SCOPE_ATTRIBUTE]: SELECT_ALL_SCOPES.CONTENTS }}
-        className="font-mono text-(length:--cy-output-font-size-sm) min-h-0 p-0 flex-1 overflow-y-auto scrollbar-hide"
+        className="font-mono text-(length:--cy-output-font-size-sm) min-h-0 p-0 flex-1 overflow-y-auto scrollbar-hide outline-none"
         style={{ overflowAnchor: "none" }}
         onScroll={onScroll}
         onWheel={onWheel}

@@ -16,8 +16,9 @@ import { isEditableClipboardTarget } from "@utils/stepClipboard";
  * the one place that sees both hosts.
  *
  * The region is the nearest `[data-select-all-scope]` ancestor of the last
- * pointer press or focus change. Focus alone is not enough: clicking output
- * text focuses nothing and leaves `document.activeElement` on `<body>`.
+ * pointer press or focus change. Focus alone is not enough: clicking text
+ * outside a focusable region focuses nothing and leaves
+ * `document.activeElement` on `<body>`.
  *   - `contents`: select the text inside that element only.
  *   - `handled`: the region implements select-all itself (the steps list),
  *     so only the text selection is suppressed.
