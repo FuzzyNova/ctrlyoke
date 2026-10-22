@@ -257,6 +257,28 @@ suite("CliResponseCollector", () => {
     assert.strictEqual(result.cliResult.error, "Provider rejected key");
   });
 
+  test("should fail a clean exit when parsed output reports an in-band error", async () => {
+    const result = await createCollector(
+      createProvider(
+        createParsedOutput({
+          events: [],
+          metadata: { error: "API rejected the request" },
+        })
+      )
+    ).collectHeadlessResponse({
+      stdout: '{"type":"result","is_error":true}',
+      stderr: "",
+      exitCode: 0,
+      promptForSessionLog: "say hi",
+      executionStartTime: new Date(),
+    });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.failureKind, FAILURE_KINDS.HARNESS_ERROR);
+    assert.strictEqual(result.failureMessage, "API rejected the request");
+    assert.strictEqual(result.cliResult.error, "API rejected the request");
+  });
+
   test("should use the provider's stdout error when the parsed output has none", async () => {
     const stdoutSeen: string[] = [];
     const provider = {
@@ -280,9 +302,11 @@ suite("CliResponseCollector", () => {
     assert.strictEqual(failed.failureMessage, "model is not supported");
     assert.deepStrictEqual(stdoutSeen, ['{"type":"turn.failed"}']);
 
-    // A clean exit never consults the hook.
-    await run(0);
-    assert.strictEqual(stdoutSeen.length, 1);
+    const inBandFailure = await run(0);
+    assert.strictEqual(inBandFailure.success, false);
+    assert.strictEqual(inBandFailure.failureKind, FAILURE_KINDS.HARNESS_ERROR);
+    assert.strictEqual(inBandFailure.failureMessage, "model is not supported");
+    assert.strictEqual(stdoutSeen.length, 2);
   });
 
   test("should classify a killed process as cancellation, not a harness failure", async () => {

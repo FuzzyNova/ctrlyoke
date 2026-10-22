@@ -76,8 +76,7 @@ export function isCtrlYokeQwenHookGroup(group: unknown): boolean {
 /**
  * Qwen Code CLI Notification Monitor
  *
- * Hook configuration: Written to .qwen/settings.json in workspace (no --settings flag).
- * Requires --experimental-hooks CLI flag to activate the hook system.
+ * Hooks are registered in workspace .qwen/settings.json and enabled by default since Qwen 0.14.0.
  * Notification directory: .ctrlyoke/temp/qwen-notifications/
  * Notification script: ctrlyoke-qwen-hook.js
  *

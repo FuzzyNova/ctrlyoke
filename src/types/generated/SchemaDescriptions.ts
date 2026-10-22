@@ -497,7 +497,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "parallelGroups": "Normalized working-file topology for authored parallel groups.",
   "parallelGroups[]": "Normalized working-file topology for one authored parallel group.",
   "permissions": "Harness-specific path and sandbox permission settings.",
-  "permissions.codexApprovalPolicy": "Approval policy for Codex CLI tool calls.",
+  "permissions.codexApprovalPolicy": "Approval policy for Codex CLI tool calls. The untrusted value is deprecated and maps to on-request in Codex 0.149.0 and newer.",
   "permissions.codexSandboxMode": "Sandbox mode for Codex CLI.",
   "permissions.heuristicSecretRedactionEnabled": "Apply pattern-based heuristics (e.g. 'token=...', 'Bearer ...', private-key blocks) when redacting logs, transports, exports, and history, in addition to exact matches of resolved managed/env secret values. Exact-value redaction of secrets ctrlyoke actually resolved always stays on regardless of this setting. Disable this if the heuristics are over-matching and corrupting legitimate output, such as code samples or public identifiers that merely look like credentials.",
   "permissions.trustedExternalRoots": "Absolute directory paths outside the workspace that ctrlyoke may read for prompt attachments and open from file links. Workspace files are always allowed. User-scope entries are trusted immediately; workspace-scope entries require a one-time batch approval before they take effect.",

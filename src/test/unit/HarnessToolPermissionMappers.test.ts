@@ -3,7 +3,10 @@ import { suite, test } from "mocha";
 import { CopilotToolPermissionMapper } from "../../core/harness/copilot/CopilotToolPermissionMapper";
 import { ClaudeToolPermissionMapper } from "../../core/harness/claude/ClaudeToolPermissionMapper";
 import { CodexToolPermissionMapper } from "../../core/harness/codex/CodexToolPermissionMapper";
-import { OpenCodeToolPermissionMapper } from "../../core/harness/opencode/OpenCodeToolPermissionMapper";
+import {
+  formatOpenCodeMcpToolName,
+  OpenCodeToolPermissionMapper,
+} from "../../core/harness/opencode/OpenCodeToolPermissionMapper";
 import { QwenToolPermissionMapper } from "../../core/harness/qwen/QwenToolPermissionMapper";
 import { AntigravityToolPermissionMapper } from "../../core/harness/antigravity/AntigravityToolPermissionMapper";
 import type {
@@ -18,6 +21,7 @@ import {
 import { COMPATIBILITY_DIAGNOSTIC_CODES } from "../../types/CompatibilityTypes";
 import { Log } from "../../utils/Log";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
+import { mergeServerDeniedTools } from "../../types/ToolPermissionUtils";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -650,6 +654,38 @@ suite("HarnessToolPermissionMappers", () => {
         ]);
       });
 
+      test("maps untrusted approval for Codex versions that removed it", () => {
+        const args = mapper.buildCodexSpecificArgs(
+          cfg(PERMISSION_MODES.CUSTOM),
+          "workspace-write",
+          "untrusted",
+          true,
+          "0.149.0"
+        );
+        assert.deepStrictEqual(args, [
+          "-s",
+          "workspace-write",
+          "-a",
+          "on-request",
+        ]);
+      });
+
+      test("preserves untrusted approval on Codex versions that still support it", () => {
+        const args = mapper.buildCodexSpecificArgs(
+          cfg(PERMISSION_MODES.CUSTOM),
+          "workspace-write",
+          "untrusted",
+          true,
+          "0.148.0"
+        );
+        assert.deepStrictEqual(args, [
+          "-s",
+          "workspace-write",
+          "-a",
+          "untrusted",
+        ]);
+      });
+
       test("none mode returns no permission flags", async () => {
         const args = await mapperArgs(mapper, cfg(PERMISSION_MODES.NONE));
         assert.deepStrictEqual(args, []);
@@ -696,13 +732,13 @@ suite("HarnessToolPermissionMappers", () => {
         ]);
       });
 
-      test("custom with sandbox=read-only, approval=untrusted → -s read-only -a untrusted", async () => {
+      test("custom with sandbox=read-only, approval=untrusted maps to on-request for current Codex", async () => {
         const args = mapper.buildCodexSpecificArgs(
           cfg(PERMISSION_MODES.CUSTOM),
           "read-only",
           "untrusted"
         );
-        assert.deepStrictEqual(args, ["-s", "read-only", "-a", "untrusted"]);
+        assert.deepStrictEqual(args, ["-s", "read-only", "-a", "on-request"]);
       });
 
       test("custom with sandbox=danger-full-access, approval=never → -s danger-full-access -a never", async () => {
@@ -1138,6 +1174,23 @@ suite("HarnessToolPermissionMappers", () => {
             "*": "allow",
             edit: "deny",
             bash: { "rm *": "deny" },
+          }
+        );
+      });
+
+      test("formats per-server denials as sanitized OpenCode MCP tool names", () => {
+        const permissions = mergeServerDeniedTools(
+          cfg(PERMISSION_MODES.ALLOW_ALL),
+          [{ id: "my.server-name", deniedTools: ["read.file"] }],
+          undefined,
+          formatOpenCodeMcpToolName
+        );
+
+        assert.deepStrictEqual(
+          mapper.buildPermissionPolicy(permissions!),
+          {
+            "*": "allow",
+            "my_server-name_read_file": "deny",
           }
         );
       });

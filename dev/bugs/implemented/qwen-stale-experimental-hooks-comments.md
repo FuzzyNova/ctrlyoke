@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-21 by a research subagent (Qwen minimum-version review)
 - **Area:** `src/core/harness/qwen/QwenCliProvider.ts` (NOTE in `buildCliArgs`), `src/core/harness/qwen/QwenNotificationMonitor.ts` (class comment)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

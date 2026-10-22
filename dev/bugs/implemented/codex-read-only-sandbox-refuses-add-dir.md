@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-22 by Claude (harness capability suite), with codex-cli 0.163.0
 - **Area:** `src/core/harness/codex/CodexCliProvider.ts` (`--add-dir` assembly), `src/core/harness/codex/CodexToolPermissionMapper.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

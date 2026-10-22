@@ -16,6 +16,7 @@ import { MCP_PROBE_CALLS } from "./mcpProbeContract";
 import {
   HARNESS_MODELS,
   HARNESS_TIMEOUT_MS,
+  KEEP_WORKSPACES_ENV,
   findRunFiles,
   isolateRunState,
   logAndMaybeSkip,
@@ -107,9 +108,13 @@ suite("MCP event pipeline harness probe", function () {
 
   teardown(function () {
     restoreRunState();
-    removeTempDir(tmpDir, (dir) =>
-      console.log(`  ⚠  Could not clean up ${dir} (may still be in use)`)
-    );
+    if (process.env[KEEP_WORKSPACES_ENV]) {
+      console.log(`  Kept harness workspace: ${tmpDir}`);
+    } else {
+      removeTempDir(tmpDir, (dir) =>
+        console.log(`  ⚠  Could not clean up ${dir} (may still be in use)`)
+      );
+    }
   });
 
   for (const harness of Object.values(HARNESS_IDS)) {

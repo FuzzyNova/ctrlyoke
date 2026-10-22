@@ -252,19 +252,27 @@ export class CliResponseCollector {
       };
     }
 
+    const reportedError =
+      parsedOutput.metadata.error ??
+      this.deps.provider.extractErrorFromStdout?.(params.stdout);
+    const parsedError = reportedError
+      ? sanitizeTerminalOutput(
+          secretRedactionService.redactText(reportedError)
+        ).trim()
+      : undefined;
+
+    // Some CLIs (notably Qwen stream-json input mode) report a rejected turn
+    // in-band and still exit successfully. A parsed provider error is a
+    // harness failure regardless of the process exit code.
+    if (parsedError && params.exitCode === 0) {
+      return { kind: FAILURE_KINDS.HARNESS_ERROR, message: parsedError };
+    }
+
     if (params.exitCode !== 0) {
       if (stderr) {
         Log.warn(`[CliResponseCollector] Headless stderr:\n${stderr}`);
       }
       const detail = this.summarizeStderr(stderr);
-      const reportedError =
-        parsedOutput.metadata.error ??
-        this.deps.provider.extractErrorFromStdout?.(params.stdout);
-      const parsedError = reportedError
-        ? sanitizeTerminalOutput(
-            secretRedactionService.redactText(reportedError)
-          ).trim()
-        : undefined;
       return {
         kind: FAILURE_KINDS.PROCESS_EXIT,
         message:

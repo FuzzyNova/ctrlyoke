@@ -1,0 +1,3 @@
+{"type":"system","subtype":"init","session_id":"qwen-api-error-session","model":"no-such-model"}
+{"type":"assistant","session_id":"qwen-api-error-session","message":{"role":"assistant","model":"no-such-model","content":[{"type":"text","text":"[API Error: 401 Incorrect API key provided (request_id: sanitized)]"}]}}
+{"type":"result","subtype":"error_during_execution","session_id":"qwen-api-error-session","is_error":true,"error":{"message":"[API Error: 401 Incorrect API key provided (request_id: sanitized)]"}}

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-21 by a research subagent (Qwen minimum-version review), from Qwen Code source 0.14.0–0.25.3
 - **Area:** `src/core/harness/qwen/QwenCliProvider.ts` (`isRecoverableSessionError`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

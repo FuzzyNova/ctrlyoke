@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **OpenCode permission request hooks now run when a tool needs approval.** OpenCode delivers the
+  request through its plugin event handler; the compatibility matrix now reflects that the event
+  is available but allow/deny decisions are not supported.
+- **OpenCode enforces per-server MCP tool denials.** Denied tool names now match OpenCode's
+  sanitized `<server>_<tool>` names, including server IDs with punctuation.
+- **Qwen remote MCP servers use their configured transport.** Streamable HTTP servers now use
+  Qwen's `httpUrl` field, while SSE servers continue to use `url`.
+- **Qwen MCP servers receive resolved managed secrets.** Secret values are substituted into the
+  per-process inline MCP config, and the config is redacted from displayed command lines.
+- **Qwen API errors now fail the step.** Qwen stream-json can exit with code 0 after an API
+  rejection; ctrlyoke now reports its in-band error instead of completing the step successfully.
+- **Codex approval settings remain compatible with current CLI releases.** The deprecated
+  `untrusted` setting maps to `on-request` for Codex 0.149.0 and newer while retaining its
+  original behavior on older supported releases.
+- **Codex starts in read-only sandboxes.** It no longer receives `--add-dir` for the workspace
+  itself or for external roots when the effective sandbox is read-only.
 - **`general.autoLoadRecentSession` (now labelled "Reopen last workflow on startup") works
   when turned off.** Off now starts every new window on a new workflow. Before, the dashboard
   reopened the workflow it was last showing regardless, and the setting only mattered when there
@@ -33,6 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Codex MCP calls appear in the run timeline.** Codex rollout logs now report MCP
+  calls as completed `McpToolCall` items in `event_msg`; ctrlyoke records those rows
+  while continuing to read the earlier response-item representation.
 - **Claude Code asks before unlisted tools in interactive `custom` mode.** ctrlyoke now starts
   Claude with `--permission-mode default`. Before, it passed no mode, so a `defaultMode` such as
   `bypassPermissions` in your own Claude settings ran every tool without asking and the allow list

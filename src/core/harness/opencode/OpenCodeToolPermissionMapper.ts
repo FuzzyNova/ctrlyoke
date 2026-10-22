@@ -76,6 +76,15 @@ const OPENCODE_TOOL_ALIASES: Readonly<Record<string, string>> = {
   web_search: "websearch",
 };
 
+/** Format an MCP tool name using OpenCode's `<server>_<tool>` convention. */
+export function formatOpenCodeMcpToolName(
+  serverId: string,
+  toolName: string
+): string {
+  const normalize = (name: string) => name.replace(/[^a-zA-Z0-9_-]/g, "_");
+  return `${normalize(serverId)}_${normalize(toolName)}`;
+}
+
 /**
  * Read-only OpenCode tools that `custom` mode allows before the author's own
  * rules, matching the other harnesses (Copilot, Claude, Qwen) where read-only
@@ -113,6 +122,7 @@ export class OpenCodeToolPermissionMapper
   implements IToolPermissionMapper
 {
   readonly capabilities = OPENCODE_PERMISSION_CAPABILITIES;
+  readonly formatMcpToolName = formatOpenCodeMcpToolName;
 
   /** Prepare OpenCode's process-local permission policy. */
   async prepare(

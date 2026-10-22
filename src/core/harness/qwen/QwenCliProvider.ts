@@ -35,6 +35,7 @@ import {
 import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
+import { redactMcpConfigArgs } from "../shared/CliLauncherResolver";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import {
   StatuslineManager,
@@ -194,6 +195,32 @@ export class QwenCliProvider implements ICliProvider {
     return sessionEvent?.session_id as string | undefined;
   }
 
+  /** Extract Qwen's in-band API error from its Claude-shaped headless stream. */
+  extractErrorFromStdout(stdout: string): string | undefined {
+    const { objects } = CliParseUtils.extractJsonObjectsFromStream(stdout);
+    const resultEvent = objects.find(
+      (event) => event.type === "result" && event.is_error === true
+    );
+    if (!resultEvent) {
+      return undefined;
+    }
+
+    const error = resultEvent.error;
+    if (typeof error === "string" && error.trim()) {
+      return error;
+    }
+    if (
+      error &&
+      typeof error === "object" &&
+      typeof (error as { message?: unknown }).message === "string"
+    ) {
+      return (error as { message: string }).message;
+    }
+    return typeof resultEvent.result === "string" && resultEvent.result.trim()
+      ? resultEvent.result
+      : "Qwen reported an error while executing the request";
+  }
+
   /**
    * Build complete CLI arguments array for Qwen Code CLI execution
    *
@@ -333,11 +360,12 @@ export class QwenCliProvider implements ICliProvider {
     // Hook setup (interactive notification hooks + headless user hooks) is dispatched
     // by CliIntegration.runExecutionSession() via buildNotificationHookArgs() /
     // buildHeadlessUserHookArgs() — not here in buildCliArgs().
-    // NOTE: buildHeadlessUserHookArgs returns ["--experimental-hooks"] for Qwen headless.
+    // Qwen hooks are registered in workspace .qwen/settings.json and enabled by default since 0.14.0.
+    // buildHeadlessUserHookArgs() applies hook setup and returns no CLI args.
     // Permission preparation is similarly dispatched by CliIntegration — not here.
 
     Log.trace(
-      `[QwenCliProvider] Qwen CLI arguments: ${JSON.stringify(this.redactMcpConfigArgs(args))}`
+      `[QwenCliProvider] Qwen CLI arguments: ${JSON.stringify(redactMcpConfigArgs(args))}`
     );
 
     return {
@@ -442,17 +470,6 @@ export class QwenCliProvider implements ICliProvider {
         ? { CTRLYOKE_STATUSLINE_WORKSPACE_ROOT: this.statusLineWorkspaceRoot }
         : {}),
     };
-  }
-
-  private redactMcpConfigArgs(args: string[]): string[] {
-    const redactedArgs = [...args];
-    for (let index = 0; index < redactedArgs.length - 1; index++) {
-      if (redactedArgs[index] === "--mcp-config") {
-        redactedArgs[index + 1] = "[REDACTED]";
-        index++;
-      }
-    }
-    return redactedArgs;
   }
 
   /**
@@ -925,10 +942,16 @@ export class QwenCliProvider implements ICliProvider {
       workingFilePath,
       additionalEnv,
       userServers,
-      undefined,
+      {
+        remoteUrlKeyMap: {
+          "streamable-http": "httpUrl",
+          sse: "url",
+        },
+        includeRemoteType: false,
+      },
       stateRoot,
       CliProviderUtils.createMcpSecretConfigOptions(
-        (name) => `\${${name}}`,
+        undefined,
         secretEnvironment
       )
     );
@@ -971,25 +994,26 @@ export class QwenCliProvider implements ICliProvider {
   }
 
   /**
-   * Check whether stderr or an error describes a rejected Qwen session.
+   * Check whether CLI output or an error describes a rejected Qwen session.
    *
    * This classifies a process result so the runner can retry without
    * the resume flag; it is intentionally a provider concern, not output
    * parsing.
    */
   isRecoverableSessionError(
-    input: string | Error | { stderr?: string }
+    input: string | Error | { stdout?: string; stderr?: string }
   ): boolean {
     const message =
       typeof input === "string"
         ? input
         : input instanceof Error
           ? getErrorMessage(input)
-          : (input.stderr ?? "");
+          : `${input.stdout ?? ""}\n${input.stderr ?? ""}`;
     return (
       message.includes("invalid session") ||
       message.includes("session not found") ||
-      message.includes("--resume requires a valid session")
+      message.includes("--resume requires a valid session") ||
+      /No saved session found with (?:ID|title)\s+["']?[^\s"']+/i.test(message)
     );
   }
 }

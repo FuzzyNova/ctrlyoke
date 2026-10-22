@@ -38,6 +38,8 @@ export interface PermissionContext {
   /** Codex-only mode settings, supplied by the provider. */
   readonly sandboxMode?: string;
   readonly approvalPolicy?: string;
+  /** Detected Codex CLI version for version-specific permission values. */
+  readonly cliVersion?: string;
   /** The step's resolved MCP servers, for harnesses that filter MCP tools per server (Codex). */
   readonly mcpServers?: readonly (string | McpServerConfig)[] | null;
   /** Existing permission keys used by config-driven harnesses for collision safety. */
@@ -71,6 +73,12 @@ export interface ToolPermissionApplication {
  * - Codex: tool patterns → compatibility diagnostics; mode → sandbox/approval args
  */
 export interface IToolPermissionMapper {
+  /**
+   * Format a server's bare denied tool name in the harness's permission syntax.
+   * Defaults to `mcp__<server>__<tool>` when omitted.
+   */
+  readonly formatMcpToolName?: (serverId: string, toolName: string) => string;
+
   /**
    * Static permission facts owned by this harness mapper and referenced by the
    * harness descriptor. The backend registry evaluates these declarations

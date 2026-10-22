@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-21 by a research subagent (OpenCode minimum-version review), from OpenCode source (`mcp/index.ts`, `session/tools.ts`)
 - **Area:** `src/types/ToolPermissionUtils.ts` (`mergeServerDeniedTools`), `src/core/harness/opencode/OpenCodeToolPermissionMapper.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -15,17 +15,18 @@ OpenCode, although the compatibility matrix marks per-server tool filtering as s
 2. Ask the model to call that tool.
 3. Expected: OpenCode refuses it. Suspected actual: the call succeeds.
 
-Found by reading the code; confirm with a `test:harness` case. The existing evidence
-(`inline-config.harness.test.ts`) only checks that the MCP server connects.
+Confirmed with the OpenCode 1.19.4 harness case in
+`src/test/harness/inline-config.harness.test.ts`.
 
 ## Root Cause
 
 `mergeServerDeniedTools()` produces permission keys shaped `mcp__<server>__<tool>`. OpenCode names
 MCP tools `<server>_<tool>`, so the generated permission rules never match a real tool name.
 
-## Suggested Fix
+## Resolution
 
-Let the OpenCode mapper rewrite server-denied tools to OpenCode's `<server>_<tool>` naming, using
-`mergeServerDeniedTools`' existing `normalizeServerId` seam or a provider-owned tool-name
-formatter. Until it is verified, downgrade OpenCode's `mcp.perServerToolFiltering` declaration so
-the matrix doesn't promise enforcement.
+`mergeServerDeniedTools()` now accepts a provider-owned formatter. OpenCode emits permission keys
+using its `<server>_<tool>` convention and sanitizes characters outside letters, digits, `_`, and
+`-` to `_`. Other harnesses retain the existing `mcp__<server>__<tool>` format. OpenCode 1.19.4's
+live harness case confirmed the denied tool call is refused, so the exact filtering declaration
+remains unchanged.

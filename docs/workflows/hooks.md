@@ -44,7 +44,7 @@ work everywhere. The others don't:
 | ------------------- | --------------------------------------- |
 | `sessionStart`      | Partial on OpenCode (can fire too late) |
 | `userPromptSubmit`  | Antigravity                             |
-| `permissionRequest` | Antigravity; partial on OpenCode        |
+| `permissionRequest` | Antigravity; OpenCode (notifications only) |
 | `notification`      | Codex, OpenCode, Antigravity            |
 | `error`             | Codex, Qwen Code, Antigravity           |
 
@@ -130,13 +130,14 @@ doesn't read the result, with one exception.
 
 ### `permissionRequest` hooks decide
 
-A `permissionRequest` hook answers the harness's permission prompt. ctrlyoke
-pipes the harness's request to your command on stdin and passes your
-command's stdout back to the harness as the decision, in the harness's own
-response format. Define one `permissionRequest` hook per step; when ctrlyoke
-is also watching the event for a [notification](#hooks-and-notifications), it
-only runs the first. OpenCode's handling of the decision is unverified, so a
-returned decision there may be ignored.
+A `permissionRequest` hook can answer the harness's permission prompt when
+that harness supports decisions. ctrlyoke pipes the request to your command on
+stdin and passes stdout back in the harness's native response format. Define
+one `permissionRequest` hook per step; when ctrlyoke is also watching the event
+for a [notification](#hooks-and-notifications), it only runs the first.
+OpenCode 1.19.4 sends permission requests to the plugin event handler, which
+has no decision response channel. OpenCode hooks therefore notify only; their
+output cannot allow or deny the requested action.
 
 ## Example: log every turn
 

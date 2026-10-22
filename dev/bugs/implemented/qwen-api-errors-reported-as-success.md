@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-21 by Claude (harness version-support review), reproduced with Qwen Code 0.25.3
 - **Area:** `src/core/harness/qwen/`, `src/core/harness/shared/CliResponseCollector.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -31,9 +31,9 @@ termination signal, or stderr that looks like an invocation error. Qwen's stream
 reports API failures only in-band, with exit code 0, and nothing maps `result.is_error` to a
 failure.
 
-## Suggested Fix
+## Resolution
 
-Have the Qwen parser (or a provider hook alongside `ICliProvider.extractErrorFromStdout`) set
-`metadata.error` from a `result` event with `is_error: true`, and let the collector treat a
-parsed error as a `HARNESS_ERROR` failure even when the exit code is 0. Add a parser fixture from
-the captured stdout above. Check whether Claude's stream-json `result.is_error` has the same gap.
+Qwen 0.26.0 still exits 0 for the captured API rejection. Its stdout parser now extracts the
+error from `result.is_error`, and the shared response collector reports that in-band error as a
+`HARNESS_ERROR` even when the process exits successfully. Claude result events now populate the
+same metadata field. Parser and collector regression tests cover both paths.
