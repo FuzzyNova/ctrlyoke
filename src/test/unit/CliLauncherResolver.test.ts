@@ -2,11 +2,27 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
   parsePowerShellBatchProxyTarget,
+  redactMcpConfigArgs,
   resolveCliCommand,
   setWindowsCommandMetadataResolverForTests,
 } from "../../core/harness/shared/CliLauncherResolver";
 
 suite("CliLauncherResolver", () => {
+  test("redacts inline MCP configuration before display or persistence", () => {
+    const secretConfig = JSON.stringify({
+      mcpServers: { server: { env: { TOKEN: "secret-value" } } },
+    });
+    assert.deepStrictEqual(
+      redactMcpConfigArgs([
+        "--model",
+        "qwen3.5-plus",
+        "--mcp-config",
+        secretConfig,
+      ]),
+      ["--model", "qwen3.5-plus", "--mcp-config", "[REDACTED]"]
+    );
+  });
+
   test("recognizes a pure PowerShell batch proxy", () => {
     const target = "C:\\Users\\test user\\AppData\\copilotCli\\copilot.ps1";
     const contents =

@@ -22,6 +22,7 @@ import { type CliProviderPreparation } from "./interfaces/PreparedMutation";
 import {
   CliMcpConfigGenerator,
   transformMcpSecretMap,
+  type McpUserServerHarnessConfig,
   type McpSecretConfigOptions,
 } from "./CliMcpConfigGenerator";
 import {
@@ -108,11 +109,12 @@ export class RetryableAsyncCache<T> {
  * `trust: true` for auto-approved servers). Antigravity's `mcp_config.json`
  * schema uses `serverUrl` and recognizes neither `type` nor `trust`.
  */
-export interface SettingsJsonMcpEntryOptions {
+export interface SettingsJsonMcpEntryOptions extends Pick<
+  McpUserServerHarnessConfig,
+  "remoteUrlKeyMap" | "includeRemoteType"
+> {
   /** Key used for a remote server's URL. Default `"url"`; Antigravity uses `"serverUrl"`. */
   remoteUrlKey?: "url" | "serverUrl";
-  /** Whether to emit a `type` field for remote servers. Default `true`. */
-  includeRemoteType?: boolean;
   /** Whether to emit a `trust` field for auto-approved/orchestrator servers. Default `true`. */
   includeTrust?: boolean;
 }
@@ -566,9 +568,12 @@ export class CliProviderUtils {
       for (const server of userServers) {
         const entry: Record<string, unknown> = {};
         if (server.url) {
-          entry[remoteUrlKey] = server.url;
-          if (includeRemoteType) {
-            entry.type = server.transport ?? MCP_TRANSPORTS.STREAMABLE_HTTP;
+          const transport = server.transport ?? MCP_TRANSPORTS.STREAMABLE_HTTP;
+          const serverRemoteUrlKey =
+            options?.remoteUrlKeyMap?.[transport] ?? remoteUrlKey;
+          entry[serverRemoteUrlKey] = server.url;
+          if (includeRemoteType && options?.includeRemoteType !== false) {
+            entry.type = transport;
           }
           if (server.headers) {
             entry.headers = transformMcpSecretMap(

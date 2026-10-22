@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-21 by a research subagent (Qwen minimum-version review), from Qwen Code source 0.15.5 and 0.25.3
 - **Area:** `src/core/harness/shared/CliMcpConfigGenerator.ts` (`transformSecretMap`), `src/core/harness/qwen/QwenCliProvider.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

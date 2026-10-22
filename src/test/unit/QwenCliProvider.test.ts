@@ -314,6 +314,10 @@ suite("QwenCliProvider", () => {
         transport: "sse",
         headers: { Authorization: "Bearer remote-secret" },
       };
+      const streamableServer: McpServerConfig = {
+        id: "streamable",
+        url: "https://mcp.example.test/mcp",
+      };
 
       const args = await provider.getMcpConfigArgs(
         "C:\\extension\\out\\mcp-server.js",
@@ -324,7 +328,7 @@ suite("QwenCliProvider", () => {
           CTRLYOKE_DIAGNOSTIC_LOGS: "true",
           CTRLYOKE_API_KEY: "dynamic-secret",
         },
-        [localServer, remoteServer]
+        [localServer, remoteServer, streamableServer]
       );
 
       assert.ok(args);
@@ -351,11 +355,41 @@ suite("QwenCliProvider", () => {
           },
           remote: {
             url: "https://mcp.example.test/sse",
-            type: "sse",
             headers: { Authorization: "Bearer remote-secret" },
           },
+          streamable: { httpUrl: "https://mcp.example.test/mcp" },
         },
       });
+    });
+
+    test("substitutes resolved secret values into process-local MCP config", async () => {
+      const provider = new QwenCliProvider();
+      const secret = "qwen-test-secret-value";
+      const args = await provider.getMcpConfigArgs(
+        undefined,
+        "C:\\workspace\\project",
+        undefined,
+        undefined,
+        [
+          {
+            id: "secret-server",
+            command: "node",
+            env: { API_TOKEN: "prefix-${secret:API_TOKEN}" },
+          },
+        ],
+        undefined,
+        { API_TOKEN: secret }
+      );
+
+      assert.ok(args);
+      const config = parseMcpConfig(args) as {
+        mcpServers: Record<string, { env: Record<string, string> }>;
+      };
+      assert.strictEqual(
+        config.mcpServers["secret-server"].env.API_TOKEN,
+        `prefix-${secret}`
+      );
+      assert.ok(!JSON.stringify(config).includes("${secret:"));
     });
 
     test("provider instances keep independent inline MCP argument values", async () => {

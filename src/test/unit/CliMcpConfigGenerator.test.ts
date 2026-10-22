@@ -50,6 +50,32 @@ suite("CliMcpConfigGenerator", () => {
       assert.ok(!json.includes("${secret:API_TOKEN}"));
     });
 
+    test("maps remote URL fields through the harness configuration", () => {
+      const json = CliMcpConfigGenerator.generateUserServersOnlyConfig(
+        [
+          { id: "http", url: "https://example.test/mcp" },
+          {
+            id: "sse",
+            url: "https://example.test/sse",
+            transport: "sse",
+          },
+        ],
+        {
+          remoteUrlKeyMap: {
+            "streamable-http": "httpUrl",
+            sse: "url",
+          },
+          includeRemoteType: false,
+        }
+      );
+      assert.deepStrictEqual(JSON.parse(json), {
+        mcpServers: {
+          http: { httpUrl: "https://example.test/mcp" },
+          sse: { url: "https://example.test/sse" },
+        },
+      });
+    });
+
     test("produces valid JSON string", () => {
       const json = CliMcpConfigGenerator.generateJsonConfig(
         "out/mcp-server.js",

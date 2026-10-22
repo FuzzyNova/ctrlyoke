@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Qwen remote MCP servers use their configured transport.** Streamable HTTP servers now use
+  Qwen's `httpUrl` field, while SSE servers continue to use `url`.
+- **Qwen MCP servers receive resolved managed secrets.** Secret values are substituted into the
+  per-process inline MCP config, and the config is redacted from displayed command lines.
 - **Qwen API errors now fail the step.** Qwen stream-json can exit with code 0 after an API
   rejection; ctrlyoke now reports its in-band error instead of completing the step successfully.
 - **Codex approval settings remain compatible with current CLI releases.** The deprecated

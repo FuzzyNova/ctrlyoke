@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-21 by a research subagent (Qwen minimum-version review), from Qwen Code source 0.14.1, 0.15.5, 0.20.1 and 0.25.3
 - **Area:** `src/core/harness/shared/CliMcpConfigGenerator.ts` (`buildUserServerEntry`), `src/core/harness/qwen/QwenCliProvider.ts` (`getMcpConfigArgs`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

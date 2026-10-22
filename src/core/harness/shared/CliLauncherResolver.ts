@@ -95,7 +95,20 @@ export async function resolveCliCommand(
 }
 
 function formatCommandForDisplay(command: string, args: string[]): string {
-  return [command, ...args].map(formatDisplayArg).join(" ");
+  const displayArgs = redactMcpConfigArgs(args);
+  return [command, ...displayArgs].map(formatDisplayArg).join(" ");
+}
+
+/** Hide inline MCP configuration from command strings persisted to logs/timelines. */
+export function redactMcpConfigArgs(args: readonly string[]): string[] {
+  const redactedArgs = [...args];
+  for (let index = 0; index < redactedArgs.length - 1; index++) {
+    if (redactedArgs[index] === "--mcp-config") {
+      redactedArgs[index + 1] = "[REDACTED]";
+      index++;
+    }
+  }
+  return redactedArgs;
 }
 
 async function getCliLauncher(commandName: string): Promise<CliLauncher> {

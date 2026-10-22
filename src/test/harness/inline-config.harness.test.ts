@@ -12,7 +12,7 @@
  */
 
 import * as assert from "assert";
-import { spawnSync } from "child_process";
+import { spawn, spawnSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import type {
@@ -92,12 +92,13 @@ function makeUserMcpServer(
   id: string,
   toolName: string,
   scriptPath: string,
-  markerPath: string
+  markerPath: string,
+  recordEnv?: string
 ): McpServerConfig {
   return {
     id,
     command: "node",
-    args: [scriptPath, toolName, markerPath],
+    args: [scriptPath, toolName, markerPath, ...(recordEnv ? [recordEnv] : [])],
     autoApprove: true,
   };
 }
@@ -165,6 +166,81 @@ function qwenMcpWorkflow(
     toolPermissions: { mode: "dangerouslyAllowAll" },
     mcpServers: [server],
     steps: [{ name: "qwen-inline-mcp-probe", prompt }],
+  };
+}
+
+function trustWorkflowSecretGrants(
+  workflow: PromptFile,
+  tmpDir: string,
+  label: string
+): void {
+  const workflowPath = path.join(tmpDir, `${label}-test.ctrlyoke.json`);
+  fs.writeFileSync(workflowPath, JSON.stringify(workflow, null, 2));
+  const cliPath = path.resolve(__dirname, "../../cli.js");
+  const result = spawnSync(
+    "node",
+    [cliPath, "trust-secret-grants", workflowPath, "--cwd", tmpDir, "--yes"],
+    { cwd: tmpDir, encoding: "utf8" }
+  );
+  assert.strictEqual(
+    result.status,
+    0,
+    `Could not approve harness secret grant: ${result.stderr}`
+  );
+}
+
+function buildStreamableHttpMcpServerScript(): string {
+  return `"use strict";
+const http = require("http");
+const fs = require("fs");
+const { McpServer } = require("@modelcontextprotocol/sdk/server/mcp.js");
+const { StreamableHTTPServerTransport } = require("@modelcontextprotocol/sdk/server/streamableHttp.js");
+const marker = process.argv[2];
+const mcp = new McpServer({ name: "qwen-http-probe", version: "1.0.0" });
+mcp.tool("record_remote_call", "Record the remote MCP tool call.", {}, async () => {
+  fs.appendFileSync(marker, "called\\n");
+  return { content: [{ type: "text", text: "remote-probe-called" }] };
+});
+const transport = new StreamableHTTPServerTransport({
+  sessionIdGenerator: () => require("crypto").randomUUID()
+});
+const server = http.createServer((req, res) => transport.handleRequest(req, res));
+mcp.connect(transport).then(() => {
+  server.listen(0, "127.0.0.1", () => console.log(server.address().port));
+});
+`;
+}
+
+async function startStreamableHttpMcpServer(
+  scriptPath: string,
+  markerPath: string
+): Promise<{ url: string; stop: () => void }> {
+  fs.writeFileSync(scriptPath, buildStreamableHttpMcpServerScript());
+  const server = spawn("node", [scriptPath, markerPath], {
+    cwd: path.dirname(scriptPath),
+    stdio: ["ignore", "pipe", "pipe"],
+    env: {
+      ...process.env,
+      NODE_PATH: [
+        path.resolve(process.cwd(), "node_modules"),
+        process.env.NODE_PATH,
+      ]
+        .filter(Boolean)
+        .join(path.delimiter),
+    },
+  });
+  const port = await new Promise<number>((resolve, reject) => {
+    server.once("error", reject);
+    server.stdout?.on("data", (chunk: Buffer) => {
+      const parsed = Number(chunk.toString().trim());
+      if (parsed > 0) resolve(parsed);
+    });
+  });
+  return {
+    url: `http://127.0.0.1:${port}/mcp`,
+    stop: () => {
+      server.kill();
+    },
   };
 }
 
@@ -626,6 +702,74 @@ suite("Inline harness configuration regression tests", function () {
         );
       });
     }
+
+    test("connects to a streamable HTTP MCP server through httpUrl", async function () {
+      const toolName = "record_remote_call";
+      const markerPath = path.join(tmpDir, "qwen-http-mcp.calls");
+      const server = await startStreamableHttpMcpServer(
+        path.join(tmpDir, "qwen-http-mcp.js"),
+        markerPath
+      );
+      try {
+        const result = runWorkflowFile(
+          qwenMcpWorkflow(
+            {
+              id: "qwen_http_server",
+              url: server.url,
+              transport: "streamable-http",
+            },
+            `Call mcp__qwen_http_server__${toolName} exactly once and do not call any other tool.`
+          ),
+          tmpDir,
+          "qwen-http-mcp"
+        );
+        if (logAndMaybeSkip("qwen-cli (streamable HTTP MCP)", result)) return;
+        assertSuccessfulRun("qwen-cli (streamable HTTP MCP)", result);
+        assert.strictEqual(
+          fs.existsSync(markerPath)
+            ? fs.readFileSync(markerPath, "utf8").trim()
+            : "missing",
+          "called",
+          `Qwen did not call the streamable HTTP tool. stdout: ${result.stdout}\nstderr: ${result.stderr}`
+        );
+      } finally {
+        server.stop();
+      }
+    });
+
+    test("passes a granted secret into a Qwen stdio MCP server", function () {
+      const secret = "qwen-inline-secret-probe";
+      const previousSecret = process.env.API_TOKEN;
+      process.env.API_TOKEN = secret;
+      const markerPath = path.join(tmpDir, "qwen-secret-mcp.calls");
+      const server: McpServerConfig = {
+        ...makeUserMcpServer(
+          "qwen_secret_server",
+          "qwen_secret_env_probe",
+          mcpServerScript,
+          markerPath,
+          "API_TOKEN"
+        ),
+        env: { API_TOKEN: "${secret:API_TOKEN}" },
+      };
+      const workflow = qwenMcpWorkflow(
+        server,
+        `!API_TOKEN Call mcp__qwen_secret_server__qwen_secret_env_probe exactly once. Do not reveal the secret or use another tool.`
+      );
+      let result: ReturnType<typeof runWorkflowFile>;
+      try {
+        trustWorkflowSecretGrants(workflow, tmpDir, "qwen-secret-mcp");
+        result = runWorkflowFile(workflow, tmpDir, "qwen-secret-mcp");
+      } finally {
+        if (previousSecret === undefined) delete process.env.API_TOKEN;
+        else process.env.API_TOKEN = previousSecret;
+      }
+      if (logAndMaybeSkip("qwen-cli (secret-backed stdio MCP)", result)) return;
+      assertSuccessfulRun("qwen-cli (secret-backed stdio MCP)", result);
+      assert.strictEqual(fs.readFileSync(markerPath, "utf8").trim(), secret);
+      assert.ok(!result.stdout.includes(secret));
+      assert.ok(!result.stderr.includes(secret));
+    });
 
     test("inline MCP without hooks leaves no workspace .qwen or .gitignore", function () {
       const markerPath = path.join(tmpDir, "qwen-no-settings.calls");

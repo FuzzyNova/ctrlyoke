@@ -35,6 +35,7 @@ import {
 import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
+import { redactMcpConfigArgs } from "../shared/CliLauncherResolver";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import {
   StatuslineManager,
@@ -363,7 +364,7 @@ export class QwenCliProvider implements ICliProvider {
     // Permission preparation is similarly dispatched by CliIntegration — not here.
 
     Log.trace(
-      `[QwenCliProvider] Qwen CLI arguments: ${JSON.stringify(this.redactMcpConfigArgs(args))}`
+      `[QwenCliProvider] Qwen CLI arguments: ${JSON.stringify(redactMcpConfigArgs(args))}`
     );
 
     return {
@@ -468,17 +469,6 @@ export class QwenCliProvider implements ICliProvider {
         ? { CTRLYOKE_STATUSLINE_WORKSPACE_ROOT: this.statusLineWorkspaceRoot }
         : {}),
     };
-  }
-
-  private redactMcpConfigArgs(args: string[]): string[] {
-    const redactedArgs = [...args];
-    for (let index = 0; index < redactedArgs.length - 1; index++) {
-      if (redactedArgs[index] === "--mcp-config") {
-        redactedArgs[index + 1] = "[REDACTED]";
-        index++;
-      }
-    }
-    return redactedArgs;
   }
 
   /**
@@ -951,10 +941,16 @@ export class QwenCliProvider implements ICliProvider {
       workingFilePath,
       additionalEnv,
       userServers,
-      undefined,
+      {
+        remoteUrlKeyMap: {
+          "streamable-http": "httpUrl",
+          sse: "url",
+        },
+        includeRemoteType: false,
+      },
       stateRoot,
       CliProviderUtils.createMcpSecretConfigOptions(
-        (name) => `\${${name}}`,
+        undefined,
         secretEnvironment
       )
     );

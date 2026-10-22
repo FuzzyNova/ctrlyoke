@@ -40,6 +40,7 @@ interface McpConfigServerEntry extends Record<string, unknown> {
   type?: string;
   tools?: string[];
   url?: string;
+  httpUrl?: string;
   headers?: Record<string, string>;
   autoApprove?: boolean | string[];
 }
@@ -62,6 +63,10 @@ export interface McpUserServerHarnessConfig {
    * If not provided, the transport value is used as-is.
    */
   remoteTypeMap?: Record<string, string>;
+  /** Maps transports to the remote URL property accepted by the harness. */
+  remoteUrlKeyMap?: Record<string, "url" | "httpUrl">;
+  /** Omit the remote type field when the URL property identifies transport. */
+  includeRemoteType?: boolean;
   /** Tools array to add to every server entry (e.g., ["*"] for Copilot CLI) */
   tools?: string[];
 }
@@ -511,10 +516,14 @@ export class CliMcpConfigGenerator {
 
     if (server.url) {
       // Remote server
-      entry.url = server.url;
       const rawTransport = server.transport ?? "streamable-http";
-      entry.type =
-        userServerConfig?.remoteTypeMap?.[rawTransport] ?? rawTransport;
+      const remoteUrlKey =
+        userServerConfig?.remoteUrlKeyMap?.[rawTransport] ?? "url";
+      entry[remoteUrlKey] = server.url;
+      if (userServerConfig?.includeRemoteType !== false) {
+        entry.type =
+          userServerConfig?.remoteTypeMap?.[rawTransport] ?? rawTransport;
+      }
       if (server.headers) {
         entry.headers = this.transformSecretMap(server.headers, secretOptions);
       }

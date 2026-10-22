@@ -677,7 +677,10 @@ rl.on("line", (line) => {
   }
   if (request.method === "tools/call") {
     if (request.params && toolNames.includes(request.params.name)) {
-      fs.appendFileSync(markerFile, request.params.name + "\\n");
+      const recorded = process.argv[4]
+        ? process.env[process.argv[4]]
+        : request.params.name;
+      fs.appendFileSync(markerFile, String(recorded || "") + "\\n");
       send(request.id, { content: [{ type: "text", text: "probe-called" }] });
     } else {
       send(request.id, { isError: true, content: [{ type: "text", text: "unknown tool" }] });
