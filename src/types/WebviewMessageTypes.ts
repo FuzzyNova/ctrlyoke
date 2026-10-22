@@ -64,6 +64,7 @@ import {
 } from "./DashboardConstants";
 import type { ScriptRuntimeOutput } from "./CtrlYokeTypes";
 import type { HarnessVersionAssessment } from "../utils/HarnessVersion";
+import type { GitWorkingTreeCounts } from "../utils/GitUtils";
 import type { LanguageServerDefinition } from "./CtrlYokeSettings";
 import type { LanguageServerCatalogEntry } from "../server/lsp/LanguageServerCatalog";
 import type { LanguageServerStatusChange } from "../server/lsp/ManagedLanguageServerBackend";
@@ -1716,6 +1717,10 @@ export interface WorktreeManagementEntry {
     behind: number;
     calculatedAt: number;
   };
+  /** Uncommitted changes in the worktree; absent when its directory is unavailable. */
+  workingTree?: GitWorkingTreeCounts;
+  /** Commit counts against `WorktreeManagementState.sourceCheckoutBranch`; absent for the source checkout. */
+  sourceComparison?: { ahead: number; behind: number };
 }
 
 export interface WorktreeManagementState {

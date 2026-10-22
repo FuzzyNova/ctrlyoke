@@ -216,6 +216,22 @@ user-owned for named ones), branch, and whether a run is using it. The command
 
 ![The Worktrees tab: the effective root, the main checkout, and a kept ctrlyoke-owned managed worktree with Delete branch…, Remove and Force remove](/screenshots/worktrees-tab-833x785.png)
 
+Each row starts with a [posh-git](https://github.com/dahlbyk/posh-git) style
+status line, such as `[feature/x ↑18 +1 ~0 -0 | +0 ~3 -0 !]`:
+
+| Part               | Means                                                                                               |
+| ------------------ | --------------------------------------------------------------------------------------------------- |
+| `↑n` / `↓n` / `≡`  | Commits the branch has that your checkout's branch doesn't, commits it lacks, or the same commits.  |
+| `+a ~m -d`         | Added, modified and deleted files. Staged changes come first; after a `\|`, changes not yet staged. |
+| `!n`               | Files with unresolved merge conflicts.                                                              |
+| Trailing `!` / `~` | The worktree has unstaged changes / only staged changes.                                            |
+
+Next to it, the row says whether the branch is **Ready to merge** (no
+uncommitted changes and commits to bring in), has **Uncommitted changes** or
+**Merge conflicts**, or is **Up to date** or **Behind** your branch. Hover the
+status line for the same information in words. The counts refresh when the
+tab opens and when you select **Refresh**.
+
 Actions on a row depend on the worktree:
 
 | Action                        | Does                                                                                                       |

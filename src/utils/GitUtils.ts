@@ -116,6 +116,73 @@ export function parseGitPorcelainV1Z(output: string): GitPorcelainV1Entry[] {
   return entries;
 }
 
+/** One area's change counts in posh-git's `+added ~modified -deleted` shape. */
+export interface GitChangeCounts {
+  added: number;
+  modified: number;
+  deleted: number;
+}
+
+/** Uncommitted-change counts for one checkout, split the way posh-git shows them. */
+export interface GitWorkingTreeCounts {
+  /** Changes recorded in the index (porcelain column X). */
+  staged: GitChangeCounts;
+  /** Working-tree changes (column Y); untracked files count as added. */
+  unstaged: GitChangeCounts;
+  /** Paths with unresolved merge conflicts, counted in neither area. */
+  conflicted: number;
+}
+
+/** Porcelain XY pairs that mark an unmerged path (`git status` "Unmerged paths"). */
+const UNMERGED_STATUS_PAIRS = new Set([
+  "DD",
+  "AU",
+  "UD",
+  "UA",
+  "DU",
+  "AA",
+  "UU",
+]);
+
+function countChange(counts: GitChangeCounts, code: string): void {
+  switch (code) {
+    case "A":
+    case "?":
+      counts.added++;
+      return;
+    case "D":
+      counts.deleted++;
+      return;
+    case "M":
+    case "R":
+    case "C":
+    case "T":
+      counts.modified++;
+      return;
+  }
+}
+
+/** Fold porcelain v1 entries into posh-git style staged/unstaged/conflict counts. */
+export function countGitWorkingTreeChanges(
+  entries: readonly GitPorcelainV1Entry[]
+): GitWorkingTreeCounts {
+  const counts: GitWorkingTreeCounts = {
+    staged: { added: 0, modified: 0, deleted: 0 },
+    unstaged: { added: 0, modified: 0, deleted: 0 },
+    conflicted: 0,
+  };
+  for (const { x, y } of entries) {
+    if (UNMERGED_STATUS_PAIRS.has(`${x}${y}`)) {
+      counts.conflicted++;
+      continue;
+    }
+    // "??" is a single untracked file, not one staged and one unstaged add.
+    if (x !== "?") countChange(counts.staged, x);
+    countChange(counts.unstaged, y);
+  }
+  return counts;
+}
+
 function matchesPathspecs(
   filePath: string,
   pathspecs: readonly string[] | undefined
@@ -1690,6 +1757,21 @@ export async function hasUncommittedChanges(dir: string): Promise<boolean> {
     "-z",
   ]);
   return stdout.length > 0;
+}
+
+/** Count a checkout's staged, unstaged, untracked and conflicted paths. */
+export async function getWorkingTreeCounts(
+  dir: string
+): Promise<GitWorkingTreeCounts> {
+  const { stdout } = await execGit([
+    "-C",
+    dir,
+    "status",
+    "--porcelain=v1",
+    "--untracked-files=all",
+    "-z",
+  ]);
+  return countGitWorkingTreeChanges(parseGitPorcelainV1Z(stdout));
 }
 
 /** Merge a ref into the current branch only when Git can fast-forward it. */

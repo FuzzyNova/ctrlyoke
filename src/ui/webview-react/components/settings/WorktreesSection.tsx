@@ -23,6 +23,11 @@ import { SettingInputRow } from "../shared/SettingInputRow";
 import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
 import { ResetConfirmModal } from "../shared/ResetConfirmModal";
 import {
+  SCM_GRAPH_TRUNK_COLOR_CLASS,
+  scmGraphBranchColorClass,
+} from "@utils/scmStatus";
+import { WorktreeGitStatus } from "./WorktreeGitStatus";
+import {
   ActionButton,
   actionFeedbackDurationMs,
   type ActionFeedback,
@@ -183,18 +188,25 @@ function normalizeWorktreePath(value: string): string {
   return value.replace(/\\/g, "/").toLowerCase().replace(/\/$/, "");
 }
 
+function isSourceCheckoutEntry(
+  entry: WorktreeManagementEntry,
+  sourceCheckoutRoot?: string
+): boolean {
+  return (
+    !!sourceCheckoutRoot &&
+    normalizeWorktreePath(entry.worktreePath) ===
+      normalizeWorktreePath(sourceCheckoutRoot)
+  );
+}
+
 /** Shared by the per-row Sync button and the section-level Sync All orchestrator. */
 function isSyncEligible(
   entry: WorktreeManagementEntry,
   sourceCheckoutRoot?: string
 ): boolean {
-  const isSourceCheckout =
-    !!sourceCheckoutRoot &&
-    normalizeWorktreePath(entry.worktreePath) ===
-      normalizeWorktreePath(sourceCheckoutRoot);
   return (
     entry.ownership === WORKTREE_LIFECYCLE_OWNERS.USER &&
-    !isSourceCheckout &&
+    !isSourceCheckoutEntry(entry, sourceCheckoutRoot) &&
     !entry.inUse &&
     !entry.stale &&
     !!entry.branchName &&
@@ -322,6 +334,18 @@ export function WorktreesSection({
       true
     );
   };
+
+  // The source checkout takes the commit graph's mainline color; every other
+  // worktree takes the next color of the graph's branch rotation, so rows
+  // stay distinguishable at a glance.
+  const branchColorClasses = useMemo(() => {
+    let colorIndex = 0;
+    return (management?.entries ?? []).map((entry) =>
+      isSourceCheckoutEntry(entry, management?.sourceCheckoutRoot)
+        ? SCM_GRAPH_TRUNK_COLOR_CLASS.local
+        : scmGraphBranchColorClass(++colorIndex)
+    );
+  }, [management]);
 
   const syncEligibleEntries = useMemo(
     () =>
@@ -522,10 +546,11 @@ export function WorktreesSection({
 
         {management?.entries.length ? (
           <div className="mt-3 space-y-2">
-            {management.entries.map((entry) => (
+            {management.entries.map((entry, index) => (
               <WorktreeRow
                 key={`${entry.worktreePath}:${entry.branchName ?? "detached"}`}
                 entry={entry}
+                branchColorClass={branchColorClasses[index]}
                 vscode={vscode}
                 feedback={feedback}
                 confirmDeleteOperations={confirmDeleteOperations}
@@ -625,6 +650,7 @@ export function WorktreesSection({
 
 function WorktreeRow({
   entry,
+  branchColorClass,
   vscode,
   feedback,
   confirmDeleteOperations,
@@ -634,6 +660,7 @@ function WorktreeRow({
   sourceCheckoutBranch,
 }: {
   entry: WorktreeManagementEntry;
+  branchColorClass: string;
   vscode: ReturnType<typeof useVsCodeApi>;
   feedback: WorktreeActionFeedback;
   confirmDeleteOperations: boolean;
@@ -760,7 +787,12 @@ function WorktreeRow({
     <div
       className={`rounded-sm border p-2 text-xs ${entry.inUse ? "border-warning-fg" : "border-panel-border"}`}
     >
-      <div className="font-mono break-all text-foreground">
+      <WorktreeGitStatus
+        entry={entry}
+        sourceCheckoutBranch={sourceCheckoutBranch}
+        branchColorClass={branchColorClass}
+      />
+      <div className="mt-1 font-mono break-all text-foreground">
         {entry.worktreePath}
       </div>
       <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-description-fg">

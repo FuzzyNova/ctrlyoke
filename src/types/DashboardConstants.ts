@@ -2463,6 +2463,18 @@ export const WORKTREE_UI_STATUSES = {
   DIRECTORY_REMOVED: "removed",
 } as const;
 
+/** Merge readiness of a worktree's branch against the source checkout's branch. */
+export const WORKTREE_MERGE_READINESS = {
+  CONFLICTED: "conflicted",
+  UNCOMMITTED: "uncommitted",
+  READY: "ready",
+  BEHIND: "behind",
+  UP_TO_DATE: "upToDate",
+} as const;
+
+export type WorktreeMergeReadiness =
+  (typeof WORKTREE_MERGE_READINESS)[keyof typeof WORKTREE_MERGE_READINESS];
+
 export type WorktreeLifecycleState =
   (typeof WORKTREE_LIFECYCLE_STATES)[keyof typeof WORKTREE_LIFECYCLE_STATES];
 
