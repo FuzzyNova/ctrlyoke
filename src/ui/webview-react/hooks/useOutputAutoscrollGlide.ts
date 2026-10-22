@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import type { RefObject } from "react";
 import type { OutputScrollTarget } from "@store/uiStore";
 import {
@@ -38,6 +38,8 @@ interface RunningGlide {
   curve: CubicBezierCurve;
   element: HTMLElement;
   offsetPx: number;
+  /** The pane's `scrollTop` that `offsetPx` was measured against. */
+  scrollTop: number;
 }
 
 /** Where a running glide is right now, read from its own clock and curve. */
@@ -69,6 +71,15 @@ function sampleRunningGlide(glide: RunningGlide) {
  *   runs only for the BOTTOM target (resolved from `scrollHeight` alone), and
  *   `settleGlide` must run before anything else reads row geometry: user
  *   input, a non-bottom apply, or a viewport-anchor capture.
+ *
+ * The lock is not the only thing that moves `scrollTop`. A new row is first
+ * laid out at its estimated height, the lock scrolls to that bottom, and the
+ * row's real (usually smaller) size is measured and committed before the
+ * frame paints. The pane shrinks under the bottom and the browser clamps
+ * `scrollTop` back down without anyone writing it. A glide still translated by
+ * the full estimated delta would then paint the content that far below where
+ * the user last saw it — a jump up before gliding back down. So every commit
+ * reconciles a running glide with where `scrollTop` actually is now.
  */
 export function useOutputAutoscrollGlide({
   autoscrollEnabledRef,
@@ -93,37 +104,33 @@ export function useOutputAutoscrollGlide({
     releaseGlide(running);
   }, [releaseGlide]);
 
-  const glideAfterScrollWrite = useCallback(
-    (phase: string, target: OutputScrollTarget, appliedDeltaPx: number) => {
-      const scrollElement = outputRef.current;
-      const container = scrollElement?.querySelector<HTMLElement>(
-        OUTPUT_ROW_CONTAINER_SELECTOR
-      );
+  /**
+   * Replaces any running glide with one that holds the content where the user
+   * last saw it after `scrollTop` moved by `scrollDeltaPx` since that glide
+   * was measured, or lands instantly when that cannot glide.
+   */
+  const retargetGlide = useCallback(
+    (
+      scrollElement: HTMLDivElement,
+      container: HTMLElement,
+      scrollDeltaPx: number
+    ) => {
       const running = runningGlideRef.current;
       const { remainingOffsetPx, speedPx } =
-        running && container && running.element === container
+        running && running.element === container
           ? sampleRunningGlide(running)
           : { remainingOffsetPx: 0, speedPx: 0 };
       settleGlide();
 
-      const clipElement = container?.parentElement;
+      const clipElement = container.parentElement;
       if (
-        !scrollElement ||
-        !container ||
         !clipElement?.matches(OUTPUT_GLIDE_CLIP_SELECTOR) ||
-        typeof container.animate !== "function" ||
-        !isEnabledRef.current ||
-        !autoscrollEnabledRef.current ||
-        target.kind !== OUTPUT_SCROLL_TARGET_KINDS.BOTTOM ||
-        !GLIDE_PHASES.has(phase) ||
-        pendingNavigationRef.current !== null ||
-        scrollSeekPlaceholderRef.current ||
-        prefersReducedMotion()
+        typeof container.animate !== "function"
       ) {
         return;
       }
       const offsetPx = resolveAutoscrollGlideOffsetPx({
-        appliedDeltaPx,
+        appliedDeltaPx: scrollDeltaPx,
         currentOffsetPx: remainingOffsetPx,
         viewportHeightPx: scrollElement.clientHeight,
       });
@@ -150,20 +157,68 @@ export function useOutputAutoscrollGlide({
         curve,
         element: container,
         offsetPx,
+        scrollTop: scrollElement.scrollTop,
       };
       runningGlideRef.current = glide;
       animation.onfinish = () => releaseGlide(glide);
+    },
+    [releaseGlide, settleGlide]
+  );
+
+  const glideAfterScrollWrite = useCallback(
+    (phase: string, target: OutputScrollTarget, appliedDeltaPx: number) => {
+      const scrollElement = outputRef.current;
+      const container = scrollElement?.querySelector<HTMLElement>(
+        OUTPUT_ROW_CONTAINER_SELECTOR
+      );
+      if (
+        !scrollElement ||
+        !container ||
+        !isEnabledRef.current ||
+        !autoscrollEnabledRef.current ||
+        target.kind !== OUTPUT_SCROLL_TARGET_KINDS.BOTTOM ||
+        !GLIDE_PHASES.has(phase) ||
+        pendingNavigationRef.current !== null ||
+        scrollSeekPlaceholderRef.current ||
+        prefersReducedMotion()
+      ) {
+        settleGlide();
+        return;
+      }
+      // Measured from the running glide's own `scrollTop`, not from where this
+      // write started: a clamp that landed in between moved the pane too.
+      const running = runningGlideRef.current;
+      const scrollDeltaPx =
+        running && running.element === container
+          ? scrollElement.scrollTop - running.scrollTop
+          : appliedDeltaPx;
+      retargetGlide(scrollElement, container, scrollDeltaPx);
     },
     [
       autoscrollEnabledRef,
       isEnabledRef,
       outputRef,
       pendingNavigationRef,
-      releaseGlide,
+      retargetGlide,
       scrollSeekPlaceholderRef,
       settleGlide,
     ]
   );
+
+  // Runs after every commit, before paint. Reads `scrollTop` only while a
+  // glide is running, so an idle pane pays nothing for it.
+  useLayoutEffect(() => {
+    const running = runningGlideRef.current;
+    const scrollElement = outputRef.current;
+    if (!running || !scrollElement) return;
+    if (!running.element.isConnected) {
+      settleGlide();
+      return;
+    }
+    const scrollDeltaPx = scrollElement.scrollTop - running.scrollTop;
+    if (Math.abs(scrollDeltaPx) < 1) return;
+    retargetGlide(scrollElement, running.element, scrollDeltaPx);
+  });
 
   useEffect(() => settleGlide, [settleGlide]);
 

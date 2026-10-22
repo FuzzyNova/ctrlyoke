@@ -96,8 +96,11 @@ export function findEnteringRowKeys(
  *
  * `currentOffsetPx` is what is still left of a running glide, so a run of
  * streaming chunks adds up to one continuous motion rather than restarting
- * from rest on every chunk. A shrink (negative delta) or a jump past the cap
- * lands instantly.
+ * from rest on every chunk. A shrink (negative delta) takes back that much of
+ * the running glide: a row laid out at an estimate and then measured smaller
+ * must leave only the real growth to animate, never content translated below
+ * where the user last saw it. When nothing is left to glide down, or the jump
+ * passes the cap, the pane lands instantly.
  */
 export function resolveAutoscrollGlideOffsetPx({
   appliedDeltaPx,
@@ -108,9 +111,6 @@ export function resolveAutoscrollGlideOffsetPx({
   currentOffsetPx: number;
   viewportHeightPx: number;
 }): number | null {
-  if (appliedDeltaPx <= 0) {
-    return null;
-  }
   const offsetPx = currentOffsetPx + appliedDeltaPx;
   if (
     offsetPx < 1 ||

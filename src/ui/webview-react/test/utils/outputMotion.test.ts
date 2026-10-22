@@ -76,6 +76,23 @@ describe("resolveAutoscrollGlideOffsetPx", () => {
     ).toBeNull();
   });
 
+  it("takes a shrink back out of a running glide", () => {
+    expect(
+      resolveAutoscrollGlideOffsetPx({
+        appliedDeltaPx: -72,
+        currentOffsetPx: 96,
+        viewportHeightPx,
+      })
+    ).toBe(24);
+    expect(
+      resolveAutoscrollGlideOffsetPx({
+        appliedDeltaPx: -96,
+        currentOffsetPx: 96,
+        viewportHeightPx,
+      })
+    ).toBeNull();
+  });
+
   it("lands instantly past the viewport cap", () => {
     expect(
       resolveAutoscrollGlideOffsetPx({

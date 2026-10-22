@@ -127,6 +127,7 @@ describe("useOutputAutoscrollGlide", () => {
     const { animations, scrollElement } = buildPane();
     const { result } = renderGlide(scrollElement);
 
+    scrollElement.scrollTop = 30;
     result.current.glideAfterScrollWrite(
       OUTPUT_SCROLL_APPLY_PHASES.LAYOUT_EFFECT,
       BOTTOM,
@@ -140,6 +141,7 @@ describe("useOutputAutoscrollGlide", () => {
       OUTPUT_AUTOSCROLL_GLIDE_CURVE,
       0.5
     );
+    scrollElement.scrollTop = 50;
     result.current.glideAfterScrollWrite(
       OUTPUT_SCROLL_APPLY_PHASES.LAYOUT_EFFECT,
       BOTTOM,
@@ -154,6 +156,85 @@ describe("useOutputAutoscrollGlide", () => {
     expect(animations[1]?.easing).toBe(
       toCssCubicBezier(resolveAutoscrollGlideCurve(before.speedPx, offsetPx))
     );
+  });
+
+  // A new row is laid out at its estimate, the lock scrolls to that bottom,
+  // and the row's smaller measured size commits before paint: the browser
+  // clamps scrollTop back down without anyone writing it.
+  it("lands without moving when a clamp takes back the whole glide", () => {
+    const { animations, clip, scrollElement } = buildPane();
+    const { result, rerender } = renderGlide(scrollElement);
+
+    scrollElement.scrollTop = 1096;
+    result.current.glideAfterScrollWrite(
+      OUTPUT_SCROLL_APPLY_PHASES.LAYOUT_EFFECT,
+      BOTTOM,
+      96
+    );
+    scrollElement.scrollTop = 1000;
+    rerender();
+
+    expect(animations).toHaveLength(1);
+    expect(animations[0]?.cancel).toHaveBeenCalled();
+    expect(clip.style.overflowY).toBe("");
+  });
+
+  it("keeps gliding only the real growth after a partial clamp", () => {
+    const { animations, scrollElement } = buildPane();
+    const { result, rerender } = renderGlide(scrollElement);
+
+    scrollElement.scrollTop = 1096;
+    result.current.glideAfterScrollWrite(
+      OUTPUT_SCROLL_APPLY_PHASES.LAYOUT_EFFECT,
+      BOTTOM,
+      96
+    );
+    scrollElement.scrollTop = 1024;
+    rerender();
+
+    expect(animations).toHaveLength(2);
+    expect(animations[1]?.keyframes[0]).toEqual({
+      transform: "translateY(24px)",
+    });
+  });
+
+  it("counts a clamp that landed before the next write", () => {
+    const { animations, scrollElement } = buildPane();
+    const { result } = renderGlide(scrollElement);
+
+    scrollElement.scrollTop = 30;
+    result.current.glideAfterScrollWrite(
+      OUTPUT_SCROLL_APPLY_PHASES.LAYOUT_EFFECT,
+      BOTTOM,
+      30
+    );
+    // Clamped from 30 to 10, then written from 10 to 50.
+    scrollElement.scrollTop = 50;
+    result.current.glideAfterScrollWrite(
+      OUTPUT_SCROLL_APPLY_PHASES.LAYOUT_EFFECT,
+      BOTTOM,
+      40
+    );
+
+    expect(animations[1]?.keyframes[0]).toEqual({
+      transform: "translateY(50px)",
+    });
+  });
+
+  it("leaves a running glide alone across commits that did not move the pane", () => {
+    const { animations, scrollElement } = buildPane();
+    const { result, rerender } = renderGlide(scrollElement);
+
+    scrollElement.scrollTop = 30;
+    result.current.glideAfterScrollWrite(
+      OUTPUT_SCROLL_APPLY_PHASES.LAYOUT_EFFECT,
+      BOTTOM,
+      30
+    );
+    rerender();
+
+    expect(animations).toHaveLength(1);
+    expect(animations[0]?.cancel).not.toHaveBeenCalled();
   });
 
   it("settles a running glide when a write is not eligible to glide", () => {
