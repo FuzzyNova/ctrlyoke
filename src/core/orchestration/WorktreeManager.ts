@@ -12,6 +12,7 @@ import {
   getAheadBehind,
   getBranchUpstream,
   getUnmergedPaths,
+  getWorkingTreeCounts,
   deleteLocalBranch,
   GitLocationMemo,
   getGitTrackedAndUntrackedFiles,
@@ -29,6 +30,7 @@ import {
   localBranchExists,
   validateBranchName,
   type GitLocationLookup,
+  type GitWorkingTreeCounts,
   type GitWorktreeEntry,
 } from "../../utils/GitUtils";
 import {
@@ -339,6 +341,14 @@ export interface WorktreeManagementEntry {
   branchCleanupEligible: boolean;
   branchCleanupReason?: string;
   divergence?: NamedBranchDivergence;
+  /** Uncommitted changes in the worktree; absent when its directory is unavailable. */
+  workingTree?: GitWorkingTreeCounts;
+  /**
+   * Local commit counts against the source checkout's current branch (the
+   * branch Sync merges with). Absent for the source checkout itself, a
+   * detached source checkout, and branches Git no longer has.
+   */
+  sourceComparison?: { ahead: number; behind: number };
 }
 
 export interface WorktreeManagementState {
@@ -1764,9 +1774,10 @@ export class WorktreeManager {
     repositoryRoot: sourceRoot,
     commonDirectory,
   }: RepositoryContext): Promise<WorktreeManagementState> {
-    const [records, entries] = await Promise.all([
+    const [records, entries, sourceBranch] = await Promise.all([
       this.readRecords(commonDirectory),
       listGitWorktrees(sourceRoot),
+      currentBranch(sourceRoot),
     ]);
     const now = this.now();
     const managedEntries: WorktreeManagementEntry[] = [];
@@ -1806,6 +1817,24 @@ export class WorktreeManager {
               this.divergenceCacheKey(sourceRoot, branchName)
             )
           : undefined;
+      // Both are informational: a failure leaves the field out rather than
+      // failing the whole management snapshot.
+      const [workingTree, sourceComparison] = await Promise.all([
+        directoryState === WORKTREE_DIRECTORY_STATES.PRESENT &&
+        !entry.prunableReason
+          ? getWorkingTreeCounts(entry.worktreePath).catch(() => undefined)
+          : undefined,
+        sourceBranch &&
+        branchName &&
+        branchState === WORKTREE_BRANCH_STATES.PRESENT &&
+        !pathsEqual(entry.worktreePath, sourceRoot)
+          ? getAheadBehind(
+              sourceRoot,
+              `refs/heads/${sourceBranch}`,
+              `refs/heads/${branchName}`
+            ).catch(() => undefined)
+          : undefined,
+      ]);
       const createdAt = record?.createdAt;
       const branchCleanup = record
         ? isNewerSchemaVersion(
@@ -1848,6 +1877,8 @@ export class WorktreeManager {
           ? { branchCleanupReason: branchCleanup.reason }
           : {}),
         ...(divergence ? { divergence } : {}),
+        ...(workingTree ? { workingTree } : {}),
+        ...(sourceComparison ? { sourceComparison } : {}),
       });
     }
 
@@ -1935,7 +1966,7 @@ export class WorktreeManager {
     return {
       resolvedRoot: await this.resolveWorktreeRootFor(sourceRoot),
       sourceCheckoutRoot: sourceRoot,
-      sourceCheckoutBranch: await currentBranch(sourceRoot),
+      sourceCheckoutBranch: sourceBranch,
       entries: managedEntries,
       staleManagedRecords,
       generatedAt: now,

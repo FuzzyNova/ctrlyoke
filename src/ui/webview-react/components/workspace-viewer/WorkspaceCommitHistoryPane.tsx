@@ -30,6 +30,10 @@ import {
   GIT_HEAD_RELATIONS,
   GIT_REF_LABEL_TYPES,
 } from "@root/types/DashboardConstants";
+import {
+  SCM_GRAPH_TRUNK_COLOR_CLASS,
+  scmGraphBranchColorClass,
+} from "@utils/scmStatus";
 import { Icon } from "../shared/Icon";
 
 export interface WorkspaceCommitHistoryPaneProps {
@@ -62,19 +66,6 @@ function resolveContainerWidthBucket(width: number): number {
   return Math.max(0, Math.floor(width / GRAPH_LANE_WIDTH)) * GRAPH_LANE_WIDTH;
 }
 
-const TRUNK_COLOR_CLASSES = {
-  local: "text-scm-graph-local",
-  remote: "text-scm-graph-remote",
-} as const;
-
-const GRAPH_BRANCH_COLOR_CLASSES = [
-  "text-scm-graph-fg1",
-  "text-scm-graph-fg2",
-  "text-scm-graph-fg3",
-  "text-scm-graph-fg4",
-  "text-scm-graph-fg5",
-] as const;
-
 function laneX(laneIndex: number): number {
   return (laneIndex + 1) * GRAPH_LANE_WIDTH;
 }
@@ -84,9 +75,7 @@ function resolveLaneColorClass(
   trunkColorClass: string
 ): string {
   if (lane.colorIndex === TRUNK_COLOR_INDEX) return trunkColorClass;
-  return GRAPH_BRANCH_COLOR_CLASSES[
-    (lane.colorIndex - 1) % GRAPH_BRANCH_COLOR_CLASSES.length
-  ];
+  return scmGraphBranchColorClass(lane.colorIndex);
 }
 
 function topTransitionPath(fromX: number, toX: number): string {
@@ -809,8 +798,8 @@ export const WorkspaceCommitHistoryPane: React.FC<
       const layout = graphLayout[index];
       const trunkColorClass =
         hasUnpushed && commit.pushed
-          ? TRUNK_COLOR_CLASSES.remote
-          : TRUNK_COLOR_CLASSES.local;
+          ? SCM_GRAPH_TRUNK_COLOR_CLASS.remote
+          : SCM_GRAPH_TRUNK_COLOR_CLASS.local;
       const nodeSource =
         layout.inputLanes[layout.laneIndex] ??
         ({

@@ -434,6 +434,92 @@ describe("WorktreesSection", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows a posh-git status and merge readiness for each worktree", () => {
+    window.vscodeApi = {
+      postMessage: vi.fn(),
+      getState: () => undefined,
+      setState: () => undefined,
+    };
+    const base = {
+      headCommit: "a",
+      ownership: "user",
+      branchState: "present",
+      inUse: false,
+      leaseOwners: [],
+      stale: false,
+      branchCleanupEligible: false,
+    } satisfies Partial<WorktreeManagementEntry>;
+    useSettingsStore.getState().setWorktreeManagement({
+      resolvedRoot: "C:/worktrees",
+      sourceCheckoutRoot: "C:/repo",
+      sourceCheckoutBranch: "main",
+      generatedAt: Date.now(),
+      staleManagedRecords: [],
+      entries: [
+        {
+          ...base,
+          worktreePath: "C:/repo",
+          branchName: "main",
+          workingTree: {
+            staged: { added: 0, modified: 0, deleted: 0 },
+            unstaged: { added: 0, modified: 0, deleted: 0 },
+            conflicted: 0,
+          },
+        },
+        {
+          ...base,
+          worktreePath: "C:/worktrees/dirty",
+          branchName: "feature/dirty",
+          sourceComparison: { ahead: 18, behind: 0 },
+          workingTree: {
+            staged: { added: 1, modified: 0, deleted: 0 },
+            unstaged: { added: 0, modified: 3, deleted: 0 },
+            conflicted: 0,
+          },
+        },
+        {
+          ...base,
+          worktreePath: "C:/worktrees/ready",
+          branchName: "feature/ready",
+          sourceComparison: { ahead: 2, behind: 1 },
+          workingTree: {
+            staged: { added: 0, modified: 0, deleted: 0 },
+            unstaged: { added: 0, modified: 0, deleted: 0 },
+            conflicted: 0,
+          },
+        },
+      ],
+    });
+
+    render(
+      <WorktreesSection
+        settings={createSettings()}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+
+    const statuses = screen.getAllByTestId("worktree-git-status");
+    expect(statuses.map((status) => status.textContent)).toEqual([
+      "[main]",
+      "[feature/dirty ↑18 +1 ~0 -0 | +0 ~3 -0 !]",
+      "[feature/ready ↓1 ↑2]",
+    ]);
+    // The source checkout keeps the graph's mainline color; the others rotate.
+    expect(within(statuses[0]).getByText("main")).toHaveClass(
+      "text-scm-graph-local"
+    );
+    expect(within(statuses[1]).getByText("feature/dirty")).toHaveClass(
+      "text-scm-graph-fg1"
+    );
+    expect(within(statuses[2]).getByText("feature/ready")).toHaveClass(
+      "text-scm-graph-fg2"
+    );
+    expect(screen.getByText("Uncommitted changes")).toBeInTheDocument();
+    expect(screen.getByText("Ready to merge")).toBeInTheDocument();
+  });
+
   it("describes the automatic resolution tiers when no root is configured", () => {
     render(
       <WorktreesSection

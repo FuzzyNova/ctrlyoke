@@ -2563,6 +2563,55 @@ suite("WorktreeManager", function () {
     assert.strictEqual(localBranchExists(repository, info.branchName), false);
   });
 
+  test("reports each worktree's uncommitted changes and commits relative to the source branch", async () => {
+    const { parent, repository } = await makeRepository("management-status");
+    const instance = manager(parent);
+    execFileSync("git", ["-C", repository, "branch", "feature/status"]);
+    const info = await resolve(instance, repository, "feature/status");
+    await info.lease.release();
+
+    // Two commits ahead on the branch, one behind on the source checkout.
+    for (const name of ["one.txt", "two.txt"]) {
+      await fs.writeFile(path.join(info.worktreePath, name), `${name}\n`);
+      execFileSync("git", ["-C", info.worktreePath, "add", name]);
+      execFileSync("git", ["-C", info.worktreePath, "commit", "-m", name], {
+        stdio: "ignore",
+      });
+    }
+    await fs.writeFile(path.join(repository, "source.txt"), "source\n");
+    execFileSync("git", ["-C", repository, "add", "source.txt"]);
+    execFileSync("git", ["-C", repository, "commit", "-m", "source"], {
+      stdio: "ignore",
+    });
+
+    // One staged add, one unstaged modification, one untracked file.
+    await fs.writeFile(path.join(info.worktreePath, "staged.txt"), "new\n");
+    execFileSync("git", ["-C", info.worktreePath, "add", "staged.txt"]);
+    await fs.writeFile(path.join(info.worktreePath, "one.txt"), "changed\n");
+    await fs.writeFile(path.join(info.worktreePath, "untracked.txt"), "u\n");
+
+    const state = await instance.getManagementState(repository);
+    const entry = state.entries.find(
+      (candidate) => candidate.branchName === "feature/status"
+    );
+    assert.deepStrictEqual(entry?.sourceComparison, { ahead: 2, behind: 1 });
+    assert.deepStrictEqual(entry?.workingTree, {
+      staged: { added: 1, modified: 0, deleted: 0 },
+      unstaged: { added: 1, modified: 1, deleted: 0 },
+      conflicted: 0,
+    });
+
+    const source = state.entries.find(
+      (candidate) => candidate.branchName === state.sourceCheckoutBranch
+    );
+    assert.strictEqual(source?.sourceComparison, undefined);
+    assert.deepStrictEqual(source?.workingTree, {
+      staged: { added: 0, modified: 0, deleted: 0 },
+      unstaged: { added: 0, modified: 0, deleted: 0 },
+      conflicted: 0,
+    });
+  });
+
   test("syncs a named worktree with the source checkout in both directions", async () => {
     const { parent, repository } = await makeRepository("sync-basic");
     const instance = manager(parent);

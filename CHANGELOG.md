@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Settings → Worktrees shows each worktree's Git status.** Every row starts with a posh-git
+  style line such as `[feature/x ↑18 +1 ~0 -0 | +0 ~3 -0 !]`: commits ahead of and behind your
+  checkout's branch, then staged and unstaged changes. A label beside it says whether the branch
+  is ready to merge, has uncommitted changes or conflicts, or is behind. Branch names use the
+  commit graph's colors.
 - **ctrlyoke tool calls in the output pane name the tool that was called.** Rows for ctrlyoke's
   own MCP tools showed only a result summary such as "Step 7/7 · running · Codex"; the header now
   starts with the tool name (`workflow_status · Step 7/7 · running · Codex`), find-in-output

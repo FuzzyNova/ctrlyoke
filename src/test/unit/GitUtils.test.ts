@@ -35,8 +35,36 @@ import {
   searchCommitsBySubject,
   getChangedFilesWithBinaryStatus,
   GitLocationMemo,
+  countGitWorkingTreeChanges,
   type GitLocationLookup,
 } from "../../utils/GitUtils";
+
+suite("GitUtils.countGitWorkingTreeChanges", function () {
+  test("splits porcelain entries into posh-git staged, unstaged and conflict counts", () => {
+    const entry = (xy: string) => ({ x: xy[0], y: xy[1], path: "f" });
+    assert.deepStrictEqual(
+      countGitWorkingTreeChanges([
+        entry("A "),
+        entry("AM"),
+        entry("R "),
+        entry("D "),
+        entry(" M"),
+        entry(" T"),
+        entry(" D"),
+        entry("??"),
+        entry(" A"),
+        entry("UU"),
+        entry("AA"),
+        entry("DU"),
+      ]),
+      {
+        staged: { added: 2, modified: 1, deleted: 1 },
+        unstaged: { added: 2, modified: 3, deleted: 1 },
+        conflicted: 3,
+      }
+    );
+  });
+});
 
 suite("GitUtils.gitRefExists", function () {
   let workspaceRoot: string;
