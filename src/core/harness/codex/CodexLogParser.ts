@@ -298,7 +298,10 @@ export class CodexLogParser extends BaseLogParser {
             ?.map((part) => part.text)
             .filter((part): part is string => typeof part === "string")
             .join("\n");
-          const resultData = { success: !result?.isError, output: output ?? "" };
+          const resultData = {
+            success: !result?.isError,
+            output: output ?? "",
+          };
           const alreadyParsedIndex = outputEvents.findIndex((outputEvent) => {
             if (outputEvent.type !== CLI_EVENT_TYPES.MCP_TOOL_CALL) {
               return false;

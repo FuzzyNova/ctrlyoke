@@ -219,10 +219,8 @@ export class CodexToolPermissionMapper
         // denies a whole write-capable tool can only be honoured by the
         // read-only sandbox, so fail closed instead of inheriting the user's
         // broader Codex sandbox setting.
-        const resolvedSandboxMode = CodexToolPermissionMapper.resolveSandboxMode(
-          config,
-          sandboxMode
-        );
+        const resolvedSandboxMode =
+          CodexToolPermissionMapper.resolveSandboxMode(config, sandboxMode);
         if (deniesWriteCapableTool(config)) {
           return ["--sandbox", resolvedSandboxMode ?? "read-only"];
         }

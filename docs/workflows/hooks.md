@@ -40,13 +40,13 @@ harness's native event.
 Not every harness has every event. `preToolUse`, `postToolUse` and `stop`
 work everywhere. The others don't:
 
-| Event               | Not available on                        |
-| ------------------- | --------------------------------------- |
-| `sessionStart`      | Partial on OpenCode (can fire too late) |
-| `userPromptSubmit`  | Antigravity                             |
+| Event               | Not available on                           |
+| ------------------- | ------------------------------------------ |
+| `sessionStart`      | Partial on OpenCode (can fire too late)    |
+| `userPromptSubmit`  | Antigravity                                |
 | `permissionRequest` | Antigravity; OpenCode (notifications only) |
-| `notification`      | Codex, OpenCode, Antigravity            |
-| `error`             | Codex, Qwen Code, Antigravity           |
+| `notification`      | Codex, OpenCode, Antigravity               |
+| `error`             | Codex, Qwen Code, Antigravity              |
 
 A hook for an event the step's harness doesn't support is skipped without an
 error. The Hooks rows of the [compatibility matrix](/harnesses/compatibility)

@@ -1186,13 +1186,10 @@ suite("HarnessToolPermissionMappers", () => {
           formatOpenCodeMcpToolName
         );
 
-        assert.deepStrictEqual(
-          mapper.buildPermissionPolicy(permissions!),
-          {
-            "*": "allow",
-            "my_server-name_read_file": "deny",
-          }
-        );
+        assert.deepStrictEqual(mapper.buildPermissionPolicy(permissions!), {
+          "*": "allow",
+          "my_server-name_read_file": "deny",
+        });
       });
 
       test("custom asks by default, translates tools, and applies deny rules last", async () => {

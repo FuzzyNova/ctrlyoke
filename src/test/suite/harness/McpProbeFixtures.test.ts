@@ -116,9 +116,7 @@ suite("MCP probe raw vendor parser contract fixtures", () => {
 
   test("Codex completed MCP items retain each call", () => {
     const events = new CodexLogParser().extractResponse(
-      readJsonLines(
-        fixturePath("mcp-probe", "codex-cli-item-completed.jsonl")
-      )
+      readJsonLines(fixturePath("mcp-probe", "codex-cli-item-completed.jsonl"))
     ).events;
     assertProbeContract("codex-cli", events);
   });

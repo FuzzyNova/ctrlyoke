@@ -297,7 +297,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           } else if (typeof event.result === "string" && event.result.trim()) {
             reportedError = event.result;
           } else {
-            reportedError = "Claude reported an error while executing the request";
+            reportedError =
+              "Claude reported an error while executing the request";
           }
         }
         if (event.sessionId) {

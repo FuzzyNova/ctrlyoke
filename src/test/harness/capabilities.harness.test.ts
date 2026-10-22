@@ -122,8 +122,10 @@ const CASES = {
     "headless: image input reaches the model and the next step resumes",
   interactiveResume: "interactive: two steps complete in one resumed session",
   unknownModel: "unknown model fails the step with the CLI's error",
-  codexReadOnlySandbox: "permissions: Codex starts with a read-only custom sandbox",
-  codexUntrustedApproval: "permissions: Codex accepts the deprecated untrusted approval setting",
+  codexReadOnlySandbox:
+    "permissions: Codex starts with a read-only custom sandbox",
+  codexUntrustedApproval:
+    "permissions: Codex accepts the deprecated untrusted approval setting",
 } as const;
 
 type CaseId = keyof typeof CASES;

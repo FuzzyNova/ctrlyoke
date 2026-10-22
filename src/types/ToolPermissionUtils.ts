@@ -31,8 +31,8 @@ export function mergeServerDeniedTools(
 
   const serverDeniedTools = mcpServers.flatMap((server) =>
     typeof server === "object" && server !== null && server.deniedTools?.length
-      ? server.deniedTools.map(
-          (tool) => formatDeniedTool(normalizeServerId(server.id), tool)
+      ? server.deniedTools.map((tool) =>
+          formatDeniedTool(normalizeServerId(server.id), tool)
         )
       : []
   );
