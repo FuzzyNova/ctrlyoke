@@ -383,6 +383,17 @@ export interface ICliProvider {
   getAdditionalCleanupFilePaths?(workspaceRoot: string): string[];
 
   /**
+   * Cleanup paths the most recently spawned CLI process keeps writing for its
+   * whole lifetime (e.g. Copilot's OTel export file, opened once at startup).
+   *
+   * While that process is a live, reusable PTY, CliIntegration defers deleting
+   * these paths until the PTY exits: deleting a file the process holds open
+   * silently discards everything it writes for later sent turns.
+   * Every returned path must also be returned by getAdditionalCleanupFilePaths().
+   */
+  getLiveProcessFilePaths?(): string[];
+
+  /**
    * Restore workspace files modified during interactive hook setup.
    *
    * Used by providers that write (and must restore) workspace-level config files

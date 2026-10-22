@@ -2075,6 +2075,75 @@ suite("CliIntegration", () => {
     }
   });
 
+  suite("live-process artifacts", () => {
+    async function waitForDeletion(filePath: string): Promise<void> {
+      for (let i = 0; i < 100 && fs.existsSync(filePath); i++) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    }
+
+    function createLiveProcessIntegration(
+      livePath: string,
+      otherPath: string
+    ): CliIntegration {
+      const integration = createHeadlessIntegration({
+        getAdditionalCleanupFilePaths: () => [livePath, otherPath],
+        getLiveProcessFilePaths: () => [livePath],
+      });
+      (integration as any).transportCoordinator.hasLivePtySession = () => true;
+      return integration;
+    }
+
+    test("keeps a file the live PTY still writes until the PTY exits", async () => {
+      const workspaceRoot = makeTempDir("ctrlyoke-cli-integration-");
+      const livePath = path.join(workspaceRoot, "otel.jsonl");
+      const otherPath = path.join(workspaceRoot, "hook.json");
+      await fs.promises.writeFile(livePath, "", "utf8");
+      await fs.promises.writeFile(otherPath, "{}", "utf8");
+
+      try {
+        const integration = createLiveProcessIntegration(livePath, otherPath);
+
+        await integration.cleanupWorkflowArtifacts(undefined, workspaceRoot);
+        assert.strictEqual(fs.existsSync(otherPath), false);
+        assert.strictEqual(fs.existsSync(livePath), true);
+
+        (integration as any).handlePtyExit(
+          { id: "pty-1", reconnectBuffer: "" },
+          0
+        );
+        await waitForDeletion(livePath);
+        assert.strictEqual(fs.existsSync(livePath), false);
+      } finally {
+        removeTempDir(workspaceRoot);
+      }
+    });
+
+    test("strict cleanup deletes live-process files without deferring", async () => {
+      const workspaceRoot = makeTempDir("ctrlyoke-cli-integration-");
+      const livePath = path.join(workspaceRoot, "otel.jsonl");
+      const otherPath = path.join(workspaceRoot, "hook.json");
+      await fs.promises.writeFile(livePath, "", "utf8");
+      await fs.promises.writeFile(otherPath, "{}", "utf8");
+
+      try {
+        const integration = createLiveProcessIntegration(livePath, otherPath);
+
+        // A deferral from an earlier non-strict cleanup is flushed too.
+        await integration.cleanupWorkflowArtifacts(undefined, workspaceRoot);
+        const result = await integration.cleanupWorkflowArtifactsStrict(
+          undefined,
+          workspaceRoot
+        );
+
+        assert.deepStrictEqual(result.failures, []);
+        assert.strictEqual(fs.existsSync(livePath), false);
+      } finally {
+        removeTempDir(workspaceRoot);
+      }
+    });
+  });
+
   suite("effective absolute file references", () => {
     class MockMultiRootPlatform extends MockVsCodePlatform {
       override getWorkspaceRoots(): string[] {

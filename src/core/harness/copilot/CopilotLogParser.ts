@@ -288,13 +288,32 @@ export class CopilotLogParser extends BaseLogParser {
     this.otelFilePath = filePath;
     this.otelReadPosition = 0;
     this.resetOtelIncrementalLineState();
+    this.resetOtelUsageTotals();
+    this.otelContextWindowUsedTokens = undefined;
+    this.otelContextWindowSize = undefined;
+  }
+
+  /**
+   * Start a new turn's usage totals. A turn sent to a running terminal keeps the
+   * same process, OTel file and read offset (setOtelFilePath() is not called), so
+   * without this its usage would include every earlier turn's. Spans the previous
+   * turn wrote after its final poll (1.0.92+ writes a turn's `invoke_agent` span
+   * when it ends) are drained first: their context reading is kept, their billing
+   * tokens are not charged to this turn.
+   */
+  async beginMonitoringTurn(): Promise<void> {
+    if (this.otelReadPosition > 0) {
+      await this.pollOtelContextWindow();
+    }
+    this.resetOtelUsageTotals();
+  }
+
+  private resetOtelUsageTotals(): void {
     this.otelCumulativeInputTokens = 0;
     this.otelCumulativeOutputTokens = 0;
     this.otelCumulativeCacheReadTokens = 0;
     this.otelCumulativeCacheWriteTokens = 0;
     this.otelChatSpanSeen = false;
-    this.otelContextWindowUsedTokens = undefined;
-    this.otelContextWindowSize = undefined;
   }
 
   /** Read new lines from the OTel export file using its own dedicated offset tracker. */
@@ -308,11 +327,7 @@ export class CopilotLogParser extends BaseLogParser {
     if (currentSize < this.otelReadPosition) {
       this.otelReadPosition = 0; // file truncated/rotated
       this.resetOtelIncrementalLineState();
-      this.otelCumulativeInputTokens = 0;
-      this.otelCumulativeOutputTokens = 0;
-      this.otelCumulativeCacheReadTokens = 0;
-      this.otelCumulativeCacheWriteTokens = 0;
-      this.otelChatSpanSeen = false;
+      this.resetOtelUsageTotals();
       this.otelContextWindowUsedTokens = undefined;
       this.otelContextWindowSize = undefined;
     }

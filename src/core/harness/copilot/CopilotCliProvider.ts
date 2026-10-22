@@ -892,6 +892,15 @@ export class CopilotCliProvider implements ICliProvider {
   }
 
   /**
+   * The current invocation's OTel export file. Copilot opens it once at startup and
+   * never recreates it, so deleting it under a reused PTY would lose every later
+   * turn's context-window telemetry.
+   */
+  getLiveProcessFilePaths(): string[] {
+    return this.otelFilePath ? [this.otelFilePath] : [];
+  }
+
+  /**
    * Delete the temporary .gitignore if no concurrent workflows still have
    * ctrlyoke hook files on disk. Called after getAdditionalCleanupFilePaths()
    * has already removed this workflow's own hook files.

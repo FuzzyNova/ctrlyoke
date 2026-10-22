@@ -3458,6 +3458,93 @@ suite("CopilotLogParser", () => {
       }
     });
 
+    test("should start each turn sent to a running terminal with fresh usage on the same OTel file", async () => {
+      const chatSpan = (input: number, output: number) => ({
+        type: "span",
+        name: "chat gpt-6-luna",
+        attributes: {
+          "gen_ai.usage.input_tokens": input,
+          "gen_ai.usage.output_tokens": output,
+        },
+      });
+      const invokeAgentSpan = (currentTokens: number) => ({
+        type: "span",
+        name: "invoke_agent",
+        events: [usageInfoEvent(currentTokens, 272000)],
+      });
+      const appendLines = (filePath: string, lines: object[]) =>
+        fs.appendFileSync(
+          filePath,
+          lines.map((line) => JSON.stringify(line) + "\n").join("")
+        );
+      const filePath = createTempJsonlFile([chatSpan(1000, 10)]);
+
+      try {
+        // Turn 1: a freshly spawned process. Its invoke_agent span lands only
+        // after the turn's final poll.
+        parser.setOtelFilePath(filePath);
+        await parser.beginMonitoringTurn();
+        await parser.pollOtelContextWindow();
+        appendLines(filePath, [invokeAgentSpan(19096)]);
+
+        // Turn 2: sent to the same live process, so the OTel path is not reset.
+        await parser.beginMonitoringTurn();
+        assert.strictEqual(parser.getFinalOtelUsage(), null);
+        appendLines(filePath, [chatSpan(2000, 20), invokeAgentSpan(19377)]);
+        const result = await parser.pollOtelContextWindow();
+
+        assert.deepStrictEqual(result, { used: 19377, size: 272000 });
+        const final = parser.getFinalOtelUsage();
+        assert.strictEqual(final?.inputTokens, 2000);
+        assert.strictEqual(final?.outputTokens, 20);
+        assert.strictEqual(final?.contextWindowUsedTokens, 19377);
+      } finally {
+        cleanupTempFile(filePath);
+      }
+    });
+
+    test("should keep the previous turn's late context reading when a new turn begins", async () => {
+      const filePath = createTempJsonlFile([
+        {
+          type: "span",
+          name: "invoke_agent",
+          events: [usageInfoEvent(19096, 272000)],
+        },
+      ]);
+
+      try {
+        parser.setOtelFilePath(filePath);
+        await parser.pollOtelContextWindow();
+        fs.appendFileSync(
+          filePath,
+          JSON.stringify({
+            type: "span",
+            name: "invoke_agent",
+            events: [usageInfoEvent(19200, 272000)],
+          }) + "\n"
+        );
+
+        await parser.beginMonitoringTurn();
+        // The drained reading is already folded in, so this poll has nothing new.
+        assert.strictEqual(await parser.pollOtelContextWindow(), null);
+        fs.appendFileSync(
+          filePath,
+          JSON.stringify({
+            type: "span",
+            name: "chat gpt-6-luna",
+            attributes: { "gen_ai.usage.output_tokens": 5 },
+          }) + "\n"
+        );
+        await parser.pollOtelContextWindow();
+        assert.strictEqual(
+          parser.getFinalOtelUsage()?.contextWindowUsedTokens,
+          19200
+        );
+      } finally {
+        cleanupTempFile(filePath);
+      }
+    });
+
     test("should accumulate cache-read and cache-write attributes per chat span", async () => {
       const otelLines = [
         {

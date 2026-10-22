@@ -179,6 +179,7 @@ export class CliLogMonitor {
   ): Promise<LogMonitorResult> {
     const parser = this.deps.logParser;
     parser.setCurrentModel?.(model);
+    await parser.beginMonitoringTurn?.();
     const events: BaseCliEvent[] = [];
     const observedSyntheticEvents: CliEvent[] = [];
     const pump = new CliLogEventPump({

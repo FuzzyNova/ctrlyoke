@@ -202,6 +202,12 @@ export class CliIntegration extends HarnessIntegration {
   /** PTY session intentionally killed for a mode handoff; its exit is not a step failure. */
   private suppressPtyExitSessionId?: string;
 
+  /**
+   * Live-process artifacts (see ICliProvider.getLiveProcessFilePaths) whose cleanup
+   * was deferred until the PTY exits, mapped to the workspace root they belong to.
+   */
+  private readonly deferredLiveProcessFilePaths = new Map<string, string>();
+
   /** Prompt/file assembly helper extracted from CliIntegration. */
   private readonly promptPreparer: CliPromptPreparer;
 
@@ -841,6 +847,7 @@ export class CliIntegration extends HarnessIntegration {
   private handlePtyExit(session: PtySession, exitCode: number): void {
     this.sessionActivityWatcher?.stop();
     this.sessionActivityWatcher = undefined;
+    void this.cleanupDeferredLiveProcessFiles();
 
     const deferredSteerTempFilePaths = this.deferredSteerTempFilePaths;
     this.deferredSteerTempFilePaths = [];
@@ -2046,6 +2053,7 @@ export class CliIntegration extends HarnessIntegration {
     super.dispose();
     this.deferredHookEnvironmentCleanup =
       this.cleanupDeferredHookEnvironmentFiles();
+    void this.cleanupDeferredLiveProcessFiles();
     this.sessionActivityWatcher?.stop();
     this.sessionActivityWatcher = undefined;
     this.transportCoordinator.dispose(
@@ -2112,6 +2120,23 @@ export class CliIntegration extends HarnessIntegration {
     workingFilePath: string | undefined,
     workspaceRoot: string
   ): Promise<void> {
+    await this.cleanupWorkflowArtifactsWithDeferral(
+      workingFilePath,
+      workspaceRoot,
+      true
+    );
+  }
+
+  /**
+   * @param deferLiveProcessFiles Keep files a live PTY still writes (see
+   *   ICliProvider.getLiveProcessFilePaths) until it exits. The strict variant
+   *   passes false: its callers need every artifact gone before they settle.
+   */
+  private async cleanupWorkflowArtifactsWithDeferral(
+    workingFilePath: string | undefined,
+    workspaceRoot: string,
+    deferLiveProcessFiles: boolean
+  ): Promise<void> {
     const tempMgr = new TempFileManager(workspaceRoot);
     const configPath = this.provider.getMcpConfigFilePath?.(
       workingFilePath,
@@ -2120,17 +2145,39 @@ export class CliIntegration extends HarnessIntegration {
     if (configPath) {
       await tempMgr.deleteFile(configPath);
     }
+    if (
+      deferLiveProcessFiles &&
+      this.transportCoordinator.hasLivePtySession()
+    ) {
+      for (const p of this.provider.getLiveProcessFilePaths?.() ?? []) {
+        this.deferredLiveProcessFilePaths.set(p, workspaceRoot);
+      }
+    }
     // Clean up provider-specific interactive setup files (e.g., OpenCode plugin)
     const additionalPaths =
       this.provider.getAdditionalCleanupFilePaths?.(workspaceRoot) ?? [];
     for (const p of additionalPaths) {
-      await tempMgr.deleteFile(p);
+      if (!this.deferredLiveProcessFilePaths.has(p)) {
+        await tempMgr.deleteFile(p);
+      }
+    }
+    if (!deferLiveProcessFiles) {
+      await this.cleanupDeferredLiveProcessFiles();
     }
     // Restore workspace config files modified during interactive hook setup (e.g., Qwen)
     await this.provider.cleanupWorkspaceArtifacts?.(
       workspaceRoot,
       workingFilePath
     );
+  }
+
+  /** Delete live-process artifacts whose cleanup waited for the PTY to exit. */
+  private async cleanupDeferredLiveProcessFiles(): Promise<void> {
+    const deferred = [...this.deferredLiveProcessFilePaths];
+    this.deferredLiveProcessFilePaths.clear();
+    for (const [filePath, workspaceRoot] of deferred) {
+      await new TempFileManager(workspaceRoot).deleteFile(filePath);
+    }
   }
 
   /** Strict variant used as the managed-worktree commit barrier. */
@@ -2145,7 +2192,11 @@ export class CliIntegration extends HarnessIntegration {
     ].filter((value): value is string => Boolean(value));
 
     try {
-      await this.cleanupWorkflowArtifacts(workingFilePath, workspaceRoot);
+      await this.cleanupWorkflowArtifactsWithDeferral(
+        workingFilePath,
+        workspaceRoot,
+        false
+      );
     } catch (error) {
       failures.push(error instanceof Error ? error.message : String(error));
     }

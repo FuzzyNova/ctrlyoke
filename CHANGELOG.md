@@ -42,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   earlier activation on macOS seemed to succeed, activate again to save the license properly.
 - Opening a folder could land the dashboard on an empty New Workflow instead of the previous or
   most recent session, when the dashboard was slow to load during startup.
+- **Copilot context window and tokens on follow-up steps.** A step sent to Copilot's running
+  terminal after the workflow had finished (for example a follow-up prompt) showed the previous
+  step's context-window size and token counts unchanged. Each step now shows its own token usage
+  and the context window as it grows.
 - Warnings that include an error now show the error's message in the log instead of `{}`.
 - Opening a folder that isn't in a Git repository no longer logs a worktree discovery warning.
 

@@ -364,6 +364,13 @@ export interface ILogParser {
   setCurrentModel?(model: string): void;
 
   /**
+   * Called by CliLogMonitor before monitoring each turn, including turns sent to
+   * an already-running terminal (which do not rebuild CLI arguments). Parsers that
+   * accumulate per-turn usage outside the main log reset it here.
+   */
+  beginMonitoringTurn?(): Promise<void>;
+
+  /**
    * Extract a log entry's timestamp, for filtering entries older than a run's start time.
    *
    * @param entry - Parsed log entry
