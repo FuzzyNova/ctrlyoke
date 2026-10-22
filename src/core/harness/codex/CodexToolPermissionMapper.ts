@@ -17,6 +17,7 @@ import {
   PERMISSION_MODES,
 } from "../../../types/DashboardConstants";
 import { foldMcpToolDenialsIntoServers } from "../../../types/ToolPermissionUtils";
+import { compareVersions } from "../../../utils/CtrlyokeInstallations";
 
 const CODEX_PERMISSION_VERIFICATION = capabilitySuiteVerification([
   ">=0.129.0",
@@ -63,6 +64,8 @@ const CODEX_WRITE_CAPABLE_TOOL_NAMES: ReadonlySet<string> = new Set([
   "shell",
 ]);
 
+const CODEX_UNTRUSTED_APPROVAL_REMOVED_VERSION = "0.149.0";
+
 function deniesWriteCapableTool(config: ToolPermissionConfig): boolean {
   return config.deniedTools.some((tool) =>
     CODEX_WRITE_CAPABLE_TOOL_NAMES.has(tool.trim().toLowerCase())
@@ -104,6 +107,26 @@ export class CodexToolPermissionMapper
 {
   readonly capabilities = CODEX_PERMISSION_CAPABILITIES;
 
+  /**
+   * Resolve the sandbox once for both permission args and --add-dir handling.
+   * Codex rejects extra writable roots in a read-only sandbox.
+   */
+  static resolveSandboxMode(
+    config: ToolPermissionConfig,
+    sandboxMode?: string
+  ): string | undefined {
+    switch (config.mode) {
+      case PERMISSION_MODES.CUSTOM:
+        return deniesWriteCapableTool(config) ? "read-only" : sandboxMode;
+      case PERMISSION_MODES.ALLOW_ALL:
+        return "workspace-write";
+      case PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL:
+        return "danger-full-access";
+      default:
+        return undefined;
+    }
+  }
+
   private readonly AUTO_PRESET_ARGS = [
     "--sandbox",
     "workspace-write",
@@ -128,7 +151,8 @@ export class CodexToolPermissionMapper
         config,
         context.sandboxMode,
         context.approvalPolicy,
-        context.isInteractive
+        context.isInteractive,
+        context.cliVersion
       ),
       // CodexCliProvider folds MCP tool denials into the attached servers'
       // `disabled_tools`; only the rest of the deny list goes unenforced.
@@ -169,7 +193,8 @@ export class CodexToolPermissionMapper
     config: ToolPermissionConfig,
     sandboxMode?: string,
     approvalPolicy?: string,
-    isInteractive?: boolean
+    isInteractive?: boolean,
+    cliVersion?: string
   ): string[] {
     // --ask-for-approval / -a is an interactive-only flag: not recognised by `codex exec`.
     // Only suppress it when isInteractive is explicitly false (headless exec mode).
@@ -194,16 +219,31 @@ export class CodexToolPermissionMapper
         // denies a whole write-capable tool can only be honoured by the
         // read-only sandbox, so fail closed instead of inheriting the user's
         // broader Codex sandbox setting.
+        const resolvedSandboxMode = CodexToolPermissionMapper.resolveSandboxMode(
+          config,
+          sandboxMode
+        );
         if (deniesWriteCapableTool(config)) {
-          return ["--sandbox", "read-only"];
+          return ["--sandbox", resolvedSandboxMode ?? "read-only"];
         }
         // Otherwise use Codex-specific sandbox and approval settings.
         // -a / --ask-for-approval is interactive-only; omit for headless exec.
-        if (sandboxMode && approvalPolicy) {
+        if (resolvedSandboxMode && approvalPolicy) {
+          // Codex 0.149.0 removed `untrusted`; retain its original behavior on
+          // supported older CLIs and map it to the nearest current policy after.
+          const resolvedApprovalPolicy =
+            approvalPolicy === "untrusted" &&
+            (!cliVersion ||
+              compareVersions(
+                cliVersion,
+                CODEX_UNTRUSTED_APPROVAL_REMOVED_VERSION
+              ) >= 0)
+              ? "on-request"
+              : approvalPolicy;
           if (includeApprovalFlag) {
-            return ["-s", sandboxMode, "-a", approvalPolicy];
+            return ["-s", resolvedSandboxMode, "-a", resolvedApprovalPolicy];
           }
-          return ["-s", sandboxMode];
+          return ["-s", resolvedSandboxMode];
         }
         Log.warn(
           "[CodexToolPermissionMapper] Custom mode requires sandboxMode and approvalPolicy for Codex. Falling back to the Auto preset."

@@ -122,6 +122,8 @@ const CASES = {
     "headless: image input reaches the model and the next step resumes",
   interactiveResume: "interactive: two steps complete in one resumed session",
   unknownModel: "unknown model fails the step with the CLI's error",
+  codexReadOnlySandbox: "permissions: Codex starts with a read-only custom sandbox",
+  codexUntrustedApproval: "permissions: Codex accepts the deprecated untrusted approval setting",
 } as const;
 
 type CaseId = keyof typeof CASES;
@@ -145,6 +147,8 @@ const CASE_CLAIMS: Record<CaseId, readonly CapabilityPath[]> = {
   imageAndResume: ["promptInputs.images"],
   interactiveResume: [],
   unknownModel: [hookPath(HOOK_EVENT_NAMES.ERROR)],
+  codexReadOnlySandbox: [],
+  codexUntrustedApproval: [],
 };
 
 /** Cases every harness runs, whatever it declares. */
@@ -632,6 +636,58 @@ suite("Harness capability tests", function () {
               `${harness}: the denied command ran`
             );
           }
+        });
+      }
+
+      if (harness === HARNESS_IDS.CODEX_CLI) {
+        test(`${harness}: ${CASES.codexReadOnlySandbox}`, async function () {
+          const result = await runInMode(
+            workflowFor(
+              harness,
+              {
+                executionMode: EXECUTION_MODES.INTERACTIVE,
+                toolPermissions: {
+                  mode: PERMISSION_MODES.CUSTOM,
+                  allowedTools: [],
+                  deniedTools: ["write"],
+                },
+              },
+              [{ name: "read-only-sandbox", prompt: "Reply OK." }]
+            ),
+            workspace,
+            `${harness}-read-only-sandbox`
+          );
+          if (logAndMaybeSkip(harness, result)) return;
+          assertSucceeded(harness, result);
+        });
+
+        test(`${harness}: ${CASES.codexUntrustedApproval}`, async function () {
+          const settingsDir = path.join(workspace.dir, ".ctrlyoke");
+          fs.mkdirSync(settingsDir, { recursive: true });
+          fs.writeFileSync(
+            path.join(settingsDir, "settings.json"),
+            JSON.stringify({
+              permissions: { codexApprovalPolicy: "untrusted" },
+            })
+          );
+          const result = await runInMode(
+            workflowFor(
+              harness,
+              {
+                executionMode: EXECUTION_MODES.INTERACTIVE,
+                toolPermissions: {
+                  mode: PERMISSION_MODES.CUSTOM,
+                  allowedTools: [],
+                  deniedTools: [],
+                },
+              },
+              [{ name: "untrusted-approval", prompt: "Reply OK." }]
+            ),
+            workspace,
+            `${harness}-untrusted-approval`
+          );
+          if (logAndMaybeSkip(harness, result)) return;
+          assertSucceeded(harness, result);
         });
       }
 

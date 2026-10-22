@@ -453,12 +453,31 @@ export class CodexCliProvider implements ICliProvider {
 
     // Add workspace directories
     if (workspaceRoot) {
-      const workspaceDirs = CliProviderUtils.getWorkspaceDirs(
-        workspaceRoot,
-        workspaceRoots,
-        approvedExternalRoots,
-        workflowContext
+      const permissions = ConfigurationUtils.resolveSpawnToolPermissions(
+        workflowContext?.resolvedProperties?.toolPermissions
       );
+      const resolvedSandboxMode = permissions
+        ? CodexToolPermissionMapper.resolveSandboxMode(
+            permissions,
+            ConfigurationUtils.getCodexSandboxMode()
+          )
+        : undefined;
+      const workspaceDirs =
+        resolvedSandboxMode === "read-only"
+          ? []
+          : CliProviderUtils.getWorkspaceDirs(
+              workspaceRoot,
+              workspaceRoots,
+              approvedExternalRoots,
+              workflowContext
+            ).filter((dir) => {
+              const resolvedDir = path.resolve(dir);
+              const resolvedWorkspaceRoot = path.resolve(workspaceRoot);
+              return process.platform === "win32"
+                ? resolvedDir.toLowerCase() !==
+                    resolvedWorkspaceRoot.toLowerCase()
+                : resolvedDir !== resolvedWorkspaceRoot;
+            });
       workspaceDirs.forEach((dir) => {
         args.push("--add-dir", dir);
       });
@@ -658,10 +677,12 @@ export class CodexCliProvider implements ICliProvider {
     }
     const sandboxMode = ConfigurationUtils.getCodexSandboxMode();
     const approvalPolicy = ConfigurationUtils.getCodexApprovalPolicy();
+    const cliVersion = await this.getVersion();
     return this.toolPermissionMapper.prepare(config, {
       ...context,
       sandboxMode,
       approvalPolicy,
+      cliVersion,
     });
   }
 
@@ -1023,8 +1044,8 @@ export class CodexCliProvider implements ICliProvider {
       CodexCliProvider.CLI_VERSION_COMMAND,
       {
         parseVersion: (stdout) => {
-          // Extract version from output like "codex version 0.1.2"
-          const match = stdout.match(/codex version ([\d.]+)/i);
+          // Extract versions from both "codex version 0.1.2" and "codex-cli 0.1.2".
+          const match = stdout.match(/codex(?:-cli)?(?: version)?\s+([\d.]+)/i);
           return match ? match[1] : stdout;
         },
       }

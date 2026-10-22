@@ -650,6 +650,38 @@ suite("HarnessToolPermissionMappers", () => {
         ]);
       });
 
+      test("maps untrusted approval for Codex versions that removed it", () => {
+        const args = mapper.buildCodexSpecificArgs(
+          cfg(PERMISSION_MODES.CUSTOM),
+          "workspace-write",
+          "untrusted",
+          true,
+          "0.149.0"
+        );
+        assert.deepStrictEqual(args, [
+          "-s",
+          "workspace-write",
+          "-a",
+          "on-request",
+        ]);
+      });
+
+      test("preserves untrusted approval on Codex versions that still support it", () => {
+        const args = mapper.buildCodexSpecificArgs(
+          cfg(PERMISSION_MODES.CUSTOM),
+          "workspace-write",
+          "untrusted",
+          true,
+          "0.148.0"
+        );
+        assert.deepStrictEqual(args, [
+          "-s",
+          "workspace-write",
+          "-a",
+          "untrusted",
+        ]);
+      });
+
       test("none mode returns no permission flags", async () => {
         const args = await mapperArgs(mapper, cfg(PERMISSION_MODES.NONE));
         assert.deepStrictEqual(args, []);
@@ -696,13 +728,13 @@ suite("HarnessToolPermissionMappers", () => {
         ]);
       });
 
-      test("custom with sandbox=read-only, approval=untrusted → -s read-only -a untrusted", async () => {
+      test("custom with sandbox=read-only, approval=untrusted maps to on-request for current Codex", async () => {
         const args = mapper.buildCodexSpecificArgs(
           cfg(PERMISSION_MODES.CUSTOM),
           "read-only",
           "untrusted"
         );
-        assert.deepStrictEqual(args, ["-s", "read-only", "-a", "untrusted"]);
+        assert.deepStrictEqual(args, ["-s", "read-only", "-a", "on-request"]);
       });
 
       test("custom with sandbox=danger-full-access, approval=never → -s danger-full-access -a never", async () => {

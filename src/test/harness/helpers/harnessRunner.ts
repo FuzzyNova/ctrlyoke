@@ -242,7 +242,11 @@ export function runInteractiveWorkflowFile(
       cols: 120,
       rows: 40,
       cwd: tmpDir,
-      env: { ...process.env, PWD: tmpDir } as Record<string, string>,
+      env: {
+        ...process.env,
+        PWD: tmpDir,
+        TERM: "xterm-256color",
+      } as Record<string, string>,
     });
     let output = "";
     let killed = false;
@@ -357,7 +361,12 @@ export async function withIsolatedCodexHome<T>(
   fn: () => Promise<T>
 ): Promise<T> {
   const realHome = getCodexHomeDir();
-  const isolatedHome = fs.mkdtempSync(path.join(os.tmpdir(), "cy-codex-home-"));
+  // Codex refuses to create its PATH helper aliases when CODEX_HOME itself is
+  // under the Windows temp directory. Keep the isolated home under the user's
+  // home directory, where it is still unique and removed after the case.
+  const isolatedHome = fs.mkdtempSync(
+    path.join(os.homedir(), ".cy-codex-home-")
+  );
   for (const file of ["auth.json", "config.toml"]) {
     const source = path.join(realHome, file);
     if (fs.existsSync(source)) {

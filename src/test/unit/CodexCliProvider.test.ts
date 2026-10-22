@@ -91,6 +91,43 @@ suite("CodexCliProvider", () => {
     );
   });
 
+  test("does not add the working directory as an extra Codex directory", async () => {
+    const args = await new CodexCliProvider().buildCliArgs(
+      {} as any,
+      true,
+      "/ext",
+      path.resolve("workspace"),
+      undefined,
+      makeWorkflowContext() as any
+    );
+
+    assert.ok(!args.includes("--add-dir"), JSON.stringify(args));
+  });
+
+  test("skips all extra directories when a denied write tool forces read-only", async () => {
+    const args = await new CodexCliProvider().buildCliArgs(
+      {} as any,
+      true,
+      "/ext",
+      path.resolve("workspace"),
+      undefined,
+      {
+        ...makeWorkflowContext(),
+        resolvedProperties: {
+          toolPermissions: {
+            mode: "custom",
+            allowedTools: [],
+            deniedTools: ["write"],
+          },
+        },
+      } as any,
+      [path.resolve("workspace", "other")],
+      [path.resolve("external")]
+    );
+
+    assert.ok(!args.includes("--add-dir"), JSON.stringify(args));
+  });
+
   test("sanitizes MCP server IDs consistently in config and approval overrides", async () => {
     const preparation = await new CodexCliProvider().planMcpConfigArgs(
       undefined,

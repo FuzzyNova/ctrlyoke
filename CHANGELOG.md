@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Codex approval settings remain compatible with current CLI releases.** The deprecated
+  `untrusted` setting maps to `on-request` for Codex 0.149.0 and newer while retaining its
+  original behavior on older supported releases.
+- **Codex starts in read-only sandboxes.** It no longer receives `--add-dir` for the workspace
+  itself or for external roots when the effective sandbox is read-only.
 - **`general.autoLoadRecentSession` (now labelled "Reopen last workflow on startup") works
   when turned off.** Off now starts every new window on a new workflow. Before, the dashboard
   reopened the workflow it was last showing regardless, and the setting only mattered when there

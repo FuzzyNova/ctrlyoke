@@ -38,6 +38,8 @@ export interface PermissionContext {
   /** Codex-only mode settings, supplied by the provider. */
   readonly sandboxMode?: string;
   readonly approvalPolicy?: string;
+  /** Detected Codex CLI version for version-specific permission values. */
+  readonly cliVersion?: string;
   /** The step's resolved MCP servers, for harnesses that filter MCP tools per server (Codex). */
   readonly mcpServers?: readonly (string | McpServerConfig)[] | null;
   /** Existing permission keys used by config-driven harnesses for collision safety. */

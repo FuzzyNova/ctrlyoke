@@ -639,7 +639,7 @@ Sandbox mode for Codex CLI.
 - **Type:** `"untrusted" | "on-request" | "never"`
 - **Default:** `"on-request"`
 
-Approval policy for Codex CLI tool calls.
+Approval policy for Codex CLI tool calls. The untrusted value is deprecated and maps to on-request in Codex 0.149.0 and newer.
 
 ### `permissions.trustedExternalRoots` {#permissions-trustedexternalroots}
 
