@@ -1,18 +1,27 @@
 name: CI
 
-# The checks every pull request must pass: the same gate as `npm run
-# check:fast`, which the local pre-push hook runs (typecheck, lint, UI tests,
-# packaging tests), then a production build and the npm tarball test against
-# it. The UI suite is the slowest part, so it runs in two shards on their own
-# runners, as in full-suite.yml. On the public repo's 4-vCPU runners a whole
-# PR run takes about 5 minutes (it was ~30 for the UI suite alone on the
-# private repo's 2-vCPU runners).
+# The single test gate: everything `npm test` covers, plus the checks the
+# local pre-push hook runs (`npm run check:fast`: typecheck, lint, format,
+# packaging tests) and a production build with the npm tarball test against
+# it. Every pull request must pass it, and release.yml calls it
+# (`workflow_call`) against the tagged commit before publishing anything. The
+# weekly schedule catches drift between PRs, such as a new VS Code release
+# breaking the extension-host tests.
+#
+# Each suite runs on its own runner rather than through
+# scripts/run-test-suites.mjs, because a hosted runner has only 4 vCPUs; the
+# UI suite is further split into two shards. The extension-host job is the
+# longest, at about 6.5 minutes. The PR checks were once split from a
+# separate on-demand "full suite" because Actions minutes were metered and
+# runners had 2 vCPUs while the repo was private; neither is true of the
+# public repo.
 #
 # The `fast-checks` job is a required status check in the `main` ruleset
 # (scripts/apply-github-guardrails.mjs). It only reports the other jobs'
-# results, so the split jobs can change without touching the ruleset. The
-# workflow deliberately has no path filter -- a required check that never
-# reports blocks the PR forever.
+# results, so the split jobs can change without touching the ruleset; it
+# keeps its original name for that reason, though it now also waits on the
+# extension-host tests. The workflow deliberately has no path filter -- a
+# required check that never reports blocks the PR forever.
 #
 # Runs on `pull_request`, never `pull_request_target`: a fork PR gets a
 # read-only token and no repo secrets, so code from the PR cannot reach them.
@@ -20,6 +29,9 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch: {}
+  workflow_call: {}
+  schedule:
+    - cron: "0 13 * * 1" # weekly, Monday 13:00 UTC
 
 permissions:
   contents: read
@@ -78,8 +90,30 @@ jobs:
       - name: UI tests (shard ${{ matrix.shard }}/2)
         run: npm run test:ui -- --shard=${{ matrix.shard }}/2
 
+  extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run compile:webview && npm run compile-tests
+
+      # @vscode/test-electron launches VS Code, which needs a display.
+      - name: Extension-host tests (xvfb-wrapped)
+        run: xvfb-run -a npm run test:extension:run
+
   fast-checks:
-    needs: [checks, ui]
+    needs: [checks, ui, extension]
     # Always report, so a failed or cancelled dependency fails this check
     # instead of leaving it skipped.
     if: always()

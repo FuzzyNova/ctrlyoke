@@ -423,7 +423,8 @@ Before releasing a new version, run these tasks:
 - [ ] Package VSIX and test locally
 - [ ] Tag release and push to GitHub
 
-See [docs/RELEASE_GUIDE.md](docs/RELEASE_GUIDE.md) for complete publishing instructions.
+See "Cutting a release" in [`CONTRIBUTING.md`](CONTRIBUTING.md#cutting-a-release-maintainers)
+for the release steps themselves; `release.yml` runs CI (`ci.yml`, every test suite) before it publishes.
 
 ---
 

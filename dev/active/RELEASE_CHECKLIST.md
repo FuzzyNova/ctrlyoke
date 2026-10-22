@@ -881,16 +881,24 @@ month is under 10% of the free allowance — and `deploy.yml` already spends
 minutes on every site commit. **So do not choose local vs. cloud on cost.
 Choose on what each is actually good at:**
 
-| Check                                                                     | Where                                                             | Why                                                                                                                                                                                             |
-| ------------------------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `typecheck`, `lint`, `test:ui` (vitest), `test:packaging` (`node --test`) | **Local pre-push hook**                                           | Fast, no Electron and no display needed. Local feedback beats waiting on a queued runner, and this catches nearly everything.                                                                   |
-| Full suite including `test:extension` (`@vscode/test-electron`)           | **Actions — `workflow_dispatch`**, optionally a weekly `schedule` | Needs a display; the workflow runs the extension suite under `xvfb-run -a`. Run it before cutting a release, or after extension-host changes.                                                   |
-| Release build + Marketplace publish                                       | **Actions — on the `v*` tag**                                     | The one build where a clean checkout _is_ the point: an uncommitted file, stale `node_modules`, or a local-only env var becomes a shipping bug. Never publish a VSIX built from a working tree. |
+| Check                                                                     | Where                                                               | Why                                                                                                                                                                                             |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `typecheck`, `lint`, `test:ui` (vitest), `test:packaging` (`node --test`) | **Local pre-push hook**                                             | Fast, no Electron and no display needed. Local feedback beats waiting on a queued runner, and this catches nearly everything.                                                                   |
+| Full suite including `test:extension` (`@vscode/test-electron`)           | **Actions — `ci.yml` on every PR, weekly, and on each release tag** | Needs a display; the workflow runs the extension suite under `xvfb-run -a`. Superseded October 22, 2026 — see the note below the table.                                                         |
+| Release build + Marketplace publish                                       | **Actions — on the `v*` tag**                                       | The one build where a clean checkout _is_ the point: an uncommitted file, stale `node_modules`, or a local-only env var becomes a shipping bug. Never publish a VSIX built from a working tree. |
 
 **Decision (Nathan, September 7, 2026):** accepted as written — local pre-push
 gate for the fast checks, GitHub Actions for the clean-room ones. Metered
 minutes were the wrong axis to optimize; they are a rounding error today and
 free once the repo is public (Phase 14).
+
+**Superseded (Nathan, October 22, 2026, after `v0.2.1`):** with the repo public,
+the split between PR checks (`ci.yml`) and an on-demand full suite
+(`full-suite.yml`) no longer saved anything, and it made every release dispatch
+both and wait. `full-suite.yml` was folded into `ci.yml` (its extension-host job
+and weekly schedule), so one workflow runs every suite on every PR. The
+extension job is the longest, so PR checks take about 6.5 minutes instead of 5.
+`release.yml` calls `ci.yml` against the tag and publishes only if it passes.
 
 A local hook verifies your **working tree**; the tag build verifies the
 **commit**. That difference is the whole argument — a hook cannot catch a file
@@ -920,7 +928,8 @@ ships is what makes the bypassable one safe to have.
       (2026-10-13):** the extension suite's missing-harness failure was fixed in
       `6f19a8191`, and the remaining red came from UI tests hitting Vitest's 20s
       timeout on the 2-vCPU private-repo runner (now 60s). Confirm a green
-      run before relying on it as a release gate.
+      run before relying on it as a release gate. _Folded into `ci.yml` on
+      October 22, 2026 (see the superseded note above)._
 - [x] **`release.yml` on `push: tags: ["v*"]`** — ✅ Built September 7, 2026:
       `.github/workflows/release.yml`. Runs the version/tag guard, `npm run
 package`, `npx vsce publish --packagePath ctrlyoke-<version>.vsix`, then

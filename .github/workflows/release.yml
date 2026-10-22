@@ -1,7 +1,8 @@
 name: Release
 
 # Tag-driven publish. Pushing a vX.Y.Z tag (see CONTRIBUTING.md's "Cutting a
-# release") packages the extension, verifies the tag matches
+# release") first runs ci.yml against the tagged commit, then, only if it
+# passes, packages the extension, verifies the tag matches
 # package.json#version, publishes to the VS Code Marketplace, and creates a
 # GitHub Release with the matching CHANGELOG.md section attached.
 #
@@ -22,12 +23,21 @@ on:
       - "v*"
 
 permissions:
-  contents: write
-  id-token: write # npm trusted publishing
+  contents: read
 
 jobs:
+  # Gate: the tagged commit must pass every test suite and check before
+  # anything publishes. It runs with the read-only token, never the publish
+  # job's write and OIDC permissions.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   release:
+    needs: [ci]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write # npm trusted publishing
     steps:
       - uses: actions/checkout@v7
 
