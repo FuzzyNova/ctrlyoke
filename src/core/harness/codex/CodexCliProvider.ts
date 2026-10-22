@@ -72,7 +72,7 @@ const CODEX_MCP_FILTERING_CAPABILITY = {
     reference:
       "dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#codex-partial-support-investigation",
     basis: "cli-version",
-    verifiedVersions: [">=0.146.0"],
+    verifiedVersions: [">=0.129.0"],
   },
 } as const;
 
@@ -83,9 +83,23 @@ const CODEX_IMAGE_INPUT_CAPABILITY = {
     kind: "manual",
     reference: "https://developers.openai.com/codex/cli/reference/",
     basis: "cli-version",
-    verifiedVersions: [">=0.146.0"],
+    verifiedVersions: [">=0.129.0"],
   },
 } as const;
+
+/**
+ * `{"type":"error","status":400,"error":{"message":"…"}}` → its inner
+ * message; anything that isn't such a body is returned unchanged.
+ */
+function unwrapApiErrorMessage(message: string): string {
+  try {
+    const body = JSON.parse(message) as { error?: { message?: unknown } };
+    const inner = body?.error?.message;
+    return typeof inner === "string" && inner.trim() ? inner.trim() : message;
+  } catch {
+    return message;
+  }
+}
 
 const CODEX_HOOK_ARGS = ["--enable", "hooks"] as const;
 const CODEX_NOTIFICATION_SCRIPT_NAME = "ctrlyoke-codex-notify.js";
@@ -255,8 +269,11 @@ export class CodexCliProvider implements ICliProvider {
     }),
     npmPackage: "@openai/codex",
     versionPolicy: {
-      minimum: "0.119.0",
-      recommended: "0.157.0",
+      // 0.129.0 renamed the `codex_hooks` feature to `hooks` (ctrlyoke passes
+      // `--enable hooks`, which older releases reject at startup) and added
+      // the `hooks.state` trust hash CodexInlineHooksBuilder writes.
+      minimum: "0.129.0",
+      testedWith: "0.157.0",
       updateCommand: "codex update",
     },
     shouldStreamHeadlessOutput: true,
@@ -295,6 +312,28 @@ export class CodexCliProvider implements ICliProvider {
         candidate.thread_id.length > 0
     );
     return event?.thread_id as string | undefined;
+  }
+
+  /**
+   * Codex reports a rejected request (an unknown model, for example) only on
+   * stdout, as `turn.failed` / `error` events whose message is often the API's
+   * JSON error body; the session log never records it.
+   */
+  extractErrorFromStdout(stdout: string): string | undefined {
+    const events = CliParseUtils.parseJsonLines(stdout);
+    for (let i = events.length - 1; i >= 0; i--) {
+      const event = events[i];
+      const message =
+        event.type === CODEX_STDOUT_EVENT_TYPES.TURN_FAILED
+          ? (event.error as { message?: unknown } | undefined)?.message
+          : event.type === CODEX_STDOUT_EVENT_TYPES.ERROR
+            ? event.message
+            : undefined;
+      if (typeof message === "string" && message.trim()) {
+        return unwrapApiErrorMessage(message.trim());
+      }
+    }
+    return undefined;
   }
 
   /**

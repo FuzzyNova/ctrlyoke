@@ -529,5 +529,45 @@ suite("CodexCliProvider", () => {
         undefined
       );
     });
+
+    test("reads a rejected request's reason from turn.failed on stdout", () => {
+      // Captured from codex 0.162.1 with an unknown --model.
+      const apiError = JSON.stringify({
+        type: "error",
+        status: 400,
+        error: {
+          type: "invalid_request_error",
+          message:
+            "The 'no-such-model' model is not supported when using Codex with a ChatGPT account.",
+        },
+      });
+      const stdout = [
+        { type: "thread.started", thread_id: "t1" },
+        {
+          type: "item.completed",
+          item: { id: "item_0", type: "error", message: "Model metadata …" },
+        },
+        { type: "turn.started" },
+        { type: "error", message: apiError },
+        { type: "turn.failed", error: { message: apiError } },
+      ]
+        .map((event) => JSON.stringify(event))
+        .join("\n");
+
+      assert.strictEqual(
+        provider.extractErrorFromStdout(stdout),
+        "The 'no-such-model' model is not supported when using Codex with a ChatGPT account."
+      );
+      assert.strictEqual(
+        provider.extractErrorFromStdout(
+          '{"type":"turn.failed","error":{"message":"stream disconnected"}}'
+        ),
+        "stream disconnected"
+      );
+      assert.strictEqual(
+        provider.extractErrorFromStdout('{"type":"turn.completed"}'),
+        undefined
+      );
+    });
   });
 });

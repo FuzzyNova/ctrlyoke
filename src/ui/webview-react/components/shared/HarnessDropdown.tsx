@@ -28,7 +28,7 @@ import {
   formatHarnessUsageTooltip,
   getHarnessAvailabilityPhrase,
   getHarnessUsageDisplay,
-  isHarnessVersionOutdated,
+  isHarnessVersionBelowMinimum,
   type HarnessAvailabilityStatus,
 } from "@utils/harnessUsageDisplay";
 import { Icon } from "./Icon";
@@ -69,19 +69,19 @@ const STATUS_COLORS: Record<HarnessStatusString, string> = {
   unavailable: "bg-indicator-error",
 };
 
-/** Available, but older than the recommended version. */
-const OUTDATED_STATUS_COLOR = "bg-severity-warning";
+/** Available, but older than the minimum supported version. */
+const BELOW_MINIMUM_STATUS_COLOR = "bg-severity-warning";
 
 const StatusIndicator: React.FC<{ status: HarnessAvailabilityStatus }> = ({
   status,
 }) => (
   <span
     data-harness-status={
-      isHarnessVersionOutdated(status) ? "outdated" : status.status
+      isHarnessVersionBelowMinimum(status) ? "below-minimum" : status.status
     }
     className={`w-2 h-2 rounded-full shrink-0 ${
-      isHarnessVersionOutdated(status)
-        ? OUTDATED_STATUS_COLOR
+      isHarnessVersionBelowMinimum(status)
+        ? BELOW_MINIMUM_STATUS_COLOR
         : (STATUS_COLORS[status.status] ?? STATUS_COLORS.checking)
     }`}
   />
@@ -549,7 +549,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
       : value;
   const triggerStatusHint =
     triggerStatus &&
-    (isHarnessVersionOutdated(triggerStatus) ||
+    (isHarnessVersionBelowMinimum(triggerStatus) ||
       (!triggerStatus.available &&
         triggerStatus.status !== HARNESS_STATUS_STRINGS.CHECKING))
       ? getHarnessAvailabilityPhrase(triggerStatus)

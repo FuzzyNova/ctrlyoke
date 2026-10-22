@@ -120,7 +120,7 @@ export class QwenNotificationMonitor
         kind: "manual",
         reference: "src/core/harness/qwen/QwenNotificationMonitor.ts",
         basis: "cli-version",
-        verifiedVersions: [">=0.20.1"],
+        verifiedVersions: [">=0.15.5"],
       },
     };
   }
@@ -134,7 +134,7 @@ export class QwenNotificationMonitor
         kind: "manual",
         reference: "src/core/harness/qwen/QwenNotificationMonitor.ts",
         basis: "cli-version",
-        verifiedVersions: [">=0.20.1"],
+        verifiedVersions: [">=0.15.5"],
       },
     };
   }

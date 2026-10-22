@@ -178,6 +178,6 @@ export class MockIntegrationFactory extends IntegrationFactory {
 /** Permissive `HarnessConfig.versionPolicy` for provider test doubles. */
 export const TEST_VERSION_POLICY: HarnessVersionPolicy = {
   minimum: "0.0.0",
-  recommended: "0.0.0",
+  testedWith: "0.0.0",
   updateCommand: "test-cli update",
 };

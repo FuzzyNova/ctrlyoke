@@ -22,7 +22,7 @@ const CODEX_PERMISSION_VERIFICATION = {
   reference:
     "dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#codex-partial-support-investigation",
   basis: "cli-version",
-  verifiedVersions: [">=0.146.0"],
+  verifiedVersions: [">=0.129.0"],
 } as const;
 
 export const CODEX_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {

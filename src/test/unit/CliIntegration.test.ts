@@ -410,7 +410,7 @@ suite("CliIntegration", () => {
   suite("version policy", () => {
     const versionPolicy = {
       minimum: "1.4.0",
-      recommended: "1.9.0",
+      testedWith: "1.9.0",
       updateCommand: "test-cli update",
     };
     const createVersionedIntegration = (version: string | undefined) =>
@@ -424,34 +424,34 @@ suite("CliIntegration", () => {
         getVersion: async () => version,
       });
 
-    test("refuses a CLI below the minimum with update guidance, not install guidance", async () => {
+    test("still launches a CLI below the minimum and repeats the update guidance on failure", async () => {
       const integration = createVersionedIntegration("test-cli 1.3.9");
 
       await integration.initialize();
 
-      assert.strictEqual(integration.isIntegrationAvailable(), false);
+      assert.strictEqual(integration.isIntegrationAvailable(), true);
       assert.strictEqual(
         integration.getInitializationStatus(),
-        HarnessStatus.Unavailable
-      );
-      assert.strictEqual(
-        integration.getDetailedStatus().message,
-        "❌ Test CLI 1.3.9 is older than the minimum supported version 1.4.0. Update with: test-cli update"
+        HarnessStatus.Ready
       );
       assert.deepStrictEqual(integration.getAvailabilityReport(), {
-        available: false,
+        available: true,
         installCommand: "npm install -g test-cli",
         version: {
-          status: HARNESS_VERSION_STATUSES.UNSUPPORTED,
+          status: HARNESS_VERSION_STATUSES.BELOW_MINIMUM,
           installedVersion: "1.3.9",
           minimumVersion: "1.4.0",
-          recommendedVersion: "1.9.0",
+          testedWithVersion: "1.9.0",
           updateCommand: "test-cli update",
         },
       });
+      assert.strictEqual(
+        integration.getLastFailureReason(),
+        "Failed to send prompt (Test CLI 1.3.9 is older than the minimum supported version 1.4.0 and may not work correctly. Update with: test-cli update)"
+      );
     });
 
-    test("runs a CLI below the recommended version and reports it as outdated", async () => {
+    test("never warns about a CLI at or above the minimum, even below the tested version", async () => {
       const integration = createVersionedIntegration("1.5.0");
 
       await integration.initialize();
@@ -459,7 +459,11 @@ suite("CliIntegration", () => {
       assert.strictEqual(integration.isIntegrationAvailable(), true);
       assert.strictEqual(
         integration.getAvailabilityReport().version?.status,
-        HARNESS_VERSION_STATUSES.OUTDATED
+        HARNESS_VERSION_STATUSES.SUPPORTED
+      );
+      assert.strictEqual(
+        integration.getLastFailureReason(),
+        "Failed to send prompt"
       );
     });
 

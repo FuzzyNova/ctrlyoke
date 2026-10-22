@@ -1820,9 +1820,9 @@ export class CliIntegration extends HarnessIntegration {
   // ============================================================
 
   /**
-   * Detect the CLI and enforce its supported version window (see
-   * `detectHarness`). A CLI below the minimum is reported unavailable with
-   * update guidance rather than install guidance.
+   * Detect the CLI and assess its version (see `detectHarness`). A CLI below
+   * the minimum is logged with update guidance but stays available: ctrlyoke
+   * never refuses to try an older CLI.
    */
   async initialize(): Promise<void> {
     this.initializationStatus = HarnessStatus.Initializing;
@@ -1844,11 +1844,6 @@ export class CliIntegration extends HarnessIntegration {
       if (versionGuidance) {
         Log.warn(`[CliIntegration] ${versionGuidance}`);
       }
-      if (!detection.available) {
-        this.markUnavailable();
-        return;
-      }
-
       Log.debug(
         `[CliIntegration] ${displayName} available${detection.rawVersion ? `: ${detection.rawVersion}` : ""}`
       );
@@ -1986,13 +1981,20 @@ export class CliIntegration extends HarnessIntegration {
 
   private getUnavailableGuidance(): string {
     const { displayName, installCommand } = this.provider.config;
+    return `❌ ${displayName} unavailable. ${formatHarnessInstallGuidance(installCommand)}. Then sign in with the CLI before running a workflow.`;
+  }
+
+  /**
+   * A failure on a CLI below its minimum version carries the update guidance:
+   * ctrlyoke still tried it, and an old CLI is the likeliest cause.
+   */
+  override getLastFailureReason(): string {
+    const reason = super.getLastFailureReason();
     const versionGuidance = formatHarnessVersionGuidance(
-      displayName,
+      this.provider.config.displayName,
       this.versionAssessment
     );
-    return versionGuidance
-      ? `❌ ${versionGuidance}`
-      : `❌ ${displayName} unavailable. ${formatHarnessInstallGuidance(installCommand)}. Then sign in with the CLI before running a workflow.`;
+    return versionGuidance ? `${reason} (${versionGuidance})` : reason;
   }
 
   // ============================================================

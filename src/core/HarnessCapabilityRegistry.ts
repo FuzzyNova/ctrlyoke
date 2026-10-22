@@ -219,6 +219,7 @@ export class HarnessCapabilityRegistry {
     return {
       available,
       ...(version ? { version } : {}),
+      ...(detection.version ? { versionAssessment: detection.version } : {}),
       descriptor,
       effective: this.resolveEnabledDomains(descriptor, version),
     };

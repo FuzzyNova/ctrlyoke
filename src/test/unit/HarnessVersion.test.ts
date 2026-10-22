@@ -15,7 +15,7 @@ import { IntegrationFactory } from "../../core/IntegrationFactory";
 
 const POLICY = {
   minimum: "1.0.19",
-  recommended: "1.0.92",
+  testedWith: "1.0.92",
   updateCommand: "copilot update",
 };
 
@@ -37,17 +37,17 @@ suite("HarnessVersion", () => {
       );
       assert.strictEqual(
         assessHarnessVersion("1.0.9", POLICY).status,
-        HARNESS_VERSION_STATUSES.UNSUPPORTED
+        HARNESS_VERSION_STATUSES.BELOW_MINIMUM
       );
     });
 
-    test("treats the minimum as supported and the recommended as current", () => {
+    test("treats the minimum itself and anything above it as supported, however far below the tested version", () => {
       assert.strictEqual(
         assessHarnessVersion("1.0.19", POLICY).status,
-        HARNESS_VERSION_STATUSES.OUTDATED
+        HARNESS_VERSION_STATUSES.SUPPORTED
       );
       assert.strictEqual(
-        assessHarnessVersion("1.0.92", POLICY).status,
+        assessHarnessVersion("1.0.50", POLICY).status,
         HARNESS_VERSION_STATUSES.SUPPORTED
       );
     });
@@ -62,35 +62,24 @@ suite("HarnessVersion", () => {
   });
 
   suite("formatHarnessVersionGuidance", () => {
-    test("names the update command for unsupported and outdated versions only", () => {
+    test("warns with the update command only for versions below the minimum", () => {
       assert.strictEqual(
         formatHarnessVersionGuidance(
           "Copilot",
           assessHarnessVersion("1.0.10", POLICY)
         ),
-        "Copilot 1.0.10 is older than the minimum supported version 1.0.19. Update with: copilot update"
+        "Copilot 1.0.10 is older than the minimum supported version 1.0.19 and may not work correctly. Update with: copilot update"
       );
-      assert.strictEqual(
-        formatHarnessVersionGuidance(
-          "Copilot",
-          assessHarnessVersion("1.0.50", POLICY)
-        ),
-        "Copilot 1.0.50 is older than the recommended version 1.0.92; some features may not work. Update with: copilot update"
-      );
-      assert.strictEqual(
-        formatHarnessVersionGuidance(
-          "Copilot",
-          assessHarnessVersion("1.0.92", POLICY)
-        ),
-        undefined
-      );
-      assert.strictEqual(
-        formatHarnessVersionGuidance(
-          "Copilot",
-          assessHarnessVersion(undefined, POLICY)
-        ),
-        undefined
-      );
+      for (const version of ["1.0.19", "1.0.50", "1.0.92", undefined]) {
+        assert.strictEqual(
+          formatHarnessVersionGuidance(
+            "Copilot",
+            assessHarnessVersion(version, POLICY)
+          ),
+          undefined,
+          `no guidance for ${version}`
+        );
+      }
     });
   });
 
@@ -120,12 +109,12 @@ suite("HarnessVersion", () => {
       });
     });
 
-    test("is unavailable below the minimum but still reports the version", async () => {
+    test("stays available below the minimum and still reports the version", async () => {
       const result = await detectHarness(provider(true, "0.0.400"));
-      assert.strictEqual(result.available, false);
+      assert.strictEqual(result.available, true);
       assert.strictEqual(
         result.version?.status,
-        HARNESS_VERSION_STATUSES.UNSUPPORTED
+        HARNESS_VERSION_STATUSES.BELOW_MINIMUM
       );
     });
 
@@ -145,16 +134,71 @@ suite("HarnessVersion", () => {
         const { versionPolicy } =
           IntegrationFactory.createCapabilityProvider(harnessId).config;
         assert.match(versionPolicy.minimum, /^\d+\.\d+\.\d+$/);
-        assert.match(versionPolicy.recommended, /^\d+\.\d+\.\d+$/);
+        assert.match(versionPolicy.testedWith, /^\d+\.\d+\.\d+$/);
         assert.ok(
           versionSatisfies(
-            versionPolicy.recommended,
+            versionPolicy.testedWith,
             `>=${versionPolicy.minimum}`
           ),
-          "recommended must not be older than minimum"
+          "testedWith must not be older than minimum"
         );
         assert.ok(versionPolicy.updateCommand.trim().length > 0);
+      });
+
+      test(`${harnessId} has evidence covering its minimum for every feature`, () => {
+        const provider = IntegrationFactory.createCapabilityProvider(harnessId);
+        const { minimum } = provider.config.versionPolicy;
+        const uncovered = collectVerifiedRanges(provider.capabilities)
+          .filter(
+            ({ ranges }) =>
+              !ranges.some((range) => versionSatisfies(minimum, range))
+          )
+          .map(({ path }) => path)
+          .filter(
+            (path) => !FEATURES_NEWER_THAN_MINIMUM[harnessId]?.includes(path)
+          );
+        // A floor above the minimum raises "unverified" warnings for CLIs the
+        // version policy calls supported. Lower the floor once the feature is
+        // checked at the minimum, raise the minimum, or (only for a feature
+        // that genuinely needs a newer CLI) list it below.
+        assert.deepStrictEqual(uncovered, []);
       });
     }
   });
 });
+
+/**
+ * Features whose evidence legitimately starts above the harness minimum. Keep
+ * this short: every entry warns users the version policy calls supported.
+ */
+const FEATURES_NEWER_THAN_MINIMUM: Partial<Record<HarnessId, string[]>> = {
+  // Only 1.4.4 has been tested; the agy changelog implies the agent could
+  // view PNG/JPEG by about 1.2.15. Test at the minimum, then remove this.
+  [HARNESS_IDS.ANTIGRAVITY_CLI]: ["promptInputs.images"],
+};
+
+function collectVerifiedRanges(
+  node: unknown,
+  path = ""
+): { path: string; ranges: readonly string[] }[] {
+  if (!node || typeof node !== "object") {
+    return [];
+  }
+  const verification = (node as { verification?: unknown }).verification;
+  if (
+    verification &&
+    typeof verification === "object" &&
+    "verifiedVersions" in verification
+  ) {
+    return [
+      {
+        path,
+        ranges: (verification as { verifiedVersions: readonly string[] })
+          .verifiedVersions,
+      },
+    ];
+  }
+  return Object.entries(node).flatMap(([key, child]) =>
+    collectVerifiedRanges(child, path ? `${path}.${key}` : key)
+  );
+}

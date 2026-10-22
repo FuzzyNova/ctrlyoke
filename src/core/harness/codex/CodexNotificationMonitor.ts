@@ -80,7 +80,7 @@ export class CodexNotificationMonitor
         kind: "manual",
         reference: "src/core/harness/codex/CodexNotificationMonitor.ts",
         basis: "cli-version",
-        verifiedVersions: [">=0.146.0"],
+        verifiedVersions: [">=0.129.0"],
       },
     };
   }
@@ -94,7 +94,7 @@ export class CodexNotificationMonitor
         kind: "manual",
         reference: "src/core/harness/codex/CodexNotificationMonitor.ts",
         basis: "cli-version",
-        verifiedVersions: [">=0.146.0"],
+        verifiedVersions: [">=0.129.0"],
       },
     };
   }

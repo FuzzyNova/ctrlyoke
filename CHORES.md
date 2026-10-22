@@ -27,9 +27,14 @@ npm run chores -- --task check-all
 
 ### 1. Update CLI Tools
 
-**Frequency**: Monthly or when new CLI versions are released
+**Frequency**: Monthly, and **right before each release**
 
-Update to the latest versions of the CLI tools ctrlyoke integrates with:
+Update to the latest versions of the CLI tools ctrlyoke integrates with. Before a release, follow
+this with one `npm run test:harness` run and set each provider's `versionPolicy.testedWith` to the
+versions it passed against (see "Before each ctrlyoke release" in
+[`dev/reference/HARNESS_VERSION_SUPPORT.md`](dev/reference/HARNESS_VERSION_SUPPORT.md)). This is
+safe to do late: users are never warned for being behind `testedWith`, only for being below the
+minimum.
 
 #### Copilot CLI
 
@@ -110,7 +115,10 @@ agy --version
 agy update
 ```
 
-**After updating**: Test CLI integrations with manual test files in `manual-test/`
+**After updating**: Test CLI integrations with manual test files in `manual-test/`. Before a
+release, also run `npm run test:harness` and refresh `versionPolicy.testedWith` as described in
+[`dev/reference/HARNESS_VERSION_SUPPORT.md`](dev/reference/HARNESS_VERSION_SUPPORT.md). Updating
+CLIs never moves `versionPolicy.minimum`; that rolls separately, early in a cycle.
 
 ---
 
@@ -396,7 +404,8 @@ install.
 
 Before releasing a new version, run these tasks:
 
-- [ ] Update CLI tools (check for latest versions)
+- [ ] Update CLI tools to latest (chore #1), run `npm run test:harness` once, and set each
+      provider's `versionPolicy.testedWith` to the versions that passed
 - [ ] Update models (`npm run chores -- --task sync-models`)
 - [ ] Update VS Code commands (list and document)
 - [ ] Update dependencies (`npm update` + `npm audit`)
@@ -468,7 +477,8 @@ Run the model update workflow (chore #2)
 
 ### CLI integration not working
 
-Check CLI versions and update to latest (chore #1)
+Check CLI versions against the supported minimum (`npm run harness:version-floors`) and update
+the CLI (chore #1)
 
 ### Security vulnerabilities
 

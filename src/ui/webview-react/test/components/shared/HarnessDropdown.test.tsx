@@ -332,7 +332,7 @@ describe("HarnessDropdown", () => {
     ).toHaveLength(Object.values(HARNESS_IDS).length);
   });
 
-  it("flags an outdated harness with a warning dot and update guidance", () => {
+  it("flags a harness below the minimum with a warning dot and update guidance", () => {
     const { container } = render(
       <HarnessDropdown
         value={HARNESS_IDS.COPILOT_CLI}
@@ -342,10 +342,10 @@ describe("HarnessDropdown", () => {
             available: true,
             status: HARNESS_STATUS_STRINGS.AVAILABLE,
             version: {
-              status: HARNESS_VERSION_STATUSES.OUTDATED,
-              installedVersion: "1.0.50",
+              status: HARNESS_VERSION_STATUSES.BELOW_MINIMUM,
+              installedVersion: "1.0.10",
               minimumVersion: "1.0.19",
-              recommendedVersion: "1.0.92",
+              testedWithVersion: "1.0.92",
               updateCommand: "copilot update",
             },
           },
@@ -354,16 +354,45 @@ describe("HarnessDropdown", () => {
     );
 
     expect(
-      container.querySelector('[data-harness-status="outdated"]')
+      container.querySelector('[data-harness-status="below-minimum"]')
     ).not.toBeNull();
     expect(
       screen.getByTitle(
-        "Available — Installed version 1.0.50 is older than the recommended version 1.0.92; some features may not work. Update with: copilot update property: harness = copilot-cli"
+        "Available — Installed version 1.0.10 is older than the minimum supported version 1.0.19 and may not work correctly. Update with: copilot update property: harness = copilot-cli"
       )
     ).toBeInTheDocument();
   });
 
-  it("shows the update command in preflight for a CLI below the minimum", () => {
+  it("does not flag a harness that is merely older than the version ctrlyoke was tested with", () => {
+    const { container } = render(
+      <HarnessDropdown
+        value={HARNESS_IDS.COPILOT_CLI}
+        onChange={vi.fn()}
+        harnessStatus={{
+          [HARNESS_IDS.COPILOT_CLI]: {
+            available: true,
+            status: HARNESS_STATUS_STRINGS.AVAILABLE,
+            version: {
+              status: HARNESS_VERSION_STATUSES.SUPPORTED,
+              installedVersion: "1.0.50",
+              minimumVersion: "1.0.19",
+              testedWithVersion: "1.0.92",
+              updateCommand: "copilot update",
+            },
+          },
+        }}
+      />
+    );
+
+    expect(
+      container.querySelector('[data-harness-status="available"]')
+    ).not.toBeNull();
+    expect(
+      container.querySelector('[data-harness-status="below-minimum"]')
+    ).toBeNull();
+  });
+
+  it("shows install commands in preflight for every unavailable harness", () => {
     useSettingsStore.setState({
       harnessStatus: Object.fromEntries(
         Object.values(HARNESS_IDS).map((id) => [
@@ -372,17 +401,6 @@ describe("HarnessDropdown", () => {
             available: false,
             status: "unavailable",
             installCommand: `Install ${id}`,
-            ...(id === HARNESS_IDS.CODEX_CLI
-              ? {
-                  version: {
-                    status: HARNESS_VERSION_STATUSES.UNSUPPORTED,
-                    installedVersion: "0.100.0",
-                    minimumVersion: "0.119.0",
-                    recommendedVersion: "0.157.0",
-                    updateCommand: "codex update",
-                  },
-                }
-              : {}),
           },
         ])
       ) as typeof originalHarnessStatus,
@@ -390,11 +408,7 @@ describe("HarnessDropdown", () => {
 
     render(<HarnessPreflightPanel />);
 
-    expect(screen.getByText("codex update")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Copy update command for Codex" })
-    ).toBeInTheDocument();
-    expect(screen.queryByText("Install codex-cli")).toBeNull();
+    expect(screen.getByText("Install codex-cli")).toBeInTheDocument();
     expect(screen.getByText("Install claude-cli")).toBeInTheDocument();
   });
 });

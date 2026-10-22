@@ -7,6 +7,7 @@ import {
   CAPABILITY_DOMAINS,
   isImageRefPath,
   FINAL_STEP_PHASES,
+  HARNESS_VERSION_STATUSES,
   HOOK_EVENT_ORDER,
   MCP_CAPABILITY_KEYS,
   PERMISSION_CAPABILITY_KEYS,
@@ -150,6 +151,28 @@ export function analyzeCompatibility({
         )
       );
       continue;
+    }
+
+    if (
+      installed.versionAssessment?.status ===
+      HARNESS_VERSION_STATUSES.BELOW_MINIMUM
+    ) {
+      const diagnostic = createDiagnostic(
+        COMPATIBILITY_DIAGNOSTIC_CODES.HARNESS_BELOW_MINIMUM,
+        COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+        harnessId,
+        "harness",
+        target,
+        installed.effective?.permissions?.mode ?? unknownCapabilityState()
+      );
+      diagnostics.push({
+        ...diagnostic,
+        message: getCompatibilityDiagnosticMessage(diagnostic.code, {
+          harnessId,
+          capability: diagnostic.capability,
+          version: installed.versionAssessment,
+        }),
+      });
     }
 
     if (capabilities.enabledDomains.includes(CAPABILITY_DOMAINS.MCP)) {

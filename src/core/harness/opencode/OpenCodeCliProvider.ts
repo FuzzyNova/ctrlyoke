@@ -23,10 +23,7 @@ import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { moveGreedyOptionArgsAfterPrompt } from "../shared/CliArgumentUtils";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
-import {
-  PROMPT_INPUT_CAVEAT_CODES,
-  type HarnessCapabilityFacts,
-} from "../../../types/CompatibilityTypes";
+import { type HarnessCapabilityFacts } from "../../../types/CompatibilityTypes";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   PromptStep,
@@ -91,7 +88,7 @@ const OPENCODE_MCP_FILTERING_CAPABILITY = {
     kind: "behavioral-test",
     reference: "src/test/harness/inline-config.harness.test.ts",
     basis: "cli-version",
-    verifiedVersions: [">=1.18.10"],
+    verifiedVersions: [">=1.3.16"],
   },
 } as const;
 
@@ -102,14 +99,7 @@ const OPENCODE_IMAGE_INPUT_CAPABILITY = {
     kind: "manual",
     reference: "https://dev.opencode.ai/docs/cli/",
     basis: "cli-version",
-    verifiedVersions: [">=1.18.10"],
-  },
-  modeOverrides: {
-    interactive: {
-      fidelity: "partial",
-      mechanism: "native",
-      caveatCode: PROMPT_INPUT_CAVEAT_CODES.OPENCODE_INTERACTIVE_PATH_ONLY,
-    },
+    verifiedVersions: [">=1.3.16"],
   },
 } as const;
 
@@ -165,7 +155,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     npmPackage: "opencode-ai",
     versionPolicy: {
       minimum: "1.3.16",
-      recommended: "1.18.34",
+      testedWith: "1.18.34",
       updateCommand: "opencode upgrade",
     },
     shouldStreamHeadlessOutput: true,
@@ -526,6 +516,11 @@ export class OpenCodeCliProvider implements ICliProvider {
     return relativeFilePath;
   }
 
+  /**
+   * Headless `run` attaches images with `--file`. The TUI has no attachment
+   * flag; the image path stays in the prompt and OpenCode's `read` tool loads
+   * it as an image.
+   */
   buildImageAttachmentArgs(
     imageFilePaths: readonly string[],
     isInteractive: boolean

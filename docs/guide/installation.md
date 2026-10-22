@@ -58,10 +58,8 @@ When the dashboard starts, it checks every supported CLI on your `PATH`. If none
 available, it shows **No CLI coding agent is available** just below the header, listing each harness
 with the command that installs it on your operating system (PowerShell on Windows, a shell
 command on macOS and Linux). A long command is cut off to fit; hover it to read it in full, or
-use the copy button at the end of its row. A harness that is installed but older than the minimum
-version ctrlyoke supports shows its update command instead; hover it to see the installed and
-minimum versions. The panel is guidance only and doesn't block the dashboard. It disappears once
-a harness is detected.
+use the copy button at the end of its row. The panel is guidance only and doesn't block the
+dashboard. It disappears once a harness is detected.
 
 ![The No CLI coding agent is available panel below the dashboard header, listing all six harnesses with their Windows install commands and a copy button on each row](/screenshots/harness-preflight-missing-660x1270.png){.panel-shot}
 
@@ -70,15 +68,17 @@ click **Retry** next to the harness picker.
 
 The harness picker marks each harness with a status dot:
 
-| Dot     | Meaning                                                |
-| ------- | ------------------------------------------------------ |
-| Green   | Available                                              |
-| Amber   | Available, but older than the recommended version      |
-| Red     | Not available. The row is dimmed and can't be selected |
-| Pulsing | Still checking                                         |
+| Dot     | Meaning                                                 |
+| ------- | ------------------------------------------------------- |
+| Green   | Available                                               |
+| Amber   | Available, but older than the minimum supported version |
+| Red     | Not available. The row is dimmed and can't be selected  |
+| Pulsing | Still checking                                          |
 
-Hover a harness to see why it is unavailable: its install command, or the version it needs. When
-the selected harness is unavailable, a **Retry** button next to the picker runs detection again.
+Hover a harness to see why it is amber or red: its update command (amber) or its install command
+(red). ctrlyoke still runs an amber harness, and never marks one amber just because a newer
+release exists. When the selected harness is unavailable, a **Retry** button next to the picker
+runs detection again.
 
 ## Initialize a workspace
 

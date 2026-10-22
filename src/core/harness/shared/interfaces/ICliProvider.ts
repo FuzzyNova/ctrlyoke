@@ -77,8 +77,9 @@ export interface HarnessConfig {
   npmPackage?: string;
 
   /**
-   * Supported CLI version window, enforced once at detection by
-   * `CliIntegration.initialize()`. Below `minimum` the harness is unavailable.
+   * Supported CLI version window. Only `minimum` has any effect: a CLI below it
+   * is still launched, with a warning (`CliIntegration.initialize()` logs it and
+   * a failed step repeats it). `testedWith` is informational.
    */
   versionPolicy: HarnessVersionPolicy;
 
@@ -178,6 +179,14 @@ export interface ICliProvider {
    * their stdout carries the session ID.
    */
   extractSessionIdFromStdout?(chunk: string): string | undefined;
+
+  /**
+   * The CLI's own reason for a failed headless run, read from complete stdout
+   * after a non-zero exit. For log-sourced providers whose stdout carries a
+   * fatal error event (an unknown model, a rejected request) that the session
+   * log does not, so the user sees that reason instead of a bare exit code.
+   */
+  extractErrorFromStdout?(stdout: string): string | undefined;
 
   /**
    * Observe raw headless stdout for narrow provider-specific enrichment.

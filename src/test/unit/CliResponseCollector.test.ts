@@ -257,6 +257,34 @@ suite("CliResponseCollector", () => {
     assert.strictEqual(result.cliResult.error, "Provider rejected key");
   });
 
+  test("should use the provider's stdout error when the parsed output has none", async () => {
+    const stdoutSeen: string[] = [];
+    const provider = {
+      ...createProvider(createParsedOutput({ events: [], metadata: {} })),
+      extractErrorFromStdout(stdout: string) {
+        stdoutSeen.push(stdout);
+        return "model is not supported";
+      },
+    };
+    const run = (exitCode: number) =>
+      createCollector(provider).collectHeadlessResponse({
+        stdout: '{"type":"turn.failed"}',
+        stderr: "Reading additional input from stdin...",
+        exitCode,
+        promptForSessionLog: "say hi",
+        executionStartTime: new Date(),
+      });
+
+    const failed = await run(1);
+    assert.strictEqual(failed.failureKind, FAILURE_KINDS.PROCESS_EXIT);
+    assert.strictEqual(failed.failureMessage, "model is not supported");
+    assert.deepStrictEqual(stdoutSeen, ['{"type":"turn.failed"}']);
+
+    // A clean exit never consults the hook.
+    await run(0);
+    assert.strictEqual(stdoutSeen.length, 1);
+  });
+
   test("should classify a killed process as cancellation, not a harness failure", async () => {
     // Regression: ctrlyoke's own teardown SIGKILLed a running harness, Node
     // reported exit code null (coalesced to 1), and the step was reported as

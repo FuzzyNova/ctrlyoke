@@ -9,7 +9,6 @@ import {
   HOOK_CAVEAT_CODES,
   MCP_CAVEAT_CODES,
   PERMISSION_CAVEAT_CODES,
-  PROMPT_INPUT_CAVEAT_CODES,
   getCompatibilityCaveatMessage,
   isAdvisoryCaveat,
   type HarnessCapabilityRegistrySnapshot,
@@ -171,7 +170,6 @@ describe("workflowPermissionDiagnostic", () => {
     const codes = [
       ...Object.values(PERMISSION_CAVEAT_CODES),
       ...Object.values(MCP_CAVEAT_CODES),
-      ...Object.values(PROMPT_INPUT_CAVEAT_CODES),
       ...Object.values(HOOK_CAVEAT_CODES),
     ];
     for (const code of codes) {

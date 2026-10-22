@@ -2750,15 +2750,14 @@ export const HARNESS_STATUS_STRINGS = {
 
 /**
  * Where a detected harness CLI version sits against that harness's
- * `HarnessConfig.versionPolicy`. `UNSUPPORTED` (below the minimum) makes the
- * harness unavailable; `OUTDATED` (below the recommended version) only warns;
- * `UNKNOWN` means the CLI answered but its version could not be parsed, which
- * never blocks.
+ * `HarnessConfig.versionPolicy`. `BELOW_MINIMUM` only warns (and is repeated in
+ * a failure message): ctrlyoke never refuses to launch a CLI over its version.
+ * `UNKNOWN` means the CLI answered but its version could not be parsed. There
+ * is no status for "older than the version ctrlyoke was tested with".
  */
 export const HARNESS_VERSION_STATUSES = {
   SUPPORTED: "supported",
-  OUTDATED: "outdated",
-  UNSUPPORTED: "unsupported",
+  BELOW_MINIMUM: "below-minimum",
   UNKNOWN: "unknown",
 } as const;
 

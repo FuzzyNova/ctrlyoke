@@ -13,7 +13,7 @@ import type { HarnessUsageSnapshot } from "@root/types/UsageTypes";
 import {
   getHarnessAvailabilityPhrase,
   getHarnessUsageDisplay,
-  isHarnessVersionOutdated,
+  isHarnessVersionBelowMinimum,
 } from "@utils/harnessUsageDisplay";
 
 function snapshot(
@@ -294,33 +294,30 @@ describe("getHarnessAvailabilityPhrase version guidance", () => {
     status,
     installedVersion: "1.0.10",
     minimumVersion: "1.0.19",
-    recommendedVersion: "1.0.92",
+    testedWithVersion: "1.0.92",
     updateCommand: "copilot update",
   });
 
-  it("gives an unsupported CLI its update command instead of the install command", () => {
-    expect(
-      getHarnessAvailabilityPhrase({
-        status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
-        available: false,
-        installCommand: "npm install -g @github/copilot",
-        version: version(HARNESS_VERSION_STATUSES.UNSUPPORTED),
-      })
-    ).toBe(
-      "Installed version 1.0.10 is older than the minimum supported version 1.0.19. Update with: copilot update"
-    );
-  });
-
-  it("keeps an outdated CLI available and appends the update guidance", () => {
+  it("keeps a CLI below the minimum available and appends the update guidance", () => {
     const status = {
       status: HARNESS_STATUS_STRINGS.AVAILABLE,
       available: true,
-      version: version(HARNESS_VERSION_STATUSES.OUTDATED),
+      version: version(HARNESS_VERSION_STATUSES.BELOW_MINIMUM),
     };
-    expect(isHarnessVersionOutdated(status)).toBe(true);
+    expect(isHarnessVersionBelowMinimum(status)).toBe(true);
     expect(getHarnessAvailabilityPhrase(status)).toBe(
-      "Available — Installed version 1.0.10 is older than the recommended version 1.0.92; some features may not work. Update with: copilot update"
+      "Available — Installed version 1.0.10 is older than the minimum supported version 1.0.19 and may not work correctly. Update with: copilot update"
     );
+  });
+
+  it("adds no guidance for a supported CLI", () => {
+    const status = {
+      status: HARNESS_STATUS_STRINGS.AVAILABLE,
+      available: true,
+      version: version(HARNESS_VERSION_STATUSES.SUPPORTED),
+    };
+    expect(isHarnessVersionBelowMinimum(status)).toBe(false);
+    expect(getHarnessAvailabilityPhrase(status)).toBe("Available");
   });
 
   it("keeps the install command for a CLI that is not installed", () => {

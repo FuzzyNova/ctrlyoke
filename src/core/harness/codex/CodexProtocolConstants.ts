@@ -4,6 +4,10 @@
  */
 export const CODEX_STDOUT_EVENT_TYPES = {
   THREAD_STARTED: "thread.started",
+  /** Fatal stream error: `{ type, message }`. */
+  ERROR: "error",
+  /** Failed turn: `{ type, error: { message } }`. */
+  TURN_FAILED: "turn.failed",
 } as const;
 
 /** Wire-level values from Codex's response-item log protocol. */

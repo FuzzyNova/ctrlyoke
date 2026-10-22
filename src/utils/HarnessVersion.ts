@@ -20,14 +20,17 @@ interface ParsedVersion {
  * The CLI versions ctrlyoke supports for one harness.
  *
  * `minimum` is the oldest release inside the support window (see
- * `dev/reference/HARNESS_VERSION_SUPPORT.md`); anything older is refused.
- * `recommended` is the release ctrlyoke was last verified against; anything
- * older still runs but is flagged. Both move forward at each ctrlyoke release,
- * and code that only exists to serve versions below `minimum` is deleted then.
+ * `dev/reference/HARNESS_VERSION_SUPPORT.md`). A CLI below it is still launched,
+ * with a warning that it may fail; ctrlyoke never refuses to try one. It is the
+ * only version that ever warns a user, and it moves forward on the rolling
+ * window or when a release breaks something, at which point code that only
+ * exists to serve older versions is deleted.
+ * `testedWith` is the release ctrlyoke was last verified against. It is
+ * informational (docs only) and never produces a warning.
  */
 export interface HarnessVersionPolicy {
   readonly minimum: string;
-  readonly recommended: string;
+  readonly testedWith: string;
   /** Command the user runs to update the CLI in place. */
   readonly updateCommand: string;
 }
@@ -38,7 +41,7 @@ export interface HarnessVersionAssessment {
   /** Normalized `major.minor.patch`, absent when the CLI's output had none. */
   installedVersion?: string;
   minimumVersion: string;
-  recommendedVersion: string;
+  testedWithVersion: string;
   updateCommand: string;
 }
 
@@ -141,8 +144,9 @@ export function versionSatisfies(
 
 /**
  * Evaluate a CLI's raw `--version` output against its policy. Unparseable or
- * missing output is `UNKNOWN` rather than `UNSUPPORTED`: a CLI that runs but
- * changed its banner should not be locked out by ctrlyoke's parser.
+ * missing output is `UNKNOWN` rather than `BELOW_MINIMUM`: a CLI that runs but
+ * changed its banner should not be flagged by ctrlyoke's parser. Neither status
+ * ever blocks the CLI from running.
  */
 export function assessHarnessVersion(
   rawVersion: string | undefined,
@@ -151,41 +155,35 @@ export function assessHarnessVersion(
   const parsed = rawVersion ? parseVersion(rawVersion) : undefined;
   const base = {
     minimumVersion: policy.minimum,
-    recommendedVersion: policy.recommended,
+    testedWithVersion: policy.testedWith,
     updateCommand: policy.updateCommand,
   };
   if (!parsed) {
     return { status: HARNESS_VERSION_STATUSES.UNKNOWN, ...base };
   }
   const installedVersion = `${parsed.major}.${parsed.minor}.${parsed.patch}`;
-  const status = !versionSatisfies(installedVersion, `>=${policy.minimum}`)
-    ? HARNESS_VERSION_STATUSES.UNSUPPORTED
-    : !versionSatisfies(installedVersion, `>=${policy.recommended}`)
-      ? HARNESS_VERSION_STATUSES.OUTDATED
-      : HARNESS_VERSION_STATUSES.SUPPORTED;
+  const status = versionSatisfies(installedVersion, `>=${policy.minimum}`)
+    ? HARNESS_VERSION_STATUSES.SUPPORTED
+    : HARNESS_VERSION_STATUSES.BELOW_MINIMUM;
   return { status, installedVersion, ...base };
 }
 
 /**
- * User-facing guidance for a version that needs attention, or undefined when
- * the version is fine. Shared by the run-time refusal message, the dashboard
- * tooltips, and the CLI's startup log so all three say the same thing.
+ * User-facing guidance for a version below the minimum, or undefined when the
+ * version is fine. Shared by the run-time warning, the failure message, the
+ * dashboard tooltips, and the CLI's startup log so all say the same thing.
  */
 export function formatHarnessVersionGuidance(
   displayName: string,
   assessment: HarnessVersionAssessment | undefined
 ): string | undefined {
-  if (!assessment?.installedVersion) {
+  if (
+    !assessment?.installedVersion ||
+    assessment.status !== HARNESS_VERSION_STATUSES.BELOW_MINIMUM
+  ) {
     return undefined;
   }
-  switch (assessment.status) {
-    case HARNESS_VERSION_STATUSES.UNSUPPORTED:
-      return `${displayName} ${assessment.installedVersion} is older than the minimum supported version ${assessment.minimumVersion}. Update with: ${assessment.updateCommand}`;
-    case HARNESS_VERSION_STATUSES.OUTDATED:
-      return `${displayName} ${assessment.installedVersion} is older than the recommended version ${assessment.recommendedVersion}; some features may not work. Update with: ${assessment.updateCommand}`;
-    default:
-      return undefined;
-  }
+  return `${displayName} ${assessment.installedVersion} is older than the minimum supported version ${assessment.minimumVersion} and may not work correctly. Update with: ${assessment.updateCommand}`;
 }
 
 /**

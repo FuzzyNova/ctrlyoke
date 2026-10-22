@@ -52,10 +52,7 @@ import type {
   UserHookConfig,
 } from "../../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
-import {
-  PROMPT_INPUT_CAVEAT_CODES,
-  type HarnessCapabilityFacts,
-} from "../../../types/CompatibilityTypes";
+import { type HarnessCapabilityFacts } from "../../../types/CompatibilityTypes";
 import {
   applyPreparedMutations,
   type CliProviderPreparation,
@@ -68,14 +65,20 @@ const QWEN_MCP_FILTERING_CAPABILITY = {
     kind: "behavioral-test",
     reference: "src/test/harness/inline-config.harness.test.ts",
     basis: "cli-version",
-    verifiedVersions: [">=0.20.1"],
+    verifiedVersions: [">=0.15.5"],
   },
 } as const;
 
 const QWEN_IMAGE_INPUT_CAPABILITY = {
-  fidelity: "unsupported",
-  mechanism: "none",
-  caveatCode: PROMPT_INPUT_CAVEAT_CODES.NO_NATIVE_IMAGE_ATTACHMENT,
+  fidelity: "exact",
+  mechanism: "native",
+  verification: {
+    kind: "manual",
+    reference:
+      "https://qwenlm.github.io/qwen-code-docs/en/users/features/commands/",
+    basis: "cli-version",
+    verifiedVersions: [">=0.15.5"],
+  },
 } as const;
 
 /**
@@ -154,8 +157,10 @@ export class QwenCliProvider implements ICliProvider {
     }),
     npmPackage: "@qwen-code/qwen-code",
     versionPolicy: {
-      minimum: "0.14.1",
-      recommended: "0.24.4",
+      // 0.15.5 added `--mcp-config`, which every MCP-using step passes; hooks
+      // have been on by default since 0.14.0.
+      minimum: "0.15.5",
+      testedWith: "0.24.4",
       updateCommand: "npm install -g @qwen-code/qwen-code@latest",
     },
     shouldStreamHeadlessOutput: true,

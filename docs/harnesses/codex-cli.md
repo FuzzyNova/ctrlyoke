@@ -20,9 +20,9 @@ capability details and version-scoped evidence.
 - **Version:** at least the minimum listed under
   [Supported versions](/harnesses/compatibility#supported-versions). Update with `codex update`.
 
-If the CLI is missing or too old, the harness picker shows a red dot next to Codex, and its
-tooltip gives the install command, or the update command when the installed version is below the
-minimum. An amber dot means it runs but is older than the recommended version. After installing or
+If the CLI is missing, the harness picker shows a red dot next to Codex, and its tooltip gives the
+install command. If it is installed but older than the minimum, it still runs: the picker shows an
+amber dot and the update command, a workflow that uses it warns when it starts, and a failed step repeats that command. After installing or
 updating, click **Retry harness detection** in the harness picker. If no harness CLI is available
 at all, the dashboard shows a **No CLI coding agent is available** panel with the install command
 for every harness.
@@ -70,6 +70,11 @@ the box. A model that isn't on the list is replaced by that default, with a warn
 `model: none` passes no `--model` flag, so Codex uses the model from its own configuration. To use
 a model the list doesn't have, set `model: none` and put `--model <id>` in `additionalArgs`. See
 [How step properties inherit](/workflows/yaml-format#property-inheritance).
+
+The list matches the **Tested with** Codex release in
+[Supported versions](/harnesses/compatibility#supported-versions). A newer model can need a newer
+Codex than ctrlyoke's minimum. If a step fails because the model is not supported, run
+`codex update`.
 
 ## Notes
 

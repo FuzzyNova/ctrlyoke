@@ -17,7 +17,7 @@ const QWEN_PERMISSION_VERIFICATION = {
   kind: "behavioral-test",
   reference: "src/test/harness/inline-config.harness.test.ts",
   basis: "cli-version",
-  verifiedVersions: [">=0.20.1"],
+  verifiedVersions: [">=0.15.5"],
 } as const;
 
 const QWEN_PERMISSION_TOOL_NAMES = {

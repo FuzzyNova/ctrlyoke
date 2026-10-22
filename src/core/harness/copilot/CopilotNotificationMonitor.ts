@@ -60,7 +60,7 @@ export class CopilotNotificationMonitor
             kind: "manual",
             reference: "src/core/harness/copilot/CopilotNotificationMonitor.ts",
             basis: "cli-version",
-            verifiedVersions: [">=0.0.384"],
+            verifiedVersions: [">=1.0.19"],
           },
         },
       ])

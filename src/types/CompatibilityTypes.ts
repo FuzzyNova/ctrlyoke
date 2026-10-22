@@ -17,9 +17,15 @@ import {
   type ExecutionMode,
 } from "./DashboardConstants";
 import { HOOK_EVENT_OPTIONS_META } from "./SchemaUiMetadata";
+import {
+  formatHarnessVersionGuidance,
+  type HarnessVersionAssessment,
+} from "../utils/HarnessVersion";
 
 export const COMPATIBILITY_DIAGNOSTIC_CODES = {
   HARNESS_UNAVAILABLE: "compatibility.harness.unavailable",
+  /** Installed but older than `versionPolicy.minimum`: it still runs. */
+  HARNESS_BELOW_MINIMUM: "compatibility.harness.belowMinimum",
   PERMISSION_MODE_UNSUPPORTED: "compatibility.permissions.mode.unsupported",
   PERMISSION_MODE_PARTIAL: "compatibility.permissions.mode.partial",
   PERMISSION_MODE_UNVERIFIED: "compatibility.permissions.mode.unverified",
@@ -151,6 +157,8 @@ export interface InstalledHarnessCapabilities {
   available: boolean;
   /** Present for versioned CLI harnesses after detection succeeds. */
   version?: string;
+  /** `version` assessed against the harness's `versionPolicy`. */
+  versionAssessment?: HarnessVersionAssessment;
   descriptor: HarnessCapabilityDescriptor;
   /** Installed-version-aware states for the enabled capability domains. */
   effective: EffectiveCapabilityDomainStateMap;
@@ -190,6 +198,8 @@ export interface CompatibilityDiagnosticMessageContext {
    * fact rather than an open question.
    */
   caveatCode?: CompatibilityCaveatCode;
+  /** The installed CLI's version assessment, for version diagnostics. */
+  version?: HarnessVersionAssessment;
 }
 
 /**
@@ -209,11 +219,6 @@ export const MCP_CAVEAT_CODES = {
   NO_PER_SERVER_FILTERING: "mcp.noPerServerFiltering",
 } as const;
 
-export const PROMPT_INPUT_CAVEAT_CODES = {
-  NO_NATIVE_IMAGE_ATTACHMENT: "promptInputs.noNativeImageAttachment",
-  OPENCODE_INTERACTIVE_PATH_ONLY: "promptInputs.opencodeInteractivePathOnly",
-} as const;
-
 export const HOOK_CAVEAT_CODES = {
   /** The harness has no native event ctrlyoke can translate the hook to. */
   NO_NATIVE_EVENT: "hooks.noNativeEvent",
@@ -231,14 +236,11 @@ export type PermissionCaveatCode =
 export type McpCaveatCode =
   (typeof MCP_CAVEAT_CODES)[keyof typeof MCP_CAVEAT_CODES];
 
-export type PromptInputCaveatCode =
-  (typeof PROMPT_INPUT_CAVEAT_CODES)[keyof typeof PROMPT_INPUT_CAVEAT_CODES];
-
 export type HookCaveatCode =
   (typeof HOOK_CAVEAT_CODES)[keyof typeof HOOK_CAVEAT_CODES];
 
 export type CompatibilityCaveatCode =
-  PermissionCaveatCode | McpCaveatCode | PromptInputCaveatCode | HookCaveatCode;
+  PermissionCaveatCode | McpCaveatCode | HookCaveatCode;
 
 /**
  * Caveats that explain a risk alongside a capability that is enforced. Every
@@ -275,10 +277,6 @@ export function getCompatibilityCaveatMessage(
       return "because this harness enforces only mcp__<server>__<tool> denials for MCP servers the workflow attaches, and uses sandbox/approval modes instead of other tool patterns";
     case MCP_CAVEAT_CODES.NO_PER_SERVER_FILTERING:
       return "because this harness exposes no documented per-server tool filtering mechanism";
-    case PROMPT_INPUT_CAVEAT_CODES.NO_NATIVE_IMAGE_ATTACHMENT:
-      return "because this harness has no verified native image-attachment path in the ctrlyoke CLI adapter";
-    case PROMPT_INPUT_CAVEAT_CODES.OPENCODE_INTERACTIVE_PATH_ONLY:
-      return "because interactive mode keeps the image path in the prompt without attaching it as vision input";
     case HOOK_CAVEAT_CODES.NO_NATIVE_EVENT:
       return "because this harness exposes no native event ctrlyoke can map it to";
     case HOOK_CAVEAT_CODES.MAIN_SESSION_START_UNRELIABLE:
@@ -322,6 +320,11 @@ export function getCompatibilityDiagnosticMessage(
   switch (code) {
     case COMPATIBILITY_DIAGNOSTIC_CODES.HARNESS_UNAVAILABLE:
       return `The ${harness} harness is unavailable for this execution target.`;
+    case COMPATIBILITY_DIAGNOSTIC_CODES.HARNESS_BELOW_MINIMUM:
+      return (
+        formatHarnessVersionGuidance(harness, context.version) ??
+        `${harness} is older than the minimum supported version and may not work correctly.`
+      );
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_UNSUPPORTED:
       return withCaveat(
         `Permission mode is not supported by the ${harness} harness`
@@ -394,6 +397,8 @@ export function getCompatibilityDiagnosticRemediation(
   switch (code) {
     case COMPATIBILITY_DIAGNOSTIC_CODES.HARNESS_UNAVAILABLE:
       return "Install the harness, make it available on PATH, or select an installed harness.";
+    case COMPATIBILITY_DIAGNOSTIC_CODES.HARNESS_BELOW_MINIMUM:
+      return "Update the harness CLI. ctrlyoke still runs it, but features it relies on may be missing.";
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_UNSUPPORTED:
       return "Choose a supported permission mode for this harness or select another harness.";
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_PARTIAL:

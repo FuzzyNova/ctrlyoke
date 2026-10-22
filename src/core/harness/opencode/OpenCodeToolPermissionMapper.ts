@@ -27,7 +27,7 @@ const OPENCODE_PERMISSION_VERIFICATION = {
   kind: "behavioral-test",
   reference: "src/test/harness/inline-config.harness.test.ts",
   basis: "cli-version",
-  verifiedVersions: [">=1.18.10"],
+  verifiedVersions: [">=1.3.16"],
 } as const;
 
 const OPENCODE_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {

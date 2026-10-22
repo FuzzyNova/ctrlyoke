@@ -72,7 +72,7 @@ export class OpenCodeNotificationMonitor
         kind: "manual",
         reference: "src/scripts/ctrlyoke-opencode-plugin.ts",
         basis: "cli-version",
-        verifiedVersions: [">=1.1.48"],
+        verifiedVersions: [">=1.3.16"],
       },
     };
   }
@@ -88,7 +88,7 @@ export class OpenCodeNotificationMonitor
         kind: "manual",
         reference: "src/scripts/ctrlyoke-opencode-plugin.ts",
         basis: "cli-version",
-        verifiedVersions: [">=1.1.48"],
+        verifiedVersions: [">=1.3.16"],
       },
     };
   }
@@ -102,7 +102,7 @@ export class OpenCodeNotificationMonitor
         kind: "manual",
         reference: "src/core/harness/opencode/OpenCodeNotificationMonitor.ts",
         basis: "cli-version",
-        verifiedVersions: [">=1.18.10"],
+        verifiedVersions: [">=1.3.16"],
       },
     };
   }

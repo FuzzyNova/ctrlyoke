@@ -1396,20 +1396,20 @@ suite("HostedServerMessageFactory", () => {
 
   test("carries the version assessment so the dashboard can show update guidance", () => {
     const version = {
-      status: HARNESS_VERSION_STATUSES.UNSUPPORTED,
+      status: HARNESS_VERSION_STATUSES.BELOW_MINIMUM,
       installedVersion: "0.100.0",
       minimumVersion: "0.119.0",
-      recommendedVersion: "0.157.0",
+      testedWithVersion: "0.157.0",
       updateCommand: "codex update",
     };
     const update = createHostedHarnessStatusUpdate(HARNESS_IDS.CODEX_CLI, {
-      available: false,
+      available: true,
       installCommand: codexInstallCommand,
       version,
     });
     assert.deepStrictEqual(update.data.harnessStatus[HARNESS_IDS.CODEX_CLI], {
-      available: false,
-      status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
+      available: true,
+      status: HARNESS_STATUS_STRINGS.AVAILABLE,
       installCommand: codexInstallCommand,
       version,
     });

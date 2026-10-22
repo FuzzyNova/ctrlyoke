@@ -99,9 +99,8 @@ ctrlyoke saves it to `.ctrlyoke/attachments/` as
 `pasted-image-<hash>.<ext>`, then inserts an `@` reference to it at the cursor.
 Pasting the same image again reuses the same file. The folder is git-ignored.
 
-Copilot, Claude Code, Codex and OpenCode receive images natively. Qwen Code and
-Antigravity don't support images, and the editor warns when the step's harness
-can't take one. See the [compatibility matrix](/harnesses/compatibility).
+Every harness receives images natively. The model you pick must accept images.
+See the [compatibility matrix](/harnesses/compatibility).
 
 <!-- SHOT D10: pasting a screenshot into the prompt editor, the "pasting" placeholder turning into an @pasted-image reference -->
 

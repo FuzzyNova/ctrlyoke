@@ -405,10 +405,19 @@ function formatDomainEvidence(harness, domain) {
   return claims.length > 0 ? claims.join("<br>") : "—";
 }
 
+/**
+ * A domain with a single capability is named after that capability ("Images",
+ * not "Prompt Inputs"): the version table has no capability rows beneath it.
+ */
+function versionTableLabel(facts, domain) {
+  const capabilities = collectDomainCapabilities(facts, domain);
+  return formatLabel(capabilities.length === 1 ? capabilities[0] : domain);
+}
+
 function buildVersionTable(facts) {
   return [
     tableRow([
-      "Domain",
+      "Feature",
       ...facts.harnesses.map(({ displayName }) =>
         shortHarnessName(displayName)
       ),
@@ -416,7 +425,7 @@ function buildVersionTable(facts) {
     tableDivider(facts.harnesses.length, "---"),
     ...facts.enabledDomains.map((domain) =>
       tableRow([
-        formatLabel(domain),
+        versionTableLabel(facts, domain),
         ...facts.harnesses.map((harness) =>
           formatDomainEvidence(harness, domain)
         ),
@@ -437,7 +446,7 @@ function buildSupportedVersionTable(facts) {
     ]),
     tableDivider(facts.harnesses.length, "---"),
     row("Minimum", ({ versionPolicy }) => versionPolicy.minimum),
-    row("Recommended", ({ versionPolicy }) => versionPolicy.recommended),
+    row("Tested with", ({ versionPolicy }) => versionPolicy.testedWith),
     row("Update", ({ versionPolicy }) => `\`${versionPolicy.updateCommand}\``),
   ].join("\n");
 }
@@ -488,21 +497,27 @@ ${buildNotesSection(facts, notes)}
 
 ## Supported versions
 
-ctrlyoke is tested against the latest release of each harness CLI and supports
-releases from roughly the past six months. A CLI older than **Minimum** is
-treated as unavailable: the dashboard and \`ctrlyoke run\` show its update
-command instead of running it. A CLI older than **Recommended** still runs, but
-the harness picker marks it with a warning because newer features (for example
-context-window or usage indicators) may be missing. These floors move forward
-with each ctrlyoke release, so keeping harness CLIs up to date is the expected
-setup.
+ctrlyoke supports each harness CLI release from roughly the past six months.
+**Minimum** is the oldest supported release. A CLI older than that is still
+launched, but ctrlyoke warns that it may not work correctly when a workflow
+that uses it starts, the harness picker shows its update command, and a failed
+step repeats that warning. Nothing warns when your
+CLI is at or above the minimum. **Tested with** is the release this version of
+ctrlyoke passed its harness test suite against, usually the latest at release
+time; it is informational only, and newer releases are expected to work too.
+Some features (for example context-window or usage indicators) can need a newer
+CLI than the minimum, and so do most new models: the minimum covers ctrlyoke's
+own features, not every model a CLI can run. When a CLI rejects a model, the
+step fails with the CLI's own error. The minimum moves forward on that rolling window, or
+sooner when a CLI release breaks something older versions can't work around.
 
 ${buildSupportedVersionTable(facts)}
 
 ## Verified versions
 
-Each claim is backed by evidence for a harness version range. Installed
-versions outside these ranges are shown as unverified by the dashboard.
+Each feature is backed by evidence for a harness version range. When a
+workflow uses a feature and the installed CLI is outside its range, the
+dashboard marks that feature as unverified; the harness itself still runs.
 
 ${buildVersionTable(facts)}
 

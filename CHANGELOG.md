@@ -7,8 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Harness CLI version policy.** A CLI below its minimum supported version is no longer refused:
+  ctrlyoke launches it, warns when a workflow that uses it starts, and repeats the update command
+  if a step fails. A CLI at or above the minimum never warns, even when a newer release exists, so
+  opening a new ctrlyoke no longer flags every harness you haven't just updated. The compatibility
+  docs' "Recommended" row is now "Tested with" and is informational.
+- **Raised minimum CLI versions.** The minimum is now the oldest release with every CLI feature
+  ctrlyoke uses: Codex 0.129.0 (older releases reject `--enable hooks`, so every step fails to
+  start), Qwen Code 0.15.5 (older releases reject `--mcp-config`, so steps with MCP servers fail),
+  and Antigravity 1.2.6 (older releases cut headless steps off after 5 minutes). Per-feature
+  verified versions now start at each harness's minimum, so supported CLIs no longer get
+  "unverified" warnings.
+- **Every harness now counts as image-capable.** Image references (`@path` to a `.png`, `.jpg`,
+  `.gif` or `.webp`) reach Qwen Code, Antigravity and interactive OpenCode natively, so the
+  compatibility matrix and the prompt editor no longer warn that images are unsupported or only
+  partly supported for them. The docs' verified-versions table now labels this row **Images**.
+
 ### Fixed
 
+- **Codex errors are shown instead of an exit code.** When Codex rejects a request (for example a
+  model that doesn't exist or that your account can't use), the step now fails with Codex's own
+  message instead of "Process exited with code 1".
 - **Pro license activation on macOS.** Activating a license no longer fails with "could not save
   it to this machine's credential store". Secrets of any length (including license files) are now
   saved to the macOS keychain intact; previously, values were truncated or saved empty. If an

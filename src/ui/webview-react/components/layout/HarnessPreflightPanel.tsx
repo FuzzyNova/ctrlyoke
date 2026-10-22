@@ -1,19 +1,15 @@
 import { HarnessIcon } from "@components/shared/HarnessIcon";
 import { HARNESS_DISPLAY_NAMES } from "@components/shared/HarnessDropdown";
 import { useSettingsStore } from "@store/settingsStore";
-import {
-  HARNESS_STATUS_STRINGS,
-  HARNESS_VERSION_STATUSES,
-} from "@/types/messages";
+import { HARNESS_STATUS_STRINGS } from "@/types/messages";
 import { HARNESS_DISPLAY_ORDER } from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
 import { CopyButton } from "../shared/CopyButton";
 
 /**
  * Non-blocking first-run guidance shown after every supported CLI has been
- * checked and none are available. Install and update commands originate with
- * each CLI provider and arrive with the existing harness-status payload; a CLI
- * that is installed but below its supported minimum shows its update command.
+ * checked and none are available. Install commands originate with each CLI
+ * provider and arrive with the existing harness-status payload.
  */
 export function HarnessPreflightPanel() {
   const harnessStatus = useSettingsStore((state) => state.harnessStatus);
@@ -44,11 +40,7 @@ export function HarnessPreflightPanel() {
       <ul className="mt-2 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
         {HARNESS_DISPLAY_ORDER.map((harnessId) => {
           const status = harnessStatus[harnessId];
-          const isUnsupported =
-            status?.version?.status === HARNESS_VERSION_STATUSES.UNSUPPORTED;
-          const command = isUnsupported
-            ? status?.version?.updateCommand
-            : status?.installCommand;
+          const command = status?.installCommand;
           const displayName = HARNESS_DISPLAY_NAMES[harnessId];
           return (
             <li
@@ -61,18 +53,14 @@ export function HarnessPreflightPanel() {
               </span>
               <code
                 className="min-w-0 flex-1 truncate bg-code-block text-xxs text-description-fg"
-                title={
-                  isUnsupported
-                    ? `${status?.version?.installedVersion} is below the supported minimum ${status?.version?.minimumVersion}. Update with: ${command}`
-                    : command
-                }
+                title={command}
               >
                 {command ?? "Installation command unavailable"}
               </code>
               {command && (
                 <CopyButton
                   text={command}
-                  label={`Copy ${isUnsupported ? "update" : "install"} command for ${displayName}`}
+                  label={`Copy install command for ${displayName}`}
                   className="icon-btn shrink-0 py-0 px-0.5"
                 />
               )}

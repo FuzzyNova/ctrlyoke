@@ -11,16 +11,17 @@ import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   FINAL_STEP_PHASES,
   HARNESS_IDS,
+  HARNESS_VERSION_STATUSES,
   HOOK_EVENT_NAMES,
   HOOK_EVENT_ORDER,
   MCP_CAPABILITY_KEYS,
   PROMPT_INPUT_CAPABILITY_KEYS,
+  type HarnessVersionStatus,
   type HookEvent,
   type HarnessId,
 } from "../../types/DashboardConstants";
 import {
   COMPATIBILITY_DIAGNOSTIC_CODES,
-  PROMPT_INPUT_CAVEAT_CODES,
   getCompatibilityCaveatMessage,
   type HarnessCapabilityRegistrySnapshot,
   type InstalledHarnessCapabilities,
@@ -417,11 +418,7 @@ suite("CompatibilityAnalyzer", () => {
       "verified"
     );
     opencode.descriptor.promptInputs!.images.modeOverrides = {
-      interactive: {
-        fidelity: "partial",
-        mechanism: "native",
-        caveatCode: PROMPT_INPUT_CAVEAT_CODES.OPENCODE_INTERACTIVE_PATH_ONLY,
-      },
+      interactive: { fidelity: "partial", mechanism: "native" },
     };
     const workflow: PromptFile = {
       steps: [
@@ -459,7 +456,6 @@ suite("CompatibilityAnalyzer", () => {
     assert.strictEqual(diagnostics[0].consumer?.kind, FINAL_STEP_PHASES.QUEUE);
     assert.strictEqual(diagnostics[0].consumer?.stepIndex, 0);
     assert.strictEqual(diagnostics[0].state.fidelity, "partial");
-    assert.match(diagnostics[0].message, /interactive mode/);
   });
 
   test("emits a blocking unavailable error only for an actual consumer", () => {
@@ -488,6 +484,59 @@ suite("CompatibilityAnalyzer", () => {
       1
     );
     assert.strictEqual(mixed[0].severity, "error");
+  });
+
+  test("warns, without blocking, when a consumer's CLI is below the minimum version", () => {
+    const versionAssessment = (status: HarnessVersionStatus) => ({
+      status,
+      installedVersion: "0.100.0",
+      minimumVersion: "0.146.0",
+      testedWithVersion: "0.162.1",
+      updateCommand: "codex update",
+    });
+    const workflow = mixedWorkflow({
+      toolPermissions: undefined,
+      steps: [{ prompt: "Codex target" }],
+    });
+    const belowMinimum = analyze(
+      workflow,
+      snapshot({
+        [HARNESS_IDS.CODEX_CLI]: {
+          ...installed(HARNESS_IDS.CODEX_CLI, true, "exact", "verified"),
+          versionAssessment: versionAssessment(
+            HARNESS_VERSION_STATUSES.BELOW_MINIMUM
+          ),
+        },
+      })
+    );
+    assert.deepStrictEqual(
+      belowMinimum.map(({ code, severity, message }) => ({
+        code,
+        severity,
+        message,
+      })),
+      [
+        {
+          code: COMPATIBILITY_DIAGNOSTIC_CODES.HARNESS_BELOW_MINIMUM,
+          severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+          message:
+            "Codex 0.100.0 is older than the minimum supported version 0.146.0 and may not work correctly. Update with: codex update",
+        },
+      ]
+    );
+
+    const supported = analyze(
+      workflow,
+      snapshot({
+        [HARNESS_IDS.CODEX_CLI]: {
+          ...installed(HARNESS_IDS.CODEX_CLI, true, "exact", "verified"),
+          versionAssessment: versionAssessment(
+            HARNESS_VERSION_STATUSES.SUPPORTED
+          ),
+        },
+      })
+    );
+    assert.deepStrictEqual(supported, []);
   });
 
   test("keeps unmodeled domains silent and evaluates only non-empty lists", () => {

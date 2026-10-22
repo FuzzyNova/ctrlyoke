@@ -1,7 +1,4 @@
-import {
-  HARNESS_STATUS_STRINGS,
-  HARNESS_VERSION_STATUSES,
-} from "../../../types/DashboardConstants";
+import { HARNESS_STATUS_STRINGS } from "../../../types/DashboardConstants";
 import type {
   HarnessAvailabilityReport,
   HarnessStatusInfo,
@@ -13,7 +10,7 @@ import {
 import type { ICliProvider } from "./interfaces/ICliProvider";
 
 export interface HarnessDetectionResult {
-  /** Installed and inside the provider's supported version window. */
+  /** Installed and answering. A version below the minimum never makes it unavailable. */
   available: boolean;
   /** Raw `--version` output, when the CLI answered. */
   rawVersion?: string;
@@ -22,9 +19,10 @@ export interface HarnessDetectionResult {
 }
 
 /**
- * The single definition of "this harness can run": the CLI answers and its
- * version is not below `config.versionPolicy.minimum`. Every host's detection
- * goes through here — `CliIntegration.initialize()` (extension, CLI runs),
+ * The single definition of "this harness can run": the CLI answers. Its version
+ * is assessed against `config.versionPolicy` for guidance only — a CLI below
+ * `minimum` is still launched, with a warning. Every host's detection goes
+ * through here — `CliIntegration.initialize()` (extension, CLI runs),
  * `IntegrationFactory.detectDefaultHarness()` (CLI auto-detected default), and
  * `HarnessCapabilityRegistry` — so they never disagree about an old CLI.
  */
@@ -40,7 +38,7 @@ export async function detectHarness(
     provider.config.versionPolicy
   );
   return {
-    available: version.status !== HARNESS_VERSION_STATUSES.UNSUPPORTED,
+    available: true,
     ...(rawVersion ? { rawVersion } : {}),
     version,
   };

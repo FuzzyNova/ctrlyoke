@@ -21,9 +21,9 @@ capability details and version-scoped evidence.
 - **Version:** at least the minimum listed under
   [Supported versions](/harnesses/compatibility#supported-versions). Update with `agy update`.
 
-If the CLI is missing or too old, the harness picker shows a red dot next to Antigravity CLI, and
-its tooltip gives the install command, or the update command when the installed version is below
-the minimum. An amber dot means it runs but is older than the recommended version. After
+If the CLI is missing, the harness picker shows a red dot next to Antigravity CLI, and its tooltip
+gives the install command. If it is installed but older than the minimum, it still runs: the
+picker shows an amber dot and the update command, a workflow that uses it warns when it starts, and a failed step repeats that command. After
 installing or updating, click **Retry harness detection** in the harness picker. If no harness CLI
 is available at all, the dashboard shows a **No CLI coding agent is available** panel with the
 install command for every harness.
@@ -76,7 +76,7 @@ its default, so the step fails.
 
 ## Notes
 
-- Permissions are coarse modes only: `dangerouslyAllowAll` passes `--dangerously-skip-permissions`, `custom` passes `--sandbox`, and `allowAll` passes nothing, so `agy` applies its own approval behavior. `allowedTools` / `deniedTools` are not enforced, and MCP servers cannot be filtered per tool. Image references are not attached.
+- Permissions are coarse modes only: `dangerouslyAllowAll` passes `--dangerously-skip-permissions`, `custom` passes `--sandbox`, and `allowAll` passes nothing, so `agy` applies its own approval behavior. `allowedTools` / `deniedTools` are not enforced, and MCP servers cannot be filtered per tool.
 - Only the `preToolUse`, `postToolUse`, `sessionStart`, and `stop` hook events fire; `userPromptSubmit`, `permissionRequest`, `notification`, and `error` do not.
 - MCP servers are written to the workspace `.agents/mcp_config.json`, which `agy` discovers on its own. There is no per-prompt server scoping, so parallel workflows in one workspace share that file's servers.
 - ctrlyoke's hooks go in `~/.gemini/config/hooks.json` and are removed when the run ends. Its status line command goes in `~/.gemini/antigravity-cli/settings.json` and stays there between runs. See [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#antigravity-cli).

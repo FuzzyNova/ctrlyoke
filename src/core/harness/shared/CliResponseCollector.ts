@@ -59,6 +59,7 @@ export interface CliResponseCollectorDeps {
     | "augmentParsedOutput"
     | "extractSessionIdFromLogs"
     | "extractSessionIdFromStdout"
+    | "extractErrorFromStdout"
     | "headlessSource"
     | "parseHeadlessStdout"
     | "logParser"
@@ -256,9 +257,12 @@ export class CliResponseCollector {
         Log.warn(`[CliResponseCollector] Headless stderr:\n${stderr}`);
       }
       const detail = this.summarizeStderr(stderr);
-      const parsedError = parsedOutput.metadata.error
+      const reportedError =
+        parsedOutput.metadata.error ??
+        this.deps.provider.extractErrorFromStdout?.(params.stdout);
+      const parsedError = reportedError
         ? sanitizeTerminalOutput(
-            secretRedactionService.redactText(parsedOutput.metadata.error)
+            secretRedactionService.redactText(reportedError)
           ).trim()
         : undefined;
       return {

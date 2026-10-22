@@ -13,7 +13,7 @@ capability fidelity, evidence, version scope, caveats, and remediation guidance.
 | `claude-cli`      | Claude Code (`claude`)         | Fine-grained tool permission patterns     |
 | `codex-cli`       | OpenAI Codex CLI (`codex`)     | Sandbox/approval modes, not tool patterns |
 | `opencode-cli`    | OpenCode (`opencode`)          | Provider-flexible `provider/model` IDs    |
-| `qwen-cli`        | Qwen Code (`qwen`)             | No image attachments                      |
+| `qwen-cli`        | Qwen Code (`qwen`)             | Fine-grained tool permission patterns     |
 | `antigravity-cli` | Google Antigravity CLI (`agy`) | Coarse permission modes only              |
 
 ## Choosing a harness

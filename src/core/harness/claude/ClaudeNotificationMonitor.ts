@@ -56,7 +56,7 @@ export class ClaudeNotificationMonitor
             kind: "manual",
             reference: "src/core/harness/claude/ClaudeNotificationMonitor.ts",
             basis: "cli-version",
-            verifiedVersions: [">=2.0.76"],
+            verifiedVersions: [">=2.1.94"],
           },
         },
       ])

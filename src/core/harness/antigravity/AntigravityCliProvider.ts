@@ -36,7 +36,6 @@ import type {
 import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import {
   MCP_CAVEAT_CODES,
-  PROMPT_INPUT_CAVEAT_CODES,
   type HarnessCapabilityFacts,
 } from "../../../types/CompatibilityTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
@@ -83,9 +82,14 @@ const ANTIGRAVITY_MCP_FILTERING_CAPABILITY = {
 } as const;
 
 const ANTIGRAVITY_IMAGE_INPUT_CAPABILITY = {
-  fidelity: "unsupported",
-  mechanism: "none",
-  caveatCode: PROMPT_INPUT_CAVEAT_CODES.NO_NATIVE_IMAGE_ATTACHMENT,
+  fidelity: "exact",
+  mechanism: "native",
+  verification: {
+    kind: "manual",
+    reference: "https://antigravity.google/docs/cli/using",
+    basis: "cli-version",
+    verifiedVersions: [">=1.4.4"],
+  },
 } as const;
 
 type AntigravityHookGroup = Record<
@@ -154,11 +158,13 @@ export class AntigravityCliProvider implements ICliProvider {
       windows: "irm https://antigravity.google/cli/install.ps1 | iex",
     }),
     versionPolicy: {
-      // agy has no public release history to derive a support window from.
-      // 1.1.12 is where every tool result became "GENERIC", the transcript
-      // shape AntigravityLogParser/AntigravityToolEventBuilder target.
-      minimum: "1.1.12",
-      recommended: "1.2.17",
+      // agy is not on npm; `agy changelog` and the google-antigravity/
+      // antigravity-cli GitHub releases give its history. 1.2.6 removed the
+      // 5-minute default `--print` timeout (ctrlyoke passes none, so longer
+      // headless steps were cut short); 1.1.20 stopped benign tool errors
+      // failing `-p` runs; 1.1.10 made `Stop` hooks and `--model` work.
+      minimum: "1.2.6",
+      testedWith: "1.2.17",
       updateCommand: "agy update",
     },
     shouldStreamHeadlessOutput: true,

@@ -148,37 +148,34 @@ export type HarnessAvailabilityStatus = Pick<
 
 /**
  * Human phrase for a harness's install/availability state. Undefined when the
- * state is unknown. A CLI below the supported minimum gets its update command
- * instead of an install command, and one below the recommended version stays
- * "Available" with the same update guidance appended.
+ * state is unknown. An unavailable harness gets its install command. A CLI
+ * below the supported minimum stays "Available" with the update guidance
+ * appended: ctrlyoke still runs it.
  */
 export function getHarnessAvailabilityPhrase(
   status: HarnessAvailabilityStatus | undefined
 ): string | undefined {
   if (!status) return undefined;
   if (status.status === HARNESS_STATUS_STRINGS.CHECKING) return "Checking…";
+  if (status.available === false) {
+    return status.installCommand
+      ? formatHarnessInstallGuidance(status.installCommand)
+      : "Not available";
+  }
   const versionGuidance = formatHarnessVersionGuidance(
     "Installed version",
     status.version
   );
-  if (status.available === false) {
-    return (
-      versionGuidance ??
-      (status.installCommand
-        ? formatHarnessInstallGuidance(status.installCommand)
-        : "Not available")
-    );
-  }
   return versionGuidance ? `Available — ${versionGuidance}` : "Available";
 }
 
-/** True when the harness runs but is older than its recommended version. */
-export function isHarnessVersionOutdated(
+/** True when the harness runs but is older than its minimum supported version. */
+export function isHarnessVersionBelowMinimum(
   status: HarnessAvailabilityStatus | undefined
 ): boolean {
   return (
     status?.available !== false &&
-    status?.version?.status === HARNESS_VERSION_STATUSES.OUTDATED
+    status?.version?.status === HARNESS_VERSION_STATUSES.BELOW_MINIMUM
   );
 }
 

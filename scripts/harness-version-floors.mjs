@@ -5,8 +5,8 @@
  *
  * Read-only: prints the current policy beside a suggested minimum (the first
  * release inside the support window, from the npm registry's publish times)
- * and the CLI version installed on this machine (the candidate "recommended",
- * once the release has been verified against it). Edit the providers'
+ * and the CLI version installed on this machine (the candidate `testedWith`,
+ * once the harness suite has passed against it). Edit the providers'
  * `versionPolicy` by hand, then delete code that only served versions below
  * the new minimums. See dev/reference/HARNESS_VERSION_SUPPORT.md.
  *
@@ -102,7 +102,7 @@ async function main() {
       }`
     );
     console.log(
-      `  recommended  ${versionPolicy.recommended.padEnd(10)} installed here: ${installed ?? "not installed"}`
+      `  tested with  ${versionPolicy.testedWith.padEnd(10)} installed here: ${installed ?? "not installed"}`
     );
   }
 }

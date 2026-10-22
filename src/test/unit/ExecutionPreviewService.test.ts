@@ -454,7 +454,6 @@ suite("ExecutionPreviewService", () => {
     installed.descriptor.promptInputs!.images = {
       fidelity: "unsupported",
       mechanism: "none",
-      caveatCode: "promptInputs.noNativeImageAttachment",
     };
     installed.effective!.promptInputs!.images = {
       fidelity: "unsupported",

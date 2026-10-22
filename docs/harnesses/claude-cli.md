@@ -20,9 +20,9 @@ capability details and version-scoped evidence.
 - **Version:** at least the minimum listed under
   [Supported versions](/harnesses/compatibility#supported-versions). Update with `claude update`.
 
-If the CLI is missing or too old, the harness picker shows a red dot next to Claude Code, and its
-tooltip gives the install command, or the update command when the installed version is below the
-minimum. An amber dot means it runs but is older than the recommended version. After installing or
+If the CLI is missing, the harness picker shows a red dot next to Claude Code, and its tooltip
+gives the install command. If it is installed but older than the minimum, it still runs: the
+picker shows an amber dot and the update command, a workflow that uses it warns when it starts, and a failed step repeats that command. After installing or
 updating, click **Retry harness detection** in the harness picker. If no harness CLI is available
 at all, the dashboard shows a **No CLI coding agent is available** panel with the install command
 for every harness.
@@ -76,6 +76,12 @@ with a warning in the log. Keep model overrides harness-specific.
 `model: none` passes no `--model` flag, so Claude Code uses its own default model. To pass a model
 the list doesn't have, such as a full model ID, set `model: none` and put `--model <id>` in
 `additionalArgs`. See [How step properties inherit](/workflows/yaml-format#property-inheritance).
+
+The list matches the **Tested with** Claude Code release in
+[Supported versions](/harnesses/compatibility#supported-versions). A newer model can need a newer
+Claude Code than ctrlyoke's minimum (Fable needs 2.1.170 or later), and an older release resolves
+`sonnet`, `opus` and `haiku` to older models. If a step fails because the selected model may not
+exist or you may not have access to it, run `claude update`.
 
 ## Permissions {#permissions}
 
