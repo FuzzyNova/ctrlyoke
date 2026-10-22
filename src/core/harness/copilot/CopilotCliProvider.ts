@@ -122,7 +122,7 @@ export class CopilotCliProvider implements ICliProvider {
     npmPackage: "@github/copilot",
     versionPolicy: {
       minimum: "1.0.19",
-      testedWith: "1.0.102",
+      testedWith: "1.0.103",
       updateCommand: "copilot update",
     },
     shouldStreamHeadlessOutput: true,

@@ -160,7 +160,7 @@ export class AntigravityCliProvider implements ICliProvider {
       // headless steps were cut short); 1.1.20 stopped benign tool errors
       // failing `-p` runs; 1.1.10 made `Stop` hooks and `--model` work.
       minimum: "1.2.6",
-      testedWith: "1.2.17",
+      testedWith: "1.4.5",
       updateCommand: "agy update",
     },
     shouldStreamHeadlessOutput: true,
