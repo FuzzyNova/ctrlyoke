@@ -78,6 +78,7 @@ its default, so the step fails.
 
 - Permissions are coarse modes only: `dangerouslyAllowAll` passes `--dangerously-skip-permissions`, `custom` passes `--sandbox`, and `allowAll` passes nothing, so `agy` applies its own approval behavior. `allowedTools` / `deniedTools` are not enforced, and MCP servers cannot be filtered per tool.
 - Only the `preToolUse`, `postToolUse`, `sessionStart`, and `stop` hook events fire; `userPromptSubmit`, `permissionRequest`, `notification`, and `error` do not.
+- A `preToolUse` hook can block the tool call. If it prints JSON, include `"decision": "allow"` to let the call go ahead; agy blocks the call on JSON without a `decision`, even `{}`. A hook that prints nothing does not block it.
 - MCP servers are written to the workspace `.agents/mcp_config.json`, which `agy` discovers on its own. There is no per-prompt server scoping, so parallel workflows in one workspace share that file's servers.
 - ctrlyoke's hooks go in `~/.gemini/config/hooks.json` and are removed when the run ends. Its status line command goes in `~/.gemini/antigravity-cli/settings.json` and stays there between runs. See [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#antigravity-cli).
 - For manual test runs, prefer a Gemini Flash tier to avoid exhausting the much smaller Claude quota.

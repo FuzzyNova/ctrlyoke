@@ -24,14 +24,17 @@ interface NotificationCase {
 const scriptPath = (name: string): string =>
   path.resolve(__dirname, `../../scripts/${name}`);
 
-const HOOK_SCRIPTS: Record<NotificationCase["harness"], string> = {
+type HookScriptHarness = NotificationCase["harness"] | "antigravity";
+
+const HOOK_SCRIPTS: Record<HookScriptHarness, string> = {
   claude: scriptPath("ctrlyoke-claude-hook.js"),
   copilot: scriptPath("ctrlyoke-copilot-hook.js"),
   qwen: scriptPath("ctrlyoke-qwen-hook.js"),
+  antigravity: scriptPath("ctrlyoke-antigravity-hook.js"),
 };
 
 function runHook(
-  harness: NotificationCase["harness"],
+  harness: HookScriptHarness,
   notifyDir: string,
   hookArgs: string[],
   payload: Record<string, unknown>,
@@ -443,6 +446,43 @@ suite("notification hook scripts", () => {
         (await readArtifact(notifyDir, errorCase.fileName)).runId,
         runId
       );
+    }
+  });
+
+  test("answers agy PreToolUse with allow, in and outside its workspace", async () => {
+    // agy blocks the tool on JSON without a decision, and hooks.json is
+    // global, so the other-workspace answer matters as much as our own.
+    const workspace = path.join(tempDirectory, "agy-workspace");
+    const expected: Record<string, string> = {
+      PreToolUse: '{"decision":"allow"}',
+      PostToolUse: "{}",
+      PreInvocation: "{}",
+    };
+
+    for (const [nativeEvent, stdout] of Object.entries(expected)) {
+      for (const workspacePath of [
+        workspace,
+        path.join(tempDirectory, "other"),
+      ]) {
+        const result = await runHook(
+          "antigravity",
+          path.join(tempDirectory, "agy-notify"),
+          [nativeEvent, workspace],
+          {
+            conversationId: "agy-session",
+            workspacePaths: [workspacePath],
+            toolCall: { name: "run_command", args: {} },
+          },
+          hookEnvironment("run-agy", "")
+        );
+
+        assert.strictEqual(result.code, 0, result.stderr);
+        assert.strictEqual(
+          result.stdout,
+          stdout,
+          `${nativeEvent} ${workspacePath}`
+        );
+      }
     }
   });
 });

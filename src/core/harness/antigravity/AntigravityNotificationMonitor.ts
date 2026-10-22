@@ -32,6 +32,11 @@ const ANTIGRAVITY_HOOK_SOURCE_VERIFICATION: CapabilityVerification = {
 type AntigravityHookKey =
   "PreToolUse" | "PostToolUse" | "PreInvocation" | "PostInvocation" | "Stop";
 
+const TOOL_HOOK_KEYS: readonly AntigravityHookKey[] = [
+  "PreToolUse",
+  "PostToolUse",
+];
+
 export class AntigravityNotificationMonitor
   extends NotificationMonitorBase
   implements INotificationMonitor
@@ -48,14 +53,8 @@ export class AntigravityNotificationMonitor
   static readonly CAPABILITIES: Record<HookEvent, CapabilityDeclaration> = {
     stop: AntigravityNotificationMonitor.verifiedHook(),
     sessionStart: AntigravityNotificationMonitor.verifiedHook(),
-    // The capability suite finds these never fire:
-    // dev/bugs/backlog/antigravity-tool-hooks-never-fire.md.
-    preToolUse: AntigravityNotificationMonitor.verifiedHook(
-      ANTIGRAVITY_HOOK_SOURCE_VERIFICATION
-    ),
-    postToolUse: AntigravityNotificationMonitor.verifiedHook(
-      ANTIGRAVITY_HOOK_SOURCE_VERIFICATION
-    ),
+    preToolUse: AntigravityNotificationMonitor.verifiedHook(),
+    postToolUse: AntigravityNotificationMonitor.verifiedHook(),
     userPromptSubmit: AntigravityNotificationMonitor.unsupportedHook(),
     permissionRequest: AntigravityNotificationMonitor.unsupportedHook(),
     notification: AntigravityNotificationMonitor.unsupportedHook(),
@@ -160,6 +159,15 @@ export class AntigravityNotificationMonitor
       // User-supplied commands are run verbatim (not our script), so they get
       // no injected event-name arg.
       pushHandler(nativeEvent, hook.command, hook);
+    }
+
+    // agy reads tool events as matcher groups and silently ignores a plain
+    // handler there; the other events take handlers directly.
+    for (const eventKey of TOOL_HOOK_KEYS) {
+      const handlers = group[eventKey];
+      if (handlers) {
+        group[eventKey] = [{ matcher: "*", hooks: handlers }];
+      }
     }
 
     return {

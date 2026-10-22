@@ -63,11 +63,6 @@ export const UNPROVEN_CLAIMS: Partial<
 export const KNOWN_BROKEN_CLAIMS: Partial<
   Record<HarnessId, Partial<Record<CapabilityPath, string>>>
 > = {
-  "antigravity-cli": {
-    "hooks.preToolUse": "dev/bugs/backlog/antigravity-tool-hooks-never-fire.md",
-    "hooks.postToolUse":
-      "dev/bugs/backlog/antigravity-tool-hooks-never-fire.md",
-  },
   "opencode-cli": {
     "hooks.permissionRequest":
       "dev/bugs/backlog/opencode-permission-request-hook-never-fires.md",

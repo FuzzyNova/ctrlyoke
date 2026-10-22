@@ -29,7 +29,14 @@
  *     transcriptPath, artifactDirectoryPath, workspacePaths, initialNumSteps }
  *   Stop: { conversationId, terminationReason, fullyIdle, executionNum, ... }
  *
- * Hook stdout contract: emit {} for invocation/stop/tool notification hooks.
+ *   PreToolUse/PostToolUse: { conversationId, toolCall: { name, args },
+ *     stepIdx, workspacePaths, ... }
+ *
+ * Hook stdout contract: PreToolUse must answer {"decision":"allow"}. agy
+ * blocks the tool call on any JSON without a decision, including {}, and
+ * because hooks.json is global that would block tools in every agy session on
+ * the machine. "allow" defers to agy's own permission checks; it does not
+ * auto-approve. Every other event gets {}.
  *
  * Debug logging: <workspace>/.ctrlyoke/logs/ctrlyoke-antigravity-hook-debug.log
  */
@@ -57,6 +64,14 @@ function getStringField(input, keys) {
     }
   }
   return undefined;
+}
+
+/** Write the neutral answer for `nativeEvent` (see the stdout contract) and exit. */
+function respondAndExit(nativeEvent) {
+  process.stdout.write(
+    nativeEvent === "PreToolUse" ? JSON.stringify({ decision: "allow" }) : "{}"
+  );
+  process.exit(0);
 }
 
 function getLogicalEvent(nativeEvent) {
@@ -117,12 +132,11 @@ function main() {
             normalizeWorkspacePath(registeredWorkspaceRoot)
       )
     ) {
-      debugLog("⏭️ Workspace mismatch — emitting {} and exiting", {
+      debugLog("⏭️ Workspace mismatch — answering neutrally and exiting", {
         registeredWorkspaceRoot,
         payloadWorkspacePaths,
       });
-      process.stdout.write("{}");
-      process.exit(0);
+      respondAndExit(nativeEventArg);
     }
 
     // agy does not put the event name in the payload — trust argv[3], falling
@@ -141,15 +155,16 @@ function main() {
       debugLog("⏭️ No event name resolved — emitting {} and exiting", {
         hookInput,
       });
-      process.stdout.write("{}");
-      process.exit(0);
+      respondAndExit(hookEvent);
     }
 
     const sessionId = getStringField(hookInput, [
       "conversationId",
       "conversation_id",
     ]);
-    const toolName = getStringField(hookInput, ["toolName", "tool_name"]);
+    const toolName =
+      getStringField(hookInput.toolCall ?? {}, ["name"]) ??
+      getStringField(hookInput, ["toolName", "tool_name"]);
 
     debugLog("🔑 Session ID + tool extracted", {
       hookEvent,
@@ -201,8 +216,7 @@ function main() {
           hasNotifyDir: Boolean(notifyDir),
         });
       }
-      process.stdout.write("{}");
-      process.exit(0);
+      respondAndExit(hookEvent);
     }
 
     // Stop → completion notification file (fires once when the agent goes
@@ -231,14 +245,12 @@ function main() {
         notifyFile,
         notifyData,
       });
-      process.stdout.write("{}");
-      process.exit(0);
+      respondAndExit(hookEvent);
     }
 
-    // PreToolUse/PostToolUse with no decision hook, or any other event.
+    // PreToolUse/PostToolUse, or any other event.
     debugLog(`✅ Hook ${hookEvent} completed (no notification file)`);
-    process.stdout.write("{}");
-    process.exit(0);
+    respondAndExit(hookEvent);
   });
 }
 

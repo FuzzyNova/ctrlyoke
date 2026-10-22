@@ -37,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Claude with `--permission-mode default`. Before, it passed no mode, so a `defaultMode` such as
   `bypassPermissions` in your own Claude settings ran every tool without asking and the allow list
   had no effect.
+- **Antigravity `preToolUse` and `postToolUse` hooks run.** ctrlyoke wrote them in a form agy
+  ignores for tool events, so they never fired. They now fire on every tool call.
 - **Codex errors are shown instead of an exit code.** When Codex rejects a request (for example a
   model that doesn't exist or that your account can't use), the step now fails with Codex's own
   message instead of "Process exited with code 1".

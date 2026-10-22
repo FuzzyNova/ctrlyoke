@@ -76,14 +76,48 @@ suite("AntigravityNotificationMonitor", () => {
     assert.strictEqual(group.PreInvocation, null);
     assert.strictEqual(group.PostInvocation, null);
     assert.strictEqual(group.Stop, null);
-    assert.strictEqual(group.PreToolUse.length, 1);
-    assert.strictEqual(
-      group.PreToolUse[0].command,
-      "node script.js notify-dir PreToolUse workspace"
+    // agy ignores a plain handler under a tool event; it needs a matcher group.
+    assert.deepStrictEqual(group.PreToolUse, [
+      {
+        matcher: "*",
+        hooks: [
+          {
+            type: "command",
+            command: "node script.js notify-dir PreToolUse workspace",
+            timeout: 0,
+          },
+        ],
+      },
+    ]);
+    assert.deepStrictEqual(group.PostToolUse, [
+      {
+        matcher: "*",
+        hooks: [
+          {
+            type: "command",
+            command: "node script.js notify-dir PostToolUse workspace",
+            timeout: 0,
+          },
+        ],
+      },
+    ]);
+  });
+
+  test("buildHookConfig puts ctrlyoke and user tool hooks in one matcher group", () => {
+    const monitor = new AntigravityNotificationMonitor();
+    const config = monitor.buildHookConfig(
+      "script.js",
+      "notify-dir",
+      "workspace",
+      [{ event: "preToolUse", command: "node pre-hook.js" }],
+      ["preToolUse"]
     );
-    assert.strictEqual(
-      group.PostToolUse[0].command,
-      "node script.js notify-dir PostToolUse workspace"
+    const group = (config as { config: Record<string, any> }).config.ctrlyoke;
+    assert.strictEqual(group.PreToolUse.length, 1);
+    assert.strictEqual(group.PreToolUse[0].matcher, "*");
+    assert.deepStrictEqual(
+      group.PreToolUse[0].hooks.map((h: { command: string }) => h.command),
+      ["node script.js notify-dir PreToolUse workspace", "node pre-hook.js"]
     );
   });
 
@@ -116,11 +150,11 @@ suite("AntigravityNotificationMonitor", () => {
       ["node start-hook.js"]
     );
     assert.deepStrictEqual(
-      group.PreToolUse.map((h: { command: string }) => h.command),
+      group.PreToolUse[0].hooks.map((h: { command: string }) => h.command),
       ["node pre-hook.js"]
     );
     assert.deepStrictEqual(
-      group.PostToolUse.map((h: { command: string }) => h.command),
+      group.PostToolUse[0].hooks.map((h: { command: string }) => h.command),
       ["node post-hook.js"]
     );
     assert.strictEqual(group.PostInvocation, null);
@@ -141,7 +175,7 @@ suite("AntigravityNotificationMonitor", () => {
     const group = (config as { config: Record<string, any> }).config.ctrlyoke;
     assert.strictEqual(group.Stop[0].timeout, 0);
     assert.strictEqual(group.Stop[1].timeout, 4);
-    assert.strictEqual(group.PreToolUse[0].timeout, 0);
+    assert.strictEqual(group.PreToolUse[0].hooks[0].timeout, 0);
   });
 
   test("silently skips notification as an unsupported event", () => {

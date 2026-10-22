@@ -2,7 +2,24 @@
 
 - **Found:** 2026-10-22 by Claude (harness capability suite), with agy 1.4.5
 - **Area:** `src/core/harness/antigravity/AntigravityNotificationMonitor.ts` (`buildHookConfig`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit. `buildHookConfig()` writes tool events as one
+  `{ matcher: "*", hooks: [...] }` group, per agy's hooks reference
+  (https://antigravity.google/docs/hooks/), and `ctrlyoke-antigravity-hook.js` answers
+  `PreToolUse` with `{"decision":"allow"}`. Both claims now cite the capability suite, whose
+  Antigravity cases all pass on agy 1.4.5. 1.2.6 was not run (agy can't install an old version),
+  but its changelog shows tool matchers honored since 1.1.9.
+
+## Follow-up findings
+
+- The flaky `PostToolUse` was a second bug, not print mode. A `PreToolUse` hook that prints JSON
+  without a `decision`, including the `{}` ctrlyoke's script printed, blocks the tool call, so
+  there was nothing for `PostToolUse` to follow. With `allow`, `PostToolUse` fired in 3 of 3
+  print-mode probes. Empty stdout also lets the call proceed, so user hooks that print nothing
+  are unaffected.
+- `allow` defers to agy's own permission checks. Without `--dangerously-skip-permissions`, a run
+  behaves the same with the hook as with no hooks at all.
+- Since `hooks.json` is global, the script's other-workspace early exit gives the same `allow`;
+  printing `{}` there would block tools in every other agy session on the machine.
 
 ## Symptom
 
