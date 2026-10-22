@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-22
+
 ### Changed
 
 - **Settings → Worktrees shows each worktree's Git status.** Every row starts with a posh-git
@@ -62,6 +64,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.gif` or `.webp`) reach Qwen Code, Antigravity and interactive OpenCode natively, so the
   compatibility matrix and the prompt editor no longer warn that images are unsupported or only
   partly supported for them. The docs' verified-versions table now labels this row **Images**.
+- **Tested with the latest harness CLIs.** The compatibility docs' "Tested with" row now lists
+  Copilot CLI 1.0.103, Codex 0.163.0, OpenCode 1.19.4, Qwen Code 0.26.0 and Antigravity 1.4.5
+  (Claude Code stays at 2.1.308). Minimum versions are unchanged.
 
 ### Fixed
 
