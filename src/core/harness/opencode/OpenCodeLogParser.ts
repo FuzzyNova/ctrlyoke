@@ -30,6 +30,7 @@ import {
   OPENCODE_PART_TYPES,
   OPENCODE_STEP_FINISH_REASONS,
   OPENCODE_MESSAGE_ROLES,
+  OPENCODE_TOOL_NAMES,
   OPENCODE_TOOL_STATUS,
 } from "./OpenCodeProtocolConstants";
 import { Log } from "../../../utils/Log";
@@ -164,7 +165,7 @@ export class OpenCodeLogParser extends BaseLogParser {
       changed = false;
       for (const record of records)
         if (
-          record.part.tool === "task" &&
+          record.part.tool === OPENCODE_TOOL_NAMES.TASK &&
           linkedSessions.has(record.part.sessionID) &&
           record.part.state?.metadata?.sessionId === record.childSessionId &&
           !links.has(record.childSessionId)
@@ -187,7 +188,7 @@ export class OpenCodeLogParser extends BaseLogParser {
           for (const { part } of childRecords)
             yield {
               type:
-                part.type === "step-finish"
+                part.type === OPENCODE_PART_TYPES.STEP_FINISH
                   ? OPENCODE_EVENT_TYPES.STEP_FINISH
                   : OPENCODE_EVENT_TYPES.TOOL_USE,
               part,
@@ -215,7 +216,8 @@ export class OpenCodeLogParser extends BaseLogParser {
         },
         usage: (record) => {
           const part = (record as any).part;
-          if (part.type !== "step-finish" || !part.tokens) return undefined;
+          if (part.type !== OPENCODE_PART_TYPES.STEP_FINISH || !part.tokens)
+            return undefined;
           const usage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
           accumulateOpenCodeStepTokens(part.tokens, usage);
           return {
@@ -238,7 +240,7 @@ export class OpenCodeLogParser extends BaseLogParser {
           (record) =>
             record.childSessionId === childId &&
             (record.part.type === "session.idle" ||
-              (record.part.tool === "task" &&
+              (record.part.tool === OPENCODE_TOOL_NAMES.TASK &&
                 record.part.state?.status === OPERATION_STATUS.COMPLETED))
         )
       )
@@ -570,7 +572,7 @@ export class OpenCodeLogParser extends BaseLogParser {
           type: CLI_EVENT_TYPES.TOOL_CALL,
           timestamp,
           data: {
-            name: "task",
+            name: OPENCODE_TOOL_NAMES.TASK,
             id: part?.callID,
             parameters: {
               description: desc,
@@ -578,7 +580,7 @@ export class OpenCodeLogParser extends BaseLogParser {
               model: e.part?.model,
             },
             subagentSpawn: {
-              agentType: agent ?? "task",
+              agentType: agent ?? OPENCODE_TOOL_NAMES.TASK,
               description: desc ?? "",
               state:
                 part?.state?.status === OPERATION_STATUS.COMPLETED
@@ -589,7 +591,7 @@ export class OpenCodeLogParser extends BaseLogParser {
                   ? [
                       {
                         agentId: part.state.metadata.sessionId,
-                        label: agent ?? "task",
+                        label: agent ?? OPENCODE_TOOL_NAMES.TASK,
                       },
                     ]
                   : [],
@@ -715,7 +717,7 @@ export class OpenCodeLogParser extends BaseLogParser {
             type: CLI_EVENT_TYPES.TOOL_CALL,
             timestamp: e.timestamp as number | undefined,
             data: {
-              name: "task",
+              name: OPENCODE_TOOL_NAMES.TASK,
               parameters: {
                 description: e.part?.description,
                 agent: e.part?.agent,

@@ -94,7 +94,7 @@ export function mapOpenCodeToolPartToCliEvent(
     return mapOpenCodeQuestionPartToCliEvent(timestamp, part, isCompleted);
   }
 
-  if (toolName === "task") {
+  if (toolName === OPENCODE_TOOL_NAMES.TASK) {
     return {
       type: CLI_EVENT_TYPES.TOOL_CALL,
       timestamp,
@@ -112,7 +112,10 @@ export function mapOpenCodeToolPartToCliEvent(
             ? { success: false, output: error, error }
             : undefined,
         subagentSpawn: {
-          agentType: typeof input.agent === "string" ? input.agent : "task",
+          agentType:
+            typeof input.agent === "string"
+              ? input.agent
+              : OPENCODE_TOOL_NAMES.TASK,
           description:
             typeof input.description === "string" ? input.description : "",
           state: isCompleted
@@ -124,7 +127,9 @@ export function mapOpenCodeToolPartToCliEvent(
                   {
                     agentId: part.state.metadata.sessionId,
                     label:
-                      typeof input.agent === "string" ? input.agent : "task",
+                      typeof input.agent === "string"
+                        ? input.agent
+                        : OPENCODE_TOOL_NAMES.TASK,
                   },
                 ]
               : [],

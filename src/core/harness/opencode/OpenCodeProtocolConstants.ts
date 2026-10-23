@@ -38,6 +38,8 @@ export const OPENCODE_TOOL_NAMES = {
   WRITE: TOOL_PERMISSION_CATEGORIES.WRITE,
   EDIT: TOOL_PERMISSION_CATEGORIES.EDIT,
   READ: TOOL_PERMISSION_CATEGORIES.READ,
+  /** Spawns a subagent in a child session. */
+  TASK: "task",
 } as const;
 
 export const OPENCODE_STEP_FINISH_REASONS = {

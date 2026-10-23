@@ -81,6 +81,15 @@ interface HookArtifact {
 // Child sessions have a parentID and are created DURING execution, so their
 // session.created events reach the plugin reliably (unlike the main session).
 const childSessions = new Set<string>();
+
+/** OpenCode wire values this standalone plugin compares against. */
+const OPENCODE_SESSION_STATUS = {
+  BUSY: "busy",
+  IDLE: "idle",
+} as const;
+const OPENCODE_TOOL_PART_TYPE = "tool";
+const OPENCODE_TASK_TOOL = "task";
+
 const childParents = new Map<string, string>();
 const childCallIds = new Map<string, string>();
 const subagentSidecarPath =
@@ -581,8 +590,8 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
         ) {
           _appendSubagentRecord(part.sessionID, part);
         } else if (
-          part?.type === "tool" &&
-          part.tool === "task" &&
+          part?.type === OPENCODE_TOOL_PART_TYPE &&
+          part.tool === OPENCODE_TASK_TOOL &&
           typeof part.state?.metadata?.sessionId === "string"
         ) {
           const childSessionId = part.state.metadata.sessionId as string;
@@ -627,7 +636,10 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
           sessionID: string;
           status: { type: string };
         };
-        if (status.type === "idle" && childSessions.has(sessionID)) {
+        if (
+          status.type === OPENCODE_SESSION_STATUS.IDLE &&
+          childSessions.has(sessionID)
+        ) {
           _appendSubagentRecord(sessionID, { type: "session.idle", sessionID });
         }
       }
@@ -650,7 +662,7 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
         });
 
         if (!isChildSession) {
-          if (status.type === "busy") {
+          if (status.type === OPENCODE_SESSION_STATUS.BUSY) {
             _debugLog("⏩ session.status busy (main)", { sessionID });
             _writeHookArtifact(
               "userPromptSubmit",
@@ -663,7 +675,7 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
               hook_event_name: "userPromptSubmit",
               session_id: sessionID,
             });
-          } else if (status.type === "idle") {
+          } else if (status.type === OPENCODE_SESSION_STATUS.IDLE) {
             _debugLog("🛑 session.status idle (main)", { sessionID });
             _writeHookArtifact(
               "stop",
