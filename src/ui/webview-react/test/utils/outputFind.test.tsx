@@ -357,6 +357,22 @@ describe("outputFind", () => {
       });
     });
 
+    it("finds the visible subagent label", () => {
+      const row = {
+        ...makeStructuredBashRow("echo ok"),
+        subagent: {
+          depth: 1,
+          label: "Alpha agent",
+          groupKey: '["spawn","agent-a"]',
+          showLabel: true,
+        },
+      };
+
+      expect(findOutputMatches([row], "Alpha", false)).toMatchObject([
+        { field: "header", preview: "Alpha agent" },
+      ]);
+    });
+
     it("mirrors bash duplicate output suppression so matches use the rendered error segment", () => {
       const row = makeStructuredBashRow("run", "alpha", "alpha");
 

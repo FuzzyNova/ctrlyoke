@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Foreground subagent output and token usage are included in step totals for supported harnesses.** Child usage is priced by model when reported. Codex child rollouts skip replayed parent history. Qwen headless totals also include background memory and extraction calls through process-wide usage, while interactive totals do not.
-- **Foreground subagent activity is attributed to its spawn in headless and interactive output, with interleaved and nested work kept distinct.** The `history show --json --events` payload replaces the always-`direct` `callerType` field with optional subagent attribution and spawn metadata; existing run histories with `callerType` remain readable.
+- **Foreground subagent activity is attributed to its spawn in headless and interactive output, with interleaved and nested work kept distinct.** Child commands, text, and thinking are indented and labelled under their spawn card. The `history show --json --events` payload replaces the always-`direct` `callerType` field with optional subagent attribution and spawn metadata; existing run histories with `callerType` remain readable.
 - **The "CLI is older than this extension" notice only names a CLI installed with npm.** After an
   extension update, it could name the CLI copy bundled in the previous extension version's folder,
   which runs whenever you or an agent type `ctrlyoke` in a VS Code terminal, even if you never

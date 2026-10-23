@@ -141,7 +141,8 @@ and [MCP tools](/reference/mcp-tools).
 
 Foreground subagent calls have a dedicated card showing the agent, live
 progress, an optional collapsible prompt, and the final result. Child activity
-is attributed to its spawn so parallel agents remain distinguishable.
+is indented and labelled under its spawn card, so parallel agents remain
+distinguishable.
 
 ## Diffs
 

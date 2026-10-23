@@ -2086,6 +2086,23 @@ function OutputRowComponent({
   }
 
   content = <ActivityAttribution row={row} children={content} />;
+  if (row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT && row.subagent) {
+    content = (
+      <div
+        className="pl-3 border-l border-panel-border"
+        style={{ marginLeft: `${row.subagent.depth * 12}px` }}
+        role="group"
+        aria-label={`Subagent ${row.subagent.label}`}
+      >
+        {row.subagent.showLabel && (
+          <div className="text-xs text-description-fg" aria-hidden="true">
+            {row.subagent.label}
+          </div>
+        )}
+        {content}
+      </div>
+    );
+  }
   return (
     <div
       className={[

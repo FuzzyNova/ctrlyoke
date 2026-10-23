@@ -147,7 +147,7 @@ function createSegments(
   return segments;
 }
 
-export function getOutputRowSearchSegments(
+function getBaseOutputRowSearchSegments(
   row: OutputRenderRow
 ): OutputRowSearchSegment[] {
   switch (row.rowKind) {
@@ -326,6 +326,22 @@ export function getOutputRowSearchSegments(
       }
     }
   }
+}
+
+export function getOutputRowSearchSegments(
+  row: OutputRenderRow
+): OutputRowSearchSegment[] {
+  const segments = getBaseOutputRowSearchSegments(row);
+  if (
+    row.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT ||
+    !row.subagent?.showLabel
+  ) {
+    return segments;
+  }
+  return createSegments([
+    { field: "header", text: row.subagent.label },
+    ...segments.map(({ field, text }) => ({ field, text })),
+  ]);
 }
 
 function normalizeMatches(
