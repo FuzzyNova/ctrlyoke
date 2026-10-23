@@ -207,6 +207,38 @@ applies one action to the selected rows:
 - **Delete** removes the selected items from one folder.
 - **Set Default** (skills only) makes the selected skills the default skills.
 
+### Installing skills from skills.sh {#manager-skills-sh}
+
+In the **Skills** list, the **skills.sh** tab under **Discover & import**
+searches [skills.sh](https://skills.sh), the public skills directory run by
+Vercel. Nothing is sent until you open the tab and type at least two
+characters; your search text is sent to skills.sh.
+
+Results are sorted by their install count on skills.sh, ten to a page. Each
+one shows a security audit badge with the worst verdict from skills.sh's audit
+providers. Click the badge to open that audit on skills.sh. **Not audited**
+means skills.sh has not audited the skill yet.
+
+**Import** opens a review dialog before anything is written. The dialog shows:
+
+- each provider's audit verdict, linked to its page on skills.sh
+- a link to the skill's `SKILL.md` on GitHub, at the exact commit that will be
+  installed
+
+When any audit warns or fails, or there is no audit yet, you must also tick a
+box saying you have reviewed the skill.
+
+Skills are published by third parties. Their files come from the
+publisher's GitHub repository, not from skills.sh. **Install** copies the skill
+folder at that commit into `.ctrlyoke/skills/<name>/`, or into
+`~/.ctrlyoke/skills/<name>/` when the settings drawer is at **User** scope.
+Its button then reads **Imported**. A file named `.ctrlyoke-origin.json` beside
+`SKILL.md` records where the skill came from. It is not copied when you
+[save](#manager-save) the skill to a harness folder.
+
+Search and install use routes that skills.sh does not document. If skills.sh
+or GitHub is unavailable or rate-limits you, the error names the service.
+
 ## Disabling inherited values
 
 Use `null` when you want to stop inheritance from the workflow level:

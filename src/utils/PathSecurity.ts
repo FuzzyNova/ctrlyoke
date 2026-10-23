@@ -103,3 +103,22 @@ export function isPathWithinAnyDirectory(
     isPathWithinDirectory(candidate, directory)
   );
 }
+
+const WINDOWS_RESERVED_NAME_PATTERN = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i;
+const CONTROL_CHAR_PATTERN = /[\x00-\x1f\x7f-\x9f]/;
+
+/**
+ * Whether one path segment taken from untrusted input (a downloaded archive or
+ * repository tree) is safe to create on every platform: not empty or `.`/`..`,
+ * no separators, drive colons, wildcard or control characters, not a Windows
+ * device name (`nul`, `con.txt`, …) and no trailing dot or space, which
+ * Windows silently strips.
+ */
+export function isSafePathSegment(segment: string): boolean {
+  if (!segment || segment === "." || segment === "..") return false;
+  if (/[\\/:*?"<>|]/.test(segment) || CONTROL_CHAR_PATTERN.test(segment)) {
+    return false;
+  }
+  if (/[. ]$/.test(segment)) return false;
+  return !WINDOWS_RESERVED_NAME_PATTERN.test(segment.split(".")[0] ?? "");
+}

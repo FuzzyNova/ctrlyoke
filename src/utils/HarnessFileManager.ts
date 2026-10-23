@@ -1,6 +1,13 @@
 import * as path from "path";
 import * as fs from "fs";
+import { randomUUID } from "crypto";
 import { Log } from "./Log";
+import {
+  CURRENT_SCHEMA_VERSIONS,
+  PERSISTED_STORES,
+  assertWritableSchema,
+} from "./PersistedSchemaGuard";
+import { isPathWithinDirectory, isSafePathSegment } from "./PathSecurity";
 import type {
   HarnessId,
   AnyTargetId,
@@ -90,17 +97,56 @@ async function copyFile(src: string, dest: string): Promise<void> {
   await fs.promises.copyFile(src, dest);
 }
 
-async function copyDir(src: string, dest: string): Promise<void> {
+async function copyDir(
+  src: string,
+  dest: string,
+  excludeNames: ReadonlySet<string> = new Set()
+): Promise<void> {
   await ensureDir(dest);
   const entries = await fs.promises.readdir(src, { withFileTypes: true });
   for (const entry of entries) {
+    if (excludeNames.has(entry.name)) continue;
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
     if (entry.isDirectory()) {
-      await copyDir(srcPath, destPath);
+      await copyDir(srcPath, destPath, excludeNames);
     } else {
       await copyFile(srcPath, destPath);
     }
+  }
+}
+
+/**
+ * Where a skill installed from a registry came from, written beside its
+ * SKILL.md so a later "update available" check can compare commits. It stays
+ * with the ctrlyoke copy and is not exported to harness directories.
+ */
+export const SKILL_ORIGIN_FILE_NAME = ".ctrlyoke-origin.json";
+
+export interface SkillOriginRecord {
+  schemaVersion: number;
+  registry: string;
+  source: string;
+  slug: string;
+  commitSha: string;
+  skillMdPath: string;
+  installedAt: string;
+}
+
+/** A file to write into a skill folder; `path` is folder-relative, `/`-separated. */
+export interface SkillFileContent {
+  path: string;
+  content: Uint8Array;
+}
+
+/** Staging area for installs, beside (not inside) a skills directory. */
+const SKILL_INSTALL_STAGING_DIR = ".skill-install-staging";
+
+async function readJsonIfPresent(filePath: string): Promise<unknown> {
+  try {
+    return JSON.parse(await fs.promises.readFile(filePath, "utf8"));
+  } catch {
+    return undefined;
   }
 }
 
@@ -121,13 +167,14 @@ function getBuiltInSkillName(sourceDir: string): string | undefined {
 async function copySkill(
   sourcePath: string,
   destDir: string,
-  skillName: string
+  skillName: string,
+  excludeNames: ReadonlySet<string>
 ): Promise<void> {
   const sourceStat = await fs.promises.stat(sourcePath);
   const sourceDir = sourceStat.isDirectory()
     ? sourcePath
     : path.dirname(sourcePath);
-  await copyDir(sourceDir, destDir);
+  await copyDir(sourceDir, destDir, excludeNames);
 
   const builtInSkillName = getBuiltInSkillName(sourceDir);
   if (!builtInSkillName || builtInSkillName !== skillName) {
@@ -554,7 +601,15 @@ export class HarnessFileManager {
       if (!overwrite && fs.existsSync(destDir)) {
         throw new Error(`Skill directory already exists: ${destDir}`);
       }
-      await copySkill(sourcePath, destDir, skillName);
+      // The origin record describes the ctrlyoke copy; harnesses don't read it.
+      await copySkill(
+        sourcePath,
+        destDir,
+        skillName,
+        targetHarnessId === SPECIAL_TARGET_IDS.CTRLYOKE
+          ? new Set()
+          : new Set([SKILL_ORIGIN_FILE_NAME])
+      );
       Log.info(
         `[HarnessFileManager] Exported skill "${skillName}" to ${destDir}`
       );
@@ -657,6 +712,91 @@ export class HarnessFileManager {
         );
       }
     }
+  }
+
+  /**
+   * Write a downloaded skill into the scope's ctrlyoke skills directory as
+   * `<name>/`, plus its {@link SKILL_ORIGIN_FILE_NAME} record. Files are
+   * staged first and moved into place in one rename, so a failed install
+   * leaves nothing behind. Writing to harness directories stays the job of
+   * {@link exportToHarness}.
+   * @returns The installed skill directory.
+   */
+  static async installSkillFiles(
+    name: string,
+    files: readonly SkillFileContent[],
+    origin: Omit<SkillOriginRecord, "schemaVersion" | "installedAt">,
+    workspaceRoot: string,
+    scope: SettingWriteScope,
+    overwrite = false
+  ): Promise<string> {
+    if (!isSafePathSegment(name)) {
+      throw new Error(`Not a valid skill folder name: ${name}`);
+    }
+    if (!files.some((file) => file.path.toLowerCase() === "skill.md")) {
+      throw new Error(`Skill "${name}" has no SKILL.md`);
+    }
+    const skillsDir = HarnessFileManager.getTargetDir(
+      SPECIAL_TARGET_IDS.CTRLYOKE,
+      workspaceRoot,
+      HARNESS_FILE_TYPES.SKILL,
+      scope
+    );
+    const destDir = path.join(skillsDir, name);
+    if (fs.existsSync(destDir)) {
+      if (!overwrite) {
+        throw new Error(`Skill directory already exists: ${destDir}`);
+      }
+      const originPath = path.join(destDir, SKILL_ORIGIN_FILE_NAME);
+      assertWritableSchema(
+        PERSISTED_STORES.SKILL_ORIGIN,
+        await readJsonIfPresent(originPath),
+        originPath
+      );
+    }
+
+    const stagingRoot = path.join(
+      path.dirname(skillsDir),
+      SKILL_INSTALL_STAGING_DIR
+    );
+    const stagingDir = path.join(stagingRoot, `${name}-${randomUUID()}`);
+    try {
+      for (const file of files) {
+        const segments = file.path.split("/");
+        if (!segments.every(isSafePathSegment)) {
+          throw new Error(`Refusing to write unsafe skill path: ${file.path}`);
+        }
+        const filePath = path.join(stagingDir, ...segments);
+        if (!isPathWithinDirectory(filePath, stagingDir)) {
+          throw new Error(`Refusing to write outside the skill: ${file.path}`);
+        }
+        await ensureDir(path.dirname(filePath));
+        await fs.promises.writeFile(filePath, file.content);
+      }
+      const record: SkillOriginRecord = {
+        schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.SKILL_ORIGIN],
+        ...origin,
+        installedAt: new Date().toISOString(),
+      };
+      await fs.promises.writeFile(
+        path.join(stagingDir, SKILL_ORIGIN_FILE_NAME),
+        `${JSON.stringify(record, null, 2)}\n`,
+        "utf8"
+      );
+
+      await ensureDir(skillsDir);
+      if (overwrite) {
+        await fs.promises.rm(destDir, { recursive: true, force: true });
+      }
+      await fs.promises.rename(stagingDir, destDir);
+    } finally {
+      await fs.promises.rm(stagingDir, { recursive: true, force: true });
+      await fs.promises.rmdir(stagingRoot).catch(() => {});
+    }
+    Log.info(
+      `[HarnessFileManager] Installed skill "${name}" from ${origin.registry} (${origin.source}@${origin.commitSha.slice(0, 7)}) to ${destDir}`
+    );
+    return destDir;
   }
 
   /**

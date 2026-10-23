@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Install skills from skills.sh in the Agent & Skills Manager.** The Skills list has a
+  **skills.sh** tab that searches the public skills.sh directory, sorted by install count, with
+  each skill's security audit verdict. **Import** shows the audits and the skill's `SKILL.md` on
+  GitHub, then installs that commit into your workspace or user ctrlyoke skills folder. A skill
+  with audit warnings or no audit needs an extra confirmation.
+
 ### Changed
 
 - **The "CLI is older than this extension" notice only names a CLI installed with npm.** After an

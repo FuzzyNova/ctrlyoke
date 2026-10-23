@@ -31,6 +31,7 @@ import {
 } from "@components/shared/BulkSelectionActionsBar";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { Icon } from "../shared/Icon";
+import { SkillsRegistryPanel } from "./SkillsRegistryPanel";
 
 // ============================================================================
 // Constants
@@ -783,6 +784,20 @@ export function AgentSkillsManagerSection({
             />
           ))}
       </div>
+
+      {activeType === HARNESS_FILE_TYPES.SKILL && (
+        <SkillsRegistryPanel
+          activeScope={activeScope}
+          managedFiles={managedFiles}
+          skillsDirectory={formatPathForDisplay(
+            getTargetDirectoryPath(
+              targetDirectories,
+              SPECIAL_TARGET_IDS.CTRLYOKE,
+              activeScope
+            ) ?? ""
+          )}
+        />
+      )}
 
       {/* Delete confirmation modal */}
       {confirmDelete && (

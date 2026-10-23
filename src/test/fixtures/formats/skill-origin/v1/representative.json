@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "registry": "skills.sh",
+  "source": "anthropics/skills",
+  "slug": "pdf",
+  "commitSha": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+  "skillMdPath": "skills/pdf/SKILL.md",
+  "installedAt": "2026-10-23T13:04:40.402Z"
+}

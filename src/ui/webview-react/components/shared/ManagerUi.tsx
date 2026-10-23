@@ -34,6 +34,7 @@ export function ManagerConfirmModal({
   title,
   children,
   confirmLabel = "Confirm",
+  confirmDisabled = false,
   backdropLabel,
   onConfirm,
   onCancel,
@@ -41,6 +42,8 @@ export function ManagerConfirmModal({
   title: string;
   children: ReactNode;
   confirmLabel?: string;
+  /** Keeps the dialog open but the confirm button inert. */
+  confirmDisabled?: boolean;
   backdropLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
@@ -85,7 +88,8 @@ export function ManagerConfirmModal({
           <button
             type="button"
             onClick={onConfirm}
-            className="rounded-sm bg-btn-bg px-3 py-1 text-xs text-btn-fg hover:bg-btn-hover"
+            disabled={confirmDisabled}
+            className="rounded-sm bg-btn-bg px-3 py-1 text-xs text-btn-fg hover:bg-btn-hover disabled:cursor-not-allowed disabled:opacity-40"
           >
             {confirmLabel}
           </button>

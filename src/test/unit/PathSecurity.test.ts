@@ -4,6 +4,7 @@ import { suite, test, teardown } from "mocha";
 import {
   isPathWithinDirectory,
   isPathWithinAnyDirectory,
+  isSafePathSegment,
 } from "../../utils/PathSecurity";
 
 suite("PathSecurity", () => {
@@ -176,6 +177,39 @@ suite("PathSecurity", () => {
         isPathWithinAnyDirectory(path.join(frontend, "a.ts"), []),
         false
       );
+    });
+  });
+
+  suite("isSafePathSegment", () => {
+    test("accepts ordinary names, including dotfiles", () => {
+      for (const name of ["SKILL.md", ".env.example", "a-b_c", "console.md"]) {
+        assert.strictEqual(isSafePathSegment(name), true, name);
+      }
+    });
+
+    test("rejects traversal, separators, devices and Windows-stripped names", () => {
+      for (const name of [
+        "",
+        ".",
+        "..",
+        "a/b",
+        "a\\b",
+        "C:",
+        "nul",
+        "NUL.txt",
+        "com1",
+        "lpt9.md",
+        "trailing.",
+        "trailing ",
+        "tab\tname",
+        "star*",
+      ]) {
+        assert.strictEqual(
+          isSafePathSegment(name),
+          false,
+          JSON.stringify(name)
+        );
+      }
     });
   });
 });

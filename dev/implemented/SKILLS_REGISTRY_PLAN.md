@@ -1,8 +1,10 @@
 # Skills Registry Plan
 
-**Status:** Proposed, not started. No skills registry client exists; the Agent &
-Skills Manager (`AgentSkillsManagerSection.tsx`) only manages skills already on
-disk.
+**Status:** Implemented (2026-10-23). Client in `src/utils/SkillsRegistryClient.ts`,
+install in `HarnessFileManager.installSkillFiles`, handlers in
+`HarnessFileMessageService`, UI in `SkillsRegistryPanel.tsx` with
+`useSkillsRegistryStore`. See "As built" at the end for where the build differs
+from the design below.
 
 ## Goal
 
@@ -167,3 +169,45 @@ a third party's code:
   stance comes first; reconsider if Vercel asks integrators to report installs.
 - Is it worth offering "install via `npx skills add`" as an alternative
   for users who want the CLI's lock file and `skills update`?
+
+## As built (2026-10-23)
+
+Verified against the live services on 2026-10-23 (search, audits, a 404 audit,
+and a full install of `anthropics/skills/pdf`).
+
+- **Search needs at least 2 characters** (`/api/search` answers 400 otherwise)
+  and has no cursor, so the client asks for 50 results once and the panel pages
+  them 10 at a time. Opening the tab sends nothing; the first request goes out
+  when the user has typed a query.
+- **Results carry `skillId`**, which is used as the slug; installs are sorted
+  descending by the client.
+- **Audits are fetched per visible page** in one batched message (at most 25,
+  4 concurrent), and cached in the store. An unknown verdict counts as `warn`.
+  The audit pill links to `skills.sh/<source>/<slug>/security/<provider>`.
+- **Location is resolved when the review dialog opens**, not at install: HEAD
+  commit (`commits/HEAD` with `Accept: application/vnd.github.sha`), then the
+  tree at that commit, then frontmatter probes of up to 20 SKILL.md candidates
+  ranked by folder name. The install message carries that commit, so the files
+  written are exactly the ones the dialog linked to. Two GitHub API calls per
+  review; raw downloads don't count against the 60/h limit.
+- **Install limits:** 200 files, 2 MB per file, 10 MB total. Symlinks,
+  `.git`/`__pycache__`/`node_modules` and `metadata.json` are skipped; any other
+  unsafe path (traversal, Windows device names, trailing dot) fails the install.
+  `isSafePathSegment` lives in `PathSecurity.ts`.
+- **Origin sidecar:** `<skill>/.ctrlyoke-origin.json`, store `skill-origin` v1
+  in `PersistedSchemaGuard` (fixture under `src/test/fixtures/formats/`). An
+  overwrite refuses a newer record. It is copied between ctrlyoke scopes but
+  not to harness directories. Nothing reads it yet; the "update available"
+  check is still to do.
+- **The four registry messages bypass `routeQueue`** (`OFF_QUEUE_MESSAGE_TYPES`
+  in `WebviewMessageRouter`), like `REQUEST_SECRET_REGISTRY`, so a slow
+  skills.sh or GitHub request can't stall the dashboard. The MCP registry search
+  still runs on the queue.
+- **Not built:**
+  - **Host capability gate.** Capabilities are derived from optional
+    `DashboardHostActions` methods, and no host forbids network access today
+    (the MCP Registry tab isn't gated either). Add one when such a host exists.
+  - **Official badge.** Left out, as the design allowed: curated isn't
+    reachable without a token, and no owner list was verified.
+  - **Overwrite from the UI.** A skill already in the active scope shows
+    **Imported**; replacing it needs deleting it first.
