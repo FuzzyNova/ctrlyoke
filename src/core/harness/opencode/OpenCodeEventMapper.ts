@@ -16,6 +16,7 @@ import {
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
   TOKEN_TOTAL_CONFIDENCE,
+  SUBAGENT_SPAWN_STATES,
 } from "../../../types/DashboardConstants";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import { CliEventMapper, type McpToolHint } from "../shared/CliEventMapper";
@@ -91,6 +92,25 @@ export function mapOpenCodeToolPartToCliEvent(
 
   if (toolName === OPEN_CODE_QUESTION_TOOL) {
     return mapOpenCodeQuestionPartToCliEvent(timestamp, part, isCompleted);
+  }
+
+  if (toolName === "task") {
+    return {
+      type: CLI_EVENT_TYPES.TOOL_CALL,
+      timestamp,
+      data: {
+        name: toolName,
+        id: part.callID,
+        parameters: input as Record<string, unknown>,
+        result: isCompleted ? { success: true, output: typeof output === "string" ? output : JSON.stringify(output) } : isFailed ? { success: false, output: error, error } : undefined,
+        subagentSpawn: {
+          agentType: typeof input.agent === "string" ? input.agent : "task",
+          description: typeof input.description === "string" ? input.description : "",
+          state: isCompleted ? SUBAGENT_SPAWN_STATES.COMPLETED : SUBAGENT_SPAWN_STATES.RUNNING,
+          children: typeof part.state?.metadata?.sessionId === "string" ? [{ agentId: part.state.metadata.sessionId, label: typeof input.agent === "string" ? input.agent : "task" }] : [],
+        },
+      },
+    };
   }
 
   switch (toolName) {

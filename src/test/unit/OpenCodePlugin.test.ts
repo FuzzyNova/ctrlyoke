@@ -19,6 +19,8 @@ async function loadPlugin(
   pluginOptions: {
     platform?: string;
     holdHookProcess?: boolean;
+    notifyDir?: string;
+    runId?: string;
   } = {}
 ): Promise<{
   plugin: Record<string, (...args: any[]) => unknown>;
@@ -87,7 +89,7 @@ async function loadPlugin(
     return actualRequire(name);
   };
   const processStub = {
-    env: { CTRLYOKE_OPENCODE_HOOKS: JSON.stringify(hooks) },
+    env: { CTRLYOKE_OPENCODE_HOOKS: JSON.stringify(hooks), ...(pluginOptions.notifyDir ? { CTRLYOKE_NOTIFY_DIR: pluginOptions.notifyDir } : {}), ...(pluginOptions.runId ? { CTRLYOKE_RUN_ID: pluginOptions.runId } : {}) },
     pid: 123,
     platform: pluginOptions.platform ?? process.platform,
     cwd: () => path.resolve("."),
@@ -114,6 +116,20 @@ async function loadPlugin(
 }
 
 suite("OpenCode plugin user hooks", () => {
+  test("writes child parts and task spawn links to the per-run sidecar", async () => {
+    const notifyDir = await fsPromises.mkdtemp(path.join(os.tmpdir(), "opencode-sidecar-"));
+    try {
+      const { plugin } = await loadPlugin([], { notifyDir, runId: "run-1" });
+      await plugin.event({ event: { type: "session.created", properties: { info: { id: "child-1", parentID: "parent" } } } });
+      await plugin.event({ event: { type: "message.part.updated", properties: { part: { type: "tool", sessionID: "parent", callID: "call-1", tool: "task", state: { status: "running", metadata: { sessionId: "child-1" } } } } } });
+      await plugin.event({ event: { type: "message.part.updated", properties: { part: { type: "text", sessionID: "child-1", id: "part-1", text: "child output" } } } });
+      const lines = (await fsPromises.readFile(path.join(notifyDir, "run-1-subagents.jsonl"), "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+      assert.strictEqual(lines.length, 2);
+      assert.strictEqual(lines[0].childSessionId, "child-1");
+      assert.strictEqual(lines[0].part.callID, "call-1");
+      assert.strictEqual(lines[1].part.text, "child output");
+    } finally { await fsPromises.rm(notifyDir, { recursive: true, force: true }); }
+  });
   test("pipes the documented tool payload to user hooks", async () => {
     const { plugin, spawnCalls } = await loadPlugin([
       { event: "preToolUse", command: "node hook.js", timeoutSec: 3 },

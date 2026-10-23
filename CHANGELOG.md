@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **OpenCode subagent output and token usage are included in the parent step.**
 - **Antigravity subagent output and token usage are included in the parent step.**
 
 ### Added

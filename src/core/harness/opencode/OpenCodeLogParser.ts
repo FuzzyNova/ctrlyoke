@@ -1,4 +1,6 @@
 import { execFile } from "child_process";
+import * as fsSync from "fs";
+import * as path from "path";
 import { promisify } from "util";
 import type * as fs from "fs";
 import { BaseLogParser } from "../shared/BaseLogParser";
@@ -17,6 +19,7 @@ import {
   COMPACTION_TRIGGERS,
   HARNESS_IDS,
   OPERATION_STATUS,
+  SUBAGENT_SPAWN_STATES,
 } from "../../../types/DashboardConstants";
 import {
   mapOpenCodeToolPartToCliEvent,
@@ -32,6 +35,7 @@ import {
 import { Log } from "../../../utils/Log";
 import { resolveCliCommand } from "../shared/CliLauncherResolver";
 import { PollingFsWatcher } from "../shared/FsWatcherHandles";
+import { SubagentSourceFollower } from "../shared/SubagentSourceFollower";
 
 const execFileAsync = promisify(execFile);
 
@@ -118,6 +122,45 @@ interface OpenCodeExportPart {
  *   extractResponse(events)       → assembles UniversalCliOutput from events
  */
 export class OpenCodeLogParser extends BaseLogParser {
+  private subagentNotifyDir?: string;
+  setSubagentNotifyDir(directory: string): void { this.subagentNotifyDir = directory; }
+
+  async drainSubagentSources(output: UniversalCliOutput): Promise<UniversalCliOutput> {
+    const parentSessionId = output.metadata.sessionId;
+    if (!this.subagentNotifyDir || !parentSessionId) return output;
+    let files: string[];
+    try { files = fsSync.readdirSync(this.subagentNotifyDir).filter((file) => file.endsWith("-subagents.jsonl")); } catch { return output; }
+    const records: Array<{ childSessionId: string; part: Record<string, any>; sidecarFile: string }> = [];
+    for (const file of files) {
+      try { for (const line of fsSync.readFileSync(path.join(this.subagentNotifyDir, file), "utf8").split(/\r?\n/)) if (line.trim()) records.push({ ...JSON.parse(line), sidecarFile: file }); } catch { /* sidecar may still be flushing */ }
+    }
+    const links = new Map<string, string>();
+    const consumedFiles = new Set<string>();
+    let changed = true;
+    const linkedSessions = new Set([parentSessionId]);
+    while (changed) {
+      changed = false;
+      for (const record of records) if (record.part.tool === "task" && linkedSessions.has(record.part.sessionID) && record.part.state?.metadata?.sessionId === record.childSessionId && !links.has(record.childSessionId)) { links.set(record.childSessionId, record.part.callID); linkedSessions.add(record.childSessionId); consumedFiles.add(record.sidecarFile); changed = true; }
+    }
+    const follower = new SubagentSourceFollower();
+    for (const [childId, callId] of links) {
+      const childRecords = records.filter((record) => record.childSessionId === childId && record.part.sessionID === childId);
+      follower.register(childId, {
+        attribution: { parentToolCallId: callId, agentId: childId },
+        open: async function* () { for (const { part } of childRecords) yield { type: part.type === "step-finish" ? OPENCODE_EVENT_TYPES.STEP_FINISH : OPENCODE_EVENT_TYPES.TOOL_USE, part } as BaseCliEvent; },
+        map: (record) => { const part = (record as any).part; if (part.type === OPENCODE_PART_TYPES.TOOL) { const event = mapOpenCodeToolPartToCliEvent(undefined, part); return event ? [event] : []; } if (part.type === OPENCODE_PART_TYPES.TEXT && typeof part.text === "string") return [{ type: CLI_EVENT_TYPES.TEXT, data: { text: part.text } }]; if (part.type === OPENCODE_PART_TYPES.REASONING && typeof part.text === "string") return [{ type: CLI_EVENT_TYPES.THINKING, data: { text: part.text } }]; return []; },
+        usage: (record) => { const part = (record as any).part; if (part.type !== "step-finish" || !part.tokens) return undefined; const usage: TokenUsage = { inputTokens: 0, outputTokens: 0 }; accumulateOpenCodeStepTokens(part.tokens, usage); return { model: part.modelID ?? part.model ?? output.metadata.model ?? "unknown", inputTokens: usage.inputTokens ?? 0, outputTokens: usage.outputTokens ?? 0, cachedInputTokens: usage.cachedInputTokens }; },
+      });
+    }
+    const drained = await follower.drain();
+    for (const file of consumedFiles) fsSync.unlinkSync(path.join(this.subagentNotifyDir, file));
+    const totals = Object.values(drained.usageByModel);
+    const modelUsage = { ...(output.metadata.modelUsage ?? {}) } as Record<string, any>;
+    for (const [model, usage] of Object.entries(drained.usageByModel)) modelUsage[model] = { ...(modelUsage[model] ?? {}), inputTokens: (modelUsage[model]?.inputTokens ?? 0) + usage.inputTokens, outputTokens: (modelUsage[model]?.outputTokens ?? 0) + usage.outputTokens };
+    const inputTokens = totals.reduce((sum, usage) => sum + usage.inputTokens, 0);
+    const outputTokens = totals.reduce((sum, usage) => sum + usage.outputTokens, 0);
+    return { ...output, events: [...output.events, ...drained.events], metadata: { ...output.metadata, ...(Object.keys(modelUsage).length ? { modelUsage } : {}), ...(totals.length ? { usage: { ...output.metadata.usage, inputTokens: (output.metadata.usage?.inputTokens ?? 0) + inputTokens, outputTokens: (output.metadata.usage?.outputTokens ?? 0) + outputTokens, totalTokens: (output.metadata.usage?.totalTokens ?? 0) + inputTokens + outputTokens } } : {}) } };
+  }
   /** Part IDs already emitted — prevents re-emitting on re-poll */
   private readonly seenPartIds = new Set<string>();
   /** MCP server ids attached to the execution whose output is being parsed. */
@@ -388,15 +431,25 @@ export class OpenCodeLogParser extends BaseLogParser {
         // A subagent was spawned via the task tool — show as a generic tool call
         const desc = e.part?.description as string | undefined;
         const agent = e.part?.agent as string | undefined;
+        const part = e.part as Record<string, any> | undefined;
         cliEvents.push({
           type: CLI_EVENT_TYPES.TOOL_CALL,
           timestamp,
           data: {
             name: "task",
+            id: part?.callID,
             parameters: {
               description: desc,
               agent,
               model: e.part?.model,
+            },
+            subagentSpawn: {
+              agentType: agent ?? "task",
+              description: desc ?? "",
+              state: part?.state?.status === OPERATION_STATUS.COMPLETED ? SUBAGENT_SPAWN_STATES.COMPLETED : SUBAGENT_SPAWN_STATES.RUNNING,
+              children: typeof part?.state?.metadata?.sessionId === "string"
+                ? [{ agentId: part.state.metadata.sessionId, label: agent ?? "task" }]
+                : [],
             },
           },
         });

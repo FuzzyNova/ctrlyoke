@@ -6672,6 +6672,26 @@ suite("OpenCodeLogParser", () => {
     parser = new OpenCodeLogParser();
   });
 
+  test("follows sidecar child parts through the task call and adds child usage once", async () => {
+    const directory = await fs.promises.mkdtemp(path.join(os.tmpdir(), "opencode-child-"));
+    try {
+      const file = path.join(directory, "run-subagents.jsonl");
+      const records = [
+        { childSessionId: "child", part: { type: "tool", tool: "task", sessionID: "parent", callID: "task-call", state: { status: "running", metadata: { sessionId: "child" } } } },
+        { childSessionId: "child", part: { type: "text", sessionID: "child", text: "child text" } },
+        { childSessionId: "child", part: { type: "step-finish", sessionID: "child", modelID: "provider/child-model", tokens: { input: 10, output: 2, total: 12 } } },
+      ];
+      fs.writeFileSync(file, records.map((record) => JSON.stringify(record)).join("\n") + "\n");
+      parser.setSubagentNotifyDir(directory);
+      const output = await parser.drainSubagentSources({ events: [], metadata: { sessionId: "parent", usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } } } as any);
+      assert.strictEqual(output.metadata.usage?.inputTokens, 11);
+      assert.strictEqual(output.metadata.usage?.outputTokens, 3);
+      const childText = output.events.find((event) => (event.data as TextData).text === "child text");
+      assert.strictEqual(childText?.subagent?.parentToolCallId, "task-call");
+      assert.strictEqual(fs.existsSync(file), false);
+    } finally { await fs.promises.rm(directory, { recursive: true, force: true }); }
+  });
+
   test("surfaces failed write and bash tool outcomes from stdout fixtures", () => {
     const fixturePath = path.join(
       __dirname,

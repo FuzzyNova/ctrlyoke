@@ -242,10 +242,7 @@ those 85.3k new tokens plus 20 in and 4.8k out.
 Runs recorded by ctrlyoke 0.2.2 or earlier left cache writes out of these totals, so
 their Claude Code, Copilot, OpenCode and Antigravity figures read lower.
 
-Subagent tokens are included in Claude Code, Qwen Code, Codex and Antigravity
-totals. Copilot's totals already include its subagents. OpenCode subagent usage
-is not yet counted, so a step that delegates heavily through OpenCode can read
-lower than its actual usage.
+Subagent tokens and output are included in totals for all supported harnesses.
 
 When Antigravity's counts come only from its status line, they can cover the
 last model call rather than the whole attempt.

@@ -506,7 +506,7 @@ ones, with `haiku` for claude-cli and a `sonnet` override on one child.
 | copilot-cli 1.0.103   | **Yes**: OTel `chat <model>` spans and `session.shutdown.modelMetrics` both include child calls  | Already in the same OTel and `events.jsonl` streams                                      | 4 of 6 model calls          |
 | codex-cli 0.163.0     | **No**: `turn.completed.usage` and the parent rollout's `token_count` are parent-only            | Each child rollout's `token_count`                                                       | 58,612 of 128,504 input     |
 | qwen-cli 0.26.0       | **No** in the chat log ctrlyoke reads. `result.usage` (headless) **does**, plus background calls | `subagents/<sessionId>/agent-*.jsonl` `usageMetadata`                                    | 70,449 of 160,217 prompt    |
-| opencode-cli 1.19.4   | **No**: stdout `step_finish.tokens` is parent-only                                               | Child session, via `opencode export <childSessionId>` (`step-finish` parts)              | ~168k of ~221k total        |
+| opencode-cli 1.19.4   | **No**: stdout `step_finish.tokens` is parent-only                                               | Child session sidecar (`step-finish` parts)                                               | ~168k of ~221k total        |
 | antigravity-cli 1.4.6 | **No**: stdout `result.usage` and the parent transcript are parent-only                          | Each child's `transcript_full.jsonl` `PLANNER_RESPONSE` `input_tokens` / `output_tokens` | ~58k of ~96k input          |
 
 Per harness:
@@ -573,7 +573,8 @@ QWEN_TELEMETRY_OUTFILE=…`) listed four `api_response` events summing to
   (3 steps, 53,495 total). The two child sessions, found through the `task`
   part's `state.metadata.sessionId`, held 84,824 and 83,080 total, so
   children were over three times the parent's tokens in this run. `part.cost`
-  was 0 throughout (free model), so cost can't be cross-checked here. Child
+  was 0 throughout (free model), so cost can't be cross-checked here. Whether
+  `part.cost` includes child cost remains unverified. Child
   sessions use `message.info.tokens` and `step-finish` parts in the same shape
   as the parent's.
 - **antigravity-cli.** Stdout `result.usage` (38,698 in) is exactly the sum of
@@ -652,7 +653,7 @@ Each item is one session; tick it when it lands.
 - [ ] 8. codex-cli follower plus child usage.
 - [x] 9. antigravity-cli follower (N children, asynchronous completion) plus
       child usage.
-- [ ] 10. opencode-cli plugin sidecar, follower, and child usage.
+- [x] 10. opencode-cli plugin sidecar, follower, and child usage.
 - [ ] 11. Harness-suite case, user docs (`docs/guide/usage-and-stats.md`
       subagent note, output guide), CHANGELOG sweep, and moving this plan to
       `dev/implemented/`.

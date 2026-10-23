@@ -81,6 +81,21 @@ interface HookArtifact {
 // Child sessions have a parentID and are created DURING execution, so their
 // session.created events reach the plugin reliably (unlike the main session).
 const childSessions = new Set<string>();
+const childParents = new Map<string, string>();
+const childCallIds = new Map<string, string>();
+const subagentSidecarPath = NOTIFY_DIR && RUN_ID
+  ? path.join(NOTIFY_DIR, `${RUN_ID}-subagents.jsonl`)
+  : undefined;
+
+function _appendSubagentRecord(childSessionId: string, part: unknown): void {
+  if (!subagentSidecarPath) return;
+  try {
+    mkdirSync(path.dirname(subagentSidecarPath), { recursive: true });
+    appendFileSync(subagentSidecarPath, JSON.stringify({ childSessionId, part }) + "\n");
+  } catch (error) {
+    _debugLog("❌ Failed to append subagent sidecar", { error: String(error) });
+  }
+}
 
 // Track main sessions for start file deduplication.
 const mainSessions = new Set<string>();
@@ -536,6 +551,7 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
         if (session.parentID) {
           // Track child (sub-agent) sessions so we can ignore their idle events.
           childSessions.add(session.id);
+          childParents.set(session.id, session.parentID);
           _debugLog("👶 Tracking child session", { sessionId: session.id });
         } else {
           // Main session — track it and write start file.
@@ -549,6 +565,18 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
             hook_event_name: "sessionStart",
             session_id: session.id,
           });
+        }
+      }
+
+      if (event.type === "message.part.updated") {
+        const part = event.properties.part as Record<string, any> | undefined;
+        if (part && typeof part.sessionID === "string" && childSessions.has(part.sessionID)) {
+          _appendSubagentRecord(part.sessionID, part);
+        } else if (part?.type === "tool" && part.tool === "task" &&
+          typeof part.state?.metadata?.sessionId === "string") {
+          const childSessionId = part.state.metadata.sessionId as string;
+          childCallIds.set(childSessionId, part.callID);
+          _appendSubagentRecord(childSessionId, { ...part, childSessionId });
         }
       }
 
@@ -578,7 +606,16 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
         const deletedId = (event.properties.info as { id: string }).id;
         mainSessions.delete(deletedId);
         childSessions.delete(deletedId);
+        childParents.delete(deletedId);
+        childCallIds.delete(deletedId);
         _debugLog("🗑️ session.deleted", { sessionId: deletedId });
+      }
+
+      if (event.type === "session.status") {
+        const { sessionID, status } = event.properties as { sessionID: string; status: { type: string } };
+        if (status.type === "idle" && childSessions.has(sessionID)) {
+          _appendSubagentRecord(sessionID, { type: "session.idle", sessionID });
+        }
       }
 
       if (event.type === "session.status") {
