@@ -456,7 +456,6 @@ export class AntigravityCliProvider implements ICliProvider {
   async augmentParsedOutput(
     output: UniversalCliOutput
   ): Promise<UniversalCliOutput> {
-    output = await this.logParser.drainSubagentSources(output);
     const snapshot =
       (await this.statusLineSidecar?.readLatestSnapshot()) ??
       this.getLatestStatuslineSnapshot();

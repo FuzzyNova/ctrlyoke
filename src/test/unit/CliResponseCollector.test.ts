@@ -4,6 +4,8 @@ import { FAILURE_KINDS } from "../../types/DashboardConstants";
 import { getTranscriptText } from "../../utils/StepOutputText";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { CliResponseCollector } from "../../core/harness/shared/CliResponseCollector";
+import { SubagentSourceFollower } from "../../core/harness/shared/SubagentSourceFollower";
+import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
 import type { BaseCliEvent } from "../../core/harness/shared/interfaces/ILogParser";
 import { Log } from "../../utils/Log";
 import {
@@ -36,6 +38,46 @@ function createCollector(provider: any) {
 }
 
 suite("CliResponseCollector", () => {
+  test("drains child events before returning headless output", async () => {
+    const follower = new SubagentSourceFollower();
+    follower.register({
+      key: "child",
+      attribution: { parentToolCallId: "spawn" },
+      read: async (offset) => ({
+        records: offset === 0 ? [{ id: "one" }] : [],
+        nextOffset: 1,
+        complete: true,
+      }),
+      map: () => [
+        { type: CLI_EVENT_TYPES.TEXT, data: { text: "child output" } },
+      ],
+      isComplete: () => false,
+    });
+    const collector = createCollector({
+      ...createProvider(createParsedOutput()),
+      logParser: {
+        extractResponse: () => createParsedOutput(),
+        getSubagentFollower: () => follower,
+      },
+    });
+    const result = await collector.collectHeadlessResponse({
+      stdout: "",
+      stderr: "",
+      exitCode: 0,
+      promptForSessionLog: "",
+      executionStartTime: new Date(),
+    });
+    assert.ok(
+      result.parsedOutput.events.some(
+        (event) => (event.data as { text?: string }).text === "child output"
+      )
+    );
+    assert.strictEqual(
+      result.parsedOutput.events.at(-1)?.subagent?.parentToolCallId,
+      "spawn"
+    );
+  });
+
   test("should build cli result and prefer session ID from parsed output", async () => {
     const loggedResponses: Array<{ response: string; statistics?: string }> =
       [];

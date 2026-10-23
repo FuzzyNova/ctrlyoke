@@ -477,6 +477,10 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
 
       if (source?.logTail) {
         await source.logTail.start();
+      } else if (source?.mode === HEADLESS_SOURCE_MODES.STDOUT) {
+        source.parser
+          .getSubagentFollower?.()
+          ?.start(this.deps.hostCallbacks.onStreamingEvents);
       }
 
       // Last gate before the process exists. A Stop that lands between prompt
@@ -582,6 +586,9 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       return false;
     } finally {
       this.activeHeadlessLogTail = undefined;
+      if (source?.mode === HEADLESS_SOURCE_MODES.STDOUT) {
+        source.parser.getSubagentFollower?.()?.stop();
+      }
       if (!keepTempFiles) {
         await this.deps.hostCallbacks.cleanupTempFiles(tempFilePaths);
       }

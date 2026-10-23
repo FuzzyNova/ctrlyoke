@@ -52,7 +52,6 @@ import type {
 import { Log } from "../../../utils/Log";
 import { CompositeFsWatcher } from "../shared/FsWatcherHandles";
 import { SubagentSourceFollower } from "../shared/SubagentSourceFollower";
-import type { ProviderModelUsage } from "../../../types/CliOutputTypes";
 
 /**
  * Synthetic `AntigravityLogEvent.type` tags — ctrlyoke's own internal event
@@ -122,6 +121,9 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   private cachedLastConversationsSessionId?: string;
   private readonly transcriptReader = new AntigravityTranscriptReader();
   private readonly subagentFollower = new SubagentSourceFollower();
+  getSubagentFollower(): SubagentSourceFollower {
+    return this.subagentFollower;
+  }
   private readonly pendingPlannerToolCalls: PendingPlannerToolCall[] = [];
   /**
    * Background follow-up state; transcript recognition remains provider-specific.
@@ -331,55 +333,6 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
         sessionId: this.extractSessionId(events) ?? undefined,
         model: this.resolvedModel || undefined,
         usage,
-      },
-    };
-  }
-
-  async drainSubagentSources(
-    output: UniversalCliOutput
-  ): Promise<UniversalCliOutput> {
-    const result = await this.subagentFollower.drain();
-    const modelUsage: Record<string, ProviderModelUsage> = {
-      ...(output.metadata.modelUsage ?? {}),
-    };
-    for (const [model, usage] of Object.entries(result.usageByModel)) {
-      const total = (modelUsage[model] ??= {});
-      total.inputTokens = (total.inputTokens ?? 0) + usage.inputTokens;
-      total.outputTokens = (total.outputTokens ?? 0) + usage.outputTokens;
-    }
-    const usage = output.metadata.usage;
-    return {
-      ...output,
-      events: [...output.events, ...result.events],
-      metadata: {
-        ...output.metadata,
-        ...(Object.keys(modelUsage).length ? { modelUsage } : {}),
-        ...(Object.keys(result.usageByModel).length
-          ? {
-              usage: {
-                ...usage,
-                inputTokens:
-                  (usage?.inputTokens ?? 0) +
-                  Object.values(result.usageByModel).reduce(
-                    (n, v) => n + v.inputTokens,
-                    0
-                  ),
-                outputTokens:
-                  (usage?.outputTokens ?? 0) +
-                  Object.values(result.usageByModel).reduce(
-                    (n, v) => n + v.outputTokens,
-                    0
-                  ),
-                totalTokens:
-                  (usage?.totalTokens ??
-                    (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0)) +
-                  Object.values(result.usageByModel).reduce(
-                    (n, v) => n + v.inputTokens + v.outputTokens,
-                    0
-                  ),
-              },
-            }
-          : {}),
       },
     };
   }
@@ -856,10 +809,15 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
         typeof descriptor?.Model === "string"
           ? descriptor.Model
           : this.resolvedModel;
-      this.subagentFollower.register(childId, {
+      const reader = new AntigravityTranscriptReader();
+      this.subagentFollower.register({
+        key: childId,
         attribution,
-        open: async function* () {
-          const reader = new AntigravityTranscriptReader();
+        read: async (fromOffset) => {
+          const records: Array<{
+            record: AntigravityTranscriptRecord;
+            childId: string;
+          }> = [];
           for (const record of await reader.readRecords(transcriptPath)) {
             // The step-zero prompt is a steer from the parent, not child output.
             const content =
@@ -871,35 +829,29 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
               content.includes(`sender=${parentSessionId}`)
             )
               continue;
-            yield {
-              type: "antigravity-child-record",
-              record,
-              childId,
-            } as unknown as BaseCliEvent;
+            records.push({ record, childId });
           }
+          return { records, nextOffset: fromOffset + records.length };
         },
-        map: (event) => {
-          const record = (
-            event as BaseCliEvent & { record: AntigravityTranscriptRecord }
-          ).record;
+        map: ({ record, childId: sourceChildId }) => {
           return childParser
-            .parseTranscriptRecords([record], childId)
+            .parseTranscriptRecords([record], sourceChildId)
             .flatMap((mapped) =>
               childParser.extractStructuredEventsFromEvent(mapped)
             );
         },
-        usage: (event) => {
-          const record = (
-            event as BaseCliEvent & { record: AntigravityTranscriptRecord }
-          ).record;
+        usage: ({ record }) => {
           const usageEntry = record.entry;
           if (usageEntry.type !== ANTIGRAVITY_ENTRY_TYPES.PLANNER_RESPONSE)
             return undefined;
           const inputTokens = this.asFiniteNumber(usageEntry.input_tokens) ?? 0;
           const outputTokens =
             this.asFiniteNumber(usageEntry.output_tokens) ?? 0;
-          return { model, inputTokens, outputTokens };
+          return { model, recordId: record.eventId, inputTokens, outputTokens };
         },
+        isComplete: ({ record }) =>
+          record.entry.source === ANTIGRAVITY_WIRE_VALUES.SYSTEM &&
+          record.entry.status === ANTIGRAVITY_WIRE_VALUES.DONE,
       });
     }
   }
@@ -1060,6 +1012,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       return;
     }
     this.backgroundStateSessionId = sessionId;
+    this.subagentFollower.reset();
     this.backgroundFollowUpState.reset();
     this.pendingPlannerToolCalls.length = 0;
   }

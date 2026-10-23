@@ -185,11 +185,6 @@ export class OpenCodeCliProvider implements ICliProvider {
     getOpenCodeContextWindowSize(this.resolvedCurrentModel)
   );
 
-  async augmentParsedOutput(
-    output: import("../../../types/CliOutputTypes").UniversalCliOutput
-  ) {
-    return this.logParser.drainSubagentSources(output);
-  }
   /** MCP server ids prepared for the current execution. */
   private attachedMcpServerIds: ReadonlySet<string> = new Set();
 

@@ -156,6 +156,7 @@ export class HeadlessLogTail {
       onContextWindowUpdate: options.onContextWindowUpdate,
       dispatchedPromptText: options.promptText,
     });
+    options.parser.getSubagentFollower?.()?.start(options.onStreamingEvents);
   }
 
   /** Start idle polling and perform an initial discovery/read attempt. */
@@ -235,6 +236,7 @@ export class HeadlessLogTail {
       return this.getResult();
     }
     this.finished = true;
+    this.options.parser.getSubagentFollower?.()?.stop();
     if (this.pollHandle) {
       clearInterval(this.pollHandle);
       this.pollHandle = undefined;

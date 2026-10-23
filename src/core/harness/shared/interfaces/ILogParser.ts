@@ -4,6 +4,7 @@ import {
   CliEvent,
   UniversalCliOutput,
 } from "../../../../types/CliOutputTypes";
+import type { SubagentSourceFollower } from "../SubagentSourceFollower";
 
 /**
  * Minimal base type for CLI log events across all harnesses.
@@ -59,6 +60,8 @@ export type UserEventClassification =
  * - Build complete responses from streaming events
  */
 export interface ILogParser {
+  /** Attempt-scoped child-source follower, when this harness discovers sidechains. */
+  getSubagentFollower?(): SubagentSourceFollower | undefined;
   /** Set the workspace root used by parsers that discover session logs there. */
   setWorkspaceRoot?(root: string): void;
 

@@ -9,6 +9,7 @@ import { CopilotLogParser } from "../../../core/harness/copilot/CopilotLogParser
 import { CopilotCliProvider } from "../../../core/harness/copilot/CopilotCliProvider";
 import { CodexLogParser } from "../../../core/harness/codex/CodexLogParser";
 import { OpenCodeLogParser } from "../../../core/harness/opencode/OpenCodeLogParser";
+import { mergeSubagentOutput } from "../../../core/harness/shared/mergeSubagentOutput";
 import { QwenCliProvider } from "../../../core/harness/qwen/QwenCliProvider";
 import {
   QwenLogParser,
@@ -6672,24 +6673,68 @@ suite("OpenCodeLogParser", () => {
     parser = new OpenCodeLogParser();
   });
 
-  test("follows sidecar child parts through the task call and adds child usage once", async () => {
-    const directory = await fs.promises.mkdtemp(path.join(os.tmpdir(), "opencode-child-"));
+  test("follows registered sidecar records and merges child usage", async () => {
+    const directory = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "opencode-child-")
+    );
     try {
       const file = path.join(directory, "run-subagents.jsonl");
       const records = [
-        { childSessionId: "child", part: { type: "tool", tool: "task", sessionID: "parent", callID: "task-call", state: { status: "running", metadata: { sessionId: "child" } } } },
-        { childSessionId: "child", part: { type: "text", sessionID: "child", text: "child text" } },
-        { childSessionId: "child", part: { type: "step-finish", sessionID: "child", modelID: "provider/child-model", tokens: { input: 10, output: 2, total: 12 } } },
+        {
+          childSessionId: "child",
+          part: {
+            type: "text",
+            id: "text-part",
+            sessionID: "child",
+            messageID: "message",
+            text: "child text",
+          },
+        },
+        {
+          childSessionId: "child",
+          part: {
+            type: "step-finish",
+            id: "usage-part",
+            sessionID: "child",
+            messageID: "message",
+            modelID: "provider/child-model",
+            tokens: { input: 10, output: 2, total: 12 },
+          },
+        },
       ];
-      fs.writeFileSync(file, records.map((record) => JSON.stringify(record)).join("\n") + "\n");
+      fs.writeFileSync(
+        file,
+        records.map((record) => JSON.stringify(record)).join("\n") + "\n"
+      );
       parser.setSubagentNotifyDir(directory);
-      const output = await parser.drainSubagentSources({ events: [], metadata: { sessionId: "parent", usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } } } as any);
+      parser.extractStructuredEventsFromEvent({
+        type: OPENCODE_EVENT_TYPES.SUBTASK,
+        part: {
+          callID: "task-call",
+          sessionID: "parent",
+          state: { metadata: { sessionId: "child" } },
+        },
+      });
+      const drain = await parser.getSubagentFollower()?.drainToEof(100);
+      assert.ok(drain);
+      const output = mergeSubagentOutput(
+        {
+          events: [],
+          metadata: {
+            usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+          },
+        },
+        drain
+      );
       assert.strictEqual(output.metadata.usage?.inputTokens, 11);
       assert.strictEqual(output.metadata.usage?.outputTokens, 3);
-      const childText = output.events.find((event) => (event.data as TextData).text === "child text");
+      const childText = output.events.find(
+        (event) => (event.data as TextData).text === "child text"
+      );
       assert.strictEqual(childText?.subagent?.parentToolCallId, "task-call");
-      assert.strictEqual(fs.existsSync(file), false);
-    } finally { await fs.promises.rm(directory, { recursive: true, force: true }); }
+    } finally {
+      await fs.promises.rm(directory, { recursive: true, force: true });
+    }
   });
 
   test("surfaces failed write and bash tool outcomes from stdout fixtures", () => {
@@ -7336,14 +7381,25 @@ suite("Antigravity subagent attribution", () => {
   test("keeps invoke_subagent running and groups children by conversation id", () => {
     const call = {
       name: "invoke_subagent",
-      args: { Subagents: JSON.stringify([{ Role: "Researcher" }, { Role: "Reviewer" }]) },
+      args: {
+        Subagents: JSON.stringify([
+          { Role: "Researcher" },
+          { Role: "Reviewer" },
+        ]),
+      },
     };
     const result = {
-      source: "MODEL", type: "GENERIC", status: "DONE",
-      content: '{"conversationId":"child-one","logAbsoluteUri":"file:///tmp/one/transcript.jsonl"}\n{"conversationId":"child-two","logAbsoluteUri":"file:///tmp/two/transcript.jsonl"}',
+      source: "MODEL",
+      type: "GENERIC",
+      status: "DONE",
+      content:
+        '{"conversationId":"child-one","logAbsoluteUri":"file:///tmp/one/transcript.jsonl"}\n{"conversationId":"child-two","logAbsoluteUri":"file:///tmp/two/transcript.jsonl"}',
     };
     const events = AntigravityToolEventBuilder.build({
-      call, result, timestamp: 1, toolCallId: "spawn-id",
+      call,
+      result,
+      timestamp: 1,
+      toolCallId: "spawn-id",
     });
     const spawn = events[0].data as ToolCall;
     assert.strictEqual(spawn.id, "spawn-id");

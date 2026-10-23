@@ -378,6 +378,8 @@ export interface ProviderModelUsage {
   cacheCreationInputTokens?: number;
   /** 1-hour cache-write subset, when available. */
   cacheCreationLongTtlInputTokens?: number;
+  /** Reasoning output tokens, when reported by the provider. */
+  reasoningOutputTokens?: number;
   webSearchRequests?: number;
   costUSD?: number;
   contextWindow?: number;

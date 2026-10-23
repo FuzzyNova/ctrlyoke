@@ -56,6 +56,8 @@ const EXPORT_POLL_INTERVAL_MS = 1000;
  * investigation for the reproducing case.
  */
 const OPENCODE_EXPORT_MAX_BUFFER = 100 * 1024 * 1024;
+const OPENCODE_SUBAGENT_SIDECAR_SUFFIX = "-subagents.jsonl";
+const OPENCODE_SESSION_IDLE_EVENT = "session.idle";
 
 type OpenCodeExportRunner = (sessionId: string) => Promise<string>;
 
@@ -103,6 +105,34 @@ interface OpenCodeExportPart {
   [key: string]: unknown;
 }
 
+interface OpenCodeSubagentSidecarRecord {
+  childSessionId: string;
+  part: OpenCodeExportPart & {
+    text?: string;
+    tokens?: Record<string, unknown>;
+  };
+}
+
+function isOpenCodeSubagentSidecarRecord(
+  value: unknown
+): value is OpenCodeSubagentSidecarRecord {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.childSessionId !== "string" ||
+    typeof record.part !== "object" ||
+    record.part === null
+  )
+    return false;
+  const part = record.part as Record<string, unknown>;
+  return (
+    typeof part.type === "string" &&
+    typeof part.id === "string" &&
+    typeof part.sessionID === "string" &&
+    typeof part.messageID === "string"
+  );
+}
+
 /**
  * OpenCode CLI Log Parser
  *
@@ -123,180 +153,19 @@ interface OpenCodeExportPart {
  *   extractResponse(events)       → assembles UniversalCliOutput from events
  */
 export class OpenCodeLogParser extends BaseLogParser {
+  private readonly subagentFollower = new SubagentSourceFollower();
   private subagentNotifyDir?: string;
+  getSubagentFollower(): SubagentSourceFollower {
+    return this.subagentFollower;
+  }
   setSubagentNotifyDir(directory: string): void {
     this.subagentNotifyDir = directory;
   }
 
-  async drainSubagentSources(
-    output: UniversalCliOutput
-  ): Promise<UniversalCliOutput> {
-    const parentSessionId = output.metadata.sessionId;
-    if (!this.subagentNotifyDir || !parentSessionId) return output;
-    let files: string[];
-    try {
-      files = fsSync
-        .readdirSync(this.subagentNotifyDir)
-        .filter((file) => file.endsWith("-subagents.jsonl"));
-    } catch {
-      return output;
-    }
-    const records: Array<{
-      childSessionId: string;
-      part: Record<string, any>;
-      sidecarFile: string;
-    }> = [];
-    for (const file of files) {
-      try {
-        for (const line of fsSync
-          .readFileSync(path.join(this.subagentNotifyDir, file), "utf8")
-          .split(/\r?\n/))
-          if (line.trim())
-            records.push({ ...JSON.parse(line), sidecarFile: file });
-      } catch {
-        /* sidecar may still be flushing */
-      }
-    }
-    const links = new Map<string, string>();
-    const consumedFiles = new Set<string>();
-    let changed = true;
-    const linkedSessions = new Set([parentSessionId]);
-    while (changed) {
-      changed = false;
-      for (const record of records)
-        if (
-          record.part.tool === OPENCODE_TOOL_NAMES.TASK &&
-          linkedSessions.has(record.part.sessionID) &&
-          record.part.state?.metadata?.sessionId === record.childSessionId &&
-          !links.has(record.childSessionId)
-        ) {
-          links.set(record.childSessionId, record.part.callID);
-          linkedSessions.add(record.childSessionId);
-          consumedFiles.add(record.sidecarFile);
-          changed = true;
-        }
-    }
-    const follower = new SubagentSourceFollower();
-    for (const [childId, callId] of links) {
-      const childRecords = records.filter(
-        (record) =>
-          record.childSessionId === childId && record.part.sessionID === childId
-      );
-      follower.register(childId, {
-        attribution: { parentToolCallId: callId, agentId: childId },
-        open: async function* () {
-          for (const { part } of childRecords)
-            yield {
-              type:
-                part.type === OPENCODE_PART_TYPES.STEP_FINISH
-                  ? OPENCODE_EVENT_TYPES.STEP_FINISH
-                  : OPENCODE_EVENT_TYPES.TOOL_USE,
-              part,
-            } as BaseCliEvent;
-        },
-        map: (record) => {
-          const part = (record as any).part;
-          if (part.type === OPENCODE_PART_TYPES.TOOL) {
-            const event = mapOpenCodeToolPartToCliEvent(undefined, part);
-            return event ? [event] : [];
-          }
-          if (
-            part.type === OPENCODE_PART_TYPES.TEXT &&
-            typeof part.text === "string"
-          )
-            return [{ type: CLI_EVENT_TYPES.TEXT, data: { text: part.text } }];
-          if (
-            part.type === OPENCODE_PART_TYPES.REASONING &&
-            typeof part.text === "string"
-          )
-            return [
-              { type: CLI_EVENT_TYPES.THINKING, data: { text: part.text } },
-            ];
-          return [];
-        },
-        usage: (record) => {
-          const part = (record as any).part;
-          if (part.type !== OPENCODE_PART_TYPES.STEP_FINISH || !part.tokens)
-            return undefined;
-          const usage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
-          accumulateOpenCodeStepTokens(part.tokens, usage);
-          return {
-            model:
-              part.modelID ?? part.model ?? output.metadata.model ?? "unknown",
-            inputTokens: usage.inputTokens ?? 0,
-            outputTokens: usage.outputTokens ?? 0,
-            cachedInputTokens: usage.cachedInputTokens,
-          };
-        },
-      });
-    }
-    const drained = await follower.drain();
-    for (const file of consumedFiles)
-      fsSync.unlinkSync(path.join(this.subagentNotifyDir, file));
-    const completedCallIds = new Set<string>();
-    for (const [childId, callId] of links) {
-      if (
-        records.some(
-          (record) =>
-            record.childSessionId === childId &&
-            (record.part.type === "session.idle" ||
-              (record.part.tool === OPENCODE_TOOL_NAMES.TASK &&
-                record.part.state?.status === OPERATION_STATUS.COMPLETED))
-        )
-      )
-        completedCallIds.add(callId);
-    }
-    for (const event of output.events) {
-      if (event.type !== CLI_EVENT_TYPES.TOOL_CALL) continue;
-      const tool =
-        event.data as import("../../../types/CliOutputTypes").ToolCall;
-      if (tool.id && completedCallIds.has(tool.id) && tool.subagentSpawn)
-        tool.subagentSpawn.state = SUBAGENT_SPAWN_STATES.COMPLETED;
-    }
-    const totals = Object.values(drained.usageByModel);
-    const modelUsage = { ...(output.metadata.modelUsage ?? {}) } as Record<
-      string,
-      any
-    >;
-    for (const [model, usage] of Object.entries(drained.usageByModel))
-      modelUsage[model] = {
-        ...(modelUsage[model] ?? {}),
-        inputTokens: (modelUsage[model]?.inputTokens ?? 0) + usage.inputTokens,
-        outputTokens:
-          (modelUsage[model]?.outputTokens ?? 0) + usage.outputTokens,
-      };
-    const inputTokens = totals.reduce(
-      (sum, usage) => sum + usage.inputTokens,
-      0
-    );
-    const outputTokens = totals.reduce(
-      (sum, usage) => sum + usage.outputTokens,
-      0
-    );
-    return {
-      ...output,
-      events: [...output.events, ...drained.events],
-      metadata: {
-        ...output.metadata,
-        ...(Object.keys(modelUsage).length ? { modelUsage } : {}),
-        ...(totals.length
-          ? {
-              usage: {
-                ...output.metadata.usage,
-                inputTokens:
-                  (output.metadata.usage?.inputTokens ?? 0) + inputTokens,
-                outputTokens:
-                  (output.metadata.usage?.outputTokens ?? 0) + outputTokens,
-                totalTokens:
-                  (output.metadata.usage?.totalTokens ?? 0) +
-                  inputTokens +
-                  outputTokens,
-              },
-            }
-          : {}),
-      },
-    };
+  async beginMonitoringTurn(): Promise<void> {
+    this.subagentFollower.reset();
   }
+
   /** Part IDs already emitted — prevents re-emitting on re-poll */
   private readonly seenPartIds = new Set<string>();
   /** MCP server ids attached to the execution whose output is being parsed. */
@@ -497,6 +366,20 @@ export class OpenCodeLogParser extends BaseLogParser {
    */
   extractStructuredEventsFromEvent(event: BaseCliEvent): CliEvent[] {
     const e = event as Record<string, any>;
+    const part = e.part as Record<string, any> | undefined;
+    const childSessionId = part?.state?.metadata?.sessionId;
+    if (
+      event.type === OPENCODE_EVENT_TYPES.SUBTASK &&
+      typeof childSessionId === "string" &&
+      typeof part?.callID === "string" &&
+      typeof part?.sessionID === "string"
+    ) {
+      this.registerSubagentSource(
+        childSessionId,
+        part.callID,
+        typeof part.model === "string" ? part.model : "unknown"
+      );
+    }
     const cliEvents: CliEvent[] = [];
     const timestamp = e.timestamp as number | undefined;
 
@@ -617,6 +500,87 @@ export class OpenCodeLogParser extends BaseLogParser {
     }
 
     return cliEvents;
+  }
+
+  private registerSubagentSource(
+    childSessionId: string,
+    parentToolCallId: string,
+    model: string
+  ): void {
+    const directory = this.subagentNotifyDir;
+    if (!directory) return;
+    this.subagentFollower.register({
+      key: childSessionId,
+      attribution: { parentToolCallId, agentId: childSessionId },
+      read: async (fromOffset) => {
+        const records: OpenCodeSubagentSidecarRecord[] = [];
+        try {
+          const files = fsSync
+            .readdirSync(directory)
+            .filter((file) => file.endsWith(OPENCODE_SUBAGENT_SIDECAR_SUFFIX));
+          for (const file of files) {
+            for (const line of fsSync
+              .readFileSync(path.join(directory, file), "utf8")
+              .split(/\r?\n/u)) {
+              if (!line.trim()) continue;
+              const value: unknown = JSON.parse(line);
+              if (
+                isOpenCodeSubagentSidecarRecord(value) &&
+                value.childSessionId === childSessionId &&
+                value.part.sessionID === childSessionId
+              ) {
+                records.push(value);
+              }
+            }
+          }
+        } catch {
+          throw new Error("Unable to read OpenCode subagent sidecar");
+        }
+        return {
+          records: records.slice(fromOffset),
+          nextOffset: records.length,
+        };
+      },
+      map: (record) => {
+        if (record.part.type === OPENCODE_PART_TYPES.STEP_FINISH) return [];
+        if (record.part.type === OPENCODE_PART_TYPES.TOOL) {
+          const event = mapOpenCodeToolPartToCliEvent(undefined, record.part);
+          return event ? [event] : [];
+        }
+        if (
+          (record.part.type === OPENCODE_PART_TYPES.TEXT ||
+            record.part.type === OPENCODE_PART_TYPES.REASONING) &&
+          typeof record.part.text === "string"
+        ) {
+          return [
+            {
+              type:
+                record.part.type === OPENCODE_PART_TYPES.TEXT
+                  ? CLI_EVENT_TYPES.TEXT
+                  : CLI_EVENT_TYPES.THINKING,
+              data: { text: record.part.text },
+            },
+          ];
+        }
+        return [];
+      },
+      usage: (record) => {
+        if (record.part.type !== OPENCODE_PART_TYPES.STEP_FINISH)
+          return undefined;
+        const tokens = record.part.tokens;
+        if (!tokens || typeof tokens !== "object") return undefined;
+        const usage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
+        accumulateOpenCodeStepTokens(tokens as Record<string, unknown>, usage);
+        return {
+          model,
+          recordId: record.part.id,
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
+          cacheReadInputTokens: usage.cachedInputTokens,
+        };
+      },
+      isComplete: (record) => record.part.type === OPENCODE_SESSION_IDLE_EVENT,
+    });
   }
 
   extractResponse(events: BaseCliEvent[]): UniversalCliOutput {

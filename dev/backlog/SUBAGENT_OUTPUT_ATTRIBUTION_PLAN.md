@@ -691,7 +691,7 @@ Each item is one session; tick it when it lands.
       interleaved siblings, antigravity N-child groups, grandchildren, and
       late-arriving spawn calls), auto-expand those groups on find, and add the
       corresponding nesting/collapse/find tests.
-- [ ] 6a. Rebuild `SubagentSourceFollower` to the follower contract in
+- [x] 6a. Rebuild `SubagentSourceFollower` to the follower contract in
       section 2B and wire it into the shared headless and interactive
       pipelines.
 - [ ] 6b. qwen-cli on the follower (both modes, bridge unwrapping, qwen
