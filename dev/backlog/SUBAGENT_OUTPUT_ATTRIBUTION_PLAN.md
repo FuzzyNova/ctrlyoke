@@ -1,6 +1,6 @@
 # Subagent Output Attribution Plan
 
-**Status:** Researched against all six harnesses (2026-10-15); ready to implement.
+**Status:** Researched against all six harnesses (2026-10-15); staged for implementation 2026-10-23 (see "Implementation order").
 
 ## Problem
 
@@ -342,10 +342,25 @@ Rejected alternative: parallel event types (`subagentText`,
 segmentation, row-height estimation, and `CliTerminalFormatter` would need a
 second branch per type. A single optional field reuses all of them.
 
-Remove `callerType`, `CallerType`, and `CALLER_TYPES` (pre-release, no
-compatibility constraint). Keep the `StreamingHistoryBuffer` merge guard, keyed
-on the group key, so a subagent's text never coalesces into the parent's or a
+Remove `callerType`, `CallerType`, and `CALLER_TYPES`. ctrlyoke is released,
+so this was checked against the compatibility rules: `callerType` is persisted
+inside `cliOutput*` events in each run's `events.jsonl` (timeline schema v2) and
+passes through verbatim in `ctrlyoke history show --json --events`. It is
+optional, undocumented (no schema, docs page or `--json` envelope definition
+names it), and never held anything but `"direct"`, so removing it needs no
+timeline schema bump: old files still carry it and are read fine because nothing
+reads it, and older ctrlyoke versions ignore the new optional `subagent` /
+`subagentSpawn` fields. Record the removal and the new fields under **Changed**
+in `CHANGELOG.md`. Keep the `StreamingHistoryBuffer` merge guard, keyed on the
+group key, so a subagent's text never coalesces into the parent's or a
 sibling's.
+
+The spawn card's live state also needs a home. Put it on `subagentSpawn`
+(`statusLine?: string` and a `state` of running / completed / failed, as
+constants in `DashboardConstants.ts`). Parsers express an update as another
+tool-call event with the spawn's id, which `CliEventNormalizer` already merges
+by id; the completion signal for a child (see section 3) sets `state`, not the
+spawn tool's own result.
 
 Normalize the spawn itself on the parent's `ToolCall`: a parser that recognizes
 its harness's spawn tool sets
@@ -469,7 +484,15 @@ children's work:
 
 Usage from a child source that can't be read (missing file, link never
 resolved) marks the attempt's coverage partial, so totals show **≥** instead
-of silently undercounting.
+of silently undercounting. Note that today `calculateAttemptCost`
+(`src/utils/ModelPricing.ts`) returns no cost at all for
+`TOKEN_TOTAL_CONFIDENCE.PARTIAL`; decide whether a missing child should
+suppress the whole attempt's cost (current behaviour, safest) or show a lower
+bound, and document the choice here.
+
+Per-model usage is a new optional field on the persisted `TokenUsage` /
+`CliOutput.tokens`; adding it is additive and needs no timeline schema bump,
+but runs recorded before it keep a single blended count.
 
 #### Measured usage coverage
 
@@ -608,24 +631,32 @@ Consequences for the design:
   from the parent in this capture. Only Codex and Antigravity (`inherit`)
   matched the parent here, and either can be configured differently.
 
-### 5. Suggested order
+### 5. Implementation order
 
-1. Data model swap (`callerType` → `subagent` / `subagentSpawn`) plus the merge
-   guard.
-2. Inline harnesses: claude-cli headless and copilot-cli. This fixes the
-   reported interleaving bug.
-3. Card renderer and terminal formatter.
-4. `SubagentSourceFollower`, with qwen-cli first: its sidechain filename already
-   carries the call id, which makes it the simplest follower case.
-5. codex-cli, antigravity-cli, claude-cli interactive, then opencode-cli (needs
-   the plugin change).
-6. Subagent token and cost accounting (section 4), per harness as each child
-   source lands. claude-cli interactive is the largest measured gap, so it can
-   come first: its `subagents/agent-*.jsonl` usage can be summed before the
-   full follower and card work, since counting tokens needs no rendering.
-   claude-cli headless is an even smaller fix: read `result.modelUsage`
-   instead of the parent-only `result.usage` (see "Measured usage coverage").
-   Copilot already counts child tokens; it only needs per-model pricing.
+Each item is one session; tick it when it lands.
+
+- [ ] 1. Data model swap (`callerType` → `subagent` / `subagentSpawn`) plus the
+      merge guard.
+- [ ] 2. claude-cli headless inline stamping, spawn normalization, and
+      `task_*` status/completion. Fixes the reported interleaving bug.
+- [ ] 3. copilot-cli inline stamping (both modes).
+- [ ] 4. Per-model usage and pricing, plus the inline-source usage fixes that
+      need no follower: claude-cli headless `result.modelUsage`, copilot-cli
+      per-model `chat` spans and the child context-window leak, qwen-cli
+      headless `result.usage`.
+- [ ] 5. Dashboard spawn card and nested rows; terminal formatter indentation
+      (independent files, may run in parallel).
+- [ ] 6. `SubagentSourceFollower` with qwen-cli (both modes, bridge
+      unwrapping, qwen interactive child usage).
+- [ ] 7. claude-cli interactive follower plus child usage (the largest
+      measured usage gap).
+- [ ] 8. codex-cli follower plus child usage.
+- [ ] 9. antigravity-cli follower (N children, asynchronous completion) plus
+      child usage.
+- [ ] 10. opencode-cli plugin sidecar, follower, and child usage.
+- [ ] 11. Harness-suite case, user docs (`docs/guide/usage-and-stats.md`
+      subagent note, output guide), CHANGELOG sweep, and moving this plan to
+      `dev/implemented/`.
 
 ## Out of scope
 
