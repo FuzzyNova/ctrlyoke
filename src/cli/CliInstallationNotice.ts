@@ -1,30 +1,14 @@
-import * as fs from "fs";
-import * as path from "path";
 import { INDEX_SCHEMA_VERSION } from "../core/orchestration/HistorySearchIndexLayout";
 import {
   findNewerExtension,
   hasShownNotice,
   INSTALLATION_KINDS,
+  isBundledInExtension,
   markNoticeShown,
   mismatchNoticeKey,
   recordInstallation,
   type InstallationRecord,
 } from "../utils/CtrlyokeInstallations";
-
-/**
- * True when this CLI is the copy bundled inside a VS Code extension (its
- * package root is the extension folder), rather than the npm package.
- */
-export function isBundledInExtension(packageRoot: string): boolean {
-  try {
-    const manifest = JSON.parse(
-      fs.readFileSync(path.join(packageRoot, "package.json"), "utf8")
-    ) as { engines?: { vscode?: unknown } };
-    return typeof manifest.engines?.vscode === "string";
-  } catch {
-    return false;
-  }
-}
 
 export function formatNewerExtensionNotice(
   cliVersion: string,

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-22 by Nathan, installing a local 0.2.1 VSIX during release prep
 - **Area:** `src/utils/CtrlyokeInstallations.ts`, `src/cli/CliInstallationNotice.ts`, `src/ui/CtrlyokeCliCommands.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

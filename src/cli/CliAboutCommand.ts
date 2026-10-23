@@ -1,13 +1,13 @@
 import * as path from "path";
 import {
   INSTALLATION_KINDS,
+  isBundledInExtension,
   readLiveInstallations,
   type InstallationKind,
   type InstallationRecord,
 } from "../utils/CtrlyokeInstallations";
 import { foldPathForCompare } from "../utils/PathCasing";
 import { ctrlyokeStateHome } from "../utils/ProjectStatePaths";
-import { isBundledInExtension } from "./CliInstallationNotice";
 
 export const CLI_ABOUT_JSON_SCHEMA_VERSION = 1;
 

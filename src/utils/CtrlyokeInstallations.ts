@@ -292,9 +292,26 @@ export function findNewerExtension(
 }
 
 /**
- * The extension's view: an npm CLI older than this extension. The CLI bundled
- * inside an extension shares that extension's package root and version, so
- * it never matches.
+ * True when the CLI at `packageRoot` is not the npm package: its
+ * `package.json` declares `engines.vscode`, as the copy bundled inside a VS
+ * Code extension and a ctrlyoke repo checkout both do.
+ */
+export function isBundledInExtension(packageRoot: string): boolean {
+  try {
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(packageRoot, "package.json"), "utf8")
+    ) as { engines?: { vscode?: unknown } };
+    return typeof manifest.engines?.vscode === "string";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The extension's view: an npm CLI older than this extension. A CLI bundled
+ * inside an extension (this one or a previous version's folder) or run from a
+ * repo checkout is not something the user can `npm install`, so it never
+ * matches. Checked on read so records already on disk are covered.
  */
 export function findOlderCli(
   self: InstallationRecord,
@@ -303,7 +320,8 @@ export function findOlderCli(
   return others.find(
     (other) =>
       other.kind === INSTALLATION_KINDS.CLI &&
-      compareVersions(other.version, self.version) < 0
+      compareVersions(other.version, self.version) < 0 &&
+      !isBundledInExtension(other.packageRoot)
   );
 }
 
