@@ -23,6 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CLI and the Stats tab now count them. Totals already recorded for earlier runs are unchanged.
   [Reading a step's token counts](https://ctrlyoke.dev/docs/guide/usage-and-stats#token-counts)
   explains how each harness reports tokens.
+- **Claude Code cost estimates price 1-hour cache writes correctly.** Claude Code writes its prompt
+  cache with a 1-hour lifetime, which Anthropic bills at twice the input rate, but ctrlyoke priced
+  every cache write at the cheaper 5-minute rate. Estimates for Claude Code steps were up to about a
+  quarter too low and now match the cost Claude Code reports itself. Costs already recorded for earlier runs
+  are unchanged.
+- **A model pricing override now applies even when the harness reports its own cost.** OpenCode
+  steps, and Claude Code steps run headless, used the harness's figure and ignored your
+  override.
 
 ## [0.2.2] - 2026-10-22
 

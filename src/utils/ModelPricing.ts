@@ -32,7 +32,7 @@ export interface ModelPricing {
   outputPerMTok: number;
   /** USD per 1M cache-read input tokens. */
   cachedInputPerMTok?: number;
-  /** USD per 1M cache-write tokens — Claude only. */
+  /** USD per 1M cache-write tokens (default 5-minute TTL) — Claude only. */
   cacheWritePerMTok?: number;
   /** USD per 1M reasoning tokens, when a provider prices them apart from output. */
   reasoningPerMTok?: number;
@@ -47,8 +47,16 @@ export interface AttemptTokenCounts {
   completion: number;
   cached?: number;
   cacheCreated?: number;
+  /** Subset of `cacheCreated` written with a 1-hour TTL. */
+  cacheCreatedLongTtl?: number;
   reasoning?: number;
 }
+
+/**
+ * Anthropic bills 1-hour cache writes at twice the base input rate. models.dev
+ * carries only the default 5-minute write rate, so the 1-hour rate is derived.
+ */
+const LONG_TTL_CACHE_WRITE_INPUT_MULTIPLIER = 2;
 
 export interface AttemptCostCalculationInput extends AttemptTokenCounts {
   harnessId: HarnessId;
@@ -95,9 +103,12 @@ function hasValidTokenCounts(tokens: AttemptTokenCounts): boolean {
   if (!Number.isFinite(tokens.prompt) || !Number.isFinite(tokens.completion)) {
     return false;
   }
-  return [tokens.cached, tokens.cacheCreated, tokens.reasoning].every(
-    (value) => value === undefined || Number.isFinite(value)
-  );
+  return [
+    tokens.cached,
+    tokens.cacheCreated,
+    tokens.cacheCreatedLongTtl,
+    tokens.reasoning,
+  ].every((value) => value === undefined || Number.isFinite(value));
 }
 
 /**
@@ -126,6 +137,10 @@ export function calculateTokenCost(
   const completion = Math.max(tokens.completion, 0);
   const cached = Math.max(tokens.cached ?? 0, 0);
   const cacheCreated = Math.max(tokens.cacheCreated ?? 0, 0);
+  const cacheCreatedLongTtl = Math.min(
+    Math.max(tokens.cacheCreatedLongTtl ?? 0, 0),
+    cacheCreated
+  );
   const reasoning = Math.max(tokens.reasoning ?? 0, 0);
   const nonCachedInput =
     semantics.cacheInputRelationship === ATTEMPT_COST_CACHE_RELATIONSHIPS.SUBSET
@@ -142,10 +157,15 @@ export function calculateTokenCost(
     cached,
     pricingData.cachedInputPerMTok ?? pricingData.inputPerMTok
   );
-  const cacheWriteUsd = perMillion(
-    cacheCreated,
-    pricingData.cacheWritePerMTok ?? pricingData.inputPerMTok
-  );
+  const cacheWriteUsd =
+    perMillion(
+      cacheCreated - cacheCreatedLongTtl,
+      pricingData.cacheWritePerMTok ?? pricingData.inputPerMTok
+    ) +
+    perMillion(
+      cacheCreatedLongTtl,
+      pricingData.inputPerMTok * LONG_TTL_CACHE_WRITE_INPUT_MULTIPLIER
+    );
   const outputUsd = perMillion(completion, pricingData.outputPerMTok);
   const reasoningUsd = perMillion(
     separatelyPricedReasoning,
@@ -205,6 +225,12 @@ export function calculateAttemptCost(
           input.modelId
         )
       : undefined;
+
+  // A user's price override is an explicit instruction about what their tokens
+  // cost, so it outranks the harness's own figure.
+  if (input.pricingOverride && calculatedCost) {
+    return { cost: calculatedCost };
+  }
 
   if (hasHarnessReported) {
     if (

@@ -555,6 +555,11 @@ export interface TokenUsage {
   cachedInputTokens?: number;
   /** Number of cache-creation input tokens — Claude only */
   cacheCreatedTokens?: number;
+  /**
+   * Subset of `cacheCreatedTokens` written with a 1-hour TTL, which Anthropic
+   * bills at a higher rate than the default 5-minute writes — Claude only.
+   */
+  cacheCreatedLongTtlTokens?: number;
   /** Number of reasoning output tokens — Codex and Antigravity */
   reasoningOutputTokens?: number;
   /** Provenance of totalTokens as declared by the parser. */

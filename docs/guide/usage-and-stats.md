@@ -93,6 +93,11 @@ tokens would cost at API prices. **≈** marks an estimate. **≥** marks a lowe
 bound: some steps had no cost, for example because their model has no known
 price, so the real figure is higher.
 
+Cache reads and cache writes are priced at their own rates. Claude Code writes
+its prompt cache with a 1-hour lifetime, which Anthropic bills at twice the
+input rate rather than the usual cache-write rate, so ctrlyoke prices those
+writes at twice the model's input rate.
+
 List prices come from [models.dev](https://models.dev), an open-source model
 pricing database. Each ctrlyoke release bundles a copy, so ctrlyoke never
 fetches prices while you work. The Stats tab names this source too.
@@ -135,7 +140,10 @@ The model ID must match the one the harness reports for the step, which can
 differ from what you picked. Claude Code, for example, reports
 `claude-haiku-5-5` for the `haiku` alias. Where the editor offers a list of
 discovered models, pick from it rather than typing. An override replaces the
-built-in price for that model completely.
+built-in price for that model completely, and it also takes priority over a
+cost the harness reports itself, as Claude Code does in headless runs and
+OpenCode always does. **Cache write** is the standard rate; Claude Code's
+1-hour cache writes are priced at twice your **Input** rate.
 
 ## Reading a step's token counts {#token-counts}
 
@@ -233,6 +241,10 @@ those 85.3k new tokens plus 20 in and 4.8k out.
 
 Runs recorded by ctrlyoke 0.2.2 or earlier left cache writes out of these totals, so
 their Claude Code, Copilot, OpenCode and Antigravity figures read lower.
+
+Tokens used by subagents that a step launches aren't counted yet for most
+harnesses, including Claude Code in an interactive terminal, so a step that
+delegates heavily reads lower than its real usage.
 
 When Antigravity's counts come only from its status line, they can cover the
 last model call rather than the whole attempt.

@@ -232,6 +232,60 @@ suite("ModelPricing", () => {
     assert.strictEqual(result.cost?.usd, 7);
   });
 
+  test("prefers a configured override over harness-reported dollars", () => {
+    for (const harnessId of [
+      HARNESS_IDS.CLAUDE_CLI,
+      HARNESS_IDS.OPENCODE_CLI,
+    ]) {
+      const result = calculateAttemptCost({
+        harnessId,
+        modelId: "provider/byo-model",
+        prompt: 1_000_000,
+        completion: 0,
+        harnessReportedCostUsd: 0,
+        pricingOverride: { inputPerMTok: 3, outputPerMTok: 15 },
+      });
+
+      assert.strictEqual(
+        result.cost?.source,
+        ATTEMPT_COST_SOURCES.USER_OVERRIDE
+      );
+      assert.strictEqual(result.cost?.usd, 3);
+    }
+  });
+
+  test("prices 1-hour cache writes at twice the input rate", () => {
+    const cost = calculateTokenCost(
+      testPricing,
+      HARNESS_TOKEN_SEMANTICS[HARNESS_IDS.CLAUDE_CLI],
+      {
+        prompt: 0,
+        completion: 0,
+        cacheCreated: 1_000_000,
+        cacheCreatedLongTtl: 250_000,
+      }
+    );
+
+    // 750k 5-minute writes at $4/M plus 250k 1-hour writes at 2 × $10/M.
+    assert.strictEqual(cost?.breakdown?.cacheWriteUsd, 3 + 5);
+    assert.strictEqual(cost?.usd, 8);
+  });
+
+  test("never prices more 1-hour writes than cache writes reported", () => {
+    const cost = calculateTokenCost(
+      testPricing,
+      HARNESS_TOKEN_SEMANTICS[HARNESS_IDS.CLAUDE_CLI],
+      {
+        prompt: 0,
+        completion: 0,
+        cacheCreated: 1_000_000,
+        cacheCreatedLongTtl: 5_000_000,
+      }
+    );
+
+    assert.strictEqual(cost?.usd, 20);
+  });
+
   test("accepts OpenCode harness dollars without a bundled model table", () => {
     const result = calculateAttemptCost({
       harnessId: HARNESS_IDS.OPENCODE_CLI,

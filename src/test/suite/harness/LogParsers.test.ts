@@ -175,6 +175,56 @@ suite("ClaudeLogParser", () => {
     );
   });
 
+  test("records 1-hour cache writes from the TTL split", () => {
+    const assistant = (id: string, oneHour: number, fiveMinute: number) =>
+      ({
+        type: "assistant",
+        timestamp: 1_792_756_800_000,
+        message: {
+          id,
+          role: "assistant",
+          content: [{ type: "text", text: "ok" }],
+          usage: {
+            input_tokens: 1,
+            output_tokens: 1,
+            cache_creation_input_tokens: oneHour + fiveMinute,
+            cache_creation: {
+              ephemeral_5m_input_tokens: fiveMinute,
+              ephemeral_1h_input_tokens: oneHour,
+            },
+          },
+        },
+      }) as BaseCliEvent;
+
+    const fromLog = parser.extractResponse([
+      assistant("msg_1", 300, 0),
+      assistant("msg_2", 200, 50),
+    ]);
+    assert.strictEqual(fromLog.metadata.usage?.cacheCreatedTokens, 550);
+    assert.strictEqual(fromLog.metadata.usage?.cacheCreatedLongTtlTokens, 500);
+
+    const fromResult = parser.extractResponse([
+      assistant("msg_1", 300, 0),
+      {
+        type: "result",
+        timestamp: 1_792_756_801_000,
+        usage: {
+          input_tokens: 2,
+          output_tokens: 2,
+          cache_creation_input_tokens: 900,
+          cache_creation: {
+            ephemeral_5m_input_tokens: 100,
+            ephemeral_1h_input_tokens: 800,
+          },
+        },
+      } as BaseCliEvent,
+    ]);
+    assert.strictEqual(
+      fromResult.metadata.usage?.cacheCreatedLongTtlTokens,
+      800
+    );
+  });
+
   suite("headless golden output", () => {
     test("surfaces Claude result errors in output metadata", () => {
       const provider = new ClaudeCliProvider();

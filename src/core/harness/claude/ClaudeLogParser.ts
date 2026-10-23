@@ -86,6 +86,12 @@ import {
  * ```
  */
 
+/** Cache writes split by TTL; the two fields sum to `cache_creation_input_tokens`. */
+interface ClaudeCacheCreationUsage {
+  ephemeral_5m_input_tokens?: number;
+  ephemeral_1h_input_tokens?: number;
+}
+
 /**
  * Provider-specific event type for internal loop bodies.
  *
@@ -120,6 +126,7 @@ interface ClaudeProviderEvent extends BaseCliEvent {
     total_tokens?: number;
     cache_creation_input_tokens?: number;
     cache_read_input_tokens?: number;
+    cache_creation?: ClaudeCacheCreationUsage;
   };
   data?: Record<string, any>;
   content?: string;
@@ -251,6 +258,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
     let cacheCreationTokens = 0;
+    let cacheCreationLongTtlTokens = 0;
     let cacheReadTokens = 0;
     let resultUsage: ClaudeProviderEvent["usage"];
     let reportedError: string | undefined;
@@ -315,6 +323,9 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
             event.usage.cache_creation_input_tokens ?? cacheCreationTokens;
           cacheReadTokens =
             event.usage.cache_read_input_tokens ?? cacheReadTokens;
+          cacheCreationLongTtlTokens =
+            event.usage.cache_creation?.ephemeral_1h_input_tokens ??
+            cacheCreationLongTtlTokens;
           resultTotalTokens = event.usage.total_tokens;
         }
         if (
@@ -410,6 +421,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
             totalOutputTokens += usage.output_tokens || 0;
             cacheCreationTokens += usage.cache_creation_input_tokens || 0;
             cacheReadTokens += usage.cache_read_input_tokens || 0;
+            cacheCreationLongTtlTokens +=
+              usage.cache_creation?.ephemeral_1h_input_tokens || 0;
             if (usageId) {
               countedUsageIds.add(usageId);
             }
@@ -532,6 +545,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
                   cacheReadTokens > 0 ? cacheReadTokens : undefined,
                 cacheCreatedTokens:
                   cacheCreationTokens > 0 ? cacheCreationTokens : undefined,
+                cacheCreatedLongTtlTokens:
+                  cacheCreationLongTtlTokens > 0
+                    ? cacheCreationLongTtlTokens
+                    : undefined,
                 contextWindowUsedTokens,
                 contextWindowSize: getClaudeContextWindowSize(
                   model ?? this.resolvedModel
