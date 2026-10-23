@@ -46,6 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ends.** When Copilot waited on a background shell with `read_powershell` and the shell finished
   during that wait, ctrlyoke kept treating the shell as running. The step stayed running for 10
   minutes after Copilot was done, until the idle timeout completed it.
+- **An interactive Qwen Code step waits for its background work.** When Qwen Code started
+  background shells, monitors or subagents and ended its turn, the step completed straight away,
+  before the work finished or Qwen Code dealt with its result. Each task's completion
+  notification was also shown as a message you had typed. The step now keeps running until the
+  last task's follow-up turn ends, like Claude Code, Copilot and Antigravity steps.
 - **The "CLI is older than this extension" notice only names a CLI installed with npm.** After an
   extension update, it could name the CLI copy bundled in the previous extension version's folder,
   which runs whenever you or an agent type `ctrlyoke` in a VS Code terminal, even if you never
