@@ -654,6 +654,15 @@ export class WorkflowExecutor {
       while (true) {
         if (!runFinalStepFirst) {
           while (this.promptQueue.hasNext()) {
+            // Never claim the next step once a stop is under way: claiming
+            // starts it, and the stopped outcome would then cancel it and
+            // advance past it without it ever running.
+            if (
+              runtime.status === EXECUTION_STATES.STOPPED ||
+              runtime.status === EXECUTION_STATES.CANCELLING
+            ) {
+              break;
+            }
             const state = this.promptQueue.getState();
             if (
               await this.checkExecutionTimeLimit(
@@ -2413,6 +2422,14 @@ export class WorkflowExecutor {
         "initial",
         false
       );
+
+      // A harness can still report success after the user stopped this step,
+      // e.g. when a completion signal that was held back arrives as the
+      // process dies. stop() has already cancelled the step and advanced past
+      // it, so the late success is a stop, not a completion.
+      if (result && runtime.stopped) {
+        result = null;
+      }
 
       if (!result) {
         const failureDisposition = await this.handlePromptSendFailure(

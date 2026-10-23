@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The MCP Manager and the Stats tab name where their data comes from.** The MCP Manager's
   "Registry" tab is now **MCP Registry** and says it searches `registry.modelcontextprotocol.io`.
   The Stats tab says cost estimates use list prices from models.dev, bundled with each release.
+- **A step you stop stays stopped, and Continue runs the next step.** If the harness reported the
+  stopped step finished after you pressed Stop, the step turned completed and the following step
+  was marked stopped without running, so Continue skipped it.
 
 ## [0.2.2] - 2026-10-22
 
