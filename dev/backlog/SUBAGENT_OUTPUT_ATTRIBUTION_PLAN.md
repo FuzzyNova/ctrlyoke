@@ -458,13 +458,11 @@ children's work:
 - **Context window stays the parent's.** Children have their own context;
   `contextWindowUsedTokens` must keep coming from the parent's last call.
 - **Don't count twice.** Before adding a child's usage, check whether the
-  stream ctrlyoke already reads includes it: claude-cli headless children
-  arrive inline in stdout with their own `message.usage`, and the `result`
-  event's `usage` (which currently overwrites the accumulated sums) may or may
-  not include them. Verify each harness against a captured run, the same way
-  the research above was done, and record the answer in this plan. Codex's
-  child rollout replays the parent's history (see the codex-cli gotchas), so
-  only its own `token_count` deltas count.
+  stream ctrlyoke already reads includes it. claude-cli is answered below
+  ("Measured: claude-cli"). The other harnesses still need a captured run, the
+  same way the research above was done; record each answer in this plan.
+  Codex's child rollout replays the parent's history (see the codex-cli
+  gotchas), so only its own `token_count` deltas count.
 - **Harness-reported cost.** Claude's `total_cost_usd` and OpenCode's
   `part.cost` may already include children. Compare against the per-model
   calculation, and keep the existing divergence check meaningful.
@@ -472,6 +470,60 @@ children's work:
 Usage from a child source that can't be read (missing file, link never
 resolved) marks the attempt's coverage partial, so totals show **≥** instead
 of silently undercounting.
+
+#### Measured: claude-cli
+
+Captured 2026-10-23 with claude-cli 2.1.309: `claude -p --model haiku
+--output-format stream-json --verbose`, asking the parent to launch two
+parallel `Agent` subagents, B pinned to `model: "sonnet"` (the spawn accepts a
+model override, and the child ran `claude-sonnet-5-5`). Then compared the
+stdout against the session's transcripts under
+`~/.claude/projects/<slug>/`.
+
+| Source                                                        | Includes the children?                                                                                                                    |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `result.usage` (top-level)                                    | **No.** Parent only (4 in / 13,982 cache-write / 45,717 cache-read / 631 out), identical to the main transcript's sums.                   |
+| `result.modelUsage[model]`                                    | **Yes**, per model, children folded in.                                                                                                   |
+| `result.total_cost_usd`                                       | **Yes**: exactly the sum of `modelUsage[*].costUSD`.                                                                                      |
+| Inline child `assistant` messages in stdout (`message.usage`) | Present, but **partial**: streamed `output_tokens` are early snapshots (3 and 16 against 387 and 172 in the transcripts). Don't sum them. |
+| `<sessionId>.jsonl` (main transcript)                         | Parent records only.                                                                                                                      |
+| `<sessionId>/subagents/agent-<id>.jsonl`                      | Child records, **also written in headless mode**, with full usage.                                                                        |
+
+The result's per-model `modelUsage` equals the main transcript plus every
+`subagents/agent-*.jsonl`, summed per model and deduped by `message.id`, with
+no difference in input, output, cache-read or cache-write counts (haiku: 8 /
+1,018 / 67,308 / 37,488; sonnet: 4 / 172 / 21,592 / 23,351). The `task_progress`
+and `task_notification` system events also carry a per-child
+`usage: {total_tokens, tool_uses, duration_ms}`, but it is a single total with
+no split by token type or model, so it is useful for a status line only.
+
+Consequences for the design:
+
+- **Headless claude-cli is currently wrong, in a way that is easy to fix.**
+  `ClaudeLogParser` takes the top-level `result.usage` as the attempt total,
+  which excludes children, while it stores `total_cost_usd` and `modelUsage`,
+  which include them. Token counts and the reported cost therefore disagree
+  whenever a subagent ran, and the divergence check fires for the wrong reason.
+  The fix needs no subagent files: use `modelUsage` for the per-model token
+  counts (`inputTokens`, `outputTokens`, `cacheReadInputTokens`,
+  `cacheCreationInputTokens`) and sum them into the step totals.
+- **Don't add the subagent transcripts on top in headless mode**, or the
+  children are counted twice. `modelUsage` already has them.
+- **`modelUsage` has no 1-hour / 5-minute cache-write split.** Only the
+  top-level `result.usage.cache_creation` has it, and that is parent-only. In
+  this capture the parent wrote its cache at the 1-hour TTL and both children at
+  5 minutes. For the priced split, take the parent's 1-hour subset from
+  `result.usage` and treat the rest of the cache writes as 5-minute, or, when
+  the transcripts are readable, take each child's split from its own file. The
+  second is exact; the first slightly underprices any child that used the
+  1-hour TTL.
+- **Interactive claude-cli has no result event**, so the transcripts are the
+  only source: the main transcript is parent-only, and the children are only in
+  `subagents/agent-*.jsonl`. Add those, per model, once each. This is the
+  42% gap measured above.
+- Transcript usage is the exact, deduped-by-`message.id` figure, unlike the
+  inline stdout messages. If headless needs the 1-hour split per child, read the
+  `subagents/` files rather than the stream.
 
 ### 5. Suggested order
 
@@ -488,6 +540,8 @@ of silently undercounting.
    source lands. claude-cli interactive is the largest measured gap, so it can
    come first: its `subagents/agent-*.jsonl` usage can be summed before the
    full follower and card work, since counting tokens needs no rendering.
+   claude-cli headless is an even smaller fix: read `result.modelUsage`
+   instead of the parent-only `result.usage` (see "Measured: claude-cli").
 
 ## Out of scope
 
