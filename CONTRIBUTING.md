@@ -58,6 +58,14 @@ Releases are tag-driven, not branch-driven — `main` stays trunk, and a `vX.Y.Z
 5. **Approve the staged npm package** on npmjs.com → `ctrlyoke` → Staged Packages (or `npm stage approve <id>`, with the id in the release run's "Stage npm CLI package" log). This needs the maintainer's passkey. Do it promptly: until it is approved, the extension's "older CLI" notice and the Install CLI command point npm users at a version that does not exist yet.
 6. **Check the release**: the Marketplace lists the new version (it can take a few minutes to validate), `npm view ctrlyoke version` matches the tag, and the GitHub Release has the VSIX attached.
 
+**Patch release:** a release that only ships bug fixes, with no dependency updates or harness CLI changes, can skip step 0 and step 1's chores. Its `testedWith` values carry over unchanged, so the CHANGELOG gets no "Tested with" note. What remains:
+
+1. `npm test` on `main`.
+2. The release commit from step 2: `npm version X.Y.Z --no-git-tag-version` and the CHANGELOG heading rename.
+3. Steps 3–6: tag, let `release.yml` publish, approve the staged npm package, check the release.
+
+Run the full checklist again for the next release that updates dependencies or a harness CLI.
+
 **Pre-release channel:** `vsce publish --pre-release` publishes to the Marketplace's opt-in pre-release channel instead of stable. VS Code's convention is `major.EVEN.patch` for stable and `major.ODD.patch` for pre-release (plain `x.y.z` only — semver suffixes like `-beta.1` aren't supported by the Marketplace). This isn't automated by `release.yml`; run it manually when you want a testable build ahead of a stable release.
 
 **Hotfixing a published version:** if `main` has moved on past what's currently live on the Marketplace and a published version needs a fix, cut a release branch from the tag rather than from `main`:
