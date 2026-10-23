@@ -958,9 +958,6 @@ export class QwenLogParser extends BaseLogParser {
       ? (wrappedArguments as Record<string, unknown>)
       : functionArgs;
     const isAgentSpawn = toolName === QWEN_TOOL_NAMES.AGENT;
-    if (isAgentSpawn && args[QWEN_AGENT_ARGUMENTS.RUN_IN_BACKGROUND] === true) {
-      return [];
-    }
     // Track file path for later correlation with tool_result resultDisplay
     // (resultDisplay.fileName is basename-only).
     const fp = (args.absolute_path ?? args.file_path ?? args.path) as

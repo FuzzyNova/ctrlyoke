@@ -22,5 +22,4 @@ export const QWEN_AGENT_ARGUMENTS = {
   DESCRIPTION: "description",
   TYPE: "subagent_type",
   PROMPT: "prompt",
-  RUN_IN_BACKGROUND: "run_in_background",
 } as const;

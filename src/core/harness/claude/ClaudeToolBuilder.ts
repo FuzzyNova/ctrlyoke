@@ -113,9 +113,8 @@ export class ClaudeToolBuilder {
       timestamp
     );
     if (
-      input.run_in_background !== true &&
-      (toolName === CLAUDE_SUBAGENT_TOOL_NAMES.AGENT ||
-        toolName === CLAUDE_SUBAGENT_TOOL_NAMES.LEGACY_TASK)
+      toolName === CLAUDE_SUBAGENT_TOOL_NAMES.AGENT ||
+      toolName === CLAUDE_SUBAGENT_TOOL_NAMES.LEGACY_TASK
     ) {
       for (const event of events) {
         if (event.type === CLI_EVENT_TYPES.TOOL_CALL) {

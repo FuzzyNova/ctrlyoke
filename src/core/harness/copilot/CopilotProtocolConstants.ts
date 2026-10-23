@@ -25,7 +25,3 @@ export const COPILOT_TOOL_NAMES = {
   APPLY_PATCH: "apply_patch",
   TASK: "task",
 } as const;
-
-export const COPILOT_SUBAGENT_EXECUTION_MODES = {
-  SYNC: "sync",
-} as const;

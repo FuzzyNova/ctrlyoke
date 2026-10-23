@@ -725,7 +725,12 @@ Each item is one session; tick it when it lands.
 
 ## Out of scope
 
-- **Background subagents**: Claude/Qwen `run_in_background`, and any Copilot
+> **Reversed 2026-10-23:** background subagents are now followed and attributed like
+> foreground ones. Claude Code launches parallel `Agent` calls as background by
+> default, so the exclusion left the feature inert; the shape, `run_in_background`
+> and `executionMode: "sync"` filters were removed.
+
+- **Background subagents** (originally excluded): Claude/Qwen `run_in_background`, and any Copilot
   `subagent.started` with `executionMode` other than `"sync"`. Their completion
   arrives as a notification that existing background-work handling already
   covers. (Antigravity children are asynchronous but the parent waits for them,

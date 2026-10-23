@@ -31,7 +31,6 @@ import {
   COPILOT_EVENT_TYPES,
   COPILOT_SESSION_INFO_TYPES,
   COPILOT_USER_MESSAGE_DELIVERIES,
-  COPILOT_SUBAGENT_EXECUTION_MODES,
   COPILOT_TOOL_NAMES,
   type CopilotMcpToolIdentity,
 } from "./CopilotProtocolConstants";
@@ -237,7 +236,6 @@ export class CopilotLogParser extends BaseLogParser {
   private pendingStreamingTools = new Map<string, CopilotPendingTool>();
   /** Child tool IDs do not repeat their parent ID on shell output events. */
   private streamingSubagentParents = new Map<string, string>();
-  private streamingSyncSubagentIds = new Set<string>();
 
   // ========================================================================
   // OpenTelemetry Context Window Tracking
@@ -317,7 +315,6 @@ export class CopilotLogParser extends BaseLogParser {
    */
   async beginMonitoringTurn(): Promise<void> {
     this.streamingSubagentParents.clear();
-    this.streamingSyncSubagentIds.clear();
     this.pendingStreamingTools.clear();
     if (this.otelReadPosition > 0) {
       await this.pollOtelContextWindow();
@@ -635,7 +632,6 @@ export class CopilotLogParser extends BaseLogParser {
     // Track pending tool calls to associate execution_start with execution_complete
     const pendingTools = new Map<string, CopilotPendingTool>();
     const subagentParents = new Map<string, string>();
-    const syncSubagentIds = new Set<string>();
 
     for (const event of events as CopilotProviderEvent[]) {
       const timestamp = event.timestamp
@@ -657,13 +653,6 @@ export class CopilotLogParser extends BaseLogParser {
             ? subagentParents.get(toolCallId)
             : undefined;
       const eventStartIndex = outputEvents.length;
-      if (
-        event.type === COPILOT_EVENT_TYPES.SUBAGENT_STARTED &&
-        event.data?.executionMode === COPILOT_SUBAGENT_EXECUTION_MODES.SYNC &&
-        typeof event.data.toolCallId === "string"
-      ) {
-        syncSubagentIds.add(event.data.toolCallId);
-      }
 
       // Extract session metadata from session.start event
       if (event.type === "session.start" && event.data) {
@@ -913,12 +902,9 @@ export class CopilotLogParser extends BaseLogParser {
       }
 
       if (
-        (event.type === COPILOT_EVENT_TYPES.SUBAGENT_STARTED &&
-          event.data?.executionMode ===
-            COPILOT_SUBAGENT_EXECUTION_MODES.SYNC) ||
-        ((event.type === COPILOT_EVENT_TYPES.SUBAGENT_COMPLETED ||
-          event.type === COPILOT_EVENT_TYPES.SUBAGENT_FAILED) &&
-          syncSubagentIds.has(String(event.data?.toolCallId)))
+        event.type === COPILOT_EVENT_TYPES.SUBAGENT_STARTED ||
+        event.type === COPILOT_EVENT_TYPES.SUBAGENT_COMPLETED ||
+        event.type === COPILOT_EVENT_TYPES.SUBAGENT_FAILED
       ) {
         const spawn = outputEvents.find(
           (candidate) => (candidate.data as any)?.id === event.data?.toolCallId
@@ -1583,14 +1569,6 @@ export class CopilotLogParser extends BaseLogParser {
       }
       return events;
     };
-    if (
-      ev.type === COPILOT_EVENT_TYPES.SUBAGENT_STARTED &&
-      data.executionMode === COPILOT_SUBAGENT_EXECUTION_MODES.SYNC &&
-      typeof data.toolCallId === "string"
-    ) {
-      this.streamingSyncSubagentIds.add(data.toolCallId);
-    }
-
     // model.model_call_success is a usage-only headless event. Its cache
     // fields are consumed again by extractResponse() from the raw event list;
     // there is no display CliEvent to emit for this metadata event.
@@ -1755,11 +1733,9 @@ export class CopilotLogParser extends BaseLogParser {
     }
 
     if (
-      ((ev.type === COPILOT_EVENT_TYPES.SUBAGENT_COMPLETED ||
-        ev.type === COPILOT_EVENT_TYPES.SUBAGENT_FAILED) &&
-        this.streamingSyncSubagentIds.has(String(data.toolCallId))) ||
-      (ev.type === COPILOT_EVENT_TYPES.SUBAGENT_STARTED &&
-        data.executionMode === COPILOT_SUBAGENT_EXECUTION_MODES.SYNC)
+      ev.type === COPILOT_EVENT_TYPES.SUBAGENT_STARTED ||
+      ev.type === COPILOT_EVENT_TYPES.SUBAGENT_COMPLETED ||
+      ev.type === COPILOT_EVENT_TYPES.SUBAGENT_FAILED
     ) {
       const spawn = this.pendingStreamingTools.get(data.toolCallId);
       if (spawn?.toolName === COPILOT_TOOL_NAMES.TASK) {

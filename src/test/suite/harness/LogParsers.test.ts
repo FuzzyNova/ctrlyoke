@@ -484,6 +484,78 @@ suite("ClaudeLogParser", () => {
     }
   });
 
+  test("follows interactive background-shaped transcripts without run_in_background input", async () => {
+    const workspace = makeTempDir("claude-subagent-bg-");
+    const normalizedWorkspace = workspace.replace(/[\\/.]/g, "-");
+    const sessionId = `claude-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const subagentsDirectory = path.join(
+      os.homedir(),
+      ".claude",
+      "projects",
+      normalizedWorkspace,
+      sessionId,
+      "subagents"
+    );
+    fs.mkdirSync(subagentsDirectory, { recursive: true });
+    parser.setWorkspaceRoot(workspace);
+    try {
+      // Claude Code launches parallel Agent calls as background by default:
+      // the tool input never carries run_in_background, only the meta does.
+      parser.extractStructuredEventsFromEvent({
+        type: "assistant",
+        sessionId,
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "bg-agent-call",
+              name: "Agent",
+              input: { description: "Bug hunt", prompt: "Hunt" },
+            },
+          ],
+        },
+      } as BaseCliEvent);
+      fs.writeFileSync(
+        path.join(subagentsDirectory, "agent-bg.meta.json"),
+        JSON.stringify({
+          toolUseId: "bg-agent-call",
+          requestShape: "background",
+          finished: true,
+        })
+      );
+      fs.writeFileSync(
+        path.join(subagentsDirectory, "agent-bg.jsonl"),
+        JSON.stringify({
+          type: "assistant",
+          isSidechain: true,
+          message: {
+            id: "bg-child-final",
+            stop_reason: "end_turn",
+            content: [{ type: "text", text: "background child done" }],
+          },
+        }) + "\n"
+      );
+
+      const drain = await parser.getSubagentFollower().drainToEof(500);
+      const output = mergeSubagentOutput({ events: [], metadata: {} }, drain);
+      const childText = output.events.find(
+        (event) =>
+          event.type === CLI_EVENT_TYPES.TEXT &&
+          (event.data as TextData).text === "background child done"
+      );
+      assert.strictEqual(
+        childText?.subagent?.parentToolCallId,
+        "bg-agent-call"
+      );
+    } finally {
+      await removeTempDir(workspace);
+      fs.rmSync(
+        path.join(os.homedir(), ".claude", "projects", normalizedWorkspace),
+        { recursive: true, force: true }
+      );
+    }
+  });
+
   test("streams Claude task progress and completion as spawn updates", () => {
     const progress = parser.extractStructuredEventsFromEvent({
       type: "system",
@@ -551,14 +623,16 @@ suite("ClaudeLogParser", () => {
     );
   });
 
-  test("does not normalize Claude background Agent tasks as foreground spawns", () => {
+  test("normalizes Claude background Agent tasks as spawn updates too", () => {
     const events = parser.extractStructuredEventsFromEvent({
       type: "system",
       subtype: "task_started",
       tool_use_id: "background-agent",
       is_backgrounded: true,
     } as BaseCliEvent);
-    assert.deepStrictEqual(events, []);
+    assert.strictEqual(events.length, 1);
+    assert.strictEqual((events[0].data as any).id, "background-agent");
+    assert.strictEqual((events[0].data as any).subagentSpawn.state, "running");
   });
 
   test("counts assistant usage once when content blocks share a message id", () => {
@@ -8162,7 +8236,7 @@ suite("Antigravity subagent attribution", () => {
 });
 
 suite("QwenLogParser", () => {
-  test("classifies bridged and bare agent calls as foreground subagent spawns", () => {
+  test("classifies bridged, bare and background agent calls as subagent spawns", () => {
     const parser = new QwenLogParser();
     const calls = [
       {
@@ -8211,7 +8285,7 @@ suite("QwenLogParser", () => {
       .filter((event) => event.type === CLI_EVENT_TYPES.TOOL_CALL)
       .map((event) => event.data as ToolCall);
 
-    assert.strictEqual(spawns.length, 2);
+    assert.strictEqual(spawns.length, 3);
     assert.deepStrictEqual(
       spawns.map((spawn) => spawn.subagentSpawn),
       [
@@ -8225,6 +8299,12 @@ suite("QwenLogParser", () => {
           description: "Run echo and read beta.txt",
           agentType: "general-purpose",
           prompt: "Read beta.txt",
+          state: "running",
+        },
+        {
+          description: "Background task",
+          agentType: "general-purpose",
+          prompt: undefined,
           state: "running",
         },
       ]

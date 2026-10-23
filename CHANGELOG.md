@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Foreground subagent calls have dedicated output cards** showing agent details, live progress, an optional prompt, and the final result.
+- **Subagent calls have dedicated output cards** showing agent details, live progress, an optional prompt, and the final result.
 
 - **The `workflow_status` MCP tool reports execution mode.** Its metadata gives the workflow's
   `executionMode`, and each prompt step lists the `harness` and `executionMode` it ran with (or will
@@ -35,11 +35,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on a cheaper model is no longer billed at the parent's. If a subagent's log can't be read, the
   token count is shown as a lower bound and no cost estimate is given. Earlier runs keep their
   recorded totals.
-- **Foreground subagent activity is attributed to its spawn in headless and interactive output.**
+- **Subagent activity is attributed to its spawn in headless and interactive output.**
   Child commands, text and thinking are indented and labelled under their spawn card, so parallel
   and nested subagents stay distinct. The `history show --json --events` payload replaces the
   always-`direct` `callerType` field with optional subagent attribution and spawn metadata;
   existing run histories with `callerType` remain readable.
+  Background subagents (Claude Code launches parallel `Agent` calls this way by default, and Qwen
+  Code and Copilot CLI have background modes too) are attributed the same way as foreground ones.
 - **The "CLI is older than this extension" notice only names a CLI installed with npm.** After an
   extension update, it could name the CLI copy bundled in the previous extension version's folder,
   which runs whenever you or an agent type `ctrlyoke` in a VS Code terminal, even if you never

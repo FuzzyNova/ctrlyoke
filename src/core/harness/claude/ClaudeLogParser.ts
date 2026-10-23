@@ -50,7 +50,6 @@ import {
   CLAUDE_STOP_REASONS,
   CLAUDE_SYSTEM_SUBTYPES,
   CLAUDE_SUBAGENT_TOOL_NAMES,
-  CLAUDE_SUBAGENT_REQUEST_SHAPES,
   CLAUDE_TASK_STATUSES,
 } from "./ClaudeProtocolConstants";
 
@@ -196,9 +195,6 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   /** TaskStop tool_use id -> the Claude task id it is attempting to stop. */
   private pendingTaskStopTargets = new Map<string, string>();
 
-  /** Background Agent calls are intentionally outside inline subagent attribution. */
-  private backgroundSubagentToolUseIds = new Set<string>();
-
   /**
    * tool_use id -> display summary, held only until that call's result
    * arrives. A launch is often confirmed by the result (an auto-promoted
@@ -229,7 +225,6 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     this.unconfirmedAsyncLaunches.clear();
     this.backgroundTaskLaunchToolUseIds.clear();
     this.pendingTaskStopTargets.clear();
-    this.backgroundSubagentToolUseIds.clear();
     this.toolUseSummaries.clear();
   }
 
@@ -1472,8 +1467,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
               !("parent_tool_use_id" in e) &&
               e.sessionId &&
               (block.name === CLAUDE_SUBAGENT_TOOL_NAMES.AGENT ||
-                block.name === CLAUDE_SUBAGENT_TOOL_NAMES.LEGACY_TASK) &&
-              block.input?.run_in_background !== true
+                block.name === CLAUDE_SUBAGENT_TOOL_NAMES.LEGACY_TASK)
             ) {
               this.registerInteractiveSubagentSource(e.sessionId, block.id);
             }
@@ -1621,10 +1615,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
                 metadata &&
                 typeof metadata === "object" &&
                 "toolUseId" in metadata &&
-                metadata.toolUseId === parentToolUseId &&
-                "requestShape" in metadata &&
-                metadata.requestShape ===
-                  CLAUDE_SUBAGENT_REQUEST_SHAPES.FOREGROUND
+                metadata.toolUseId === parentToolUseId
               ) {
                 agentId = filename.slice("agent-".length, -".meta.json".length);
                 break;
@@ -1691,15 +1682,6 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   ): CliEvent[] {
     const toolUseId = (event as any).tool_use_id;
     if (typeof toolUseId !== "string" || !toolUseId) return [];
-
-    if (
-      event.subtype === CLAUDE_SYSTEM_SUBTYPES.TASK_STARTED &&
-      (event as any).is_backgrounded === true
-    ) {
-      this.backgroundSubagentToolUseIds.add(toolUseId);
-      return [];
-    }
-    if (this.backgroundSubagentToolUseIds.has(toolUseId)) return [];
 
     const subtype = event.subtype;
     if (
