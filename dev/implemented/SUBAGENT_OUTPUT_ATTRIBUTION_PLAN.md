@@ -2,7 +2,8 @@
 
 **Status:** Implemented 2026-10-23 (see "Implementation order"). Collapsible
 subagent groups in the output pane were split out to
-`dev/backlog/SUBAGENT_COLLAPSIBLE_GROUPS_PLAN.md`; whether OpenCode's
+`dev/rejected/SUBAGENT_COLLAPSIBLE_GROUPS_PLAN.md` and rejected in favour of
+`dev/backlog/OUTPUT_EVENT_AND_SUBAGENT_FILTER_PLAN.md`; whether OpenCode's
 `part.cost` includes child cost is still unverified.
 
 ## Problem
@@ -693,8 +694,9 @@ Each item is one session; tick it when it lands.
       Shipped as the first cut section 3 allows: subagent rows indented under
       their spawn and labelled with the child at the start of each run of its
       rows, in time order (592b36ee8). Full collapsible groups moved to
-      `dev/backlog/SUBAGENT_COLLAPSIBLE_GROUPS_PLAN.md` after two attempts
-      showed they need a new virtual row kind.
+      `dev/rejected/SUBAGENT_COLLAPSIBLE_GROUPS_PLAN.md` after two attempts
+      showed they need a new virtual row kind, then rejected for a subagent
+      filter (`dev/backlog/OUTPUT_EVENT_AND_SUBAGENT_FILTER_PLAN.md`).
 - [x] 6a. Rebuild `SubagentSourceFollower` to the follower contract in
       section 2B and wire it into the shared headless and interactive
       pipelines.

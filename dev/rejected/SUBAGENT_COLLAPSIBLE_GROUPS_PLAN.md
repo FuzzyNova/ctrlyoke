@@ -1,8 +1,11 @@
 # Collapsible Subagent Groups in the Output Pane
 
-**Status:** Not started. Split out of
-`dev/implemented/SUBAGENT_OUTPUT_ATTRIBUTION_PLAN.md`, which shipped the first cut: subagent rows indented and labelled
-under the spawn card.
+**Status:** REJECTED (2026-10-23). Filtering through the output filter state
+the step filter already uses covers the need without a new row kind, keeps
+interleaved rows in time order, and needs no regrouping. Replaced by
+`dev/backlog/OUTPUT_EVENT_AND_SUBAGENT_FILTER_PLAN.md`. Split out of
+`dev/implemented/SUBAGENT_OUTPUT_ATTRIBUTION_PLAN.md`, which shipped the first
+cut: subagent rows indented and labelled under the spawn card.
 
 ## Goal
 
