@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Antigravity subagent output and token usage are included in the parent step.**
+
 ### Added
 
 - **Install skills from skills.sh in the Agent & Skills Manager.** The Skills list has a

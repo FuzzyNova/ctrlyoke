@@ -650,7 +650,7 @@ Each item is one session; tick it when it lands.
 - [ ] 7. claude-cli interactive follower plus child usage (the largest
       measured usage gap).
 - [ ] 8. codex-cli follower plus child usage.
-- [ ] 9. antigravity-cli follower (N children, asynchronous completion) plus
+- [x] 9. antigravity-cli follower (N children, asynchronous completion) plus
       child usage.
 - [ ] 10. opencode-cli plugin sidecar, follower, and child usage.
 - [ ] 11. Harness-suite case, user docs (`docs/guide/usage-and-stats.md`

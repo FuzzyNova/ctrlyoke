@@ -15,6 +15,7 @@ import {
   sanitizeQwenProjectPath,
 } from "../../../core/harness/qwen/QwenLogParser";
 import { AntigravityLogParser } from "../../../core/harness/antigravity/AntigravityLogParser";
+import { AntigravityToolEventBuilder } from "../../../core/harness/antigravity/AntigravityToolEventBuilder";
 import {
   UniversalCliOutput,
   CliEvent,
@@ -7310,6 +7311,29 @@ suite("OpenCodeLogParser", () => {
 // ============================================================================
 // QwenLogParser Tests
 // ============================================================================
+
+suite("Antigravity subagent attribution", () => {
+  test("keeps invoke_subagent running and groups children by conversation id", () => {
+    const call = {
+      name: "invoke_subagent",
+      args: { Subagents: JSON.stringify([{ Role: "Researcher" }, { Role: "Reviewer" }]) },
+    };
+    const result = {
+      source: "MODEL", type: "GENERIC", status: "DONE",
+      content: '{"conversationId":"child-one","logAbsoluteUri":"file:///tmp/one/transcript.jsonl"}\n{"conversationId":"child-two","logAbsoluteUri":"file:///tmp/two/transcript.jsonl"}',
+    };
+    const events = AntigravityToolEventBuilder.build({
+      call, result, timestamp: 1, toolCallId: "spawn-id",
+    });
+    const spawn = events[0].data as ToolCall;
+    assert.strictEqual(spawn.id, "spawn-id");
+    assert.strictEqual(spawn.subagentSpawn?.state, "running");
+    assert.deepStrictEqual(spawn.subagentSpawn?.children, [
+      { agentId: "child-one", label: "Researcher" },
+      { agentId: "child-two", label: "Reviewer" },
+    ]);
+  });
+});
 
 suite("QwenLogParser", () => {
   test("uses headless result usage as the whole-process total", () => {

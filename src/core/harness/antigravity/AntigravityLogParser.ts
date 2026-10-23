@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import { fileURLToPath } from "url";
 import { BaseLogParser } from "../shared/BaseLogParser";
 import {
   BaseCliEvent,
@@ -12,6 +13,7 @@ import {
   COMPACTION_TRIGGERS,
   HARNESS_IDS,
   TOKEN_TOTAL_CONFIDENCE,
+  SUBAGENT_SPAWN_STATES,
 } from "../../../types/DashboardConstants";
 import {
   CliEvent,
@@ -49,6 +51,8 @@ import type {
 } from "./AntigravityStreamJsonUsage";
 import { Log } from "../../../utils/Log";
 import { CompositeFsWatcher } from "../shared/FsWatcherHandles";
+import { SubagentSourceFollower } from "../shared/SubagentSourceFollower";
+import type { ProviderModelUsage } from "../../../types/CliOutputTypes";
 
 /**
  * Synthetic `AntigravityLogEvent.type` tags — ctrlyoke's own internal event
@@ -117,6 +121,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   private cachedSessionId?: string;
   private cachedLastConversationsSessionId?: string;
   private readonly transcriptReader = new AntigravityTranscriptReader();
+  private readonly subagentFollower = new SubagentSourceFollower();
   private readonly pendingPlannerToolCalls: PendingPlannerToolCall[] = [];
   /**
    * Background follow-up state; transcript recognition remains provider-specific.
@@ -297,6 +302,23 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     }
 
     const usage = this.extractTokenUsage(events);
+    const reportedChildren = new Set<string>();
+    for (const event of events as AntigravityLogEvent[]) {
+      const entry = event.transcriptEntry;
+      const content = typeof entry?.content === "string" ? entry.content : "";
+      const report = content.match(/sender=([0-9a-f-]{36})[^\n]*content=/i);
+      if (entry?.type === ANTIGRAVITY_WIRE_VALUES.SYSTEM_MESSAGE && report) {
+        reportedChildren.add(report[1]);
+      }
+    }
+    for (const event of outputEvents) {
+      if (event.type !== CLI_EVENT_TYPES.TOOL_CALL) continue;
+      const tool = event.data as import("../../../types/CliOutputTypes").ToolCall;
+      const children = tool.subagentSpawn?.children ?? [];
+      if (children.length && children.every((child) => reportedChildren.has(child.agentId))) {
+        tool.subagentSpawn!.state = SUBAGENT_SPAWN_STATES.COMPLETED;
+      }
+    }
 
     return {
       events: outputEvents,
@@ -305,6 +327,33 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
         sessionId: this.extractSessionId(events) ?? undefined,
         model: this.resolvedModel || undefined,
         usage,
+      },
+    };
+  }
+
+  async drainSubagentSources(output: UniversalCliOutput): Promise<UniversalCliOutput> {
+    const result = await this.subagentFollower.drain();
+    const modelUsage: Record<string, ProviderModelUsage> = { ...(output.metadata.modelUsage ?? {}) };
+    for (const [model, usage] of Object.entries(result.usageByModel)) {
+      const total = modelUsage[model] ??= {};
+      total.inputTokens = (total.inputTokens ?? 0) + usage.inputTokens;
+      total.outputTokens = (total.outputTokens ?? 0) + usage.outputTokens;
+    }
+    const usage = output.metadata.usage;
+    return {
+      ...output,
+      events: [...output.events, ...result.events],
+      metadata: {
+        ...output.metadata,
+        ...(Object.keys(modelUsage).length ? { modelUsage } : {}),
+        ...(Object.keys(result.usageByModel).length ? {
+          usage: {
+            ...usage,
+            inputTokens: (usage?.inputTokens ?? 0) + Object.values(result.usageByModel).reduce((n, v) => n + v.inputTokens, 0),
+            outputTokens: (usage?.outputTokens ?? 0) + Object.values(result.usageByModel).reduce((n, v) => n + v.outputTokens, 0),
+            totalTokens: (usage?.totalTokens ?? (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0)) + Object.values(result.usageByModel).reduce((n, v) => n + v.inputTokens + v.outputTokens, 0),
+          },
+        } : {}),
       },
     };
   }
@@ -660,13 +709,17 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       entry.source === ANTIGRAVITY_WIRE_VALUES.MODEL &&
       this.isToolResultEntry(entry)
     ) {
-      const call = this.takePlannerCallForResult(entry);
+      const pendingCall = this.takePlannerCallForResult(entry);
+      const call = pendingCall?.call;
+      if (call?.name.toLowerCase() === ANTIGRAVITY_TOOL_NAMES.INVOKE_SUBAGENT) {
+        this.registerSubagentSources(call, entry, pendingCall!.toolCallId, sessionId);
+      }
       return [
         {
           type: ANTIGRAVITY_LOG_EVENT_TYPES.TRANSCRIPT_TOOL,
           line: typeof entry.content === "string" ? entry.content : "",
-          toolCall: call?.call,
-          toolCallId: call?.toolCallId,
+          toolCall: call,
+          toolCallId: pendingCall?.toolCallId,
           resultEntry: entry,
           taskId: this.extractTaskId(entry),
           ...base,
@@ -724,6 +777,57 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     }
 
     return [];
+  }
+
+  private registerSubagentSources(
+    call: AntigravityPlannerToolCall,
+    result: AntigravityTranscriptEntry,
+    spawnId: string,
+    parentSessionId: string
+  ): void {
+    const args = call.args ?? {};
+    if (typeof args.Subagents !== "string" || typeof result.content !== "string") return;
+    let descriptors: unknown;
+    try { descriptors = JSON.parse(args.Subagents); } catch { return; }
+    if (!Array.isArray(descriptors)) return;
+    const children = [...result.content.matchAll(/\{[^{}]*"conversationId"\s*:\s*"([^"]+)"[^{}]*"logAbsoluteUri"\s*:\s*"([^"]+)"[^{}]*\}/gs)];
+    for (let index = 0; index < children.length; index++) {
+      const descriptor = descriptors[index] as Record<string, unknown> | undefined;
+      const childId = children[index][1];
+      let transcriptPath: string;
+      try {
+        transcriptPath = fileURLToPath(children[index][2]);
+        const fullTranscriptPath = path.join(path.dirname(transcriptPath), "transcript_full.jsonl");
+        if (fs.existsSync(fullTranscriptPath)) transcriptPath = fullTranscriptPath;
+      } catch { continue; }
+      const attribution = { parentToolCallId: spawnId, agentId: childId };
+      const childParser = new AntigravityLogParser();
+      const model = typeof descriptor?.Model === "string" ? descriptor.Model : this.resolvedModel;
+      this.subagentFollower.register(childId, {
+        attribution,
+        open: async function* () {
+          const reader = new AntigravityTranscriptReader();
+          for (const record of await reader.readRecords(transcriptPath)) {
+            // The step-zero prompt is a steer from the parent, not child output.
+            const content = typeof record.entry.content === "string" ? record.entry.content : "";
+            if (record.entry.type === ANTIGRAVITY_WIRE_VALUES.SYSTEM_MESSAGE && content.includes(`sender=${parentSessionId}`)) continue;
+            yield { type: "antigravity-child-record", record, childId } as unknown as BaseCliEvent;
+          }
+        },
+        map: (event) => {
+          const record = (event as BaseCliEvent & { record: AntigravityTranscriptRecord }).record;
+          return childParser.parseTranscriptRecords([record], childId).flatMap((mapped) => childParser.extractStructuredEventsFromEvent(mapped));
+        },
+        usage: (event) => {
+          const record = (event as BaseCliEvent & { record: AntigravityTranscriptRecord }).record;
+          const usageEntry = record.entry;
+          if (usageEntry.type !== ANTIGRAVITY_ENTRY_TYPES.PLANNER_RESPONSE) return undefined;
+          const inputTokens = this.asFiniteNumber(usageEntry.input_tokens) ?? 0;
+          const outputTokens = this.asFiniteNumber(usageEntry.output_tokens) ?? 0;
+          return { model, inputTokens, outputTokens };
+        },
+      });
+    }
   }
 
   private isToolResultEntry(entry: AntigravityTranscriptEntry): boolean {

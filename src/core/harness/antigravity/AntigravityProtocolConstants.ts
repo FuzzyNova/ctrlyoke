@@ -49,6 +49,7 @@ export const ANTIGRAVITY_TOOL_NAMES = {
   LIST_DIR: "list_dir",
   GREP_SEARCH: "grep_search",
   ASK_QUESTION: "ask_question",
+  INVOKE_SUBAGENT: "invoke_subagent",
 } as const;
 
 /**
