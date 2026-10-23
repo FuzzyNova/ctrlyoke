@@ -76,6 +76,9 @@ export const CODEX_AGENT_MESSAGE_MARKERS = {
   FINAL_ANSWER: "FINAL_ANSWER",
 } as const;
 
+export const CODEX_ROLLOUT_FILE_PREFIX = "rollout-";
+export const CODEX_ROLLOUT_FILE_SUFFIX = ".jsonl";
+
 export const CODEX_EXEC_OPERATION_KINDS = {
   SHELL: "shell",
   PATCH: "patch",

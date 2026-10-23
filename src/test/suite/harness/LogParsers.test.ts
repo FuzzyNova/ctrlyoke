@@ -4951,6 +4951,233 @@ suite("CodexLogParser", () => {
     parser = new CodexLogParser();
   });
 
+  test("follows linked child rollouts, adds cumulative usage once, and completes from FINAL_ANSWER", async () => {
+    const tempDir = await makeTempDir("codex-subagent-follow");
+    const previousCodexHome = process.env.CODEX_HOME;
+    process.env.CODEX_HOME = tempDir;
+    try {
+      const dayDir = path.join(tempDir, "sessions", "2026", "10", "23");
+      fs.mkdirSync(dayDir, { recursive: true });
+      const parentThread = "parent-thread";
+      const parentFile = path.join(
+        dayDir,
+        `rollout-parent-${parentThread}.jsonl`
+      );
+      fs.writeFileSync(parentFile, "");
+      const childRecords = [
+        {
+          type: "session_meta",
+          payload: {
+            id: "child-thread",
+            parent_thread_id: parentThread,
+            agent_path: "/root/worker",
+            source: {
+              subagent: { thread_spawn: { agent_nickname: "Carver" } },
+            },
+            model: "gpt-child",
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            role: "user",
+            content: [{ type: "input_text", text: "replayed parent prompt" }],
+          },
+        },
+        { type: "event_msg", payload: { type: "task_started" } },
+        {
+          type: "event_msg",
+          payload: {
+            type: "task_started",
+            turn_attribution: { initiating_agent_path: "/root" },
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            role: "assistant",
+            content: [{ type: "output_text", text: "child work" }],
+          },
+        },
+        {
+          type: "event_msg",
+          payload: {
+            type: "token_count",
+            info: {
+              model: "gpt-child",
+              total_token_usage: {
+                input_tokens: 50,
+                output_tokens: 4,
+                cached_input_tokens: 10,
+                reasoning_output_tokens: 1,
+              },
+            },
+          },
+        },
+        {
+          type: "event_msg",
+          payload: {
+            type: "token_count",
+            info: {
+              model: "gpt-child",
+              total_token_usage: {
+                input_tokens: 100,
+                output_tokens: 8,
+                cached_input_tokens: 20,
+                reasoning_output_tokens: 2,
+              },
+            },
+          },
+        },
+        { type: "event_msg", payload: { type: "task_complete" } },
+      ];
+      fs.writeFileSync(
+        path.join(dayDir, "rollout-child.jsonl"),
+        childRecords.map((record) => JSON.stringify(record)).join("\n") + "\n"
+      );
+      const unrelated = {
+        ...childRecords[0],
+        payload: {
+          ...childRecords[0].payload,
+          parent_thread_id: "different-parent",
+        },
+      };
+      fs.writeFileSync(
+        path.join(dayDir, "rollout-unrelated.jsonl"),
+        JSON.stringify(unrelated) + "\n"
+      );
+      const parentEvents = [
+        {
+          type: "session_meta",
+          payload: { id: parentThread, model: "gpt-parent" },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "function_call",
+            name: "spawn_agent",
+            namespace: "collaboration",
+            call_id: "spawn-call",
+            arguments: JSON.stringify({
+              task_name: "worker",
+              message: "encrypted",
+            }),
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "function_call_output",
+            call_id: "spawn-call",
+            output: JSON.stringify({ task_name: "/root/worker" }),
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "agent_message",
+            author: "/root/worker",
+            content: "Message Type: FINAL_ANSWER\nPayload:\nChild result text",
+          },
+        },
+      ] as unknown as BaseCliEvent[];
+
+      const output = parser.extractResponse(parentEvents);
+      const drain = await parser.getSubagentFollower().drainToEof(500);
+      const merged = mergeSubagentOutput(output, drain);
+      const spawn = merged.events.find(
+        (event) => (event.data as ToolCall).id === "spawn-call"
+      );
+      assert.strictEqual(
+        (spawn?.data as ToolCall).subagentSpawn?.children?.[0]?.label,
+        "Carver"
+      );
+      assert.strictEqual(
+        (spawn?.data as ToolCall).subagentSpawn?.state,
+        "completed"
+      );
+      assert.deepStrictEqual((spawn?.data as ToolCall).result, {
+        success: true,
+        output: "Child result text",
+      });
+      assert.strictEqual(
+        merged.events.some(
+          (event) =>
+            event.type === CLI_EVENT_TYPES.TEXT &&
+            (event.data as TextData).text.includes("replayed parent")
+        ),
+        false
+      );
+      assert.strictEqual(
+        merged.events.some(
+          (event) =>
+            event.type === CLI_EVENT_TYPES.TEXT &&
+            (event.data as TextData).text === "child work" &&
+            event.subagent?.parentToolCallId === "spawn-call"
+        ),
+        true
+      );
+      assert.strictEqual(
+        merged.metadata.usage?.modelUsage?.["gpt-child"]?.inputTokens,
+        100
+      );
+      assert.strictEqual(
+        merged.metadata.usage?.modelUsage?.["gpt-child"]?.outputTokens,
+        8
+      );
+      assert.strictEqual(drain.partial, false);
+    } finally {
+      if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
+      else process.env.CODEX_HOME = previousCodexHome;
+      await removeTempDir(tempDir);
+    }
+  });
+
+  test("completes a live spawn card from the linked FINAL_ANSWER payload", () => {
+    const streamingParser = new CodexLogParser();
+    const parentRecords = [
+      { type: "session_meta", payload: { id: "live-parent" } },
+      {
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "spawn_agent",
+          namespace: "collaboration",
+          call_id: "live-spawn",
+          arguments: JSON.stringify({ task_name: "worker" }),
+        },
+      },
+      {
+        type: "response_item",
+        payload: {
+          type: "function_call_output",
+          call_id: "live-spawn",
+          output: JSON.stringify({ task_name: "/root/worker" }),
+        },
+      },
+    ];
+    for (const record of parentRecords) {
+      streamingParser.extractStructuredEventsFromEvent(record as BaseCliEvent);
+    }
+    const completed = streamingParser.extractStructuredEventsFromEvent({
+      type: "response_item",
+      payload: {
+        type: "agent_message",
+        author: "/root/worker",
+        content: "Message Type: FINAL_ANSWER\nPayload:\nLive child result",
+      },
+    } as BaseCliEvent);
+    assert.strictEqual((completed[0].data as ToolCall).id, "live-spawn");
+    assert.strictEqual(
+      (completed[0].data as ToolCall).subagentSpawn?.state,
+      "completed"
+    );
+    assert.deepStrictEqual((completed[0].data as ToolCall).result, {
+      success: true,
+      output: "Live child result",
+    });
+  });
+
   suite("fixture-based per-step usage", () => {
     function readUsageFixture(name: string): BaseCliEvent[] {
       const fixturePath = path.resolve(

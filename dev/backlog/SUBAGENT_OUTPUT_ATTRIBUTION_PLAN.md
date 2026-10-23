@@ -701,7 +701,7 @@ Each item is one session; tick it when it lands.
       interactive child usage).
 - [x] 7. claude-cli interactive follower plus child usage (the largest
       measured usage gap).
-- [ ] 8. codex-cli follower plus child usage.
+- [x] 8. codex-cli follower plus child usage.
 - [ ] 9. antigravity-cli follower (N children, asynchronous completion) plus
       child usage. A first cut landed in 26409d384 on the old one-shot drain;
       move it onto the follower contract.
