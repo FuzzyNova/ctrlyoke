@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-23 by Claude Code, bug-drain final-step review of 2a7699a9b
 - **Area:** `src/core/harness/shared/CliResponseCollector.ts` (`collectHeadlessResponse`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

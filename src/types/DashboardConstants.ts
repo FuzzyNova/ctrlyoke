@@ -4200,6 +4200,10 @@ export const CLI_EVENT_TYPES = {
    *  step hasn't completed and which background tasks it is waiting on. */
   BACKGROUND_WORK_HOLD: "backgroundWorkHold",
 
+  /** A headless step ended while background tasks were still running; the harness
+   *  stopped them when its session exited. Display-only. */
+  BACKGROUND_WORK_ABANDONED: "backgroundWorkAbandoned",
+
   /** Invisible marker carrying updated context-window usage discovered during
    *  post-completion follow-up activity. Never rendered — consumed by the merge
    *  logic that refreshes a completed step's stats footer (tokens/contextWindow). */

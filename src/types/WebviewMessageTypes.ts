@@ -341,6 +341,7 @@ export type {
   UserSteerData,
   FollowUpResumedData,
   BackgroundWorkHoldData,
+  BackgroundWorkAbandonedData,
   BackgroundTaskSummary,
   ContextWindowSyncData,
   UniversalCliOutput,

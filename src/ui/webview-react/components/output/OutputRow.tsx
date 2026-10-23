@@ -44,6 +44,7 @@ import {
 } from "./BashOutput";
 import { ScriptVerdict } from "./ScriptVerdict";
 import { BackgroundWorkHoldOutput } from "./BackgroundWorkHoldOutput";
+import { BackgroundWorkAbandonedOutput } from "./BackgroundWorkAbandonedOutput";
 import { resolveCtrlYokeToolView } from "./ctrlyoke-tools/registry";
 import { CTRLYOKE_TOOL_VIEW_BODIES } from "./ctrlyoke-tools/viewComponents";
 import { CtrlYokeToolHeading } from "./ctrlyoke-tools/CtrlYokeToolHeading";
@@ -53,6 +54,7 @@ import type { McpToolName } from "@root/utils/McpToolDefinitions";
 import type {
   AskUserQuestionData,
   BackgroundWorkHoldData,
+  BackgroundWorkAbandonedData,
   BashCommandData,
   CliEvent,
   CompactionData,
@@ -1315,6 +1317,12 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
         return (
           <BackgroundWorkHoldOutput
             data={event.data as BackgroundWorkHoldData}
+          />
+        );
+      case CLI_EVENT_TYPES.BACKGROUND_WORK_ABANDONED:
+        return (
+          <BackgroundWorkAbandonedOutput
+            data={event.data as BackgroundWorkAbandonedData}
           />
         );
       default:

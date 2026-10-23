@@ -20,6 +20,7 @@ import type {
   ThinkingBlock,
   AskUserQuestionData,
   UserSteerData,
+  BackgroundWorkAbandonedData,
   CliOutput as CliOutputType,
 } from "../types/cliEvents";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../types/cliEvents";
@@ -38,6 +39,7 @@ import {
 } from "@root/utils/ThinkingBlockFormat";
 import { getTargetKey } from "./outputProjection";
 import { truncate } from "./string";
+import { getBackgroundWorkAbandonedNotice } from "@root/utils/BackgroundWorkHoldText";
 import {
   generateDiffLines,
   getStructuredPatchDiffLines,
@@ -364,6 +366,13 @@ function renderStructuredEventsToMarkdown(
       case CLI_EVENT_TYPES.BACKGROUND_WORK_HOLD:
       case CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC:
         break;
+
+      case CLI_EVENT_TYPES.BACKGROUND_WORK_ABANDONED: {
+        const data = event.data as BackgroundWorkAbandonedData;
+        lines.push(`> ⚠ ${getBackgroundWorkAbandonedNotice(data.pendingTasks)}`);
+        lines.push("");
+        break;
+      }
 
       default: {
         const exhaustive = event.type satisfies never;

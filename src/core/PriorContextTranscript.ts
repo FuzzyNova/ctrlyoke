@@ -386,6 +386,7 @@ function projectEvent(
     case CLI_EVENT_TYPES.COMPACTION:
     case CLI_EVENT_TYPES.FOLLOW_UP_RESUMED:
     case CLI_EVENT_TYPES.BACKGROUND_WORK_HOLD:
+    case CLI_EVENT_TYPES.BACKGROUND_WORK_ABANDONED:
     case CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC:
       return undefined;
     default: {

@@ -1,4 +1,5 @@
 import type {
+  BackgroundWorkAbandonedData,
   CliResult,
   UniversalCliOutput,
 } from "../../../types/CliOutputTypes";
@@ -140,21 +141,16 @@ export class CliResponseCollector {
 
     const logParser = this.deps.provider.logParser;
     if (logParser?.hasPendingBackgroundWork?.()) {
-      const pendingTaskCount = Math.max(
-        1,
-        logParser.getBackgroundWorkHoldSnapshot?.().pendingTasks.length ?? 1
-      );
-      const taskLabel =
-        pendingTaskCount === 1 ? "background task" : "background tasks";
-      const warning = `Warning: The step ended with ${pendingTaskCount} ${taskLabel} still running; they were stopped when the headless session ended.`;
+      const pendingTasks =
+        logParser.getBackgroundWorkHoldSnapshot?.().pendingTasks ?? [];
       parsedOutput = {
         ...parsedOutput,
         events: [
           ...parsedOutput.events,
           {
-            type: CLI_EVENT_TYPES.TEXT,
+            type: CLI_EVENT_TYPES.BACKGROUND_WORK_ABANDONED,
             timestamp: Date.now(),
-            data: { text: warning },
+            data: { pendingTasks } satisfies BackgroundWorkAbandonedData,
           },
         ],
       };

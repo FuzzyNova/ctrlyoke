@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { FAILURE_KINDS } from "../../types/DashboardConstants";
+import type { BackgroundWorkAbandonedData } from "../../types/CliOutputTypes";
 import { getTranscriptText } from "../../utils/StepOutputText";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { CliResponseCollector } from "../../core/harness/shared/CliResponseCollector";
@@ -38,7 +39,7 @@ function createCollector(provider: any) {
 }
 
 suite("CliResponseCollector", () => {
-  test("records a warning when headless output ends with pending background work", async () => {
+  test("records a display-only notice when headless output ends with pending background work", async () => {
     const collector = createCollector({
       ...createProvider(),
       logParser: {
@@ -60,15 +61,17 @@ suite("CliResponseCollector", () => {
     });
 
     const warningEvent = result.parsedOutput.events.at(-1);
-    assert.strictEqual(warningEvent?.type, CLI_EVENT_TYPES.TEXT);
     assert.strictEqual(
-      (warningEvent?.data as { text: string }).text,
-      "Warning: The step ended with 2 background tasks still running; they were stopped when the headless session ended."
+      warningEvent?.type,
+      CLI_EVENT_TYPES.BACKGROUND_WORK_ABANDONED
     );
-    assert.ok(
-      getTranscriptText(result.parsedOutput.events).includes(
-        (warningEvent?.data as { text: string }).text
-      )
+    assert.deepStrictEqual(
+      (warningEvent?.data as BackgroundWorkAbandonedData).pendingTasks,
+      [{ taskId: "task-1" }, { taskId: "task-2" }]
+    );
+    assert.strictEqual(
+      getTranscriptText(result.parsedOutput.events),
+      "hello world"
     );
   });
 
@@ -94,6 +97,11 @@ suite("CliResponseCollector", () => {
     });
 
     assert.strictEqual(result.parsedOutput.events.length, 1);
+    assert.ok(
+      result.parsedOutput.events.every(
+        (event) => event.type !== CLI_EVENT_TYPES.BACKGROUND_WORK_ABANDONED
+      )
+    );
     assert.strictEqual(
       getTranscriptText(result.parsedOutput.events),
       "hello world"
