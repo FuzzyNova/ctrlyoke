@@ -36,7 +36,8 @@ export function getBackgroundWorkAbandonedNotice(
     count === 0
       ? "background work"
       : `${count} background task${count === 1 ? "" : "s"}`;
-  return `The step ended with ${workLabel} still running; they were stopped when the headless session ended.`;
+  const stopped = count > 1 ? "they were" : "it was";
+  return `The step ended with ${workLabel} still running; ${stopped} stopped when the headless session ended.`;
 }
 
 /**

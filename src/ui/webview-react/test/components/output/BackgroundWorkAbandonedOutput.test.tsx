@@ -19,7 +19,7 @@ describe("BackgroundWorkAbandonedOutput", () => {
     render(<BackgroundWorkAbandonedOutput data={{ pendingTasks: [] }} />);
 
     expect(screen.getByTestId("background-work-abandoned")).toHaveTextContent(
-      "The step ended with background work still running; they were stopped when the headless session ended."
+      "The step ended with background work still running; it was stopped when the headless session ended."
     );
   });
 });
