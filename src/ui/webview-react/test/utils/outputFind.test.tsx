@@ -14,7 +14,10 @@ import type {
   ScriptVerdictRow,
   StructuredEventRow,
 } from "@utils/outputRows";
-import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
+import {
+  OUTPUT_ROW_KINDS,
+  SUBAGENT_SPAWN_STATES,
+} from "@root/types/DashboardConstants";
 import { getFileReadHeaderText } from "@root/utils/FileReadHeaderText";
 
 const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
@@ -164,6 +167,37 @@ function makeVerdictRow(): ScriptVerdictRow {
 }
 
 describe("outputFind", () => {
+  it("searches subagent description, status, and prompt fields", () => {
+    const row: OutputRenderRow = {
+      key: "subagent-spawn",
+      rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
+      target,
+      event: {
+        type: CLI_EVENT_TYPES.TOOL_CALL,
+        data: {
+          name: "task",
+          parameters: {},
+          subagentSpawn: {
+            description: "Inspect workspace",
+            statusLine: "Reading source",
+            prompt: "Find implementation",
+            state: SUBAGENT_SPAWN_STATES.RUNNING,
+          },
+        },
+      },
+      eventIndex: 0,
+      rawTextOutput: false,
+      hideDiff: false,
+      estimateSize: 48,
+    };
+
+    expect(findOutputMatches([row], "Inspect", false)[0]?.field).toBe("header");
+    expect(findOutputMatches([row], "Reading", false)[0]?.field).toBe("status");
+    expect(findOutputMatches([row], "implementation", false)[0]?.field).toBe(
+      "prompt"
+    );
+  });
+
   it("formats file-read line ranges through the shared header helper", () => {
     expect(
       getFileReadHeaderText({

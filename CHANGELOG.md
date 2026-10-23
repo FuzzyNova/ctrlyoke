@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Foreground subagent calls have dedicated output cards** with agent details,
+  progress, prompt, and result.
+
 - **Install skills from skills.sh in the Agent & Skills Manager.** The Skills list has a
   **skills.sh** tab that searches the public skills.sh directory, sorted by install count, with
   each skill's security audit verdict. **Import** shows the audits and the skill's `SKILL.md` on

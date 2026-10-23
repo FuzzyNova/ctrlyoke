@@ -33,6 +33,7 @@ import {
   MarkdownText,
   McpToolCallOutput,
   ParallelGroupHeaderRowView,
+  SubagentSpawnOutput,
   StatusMessage,
   WebSearchOutput,
 } from ".";
@@ -1205,6 +1206,18 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       case CLI_EVENT_TYPES.TOOL_CALL: {
         const data = event.data as ToolCall;
         if (!data.name) return null;
+        if (data.subagentSpawn) {
+          return (
+            <SubagentSpawnOutput
+              name={data.name}
+              spawn={data.subagentSpawn}
+              result={data.result}
+              descriptionFindMatches={getFieldMatches("header")}
+              statusFindMatches={getFieldMatches("status")}
+              promptFindMatches={getFieldMatches("prompt")}
+            />
+          );
+        }
         // getOutputRowSearchSegments derives "toolContent" from
         // getToolResultText, which prefers result.error over result.output —
         // mirror that branching so highlights land on whichever text the

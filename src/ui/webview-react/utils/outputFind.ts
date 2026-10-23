@@ -283,6 +283,10 @@ export function getOutputRowSearchSegments(
           const data = event.data as ToolCall;
           return createSegments([
             { field: "toolLabel", text: data.name },
+            { field: "header", text: data.subagentSpawn?.description },
+            { field: "header", text: data.subagentSpawn?.agentType },
+            { field: "status", text: data.subagentSpawn?.statusLine },
+            { field: "prompt", text: data.subagentSpawn?.prompt },
             {
               field: "params",
               text: getGenericToolCallParamsText(data.parameters),

@@ -139,6 +139,10 @@ step's output, are shown as a summary of what happened. Click **Raw** on one to
 see the underlying call and its result. See [Dynamic workflows](/workflows/dynamic-workflows)
 and [MCP tools](/reference/mcp-tools).
 
+Foreground subagent calls have a dedicated card showing the agent, live
+progress, an optional collapsible prompt, and the final result. Child activity
+is attributed to its spawn so parallel agents remain distinguishable.
+
 ## Diffs
 
 Every file the harness edited or wrote has a diff in the output. Click **Show

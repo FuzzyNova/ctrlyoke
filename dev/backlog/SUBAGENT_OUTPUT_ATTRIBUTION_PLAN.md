@@ -685,7 +685,12 @@ Each item is one session; tick it when it lands.
       headless `result.usage`.
 - [ ] 5. Dashboard spawn card and nested rows; terminal formatter indentation
       (independent files, may run in parallel). Terminal half done
-      (765b32752); the dashboard card and nesting were not committed.
+      (765b32752); dashboard card rendering, description/status/prompt find
+      segments, docs, and changelog are committed separately. Remaining:
+      connect collapsible child groups to virtualized rows (including
+      interleaved siblings, antigravity N-child groups, grandchildren, and
+      late-arriving spawn calls), auto-expand those groups on find, and add the
+      corresponding nesting/collapse/find tests.
 - [ ] 6a. Rebuild `SubagentSourceFollower` to the follower contract in
       section 2B and wire it into the shared headless and interactive
       pipelines.
