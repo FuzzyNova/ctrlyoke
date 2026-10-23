@@ -78,6 +78,31 @@ export class SubagentSourceFollower {
     });
   }
 
+  /** Mark a child complete when its harness reports completion in the parent stream. */
+  markChildComplete(agentId: string): CliEvent[] {
+    const source = [...this.sources.values()].find(
+      (candidate) => candidate.attribution.agentId === agentId
+    );
+    if (!source || source.childComplete) return [];
+    source.childComplete = true;
+    const siblings = [...this.sources.values()].filter(
+      (candidate) =>
+        candidate.attribution.parentToolCallId ===
+        source.attribution.parentToolCallId
+    );
+    if (!siblings.every((candidate) => candidate.childComplete)) return [];
+    const parentId = source.attribution.parentToolCallId;
+    if (this.completedSpawns.has(parentId)) return [];
+    this.completedSpawns.add(parentId);
+    const event = this.buildSpawnStateEvent(
+      parentId,
+      SUBAGENT_SPAWN_STATES.COMPLETED
+    );
+    this.events.push(event);
+    this.callback?.([event]);
+    return [event];
+  }
+
   start(
     onStreamingEvents: (events: CliEvent[]) => void,
     pollIntervalMs = DRAIN_POLL_INTERVAL_MS
@@ -192,6 +217,9 @@ export class SubagentSourceFollower {
           source.complete = true;
         }
       }
+      // A parent report is the child's completion signal; take one final read
+      // after observing it so records appended just before the report are kept.
+      if (source.childComplete) source.complete = true;
       if (source.complete) {
         const parentId = source.attribution.parentToolCallId;
         const siblings = [...this.sources.values()].filter(

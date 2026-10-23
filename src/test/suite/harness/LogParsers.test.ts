@@ -7092,6 +7092,7 @@ suite("OpenCodeLogParser", () => {
       const file = path.join(directory, "run-subagents.jsonl");
       const records = [
         {
+          kind: "part",
           childSessionId: "child",
           part: {
             type: "text",
@@ -7102,6 +7103,7 @@ suite("OpenCodeLogParser", () => {
           },
         },
         {
+          kind: "part",
           childSessionId: "child",
           part: {
             type: "step-finish",
@@ -7115,9 +7117,26 @@ suite("OpenCodeLogParser", () => {
       ];
       fs.writeFileSync(
         file,
-        records.map((record) => JSON.stringify(record)).join("\n") + "\n"
+        [...records, records[1]]
+          .map((record) => JSON.stringify(record))
+          .join("\n") + "\n"
+      );
+      fs.writeFileSync(
+        path.join(directory, "other-run-subagents.jsonl"),
+        JSON.stringify({
+          kind: "part",
+          childSessionId: "child",
+          part: {
+            type: "text",
+            id: "other",
+            sessionID: "child",
+            messageID: "message",
+            text: "wrong run",
+          },
+        }) + "\n"
       );
       parser.setSubagentNotifyDir(directory);
+      parser.setSubagentRunId("run");
       parser.extractStructuredEventsFromEvent({
         type: OPENCODE_EVENT_TYPES.SUBTASK,
         part: {
@@ -7143,6 +7162,12 @@ suite("OpenCodeLogParser", () => {
         (event) => (event.data as TextData).text === "child text"
       );
       assert.strictEqual(childText?.subagent?.parentToolCallId, "task-call");
+      assert.strictEqual(
+        output.events.some(
+          (event) => (event.data as TextData).text === "wrong run"
+        ),
+        false
+      );
     } finally {
       await fs.promises.rm(directory, { recursive: true, force: true });
     }
@@ -7819,6 +7844,155 @@ suite("Antigravity subagent attribution", () => {
       { agentId: "child-one", label: "Researcher" },
       { agentId: "child-two", label: "Reviewer" },
     ]);
+  });
+
+  test("follows child transcripts live and completes only after every report", async () => {
+    const workspace = makeTempDir("antigravity-subagents-");
+    const childOne = path.join(workspace, "child-one");
+    const childTwo = path.join(workspace, "child-two");
+    fs.mkdirSync(childOne, { recursive: true });
+    fs.mkdirSync(childTwo, { recursive: true });
+    const firstId = "11111111-1111-4111-8111-111111111111";
+    const secondId = "22222222-2222-4222-8222-222222222222";
+    const parentId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const writeChild = (directory: string, text: string, input: number) => {
+      fs.writeFileSync(
+        path.join(directory, "transcript_full.jsonl"),
+        [
+          {
+            source: "MODEL",
+            type: "PLANNER_RESPONSE",
+            status: "DONE",
+            step_index: 1,
+            content: text,
+            input_tokens: input,
+            output_tokens: 2,
+          },
+        ]
+          .map((record) => JSON.stringify(record))
+          .join("\n") + "\n"
+      );
+    };
+    writeChild(childOne, "child one output", 10);
+    writeChild(childTwo, "child two output", 20);
+    const parser = new AntigravityLogParser();
+    try {
+      const descriptors = [
+        { Role: "Researcher", Model: "inherit" },
+        { Role: "Reviewer", Model: "inherit" },
+      ];
+      const resultContent = [
+        `created ${JSON.stringify({ conversationId: firstId, logAbsoluteUri: `file://${path.join(childOne, "transcript.jsonl")}` })}`,
+        JSON.stringify({
+          conversationId: secondId,
+          logAbsoluteUri: `file://${path.join(childTwo, "transcript.jsonl")}`,
+        }),
+      ].join("\n");
+      const parentRecords = [
+        {
+          entry: {
+            source: "MODEL",
+            type: "PLANNER_RESPONSE",
+            status: "DONE",
+            tool_calls: [
+              {
+                name: "invoke_subagent",
+                args: { Subagents: JSON.stringify(descriptors) },
+              },
+            ],
+          },
+          eventId: "parent-planner",
+          lineNumber: 1,
+        },
+        {
+          entry: {
+            source: "MODEL",
+            type: "GENERIC",
+            status: "DONE",
+            content: resultContent,
+          },
+          eventId: "parent-result",
+          lineNumber: 2,
+        },
+      ];
+      const parsed = parser.parseTranscriptRecords(parentRecords, parentId);
+      const spawn = parsed
+        .flatMap((event) => parser.extractStructuredEventsFromEvent(event))
+        .find((event) => event.type === CLI_EVENT_TYPES.TOOL_CALL);
+      assert.strictEqual(
+        (spawn?.data as ToolCall).subagentSpawn?.state,
+        "running"
+      );
+      assert.deepStrictEqual(
+        (spawn?.data as ToolCall).subagentSpawn?.children?.map(
+          (child) => child.agentId
+        ),
+        [firstId, secondId]
+      );
+
+      const streamed: CliEvent[] = [];
+      parser
+        .getSubagentFollower()
+        .start((events) => streamed.push(...events), 5);
+      const report = {
+        source: "SYSTEM",
+        type: "SYSTEM_MESSAGE",
+        status: "DONE",
+        content: `sender=${firstId} priority=MESSAGE_PRIORITY_HIGH content=done`,
+      };
+      const reportEvent = parser.parseTranscriptRecords(
+        [{ entry: report, eventId: "report-one", lineNumber: 3 }],
+        parentId
+      )[0];
+      const oneReportUpdates =
+        parser.extractStructuredEventsFromEvent(reportEvent);
+      assert.strictEqual(
+        oneReportUpdates.some(
+          (event) =>
+            (event.data as ToolCall).subagentSpawn?.state === "completed"
+        ),
+        false
+      );
+      const secondReport = parser.parseTranscriptRecords(
+        [
+          {
+            entry: {
+              ...report,
+              content: `sender=${secondId} priority=MESSAGE_PRIORITY_HIGH content=done`,
+            },
+            eventId: "report-two",
+            lineNumber: 4,
+          },
+        ],
+        parentId
+      )[0];
+      const completed = parser.extractStructuredEventsFromEvent(secondReport);
+      assert.strictEqual(
+        completed.some(
+          (event) =>
+            (event.data as ToolCall).subagentSpawn?.state === "completed"
+        ),
+        true
+      );
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      const drain = await parser.getSubagentFollower().drainToEof(100);
+      const usage = Object.values(drain.usageByModel);
+      assert.strictEqual(
+        usage.reduce((sum, model) => sum + (model.inputTokens ?? 0), 0),
+        30
+      );
+      assert.strictEqual(
+        usage.reduce((sum, model) => sum + (model.outputTokens ?? 0), 0),
+        4
+      );
+      assert.strictEqual(
+        streamed.filter((event) => event.subagent?.agentId).length,
+        2
+      );
+    } finally {
+      parser.getSubagentFollower().reset();
+      removeTempDir(workspace);
+    }
   });
 });
 

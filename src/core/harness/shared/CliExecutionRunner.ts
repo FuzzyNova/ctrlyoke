@@ -374,6 +374,7 @@ export class CliExecutionRunner {
       notifyDir,
       env: headlessEnv,
     } = this.buildHarnessProcessEnv(session);
+    this.deps.provider.setRunId?.(runId);
 
     const hookMonitor =
       notifyDir && this.deps.hostCallbacks.onNotificationEvent
@@ -645,6 +646,7 @@ export class CliExecutionRunner {
         notifyDir,
         env: terminalEnv,
       } = this.buildHarnessProcessEnv(session);
+      this.deps.provider.setRunId?.(runId);
 
       hookMonitor =
         notifyDir && this.deps.hostCallbacks.onNotificationEvent

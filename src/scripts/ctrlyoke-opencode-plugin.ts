@@ -89,6 +89,11 @@ const OPENCODE_SESSION_STATUS = {
 } as const;
 const OPENCODE_TOOL_PART_TYPE = "tool";
 const OPENCODE_TASK_TOOL = "task";
+const OPENCODE_SUBAGENT_RECORD_TYPES = {
+  PART: "part",
+  TASK_RUNNING: "task-running",
+  CHILD_IDLE: "child-idle",
+} as const;
 
 const childParents = new Map<string, string>();
 const childCallIds = new Map<string, string>();
@@ -97,14 +102,15 @@ const subagentSidecarPath =
     ? path.join(NOTIFY_DIR, `${RUN_ID}-subagents.jsonl`)
     : undefined;
 
-function _appendSubagentRecord(childSessionId: string, part: unknown): void {
+function _appendSubagentRecord(record: {
+  kind: string;
+  childSessionId: string;
+  part?: unknown;
+}): void {
   if (!subagentSidecarPath) return;
   try {
     mkdirSync(path.dirname(subagentSidecarPath), { recursive: true });
-    appendFileSync(
-      subagentSidecarPath,
-      JSON.stringify({ childSessionId, part }) + "\n"
-    );
+    appendFileSync(subagentSidecarPath, JSON.stringify(record) + "\n");
   } catch (error) {
     _debugLog("❌ Failed to append subagent sidecar", { error: String(error) });
   }
@@ -588,7 +594,11 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
           typeof part.sessionID === "string" &&
           childSessions.has(part.sessionID)
         ) {
-          _appendSubagentRecord(part.sessionID, part);
+          _appendSubagentRecord({
+            kind: OPENCODE_SUBAGENT_RECORD_TYPES.PART,
+            childSessionId: part.sessionID,
+            part,
+          });
         } else if (
           part?.type === OPENCODE_TOOL_PART_TYPE &&
           part.tool === OPENCODE_TASK_TOOL &&
@@ -596,7 +606,11 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
         ) {
           const childSessionId = part.state.metadata.sessionId as string;
           childCallIds.set(childSessionId, part.callID);
-          _appendSubagentRecord(childSessionId, { ...part, childSessionId });
+          _appendSubagentRecord({
+            kind: OPENCODE_SUBAGENT_RECORD_TYPES.TASK_RUNNING,
+            childSessionId,
+            part,
+          });
         }
       }
 
@@ -640,7 +654,10 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
           status.type === OPENCODE_SESSION_STATUS.IDLE &&
           childSessions.has(sessionID)
         ) {
-          _appendSubagentRecord(sessionID, { type: "session.idle", sessionID });
+          _appendSubagentRecord({
+            kind: OPENCODE_SUBAGENT_RECORD_TYPES.CHILD_IDLE,
+            childSessionId: sessionID,
+          });
         }
       }
 

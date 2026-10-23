@@ -702,13 +702,20 @@ Each item is one session; tick it when it lands.
 - [x] 7. claude-cli interactive follower plus child usage (the largest
       measured usage gap).
 - [x] 8. codex-cli follower plus child usage.
-- [ ] 9. antigravity-cli follower (N children, asynchronous completion) plus
+- [x] 9. antigravity-cli follower (N children, asynchronous completion) plus
       child usage. A first cut landed in 26409d384 on the old one-shot drain;
       move it onto the follower contract.
 - [ ] 10. opencode-cli plugin sidecar, follower, and child usage. A first cut
       landed in 584be3d4d / 5e5d328f6 on the old one-shot drain (scans every
       sidecar in the notify dir, headless only); move it onto the follower
       contract.
+      Partial: the plugin writes the per-run sidecar; headless/interactive
+      parser registration now targets that run's file and uses the shared
+      incremental reader. Remaining: strongly type the plugin wire records;
+      support grandchild follower registration; merge parent task completion
+      into the existing spawn state; verify child usage deduplication and
+      interactive streaming in focused tests; verify how `part.cost` treats
+      child cost.
 - [ ] 11. Harness-suite case, user docs (`docs/guide/usage-and-stats.md`
       subagent note, output guide), CHANGELOG sweep, and moving this plan to
       `dev/implemented/`.

@@ -46,6 +46,12 @@ export const OPENCODE_STEP_FINISH_REASONS = {
   STOP: "stop",
 } as const;
 
+export const OPENCODE_SUBAGENT_RECORD_TYPES = {
+  PART: "part",
+  TASK_RUNNING: "task-running",
+  CHILD_IDLE: "child-idle",
+} as const;
+
 /** OpenCode CLI flags that ctrlyoke both writes and reads back. */
 export const OPENCODE_CLI_FLAGS = {
   MODEL: "-m",

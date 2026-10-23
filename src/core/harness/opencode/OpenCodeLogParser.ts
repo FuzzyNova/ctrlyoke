@@ -19,7 +19,6 @@ import {
   COMPACTION_TRIGGERS,
   HARNESS_IDS,
   OPERATION_STATUS,
-  SUBAGENT_SPAWN_STATES,
 } from "../../../types/DashboardConstants";
 import {
   mapOpenCodeToolPartToCliEvent,
@@ -32,11 +31,13 @@ import {
   OPENCODE_MESSAGE_ROLES,
   OPENCODE_TOOL_NAMES,
   OPENCODE_TOOL_STATUS,
+  OPENCODE_SUBAGENT_RECORD_TYPES,
 } from "./OpenCodeProtocolConstants";
 import { Log } from "../../../utils/Log";
 import { resolveCliCommand } from "../shared/CliLauncherResolver";
 import { PollingFsWatcher } from "../shared/FsWatcherHandles";
 import { SubagentSourceFollower } from "../shared/SubagentSourceFollower";
+import { readIncrementalJsonl } from "../shared/IncrementalJsonlReader";
 
 const execFileAsync = promisify(execFile);
 
@@ -57,7 +58,6 @@ const EXPORT_POLL_INTERVAL_MS = 1000;
  */
 const OPENCODE_EXPORT_MAX_BUFFER = 100 * 1024 * 1024;
 const OPENCODE_SUBAGENT_SIDECAR_SUFFIX = "-subagents.jsonl";
-const OPENCODE_SESSION_IDLE_EVENT = "session.idle";
 
 type OpenCodeExportRunner = (sessionId: string) => Promise<string>;
 
@@ -102,15 +102,20 @@ interface OpenCodeExportPart {
   id: string;
   sessionID: string;
   messageID: string;
+  state?: {
+    status?: string;
+    metadata?: { sessionId?: string };
+    [key: string]: unknown;
+  };
+  tokens?: Record<string, unknown>;
+  text?: string;
   [key: string]: unknown;
 }
 
 interface OpenCodeSubagentSidecarRecord {
+  kind: (typeof OPENCODE_SUBAGENT_RECORD_TYPES)[keyof typeof OPENCODE_SUBAGENT_RECORD_TYPES];
   childSessionId: string;
-  part: OpenCodeExportPart & {
-    text?: string;
-    tokens?: Record<string, unknown>;
-  };
+  part?: OpenCodeExportPart;
 }
 
 function isOpenCodeSubagentSidecarRecord(
@@ -120,10 +125,13 @@ function isOpenCodeSubagentSidecarRecord(
   const record = value as Record<string, unknown>;
   if (
     typeof record.childSessionId !== "string" ||
-    typeof record.part !== "object" ||
-    record.part === null
+    !Object.values(OPENCODE_SUBAGENT_RECORD_TYPES).includes(
+      record.kind as OpenCodeSubagentSidecarRecord["kind"]
+    )
   )
     return false;
+  if (record.kind === OPENCODE_SUBAGENT_RECORD_TYPES.CHILD_IDLE) return true;
+  if (typeof record.part !== "object" || record.part === null) return false;
   const part = record.part as Record<string, unknown>;
   return (
     typeof part.type === "string" &&
@@ -155,11 +163,27 @@ function isOpenCodeSubagentSidecarRecord(
 export class OpenCodeLogParser extends BaseLogParser {
   private readonly subagentFollower = new SubagentSourceFollower();
   private subagentNotifyDir?: string;
+  private subagentRunId?: string;
   getSubagentFollower(): SubagentSourceFollower {
     return this.subagentFollower;
   }
   setSubagentNotifyDir(directory: string): void {
     this.subagentNotifyDir = directory;
+  }
+  setSubagentRunId(runId: string): void {
+    this.subagentRunId = runId;
+  }
+  async cleanupSubagentSidecar(): Promise<void> {
+    if (this.subagentNotifyDir && this.subagentRunId) {
+      await fsSync.promises
+        .unlink(
+          path.join(
+            this.subagentNotifyDir,
+            `${this.subagentRunId}${OPENCODE_SUBAGENT_SIDECAR_SUFFIX}`
+          )
+        )
+        .catch(() => {});
+    }
   }
 
   async beginMonitoringTurn(): Promise<void> {
@@ -447,40 +471,8 @@ export class OpenCodeLogParser extends BaseLogParser {
         break;
       }
       case OPENCODE_EVENT_TYPES.SUBTASK: {
-        // A subagent was spawned via the task tool — show as a generic tool call
-        const desc = e.part?.description as string | undefined;
-        const agent = e.part?.agent as string | undefined;
-        const part = e.part as Record<string, any> | undefined;
-        cliEvents.push({
-          type: CLI_EVENT_TYPES.TOOL_CALL,
-          timestamp,
-          data: {
-            name: OPENCODE_TOOL_NAMES.TASK,
-            id: part?.callID,
-            parameters: {
-              description: desc,
-              agent,
-              model: e.part?.model,
-            },
-            subagentSpawn: {
-              agentType: agent ?? OPENCODE_TOOL_NAMES.TASK,
-              description: desc ?? "",
-              state:
-                part?.state?.status === OPERATION_STATUS.COMPLETED
-                  ? SUBAGENT_SPAWN_STATES.COMPLETED
-                  : SUBAGENT_SPAWN_STATES.RUNNING,
-              children:
-                typeof part?.state?.metadata?.sessionId === "string"
-                  ? [
-                      {
-                        agentId: part.state.metadata.sessionId,
-                        label: agent ?? OPENCODE_TOOL_NAMES.TASK,
-                      },
-                    ]
-                  : [],
-            },
-          },
-        });
+        const taskEvent = mapOpenCodeToolPartToCliEvent(timestamp, e.part);
+        if (taskEvent) cliEvents.push(taskEvent);
         break;
       }
       case OPENCODE_EVENT_TYPES.RETRY: {
@@ -508,40 +500,31 @@ export class OpenCodeLogParser extends BaseLogParser {
     model: string
   ): void {
     const directory = this.subagentNotifyDir;
-    if (!directory) return;
+    const runId = this.subagentRunId;
+    if (!directory || !runId) return;
+    const sidecarPath = path.join(
+      directory,
+      `${runId}${OPENCODE_SUBAGENT_SIDECAR_SUFFIX}`
+    );
     this.subagentFollower.register({
       key: childSessionId,
       attribution: { parentToolCallId, agentId: childSessionId },
       read: async (fromOffset) => {
-        const records: OpenCodeSubagentSidecarRecord[] = [];
-        try {
-          const files = fsSync
-            .readdirSync(directory)
-            .filter((file) => file.endsWith(OPENCODE_SUBAGENT_SIDECAR_SUFFIX));
-          for (const file of files) {
-            for (const line of fsSync
-              .readFileSync(path.join(directory, file), "utf8")
-              .split(/\r?\n/u)) {
-              if (!line.trim()) continue;
-              const value: unknown = JSON.parse(line);
-              if (
-                isOpenCodeSubagentSidecarRecord(value) &&
-                value.childSessionId === childSessionId &&
-                value.part.sessionID === childSessionId
-              ) {
-                records.push(value);
-              }
-            }
-          }
-        } catch {
-          throw new Error("Unable to read OpenCode subagent sidecar");
-        }
+        const result = await readIncrementalJsonl(
+          sidecarPath,
+          fromOffset,
+          isOpenCodeSubagentSidecarRecord
+        );
         return {
-          records: records.slice(fromOffset),
-          nextOffset: records.length,
+          ...result,
+          records: result.records.filter(
+            (record) => record.childSessionId === childSessionId
+          ),
         };
       },
       map: (record) => {
+        if (!record.part || record.kind !== OPENCODE_SUBAGENT_RECORD_TYPES.PART)
+          return [];
         if (record.part.type === OPENCODE_PART_TYPES.STEP_FINISH) return [];
         if (record.part.type === OPENCODE_PART_TYPES.TOOL) {
           const event = mapOpenCodeToolPartToCliEvent(undefined, record.part);
@@ -565,21 +548,30 @@ export class OpenCodeLogParser extends BaseLogParser {
         return [];
       },
       usage: (record) => {
-        if (record.part.type !== OPENCODE_PART_TYPES.STEP_FINISH)
+        if (
+          record.kind !== OPENCODE_SUBAGENT_RECORD_TYPES.PART ||
+          record.part?.type !== OPENCODE_PART_TYPES.STEP_FINISH
+        )
           return undefined;
-        const tokens = record.part.tokens;
+        const tokens = record.part?.tokens;
         if (!tokens || typeof tokens !== "object") return undefined;
         const usage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
         accumulateOpenCodeStepTokens(tokens as Record<string, unknown>, usage);
         return {
-          model,
+          model:
+            typeof record.part.modelID === "string"
+              ? record.part.modelID
+              : model,
           recordId: record.part.id,
           inputTokens: usage.inputTokens,
           outputTokens: usage.outputTokens,
           cacheReadInputTokens: usage.cachedInputTokens,
         };
       },
-      isComplete: (record) => record.part.type === OPENCODE_SESSION_IDLE_EVENT,
+      isComplete: (record) =>
+        record.kind === OPENCODE_SUBAGENT_RECORD_TYPES.CHILD_IDLE ||
+        (record.kind === OPENCODE_SUBAGENT_RECORD_TYPES.TASK_RUNNING &&
+          record.part?.state?.status === OPERATION_STATUS.COMPLETED),
     });
   }
 

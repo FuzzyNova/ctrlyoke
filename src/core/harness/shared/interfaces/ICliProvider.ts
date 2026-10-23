@@ -132,6 +132,7 @@ export interface HarnessConfig {
  * ```
  */
 export interface ICliProvider {
+  setRunId?(runId: string): void;
   /** Static harness configuration */
   readonly config: HarnessConfig;
 
