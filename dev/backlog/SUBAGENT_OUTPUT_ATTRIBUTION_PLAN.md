@@ -401,6 +401,45 @@ Rules:
 - Tail a child only once its link is known. Never guess a file by mtime: parallel
   workflows share these directories.
 
+**Follower contract (fixed 2026-10-23 after the first attempt).** The first
+`SubagentSourceFollower` was a one-shot `drain()` called from each provider's
+`augmentParsedOutput`. That path is headless-only (`CliResponseCollector`), so
+interactive mode never saw children, nothing streamed live, and antigravity and
+opencode each re-implemented the usage merge by hand. The follower is rebuilt
+to this contract, and every provider uses it:
+
+- **Ownership.** One follower per attempt, owned by the provider's log parser
+  and exposed through an optional `ILogParser` member (e.g.
+  `getSubagentFollower?(): SubagentSourceFollower | undefined`), reset with the
+  parser's other per-attempt state. Providers do not drain it themselves.
+- **Registration.** `register(source)` with a typed
+  `SubagentChildSource<TRecord>`: `key`, `attribution`, a `read(fromOffset)`
+  (or async iterator) that returns new raw records plus the next offset, the
+  provider's `map(record) => CliEvent[]`, `usage(record) => SubagentRecordUsage
+| undefined` (model, input, output, cache-read, cache-write, 1-hour
+  cache-write subset, reasoning; deduplicated by a provider-supplied
+  `recordId`), and `isComplete(record)` for the card's completion signal. No
+  `as unknown as` casts: the record type is a generic parameter.
+- **Live tailing.** The shared pipeline starts the follower with the attempt's
+  `onStreamingEvents` callback: `HeadlessLogTail` for headless log sources and
+  `CliLogMonitor` / `SessionActivityWatcher` for interactive. It polls each
+  registered source on the existing tail interval and streams attributed events
+  as they appear, plus a spawn-card update (`subagentSpawn.state`) when
+  `isComplete` fires.
+- **Final output.** Before final output is returned, the shared code (not the
+  provider) drains every registered source to EOF within `DRAIN_DEADLINE_MS`
+  and merges the result through one helper, e.g. `mergeSubagentOutput(output,
+drain)` in `src/core/harness/shared/`: attributed events appended in
+  timestamp order, spawn states applied, per-child usage added into
+  `TokenUsage.modelUsage` per model and into the totals (input, output,
+  cache-read, cache-write, long-TTL, reasoning), and `totalConfidence` set to
+  `PARTIAL` when a registered source could not be read. The call sites are
+  `CliResponseCollector` (headless) and `CliLogMonitor`'s completion and failure
+  finalization (interactive), so the two modes cannot diverge.
+- **Opt-out of usage per mode.** A source registered for events only (claude
+  headless, qwen headless, where the parent stream's totals already include
+  children) passes no `usage`.
+
 Per harness:
 
 | Harness                      | Discover from                                                                                | Child source                                                                                    | Skip                                                                                |
@@ -506,7 +545,7 @@ ones, with `haiku` for claude-cli and a `sonnet` override on one child.
 | copilot-cli 1.0.103   | **Yes**: OTel `chat <model>` spans and `session.shutdown.modelMetrics` both include child calls  | Already in the same OTel and `events.jsonl` streams                                      | 4 of 6 model calls          |
 | codex-cli 0.163.0     | **No**: `turn.completed.usage` and the parent rollout's `token_count` are parent-only            | Each child rollout's `token_count`                                                       | 58,612 of 128,504 input     |
 | qwen-cli 0.26.0       | **No** in the chat log ctrlyoke reads. `result.usage` (headless) **does**, plus background calls | `subagents/<sessionId>/agent-*.jsonl` `usageMetadata`                                    | 70,449 of 160,217 prompt    |
-| opencode-cli 1.19.4   | **No**: stdout `step_finish.tokens` is parent-only                                               | Child session sidecar (`step-finish` parts)                                               | ~168k of ~221k total        |
+| opencode-cli 1.19.4   | **No**: stdout `step_finish.tokens` is parent-only                                               | Child session sidecar (`step-finish` parts)                                              | ~168k of ~221k total        |
 | antigravity-cli 1.4.6 | **No**: stdout `result.usage` and the parent transcript are parent-only                          | Each child's `transcript_full.jsonl` `PLANNER_RESPONSE` `input_tokens` / `output_tokens` | ~58k of ~96k input          |
 
 Per harness:
@@ -644,16 +683,24 @@ Each item is one session; tick it when it lands.
       need no follower: claude-cli headless `result.modelUsage`, copilot-cli
       per-model `chat` spans and the child context-window leak, qwen-cli
       headless `result.usage`.
-- [x] 5. Dashboard spawn card and nested rows; terminal formatter indentation
-      (independent files, may run in parallel).
-- [ ] 6. `SubagentSourceFollower` with qwen-cli (both modes, bridge
-      unwrapping, qwen interactive child usage).
+- [ ] 5. Dashboard spawn card and nested rows; terminal formatter indentation
+      (independent files, may run in parallel). Terminal half done
+      (765b32752); the dashboard card and nesting were not committed.
+- [ ] 6a. Rebuild `SubagentSourceFollower` to the follower contract in
+      section 2B and wire it into the shared headless and interactive
+      pipelines.
+- [ ] 6b. qwen-cli on the follower (both modes, bridge unwrapping, qwen
+      interactive child usage).
 - [ ] 7. claude-cli interactive follower plus child usage (the largest
       measured usage gap).
 - [ ] 8. codex-cli follower plus child usage.
-- [x] 9. antigravity-cli follower (N children, asynchronous completion) plus
-      child usage.
-- [x] 10. opencode-cli plugin sidecar, follower, and child usage.
+- [ ] 9. antigravity-cli follower (N children, asynchronous completion) plus
+      child usage. A first cut landed in 26409d384 on the old one-shot drain;
+      move it onto the follower contract.
+- [ ] 10. opencode-cli plugin sidecar, follower, and child usage. A first cut
+      landed in 584be3d4d / 5e5d328f6 on the old one-shot drain (scans every
+      sidecar in the notify dir, headless only); move it onto the follower
+      contract.
 - [ ] 11. Harness-suite case, user docs (`docs/guide/usage-and-stats.md`
       subagent note, output guide), CHANGELOG sweep, and moving this plan to
       `dev/implemented/`.
