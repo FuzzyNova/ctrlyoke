@@ -717,6 +717,9 @@ describe("OutputRow step identity bar", () => {
     const cliBar = container.querySelector("[data-step-color-bar]");
     expect(cliBar).toHaveStyle(getStepIdentityBarStyle(stepColor));
     expect(cliBar).not.toHaveStyle({ boxShadow: `inset 3px 0 0 ${stepColor}` });
+    // overflow-x: clip creates no block formatting context; without flow-root
+    // child margins collapse past the row's background and gap the bar.
+    expect(cliBar).toHaveClass("flow-root", "overflow-x-clip");
 
     rerender(
       <OutputRow row={{ ...nonCliRow, stepColor }} isExecutionActive={false} />

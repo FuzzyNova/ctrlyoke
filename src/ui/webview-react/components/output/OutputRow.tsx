@@ -2111,8 +2111,11 @@ function OutputRowComponent({
       className={[
         // clip, not hidden: overflow-x: hidden turns the row into a scroll
         // container, which captures a sticky "Hide full output" toggle so it
-        // offsets from the row instead of sticking to the pane.
-        "bg-(--bg-primary) px-(--spacing-md) overflow-x-clip",
+        // offsets from the row instead of sticking to the pane. clip creates
+        // no block formatting context, so flow-root does: without it the
+        // children's vertical margins collapse out of the row, past its
+        // background, and break the step identity bar into segments.
+        "flow-root bg-(--bg-primary) px-(--spacing-md) overflow-x-clip",
         isActiveRow ? "rounded-xs ring-1 ring-focus-border" : "",
         row.groupStart ? "pt-(--spacing-sm)" : "",
         row.groupEnd
