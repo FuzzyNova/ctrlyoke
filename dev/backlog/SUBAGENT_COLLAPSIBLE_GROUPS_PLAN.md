@@ -1,7 +1,7 @@
 # Collapsible Subagent Groups in the Output Pane
 
-**Status:** Not started. Split out of `SUBAGENT_OUTPUT_ATTRIBUTION_PLAN.md`
-(implemented), which shipped the first cut: subagent rows indented and labelled
+**Status:** Not started. Split out of
+`dev/implemented/SUBAGENT_OUTPUT_ATTRIBUTION_PLAN.md`, which shipped the first cut: subagent rows indented and labelled
 under the spawn card.
 
 ## Goal

@@ -21,8 +21,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Foreground subagent output and token usage are included in step totals for supported harnesses.** Child usage is priced by model when reported. Codex child rollouts skip replayed parent history. Qwen headless totals also include background memory and extraction calls through process-wide usage, while interactive totals do not.
-- **Foreground subagent activity is attributed to its spawn in headless and interactive output, with interleaved and nested work kept distinct.** Child commands, text, and thinking are indented and labelled under their spawn card. The `history show --json --events` payload replaces the always-`direct` `callerType` field with optional subagent attribution and spawn metadata; existing run histories with `callerType` remain readable.
+- **Step token totals and cost estimates include foreground subagents.** Subagent work was
+  missing from every harness except Copilot; in measured Claude Code interactive sessions it was
+  about 40% of the cost. Claude Code headless uses its per-model result totals, Qwen Code
+  headless its process-wide usage (which also counts background memory calls), and the other
+  harnesses follow each subagent's own log. Each model is priced at its own rates, so a subagent
+  on a cheaper model is no longer billed at the parent's. If a subagent's log can't be read, the
+  token count is shown as a lower bound and no cost estimate is given. Earlier runs keep their
+  recorded totals.
+- **Foreground subagent activity is attributed to its spawn in headless and interactive output.**
+  Child commands, text and thinking are indented and labelled under their spawn card, so parallel
+  and nested subagents stay distinct. The `history show --json --events` payload replaces the
+  always-`direct` `callerType` field with optional subagent attribution and spawn metadata;
+  existing run histories with `callerType` remain readable.
 - **The "CLI is older than this extension" notice only names a CLI installed with npm.** After an
   extension update, it could name the CLI copy bundled in the previous extension version's folder,
   which runs whenever you or an agent type `ctrlyoke` in a VS Code terminal, even if you never
@@ -42,11 +53,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every cache write at the cheaper 5-minute rate. Estimates for Claude Code steps were up to about a
   quarter too low and now match the cost Claude Code reports itself. Costs already recorded for earlier runs
   are unchanged.
-- **Claude Code headless and Qwen Code headless token totals include subagent work.** Claude Code
-  uses its per-model result totals, and Qwen Code uses the process-wide result usage. Earlier runs
-  keep their recorded totals.
-- **Cost estimates account for the model used by each call.** When a harness reports usage by model,
-  ctrlyoke applies each model's own rates before summing the attempt cost.
 - **A model pricing override now applies even when the harness reports its own cost.** OpenCode
   steps, and Claude Code steps run headless, used the harness's figure and ignored your
   override.

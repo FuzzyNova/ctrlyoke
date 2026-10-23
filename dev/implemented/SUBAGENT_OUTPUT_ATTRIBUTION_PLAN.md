@@ -1,6 +1,9 @@
 # Subagent Output Attribution Plan
 
-**Status:** Researched against all six harnesses (2026-10-15); staged for implementation 2026-10-23 (see "Implementation order").
+**Status:** Implemented 2026-10-23 (see "Implementation order"). Collapsible
+subagent groups in the output pane were split out to
+`dev/backlog/SUBAGENT_COLLAPSIBLE_GROUPS_PLAN.md`; whether OpenCode's
+`part.cost` includes child cost is still unverified.
 
 ## Problem
 
@@ -686,14 +689,12 @@ Each item is one session; tick it when it lands.
       need no follower: claude-cli headless `result.modelUsage`, copilot-cli
       per-model `chat` spans and the child context-window leak, qwen-cli
       headless `result.usage`.
-- [ ] 5. Dashboard spawn card and nested rows; terminal formatter indentation
-      (independent files, may run in parallel). Terminal half done
-      (765b32752); dashboard card rendering, description/status/prompt find
-      segments, docs, and changelog are committed separately. Re-scoped
-      2026-10-23 to the first cut section 3 allows: subagent rows indented
-      under their spawn and labelled with the child, in time order. Full
-      collapsible groups moved to `dev/backlog/SUBAGENT_COLLAPSIBLE_GROUPS_PLAN.md`
-      after two attempts showed they need a new virtual row kind.
+- [x] 5. Dashboard spawn card and nested rows; terminal formatter indentation.
+      Shipped as the first cut section 3 allows: subagent rows indented under
+      their spawn and labelled with the child at the start of each run of its
+      rows, in time order (592b36ee8). Full collapsible groups moved to
+      `dev/backlog/SUBAGENT_COLLAPSIBLE_GROUPS_PLAN.md` after two attempts
+      showed they need a new virtual row kind.
 - [x] 6a. Rebuild `SubagentSourceFollower` to the follower contract in
       section 2B and wire it into the shared headless and interactive
       pipelines.
@@ -716,7 +717,7 @@ Each item is one session; tick it when it lands.
       per-run isolation, usage deduplication, interactive streaming, nested
       attribution, and completion. Whether `part.cost` includes child cost
       remains unverified.
-- [ ] 11. Harness-suite case, user docs (`docs/guide/usage-and-stats.md`
+- [x] 11. Harness-suite case, user docs (`docs/guide/usage-and-stats.md`
       subagent note, output guide), CHANGELOG sweep, and moving this plan to
       `dev/implemented/`.
 
