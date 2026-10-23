@@ -154,6 +154,15 @@ export class OpenCodeLogParser extends BaseLogParser {
     }
     const drained = await follower.drain();
     for (const file of consumedFiles) fsSync.unlinkSync(path.join(this.subagentNotifyDir, file));
+    const completedCallIds = new Set<string>();
+    for (const [childId, callId] of links) {
+      if (records.some((record) => record.childSessionId === childId && (record.part.type === "session.idle" || (record.part.tool === "task" && record.part.state?.status === OPERATION_STATUS.COMPLETED)))) completedCallIds.add(callId);
+    }
+    for (const event of output.events) {
+      if (event.type !== CLI_EVENT_TYPES.TOOL_CALL) continue;
+      const tool = event.data as import("../../../types/CliOutputTypes").ToolCall;
+      if (tool.id && completedCallIds.has(tool.id) && tool.subagentSpawn) tool.subagentSpawn.state = SUBAGENT_SPAWN_STATES.COMPLETED;
+    }
     const totals = Object.values(drained.usageByModel);
     const modelUsage = { ...(output.metadata.modelUsage ?? {}) } as Record<string, any>;
     for (const [model, usage] of Object.entries(drained.usageByModel)) modelUsage[model] = { ...(modelUsage[model] ?? {}), inputTokens: (modelUsage[model]?.inputTokens ?? 0) + usage.inputTokens, outputTokens: (modelUsage[model]?.outputTokens ?? 0) + usage.outputTokens };
