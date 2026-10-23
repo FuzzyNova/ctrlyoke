@@ -303,9 +303,8 @@ function calculatePerModelCost(
         cacheCreated: usage.cacheCreationInputTokens,
         cacheCreatedLongTtl: usage.cacheCreationLongTtlInputTokens,
         reasoning:
-          input.reasoning && modelId === input.modelId
-            ? input.reasoning
-            : undefined,
+          usage.reasoningOutputTokens ??
+          (modelId === input.modelId ? input.reasoning : undefined),
       },
       input.pricingOverride && modelId === input.modelId
         ? ATTEMPT_COST_SOURCES.USER_OVERRIDE

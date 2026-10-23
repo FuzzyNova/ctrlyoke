@@ -53,6 +53,23 @@ export function mergeSubagentOutput(
   const modelUsage: Record<string, ProviderModelUsage> = {
     ...(output.metadata.modelUsage ?? output.metadata.usage?.modelUsage ?? {}),
   };
+  const priorUsage = output.metadata.usage;
+  const hasUsage = Object.keys(drain.usageByModel).length > 0;
+  let modelUsageIsComplete = true;
+  if (hasUsage && Object.keys(modelUsage).length === 0) {
+    if (output.metadata.model) {
+      modelUsage[output.metadata.model] = {
+        inputTokens: priorUsage?.inputTokens,
+        outputTokens: priorUsage?.outputTokens,
+        cacheReadInputTokens: priorUsage?.cachedInputTokens,
+        cacheCreationInputTokens: priorUsage?.cacheCreatedTokens,
+        cacheCreationLongTtlInputTokens: priorUsage?.cacheCreatedLongTtlTokens,
+        reasoningOutputTokens: priorUsage?.reasoningOutputTokens,
+      };
+    } else {
+      modelUsageIsComplete = false;
+    }
+  }
   let inputTokens = 0;
   let outputTokens = 0;
   let cachedInputTokens = 0;
@@ -79,14 +96,15 @@ export function mergeSubagentOutput(
     cacheCreatedLongTtlTokens += usage.cacheCreationLongTtlInputTokens ?? 0;
     reasoningOutputTokens += usage.reasoningOutputTokens ?? 0;
   }
-  const priorUsage = output.metadata.usage;
-  const hasUsage = Object.keys(drain.usageByModel).length > 0;
+  const completeModelUsage = modelUsageIsComplete ? modelUsage : undefined;
   return {
     ...output,
     events,
     metadata: {
       ...output.metadata,
-      ...(Object.keys(modelUsage).length ? { modelUsage } : {}),
+      ...(completeModelUsage && Object.keys(completeModelUsage).length
+        ? { modelUsage: completeModelUsage }
+        : {}),
       ...(hasUsage || drain.partial
         ? {
             usage: {
@@ -109,10 +127,12 @@ export function mergeSubagentOutput(
               reasoningOutputTokens:
                 (priorUsage?.reasoningOutputTokens ?? 0) +
                 reasoningOutputTokens,
-              modelUsage,
+              ...(completeModelUsage ? { modelUsage: completeModelUsage } : {}),
               ...(drain.partial
                 ? { totalConfidence: TOKEN_TOTAL_CONFIDENCE.PARTIAL }
-                : {}),
+                : !modelUsageIsComplete
+                  ? { totalConfidence: TOKEN_TOTAL_CONFIDENCE.PARTIAL }
+                  : {}),
             },
           }
         : {}),

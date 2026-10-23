@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Step cost estimates include parent agent tokens and price subagents at their own model.**
+
 - **MCP `edit_step` no longer lets agents set or clear harness arguments.** The deprecated
   `additionalArgs` input remains accepted by the schema for compatibility, but calls using it
   fail without applying any edits. Workflow authors retain control of harness command flags.

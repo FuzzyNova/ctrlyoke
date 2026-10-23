@@ -13,6 +13,7 @@ import { CopilotCliProvider } from "../../../core/harness/copilot/CopilotCliProv
 import { CodexLogParser } from "../../../core/harness/codex/CodexLogParser";
 import { OpenCodeLogParser } from "../../../core/harness/opencode/OpenCodeLogParser";
 import { mergeSubagentOutput } from "../../../core/harness/shared/mergeSubagentOutput";
+import { calculateAttemptCost } from "../../../utils/ModelPricing";
 import { QwenCliProvider } from "../../../core/harness/qwen/QwenCliProvider";
 import {
   QwenLogParser,
@@ -5258,6 +5259,103 @@ suite("CopilotLogParser", () => {
 // CodexLogParser Tests
 // ============================================================================
 
+suite("Subagent usage cost attribution", () => {
+  test("prices parent and child tokens when the parent has no model breakdown", () => {
+    const parentModel = "gpt-5.4";
+    const childModels = [parentModel, "gpt-5-mini"];
+    for (const childModel of childModels) {
+      const merged = mergeSubagentOutput(
+        {
+          events: [],
+          metadata: {
+            model: parentModel,
+            usage: {
+              inputTokens: 1_000,
+              outputTokens: 100,
+              totalTokens: 1_100,
+              cachedInputTokens: 200,
+              reasoningOutputTokens: 20,
+            },
+          },
+        },
+        {
+          events: [],
+          partial: false,
+          usageByModel: {
+            [childModel]: {
+              inputTokens: 500,
+              outputTokens: 50,
+              cacheReadInputTokens: 100,
+              reasoningOutputTokens: 10,
+            },
+          },
+        }
+      );
+      const usage = merged.metadata.usage;
+      const cost = calculateAttemptCost({
+        harnessId: HARNESS_IDS.CODEX_CLI,
+        modelId: parentModel,
+        prompt: usage?.inputTokens ?? 0,
+        completion: usage?.outputTokens ?? 0,
+        cached: usage?.cachedInputTokens,
+        reasoning: usage?.reasoningOutputTokens,
+        totalConfidence: usage?.totalConfidence,
+        modelUsage: usage?.modelUsage,
+      }).cost;
+      const childOnlyCost = calculateAttemptCost({
+        harnessId: HARNESS_IDS.CODEX_CLI,
+        modelId: childModel,
+        prompt: 500,
+        completion: 50,
+        cached: 100,
+        reasoning: 10,
+        modelUsage: {
+          [childModel]: {
+            inputTokens: 500,
+            outputTokens: 50,
+            cacheReadInputTokens: 100,
+            reasoningOutputTokens: 10,
+          },
+        },
+      }).cost;
+
+      assert.ok(usage?.modelUsage?.[parentModel]);
+      assert.strictEqual(
+        usage?.modelUsage?.[parentModel]?.inputTokens,
+        childModel === parentModel ? 1_500 : 1_000
+      );
+      assert.strictEqual(
+        usage?.modelUsage?.[childModel]?.inputTokens,
+        childModel === parentModel ? 1_500 : 500
+      );
+      assert.strictEqual(cost?.confidence, "complete");
+      assert.ok((cost?.usd ?? 0) > 0);
+      assert.ok((cost?.usd ?? 0) > (childOnlyCost?.usd ?? 0));
+    }
+  });
+
+  test("marks per-model coverage partial when the parent model is unknown", () => {
+    const merged = mergeSubagentOutput(
+      {
+        events: [],
+        metadata: { usage: { inputTokens: 100, outputTokens: 10 } },
+      },
+      {
+        events: [],
+        partial: false,
+        usageByModel: { "gpt-5-mini": { inputTokens: 20, outputTokens: 2 } },
+      }
+    );
+
+    assert.strictEqual(merged.metadata.modelUsage, undefined);
+    assert.strictEqual(merged.metadata.usage?.modelUsage, undefined);
+    assert.strictEqual(
+      merged.metadata.usage?.totalConfidence,
+      TOKEN_TOTAL_CONFIDENCE.PARTIAL
+    );
+  });
+});
+
 suite("CodexLogParser", () => {
   let parser: CodexLogParser;
 
@@ -5318,7 +5416,6 @@ suite("CodexLogParser", () => {
           payload: {
             type: "token_count",
             info: {
-              model: "gpt-child",
               total_token_usage: {
                 input_tokens: 50,
                 output_tokens: 4,
@@ -5333,7 +5430,6 @@ suite("CodexLogParser", () => {
           payload: {
             type: "token_count",
             info: {
-              model: "gpt-child",
               total_token_usage: {
                 input_tokens: 100,
                 output_tokens: 8,
@@ -5394,6 +5490,20 @@ suite("CodexLogParser", () => {
             content: "Message Type: FINAL_ANSWER\nPayload:\nChild result text",
           },
         },
+        {
+          type: "event_msg",
+          payload: {
+            type: "token_count",
+            info: {
+              total_token_usage: {
+                input_tokens: 900,
+                output_tokens: 40,
+                cached_input_tokens: 150,
+                reasoning_output_tokens: 12,
+              },
+            },
+          },
+        },
       ] as unknown as BaseCliEvent[];
 
       const output = parser.extractResponse(parentEvents);
@@ -5438,6 +5548,14 @@ suite("CodexLogParser", () => {
       assert.strictEqual(
         merged.metadata.usage?.modelUsage?.["gpt-child"]?.outputTokens,
         8
+      );
+      assert.strictEqual(
+        merged.metadata.usage?.modelUsage?.["gpt-parent"]?.inputTokens,
+        900
+      );
+      assert.strictEqual(
+        merged.metadata.usage?.modelUsage?.["gpt-parent"]?.outputTokens,
+        40
       );
       assert.strictEqual(drain.partial, false);
     } finally {
@@ -7466,6 +7584,7 @@ suite("OpenCodeLogParser", () => {
         {
           events: [],
           metadata: {
+            model: "provider/parent-model",
             usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
           },
         },
@@ -8605,6 +8724,7 @@ suite("QwenLogParser", () => {
         {
           type: QWEN_EVENT_TYPES.ASSISTANT,
           sessionId: "session-with-hyphens",
+          model: "qwen-parent-model",
           message: {
             role: "assistant",
             parts: [
