@@ -112,28 +112,47 @@ interface OpenCodeExportPart {
   [key: string]: unknown;
 }
 
-interface OpenCodeSubagentSidecarRecord {
-  kind: (typeof OPENCODE_SUBAGENT_RECORD_TYPES)[keyof typeof OPENCODE_SUBAGENT_RECORD_TYPES];
-  childSessionId: string;
-  part?: OpenCodeExportPart;
+type OpenCodeSidecarPart = OpenCodeExportPart & {
+  callID?: string;
+  tool?: string;
+  modelID?: string;
+};
+
+type OpenCodeSubagentSidecarRecord =
+  | {
+      kind: typeof OPENCODE_SUBAGENT_RECORD_TYPES.PART;
+      childSessionId: string;
+      part: OpenCodeSidecarPart;
+    }
+  | {
+      kind: typeof OPENCODE_SUBAGENT_RECORD_TYPES.TASK_RUNNING;
+      childSessionId: string;
+      part: OpenCodeSidecarPart;
+    }
+  | {
+      kind: typeof OPENCODE_SUBAGENT_RECORD_TYPES.CHILD_IDLE;
+      childSessionId: string;
+    };
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function isOpenCodeSubagentSidecarRecord(
   value: unknown
 ): value is OpenCodeSubagentSidecarRecord {
   if (typeof value !== "object" || value === null) return false;
-  const record = value as Record<string, unknown>;
+  if (!isObject(value) || typeof value.childSessionId !== "string")
+    return false;
+  if (value.kind === OPENCODE_SUBAGENT_RECORD_TYPES.CHILD_IDLE) return true;
   if (
-    typeof record.childSessionId !== "string" ||
-    !Object.values(OPENCODE_SUBAGENT_RECORD_TYPES).includes(
-      record.kind as OpenCodeSubagentSidecarRecord["kind"]
-    )
+    value.kind !== OPENCODE_SUBAGENT_RECORD_TYPES.PART &&
+    value.kind !== OPENCODE_SUBAGENT_RECORD_TYPES.TASK_RUNNING
   )
     return false;
-  if (record.kind === OPENCODE_SUBAGENT_RECORD_TYPES.CHILD_IDLE) return true;
-  if (typeof record.part !== "object" || record.part === null) return false;
-  const part = record.part as Record<string, unknown>;
+  const part = value.part;
   return (
+    isObject(part) &&
     typeof part.type === "string" &&
     typeof part.id === "string" &&
     typeof part.sessionID === "string" &&
@@ -523,25 +542,52 @@ export class OpenCodeLogParser extends BaseLogParser {
         };
       },
       map: (record) => {
-        if (!record.part || record.kind !== OPENCODE_SUBAGENT_RECORD_TYPES.PART)
+        if (record.kind === OPENCODE_SUBAGENT_RECORD_TYPES.CHILD_IDLE)
           return [];
-        if (record.part.type === OPENCODE_PART_TYPES.STEP_FINISH) return [];
-        if (record.part.type === OPENCODE_PART_TYPES.TOOL) {
-          const event = mapOpenCodeToolPartToCliEvent(undefined, record.part);
+        const part = record.part;
+        if (
+          record.kind === OPENCODE_SUBAGENT_RECORD_TYPES.TASK_RUNNING &&
+          typeof part.state?.metadata?.sessionId === "string" &&
+          typeof part.callID === "string"
+        ) {
+          this.registerSubagentSource(
+            part.state.metadata.sessionId,
+            part.callID,
+            typeof part.modelID === "string" ? part.modelID : model
+          );
+          return [];
+        }
+        if (record.kind !== OPENCODE_SUBAGENT_RECORD_TYPES.PART) return [];
+        if (part.type === OPENCODE_PART_TYPES.STEP_FINISH) return [];
+        if (part.type === OPENCODE_PART_TYPES.TOOL) {
+          if (
+            part.tool === OPENCODE_TOOL_NAMES.TASK &&
+            typeof part.state?.metadata?.sessionId === "string" &&
+            typeof part.callID === "string"
+          ) {
+            this.registerSubagentSource(
+              part.state.metadata.sessionId,
+              part.callID,
+              typeof part.modelID === "string" ? part.modelID : model
+            );
+            const taskEvent = mapOpenCodeToolPartToCliEvent(undefined, part);
+            return taskEvent ? [taskEvent] : [];
+          }
+          const event = mapOpenCodeToolPartToCliEvent(undefined, part);
           return event ? [event] : [];
         }
         if (
-          (record.part.type === OPENCODE_PART_TYPES.TEXT ||
-            record.part.type === OPENCODE_PART_TYPES.REASONING) &&
-          typeof record.part.text === "string"
+          (part.type === OPENCODE_PART_TYPES.TEXT ||
+            part.type === OPENCODE_PART_TYPES.REASONING) &&
+          typeof part.text === "string"
         ) {
           return [
             {
               type:
-                record.part.type === OPENCODE_PART_TYPES.TEXT
+                part.type === OPENCODE_PART_TYPES.TEXT
                   ? CLI_EVENT_TYPES.TEXT
                   : CLI_EVENT_TYPES.THINKING,
-              data: { text: record.part.text },
+              data: { text: part.text },
             },
           ];
         }
@@ -553,10 +599,10 @@ export class OpenCodeLogParser extends BaseLogParser {
           record.part?.type !== OPENCODE_PART_TYPES.STEP_FINISH
         )
           return undefined;
-        const tokens = record.part?.tokens;
+        const tokens = record.part.tokens;
         if (!tokens || typeof tokens !== "object") return undefined;
         const usage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
-        accumulateOpenCodeStepTokens(tokens as Record<string, unknown>, usage);
+        accumulateOpenCodeStepTokens(tokens, usage);
         return {
           model:
             typeof record.part.modelID === "string"

@@ -95,6 +95,38 @@ const OPENCODE_SUBAGENT_RECORD_TYPES = {
   CHILD_IDLE: "child-idle",
 } as const;
 
+interface OpenCodeSidecarPart {
+  type: string;
+  id: string;
+  sessionID: string;
+  messageID: string;
+  callID?: string;
+  tool?: string;
+  modelID?: string;
+  state?: {
+    status?: string;
+    metadata?: { sessionId?: string };
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+type OpenCodeSubagentRecord =
+  | {
+      kind: typeof OPENCODE_SUBAGENT_RECORD_TYPES.PART;
+      childSessionId: string;
+      part: OpenCodeSidecarPart;
+    }
+  | {
+      kind: typeof OPENCODE_SUBAGENT_RECORD_TYPES.TASK_RUNNING;
+      childSessionId: string;
+      part: OpenCodeSidecarPart;
+    }
+  | {
+      kind: typeof OPENCODE_SUBAGENT_RECORD_TYPES.CHILD_IDLE;
+      childSessionId: string;
+    };
+
 const childParents = new Map<string, string>();
 const childCallIds = new Map<string, string>();
 const subagentSidecarPath =
@@ -102,11 +134,7 @@ const subagentSidecarPath =
     ? path.join(NOTIFY_DIR, `${RUN_ID}-subagents.jsonl`)
     : undefined;
 
-function _appendSubagentRecord(record: {
-  kind: string;
-  childSessionId: string;
-  part?: unknown;
-}): void {
+function _appendSubagentRecord(record: OpenCodeSubagentRecord): void {
   if (!subagentSidecarPath) return;
   try {
     mkdirSync(path.dirname(subagentSidecarPath), { recursive: true });
@@ -597,19 +625,21 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
           _appendSubagentRecord({
             kind: OPENCODE_SUBAGENT_RECORD_TYPES.PART,
             childSessionId: part.sessionID,
-            part,
+            part: part as OpenCodeSidecarPart,
           });
         } else if (
+          part &&
           part?.type === OPENCODE_TOOL_PART_TYPE &&
           part.tool === OPENCODE_TASK_TOOL &&
+          typeof part.sessionID === "string" &&
           typeof part.state?.metadata?.sessionId === "string"
         ) {
-          const childSessionId = part.state.metadata.sessionId as string;
+          const childSessionId = part.state.metadata.sessionId;
           childCallIds.set(childSessionId, part.callID);
           _appendSubagentRecord({
             kind: OPENCODE_SUBAGENT_RECORD_TYPES.TASK_RUNNING,
             childSessionId,
-            part,
+            part: part as OpenCodeSidecarPart,
           });
         }
       }

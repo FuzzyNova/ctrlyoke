@@ -7114,6 +7114,7 @@ suite("OpenCodeLogParser", () => {
             tokens: { input: 10, output: 2, total: 12 },
           },
         },
+        { kind: "child-idle", childSessionId: "child" },
       ];
       fs.writeFileSync(
         file,
@@ -7158,6 +7159,18 @@ suite("OpenCodeLogParser", () => {
       );
       assert.strictEqual(output.metadata.usage?.inputTokens, 11);
       assert.strictEqual(output.metadata.usage?.outputTokens, 3);
+      assert.strictEqual(
+        output.metadata.usage?.modelUsage?.["provider/child-model"]
+          ?.inputTokens,
+        10
+      );
+      assert.strictEqual(
+        output.events.some(
+          (event) =>
+            (event.data as ToolCall).subagentSpawn?.state === "completed"
+        ),
+        true
+      );
       const childText = output.events.find(
         (event) => (event.data as TextData).text === "child text"
       );
@@ -7169,6 +7182,77 @@ suite("OpenCodeLogParser", () => {
         false
       );
     } finally {
+      await fs.promises.rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("streams child parts interactively and attributes grandchildren to their task", async () => {
+    const directory = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "opencode-grandchild-")
+    );
+    try {
+      const file = path.join(directory, "run-subagents.jsonl");
+      const records = [
+        {
+          kind: "part",
+          childSessionId: "child",
+          part: {
+            type: "tool",
+            id: "grandchild-task-part",
+            sessionID: "child",
+            messageID: "message-child",
+            callID: "grandchild-call",
+            tool: "task",
+            state: {
+              status: "running",
+              metadata: { sessionId: "grandchild" },
+            },
+          },
+        },
+        {
+          kind: "part",
+          childSessionId: "grandchild",
+          part: {
+            type: "text",
+            id: "grandchild-text",
+            sessionID: "grandchild",
+            messageID: "message-grandchild",
+            text: "grandchild output",
+          },
+        },
+        { kind: "child-idle", childSessionId: "grandchild" },
+      ];
+      await fs.promises.writeFile(
+        file,
+        records.map((record) => JSON.stringify(record)).join("\n") + "\n"
+      );
+      parser.setSubagentNotifyDir(directory);
+      parser.setSubagentRunId("run");
+      parser.extractStructuredEventsFromEvent({
+        type: OPENCODE_EVENT_TYPES.SUBTASK,
+        part: {
+          callID: "parent-call",
+          sessionID: "parent",
+          state: { metadata: { sessionId: "child" } },
+        },
+      });
+
+      const streamed: CliEvent[] = [];
+      const follower = parser.getSubagentFollower();
+      follower.start((events) => streamed.push(...events), 5);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      follower.stop();
+
+      const grandchildText = streamed.find(
+        (event) => (event.data as TextData).text === "grandchild output"
+      );
+      assert.strictEqual(
+        grandchildText?.subagent?.parentToolCallId,
+        "grandchild-call"
+      );
+      assert.strictEqual(grandchildText?.subagent?.agentId, "grandchild");
+    } finally {
+      parser.getSubagentFollower().reset();
       await fs.promises.rm(directory, { recursive: true, force: true });
     }
   });

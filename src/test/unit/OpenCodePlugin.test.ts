@@ -161,6 +161,12 @@ suite("OpenCode plugin user hooks", () => {
           },
         },
       });
+      await plugin.event({
+        event: {
+          type: "session.status",
+          properties: { sessionID: "child-1", status: { type: "idle" } },
+        },
+      });
       const lines = (
         await fsPromises.readFile(
           path.join(notifyDir, "run-1-subagents.jsonl"),
@@ -170,12 +176,16 @@ suite("OpenCode plugin user hooks", () => {
         .trim()
         .split("\n")
         .map((line) => JSON.parse(line));
-      assert.strictEqual(lines.length, 2);
+      assert.strictEqual(lines.length, 3);
       assert.strictEqual(lines[0].kind, "task-running");
       assert.strictEqual(lines[0].childSessionId, "child-1");
       assert.strictEqual(lines[0].part.callID, "call-1");
       assert.strictEqual(lines[1].kind, "part");
       assert.strictEqual(lines[1].part.text, "child output");
+      assert.deepStrictEqual(lines[2], {
+        kind: "child-idle",
+        childSessionId: "child-1",
+      });
     } finally {
       await fsPromises.rm(notifyDir, { recursive: true, force: true });
     }
