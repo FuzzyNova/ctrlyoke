@@ -2626,6 +2626,121 @@ suite("CopilotLogParser", () => {
     parser = new CopilotLogParser();
   });
 
+  test("attributes Copilot subagent events and shell output across interleaved children", () => {
+    const events: BaseCliEvent[] = [
+      {
+        type: "tool.execution_start",
+        data: {
+          toolCallId: "spawn-a",
+          toolName: "task",
+          arguments: { description: "A", prompt: "do A" },
+        },
+      },
+      {
+        type: "tool.execution_start",
+        data: {
+          toolCallId: "spawn-b",
+          toolName: "task",
+          arguments: { description: "B", prompt: "do B" },
+        },
+      },
+      {
+        type: "subagent.started",
+        data: {
+          toolCallId: "spawn-a",
+          agentName: "agent-a",
+          agentDisplayName: "Alpha",
+          agentDescription: "Read alpha",
+          executionMode: "sync",
+        },
+      },
+      {
+        type: "subagent.started",
+        data: {
+          toolCallId: "spawn-b",
+          agentName: "agent-b",
+          agentDisplayName: "Beta",
+          agentDescription: "Read beta",
+          executionMode: "sync",
+        },
+      },
+      {
+        type: "assistant.message",
+        data: {
+          content: "A thinking",
+          reasoningText: "reason A",
+          parentToolCallId: "spawn-a",
+        },
+      },
+      {
+        type: "tool.execution_start",
+        data: {
+          toolCallId: "child-a",
+          toolName: "powershell",
+          arguments: {},
+          parentToolCallId: "spawn-a",
+        },
+      },
+      {
+        type: "tool.execution_start",
+        data: {
+          toolCallId: "child-b",
+          toolName: "powershell",
+          arguments: {},
+          parentToolCallId: "spawn-b",
+        },
+      },
+      {
+        type: "tool.shell_output",
+        data: { toolCallId: "child-b", text: "B output" },
+      },
+      {
+        type: "tool.shell_output",
+        data: { toolCallId: "child-a", text: "A output" },
+      },
+      {
+        type: "subagent.completed",
+        data: { toolCallId: "spawn-a", agentDisplayName: "Alpha" },
+      },
+    ];
+    const output = parser.extractResponse(events);
+    assert.ok(
+      output.events.some(
+        (event) =>
+          event.type === CLI_EVENT_TYPES.TEXT &&
+          event.subagent?.parentToolCallId === "spawn-a"
+      )
+    );
+    const calls = output.events.filter(
+      (event) => event.type === CLI_EVENT_TYPES.TOOL_CALL
+    );
+    assert.strictEqual(
+      (calls[0].data as ToolCall).subagentSpawn?.description,
+      "Read alpha"
+    );
+    assert.strictEqual(
+      (calls[0].data as ToolCall).subagentSpawn?.state,
+      "completed"
+    );
+
+    const streaming = new CopilotLogParser();
+    const childStart = streaming.extractStructuredEventsFromEvent(events[5]);
+    streaming.extractStructuredEventsFromEvent(events[6]);
+    const shellOutput = streaming.extractStructuredEventsFromEvent(events[7]);
+    assert.strictEqual(childStart[0].subagent?.parentToolCallId, "spawn-a");
+    assert.strictEqual(shellOutput[0].subagent?.parentToolCallId, "spawn-b");
+    assert.strictEqual(
+      streaming.classifyUserEvent(
+        {
+          type: "user.message",
+          data: { source: "agent-child", content: "child prompt" },
+        },
+        {}
+      ),
+      "other"
+    );
+  });
+
   test("normalizes Copilot tool start, completion, and result triples into one row", () => {
     const scenarios = [
       {

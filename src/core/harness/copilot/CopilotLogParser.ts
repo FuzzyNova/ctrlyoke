@@ -31,6 +31,8 @@ import {
   COPILOT_EVENT_TYPES,
   COPILOT_SESSION_INFO_TYPES,
   COPILOT_USER_MESSAGE_DELIVERIES,
+  COPILOT_SUBAGENT_EXECUTION_MODES,
+  COPILOT_TOOL_NAMES,
   type CopilotMcpToolIdentity,
 } from "./CopilotProtocolConstants";
 
@@ -233,6 +235,9 @@ export class CopilotLogParser extends BaseLogParser {
 
   /** Tracks in-flight tool calls across streaming events for extractStructuredEventsFromEvent. */
   private pendingStreamingTools = new Map<string, CopilotPendingTool>();
+  /** Child tool IDs do not repeat their parent ID on shell output events. */
+  private streamingSubagentParents = new Map<string, string>();
+  private streamingSyncSubagentIds = new Set<string>();
 
   // ========================================================================
   // OpenTelemetry Context Window Tracking
@@ -302,6 +307,9 @@ export class CopilotLogParser extends BaseLogParser {
    * tokens are not charged to this turn.
    */
   async beginMonitoringTurn(): Promise<void> {
+    this.streamingSubagentParents.clear();
+    this.streamingSyncSubagentIds.clear();
+    this.pendingStreamingTools.clear();
     if (this.otelReadPosition > 0) {
       await this.pollOtelContextWindow();
     }
@@ -565,11 +573,36 @@ export class CopilotLogParser extends BaseLogParser {
 
     // Track pending tool calls to associate execution_start with execution_complete
     const pendingTools = new Map<string, CopilotPendingTool>();
+    const subagentParents = new Map<string, string>();
+    const syncSubagentIds = new Set<string>();
 
     for (const event of events as CopilotProviderEvent[]) {
       const timestamp = event.timestamp
         ? new Date(event.timestamp).getTime()
         : Date.now();
+      const parentToolCallId = event.data?.parentToolCallId;
+      const toolCallId = event.data?.toolCallId;
+      if (
+        event.type === "tool.execution_start" &&
+        typeof toolCallId === "string" &&
+        typeof parentToolCallId === "string"
+      ) {
+        subagentParents.set(toolCallId, parentToolCallId);
+      }
+      const attributedParent =
+        typeof parentToolCallId === "string"
+          ? parentToolCallId
+          : typeof toolCallId === "string"
+            ? subagentParents.get(toolCallId)
+            : undefined;
+      const eventStartIndex = outputEvents.length;
+      if (
+        event.type === COPILOT_EVENT_TYPES.SUBAGENT_STARTED &&
+        event.data?.executionMode === COPILOT_SUBAGENT_EXECUTION_MODES.SYNC &&
+        typeof event.data.toolCallId === "string"
+      ) {
+        syncSubagentIds.add(event.data.toolCallId);
+      }
 
       // Extract session metadata from session.start event
       if (event.type === "session.start" && event.data) {
@@ -703,6 +736,20 @@ export class CopilotLogParser extends BaseLogParser {
         // us to add structuredPatch from tool.execution_complete
       }
 
+      if (
+        event.type === "tool.shell_output" ||
+        event.type === "tool.execution_partial_result"
+      ) {
+        const text = event.data?.text ?? event.data?.output;
+        if (typeof text === "string" && text.length > 0) {
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.TEXT,
+            timestamp,
+            data: { text },
+          });
+        }
+      }
+
       // Extract thinking/reasoning blocks (old format: separate assistant.reasoning event)
       if (event.type === "assistant.reasoning" && event.data?.content) {
         outputEvents.push({
@@ -736,6 +783,28 @@ export class CopilotLogParser extends BaseLogParser {
             mcpHint
           )
         );
+        if (event.data.toolName === COPILOT_TOOL_NAMES.TASK) {
+          for (const emitted of outputEvents.slice(eventStartIndex)) {
+            if (emitted.type === CLI_EVENT_TYPES.TOOL_CALL) {
+              const call =
+                emitted.data as import("../../../types/CliOutputTypes").ToolCall;
+              const args = event.data.arguments ?? {};
+              call.subagentSpawn = {
+                description:
+                  typeof args.description === "string"
+                    ? args.description
+                    : undefined,
+                agentType:
+                  typeof args.subagent_type === "string"
+                    ? args.subagent_type
+                    : undefined,
+                prompt:
+                  typeof args.prompt === "string" ? args.prompt : undefined,
+                state: "running",
+              };
+            }
+          }
+        }
       }
 
       // Emit COMPLETED events for all tool types from tool.execution_complete
@@ -779,6 +848,54 @@ export class CopilotLogParser extends BaseLogParser {
               },
             } as ToolResultData,
           });
+        }
+      }
+
+      if (
+        (event.type === COPILOT_EVENT_TYPES.SUBAGENT_STARTED &&
+          event.data?.executionMode ===
+            COPILOT_SUBAGENT_EXECUTION_MODES.SYNC) ||
+        ((event.type === COPILOT_EVENT_TYPES.SUBAGENT_COMPLETED ||
+          event.type === COPILOT_EVENT_TYPES.SUBAGENT_FAILED) &&
+          syncSubagentIds.has(String(event.data?.toolCallId)))
+      ) {
+        const spawn = outputEvents.find(
+          (candidate) => (candidate.data as any)?.id === event.data?.toolCallId
+        );
+        if (spawn && spawn.type === CLI_EVENT_TYPES.TOOL_CALL) {
+          const toolCall =
+            spawn.data as import("../../../types/CliOutputTypes").ToolCall;
+          const spawnData = event.data ?? {};
+          const displayName = spawnData.agentDisplayName;
+          const agentName = spawnData.agentName;
+          toolCall.subagentSpawn = {
+            ...(toolCall.subagentSpawn ?? { state: "running" as const }),
+            ...(typeof spawnData.agentDescription === "string"
+              ? { description: spawnData.agentDescription }
+              : {}),
+            ...(typeof displayName === "string" || typeof agentName === "string"
+              ? {
+                  children: [
+                    {
+                      agentId: String(agentName ?? displayName),
+                      label: String(displayName ?? agentName),
+                    },
+                  ],
+                }
+              : {}),
+            state:
+              event.type === COPILOT_EVENT_TYPES.SUBAGENT_STARTED
+                ? "running"
+                : event.type === COPILOT_EVENT_TYPES.SUBAGENT_COMPLETED
+                  ? "completed"
+                  : "failed",
+          };
+        }
+      }
+
+      if (typeof attributedParent === "string") {
+        for (const emitted of outputEvents.slice(eventStartIndex)) {
+          emitted.subagent = { parentToolCallId: attributedParent };
         }
       }
     }
@@ -1041,6 +1158,12 @@ export class CopilotLogParser extends BaseLogParser {
   ): UserEventClassification {
     const e = event as CopilotProviderEvent;
     if (e.type !== "user.message") {
+      return "other";
+    }
+    if (
+      typeof e.data?.source === "string" &&
+      e.data.source.startsWith("agent-")
+    ) {
       return "other";
     }
 
@@ -1377,6 +1500,35 @@ export class CopilotLogParser extends BaseLogParser {
     if (!data) {
       return results;
     }
+    const parentToolCallId = data.parentToolCallId;
+    if (
+      ev.type === "tool.execution_start" &&
+      typeof data.toolCallId === "string" &&
+      typeof parentToolCallId === "string"
+    ) {
+      this.streamingSubagentParents.set(data.toolCallId, parentToolCallId);
+    }
+    const attributedParent =
+      typeof parentToolCallId === "string"
+        ? parentToolCallId
+        : typeof data.toolCallId === "string"
+          ? this.streamingSubagentParents.get(data.toolCallId)
+          : undefined;
+    const addAttribution = (events: CliEvent[]): CliEvent[] => {
+      if (attributedParent) {
+        for (const emitted of events) {
+          emitted.subagent = { parentToolCallId: attributedParent };
+        }
+      }
+      return events;
+    };
+    if (
+      ev.type === COPILOT_EVENT_TYPES.SUBAGENT_STARTED &&
+      data.executionMode === COPILOT_SUBAGENT_EXECUTION_MODES.SYNC &&
+      typeof data.toolCallId === "string"
+    ) {
+      this.streamingSyncSubagentIds.add(data.toolCallId);
+    }
 
     // model.model_call_success is a usage-only headless event. Its cache
     // fields are consumed again by extractResponse() from the raw event list;
@@ -1409,6 +1561,7 @@ export class CopilotLogParser extends BaseLogParser {
           data: { text: data.content } as TextData,
         });
       }
+      addAttribution(results);
       return results;
     }
 
@@ -1456,6 +1609,28 @@ export class CopilotLogParser extends BaseLogParser {
           mcpHint
         )
       );
+      if (data.toolName === COPILOT_TOOL_NAMES.TASK) {
+        for (const emitted of results) {
+          if (emitted.type === CLI_EVENT_TYPES.TOOL_CALL) {
+            const call =
+              emitted.data as import("../../../types/CliOutputTypes").ToolCall;
+            const args = data.arguments ?? {};
+            call.subagentSpawn = {
+              description:
+                typeof args.description === "string"
+                  ? args.description
+                  : undefined,
+              agentType:
+                typeof args.subagent_type === "string"
+                  ? args.subagent_type
+                  : undefined,
+              prompt: typeof args.prompt === "string" ? args.prompt : undefined,
+              state: "running",
+            };
+          }
+        }
+      }
+      addAttribution(results);
       return results;
     }
 
@@ -1496,6 +1671,87 @@ export class CopilotLogParser extends BaseLogParser {
               error: data.success ? undefined : toolResultStr,
             },
           } as ToolResultData,
+        });
+      }
+      addAttribution(results);
+      return results;
+    }
+
+    if (
+      ev.type === "tool.shell_output" ||
+      ev.type === "tool.execution_partial_result"
+    ) {
+      const text = data.text ?? data.output;
+      if (typeof text === "string" && text.length > 0) {
+        results.push({
+          type: CLI_EVENT_TYPES.TEXT,
+          timestamp,
+          data: { text },
+        });
+        addAttribution(results);
+      }
+      return results;
+    }
+
+    if (
+      ((ev.type === COPILOT_EVENT_TYPES.SUBAGENT_COMPLETED ||
+        ev.type === COPILOT_EVENT_TYPES.SUBAGENT_FAILED) &&
+        this.streamingSyncSubagentIds.has(String(data.toolCallId))) ||
+      (ev.type === COPILOT_EVENT_TYPES.SUBAGENT_STARTED &&
+        data.executionMode === COPILOT_SUBAGENT_EXECUTION_MODES.SYNC)
+    ) {
+      const spawn = this.pendingStreamingTools.get(data.toolCallId);
+      if (spawn?.toolName === COPILOT_TOOL_NAMES.TASK) {
+        const state =
+          ev.type === COPILOT_EVENT_TYPES.SUBAGENT_COMPLETED
+            ? "completed"
+            : ev.type === COPILOT_EVENT_TYPES.SUBAGENT_FAILED
+              ? "failed"
+              : "running";
+        results.push({
+          type: CLI_EVENT_TYPES.TOOL_CALL,
+          timestamp,
+          data: {
+            id: data.toolCallId,
+            name: COPILOT_TOOL_NAMES.TASK,
+            parameters: spawn.args,
+            subagentSpawn: {
+              description:
+                typeof data.agentDescription === "string"
+                  ? data.agentDescription
+                  : typeof spawn.args === "object" &&
+                      spawn.args !== null &&
+                      typeof spawn.args.description === "string"
+                    ? spawn.args.description
+                    : undefined,
+              agentType:
+                typeof spawn.args === "object" &&
+                spawn.args !== null &&
+                typeof spawn.args.subagent_type === "string"
+                  ? spawn.args.subagent_type
+                  : undefined,
+              prompt:
+                typeof spawn.args === "object" &&
+                spawn.args !== null &&
+                typeof spawn.args.prompt === "string"
+                  ? spawn.args.prompt
+                  : undefined,
+              ...(typeof data.agentDisplayName === "string" ||
+              typeof data.agentName === "string"
+                ? {
+                    children: [
+                      {
+                        agentId: String(
+                          data.agentName ?? data.agentDisplayName
+                        ),
+                        label: String(data.agentDisplayName ?? data.agentName),
+                      },
+                    ],
+                  }
+                : {}),
+              state,
+            },
+          } as import("../../../types/CliOutputTypes").ToolCall,
         });
       }
       return results;

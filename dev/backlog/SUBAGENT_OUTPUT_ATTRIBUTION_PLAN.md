@@ -639,7 +639,7 @@ Each item is one session; tick it when it lands.
       merge guard.
 - [x] 2. claude-cli headless inline stamping, spawn normalization, and
       `task_*` status/completion. Fixes the reported interleaving bug.
-- [ ] 3. copilot-cli inline stamping (both modes).
+- [x] 3. copilot-cli inline stamping (both modes).
 - [ ] 4. Per-model usage and pricing, plus the inline-source usage fixes that
       need no follower: claude-cli headless `result.modelUsage`, copilot-cli
       per-model `chat` spans and the child context-window leak, qwen-cli
