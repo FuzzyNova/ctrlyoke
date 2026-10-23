@@ -1,5 +1,7 @@
 import {
+  EXECUTION_MODES,
   QUEUE_POSITION,
+  type ExecutionMode,
   type QueuePosition,
 } from "../types/DashboardConstants";
 import type { ParallelGroupInsertPlacement } from "../core/ParallelGroupTopology";
@@ -29,6 +31,7 @@ export type McpAppendStepInput = Pick<
   "prompt" | "name" | "model" | "harness" | "resumeSession"
 > & {
   sessionId?: number;
+  executionMode?: ExecutionMode;
 };
 
 export interface McpAppendParallelGroupInput {
@@ -79,6 +82,8 @@ export interface McpAppendStepResult {
    * positional references the insert shifted (references are never rewritten).
    */
   warning?: string;
+  /** Execution constraints that callers should account for. */
+  warnings?: string[];
 }
 
 export type McpStepUpdateArguments = Omit<
@@ -95,6 +100,7 @@ export type McpStepUpdateArguments = Omit<
       | "enabled"
       | "color"
       | "skills"
+      | "executionMode"
     >
   >,
   "additionalArgs"
@@ -225,6 +231,12 @@ const MCP_APPEND_STEP_INPUT_SCHEMA: McpToolInputSchema = {
       description:
         "Harness to run this step with. Defaults to the workflow's harness.",
     },
+    executionMode: {
+      type: "string",
+      enum: Object.values(EXECUTION_MODES),
+      description:
+        "How to run this step. Defaults to the workflow's executionMode.",
+    },
     resumeSession: {
       type: "boolean",
       description:
@@ -280,6 +292,11 @@ const MCP_STEP_UPDATE_SCHEMA: McpToolInputSchema = {
     name: { type: "string", description: "The step's display label." },
     model: { type: "string", description: "The model override." },
     harness: { type: "string", description: "The harness override." },
+    executionMode: {
+      type: "string",
+      enum: Object.values(EXECUTION_MODES),
+      description: "The execution mode override.",
+    },
     resumeSession: {
       type: "boolean",
       description: "Whether the step should resume a previous session.",
@@ -315,7 +332,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: MCP_WORKFLOW_STATUS_TOOL_NAME,
     description:
-      "See each workflow step's type, status, sessionId, and whether it resumes an earlier session (resumeSession, including a value inherited from the workflow). Each prompt step also shows its harness and executionMode (interactive or headless): what it ran with once started, otherwise what it will run with. Prompt steps include a prompt preview; script steps include a script preview. metadata shows the workflow's harness, model, resumeSession, and executionMode, which appended prompt steps inherit; append_step can override all but executionMode. A headless step cannot wait on background work: its process exits when the agent ends its turn. Call read_output with a step's index to read its full prompt or script.",
+      "See each workflow step's type, status, sessionId, and whether it resumes an earlier session (resumeSession, including a value inherited from the workflow). Each prompt step also shows its harness and executionMode (interactive or headless): what it ran with once started, otherwise what it will run with. Prompt steps include a prompt preview; script steps include a script preview. metadata shows the workflow's harness, model, resumeSession, and executionMode, which appended prompt steps inherit; append_step can override these. A headless step cannot wait on background work: its process exits when the agent ends its turn. Codex cannot wait on background work in either mode. Call read_output with a step's index to read its full prompt or script.",
     inputSchema: { type: "object", properties: {} },
   },
   {

@@ -234,8 +234,12 @@ Each item is one session; tick it when it lands.
       frontmatter `tools` is discarded by `AgentExpander.stripFrontmatter`,
       and agent/skill content is injected as prompt text only. Stage 3 item 1
       is unblocked.
-- [ ] 1. Stage 1: `executionMode` on `append_step`/`edit_step`, result
+- [x] 1. Stage 1: `executionMode` on `append_step`/`edit_step`, result
       `warnings`, docs, orchestrator template, tests.
+      PTY capability remains an open question: the runner computes it in
+      `resolveCliExecutionMode`, but does not export it to the MCP child.
+      `ParallelGroupPreflight` applies the same interactive multiplex check to
+      queued groups regardless of whether members were authored or appended.
 - [ ] 2a. Stage 2 schema: the `conditions` root field and `params` (legal only
       inside `conditions` entries), `schema:update`, the TypeScript types,
       parser validation, and the serializer/schema round-trip suites. No MCP

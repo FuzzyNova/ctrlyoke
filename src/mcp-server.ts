@@ -54,6 +54,8 @@ import {
   DEFAULT_MAX_STEPS,
   ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
+  EXECUTION_MODES,
+  HARNESS_IDS,
   StepOutputTextMode,
   LOGS_DIR,
   QUEUE_POSITION,
@@ -399,6 +401,28 @@ function toWorkflowStepUpdates(
           : value,
       ])
   ) as Partial<WorkflowStep>;
+}
+
+function executionModeWarnings(
+  steps: readonly WorkflowStep[],
+  workingFile: WorkingFile
+): string[] {
+  const hasCodexInteractiveStep = steps.some((step) => {
+    if (isScriptStep(step)) return false;
+    return (
+      PropertyResolver.resolveHarnessValue(
+        step.harness,
+        workingFile.harness
+      ) === HARNESS_IDS.CODEX_CLI &&
+      PropertyResolver.resolveExecutionMode(step, workingFile) ===
+        EXECUTION_MODES.INTERACTIVE
+    );
+  });
+  return hasCodexInteractiveStep
+    ? [
+        "Codex cannot wait on background work in either execution mode; choose a non-Codex harness for steps that must wait for long commands.",
+      ]
+    : [];
 }
 
 export class CtrlYokeMCPServer {
@@ -1354,6 +1378,14 @@ export class CtrlYokeMCPServer {
       throw new Error("Failed to append steps: no response generated");
     }
 
+    const executionWarnings = executionModeWarnings(
+      flattened.topology.steps,
+      updatedWorkingFile
+    );
+    if (executionWarnings.length > 0) {
+      response.warnings = executionWarnings;
+    }
+
     // Steps appended mid-run never pass the start-time approval prompt, so
     // tell the appending agent now instead of letting the step fail at
     // dispatch with nobody listening.
@@ -1441,12 +1473,16 @@ export class CtrlYokeMCPServer {
       lineageRepository,
       target.allowInterruptedRun
     );
+    const effectiveStep = edited.workingFile.steps?.[index];
+    const warnings = effectiveStep
+      ? executionModeWarnings([effectiveStep], edited.workingFile)
+      : [];
     return this.mutationResponse(
       MCP_EDIT_STEP_TOOL_NAME,
       selected,
       edited,
       target.definitionRevision,
-      { index }
+      { index, ...(warnings.length > 0 ? { warnings } : {}) }
     );
   }
 

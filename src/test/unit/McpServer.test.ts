@@ -1863,7 +1863,13 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       enabled: false,
       color: "blue",
       skills: ["skill-name"],
+      executionMode: EXECUTION_MODES.HEADLESS,
     };
+    const initial = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    initial.executionMode = EXECUTION_MODES.INTERACTIVE;
+    await fs.writeFile(run.runFilePath, JSON.stringify(initial), "utf8");
     try {
       await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, { index: 2, updates });
       const updated = JSON.parse(
@@ -1880,6 +1886,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         enabled: false,
         color: "blue",
         skills: ["skill-name"],
+        executionMode: EXECUTION_MODES.HEADLESS,
       });
 
       await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
@@ -1895,15 +1902,160 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
           "enabled",
           "color",
           "skills",
+          "executionMode",
         ],
       });
       const cleared = JSON.parse(
         await fs.readFile(run.runFilePath, "utf8")
       ) as WorkingFile;
       assert.deepStrictEqual(cleared.steps?.[2], { prompt: "updated prompt" });
+      const status = responseJson(
+        await server.invokeTool("workflow_status", {})
+      );
+      assert.strictEqual(
+        status.steps[2].executionMode,
+        EXECUTION_MODES.INTERACTIVE
+      );
     } finally {
       await releaseActiveRun(run, ownerToken);
     }
+  });
+
+  test("append_step stores and reports an executionMode override", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "append-execution-mode",
+      "2026-01-01T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.RUNNING }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.harness = HARNESS_IDS.CLAUDE_CLI;
+    workingFile.executionMode = EXECUTION_MODES.HEADLESS;
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const result = responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          {
+            prompt: "interactive task",
+            executionMode: EXECUTION_MODES.INTERACTIVE,
+          },
+        ],
+      })
+    );
+    const persisted = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    const status = responseJson(await server.invokeTool("workflow_status", {}));
+
+    assert.strictEqual(
+      persisted.steps?.[1].executionMode,
+      EXECUTION_MODES.INTERACTIVE
+    );
+    assert.strictEqual(
+      status.steps[1].executionMode,
+      EXECUTION_MODES.INTERACTIVE
+    );
+    assert.strictEqual("warnings" in result, false);
+  });
+
+  test("warns for resolved Codex interactive steps and omits warnings otherwise", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "codex-interactive-warning",
+      "2026-01-01T00-00-00-000Z",
+      {
+        stepCount: 3,
+        currentIndex: 1,
+        executionState: EXECUTION_STATES.RUNNING,
+      }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.harness = HARNESS_IDS.CODEX_CLI;
+    workingFile.executionMode = EXECUTION_MODES.INTERACTIVE;
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const inheritedInteractive = responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [{ prompt: "needs background wait" }],
+      })
+    );
+    const editedInteractive = responseJson(
+      await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 3,
+        updates: { executionMode: EXECUTION_MODES.INTERACTIVE },
+      })
+    );
+    const explicitHeadless = responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          { prompt: "headless", executionMode: EXECUTION_MODES.HEADLESS },
+        ],
+      })
+    );
+    const editedHeadless = responseJson(
+      await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 3,
+        updates: { executionMode: EXECUTION_MODES.HEADLESS },
+      })
+    );
+
+    assert.match(inheritedInteractive.warnings[0], /Codex cannot wait/u);
+    assert.match(editedInteractive.warnings[0], /Codex cannot wait/u);
+    assert.strictEqual("warnings" in explicitHeadless, false);
+    assert.strictEqual("warnings" in editedHeadless, false);
+  });
+
+  test("accepts an interactive member in an appended parallel group", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "append-interactive-parallel-member",
+      "2026-01-01T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.RUNNING }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.harness = HARNESS_IDS.CLAUDE_CLI;
+    workingFile.executionMode = EXECUTION_MODES.HEADLESS;
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const result = responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          {
+            parallel: [
+              {
+                prompt: "interactive member",
+                executionMode: EXECUTION_MODES.INTERACTIVE,
+              },
+              { prompt: "headless member" },
+            ],
+          },
+        ],
+      })
+    );
+    const persisted = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+
+    assert.strictEqual(result.stepsAdded, 2);
+    assert.strictEqual(
+      persisted.steps?.[1].executionMode,
+      EXECUTION_MODES.INTERACTIVE
+    );
+    assert.strictEqual(persisted.parallelGroups?.length, 1);
   });
 
   test("rejects editing a parallel member to target its sibling", async () => {
