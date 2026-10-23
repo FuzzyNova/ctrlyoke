@@ -644,6 +644,12 @@ const HEADER_HORIZONTAL_CHROME = 140;
 const STATS_HORIZONTAL_CHROME = 96;
 const OUTPUT_BLOCK_VERTICAL_CHROME = 32;
 const THINKING_LABEL_HEIGHT = 18;
+/** Left margin per nesting level of a subagent row; `OutputRow` renders it. */
+export const SUBAGENT_ROW_INDENT_PX = 12;
+/** `pl-3` padding plus the 1px left border of a subagent row. */
+const SUBAGENT_ROW_HORIZONTAL_CHROME = 12;
+/** The child label shown on a subagent group's first row. */
+const SUBAGENT_LABEL_HEIGHT = 18;
 const THINKING_CONTENT_VERTICAL_CHROME = 14;
 const THINKING_OUTER_VERTICAL_CHROME = 6;
 const STATUS_ROW_VERTICAL_CHROME = 20;
@@ -1916,7 +1922,9 @@ export function estimateOutputRowHeight(
   const contentWidth =
     row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT && row.subagent
       ? outputContentWidth != null
-        ? outputContentWidth - row.subagent.depth * 12 - 12
+        ? outputContentWidth -
+          row.subagent.depth * SUBAGENT_ROW_INDENT_PX -
+          SUBAGENT_ROW_HORIZONTAL_CHROME
         : undefined
       : outputContentWidth;
   const height =
@@ -1925,7 +1933,7 @@ export function estimateOutputRowHeight(
     outputRowActivityChrome(row) +
     (row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
     row.subagent?.showLabel
-      ? 18
+      ? SUBAGENT_LABEL_HEIGHT
       : 0);
   rowHeightEstimateCache.set(row, {
     contentWidth: outputContentWidth,
@@ -2807,7 +2815,8 @@ export function buildOutputRows(
         visibleEvent.event,
         previousSubagentGroup
       );
-      if (subagent) previousSubagentGroup = subagent.groupKey;
+      // Parent rows end a run, so a child resuming after them is relabelled.
+      previousSubagentGroup = subagent?.groupKey;
       const rowKey = `${rowKeyBase}:event:${visibleEvent.originalIndex}`;
       // The diff key is both the collapse/expansion state key and the diff
       // row's DOM anchor id, so it needs the same per-slice uniqueness as

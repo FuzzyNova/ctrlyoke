@@ -133,6 +133,7 @@ import type {
   ScriptOutputRow,
   StructuredEventRow,
 } from "@utils/outputRows";
+import { SUBAGENT_ROW_INDENT_PX } from "@utils/outputRows";
 import {
   getDisplayStructuredPatch,
   getSnapshotBeforeContent,
@@ -2090,7 +2091,9 @@ function OutputRowComponent({
     content = (
       <div
         className="pl-3 border-l border-panel-border"
-        style={{ marginLeft: `${row.subagent.depth * 12}px` }}
+        style={{
+          marginLeft: `${row.subagent.depth * SUBAGENT_ROW_INDENT_PX}px`,
+        }}
         role="group"
         aria-label={`Subagent ${row.subagent.label}`}
       >

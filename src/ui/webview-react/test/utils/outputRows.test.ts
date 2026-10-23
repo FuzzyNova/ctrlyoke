@@ -161,6 +161,11 @@ describe("outputRows", () => {
         subagent: { parentToolCallId: "spawn", agentId: "b" },
       },
       { type: CLI_EVENT_TYPES.TEXT, data: { text: "parent" } },
+      {
+        type: CLI_EVENT_TYPES.TEXT,
+        data: { text: "beta resumes" },
+        subagent: { parentToolCallId: "spawn", agentId: "b" },
+      },
     ];
     const rows = buildOutputRows({
       allMessages: [
@@ -207,6 +212,12 @@ describe("outputRows", () => {
       children[5].subagent?.groupKey
     );
     expect(children[6].subagent).toBeUndefined();
+    // The label marks each run of a group's rows: a continuation stays
+    // unlabelled, and a child resuming after parent output is relabelled.
+    expect(children[2].subagent?.showLabel).toBe(true);
+    expect(children[3].subagent?.showLabel).toBe(false);
+    expect(children[7].subagent?.label).toBe("Beta");
+    expect(children[7].subagent?.showLabel).toBe(true);
   });
 
   // Regression: the timeline-v2 migration dropped `CliOutput.prompt` and the
