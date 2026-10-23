@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A Copilot step that reads its background shells until they finish now completes when its turn
+  ends.** When Copilot waited on a background shell with `read_powershell` and the shell finished
+  during that wait, ctrlyoke kept treating the shell as running. The step stayed running for 10
+  minutes after Copilot was done, until the idle timeout completed it.
 - **The "CLI is older than this extension" notice only names a CLI installed with npm.** After an
   extension update, it could name the CLI copy bundled in the previous extension version's folder,
   which runs whenever you or an agent type `ctrlyoke` in a VS Code terminal, even if you never

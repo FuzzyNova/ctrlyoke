@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-23 by Copilot CLI, while a step launched five async shells and polled them
 - **Area:** `src/core/harness/copilot/CopilotLogParser.ts` (`trackBackgroundWorkState`), `src/core/harness/CliLogMonitor.ts` (background-work hold)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -145,6 +145,16 @@ exit code 0>` removes `shell-1`, so `hasPendingBackgroundWork()` is false.
 Also add a `CliLogMonitor.test.ts` case, next to the detached-shell ones near
 line 1206, showing that a Stop hook is accepted rather than held once every
 pending shell has been read to completion.
+
+### Confirmation
+
+A scan of all 2,129 local Copilot sessions confirmed the inference before the fix:
+99 `read_powershell` results ended with a completion marker, none was ever followed by a
+`system.notification` for that shell, and the marker's id always matched
+`arguments.shellId`. Every one of them ended its result with the marker. Detached shells
+use the form `<detached command with shellId: <id> completed with exit code <n>>`.
+`write_powershell` and `list_powershell` never returned a completion marker, so step 3
+added nothing for them.
 
 ### Related
 

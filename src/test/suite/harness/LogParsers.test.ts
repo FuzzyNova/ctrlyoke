@@ -4060,6 +4060,144 @@ suite("CopilotLogParser", () => {
       });
       assert.strictEqual(parser.hasPendingBackgroundWork(), false);
     });
+
+    let readCallCounter = 0;
+    /** Replays a `read_powershell` call's start/complete pair, shaped like Copilot 1.0.103's. */
+    const readShell = (shellId: string, resultContent: string): void => {
+      const toolCallId = `read-${++readCallCounter}`;
+      parser.trackBackgroundWorkState({
+        type: "tool.execution_start",
+        data: {
+          toolCallId,
+          toolName: "read_powershell",
+          arguments: { shellId, delay: 30 },
+        },
+      });
+      parser.trackBackgroundWorkState({
+        type: "tool.execution_complete",
+        data: {
+          toolCallId,
+          success: true,
+          toolTelemetry: {
+            properties: {
+              read_target_state: "active",
+              read_target_original_mode: "async",
+            },
+          },
+          result: { content: resultContent },
+        },
+      });
+    };
+
+    test("read_powershell returning a shell's completion removes it without a notification", () => {
+      // Regression: a real capture had four async shells whose completion a
+      // read returned in-turn; Copilot sent no system.notification for any of
+      // them, so they stayed pending and the step was held until the idle
+      // backstop.
+      parser.trackBackgroundWorkState(asyncLaunch("shell-1"));
+      readShell(
+        "shell-1",
+        "exit 0\n461\n<shellId: shell-1 completed with exit code 0>"
+      );
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+      // No resumed-turn latch: the model handled the result in this turn, so
+      // no turn_start/turn_end is needed to release the hold.
+      assert.deepStrictEqual(parser.getBackgroundWorkHoldSnapshot(), {
+        pendingTasks: [],
+        awaitingResumedTurn: false,
+      });
+    });
+
+    test("read_powershell reporting a non-zero exit also removes the shell", () => {
+      parser.trackBackgroundWorkState(asyncLaunch("shell-1"));
+      readShell(
+        "shell-1",
+        "boom\n<shellId: shell-1 completed with exit code 1>"
+      );
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
+
+    test("read_powershell of a detached shell recognizes the detached completion marker", () => {
+      parser.trackBackgroundWorkState(asyncLaunch("0"));
+      readShell(
+        "0",
+        "Output:\nbackground task 1 complete\n<detached command with shellId: 0 completed with exit code 0>"
+      );
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
+
+    test("read_powershell that times out while the shell is still running leaves it pending", () => {
+      parser.trackBackgroundWorkState(asyncLaunch("shell-1"));
+      // Wordings observed in real Copilot session logs.
+      for (const stillRunning of [
+        "<command with shellId: shell-1 is still running after 5 seconds. The command is still running but hasn't produced output yet. Use read_powershell to continue waiting, or stop_powershell to stop it.>",
+        "partial\n<command with shellId: shell-1 is still running after 30 seconds. The command is still running. You will be automatically notified when it completes; if you need the command to complete end your response with no tool calls to wait for the notification. Use stop_powershell to stop it.>",
+        "partial\n<command with shellId: shell-1 is still running after 30 seconds. The command is still running. Check the output above - if it looks like the command is waiting for input, use write_powershell to provide it. Otherwise, use read_powershell to continue waiting for output, or stop_powershell to stop it.>",
+      ]) {
+        readShell("shell-1", stillRunning);
+        assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+      }
+    });
+
+    test("read_powershell completing one shell leaves the others pending", () => {
+      parser.trackBackgroundWorkState(asyncLaunch("shell-1"));
+      parser.trackBackgroundWorkState(asyncLaunch("shell-2"));
+
+      readShell("shell-1", "<shellId: shell-1 completed with exit code 0>");
+      assert.deepStrictEqual(
+        parser
+          .getBackgroundWorkHoldSnapshot()
+          .pendingTasks.map((task) => task.taskId),
+        ["shell-2"]
+      );
+
+      readShell("shell-2", "<shellId: shell-2 completed with exit code 0>");
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
+
+    test("read_powershell removes the shell named by its result marker, not by its argument", () => {
+      parser.trackBackgroundWorkState(asyncLaunch("shell-1"));
+      parser.trackBackgroundWorkState(asyncLaunch("shell-2"));
+
+      readShell("shell-1", "<shellId: shell-2 completed with exit code 0>");
+      assert.deepStrictEqual(
+        parser
+          .getBackgroundWorkHoldSnapshot()
+          .pendingTasks.map((task) => task.taskId),
+        ["shell-1"]
+      );
+    });
+
+    test("only read_powershell results clear a shell, and only when the marker ends the result", () => {
+      parser.trackBackgroundWorkState(asyncLaunch("shell-1"));
+
+      // Another (sync) tool whose output merely contains the marker text.
+      parser.trackBackgroundWorkState({
+        type: "tool.execution_start",
+        data: {
+          toolCallId: "sync-1",
+          toolName: "powershell",
+          arguments: { command: "Get-Content notes.txt" },
+        },
+      });
+      parser.trackBackgroundWorkState({
+        type: "tool.execution_complete",
+        data: {
+          toolCallId: "sync-1",
+          toolTelemetry: { properties: { executionMode: "sync" } },
+          result: { content: "<shellId: shell-1 completed with exit code 0>" },
+        },
+      });
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      // A still-running read whose output echoes the marker mid-stream.
+      readShell(
+        "shell-1",
+        "log: <shellId: shell-1 completed with exit code 0>\n<command with shellId: shell-1 is still running after 5 seconds. The command is still running. Use read_powershell to continue waiting for output, or stop_powershell to stop it.>"
+      );
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+    });
   });
 
   suite("classifyUserEvent", () => {

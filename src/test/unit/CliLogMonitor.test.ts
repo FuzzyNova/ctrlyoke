@@ -1250,6 +1250,112 @@ suite("CliLogMonitor", () => {
     });
   });
 
+  test("accepts the first Copilot Stop once every async shell was read to completion in-turn", async () => {
+    // Regression for a real production hang: async shells whose completion a
+    // `read_powershell` returned in-turn never get a system.notification, so
+    // they used to stay pending and the only Stop Copilot sends was absorbed
+    // by the hold until the 10-minute idle backstop.
+    await withZeroDrainDeadline(async () => {
+      const tempDir = makeTempDir("ctrlyoke-copilot-monitor-");
+      const logPath = path.join(tempDir, "events.jsonl");
+
+      try {
+        const writeLine = (event: Record<string, unknown>) =>
+          fs.appendFileSync(logPath, JSON.stringify(event) + "\n", "utf8");
+
+        writeLine({
+          type: "session.start",
+          data: { sessionId: "copilot-session" },
+        });
+        writeLine({ type: "assistant.turn_start" });
+        for (const shellId of ["codex", "qwen"]) {
+          writeLine({
+            type: "tool.execution_complete",
+            data: {
+              toolCallId: `launch-${shellId}`,
+              toolTelemetry: { properties: { executionMode: "async" } },
+              result: {
+                content: `<command started in background with shellId: ${shellId}>`,
+              },
+            },
+          });
+        }
+        for (const shellId of ["codex", "qwen"]) {
+          writeLine({
+            type: "tool.execution_start",
+            data: {
+              toolCallId: `read-${shellId}`,
+              toolName: "read_powershell",
+              arguments: { shellId, delay: 30 },
+            },
+          });
+          writeLine({
+            type: "tool.execution_complete",
+            data: {
+              toolCallId: `read-${shellId}`,
+              toolTelemetry: {
+                properties: {
+                  read_target_state: "active",
+                  read_target_original_mode: "async",
+                },
+              },
+              result: {
+                content: `exit 0\n<shellId: ${shellId} completed with exit code 0>`,
+              },
+            },
+          });
+        }
+        writeLine({
+          type: "assistant.message",
+          data: { content: "All shells finished." },
+        });
+        writeLine({ type: "assistant.turn_end" });
+
+        const parser = new CopilotLogParser();
+        let notificationCallCount = 0;
+        const monitor = new CliLogMonitor({
+          logParser: parser,
+          notificationMonitor: createNotificationMonitor({
+            monitorForCompletion: async () => {
+              notificationCallCount++;
+              return { completed: true, kind: "completion", data: {} };
+            },
+          }),
+          runtimeState: {
+            getWorkspaceRoot: () => tempDir,
+            isCancelling: () => false,
+          },
+          hostCallbacks: {
+            onStreamingEvents: () => undefined,
+            onResponseComplete: () => undefined,
+            logResponse: () => undefined,
+          },
+        });
+
+        const result = await monitor.monitor(
+          logPath,
+          "copilot-session",
+          new Date(0),
+          "gpt-5.4"
+        );
+
+        assert.strictEqual(result.success, true);
+        assert.strictEqual(
+          notificationCallCount,
+          1,
+          "the Stop must be accepted, not held for a second one"
+        );
+        assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+        assert.strictEqual(
+          getTranscriptText(result.parsedOutput?.events ?? []),
+          "All shells finished."
+        );
+      } finally {
+        removeTempDir(tempDir);
+      }
+    });
+  });
+
   test("completes on the first Antigravity Stop once catch-up includes completion and resumed terminal response", async () => {
     // Antigravity runs no stale-stop guard (unlike Copilot above): its transcript
     // watcher settles state independently of Stop-hook timing, so a single Stop

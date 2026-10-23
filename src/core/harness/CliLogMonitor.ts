@@ -461,8 +461,18 @@ export class CliLogMonitor {
 
       const runBackgroundWorkHold = async (): Promise<void> => {
         holdingForBackgroundWork = true;
+        // Name what is pending, so a hold that never releases is diagnosable
+        // from the session log without reading the harness's own transcript.
+        const heldOn = parser.getBackgroundWorkHoldSnapshot?.();
+        const heldOnDetail = heldOn
+          ? ` (pending: [${heldOn.pendingTasks
+              .map((task) => task.taskId ?? task.description ?? "?")
+              .join(
+                ", "
+              )}], awaiting resumed turn: ${heldOn.awaitingResumedTurn})`
+          : "";
         Log.info(
-          "[CliLogMonitor] Background task still pending — holding completion until the harness auto-resumes and truly finishes"
+          `[CliLogMonitor] Background task still pending — holding completion until the harness auto-resumes and truly finishes${heldOnDetail}`
         );
 
         const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();

@@ -196,6 +196,18 @@ const COPILOT_TOKEN_TYPE_CACHE_READ = "cache_read";
 const COPILOT_TOKEN_TYPE_CACHE_WRITE = "cache_write";
 /** Tool name Copilot uses to terminate a running (including backgrounded) shell. */
 const COPILOT_STOP_SHELL_TOOL_NAME = "stop_powershell";
+/** Tool name Copilot uses to wait on and read a shell's output. */
+const COPILOT_READ_SHELL_TOOL_NAME = "read_powershell";
+/**
+ * Marker that ends a `read_powershell` result once the shell it read has
+ * exited: `<shellId: <id> completed with exit code <n>>`, or
+ * `<detached command with shellId: <id> completed with exit code <n>>` for a
+ * detached shell. Captures the id. Only the completed form is matched: the
+ * "still running" form has at least five wordings across Copilot versions, so
+ * anything that is not this marker means the shell may still be running.
+ */
+const COPILOT_SHELL_COMPLETED_READ_RESULT =
+  /<(?:detached command with )?shellId:\s*([^\s>]+) completed with\s+exit code -?\d+>\s*$/;
 /**
  * `system.notification` `data.kind.type` values that report a background
  * shell finishing on its own. Copilot has two independently-named families:
@@ -891,14 +903,16 @@ export class CopilotLogParser extends BaseLogParser {
    * shellId → still-pending async shells launched via `tool.execution_complete`
    * with `data.toolTelemetry.properties.executionMode === "async"`. Cleared by
    * a matching `system.notification` whose `data.kind.type` is one of
-   * `COPILOT_SHELL_COMPLETION_NOTIFICATION_KINDS` — or, when the model stops the shell
-   * itself via the `stop_powershell` tool, immediately on that tool's
-   * `tool.execution_start` (see `dev/implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`,
-   * "Copilot CLI"). The latter path exists because an explicitly-stopped shell
-   * never produces a `system.notification`: that event is reserved for a shell
-   * finishing on its own, so without this the shellId would stay pending for
-   * the rest of the interactive session and every later Stop hook would be
-   * absorbed by `CliLogMonitor`'s background-work hold instead of completing.
+   * `COPILOT_SHELL_COMPLETION_NOTIFICATION_KINDS`, and also cleared as soon as
+   * the log shows the model saw the shell finish in-turn: on `stop_powershell`'s
+   * `tool.execution_start`, and on a `read_powershell` whose result ends with
+   * `COPILOT_SHELL_COMPLETED_READ_RESULT` (see
+   * `dev/implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`, "Copilot CLI"). Neither
+   * in-turn path produces a `system.notification`, which is reserved for a shell
+   * finishing while nothing is reading it, so without them the shellId would
+   * stay pending for the rest of the interactive session and every later Stop
+   * hook would be absorbed by `CliLogMonitor`'s background-work hold instead of
+   * completing.
    */
   /**
    * Background follow-up state; Copilot's provider-specific signals feed it below.
@@ -966,6 +980,17 @@ export class CopilotLogParser extends BaseLogParser {
             ...summary,
             taskId: shellId,
           });
+        }
+      } else if (summary?.toolName === COPILOT_READ_SHELL_TOOL_NAME) {
+        // A read that waited on the shell until it exited hands the model the
+        // completion in-turn, and Copilot then sends no system.notification for
+        // it. Remove rather than consumeNotification: the model already handled
+        // the result, so no resumed turn will follow.
+        const shellId = this.extractCompletedReadShellId(
+          e.data.result?.content
+        );
+        if (shellId) {
+          this.backgroundFollowUpState.remove(shellId);
         }
       }
       return;
@@ -1098,6 +1123,18 @@ export class CopilotLogParser extends BaseLogParser {
     }
     const match = content.match(/shellId:\s*(\S+?)>/);
     return match ? match[1] : undefined;
+  }
+
+  /**
+   * Extracts the shellId from a `read_powershell` result that reports its shell
+   * exited, taken from the result's own marker rather than the call's
+   * `shellId` argument. Undefined while the shell is still running.
+   */
+  private extractCompletedReadShellId(content: unknown): string | undefined {
+    if (typeof content !== "string") {
+      return undefined;
+    }
+    return content.match(COPILOT_SHELL_COMPLETED_READ_RESULT)?.[1];
   }
 
   /**
