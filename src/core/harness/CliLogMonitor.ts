@@ -20,6 +20,7 @@ import type {
   INotificationMonitor,
   NotificationResult,
 } from "./shared/interfaces/INotificationMonitor";
+import { mergeSubagentOutput } from "./shared/mergeSubagentOutput";
 
 /** Maximum time (ms) spent draining log entries after completion. */
 export const DRAIN_DEADLINE_MS = 2000;
@@ -196,6 +197,8 @@ export class CliLogMonitor {
       onContextWindowUpdate: this.deps.hostCallbacks.onContextWindowUpdate,
       dispatchedPromptText,
     });
+    const subagentFollower = parser.getSubagentFollower?.();
+    subagentFollower?.start(this.deps.hostCallbacks.onStreamingEvents);
     // undefined means unlimited (-1 setting) — no timeout will be set
     const timeoutMs = ConfigurationUtils.getMaxPromptExecutionTimeMs();
 
@@ -245,13 +248,18 @@ export class CliLogMonitor {
           // ignore drain failures during failure finalization
         }
 
-        const partialResponse =
-          events.length > 0
+        const partialDrain = await subagentFollower?.drainToEof();
+
+        let partialResponse =
+          events.length > 0 || (partialDrain?.events.length ?? 0) > 0
             ? mergeObservedSyntheticEvents(
                 parser.extractResponse(events),
                 observedSyntheticEvents
               )
             : undefined;
+        if (partialResponse && partialDrain) {
+          partialResponse = mergeSubagentOutput(partialResponse, partialDrain);
+        }
         const partialText = partialResponse
           ? getTranscriptText(partialResponse.events)
           : undefined;
@@ -312,10 +320,13 @@ export class CliLogMonitor {
         }
 
         // Extract final response from accumulated events
-        const response = mergeObservedSyntheticEvents(
+        let response = mergeObservedSyntheticEvents(
           parser.extractResponse(events),
           observedSyntheticEvents
         );
+        const subagentDrain = await subagentFollower?.drainToEof();
+        if (subagentDrain)
+          response = mergeSubagentOutput(response, subagentDrain);
 
         // Copilot-specific: patch in context-window usage from whichever source is
         // available, most-reliable first:

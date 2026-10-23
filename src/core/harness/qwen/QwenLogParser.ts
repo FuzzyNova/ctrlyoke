@@ -12,6 +12,7 @@ import {
   UniversalCliOutput,
   CliEvent,
   TokenUsage,
+  ToolCall,
   FileEditData,
   FileReadData,
   FileWriteData,
@@ -26,6 +27,7 @@ import {
   CLI_EVENT_TYPES,
   HARNESS_IDS,
   OPERATION_STATUS,
+  SUBAGENT_SPAWN_STATES,
   TOOL_PERMISSION_CATEGORIES,
   TOOL_RESULT_STATUSES,
   TOKEN_TOTAL_CONFIDENCE,
@@ -33,7 +35,14 @@ import {
 } from "../../../types/DashboardConstants";
 import { getQwenContextWindowSize } from "../../../utils/ModelConstants";
 import { BaseToolBuilder } from "../shared/BaseToolBuilder";
-import { QWEN_EVENT_TYPES, QWEN_TOOL_NAMES } from "./QwenProtocolConstants";
+import { SubagentSourceFollower } from "../shared/SubagentSourceFollower";
+import { readIncrementalJsonl } from "../shared/IncrementalJsonlReader";
+import type { SubagentChildSource } from "../shared/interfaces/SubagentChildSource";
+import {
+  QWEN_AGENT_ARGUMENTS,
+  QWEN_EVENT_TYPES,
+  QWEN_TOOL_NAMES,
+} from "./QwenProtocolConstants";
 
 /** Match Qwen's `sanitizeCwd` naming for directories under `~/.qwen/projects`. */
 export function sanitizeQwenProjectPath(projectPath: string): string {
@@ -153,6 +162,7 @@ interface QwenProviderEvent extends BaseCliEvent {
     cachedContentTokenCount: number;
   };
   subtype?: string;
+  usage?: Record<string, number>;
   systemPayload?: Record<string, any>;
   toolCallResult?: {
     callId: string;
@@ -161,7 +171,28 @@ interface QwenProviderEvent extends BaseCliEvent {
   };
 }
 
+function isQwenProviderEvent(value: unknown): value is QwenProviderEvent {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    typeof value.type === "string"
+  );
+}
+
 export class QwenLogParser extends BaseLogParser {
+  private readonly subagentFollower = new SubagentSourceFollower();
+  private subagentUsageEnabled = true;
+
+  getSubagentFollower(): SubagentSourceFollower {
+    return this.subagentFollower;
+  }
+
+  setSubagentUsageEnabled(enabled: boolean): void {
+    this.subagentFollower.reset();
+    this.subagentUsageEnabled = enabled;
+  }
+
   /**
    * Workspace root directory — set by CliIntegration after construction.
    * Used by getQwenProjectDirectory() to locate Qwen's session log folder.
@@ -215,6 +246,7 @@ export class QwenLogParser extends BaseLogParser {
     let totalOutputTokens = 0;
     let totalCachedTokens = 0;
     let sawUsageMetadata = false;
+    let resultUsage: QwenProviderEvent["usage"];
     let lastAssistantUsage: QwenProviderEvent["usageMetadata"] | undefined;
     let model: string | undefined;
     // Maps callId → full file path so tool_result events can get the path from the
@@ -223,6 +255,9 @@ export class QwenLogParser extends BaseLogParser {
     const askQuestionMap = new Map<string, AskUserQuestionEntry[]>();
 
     for (const event of events as QwenProviderEvent[]) {
+      if (event.type === QWEN_EVENT_TYPES.RESULT && event.usage) {
+        resultUsage = event.usage;
+      }
       // Extract session ID from top-level field (present on all event types)
       if (event.sessionId && !sessionId) {
         sessionId = event.sessionId;
@@ -263,7 +298,8 @@ export class QwenLogParser extends BaseLogParser {
                 part.functionCall,
                 timestamp,
                 askQuestionMap,
-                callPathMap
+                callPathMap,
+                event.sessionId
               )
             );
           }
@@ -336,20 +372,41 @@ export class QwenLogParser extends BaseLogParser {
       ? lastAssistantUsage.promptTokenCount || 0
       : undefined;
 
-    const tokenUsage: TokenUsage | undefined = sawUsageMetadata
-      ? {
-          inputTokens: totalInputTokens,
-          outputTokens: totalOutputTokens,
-          totalTokens: totalInputTokens + totalOutputTokens,
-          totalConfidence: TOKEN_TOTAL_CONFIDENCE.ACCUMULATED,
-          cachedInputTokens:
-            totalCachedTokens > 0 ? totalCachedTokens : undefined,
-          contextWindowUsedTokens,
-          contextWindowSize: getQwenContextWindowSize(
-            model ?? this.resolvedModel
-          ),
-        }
-      : undefined;
+    const resultInput =
+      resultUsage?.input_tokens ?? resultUsage?.promptTokenCount;
+    const resultOutput =
+      resultUsage?.output_tokens ?? resultUsage?.candidatesTokenCount;
+    const resultCached =
+      resultUsage?.cached_tokens ?? resultUsage?.cachedContentTokenCount;
+    const resultTotal =
+      resultUsage?.total_tokens ?? resultUsage?.totalTokenCount;
+    const tokenUsage: TokenUsage | undefined =
+      resultUsage && resultInput !== undefined && resultOutput !== undefined
+        ? {
+            inputTokens: resultInput,
+            outputTokens: resultOutput,
+            totalTokens: resultTotal ?? resultInput + resultOutput,
+            totalConfidence: TOKEN_TOTAL_CONFIDENCE.PROVIDER,
+            cachedInputTokens: resultCached,
+            contextWindowUsedTokens,
+            contextWindowSize: getQwenContextWindowSize(
+              model ?? this.resolvedModel
+            ),
+          }
+        : sawUsageMetadata
+          ? {
+              inputTokens: totalInputTokens,
+              outputTokens: totalOutputTokens,
+              totalTokens: totalInputTokens + totalOutputTokens,
+              totalConfidence: TOKEN_TOTAL_CONFIDENCE.ACCUMULATED,
+              cachedInputTokens:
+                totalCachedTokens > 0 ? totalCachedTokens : undefined,
+              contextWindowUsedTokens,
+              contextWindowSize: getQwenContextWindowSize(
+                model ?? this.resolvedModel
+              ),
+            }
+          : undefined;
 
     return {
       events: outputEvents,
@@ -669,7 +726,8 @@ export class QwenLogParser extends BaseLogParser {
               part.functionCall,
               timestamp,
               this.streamingAskQuestions,
-              this.streamingCallPathMap
+              this.streamingCallPathMap,
+              e.sessionId
             )
           );
         }
@@ -877,7 +935,8 @@ export class QwenLogParser extends BaseLogParser {
     functionCall: NonNullable<QwenMessagePart["functionCall"]>,
     timestamp: number,
     askQuestionMap: Map<string, AskUserQuestionEntry[]>,
-    callPathMap: Map<string, string>
+    callPathMap: Map<string, string>,
+    sessionId?: string
   ): CliEvent[] {
     const functionArgs = functionCall.args || {};
     // Qwen represents an MCP invocation as a generic `tool_call` function
@@ -886,19 +945,19 @@ export class QwenLogParser extends BaseLogParser {
     // functionResponse can pair with the same call id.
     const wrappedToolName = functionArgs.name;
     const wrappedArguments = functionArgs.arguments;
-    const isWrappedMcpCall =
+    const isWrappedToolCall =
       functionCall.name === QWEN_TOOL_NAMES.MCP_CALL_WRAPPER &&
       typeof wrappedToolName === "string" &&
-      wrappedToolName.startsWith(QWEN_TOOL_NAMES.MCP_TOOL_PREFIX) &&
       wrappedArguments !== null &&
       typeof wrappedArguments === "object" &&
       !Array.isArray(wrappedArguments);
-    const toolName = isWrappedMcpCall
+    const toolName = isWrappedToolCall
       ? (wrappedToolName as string)
       : functionCall.name;
-    const args = isWrappedMcpCall
+    const args = isWrappedToolCall
       ? (wrappedArguments as Record<string, unknown>)
       : functionArgs;
+    const isAgentSpawn = toolName === QWEN_TOOL_NAMES.AGENT;
     // Track file path for later correlation with tool_result resultDisplay
     // (resultDisplay.fileName is basename-only).
     const fp = (args.absolute_path ?? args.file_path ?? args.path) as
@@ -906,13 +965,44 @@ export class QwenLogParser extends BaseLogParser {
     if (fp) {
       callPathMap.set(functionCall.id, fp);
     }
-    if (!this.isAskUserQuestionTool(functionCall.name)) {
-      return BaseToolBuilder.buildInitiatedEvents(
+    if (!this.isAskUserQuestionTool(toolName)) {
+      const events = BaseToolBuilder.buildInitiatedEvents(
         toolName,
         QwenLogParser.normalizeReadFileArgs(toolName, args),
         functionCall.id,
         timestamp
       );
+      if (isAgentSpawn) {
+        const spawnEvent = events.find(
+          (event) => event.type === CLI_EVENT_TYPES.TOOL_CALL
+        );
+        if (spawnEvent) {
+          const data = spawnEvent.data as ToolCall;
+          data.subagentSpawn = {
+            description:
+              typeof args[QWEN_AGENT_ARGUMENTS.DESCRIPTION] === "string"
+                ? args[QWEN_AGENT_ARGUMENTS.DESCRIPTION]
+                : "",
+            agentType:
+              typeof args[QWEN_AGENT_ARGUMENTS.TYPE] === "string"
+                ? args[QWEN_AGENT_ARGUMENTS.TYPE]
+                : QWEN_TOOL_NAMES.AGENT,
+            prompt:
+              typeof args[QWEN_AGENT_ARGUMENTS.PROMPT] === "string"
+                ? args[QWEN_AGENT_ARGUMENTS.PROMPT]
+                : undefined,
+            state: SUBAGENT_SPAWN_STATES.RUNNING,
+          };
+          if (sessionId) {
+            this.registerSubagentSource(
+              sessionId,
+              functionCall.id,
+              data.subagentSpawn.agentType ?? QWEN_TOOL_NAMES.AGENT
+            );
+          }
+        }
+      }
+      return events;
     }
 
     const questions = this.parseAskUserQuestionEntries(args);
@@ -928,6 +1018,68 @@ export class QwenLogParser extends BaseLogParser {
         } as AskUserQuestionData,
       },
     ];
+  }
+
+  private registerSubagentSource(
+    sessionId: string,
+    parentToolCallId: string,
+    agentType: string
+  ): void {
+    const directory = path.join(
+      this.getQwenProjectDirectory(),
+      "subagents",
+      sessionId
+    );
+    const filenameSuffix = `-${parentToolCallId}.jsonl`;
+    let childFile: string | undefined;
+    const source: SubagentChildSource<QwenProviderEvent> = {
+      key: `${sessionId}:${parentToolCallId}`,
+      attribution: {
+        parentToolCallId,
+        agentId: `${agentType}-${parentToolCallId}`,
+      },
+      read: async (fromOffset) => {
+        if (!childFile) {
+          try {
+            const filename = (await fs.promises.readdir(directory)).find(
+              (candidate) => candidate.endsWith(filenameSuffix)
+            );
+            if (!filename) {
+              return { records: [], nextOffset: fromOffset, complete: false };
+            }
+            childFile = path.join(directory, filename);
+          } catch {
+            return { records: [], nextOffset: fromOffset, complete: false };
+          }
+        }
+        const result = await readIncrementalJsonl(
+          childFile,
+          fromOffset,
+          isQwenProviderEvent
+        );
+        return { ...result, complete: false };
+      },
+      map: (record) => this.extractStructuredEventsFromEvent(record),
+      ...(this.subagentUsageEnabled
+        ? {
+            usage: (record: QwenProviderEvent) => {
+              const usage = record.usageMetadata;
+              if (!usage || !record.uuid || !record.model) return undefined;
+              return {
+                recordId: record.uuid,
+                model: record.model,
+                inputTokens: usage.promptTokenCount,
+                outputTokens: usage.candidatesTokenCount,
+                cacheReadInputTokens: usage.cachedContentTokenCount,
+              };
+            },
+          }
+        : {}),
+      isComplete: (record) =>
+        record.type === QWEN_EVENT_TYPES.ASSISTANT &&
+        !record.message?.parts?.some((part) => part.functionCall),
+    };
+    this.subagentFollower.register(source);
   }
 
   private buildAskUserQuestionCompletedEvent(

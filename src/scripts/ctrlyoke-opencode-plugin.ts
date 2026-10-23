@@ -82,6 +82,68 @@ interface HookArtifact {
 // session.created events reach the plugin reliably (unlike the main session).
 const childSessions = new Set<string>();
 
+/** OpenCode wire values this standalone plugin compares against. */
+const OPENCODE_SESSION_STATUS = {
+  BUSY: "busy",
+  IDLE: "idle",
+} as const;
+const OPENCODE_TOOL_PART_TYPE = "tool";
+const OPENCODE_TASK_TOOL = "task";
+const OPENCODE_SUBAGENT_RECORD_TYPES = {
+  PART: "part",
+  TASK_RUNNING: "task-running",
+  CHILD_IDLE: "child-idle",
+} as const;
+
+interface OpenCodeSidecarPart {
+  type: string;
+  id: string;
+  sessionID: string;
+  messageID: string;
+  callID?: string;
+  tool?: string;
+  modelID?: string;
+  state?: {
+    status?: string;
+    metadata?: { sessionId?: string };
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+type OpenCodeSubagentRecord =
+  | {
+      kind: typeof OPENCODE_SUBAGENT_RECORD_TYPES.PART;
+      childSessionId: string;
+      part: OpenCodeSidecarPart;
+    }
+  | {
+      kind: typeof OPENCODE_SUBAGENT_RECORD_TYPES.TASK_RUNNING;
+      childSessionId: string;
+      part: OpenCodeSidecarPart;
+    }
+  | {
+      kind: typeof OPENCODE_SUBAGENT_RECORD_TYPES.CHILD_IDLE;
+      childSessionId: string;
+    };
+
+const childParents = new Map<string, string>();
+const childCallIds = new Map<string, string>();
+const subagentSidecarPath =
+  NOTIFY_DIR && RUN_ID
+    ? path.join(NOTIFY_DIR, `${RUN_ID}-subagents.jsonl`)
+    : undefined;
+
+function _appendSubagentRecord(record: OpenCodeSubagentRecord): void {
+  if (!subagentSidecarPath) return;
+  try {
+    mkdirSync(path.dirname(subagentSidecarPath), { recursive: true });
+    appendFileSync(subagentSidecarPath, JSON.stringify(record) + "\n");
+  } catch (error) {
+    _debugLog("❌ Failed to append subagent sidecar", { error: String(error) });
+  }
+}
+
 // Track main sessions for start file deduplication.
 const mainSessions = new Set<string>();
 
@@ -536,6 +598,7 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
         if (session.parentID) {
           // Track child (sub-agent) sessions so we can ignore their idle events.
           childSessions.add(session.id);
+          childParents.set(session.id, session.parentID);
           _debugLog("👶 Tracking child session", { sessionId: session.id });
         } else {
           // Main session — track it and write start file.
@@ -548,6 +611,35 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
             ...session,
             hook_event_name: "sessionStart",
             session_id: session.id,
+          });
+        }
+      }
+
+      if (event.type === "message.part.updated") {
+        const part = event.properties.part as Record<string, any> | undefined;
+        if (
+          part &&
+          typeof part.sessionID === "string" &&
+          childSessions.has(part.sessionID)
+        ) {
+          _appendSubagentRecord({
+            kind: OPENCODE_SUBAGENT_RECORD_TYPES.PART,
+            childSessionId: part.sessionID,
+            part: part as OpenCodeSidecarPart,
+          });
+        } else if (
+          part &&
+          part?.type === OPENCODE_TOOL_PART_TYPE &&
+          part.tool === OPENCODE_TASK_TOOL &&
+          typeof part.sessionID === "string" &&
+          typeof part.state?.metadata?.sessionId === "string"
+        ) {
+          const childSessionId = part.state.metadata.sessionId;
+          childCallIds.set(childSessionId, part.callID);
+          _appendSubagentRecord({
+            kind: OPENCODE_SUBAGENT_RECORD_TYPES.TASK_RUNNING,
+            childSessionId,
+            part: part as OpenCodeSidecarPart,
           });
         }
       }
@@ -578,7 +670,25 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
         const deletedId = (event.properties.info as { id: string }).id;
         mainSessions.delete(deletedId);
         childSessions.delete(deletedId);
+        childParents.delete(deletedId);
+        childCallIds.delete(deletedId);
         _debugLog("🗑️ session.deleted", { sessionId: deletedId });
+      }
+
+      if (event.type === "session.status") {
+        const { sessionID, status } = event.properties as {
+          sessionID: string;
+          status: { type: string };
+        };
+        if (
+          status.type === OPENCODE_SESSION_STATUS.IDLE &&
+          childSessions.has(sessionID)
+        ) {
+          _appendSubagentRecord({
+            kind: OPENCODE_SUBAGENT_RECORD_TYPES.CHILD_IDLE,
+            childSessionId: sessionID,
+          });
+        }
       }
 
       if (event.type === "session.status") {
@@ -599,7 +709,7 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
         });
 
         if (!isChildSession) {
-          if (status.type === "busy") {
+          if (status.type === OPENCODE_SESSION_STATUS.BUSY) {
             _debugLog("⏩ session.status busy (main)", { sessionID });
             _writeHookArtifact(
               "userPromptSubmit",
@@ -612,7 +722,7 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
               hook_event_name: "userPromptSubmit",
               session_id: sessionID,
             });
-          } else if (status.type === "idle") {
+          } else if (status.type === OPENCODE_SESSION_STATUS.IDLE) {
             _debugLog("🛑 session.status idle (main)", { sessionID });
             _writeHookArtifact(
               "stop",

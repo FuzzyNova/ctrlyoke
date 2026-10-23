@@ -3467,6 +3467,7 @@ export class WorkflowExecutor {
             cacheCreated: u.cacheCreatedTokens,
             cacheCreatedLongTtl: u.cacheCreatedLongTtlTokens,
             reasoning: u.reasoningOutputTokens,
+            modelUsage: u.modelUsage,
             totalConfidence: u.totalConfidence,
           })
         : {

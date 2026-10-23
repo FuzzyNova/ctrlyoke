@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import { fileURLToPath } from "url";
 import { BaseLogParser } from "../shared/BaseLogParser";
 import {
   BaseCliEvent,
@@ -31,11 +32,15 @@ import {
   AntigravityTranscriptReader,
   AntigravityTranscriptRecord,
 } from "./AntigravityTranscriptReader";
-import { AntigravityToolEventBuilder } from "./AntigravityToolEventBuilder";
+import {
+  AntigravityToolEventBuilder,
+  parseAntigravityJsonObjectSequence,
+} from "./AntigravityToolEventBuilder";
 import {
   ANTIGRAVITY_ENTRY_TYPES,
   ANTIGRAVITY_TOOL_NAMES,
   ANTIGRAVITY_WIRE_VALUES,
+  ANTIGRAVITY_SUBAGENT_REPORT_PATTERN,
 } from "./AntigravityProtocolConstants";
 import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
 import {
@@ -49,6 +54,7 @@ import type {
 } from "./AntigravityStreamJsonUsage";
 import { Log } from "../../../utils/Log";
 import { CompositeFsWatcher } from "../shared/FsWatcherHandles";
+import { SubagentSourceFollower } from "../shared/SubagentSourceFollower";
 
 /**
  * Synthetic `AntigravityLogEvent.type` tags — ctrlyoke's own internal event
@@ -117,6 +123,10 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   private cachedSessionId?: string;
   private cachedLastConversationsSessionId?: string;
   private readonly transcriptReader = new AntigravityTranscriptReader();
+  private readonly subagentFollower = new SubagentSourceFollower();
+  getSubagentFollower(): SubagentSourceFollower {
+    return this.subagentFollower;
+  }
   private readonly pendingPlannerToolCalls: PendingPlannerToolCall[] = [];
   /**
    * Background follow-up state; transcript recognition remains provider-specific.
@@ -297,7 +307,6 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     }
 
     const usage = this.extractTokenUsage(events);
-
     return {
       events: outputEvents,
       metadata: {
@@ -400,6 +409,18 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   override extractStructuredEventsFromEvent(event: BaseCliEvent): CliEvent[] {
     const antigravityEvent = event as AntigravityLogEvent;
     const timestamp = antigravityEvent.timestamp ?? Date.now();
+    let completionUpdates: CliEvent[] = [];
+
+    const entry = antigravityEvent.transcriptEntry;
+    if (
+      entry?.type === ANTIGRAVITY_WIRE_VALUES.SYSTEM_MESSAGE &&
+      entry.source === ANTIGRAVITY_WIRE_VALUES.SYSTEM &&
+      typeof entry.content === "string"
+    ) {
+      const report = ANTIGRAVITY_SUBAGENT_REPORT_PATTERN.exec(entry.content);
+      if (report?.[1])
+        completionUpdates = this.subagentFollower.markChildComplete(report[1]);
+    }
 
     if (
       antigravityEvent.type === ANTIGRAVITY_LOG_EVENT_TYPES.TRANSCRIPT_PLANNER
@@ -445,7 +466,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       antigravityEvent.type === ANTIGRAVITY_LOG_EVENT_TYPES.TRANSCRIPT_TOOL &&
       antigravityEvent.resultEntry
     ) {
-      return AntigravityToolEventBuilder.build({
+      const mapped = AntigravityToolEventBuilder.build({
         call: antigravityEvent.toolCall,
         result: antigravityEvent.resultEntry,
         timestamp,
@@ -453,6 +474,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
         toolCallId: antigravityEvent.toolCallId,
         taskId: antigravityEvent.taskId,
       });
+      return [...mapped, ...completionUpdates];
     }
 
     if (
@@ -660,13 +682,22 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       entry.source === ANTIGRAVITY_WIRE_VALUES.MODEL &&
       this.isToolResultEntry(entry)
     ) {
-      const call = this.takePlannerCallForResult(entry);
+      const pendingCall = this.takePlannerCallForResult(entry);
+      const call = pendingCall?.call;
+      if (call?.name.toLowerCase() === ANTIGRAVITY_TOOL_NAMES.INVOKE_SUBAGENT) {
+        this.registerSubagentSources(
+          call,
+          entry,
+          pendingCall!.toolCallId,
+          sessionId
+        );
+      }
       return [
         {
           type: ANTIGRAVITY_LOG_EVENT_TYPES.TRANSCRIPT_TOOL,
           line: typeof entry.content === "string" ? entry.content : "",
-          toolCall: call?.call,
-          toolCallId: call?.toolCallId,
+          toolCall: call,
+          toolCallId: pendingCall?.toolCallId,
           resultEntry: entry,
           taskId: this.extractTaskId(entry),
           ...base,
@@ -724,6 +755,129 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     }
 
     return [];
+  }
+
+  private registerSubagentSources(
+    call: AntigravityPlannerToolCall,
+    result: AntigravityTranscriptEntry,
+    spawnId: string,
+    parentSessionId: string
+  ): void {
+    const args = call.args ?? {};
+    if (
+      typeof args.Subagents !== "string" ||
+      typeof result.content !== "string"
+    )
+      return;
+    let descriptors: unknown;
+    try {
+      descriptors = JSON.parse(args.Subagents);
+    } catch {
+      return;
+    }
+    if (!Array.isArray(descriptors)) return;
+    const childObjects = parseAntigravityJsonObjectSequence(result.content);
+    // The result lists created children in the same order as the submitted Subagents array.
+    const children = childObjects.filter(
+      (item) =>
+        typeof item.conversationId === "string" &&
+        typeof item.logAbsoluteUri === "string"
+    );
+    if (children.length !== descriptors.length) return;
+    for (let index = 0; index < children.length; index++) {
+      const descriptor = descriptors[index] as
+        Record<string, unknown> | undefined;
+      const childId = children[index].conversationId as string;
+      let transcriptPath: string;
+      try {
+        transcriptPath = fileURLToPath(
+          children[index].logAbsoluteUri as string
+        );
+        const fullTranscriptPath = path.join(
+          path.dirname(transcriptPath),
+          "transcript_full.jsonl"
+        );
+        if (fs.existsSync(fullTranscriptPath))
+          transcriptPath = fullTranscriptPath;
+      } catch {
+        continue;
+      }
+      const attribution = { parentToolCallId: spawnId, agentId: childId };
+      const model =
+        typeof descriptor?.Model === "string" &&
+        descriptor.Model.toLowerCase() !== "inherit"
+          ? descriptor.Model
+          : (this.resolvedModel ?? "unknown");
+      const reader = new AntigravityTranscriptReader();
+      const pendingCalls: Array<{
+        call: AntigravityPlannerToolCall;
+        index: number;
+      }> = [];
+      this.subagentFollower.register({
+        key: childId,
+        attribution,
+        read: async (fromOffset) => {
+          const records: Array<{
+            record: AntigravityTranscriptRecord;
+            childId: string;
+          }> = [];
+          // The reader is incremental and returns only records appended since
+          // its last call, so `map` (which pairs results with calls in order)
+          // sees each record once; `fromOffset` is only a progress counter.
+          for (const record of await reader.readRecords(transcriptPath)) {
+            // The step-zero prompt is a steer from the parent, not child output.
+            const content =
+              typeof record.entry.content === "string"
+                ? record.entry.content
+                : "";
+            if (
+              record.entry.type === ANTIGRAVITY_WIRE_VALUES.SYSTEM_MESSAGE &&
+              content.includes(`sender=${parentSessionId}`)
+            )
+              continue;
+            records.push({ record, childId });
+          }
+          return { records, nextOffset: fromOffset + records.length };
+        },
+        map: ({ record }) => {
+          const entry = record.entry;
+          const timestamp = entry.created_at
+            ? Date.parse(entry.created_at)
+            : Date.now();
+          if (entry.type === ANTIGRAVITY_ENTRY_TYPES.PLANNER_RESPONSE) {
+            for (const [callIndex, childCall] of (
+              entry.tool_calls ?? []
+            ).entries())
+              pendingCalls.push({ call: childCall, index: callIndex });
+            const text =
+              typeof entry.content === "string" ? entry.content.trim() : "";
+            return text
+              ? [{ type: CLI_EVENT_TYPES.TEXT, timestamp, data: { text } }]
+              : [];
+          }
+          const pending = pendingCalls.shift();
+          return AntigravityToolEventBuilder.build({
+            call: pending?.call,
+            result: entry,
+            timestamp,
+            eventId: record.eventId,
+            toolCallId: pending
+              ? `${record.eventId}:tool-${pending.index}`
+              : record.eventId,
+          });
+        },
+        usage: ({ record }) => {
+          const usageEntry = record.entry;
+          if (usageEntry.type !== ANTIGRAVITY_ENTRY_TYPES.PLANNER_RESPONSE)
+            return undefined;
+          const inputTokens = this.asFiniteNumber(usageEntry.input_tokens) ?? 0;
+          const outputTokens =
+            this.asFiniteNumber(usageEntry.output_tokens) ?? 0;
+          return { model, recordId: record.eventId, inputTokens, outputTokens };
+        },
+        isComplete: () => false,
+      });
+    }
   }
 
   private isToolResultEntry(entry: AntigravityTranscriptEntry): boolean {
@@ -882,6 +1036,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       return;
     }
     this.backgroundStateSessionId = sessionId;
+    this.subagentFollower.reset();
     this.backgroundFollowUpState.reset();
     this.pendingPlannerToolCalls.length = 0;
   }

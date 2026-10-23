@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Subagent calls have dedicated output cards** showing agent details, live progress, an optional prompt, and the final result.
+
+- **The `workflow_status` MCP tool reports execution mode.** Its metadata gives the workflow's
+  `executionMode`, and each prompt step lists the `harness` and `executionMode` it ran with (or will
+  run with). The built-in workflow orchestrator and workflow composer agents use this to tell
+  queued steps how to wait for long commands. A headless step can't wait on background work,
+  because its process exits when the agent ends its turn. codex-cli can't in either mode.
+
 - **Install skills from skills.sh in the Agent & Skills Manager.** The Skills list has a
   **skills.sh** tab that searches the public skills.sh directory, sorted by install count, with
   each skill's security audit verdict. **Import** shows the audits and the skill's `SKILL.md` on
@@ -19,6 +27,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Step token totals and cost estimates include foreground subagents.** Subagent work was
+  missing from every harness except Copilot; in measured Claude Code interactive sessions it was
+  about 40% of the cost. Claude Code headless uses its per-model result totals, Qwen Code
+  headless its process-wide usage (which also counts background memory calls), and the other
+  harnesses follow each subagent's own log. Each model is priced at its own rates, so a subagent
+  on a cheaper model is no longer billed at the parent's. If a subagent's log can't be read, the
+  token count is shown as a lower bound and no cost estimate is given. Earlier runs keep their
+  recorded totals.
+- **Subagent activity is attributed to its spawn in headless and interactive output.**
+  Child commands, text and thinking are indented and labelled under their spawn card, so parallel
+  and nested subagents stay distinct. The `history show --json --events` payload replaces the
+  always-`direct` `callerType` field with optional subagent attribution and spawn metadata;
+  existing run histories with `callerType` remain readable.
+  Background subagents (Claude Code launches parallel `Agent` calls this way by default, and Qwen
+  Code and Copilot CLI have background modes too) are attributed the same way as foreground ones.
 - **A Copilot step that reads its background shells until they finish now completes when its turn
   ends.** When Copilot waited on a background shell with `read_powershell` and the shell finished
   during that wait, ctrlyoke kept treating the shell as running. The step stayed running for 10

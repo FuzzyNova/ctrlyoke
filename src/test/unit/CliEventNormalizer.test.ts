@@ -21,6 +21,49 @@ import {
 } from "../../utils/CliEventNormalizer";
 
 suite("CliEventNormalizer", () => {
+  test("merges spawn updates, preserving terminal state", () => {
+    const normalized = normalizeCliEvents([
+      {
+        type: CLI_EVENT_TYPES.TOOL_CALL,
+        data: {
+          name: "task",
+          id: "spawn-1",
+          parameters: {},
+          subagentSpawn: { description: "first", state: "running" },
+        },
+      },
+      {
+        type: CLI_EVENT_TYPES.TOOL_CALL,
+        data: {
+          name: "task",
+          id: "spawn-1",
+          parameters: {},
+          subagentSpawn: { statusLine: "finished", state: "completed" },
+        },
+      },
+      {
+        type: CLI_EVENT_TYPES.TOOL_CALL,
+        data: {
+          name: "task",
+          id: "spawn-1",
+          parameters: {},
+          subagentSpawn: { description: "updated", state: "running" },
+        },
+      },
+    ]);
+    assert.deepStrictEqual((normalized[0].data as ToolCall).subagentSpawn, {
+      description: "updated",
+      state: "completed",
+      statusLine: "finished",
+    });
+  });
+
+  test("accepts persisted legacy direct callerType fields", () => {
+    const legacy = JSON.parse(
+      `{"type":"${CLI_EVENT_TYPES.TEXT}","data":{"text":"legacy"},"callerType":"direct"}`
+    ) as CliEvent;
+    assert.deepStrictEqual(normalizeCliEvents([legacy]), [legacy]);
+  });
   test("incremental batches match the one-shot normalizer and report changed slots", () => {
     const fixtures: CliEvent[][] = [
       JSON.parse(`[{

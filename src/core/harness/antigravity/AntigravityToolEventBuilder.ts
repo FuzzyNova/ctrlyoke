@@ -14,6 +14,7 @@ import {
 import {
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
+  SUBAGENT_SPAWN_STATES,
 } from "../../../types/DashboardConstants";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import {
@@ -55,6 +56,26 @@ export class AntigravityToolEventBuilder {
     const error = success ? undefined : this.resultError(result);
     const resultText = error || this.stringContent(result);
     const id = taskId ?? eventId;
+
+    if (normalizedName === ANTIGRAVITY_TOOL_NAMES.INVOKE_SUBAGENT) {
+      const children = this.parseSubagents(args.Subagents, resultText);
+      return [
+        {
+          type: CLI_EVENT_TYPES.TOOL_CALL,
+          timestamp,
+          data: {
+            name: toolName,
+            parameters: args,
+            id: mapping.toolCallId ?? id,
+            result: { success, output: resultText || undefined, error },
+            subagentSpawn: {
+              children,
+              state: SUBAGENT_SPAWN_STATES.RUNNING,
+            },
+          } as ToolCall,
+        },
+      ];
+    }
 
     if (result.type === ANTIGRAVITY_ENTRY_TYPES.ASK_QUESTION) {
       return [
@@ -230,6 +251,35 @@ export class AntigravityToolEventBuilder {
         } as ToolCall,
       },
     ];
+  }
+
+  private static parseSubagents(
+    value: unknown,
+    resultText: string
+  ): { agentId: string; label?: string }[] {
+    if (typeof value !== "string") return [];
+    try {
+      const parsed: unknown = JSON.parse(value);
+      if (!Array.isArray(parsed)) return [];
+      const ids = parseAntigravityJsonObjectSequence(resultText).flatMap(
+        (item) =>
+          typeof item.conversationId === "string" ? [item.conversationId] : []
+      );
+      return parsed.flatMap((child, index) => {
+        if (!isRecord(child)) return [];
+        const conversationId = ids[index];
+        return typeof conversationId === "string"
+          ? [
+              {
+                agentId: conversationId,
+                label: typeof child.Role === "string" ? child.Role : undefined,
+              },
+            ]
+          : [];
+      });
+    } catch {
+      return [];
+    }
   }
 
   static buildUnmatchedCall(
@@ -758,4 +808,37 @@ export class AntigravityToolEventBuilder {
     }
     return entry.type.toLowerCase();
   }
+}
+
+/** The creation result contains adjacent JSON objects among explanatory text. */
+export function parseAntigravityJsonObjectSequence(
+  text: string
+): Record<string, unknown>[] {
+  const results: Record<string, unknown>[] = [];
+  let depth = 0;
+  let start = -1;
+  let quoted = false;
+  let escaped = false;
+  for (let index = 0; index < text.length; index++) {
+    const character = text[index];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') quoted = false;
+      continue;
+    }
+    if (character === '"') quoted = true;
+    else if (character === "{") {
+      if (depth++ === 0) start = index;
+    } else if (character === "}" && depth > 0 && --depth === 0 && start >= 0) {
+      try {
+        const parsed: unknown = JSON.parse(text.slice(start, index + 1));
+        if (isRecord(parsed)) results.push(parsed);
+      } catch {
+        // Ignore surrounding non-JSON braces in the human-readable result.
+      }
+      start = -1;
+    }
+  }
+  return results;
 }

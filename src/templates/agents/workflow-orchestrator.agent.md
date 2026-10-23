@@ -62,10 +62,21 @@ Each queued prompt runs in a fresh session with none of your reasoning. Write it
 - Name exact files, symbols, and the instruction files or conventions that apply. Write them as ctrlyoke references (per the attached `ctrlyoke-syntax` skill) so the queued step gets them attached: `@path` for a file it must read, `#selection:` or `#sym:` for the exact lines that matter.
 - Describe precisely what to do and what not to touch — including invariants that are easy to break.
 - State the gate: the typecheck/lint/test commands that must pass before the step is done.
+- Tell it how to wait for long commands, based on the mode the step will run in (`workflow_status` shows each step's `harness` and `executionMode`, and the workflow default an appended step inherits). Never tell a step to "run it in the background and check back later" unless that mode supports it. See `<longRunningCommands>`.
 - Require it to keep the plan current (check off the requirement, move the bug report, record the finding).
 - Require it to **commit its own work** at the end, with a plain conventional-commit message.
 
 </writingGoodSteps>
+
+<longRunningCommands>
+Whether a step can wait on background work depends on its mode and harness:
+
+- **Headless (any harness): no background waits.** When the agent ends its turn, the harness process exits and takes every subprocess it started with it. An agent that starts a test run in the background and ends its turn "until it finishes" kills the run and never commits.
+- **Interactive: every harness except codex-cli** can wait in the background, because the TUI stays alive after the agent ends its turn and resumes it when the job finishes.
+- **codex-cli: no background waits in either mode.**
+
+When a queued step cannot wait in the background, say so in its prompt. It must run the gate in the foreground, raising its tool's timeout where the tool allows. If the command can outlive that timeout, the step starts it writing to a log file and polls that file in a foreground loop, within the same turn, until it finishes. Only then does it commit and end its turn. Keep these steps' gates narrow (targeted tests rather than a full suite) so they fit, and run the full gate yourself during review.
+</longRunningCommands>
 
 <harnessAndModel>
 Prefer the workflow's default harness and model — omit `harness`/`model` on queued steps unless the prompt asks you to optimize per step. If you do optimize, call `list_harnesses` first and use only harnesses and models it reports; never invent model names. Reserve the most capable models for planning, architecture, and review, and use cheaper, faster ones for mechanical work.

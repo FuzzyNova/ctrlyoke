@@ -2,6 +2,7 @@ import type {
   BashCommandData,
   CliEvent,
   FileEditData,
+  ToolCall,
 } from "../types/CliOutputTypes";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../types/DashboardConstants";
 import {
@@ -28,6 +29,9 @@ type SlotPart = (typeof SLOT_PARTS)[keyof typeof SLOT_PARTS];
 export class CliEventStream {
   private readonly normalizer = new CliEventNormalizer();
   private readonly printedParts = new Map<number, Set<SlotPart>>();
+  private readonly spawnLabels = new Map<string, string>();
+  private readonly spawnDepths = new Map<string, number>();
+  private activeContext?: string;
   private disposed = false;
 
   constructor(
@@ -72,47 +76,84 @@ export class CliEventStream {
   private renderSlot(index: number): void {
     const event = this.normalizer.events[index];
     if (!event) return;
+    const call =
+      event.type === CLI_EVENT_TYPES.TOOL_CALL
+        ? (event.data as ToolCall)
+        : undefined;
+    const parentId = event.subagent?.parentToolCallId;
+    const childId = event.subagent?.agentId;
+    const label =
+      parentId && childId
+        ? (this.spawnLabels.get(`${parentId}:${childId}`) ?? childId)
+        : parentId
+          ? this.spawnLabels.get(parentId)
+          : undefined;
+    const depth = parentId ? (this.spawnDepths.get(parentId) ?? 0) : 0;
+    if (call?.id && call.subagentSpawn) {
+      const callDepth = depth + (event.subagent ? 1 : 0);
+      this.spawnDepths.set(call.id, callDepth);
+      for (const child of call.subagentSpawn.children ?? []) {
+        this.spawnLabels.set(
+          `${call.id}:${child.agentId}`,
+          child.label ?? child.agentId
+        );
+        this.spawnDepths.set(`${call.id}:${child.agentId}`, callDepth + 1);
+      }
+    }
+    const context = label;
+    const target =
+      label && this.target
+        ? {
+            ...this.target,
+            subagentPrefix: `${"  ".repeat(depth + 1)}[${label}] `,
+          }
+        : this.target;
+    this.flushForContext(context);
     const parts = this.parts(index);
     if (
       event.type === CLI_EVENT_TYPES.TEXT ||
       event.type === CLI_EVENT_TYPES.THINKING
     ) {
-      CliTerminalFormatter.renderEvent(event, this.target);
+      CliTerminalFormatter.renderEvent(event, target);
       CliTerminalFormatter.noteStreamSlot(this.targetKey, index);
       return;
     }
     if (parts.has(SLOT_PARTS.BODY)) return;
 
     if (isOpenCliOperation(event) || this.isAwaitingDiff(index, event)) {
-      this.printRunningHeader(index, event);
+      this.printRunningHeader(index, event, target);
       return;
     }
 
     const supersededSlot = this.findSupersededSlot(index, event);
     if (supersededSlot !== undefined) {
       const earlier = this.normalizer.events[supersededSlot];
-      this.printRunningHeader(supersededSlot, earlier);
-      this.printBody(supersededSlot, earlier, event);
+      this.printRunningHeader(supersededSlot, earlier, target);
+      this.printBody(supersededSlot, earlier, event, target);
       parts.add(SLOT_PARTS.BODY);
       return;
     }
 
     if (parts.has(SLOT_PARTS.HEADER)) {
-      this.printBody(index, event, event);
+      this.printBody(index, event, event, target);
       return;
     }
-    CliTerminalFormatter.renderEvent(event, this.target);
+    CliTerminalFormatter.renderEvent(event, target);
     CliTerminalFormatter.noteStreamSlot(this.targetKey, index);
     parts.add(SLOT_PARTS.HEADER);
     parts.add(SLOT_PARTS.BODY);
   }
 
-  private printRunningHeader(index: number, event: CliEvent): void {
+  private printRunningHeader(
+    index: number,
+    event: CliEvent,
+    target = this.target
+  ): void {
     const parts = this.parts(index);
     if (parts.has(SLOT_PARTS.HEADER)) return;
     CliTerminalFormatter.renderStreamHeader(
       event,
-      this.target,
+      target,
       true,
       this.targetKey,
       index
@@ -124,16 +165,24 @@ export class CliEventStream {
   private printBody(
     index: number,
     headerEvent: CliEvent,
-    completionEvent: CliEvent
+    completionEvent: CliEvent,
+    target = this.target
   ): void {
     CliTerminalFormatter.renderStreamBody(
       headerEvent,
       completionEvent,
-      this.target,
+      target,
       this.targetKey,
       index
     );
     this.parts(index).add(SLOT_PARTS.BODY);
+  }
+
+  private flushForContext(context?: string): void {
+    if (this.activeContext !== context) {
+      CliTerminalFormatter.flushStreamingBuffer(this.target);
+      this.activeContext = context;
+    }
   }
 
   /**

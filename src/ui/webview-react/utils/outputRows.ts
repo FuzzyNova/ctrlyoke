@@ -106,6 +106,7 @@ import { resolveStepColor } from "./stepColor";
 import type { HarnessColorSettings } from "@root/types/CtrlYokeSettings";
 import type { StepColorMode } from "@root/types/DashboardConstants";
 import { formatFinalPassLabel } from "@root/utils/FinalStepLabels";
+import { subagentGroupKey } from "@root/utils/SubagentAttribution";
 
 export interface OutputRowPromptUndoMeta {
   workspacePath: string;
@@ -288,6 +289,12 @@ export interface StructuredEventRow extends OutputRowBase<
 > {
   target: OutputMessageTarget;
   event: CliEvent;
+  subagent?: {
+    depth: number;
+    label: string;
+    groupKey: string;
+    showLabel: boolean;
+  };
   eventIndex: number;
   rawTextOutput: boolean;
   workspaceSnapshot?: WorkspaceSnapshot;
@@ -637,6 +644,12 @@ const HEADER_HORIZONTAL_CHROME = 140;
 const STATS_HORIZONTAL_CHROME = 96;
 const OUTPUT_BLOCK_VERTICAL_CHROME = 32;
 const THINKING_LABEL_HEIGHT = 18;
+/** Left margin per nesting level of a subagent row; `OutputRow` renders it. */
+export const SUBAGENT_ROW_INDENT_PX = 12;
+/** `pl-3` padding plus the 1px left border of a subagent row. */
+const SUBAGENT_ROW_HORIZONTAL_CHROME = 12;
+/** The child label shown on a subagent group's first row. */
+const SUBAGENT_LABEL_HEIGHT = 18;
 const THINKING_CONTENT_VERTICAL_CHROME = 14;
 const THINKING_OUTER_VERTICAL_CHROME = 6;
 const STATUS_ROW_VERTICAL_CHROME = 20;
@@ -1906,10 +1919,22 @@ export function estimateOutputRowHeight(
   // unconditionally — and the group padding is the whole story behind the
   // persistent bias on `stats` (always a group's last row) and `cli-header`
   // (always its first).
+  const contentWidth =
+    row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT && row.subagent
+      ? outputContentWidth != null
+        ? outputContentWidth -
+          row.subagent.depth * SUBAGENT_ROW_INDENT_PX -
+          SUBAGENT_ROW_HORIZONTAL_CHROME
+        : undefined
+      : outputContentWidth;
   const height =
-    estimateOutputRowContentHeight(row, outputFontSize, outputContentWidth) +
+    estimateOutputRowContentHeight(row, outputFontSize, contentWidth) +
     outputRowGroupPadding(row) +
-    outputRowActivityChrome(row);
+    outputRowActivityChrome(row) +
+    (row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
+    row.subagent?.showLabel
+      ? SUBAGENT_LABEL_HEIGHT
+      : 0);
   rowHeightEstimateCache.set(row, {
     contentWidth: outputContentWidth,
     fontSize: outputFontSize,
@@ -2188,6 +2213,48 @@ export function buildOutputRows(
   input: BuildOutputRowsInput
 ): BuildOutputRowsResult {
   const rows: OutputRenderRow[] = [];
+  const spawnEvents = new Map<string, CliEvent>();
+  for (const message of input.allMessages) {
+    const events = message.isActivity
+      ? (message.activityEvents ?? [])
+      : ((message.data as CliOutputType).structured?.events ?? []);
+    for (const event of events) {
+      if (event.type === CLI_EVENT_TYPES.TOOL_CALL) {
+        const tool = event.data as ToolCall;
+        if (tool.id && tool.subagentSpawn) spawnEvents.set(tool.id, event);
+      }
+    }
+  }
+  const resolveSubagentMetadata = (
+    event: CliEvent,
+    previousGroup: string | undefined
+  ) => {
+    if (!event.subagent) return undefined;
+    const groupKey = subagentGroupKey(event.subagent);
+    const spawn = spawnEvents.get(event.subagent.parentToolCallId);
+    const spawnData = spawn?.data as ToolCall | undefined;
+    const child = spawnData?.subagentSpawn?.children?.find(
+      (item) => item.agentId === event.subagent?.agentId
+    );
+    const id = event.subagent.agentId;
+    const label =
+      child?.label ||
+      spawnData?.subagentSpawn?.description ||
+      spawnData?.subagentSpawn?.agentType ||
+      (id ? id.slice(0, 8) : event.subagent.parentToolCallId.slice(0, 8));
+    let depth = 1;
+    let parentAttribution = spawn?.subagent;
+    const seen = new Set<string>([event.subagent.parentToolCallId]);
+    while (parentAttribution && !seen.has(parentAttribution.parentToolCallId)) {
+      seen.add(parentAttribution.parentToolCallId);
+      depth += 1;
+      parentAttribution = spawnEvents.get(
+        parentAttribution.parentToolCallId
+      )?.subagent;
+    }
+    return { depth, label, groupKey, showLabel: groupKey !== previousGroup };
+  };
+  let previousSubagentGroup: string | undefined;
   const stepOutputsMap = new Map<string, CliOutputType[]>();
   const promptChangeSummariesByTarget = new Map<string, PromptChangeSummary>();
   const lastCliIndexPerStep = new Map<string, number>();
@@ -2744,6 +2811,12 @@ export function buildOutputRows(
     }
 
     for (const visibleEvent of visibleEvents) {
+      const subagent = resolveSubagentMetadata(
+        visibleEvent.event,
+        previousSubagentGroup
+      );
+      // Parent rows end a run, so a child resuming after them is relabelled.
+      previousSubagentGroup = subagent?.groupKey;
       const rowKey = `${rowKeyBase}:event:${visibleEvent.originalIndex}`;
       // The diff key is both the collapse/expansion state key and the diff
       // row's DOM anchor id, so it needs the same per-slice uniqueness as
@@ -2822,6 +2895,7 @@ export function buildOutputRows(
         rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
         target,
         event: visibleEvent.event,
+        subagent,
         eventIndex: visibleEvent.originalIndex,
         rawTextOutput,
         workspaceSnapshot,

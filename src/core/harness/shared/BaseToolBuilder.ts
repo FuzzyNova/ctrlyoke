@@ -88,7 +88,6 @@ export class BaseToolBuilder {
     input: Record<string, unknown>,
     toolId: string | undefined,
     timestamp: number,
-    extras?: { callerType?: string },
     mcpHint?: McpToolHint
   ): CliEvent[] {
     const classification = CliEventMapper.classifyTool(toolName, mcpHint);
@@ -97,7 +96,6 @@ export class BaseToolBuilder {
       input.path ??
       input.file ??
       input.pattern) as string | undefined;
-    const ex = extras ?? {};
 
     switch (classification.type) {
       case CLI_EVENT_TYPES.BASH_COMMAND:
@@ -105,7 +103,6 @@ export class BaseToolBuilder {
           {
             type: CLI_EVENT_TYPES.BASH_COMMAND,
             timestamp,
-            ...ex,
             data: {
               command:
                 ((input.command ?? input.cmd ?? input.script) as
@@ -124,7 +121,6 @@ export class BaseToolBuilder {
           {
             type: CLI_EVENT_TYPES.FILE_READ,
             timestamp,
-            ...ex,
             data: {
               path: path || "unknown",
               toolCallId: toolId,
@@ -139,7 +135,6 @@ export class BaseToolBuilder {
           {
             type: CLI_EVENT_TYPES.FILE_WRITE,
             timestamp,
-            ...ex,
             data: {
               path: path || "unknown",
               content:
@@ -156,7 +151,6 @@ export class BaseToolBuilder {
           {
             type: CLI_EVENT_TYPES.FILE_EDIT,
             timestamp,
-            ...ex,
             data: {
               path: path || "unknown",
               oldContent: (input.oldString ??
@@ -181,7 +175,6 @@ export class BaseToolBuilder {
           {
             type: CLI_EVENT_TYPES.FILE_DELETE,
             timestamp,
-            ...ex,
             data: {
               path: path || "unknown",
               toolCallId: toolId,
@@ -194,7 +187,6 @@ export class BaseToolBuilder {
           {
             type: CLI_EVENT_TYPES.WEB_SEARCH,
             timestamp,
-            ...ex,
             data: {
               query: (input.query as string) || "",
             } as WebSearchData,
@@ -211,7 +203,6 @@ export class BaseToolBuilder {
           {
             type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
             timestamp,
-            ...ex,
             data: {
               server: mcp.server,
               tool: mcp.tool,
@@ -227,7 +218,6 @@ export class BaseToolBuilder {
           {
             type: CLI_EVENT_TYPES.TOOL_CALL,
             timestamp,
-            ...ex,
             data: {
               name: toolName,
               parameters: input,

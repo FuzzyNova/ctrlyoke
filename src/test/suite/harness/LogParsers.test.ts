@@ -9,12 +9,14 @@ import { CopilotLogParser } from "../../../core/harness/copilot/CopilotLogParser
 import { CopilotCliProvider } from "../../../core/harness/copilot/CopilotCliProvider";
 import { CodexLogParser } from "../../../core/harness/codex/CodexLogParser";
 import { OpenCodeLogParser } from "../../../core/harness/opencode/OpenCodeLogParser";
+import { mergeSubagentOutput } from "../../../core/harness/shared/mergeSubagentOutput";
 import { QwenCliProvider } from "../../../core/harness/qwen/QwenCliProvider";
 import {
   QwenLogParser,
   sanitizeQwenProjectPath,
 } from "../../../core/harness/qwen/QwenLogParser";
 import { AntigravityLogParser } from "../../../core/harness/antigravity/AntigravityLogParser";
+import { AntigravityToolEventBuilder } from "../../../core/harness/antigravity/AntigravityToolEventBuilder";
 import {
   UniversalCliOutput,
   CliEvent,
@@ -144,6 +146,493 @@ suite("ClaudeLogParser", () => {
 
   setup(() => {
     parser = new ClaudeLogParser();
+  });
+
+  test("attributes parallel headless subagent calls and results by parent tool id", () => {
+    const output = parser.extractResponse([
+      {
+        type: "assistant",
+        parent_tool_use_id: null,
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "spawn-a",
+              name: "Agent",
+              input: {
+                description: "A",
+                subagent_type: "general-purpose",
+                prompt: "do A",
+              },
+            },
+            {
+              type: "tool_use",
+              id: "spawn-b",
+              name: "Agent",
+              input: {
+                description: "B",
+                subagent_type: "general-purpose",
+                prompt: "do B",
+              },
+            },
+            { type: "text", text: "parent" },
+          ],
+        },
+      },
+      {
+        type: "assistant",
+        parent_tool_use_id: "spawn-a",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "child-tool-a",
+              name: "Bash",
+              input: { command: "echo A" },
+              caller: { type: "direct" },
+            },
+          ],
+        },
+      },
+      {
+        type: "user",
+        parent_tool_use_id: "spawn-a",
+        message: {
+          content: [
+            { type: "tool_result", tool_use_id: "child-tool-a", content: "A" },
+          ],
+        },
+      },
+      {
+        type: "assistant",
+        parent_tool_use_id: "spawn-b",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "child-tool-b",
+              name: "Bash",
+              input: { command: "echo B" },
+              caller: { type: "direct" },
+            },
+          ],
+        },
+      },
+      {
+        type: "user",
+        parent_tool_use_id: "spawn-b",
+        message: {
+          content: [
+            { type: "tool_result", tool_use_id: "child-tool-b", content: "B" },
+          ],
+        },
+      },
+    ] as BaseCliEvent[]);
+
+    const childA = output.events.filter(
+      (event) => event.subagent?.parentToolCallId === "spawn-a"
+    );
+    const childB = output.events.filter(
+      (event) => event.subagent?.parentToolCallId === "spawn-b"
+    );
+    assert.ok(
+      childA.some((event) => event.type === CLI_EVENT_TYPES.BASH_COMMAND)
+    );
+    assert.ok(
+      childA.some((event) => event.type === CLI_EVENT_TYPES.TOOL_RESULT)
+    );
+    assert.ok(
+      childB.some((event) => event.type === CLI_EVENT_TYPES.BASH_COMMAND)
+    );
+    assert.ok(
+      childB.some((event) => event.type === CLI_EVENT_TYPES.TOOL_RESULT)
+    );
+    assert.ok(
+      output.events.some(
+        (event) => event.type === CLI_EVENT_TYPES.TEXT && !event.subagent
+      )
+    );
+    const spawns = output.events.filter(
+      (event) => event.type === CLI_EVENT_TYPES.TOOL_CALL
+    );
+    assert.deepStrictEqual((spawns[0].data as any).subagentSpawn, {
+      description: "A",
+      agentType: "general-purpose",
+      prompt: "do A",
+      state: "running",
+    });
+
+    const streamedCall = parser.extractStructuredEventsFromEvent({
+      type: "assistant",
+      parent_tool_use_id: "spawn-stream",
+      message: {
+        content: [
+          {
+            type: "tool_use",
+            id: "stream-child-tool",
+            name: "Bash",
+            input: { command: "echo stream" },
+            caller: { type: "direct" },
+          },
+        ],
+      },
+    } as BaseCliEvent);
+    const streamedResult = parser.extractStructuredEventsFromEvent({
+      type: "user",
+      parent_tool_use_id: "spawn-stream",
+      message: {
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: "stream-child-tool",
+            content: "stream",
+          },
+        ],
+      },
+    } as BaseCliEvent);
+    assert.strictEqual(
+      streamedCall[0].subagent?.parentToolCallId,
+      "spawn-stream"
+    );
+    assert.strictEqual(
+      streamedResult[0].subagent?.parentToolCallId,
+      "spawn-stream"
+    );
+  });
+
+  test("follows interactive foreground transcripts once and keeps parent context", async () => {
+    const workspace = makeTempDir("claude-subagent-");
+    const normalizedWorkspace = workspace.replace(/[\\/.]/g, "-");
+    const sessionId = `claude-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const subagentsDirectory = path.join(
+      os.homedir(),
+      ".claude",
+      "projects",
+      normalizedWorkspace,
+      sessionId,
+      "subagents"
+    );
+    fs.mkdirSync(subagentsDirectory, { recursive: true });
+    parser.setWorkspaceRoot(workspace);
+    try {
+      const parentSpawnEvents = parser.extractStructuredEventsFromEvent({
+        type: "assistant",
+        sessionId,
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "interactive-agent-call",
+              name: "Agent",
+              input: {
+                description: "Inspect with Haiku",
+                subagent_type: "Explore",
+                prompt: "Inspect the code",
+              },
+            },
+          ],
+        },
+      } as BaseCliEvent);
+      const spawnCall = parentSpawnEvents.find(
+        (event) => event.type === CLI_EVENT_TYPES.TOOL_CALL
+      );
+      assert.strictEqual(
+        (spawnCall?.data as ToolCall).subagentSpawn?.description,
+        "Inspect with Haiku"
+      );
+      fs.writeFileSync(
+        path.join(subagentsDirectory, "agent-foreground.meta.json"),
+        JSON.stringify({
+          toolUseId: "interactive-agent-call",
+          requestShape: "foreground",
+        })
+      );
+      fs.writeFileSync(
+        path.join(subagentsDirectory, "agent-background.meta.json"),
+        JSON.stringify({
+          toolUseId: "unrelated-background-call",
+          requestShape: "background",
+        })
+      );
+      fs.writeFileSync(
+        path.join(subagentsDirectory, "agent-background.jsonl"),
+        JSON.stringify({
+          type: "assistant",
+          message: { content: [{ type: "text", text: "background child" }] },
+        }) + "\n"
+      );
+      const childRecords = [
+        {
+          type: "assistant",
+          isSidechain: true,
+          message: {
+            id: "child-usage-1",
+            model: "claude-haiku-child",
+            usage: {
+              input_tokens: 11,
+              output_tokens: 7,
+              cache_read_input_tokens: 5,
+              cache_creation_input_tokens: 13,
+              cache_creation: { ephemeral_1h_input_tokens: 9 },
+            },
+            content: [
+              {
+                type: "tool_use",
+                id: "child-tool-call",
+                name: "Bash",
+                input: { command: "echo child" },
+                caller: { type: "direct" },
+              },
+            ],
+          },
+        },
+        {
+          type: "assistant",
+          isSidechain: true,
+          message: {
+            id: "child-usage-1",
+            model: "claude-haiku-child",
+            usage: { input_tokens: 999, output_tokens: 999 },
+            content: [{ type: "text", text: "duplicate usage" }],
+          },
+        },
+        {
+          type: "user",
+          isSidechain: true,
+          message: {
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "child-tool-call",
+                content: "child output",
+              },
+            ],
+          },
+        },
+        {
+          type: "assistant",
+          isSidechain: true,
+          message: {
+            id: "child-final",
+            model: "claude-haiku-child",
+            stop_reason: "end_turn",
+            content: [{ type: "text", text: "child done" }],
+          },
+        },
+      ];
+      fs.writeFileSync(
+        path.join(subagentsDirectory, "agent-foreground.jsonl"),
+        childRecords.map((record) => JSON.stringify(record)).join("\n") + "\n"
+      );
+
+      const drain = await parser.getSubagentFollower().drainToEof(500);
+      const output = mergeSubagentOutput(
+        {
+          events: [],
+          metadata: {
+            usage: {
+              inputTokens: 20,
+              outputTokens: 3,
+              totalTokens: 23,
+              contextWindowUsedTokens: 18,
+              modelUsage: {
+                "claude-opus-parent": { inputTokens: 20, outputTokens: 3 },
+              },
+            },
+          },
+        },
+        drain
+      );
+      const childTool = output.events.find(
+        (event) => event.type === CLI_EVENT_TYPES.BASH_COMMAND
+      );
+      assert.strictEqual(
+        childTool?.subagent?.parentToolCallId,
+        "interactive-agent-call"
+      );
+      assert.strictEqual(
+        output.metadata.usage?.modelUsage?.["claude-haiku-child"]?.inputTokens,
+        11
+      );
+      assert.strictEqual(
+        output.metadata.usage?.modelUsage?.["claude-haiku-child"]?.outputTokens,
+        7
+      );
+      assert.strictEqual(
+        output.metadata.usage?.modelUsage?.["claude-haiku-child"]
+          ?.cacheCreationLongTtlInputTokens,
+        9
+      );
+      assert.strictEqual(output.metadata.usage?.inputTokens, 31);
+      assert.strictEqual(output.metadata.usage?.contextWindowUsedTokens, 18);
+      assert.ok(
+        !output.events.some(
+          (event) =>
+            event.type === CLI_EVENT_TYPES.TEXT &&
+            (event.data as TextData).text === "background child"
+        )
+      );
+    } finally {
+      await removeTempDir(workspace);
+      fs.rmSync(
+        path.join(os.homedir(), ".claude", "projects", normalizedWorkspace),
+        {
+          recursive: true,
+          force: true,
+        }
+      );
+    }
+  });
+
+  test("follows interactive background-shaped transcripts without run_in_background input", async () => {
+    const workspace = makeTempDir("claude-subagent-bg-");
+    const normalizedWorkspace = workspace.replace(/[\\/.]/g, "-");
+    const sessionId = `claude-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const subagentsDirectory = path.join(
+      os.homedir(),
+      ".claude",
+      "projects",
+      normalizedWorkspace,
+      sessionId,
+      "subagents"
+    );
+    fs.mkdirSync(subagentsDirectory, { recursive: true });
+    parser.setWorkspaceRoot(workspace);
+    try {
+      // Claude Code launches parallel Agent calls as background by default:
+      // the tool input never carries run_in_background, only the meta does.
+      parser.extractStructuredEventsFromEvent({
+        type: "assistant",
+        sessionId,
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "bg-agent-call",
+              name: "Agent",
+              input: { description: "Bug hunt", prompt: "Hunt" },
+            },
+          ],
+        },
+      } as BaseCliEvent);
+      fs.writeFileSync(
+        path.join(subagentsDirectory, "agent-bg.meta.json"),
+        JSON.stringify({
+          toolUseId: "bg-agent-call",
+          requestShape: "background",
+          finished: true,
+        })
+      );
+      fs.writeFileSync(
+        path.join(subagentsDirectory, "agent-bg.jsonl"),
+        JSON.stringify({
+          type: "assistant",
+          isSidechain: true,
+          message: {
+            id: "bg-child-final",
+            stop_reason: "end_turn",
+            content: [{ type: "text", text: "background child done" }],
+          },
+        }) + "\n"
+      );
+
+      const drain = await parser.getSubagentFollower().drainToEof(500);
+      const output = mergeSubagentOutput({ events: [], metadata: {} }, drain);
+      const childText = output.events.find(
+        (event) =>
+          event.type === CLI_EVENT_TYPES.TEXT &&
+          (event.data as TextData).text === "background child done"
+      );
+      assert.strictEqual(
+        childText?.subagent?.parentToolCallId,
+        "bg-agent-call"
+      );
+    } finally {
+      await removeTempDir(workspace);
+      fs.rmSync(
+        path.join(os.homedir(), ".claude", "projects", normalizedWorkspace),
+        { recursive: true, force: true }
+      );
+    }
+  });
+
+  test("streams Claude task progress and completion as spawn updates", () => {
+    const progress = parser.extractStructuredEventsFromEvent({
+      type: "system",
+      subtype: "task_progress",
+      tool_use_id: "spawn-a",
+      description: "Reading alpha.txt",
+    } as BaseCliEvent);
+    const complete = parser.extractStructuredEventsFromEvent({
+      type: "system",
+      subtype: "task_notification",
+      tool_use_id: "spawn-a",
+      status: "completed",
+    } as BaseCliEvent);
+
+    assert.strictEqual((progress[0].data as any).id, "spawn-a");
+    assert.strictEqual(
+      (progress[0].data as any).subagentSpawn.statusLine,
+      "Reading alpha.txt"
+    );
+    assert.strictEqual((complete[0].data as any).id, "spawn-a");
+    assert.strictEqual(
+      (complete[0].data as any).subagentSpawn.state,
+      "completed"
+    );
+
+    const finalOutput = parser.extractResponse([
+      {
+        type: "assistant",
+        parent_tool_use_id: null,
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "spawn-final",
+              name: "Agent",
+              input: { description: "final" },
+            },
+          ],
+        },
+      },
+      {
+        type: "system",
+        subtype: "task_progress",
+        tool_use_id: "spawn-final",
+        description: "Reading",
+      },
+      {
+        type: "system",
+        subtype: "task_notification",
+        tool_use_id: "spawn-final",
+        status: "completed",
+      },
+    ] as BaseCliEvent[]);
+    const finalUpdates = finalOutput.events.filter(
+      (event) => (event.data as any).id === "spawn-final"
+    );
+    assert.strictEqual(finalUpdates[1].type, CLI_EVENT_TYPES.TOOL_CALL);
+    assert.strictEqual(
+      (finalUpdates[1].data as any).subagentSpawn.statusLine,
+      "Reading"
+    );
+    assert.strictEqual(
+      (finalUpdates[2].data as any).subagentSpawn.state,
+      "completed"
+    );
+  });
+
+  test("normalizes Claude background Agent tasks as spawn updates too", () => {
+    const events = parser.extractStructuredEventsFromEvent({
+      type: "system",
+      subtype: "task_started",
+      tool_use_id: "background-agent",
+      is_backgrounded: true,
+    } as BaseCliEvent);
+    assert.strictEqual(events.length, 1);
+    assert.strictEqual((events[0].data as any).id, "background-agent");
+    assert.strictEqual((events[0].data as any).subagentSpawn.state, "running");
   });
 
   test("counts assistant usage once when content blocks share a message id", () => {
@@ -548,6 +1037,66 @@ suite("ClaudeLogParser", () => {
         0.42
       );
       assert.strictEqual(response.metadata.model, "claude-sonnet-4-5-20250929");
+    });
+
+    test("uses result modelUsage totals while retaining parent context usage", () => {
+      const response = parser.extractResponse([
+        {
+          type: "assistant",
+          parent_tool_use_id: null,
+          message: {
+            model: "claude-opus-4-6",
+            usage: {
+              input_tokens: 12,
+              output_tokens: 3,
+              cache_read_input_tokens: 5,
+            },
+            content: [{ type: "text", text: "parent" }],
+          },
+        },
+        {
+          type: "assistant",
+          parent_tool_use_id: "spawn",
+          message: {
+            model: "claude-haiku-4-5",
+            usage: {
+              input_tokens: 500,
+              output_tokens: 20,
+              cache_read_input_tokens: 100,
+            },
+            content: [{ type: "text", text: "child" }],
+          },
+        },
+        {
+          type: "result",
+          model: "claude-opus-4-6",
+          usage: {
+            input_tokens: 12,
+            output_tokens: 3,
+            cache_read_input_tokens: 5,
+          },
+          modelUsage: {
+            "claude-opus-4-6": {
+              inputTokens: 12,
+              outputTokens: 3,
+              cacheReadInputTokens: 5,
+            },
+            "claude-haiku-4-5": {
+              inputTokens: 500,
+              outputTokens: 20,
+              cacheReadInputTokens: 100,
+            },
+          },
+        },
+      ] as any);
+      assert.strictEqual(response.metadata.usage?.inputTokens, 512);
+      assert.strictEqual(response.metadata.usage?.outputTokens, 23);
+      assert.strictEqual(response.metadata.usage?.cachedInputTokens, 105);
+      assert.strictEqual(response.metadata.usage?.contextWindowUsedTokens, 17);
+      assert.strictEqual(
+        Object.keys(response.metadata.usage?.modelUsage ?? {}).length,
+        2
+      );
     });
 
     test("should extract tool results from user events", () => {
@@ -2397,6 +2946,121 @@ suite("CopilotLogParser", () => {
     parser = new CopilotLogParser();
   });
 
+  test("attributes Copilot subagent events and shell output across interleaved children", () => {
+    const events: BaseCliEvent[] = [
+      {
+        type: "tool.execution_start",
+        data: {
+          toolCallId: "spawn-a",
+          toolName: "task",
+          arguments: { description: "A", prompt: "do A" },
+        },
+      },
+      {
+        type: "tool.execution_start",
+        data: {
+          toolCallId: "spawn-b",
+          toolName: "task",
+          arguments: { description: "B", prompt: "do B" },
+        },
+      },
+      {
+        type: "subagent.started",
+        data: {
+          toolCallId: "spawn-a",
+          agentName: "agent-a",
+          agentDisplayName: "Alpha",
+          agentDescription: "Read alpha",
+          executionMode: "sync",
+        },
+      },
+      {
+        type: "subagent.started",
+        data: {
+          toolCallId: "spawn-b",
+          agentName: "agent-b",
+          agentDisplayName: "Beta",
+          agentDescription: "Read beta",
+          executionMode: "sync",
+        },
+      },
+      {
+        type: "assistant.message",
+        data: {
+          content: "A thinking",
+          reasoningText: "reason A",
+          parentToolCallId: "spawn-a",
+        },
+      },
+      {
+        type: "tool.execution_start",
+        data: {
+          toolCallId: "child-a",
+          toolName: "powershell",
+          arguments: {},
+          parentToolCallId: "spawn-a",
+        },
+      },
+      {
+        type: "tool.execution_start",
+        data: {
+          toolCallId: "child-b",
+          toolName: "powershell",
+          arguments: {},
+          parentToolCallId: "spawn-b",
+        },
+      },
+      {
+        type: "tool.shell_output",
+        data: { toolCallId: "child-b", text: "B output" },
+      },
+      {
+        type: "tool.shell_output",
+        data: { toolCallId: "child-a", text: "A output" },
+      },
+      {
+        type: "subagent.completed",
+        data: { toolCallId: "spawn-a", agentDisplayName: "Alpha" },
+      },
+    ];
+    const output = parser.extractResponse(events);
+    assert.ok(
+      output.events.some(
+        (event) =>
+          event.type === CLI_EVENT_TYPES.TEXT &&
+          event.subagent?.parentToolCallId === "spawn-a"
+      )
+    );
+    const calls = output.events.filter(
+      (event) => event.type === CLI_EVENT_TYPES.TOOL_CALL
+    );
+    assert.strictEqual(
+      (calls[0].data as ToolCall).subagentSpawn?.description,
+      "Read alpha"
+    );
+    assert.strictEqual(
+      (calls[0].data as ToolCall).subagentSpawn?.state,
+      "completed"
+    );
+
+    const streaming = new CopilotLogParser();
+    const childStart = streaming.extractStructuredEventsFromEvent(events[5]);
+    streaming.extractStructuredEventsFromEvent(events[6]);
+    const shellOutput = streaming.extractStructuredEventsFromEvent(events[7]);
+    assert.strictEqual(childStart[0].subagent?.parentToolCallId, "spawn-a");
+    assert.strictEqual(shellOutput[0].subagent?.parentToolCallId, "spawn-b");
+    assert.strictEqual(
+      streaming.classifyUserEvent(
+        {
+          type: "user.message",
+          data: { source: "agent-child", content: "child prompt" },
+        },
+        {}
+      ),
+      "other"
+    );
+  });
+
   test("normalizes Copilot tool start, completion, and result triples into one row", () => {
     const scenarios = [
       {
@@ -3401,6 +4065,7 @@ suite("CopilotLogParser", () => {
         assert.strictEqual(final?.contextWindowUsedTokens, 20692);
         assert.strictEqual(final?.contextWindowSize, 1000000);
         assert.strictEqual(final?.outputTokens, 42);
+        assert.strictEqual(final?.modelUsage?.["gpt-5.4"]?.inputTokens, 18689);
       } finally {
         cleanupTempFile(filePath);
       }
@@ -3512,6 +4177,7 @@ suite("CopilotLogParser", () => {
             { name: "github.copilot.user.message", attributes: {} },
             usageInfoEvent(17319, 272000),
             usageInfoEvent(20411, 272000),
+            usageInfoEvent(18000, 200000),
           ],
         },
       ];
@@ -4495,6 +5161,233 @@ suite("CodexLogParser", () => {
 
   setup(() => {
     parser = new CodexLogParser();
+  });
+
+  test("follows linked child rollouts, adds cumulative usage once, and completes from FINAL_ANSWER", async () => {
+    const tempDir = await makeTempDir("codex-subagent-follow");
+    const previousCodexHome = process.env.CODEX_HOME;
+    process.env.CODEX_HOME = tempDir;
+    try {
+      const dayDir = path.join(tempDir, "sessions", "2026", "10", "23");
+      fs.mkdirSync(dayDir, { recursive: true });
+      const parentThread = "parent-thread";
+      const parentFile = path.join(
+        dayDir,
+        `rollout-parent-${parentThread}.jsonl`
+      );
+      fs.writeFileSync(parentFile, "");
+      const childRecords = [
+        {
+          type: "session_meta",
+          payload: {
+            id: "child-thread",
+            parent_thread_id: parentThread,
+            agent_path: "/root/worker",
+            source: {
+              subagent: { thread_spawn: { agent_nickname: "Carver" } },
+            },
+            model: "gpt-child",
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            role: "user",
+            content: [{ type: "input_text", text: "replayed parent prompt" }],
+          },
+        },
+        { type: "event_msg", payload: { type: "task_started" } },
+        {
+          type: "event_msg",
+          payload: {
+            type: "task_started",
+            turn_attribution: { initiating_agent_path: "/root" },
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            role: "assistant",
+            content: [{ type: "output_text", text: "child work" }],
+          },
+        },
+        {
+          type: "event_msg",
+          payload: {
+            type: "token_count",
+            info: {
+              model: "gpt-child",
+              total_token_usage: {
+                input_tokens: 50,
+                output_tokens: 4,
+                cached_input_tokens: 10,
+                reasoning_output_tokens: 1,
+              },
+            },
+          },
+        },
+        {
+          type: "event_msg",
+          payload: {
+            type: "token_count",
+            info: {
+              model: "gpt-child",
+              total_token_usage: {
+                input_tokens: 100,
+                output_tokens: 8,
+                cached_input_tokens: 20,
+                reasoning_output_tokens: 2,
+              },
+            },
+          },
+        },
+        { type: "event_msg", payload: { type: "task_complete" } },
+      ];
+      fs.writeFileSync(
+        path.join(dayDir, "rollout-child.jsonl"),
+        childRecords.map((record) => JSON.stringify(record)).join("\n") + "\n"
+      );
+      const unrelated = {
+        ...childRecords[0],
+        payload: {
+          ...childRecords[0].payload,
+          parent_thread_id: "different-parent",
+        },
+      };
+      fs.writeFileSync(
+        path.join(dayDir, "rollout-unrelated.jsonl"),
+        JSON.stringify(unrelated) + "\n"
+      );
+      const parentEvents = [
+        {
+          type: "session_meta",
+          payload: { id: parentThread, model: "gpt-parent" },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "function_call",
+            name: "spawn_agent",
+            namespace: "collaboration",
+            call_id: "spawn-call",
+            arguments: JSON.stringify({
+              task_name: "worker",
+              message: "encrypted",
+            }),
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "function_call_output",
+            call_id: "spawn-call",
+            output: JSON.stringify({ task_name: "/root/worker" }),
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "agent_message",
+            author: "/root/worker",
+            content: "Message Type: FINAL_ANSWER\nPayload:\nChild result text",
+          },
+        },
+      ] as unknown as BaseCliEvent[];
+
+      const output = parser.extractResponse(parentEvents);
+      const drain = await parser.getSubagentFollower().drainToEof(500);
+      const merged = mergeSubagentOutput(output, drain);
+      const spawn = merged.events.find(
+        (event) => (event.data as ToolCall).id === "spawn-call"
+      );
+      assert.strictEqual(
+        (spawn?.data as ToolCall).subagentSpawn?.children?.[0]?.label,
+        "Carver"
+      );
+      assert.strictEqual(
+        (spawn?.data as ToolCall).subagentSpawn?.state,
+        "completed"
+      );
+      assert.deepStrictEqual((spawn?.data as ToolCall).result, {
+        success: true,
+        output: "Child result text",
+      });
+      assert.strictEqual(
+        merged.events.some(
+          (event) =>
+            event.type === CLI_EVENT_TYPES.TEXT &&
+            (event.data as TextData).text.includes("replayed parent")
+        ),
+        false
+      );
+      assert.strictEqual(
+        merged.events.some(
+          (event) =>
+            event.type === CLI_EVENT_TYPES.TEXT &&
+            (event.data as TextData).text === "child work" &&
+            event.subagent?.parentToolCallId === "spawn-call"
+        ),
+        true
+      );
+      assert.strictEqual(
+        merged.metadata.usage?.modelUsage?.["gpt-child"]?.inputTokens,
+        100
+      );
+      assert.strictEqual(
+        merged.metadata.usage?.modelUsage?.["gpt-child"]?.outputTokens,
+        8
+      );
+      assert.strictEqual(drain.partial, false);
+    } finally {
+      if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
+      else process.env.CODEX_HOME = previousCodexHome;
+      await removeTempDir(tempDir);
+    }
+  });
+
+  test("completes a live spawn card from the linked FINAL_ANSWER payload", () => {
+    const streamingParser = new CodexLogParser();
+    const parentRecords = [
+      { type: "session_meta", payload: { id: "live-parent" } },
+      {
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "spawn_agent",
+          namespace: "collaboration",
+          call_id: "live-spawn",
+          arguments: JSON.stringify({ task_name: "worker" }),
+        },
+      },
+      {
+        type: "response_item",
+        payload: {
+          type: "function_call_output",
+          call_id: "live-spawn",
+          output: JSON.stringify({ task_name: "/root/worker" }),
+        },
+      },
+    ];
+    for (const record of parentRecords) {
+      streamingParser.extractStructuredEventsFromEvent(record as BaseCliEvent);
+    }
+    const completed = streamingParser.extractStructuredEventsFromEvent({
+      type: "response_item",
+      payload: {
+        type: "agent_message",
+        author: "/root/worker",
+        content: "Message Type: FINAL_ANSWER\nPayload:\nLive child result",
+      },
+    } as BaseCliEvent);
+    assert.strictEqual((completed[0].data as ToolCall).id, "live-spawn");
+    assert.strictEqual(
+      (completed[0].data as ToolCall).subagentSpawn?.state,
+      "completed"
+    );
+    assert.deepStrictEqual((completed[0].data as ToolCall).result, {
+      success: true,
+      output: "Live child result",
+    });
   });
 
   suite("fixture-based per-step usage", () => {
@@ -6403,6 +7296,179 @@ suite("OpenCodeLogParser", () => {
     parser = new OpenCodeLogParser();
   });
 
+  test("follows registered sidecar records and merges child usage", async () => {
+    const directory = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "opencode-child-")
+    );
+    try {
+      const file = path.join(directory, "run-subagents.jsonl");
+      const records = [
+        {
+          kind: "part",
+          childSessionId: "child",
+          part: {
+            type: "text",
+            id: "text-part",
+            sessionID: "child",
+            messageID: "message",
+            text: "child text",
+          },
+        },
+        {
+          kind: "part",
+          childSessionId: "child",
+          part: {
+            type: "step-finish",
+            id: "usage-part",
+            sessionID: "child",
+            messageID: "message",
+            modelID: "provider/child-model",
+            tokens: { input: 10, output: 2, total: 12 },
+          },
+        },
+        { kind: "child-idle", childSessionId: "child" },
+      ];
+      fs.writeFileSync(
+        file,
+        [...records, records[1]]
+          .map((record) => JSON.stringify(record))
+          .join("\n") + "\n"
+      );
+      fs.writeFileSync(
+        path.join(directory, "other-run-subagents.jsonl"),
+        JSON.stringify({
+          kind: "part",
+          childSessionId: "child",
+          part: {
+            type: "text",
+            id: "other",
+            sessionID: "child",
+            messageID: "message",
+            text: "wrong run",
+          },
+        }) + "\n"
+      );
+      parser.setSubagentNotifyDir(directory);
+      parser.setSubagentRunId("run");
+      parser.extractStructuredEventsFromEvent({
+        type: OPENCODE_EVENT_TYPES.SUBTASK,
+        part: {
+          callID: "task-call",
+          sessionID: "parent",
+          state: { metadata: { sessionId: "child" } },
+        },
+      });
+      const drain = await parser.getSubagentFollower()?.drainToEof(100);
+      assert.ok(drain);
+      const output = mergeSubagentOutput(
+        {
+          events: [],
+          metadata: {
+            usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+          },
+        },
+        drain
+      );
+      assert.strictEqual(output.metadata.usage?.inputTokens, 11);
+      assert.strictEqual(output.metadata.usage?.outputTokens, 3);
+      assert.strictEqual(
+        output.metadata.usage?.modelUsage?.["provider/child-model"]
+          ?.inputTokens,
+        10
+      );
+      assert.strictEqual(
+        output.events.some(
+          (event) =>
+            (event.data as ToolCall).subagentSpawn?.state === "completed"
+        ),
+        true
+      );
+      const childText = output.events.find(
+        (event) => (event.data as TextData).text === "child text"
+      );
+      assert.strictEqual(childText?.subagent?.parentToolCallId, "task-call");
+      assert.strictEqual(
+        output.events.some(
+          (event) => (event.data as TextData).text === "wrong run"
+        ),
+        false
+      );
+    } finally {
+      await fs.promises.rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("streams child parts interactively and attributes grandchildren to their task", async () => {
+    const directory = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "opencode-grandchild-")
+    );
+    try {
+      const file = path.join(directory, "run-subagents.jsonl");
+      const records = [
+        {
+          kind: "part",
+          childSessionId: "child",
+          part: {
+            type: "tool",
+            id: "grandchild-task-part",
+            sessionID: "child",
+            messageID: "message-child",
+            callID: "grandchild-call",
+            tool: "task",
+            state: {
+              status: "running",
+              metadata: { sessionId: "grandchild" },
+            },
+          },
+        },
+        {
+          kind: "part",
+          childSessionId: "grandchild",
+          part: {
+            type: "text",
+            id: "grandchild-text",
+            sessionID: "grandchild",
+            messageID: "message-grandchild",
+            text: "grandchild output",
+          },
+        },
+        { kind: "child-idle", childSessionId: "grandchild" },
+      ];
+      await fs.promises.writeFile(
+        file,
+        records.map((record) => JSON.stringify(record)).join("\n") + "\n"
+      );
+      parser.setSubagentNotifyDir(directory);
+      parser.setSubagentRunId("run");
+      parser.extractStructuredEventsFromEvent({
+        type: OPENCODE_EVENT_TYPES.SUBTASK,
+        part: {
+          callID: "parent-call",
+          sessionID: "parent",
+          state: { metadata: { sessionId: "child" } },
+        },
+      });
+
+      const streamed: CliEvent[] = [];
+      const follower = parser.getSubagentFollower();
+      follower.start((events) => streamed.push(...events), 5);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      follower.stop();
+
+      const grandchildText = streamed.find(
+        (event) => (event.data as TextData).text === "grandchild output"
+      );
+      assert.strictEqual(
+        grandchildText?.subagent?.parentToolCallId,
+        "grandchild-call"
+      );
+      assert.strictEqual(grandchildText?.subagent?.agentId, "grandchild");
+    } finally {
+      parser.getSubagentFollower().reset();
+      await fs.promises.rm(directory, { recursive: true, force: true });
+    }
+  });
+
   test("surfaces failed write and bash tool outcomes from stdout fixtures", () => {
     const fixturePath = path.join(
       __dirname,
@@ -7043,7 +8109,538 @@ suite("OpenCodeLogParser", () => {
 // QwenLogParser Tests
 // ============================================================================
 
+suite("Antigravity subagent attribution", () => {
+  test("keeps invoke_subagent running and groups children by conversation id", () => {
+    const call = {
+      name: "invoke_subagent",
+      args: {
+        Subagents: JSON.stringify([
+          { Role: "Researcher" },
+          { Role: "Reviewer" },
+        ]),
+      },
+    };
+    const result = {
+      source: "MODEL",
+      type: "GENERIC",
+      status: "DONE",
+      content:
+        '{"conversationId":"child-one","logAbsoluteUri":"file:///tmp/one/transcript.jsonl"}\n{"conversationId":"child-two","logAbsoluteUri":"file:///tmp/two/transcript.jsonl"}',
+    };
+    const events = AntigravityToolEventBuilder.build({
+      call,
+      result,
+      timestamp: 1,
+      toolCallId: "spawn-id",
+    });
+    const spawn = events[0].data as ToolCall;
+    assert.strictEqual(spawn.id, "spawn-id");
+    assert.strictEqual(spawn.subagentSpawn?.state, "running");
+    assert.deepStrictEqual(spawn.subagentSpawn?.children, [
+      { agentId: "child-one", label: "Researcher" },
+      { agentId: "child-two", label: "Reviewer" },
+    ]);
+  });
+
+  test("follows child transcripts live and completes only after every report", async () => {
+    const workspace = makeTempDir("antigravity-subagents-");
+    const childOne = path.join(workspace, "child-one");
+    const childTwo = path.join(workspace, "child-two");
+    fs.mkdirSync(childOne, { recursive: true });
+    fs.mkdirSync(childTwo, { recursive: true });
+    const firstId = "11111111-1111-4111-8111-111111111111";
+    const secondId = "22222222-2222-4222-8222-222222222222";
+    const parentId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const writeChild = (directory: string, text: string, input: number) => {
+      fs.writeFileSync(
+        path.join(directory, "transcript_full.jsonl"),
+        [
+          {
+            source: "MODEL",
+            type: "PLANNER_RESPONSE",
+            status: "DONE",
+            step_index: 1,
+            content: text,
+            input_tokens: input,
+            output_tokens: 2,
+          },
+        ]
+          .map((record) => JSON.stringify(record))
+          .join("\n") + "\n"
+      );
+    };
+    writeChild(childOne, "child one output", 10);
+    writeChild(childTwo, "child two output", 20);
+    const parser = new AntigravityLogParser();
+    try {
+      const descriptors = [
+        { Role: "Researcher", Model: "inherit" },
+        { Role: "Reviewer", Model: "inherit" },
+      ];
+      const resultContent = [
+        `created ${JSON.stringify({ conversationId: firstId, logAbsoluteUri: `file://${path.join(childOne, "transcript.jsonl")}` })}`,
+        JSON.stringify({
+          conversationId: secondId,
+          logAbsoluteUri: `file://${path.join(childTwo, "transcript.jsonl")}`,
+        }),
+      ].join("\n");
+      const parentRecords = [
+        {
+          entry: {
+            source: "MODEL",
+            type: "PLANNER_RESPONSE",
+            status: "DONE",
+            tool_calls: [
+              {
+                name: "invoke_subagent",
+                args: { Subagents: JSON.stringify(descriptors) },
+              },
+            ],
+          },
+          eventId: "parent-planner",
+          lineNumber: 1,
+        },
+        {
+          entry: {
+            source: "MODEL",
+            type: "GENERIC",
+            status: "DONE",
+            content: resultContent,
+          },
+          eventId: "parent-result",
+          lineNumber: 2,
+        },
+      ];
+      const parsed = parser.parseTranscriptRecords(parentRecords, parentId);
+      const spawn = parsed
+        .flatMap((event) => parser.extractStructuredEventsFromEvent(event))
+        .find((event) => event.type === CLI_EVENT_TYPES.TOOL_CALL);
+      assert.strictEqual(
+        (spawn?.data as ToolCall).subagentSpawn?.state,
+        "running"
+      );
+      assert.deepStrictEqual(
+        (spawn?.data as ToolCall).subagentSpawn?.children?.map(
+          (child) => child.agentId
+        ),
+        [firstId, secondId]
+      );
+
+      const streamed: CliEvent[] = [];
+      parser
+        .getSubagentFollower()
+        .start((events) => streamed.push(...events), 5);
+      const report = {
+        source: "SYSTEM",
+        type: "SYSTEM_MESSAGE",
+        status: "DONE",
+        content: `sender=${firstId} priority=MESSAGE_PRIORITY_HIGH content=done`,
+      };
+      const reportEvent = parser.parseTranscriptRecords(
+        [{ entry: report, eventId: "report-one", lineNumber: 3 }],
+        parentId
+      )[0];
+      const oneReportUpdates =
+        parser.extractStructuredEventsFromEvent(reportEvent);
+      assert.strictEqual(
+        oneReportUpdates.some(
+          (event) =>
+            (event.data as ToolCall).subagentSpawn?.state === "completed"
+        ),
+        false
+      );
+      const secondReport = parser.parseTranscriptRecords(
+        [
+          {
+            entry: {
+              ...report,
+              content: `sender=${secondId} priority=MESSAGE_PRIORITY_HIGH content=done`,
+            },
+            eventId: "report-two",
+            lineNumber: 4,
+          },
+        ],
+        parentId
+      )[0];
+      const completed = parser.extractStructuredEventsFromEvent(secondReport);
+      assert.strictEqual(
+        completed.some(
+          (event) =>
+            (event.data as ToolCall).subagentSpawn?.state === "completed"
+        ),
+        true
+      );
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      const drain = await parser.getSubagentFollower().drainToEof(100);
+      const usage = Object.values(drain.usageByModel);
+      assert.strictEqual(
+        usage.reduce((sum, model) => sum + (model.inputTokens ?? 0), 0),
+        30
+      );
+      assert.strictEqual(
+        usage.reduce((sum, model) => sum + (model.outputTokens ?? 0), 0),
+        4
+      );
+      assert.strictEqual(
+        streamed.filter((event) => event.subagent?.agentId).length,
+        2
+      );
+    } finally {
+      parser.getSubagentFollower().reset();
+      removeTempDir(workspace);
+    }
+  });
+
+  test("maps each child record once so results pair with their own calls across polls", async () => {
+    const workspace = makeTempDir("antigravity-subagent-polls-");
+    const childDir = path.join(workspace, "child");
+    fs.mkdirSync(childDir, { recursive: true });
+    const transcript = path.join(childDir, "transcript_full.jsonl");
+    const childId = "33333333-3333-4333-8333-333333333333";
+    const parentId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const planner = (name: string, stepIndex: number) => ({
+      source: "MODEL",
+      type: "PLANNER_RESPONSE",
+      status: "DONE",
+      step_index: stepIndex,
+      tool_calls: [{ name, args: {} }],
+    });
+    const result = (stepIndex: number) => ({
+      source: "MODEL",
+      type: "GENERIC",
+      status: "DONE",
+      step_index: stepIndex,
+      content: `result ${stepIndex}`,
+    });
+    const append = (records: object[]) =>
+      fs.appendFileSync(
+        transcript,
+        records.map((record) => JSON.stringify(record)).join("\n") + "\n"
+      );
+    append([planner("first_tool", 1)]);
+    const parser = new AntigravityLogParser();
+    try {
+      const spawnRecords = [
+        {
+          entry: {
+            source: "MODEL",
+            type: "PLANNER_RESPONSE",
+            status: "DONE",
+            tool_calls: [
+              {
+                name: "invoke_subagent",
+                args: { Subagents: JSON.stringify([{ Role: "Worker" }]) },
+              },
+            ],
+          },
+          eventId: "parent-planner",
+          lineNumber: 1,
+        },
+        {
+          entry: {
+            source: "MODEL",
+            type: "GENERIC",
+            status: "DONE",
+            content: JSON.stringify({
+              conversationId: childId,
+              logAbsoluteUri: `file://${path.join(childDir, "transcript.jsonl")}`,
+            }),
+          },
+          eventId: "parent-result",
+          lineNumber: 2,
+        },
+      ];
+      parser
+        .parseTranscriptRecords(spawnRecords, parentId)
+        .forEach((event) => parser.extractStructuredEventsFromEvent(event));
+
+      const streamed: CliEvent[] = [];
+      parser
+        .getSubagentFollower()
+        .start((events) => streamed.push(...events), 5);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      append([result(2), planner("second_tool", 3), result(4)]);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      const toolNames = streamed
+        .filter((event) => event.type === CLI_EVENT_TYPES.TOOL_CALL)
+        .map((event) => (event.data as ToolCall).name);
+      assert.deepStrictEqual(toolNames, ["first_tool", "second_tool"]);
+    } finally {
+      parser.getSubagentFollower().reset();
+      removeTempDir(workspace);
+    }
+  });
+});
+
 suite("QwenLogParser", () => {
+  test("classifies bridged, bare and background agent calls as subagent spawns", () => {
+    const parser = new QwenLogParser();
+    const calls = [
+      {
+        id: "call-bridged",
+        name: "tool_call",
+        args: {
+          name: "agent",
+          arguments: {
+            description: "Run echo and read alpha.txt",
+            prompt: "Read alpha.txt",
+            run_in_background: false,
+            subagent_type: "general-purpose",
+          },
+        },
+      },
+      {
+        id: "call-bare",
+        name: "agent",
+        args: {
+          description: "Run echo and read beta.txt",
+          prompt: "Read beta.txt",
+          subagent_type: "general-purpose",
+        },
+      },
+      {
+        id: "call-background",
+        name: "agent",
+        args: {
+          description: "Background task",
+          run_in_background: true,
+          subagent_type: "general-purpose",
+        },
+      },
+    ];
+    const output = parser.extractResponse([
+      {
+        type: QWEN_EVENT_TYPES.ASSISTANT,
+        sessionId: "qwen-session",
+        message: {
+          role: "assistant",
+          parts: calls.map((functionCall) => ({ functionCall })),
+        },
+      } as BaseCliEvent,
+    ]);
+    const spawns = output.events
+      .filter((event) => event.type === CLI_EVENT_TYPES.TOOL_CALL)
+      .map((event) => event.data as ToolCall);
+
+    assert.strictEqual(spawns.length, 3);
+    assert.deepStrictEqual(
+      spawns.map((spawn) => spawn.subagentSpawn),
+      [
+        {
+          description: "Run echo and read alpha.txt",
+          agentType: "general-purpose",
+          prompt: "Read alpha.txt",
+          state: "running",
+        },
+        {
+          description: "Run echo and read beta.txt",
+          agentType: "general-purpose",
+          prompt: "Read beta.txt",
+          state: "running",
+        },
+        {
+          description: "Background task",
+          agentType: "general-purpose",
+          prompt: undefined,
+          state: "running",
+        },
+      ]
+    );
+  });
+
+  test("follows Qwen sidechains by spawn call id and counts child usage once interactively", async () => {
+    const workspace = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "qwen-subagent-workspace-")
+    );
+    const projectDir = path.join(
+      os.homedir(),
+      ".qwen",
+      "projects",
+      sanitizeQwenProjectPath(workspace)
+    );
+    const sidechainDir = path.join(
+      projectDir,
+      "subagents",
+      "session-with-hyphens"
+    );
+    const sidechainPath = path.join(
+      sidechainDir,
+      "agent-general-purpose-call_with-hyphens.jsonl"
+    );
+    try {
+      await fs.promises.mkdir(sidechainDir, { recursive: true });
+      const childRecords = [
+        {
+          type: QWEN_EVENT_TYPES.ASSISTANT,
+          uuid: "child-usage-record",
+          sessionId: "session-with-hyphens",
+          model: "qwen-child-model",
+          agentId: "general-purpose-call_with-hyphens",
+          agentName: "general-purpose",
+          isSidechain: true,
+          message: {
+            role: "assistant",
+            parts: [{ text: "Child result" }],
+          },
+          usageMetadata: {
+            promptTokenCount: 35_223,
+            candidatesTokenCount: 20,
+            thoughtsTokenCount: 0,
+            totalTokenCount: 35_243,
+            cachedContentTokenCount: 3,
+          },
+        },
+      ];
+      await fs.promises.writeFile(
+        sidechainPath,
+        childRecords.map((record) => JSON.stringify(record)).join("\n") + "\n"
+      );
+
+      const parser = new QwenLogParser();
+      parser.setWorkspaceRoot(workspace);
+      const parentOutput = parser.extractResponse([
+        {
+          type: QWEN_EVENT_TYPES.ASSISTANT,
+          sessionId: "session-with-hyphens",
+          message: {
+            role: "assistant",
+            parts: [
+              {
+                functionCall: {
+                  id: "call_with-hyphens",
+                  name: "tool_call",
+                  args: {
+                    name: "agent",
+                    arguments: {
+                      description: "Read alpha.txt",
+                      prompt: "Read alpha.txt",
+                      run_in_background: false,
+                      subagent_type: "general-purpose",
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        } as BaseCliEvent,
+      ]);
+      const drain = await parser.getSubagentFollower().drainToEof(100);
+      const output = mergeSubagentOutput(parentOutput, drain);
+      const childText = output.events.find(
+        (event) =>
+          event.type === CLI_EVENT_TYPES.TEXT &&
+          (event.data as TextData).text === "Child result"
+      );
+
+      assert.strictEqual(
+        childText?.subagent?.parentToolCallId,
+        "call_with-hyphens"
+      );
+      assert.strictEqual(
+        output.metadata.modelUsage?.["qwen-child-model"]?.inputTokens,
+        35_223
+      );
+      assert.strictEqual(output.metadata.usage?.inputTokens, 35_223);
+    } finally {
+      await fs.promises.rm(projectDir, { recursive: true, force: true });
+      await fs.promises.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("does not add sidechain usage to Qwen headless result totals", async () => {
+    const workspace = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "qwen-subagent-headless-")
+    );
+    const projectDir = path.join(
+      os.homedir(),
+      ".qwen",
+      "projects",
+      sanitizeQwenProjectPath(workspace)
+    );
+    const sidechainDir = path.join(projectDir, "subagents", "qwen-session");
+    try {
+      await fs.promises.mkdir(sidechainDir, { recursive: true });
+      await fs.promises.writeFile(
+        path.join(sidechainDir, "agent-general-purpose-call-headless.jsonl"),
+        `${JSON.stringify({
+          type: QWEN_EVENT_TYPES.ASSISTANT,
+          uuid: "headless-child-usage",
+          model: "qwen-child-model",
+          message: { role: "assistant", parts: [{ text: "Child" }] },
+          usageMetadata: {
+            promptTokenCount: 100,
+            candidatesTokenCount: 5,
+            thoughtsTokenCount: 0,
+            totalTokenCount: 105,
+            cachedContentTokenCount: 0,
+          },
+        })}\n`
+      );
+      const parser = new QwenLogParser();
+      parser.setWorkspaceRoot(workspace);
+      parser.setSubagentUsageEnabled(false);
+      const output = parser.extractResponse([
+        {
+          type: QWEN_EVENT_TYPES.ASSISTANT,
+          sessionId: "qwen-session",
+          message: {
+            role: "assistant",
+            parts: [
+              {
+                functionCall: {
+                  id: "call-headless",
+                  name: "agent",
+                  args: { subagent_type: "general-purpose" },
+                },
+              },
+            ],
+          },
+        },
+        {
+          type: QWEN_EVENT_TYPES.RESULT,
+          usage: { input_tokens: 900, output_tokens: 40, total_tokens: 940 },
+        },
+      ] as BaseCliEvent[]);
+      const merged = mergeSubagentOutput(
+        output,
+        await parser.getSubagentFollower().drainToEof(100)
+      );
+
+      assert.strictEqual(merged.metadata.usage?.inputTokens, 900);
+      assert.strictEqual(merged.metadata.usage?.outputTokens, 40);
+      assert.strictEqual(merged.metadata.modelUsage, undefined);
+    } finally {
+      await fs.promises.rm(projectDir, { recursive: true, force: true });
+      await fs.promises.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("uses headless result usage as the whole-process total", () => {
+    const parser = new QwenLogParser();
+    const output = parser.extractResponse([
+      {
+        type: QWEN_EVENT_TYPES.ASSISTANT,
+        model: "qwen3-coder-plus",
+        message: { role: "assistant", parts: [] },
+        usageMetadata: {
+          promptTokenCount: 10,
+          candidatesTokenCount: 2,
+          thoughtsTokenCount: 0,
+          totalTokenCount: 12,
+          cachedContentTokenCount: 0,
+        },
+      },
+      {
+        type: QWEN_EVENT_TYPES.RESULT,
+        usage: { input_tokens: 90, output_tokens: 8, total_tokens: 98 },
+      },
+    ] as any);
+    assert.strictEqual(output.metadata.usage?.inputTokens, 90);
+    assert.strictEqual(output.metadata.usage?.outputTokens, 8);
+    assert.strictEqual(output.metadata.usage?.totalTokens, 98);
+  });
+
   suite("sanitizeQwenProjectPath", () => {
     test("replaces dots, underscores, and spaces with dashes", () => {
       const user = process.platform === "win32" ? "user" : "User";

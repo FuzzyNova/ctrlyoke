@@ -7,6 +7,7 @@ import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  CLI_EVENT_TYPES,
 } from "../../types/DashboardConstants";
 import {
   TIMELINE_EVENT_TYPES,
@@ -107,6 +108,39 @@ suite("TimelineRecorder", () => {
     assert.strictEqual(manifest.eventCount, 5);
     assert.strictEqual(manifest.nextSequence, 6);
     assert.strictEqual(manifest.lastUpdatedAt, 131);
+  });
+
+  test("reads legacy cli output events that contain callerType", async () => {
+    await recorder.appendEvents(manifestPath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED,
+        timestampMs: 110,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        runIndex: 0,
+        attemptIndex: 0,
+        payload: {
+          events: [
+            {
+              type: CLI_EVENT_TYPES.TEXT,
+              data: { text: "legacy" },
+              callerType: "direct",
+            } as never,
+          ],
+        },
+      },
+    ]);
+    const events = await recorder.readEvents(manifestPath);
+    const cliOutput = events.find(
+      (event) =>
+        event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED
+    );
+    assert.strictEqual(
+      cliOutput?.eventType ===
+        TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED &&
+        (cliOutput.payload.events[0] as unknown as { callerType?: string })
+          .callerType,
+      "direct"
+    );
   });
 
   test("truncates a torn final line before appending events", async () => {

@@ -33,6 +33,7 @@ import {
   MarkdownText,
   McpToolCallOutput,
   ParallelGroupHeaderRowView,
+  SubagentSpawnOutput,
   StatusMessage,
   WebSearchOutput,
 } from ".";
@@ -132,6 +133,7 @@ import type {
   ScriptOutputRow,
   StructuredEventRow,
 } from "@utils/outputRows";
+import { SUBAGENT_ROW_INDENT_PX } from "@utils/outputRows";
 import {
   getDisplayStructuredPatch,
   getSnapshotBeforeContent,
@@ -1205,6 +1207,18 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       case CLI_EVENT_TYPES.TOOL_CALL: {
         const data = event.data as ToolCall;
         if (!data.name) return null;
+        if (data.subagentSpawn) {
+          return (
+            <SubagentSpawnOutput
+              name={data.name}
+              spawn={data.subagentSpawn}
+              result={data.result}
+              descriptionFindMatches={getFieldMatches("header")}
+              statusFindMatches={getFieldMatches("status")}
+              promptFindMatches={getFieldMatches("prompt")}
+            />
+          );
+        }
         // getOutputRowSearchSegments derives "toolContent" from
         // getToolResultText, which prefers result.error over result.output —
         // mirror that branching so highlights land on whichever text the
@@ -2073,6 +2087,25 @@ function OutputRowComponent({
   }
 
   content = <ActivityAttribution row={row} children={content} />;
+  if (row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT && row.subagent) {
+    content = (
+      <div
+        className="pl-3 border-l border-panel-border"
+        style={{
+          marginLeft: `${row.subagent.depth * SUBAGENT_ROW_INDENT_PX}px`,
+        }}
+        role="group"
+        aria-label={`Subagent ${row.subagent.label}`}
+      >
+        {row.subagent.showLabel && (
+          <div className="text-xs text-description-fg" aria-hidden="true">
+            {row.subagent.label}
+          </div>
+        )}
+        {content}
+      </div>
+    );
+  }
   return (
     <div
       className={[

@@ -19,6 +19,7 @@ import {
 } from "./HeadlessLogTail";
 import type { ICliProvider } from "./interfaces/ICliProvider";
 import type { BaseCliEvent } from "./interfaces/ILogParser";
+import { mergeSubagentOutput } from "./mergeSubagentOutput";
 
 /**
  * Tokens that make an stderr line a diagnostic rather than chatter. A line
@@ -122,6 +123,14 @@ export class CliResponseCollector {
           metadata: { ...parsedOutput.metadata, sessionId },
         };
       }
+    }
+
+    const follower = this.deps.provider.logParser?.getSubagentFollower?.();
+    if (follower) {
+      parsedOutput = mergeSubagentOutput(
+        parsedOutput,
+        await follower.drainToEof()
+      );
     }
 
     if (this.deps.provider.augmentParsedOutput) {

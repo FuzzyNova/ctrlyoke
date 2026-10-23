@@ -1327,6 +1327,9 @@ export class CopilotCliProvider implements ICliProvider {
             inputTokens: otelUsage.inputTokens,
             outputTokens: otelUsage.outputTokens,
             totalTokens: otelUsage.totalTokens,
+            ...(otelUsage.modelUsage
+              ? { modelUsage: otelUsage.modelUsage }
+              : {}),
             // Headless JSON token_details is canonical when present. OTel is
             // the fallback for interactive-only attempts or missing fields.
             ...(cachedInputTokens !== undefined ? { cachedInputTokens } : {}),

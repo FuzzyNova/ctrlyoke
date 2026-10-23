@@ -49,7 +49,12 @@ export const ANTIGRAVITY_TOOL_NAMES = {
   LIST_DIR: "list_dir",
   GREP_SEARCH: "grep_search",
   ASK_QUESTION: "ask_question",
+  INVOKE_SUBAGENT: "invoke_subagent",
 } as const;
+
+/** Parent SYSTEM_MESSAGE report envelope carrying the completed child id. */
+export const ANTIGRAVITY_SUBAGENT_REPORT_PATTERN =
+  /sender=([0-9a-f-]{36})[^\n]*content=/i;
 
 /**
  * `event` values from Antigravity's headless stream-json **stdout**, a separate

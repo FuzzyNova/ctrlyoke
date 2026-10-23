@@ -38,10 +38,18 @@ export const OPENCODE_TOOL_NAMES = {
   WRITE: TOOL_PERMISSION_CATEGORIES.WRITE,
   EDIT: TOOL_PERMISSION_CATEGORIES.EDIT,
   READ: TOOL_PERMISSION_CATEGORIES.READ,
+  /** Spawns a subagent in a child session. */
+  TASK: "task",
 } as const;
 
 export const OPENCODE_STEP_FINISH_REASONS = {
   STOP: "stop",
+} as const;
+
+export const OPENCODE_SUBAGENT_RECORD_TYPES = {
+  PART: "part",
+  TASK_RUNNING: "task-running",
+  CHILD_IDLE: "child-idle",
 } as const;
 
 /** OpenCode CLI flags that ctrlyoke both writes and reads back. */

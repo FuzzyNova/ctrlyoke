@@ -137,6 +137,9 @@ const OPENCODE_IMAGE_INPUT_CAPABILITY = {
  * ```
  */
 export class OpenCodeCliProvider implements ICliProvider {
+  setRunId(runId: string): void {
+    this.logParser.setSubagentRunId(runId);
+  }
   private static readonly CLI_COMMAND = "opencode";
   static readonly CLI_VERSION_COMMAND = `${OpenCodeCliProvider.CLI_COMMAND} --version`;
   static readonly CLI_HELP_COMMAND = `${OpenCodeCliProvider.CLI_COMMAND} --help`;
@@ -184,6 +187,7 @@ export class OpenCodeCliProvider implements ICliProvider {
   readonly logParser = new OpenCodeLogParser(() =>
     getOpenCodeContextWindowSize(this.resolvedCurrentModel)
   );
+
   /** MCP server ids prepared for the current execution. */
   private attachedMcpServerIds: ReadonlySet<string> = new Set();
 
@@ -708,6 +712,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     _workspaceRoot: string,
     _workingFilePath?: string
   ): Promise<void> {
+    await this.logParser.cleanupSubagentSidecar();
     for (const artifactPath of this.fallbackPluginArtifactPaths) {
       await fs.promises.unlink(artifactPath).catch(() => {});
     }
@@ -742,6 +747,9 @@ export class OpenCodeCliProvider implements ICliProvider {
     userHooks: UserHookConfig[] | undefined,
     _enabledNotificationHookEvents: HookEvent[]
   ): Promise<CliProviderPreparation> {
+    this.logParser.setSubagentNotifyDir(
+      this.notificationMonitor.getNotificationDirectory(_workspaceRoot)
+    );
     const serializedHooks = this.serializeUserHooks(userHooks);
     return {
       cliArgs: [],

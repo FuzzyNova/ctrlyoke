@@ -45,8 +45,10 @@ import type {
 import {
   DEFAULT_MAX_STEPS,
   CLI_EVENT_TYPES,
+  EXECUTION_MODES,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  HARNESS_IDS,
   PARALLEL_GROUP_ADMISSION,
   PROMPT_TERMINAL_STATUS,
   RUNNER_IDS,
@@ -1245,6 +1247,63 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.strictEqual(
       unset.steps[1].resumeSession,
       CTRLYOKE_SETTINGS_DEFAULTS.defaults.resumeSession
+    );
+  });
+
+  test("workflow_status reports each step's harness and executionMode", async () => {
+    const server = await setup();
+    const run = await createRun("modes", "2026-01-01T00-00-00-000Z", {
+      stepCount: 4,
+    });
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.harness = HARNESS_IDS.CODEX_CLI;
+    workingFile.executionMode = EXECUTION_MODES.HEADLESS;
+    workingFile.steps = [
+      {
+        prompt: "explicit",
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        executionMode: EXECUTION_MODES.INTERACTIVE,
+      },
+      { prompt: "inherits the workflow" },
+      {
+        // A started step reports what it ran with, e.g. a terminal-less
+        // `ctrlyoke run` clamping an interactive step to headless.
+        prompt: "already ran",
+        executionMode: EXECUTION_MODES.INTERACTIVE,
+        _runtime: {
+          harness: HARNESS_IDS.QWEN_CLI,
+          executionMode: EXECUTION_MODES.HEADLESS,
+        },
+      },
+      { type: "script", script: "npm test" },
+    ];
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const status = responseJson(await server.invokeTool("workflow_status", {}));
+
+    assert.strictEqual(status.metadata.executionMode, EXECUTION_MODES.HEADLESS);
+    assert.deepStrictEqual(
+      status.steps.map((step: { harness?: string; executionMode: string }) => [
+        step.harness,
+        step.executionMode,
+      ]),
+      [
+        [HARNESS_IDS.CLAUDE_CLI, EXECUTION_MODES.INTERACTIVE],
+        [HARNESS_IDS.CODEX_CLI, EXECUTION_MODES.HEADLESS],
+        [HARNESS_IDS.QWEN_CLI, EXECUTION_MODES.HEADLESS],
+        [undefined, undefined],
+      ]
+    );
+
+    delete workingFile.executionMode;
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    const unset = responseJson(await server.invokeTool("workflow_status", {}));
+    assert.strictEqual(
+      unset.metadata.executionMode,
+      CTRLYOKE_SETTINGS_DEFAULTS.defaults.executionMode
     );
   });
 

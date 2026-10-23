@@ -15,4 +15,11 @@ export const QWEN_CONTENT_PART_TYPES = {
 export const QWEN_TOOL_NAMES = {
   MCP_CALL_WRAPPER: "tool_call",
   MCP_TOOL_PREFIX: "mcp__",
+  AGENT: "agent",
+} as const;
+
+export const QWEN_AGENT_ARGUMENTS = {
+  DESCRIPTION: "description",
+  TYPE: "subagent_type",
+  PROMPT: "prompt",
 } as const;

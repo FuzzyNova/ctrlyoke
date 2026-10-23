@@ -118,11 +118,18 @@ class ManualRefreshTimer {
     this.entries.delete(entry[0]);
     entry[1].callback();
     // The timer callback intentionally detaches its async refresh. Wait until
-    // it schedules the next timer, which proves the attempt has settled.
-    for (let index = 0; index < 100 && this.entries.size === 0; index++) {
-      await new Promise<void>((resolve) => setImmediate(resolve));
+    // it schedules the next timer, which proves the attempt has settled. The
+    // wait is bounded by time, not by event-loop turns: the refresh verifies
+    // the license signature on the crypto thread pool, which a loaded
+    // `npm test` can delay past any fixed number of turns.
+    const started = Date.now();
+    while (this.entries.size === 0 && Date.now() - started < 10_000) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 5));
     }
-    assert.ok(this.entries.size > 0, "refresh did not schedule its next timer");
+    assert.ok(
+      this.entries.size > 0,
+      `refresh did not schedule its next timer within ${Date.now() - started}ms`
+    );
   }
 }
 

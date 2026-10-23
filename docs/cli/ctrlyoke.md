@@ -175,7 +175,8 @@ Without a TTY, interactive steps are clamped to headless. Use
 `--headless --force headless` to make every step headless. Interactive mode
 passes the harness's own terminal UI through with minimal ctrlyoke framing.
 Headless mode streams formatted output: step headers, streamed text, tool
-calls, diffs, script verdicts, and per-step statistics.
+calls, diffs, script verdicts, and per-step statistics. Subagent output is
+indented and labeled beneath its spawn, including when child work interleaves.
 
 ### Tool permissions
 

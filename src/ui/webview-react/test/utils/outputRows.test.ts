@@ -37,6 +37,7 @@ import {
   STEP_COLOR_MODES,
   STEP_STATUS,
   STEP_TYPES,
+  SUBAGENT_SPAWN_STATES,
   type OutputRowKind,
 } from "@root/types/DashboardConstants";
 
@@ -106,6 +107,117 @@ describe("outputRows", () => {
         )
         .map((row) => row.rowKind)
     ).toEqual([OUTPUT_ROW_KINDS.PROMPT, OUTPUT_ROW_KINDS.CLI_COMMAND]);
+  });
+
+  it("labels and indents attributed child rows, including siblings and grandchildren", () => {
+    const events = [
+      {
+        type: CLI_EVENT_TYPES.TOOL_CALL,
+        data: {
+          id: "spawn",
+          name: "task",
+          parameters: {},
+          subagentSpawn: {
+            description: "Worker",
+            children: [
+              { agentId: "a", label: "Alpha" },
+              { agentId: "b", label: "Beta" },
+            ],
+            state: SUBAGENT_SPAWN_STATES.RUNNING,
+          },
+        },
+      },
+      {
+        type: CLI_EVENT_TYPES.TEXT,
+        data: { text: "before spawn" },
+        subagent: { parentToolCallId: "later", agentId: "z" },
+      },
+      {
+        type: CLI_EVENT_TYPES.TEXT,
+        data: { text: "alpha" },
+        subagent: { parentToolCallId: "spawn", agentId: "a" },
+      },
+      {
+        type: CLI_EVENT_TYPES.TOOL_CALL,
+        data: {
+          id: "nested",
+          name: "task",
+          parameters: {},
+          subagentSpawn: {
+            description: "Nested",
+            state: SUBAGENT_SPAWN_STATES.RUNNING,
+          },
+        },
+        subagent: { parentToolCallId: "spawn", agentId: "a" },
+      },
+      {
+        type: CLI_EVENT_TYPES.TEXT,
+        data: { text: "grandchild" },
+        subagent: { parentToolCallId: "nested", agentId: "g" },
+      },
+      {
+        type: CLI_EVENT_TYPES.TEXT,
+        data: { text: "beta" },
+        subagent: { parentToolCallId: "spawn", agentId: "b" },
+      },
+      { type: CLI_EVENT_TYPES.TEXT, data: { text: "parent" } },
+      {
+        type: CLI_EVENT_TYPES.TEXT,
+        data: { text: "beta resumes" },
+        subagent: { parentToolCallId: "spawn", agentId: "b" },
+      },
+    ];
+    const rows = buildOutputRows({
+      allMessages: [
+        {
+          type: "cli",
+          target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+          timestamp: 1000,
+          attemptIndex: 0,
+          runIndex: 0,
+          data: {
+            structured: { events, metadata: {} },
+            elapsed: 1,
+            isStreaming: false,
+          },
+        },
+      ],
+      steps,
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+    }).rows.filter((row) => row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT);
+    const children = rows.filter(
+      (row) => row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT
+    );
+    expect(children[0].subagent).toBeUndefined();
+    expect(children[1].subagent?.label).toBe("z");
+    expect(children[1].subagent?.depth).toBe(1);
+    expect(children[2].subagent?.label).toBe("Alpha");
+    expect(children[3].subagent?.label).toBe("Alpha");
+    expect(children[4].subagent?.depth).toBe(2);
+    expect(children[5].subagent?.label).toBe("Beta");
+    expect(children[2].subagent?.groupKey).not.toBe(
+      children[5].subagent?.groupKey
+    );
+    expect(children[6].subagent).toBeUndefined();
+    // The label marks each run of a group's rows: a continuation stays
+    // unlabelled, and a child resuming after parent output is relabelled.
+    expect(children[2].subagent?.showLabel).toBe(true);
+    expect(children[3].subagent?.showLabel).toBe(false);
+    expect(children[7].subagent?.label).toBe("Beta");
+    expect(children[7].subagent?.showLabel).toBe(true);
   });
 
   // Regression: the timeline-v2 migration dropped `CliOutput.prompt` and the

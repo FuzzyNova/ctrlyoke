@@ -14,6 +14,7 @@ import type { INotificationMonitor } from "../../core/harness/shared/interfaces/
 import { ClaudeLogParser } from "../../core/harness/claude/ClaudeLogParser";
 import { CopilotLogParser } from "../../core/harness/copilot/CopilotLogParser";
 import { AntigravityLogParser } from "../../core/harness/antigravity/AntigravityLogParser";
+import { SubagentSourceFollower } from "../../core/harness/shared/SubagentSourceFollower";
 import { CLI_EVENT_TYPES, FAILURE_KINDS } from "../../types/DashboardConstants";
 import type {
   BackgroundWorkHoldData,
@@ -162,6 +163,60 @@ async function withFakeTimers(
 }
 
 suite("CliLogMonitor", () => {
+  test("drains child events into interactive completion output", async () => {
+    const originalTimeoutReader =
+      ConfigurationUtils.getMaxPromptExecutionTimeMs;
+    ConfigurationUtils.getMaxPromptExecutionTimeMs = () => undefined;
+    const follower = new SubagentSourceFollower();
+    follower.register({
+      key: "interactive-child",
+      attribution: { parentToolCallId: "spawn" },
+      read: async (offset) => ({
+        records: offset === 0 ? ["child"] : [],
+        nextOffset: 1,
+        complete: true,
+      }),
+      map: () => [
+        { type: CLI_EVENT_TYPES.TEXT, data: { text: "interactive child" } },
+      ],
+      isComplete: () => false,
+    });
+    const parser = createParser({
+      isComplete: () => true,
+      readNewLines: async () => [{ type: "complete" }],
+      getSubagentFollower: () => follower,
+      extractResponse: () => ({ events: [], metadata: {} }),
+    });
+    const monitor = new CliLogMonitor({
+      logParser: parser,
+      runtimeState: {
+        getWorkspaceRoot: () => undefined,
+        isCancelling: () => false,
+      },
+      hostCallbacks: {
+        onStreamingEvents: () => undefined,
+        onResponseComplete: () => undefined,
+        logResponse: () => undefined,
+      },
+    });
+    try {
+      const result = await monitor.monitor(
+        "session.jsonl",
+        null,
+        new Date(0),
+        "test-model"
+      );
+      assert.ok(
+        result.parsedOutput?.events.some(
+          (event) =>
+            (event.data as { text?: string }).text === "interactive child"
+        )
+      );
+    } finally {
+      ConfigurationUtils.getMaxPromptExecutionTimeMs = originalTimeoutReader;
+    }
+  });
+
   test("does not time out an unlimited prompt", async () => {
     const originalTimeoutReader =
       ConfigurationUtils.getMaxPromptExecutionTimeMs;

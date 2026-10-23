@@ -8,6 +8,7 @@ import type {
   ThinkingBlock,
 } from "../types/CliOutputTypes";
 import { formatTokenCount } from "./TokenFormatting";
+import { sameSubagentGroup } from "./SubagentAttribution";
 
 /**
  * Whether `next` continues `previous` as one TEXT or THINKING block. The
@@ -18,7 +19,11 @@ export function canCoalesceTextEvents(
   previous: CliEvent | undefined,
   next: CliEvent
 ): previous is CliEvent {
-  if (!previous || previous.type !== next.type) {
+  if (
+    !previous ||
+    previous.type !== next.type ||
+    !sameSubagentGroup(previous, next)
+  ) {
     return false;
   }
   if (next.type === CLI_EVENT_TYPES.TEXT) {

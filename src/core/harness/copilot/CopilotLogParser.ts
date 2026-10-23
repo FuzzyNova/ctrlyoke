@@ -31,6 +31,7 @@ import {
   COPILOT_EVENT_TYPES,
   COPILOT_SESSION_INFO_TYPES,
   COPILOT_USER_MESSAGE_DELIVERIES,
+  COPILOT_TOOL_NAMES,
   type CopilotMcpToolIdentity,
 } from "./CopilotProtocolConstants";
 
@@ -245,6 +246,8 @@ export class CopilotLogParser extends BaseLogParser {
 
   /** Tracks in-flight tool calls across streaming events for extractStructuredEventsFromEvent. */
   private pendingStreamingTools = new Map<string, CopilotPendingTool>();
+  /** Child tool IDs do not repeat their parent ID on shell output events. */
+  private streamingSubagentParents = new Map<string, string>();
 
   // ========================================================================
   // OpenTelemetry Context Window Tracking
@@ -283,6 +286,15 @@ export class CopilotLogParser extends BaseLogParser {
   private otelCumulativeCacheReadTokens = 0;
   /** Running total of cache-write tokens across all chat spans seen this invocation. */
   private otelCumulativeCacheWriteTokens = 0;
+  private otelModelUsage: Record<
+    string,
+    {
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadInputTokens: number;
+      cacheCreationInputTokens: number;
+    }
+  > = {};
   /** Whether at least one OTel chat span was observed this invocation. */
   private otelChatSpanSeen = false;
   /** Exact context-window usage emitted by Copilot's per-turn OTel event. */
@@ -314,6 +326,8 @@ export class CopilotLogParser extends BaseLogParser {
    * tokens are not charged to this turn.
    */
   async beginMonitoringTurn(): Promise<void> {
+    this.streamingSubagentParents.clear();
+    this.pendingStreamingTools.clear();
     if (this.otelReadPosition > 0) {
       await this.pollOtelContextWindow();
     }
@@ -325,6 +339,7 @@ export class CopilotLogParser extends BaseLogParser {
     this.otelCumulativeOutputTokens = 0;
     this.otelCumulativeCacheReadTokens = 0;
     this.otelCumulativeCacheWriteTokens = 0;
+    this.otelModelUsage = {};
     this.otelChatSpanSeen = false;
   }
 
@@ -428,6 +443,29 @@ export class CopilotLogParser extends BaseLogParser {
         const output = line.attributes[COPILOT_OTEL_OUTPUT_TOKENS_ATTRIBUTE];
         const cacheRead = line.attributes[COPILOT_OTEL_CACHE_READ_ATTRIBUTE];
         const cacheWrite = line.attributes[COPILOT_OTEL_CACHE_WRITE_ATTRIBUTE];
+        const modelId = line.name
+          .slice(COPILOT_OTEL_CHAT_SPAN_PREFIX.length)
+          .trim();
+        if (modelId) {
+          const modelUsage = (this.otelModelUsage[modelId] ??= {
+            inputTokens: 0,
+            outputTokens: 0,
+            cacheReadInputTokens: 0,
+            cacheCreationInputTokens: 0,
+          });
+          if (typeof input === "number")
+            modelUsage.inputTokens += Math.max(
+              input -
+                (typeof cacheRead === "number" ? cacheRead : 0) -
+                (typeof cacheWrite === "number" ? cacheWrite : 0),
+              0
+            );
+          if (typeof output === "number") modelUsage.outputTokens += output;
+          if (typeof cacheRead === "number")
+            modelUsage.cacheReadInputTokens += cacheRead;
+          if (typeof cacheWrite === "number")
+            modelUsage.cacheCreationInputTokens += cacheWrite;
+        }
         if (typeof input === "number") {
           // Copilot's OTel input count includes both cache pools. Store the
           // non-cached amount so all downstream usage consumers see disjoint
@@ -473,6 +511,14 @@ export class CopilotLogParser extends BaseLogParser {
           typeof size === "number" &&
           size > 0
         ) {
+          // Child agents can use a smaller context tier and emit usage_info
+          // on the same invoke_agent span. Keep the parent reading, whose
+          // effective context limit is the largest in the invocation.
+          if (
+            this.otelContextWindowSize !== undefined &&
+            size < this.otelContextWindowSize
+          )
+            continue;
           this.otelContextWindowUsedTokens = used;
           this.otelContextWindowSize = size;
           contextUpdated = true;
@@ -507,6 +553,15 @@ export class CopilotLogParser extends BaseLogParser {
     contextWindowUsedTokens?: number;
     contextWindowSize?: number;
     totalConfidence: typeof TOKEN_TOTAL_CONFIDENCE.ACCUMULATED;
+    modelUsage?: Record<
+      string,
+      {
+        inputTokens: number;
+        outputTokens: number;
+        cacheReadInputTokens: number;
+        cacheCreationInputTokens: number;
+      }
+    >;
   } | null {
     if (!this.otelChatSpanSeen) {
       return null;
@@ -527,6 +582,17 @@ export class CopilotLogParser extends BaseLogParser {
       contextWindowUsedTokens: this.otelContextWindowUsedTokens,
       contextWindowSize: this.otelContextWindowSize,
       totalConfidence: TOKEN_TOTAL_CONFIDENCE.ACCUMULATED,
+      modelUsage: Object.fromEntries(
+        Object.entries(this.otelModelUsage).map(([model, usage]) => [
+          model,
+          {
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            cacheReadInputTokens: usage.cacheReadInputTokens,
+            cacheCreationInputTokens: usage.cacheCreationInputTokens,
+          },
+        ])
+      ),
     };
   }
 
@@ -577,11 +643,28 @@ export class CopilotLogParser extends BaseLogParser {
 
     // Track pending tool calls to associate execution_start with execution_complete
     const pendingTools = new Map<string, CopilotPendingTool>();
+    const subagentParents = new Map<string, string>();
 
     for (const event of events as CopilotProviderEvent[]) {
       const timestamp = event.timestamp
         ? new Date(event.timestamp).getTime()
         : Date.now();
+      const parentToolCallId = event.data?.parentToolCallId;
+      const toolCallId = event.data?.toolCallId;
+      if (
+        event.type === "tool.execution_start" &&
+        typeof toolCallId === "string" &&
+        typeof parentToolCallId === "string"
+      ) {
+        subagentParents.set(toolCallId, parentToolCallId);
+      }
+      const attributedParent =
+        typeof parentToolCallId === "string"
+          ? parentToolCallId
+          : typeof toolCallId === "string"
+            ? subagentParents.get(toolCallId)
+            : undefined;
+      const eventStartIndex = outputEvents.length;
 
       // Extract session metadata from session.start event
       if (event.type === "session.start" && event.data) {
@@ -715,6 +798,20 @@ export class CopilotLogParser extends BaseLogParser {
         // us to add structuredPatch from tool.execution_complete
       }
 
+      if (
+        event.type === "tool.shell_output" ||
+        event.type === "tool.execution_partial_result"
+      ) {
+        const text = event.data?.text ?? event.data?.output;
+        if (typeof text === "string" && text.length > 0) {
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.TEXT,
+            timestamp,
+            data: { text },
+          });
+        }
+      }
+
       // Extract thinking/reasoning blocks (old format: separate assistant.reasoning event)
       if (event.type === "assistant.reasoning" && event.data?.content) {
         outputEvents.push({
@@ -748,6 +845,28 @@ export class CopilotLogParser extends BaseLogParser {
             mcpHint
           )
         );
+        if (event.data.toolName === COPILOT_TOOL_NAMES.TASK) {
+          for (const emitted of outputEvents.slice(eventStartIndex)) {
+            if (emitted.type === CLI_EVENT_TYPES.TOOL_CALL) {
+              const call =
+                emitted.data as import("../../../types/CliOutputTypes").ToolCall;
+              const args = event.data.arguments ?? {};
+              call.subagentSpawn = {
+                description:
+                  typeof args.description === "string"
+                    ? args.description
+                    : undefined,
+                agentType:
+                  typeof args.subagent_type === "string"
+                    ? args.subagent_type
+                    : undefined,
+                prompt:
+                  typeof args.prompt === "string" ? args.prompt : undefined,
+                state: "running",
+              };
+            }
+          }
+        }
       }
 
       // Emit COMPLETED events for all tool types from tool.execution_complete
@@ -791,6 +910,51 @@ export class CopilotLogParser extends BaseLogParser {
               },
             } as ToolResultData,
           });
+        }
+      }
+
+      if (
+        event.type === COPILOT_EVENT_TYPES.SUBAGENT_STARTED ||
+        event.type === COPILOT_EVENT_TYPES.SUBAGENT_COMPLETED ||
+        event.type === COPILOT_EVENT_TYPES.SUBAGENT_FAILED
+      ) {
+        const spawn = outputEvents.find(
+          (candidate) => (candidate.data as any)?.id === event.data?.toolCallId
+        );
+        if (spawn && spawn.type === CLI_EVENT_TYPES.TOOL_CALL) {
+          const toolCall =
+            spawn.data as import("../../../types/CliOutputTypes").ToolCall;
+          const spawnData = event.data ?? {};
+          const displayName = spawnData.agentDisplayName;
+          const agentName = spawnData.agentName;
+          toolCall.subagentSpawn = {
+            ...(toolCall.subagentSpawn ?? { state: "running" as const }),
+            ...(typeof spawnData.agentDescription === "string"
+              ? { description: spawnData.agentDescription }
+              : {}),
+            ...(typeof displayName === "string" || typeof agentName === "string"
+              ? {
+                  children: [
+                    {
+                      agentId: String(agentName ?? displayName),
+                      label: String(displayName ?? agentName),
+                    },
+                  ],
+                }
+              : {}),
+            state:
+              event.type === COPILOT_EVENT_TYPES.SUBAGENT_STARTED
+                ? "running"
+                : event.type === COPILOT_EVENT_TYPES.SUBAGENT_COMPLETED
+                  ? "completed"
+                  : "failed",
+          };
+        }
+      }
+
+      if (typeof attributedParent === "string") {
+        for (const emitted of outputEvents.slice(eventStartIndex)) {
+          emitted.subagent = { parentToolCallId: attributedParent };
         }
       }
     }
@@ -1066,6 +1230,12 @@ export class CopilotLogParser extends BaseLogParser {
   ): UserEventClassification {
     const e = event as CopilotProviderEvent;
     if (e.type !== "user.message") {
+      return "other";
+    }
+    if (
+      typeof e.data?.source === "string" &&
+      e.data.source.startsWith("agent-")
+    ) {
       return "other";
     }
 
@@ -1414,7 +1584,28 @@ export class CopilotLogParser extends BaseLogParser {
     if (!data) {
       return results;
     }
-
+    const parentToolCallId = data.parentToolCallId;
+    if (
+      ev.type === "tool.execution_start" &&
+      typeof data.toolCallId === "string" &&
+      typeof parentToolCallId === "string"
+    ) {
+      this.streamingSubagentParents.set(data.toolCallId, parentToolCallId);
+    }
+    const attributedParent =
+      typeof parentToolCallId === "string"
+        ? parentToolCallId
+        : typeof data.toolCallId === "string"
+          ? this.streamingSubagentParents.get(data.toolCallId)
+          : undefined;
+    const addAttribution = (events: CliEvent[]): CliEvent[] => {
+      if (attributedParent) {
+        for (const emitted of events) {
+          emitted.subagent = { parentToolCallId: attributedParent };
+        }
+      }
+      return events;
+    };
     // model.model_call_success is a usage-only headless event. Its cache
     // fields are consumed again by extractResponse() from the raw event list;
     // there is no display CliEvent to emit for this metadata event.
@@ -1446,6 +1637,7 @@ export class CopilotLogParser extends BaseLogParser {
           data: { text: data.content } as TextData,
         });
       }
+      addAttribution(results);
       return results;
     }
 
@@ -1493,6 +1685,28 @@ export class CopilotLogParser extends BaseLogParser {
           mcpHint
         )
       );
+      if (data.toolName === COPILOT_TOOL_NAMES.TASK) {
+        for (const emitted of results) {
+          if (emitted.type === CLI_EVENT_TYPES.TOOL_CALL) {
+            const call =
+              emitted.data as import("../../../types/CliOutputTypes").ToolCall;
+            const args = data.arguments ?? {};
+            call.subagentSpawn = {
+              description:
+                typeof args.description === "string"
+                  ? args.description
+                  : undefined,
+              agentType:
+                typeof args.subagent_type === "string"
+                  ? args.subagent_type
+                  : undefined,
+              prompt: typeof args.prompt === "string" ? args.prompt : undefined,
+              state: "running",
+            };
+          }
+        }
+      }
+      addAttribution(results);
       return results;
     }
 
@@ -1533,6 +1747,85 @@ export class CopilotLogParser extends BaseLogParser {
               error: data.success ? undefined : toolResultStr,
             },
           } as ToolResultData,
+        });
+      }
+      addAttribution(results);
+      return results;
+    }
+
+    if (
+      ev.type === "tool.shell_output" ||
+      ev.type === "tool.execution_partial_result"
+    ) {
+      const text = data.text ?? data.output;
+      if (typeof text === "string" && text.length > 0) {
+        results.push({
+          type: CLI_EVENT_TYPES.TEXT,
+          timestamp,
+          data: { text },
+        });
+        addAttribution(results);
+      }
+      return results;
+    }
+
+    if (
+      ev.type === COPILOT_EVENT_TYPES.SUBAGENT_STARTED ||
+      ev.type === COPILOT_EVENT_TYPES.SUBAGENT_COMPLETED ||
+      ev.type === COPILOT_EVENT_TYPES.SUBAGENT_FAILED
+    ) {
+      const spawn = this.pendingStreamingTools.get(data.toolCallId);
+      if (spawn?.toolName === COPILOT_TOOL_NAMES.TASK) {
+        const state =
+          ev.type === COPILOT_EVENT_TYPES.SUBAGENT_COMPLETED
+            ? "completed"
+            : ev.type === COPILOT_EVENT_TYPES.SUBAGENT_FAILED
+              ? "failed"
+              : "running";
+        results.push({
+          type: CLI_EVENT_TYPES.TOOL_CALL,
+          timestamp,
+          data: {
+            id: data.toolCallId,
+            name: COPILOT_TOOL_NAMES.TASK,
+            parameters: spawn.args,
+            subagentSpawn: {
+              description:
+                typeof data.agentDescription === "string"
+                  ? data.agentDescription
+                  : typeof spawn.args === "object" &&
+                      spawn.args !== null &&
+                      typeof spawn.args.description === "string"
+                    ? spawn.args.description
+                    : undefined,
+              agentType:
+                typeof spawn.args === "object" &&
+                spawn.args !== null &&
+                typeof spawn.args.subagent_type === "string"
+                  ? spawn.args.subagent_type
+                  : undefined,
+              prompt:
+                typeof spawn.args === "object" &&
+                spawn.args !== null &&
+                typeof spawn.args.prompt === "string"
+                  ? spawn.args.prompt
+                  : undefined,
+              ...(typeof data.agentDisplayName === "string" ||
+              typeof data.agentName === "string"
+                ? {
+                    children: [
+                      {
+                        agentId: String(
+                          data.agentName ?? data.agentDisplayName
+                        ),
+                        label: String(data.agentDisplayName ?? data.agentName),
+                      },
+                    ],
+                  }
+                : {}),
+              state,
+            },
+          } as import("../../../types/CliOutputTypes").ToolCall,
         });
       }
       return results;

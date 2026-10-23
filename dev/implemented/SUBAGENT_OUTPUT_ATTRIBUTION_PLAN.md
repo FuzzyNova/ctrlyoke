@@ -1,6 +1,10 @@
 # Subagent Output Attribution Plan
 
-**Status:** Researched against all six harnesses (2026-10-15); ready to implement.
+**Status:** Implemented 2026-10-23 (see "Implementation order"). Collapsible
+subagent groups in the output pane were split out to
+`dev/rejected/SUBAGENT_COLLAPSIBLE_GROUPS_PLAN.md` and rejected in favour of
+`dev/backlog/OUTPUT_EVENT_AND_SUBAGENT_FILTER_PLAN.md`; whether OpenCode's
+`part.cost` includes child cost is still unverified.
 
 ## Problem
 
@@ -342,10 +346,25 @@ Rejected alternative: parallel event types (`subagentText`,
 segmentation, row-height estimation, and `CliTerminalFormatter` would need a
 second branch per type. A single optional field reuses all of them.
 
-Remove `callerType`, `CallerType`, and `CALLER_TYPES` (pre-release, no
-compatibility constraint). Keep the `StreamingHistoryBuffer` merge guard, keyed
-on the group key, so a subagent's text never coalesces into the parent's or a
+Remove `callerType`, `CallerType`, and `CALLER_TYPES`. ctrlyoke is released,
+so this was checked against the compatibility rules: `callerType` is persisted
+inside `cliOutput*` events in each run's `events.jsonl` (timeline schema v2) and
+passes through verbatim in `ctrlyoke history show --json --events`. It is
+optional, undocumented (no schema, docs page or `--json` envelope definition
+names it), and never held anything but `"direct"`, so removing it needs no
+timeline schema bump: old files still carry it and are read fine because nothing
+reads it, and older ctrlyoke versions ignore the new optional `subagent` /
+`subagentSpawn` fields. Record the removal and the new fields under **Changed**
+in `CHANGELOG.md`. Keep the `StreamingHistoryBuffer` merge guard, keyed on the
+group key, so a subagent's text never coalesces into the parent's or a
 sibling's.
+
+The spawn card's live state also needs a home. Put it on `subagentSpawn`
+(`statusLine?: string` and a `state` of running / completed / failed, as
+constants in `DashboardConstants.ts`). Parsers express an update as another
+tool-call event with the spawn's id, which `CliEventNormalizer` already merges
+by id; the completion signal for a child (see section 3) sets `state`, not the
+spawn tool's own result.
 
 Normalize the spawn itself on the parent's `ToolCall`: a parser that recognizes
 its harness's spawn tool sets
@@ -385,6 +404,48 @@ Rules:
   ms.
 - Tail a child only once its link is known. Never guess a file by mtime: parallel
   workflows share these directories.
+
+**Follower contract (fixed 2026-10-23 after the first attempt).** The first
+`SubagentSourceFollower` was a one-shot `drain()` called from each provider's
+`augmentParsedOutput`. That path is headless-only (`CliResponseCollector`), so
+interactive mode never saw children, nothing streamed live, and antigravity and
+opencode each re-implemented the usage merge by hand. The follower is rebuilt
+to this contract, and every provider uses it:
+
+- **Ownership.** One follower per attempt, owned by the provider's log parser
+  and exposed through an optional `ILogParser` member (e.g.
+  `getSubagentFollower?(): SubagentSourceFollower | undefined`), reset with the
+  parser's other per-attempt state. Providers do not drain it themselves.
+- **Registration.** `register(source)` with a typed
+  `SubagentChildSource<TRecord>`: `key`, `attribution`, a `read(fromOffset)`
+  (or async iterator) that returns new raw records plus the next offset, the
+  provider's `map(record) => CliEvent[]`, `usage(record) => SubagentRecordUsage
+| undefined` (model, input, output, cache-read, cache-write, 1-hour
+  cache-write subset, reasoning; deduplicated by a provider-supplied
+  `recordId`), and `isComplete(record)` for the card's completion signal.
+  Providers reading JSONL files use the shared async `readIncrementalJsonl`
+  helper so polling reads only appended bytes and retains an incomplete tail.
+  No
+  `as unknown as` casts: the record type is a generic parameter.
+- **Live tailing.** The shared pipeline starts the follower with the attempt's
+  `onStreamingEvents` callback: `HeadlessLogTail` for headless log sources and
+  `CliLogMonitor` / `SessionActivityWatcher` for interactive. It polls each
+  registered source on the existing tail interval and streams attributed events
+  as they appear, plus a spawn-card update (`subagentSpawn.state`) when
+  `isComplete` fires.
+- **Final output.** Before final output is returned, the shared code (not the
+  provider) drains every registered source to EOF within `DRAIN_DEADLINE_MS`
+  and merges the result through one helper, e.g. `mergeSubagentOutput(output,
+drain)` in `src/core/harness/shared/`: attributed events appended in
+  timestamp order, spawn states applied, per-child usage added into
+  `TokenUsage.modelUsage` per model and into the totals (input, output,
+  cache-read, cache-write, long-TTL, reasoning), and `totalConfidence` set to
+  `PARTIAL` when a registered source could not be read. The call sites are
+  `CliResponseCollector` (headless) and `CliLogMonitor`'s completion and failure
+  finalization (interactive), so the two modes cannot diverge.
+- **Opt-out of usage per mode.** A source registered for events only (claude
+  headless, qwen headless, where the parent stream's totals already include
+  children) passes no `usage`.
 
 Per harness:
 
@@ -469,7 +530,14 @@ children's work:
 
 Usage from a child source that can't be read (missing file, link never
 resolved) marks the attempt's coverage partial, so totals show **≥** instead
-of silently undercounting.
+of silently undercounting. `calculateAttemptCost`
+(`src/utils/ModelPricing.ts`) continues to suppress the whole attempt's cost
+for `TOKEN_TOTAL_CONFIDENCE.PARTIAL`. A lower-bound estimate would risk being
+read as the full bill; the token count still exposes the lower-bound marker.
+
+Per-model usage is a new optional field on the persisted `TokenUsage` /
+`CliOutput.tokens`; adding it is additive and needs no timeline schema bump,
+but runs recorded before it keep a single blended count.
 
 #### Measured usage coverage
 
@@ -484,7 +552,7 @@ ones, with `haiku` for claude-cli and a `sonnet` override on one child.
 | copilot-cli 1.0.103   | **Yes**: OTel `chat <model>` spans and `session.shutdown.modelMetrics` both include child calls  | Already in the same OTel and `events.jsonl` streams                                      | 4 of 6 model calls          |
 | codex-cli 0.163.0     | **No**: `turn.completed.usage` and the parent rollout's `token_count` are parent-only            | Each child rollout's `token_count`                                                       | 58,612 of 128,504 input     |
 | qwen-cli 0.26.0       | **No** in the chat log ctrlyoke reads. `result.usage` (headless) **does**, plus background calls | `subagents/<sessionId>/agent-*.jsonl` `usageMetadata`                                    | 70,449 of 160,217 prompt    |
-| opencode-cli 1.19.4   | **No**: stdout `step_finish.tokens` is parent-only                                               | Child session, via `opencode export <childSessionId>` (`step-finish` parts)              | ~168k of ~221k total        |
+| opencode-cli 1.19.4   | **No**: stdout `step_finish.tokens` is parent-only                                               | Child session sidecar (`step-finish` parts)                                              | ~168k of ~221k total        |
 | antigravity-cli 1.4.6 | **No**: stdout `result.usage` and the parent transcript are parent-only                          | Each child's `transcript_full.jsonl` `PLANNER_RESPONSE` `input_tokens` / `output_tokens` | ~58k of ~96k input          |
 
 Per harness:
@@ -551,7 +619,8 @@ QWEN_TELEMETRY_OUTFILE=…`) listed four `api_response` events summing to
   (3 steps, 53,495 total). The two child sessions, found through the `task`
   part's `state.metadata.sessionId`, held 84,824 and 83,080 total, so
   children were over three times the parent's tokens in this run. `part.cost`
-  was 0 throughout (free model), so cost can't be cross-checked here. Child
+  was 0 throughout (free model), so cost can't be cross-checked here. Whether
+  `part.cost` includes child cost remains unverified. Child
   sessions use `message.info.tokens` and `step-finish` parts in the same shape
   as the parent's.
 - **antigravity-cli.** Stdout `result.usage` (38,698 in) is exactly the sum of
@@ -608,28 +677,60 @@ Consequences for the design:
   from the parent in this capture. Only Codex and Antigravity (`inherit`)
   matched the parent here, and either can be configured differently.
 
-### 5. Suggested order
+### 5. Implementation order
 
-1. Data model swap (`callerType` → `subagent` / `subagentSpawn`) plus the merge
-   guard.
-2. Inline harnesses: claude-cli headless and copilot-cli. This fixes the
-   reported interleaving bug.
-3. Card renderer and terminal formatter.
-4. `SubagentSourceFollower`, with qwen-cli first: its sidechain filename already
-   carries the call id, which makes it the simplest follower case.
-5. codex-cli, antigravity-cli, claude-cli interactive, then opencode-cli (needs
-   the plugin change).
-6. Subagent token and cost accounting (section 4), per harness as each child
-   source lands. claude-cli interactive is the largest measured gap, so it can
-   come first: its `subagents/agent-*.jsonl` usage can be summed before the
-   full follower and card work, since counting tokens needs no rendering.
-   claude-cli headless is an even smaller fix: read `result.modelUsage`
-   instead of the parent-only `result.usage` (see "Measured usage coverage").
-   Copilot already counts child tokens; it only needs per-model pricing.
+Each item is one session; tick it when it lands.
+
+- [x] 1. Data model swap (`callerType` → `subagent` / `subagentSpawn`) plus the
+      merge guard.
+- [x] 2. claude-cli headless inline stamping, spawn normalization, and
+      `task_*` status/completion. Fixes the reported interleaving bug.
+- [x] 3. copilot-cli inline stamping (both modes).
+- [x] 4. Per-model usage and pricing, plus the inline-source usage fixes that
+      need no follower: claude-cli headless `result.modelUsage`, copilot-cli
+      per-model `chat` spans and the child context-window leak, qwen-cli
+      headless `result.usage`.
+- [x] 5. Dashboard spawn card and nested rows; terminal formatter indentation.
+      Shipped as the first cut section 3 allows: subagent rows indented under
+      their spawn and labelled with the child at the start of each run of its
+      rows, in time order (592b36ee8). Full collapsible groups moved to
+      `dev/rejected/SUBAGENT_COLLAPSIBLE_GROUPS_PLAN.md` after two attempts
+      showed they need a new virtual row kind, then rejected for a subagent
+      filter (`dev/backlog/OUTPUT_EVENT_AND_SUBAGENT_FILTER_PLAN.md`).
+- [x] 6a. Rebuild `SubagentSourceFollower` to the follower contract in
+      section 2B and wire it into the shared headless and interactive
+      pipelines.
+- [x] 6b. qwen-cli on the follower (both modes, bridge unwrapping, qwen
+      interactive child usage).
+- [x] 7. claude-cli interactive follower plus child usage (the largest
+      measured usage gap).
+- [x] 8. codex-cli follower plus child usage.
+- [x] 9. antigravity-cli follower (N children, asynchronous completion) plus
+      child usage. A first cut landed in 26409d384 on the old one-shot drain;
+      move it onto the follower contract.
+- [x] 10. opencode-cli plugin sidecar, follower, and child usage. A first cut
+      landed in 584be3d4d / 5e5d328f6 on the old one-shot drain (scans every
+      sidecar in the notify dir, headless only); move it onto the follower
+      contract.
+      The plugin writes discriminated per-run sidecar records; headless and
+      interactive parsing use the shared incremental follower, including
+      grandchildren attributed to their own task call. Child idle and parent
+      task completion update the existing spawn card, and focused tests cover
+      per-run isolation, usage deduplication, interactive streaming, nested
+      attribution, and completion. Whether `part.cost` includes child cost
+      remains unverified.
+- [x] 11. Harness-suite case, user docs (`docs/guide/usage-and-stats.md`
+      subagent note, output guide), CHANGELOG sweep, and moving this plan to
+      `dev/implemented/`.
 
 ## Out of scope
 
-- **Background subagents**: Claude/Qwen `run_in_background`, and any Copilot
+> **Reversed 2026-10-23:** background subagents are now followed and attributed like
+> foreground ones. Claude Code launches parallel `Agent` calls as background by
+> default, so the exclusion left the feature inert; the shape, `run_in_background`
+> and `executionMode: "sync"` filters were removed.
+
+- **Background subagents** (originally excluded): Claude/Qwen `run_in_background`, and any Copilot
   `subagent.started` with `executionMode` other than `"sync"`. Their completion
   arrives as a notification that existing background-work handling already
   covers. (Antigravity children are asynchronous but the parent waits for them,

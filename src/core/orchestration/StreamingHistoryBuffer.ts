@@ -313,10 +313,7 @@ function canMerge(
   previous: CliEvent | undefined,
   next: CliEvent
 ): previous is CliEvent {
-  return (
-    canCoalesceTextEvents(previous, next) &&
-    previous.callerType === next.callerType
-  );
+  return canCoalesceTextEvents(previous, next);
 }
 
 function getEventText(event: CliEvent): string {

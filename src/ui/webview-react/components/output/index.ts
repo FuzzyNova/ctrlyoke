@@ -15,6 +15,7 @@ export {
   WebSearchOutput,
   GenericToolCallOutput,
 } from "./ToolCallOutput";
+export { SubagentSpawnOutput } from "./SubagentSpawn";
 export { BashOutput } from "./BashOutput";
 export { ToolCallExpandToggle } from "./ToolCallExpandToggle";
 export { ParallelGroupHeaderRowView } from "./ParallelGroupHeaderRowView";

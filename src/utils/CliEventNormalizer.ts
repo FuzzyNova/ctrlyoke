@@ -12,8 +12,13 @@ import type {
   ToolResultData,
   WebSearchData,
 } from "../types/CliOutputTypes";
-import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  OPERATION_STATUS,
+  SUBAGENT_SPAWN_STATES,
+} from "../types/DashboardConstants";
 import { McpSkillEventRewriter } from "./McpSkillCommandRecognizer";
+import { sameSubagentGroup } from "./SubagentAttribution";
 
 const PENDING_KINDS = {
   SEMANTIC: "semantic",
@@ -475,7 +480,8 @@ function findOutputIndexByToolCallIdAndType(
   for (let i = output.length - 1; i >= 0; i--) {
     if (
       output[i].type === event.type &&
-      getToolCallId(output[i]) === toolCallId
+      getToolCallId(output[i]) === toolCallId &&
+      sameSubagentGroup(output[i], event)
     ) {
       return i;
     }
@@ -643,7 +649,10 @@ function mergeInitiatedWithCompleted(
   completed: CliEvent
 ): CliEvent {
   return withCompletedTimestamp(
-    mergeCompletedData(initiated, completed),
+    {
+      ...mergeCompletedData(initiated, completed),
+      subagent: completed.subagent ?? initiated.subagent,
+    },
     initiated,
     completed.timestamp
   );
@@ -665,6 +674,10 @@ function mergeCompletedData(
           parameters: initiatedData.parameters ?? completedData.parameters,
           id: initiatedData.id ?? completedData.id,
           result: completedData.result ?? initiatedData.result,
+          subagentSpawn: mergeSubagentSpawn(
+            initiatedData.subagentSpawn,
+            completedData.subagentSpawn
+          ),
         } as ToolCall,
       };
     }
@@ -792,6 +805,19 @@ function mergeCompletedData(
   }
 }
 
+function mergeSubagentSpawn(
+  previous: ToolCall["subagentSpawn"],
+  next: ToolCall["subagentSpawn"]
+): ToolCall["subagentSpawn"] {
+  if (!previous) return next;
+  if (!next) return previous;
+  const state =
+    previous.state === SUBAGENT_SPAWN_STATES.RUNNING
+      ? next.state
+      : previous.state;
+  return { ...previous, ...next, state };
+}
+
 export interface NormalizedCliEvent {
   event: CliEvent;
   /**
@@ -832,6 +858,31 @@ export class CliEventNormalizer {
         this.skillEventRewriter.rewrite(cloneEvent(originalEvent))
       );
 
+      if (event.type === CLI_EVENT_TYPES.TOOL_CALL) {
+        const data = event.data as ToolCall;
+        if (data.id && data.subagentSpawn) {
+          const existingIndex = this.output.findIndex((candidate) => {
+            const candidateData =
+              candidate.type === CLI_EVENT_TYPES.TOOL_CALL
+                ? (candidate.data as ToolCall)
+                : undefined;
+            return (
+              candidateData?.id === data.id &&
+              candidateData?.subagentSpawn !== undefined &&
+              sameSubagentGroup(candidate, event)
+            );
+          });
+          if (existingIndex >= 0) {
+            this.replaceSlot(
+              existingIndex,
+              mergeInitiatedWithCompleted(this.output[existingIndex], event),
+              changedSlots
+            );
+            continue;
+          }
+        }
+      }
+
       if (
         (event.type === CLI_EVENT_TYPES.TOOL_CALL ||
           event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL) &&
@@ -844,7 +895,8 @@ export class CliEventNormalizer {
             .find(
               (candidate) =>
                 candidate.type === event.type &&
-                candidate.toolCallId === toolCallId
+                candidate.toolCallId === toolCallId &&
+                sameSubagentGroup(this.output[candidate.index], event)
             );
           const outputIndex =
             pendingMatch?.index ??

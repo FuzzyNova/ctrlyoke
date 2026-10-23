@@ -8,18 +8,21 @@ import type {
   AskUserQuestionData,
   AskUserQuestionEntry,
   AskUserQuestionOption,
+  ToolCall,
 } from "../../../types/CliOutputTypes";
 import {
   CLAUDE_TOOL_NAMES,
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
   TOOL_PERMISSION_CATEGORIES,
+  SUBAGENT_SPAWN_STATES,
 } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import { BaseToolBuilder } from "../shared/BaseToolBuilder";
 import {
   CLAUDE_CONTENT_BLOCK_TYPES,
   CLAUDE_TOOL_RESULT_TYPES,
+  CLAUDE_SUBAGENT_TOOL_NAMES,
 } from "./ClaudeProtocolConstants";
 
 /**
@@ -52,18 +55,14 @@ export class ClaudeToolBuilder {
    * @param input - Tool input parameters from tool_use block
    * @param toolId - Tool call ID (used in generic TOOL_CALL fallback)
    * @param timestamp - Event timestamp in milliseconds
-   * @param callerType - 'direct' for top-level calls, 'subagent' for sub-agent calls
    * @returns Array of CliEvents to spread onto the event stream
    */
   static buildInitiatedEvents(
     toolName: string,
     input: Record<string, unknown>,
     toolId: string | undefined,
-    timestamp: number,
-    callerType?: string
+    timestamp: number
   ): CliEvent[] {
-    const ct = callerType ? { callerType } : {};
-
     // Claude-specific: AskUserQuestion parses into the full question/option
     // set up front, so the pending question is visible while the user is
     // still answering — the answer arrives later via tryBuildAskUserQuestionEvent.
@@ -72,7 +71,6 @@ export class ClaudeToolBuilder {
         {
           type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
           timestamp,
-          ...ct,
           data: {
             toolCallId: toolId,
             questions: ClaudeToolBuilder.parseAskUserQuestionEntries(
@@ -92,7 +90,6 @@ export class ClaudeToolBuilder {
       return (input.edits as Record<string, unknown>[]).map((edit) => ({
         type: CLI_EVENT_TYPES.FILE_EDIT,
         timestamp,
-        ...ct,
         data: {
           path:
             ((edit.file_path ?? edit.path) as string | undefined) || "unknown",
@@ -109,13 +106,35 @@ export class ClaudeToolBuilder {
       }));
     }
 
-    return BaseToolBuilder.buildInitiatedEvents(
+    const events = BaseToolBuilder.buildInitiatedEvents(
       toolName,
       input,
       toolId,
-      timestamp,
-      ct
+      timestamp
     );
+    if (
+      toolName === CLAUDE_SUBAGENT_TOOL_NAMES.AGENT ||
+      toolName === CLAUDE_SUBAGENT_TOOL_NAMES.LEGACY_TASK
+    ) {
+      for (const event of events) {
+        if (event.type === CLI_EVENT_TYPES.TOOL_CALL) {
+          const toolCall = event.data as ToolCall;
+          toolCall.subagentSpawn = {
+            description:
+              typeof input.description === "string"
+                ? input.description
+                : undefined,
+            agentType:
+              typeof input.subagent_type === "string"
+                ? input.subagent_type
+                : undefined,
+            prompt: typeof input.prompt === "string" ? input.prompt : undefined,
+            state: SUBAGENT_SPAWN_STATES.RUNNING,
+          };
+        }
+      }
+    }
+    return events;
   }
 
   // ── TOOL RESULTS ───────────────────────────────────────────────────────────

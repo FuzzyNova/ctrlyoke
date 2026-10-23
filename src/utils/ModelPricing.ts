@@ -14,6 +14,7 @@ import {
 } from "../types/DashboardConstants";
 import type { AttemptCostEstimate } from "../types/CtrlYokeTypes";
 import type { ModelPricingOverride } from "../types/CtrlYokeSettings";
+import type { ProviderModelUsage } from "../types/CliOutputTypes";
 import { getModelPricingFromRegistry } from "./ModelPricingRegistry";
 import { Log } from "./Log";
 import {
@@ -66,6 +67,8 @@ export interface AttemptCostCalculationInput extends AttemptTokenCounts {
   pricingOverride?: ModelPricingOverride;
   /** Raw provider-reported USD total, when available. */
   harnessReportedCostUsd?: number;
+  /** Optional per-model billing counts; absent on older persisted attempts. */
+  modelUsage?: Record<string, ProviderModelUsage>;
 }
 
 export interface AttemptCostCalculationResult {
@@ -214,17 +217,19 @@ export function calculateAttemptCost(
     semantics.reasoningRelationship !==
       ATTEMPT_COST_REASONING_RELATIONSHIPS.UNKNOWN;
   const calculatedCost =
-    pricingData && canCalculate
-      ? calculateTokenCost(
-          pricingData,
-          semantics,
-          input,
-          input.pricingOverride
-            ? ATTEMPT_COST_SOURCES.USER_OVERRIDE
-            : ATTEMPT_COST_SOURCES.PRICE_TABLE,
-          input.modelId
-        )
-      : undefined;
+    input.modelUsage && Object.keys(input.modelUsage).length > 0
+      ? calculatePerModelCost(input)
+      : pricingData && canCalculate
+        ? calculateTokenCost(
+            pricingData,
+            semantics,
+            input,
+            input.pricingOverride
+              ? ATTEMPT_COST_SOURCES.USER_OVERRIDE
+              : ATTEMPT_COST_SOURCES.PRICE_TABLE,
+            input.modelId
+          )
+        : undefined;
 
   // A user's price override is an explicit instruction about what their tokens
   // cost, so it outranks the harness's own figure.
@@ -266,6 +271,63 @@ export function calculateAttemptCost(
       pricingData && !canCalculate
         ? ATTEMPT_COST_UNAVAILABLE_REASONS.UNVERIFIED_TOKEN_SEMANTICS
         : ATTEMPT_COST_UNAVAILABLE_REASONS.UNKNOWN_MODEL,
+  };
+}
+
+function calculatePerModelCost(
+  input: AttemptCostCalculationInput
+): AttemptCostEstimate | undefined {
+  const semantics = HARNESS_TOKEN_SEMANTICS[input.harnessId];
+  let usd = 0;
+  const breakdown = {
+    inputUsd: 0,
+    outputUsd: 0,
+    cachedInputUsd: 0,
+    cacheWriteUsd: 0,
+    reasoningUsd: 0,
+  };
+  for (const [modelId, usage] of Object.entries(input.modelUsage ?? {})) {
+    const pricing = getModelPricing(
+      input.harnessId,
+      modelId,
+      modelId === input.modelId ? input.pricingOverride : undefined
+    );
+    if (!pricing) return undefined;
+    const cost = calculateTokenCost(
+      pricing,
+      semantics,
+      {
+        prompt: usage.inputTokens ?? 0,
+        completion: usage.outputTokens ?? 0,
+        cached: usage.cacheReadInputTokens,
+        cacheCreated: usage.cacheCreationInputTokens,
+        cacheCreatedLongTtl: usage.cacheCreationLongTtlInputTokens,
+        reasoning:
+          input.reasoning && modelId === input.modelId
+            ? input.reasoning
+            : undefined,
+      },
+      input.pricingOverride && modelId === input.modelId
+        ? ATTEMPT_COST_SOURCES.USER_OVERRIDE
+        : ATTEMPT_COST_SOURCES.PRICE_TABLE,
+      modelId
+    );
+    if (!cost) return undefined;
+    usd += cost.usd;
+    breakdown.inputUsd += cost.breakdown?.inputUsd ?? 0;
+    breakdown.outputUsd += cost.breakdown?.outputUsd ?? 0;
+    breakdown.cachedInputUsd += cost.breakdown?.cachedInputUsd ?? 0;
+    breakdown.cacheWriteUsd += cost.breakdown?.cacheWriteUsd ?? 0;
+    breakdown.reasoningUsd += cost.breakdown?.reasoningUsd ?? 0;
+  }
+  return {
+    usd,
+    source: input.pricingOverride
+      ? ATTEMPT_COST_SOURCES.USER_OVERRIDE
+      : ATTEMPT_COST_SOURCES.PRICE_TABLE,
+    confidence: ATTEMPT_COST_CONFIDENCE.COMPLETE,
+    ...(input.modelId === undefined ? {} : { modelId: input.modelId }),
+    breakdown,
   };
 }
 
