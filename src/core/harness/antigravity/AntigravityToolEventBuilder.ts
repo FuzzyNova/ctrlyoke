@@ -261,9 +261,10 @@ export class AntigravityToolEventBuilder {
     try {
       const parsed: unknown = JSON.parse(value);
       if (!Array.isArray(parsed)) return [];
-      const ids = [
-        ...resultText.matchAll(/"conversationId"\s*:\s*"([^"]+)"/g),
-      ].map((match) => match[1]);
+      const ids = parseAntigravityJsonObjectSequence(resultText).flatMap(
+        (item) =>
+          typeof item.conversationId === "string" ? [item.conversationId] : []
+      );
       return parsed.flatMap((child, index) => {
         if (!isRecord(child)) return [];
         const conversationId = ids[index];
@@ -807,4 +808,37 @@ export class AntigravityToolEventBuilder {
     }
     return entry.type.toLowerCase();
   }
+}
+
+/** The creation result contains adjacent JSON objects among explanatory text. */
+export function parseAntigravityJsonObjectSequence(
+  text: string
+): Record<string, unknown>[] {
+  const results: Record<string, unknown>[] = [];
+  let depth = 0;
+  let start = -1;
+  let quoted = false;
+  let escaped = false;
+  for (let index = 0; index < text.length; index++) {
+    const character = text[index];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') quoted = false;
+      continue;
+    }
+    if (character === '"') quoted = true;
+    else if (character === "{") {
+      if (depth++ === 0) start = index;
+    } else if (character === "}" && depth > 0 && --depth === 0 && start >= 0) {
+      try {
+        const parsed: unknown = JSON.parse(text.slice(start, index + 1));
+        if (isRecord(parsed)) results.push(parsed);
+      } catch {
+        // Ignore surrounding non-JSON braces in the human-readable result.
+      }
+      start = -1;
+    }
+  }
+  return results;
 }

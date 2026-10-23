@@ -52,6 +52,10 @@ export const ANTIGRAVITY_TOOL_NAMES = {
   INVOKE_SUBAGENT: "invoke_subagent",
 } as const;
 
+/** Parent SYSTEM_MESSAGE report envelope carrying the completed child id. */
+export const ANTIGRAVITY_SUBAGENT_REPORT_PATTERN =
+  /sender=([0-9a-f-]{36})[^\n]*content=/i;
+
 /**
  * `event` values from Antigravity's headless stream-json **stdout**, a separate
  * vocabulary from the transcript protocol above. Shared by the usage
