@@ -52,17 +52,14 @@ export class ClaudeToolBuilder {
    * @param input - Tool input parameters from tool_use block
    * @param toolId - Tool call ID (used in generic TOOL_CALL fallback)
    * @param timestamp - Event timestamp in milliseconds
-   * @param callerType - 'direct' for top-level calls, 'subagent' for sub-agent calls
    * @returns Array of CliEvents to spread onto the event stream
    */
   static buildInitiatedEvents(
     toolName: string,
     input: Record<string, unknown>,
     toolId: string | undefined,
-    timestamp: number,
-    callerType?: string
+    timestamp: number
   ): CliEvent[] {
-    const ct = callerType ? { callerType } : {};
 
     // Claude-specific: AskUserQuestion parses into the full question/option
     // set up front, so the pending question is visible while the user is
@@ -72,7 +69,6 @@ export class ClaudeToolBuilder {
         {
           type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
           timestamp,
-          ...ct,
           data: {
             toolCallId: toolId,
             questions: ClaudeToolBuilder.parseAskUserQuestionEntries(
@@ -92,7 +88,6 @@ export class ClaudeToolBuilder {
       return (input.edits as Record<string, unknown>[]).map((edit) => ({
         type: CLI_EVENT_TYPES.FILE_EDIT,
         timestamp,
-        ...ct,
         data: {
           path:
             ((edit.file_path ?? edit.path) as string | undefined) || "unknown",
@@ -113,8 +108,7 @@ export class ClaudeToolBuilder {
       toolName,
       input,
       toolId,
-      timestamp,
-      ct
+      timestamp
     );
   }
 

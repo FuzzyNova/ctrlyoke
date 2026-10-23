@@ -314,8 +314,7 @@ function canMerge(
   next: CliEvent
 ): previous is CliEvent {
   return (
-    canCoalesceTextEvents(previous, next) &&
-    previous.callerType === next.callerType
+    canCoalesceTextEvents(previous, next)
   );
 }
 

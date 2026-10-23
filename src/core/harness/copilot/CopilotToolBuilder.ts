@@ -315,7 +315,6 @@ export class CopilotToolBuilder {
       typeof args === "string" ? {} : args,
       toolCallId,
       timestamp,
-      undefined,
       mcpHint
     ) as CliEvent[];
   }

@@ -15,7 +15,6 @@ import {
 import {
   CLI_EVENT_TYPES,
   COMPACTION_TRIGGERS,
-  CALLER_TYPES,
   HARNESS_IDS,
   OPERATION_STATUS,
 } from "../../../types/DashboardConstants";
@@ -392,7 +391,6 @@ export class OpenCodeLogParser extends BaseLogParser {
         cliEvents.push({
           type: CLI_EVENT_TYPES.TOOL_CALL,
           timestamp,
-          callerType: CALLER_TYPES.DIRECT,
           data: {
             name: "task",
             parameters: {
@@ -520,7 +518,6 @@ export class OpenCodeLogParser extends BaseLogParser {
           cliEvents.push({
             type: CLI_EVENT_TYPES.TOOL_CALL,
             timestamp: e.timestamp as number | undefined,
-            callerType: CALLER_TYPES.DIRECT,
             data: {
               name: "task",
               parameters: {

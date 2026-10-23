@@ -635,7 +635,7 @@ Consequences for the design:
 
 Each item is one session; tick it when it lands.
 
-- [ ] 1. Data model swap (`callerType` → `subagent` / `subagentSpawn`) plus the
+- [x] 1. Data model swap (`callerType` → `subagent` / `subagentSpawn`) plus the
       merge guard.
 - [ ] 2. claude-cli headless inline stamping, spawn normalization, and
       `task_*` status/completion. Fixes the reported interleaving bug.

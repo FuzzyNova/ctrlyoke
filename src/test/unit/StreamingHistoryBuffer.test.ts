@@ -45,6 +45,25 @@ suite("StreamingHistoryBuffer", () => {
     assert.deepStrictEqual(writes[0].events, [textEvent("Hello world")]);
   });
 
+  test("keeps parent and sibling subagent text in separate groups", async () => {
+    const { buffer, writes } = createBuffer();
+    const event = (text: string, subagent?: CliEvent["subagent"]): CliEvent => ({
+      ...textEvent(text),
+      subagent,
+    });
+    await buffer.addEvents(HISTORY_FILE, TARGET, 0, 0, [
+      event("parent "),
+      event("child A", { parentToolCallId: "spawn", agentId: "a" }),
+      event("child B", { parentToolCallId: "spawn", agentId: "b" }),
+      event("parent again"),
+    ]);
+    await buffer.flush();
+    assert.deepStrictEqual(
+      writes[0].events?.map((item) => (item.data as { text: string }).text),
+      ["parent ", "child A", "child B", "parent again"]
+    );
+  });
+
   test("writes immediately when a non-text boundary event arrives", async () => {
     const { buffer, writes } = createBuffer();
     const toolCall: CliEvent = {

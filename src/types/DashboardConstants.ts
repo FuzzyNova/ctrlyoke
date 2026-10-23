@@ -4266,16 +4266,14 @@ export const COMPACTION_TRIGGERS = {
 export type CompactionTrigger =
   (typeof COMPACTION_TRIGGERS)[keyof typeof COMPACTION_TRIGGERS];
 
-/**
- * Who invoked a tool call — top-level agent or a spawned subagent.
- * Used by CliEvent.callerType across harnesses that support subagent spawning.
- */
-export const CALLER_TYPES = {
-  DIRECT: "direct",
-  SUBAGENT: "subagent",
+export const SUBAGENT_SPAWN_STATES = {
+  RUNNING: "running",
+  COMPLETED: "completed",
+  FAILED: "failed",
 } as const;
 
-export type CallerType = (typeof CALLER_TYPES)[keyof typeof CALLER_TYPES];
+export type SubagentSpawnState =
+  (typeof SUBAGENT_SPAWN_STATES)[keyof typeof SUBAGENT_SPAWN_STATES];
 
 // ============================================================================
 // RUNNER IDS - Process runner identifiers written into workflow lock files

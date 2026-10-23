@@ -8,7 +8,6 @@ import type {
   FileOperationStatus,
   CliEventType,
   CompactionTrigger,
-  CallerType,
   HarnessId,
   McpCallVia,
   TokenTotalConfidence,
@@ -32,11 +31,8 @@ export interface CliEvent {
   completedTimestamp?: number;
   /** Event-specific data based on type */
   data: CliEventData;
-  /**
-   * Who invoked this event: 'direct' for top-level Claude, 'subagent' when
-   * produced inside a spawned sub-agent (Task tool). Omitted for non-tool events.
-   */
-  callerType?: CallerType | string;
+  /** Spawn group that produced this event; absent for the step's own agent. */
+  subagent?: SubagentAttribution;
   /** Excluded from prior-context transcripts while retained in dashboard output. */
   priorContextExcluded?: boolean;
 }
@@ -191,11 +187,24 @@ export interface ToolCall {
   id?: string;
   /** Result of the tool execution, if available */
   result?: ToolResult;
-  /**
-   * Caller context — 'direct' for top-level calls, 'subagent' when invoked
-   * within a spawned sub-agent (Claude task tool). undefined = unknown.
-   */
-  callerType?: CallerType | string;
+  /** Normalized metadata when this call spawns one or more subagents. */
+  subagentSpawn?: SubagentSpawn;
+}
+
+/** Identifies the spawn call and (for multi-child spawns) the child agent. */
+export interface SubagentAttribution {
+  parentToolCallId: string;
+  agentId?: string;
+}
+
+/** Normalized description and lifecycle for a subagent spawn call. */
+export interface SubagentSpawn {
+  description?: string;
+  agentType?: string;
+  prompt?: string;
+  children?: { agentId: string; label?: string }[];
+  statusLine?: string;
+  state: import("./DashboardConstants").SubagentSpawnState;
 }
 
 /**

@@ -1386,14 +1386,12 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         }
 
         if (block.type === CLAUDE_CONTENT_BLOCK_TYPES.TOOL_USE) {
-          const callerType = block.caller?.type as string | undefined;
           events.push(
             ...ClaudeToolBuilder.buildInitiatedEvents(
               block.name,
               block.input || {},
               block.id,
-              timestamp,
-              callerType
+              timestamp
             )
           );
           if (block.id && block.name) {
