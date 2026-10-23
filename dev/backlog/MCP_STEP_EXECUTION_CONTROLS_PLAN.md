@@ -1,6 +1,6 @@
 # MCP Step Execution Controls Plan
 
-**Status:** Proposed 2026-10-23, not started.
+**Status:** In progress (2026-10-23). Item 0 landed; items 1–5 are queued.
 
 **Related:**
 
@@ -8,8 +8,9 @@
   surface is deliberately narrower than an authored step. This plan widens it
   on purpose, field by field, and keeps that decision's reasoning for
   everything it leaves out.
-- `dev/bugs/backlog/mcp-edit-step-additional-args-can-widen-harness-permissions.md`:
-  fix it before stage 3 below adds fields to `append_step`.
+- `dev/bugs/implemented/mcp-edit-step-additional-args-can-widen-harness-permissions.md`:
+  fixed in 895645b20, the prerequisite for stage 3 adding fields to
+  `append_step`.
 - `dev/bugs/backlog/headless-step-ends-silently-with-pending-background-work.md`
 - `dev/backlog/SCRIPT_GENERATED_STEPS_PLAN.md`: deterministic step generation
   from a script, the non-agent route to queueing work.
@@ -148,6 +149,18 @@ The rules:
     changes;
   - the working file shows exactly what ran;
   - a later edit to the preset doesn't change steps already queued.
+- **Param env merge.** The materialized condition's `env` is the preset's
+  `env` plus one entry per param. A param whose name collides with a key the
+  preset's own `env` sets is rejected when the preset is loaded, so an agent
+  value can never replace an author-set variable.
+- **Replacing an inherited gate.** Attaching a preset replaces a
+  workflow-level `endCondition`/`preCondition` the step would otherwise
+  inherit. That is acceptable because every preset is author-written, but say
+  so in the `append_step` field description and the docs.
+- **Built-in preset scripts must be cross-platform.** Templates run on
+  Windows too, so `git status --porcelain` is fine but `test -f` is only an
+  illustration; real template presets should use `git`/`npm`/`node`
+  commands or the bundled `check_condition` helpers.
 - **No `null` through MCP in the first cut.** An agent shouldn't be able to
   remove a gate the author made inherited. Revisit if a real use case appears,
   such as a docs-only step under a test gate. If it is added, make it an author
@@ -183,8 +196,8 @@ None of these is covered by a filed bug.
 
 1. **Align `append_step` with `edit_step` for `agent` and `skills`.** Today an
    orchestrator appends a step and then edits it to attach a skill. Add both to
-   the append item once the `additionalArgs` bug is fixed and those two fields
-   are confirmed unable to widen tool permissions (the bug's audit item). Never
+   the append item. The `additionalArgs` bug is fixed and its audit confirmed
+   these two fields cannot widen tool permissions (see item 0 below). Never
    add `additionalArgs` to `append_step`.
 2. **Echo the effective settings in the append result.** For each added step,
    return the resolved `harness`, `model`, `executionMode`, `resumeSession` and
@@ -215,20 +228,29 @@ None of these is covered by a filed bug.
 
 Each item is one session; tick it when it lands.
 
-- [ ] 0. Fix `mcp-edit-step-additional-args-can-widen-harness-permissions`
-      (its own bug doc; prerequisite for stage 3, item 1).
+- [x] 0. Fix `mcp-edit-step-additional-args-can-widen-harness-permissions`
+      (fixed in 895645b20; bug doc is in `dev/bugs/implemented/`). Its audit
+      confirmed `agent` and `skills` cannot widen tool permissions: agent
+      frontmatter `tools` is discarded by `AgentExpander.stripFrontmatter`,
+      and agent/skill content is injected as prompt text only. Stage 3 item 1
+      is unblocked.
 - [ ] 1. Stage 1: `executionMode` on `append_step`/`edit_step`, result
       `warnings`, docs, orchestrator template, tests.
-- [ ] 2. Stage 2 schema and resolution: the `conditions` root field, `params`,
-      `schema:update`, preset resolution and materialization in the MCP layer,
-      tests for the override and parameter rules.
-- [ ] 3. Stage 2 adoption: presets in the loop templates, orchestrator agent
-      guidance, `docs/reference/mcp-tools.md` and a guide section on presets,
-      and a CHANGELOG entry under **Added**.
+- [ ] 2a. Stage 2 schema: the `conditions` root field and `params` (legal only
+      inside `conditions` entries), `schema:update`, the TypeScript types,
+      parser validation, and the serializer/schema round-trip suites. No MCP
+      behavior yet.
+- [ ] 2b. Stage 2 resolution: preset resolution and materialization in the MCP
+      layer (`append_step` and `edit_step`), the override and parameter rules,
+      `McpServer.test.ts` coverage, and the executor-level `committed` retry
+      test.
+- [ ] 3. Stage 2 adoption plus stage 3 item 4: presets in the loop templates,
+      orchestrator agent guidance (presets and the stage 3 item 4 lessons, which
+      edit the same template), `docs/reference/mcp-tools.md` and a guide section
+      on presets, and a CHANGELOG entry under **Added**.
 - [ ] 4. Stage 3 items 1–2 (append parity, effective-settings echo).
 - [ ] 5. Stage 3 item 3 (per-step git outcome), after the investigation it
       names.
-- [ ] 6. Stage 3 item 4 (template guidance).
 
 ## Tests
 
