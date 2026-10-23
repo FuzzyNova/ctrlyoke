@@ -5,7 +5,10 @@ export function subagentGroupKey(
   attribution: SubagentAttribution | undefined
 ): string {
   return attribution
-    ? JSON.stringify([attribution.parentToolCallId, attribution.agentId ?? null])
+    ? JSON.stringify([
+        attribution.parentToolCallId,
+        attribution.agentId ?? null,
+      ])
     : "parent";
 }
 

@@ -131,11 +131,14 @@ suite("TimelineRecorder", () => {
     ]);
     const events = await recorder.readEvents(manifestPath);
     const cliOutput = events.find(
-      (event) => event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED
+      (event) =>
+        event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED
     );
     assert.strictEqual(
-      cliOutput?.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED &&
-        (cliOutput.payload.events[0] as unknown as { callerType?: string }).callerType,
+      cliOutput?.eventType ===
+        TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED &&
+        (cliOutput.payload.events[0] as unknown as { callerType?: string })
+          .callerType,
       "direct"
     );
   });

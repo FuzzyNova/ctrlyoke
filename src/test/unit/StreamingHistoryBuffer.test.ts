@@ -47,7 +47,10 @@ suite("StreamingHistoryBuffer", () => {
 
   test("keeps parent and sibling subagent text in separate groups", async () => {
     const { buffer, writes } = createBuffer();
-    const event = (text: string, subagent?: CliEvent["subagent"]): CliEvent => ({
+    const event = (
+      text: string,
+      subagent?: CliEvent["subagent"]
+    ): CliEvent => ({
       ...textEvent(text),
       subagent,
     });

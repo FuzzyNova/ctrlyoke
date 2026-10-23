@@ -55,4 +55,7 @@ export {
   type OutputStatusMessage,
 } from "@root/types/WebviewMessageTypes";
 
-export type { SubagentAttribution, SubagentSpawn } from "@root/types/CliOutputTypes";
+export type {
+  SubagentAttribution,
+  SubagentSpawn,
+} from "@root/types/CliOutputTypes";

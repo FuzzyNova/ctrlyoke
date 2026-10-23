@@ -25,15 +25,30 @@ suite("CliEventNormalizer", () => {
     const normalized = normalizeCliEvents([
       {
         type: CLI_EVENT_TYPES.TOOL_CALL,
-        data: { name: "task", id: "spawn-1", parameters: {}, subagentSpawn: { description: "first", state: "running" } },
+        data: {
+          name: "task",
+          id: "spawn-1",
+          parameters: {},
+          subagentSpawn: { description: "first", state: "running" },
+        },
       },
       {
         type: CLI_EVENT_TYPES.TOOL_CALL,
-        data: { name: "task", id: "spawn-1", parameters: {}, subagentSpawn: { statusLine: "finished", state: "completed" } },
+        data: {
+          name: "task",
+          id: "spawn-1",
+          parameters: {},
+          subagentSpawn: { statusLine: "finished", state: "completed" },
+        },
       },
       {
         type: CLI_EVENT_TYPES.TOOL_CALL,
-        data: { name: "task", id: "spawn-1", parameters: {}, subagentSpawn: { description: "updated", state: "running" } },
+        data: {
+          name: "task",
+          id: "spawn-1",
+          parameters: {},
+          subagentSpawn: { description: "updated", state: "running" },
+        },
       },
     ]);
     assert.deepStrictEqual((normalized[0].data as ToolCall).subagentSpawn, {

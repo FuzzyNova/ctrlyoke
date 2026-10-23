@@ -19,7 +19,11 @@ export function canCoalesceTextEvents(
   previous: CliEvent | undefined,
   next: CliEvent
 ): previous is CliEvent {
-  if (!previous || previous.type !== next.type || !sameSubagentGroup(previous, next)) {
+  if (
+    !previous ||
+    previous.type !== next.type ||
+    !sameSubagentGroup(previous, next)
+  ) {
     return false;
   }
   if (next.type === CLI_EVENT_TYPES.TEXT) {
