@@ -242,13 +242,15 @@ those 85.3k new tokens plus 20 in and 4.8k out.
 Runs recorded by ctrlyoke 0.2.2 or earlier left cache writes out of these totals, so
 their Claude Code, Copilot, OpenCode and Antigravity figures read lower.
 
-Subagent tokens and output are included in totals for all supported harnesses.
-Claude Code interactive runs count foreground subagent transcripts. Qwen Code
-interactive runs include foreground subagent output and usage; its background
-memory and extraction calls are not included because they are only reported in
-telemetry. Headless Qwen totals use process-wide result usage, which already
-includes those calls. Codex reads each linked child rollout for its output and
-per-model usage, skipping the replayed parent history.
+Foreground subagent output and usage are included where the harness exposes a
+linked child transcript or event stream. Claude Code counts foreground child
+transcripts in both modes; Copilot counts child calls in its event and usage
+streams; Codex follows linked child rollouts and skips replayed parent history;
+Qwen follows foreground child logs in both modes. Headless Qwen totals come
+from process-wide usage, which also includes background memory and extraction
+calls. Interactive Qwen has no equivalent process-wide usage total, so those
+background calls are not counted. OpenCode and Antigravity include child
+output and usage from their linked child sources.
 
 When Antigravity's counts come only from its status line, they can cover the
 last model call rather than the whole attempt.
