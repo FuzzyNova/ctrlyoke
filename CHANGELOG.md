@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Headless CLI output labels and indents subagent work under its spawn.** Interleaved child
+  output stays distinguishable, including nested subagents.
 - **Claude Code headless output now attributes foreground subagent activity to its spawn.** Child
   tool calls and results retain the parent Agent call ID, with live progress and completion state.
 - **The `history show --json --events` payload replaces the always-`direct` `callerType` field with optional subagent attribution and spawn metadata.** Existing run histories with `callerType` remain readable.

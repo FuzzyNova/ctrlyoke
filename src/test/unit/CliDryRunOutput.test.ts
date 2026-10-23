@@ -192,6 +192,40 @@ CliTerminalFormatter.flushStreamingBuffer();`
     assert.ok(output.includes("[3 unit-tests] done"));
   });
 
+  test("prints spawn labels and keeps interleaved child text attributed", () => {
+    const output = runFormatterScript(`
+const target = { stepIndex: 0, stepName: "work" };
+CliTerminalFormatter.renderEvents([
+  { type: CLI_EVENT_TYPES.TEXT, timestamp: 0, data: { text: "parent\\n" } },
+  { type: CLI_EVENT_TYPES.TOOL_CALL, timestamp: 1, data: { id: "spawn", name: "Agent", parameters: { description: "Inspect tests" }, subagentSpawn: { state: "running", children: [{ agentId: "a", label: "researcher" }, { agentId: "b", label: "tester" }] } } },
+], target);
+CliTerminalFormatter.renderEvents([
+  { type: CLI_EVENT_TYPES.TOOL_CALL, timestamp: 4, data: { id: "spawn", name: "Agent", parameters: { description: "Inspect tests" }, result: { success: true }, subagentSpawn: { state: "completed", children: [{ agentId: "a", label: "researcher" }, { agentId: "b", label: "tester" }] } } },
+  { type: CLI_EVENT_TYPES.TEXT, timestamp: 2, subagent: { parentToolCallId: "spawn", agentId: "a" }, data: { text: "research\\n" } },
+  { type: CLI_EVENT_TYPES.TEXT, timestamp: 3, subagent: { parentToolCallId: "spawn", agentId: "b" }, data: { text: "testing\\n" } },
+], target);
+CliTerminalFormatter.flushStreamingBuffer(target);
+`);
+    assert.ok(output.includes("Agent · researcher, tester …"));
+    assert.ok(output.includes("[researcher] research"));
+    assert.ok(output.includes("[tester] testing"));
+    assert.ok(output.includes("[1 work] parent"));
+    assert.ok(output.includes("Subagents completed"));
+  });
+
+  test("increases indentation for nested subagents", () => {
+    const output = runFormatterScript(`
+const target = { stepIndex: 0, stepName: "work" };
+CliTerminalFormatter.renderEvents([
+  { type: CLI_EVENT_TYPES.TOOL_CALL, data: { id: "root", name: "Agent", parameters: {}, subagentSpawn: { state: "running", children: [{ agentId: "a", label: "researcher" }] } } },
+  { type: CLI_EVENT_TYPES.TOOL_CALL, subagent: { parentToolCallId: "root", agentId: "a" }, data: { id: "nested", name: "Agent", parameters: {}, subagentSpawn: { state: "running", children: [{ agentId: "g", label: "grandchild" }] } } },
+  { type: CLI_EVENT_TYPES.TEXT, subagent: { parentToolCallId: "nested", agentId: "g" }, data: { text: "nested work" } },
+], target);
+CliTerminalFormatter.flushStreamingBuffer(target);
+`);
+    assert.ok(output.includes("    [grandchild] nested work"));
+  });
+
   test("renders user steers once and preserves event order without dangling prefixes", () => {
     const output = runFormatterScript(
       `const target = { stepIndex: 1, stepName: "recall-info" };

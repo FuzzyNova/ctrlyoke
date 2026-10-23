@@ -643,7 +643,7 @@ Each item is one session; tick it when it lands.
       need no follower: claude-cli headless `result.modelUsage`, copilot-cli
       per-model `chat` spans and the child context-window leak, qwen-cli
       headless `result.usage`.
-- [ ] 5. Dashboard spawn card and nested rows; terminal formatter indentation
+- [x] 5. Dashboard spawn card and nested rows; terminal formatter indentation
       (independent files, may run in parallel).
 - [ ] 6. `SubagentSourceFollower` with qwen-cli (both modes, bridge
       unwrapping, qwen interactive child usage).

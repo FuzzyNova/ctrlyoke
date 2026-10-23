@@ -29,6 +29,7 @@ import {
 import {
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
+  SUBAGENT_SPAWN_STATES,
   PREVIEW_PROMPT_CATEGORY_LABELS,
   PREVIEW_MUTATION_SCOPES,
   PREVIEW_TRUNCATION_REASON_COPY,
@@ -212,6 +213,8 @@ export interface CliOutputTarget {
   stepIndex: number;
   stepName: string;
   key?: string;
+  /** Live CLI-only nesting prefix for attributed subagent events. */
+  subagentPrefix?: string;
 }
 
 /** Prompt-header details resolved by the CLI from the active workflow runtime. */
@@ -820,7 +823,9 @@ export class CliTerminalFormatter {
   private static writeTargetPrefix(target?: CliOutputTarget): void {
     if (!target) return;
     process.stdout.write(
-      chalk.dim(`[${target.stepIndex + 1} ${target.stepName}] `)
+      chalk.dim(
+        `[${target.stepIndex + 1} ${target.stepName}] ${target.subagentPrefix ?? ""}`
+      )
     );
   }
 
@@ -1169,9 +1174,25 @@ export class CliTerminalFormatter {
         );
         break;
       case CLI_EVENT_TYPES.TOOL_CALL:
-        console.log(
-          chalk.yellow(`⚙ ${String(data.name ?? "")}${running ? " …" : ""}`)
-        );
+        {
+          const call = event.data as ToolCall;
+          const spawn = call.subagentSpawn;
+          const label =
+            spawn?.children
+              ?.map((child) => child.label ?? child.agentId)
+              .join(", ") ??
+            spawn?.agentType ??
+            (typeof data.parameters === "object" &&
+            data.parameters !== null &&
+            "description" in data.parameters
+              ? String((data.parameters as Record<string, unknown>).description)
+              : undefined);
+          console.log(
+            chalk.yellow(
+              `⚙ ${String(data.name ?? "")}${label ? ` · ${label}` : ""}${running ? " …" : ""}`
+            )
+          );
+        }
         break;
       default:
         CliTerminalFormatter.renderEvent(event, target);
@@ -1235,6 +1256,20 @@ export class CliTerminalFormatter {
     targetKey: string,
     slotIndex: number
   ): void {
+    if (headerEvent.type === CLI_EVENT_TYPES.TOOL_CALL) {
+      const call = completionEvent.data as ToolCall;
+      if (call.subagentSpawn) {
+        CliTerminalFormatter.beginEventOutput(target);
+        const state = call.subagentSpawn.state;
+        console.log(
+          chalk.dim(
+            `  ${state === SUBAGENT_SPAWN_STATES.COMPLETED ? "✓" : state === SUBAGENT_SPAWN_STATES.FAILED ? "✗" : "•"} Subagents ${state}`
+          )
+        );
+        CliTerminalFormatter._lastPrintedStreamSlot = { targetKey, slotIndex };
+        return;
+      }
+    }
     if (
       CliTerminalFormatter._lastPrintedStreamSlot?.targetKey !== targetKey ||
       CliTerminalFormatter._lastPrintedStreamSlot.slotIndex !== slotIndex
@@ -1348,7 +1383,13 @@ export class CliTerminalFormatter {
             endsWithNewline: false,
           });
         }
-        process.stdout.write(data.text);
+        const text = target?.subagentPrefix
+          ? data.text.replace(/\n(?=.)/g, `\n${target.subagentPrefix}`)
+          : data.text;
+        if (s?.endsWithNewline && target?.subagentPrefix) {
+          CliTerminalFormatter.writeTargetPrefix(target);
+        }
+        process.stdout.write(text);
         const state = CliTerminalFormatter._streaming.get(key);
         if (state) state.endsWithNewline = data.text.endsWith("\n");
         break;
