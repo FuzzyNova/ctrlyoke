@@ -31,6 +31,7 @@ import {
   MCP_TRANSPORTS,
   SPECIAL_TARGET_IDS,
   DASHBOARD_HOST_CAPABILITIES,
+  DATA_SOURCES,
   getMcpLocalSource,
   type AnyTargetId,
   type HarnessId,
@@ -864,8 +865,10 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
         </h3>
         <p className="text-xs text-description-fg">
           Manage the ctrlyoke MCP registry in the active {activeScope} scope,
-          import servers from local configs or the MCP registry, and push or
-          remove individual exported copies in external harness configs.
+          import servers from local configs or the public{" "}
+          {DATA_SOURCES.MCP_REGISTRY.label} ({DATA_SOURCES.MCP_REGISTRY.host}),
+          and push or remove individual exported copies in external harness
+          configs.
         </p>
       </div>
 
@@ -1188,6 +1191,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
           <button
             type="button"
             onClick={() => setDiscoveryTab(MCP_MANAGER_DISCOVERY_TABS.REGISTRY)}
+            title={`Search the public ${DATA_SOURCES.MCP_REGISTRY.label} at ${DATA_SOURCES.MCP_REGISTRY.host}`}
             className={`flex items-center gap-1 rounded-sm border px-2 py-1 text-xs transition-colors ${
               discoveryTab === MCP_MANAGER_DISCOVERY_TABS.REGISTRY
                 ? "border-btn-bg bg-btn-bg text-btn-fg"
@@ -1195,7 +1199,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
             }`}
           >
             <Icon name="globe" className="text-xxs" />
-            Registry
+            {DATA_SOURCES.MCP_REGISTRY.label}
           </button>
           {canBrowseMcpGallery && (
             <button
@@ -1305,6 +1309,19 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
 
         {discoveryTab === MCP_MANAGER_DISCOVERY_TABS.REGISTRY && (
           <div className="space-y-2 rounded-sm border border-panel-border bg-editor-bg p-3">
+            <p className="text-xs text-description-fg">
+              Results come from the public {DATA_SOURCES.MCP_REGISTRY.label} at{" "}
+              <a
+                href={DATA_SOURCES.MCP_REGISTRY.url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-link-fg hover:underline"
+              >
+                {DATA_SOURCES.MCP_REGISTRY.host}
+              </a>
+              . Your search text is sent there. Servers are published by third
+              parties, so review one before you import it.
+            </p>
             <div className="flex flex-wrap items-center gap-2">
               <input
                 type="text"
@@ -1316,8 +1333,8 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                     handleSearchRegistry();
                   }
                 }}
-                placeholder="Search the MCP registry…"
-                aria-label="Search MCP registry"
+                placeholder={`Search the ${DATA_SOURCES.MCP_REGISTRY.label}…`}
+                aria-label={`Search ${DATA_SOURCES.MCP_REGISTRY.label}`}
                 className="min-w-[220px] flex-1 rounded-sm border border-input-border bg-input-bg px-2 py-1 text-xs text-input-fg focus:border-focus-border focus:outline-hidden"
               />
               <button
@@ -1362,7 +1379,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                   name="loading"
                   className="codicon-modifier-spin text-xxs"
                 />
-                Fetching from MCP Registry…
+                Fetching from {DATA_SOURCES.MCP_REGISTRY.host}…
               </div>
             ) : remoteError ? (
               <div className="text-xs text-error-fg">{remoteError}</div>

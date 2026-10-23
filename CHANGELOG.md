@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   extension update, it could name the CLI copy bundled in the previous extension version's folder,
   which runs whenever you or an agent type `ctrlyoke` in a VS Code terminal, even if you never
   installed the npm CLI.
+- **The MCP Manager and the Stats tab name where their data comes from.** The MCP Manager's
+  "Registry" tab is now **MCP Registry** and says it searches `registry.modelcontextprotocol.io`.
+  The Stats tab says cost estimates use list prices from models.dev, bundled with each release.
 
 ## [0.2.2] - 2026-10-22
 

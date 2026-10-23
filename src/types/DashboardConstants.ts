@@ -424,6 +424,25 @@ export const DOCS_URLS = {
   CLI_REFERENCE: "https://ctrlyoke.dev/docs/cli/ctrlyoke",
 } as const;
 
+/**
+ * Third-party services whose data the dashboard shows. The UI names the
+ * source wherever that data appears, so users know who provides it.
+ */
+export const DATA_SOURCES = {
+  /** Searched live by the MCP Manager's registry tab. */
+  MCP_REGISTRY: {
+    label: "MCP Registry",
+    host: "registry.modelcontextprotocol.io",
+    url: "https://registry.modelcontextprotocol.io",
+  },
+  /** Model prices, bundled at build time by `scripts/sync-model-pricing.mjs`. */
+  MODELS_DEV: {
+    label: "models.dev",
+    host: "models.dev",
+    url: "https://models.dev",
+  },
+} as const;
+
 /** User-facing licensing command actions and destinations. */
 export const LICENSE_UI = {
   OPEN_PRICING: "Open pricing",

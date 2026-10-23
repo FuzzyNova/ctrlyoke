@@ -23,6 +23,7 @@ import {
   SETTING_SCOPES,
   SPECIAL_TARGET_IDS,
 } from "@/types/messages";
+import { DATA_SOURCES } from "@root/types/DashboardConstants";
 import type {
   LocalMcpServerEntry,
   ManagedMcpServer,
@@ -115,6 +116,25 @@ describe("McpManagerSection", () => {
     expect(
       screen.queryByRole("button", { name: "VS Code MCP" })
     ).not.toBeInTheDocument();
+  });
+
+  it("names the public MCP Registry as the source of registry results", async () => {
+    const user = userEvent.setup();
+    renderSection([]);
+
+    await user.click(
+      screen.getByRole("button", { name: DATA_SOURCES.MCP_REGISTRY.label })
+    );
+
+    const sourceLink = screen.getByRole("link", {
+      name: DATA_SOURCES.MCP_REGISTRY.host,
+    });
+    expect(sourceLink).toHaveAttribute("href", DATA_SOURCES.MCP_REGISTRY.url);
+    expect(
+      screen.getByRole("textbox", {
+        name: `Search ${DATA_SOURCES.MCP_REGISTRY.label}`,
+      })
+    ).toBeInTheDocument();
   });
 
   it("shows the VS Code MCP gallery action when the host advertises it", () => {

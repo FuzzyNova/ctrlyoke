@@ -71,9 +71,11 @@ editing.
   they define. **Import** copies one into the registry.
   **Scan again** re-reads them, for example after installing a server from VS
   Code's own MCP Servers panel.
-- **Registry** searches the public [MCP Registry](https://registry.modelcontextprotocol.io),
+- **MCP Registry** searches the public [MCP Registry](https://registry.modelcontextprotocol.io),
   sorted A–Z, Z–A or by recently updated. Verified entries are marked.
-  **Import** adds the server to your registry.
+  **Import** adds the server to your registry. The tab names
+  `registry.modelcontextprotocol.io` as the source, and your search text is
+  sent there.
 
 ## Adding servers to a workflow
 

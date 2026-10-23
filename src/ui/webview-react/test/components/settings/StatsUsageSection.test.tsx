@@ -6,6 +6,7 @@ import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { useHarnessUsageStore } from "@store/harnessUsageStore";
 import { useWorkspaceStatsStore } from "@store/workspaceStatsStore";
 import {
+  DATA_SOURCES,
   HARNESS_IDS,
   HARNESS_INFO,
   MESSAGE_TYPES,
@@ -137,6 +138,22 @@ describe("StatsUsageSection", () => {
     );
 
     expect(screen.getByText("1.5k tokens")).toBeInTheDocument();
+  });
+
+  it("names models.dev as the source of list prices", () => {
+    render(
+      <StatsUsageSection
+        showCostEstimates={true}
+        settings={createSettings()}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+
+    expect(
+      screen.getByRole("link", { name: DATA_SOURCES.MODELS_DEV.host })
+    ).toHaveAttribute("href", DATA_SOURCES.MODELS_DEV.url);
   });
 
   it("renders the usage collection controls", () => {

@@ -15,6 +15,7 @@ import type {
 } from "../types/WebviewMessageTypes";
 import { Log } from "./Log";
 import {
+  DATA_SOURCES,
   MCP_CONFIG_ENTRY_TYPES,
   MCP_CONFIG_KEYS,
   MCP_REGISTRY_PACKAGE_TYPES,
@@ -1113,8 +1114,7 @@ interface McpIoRegistryItem {
   };
 }
 
-const MCP_REGISTRY_URL =
-  "https://registry.modelcontextprotocol.io/v0.1/servers";
+const MCP_REGISTRY_URL = `${DATA_SOURCES.MCP_REGISTRY.url}/v0.1/servers`;
 
 async function fetchMcpRegistry(
   options: {

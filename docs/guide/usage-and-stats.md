@@ -93,6 +93,10 @@ tokens would cost at API prices. **≈** marks an estimate. **≥** marks a lowe
 bound: some steps had no cost, for example because their model has no known
 price, so the real figure is higher.
 
+List prices come from [models.dev](https://models.dev), an open-source model
+pricing database. Each ctrlyoke release bundles a copy, so ctrlyoke never
+fetches prices while you work. The Stats tab names this source too.
+
 To hide every cost estimate, in the dashboard and in the CLI, turn off **Show
 token cost estimates** on the **General** tab
 ([`ui.showCostEstimates`](/reference/settings#ui-showcostestimates)).

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  DATA_SOURCES,
   HARNESS_IDS,
   HARNESS_INFO,
   HARNESS_SHARE_METRICS,
@@ -354,6 +355,20 @@ export function StatsUsageSection({
         prices, or taken directly from a harness's own reported figure when one
         is available; either way, they are not subscription spend.
       </p>
+      <p className="text-xs text-description-fg">
+        List prices come from{" "}
+        <a
+          href={DATA_SOURCES.MODELS_DEV.url}
+          target="_blank"
+          rel="noreferrer"
+          className="text-link-fg hover:underline"
+        >
+          {DATA_SOURCES.MODELS_DEV.host}
+        </a>
+        , an open-source model pricing database. A copy is bundled with each
+        ctrlyoke release, so prices are never fetched while you work. Use the
+        overrides below for any model that is missing or out of date.
+      </p>
       {settings && (
         <section
           className="pt-3 border-t border-panel-border space-y-3"
@@ -368,8 +383,9 @@ export function StatsUsageSection({
               Model pricing overrides
             </h3>
             <p className="text-xs text-description-fg mt-1">
-              Override USD-per-million-token rates for a harness and model.
-              Leave optional cache and reasoning rates blank when they are not
+              Override the bundled {DATA_SOURCES.MODELS_DEV.label}{" "}
+              USD-per-million-token rates for a harness and model. Leave
+              optional cache and reasoning rates blank when they are not
               reported separately.
             </p>
           </div>

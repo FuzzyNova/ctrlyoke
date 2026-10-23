@@ -16,12 +16,12 @@ Default actions like any other managed skill.
 
 Researched 2026-10-22. Options considered:
 
-| Registry | For | Against |
-| --- | --- | --- |
-| **skills.sh (Vercel)** | Biggest by real use: deduplicated install counts (anthropics/skills `pdf` ~215k), an "official creators" list, and per-skill security audits from Gen Agent Trust Hub, Socket and Snyk. The `skills` CLI (`vercel-labs/skills`, MIT) installs into 40+ agents, which covers all six of ours. | The documented `/api/v1` API needs a Vercel OIDC token (see below). |
-| SkillsMP (skillsmp.com) | Largest raw index (3M+ SKILL.md files crawled from GitHub); REST + MCP API with an OpenAPI spec. | Unnamed operator, no security scanning, a lot of low-quality crawl results, anonymous limit of 50 requests/day, then paid tiers. |
-| anthropics/skills (GitHub) | Reference set, trustworthy. | A few dozen skills: a repo, not a registry. |
-| Agensi, ClawHub, awesome-lists | Curated niches. | Small, or commercial. |
+| Registry                       | For                                                                                                                                                                                                                                                                                          | Against                                                                                                                          |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **skills.sh (Vercel)**         | Biggest by real use: deduplicated install counts (anthropics/skills `pdf` ~215k), an "official creators" list, and per-skill security audits from Gen Agent Trust Hub, Socket and Snyk. The `skills` CLI (`vercel-labs/skills`, MIT) installs into 40+ agents, which covers all six of ours. | The documented `/api/v1` API needs a Vercel OIDC token (see below).                                                              |
+| SkillsMP (skillsmp.com)        | Largest raw index (3M+ SKILL.md files crawled from GitHub); REST + MCP API with an OpenAPI spec.                                                                                                                                                                                             | Unnamed operator, no security scanning, a lot of low-quality crawl results, anonymous limit of 50 requests/day, then paid tiers. |
+| anthropics/skills (GitHub)     | Reference set, trustworthy.                                                                                                                                                                                                                                                                  | A few dozen skills: a repo, not a registry.                                                                                      |
+| Agensi, ClawHub, awesome-lists | Curated niches.                                                                                                                                                                                                                                                                              | Small, or commercial.                                                                                                            |
 
 Trust is the deciding factor: scans of the public ecosystem find security
 problems in roughly 13–37% of skills, so the install-count ranking, the
@@ -29,12 +29,12 @@ official-creator badge and the audit verdicts are the features that matter most.
 
 ## The API situation (verified 2026-10-22)
 
-| Need | Route | Auth | Status |
-| --- | --- | --- | --- |
-| Search | `GET https://skills.sh/api/search?q&limit[&owner]` | none | Undocumented; the route `skills find` uses (`src/find.ts`, overridable via `SKILLS_API_URL`). Returns `{ skills: [{ id, source, name, installs }], searchType, count }`. |
-| Skill files | `GET https://skills.sh/api/download/{owner}/{repo}/{slug}` | none | Undocumented; the CLI's blob fast path (`src/blob.ts`). Known hash bug: vercel-labs/skills#2388. |
-| Security audits | `GET https://skills.sh/api/v1/skills/audit/{source}/{skill}` | none | **Documented** and answers without a token. Returns `audits[]` with `provider`, `status` (`pass`/`warn`/`fail`), `riskLevel`, `summary`, `auditedAt`; 404 = not audited yet. |
-| Search / detail / leaderboard / curated | `GET /api/v1/skills…` | Vercel OIDC | Documented, but returns 401 without a token from a linked Vercel project. |
+| Need                                    | Route                                                        | Auth        | Status                                                                                                                                                                       |
+| --------------------------------------- | ------------------------------------------------------------ | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Search                                  | `GET https://skills.sh/api/search?q&limit[&owner]`           | none        | Undocumented; the route `skills find` uses (`src/find.ts`, overridable via `SKILLS_API_URL`). Returns `{ skills: [{ id, source, name, installs }], searchType, count }`.     |
+| Skill files                             | `GET https://skills.sh/api/download/{owner}/{repo}/{slug}`   | none        | Undocumented; the CLI's blob fast path (`src/blob.ts`). Known hash bug: vercel-labs/skills#2388.                                                                             |
+| Security audits                         | `GET https://skills.sh/api/v1/skills/audit/{source}/{skill}` | none        | **Documented** and answers without a token. Returns `audits[]` with `provider`, `status` (`pass`/`warn`/`fail`), `riskLevel`, `summary`, `auditedAt`; 404 = not audited yet. |
+| Search / detail / leaderboard / curated | `GET /api/v1/skills…`                                        | Vercel OIDC | Documented, but returns 401 without a token from a linked Vercel project.                                                                                                    |
 
 The skills.sh terms say the "public API" is "rate-limited per IP" and that
 "reasonable use, including caching results on your own infrastructure, is
@@ -116,6 +116,31 @@ Rejected alternatives:
   to skills.sh's per-provider pages and a link to the SKILL.md on GitHub. Any
   `warn`/`fail`, or no audit yet, needs an explicit second confirmation.
 - Store state in `useHarnessFileStore` (or a sibling store if it gets crowded).
+
+### Naming the source
+
+The MCP Manager and Stats tab already name their sources (`DATA_SOURCES` in
+`DashboardConstants.ts`): the tab is **MCP Registry**, not "Registry", and a
+line in the panel links `registry.modelcontextprotocol.io`. Do the same here,
+and make it say more, because the routes are undocumented and every result is
+a third party's code:
+
+- Add a `SKILLS_SH` entry to `DATA_SOURCES` and build every label below from
+  it. Don't hardcode "skills.sh" in components.
+- Label the discovery tab **skills.sh**, never "Registry", with a tooltip
+  that says it searches the public skills.sh directory run by Vercel.
+- At the top of the panel, add a line linking `skills.sh`: results, install
+  counts and security audits come from skills.sh (Vercel), your search text is
+  sent there, and skills are published by third parties and fetched from their
+  GitHub repositories on install.
+- On each result, label the install count and audit pill as skills.sh data
+  ("12.3k installs on skills.sh"), and link the audit pill to the skill's
+  skills.sh security page.
+- The install confirm modal names both origins: the audit from skills.sh, the
+  files from `github.com/<owner>/<repo>`.
+- When the client fails (blocked, shape change), the error names skills.sh
+  ("skills.sh search is unavailable") so the user knows which service is
+  down. It must not read as a ctrlyoke error.
 
 ### Privacy and docs
 
