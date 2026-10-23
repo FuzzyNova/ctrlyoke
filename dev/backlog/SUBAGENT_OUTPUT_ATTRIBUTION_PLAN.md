@@ -418,7 +418,10 @@ to this contract, and every provider uses it:
   provider's `map(record) => CliEvent[]`, `usage(record) => SubagentRecordUsage
 | undefined` (model, input, output, cache-read, cache-write, 1-hour
   cache-write subset, reasoning; deduplicated by a provider-supplied
-  `recordId`), and `isComplete(record)` for the card's completion signal. No
+  `recordId`), and `isComplete(record)` for the card's completion signal.
+  Providers reading JSONL files use the shared async `readIncrementalJsonl`
+  helper so polling reads only appended bytes and retains an incomplete tail.
+  No
   `as unknown as` casts: the record type is a generic parameter.
 - **Live tailing.** The shared pipeline starts the follower with the attempt's
   `onStreamingEvents` callback: `HeadlessLogTail` for headless log sources and

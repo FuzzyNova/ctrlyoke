@@ -34,6 +34,7 @@ import {
 import { ClaudeToolBuilder } from "./ClaudeToolBuilder";
 import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
 import { SubagentSourceFollower } from "../shared/SubagentSourceFollower";
+import { readIncrementalJsonl } from "../shared/IncrementalJsonlReader";
 import type {
   SubagentChildSource,
   SubagentRecordUsage,
@@ -149,6 +150,15 @@ interface ClaudeProviderEvent extends BaseCliEvent {
   };
   total_cost_usd?: number;
   modelUsage?: Record<string, ProviderModelUsage>;
+}
+
+function isClaudeProviderEvent(value: unknown): value is ClaudeProviderEvent {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    typeof value.type === "string"
+  );
 }
 
 type UnconfirmedAsyncLaunch = (typeof CLAUDE_TOOL_NAMES)["AGENT" | "MONITOR"];
@@ -1631,30 +1641,11 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           subagentsDirectory,
           `agent-${agentId}.jsonl`
         );
-        let buffer: Buffer;
-        try {
-          buffer = fs.readFileSync(transcriptPath);
-        } catch {
-          return { records: [], nextOffset: fromOffset };
-        }
-        const appended = buffer.subarray(fromOffset);
-        const lastNewline = appended.lastIndexOf(0x0a);
-        const completeBytes =
-          lastNewline < 0
-            ? Buffer.alloc(0)
-            : appended.subarray(0, lastNewline + 1);
-        const lines = completeBytes.toString("utf8").split(/\r?\n/u);
-        const records: ClaudeProviderEvent[] = [];
-        for (const line of lines.slice(0, -1)) {
-          if (!line.trim()) continue;
-          try {
-            const record: ClaudeProviderEvent = JSON.parse(line);
-            records.push(record);
-          } catch {
-            // Ignore malformed complete lines and continue with later records.
-          }
-        }
-        return { records, nextOffset: fromOffset + completeBytes.length };
+        return readIncrementalJsonl(
+          transcriptPath,
+          fromOffset,
+          isClaudeProviderEvent
+        );
       },
       map: (record) => this.extractStructuredEventsFromEvent(record),
       usage: (record): SubagentRecordUsage | undefined => {

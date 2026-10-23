@@ -36,6 +36,7 @@ import {
 import { getQwenContextWindowSize } from "../../../utils/ModelConstants";
 import { BaseToolBuilder } from "../shared/BaseToolBuilder";
 import { SubagentSourceFollower } from "../shared/SubagentSourceFollower";
+import { readIncrementalJsonl } from "../shared/IncrementalJsonlReader";
 import type { SubagentChildSource } from "../shared/interfaces/SubagentChildSource";
 import {
   QWEN_AGENT_ARGUMENTS,
@@ -168,6 +169,15 @@ interface QwenProviderEvent extends BaseCliEvent {
     status: Exclude<ToolResultStatus, typeof TOOL_RESULT_STATUSES.PENDING>;
     resultDisplay?: string | Record<string, unknown>;
   };
+}
+
+function isQwenProviderEvent(value: unknown): value is QwenProviderEvent {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    typeof value.type === "string"
+  );
 }
 
 export class QwenLogParser extends BaseLogParser {
@@ -1024,6 +1034,7 @@ export class QwenLogParser extends BaseLogParser {
       sessionId
     );
     const filenameSuffix = `-${parentToolCallId}.jsonl`;
+    let childFile: string | undefined;
     const source: SubagentChildSource<QwenProviderEvent> = {
       key: `${sessionId}:${parentToolCallId}`,
       attribution: {
@@ -1031,45 +1042,25 @@ export class QwenLogParser extends BaseLogParser {
         agentId: `${agentType}-${parentToolCallId}`,
       },
       read: async (fromOffset) => {
-        let childFile: string;
-        try {
-          const filename = fs
-            .readdirSync(directory)
-            .find((candidate) => candidate.endsWith(filenameSuffix));
-          if (!filename) {
+        if (!childFile) {
+          try {
+            const filename = (await fs.promises.readdir(directory)).find(
+              (candidate) => candidate.endsWith(filenameSuffix)
+            );
+            if (!filename) {
+              return { records: [], nextOffset: fromOffset, complete: false };
+            }
+            childFile = path.join(directory, filename);
+          } catch {
             return { records: [], nextOffset: fromOffset, complete: false };
           }
-          childFile = path.join(directory, filename);
-        } catch {
-          return { records: [], nextOffset: fromOffset, complete: false };
         }
-        const buffer = fs.readFileSync(childFile);
-        const appended = buffer.subarray(fromOffset);
-        const lastNewline = appended.lastIndexOf(0x0a);
-        const completeBytes =
-          lastNewline < 0
-            ? Buffer.alloc(0)
-            : appended.subarray(0, lastNewline + 1);
-        const lines = completeBytes.toString("utf8").split(/\r?\n/u);
-        const completeLineCount = lines.length - 1;
-        const consumedBytes = completeBytes.length;
-        const records: QwenProviderEvent[] = [];
-        for (const line of lines.slice(0, completeLineCount)) {
-          if (!line.trim()) continue;
-          try {
-            const record: unknown = JSON.parse(line);
-            if (record && typeof record === "object" && "type" in record) {
-              records.push(record as QwenProviderEvent);
-            }
-          } catch {
-            // Ignore a malformed record and continue with later complete lines.
-          }
-        }
-        return {
-          records,
-          nextOffset: fromOffset + consumedBytes,
-          complete: false,
-        };
+        const result = await readIncrementalJsonl(
+          childFile,
+          fromOffset,
+          isQwenProviderEvent
+        );
+        return { ...result, complete: false };
       },
       map: (record) => this.extractStructuredEventsFromEvent(record),
       ...(this.subagentUsageEnabled
