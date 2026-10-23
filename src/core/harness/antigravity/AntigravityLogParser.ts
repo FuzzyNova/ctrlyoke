@@ -821,6 +821,9 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
             record: AntigravityTranscriptRecord;
             childId: string;
           }> = [];
+          // The reader is incremental and returns only records appended since
+          // its last call, so `map` (which pairs results with calls in order)
+          // sees each record once; `fromOffset` is only a progress counter.
           for (const record of await reader.readRecords(transcriptPath)) {
             // The step-zero prompt is a steer from the parent, not child output.
             const content =

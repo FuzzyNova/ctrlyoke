@@ -7994,6 +7994,87 @@ suite("Antigravity subagent attribution", () => {
       removeTempDir(workspace);
     }
   });
+
+  test("maps each child record once so results pair with their own calls across polls", async () => {
+    const workspace = makeTempDir("antigravity-subagent-polls-");
+    const childDir = path.join(workspace, "child");
+    fs.mkdirSync(childDir, { recursive: true });
+    const transcript = path.join(childDir, "transcript_full.jsonl");
+    const childId = "33333333-3333-4333-8333-333333333333";
+    const parentId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const planner = (name: string, stepIndex: number) => ({
+      source: "MODEL",
+      type: "PLANNER_RESPONSE",
+      status: "DONE",
+      step_index: stepIndex,
+      tool_calls: [{ name, args: {} }],
+    });
+    const result = (stepIndex: number) => ({
+      source: "MODEL",
+      type: "GENERIC",
+      status: "DONE",
+      step_index: stepIndex,
+      content: `result ${stepIndex}`,
+    });
+    const append = (records: object[]) =>
+      fs.appendFileSync(
+        transcript,
+        records.map((record) => JSON.stringify(record)).join("\n") + "\n"
+      );
+    append([planner("first_tool", 1)]);
+    const parser = new AntigravityLogParser();
+    try {
+      const spawnRecords = [
+        {
+          entry: {
+            source: "MODEL",
+            type: "PLANNER_RESPONSE",
+            status: "DONE",
+            tool_calls: [
+              {
+                name: "invoke_subagent",
+                args: { Subagents: JSON.stringify([{ Role: "Worker" }]) },
+              },
+            ],
+          },
+          eventId: "parent-planner",
+          lineNumber: 1,
+        },
+        {
+          entry: {
+            source: "MODEL",
+            type: "GENERIC",
+            status: "DONE",
+            content: JSON.stringify({
+              conversationId: childId,
+              logAbsoluteUri: `file://${path.join(childDir, "transcript.jsonl")}`,
+            }),
+          },
+          eventId: "parent-result",
+          lineNumber: 2,
+        },
+      ];
+      parser
+        .parseTranscriptRecords(spawnRecords, parentId)
+        .forEach((event) => parser.extractStructuredEventsFromEvent(event));
+
+      const streamed: CliEvent[] = [];
+      parser
+        .getSubagentFollower()
+        .start((events) => streamed.push(...events), 5);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      append([result(2), planner("second_tool", 3), result(4)]);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      const toolNames = streamed
+        .filter((event) => event.type === CLI_EVENT_TYPES.TOOL_CALL)
+        .map((event) => (event.data as ToolCall).name);
+      assert.deepStrictEqual(toolNames, ["first_tool", "second_tool"]);
+    } finally {
+      parser.getSubagentFollower().reset();
+      removeTempDir(workspace);
+    }
+  });
 });
 
 suite("QwenLogParser", () => {
