@@ -24,7 +24,9 @@ import type {
 import {
   DATA_SOURCES,
   SKILL_AUDIT_STATUSES,
+  SKILL_UPDATE_STATUSES,
   type SkillAuditStatus,
+  type SkillUpdateStatus,
 } from "../types/DashboardConstants";
 import { parseAgentFrontmatter } from "./AgentDiscovery";
 import { getErrorMessage } from "./ErrorUtils";
@@ -58,6 +60,12 @@ export const SKILL_INSTALL_LIMITS = {
 } as const;
 const DOWNLOAD_CONCURRENCY = 4;
 const AUDIT_CONCURRENCY = 4;
+const UPDATE_CHECK_CONCURRENCY = 4;
+/**
+ * How long an update check reuses a repository's HEAD commit, so checking
+ * several skills from one repository asks GitHub once.
+ */
+const HEAD_COMMIT_CACHE_MS = 60_000;
 
 const SKILL_FILE_NAME = "skill.md";
 const GIT_TREE_ENTRY_TYPES = { BLOB: "blob", TREE: "tree" } as const;
@@ -105,6 +113,22 @@ export interface DownloadedSkillFile {
   content: Uint8Array;
 }
 
+/** What the update check needs to know about an installed copy. */
+export interface InstalledRegistrySkill {
+  source: string;
+  slug: string;
+  commitSha: string;
+  skillMdPath: string;
+  /** Git blob SHA of each installed file, keyed by folder-relative path. */
+  files: Readonly<Record<string, string>>;
+}
+
+/** An installed skill compared with its repository's current commit. */
+export interface SkillUpdateCheck {
+  status: Exclude<SkillUpdateStatus, typeof SKILL_UPDATE_STATUSES.FAILED>;
+  latestCommitSha: string;
+}
+
 /** The registry operations the Agent & Skills Manager uses. */
 export interface SkillsRegistry {
   searchSkills(query: string): Promise<RegistrySkillEntry[]>;
@@ -117,6 +141,7 @@ export interface SkillsRegistry {
   downloadSkill(
     location: RegistrySkillLocation
   ): Promise<DownloadedSkillFile[]>;
+  checkForUpdate(installed: InstalledRegistrySkill): Promise<SkillUpdateCheck>;
 }
 
 // ============================================================================
@@ -284,6 +309,8 @@ interface GitTreeEntry {
   type: string;
   mode?: string;
   size?: number;
+  /** Git object SHA; for a blob, what `gitBlobSha` computes from its content. */
+  sha?: string;
 }
 
 /** Parse a GitHub `git/trees?recursive=1` body. */
@@ -308,6 +335,7 @@ export function parseGitTreeResponse(data: unknown): GitTreeEntry[] {
             type: entry.type,
             ...(typeof entry.mode === "string" ? { mode: entry.mode } : {}),
             ...(typeof entry.size === "number" ? { size: entry.size } : {}),
+            ...(typeof entry.sha === "string" ? { sha: entry.sha } : {}),
           },
         ]
       : []
@@ -365,9 +393,9 @@ export function rankSkillMdCandidates(
 export function selectSkillFiles(
   tree: readonly GitTreeEntry[],
   folderPath: string
-): Array<{ repoPath: string; path: string }> {
+): Array<{ repoPath: string; path: string; sha?: string }> {
   const prefix = folderPath ? `${folderPath}/` : "";
-  const selected: Array<{ repoPath: string; path: string }> = [];
+  const selected: Array<{ repoPath: string; path: string; sha?: string }> = [];
   let totalBytes = 0;
   for (const entry of tree) {
     if (entry.type !== GIT_TREE_ENTRY_TYPES.BLOB) continue;
@@ -397,7 +425,11 @@ export function selectSkillFiles(
       );
     }
     totalBytes += size;
-    selected.push({ repoPath: entry.path, path: relative });
+    selected.push({
+      repoPath: entry.path,
+      path: relative,
+      ...(entry.sha ? { sha: entry.sha } : {}),
+    });
   }
   if (selected.length > SKILL_INSTALL_LIMITS.MAX_FILES) {
     throw new SkillsRegistryError(
@@ -491,6 +523,10 @@ export class SkillsShRegistryClient implements SkillsRegistry {
   private readonly baseUrl: string;
   /** Trees by `source@commit`; a commit's tree never changes. */
   private readonly treeCache = new Map<string, GitTreeEntry[]>();
+  private readonly headCache = new Map<
+    string,
+    { sha: Promise<string>; fetchedAt: number }
+  >();
 
   constructor(options: SkillsShRegistryClientOptions = {}) {
     this.fetchFn = options.fetch ?? ((input, init) => fetch(input, init));
@@ -542,34 +578,56 @@ export class SkillsShRegistryClient implements SkillsRegistry {
   ): Promise<RegistrySkillLocation> {
     this.assertSkillId(source, slug);
     const commitSha = await this.fetchHeadCommit(source);
-    const tree = await this.fetchTree(source, commitSha);
-    const candidates = rankSkillMdCandidates(tree, source, slug).slice(
-      0,
-      MAX_FRONTMATTER_PROBES
-    );
-    for (const skillMdPath of candidates) {
-      const content = await this.fetchRawText(source, commitSha, skillMdPath);
-      if (content === null) continue;
-      const frontmatter = parseAgentFrontmatter(content);
-      const folderPath = getFolderPath(skillMdPath);
-      const name = frontmatter.name ?? getFolderName(folderPath, source);
-      if (toSkillSlug(name) !== slug) continue;
-      const description = frontmatter.description
-        ? sanitizeRegistryText(frontmatter.description)
-        : undefined;
-      return {
-        source,
-        slug,
-        commitSha,
-        folderPath,
-        skillMdPath,
-        name: sanitizeRegistryText(name, MAX_NAME_LENGTH) || slug,
-        ...(description ? { description } : {}),
-      };
+    const location = await this.findSkillAtCommit(source, slug, commitSha);
+    if (!location) {
+      throw new SkillsRegistryError(
+        `Could not find the "${slug}" skill in ${GITHUB_HOST}/${source}`
+      );
     }
-    throw new SkillsRegistryError(
-      `Could not find the "${slug}" skill in ${GITHUB_HOST}/${source}`
-    );
+    return location;
+  }
+
+  /**
+   * Compare an installed copy with the repository's current commit. The
+   * folder's file SHAs are compared, so commits that touch only other parts
+   * of the repository are not an update. Costs at most two GitHub API calls
+   * per repository (HEAD and its tree), and none beyond HEAD when nothing
+   * was committed since the install.
+   */
+  async checkForUpdate(
+    installed: InstalledRegistrySkill
+  ): Promise<SkillUpdateCheck> {
+    const { source, slug } = installed;
+    this.assertSkillId(source, slug);
+    const latestCommitSha = await this.headCommit(source);
+    if (latestCommitSha === installed.commitSha) {
+      return { status: SKILL_UPDATE_STATUSES.UP_TO_DATE, latestCommitSha };
+    }
+    const tree = await this.fetchTree(source, latestCommitSha);
+    const skillMdPath = tree.some(
+      (entry) =>
+        entry.type === GIT_TREE_ENTRY_TYPES.BLOB &&
+        entry.path === installed.skillMdPath
+    )
+      ? installed.skillMdPath
+      : (await this.findSkillAtCommit(source, slug, latestCommitSha))
+          ?.skillMdPath;
+    if (skillMdPath === undefined) {
+      return { status: SKILL_UPDATE_STATUSES.NOT_FOUND, latestCommitSha };
+    }
+    const latest = selectSkillFiles(tree, getFolderPath(skillMdPath));
+    const unchanged =
+      latest.length === Object.keys(installed.files).length &&
+      latest.every(
+        (file) =>
+          file.sha !== undefined && installed.files[file.path] === file.sha
+      );
+    return {
+      status: unchanged
+        ? SKILL_UPDATE_STATUSES.UP_TO_DATE
+        : SKILL_UPDATE_STATUSES.UPDATE_AVAILABLE,
+      latestCommitSha,
+    };
   }
 
   async downloadSkill(
@@ -682,6 +740,56 @@ export class SkillsShRegistryClient implements SkillsRegistry {
     }
   }
 
+  /**
+   * The skill folder whose SKILL.md frontmatter name slugs to `slug` at one
+   * commit, or `undefined` when no candidate matches.
+   */
+  private async findSkillAtCommit(
+    source: string,
+    slug: string,
+    commitSha: string
+  ): Promise<RegistrySkillLocation | undefined> {
+    const tree = await this.fetchTree(source, commitSha);
+    const candidates = rankSkillMdCandidates(tree, source, slug).slice(
+      0,
+      MAX_FRONTMATTER_PROBES
+    );
+    for (const skillMdPath of candidates) {
+      const content = await this.fetchRawText(source, commitSha, skillMdPath);
+      if (content === null) continue;
+      const frontmatter = parseAgentFrontmatter(content);
+      const folderPath = getFolderPath(skillMdPath);
+      const name = frontmatter.name ?? getFolderName(folderPath, source);
+      if (toSkillSlug(name) !== slug) continue;
+      const description = frontmatter.description
+        ? sanitizeRegistryText(frontmatter.description)
+        : undefined;
+      return {
+        source,
+        slug,
+        commitSha,
+        folderPath,
+        skillMdPath,
+        name: sanitizeRegistryText(name, MAX_NAME_LENGTH) || slug,
+        ...(description ? { description } : {}),
+      };
+    }
+    return undefined;
+  }
+
+  /** {@link fetchHeadCommit}, shared for {@link HEAD_COMMIT_CACHE_MS}. */
+  private headCommit(source: string): Promise<string> {
+    const cached = this.headCache.get(source);
+    if (cached && Date.now() - cached.fetchedAt < HEAD_COMMIT_CACHE_MS) {
+      return cached.sha;
+    }
+    const sha = this.fetchHeadCommit(source);
+    this.headCache.set(source, { sha, fetchedAt: Date.now() });
+    // A failure is not remembered; the next check asks again.
+    sha.catch(() => this.headCache.delete(source));
+    return sha;
+  }
+
   private async fetchHeadCommit(source: string): Promise<string> {
     const response = await this.request(
       REGISTRY_SERVICES.GITHUB,
@@ -777,6 +885,36 @@ export async function fetchSkillAuditsBatch(
         };
       } catch (error) {
         return { source, slug, audits: null, error: getErrorMessage(error) };
+      }
+    }
+  );
+}
+
+/** A {@link SkillUpdateCheck}, or why the check failed. */
+export type SkillUpdateCheckOutcome =
+  | SkillUpdateCheck
+  | { status: typeof SKILL_UPDATE_STATUSES.FAILED; error: string };
+
+/**
+ * Update checks for several installed skills from any {@link SkillsRegistry},
+ * in order, with bounded concurrency. A failed check becomes that skill's
+ * `error`, never a throw.
+ */
+export async function checkSkillUpdatesBatch(
+  registry: Pick<SkillsRegistry, "checkForUpdate">,
+  skills: readonly InstalledRegistrySkill[]
+): Promise<SkillUpdateCheckOutcome[]> {
+  return mapWithConcurrency(
+    skills,
+    UPDATE_CHECK_CONCURRENCY,
+    async (skill): Promise<SkillUpdateCheckOutcome> => {
+      try {
+        return await registry.checkForUpdate(skill);
+      } catch (error) {
+        return {
+          status: SKILL_UPDATE_STATUSES.FAILED,
+          error: getErrorMessage(error),
+        };
       }
     }
   );

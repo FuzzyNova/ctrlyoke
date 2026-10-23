@@ -162,13 +162,18 @@ a third party's code:
 - Unit: GitHub tree resolution and path-traversal rejection.
 - UI (Vitest): search states, audit pill and confirm gating, Imported state.
 
-## Open questions
+## Resolved questions (2026-10-23)
 
-- Should installs also be counted with skills.sh telemetry, as the CLI does
-  (opt-out via `DISABLE_TELEMETRY`)? Default: no, since ctrlyoke's privacy
-  stance comes first; reconsider if Vercel asks integrators to report installs.
-- Is it worth offering "install via `npx skills add`" as an alternative
-  for users who want the CLI's lock file and `skills update`?
+- **Install telemetry: no.** ctrlyoke does not report installs to skills.sh,
+  so they don't add to a skill's install count. Reconsider only if Vercel asks
+  integrators to report installs through a documented route.
+- **"Install via `npx skills add`": not offered.** It would run an unpinned
+  npm package fetched at click time, send the CLI's telemetry unless opted
+  out, skip the review dialog's audit gate, and write a second lock file and
+  update mechanism for the same skill. The reason to want it, `skills update`,
+  is covered by ctrlyoke's own update check. Skills the CLI installs into
+  `.agents/skills` already appear in the manager under **Agents**, so users who
+  prefer the CLI lose nothing by running it themselves.
 
 ## As built (2026-10-23)
 
@@ -195,10 +200,25 @@ and a full install of `anthropics/skills/pdf`).
   unsafe path (traversal, Windows device names, trailing dot) fails the install.
   `isSafePathSegment` lives in `PathSecurity.ts`.
 - **Origin sidecar:** `<skill>/.ctrlyoke-origin.json`, store `skill-origin` v1
-  in `PersistedSchemaGuard` (fixture under `src/test/fixtures/formats/`). An
-  overwrite refuses a newer record. It is copied between ctrlyoke scopes but
-  not to harness directories. Nothing reads it yet; the "update available"
-  check is still to do.
+  in `PersistedSchemaGuard` (fixture under `src/test/fixtures/formats/`). It
+  carries `files`, the git blob SHA of each installed file, so both checks
+  below need no download. A replace refuses a newer record. It is copied
+  between ctrlyoke scopes but not to harness directories. Enumeration reads it
+  into `ManagedFileLocation.origin` for ctrlyoke copies only.
+- **Update check** (`REQUEST_SKILLS_REGISTRY_UPDATE_CHECK`, user-initiated, off
+  the route queue): per installed skills.sh copy in either scope,
+  `checkForUpdate` fetches HEAD (cached 60 s, so skills sharing a repository
+  ask once); an unchanged HEAD is up to date with no further call. Otherwise
+  the HEAD tree's file SHAs for the skill folder are compared with `files`, so
+  commits elsewhere in the repository are not updates. A moved folder is found
+  again through the frontmatter probe; a missing one is `notFound`. Local
+  edits come from hashing the folder on disk (`findLocalSkillChanges`).
+- **Update = install with `replace`.** The handler refuses to replace a copy
+  whose origin is not the same registry, `source` and `slug`, so a user's own
+  skill with the same folder name is never overwritten (the UI shows **Name in
+  use**). The old folder is renamed aside, the staged one renamed in, and the
+  old one restored if that fails. Updates always re-resolve the location, and a
+  successful install drops the cached location and stale check result.
 - **The four registry messages bypass `routeQueue`** (`OFF_QUEUE_MESSAGE_TYPES`
   in `WebviewMessageRouter`), like `REQUEST_SECRET_REGISTRY`, so a slow
   skills.sh or GitHub request can't stall the dashboard. The MCP registry search
@@ -209,5 +229,5 @@ and a full install of `anthropics/skills/pdf`).
     (the MCP Registry tab isn't gated either). Add one when such a host exists.
   - **Official badge.** Left out, as the design allowed: curated isn't
     reachable without a token, and no owner list was verified.
-  - **Overwrite from the UI.** A skill already in the active scope shows
-    **Imported**; replacing it needs deleting it first.
+  - **Automatic update checks.** Checks run only from the button, so nothing
+    is sent to GitHub without a click.

@@ -45,6 +45,7 @@ services. See [Other network requests](#other-network-requests).
 | You browse or search the MCP registry in the MCP manager | `registry.modelcontextprotocol.io`            | Your search text                                                    |
 | You search skills.sh in the Agent & Skills Manager       | `skills.sh` (run by Vercel)                   | Your search text, and the public `owner/repo` of each result shown  |
 | You review or install a skill from skills.sh             | `api.github.com`, `raw.githubusercontent.com` | The skill's public `owner/repo` and file paths                      |
+| You check skills from skills.sh for updates              | `api.github.com`, `raw.githubusercontent.com` | The public `owner/repo` of each installed skill                     |
 | Push notifications are on (Pro)                          | Your browser vendor's push service            | An encrypted notification for your subscribed browser or phone      |
 
 Activating Pro offline with a signed license file sends nothing. The 14-day remote-access trial

@@ -4,6 +4,7 @@ import type {
   RegistrySkillAuditResult,
   RegistrySkillEntry,
   RegistrySkillLocation,
+  SkillUpdateCheckResult,
 } from "@root/types/WebviewMessageTypes";
 import { sendMessage } from "@hooks/useMessageHandler";
 
@@ -26,7 +27,37 @@ export type RegistrySkillLocationState =
 
 export interface RegistrySkillInstallState {
   installing?: boolean;
+  /** The scope the running install writes to. */
+  scope?: SettingWriteScope;
   error?: string;
+}
+
+/** The skill a review dialog is open for. */
+export type RegistrySkillReviewEntry = Pick<
+  RegistrySkillEntry,
+  "id" | "source" | "slug" | "name"
+>;
+
+/** An update of an installed copy, reviewed in the same dialog as an install. */
+export interface RegistrySkillUpdateReview {
+  scope: SettingWriteScope;
+  installedCommitSha: string;
+  /** Files edited locally since install, which the update replaces. */
+  localChanges: string[];
+}
+
+export interface RegistrySkillReview {
+  entry: RegistrySkillReviewEntry;
+  /** Set when the dialog replaces an installed copy instead of installing. */
+  update?: RegistrySkillUpdateReview;
+}
+
+export interface SkillsRegistryUpdateCheckState {
+  checking: boolean;
+  /** `Date.now()` when the last check answered. */
+  checkedAt?: number;
+  /** Results keyed by installed skill folder (`ManagedFileLocation.path`). */
+  results: Record<string, SkillUpdateCheckResult>;
 }
 
 export interface SkillsRegistryState {
@@ -44,8 +75,9 @@ export interface SkillsRegistryState {
   audits: Record<string, RegistrySkillAuditState>;
   locations: Record<string, RegistrySkillLocationState>;
   installs: Record<string, RegistrySkillInstallState>;
-  /** The skill whose install confirmation is open. */
-  reviewingKey: string | undefined;
+  /** The skill whose install or update dialog is open. */
+  review: RegistrySkillReview | undefined;
+  updateCheck: SkillsRegistryUpdateCheckState;
 
   setOpen: (isOpen: boolean) => void;
   setQuery: (query: string) => void;
@@ -56,9 +88,12 @@ export interface SkillsRegistryState {
     error?: string
   ) => void;
   setPage: (page: number) => void;
-  requestAudits: (entries: readonly RegistrySkillEntry[]) => void;
+  requestAudits: (entries: readonly RegistrySkillReviewEntry[]) => void;
   setAuditResults: (results: readonly RegistrySkillAuditResult[]) => void;
-  openReview: (entry: RegistrySkillEntry) => void;
+  openReview: (
+    entry: RegistrySkillReviewEntry,
+    update?: RegistrySkillUpdateReview
+  ) => void;
   closeReview: () => void;
   setLocationResult: (
     source: string,
@@ -66,8 +101,14 @@ export interface SkillsRegistryState {
     location?: RegistrySkillLocation,
     error?: string
   ) => void;
-  install: (location: RegistrySkillLocation, scope: SettingWriteScope) => void;
+  install: (
+    location: RegistrySkillLocation,
+    scope: SettingWriteScope,
+    replace?: boolean
+  ) => void;
   setInstallResult: (source: string, slug: string, error?: string) => void;
+  checkForUpdates: () => void;
+  setUpdateCheckResults: (results: readonly SkillUpdateCheckResult[]) => void;
 }
 
 export const useSkillsRegistryStore = create<SkillsRegistryState>(
@@ -82,7 +123,8 @@ export const useSkillsRegistryStore = create<SkillsRegistryState>(
     audits: {},
     locations: {},
     installs: {},
-    reviewingKey: undefined,
+    review: undefined,
+    updateCheck: { checking: false, results: {} },
 
     setOpen: (isOpen) => set({ isOpen }),
 
@@ -157,12 +199,18 @@ export const useSkillsRegistryStore = create<SkillsRegistryState>(
         },
       })),
 
-    openReview: (entry) => {
-      set({ reviewingKey: entry.id });
+    openReview: (entry, update) => {
+      set((state) => ({
+        review: { entry, ...(update ? { update } : {}) },
+        installs: { ...state.installs, [entry.id]: {} },
+      }));
       get().requestAudits([entry]);
       const location = get().locations[entry.id];
-      // Re-resolve after a failure; a resolved commit is reused.
-      if (location && (location.loading || location.location)) return;
+      // Reuse a commit resolved for this review session; re-resolve after a
+      // failure, and always for an update, which must see the newest commit.
+      if (!update && location && (location.loading || location.location)) {
+        return;
+      }
       set((state) => ({
         locations: { ...state.locations, [entry.id]: { loading: true } },
       }));
@@ -172,7 +220,7 @@ export const useSkillsRegistryStore = create<SkillsRegistryState>(
       });
     },
 
-    closeReview: () => set({ reviewingKey: undefined }),
+    closeReview: () => set({ review: undefined }),
 
     setLocationResult: (source, slug, location, error) =>
       set((state) => ({
@@ -184,21 +232,72 @@ export const useSkillsRegistryStore = create<SkillsRegistryState>(
         },
       })),
 
-    install: (location, scope) => {
+    install: (location, scope, replace = false) => {
       const key = getRegistrySkillKey(location.source, location.slug);
       set((state) => ({
-        installs: { ...state.installs, [key]: { installing: true } },
+        installs: { ...state.installs, [key]: { installing: true, scope } },
       }));
-      sendMessage(MESSAGE_TYPES.INSTALL_REGISTRY_SKILL, { location, scope });
+      sendMessage(MESSAGE_TYPES.INSTALL_REGISTRY_SKILL, {
+        location,
+        scope,
+        ...(replace ? { replace: true } : {}),
+      });
     },
 
     setInstallResult: (source, slug, error) => {
       const key = getRegistrySkillKey(source, slug);
-      set((state) => ({
-        installs: { ...state.installs, [key]: error ? { error } : {} },
-        reviewingKey:
-          !error && state.reviewingKey === key ? undefined : state.reviewingKey,
-      }));
+      set((state) => {
+        if (error) {
+          return {
+            installs: {
+              ...state.installs,
+              [key]: { ...state.installs[key], installing: false, error },
+            },
+          };
+        }
+        const scope = state.installs[key]?.scope;
+        // The installed copy is now the newest commit, so its update result
+        // is stale; the resolved location is dropped so the next review
+        // looks up the repository again.
+        const { [key]: _resolved, ...locations } = state.locations;
+        return {
+          installs: { ...state.installs, [key]: {} },
+          locations,
+          updateCheck: {
+            ...state.updateCheck,
+            results: Object.fromEntries(
+              Object.entries(state.updateCheck.results).filter(
+                ([, result]) =>
+                  !(
+                    result.source === source &&
+                    result.slug === slug &&
+                    result.scope === scope
+                  )
+              )
+            ),
+          },
+          review: state.review?.entry.id === key ? undefined : state.review,
+        };
+      });
     },
+
+    checkForUpdates: () => {
+      if (get().updateCheck.checking) return;
+      set((state) => ({
+        updateCheck: { ...state.updateCheck, checking: true },
+      }));
+      sendMessage(MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_UPDATE_CHECK, {});
+    },
+
+    setUpdateCheckResults: (results) =>
+      set({
+        updateCheck: {
+          checking: false,
+          checkedAt: Date.now(),
+          results: Object.fromEntries(
+            results.map((result) => [result.path, result])
+          ),
+        },
+      }),
   })
 );

@@ -2,15 +2,21 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   SKILLS_REGISTRY_MIN_QUERY_LENGTH,
   SKILLS_REGISTRY_PAGE_SIZE,
+  getRegistrySkillKey,
   useSkillsRegistryStore,
   type RegistrySkillAuditState,
+  type RegistrySkillReview,
+  type RegistrySkillReviewEntry,
+  type RegistrySkillUpdateReview,
 } from "@store/useSkillsRegistryStore";
 import {
   DATA_SOURCES,
   KEYBOARD_KEYS,
   SKILL_AUDIT_STATUSES,
+  SKILL_UPDATE_STATUSES,
   SPECIAL_TARGET_IDS,
   getGitHubBlobUrl,
+  getGitHubCompareUrl,
   getSkillsShAuditUrl,
   getSkillsShSkillUrl,
   type SettingWriteScope,
@@ -18,8 +24,11 @@ import {
 } from "@root/types/DashboardConstants";
 import type {
   ManagedFile,
+  ManagedFileLocation,
   RegistrySkillAudit,
   RegistrySkillEntry,
+  SkillOriginInfo,
+  SkillUpdateCheckResult,
 } from "@root/types/WebviewMessageTypes";
 import { ManagerConfirmModal } from "@components/shared/ManagerUi";
 import { Icon } from "../shared/Icon";
@@ -149,20 +158,227 @@ function AuditPill({
   );
 }
 
-function isInstalledInScope(
+/** The scope's ctrlyoke copy of a skill folder named `slug`, if any. */
+function findCtrlYokeCopy(
   managedFiles: readonly ManagedFile[],
   slug: string,
   scope: SettingWriteScope
+): ManagedFileLocation | undefined {
+  return managedFiles
+    .find((file) => file.name === slug)
+    ?.locations.find(
+      (location) =>
+        location.harnessId === SPECIAL_TARGET_IDS.CTRLYOKE &&
+        location.scope === scope
+    );
+}
+
+/** The skills.sh origin of an installed copy, when it has one. */
+function getSkillsShOrigin(
+  location: ManagedFileLocation
+): SkillOriginInfo | undefined {
+  return location.origin?.registry === SKILLS_SH.host
+    ? location.origin
+    : undefined;
+}
+
+function isSameRegistrySkill(
+  location: ManagedFileLocation,
+  source: string,
+  slug: string
 ): boolean {
-  return managedFiles.some(
-    (file) =>
-      file.name === slug &&
-      file.locations.some(
-        (location) =>
-          location.harnessId === SPECIAL_TARGET_IDS.CTRLYOKE &&
-          location.scope === scope
-      )
+  const origin = getSkillsShOrigin(location);
+  return origin?.source === source && origin.slug === slug;
+}
+
+/** How many installed copies came from skills.sh, across both scopes. */
+function countSkillsShCopies(managedFiles: readonly ManagedFile[]): number {
+  return managedFiles.reduce(
+    (count, file) =>
+      count +
+      file.locations.filter((location) => getSkillsShOrigin(location)).length,
+    0
   );
+}
+
+/** Open the review dialog in update mode for an installed copy. */
+function openUpdateReview(
+  location: ManagedFileLocation,
+  result: SkillUpdateCheckResult,
+  name?: string
+): void {
+  const origin = getSkillsShOrigin(location);
+  if (!origin) return;
+  useSkillsRegistryStore.getState().openReview(
+    {
+      id: getRegistrySkillKey(origin.source, origin.slug),
+      source: origin.source,
+      slug: origin.slug,
+      name: name ?? origin.slug,
+    },
+    {
+      scope: location.scope,
+      installedCommitSha: origin.commitSha,
+      localChanges: result.localChanges,
+    }
+  );
+}
+
+const ORIGIN_BADGE_CLASS =
+  "inline-flex items-center gap-1 rounded-sm border border-panel-border px-1 py-0.5 text-xxs leading-none";
+
+/**
+ * Shown beside a ctrlyoke copy's badge in the Agent & Skills Manager when it
+ * was installed from skills.sh, with that copy's last update check result.
+ */
+export function SkillOriginBadge({
+  location,
+  name,
+}: {
+  location: ManagedFileLocation;
+  name?: string;
+}) {
+  const result = useSkillsRegistryStore(
+    (s) => s.updateCheck.results[location.path]
+  );
+  const origin = getSkillsShOrigin(location);
+  if (!origin) return null;
+  return (
+    <>
+      <a
+        href={getSkillsShSkillUrl(origin.source, origin.slug)}
+        target="_blank"
+        rel="noreferrer"
+        className={`${ORIGIN_BADGE_CLASS} text-description-fg hover:underline`}
+        title={`Installed from ${SKILLS_SH.label}: github.com/${origin.source} at commit ${origin.commitSha.slice(0, 7)}`}
+      >
+        <Icon name="globe" className="text-xxs" />
+        {SKILLS_SH.label}
+      </a>
+      {result?.status === SKILL_UPDATE_STATUSES.UPDATE_AVAILABLE && (
+        <button
+          type="button"
+          onClick={() => openUpdateReview(location, result, name)}
+          className={`${ORIGIN_BADGE_CLASS} border-btn-bg bg-btn-bg text-btn-fg hover:bg-btn-hover`}
+          title={`Review and install the newest version from github.com/${origin.source}`}
+        >
+          <Icon name="arrow-circle-up" className="text-xxs" />
+          Update available
+        </button>
+      )}
+      {result?.status === SKILL_UPDATE_STATUSES.NOT_FOUND && (
+        <span
+          className={`${ORIGIN_BADGE_CLASS} text-warning-fg`}
+          title={`github.com/${origin.source} no longer contains this skill`}
+        >
+          <Icon name="warning" className="text-xxs" />
+          Removed upstream
+        </span>
+      )}
+      {result?.status === SKILL_UPDATE_STATUSES.FAILED && (
+        <span
+          className={`${ORIGIN_BADGE_CLASS} text-description-fg`}
+          title={result.error}
+        >
+          <Icon name="question" className="text-xxs" />
+          Update check failed
+        </span>
+      )}
+    </>
+  );
+}
+
+/** "Check for updates" and the outcome of the last check. */
+function SkillUpdateCheckControl({ copies }: { copies: number }) {
+  const updateCheck = useSkillsRegistryStore((s) => s.updateCheck);
+  const checkForUpdates = useSkillsRegistryStore((s) => s.checkForUpdates);
+  const results = Object.values(updateCheck.results);
+  const available = results.filter(
+    (result) => result.status === SKILL_UPDATE_STATUSES.UPDATE_AVAILABLE
+  ).length;
+  const failures = results.filter(
+    (result) => result.status === SKILL_UPDATE_STATUSES.FAILED
+  );
+
+  let summary: string | undefined;
+  if (updateCheck.checking) {
+    summary = `Checking ${copies} skill${copies === 1 ? "" : "s"} on GitHub…`;
+  } else if (updateCheck.checkedAt !== undefined) {
+    summary =
+      available > 0
+        ? `${available} update${available === 1 ? "" : "s"} available`
+        : failures.length === 0
+          ? "Up to date"
+          : undefined;
+    if (failures.length > 0) {
+      const failed = `${failures.length} check${failures.length === 1 ? "" : "s"} failed`;
+      summary = summary ? `${summary}, ${failed}` : failed;
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <button
+        type="button"
+        onClick={checkForUpdates}
+        disabled={updateCheck.checking}
+        title={`Compare the ${copies} skill${copies === 1 ? "" : "s"} installed from ${SKILLS_SH.label} with their GitHub repositories`}
+        className="flex items-center gap-1 rounded-sm border border-panel-border px-2 py-1 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <Icon
+          name={updateCheck.checking ? "loading" : "refresh"}
+          className={`text-xxs ${updateCheck.checking ? "codicon-modifier-spin" : ""}`}
+        />
+        Check for updates
+      </button>
+      {summary && (
+        <span
+          className="text-xxs text-description-fg"
+          title={
+            failures
+              .map((result) => `${result.slug}: ${result.error}`)
+              .join("\n") || undefined
+          }
+          role="status"
+        >
+          {summary}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** The action a search result offers, given what the scope already holds. */
+function getResultAction(
+  entry: RegistrySkillEntry,
+  copy: ManagedFileLocation | undefined,
+  updateResult: SkillUpdateCheckResult | undefined,
+  scope: SettingWriteScope
+): { label: string; title: string; onClick?: () => void } {
+  if (!copy) {
+    return {
+      label: "Import",
+      title: `Review and import ${entry.name} into ${scope}`,
+      onClick: () => useSkillsRegistryStore.getState().openReview(entry),
+    };
+  }
+  if (!isSameRegistrySkill(copy, entry.source, entry.slug)) {
+    return {
+      label: "Name in use",
+      title: `A different skill named ${entry.slug} is already in the ${scope} ctrlyoke skills folder. Delete or rename it to import this one.`,
+    };
+  }
+  if (updateResult?.status === SKILL_UPDATE_STATUSES.UPDATE_AVAILABLE) {
+    return {
+      label: "Update",
+      title: `Review and install the newest version of ${entry.name}`,
+      onClick: () => openUpdateReview(copy, updateResult, entry.name),
+    };
+  }
+  return {
+    label: "Installed",
+    title: `Already in the ${scope} ctrlyoke skills folder. Use Check for updates to compare it with GitHub.`,
+  };
 }
 
 type SkillsRegistryPanelProps = {
@@ -194,8 +410,12 @@ export function SkillsRegistryPanel({
   const setPage = useSkillsRegistryStore((s) => s.setPage);
   const audits = useSkillsRegistryStore((s) => s.audits);
   const requestAudits = useSkillsRegistryStore((s) => s.requestAudits);
-  const openReview = useSkillsRegistryStore((s) => s.openReview);
-  const reviewingKey = useSkillsRegistryStore((s) => s.reviewingKey);
+  const review = useSkillsRegistryStore((s) => s.review);
+  const updateResults = useSkillsRegistryStore((s) => s.updateCheck.results);
+  const skillsShCopies = useMemo(
+    () => countSkillsShCopies(managedFiles),
+    [managedFiles]
+  );
 
   const lastSearchedQuery = useRef<string | null>(null);
 
@@ -224,10 +444,6 @@ export function SkillsRegistryPanel({
     if (pageEntries.length > 0) requestAudits(pageEntries);
   }, [pageEntries, requestAudits]);
 
-  const reviewingEntry = reviewingKey
-    ? results?.find((entry) => entry.id === reviewingKey)
-    : undefined;
-
   const searchNow = () => {
     lastSearchedQuery.current = query;
     search(query);
@@ -241,7 +457,7 @@ export function SkillsRegistryPanel({
         Discover &amp; import
       </div>
 
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => setOpen(!isOpen)}
@@ -256,6 +472,9 @@ export function SkillsRegistryPanel({
           <Icon name="globe" className="text-xxs" />
           {SKILLS_SH.label}
         </button>
+        {skillsShCopies > 0 && (
+          <SkillUpdateCheckControl copies={skillsShCopies} />
+        )}
       </div>
 
       {isOpen && (
@@ -320,9 +539,15 @@ export function SkillsRegistryPanel({
             <>
               <div className="space-y-2">
                 {pageEntries.map((entry) => {
-                  const installed = isInstalledInScope(
+                  const copy = findCtrlYokeCopy(
                     managedFiles,
                     entry.slug,
+                    activeScope
+                  );
+                  const action = getResultAction(
+                    entry,
+                    copy,
+                    copy ? updateResults[copy.path] : undefined,
                     activeScope
                   );
                   return (
@@ -350,16 +575,12 @@ export function SkillsRegistryPanel({
                       </div>
                       <button
                         type="button"
-                        disabled={installed}
-                        onClick={() => openReview(entry)}
-                        className="mt-0.5 rounded-sm border border-panel-border px-2 py-0.5 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-                        title={
-                          installed
-                            ? `Already in the ${activeScope} ctrlyoke skills folder`
-                            : `Review and import ${entry.name} into ${activeScope}`
-                        }
+                        disabled={!action.onClick}
+                        onClick={action.onClick}
+                        className="mt-0.5 shrink-0 rounded-sm border border-panel-border px-2 py-0.5 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                        title={action.title}
                       >
-                        {installed ? "Imported" : "Import"}
+                        {action.label}
                       </button>
                     </div>
                   );
@@ -400,9 +621,9 @@ export function SkillsRegistryPanel({
         </div>
       )}
 
-      {reviewingEntry && (
+      {review && (
         <SkillInstallReviewModal
-          entry={reviewingEntry}
+          review={review}
           activeScope={activeScope}
           skillsDirectory={skillsDirectory}
         />
@@ -411,22 +632,29 @@ export function SkillsRegistryPanel({
   );
 }
 
+/** Local changes listed by name in the update dialog; the rest are counted. */
+const MAX_LISTED_LOCAL_CHANGES = 8;
+
 function SkillInstallReviewModal({
-  entry,
+  review,
   activeScope,
   skillsDirectory,
 }: {
-  entry: RegistrySkillEntry;
+  review: RegistrySkillReview;
   activeScope: SettingWriteScope;
   skillsDirectory?: string;
 }) {
+  const { entry, update } = review;
   const audit = useSkillsRegistryStore((s) => s.audits[entry.id]);
   const locationState = useSkillsRegistryStore((s) => s.locations[entry.id]);
   const installState = useSkillsRegistryStore((s) => s.installs[entry.id]);
   const install = useSkillsRegistryStore((s) => s.install);
   const closeReview = useSkillsRegistryStore((s) => s.closeReview);
   const [acknowledged, setAcknowledged] = useState(false);
+  const [discardLocalChanges, setDiscardLocalChanges] = useState(false);
 
+  const scope = update?.scope ?? activeScope;
+  const localChanges = update?.localChanges ?? [];
   const location =
     locationState && !locationState.loading
       ? locationState.location
@@ -438,31 +666,71 @@ function SkillInstallReviewModal({
     Boolean(location) &&
     !isInstalling &&
     Boolean(auditResult) &&
-    (!needsAcknowledgement || acknowledged);
+    (!needsAcknowledgement || acknowledged) &&
+    (localChanges.length === 0 || discardLocalChanges);
 
   return (
     <ManagerConfirmModal
-      title={`Install ${entry.name}?`}
-      confirmLabel={isInstalling ? "Installing…" : "Install"}
+      title={`${update ? "Update" : "Install"} ${entry.name}?`}
+      confirmLabel={
+        update
+          ? isInstalling
+            ? "Updating…"
+            : "Update"
+          : isInstalling
+            ? "Installing…"
+            : "Install"
+      }
       confirmDisabled={!canInstall}
-      backdropLabel="Close install skill dialog"
+      backdropLabel={`Close ${update ? "update" : "install"} skill dialog`}
       onCancel={closeReview}
       onConfirm={() => {
-        if (location && canInstall) install(location, activeScope);
+        if (location && canInstall) install(location, scope, Boolean(update));
       }}
     >
       <div className="max-h-[60vh] space-y-3 overflow-y-auto">
-        <p>
-          Installs <strong>{entry.slug}</strong> into the {activeScope} ctrlyoke
-          skills folder
-          {skillsDirectory ? (
-            <>
-              {" "}
-              (<span className="break-all font-mono">{skillsDirectory}</span>)
-            </>
-          ) : null}
-          . Use Save afterwards to copy it to a harness.
-        </p>
+        {update ? (
+          <UpdateSummary
+            entry={entry}
+            update={update}
+            latestCommitSha={location?.commitSha}
+          />
+        ) : (
+          <p>
+            Installs <strong>{entry.slug}</strong> into the {scope} ctrlyoke
+            skills folder
+            {skillsDirectory ? (
+              <>
+                {" "}
+                (<span className="break-all font-mono">{skillsDirectory}</span>)
+              </>
+            ) : null}
+            . Use Save afterwards to copy it to a harness.
+          </p>
+        )}
+
+        {localChanges.length > 0 && (
+          <div className="space-y-1 text-warning-fg">
+            <p>
+              You changed {localChanges.length} file
+              {localChanges.length === 1 ? "" : "s"} in this skill since
+              installing it. Updating replaces{" "}
+              {localChanges.length === 1 ? "it" : "them"}:
+            </p>
+            <ul className="list-disc pl-4 font-mono">
+              {localChanges.slice(0, MAX_LISTED_LOCAL_CHANGES).map((file) => (
+                <li key={file} className="break-all">
+                  {file}
+                </li>
+              ))}
+              {localChanges.length > MAX_LISTED_LOCAL_CHANGES && (
+                <li>
+                  and {localChanges.length - MAX_LISTED_LOCAL_CHANGES} more
+                </li>
+              )}
+            </ul>
+          </div>
+        )}
 
         <div className="space-y-1">
           <div className="text-xxs font-semibold uppercase tracking-wide">
@@ -568,10 +836,60 @@ function SkillInstallReviewModal({
           </label>
         )}
 
+        {localChanges.length > 0 && (
+          <label className="flex items-start gap-1.5 text-foreground">
+            <input
+              type="checkbox"
+              checked={discardLocalChanges}
+              onChange={(event) => setDiscardLocalChanges(event.target.checked)}
+              className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-focus-border"
+            />
+            <span>Replace my local changes.</span>
+          </label>
+        )}
+
         {installState?.error && (
           <div className="text-error-fg">{installState.error}</div>
         )}
       </div>
     </ManagerConfirmModal>
+  );
+}
+
+/** What an update replaces, with a link to the changes on GitHub. */
+function UpdateSummary({
+  entry,
+  update,
+  latestCommitSha,
+}: {
+  entry: RegistrySkillReviewEntry;
+  update: RegistrySkillUpdateReview;
+  latestCommitSha: string | undefined;
+}) {
+  return (
+    <p>
+      Replaces the {update.scope} copy of <strong>{entry.slug}</strong>,
+      installed from commit{" "}
+      <span className="font-mono">{update.installedCommitSha.slice(0, 7)}</span>
+      , with the files below.{" "}
+      {latestCommitSha && latestCommitSha !== update.installedCommitSha && (
+        <>
+          <a
+            href={getGitHubCompareUrl(
+              entry.source,
+              update.installedCommitSha,
+              latestCommitSha
+            )}
+            target="_blank"
+            rel="noreferrer"
+            className="text-link-fg hover:underline"
+          >
+            Compare the commits on GitHub
+          </a>
+          .{" "}
+        </>
+      )}
+      Copies saved to harness folders keep the old version until you Save again.
+    </p>
   );
 }

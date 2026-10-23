@@ -13,7 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **skills.sh** tab that searches the public skills.sh directory, sorted by install count, with
   each skill's security audit verdict. **Import** shows the audits and the skill's `SKILL.md` on
   GitHub, then installs that commit into your workspace or user ctrlyoke skills folder. A skill
-  with audit warnings or no audit needs an extra confirmation.
+  with audit warnings or no audit needs an extra confirmation. **Check for updates** compares
+  installed skills with their GitHub repositories, and **Update** reviews and installs the newer
+  version, asking first before it replaces files you edited.
 
 ### Changed
 

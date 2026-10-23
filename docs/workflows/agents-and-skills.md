@@ -232,12 +232,40 @@ Skills are published by third parties. Their files come from the
 publisher's GitHub repository, not from skills.sh. **Install** copies the skill
 folder at that commit into `.ctrlyoke/skills/<name>/`, or into
 `~/.ctrlyoke/skills/<name>/` when the settings drawer is at **User** scope.
-Its button then reads **Imported**. A file named `.ctrlyoke-origin.json` beside
-`SKILL.md` records where the skill came from. It is not copied when you
-[save](#manager-save) the skill to a harness folder.
+Its button then reads **Installed**, and the skill's row in the list gets a
+**skills.sh** badge. A file named `.ctrlyoke-origin.json` beside `SKILL.md`
+records where the skill came from and a hash of each file it installed. It is
+not copied when you [save](#manager-save) the skill to a harness folder.
+
+A result reads **Name in use** when a different skill with the same folder
+name is already in that scope, for example one you wrote yourself. ctrlyoke
+never replaces it; delete or rename it first.
+
+#### Updating skills from skills.sh {#manager-skills-sh-updates}
+
+**Check for updates**, beside the **skills.sh** tab, compares every skill you
+installed from skills.sh, in both scopes, with its GitHub repository. It
+appears once you have installed one, and runs only when you click it. Only the
+skill's own folder counts, so commits to other parts of the repository are not
+an update.
+
+A skill with a newer version shows **Update available** on its row, and its
+search result offers **Update**. Either opens the review dialog again, with
+the new commit's audits, its `SKILL.md`, and a link comparing the two commits
+on GitHub. **Update** replaces the installed copy in one step; if it fails, the
+old copy stays. When you have edited, added or deleted files in the installed
+skill since installing it, the dialog lists them and you must tick a box to
+replace them. Copies you saved to harness folders keep the old version until
+you save the skill again.
+
+A row reads **Removed upstream** when the repository no longer contains the
+skill, and **Update check failed** (with the reason in its tooltip) when GitHub
+could not be reached.
 
 Search and install use routes that skills.sh does not document. If skills.sh
 or GitHub is unavailable or rate-limits you, the error names the service.
+ctrlyoke does not report installs to skills.sh, so they do not count toward a
+skill's install count there.
 
 ## Disabling inherited values
 

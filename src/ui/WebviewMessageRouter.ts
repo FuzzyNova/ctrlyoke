@@ -193,6 +193,7 @@ const OFF_QUEUE_MESSAGE_TYPES: ReadonlySet<string> = new Set([
   MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_AUDITS,
   MESSAGE_TYPES.REQUEST_REGISTRY_SKILL_LOCATION,
   MESSAGE_TYPES.INSTALL_REGISTRY_SKILL,
+  MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_UPDATE_CHECK,
 ]);
 
 /**
@@ -1737,6 +1738,13 @@ export class WebviewMessageRouter {
         message as InstallRegistrySkillMessage
       );
     });
+
+    table.set(
+      MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_UPDATE_CHECK,
+      async (_message, ctx) => {
+        await this.harnessFiles.handleSkillsRegistryUpdateCheck(ctx);
+      }
+    );
   }
 
   private registerOutputHistory(table: DispatchTable): void {

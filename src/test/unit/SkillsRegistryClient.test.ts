@@ -4,7 +4,9 @@ import {
   SKILL_INSTALL_LIMITS,
   SkillsRegistryError,
   SkillsShRegistryClient,
+  checkSkillUpdatesBatch,
   fetchSkillAuditsBatch,
+  type InstalledRegistrySkill,
   parseSkillAuditResponse,
   parseSkillsSearchResponse,
   rankSkillMdCandidates,
@@ -13,7 +15,10 @@ import {
   toSkillRelativePath,
   toSkillSlug,
 } from "../../utils/SkillsRegistryClient";
-import { SKILL_AUDIT_STATUSES } from "../../types/DashboardConstants";
+import {
+  SKILL_AUDIT_STATUSES,
+  SKILL_UPDATE_STATUSES,
+} from "../../types/DashboardConstants";
 import type { RegistrySkillLocation } from "../../types/WebviewMessageTypes";
 
 const COMMIT = "dbd4588f9e1033efb41dad4bef2f7947c8993d44";
@@ -503,6 +508,160 @@ suite("SkillsRegistryClient", () => {
         await assert.rejects(registry.downloadSkill(bad), /not valid/);
       }
       assert.strictEqual(urls.length, 0);
+    });
+  });
+
+  suite("update check", () => {
+    const NEWER = "1111111111111111111111111111111111111111";
+    const installed: InstalledRegistrySkill = {
+      source: "anthropics/skills",
+      slug: "pdf",
+      commitSha: COMMIT,
+      skillMdPath: "skills/pdf/SKILL.md",
+      files: { "SKILL.md": "aaa", "scripts/fill.py": "bbb" },
+    };
+    const treeAt = (entries: Array<[string, string]>) => ({
+      tree: [
+        { path: "README.md", type: "blob", size: 1, sha: "readme" },
+        ...entries.map(([repoPath, sha]) => ({
+          path: repoPath,
+          type: "blob",
+          size: 1,
+          sha,
+        })),
+      ],
+    });
+
+    function updateRoutes(
+      head: string,
+      tree: unknown,
+      files: Record<string, string> = {}
+    ): Record<string, Route> {
+      return {
+        "https://api.github.com/repos/anthropics/skills/commits/HEAD": () =>
+          new Response(`${head}\n`),
+        [`https://api.github.com/repos/anthropics/skills/git/trees/${head}`]:
+          () => json(tree),
+        [`https://raw.githubusercontent.com/anthropics/skills/${head}/`]: (
+          url
+        ) => {
+          const content =
+            files[
+              decodeURIComponent(
+                url.slice(
+                  `https://raw.githubusercontent.com/anthropics/skills/${head}/`
+                    .length
+                )
+              )
+            ];
+          return content === undefined
+            ? new Response("missing", { status: 404 })
+            : new Response(content);
+        },
+      };
+    }
+
+    test("an unchanged HEAD is up to date after one request", async () => {
+      const { registry, urls } = client(updateRoutes(COMMIT, treeAt([])));
+      assert.deepStrictEqual(await registry.checkForUpdate(installed), {
+        status: SKILL_UPDATE_STATUSES.UP_TO_DATE,
+        latestCommitSha: COMMIT,
+      });
+      assert.strictEqual(urls.length, 1);
+    });
+
+    test("commits elsewhere in the repository are not an update", async () => {
+      const { registry } = client(
+        updateRoutes(
+          NEWER,
+          treeAt([
+            ["skills/pdf/SKILL.md", "aaa"],
+            ["skills/pdf/scripts/fill.py", "bbb"],
+            ["skills/docx/SKILL.md", "changed"],
+          ])
+        )
+      );
+      assert.deepStrictEqual(await registry.checkForUpdate(installed), {
+        status: SKILL_UPDATE_STATUSES.UP_TO_DATE,
+        latestCommitSha: NEWER,
+      });
+    });
+
+    test("an edited, added or removed file in the folder is an update", async () => {
+      for (const entries of [
+        [
+          ["skills/pdf/SKILL.md", "aaa"],
+          ["skills/pdf/scripts/fill.py", "edited"],
+        ],
+        [
+          ["skills/pdf/SKILL.md", "aaa"],
+          ["skills/pdf/scripts/fill.py", "bbb"],
+          ["skills/pdf/new.md", "ccc"],
+        ],
+        [["skills/pdf/SKILL.md", "aaa"]],
+      ] as Array<Array<[string, string]>>) {
+        const { registry } = client(updateRoutes(NEWER, treeAt(entries)));
+        assert.deepStrictEqual(
+          await registry.checkForUpdate(installed),
+          {
+            status: SKILL_UPDATE_STATUSES.UPDATE_AVAILABLE,
+            latestCommitSha: NEWER,
+          },
+          JSON.stringify(entries)
+        );
+      }
+    });
+
+    test("a skill whose folder moved is found again by its frontmatter", async () => {
+      const { registry } = client(
+        updateRoutes(NEWER, treeAt([["pdf/SKILL.md", "aaa"]]), {
+          "pdf/SKILL.md": "---\nname: pdf\n---\n",
+        })
+      );
+      assert.strictEqual(
+        (await registry.checkForUpdate(installed)).status,
+        SKILL_UPDATE_STATUSES.UPDATE_AVAILABLE
+      );
+    });
+
+    test("a skill gone from its repository is reported as not found", async () => {
+      const { registry } = client(
+        updateRoutes(NEWER, treeAt([["skills/docx/SKILL.md", "x"]]), {
+          "skills/docx/SKILL.md": "---\nname: docx\n---\n",
+        })
+      );
+      assert.strictEqual(
+        (await registry.checkForUpdate(installed)).status,
+        SKILL_UPDATE_STATUSES.NOT_FOUND
+      );
+    });
+
+    test("skills from one repository share its HEAD lookup", async () => {
+      const { registry, urls } = client(updateRoutes(COMMIT, treeAt([])));
+      const outcomes = await checkSkillUpdatesBatch(registry, [
+        installed,
+        { ...installed, slug: "docx", skillMdPath: "skills/docx/SKILL.md" },
+      ]);
+      assert.deepStrictEqual(
+        outcomes.map((outcome) => outcome.status),
+        [SKILL_UPDATE_STATUSES.UP_TO_DATE, SKILL_UPDATE_STATUSES.UP_TO_DATE]
+      );
+      assert.strictEqual(
+        urls.filter((url) => url.endsWith("/commits/HEAD")).length,
+        1
+      );
+    });
+
+    test("a failed check becomes that skill's error, not a throw", async () => {
+      const { registry } = client({
+        "https://api.github.com/": () => new Response("", { status: 500 }),
+      });
+      const [outcome] = await checkSkillUpdatesBatch(registry, [installed]);
+      assert.strictEqual(outcome?.status, SKILL_UPDATE_STATUSES.FAILED);
+      assert.match(
+        "error" in outcome! ? outcome.error : "",
+        /GitHub lookup of anthropics\/skills is unavailable \(HTTP 500\)/
+      );
     });
   });
 });

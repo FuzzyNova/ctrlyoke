@@ -11,6 +11,7 @@ import {
   HARNESS_IDS,
   MESSAGE_TYPES,
   SETTING_SCOPES,
+  SKILL_UPDATE_STATUSES,
 } from "../../types/DashboardConstants";
 import type {
   RegistrySkillAudit,
@@ -19,8 +20,12 @@ import type {
 } from "../../types/WebviewMessageTypes";
 import type {
   DownloadedSkillFile,
+  InstalledRegistrySkill,
+  SkillUpdateCheck,
   SkillsRegistry,
 } from "../../utils/SkillsRegistryClient";
+
+const NEWER_COMMIT = "1111111111111111111111111111111111111111";
 
 /**
  * Every mutating harness-file op shares one success payload shape. This pins
@@ -284,6 +289,18 @@ suite("HarnessFileMessageService", () => {
 
     class FakeSkillsRegistry implements SkillsRegistry {
       failWith: string | undefined;
+      updateCheck: SkillUpdateCheck | Error = {
+        status: SKILL_UPDATE_STATUSES.UPDATE_AVAILABLE,
+        latestCommitSha: NEWER_COMMIT,
+      };
+      checked: InstalledRegistrySkill[] = [];
+      async checkForUpdate(
+        installed: InstalledRegistrySkill
+      ): Promise<SkillUpdateCheck> {
+        this.checked.push(installed);
+        if (this.updateCheck instanceof Error) throw this.updateCheck;
+        return this.updateCheck;
+      }
       async searchSkills(): Promise<RegistrySkillEntry[]> {
         if (this.failWith) throw new Error(this.failWith);
         return [
@@ -410,6 +427,70 @@ suite("HarnessFileMessageService", () => {
       assert.strictEqual(lastResult().success, false);
       assert.match(lastResult().error, /GitHub download/);
       assert.strictEqual(refreshes, 0);
+    });
+
+    async function installPdf(replace?: boolean): Promise<void> {
+      await service.handleInstallRegistrySkill(ctx(), {
+        type: MESSAGE_TYPES.INSTALL_REGISTRY_SKILL,
+        location,
+        scope,
+        ...(replace ? { replace } : {}),
+      });
+    }
+
+    test("installing over an existing copy needs replace", async () => {
+      await installPdf();
+      await installPdf();
+      assert.strictEqual(lastResult().success, false);
+      assert.match(lastResult().error, /already exists/);
+
+      await installPdf(true);
+      assert.strictEqual(lastResult().success, true);
+    });
+
+    test("the update check reports each installed skill with its local edits", async () => {
+      await installPdf();
+      const skillDir = path.join(workspaceRoot, ".ctrlyoke", "skills", "pdf");
+      await fs.writeFile(path.join(skillDir, "SKILL.md"), "edited locally");
+
+      await service.handleSkillsRegistryUpdateCheck(ctx());
+      assert.deepStrictEqual(lastResult(), {
+        type: MESSAGE_TYPES.SKILLS_REGISTRY_UPDATE_CHECK_RESULT,
+        results: [
+          {
+            path: skillDir,
+            scope,
+            source: location.source,
+            slug: location.slug,
+            status: SKILL_UPDATE_STATUSES.UPDATE_AVAILABLE,
+            latestCommitSha: NEWER_COMMIT,
+            localChanges: ["SKILL.md"],
+          },
+        ],
+      });
+      assert.strictEqual(registry.checked[0]?.commitSha, location.commitSha);
+      assert.deepStrictEqual(Object.keys(registry.checked[0]!.files), [
+        "SKILL.md",
+      ]);
+    });
+
+    test("a failed update check is reported per skill", async () => {
+      await installPdf();
+      registry.updateCheck = new Error("GitHub is rate-limiting requests");
+      await service.handleSkillsRegistryUpdateCheck(ctx());
+      const [result] = lastResult().results;
+      assert.strictEqual(result.status, SKILL_UPDATE_STATUSES.FAILED);
+      assert.strictEqual(result.error, "GitHub is rate-limiting requests");
+      assert.strictEqual(result.latestCommitSha, undefined);
+    });
+
+    test("skills without a skills.sh origin are not checked", async () => {
+      const own = path.join(workspaceRoot, ".ctrlyoke", "skills", "mine");
+      await fs.mkdir(own, { recursive: true });
+      await fs.writeFile(path.join(own, "SKILL.md"), "---\nname: mine\n---\n");
+      await service.handleSkillsRegistryUpdateCheck(ctx());
+      assert.deepStrictEqual(lastResult().results, []);
+      assert.strictEqual(registry.checked.length, 0);
     });
   });
 });

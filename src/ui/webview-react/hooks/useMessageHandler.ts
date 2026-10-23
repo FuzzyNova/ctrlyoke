@@ -2232,6 +2232,11 @@ export function createMessageHandlers(
       useHarnessFileStore.getState().requestFiles();
     }
   };
+  handlers[MESSAGE_TYPES.SKILLS_REGISTRY_UPDATE_CHECK_RESULT] = (message) => {
+    useSkillsRegistryStore
+      .getState()
+      .setUpdateCheckResults(message.results ?? []);
+  };
 
   // --------------------------------------------------------------------------
   // HARNESS_FILES_RESULT - File enumeration results

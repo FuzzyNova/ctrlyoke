@@ -487,6 +487,28 @@ export function getGitHubBlobUrl(
   return `https://github.com/${source}/blob/${commitSha}/${encodedPath}`;
 }
 
+/** The GitHub page comparing two commits of `<owner>/<repo>`. */
+export function getGitHubCompareUrl(
+  source: string,
+  fromSha: string,
+  toSha: string
+): string {
+  return `https://github.com/${source}/compare/${fromSha}...${toSha}`;
+}
+
+/** Outcomes of checking an installed registry skill against its repository. */
+export const SKILL_UPDATE_STATUSES = {
+  UP_TO_DATE: "upToDate",
+  UPDATE_AVAILABLE: "updateAvailable",
+  /** The skill is no longer in its repository. */
+  NOT_FOUND: "notFound",
+  /** The check itself failed; the result carries the error. */
+  FAILED: "failed",
+} as const;
+
+export type SkillUpdateStatus =
+  (typeof SKILL_UPDATE_STATUSES)[keyof typeof SKILL_UPDATE_STATUSES];
+
 /** User-facing licensing command actions and destinations. */
 export const LICENSE_UI = {
   OPEN_PRICING: "Open pricing",
@@ -893,8 +915,10 @@ export const MESSAGE_TYPES = {
   SKILLS_REGISTRY_AUDITS_RESULT: "skillsRegistryAuditsResult", // Extension -> Webview: { results: RegistrySkillAuditResult[] }
   REQUEST_REGISTRY_SKILL_LOCATION: "requestRegistrySkillLocation", // Webview -> Extension: { source, slug }
   REGISTRY_SKILL_LOCATION_RESULT: "registrySkillLocationResult", // Extension -> Webview: { source, slug, location?, error? }
-  INSTALL_REGISTRY_SKILL: "installRegistrySkill", // Webview -> Extension: { location, scope }
+  INSTALL_REGISTRY_SKILL: "installRegistrySkill", // Webview -> Extension: { location, scope, replace? }
   REGISTRY_SKILL_INSTALL_RESULT: "registrySkillInstallResult", // Extension -> Webview: { source, slug, success, error? }
+  REQUEST_SKILLS_REGISTRY_UPDATE_CHECK: "requestSkillsRegistryUpdateCheck", // Webview -> Extension: {}
+  SKILLS_REGISTRY_UPDATE_CHECK_RESULT: "skillsRegistryUpdateCheckResult", // Extension -> Webview: { results: SkillUpdateCheckResult[] }
 
   // Settings — Webview → Extension
   UPDATE_CONFIRM_DELETE: "updateConfirmDelete", // Update confirmDeleteOperations setting: { value: boolean }

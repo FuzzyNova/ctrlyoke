@@ -11,6 +11,7 @@ vi.mock("@hooks/useMessageHandler", () => ({
 }));
 
 import {
+  SkillOriginBadge,
   SkillsRegistryPanel,
   formatSkillInstalls,
   getWorstSkillAudit,
@@ -22,13 +23,16 @@ import {
   MESSAGE_TYPES,
   SETTING_SCOPES,
   SKILL_AUDIT_STATUSES,
+  SKILL_UPDATE_STATUSES,
   SPECIAL_TARGET_IDS,
 } from "@root/types/DashboardConstants";
 import type {
   ManagedFile,
+  ManagedFileLocation,
   RegistrySkillAuditResult,
   RegistrySkillEntry,
   RegistrySkillLocation,
+  SkillUpdateCheckResult,
 } from "@root/types/WebviewMessageTypes";
 
 const PDF: RegistrySkillEntry = {
@@ -52,6 +56,26 @@ const PDF_LOCATION: RegistrySkillLocation = {
   folderPath: "skills/pdf",
   skillMdPath: "skills/pdf/SKILL.md",
   name: "pdf",
+};
+
+const PDF_COPY: ManagedFileLocation = {
+  harnessId: SPECIAL_TARGET_IDS.CTRLYOKE,
+  scope: SETTING_SCOPES.WORKSPACE,
+  path: "C:/repo/.ctrlyoke/skills/pdf",
+  origin: {
+    registry: DATA_SOURCES.SKILLS_SH.host,
+    source: PDF_LOCATION.source,
+    slug: PDF_LOCATION.slug,
+    commitSha: PDF_LOCATION.commitSha,
+    skillMdPath: PDF_LOCATION.skillMdPath,
+    installedAt: "2026-10-23T13:04:40.402Z",
+  },
+};
+const PDF_FILE: ManagedFile = {
+  name: "pdf",
+  displayName: "Pdf",
+  type: "skill",
+  locations: [PDF_COPY],
 };
 
 const initialState = useSkillsRegistryStore.getState();
@@ -199,29 +223,209 @@ describe("SkillsRegistryPanel", () => {
     ).toBeTruthy();
   });
 
-  it("marks a skill already in the active ctrlyoke scope as Imported", () => {
+  it("marks the installed copy of a result as Installed", () => {
+    renderPanel([PDF_FILE]);
+    searchFor("pdf");
+    answerSearch([PDF, DOCX]);
+    const installed = screen.getByRole("button", { name: "Installed" });
+    expect((installed as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole("button", { name: "Import" })).toBeTruthy();
+  });
+
+  it("does not offer a result whose folder name a different skill already uses", () => {
     renderPanel([
       {
-        name: "pdf",
-        displayName: "Pdf",
-        type: "skill",
-        locations: [
-          {
-            harnessId: SPECIAL_TARGET_IDS.CTRLYOKE,
-            scope: SETTING_SCOPES.WORKSPACE,
-            path: "C:/repo/.ctrlyoke/skills/pdf",
-          },
-        ],
+        ...PDF_FILE,
+        locations: [{ ...PDF_COPY, origin: undefined }],
       },
     ]);
     searchFor("pdf");
-    answerSearch([PDF, DOCX]);
-    const buttons = screen.getAllByRole("button", { name: /Import/ });
-    expect(buttons.map((button) => button.textContent)).toEqual([
-      "Imported",
-      "Import",
-    ]);
-    expect((buttons[0] as HTMLButtonElement).disabled).toBe(true);
+    answerSearch([PDF]);
+    const button = screen.getByRole("button", { name: "Name in use" });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    expect(button.getAttribute("title")).toMatch(/Delete or rename it/);
+  });
+
+  describe("updates", () => {
+    const NEWER = "1111111111111111111111111111111111111111";
+    const NEWER_LOCATION = { ...PDF_LOCATION, commitSha: NEWER };
+
+    function answerUpdateCheck(
+      overrides: Partial<SkillUpdateCheckResult> = {}
+    ) {
+      act(() => {
+        useSkillsRegistryStore.getState().setUpdateCheckResults([
+          {
+            path: PDF_COPY.path,
+            scope: SETTING_SCOPES.WORKSPACE,
+            source: PDF.source,
+            slug: PDF.slug,
+            status: SKILL_UPDATE_STATUSES.UPDATE_AVAILABLE,
+            latestCommitSha: NEWER,
+            localChanges: [],
+            ...overrides,
+          },
+        ]);
+      });
+    }
+
+    it("checks for updates only when asked, and summarizes the answer", () => {
+      renderPanel([PDF_FILE]);
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(sendMessageMock).not.toHaveBeenCalled();
+
+      fireEvent.click(
+        screen.getByRole("button", { name: /Check for updates/ })
+      );
+      expect(
+        sentOfType(MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_UPDATE_CHECK)
+      ).toHaveLength(1);
+      expect(screen.getByText("Checking 1 skill on GitHub…")).toBeTruthy();
+
+      answerUpdateCheck();
+      expect(screen.getByText("1 update available")).toBeTruthy();
+      answerUpdateCheck({ status: SKILL_UPDATE_STATUSES.UP_TO_DATE });
+      expect(screen.getByText("Up to date")).toBeTruthy();
+    });
+
+    it("hides the update check when nothing came from skills.sh", () => {
+      renderPanel([
+        { ...PDF_FILE, locations: [{ ...PDF_COPY, origin: undefined }] },
+      ]);
+      expect(
+        screen.queryByRole("button", { name: /Check for updates/ })
+      ).toBeNull();
+    });
+
+    it("offers Update on the result and replaces the copy in its own scope", () => {
+      renderPanel([PDF_FILE]);
+      answerUpdateCheck();
+      searchFor("pdf");
+      answerSearch([PDF]);
+      act(() => {
+        useSkillsRegistryStore.getState().setAuditResults([
+          {
+            source: PDF.source,
+            slug: PDF.slug,
+            audits: [
+              { provider: "Socket", providerSlug: "socket", status: "pass" },
+            ],
+          },
+        ]);
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Update" }));
+      const dialog = screen.getByRole("dialog", { name: "Update pdf?" });
+      act(() => {
+        useSkillsRegistryStore
+          .getState()
+          .setLocationResult(PDF.source, PDF.slug, NEWER_LOCATION);
+      });
+      expect(
+        within(dialog)
+          .getByRole("link", { name: /Compare the commits/ })
+          .getAttribute("href")
+      ).toBe(
+        `https://github.com/anthropics/skills/compare/${PDF_LOCATION.commitSha}...${NEWER}`
+      );
+
+      fireEvent.click(within(dialog).getByRole("button", { name: "Update" }));
+      expect(sentOfType(MESSAGE_TYPES.INSTALL_REGISTRY_SKILL)).toEqual([
+        [
+          MESSAGE_TYPES.INSTALL_REGISTRY_SKILL,
+          {
+            location: NEWER_LOCATION,
+            scope: SETTING_SCOPES.WORKSPACE,
+            replace: true,
+          },
+        ],
+      ]);
+
+      act(() => {
+        useSkillsRegistryStore
+          .getState()
+          .setInstallResult(PDF.source, PDF.slug);
+      });
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(useSkillsRegistryStore.getState().updateCheck.results).toEqual({});
+      expect(useSkillsRegistryStore.getState().locations[PDF.id]).toBe(
+        undefined
+      );
+    });
+
+    it("always looks up the newest commit for an update", () => {
+      renderPanel([PDF_FILE]);
+      act(() => {
+        useSkillsRegistryStore
+          .getState()
+          .setLocationResult(PDF.source, PDF.slug, PDF_LOCATION);
+      });
+      answerUpdateCheck();
+      render(<SkillOriginBadge location={PDF_COPY} name="Pdf" />);
+      fireEvent.click(screen.getByRole("button", { name: /Update available/ }));
+      expect(
+        sentOfType(MESSAGE_TYPES.REQUEST_REGISTRY_SKILL_LOCATION)
+      ).toHaveLength(1);
+      expect(screen.getByRole("dialog", { name: "Update Pdf?" })).toBeTruthy();
+    });
+
+    it("lists local edits and needs consent to replace them", () => {
+      renderPanel([PDF_FILE]);
+      answerUpdateCheck({ localChanges: ["SKILL.md", "scripts/fill.py"] });
+      render(<SkillOriginBadge location={PDF_COPY} />);
+      fireEvent.click(screen.getByRole("button", { name: /Update available/ }));
+      const dialog = screen.getByRole("dialog", { name: "Update pdf?" });
+      act(() => {
+        const store = useSkillsRegistryStore.getState();
+        store.setLocationResult(PDF.source, PDF.slug, NEWER_LOCATION);
+        store.setAuditResults([
+          {
+            source: PDF.source,
+            slug: PDF.slug,
+            audits: [
+              { provider: "Socket", providerSlug: "socket", status: "pass" },
+            ],
+          },
+        ]);
+      });
+      expect(within(dialog).getByText(/You changed 2 files/)).toBeTruthy();
+      expect(within(dialog).getByText("scripts/fill.py")).toBeTruthy();
+      const update = within(dialog).getByRole("button", {
+        name: "Update",
+      }) as HTMLButtonElement;
+      expect(update.disabled).toBe(true);
+      fireEvent.click(
+        within(dialog).getByRole("checkbox", {
+          name: "Replace my local changes.",
+        })
+      );
+      expect(update.disabled).toBe(false);
+    });
+
+    it("badges a skills.sh copy and reports what the check found", () => {
+      render(<SkillOriginBadge location={PDF_COPY} />);
+      expect(
+        screen.getByRole("link", { name: DATA_SOURCES.SKILLS_SH.label })
+      ).toBeTruthy();
+      expect(screen.queryByRole("button")).toBeNull();
+      answerUpdateCheck({ status: SKILL_UPDATE_STATUSES.NOT_FOUND });
+      expect(screen.getByText("Removed upstream")).toBeTruthy();
+      answerUpdateCheck({
+        status: SKILL_UPDATE_STATUSES.FAILED,
+        error: "GitHub is rate-limiting requests",
+      });
+      expect(
+        screen.getByText("Update check failed").getAttribute("title")
+      ).toBe("GitHub is rate-limiting requests");
+    });
+
+    it("renders nothing for a copy that did not come from skills.sh", () => {
+      const { container } = render(
+        <SkillOriginBadge location={{ ...PDF_COPY, origin: undefined }} />
+      );
+      expect(container.textContent).toBe("");
+    });
   });
 
   it("pages through results ten at a time", () => {

@@ -45,6 +45,7 @@ import {
   type SettingScope,
   type SettingWriteScope,
   type SkillAuditStatus,
+  type SkillUpdateStatus,
   type TemplateVariableDefaultSource,
   type LspExportTargetId,
   type SecretRegistryActionState,
@@ -3116,6 +3117,21 @@ export interface ManagedFileLocation {
   scope: SettingWriteScope;
   /** Absolute path to the file (agent) or directory (skill) on disk */
   path: string;
+  /** Set on a ctrlyoke skill folder that was installed from a registry. */
+  origin?: SkillOriginInfo;
+}
+
+/** Where an installed skill came from, read from its origin record. */
+export interface SkillOriginInfo {
+  /** Host of the registry it was found on, e.g. `skills.sh`. */
+  registry: string;
+  /** The publishing GitHub repository, `<owner>/<repo>`. */
+  source: string;
+  slug: string;
+  /** The commit its files were downloaded from. */
+  commitSha: string;
+  skillMdPath: string;
+  installedAt: string;
 }
 
 /** A discovered agent or skill, with all known on-disk locations */
@@ -3317,6 +3333,11 @@ export interface InstallRegistrySkillMessage {
   type: typeof MESSAGE_TYPES.INSTALL_REGISTRY_SKILL;
   location: RegistrySkillLocation;
   scope: SettingWriteScope;
+  /**
+   * Replace the scope's copy of this skill (an update). Only a copy installed
+   * from the same `source`/`slug` may be replaced.
+   */
+  replace?: boolean;
 }
 
 /** Extension → Webview: outcome of a registry skill install. */
@@ -3326,6 +3347,35 @@ export interface RegistrySkillInstallResultMessage {
   slug: string;
   success: boolean;
   error?: string;
+}
+
+/** Webview → Extension: check every skills.sh skill installed in either scope for updates. */
+export interface RequestSkillsRegistryUpdateCheckMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_UPDATE_CHECK;
+}
+
+/** One installed skill's update check. */
+export interface SkillUpdateCheckResult {
+  /** The installed skill folder, as `ManagedFileLocation.path`. */
+  path: string;
+  scope: SettingWriteScope;
+  source: string;
+  slug: string;
+  status: SkillUpdateStatus;
+  /** The repository's current commit, when it was reached. */
+  latestCommitSha?: string;
+  /**
+   * Files edited, added or removed locally since install, folder-relative.
+   * An update replaces them.
+   */
+  localChanges: string[];
+  error?: string;
+}
+
+/** Extension → Webview: update check results, one per installed skill. */
+export interface SkillsRegistryUpdateCheckResultMessage {
+  type: typeof MESSAGE_TYPES.SKILLS_REGISTRY_UPDATE_CHECK_RESULT;
+  results: SkillUpdateCheckResult[];
 }
 
 /** Webview → Extension: validate the current unsaved ctrlyoke document. */
@@ -3507,6 +3557,7 @@ export type IncomingMessage =
   | SkillsRegistryAuditsResultMessage
   | RegistrySkillLocationResultMessage
   | RegistrySkillInstallResultMessage
+  | SkillsRegistryUpdateCheckResultMessage
   | { type: typeof MESSAGE_TYPES.STARTUP_COMPLETE }
   | { type: typeof MESSAGE_TYPES.WORKSPACE_INIT_REQUIRED }
   | { type: typeof MESSAGE_TYPES.WORKSPACE_FOLDER_REQUIRED }

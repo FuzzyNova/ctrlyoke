@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { Fragment, useEffect, useMemo, useState, useCallback } from "react";
 import { useHarnessFileStore } from "@store/useHarnessFileStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { sendMessage } from "@hooks/useMessageHandler";
@@ -31,7 +31,7 @@ import {
 } from "@components/shared/BulkSelectionActionsBar";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { Icon } from "../shared/Icon";
-import { SkillsRegistryPanel } from "./SkillsRegistryPanel";
+import { SkillOriginBadge, SkillsRegistryPanel } from "./SkillsRegistryPanel";
 
 // ============================================================================
 // Constants
@@ -396,11 +396,10 @@ function FileRow({
 
       <div className="mt-1 flex items-center gap-1 flex-wrap">
         {file.locations.map((loc) => (
-          <HarnessBadge
-            key={`${loc.harnessId}-${loc.scope}-${loc.path}`}
-            id={loc.harnessId}
-            scope={loc.scope}
-          />
+          <Fragment key={`${loc.harnessId}-${loc.scope}-${loc.path}`}>
+            <HarnessBadge id={loc.harnessId} scope={loc.scope} />
+            <SkillOriginBadge location={loc} name={file.displayName} />
+          </Fragment>
         ))}
         {file.builtInSourcePath && (
           <span className="inline-flex items-center px-1 py-0.5 rounded-sm text-xxs font-medium leading-none bg-badge-bg text-badge-fg">

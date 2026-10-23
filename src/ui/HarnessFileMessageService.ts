@@ -5,13 +5,18 @@ import { getErrorMessage } from "../utils/ErrorUtils";
 import {
   DASHBOARD_ACTION_RESULT_STATUSES,
   DATA_SOURCES,
+  HARNESS_FILE_TYPES,
   MESSAGE_TYPES,
   type HarnessFileType,
 } from "../types/DashboardConstants";
-import { HarnessFileManager } from "../utils/HarnessFileManager";
+import {
+  HarnessFileManager,
+  readSkillOrigin,
+} from "../utils/HarnessFileManager";
 import { Log } from "../utils/Log";
 import {
   SkillsShRegistryClient,
+  checkSkillUpdatesBatch,
   fetchSkillAuditsBatch,
   type SkillsRegistry,
 } from "../utils/SkillsRegistryClient";
@@ -29,6 +34,7 @@ import type {
   RequestSkillsRegistryAuditsMessage,
   RequestRegistrySkillLocationMessage,
   InstallRegistrySkillMessage,
+  SkillUpdateCheckResult,
 } from "../types/WebviewMessageTypes";
 import type { WebviewClientContext } from "./WebviewClientContext";
 
@@ -280,7 +286,8 @@ export class HarnessFileMessageService {
           skillMdPath: location.skillMdPath,
         },
         workspaceRoot,
-        message.scope ?? "workspace"
+        message.scope ?? "workspace",
+        message.replace === true
       );
     } catch (error) {
       const msg = getErrorMessage(error);
@@ -304,6 +311,68 @@ export class HarnessFileMessageService {
       success: true,
     });
     await this.onFilesChanged();
+  }
+
+  /**
+   * Check every skills.sh skill installed in either ctrlyoke scope against
+   * its GitHub repository, and list the files edited locally since install
+   * (which an update would replace). Always answers, one result per skill.
+   */
+  async handleSkillsRegistryUpdateCheck(
+    ctx: WebviewClientContext
+  ): Promise<void> {
+    let results: SkillUpdateCheckResult[] = [];
+    try {
+      const files = await HarnessFileManager.resolveAllLocations(
+        this.getWorkspaceRoot(),
+        HARNESS_FILE_TYPES.SKILL
+      );
+      const installed = (
+        await Promise.all(
+          files
+            .flatMap((file) => file.locations)
+            .filter(
+              (location) =>
+                location.origin?.registry === DATA_SOURCES.SKILLS_SH.host
+            )
+            .map(async (location) => ({
+              location,
+              record: await readSkillOrigin(location.path),
+            }))
+        )
+      ).flatMap(({ location, record }) =>
+        record ? [{ location, record }] : []
+      );
+      const outcomes = await checkSkillUpdatesBatch(
+        this.skillsRegistry,
+        installed.map(({ record }) => record)
+      );
+      results = await Promise.all(
+        installed.map(async ({ location, record }, index) => {
+          const outcome = outcomes[index]!;
+          return {
+            path: location.path,
+            scope: location.scope,
+            source: record.source,
+            slug: record.slug,
+            status: outcome.status,
+            ...("latestCommitSha" in outcome
+              ? { latestCommitSha: outcome.latestCommitSha }
+              : { error: outcome.error }),
+            localChanges: await HarnessFileManager.findLocalSkillChanges(
+              location.path,
+              record.files
+            ).catch(() => []),
+          };
+        })
+      );
+    } catch (error) {
+      Log.warn(`[SkillsRegistry] update check failed:`, getErrorMessage(error));
+    }
+    ctx.emit({
+      type: MESSAGE_TYPES.SKILLS_REGISTRY_UPDATE_CHECK_RESULT,
+      results,
+    });
   }
 
   async handleOpenHarnessDir(

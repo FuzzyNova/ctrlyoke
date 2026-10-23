@@ -1,6 +1,6 @@
 import * as path from "path";
 import * as fs from "fs";
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { Log } from "./Log";
 import {
   CURRENT_SCHEMA_VERSIONS,
@@ -8,6 +8,9 @@ import {
   assertWritableSchema,
 } from "./PersistedSchemaGuard";
 import { isPathWithinDirectory, isSafePathSegment } from "./PathSecurity";
+import { renameWithTransientRetry } from "./AtomicFileUtils";
+import { getErrorMessage } from "./ErrorUtils";
+import type { SkillOriginInfo } from "../types/WebviewMessageTypes";
 import type {
   HarnessId,
   AnyTargetId,
@@ -54,6 +57,8 @@ export interface ManagedFileLocation {
   /** Whether this copy lives in a workspace dir or a user-level dir */
   scope: SettingWriteScope;
   path: string;
+  /** Set on a ctrlyoke skill folder that was installed from a registry. */
+  origin?: SkillOriginInfo;
 }
 
 export interface ManagedFile {
@@ -118,19 +123,19 @@ async function copyDir(
 
 /**
  * Where a skill installed from a registry came from, written beside its
- * SKILL.md so a later "update available" check can compare commits. It stays
+ * SKILL.md so the update check can compare it with the repository. It stays
  * with the ctrlyoke copy and is not exported to harness directories.
  */
 export const SKILL_ORIGIN_FILE_NAME = ".ctrlyoke-origin.json";
 
-export interface SkillOriginRecord {
+export interface SkillOriginRecord extends SkillOriginInfo {
   schemaVersion: number;
-  registry: string;
-  source: string;
-  slug: string;
-  commitSha: string;
-  skillMdPath: string;
-  installedAt: string;
+  /**
+   * Git blob SHA of every installed file, keyed by folder-relative `/` path.
+   * Compared with the repository tree to detect an update, and with the files
+   * on disk to detect local edits, without downloading anything.
+   */
+  files: Record<string, string>;
 }
 
 /** A file to write into a skill folder; `path` is folder-relative, `/`-separated. */
@@ -148,6 +153,88 @@ async function readJsonIfPresent(filePath: string): Promise<unknown> {
   } catch {
     return undefined;
   }
+}
+
+/** The SHA git (and the GitHub trees API) gives a file with this content. */
+export function gitBlobSha(content: Uint8Array): string {
+  return createHash("sha1")
+    .update(`blob ${content.byteLength}\0`)
+    .update(content)
+    .digest("hex");
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.values(value).every((entry) => typeof entry === "string")
+  );
+}
+
+const SKILL_ORIGIN_TEXT_FIELDS = [
+  "registry",
+  "source",
+  "slug",
+  "commitSha",
+  "skillMdPath",
+  "installedAt",
+] as const satisfies ReadonlyArray<keyof SkillOriginInfo>;
+
+function isSkillOriginRecord(value: unknown): value is SkillOriginRecord {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const record: Partial<Record<keyof SkillOriginRecord, unknown>> = value;
+  return (
+    typeof record.schemaVersion === "number" &&
+    SKILL_ORIGIN_TEXT_FIELDS.every(
+      (field) => typeof record[field] === "string"
+    ) &&
+    isStringRecord(record.files)
+  );
+}
+
+/**
+ * A skill folder's origin record, or `undefined` when it has none or it is
+ * unreadable. A record a newer ctrlyoke wrote is returned for display; writes
+ * still refuse it through `assertWritableSchema`.
+ */
+export async function readSkillOrigin(
+  skillDir: string
+): Promise<SkillOriginRecord | undefined> {
+  const data = await readJsonIfPresent(
+    path.join(skillDir, SKILL_ORIGIN_FILE_NAME)
+  );
+  return isSkillOriginRecord(data) ? data : undefined;
+}
+
+function toSkillOriginInfo(record: SkillOriginRecord): SkillOriginInfo {
+  return {
+    registry: record.registry,
+    source: record.source,
+    slug: record.slug,
+    commitSha: record.commitSha,
+    skillMdPath: record.skillMdPath,
+    installedAt: record.installedAt,
+  };
+}
+
+/** Every regular file under `dir`, folder-relative with `/`; symlinks are skipped. */
+async function listSkillFiles(dir: string, prefix = ""): Promise<string[]> {
+  const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      files.push(
+        ...(await listSkillFiles(path.join(dir, entry.name), relative))
+      );
+    } else if (entry.isFile() && relative !== SKILL_ORIGIN_FILE_NAME) {
+      files.push(relative);
+    }
+  }
+  return files;
 }
 
 /** Return the generated built-in skill name for a bundled skill directory. */
@@ -386,11 +473,21 @@ async function collectSkillLocations(
       .catch(() => [] as fs.Dirent[]);
     for (const e of entries) {
       if (e.isDirectory() && (await isSkillDir(dir, e.name))) {
-        const skillFilePath = path.join(dir, e.name, "SKILL.md");
+        const skillDir = path.join(dir, e.name);
+        // Only ctrlyoke's own copies keep an origin record.
+        const origin =
+          targetId === SPECIAL_TARGET_IDS.CTRLYOKE
+            ? await readSkillOrigin(skillDir)
+            : undefined;
         addSkill(
           e.name,
-          { harnessId: targetId, scope, path: path.join(dir, e.name) },
-          await readFrontmatterDescription(skillFilePath)
+          {
+            harnessId: targetId,
+            scope,
+            path: skillDir,
+            ...(origin ? { origin: toSkillOriginInfo(origin) } : {}),
+          },
+          await readFrontmatterDescription(path.join(skillDir, "SKILL.md"))
         );
       }
     }
@@ -725,10 +822,10 @@ export class HarnessFileManager {
   static async installSkillFiles(
     name: string,
     files: readonly SkillFileContent[],
-    origin: Omit<SkillOriginRecord, "schemaVersion" | "installedAt">,
+    origin: Omit<SkillOriginInfo, "installedAt">,
     workspaceRoot: string,
     scope: SettingWriteScope,
-    overwrite = false
+    replace = false
   ): Promise<string> {
     if (!isSafePathSegment(name)) {
       throw new Error(`Not a valid skill folder name: ${name}`);
@@ -743,8 +840,9 @@ export class HarnessFileManager {
       scope
     );
     const destDir = path.join(skillsDir, name);
-    if (fs.existsSync(destDir)) {
-      if (!overwrite) {
+    const exists = fs.existsSync(destDir);
+    if (exists) {
+      if (!replace) {
         throw new Error(`Skill directory already exists: ${destDir}`);
       }
       const originPath = path.join(destDir, SKILL_ORIGIN_FILE_NAME);
@@ -753,6 +851,18 @@ export class HarnessFileManager {
         await readJsonIfPresent(originPath),
         originPath
       );
+      // An update replaces only a copy of the same registry skill, never a
+      // skill the user wrote or installed from somewhere else.
+      const existing = await readSkillOrigin(destDir);
+      if (
+        existing?.registry !== origin.registry ||
+        existing.source !== origin.source ||
+        existing.slug !== origin.slug
+      ) {
+        throw new Error(
+          `The skill in ${destDir} was not installed from ${origin.registry} ${origin.source}; delete it before installing this one`
+        );
+      }
     }
 
     const stagingRoot = path.join(
@@ -760,7 +870,13 @@ export class HarnessFileManager {
       SKILL_INSTALL_STAGING_DIR
     );
     const stagingDir = path.join(stagingRoot, `${name}-${randomUUID()}`);
+    const previousDir = path.join(
+      stagingRoot,
+      `${name}-previous-${randomUUID()}`
+    );
+    let keepPrevious = false;
     try {
+      const hashes: Record<string, string> = {};
       for (const file of files) {
         const segments = file.path.split("/");
         if (!segments.every(isSafePathSegment)) {
@@ -772,11 +888,13 @@ export class HarnessFileManager {
         }
         await ensureDir(path.dirname(filePath));
         await fs.promises.writeFile(filePath, file.content);
+        hashes[file.path] = gitBlobSha(file.content);
       }
       const record: SkillOriginRecord = {
         schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.SKILL_ORIGIN],
         ...origin,
         installedAt: new Date().toISOString(),
+        files: hashes,
       };
       await fs.promises.writeFile(
         path.join(stagingDir, SKILL_ORIGIN_FILE_NAME),
@@ -785,18 +903,60 @@ export class HarnessFileManager {
       );
 
       await ensureDir(skillsDir);
-      if (overwrite) {
-        await fs.promises.rm(destDir, { recursive: true, force: true });
+      if (exists) {
+        // Move the old copy aside rather than deleting it first, so a failed
+        // swap can put it back and the skill is never left missing.
+        await renameWithTransientRetry(destDir, previousDir);
+        try {
+          await renameWithTransientRetry(stagingDir, destDir);
+        } catch (error) {
+          try {
+            await renameWithTransientRetry(previousDir, destDir);
+          } catch {
+            keepPrevious = true;
+            throw new Error(
+              `Could not replace ${destDir} (${getErrorMessage(error)}); the previous copy is in ${previousDir}`
+            );
+          }
+          throw error;
+        }
+      } else {
+        await renameWithTransientRetry(stagingDir, destDir);
       }
-      await fs.promises.rename(stagingDir, destDir);
     } finally {
       await fs.promises.rm(stagingDir, { recursive: true, force: true });
+      if (!keepPrevious) {
+        await fs.promises.rm(previousDir, { recursive: true, force: true });
+      }
       await fs.promises.rmdir(stagingRoot).catch(() => {});
     }
     Log.info(
-      `[HarnessFileManager] Installed skill "${name}" from ${origin.registry} (${origin.source}@${origin.commitSha.slice(0, 7)}) to ${destDir}`
+      `[HarnessFileManager] ${exists ? "Updated" : "Installed"} skill "${name}" from ${origin.registry} (${origin.source}@${origin.commitSha.slice(0, 7)}) in ${destDir}`
     );
     return destDir;
+  }
+
+  /**
+   * Folder-relative paths in an installed skill that differ from what was
+   * installed (edited, added or deleted), sorted. Reads only the local disk.
+   */
+  static async findLocalSkillChanges(
+    skillDir: string,
+    installed: Readonly<Record<string, string>>
+  ): Promise<string[]> {
+    const changed = new Set<string>();
+    const present = await listSkillFiles(skillDir);
+    for (const relative of present) {
+      const content = await fs.promises.readFile(
+        path.join(skillDir, ...relative.split("/"))
+      );
+      if (installed[relative] !== gitBlobSha(content)) changed.add(relative);
+    }
+    const presentSet = new Set(present);
+    for (const relative of Object.keys(installed)) {
+      if (!presentSet.has(relative)) changed.add(relative);
+    }
+    return [...changed].sort();
   }
 
   /**

@@ -7,6 +7,8 @@ import * as HarnessDirectoryUtils from "../../utils/HarnessDirectoryUtils";
 import {
   HarnessFileManager,
   SKILL_ORIGIN_FILE_NAME,
+  gitBlobSha,
+  readSkillOrigin,
 } from "../../utils/HarnessFileManager";
 import { SkillDiscovery } from "../../utils/SkillDiscovery";
 import {
@@ -298,6 +300,153 @@ suite("HarnessFileManager", () => {
       );
       const exported = path.join(workspaceRoot, ".claude", "skills", "pdf");
       assert.deepStrictEqual(await fs.readdir(exported), ["SKILL.md"]);
+    });
+
+    test("hashes files the way git does", () => {
+      // `printf 'hello\n' | git hash-object --stdin`
+      assert.strictEqual(
+        gitBlobSha(text("hello\n")),
+        "ce013625030ba8dba906f756967f9e9ca394464a"
+      );
+    });
+
+    test("records each file's hash and reports the origin on the ctrlyoke copy", async () => {
+      const skillMd = text("---\nname: pdf\n---\n");
+      const dest = await HarnessFileManager.installSkillFiles(
+        "pdf",
+        [{ path: "SKILL.md", content: skillMd }],
+        origin,
+        workspaceRoot,
+        SETTING_SCOPES.WORKSPACE
+      );
+      assert.deepStrictEqual((await readSkillOrigin(dest))?.files, {
+        "SKILL.md": gitBlobSha(skillMd),
+      });
+      await HarnessFileManager.exportToHarness(
+        dest,
+        HARNESS_IDS.CLAUDE_CLI,
+        workspaceRoot,
+        HARNESS_FILE_TYPES.SKILL
+      );
+
+      const [file] = await HarnessFileManager.resolveAllLocations(
+        workspaceRoot,
+        HARNESS_FILE_TYPES.SKILL
+      ).then((files) => files.filter((entry) => entry.name === "pdf"));
+      const ctrlyoke = file?.locations.find(
+        (location) =>
+          location.harnessId === SPECIAL_TARGET_IDS.CTRLYOKE &&
+          location.scope === SETTING_SCOPES.WORKSPACE
+      );
+      const claude = file?.locations.find(
+        (location) =>
+          location.harnessId === HARNESS_IDS.CLAUDE_CLI &&
+          location.scope === SETTING_SCOPES.WORKSPACE
+      );
+      assert.strictEqual(ctrlyoke?.origin?.commitSha, origin.commitSha);
+      assert.strictEqual(ctrlyoke?.origin?.source, origin.source);
+      assert.ok(claude, "the exported copy is listed");
+      assert.strictEqual(claude.origin, undefined);
+    });
+
+    test("replaces an installed copy of the same skill with the new files", async () => {
+      await HarnessFileManager.installSkillFiles(
+        "pdf",
+        [
+          { path: "SKILL.md", content: text("old") },
+          { path: "old.md", content: text("gone") },
+        ],
+        origin,
+        workspaceRoot,
+        SETTING_SCOPES.WORKSPACE
+      );
+      const newer = "1111111111111111111111111111111111111111";
+      const dest = await HarnessFileManager.installSkillFiles(
+        "pdf",
+        [{ path: "SKILL.md", content: text("new") }],
+        { ...origin, commitSha: newer },
+        workspaceRoot,
+        SETTING_SCOPES.WORKSPACE,
+        true
+      );
+      assert.deepStrictEqual((await fs.readdir(dest)).sort(), [
+        SKILL_ORIGIN_FILE_NAME,
+        "SKILL.md",
+      ]);
+      assert.strictEqual(
+        await fs.readFile(path.join(dest, "SKILL.md"), "utf8"),
+        "new"
+      );
+      assert.strictEqual((await readSkillOrigin(dest))?.commitSha, newer);
+      assert.deepStrictEqual(
+        await fs.readdir(path.join(workspaceRoot, ".ctrlyoke")),
+        ["skills"]
+      );
+    });
+
+    test("never replaces a skill that was not installed from the same source", async () => {
+      const dest = path.join(skillsDir(), "pdf");
+      await fs.mkdir(dest, { recursive: true });
+      await fs.writeFile(path.join(dest, "SKILL.md"), "mine");
+      await assert.rejects(
+        HarnessFileManager.installSkillFiles(
+          "pdf",
+          [{ path: "SKILL.md", content: text("theirs") }],
+          origin,
+          workspaceRoot,
+          SETTING_SCOPES.WORKSPACE,
+          true
+        ),
+        /was not installed from skills\.sh anthropics\/skills/
+      );
+      await HarnessFileManager.installSkillFiles(
+        "other",
+        [{ path: "SKILL.md", content: text("x") }],
+        { ...origin, source: "someone/else" },
+        workspaceRoot,
+        SETTING_SCOPES.WORKSPACE
+      );
+      await assert.rejects(
+        HarnessFileManager.installSkillFiles(
+          "other",
+          [{ path: "SKILL.md", content: text("theirs") }],
+          origin,
+          workspaceRoot,
+          SETTING_SCOPES.WORKSPACE,
+          true
+        ),
+        /was not installed from/
+      );
+      assert.strictEqual(
+        await fs.readFile(path.join(dest, "SKILL.md"), "utf8"),
+        "mine"
+      );
+    });
+
+    test("finds files edited, added or deleted since install", async () => {
+      const dest = await HarnessFileManager.installSkillFiles(
+        "pdf",
+        [
+          { path: "SKILL.md", content: text("same") },
+          { path: "scripts/a.py", content: text("a") },
+          { path: "scripts/b.py", content: text("b") },
+        ],
+        origin,
+        workspaceRoot,
+        SETTING_SCOPES.WORKSPACE
+      );
+      const record = await readSkillOrigin(dest);
+      assert.deepStrictEqual(
+        await HarnessFileManager.findLocalSkillChanges(dest, record!.files),
+        []
+      );
+      await fs.writeFile(path.join(dest, "scripts", "a.py"), "edited");
+      await fs.rm(path.join(dest, "scripts", "b.py"));
+      await fs.writeFile(path.join(dest, "notes.md"), "added");
+      assert.deepStrictEqual(
+        await HarnessFileManager.findLocalSkillChanges(dest, record!.files),
+        ["notes.md", "scripts/a.py", "scripts/b.py"]
+      );
     });
   });
 });
