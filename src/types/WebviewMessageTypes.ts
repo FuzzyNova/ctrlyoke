@@ -44,6 +44,8 @@ import {
   type NotificationKind,
   type SettingScope,
   type SettingWriteScope,
+  type SkillAuditStatus,
+  type SkillUpdateStatus,
   type TemplateVariableDefaultSource,
   type LspExportTargetId,
   type SecretRegistryActionState,
@@ -3115,6 +3117,21 @@ export interface ManagedFileLocation {
   scope: SettingWriteScope;
   /** Absolute path to the file (agent) or directory (skill) on disk */
   path: string;
+  /** Set on a ctrlyoke skill folder that was installed from a registry. */
+  origin?: SkillOriginInfo;
+}
+
+/** Where an installed skill came from, read from its origin record. */
+export interface SkillOriginInfo {
+  /** Host of the registry it was found on, e.g. `skills.sh`. */
+  registry: string;
+  /** The publishing GitHub repository, `<owner>/<repo>`. */
+  source: string;
+  slug: string;
+  /** The commit its files were downloaded from. */
+  commitSha: string;
+  skillMdPath: string;
+  installedAt: string;
 }
 
 /** A discovered agent or skill, with all known on-disk locations */
@@ -3221,6 +3238,144 @@ export interface OpenHarnessDirResultMessage {
   /** Browser fallback target when the host cannot reveal a directory in the OS. */
   path?: string;
   error?: string;
+}
+
+/** One skills.sh search result. All text is sanitized by the extension. */
+export interface RegistrySkillEntry {
+  /** `<owner>/<repo>/<slug>`, unique across skills.sh. */
+  id: string;
+  /** The publishing GitHub repository, `<owner>/<repo>`. */
+  source: string;
+  /** skills.sh's slug for the skill; also the folder name it installs as. */
+  slug: string;
+  name: string;
+  /** Deduplicated install count reported by skills.sh. */
+  installs: number;
+}
+
+/** One provider's skills.sh security audit of a skill. */
+export interface RegistrySkillAudit {
+  provider: string;
+  /** Path segment of the provider's skills.sh audit page. */
+  providerSlug: string;
+  status: SkillAuditStatus;
+  riskLevel?: string;
+  summary?: string;
+  auditedAt?: string;
+}
+
+/** The audits for one skill: `null` when skills.sh has not audited it yet. */
+export interface RegistrySkillAuditResult {
+  source: string;
+  slug: string;
+  audits: RegistrySkillAudit[] | null;
+  error?: string;
+}
+
+/** Where a registry skill's files live on GitHub, pinned to one commit. */
+export interface RegistrySkillLocation {
+  source: string;
+  slug: string;
+  commitSha: string;
+  /** Repository-relative folder holding SKILL.md (empty for a root skill). */
+  folderPath: string;
+  skillMdPath: string;
+  /** The `name` from SKILL.md's frontmatter, sanitized. */
+  name: string;
+  description?: string;
+}
+
+/** Webview → Extension: search skills.sh. */
+export interface RequestSkillsRegistrySearchMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_SEARCH;
+  requestId: number;
+  query: string;
+}
+
+/** Extension → Webview: skills.sh search results. */
+export interface SkillsRegistrySearchResultMessage {
+  type: typeof MESSAGE_TYPES.SKILLS_REGISTRY_SEARCH_RESULT;
+  requestId: number;
+  skills: RegistrySkillEntry[];
+  error?: string;
+}
+
+/** Webview → Extension: fetch the security audits of several skills. */
+export interface RequestSkillsRegistryAuditsMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_AUDITS;
+  skills: Array<{ source: string; slug: string }>;
+}
+
+/** Extension → Webview: security audits, one result per requested skill. */
+export interface SkillsRegistryAuditsResultMessage {
+  type: typeof MESSAGE_TYPES.SKILLS_REGISTRY_AUDITS_RESULT;
+  results: RegistrySkillAuditResult[];
+}
+
+/** Webview → Extension: find a skill's folder in its GitHub repository. */
+export interface RequestRegistrySkillLocationMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_REGISTRY_SKILL_LOCATION;
+  source: string;
+  slug: string;
+}
+
+/** Extension → Webview: the resolved GitHub location, or why it failed. */
+export interface RegistrySkillLocationResultMessage {
+  type: typeof MESSAGE_TYPES.REGISTRY_SKILL_LOCATION_RESULT;
+  source: string;
+  slug: string;
+  location?: RegistrySkillLocation;
+  error?: string;
+}
+
+/** Webview → Extension: install the reviewed commit of a registry skill. */
+export interface InstallRegistrySkillMessage {
+  type: typeof MESSAGE_TYPES.INSTALL_REGISTRY_SKILL;
+  location: RegistrySkillLocation;
+  scope: SettingWriteScope;
+  /**
+   * Replace the scope's copy of this skill (an update). Only a copy installed
+   * from the same `source`/`slug` may be replaced.
+   */
+  replace?: boolean;
+}
+
+/** Extension → Webview: outcome of a registry skill install. */
+export interface RegistrySkillInstallResultMessage {
+  type: typeof MESSAGE_TYPES.REGISTRY_SKILL_INSTALL_RESULT;
+  source: string;
+  slug: string;
+  success: boolean;
+  error?: string;
+}
+
+/** Webview → Extension: check every skills.sh skill installed in either scope for updates. */
+export interface RequestSkillsRegistryUpdateCheckMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_UPDATE_CHECK;
+}
+
+/** One installed skill's update check. */
+export interface SkillUpdateCheckResult {
+  /** The installed skill folder, as `ManagedFileLocation.path`. */
+  path: string;
+  scope: SettingWriteScope;
+  source: string;
+  slug: string;
+  status: SkillUpdateStatus;
+  /** The repository's current commit, when it was reached. */
+  latestCommitSha?: string;
+  /**
+   * Files edited, added or removed locally since install, folder-relative.
+   * An update replaces them.
+   */
+  localChanges: string[];
+  error?: string;
+}
+
+/** Extension → Webview: update check results, one per installed skill. */
+export interface SkillsRegistryUpdateCheckResultMessage {
+  type: typeof MESSAGE_TYPES.SKILLS_REGISTRY_UPDATE_CHECK_RESULT;
+  results: SkillUpdateCheckResult[];
 }
 
 /** Webview → Extension: validate the current unsaved ctrlyoke document. */
@@ -3398,6 +3553,11 @@ export type IncomingMessage =
   | HarnessFilesResultMessage
   | HarnessFileOpResultMessage
   | OpenHarnessDirResultMessage
+  | SkillsRegistrySearchResultMessage
+  | SkillsRegistryAuditsResultMessage
+  | RegistrySkillLocationResultMessage
+  | RegistrySkillInstallResultMessage
+  | SkillsRegistryUpdateCheckResultMessage
   | { type: typeof MESSAGE_TYPES.STARTUP_COMPLETE }
   | { type: typeof MESSAGE_TYPES.WORKSPACE_INIT_REQUIRED }
   | { type: typeof MESSAGE_TYPES.WORKSPACE_FOLDER_REQUIRED }

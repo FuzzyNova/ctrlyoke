@@ -62,6 +62,7 @@ import {
 import { useTerminalStore } from "../store/terminalStore";
 import { useHarnessFileStore } from "../store/useHarnessFileStore";
 import { useMcpManagerStore } from "../store/useMcpManagerStore";
+import { useSkillsRegistryStore } from "../store/useSkillsRegistryStore";
 import { useWorkspaceViewerStore } from "../store/workspaceViewerStore";
 import { useCompatibilityStore } from "../store/compatibilityStore";
 import { useHistoryTrashStore } from "../store/historyTrashStore";
@@ -2196,6 +2197,45 @@ export function createMessageHandlers(
         message.error,
         message.nextCursor
       );
+  };
+
+  // --------------------------------------------------------------------------
+  // Skills registry (skills.sh) - search, audits, GitHub location, install
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.SKILLS_REGISTRY_SEARCH_RESULT] = (message) => {
+    useSkillsRegistryStore
+      .getState()
+      .setSearchResult(message.requestId, message.skills ?? [], message.error);
+  };
+  handlers[MESSAGE_TYPES.SKILLS_REGISTRY_AUDITS_RESULT] = (message) => {
+    useSkillsRegistryStore.getState().setAuditResults(message.results ?? []);
+  };
+  handlers[MESSAGE_TYPES.REGISTRY_SKILL_LOCATION_RESULT] = (message) => {
+    useSkillsRegistryStore
+      .getState()
+      .setLocationResult(
+        message.source,
+        message.slug,
+        message.location,
+        message.error
+      );
+  };
+  handlers[MESSAGE_TYPES.REGISTRY_SKILL_INSTALL_RESULT] = (message) => {
+    useSkillsRegistryStore
+      .getState()
+      .setInstallResult(
+        message.source,
+        message.slug,
+        message.success ? undefined : (message.error ?? "Install failed")
+      );
+    if (message.success) {
+      useHarnessFileStore.getState().requestFiles();
+    }
+  };
+  handlers[MESSAGE_TYPES.SKILLS_REGISTRY_UPDATE_CHECK_RESULT] = (message) => {
+    useSkillsRegistryStore
+      .getState()
+      .setUpdateCheckResults(message.results ?? []);
   };
 
   // --------------------------------------------------------------------------

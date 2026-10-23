@@ -43,6 +43,7 @@ export const BASELINE_SCHEMA_VERSIONS: Record<PersistedStore, number> = {
   [PERSISTED_STORES.INSTALLATIONS]: 1,
   [PERSISTED_STORES.HISTORY_TRASH_ENTRY]: 1,
   [PERSISTED_STORES.SESSION_ATTACHMENTS]: 1,
+  [PERSISTED_STORES.SKILL_ORIGIN]: 1,
 };
 
 /** Ordered migrations, one entry for every version transition. */
@@ -80,6 +81,7 @@ export const MIGRATIONS: Record<PersistedStore, readonly FormatMigration[]> = {
   [PERSISTED_STORES.INSTALLATIONS]: [],
   [PERSISTED_STORES.HISTORY_TRASH_ENTRY]: [],
   [PERSISTED_STORES.SESSION_ATTACHMENTS]: [],
+  [PERSISTED_STORES.SKILL_ORIGIN]: [],
 };
 
 export class MigrationError extends Error {

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "registry": "skills.sh",
+  "source": "anthropics/skills",
+  "slug": "pdf",
+  "commitSha": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+  "skillMdPath": "skills/pdf/SKILL.md",
+  "installedAt": "2026-10-23T13:04:40.402Z",
+  "files": {
+    "SKILL.md": "5d0e1c4a6b1f7c2d9e8a3b4c5d6e7f8091a2b3c4",
+    "scripts/fill_fillable_fields.py": "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c"
+  }
+}

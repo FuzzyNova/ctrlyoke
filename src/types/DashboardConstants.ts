@@ -441,7 +441,73 @@ export const DATA_SOURCES = {
     host: "models.dev",
     url: "https://models.dev",
   },
+  /**
+   * Searched live by the Agent & Skills Manager's skills tab. Its search and
+   * download routes are undocumented, so every label names it explicitly.
+   */
+  SKILLS_SH: {
+    label: "skills.sh",
+    host: "skills.sh",
+    url: "https://skills.sh",
+    operator: "Vercel",
+  },
 } as const;
+
+/** Verdicts a skills.sh security audit provider can return. */
+export const SKILL_AUDIT_STATUSES = {
+  PASS: "pass",
+  WARN: "warn",
+  FAIL: "fail",
+} as const;
+
+export type SkillAuditStatus =
+  (typeof SKILL_AUDIT_STATUSES)[keyof typeof SKILL_AUDIT_STATUSES];
+
+/** The skills.sh page for one skill. */
+export function getSkillsShSkillUrl(source: string, slug: string): string {
+  return `${DATA_SOURCES.SKILLS_SH.url}/${source}/${encodeURIComponent(slug)}`;
+}
+
+/** The skills.sh page for one provider's audit of a skill. */
+export function getSkillsShAuditUrl(
+  source: string,
+  slug: string,
+  providerSlug: string
+): string {
+  return `${getSkillsShSkillUrl(source, slug)}/security/${encodeURIComponent(providerSlug)}`;
+}
+
+/** The GitHub page for one file of `<owner>/<repo>` at a pinned commit. */
+export function getGitHubBlobUrl(
+  source: string,
+  commitSha: string,
+  repoPath: string
+): string {
+  const encodedPath = repoPath.split("/").map(encodeURIComponent).join("/");
+  return `https://github.com/${source}/blob/${commitSha}/${encodedPath}`;
+}
+
+/** The GitHub page comparing two commits of `<owner>/<repo>`. */
+export function getGitHubCompareUrl(
+  source: string,
+  fromSha: string,
+  toSha: string
+): string {
+  return `https://github.com/${source}/compare/${fromSha}...${toSha}`;
+}
+
+/** Outcomes of checking an installed registry skill against its repository. */
+export const SKILL_UPDATE_STATUSES = {
+  UP_TO_DATE: "upToDate",
+  UPDATE_AVAILABLE: "updateAvailable",
+  /** The skill is no longer in its repository. */
+  NOT_FOUND: "notFound",
+  /** The check itself failed; the result carries the error. */
+  FAILED: "failed",
+} as const;
+
+export type SkillUpdateStatus =
+  (typeof SKILL_UPDATE_STATUSES)[keyof typeof SKILL_UPDATE_STATUSES];
 
 /** User-facing licensing command actions and destinations. */
 export const LICENSE_UI = {
@@ -841,6 +907,18 @@ export const MESSAGE_TYPES = {
   HARNESS_FILE_OP_RESULT: "harnessFileOpResult", // Extension -> Webview: { success, error?, files? }
   OPEN_HARNESS_DIR: "openHarnessDir", // Webview -> Extension: { harnessId, fileType }
   OPEN_HARNESS_DIR_RESULT: "openHarnessDirResult", // Extension -> Webview: { success, error? }
+
+  // Skills registry (skills.sh) — Webview ↔ Extension
+  REQUEST_SKILLS_REGISTRY_SEARCH: "requestSkillsRegistrySearch", // Webview -> Extension: { requestId, query }
+  SKILLS_REGISTRY_SEARCH_RESULT: "skillsRegistrySearchResult", // Extension -> Webview: { requestId, skills: RegistrySkillEntry[], error? }
+  REQUEST_SKILLS_REGISTRY_AUDITS: "requestSkillsRegistryAudits", // Webview -> Extension: { skills: { source, slug }[] }
+  SKILLS_REGISTRY_AUDITS_RESULT: "skillsRegistryAuditsResult", // Extension -> Webview: { results: RegistrySkillAuditResult[] }
+  REQUEST_REGISTRY_SKILL_LOCATION: "requestRegistrySkillLocation", // Webview -> Extension: { source, slug }
+  REGISTRY_SKILL_LOCATION_RESULT: "registrySkillLocationResult", // Extension -> Webview: { source, slug, location?, error? }
+  INSTALL_REGISTRY_SKILL: "installRegistrySkill", // Webview -> Extension: { location, scope, replace? }
+  REGISTRY_SKILL_INSTALL_RESULT: "registrySkillInstallResult", // Extension -> Webview: { source, slug, success, error? }
+  REQUEST_SKILLS_REGISTRY_UPDATE_CHECK: "requestSkillsRegistryUpdateCheck", // Webview -> Extension: {}
+  SKILLS_REGISTRY_UPDATE_CHECK_RESULT: "skillsRegistryUpdateCheckResult", // Extension -> Webview: { results: SkillUpdateCheckResult[] }
 
   // Settings — Webview → Extension
   UPDATE_CONFIRM_DELETE: "updateConfirmDelete", // Update confirmDeleteOperations setting: { value: boolean }

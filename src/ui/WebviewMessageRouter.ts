@@ -66,6 +66,10 @@ import type {
   SyncAllToHarnessMessage,
   DeleteAllFromHarnessMessage,
   OpenHarnessDirMessage,
+  RequestSkillsRegistrySearchMessage,
+  RequestSkillsRegistryAuditsMessage,
+  RequestRegistrySkillLocationMessage,
+  InstallRegistrySkillMessage,
   ShowNativeFeedbackMessage,
   DisableStatusLineTrackingMessage,
   SetStatusLineFormatModeMessage,
@@ -177,6 +181,20 @@ const WORKFLOW_VARIANT_REQUEST_CACHE_MAX_ENTRIES = 256;
  */
 const SLOW_ROUTE_RUN_MS = 250;
 const SLOW_ROUTE_WAIT_MS = 1000;
+
+/**
+ * Messages routed outside `routeQueue` because they wait on slow I/O and
+ * mutate no state other handlers depend on. Each still replies only to a
+ * client that is connected when it finishes.
+ */
+const OFF_QUEUE_MESSAGE_TYPES: ReadonlySet<string> = new Set([
+  MESSAGE_TYPES.REQUEST_SECRET_REGISTRY,
+  MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_SEARCH,
+  MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_AUDITS,
+  MESSAGE_TYPES.REQUEST_REGISTRY_SKILL_LOCATION,
+  MESSAGE_TYPES.INSTALL_REGISTRY_SKILL,
+  MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_UPDATE_CHECK,
+]);
 
 /**
  * The history searches one client currently has in flight, all of them for
@@ -405,10 +423,10 @@ export class WebviewMessageRouter {
       options?.postMessage ?? this.defaultPostMessage,
       interactionPort
     );
-    if (message?.type === MESSAGE_TYPES.REQUEST_SECRET_REGISTRY) {
-      // Credential-store reads can take seconds on Windows. Keep them outside
-      // the shared routeQueue, and suppress a reply if this browser disconnected
-      // while its snapshot was loading.
+    if (OFF_QUEUE_MESSAGE_TYPES.has(message?.type)) {
+      // These can take seconds (credential-store reads on Windows, requests to
+      // skills.sh and GitHub). Keep them outside the shared routeQueue, and
+      // suppress a reply if this browser disconnected while one was running.
       const epoch = this.clientRouteEpochs.get(clientId) ?? 0;
       const originalEmit = ctx.emit;
       ctx = {
@@ -1683,6 +1701,50 @@ export class WebviewMessageRouter {
         message as OpenHarnessDirMessage
       );
     });
+
+    table.set(
+      MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_SEARCH,
+      async (message, ctx) => {
+        await this.harnessFiles.handleSkillsRegistrySearch(
+          ctx,
+          message as RequestSkillsRegistrySearchMessage
+        );
+      }
+    );
+
+    table.set(
+      MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_AUDITS,
+      async (message, ctx) => {
+        await this.harnessFiles.handleSkillsRegistryAudits(
+          ctx,
+          message as RequestSkillsRegistryAuditsMessage
+        );
+      }
+    );
+
+    table.set(
+      MESSAGE_TYPES.REQUEST_REGISTRY_SKILL_LOCATION,
+      async (message, ctx) => {
+        await this.harnessFiles.handleRegistrySkillLocation(
+          ctx,
+          message as RequestRegistrySkillLocationMessage
+        );
+      }
+    );
+
+    table.set(MESSAGE_TYPES.INSTALL_REGISTRY_SKILL, async (message, ctx) => {
+      await this.harnessFiles.handleInstallRegistrySkill(
+        ctx,
+        message as InstallRegistrySkillMessage
+      );
+    });
+
+    table.set(
+      MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_UPDATE_CHECK,
+      async (_message, ctx) => {
+        await this.harnessFiles.handleSkillsRegistryUpdateCheck(ctx);
+      }
+    );
   }
 
   private registerOutputHistory(table: DispatchTable): void {
