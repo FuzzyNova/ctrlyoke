@@ -58,6 +58,7 @@ export const CODEX_CONTENT_BLOCK_TYPES = {
 } as const;
 
 export const CODEX_TOOL_NAMES = {
+  SPAWN_AGENT: "spawn_agent",
   EXEC: "exec",
   APPLY_PATCH: "apply_patch",
   TODO_LIST: "todo_list",
@@ -65,6 +66,14 @@ export const CODEX_TOOL_NAMES = {
   WRITE_STDIN: "write_stdin",
   SHELL_COMMAND: "shell_command",
   EXEC_COMMAND: "exec_command",
+} as const;
+
+export const CODEX_COLLABORATION_NAMESPACES = {
+  COLLABORATION: "collaboration",
+} as const;
+
+export const CODEX_AGENT_MESSAGE_MARKERS = {
+  FINAL_ANSWER: "FINAL_ANSWER",
 } as const;
 
 export const CODEX_EXEC_OPERATION_KINDS = {

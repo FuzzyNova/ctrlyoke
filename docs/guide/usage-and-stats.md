@@ -247,7 +247,8 @@ Claude Code interactive runs count foreground subagent transcripts. Qwen Code
 interactive runs include foreground subagent output and usage; its background
 memory and extraction calls are not included because they are only reported in
 telemetry. Headless Qwen totals use process-wide result usage, which already
-includes those calls.
+includes those calls. Codex reads each linked child rollout for its output and
+per-model usage, skipping the replayed parent history.
 
 When Antigravity's counts come only from its status line, they can cover the
 last model call rather than the whole attempt.

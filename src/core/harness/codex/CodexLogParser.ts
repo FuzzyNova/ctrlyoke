@@ -20,6 +20,7 @@ import {
   FileEditData,
   FileWriteData,
   UnifiedDiffHunk,
+  SubagentSpawn,
 } from "../../../types/CliOutputTypes";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import {
@@ -27,10 +28,13 @@ import {
   COMPACTION_TRIGGERS,
   HARNESS_IDS,
   TOKEN_TOTAL_CONFIDENCE,
+  SUBAGENT_SPAWN_STATES,
 } from "../../../types/DashboardConstants";
 import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
 import { getCodexContextWindowSize } from "../../../utils/ModelConstants";
 import { normalizeCodexRolloutQuota } from "./CodexUsageNormalization";
+import { SubagentSourceFollower } from "../shared/SubagentSourceFollower";
+import type { SubagentChildSource } from "../shared/interfaces/SubagentChildSource";
 import {
   buildCodexReasoningBlock,
   CodexReasoningGrouper,
@@ -42,6 +46,8 @@ import {
   CODEX_MESSAGE_ROLES,
   CODEX_PAYLOAD_TYPES,
   CODEX_TOOL_NAMES,
+  CODEX_COLLABORATION_NAMESPACES,
+  CODEX_AGENT_MESSAGE_MARKERS,
 } from "./CodexProtocolConstants";
 
 // ============================================================================
@@ -58,8 +64,12 @@ interface CodexSessionMetaPayload {
   originator: string;
   cli_version: string;
   instructions: string;
-  source: string;
+  source?:
+    string | { subagent?: { thread_spawn?: { agent_nickname?: string } } };
   model_harness: string;
+  session_id?: string;
+  parent_thread_id?: string;
+  agent_path?: string;
   model?: string;
   git?: {
     commit_hash: string;
@@ -142,6 +152,14 @@ interface CodexTrackedToolCall {
 }
 
 export class CodexLogParser extends BaseLogParser {
+  private readonly subagentFollower = new SubagentSourceFollower();
+  private readonly pendingSubagentSpawns = new Map<string, CliEvent>();
+  private readonly registeredSubagentTasks = new Set<string>();
+
+  getSubagentFollower(): SubagentSourceFollower {
+    return this.subagentFollower;
+  }
+
   private readonly onProviderUsageUpdate?: (
     quota: HarnessQuotaSnapshot
   ) => void;
@@ -552,6 +570,27 @@ export class CodexLogParser extends BaseLogParser {
         const functionName = event.payload.name?.toLowerCase() || "";
         const callId = (event.payload.call_id ?? event.payload.id) as
           string | undefined;
+        if (
+          functionName === CODEX_TOOL_NAMES.SPAWN_AGENT &&
+          event.payload.namespace ===
+            CODEX_COLLABORATION_NAMESPACES.COLLABORATION
+        ) {
+          const spawnEvent = this.buildSubagentSpawnEvent(
+            params,
+            callId,
+            timestamp
+          );
+          if (callId) {
+            this.pendingSubagentSpawns.set(callId, spawnEvent);
+            this.toolCallMap.set(callId, {
+              type: CLI_EVENT_TYPES.TOOL_CALL,
+              toolName: functionName,
+              initiatedEvents: [spawnEvent],
+            });
+          }
+          outputEvents.push(spawnEvent);
+          continue;
+        }
         const eventsForTool = CodexToolBuilder.buildLogToolInitiatedEvents(
           functionName,
           params,
@@ -580,6 +619,11 @@ export class CodexLogParser extends BaseLogParser {
         event.payload?.type === CODEX_PAYLOAD_TYPES.FUNCTION_CALL_OUTPUT
       ) {
         const callId = event.payload.call_id as string | undefined;
+        const output = event.payload.output;
+        const taskName = this.parseTaskName(output);
+        if (callId && taskName) {
+          this.registerCodexSubagent(callId, taskName);
+        }
         const toolInfo = callId ? this.toolCallMap.get(callId) : undefined;
         const isBash = toolInfo?.type === CLI_EVENT_TYPES.BASH_COMMAND;
         outputEvents.push(
@@ -1252,12 +1296,246 @@ export class CodexLogParser extends BaseLogParser {
     return this.streamingReasoning.accept(event, this.mapStreamingEvent(e));
   }
 
+  private buildSubagentSpawnEvent(
+    params: Record<string, unknown>,
+    callId: string | undefined,
+    timestamp: number
+  ): CliEvent {
+    const description =
+      typeof params.task_name === "string" ? params.task_name : undefined;
+    return {
+      type: CLI_EVENT_TYPES.TOOL_CALL,
+      timestamp,
+      data: {
+        name: CODEX_TOOL_NAMES.SPAWN_AGENT,
+        id: callId,
+        parameters: {},
+        subagentSpawn: {
+          description,
+          state: SUBAGENT_SPAWN_STATES.RUNNING,
+        } satisfies SubagentSpawn,
+      },
+    };
+  }
+
+  private parseTaskName(output: unknown): string | undefined {
+    if (typeof output !== "string") return undefined;
+    try {
+      const parsed: unknown = JSON.parse(output);
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        "task_name" in parsed &&
+        typeof parsed.task_name === "string"
+      )
+        return parsed.task_name;
+    } catch {
+      /* output may be a non-JSON tool response */
+    }
+    return undefined;
+  }
+
+  private registerCodexSubagent(
+    parentToolCallId: string,
+    taskName: string
+  ): void {
+    const parentThreadId = this.sessionMeta?.id;
+    if (!parentThreadId || this.registeredSubagentTasks.has(taskName)) return;
+    const sessionsRoot = path.join(getCodexHomeDir(), "sessions");
+    const parentPath = this.findSessionFileRecursive(
+      sessionsRoot,
+      parentThreadId
+    );
+    if (!parentPath) return;
+    const directory = path.dirname(parentPath);
+    const source: SubagentChildSource<CodexProviderEvent> = {
+      key: `codex:${parentThreadId}:${taskName}`,
+      attribution: { parentToolCallId, agentId: taskName },
+      read: async (fromOffset) => {
+        let selectedPath: string | undefined;
+        let nickname: string | undefined;
+        try {
+          for (const filename of fs.readdirSync(directory)) {
+            if (
+              !filename.startsWith("rollout-") ||
+              !filename.endsWith(".jsonl")
+            )
+              continue;
+            const candidate = path.join(directory, filename);
+            try {
+              const head = fs
+                .readFileSync(candidate, "utf8")
+                .split(/\r?\n/u)
+                .slice(0, 5);
+              for (const line of head) {
+                const raw: unknown = JSON.parse(line);
+                if (
+                  !raw ||
+                  typeof raw !== "object" ||
+                  !("type" in raw) ||
+                  raw.type !== CODEX_EVENT_TYPES.SESSION_META ||
+                  !("payload" in raw)
+                )
+                  continue;
+                const meta = raw.payload;
+                if (!meta || typeof meta !== "object") continue;
+                const sourceInfo = "source" in meta ? meta.source : undefined;
+                const subagent =
+                  sourceInfo &&
+                  typeof sourceInfo === "object" &&
+                  "subagent" in sourceInfo
+                    ? sourceInfo.subagent
+                    : undefined;
+                const threadSpawn =
+                  subagent &&
+                  typeof subagent === "object" &&
+                  "thread_spawn" in subagent
+                    ? subagent.thread_spawn
+                    : undefined;
+                if (
+                  "parent_thread_id" in meta &&
+                  meta.parent_thread_id === parentThreadId &&
+                  "agent_path" in meta &&
+                  meta.agent_path === taskName
+                ) {
+                  selectedPath = candidate;
+                  if (
+                    threadSpawn &&
+                    typeof threadSpawn === "object" &&
+                    "agent_nickname" in threadSpawn &&
+                    typeof threadSpawn.agent_nickname === "string"
+                  )
+                    nickname = threadSpawn.agent_nickname;
+                  break;
+                }
+              }
+            } catch {
+              /* skip incomplete or malformed rollout */
+            }
+            if (selectedPath) break;
+          }
+        } catch {
+          return { records: [], nextOffset: fromOffset };
+        }
+        if (!selectedPath) return { records: [], nextOffset: fromOffset };
+        const bytes = fs.readFileSync(selectedPath);
+        const appended = bytes.subarray(fromOffset);
+        const end = appended.lastIndexOf(0x0a);
+        if (end < 0) return { records: [], nextOffset: fromOffset };
+        const lines = appended
+          .subarray(0, end + 1)
+          .toString("utf8")
+          .split(/\r?\n/u);
+        const records: CodexProviderEvent[] = [];
+        let started = fromOffset > 0;
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const raw: unknown = JSON.parse(line);
+            if (!raw || typeof raw !== "object" || !("type" in raw)) continue;
+            const record = raw as CodexProviderEvent;
+            if (!started) {
+              if (
+                record.type === CODEX_EVENT_TYPES.EVENT_MSG &&
+                record.payload?.type === CODEX_PAYLOAD_TYPES.TASK_STARTED &&
+                record.payload.turn_attribution?.initiating_agent_path
+              )
+                started = true;
+              if (!started) continue;
+            }
+            records.push(record);
+          } catch {
+            /* ignore malformed JSONL record */
+          }
+        }
+        if (nickname) {
+          const spawnEvent = this.pendingSubagentSpawns.get(parentToolCallId);
+          const data = spawnEvent?.data;
+          if (data && "subagentSpawn" in data && data.subagentSpawn)
+            data.subagentSpawn.children = [
+              { agentId: taskName, label: nickname },
+            ];
+        }
+        return { records, nextOffset: fromOffset + end + 1 };
+      },
+      map: (record) => {
+        const events = this.extractStructuredEventsFromEvent(record);
+        for (const event of events)
+          event.subagent = { parentToolCallId, agentId: taskName };
+        return events;
+      },
+      usage: (record) => {
+        if (
+          record.type !== CODEX_EVENT_TYPES.EVENT_MSG ||
+          record.payload?.type !== CODEX_PAYLOAD_TYPES.TOKEN_COUNT
+        )
+          return undefined;
+        const payload = record.payload;
+        const info = payload.info;
+        const total = info?.total_token_usage;
+        const model =
+          typeof info?.model === "string"
+            ? info.model
+            : this.sessionMeta?.model;
+        if (!model || !total) return undefined;
+        return {
+          recordId: `${taskName}:${JSON.stringify(total)}`,
+          model,
+          inputTokens: total.input_tokens ?? 0,
+          outputTokens: total.output_tokens ?? 0,
+          cacheReadInputTokens: total.cached_input_tokens ?? 0,
+          reasoningOutputTokens: total.reasoning_output_tokens ?? 0,
+        };
+      },
+      isComplete: (record) =>
+        record.type === CODEX_EVENT_TYPES.EVENT_MSG &&
+        record.payload?.type === CODEX_PAYLOAD_TYPES.TASK_COMPLETE,
+    };
+    this.registeredSubagentTasks.add(taskName);
+    this.subagentFollower.register(source);
+  }
+
   /** Map one log event to CliEvents, before reasoning grouping. */
   private mapStreamingEvent(e: CodexProviderEvent): CliEvent[] {
     const timestamp = e.timestamp
       ? new Date(e.timestamp).getTime()
       : Date.now();
     const results: CliEvent[] = [];
+
+    if (
+      e.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
+      e.payload?.type === CODEX_PAYLOAD_TYPES.AGENT_MESSAGE &&
+      e.payload?.author &&
+      typeof e.payload.author === "string" &&
+      typeof e.payload.content === "string" &&
+      e.payload.content.includes(CODEX_AGENT_MESSAGE_MARKERS.FINAL_ANSWER)
+    ) {
+      const answerAuthor = e.payload.author;
+      const answerContent = e.payload.content;
+      const parentToolCallId = [...this.pendingSubagentSpawns.entries()].find(
+        ([, spawn]) => {
+          const data = spawn.data;
+          return (
+            data &&
+            "subagentSpawn" in data &&
+            data.subagentSpawn?.description === answerAuthor
+          );
+        }
+      )?.[0];
+      const spawn = parentToolCallId
+        ? this.pendingSubagentSpawns.get(parentToolCallId)
+        : undefined;
+      if (
+        spawn?.data &&
+        "subagentSpawn" in spawn.data &&
+        spawn.data.subagentSpawn
+      ) {
+        spawn.data.subagentSpawn.state = SUBAGENT_SPAWN_STATES.COMPLETED;
+        spawn.data.result = { success: true, output: answerContent };
+        results.push({ ...spawn, timestamp });
+        return results;
+      }
+    }
 
     if (
       e.type === CODEX_EVENT_TYPES.EVENT_MSG &&
@@ -1426,6 +1704,19 @@ export class CodexLogParser extends BaseLogParser {
       }
       const functionName = e.payload.name?.toLowerCase() || "";
       const callId = (e.payload.call_id ?? e.payload.id) as string | undefined;
+      if (
+        functionName === CODEX_TOOL_NAMES.SPAWN_AGENT &&
+        e.payload.namespace === CODEX_COLLABORATION_NAMESPACES.COLLABORATION
+      ) {
+        const spawnEvent = this.buildSubagentSpawnEvent(
+          params,
+          callId,
+          timestamp
+        );
+        if (callId) this.pendingSubagentSpawns.set(callId, spawnEvent);
+        results.push(spawnEvent);
+        return results;
+      }
       const toolEvents = CodexToolBuilder.buildLogToolInitiatedEvents(
         functionName,
         params,
@@ -1455,6 +1746,8 @@ export class CodexLogParser extends BaseLogParser {
       e.payload?.type === CODEX_PAYLOAD_TYPES.FUNCTION_CALL_OUTPUT
     ) {
       const callId = e.payload.call_id as string | undefined;
+      const taskName = this.parseTaskName(e.payload.output);
+      if (callId && taskName) this.registerCodexSubagent(callId, taskName);
       const toolInfo = callId
         ? this.pendingStreamingCalls.get(callId)
         : undefined;
