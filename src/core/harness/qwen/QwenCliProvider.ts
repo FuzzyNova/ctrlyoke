@@ -825,6 +825,7 @@ export class QwenCliProvider implements ICliProvider {
    * @returns Complete arguments array
    */
   buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
+    this.logParser.setSubagentUsageEnabled(false);
     // --output-format stream-json enables structured JSON output for reliable parsing.
     // --input-format stream-json is required alongside it (Qwen rejects the combination
     // otherwise) and exempts this run from Qwen's non-interactive auto-deny gate, which
@@ -856,6 +857,7 @@ export class QwenCliProvider implements ICliProvider {
    * @returns Complete arguments array
    */
   buildInteractiveArgs(baseArgs: string[], promptText: string): string[] {
+    this.logParser.setSubagentUsageEnabled(true);
     return ["-i", promptText, ...baseArgs];
   }
 

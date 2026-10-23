@@ -7412,6 +7412,242 @@ suite("Antigravity subagent attribution", () => {
 });
 
 suite("QwenLogParser", () => {
+  test("classifies bridged and bare agent calls as foreground subagent spawns", () => {
+    const parser = new QwenLogParser();
+    const calls = [
+      {
+        id: "call-bridged",
+        name: "tool_call",
+        args: {
+          name: "agent",
+          arguments: {
+            description: "Run echo and read alpha.txt",
+            prompt: "Read alpha.txt",
+            run_in_background: false,
+            subagent_type: "general-purpose",
+          },
+        },
+      },
+      {
+        id: "call-bare",
+        name: "agent",
+        args: {
+          description: "Run echo and read beta.txt",
+          prompt: "Read beta.txt",
+          subagent_type: "general-purpose",
+        },
+      },
+      {
+        id: "call-background",
+        name: "agent",
+        args: {
+          description: "Background task",
+          run_in_background: true,
+          subagent_type: "general-purpose",
+        },
+      },
+    ];
+    const output = parser.extractResponse([
+      {
+        type: QWEN_EVENT_TYPES.ASSISTANT,
+        sessionId: "qwen-session",
+        message: {
+          role: "assistant",
+          parts: calls.map((functionCall) => ({ functionCall })),
+        },
+      } as BaseCliEvent,
+    ]);
+    const spawns = output.events
+      .filter((event) => event.type === CLI_EVENT_TYPES.TOOL_CALL)
+      .map((event) => event.data as ToolCall);
+
+    assert.strictEqual(spawns.length, 2);
+    assert.deepStrictEqual(
+      spawns.map((spawn) => spawn.subagentSpawn),
+      [
+        {
+          description: "Run echo and read alpha.txt",
+          agentType: "general-purpose",
+          prompt: "Read alpha.txt",
+          state: "running",
+        },
+        {
+          description: "Run echo and read beta.txt",
+          agentType: "general-purpose",
+          prompt: "Read beta.txt",
+          state: "running",
+        },
+      ]
+    );
+  });
+
+  test("follows Qwen sidechains by spawn call id and counts child usage once interactively", async () => {
+    const workspace = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "qwen-subagent-workspace-")
+    );
+    const projectDir = path.join(
+      os.homedir(),
+      ".qwen",
+      "projects",
+      sanitizeQwenProjectPath(workspace)
+    );
+    const sidechainDir = path.join(
+      projectDir,
+      "subagents",
+      "session-with-hyphens"
+    );
+    const sidechainPath = path.join(
+      sidechainDir,
+      "agent-general-purpose-call_with-hyphens.jsonl"
+    );
+    try {
+      await fs.promises.mkdir(sidechainDir, { recursive: true });
+      const childRecords = [
+        {
+          type: QWEN_EVENT_TYPES.ASSISTANT,
+          uuid: "child-usage-record",
+          sessionId: "session-with-hyphens",
+          model: "qwen-child-model",
+          agentId: "general-purpose-call_with-hyphens",
+          agentName: "general-purpose",
+          isSidechain: true,
+          message: {
+            role: "assistant",
+            parts: [{ text: "Child result" }],
+          },
+          usageMetadata: {
+            promptTokenCount: 35_223,
+            candidatesTokenCount: 20,
+            thoughtsTokenCount: 0,
+            totalTokenCount: 35_243,
+            cachedContentTokenCount: 3,
+          },
+        },
+      ];
+      await fs.promises.writeFile(
+        sidechainPath,
+        childRecords.map((record) => JSON.stringify(record)).join("\n") + "\n"
+      );
+
+      const parser = new QwenLogParser();
+      parser.setWorkspaceRoot(workspace);
+      const parentOutput = parser.extractResponse([
+        {
+          type: QWEN_EVENT_TYPES.ASSISTANT,
+          sessionId: "session-with-hyphens",
+          message: {
+            role: "assistant",
+            parts: [
+              {
+                functionCall: {
+                  id: "call_with-hyphens",
+                  name: "tool_call",
+                  args: {
+                    name: "agent",
+                    arguments: {
+                      description: "Read alpha.txt",
+                      prompt: "Read alpha.txt",
+                      run_in_background: false,
+                      subagent_type: "general-purpose",
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        } as BaseCliEvent,
+      ]);
+      const drain = await parser.getSubagentFollower().drainToEof(100);
+      const output = mergeSubagentOutput(parentOutput, drain);
+      const childText = output.events.find(
+        (event) =>
+          event.type === CLI_EVENT_TYPES.TEXT &&
+          (event.data as TextData).text === "Child result"
+      );
+
+      assert.strictEqual(
+        childText?.subagent?.parentToolCallId,
+        "call_with-hyphens"
+      );
+      assert.strictEqual(
+        output.metadata.modelUsage?.["qwen-child-model"]?.inputTokens,
+        35_223
+      );
+      assert.strictEqual(output.metadata.usage?.inputTokens, 35_223);
+    } finally {
+      await fs.promises.rm(projectDir, { recursive: true, force: true });
+      await fs.promises.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("does not add sidechain usage to Qwen headless result totals", async () => {
+    const workspace = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "qwen-subagent-headless-")
+    );
+    const projectDir = path.join(
+      os.homedir(),
+      ".qwen",
+      "projects",
+      sanitizeQwenProjectPath(workspace)
+    );
+    const sidechainDir = path.join(projectDir, "subagents", "qwen-session");
+    try {
+      await fs.promises.mkdir(sidechainDir, { recursive: true });
+      await fs.promises.writeFile(
+        path.join(sidechainDir, "agent-general-purpose-call-headless.jsonl"),
+        `${JSON.stringify({
+          type: QWEN_EVENT_TYPES.ASSISTANT,
+          uuid: "headless-child-usage",
+          model: "qwen-child-model",
+          message: { role: "assistant", parts: [{ text: "Child" }] },
+          usageMetadata: {
+            promptTokenCount: 100,
+            candidatesTokenCount: 5,
+            thoughtsTokenCount: 0,
+            totalTokenCount: 105,
+            cachedContentTokenCount: 0,
+          },
+        })}\n`
+      );
+      const parser = new QwenLogParser();
+      parser.setWorkspaceRoot(workspace);
+      parser.setSubagentUsageEnabled(false);
+      const output = parser.extractResponse([
+        {
+          type: QWEN_EVENT_TYPES.ASSISTANT,
+          sessionId: "qwen-session",
+          message: {
+            role: "assistant",
+            parts: [
+              {
+                functionCall: {
+                  id: "call-headless",
+                  name: "agent",
+                  args: { subagent_type: "general-purpose" },
+                },
+              },
+            ],
+          },
+        },
+        {
+          type: QWEN_EVENT_TYPES.RESULT,
+          usage: { input_tokens: 900, output_tokens: 40, total_tokens: 940 },
+        },
+      ] as BaseCliEvent[]);
+      const merged = mergeSubagentOutput(
+        output,
+        await parser.getSubagentFollower().drainToEof(100)
+      );
+
+      assert.strictEqual(merged.metadata.usage?.inputTokens, 900);
+      assert.strictEqual(merged.metadata.usage?.outputTokens, 40);
+      assert.strictEqual(merged.metadata.modelUsage, undefined);
+    } finally {
+      await fs.promises.rm(projectDir, { recursive: true, force: true });
+      await fs.promises.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("uses headless result usage as the whole-process total", () => {
     const parser = new QwenLogParser();
     const output = parser.extractResponse([

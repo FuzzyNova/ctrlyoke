@@ -694,7 +694,7 @@ Each item is one session; tick it when it lands.
 - [x] 6a. Rebuild `SubagentSourceFollower` to the follower contract in
       section 2B and wire it into the shared headless and interactive
       pipelines.
-- [ ] 6b. qwen-cli on the follower (both modes, bridge unwrapping, qwen
+- [x] 6b. qwen-cli on the follower (both modes, bridge unwrapping, qwen
       interactive child usage).
 - [ ] 7. claude-cli interactive follower plus child usage (the largest
       measured usage gap).
