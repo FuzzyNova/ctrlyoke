@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Foreground subagent calls have dedicated output cards** showing agent details, live progress, an optional prompt, and the final result.
 
+- **The `workflow_status` MCP tool reports execution mode.** Its metadata gives the workflow's
+  `executionMode`, and each prompt step lists the `harness` and `executionMode` it ran with (or will
+  run with). The built-in workflow orchestrator and workflow composer agents use this to tell
+  queued steps how to wait for long commands. A headless step can't wait on background work,
+  because its process exits when the agent ends its turn. codex-cli can't in either mode.
+
 - **Install skills from skills.sh in the Agent & Skills Manager.** The Skills list has a
   **skills.sh** tab that searches the public skills.sh directory, sorted by install count, with
   each skill's security audit verdict. **Import** shows the audits and the skill's `SKILL.md` on

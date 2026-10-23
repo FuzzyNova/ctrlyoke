@@ -76,6 +76,15 @@ The `model` field is **relative to whichever harness runs the workflow**, and sp
 
 Never invent model names. When in doubt, omit the field.
 
+## Long-running commands
+
+A step's agent can only wait on background work when its harness process outlives the turn:
+
+- **Headless steps (any harness) can't.** The process exits when the agent ends its turn, and kills any background command with it.
+- **Interactive steps can, except on codex-cli.** codex-cli can't wait in the background in either mode.
+
+So when a prompt asks for a slow command (a full test suite, a build), tell the agent to run it in the foreground and poll a log file until it finishes, not to "check back later". Or move the check into an `endCondition` script, which ctrlyoke runs and waits for itself.
+
 ## Fixed workflow vs. self-extending loop
 
 A plain `steps:` list is a **fixed, linear** plan — best when you can enumerate the work up front. For **open-ended** work ("keep going until every requirement is met"), a fixed list can't know how many steps it needs. In that case, tell the user the **spec-driven loop** pattern fits better: **Spec-Driven Loop** starts from an existing spec/design document, while **Feature-Driven Loop** first writes a plan from their description; both use the built-in `workflow-orchestrator` agent to stage work with `append_step`, review the results, and queue more until the goal is met. Point them at the matching built-in template rather than composing that machinery by hand.

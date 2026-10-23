@@ -1095,6 +1095,9 @@ export class CtrlYokeMCPServer {
     const workflowResumeSession =
       queueData.resumeSession ??
       CTRLYOKE_SETTINGS_DEFAULTS.defaults.resumeSession;
+    const workflowExecutionMode =
+      queueData.executionMode ??
+      CTRLYOKE_SETTINGS_DEFAULTS.defaults.executionMode;
     // One row per step, so a long-running orchestrator's status stays small no
     // matter how many steps it has appended. Full prompts and scripts are a
     // read_output call away.
@@ -1117,6 +1120,17 @@ export class CtrlYokeMCPServer {
             : { promptTruncated: true }
           : {}),
         status: stepStatuses[index],
+        // A step that has started reports what it actually ran with (its
+        // _runtime), which includes the headless clamp a terminal-less
+        // `ctrlyoke run` applies; a pending step reports its configured value.
+        harness: scriptStep
+          ? undefined
+          : (p._runtime?.harness ?? p.harness ?? queueData.harness),
+        executionMode: scriptStep
+          ? undefined
+          : (p._runtime?.executionMode ??
+            p.executionMode ??
+            workflowExecutionMode),
         model: scriptStep ? undefined : p.model,
         sessionId: scriptStep ? null : (p.sessionId ?? null),
         resumeSession: scriptStep
@@ -1147,6 +1161,7 @@ export class CtrlYokeMCPServer {
         harness: queueData.harness ?? null,
         model: queueData.model ?? null,
         resumeSession: workflowResumeSession,
+        executionMode: workflowExecutionMode,
         currentIndex: runtime.currentIndex,
         totalSteps: allSteps.length,
         completedSteps: completedCount,
