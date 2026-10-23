@@ -478,14 +478,14 @@ each run `echo` and read a file. The prompt is the research prompt above. Each
 run's stdout and session files were compared. Models were the `HARNESS_MODELS`
 ones, with `haiku` for claude-cli and a `sonnet` override on one child.
 
-| Harness (version)     | Does the stream or log ctrlyoke reads include the children?                                     | Where the children's usage is                                                            | Children's share of the run |
-| --------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------- |
-| claude-cli 2.1.309    | `result.usage` **no**; `result.modelUsage` and `total_cost_usd` **yes**                         | `subagents/agent-*.jsonl` (also in headless)                                             | see below                   |
-| copilot-cli 1.0.103   | **Yes**: OTel `chat <model>` spans and `session.shutdown.modelMetrics` both include child calls | Already in the same OTel and `events.jsonl` streams                                      | 4 of 6 model calls          |
-| codex-cli 0.163.0     | **No**: `turn.completed.usage` and the parent rollout's `token_count` are parent-only           | Each child rollout's `token_count`                                                       | 58,612 of 128,504 input     |
-| qwen-cli 0.26.0       | **No** in the chat log ctrlyoke reads. `result.usage` is a superset but unreliable (below)      | `subagents/<sessionId>/agent-*.jsonl` `usageMetadata`                                    | 70,449 of 160,217 prompt    |
-| opencode-cli 1.19.4   | **No**: stdout `step_finish.tokens` is parent-only                                              | Child session, via `opencode export <childSessionId>` (`step-finish` parts)              | ~168k of ~221k total        |
-| antigravity-cli 1.4.6 | **No**: stdout `result.usage` and the parent transcript are parent-only                         | Each child's `transcript_full.jsonl` `PLANNER_RESPONSE` `input_tokens` / `output_tokens` | ~58k of ~96k input          |
+| Harness (version)     | Does the stream or log ctrlyoke reads include the children?                                      | Where the children's usage is                                                            | Children's share of the run |
+| --------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | --------------------------- |
+| claude-cli 2.1.309    | `result.usage` **no**; `result.modelUsage` and `total_cost_usd` **yes**                          | `subagents/agent-*.jsonl` (also in headless)                                             | see below                   |
+| copilot-cli 1.0.103   | **Yes**: OTel `chat <model>` spans and `session.shutdown.modelMetrics` both include child calls  | Already in the same OTel and `events.jsonl` streams                                      | 4 of 6 model calls          |
+| codex-cli 0.163.0     | **No**: `turn.completed.usage` and the parent rollout's `token_count` are parent-only            | Each child rollout's `token_count`                                                       | 58,612 of 128,504 input     |
+| qwen-cli 0.26.0       | **No** in the chat log ctrlyoke reads. `result.usage` (headless) **does**, plus background calls | `subagents/<sessionId>/agent-*.jsonl` `usageMetadata`                                    | 70,449 of 160,217 prompt    |
+| opencode-cli 1.19.4   | **No**: stdout `step_finish.tokens` is parent-only                                               | Child session, via `opencode export <childSessionId>` (`step-finish` parts)              | ~168k of ~221k total        |
+| antigravity-cli 1.4.6 | **No**: stdout `result.usage` and the parent transcript are parent-only                          | Each child's `transcript_full.jsonl` `PLANNER_RESPONSE` `input_tokens` / `output_tokens` | ~58k of ~96k input          |
 
 Per harness:
 
@@ -527,12 +527,26 @@ Per harness:
   noted above is messages only.
 - **qwen-cli.** The main chat log holds the parent's calls only (5 calls, 89,768
   prompt). The sidechain files hold the children's (2 calls each, 35,223 and
-  35,226 prompt), so logs plus sidechains total 160,217. Don't use `result.usage`
-  as a check: it reads 204,514, which includes more than the logs hold, and
-  **a control run with no subagents shows the same inflation** (log and stream
-  both 31,999 prompt, `result.usage` 53,365). Treat `result.usage` as
-  unreliable for Qwen, and sum `usageMetadata` per call from the files. The
-  stream's child messages carry zeroed usage (`input_tokens: 0`).
+  35,226 prompt), so logs plus sidechains total 160,217. The headless
+  `result.usage` is larger (204,514), and a control run with no subagents shows
+  the same gap (log and stream 31,999 prompt, `result.usage` 53,365). **That
+  gap is not a Qwen bug.** `result.usage` is built from Qwen's session
+  telemetry (`computeUsageFromMetrics` over `uiTelemetryService`), which counts
+  every API response in the process, while the chat log records only the main
+  chat's assistant turns. A control run with Qwen's telemetry outfile enabled
+  (`QWEN_TELEMETRY_ENABLED=true QWEN_TELEMETRY_TARGET=local
+QWEN_TELEMETRY_OUTFILE=…`) listed four `api_response` events summing to
+  exactly `result.usage` (43,009 in / 783 out / 12,143 cached): the two
+  main-chat calls, plus two background calls that never reach the chat log, a
+  `side-query:auto-memory-recall` call and a `managed-auto-memory-extractor`
+  subagent call (9,222 in / 468 out). So `result.usage` is complete billing for
+  the process, including children and these background calls. It is the more
+  accurate headless number, not an inflated one. The stream's child messages
+  carry zeroed usage (`input_tokens: 0`).
+  ctrlyoke reads `usageMetadata` from the chat log and uses the `result` event
+  only for errors, so today it under-counts both the children and the
+  background calls. No tokenizing is involved either way: both options read
+  counts Qwen already reports.
 - **opencode-cli.** Stdout `step_finish.tokens` covers the parent session only
   (3 steps, 53,495 total). The two child sessions, found through the `task`
   part's `state.metadata.sessionId`, held 84,824 and 83,080 total, so
@@ -571,10 +585,19 @@ Consequences for the design:
   only source: the main transcript is parent-only, and the children are only in
   `subagents/agent-*.jsonl`. Add those, per model, once each. This is the 42%
   gap measured above.
-- **Codex, Qwen, OpenCode and Antigravity** need the follower from step 4
-  before their children can be counted, and each can then simply add the child
+- **Codex, OpenCode and Antigravity** need the follower from step 4 before
+  their children can be counted, and each can then simply add the child
   source's sums to the parent's. There is no double counting to guard against
-  in any of them, but the Qwen check must not lean on `result.usage`.
+  in any of them.
+- **Qwen headless** can skip the follower for token counts: take the `result`
+  event's `usage` (whole-process, children and background calls included) as the
+  attempt total, as the claude-cli headless fix does with `modelUsage`. It has
+  no per-model split, but it is one model per process unless a fast model is
+  configured. Do not also add the sidechain files in headless, or the children
+  count twice. **Qwen interactive** has no result event, so there the chat log
+  plus the sidechain files are the source, and the background calls (memory
+  recall/extraction, which only the telemetry sees) stay uncounted. Document
+  that as a known limit rather than chasing it.
 - **Copilot needs pricing, not collection.** The tokens are already in the
   total. Keep per-model usage from the `chat <model>` spans (or from
   `session.shutdown.modelMetrics`) so child calls are priced at their own
