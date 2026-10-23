@@ -2,7 +2,10 @@ import * as assert from "assert";
 import * as fs from "fs";
 import * as path from "path";
 import { suite, test } from "mocha";
-import { CliPromptPreparer } from "../../core/harness/shared/CliPromptPreparer";
+import {
+  CliPromptPreparer,
+  HEADLESS_EXECUTION_NOTE,
+} from "../../core/harness/shared/CliPromptPreparer";
 import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
 import {
   HarnessIntegration,
@@ -80,6 +83,41 @@ function createSections(overrides?: Partial<PromptSections>): PromptSections {
 }
 
 suite("CliPromptPreparer", () => {
+  test("adds the headless execution note only to headless prompts", async () => {
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async (prompt) =>
+        createSections({ userPromptText: prompt.prompt }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+    });
+
+    const prompt = { prompt: "run the checks" } as PromptStep;
+    const headless = await preparer.planPrompt(
+      prompt,
+      undefined,
+      { executionMode: EXECUTION_MODES.HEADLESS } as ResolvedProperties,
+      undefined
+    );
+    const interactive = await preparer.planPrompt(
+      prompt,
+      undefined,
+      { executionMode: EXECUTION_MODES.INTERACTIVE } as ResolvedProperties,
+      undefined
+    );
+
+    assert.ok(headless.promptWithInstruction.includes(HEADLESS_EXECUTION_NOTE));
+    assert.ok(
+      !interactive.promptWithInstruction.includes(HEADLESS_EXECUTION_NOTE)
+    );
+  });
+
   test("routes dash-prefixed prompts through temp files and out of argv", async () => {
     const integration = new SimplePromptTestIntegration(undefined, false);
     assert.strictEqual(integration.isSimple("- fix the tests"), false);

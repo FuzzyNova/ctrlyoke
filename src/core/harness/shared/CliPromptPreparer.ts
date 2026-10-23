@@ -13,6 +13,7 @@ import {
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   CTRLYOKE_MCP_MODES,
+  EXECUTION_MODES,
   MCP_SKILL_NAMES,
   MAX_CONTENT_SIZE,
   MAX_PREVIEW_BODY_BYTES,
@@ -68,6 +69,10 @@ import type {
   CompatibilityDiagnosticSeverity,
 } from "../../../types/CompatibilityTypes";
 import type { PreparedMutation } from "./interfaces/PreparedMutation";
+
+/** Added to headless prompts so agents wait for work that must outlive a turn. */
+export const HEADLESS_EXECUTION_NOTE =
+  "This headless session ends when you end your turn, and any background commands are stopped with it. Wait for long-running commands in the foreground before ending your turn.";
 
 export interface PlannedPromptFile {
   readonly path: string;
@@ -343,6 +348,9 @@ export class CliPromptPreparer {
             inlineMcpNames.includes(token.name))
       ),
     };
+    if (resolvedProperties?.executionMode === EXECUTION_MODES.HEADLESS) {
+      outgoingSections.userPromptText = `${outgoingSections.userPromptText.trimEnd()} ${HEADLESS_EXECUTION_NOTE}`;
+    }
 
     const resolvedPriorContext = resolvedProperties?.priorContext;
     const inlineRefs = parseInlinePriorContextRefs(

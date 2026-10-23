@@ -112,11 +112,13 @@ export function resolveHeadlessSourceMode(
 /**
  * Tails a headless harness's session log while stdout supplies the clock.
  *
- * Headless completion is owned by process exit, so this class intentionally
- * has no completion detection, notification monitor, or background-work hold.
- * Each stdout chunk queues one position-tracked log read. A low-frequency idle
- * poll catches log writes during long tool calls, and finish() performs the
- * same bounded drain used by the interactive log monitor.
+ * Headless completion is owned by process exit, so this class has no
+ * completion detection, notification monitor, or background-work hold. It
+ * does track parser background-work state through CliLogEventPump; the response
+ * collector checks that state after finish() drains the log and warns if work
+ * remains pending. Each stdout chunk queues one position-tracked log read. A
+ * low-frequency idle poll catches log writes during long tool calls, and
+ * finish() performs the same bounded drain used by the interactive log monitor.
  */
 export class HeadlessLogTail {
   private readonly pump: CliLogEventPump;

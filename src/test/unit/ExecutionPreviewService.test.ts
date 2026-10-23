@@ -728,7 +728,11 @@ suite("ExecutionPreviewService", () => {
       "workflow"
     );
     assert.ok(preview.steps[0].command);
-    assert.ok(preview.steps[0].command?.args.includes("inspect src/app.ts"));
+    assert.ok(
+      preview.steps[0].command?.args.some((argument) =>
+        argument.includes("inspect src/app.ts")
+      )
+    );
     assert.ok(preview.steps[0].command?.args.includes("--model"));
     assert.ok(
       preview.steps[0].prompt?.sections.some((section) =>

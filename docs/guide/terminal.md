@@ -17,6 +17,10 @@ Each step runs in one of two execution modes:
 - **Headless** runs the harness in the background with no terminal. Its output
   appears only on the **Output** tab.
 
+The headless session ends when the agent ends its turn, so background commands
+are stopped with it. ctrlyoke warns in the step output when it detects unfinished
+background work; agents should wait for long-running commands in the foreground.
+
 Both modes fill the **Output** tab: ctrlyoke reads the harness's session log
 or output stream and renders replies, tool calls and diffs the same way. Set
 the mode for a workflow in [Workflow Properties](/workflows/properties-panel),
@@ -106,9 +110,9 @@ to type into. Both settings are on the **Execution** tab of Settings.
 
 ### Background work
 
-Claude Code, Copilot, Antigravity and Qwen Code can start work in the
-background, such as a long test run or a background subagent, and end their
-turn while it runs. ctrlyoke notices this and
+In interactive mode, Claude Code, Copilot, Antigravity and Qwen Code can start
+work in the background, such as a long test run or a background subagent, and
+end their turn while it runs. ctrlyoke notices this and
 keeps the step running until the background work finishes and the harness has
 dealt with its result, instead of moving on to the next step too early. While
 it waits, the output shows a row like **Stop hook received — step kept running

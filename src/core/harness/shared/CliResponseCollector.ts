@@ -3,6 +3,7 @@ import type {
   UniversalCliOutput,
 } from "../../../types/CliOutputTypes";
 import {
+  CLI_EVENT_TYPES,
   FAILURE_KINDS,
   HEADLESS_SOURCE_MODES,
 } from "../../../types/DashboardConstants";
@@ -135,6 +136,28 @@ export class CliResponseCollector {
 
     if (this.deps.provider.augmentParsedOutput) {
       parsedOutput = await this.deps.provider.augmentParsedOutput(parsedOutput);
+    }
+
+    const logParser = this.deps.provider.logParser;
+    if (logParser?.hasPendingBackgroundWork?.()) {
+      const pendingTaskCount = Math.max(
+        1,
+        logParser.getBackgroundWorkHoldSnapshot?.().pendingTasks.length ?? 1
+      );
+      const taskLabel =
+        pendingTaskCount === 1 ? "background task" : "background tasks";
+      const warning = `Warning: The step ended with ${pendingTaskCount} ${taskLabel} still running; they were stopped when the headless session ended.`;
+      parsedOutput = {
+        ...parsedOutput,
+        events: [
+          ...parsedOutput.events,
+          {
+            type: CLI_EVENT_TYPES.TEXT,
+            timestamp: Date.now(),
+            data: { text: warning },
+          },
+        ],
+      };
     }
     // Deliberately not redacted here: `parsedOutput.events` become the
     // harness's canonical record — rendered verbatim as `$previous`/`$step:N`

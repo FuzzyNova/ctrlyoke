@@ -38,6 +38,68 @@ function createCollector(provider: any) {
 }
 
 suite("CliResponseCollector", () => {
+  test("records a warning when headless output ends with pending background work", async () => {
+    const collector = createCollector({
+      ...createProvider(),
+      logParser: {
+        extractResponse: () => createParsedOutput(),
+        hasPendingBackgroundWork: () => true,
+        getBackgroundWorkHoldSnapshot: () => ({
+          pendingTasks: [{ taskId: "task-1" }, { taskId: "task-2" }],
+          awaitingResumedTurn: false,
+        }),
+      },
+    });
+
+    const result = await collector.collectHeadlessResponse({
+      stdout: "",
+      stderr: "",
+      exitCode: 0,
+      promptForSessionLog: "",
+      executionStartTime: new Date(),
+    });
+
+    const warningEvent = result.parsedOutput.events.at(-1);
+    assert.strictEqual(warningEvent?.type, CLI_EVENT_TYPES.TEXT);
+    assert.strictEqual(
+      (warningEvent?.data as { text: string }).text,
+      "Warning: The step ended with 2 background tasks still running; they were stopped when the headless session ended."
+    );
+    assert.ok(
+      getTranscriptText(result.parsedOutput.events).includes(
+        (warningEvent?.data as { text: string }).text
+      )
+    );
+  });
+
+  test("does not add a warning when no headless background work is pending", async () => {
+    const collector = createCollector({
+      ...createProvider(),
+      logParser: {
+        extractResponse: () => createParsedOutput(),
+        hasPendingBackgroundWork: () => false,
+        getBackgroundWorkHoldSnapshot: () => ({
+          pendingTasks: [],
+          awaitingResumedTurn: false,
+        }),
+      },
+    });
+
+    const result = await collector.collectHeadlessResponse({
+      stdout: "",
+      stderr: "",
+      exitCode: 0,
+      promptForSessionLog: "",
+      executionStartTime: new Date(),
+    });
+
+    assert.strictEqual(result.parsedOutput.events.length, 1);
+    assert.strictEqual(
+      getTranscriptText(result.parsedOutput.events),
+      "hello world"
+    );
+  });
+
   test("drains child events before returning headless output", async () => {
     const follower = new SubagentSourceFollower();
     follower.register({

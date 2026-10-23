@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Headless steps warn when they end with background work still running.** The output identifies how many tasks were stopped, and headless prompts now tell agents to wait for long commands in the foreground.
 - **Antigravity cost estimates now include separately reported thinking tokens.**
 - **Sonnet 5.5 cache reads use the corrected $0.20/M rate.** The sync script
   checks the upstream value so the temporary correction can be removed when
