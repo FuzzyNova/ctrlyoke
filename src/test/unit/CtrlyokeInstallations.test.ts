@@ -10,6 +10,7 @@ import {
   forgetInstallation,
   INSTALLATION_KINDS,
   installationsFilePath,
+  isBundledInExtension,
   markNoticeShown,
   readLiveInstallations,
   recordInstallation,
@@ -17,7 +18,6 @@ import {
 import { INDEX_SCHEMA_VERSION } from "../../core/orchestration/HistorySearchIndexLayout";
 import {
   formatNewerExtensionNotice,
-  isBundledInExtension,
   noteCliInstallation,
 } from "../../cli/CliInstallationNotice";
 
@@ -154,6 +154,34 @@ suite("CtrlyokeInstallations", () => {
     };
     assert.strictEqual(findOlderCli(self, [bundled]), undefined);
     assert.strictEqual(findOlderCli(self, [bundled, older]), older);
+  });
+
+  test("the extension ignores CLIs bundled in an older extension or run from a checkout", async () => {
+    const extension = await packageRoot("ext-0.3.0", {
+      engines: { vscode: "^1" },
+    });
+    const previousExtension = await packageRoot("ext-0.2.0", {
+      engines: { vscode: "^1" },
+    });
+    const checkout = await packageRoot("ctrlyoke-checkout", {
+      name: "ctrlyoke",
+      engines: { vscode: "^1", node: ">=20" },
+    });
+    const self = {
+      kind: INSTALLATION_KINDS.VSCODE_EXTENSION,
+      version: "0.3.0",
+      packageRoot: extension,
+      lastSeen: Date.now(),
+    };
+    const previousBundled = {
+      kind: INSTALLATION_KINDS.CLI,
+      version: "0.2.0",
+      packageRoot: previousExtension,
+      lastSeen: Date.now(),
+    };
+    const checkoutCli = { ...previousBundled, packageRoot: checkout };
+    assert.strictEqual(findOlderCli(self, [previousBundled]), undefined);
+    assert.strictEqual(findOlderCli(self, [checkoutCli]), undefined);
   });
 
   test("counts the bundled CLI and its extension as one installation", async () => {

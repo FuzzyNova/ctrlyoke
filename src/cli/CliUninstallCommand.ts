@@ -4,11 +4,13 @@ import {
 } from "../core/harness/shared/PackageUninstall";
 import { statuslineLauncherDirectory } from "../core/harness/shared/StatuslineLauncher";
 import { getHarnessDisplayName } from "../types/DashboardConstants";
-import type { InstallationKind } from "../utils/CtrlyokeInstallations";
+import {
+  isBundledInExtension,
+  type InstallationKind,
+} from "../utils/CtrlyokeInstallations";
 import { ctrlyokeStateHome } from "../utils/ProjectStatePaths";
 import { INSTALLATION_KIND_LABELS } from "./CliAboutCommand";
 import { CLI_USAGE_EXIT_CODE } from "./CliExitCode";
-import { isBundledInExtension } from "./CliInstallationNotice";
 
 export const CLI_UNINSTALL_JSON_SCHEMA_VERSION = 1;
 
