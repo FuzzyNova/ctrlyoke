@@ -3455,10 +3455,16 @@ export class WorkflowExecutor {
             costUnavailableReason:
               ATTEMPT_COST_UNAVAILABLE_REASONS.UNKNOWN_MODEL,
           };
+      // The attempt total counts tokens new to the model: cache reads are
+      // excluded, cache writes are included. Subset harnesses count writes
+      // inside input; disjoint harnesses report them beside a total that
+      // leaves them out (Claude's own total_tokens included).
       const total = cacheInputIsSubset
         ? Math.max(u.inputTokens - (u.cachedInputTokens ?? 0), 0) +
           u.outputTokens
-        : u.totalTokens;
+        : u.totalTokens === undefined
+          ? undefined
+          : u.totalTokens + (u.cacheCreatedTokens ?? 0);
       return {
         prompt: u.inputTokens,
         completion: u.outputTokens,

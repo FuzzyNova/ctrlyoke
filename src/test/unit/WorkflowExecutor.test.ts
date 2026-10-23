@@ -392,13 +392,14 @@ suite("WorkflowExecutor token totals", () => {
     }
   });
 
-  test("leaves disjoint harness totals unchanged", () => {
+  test("adds cache writes to disjoint harness totals", () => {
     const executor = makeInspectableExecutor();
 
     for (const harness of [
       HARNESS_IDS.CLAUDE_CLI,
       HARNESS_IDS.ANTIGRAVITY_CLI,
       HARNESS_IDS.OPENCODE_CLI,
+      HARNESS_IDS.COPILOT_CLI,
     ]) {
       const tokens = executor.resolveTokens(
         parsedTokenOutput(harness, {
@@ -417,12 +418,26 @@ suite("WorkflowExecutor token totals", () => {
       assert.strictEqual(tokens?.cached, 200);
       assert.strictEqual(tokens?.cacheCreated, 17);
       assert.strictEqual(tokens?.reasoning, 3);
-      assert.strictEqual(tokens?.total, 105);
+      assert.strictEqual(tokens?.total, 122);
       assert.strictEqual(
         tokens?.totalConfidence,
         TOKEN_TOTAL_CONFIDENCE.PROVIDER
       );
     }
+  });
+
+  test("leaves a disjoint total unchanged when no cache writes are reported", () => {
+    const tokens = makeInspectableExecutor().resolveTokens(
+      parsedTokenOutput(HARNESS_IDS.CLAUDE_CLI, {
+        inputTokens: 100,
+        outputTokens: 5,
+        totalTokens: 105,
+        cachedInputTokens: 200,
+        totalConfidence: TOKEN_TOTAL_CONFIDENCE.PROVIDER,
+      })
+    );
+
+    assert.strictEqual(tokens?.total, 105);
   });
 
   test("keeps raw prompt and cache counts for cost calculation", () => {

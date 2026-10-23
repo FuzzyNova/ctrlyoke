@@ -12,16 +12,16 @@ dashboard, with a **Terminal** tab beside it for interactive sessions.
 Each step's output starts with a header row: the time, the step number and
 name, and its harness and model. Below it, in the order they happened:
 
-| Block                     | What it shows                                                                                                                                                         |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Replies                   | The harness's text, rendered as Markdown. File paths and references are links; click one to open it.                                                                  |
-| **Thinking** / reasoning  | The model's reasoning, dimmed and indented, when the harness reports it. The label comes from the harness, and shows a token count, or "encrypted" when it is hidden. |
-| Commands                  | Each shell command with its exit code and result.                                                                                                                     |
-| Tool calls                | Tools the harness called, including MCP tools (see [Tool calls](#tool-calls)).                                                                                        |
-| File operations           | Files the harness read, edited, wrote or deleted. Changes have a diff and an **Undo** button (see [Diffs](#diffs)).                                                   |
-| **User message**          | A steer message you sent to the running step.                                                                                                                         |
-| Script and condition rows | A script step's or condition's output, and its verdict: **Passed**, **Failed** or **Errored**, the comparison, and what happens next.                                 |
-| Stats                     | Context window use, tokens, an estimated cost, the session ID, the duration, and **Copy output**.                                                                     |
+| Block                     | What it shows                                                                                                                                                               |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Replies                   | The harness's text, rendered as Markdown. File paths and references are links; click one to open it.                                                                        |
+| **Thinking** / reasoning  | The model's reasoning, dimmed and indented, when the harness reports it. The label comes from the harness, and shows a token count, or "encrypted" when it is hidden.       |
+| Commands                  | Each shell command with its exit code and result.                                                                                                                           |
+| Tool calls                | Tools the harness called, including MCP tools (see [Tool calls](#tool-calls)).                                                                                              |
+| File operations           | Files the harness read, edited, wrote or deleted. Changes have a diff and an **Undo** button (see [Diffs](#diffs)).                                                         |
+| **User message**          | A steer message you sent to the running step.                                                                                                                               |
+| Script and condition rows | A script step's or condition's output, and its verdict: **Passed**, **Failed** or **Errored**, the comparison, and what happens next.                                       |
+| Stats                     | Context window use, tokens, an estimated cost, the session ID, the duration, and **Copy output**. See [Reading a step's token counts](/guide/usage-and-stats#token-counts). |
 
 A banner at the top names the run, when it started, how long it has run, its
 state and its token total. Click the pin to keep it at the top of the pane while you scroll, or

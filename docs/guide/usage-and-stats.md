@@ -137,6 +137,106 @@ differ from what you picked. Claude Code, for example, reports
 discovered models, pick from it rather than typing. An override replaces the
 built-in price for that model completely.
 
+## Reading a step's token counts {#token-counts}
+
+Hover over the context or total figure in a step's stats row to see its token
+counts. A Claude Code step, for example:
+
+```text
+Current context window: 119.5k/1M (12%)
+Current context window is the last turn only; attempt total sums every turn.
+Attempt total: 90.1k tokens
+Tokens: 20 in / 4.8k out / 90.1k total | 1M cached | 85.3k cache-created
+Compactions: 0
+≈$0.73 at API list prices.
+```
+
+And a Codex step:
+
+```text
+Current context window: 133k/258.4k (51%)
+Current context window is the last turn only; attempt total sums every turn.
+Cache-read tokens are netted out of the attempt total for this harness.
+Attempt total: 165.1k tokens
+Tokens: 11.2M in (11M cached) / 22.9k out / 165.1k total
+Compactions: 0
+≈$0.14 at API list prices.
+```
+
+| Line                       | Meaning                                                                                                                                                                                                        |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Current context window** | How much of the model's context window the step's **last** model call used. It is a snapshot, not a sum.                                                                                                       |
+| **Attempt total**          | The tokens of every model call in this attempt, added up, **not counting cache reads** (see below). Cache writes are counted. Workspace statistics and the per-harness cards add up these totals.              |
+| **Tokens**                 | The parts the total is made of: input (**in**), output (**out**), cache reads (**cached**) and cache writes (**cache-created**), each summed over every model call. Which parts appear depends on the harness. |
+| **Compactions**            | How many times the harness compacted its conversation during the step.                                                                                                                                         |
+| Cost                       | The [cost estimate](#cost-estimates), with cache reads and writes priced at their own rates.                                                                                                                   |
+
+### Why the numbers don't add up {#why-the-numbers-dont-add-up}
+
+A single step is many model calls: the harness calls the model, runs the tools
+it asked for, then calls it again with the results, until the work is done.
+Every call sends the **whole conversation so far** again. Providers keep a
+prompt cache, so the part of the conversation the model has already seen is
+read from the cache instead of being processed again, at a fraction of the
+price.
+
+So adding up the input of every call counts the same conversation over and
+over. A step that makes 100 model calls while its conversation averages 110k
+tokens sends 11 million input tokens, nearly all of them cache hits. That is
+what Codex's **11.2M in (11M cached)** means. Counting all of it would make a
+long step look hundreds of times bigger than the work in it, so the attempt
+total leaves cache reads out. The **cached** figure is still shown, and it
+still counts toward the cost estimate. Cache writes stay in the total: they are
+input the model processed for the first time.
+
+The context window is different again: it measures the last call only, cache
+included, which is why it can be far larger than the attempt total.
+
+The terms:
+
+- **cached** (cache read): input tokens served from the prompt cache.
+- **cache-created** (cache write): input tokens written to the prompt cache
+  for the first time. Anthropic models charge extra for these. Most other
+  providers cache automatically and don't report them.
+- **in**: input tokens. Whether it includes the two cache counts depends on
+  the harness, as the table below shows.
+- **out**: output tokens. Reasoning tokens are part of it for every harness
+  except OpenCode, which reports them separately and adds them to the total.
+
+### How each harness reports tokens {#harness-token-reporting}
+
+Each harness takes these numbers from its model provider, and providers split
+input differently. Anthropic counts cache reads, cache writes and the rest of
+the input separately; OpenAI counts cached tokens as part of the input.
+ctrlyoke keeps each harness's own split, so the figures mean slightly
+different things:
+
+| Harness     | **in** includes cached?               | Reports cache-created | Attempt total                                          |
+| ----------- | ------------------------------------- | --------------------- | ------------------------------------------------------ |
+| Claude Code | No                                    | Yes                   | in + cache-created + out                               |
+| Codex       | Yes, shown as "11.2M in (11M cached)" | No                    | in − cached + out                                      |
+| Qwen Code   | Yes, shown as "… in (… cached)"       | No                    | in − cached + out                                      |
+| Copilot     | No                                    | Yes                   | in + cache-created + out                               |
+| OpenCode    | No                                    | Yes                   | in + cache-created + out + reasoning                   |
+| Antigravity | No                                    | Yes                   | in + cache-created + out, sometimes from the last call |
+
+Codex and Qwen Code count cache writes as part of **in**, so subtracting the
+cache reads leaves exactly the new input. The others report cache writes on
+their own, so ctrlyoke adds them back.
+
+Claude Code caches almost the entire conversation, so its **in** is often tiny:
+in the example above only 20 input tokens were neither read from nor written
+to the cache. The 85.3k cache-created tokens are what was new to the model in
+that attempt (the prompt, files read, tool output), and the 1M cached tokens
+are the conversation being read back on each call. The 90.1k attempt total is
+those 85.3k new tokens plus 20 in and 4.8k out.
+
+Runs recorded by ctrlyoke 0.2.2 or earlier left cache writes out of these totals, so
+their Claude Code, Copilot, OpenCode and Antigravity figures read lower.
+
+When Antigravity's counts come only from its status line, they can cover the
+last model call rather than the whole attempt.
+
 ## Status line {#status-line}
 
 Claude Code, Copilot, Qwen Code and Antigravity can show a status line at the

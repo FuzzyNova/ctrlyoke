@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The MCP Manager and the Stats tab name where their data comes from.** The MCP Manager's
   "Registry" tab is now **MCP Registry** and says it searches `registry.modelcontextprotocol.io`.
   The Stats tab says cost estimates use list prices from models.dev, bundled with each release.
+- **Token totals for Claude Code, Copilot, OpenCode and Antigravity now include cache writes.**
+  Cache-created tokens are input the model processed for the first time, but these harnesses
+  report them separately from input, and the attempt total left them out. A Claude Code step's
+  total could be many times lower than a Codex step doing the same work. The step tooltip, the
+  CLI and the Stats tab now count them. Totals already recorded for earlier runs are unchanged.
+  [Reading a step's token counts](https://ctrlyoke.dev/docs/guide/usage-and-stats#token-counts)
+  explains how each harness reports tokens.
 
 ## [0.2.2] - 2026-10-22
 
