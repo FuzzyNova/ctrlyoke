@@ -1385,6 +1385,14 @@ export class CtrlYokeMCPServer {
   /** Handle edit_step for a zero-based pending step index. */
   private async handleStepEdit(args: McpEditStepArguments) {
     const { index, updates, clearProperties } = args;
+    if (
+      Object.prototype.hasOwnProperty.call(updates, "additionalArgs") ||
+      clearProperties?.includes("additionalArgs")
+    ) {
+      throw new Error(
+        `${MCP_EDIT_STEP_TOOL_NAME}: additionalArgs cannot be set or cleared through edit_step; harness arguments can only be set by the workflow author, for security reasons.`
+      );
+    }
     if (updates.prompt?.startsWith(MCP_SCRIPT_STEP_PROMPT_MARKER)) {
       throw new Error(
         "Script steps cannot be edited through MCP; edit_step only accepts prompt steps."

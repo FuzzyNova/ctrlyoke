@@ -294,7 +294,8 @@ const MCP_STEP_UPDATE_SCHEMA: McpToolInputSchema = {
     additionalArgs: {
       type: "array",
       items: { type: "string" },
-      description: "Additional arguments for the harness.",
+      description:
+        "Deprecated: harness arguments can only be set by the workflow author for security reasons. edit_step rejects setting or clearing this field.",
     },
     skills: {
       type: "array",

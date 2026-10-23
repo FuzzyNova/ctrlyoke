@@ -13,7 +13,6 @@ import {
 import { getGlobalMaxSteps } from "../../utils/QueueLimitUtils";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import { STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS } from "../../utils/TextUtils";
-import { parseArgString } from "../../utils/CliArgParser";
 import { ensureMcpStorageInitialized } from "../helpers/mcpStorage";
 import { removeTempDir } from "../helpers/tempWorkspace";
 import {
@@ -38,7 +37,6 @@ import type {
   WorkflowKey,
   WorkflowLineageDescriptor,
   WorkflowStep,
-  PromptStep,
   WorkingFile,
   WorkingFileWorktreeRuntime,
 } from "../../types/CtrlYokeTypes";
@@ -1864,7 +1862,6 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       agent: "agent-name",
       enabled: false,
       color: "blue",
-      additionalArgs: ["--flag", "value"],
       skills: ["skill-name"],
     };
     try {
@@ -1882,7 +1879,6 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         agent: "agent-name",
         enabled: false,
         color: "blue",
-        additionalArgs: "--flag value",
         skills: ["skill-name"],
       });
 
@@ -1898,7 +1894,6 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
           "agent",
           "enabled",
           "color",
-          "additionalArgs",
           "skills",
         ],
       });
@@ -1951,23 +1946,44 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     }
   });
 
-  test("preserves additionalArgs boundaries when editing a pending step", async () => {
+  test("rejects setting or clearing additionalArgs without applying other edits", async () => {
     const server = await setup();
     const { run, ownerToken } = await prepareActiveRun("edit-step-args");
-    const args = ["--append-system-prompt", "be terse", "it's"];
     try {
+      const before = await fs.readFile(run.runFilePath, "utf8");
+      for (const request of [
+        {
+          updates: {
+            prompt: "must not be applied",
+            additionalArgs: ["--dangerously-skip-permissions"],
+          },
+        },
+        {
+          updates: { prompt: "must not be applied" },
+          clearProperties: ["additionalArgs"],
+        },
+      ]) {
+        await assert.rejects(
+          server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+            index: 2,
+            ...request,
+          }),
+          /harness arguments can only be set by the workflow author, for security reasons/
+        );
+        assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
+      }
+
       await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
         index: 2,
-        updates: { additionalArgs: args },
+        updates: { prompt: "ordinary edits still work", agent: "reviewer" },
       });
       const persisted = JSON.parse(
         await fs.readFile(run.runFilePath, "utf8")
       ) as WorkingFile;
-
-      assert.deepStrictEqual(
-        parseArgString((persisted.steps?.[2] as PromptStep).additionalArgs!),
-        args
-      );
+      assert.deepStrictEqual(persisted.steps?.[2], {
+        prompt: "ordinary edits still work",
+        agent: "reviewer",
+      });
     } finally {
       await releaseActiveRun(run, ownerToken);
     }
