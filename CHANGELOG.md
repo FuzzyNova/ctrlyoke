@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Claude Code headless output now attributes foreground subagent activity to its spawn.** Child
+  tool calls and results retain the parent Agent call ID, with live progress and completion state.
 - **The `history show --json --events` payload replaces the always-`direct` `callerType` field with optional subagent attribution and spawn metadata.** Existing run histories with `callerType` remain readable.
 - **The "CLI is older than this extension" notice only names a CLI installed with npm.** After an
   extension update, it could name the CLI copy bundled in the previous extension version's folder,

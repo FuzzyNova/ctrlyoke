@@ -40,6 +40,23 @@ export const CLAUDE_SYSTEM_SUBTYPES = {
   INIT: "init",
   TURN_DURATION: "turn_duration",
   COMPACT_BOUNDARY: "compact_boundary",
+  TASK_STARTED: "task_started",
+  TASK_PROGRESS: "task_progress",
+  TASK_NOTIFICATION: "task_notification",
+  TASK_UPDATED: "task_updated",
+} as const;
+
+/** Spawn tools emitted by Claude Code; `Task` is the legacy name for `Agent`. */
+export const CLAUDE_SUBAGENT_TOOL_NAMES = {
+  AGENT: "Agent",
+  LEGACY_TASK: "Task",
+} as const;
+
+/** Terminal status values Claude reports in `task_notification` records. */
+export const CLAUDE_TASK_STATUSES = {
+  COMPLETED: "completed",
+  FAILED: "failed",
+  STOPPED: "stopped",
 } as const;
 
 export const CLAUDE_PROGRESS_TYPES = {

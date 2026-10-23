@@ -20,6 +20,8 @@ import {
   ProviderModelUsage,
   BackgroundTaskSummary,
   BackgroundWorkHoldSnapshot,
+  ToolCall,
+  SubagentSpawn,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -27,6 +29,7 @@ import {
   COMPACTION_TRIGGERS,
   HARNESS_IDS,
   TOKEN_TOTAL_CONFIDENCE,
+  SUBAGENT_SPAWN_STATES,
 } from "../../../types/DashboardConstants";
 import { ClaudeToolBuilder } from "./ClaudeToolBuilder";
 import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
@@ -40,6 +43,8 @@ import {
   CLAUDE_PROGRESS_TYPES,
   CLAUDE_STOP_REASONS,
   CLAUDE_SYSTEM_SUBTYPES,
+  CLAUDE_SUBAGENT_TOOL_NAMES,
+  CLAUDE_TASK_STATUSES,
 } from "./ClaudeProtocolConstants";
 
 /**
@@ -170,6 +175,9 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   /** TaskStop tool_use id -> the Claude task id it is attempting to stop. */
   private pendingTaskStopTargets = new Map<string, string>();
 
+  /** Background Agent calls are intentionally outside inline subagent attribution. */
+  private backgroundSubagentToolUseIds = new Set<string>();
+
   /**
    * tool_use id -> display summary, held only until that call's result
    * arrives. A launch is often confirmed by the result (an auto-promoted
@@ -199,6 +207,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     this.unconfirmedAsyncLaunches.clear();
     this.backgroundTaskLaunchToolUseIds.clear();
     this.pendingTaskStopTargets.clear();
+    this.backgroundSubagentToolUseIds.clear();
     this.toolUseSummaries.clear();
   }
 
@@ -283,6 +292,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     const pendingToolNames = new Map<string, string>();
 
     for (const event of events as ClaudeProviderEvent[]) {
+      const firstOutputEventIndex = outputEvents.length;
       // Extract session ID from any event
       if (event.sessionId && !sessionId) {
         sessionId = event.sessionId;
@@ -478,6 +488,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
 
       // Process system events
       if (event.type === CLAUDE_EVENT_TYPES.SYSTEM) {
+        outputEvents.push(...this.buildSubagentSpawnUpdate(event, timestamp));
         // Turn duration → elapsed time metadata
         if (
           event.subtype === CLAUDE_SYSTEM_SUBTYPES.TURN_DURATION &&
@@ -502,6 +513,14 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
               durationMs: meta.durationMs ?? meta.duration_ms,
             } as CompactionData,
           });
+        }
+      }
+
+      if (event.parent_tool_use_id) {
+        for (const outputEvent of outputEvents.slice(firstOutputEventIndex)) {
+          outputEvent.subagent = {
+            parentToolCallId: event.parent_tool_use_id,
+          };
         }
       }
     }
@@ -1462,6 +1481,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       }
     }
 
+    if (e.type === CLAUDE_EVENT_TYPES.SYSTEM) {
+      events.push(...this.buildSubagentSpawnUpdate(e, timestamp));
+    }
+
     if (
       e.type === CLAUDE_EVENT_TYPES.PROGRESS &&
       e.data?.type === CLAUDE_PROGRESS_TYPES.BASH
@@ -1496,7 +1519,80 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       });
     }
 
+    if (e.parent_tool_use_id) {
+      for (const emittedEvent of events) {
+        emittedEvent.subagent = {
+          parentToolCallId: e.parent_tool_use_id,
+        };
+      }
+    }
+
     return events;
+  }
+
+  /** Convert Claude task lifecycle records into updates keyed by Agent tool id. */
+  private buildSubagentSpawnUpdate(
+    event: ClaudeProviderEvent,
+    timestamp: number
+  ): CliEvent[] {
+    const toolUseId = (event as any).tool_use_id;
+    if (typeof toolUseId !== "string" || !toolUseId) return [];
+
+    if (
+      event.subtype === CLAUDE_SYSTEM_SUBTYPES.TASK_STARTED &&
+      (event as any).is_backgrounded === true
+    ) {
+      this.backgroundSubagentToolUseIds.add(toolUseId);
+      return [];
+    }
+    if (this.backgroundSubagentToolUseIds.has(toolUseId)) return [];
+
+    const subtype = event.subtype;
+    if (
+      subtype !== CLAUDE_SYSTEM_SUBTYPES.TASK_STARTED &&
+      subtype !== CLAUDE_SYSTEM_SUBTYPES.TASK_PROGRESS &&
+      subtype !== CLAUDE_SYSTEM_SUBTYPES.TASK_NOTIFICATION &&
+      subtype !== CLAUDE_SYSTEM_SUBTYPES.TASK_UPDATED
+    )
+      return [];
+
+    const status = (event as any).status;
+    let state: SubagentSpawn["state"] = SUBAGENT_SPAWN_STATES.RUNNING;
+    if (subtype === CLAUDE_SYSTEM_SUBTYPES.TASK_NOTIFICATION) {
+      state =
+        status === CLAUDE_TASK_STATUSES.COMPLETED
+          ? SUBAGENT_SPAWN_STATES.COMPLETED
+          : SUBAGENT_SPAWN_STATES.FAILED;
+    } else if (status === CLAUDE_TASK_STATUSES.COMPLETED) {
+      state = SUBAGENT_SPAWN_STATES.COMPLETED;
+    } else if (
+      status === CLAUDE_TASK_STATUSES.FAILED ||
+      status === CLAUDE_TASK_STATUSES.STOPPED
+    ) {
+      state = SUBAGENT_SPAWN_STATES.FAILED;
+    }
+
+    const description = (event as any).description;
+    const statusLine =
+      subtype === CLAUDE_SYSTEM_SUBTYPES.TASK_PROGRESS ||
+      subtype === CLAUDE_SYSTEM_SUBTYPES.TASK_UPDATED
+        ? typeof description === "string"
+          ? description
+          : undefined
+        : undefined;
+
+    return [
+      {
+        type: CLI_EVENT_TYPES.TOOL_CALL,
+        timestamp,
+        data: {
+          name: CLAUDE_SUBAGENT_TOOL_NAMES.AGENT,
+          parameters: {},
+          id: toolUseId,
+          subagentSpawn: { ...(statusLine ? { statusLine } : {}), state },
+        } as ToolCall,
+      },
+    ];
   }
 
   /**

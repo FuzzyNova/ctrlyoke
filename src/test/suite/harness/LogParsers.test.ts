@@ -146,6 +146,235 @@ suite("ClaudeLogParser", () => {
     parser = new ClaudeLogParser();
   });
 
+  test("attributes parallel headless subagent calls and results by parent tool id", () => {
+    const output = parser.extractResponse([
+      {
+        type: "assistant",
+        parent_tool_use_id: null,
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "spawn-a",
+              name: "Agent",
+              input: {
+                description: "A",
+                subagent_type: "general-purpose",
+                prompt: "do A",
+              },
+            },
+            {
+              type: "tool_use",
+              id: "spawn-b",
+              name: "Agent",
+              input: {
+                description: "B",
+                subagent_type: "general-purpose",
+                prompt: "do B",
+              },
+            },
+            { type: "text", text: "parent" },
+          ],
+        },
+      },
+      {
+        type: "assistant",
+        parent_tool_use_id: "spawn-a",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "child-tool-a",
+              name: "Bash",
+              input: { command: "echo A" },
+              caller: { type: "direct" },
+            },
+          ],
+        },
+      },
+      {
+        type: "user",
+        parent_tool_use_id: "spawn-a",
+        message: {
+          content: [
+            { type: "tool_result", tool_use_id: "child-tool-a", content: "A" },
+          ],
+        },
+      },
+      {
+        type: "assistant",
+        parent_tool_use_id: "spawn-b",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "child-tool-b",
+              name: "Bash",
+              input: { command: "echo B" },
+              caller: { type: "direct" },
+            },
+          ],
+        },
+      },
+      {
+        type: "user",
+        parent_tool_use_id: "spawn-b",
+        message: {
+          content: [
+            { type: "tool_result", tool_use_id: "child-tool-b", content: "B" },
+          ],
+        },
+      },
+    ] as BaseCliEvent[]);
+
+    const childA = output.events.filter(
+      (event) => event.subagent?.parentToolCallId === "spawn-a"
+    );
+    const childB = output.events.filter(
+      (event) => event.subagent?.parentToolCallId === "spawn-b"
+    );
+    assert.ok(
+      childA.some((event) => event.type === CLI_EVENT_TYPES.BASH_COMMAND)
+    );
+    assert.ok(
+      childA.some((event) => event.type === CLI_EVENT_TYPES.TOOL_RESULT)
+    );
+    assert.ok(
+      childB.some((event) => event.type === CLI_EVENT_TYPES.BASH_COMMAND)
+    );
+    assert.ok(
+      childB.some((event) => event.type === CLI_EVENT_TYPES.TOOL_RESULT)
+    );
+    assert.ok(
+      output.events.some(
+        (event) => event.type === CLI_EVENT_TYPES.TEXT && !event.subagent
+      )
+    );
+    const spawns = output.events.filter(
+      (event) => event.type === CLI_EVENT_TYPES.TOOL_CALL
+    );
+    assert.deepStrictEqual((spawns[0].data as any).subagentSpawn, {
+      description: "A",
+      agentType: "general-purpose",
+      prompt: "do A",
+      state: "running",
+    });
+
+    const streamedCall = parser.extractStructuredEventsFromEvent({
+      type: "assistant",
+      parent_tool_use_id: "spawn-stream",
+      message: {
+        content: [
+          {
+            type: "tool_use",
+            id: "stream-child-tool",
+            name: "Bash",
+            input: { command: "echo stream" },
+            caller: { type: "direct" },
+          },
+        ],
+      },
+    } as BaseCliEvent);
+    const streamedResult = parser.extractStructuredEventsFromEvent({
+      type: "user",
+      parent_tool_use_id: "spawn-stream",
+      message: {
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: "stream-child-tool",
+            content: "stream",
+          },
+        ],
+      },
+    } as BaseCliEvent);
+    assert.strictEqual(
+      streamedCall[0].subagent?.parentToolCallId,
+      "spawn-stream"
+    );
+    assert.strictEqual(
+      streamedResult[0].subagent?.parentToolCallId,
+      "spawn-stream"
+    );
+  });
+
+  test("streams Claude task progress and completion as spawn updates", () => {
+    const progress = parser.extractStructuredEventsFromEvent({
+      type: "system",
+      subtype: "task_progress",
+      tool_use_id: "spawn-a",
+      description: "Reading alpha.txt",
+    } as BaseCliEvent);
+    const complete = parser.extractStructuredEventsFromEvent({
+      type: "system",
+      subtype: "task_notification",
+      tool_use_id: "spawn-a",
+      status: "completed",
+    } as BaseCliEvent);
+
+    assert.strictEqual((progress[0].data as any).id, "spawn-a");
+    assert.strictEqual(
+      (progress[0].data as any).subagentSpawn.statusLine,
+      "Reading alpha.txt"
+    );
+    assert.strictEqual((complete[0].data as any).id, "spawn-a");
+    assert.strictEqual(
+      (complete[0].data as any).subagentSpawn.state,
+      "completed"
+    );
+
+    const finalOutput = parser.extractResponse([
+      {
+        type: "assistant",
+        parent_tool_use_id: null,
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "spawn-final",
+              name: "Agent",
+              input: { description: "final" },
+            },
+          ],
+        },
+      },
+      {
+        type: "system",
+        subtype: "task_progress",
+        tool_use_id: "spawn-final",
+        description: "Reading",
+      },
+      {
+        type: "system",
+        subtype: "task_notification",
+        tool_use_id: "spawn-final",
+        status: "completed",
+      },
+    ] as BaseCliEvent[]);
+    const finalUpdates = finalOutput.events.filter(
+      (event) => (event.data as any).id === "spawn-final"
+    );
+    assert.strictEqual(finalUpdates[1].type, CLI_EVENT_TYPES.TOOL_CALL);
+    assert.strictEqual(
+      (finalUpdates[1].data as any).subagentSpawn.statusLine,
+      "Reading"
+    );
+    assert.strictEqual(
+      (finalUpdates[2].data as any).subagentSpawn.state,
+      "completed"
+    );
+  });
+
+  test("does not normalize Claude background Agent tasks as foreground spawns", () => {
+    const events = parser.extractStructuredEventsFromEvent({
+      type: "system",
+      subtype: "task_started",
+      tool_use_id: "background-agent",
+      is_backgrounded: true,
+    } as BaseCliEvent);
+    assert.deepStrictEqual(events, []);
+  });
+
   test("counts assistant usage once when content blocks share a message id", () => {
     const fixturePath = path.resolve(
       __dirname,

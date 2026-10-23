@@ -637,7 +637,7 @@ Each item is one session; tick it when it lands.
 
 - [x] 1. Data model swap (`callerType` → `subagent` / `subagentSpawn`) plus the
       merge guard.
-- [ ] 2. claude-cli headless inline stamping, spawn normalization, and
+- [x] 2. claude-cli headless inline stamping, spawn normalization, and
       `task_*` status/completion. Fixes the reported interleaving bug.
 - [ ] 3. copilot-cli inline stamping (both modes).
 - [ ] 4. Per-model usage and pricing, plus the inline-source usage fixes that

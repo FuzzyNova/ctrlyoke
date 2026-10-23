@@ -8,18 +8,21 @@ import type {
   AskUserQuestionData,
   AskUserQuestionEntry,
   AskUserQuestionOption,
+  ToolCall,
 } from "../../../types/CliOutputTypes";
 import {
   CLAUDE_TOOL_NAMES,
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
   TOOL_PERMISSION_CATEGORIES,
+  SUBAGENT_SPAWN_STATES,
 } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import { BaseToolBuilder } from "../shared/BaseToolBuilder";
 import {
   CLAUDE_CONTENT_BLOCK_TYPES,
   CLAUDE_TOOL_RESULT_TYPES,
+  CLAUDE_SUBAGENT_TOOL_NAMES,
 } from "./ClaudeProtocolConstants";
 
 /**
@@ -60,7 +63,6 @@ export class ClaudeToolBuilder {
     toolId: string | undefined,
     timestamp: number
   ): CliEvent[] {
-
     // Claude-specific: AskUserQuestion parses into the full question/option
     // set up front, so the pending question is visible while the user is
     // still answering — the answer arrives later via tryBuildAskUserQuestionEvent.
@@ -104,12 +106,36 @@ export class ClaudeToolBuilder {
       }));
     }
 
-    return BaseToolBuilder.buildInitiatedEvents(
+    const events = BaseToolBuilder.buildInitiatedEvents(
       toolName,
       input,
       toolId,
       timestamp
     );
+    if (
+      input.run_in_background !== true &&
+      (toolName === CLAUDE_SUBAGENT_TOOL_NAMES.AGENT ||
+        toolName === CLAUDE_SUBAGENT_TOOL_NAMES.LEGACY_TASK)
+    ) {
+      for (const event of events) {
+        if (event.type === CLI_EVENT_TYPES.TOOL_CALL) {
+          const toolCall = event.data as ToolCall;
+          toolCall.subagentSpawn = {
+            description:
+              typeof input.description === "string"
+                ? input.description
+                : undefined,
+            agentType:
+              typeof input.subagent_type === "string"
+                ? input.subagent_type
+                : undefined,
+            prompt: typeof input.prompt === "string" ? input.prompt : undefined,
+            state: SUBAGENT_SPAWN_STATES.RUNNING,
+          };
+        }
+      }
+    }
+    return events;
   }
 
   // ── TOOL RESULTS ───────────────────────────────────────────────────────────
