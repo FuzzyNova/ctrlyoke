@@ -59,20 +59,22 @@ export class AntigravityToolEventBuilder {
 
     if (normalizedName === ANTIGRAVITY_TOOL_NAMES.INVOKE_SUBAGENT) {
       const children = this.parseSubagents(args.Subagents, resultText);
-      return [{
-        type: CLI_EVENT_TYPES.TOOL_CALL,
-        timestamp,
-        data: {
-          name: toolName,
-          parameters: args,
-          id: mapping.toolCallId ?? id,
-          result: { success, output: resultText || undefined, error },
-          subagentSpawn: {
-            children,
-            state: SUBAGENT_SPAWN_STATES.RUNNING,
-          },
-        } as ToolCall,
-      }];
+      return [
+        {
+          type: CLI_EVENT_TYPES.TOOL_CALL,
+          timestamp,
+          data: {
+            name: toolName,
+            parameters: args,
+            id: mapping.toolCallId ?? id,
+            result: { success, output: resultText || undefined, error },
+            subagentSpawn: {
+              children,
+              state: SUBAGENT_SPAWN_STATES.RUNNING,
+            },
+          } as ToolCall,
+        },
+      ];
     }
 
     if (result.type === ANTIGRAVITY_ENTRY_TYPES.ASK_QUESTION) {
@@ -251,17 +253,27 @@ export class AntigravityToolEventBuilder {
     ];
   }
 
-  private static parseSubagents(value: unknown, resultText: string): { agentId: string; label?: string }[] {
+  private static parseSubagents(
+    value: unknown,
+    resultText: string
+  ): { agentId: string; label?: string }[] {
     if (typeof value !== "string") return [];
     try {
       const parsed: unknown = JSON.parse(value);
       if (!Array.isArray(parsed)) return [];
-      const ids = [...resultText.matchAll(/"conversationId"\s*:\s*"([^"]+)"/g)].map((match) => match[1]);
+      const ids = [
+        ...resultText.matchAll(/"conversationId"\s*:\s*"([^"]+)"/g),
+      ].map((match) => match[1]);
       return parsed.flatMap((child, index) => {
         if (!isRecord(child)) return [];
         const conversationId = ids[index];
         return typeof conversationId === "string"
-          ? [{ agentId: conversationId, label: typeof child.Role === "string" ? child.Role : undefined }]
+          ? [
+              {
+                agentId: conversationId,
+                label: typeof child.Role === "string" ? child.Role : undefined,
+              },
+            ]
           : [];
       });
     } catch {

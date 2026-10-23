@@ -185,7 +185,9 @@ export class OpenCodeCliProvider implements ICliProvider {
     getOpenCodeContextWindowSize(this.resolvedCurrentModel)
   );
 
-  async augmentParsedOutput(output: import("../../../types/CliOutputTypes").UniversalCliOutput) {
+  async augmentParsedOutput(
+    output: import("../../../types/CliOutputTypes").UniversalCliOutput
+  ) {
     return this.logParser.drainSubagentSources(output);
   }
   /** MCP server ids prepared for the current execution. */
@@ -746,7 +748,9 @@ export class OpenCodeCliProvider implements ICliProvider {
     userHooks: UserHookConfig[] | undefined,
     _enabledNotificationHookEvents: HookEvent[]
   ): Promise<CliProviderPreparation> {
-    this.logParser.setSubagentNotifyDir(this.notificationMonitor.getNotificationDirectory(_workspaceRoot));
+    this.logParser.setSubagentNotifyDir(
+      this.notificationMonitor.getNotificationDirectory(_workspaceRoot)
+    );
     const serializedHooks = this.serializeUserHooks(userHooks);
     return {
       cliArgs: [],

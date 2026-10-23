@@ -102,12 +102,32 @@ export function mapOpenCodeToolPartToCliEvent(
         name: toolName,
         id: part.callID,
         parameters: input as Record<string, unknown>,
-        result: isCompleted ? { success: true, output: typeof output === "string" ? output : JSON.stringify(output) } : isFailed ? { success: false, output: error, error } : undefined,
+        result: isCompleted
+          ? {
+              success: true,
+              output:
+                typeof output === "string" ? output : JSON.stringify(output),
+            }
+          : isFailed
+            ? { success: false, output: error, error }
+            : undefined,
         subagentSpawn: {
           agentType: typeof input.agent === "string" ? input.agent : "task",
-          description: typeof input.description === "string" ? input.description : "",
-          state: isCompleted ? SUBAGENT_SPAWN_STATES.COMPLETED : SUBAGENT_SPAWN_STATES.RUNNING,
-          children: typeof part.state?.metadata?.sessionId === "string" ? [{ agentId: part.state.metadata.sessionId, label: typeof input.agent === "string" ? input.agent : "task" }] : [],
+          description:
+            typeof input.description === "string" ? input.description : "",
+          state: isCompleted
+            ? SUBAGENT_SPAWN_STATES.COMPLETED
+            : SUBAGENT_SPAWN_STATES.RUNNING,
+          children:
+            typeof part.state?.metadata?.sessionId === "string"
+              ? [
+                  {
+                    agentId: part.state.metadata.sessionId,
+                    label:
+                      typeof input.agent === "string" ? input.agent : "task",
+                  },
+                ]
+              : [],
         },
       },
     };

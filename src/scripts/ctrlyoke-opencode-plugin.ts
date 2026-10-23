@@ -83,15 +83,19 @@ interface HookArtifact {
 const childSessions = new Set<string>();
 const childParents = new Map<string, string>();
 const childCallIds = new Map<string, string>();
-const subagentSidecarPath = NOTIFY_DIR && RUN_ID
-  ? path.join(NOTIFY_DIR, `${RUN_ID}-subagents.jsonl`)
-  : undefined;
+const subagentSidecarPath =
+  NOTIFY_DIR && RUN_ID
+    ? path.join(NOTIFY_DIR, `${RUN_ID}-subagents.jsonl`)
+    : undefined;
 
 function _appendSubagentRecord(childSessionId: string, part: unknown): void {
   if (!subagentSidecarPath) return;
   try {
     mkdirSync(path.dirname(subagentSidecarPath), { recursive: true });
-    appendFileSync(subagentSidecarPath, JSON.stringify({ childSessionId, part }) + "\n");
+    appendFileSync(
+      subagentSidecarPath,
+      JSON.stringify({ childSessionId, part }) + "\n"
+    );
   } catch (error) {
     _debugLog("❌ Failed to append subagent sidecar", { error: String(error) });
   }
@@ -570,10 +574,17 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
 
       if (event.type === "message.part.updated") {
         const part = event.properties.part as Record<string, any> | undefined;
-        if (part && typeof part.sessionID === "string" && childSessions.has(part.sessionID)) {
+        if (
+          part &&
+          typeof part.sessionID === "string" &&
+          childSessions.has(part.sessionID)
+        ) {
           _appendSubagentRecord(part.sessionID, part);
-        } else if (part?.type === "tool" && part.tool === "task" &&
-          typeof part.state?.metadata?.sessionId === "string") {
+        } else if (
+          part?.type === "tool" &&
+          part.tool === "task" &&
+          typeof part.state?.metadata?.sessionId === "string"
+        ) {
           const childSessionId = part.state.metadata.sessionId as string;
           childCallIds.set(childSessionId, part.callID);
           _appendSubagentRecord(childSessionId, { ...part, childSessionId });
@@ -612,7 +623,10 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
       }
 
       if (event.type === "session.status") {
-        const { sessionID, status } = event.properties as { sessionID: string; status: { type: string } };
+        const { sessionID, status } = event.properties as {
+          sessionID: string;
+          status: { type: string };
+        };
         if (status.type === "idle" && childSessions.has(sessionID)) {
           _appendSubagentRecord(sessionID, { type: "session.idle", sessionID });
         }
