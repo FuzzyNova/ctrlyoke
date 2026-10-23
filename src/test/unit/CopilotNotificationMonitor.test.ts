@@ -24,12 +24,23 @@ suite("CopilotNotificationMonitor", () => {
       (hooks.notification[1] as { bash: string }).bash,
       "node user.js"
     );
+    // Only user commands are pinned to the workspace; ctrlyoke's own hook
+    // command uses absolute paths and runs wherever Copilot starts it.
+    assert.strictEqual(
+      (hooks.notification[1] as { cwd?: string }).cwd,
+      "workspace"
+    );
+    assert.strictEqual(
+      (hooks.notification[0] as { cwd?: string }).cwd,
+      undefined
+    );
   });
 
   test("uses the lowercase native key in a user-only config", () => {
-    const config = CopilotNotificationMonitor.buildUserOnlyConfig([
-      { event: "notification", command: "node user.js" },
-    ]);
+    const config = CopilotNotificationMonitor.buildUserOnlyConfig(
+      [{ event: "notification", command: "node user.js" }],
+      "workspace"
+    );
     const hooks = config.hooks as Record<string, unknown[]>;
 
     assert.strictEqual(hooks.notification.length, 1);
@@ -37,12 +48,17 @@ suite("CopilotNotificationMonitor", () => {
       (hooks.notification[0] as { bash: string }).bash,
       "node user.js"
     );
+    assert.strictEqual(
+      (hooks.notification[0] as { cwd?: string }).cwd,
+      "workspace"
+    );
   });
 
   test("preserves per-hook timeoutSec in seconds", () => {
-    const config = CopilotNotificationMonitor.buildUserOnlyConfig([
-      { event: "stop", command: "node slow.js", timeoutSec: 13 },
-    ]);
+    const config = CopilotNotificationMonitor.buildUserOnlyConfig(
+      [{ event: "stop", command: "node slow.js", timeoutSec: 13 }],
+      "workspace"
+    );
     const hooks = config.hooks as Record<string, Array<{ timeoutSec: number }>>;
     assert.strictEqual(hooks.agentStop[0].timeoutSec, 13);
   });

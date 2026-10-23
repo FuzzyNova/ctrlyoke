@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Copilot steps finish when the workspace is a subdirectory of a repository.** Copilot loads
+  hooks only from the repository root's `.github/hooks/`, but ctrlyoke wrote its hook files under
+  the workspace folder, so Copilot never reported a step's start or end. Hook files now go in the
+  repository root's `.github/hooks/`, and your own workflow hooks still run in the workspace folder.
+
 ## [0.2.1] - 2026-10-22
 
 ### Changed

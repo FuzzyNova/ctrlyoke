@@ -27,7 +27,7 @@ import { lowercaseDriveLetter } from "../../../utils/PathCasing";
 /**
  * Copilot CLI Notification Monitor
  *
- * Hook file format: .github/hooks/ctrlyoke.json (bash/powershell fields)
+ * Hook file format: <repo root>/.github/hooks/ctrlyoke-*.json (bash/powershell fields)
  * Notification directory: .ctrlyoke/temp/copilot-notifications/
  * Notification script: ctrlyoke-copilot-hook.js
  *
@@ -79,23 +79,43 @@ export class CopilotNotificationMonitor
 
   /**
    * Build a user-hooks-only Copilot hook config object (no ctrlyoke notification entries).
+   *
+   * @param workspaceRoot Directory user hook commands run in (see buildUserHookEntry)
    */
   static buildUserOnlyConfig(
-    userHooks: PreparedUserHookConfig[]
+    userHooks: PreparedUserHookConfig[],
+    workspaceRoot: string
   ): Record<string, unknown> {
     const hooks: Record<string, unknown[]> = {};
     for (const uh of userHooks) {
       const nativeEvent = CopilotNotificationMonitor.EVENT_MAP[uh.event];
       if (!nativeEvent) continue;
       if (!hooks[nativeEvent]) hooks[nativeEvent] = [];
-      hooks[nativeEvent].push({
-        type: "command",
-        bash: uh.bashCommand ?? uh.command,
-        powershell: uh.powershellCommand ?? uh.command,
-        timeoutSec: buildHookTimeoutOptions(uh.timeoutSec).timeout ?? 10,
-      });
+      hooks[nativeEvent].push(
+        CopilotNotificationMonitor.buildUserHookEntry(uh, workspaceRoot)
+      );
     }
     return { version: 1, hooks };
+  }
+
+  /**
+   * One user hook entry. Copilot runs hook commands in the repository root by
+   * default, which is not the workspace when the workspace is a subdirectory of
+   * the repository (hook files always live in the repository root's
+   * `.github/hooks/`). An explicit absolute `cwd` keeps workspace-relative user
+   * commands working either way.
+   */
+  private static buildUserHookEntry(
+    uh: PreparedUserHookConfig,
+    workspaceRoot: string
+  ): Record<string, unknown> {
+    return {
+      type: "command",
+      bash: uh.bashCommand ?? uh.command,
+      powershell: uh.powershellCommand ?? uh.command,
+      cwd: lowercaseDriveLetter(workspaceRoot),
+      timeoutSec: buildHookTimeoutOptions(uh.timeoutSec).timeout ?? 10,
+    };
   }
 
   /**
@@ -106,13 +126,13 @@ export class CopilotNotificationMonitor
    *
    * @param scriptPath Path to notification handler script (ctrlyoke-copilot-hook.js)
    * @param notifyDir Notification directory path
-   * @param workspaceRoot Workspace root directory (unused for Copilot)
+   * @param workspaceRoot Workspace root directory, where user hook commands run
    * @returns Hook configuration as JSON object
    */
   buildHookConfig(
     scriptPath: string,
     notifyDir: string,
-    _workspaceRoot: string,
+    workspaceRoot: string,
     userHooks?: UserHookConfig[],
     ctrlyokeEvents?: HookEvent[]
   ): HookConfig {
@@ -177,13 +197,9 @@ export class CopilotNotificationMonitor
         const nativeEvent = eventMap[uh.event];
         if (!nativeEvent) continue;
         if (!hooks[nativeEvent]) hooks[nativeEvent] = [];
-        hooks[nativeEvent].push({
-          type: "command",
-          bash: (uh as PreparedUserHookConfig).bashCommand ?? uh.command,
-          powershell:
-            (uh as PreparedUserHookConfig).powershellCommand ?? uh.command,
-          timeoutSec: buildHookTimeoutOptions(uh.timeoutSec).timeout ?? 10,
-        });
+        hooks[nativeEvent].push(
+          CopilotNotificationMonitor.buildUserHookEntry(uh, workspaceRoot)
+        );
       }
     }
 

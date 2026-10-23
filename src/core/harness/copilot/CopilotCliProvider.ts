@@ -35,6 +35,8 @@ import {
 } from "../../../utils/ModelRegistry";
 import { MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
+import { repoToplevel } from "../../../utils/GitUtils";
+import { isPathWithinDirectory } from "../../../utils/PathSecurity";
 import {
   CliProviderUtils,
   hasCtrlYokeServer,
@@ -579,12 +581,14 @@ export class CopilotCliProvider implements ICliProvider {
       promptIndex,
       workingFilePath
     );
-    const hookPath = this.getHookFilePath(workspaceRoot, hookFileName);
+    const hookPath = path.join(
+      await CopilotCliProvider.resolveHooksDir(workspaceRoot),
+      hookFileName
+    );
     return {
       cliArgs: [],
       mutations: [
         this.createHookMutation(
-          workspaceRoot,
           hookPath,
           JSON.stringify((hookConfig as { config?: object }).config, null, 2),
           "Write Copilot notification hook"
@@ -655,20 +659,23 @@ export class CopilotCliProvider implements ICliProvider {
         : {
             type: "json",
             config: CopilotNotificationMonitor.buildUserOnlyConfig(
-              userHooks ?? []
+              userHooks ?? [],
+              workspaceRoot
             ),
           };
     const hookFileName = CopilotCliProvider.buildHookFileName(
       promptIndex,
       workingFilePath
     );
-    const hookPath = this.getHookFilePath(workspaceRoot, hookFileName);
+    const hookPath = path.join(
+      await CopilotCliProvider.resolveHooksDir(workspaceRoot),
+      hookFileName
+    );
     return {
       cliArgs: [],
       mutations: [
         this.createHeadlessHookStateMutation(hasPromptModeHooks),
         this.createHookMutation(
-          workspaceRoot,
           hookPath,
           JSON.stringify((config as { config?: object }).config, null, 2),
           "Write Copilot headless hook"
@@ -678,8 +685,34 @@ export class CopilotCliProvider implements ICliProvider {
     };
   }
 
-  private getHookFilePath(workspaceRoot: string, hookFileName: string): string {
-    return path.join(workspaceRoot, ".github", "hooks", hookFileName);
+  /**
+   * The `.github/hooks/` directory Copilot loads repository hooks from.
+   *
+   * Copilot reads hooks only from the git toplevel of its working directory
+   * (or the directory itself outside a repository), never from a nested
+   * folder's `.github/hooks/` and not from `--add-dir` directories either
+   * (verified on 1.0.103). A workspace opened on a subdirectory of a
+   * repository must therefore write its hooks at the repository root. A
+   * linked worktree's toplevel is the worktree itself, which is also where
+   * Copilot looks.
+   */
+  private static async resolveHooksDir(workspaceRoot: string): Promise<string> {
+    const toplevel = await repoToplevel(workspaceRoot);
+    let hooksRoot = workspaceRoot;
+    if (toplevel) {
+      // git reports the realpath, so compare it against the workspace's realpath.
+      const realWorkspaceRoot = await fs
+        .realpath(workspaceRoot)
+        .catch(() => path.resolve(workspaceRoot));
+      if (isPathWithinDirectory(realWorkspaceRoot, toplevel)) {
+        hooksRoot = toplevel;
+      } else {
+        Log.warn(
+          `[CopilotCliProvider] Git toplevel "${toplevel}" does not contain workspace "${realWorkspaceRoot}"; writing Copilot hooks under the workspace`
+        );
+      }
+    }
+    return path.join(hooksRoot, ".github", "hooks");
   }
 
   private createHeadlessHookStateMutation(enabled: boolean): PreparedMutation {
@@ -692,12 +725,10 @@ export class CopilotCliProvider implements ICliProvider {
   }
 
   private createHookMutation(
-    workspaceRoot: string,
     hookPath: string,
     content: string,
     description: string
   ): PreparedMutation {
-    const hookFileName = path.basename(hookPath);
     return {
       path: hookPath,
       intendedContent: content,
@@ -706,11 +737,7 @@ export class CopilotCliProvider implements ICliProvider {
       ownedKeys: [],
       description,
       apply: async () => {
-        await this.createHookFile(
-          { type: "json", config: JSON.parse(content) },
-          workspaceRoot,
-          hookFileName
-        );
+        await this.createHookFile(content, hookPath);
       },
       restore: async () => {
         await fs.unlink(hookPath).catch(() => undefined);
@@ -900,7 +927,7 @@ export class CopilotCliProvider implements ICliProvider {
    */
   async cleanupWorkspaceArtifacts(workspaceRoot: string): Promise<void> {
     try {
-      const hookDir = path.join(workspaceRoot, ".github", "hooks");
+      const hookDir = await CopilotCliProvider.resolveHooksDir(workspaceRoot);
       const files = await fs.readdir(hookDir);
       const hasOtherHookFiles = files.some(
         (f) => f.startsWith("ctrlyoke-") && f.endsWith(".json")
@@ -940,35 +967,18 @@ export class CopilotCliProvider implements ICliProvider {
   }
 
   /**
-   * Create a per-prompt hook file for Copilot in .github/hooks/.
+   * Create a per-prompt hook file for Copilot at a path from resolveHooksDir().
    */
   private async createHookFile(
-    hookConfig: any,
-    workspaceRoot: string,
-    hookFileName: string
+    content: string,
+    hookPath: string
   ): Promise<void> {
     try {
-      const hookDir = path.join(workspaceRoot, ".github", "hooks");
-
-      // Security: Validate that the resolved hook path stays within the workspace root.
-      const normalizedWorkspaceRoot = path.resolve(workspaceRoot);
-      const resolvedHookDir = path.resolve(hookDir);
-      if (!resolvedHookDir.startsWith(normalizedWorkspaceRoot)) {
-        Log.error(
-          `[CopilotCliProvider] Security: Hook directory "${resolvedHookDir}" is outside workspace root "${normalizedWorkspaceRoot}"`
-        );
-        return;
-      }
-
+      const hookDir = path.dirname(hookPath);
       await fs.mkdir(hookDir, { recursive: true });
       await this.writeHookDirGitignore(hookDir);
 
-      const hookPath = path.join(hookDir, hookFileName);
-      await fs.writeFile(
-        hookPath,
-        JSON.stringify(hookConfig.config, null, 2),
-        "utf-8"
-      );
+      await fs.writeFile(hookPath, content, "utf-8");
 
       this.hookFilePaths.push(hookPath);
       Log.debug(`[CopilotCliProvider] Created hook file: ${hookPath}`);

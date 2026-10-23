@@ -60,7 +60,10 @@ Unlike everything else on this page, this is a lasting change, not a per-run one
 | Context window  | `.ctrlyoke/temp/ctrlyoke-otel-<workflow>-p<step>.jsonl`  | when the run ends                           |
 
 Copilot has no command-line option for hooks; it loads every JSON file in the repository's
-`.github/hooks/` folder, so ctrlyoke writes one hook file per step there. To keep those files out of `git status`, it also writes a
+`.github/hooks/` folder, so ctrlyoke writes one hook file per step there. That folder is always at
+the repository root, even when your workspace is a subfolder of the repository, because Copilot
+does not read a subfolder's `.github/hooks/`; your own workflow hooks still run in the workspace
+folder. To keep those files out of `git status`, it also writes a
 `.gitignore` in that folder that ignores `ctrlyoke-*.json` and itself, but only if the folder has
 no `.gitignore` of its own. Your own `.gitignore` is never edited.
 

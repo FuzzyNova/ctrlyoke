@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { execFileSync } from "child_process";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
@@ -7,6 +8,7 @@ import { CopilotCliProvider } from "../../core/harness/copilot/CopilotCliProvide
 import { EXECUTION_MODES, HARNESS_IDS } from "../../types/DashboardConstants";
 import type { PromptStep } from "../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 function createProperties(
   mcpServers: ResolvedProperties["mcpServers"] = ["ctrlyoke"]
@@ -187,6 +189,55 @@ suite("CopilotCliProvider", () => {
       );
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("writes hooks under the repository root when the workspace is a subdirectory", async () => {
+    const tempDir = makeTempDir("copilot-nested-hooks-");
+    try {
+      // Copilot reads hooks only from the git toplevel's .github/hooks/.
+      const repoRoot = await fs.realpath(tempDir);
+      execFileSync("git", ["init", "--quiet"], { cwd: repoRoot });
+      const workspaceRoot = path.join(repoRoot, "packages", "app");
+      await fs.mkdir(workspaceRoot, { recursive: true });
+
+      const provider = new CopilotCliProvider();
+      const preparation = await provider.planNotificationHookArgs(
+        process.cwd(),
+        workspaceRoot,
+        0,
+        undefined,
+        [{ event: "stop", command: "node user.js" }],
+        []
+      );
+      for (const mutation of preparation.mutations) await mutation.apply();
+
+      const rootHooksDir = path.join(repoRoot, ".github", "hooks");
+      const hookPath = preparation.mutations[0].path;
+      assert.ok(hookPath);
+      assert.strictEqual(path.dirname(hookPath), rootHooksDir);
+      const hookConfig = JSON.parse(await fs.readFile(hookPath, "utf-8"));
+      const userHook = hookConfig.hooks.agentStop.find(
+        (hook: { bash: string }) => hook.bash === "node user.js"
+      );
+      assert.strictEqual(
+        path.resolve(userHook.cwd).toLowerCase(),
+        workspaceRoot.toLowerCase()
+      );
+      await assert.rejects(
+        fs.access(path.join(workspaceRoot, ".github")),
+        "nothing is written under the nested workspace"
+      );
+
+      for (const cleanupPath of provider.getAdditionalCleanupFilePaths(
+        workspaceRoot
+      )) {
+        await fs.rm(cleanupPath, { force: true });
+      }
+      await provider.cleanupWorkspaceArtifacts(workspaceRoot);
+      assert.deepStrictEqual(await fs.readdir(rootHooksDir), []);
+    } finally {
+      removeTempDir(tempDir);
     }
   });
 });
