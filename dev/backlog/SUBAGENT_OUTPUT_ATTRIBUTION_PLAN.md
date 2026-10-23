@@ -689,11 +689,11 @@ Each item is one session; tick it when it lands.
 - [ ] 5. Dashboard spawn card and nested rows; terminal formatter indentation
       (independent files, may run in parallel). Terminal half done
       (765b32752); dashboard card rendering, description/status/prompt find
-      segments, docs, and changelog are committed separately. Remaining:
-      connect collapsible child groups to virtualized rows (including
-      interleaved siblings, antigravity N-child groups, grandchildren, and
-      late-arriving spawn calls), auto-expand those groups on find, and add the
-      corresponding nesting/collapse/find tests.
+      segments, docs, and changelog are committed separately. Re-scoped
+      2026-10-23 to the first cut section 3 allows: subagent rows indented
+      under their spawn and labelled with the child, in time order. Full
+      collapsible groups moved to `dev/backlog/SUBAGENT_COLLAPSIBLE_GROUPS_PLAN.md`
+      after two attempts showed they need a new virtual row kind.
 - [x] 6a. Rebuild `SubagentSourceFollower` to the follower contract in
       section 2B and wire it into the shared headless and interactive
       pipelines.
