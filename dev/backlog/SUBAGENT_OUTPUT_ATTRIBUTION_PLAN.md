@@ -18,6 +18,12 @@ which is plainly that subagent's command, yet it is persisted with
 `callerType: "direct"` and rendered as a parent row between the parent's own
 commands.
 
+The same gap loses usage. A step's tokens and cost come only from the records
+ctrlyoke parses, so a child that writes elsewhere is not counted. Measured on
+2026-10-23 for claude-cli interactive: across 35 sessions with subagents, the
+`subagents/agent-*.jsonl` files held 42% of the sessions' cost ($211 of $505 at
+API list prices), none of it in ctrlyoke's step totals.
+
 A related symptom, already fixed, was the subagent's prompt being recorded as a
 human `USER_STEER` row (`dev/bugs/implemented/claude-subagent-prompts-classified-as-human-steers.md`).
 That fix drops the prompt message as `"other"`; the prompt is still visible
@@ -430,7 +436,44 @@ cooperate with its virtualization and height estimation, and with
 `src/cli/CliTerminalFormatter.ts` should indent subagent rows under the spawn
 line the same way.
 
-### 4. Suggested order
+### 4. Count subagent tokens and cost
+
+Every followed child source carries per-call usage in the same shape as the
+parent's records (Claude `message.usage`, Qwen `usageMetadata`, Codex
+`token_count`, Antigravity transcript and statusline usage, OpenCode
+`step_finish` `tokens`). Fold it into the step's `TokenUsage` so the attempt
+total, the cost estimate, the Stats tab and the harness cards include the
+children's work:
+
+- **Reuse each parser's usage accumulation**, run per child source, then add
+  the child's sums into the step's input, output, cache-read, cache-write
+  (including Claude's 1-hour `cache_creation.ephemeral_1h_input_tokens`
+  subset) and reasoning counts. Dedupe by message id per source, as
+  `ClaudeLogParser` already does for the main log.
+- **Children may run a different model.** A Claude `Explore` subagent often
+  runs Haiku while the parent runs Opus, so one blended count priced at the
+  parent's rates is wrong. Price each model separately: keep per-model usage
+  (the shape of the existing `modelUsage` metadata) and sum the per-model
+  costs in `calculateAttemptCost`.
+- **Context window stays the parent's.** Children have their own context;
+  `contextWindowUsedTokens` must keep coming from the parent's last call.
+- **Don't count twice.** Before adding a child's usage, check whether the
+  stream ctrlyoke already reads includes it: claude-cli headless children
+  arrive inline in stdout with their own `message.usage`, and the `result`
+  event's `usage` (which currently overwrites the accumulated sums) may or may
+  not include them. Verify each harness against a captured run, the same way
+  the research above was done, and record the answer in this plan. Codex's
+  child rollout replays the parent's history (see the codex-cli gotchas), so
+  only its own `token_count` deltas count.
+- **Harness-reported cost.** Claude's `total_cost_usd` and OpenCode's
+  `part.cost` may already include children. Compare against the per-model
+  calculation, and keep the existing divergence check meaningful.
+
+Usage from a child source that can't be read (missing file, link never
+resolved) marks the attempt's coverage partial, so totals show **≥** instead
+of silently undercounting.
+
+### 5. Suggested order
 
 1. Data model swap (`callerType` → `subagent` / `subagentSpawn`) plus the merge
    guard.
@@ -441,6 +484,10 @@ line the same way.
    carries the call id, which makes it the simplest follower case.
 5. codex-cli, antigravity-cli, claude-cli interactive, then opencode-cli (needs
    the plugin change).
+6. Subagent token and cost accounting (section 4), per harness as each child
+   source lands. claude-cli interactive is the largest measured gap, so it can
+   come first: its `subagents/agent-*.jsonl` usage can be summed before the
+   full follower and card work, since counting tokens needs no rendering.
 
 ## Out of scope
 
@@ -471,6 +518,10 @@ Build fixtures from the record shapes quoted above (trim paths and ids):
     part's `metadata.sessionId`.
 - `SubagentSourceFollower`: drains registered children before completion, never
   tails a source whose link isn't known, deduplicates re-read records.
+- Usage: a step with one child adds the child's input, output, cache-read and
+  cache-write counts to the step's totals exactly once; a child on a different
+  model is priced at its own model's rates; the context window stays the
+  parent's; an unreadable child source marks coverage partial.
 - `StreamingHistoryBuffer`: parent and subagent text don't merge, and neither do
   two sibling subagents' texts.
 - Webview (`src/ui/webview-react/test/`): rows nest under their spawn card; two
