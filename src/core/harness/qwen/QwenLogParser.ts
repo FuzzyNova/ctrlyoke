@@ -153,6 +153,7 @@ interface QwenProviderEvent extends BaseCliEvent {
     cachedContentTokenCount: number;
   };
   subtype?: string;
+  usage?: Record<string, number>;
   systemPayload?: Record<string, any>;
   toolCallResult?: {
     callId: string;
@@ -215,6 +216,7 @@ export class QwenLogParser extends BaseLogParser {
     let totalOutputTokens = 0;
     let totalCachedTokens = 0;
     let sawUsageMetadata = false;
+    let resultUsage: QwenProviderEvent["usage"];
     let lastAssistantUsage: QwenProviderEvent["usageMetadata"] | undefined;
     let model: string | undefined;
     // Maps callId → full file path so tool_result events can get the path from the
@@ -223,6 +225,9 @@ export class QwenLogParser extends BaseLogParser {
     const askQuestionMap = new Map<string, AskUserQuestionEntry[]>();
 
     for (const event of events as QwenProviderEvent[]) {
+      if (event.type === QWEN_EVENT_TYPES.RESULT && event.usage) {
+        resultUsage = event.usage;
+      }
       // Extract session ID from top-level field (present on all event types)
       if (event.sessionId && !sessionId) {
         sessionId = event.sessionId;
@@ -336,20 +341,41 @@ export class QwenLogParser extends BaseLogParser {
       ? lastAssistantUsage.promptTokenCount || 0
       : undefined;
 
-    const tokenUsage: TokenUsage | undefined = sawUsageMetadata
-      ? {
-          inputTokens: totalInputTokens,
-          outputTokens: totalOutputTokens,
-          totalTokens: totalInputTokens + totalOutputTokens,
-          totalConfidence: TOKEN_TOTAL_CONFIDENCE.ACCUMULATED,
-          cachedInputTokens:
-            totalCachedTokens > 0 ? totalCachedTokens : undefined,
-          contextWindowUsedTokens,
-          contextWindowSize: getQwenContextWindowSize(
-            model ?? this.resolvedModel
-          ),
-        }
-      : undefined;
+    const resultInput =
+      resultUsage?.input_tokens ?? resultUsage?.promptTokenCount;
+    const resultOutput =
+      resultUsage?.output_tokens ?? resultUsage?.candidatesTokenCount;
+    const resultCached =
+      resultUsage?.cached_tokens ?? resultUsage?.cachedContentTokenCount;
+    const resultTotal =
+      resultUsage?.total_tokens ?? resultUsage?.totalTokenCount;
+    const tokenUsage: TokenUsage | undefined =
+      resultUsage && resultInput !== undefined && resultOutput !== undefined
+        ? {
+            inputTokens: resultInput,
+            outputTokens: resultOutput,
+            totalTokens: resultTotal ?? resultInput + resultOutput,
+            totalConfidence: TOKEN_TOTAL_CONFIDENCE.PROVIDER,
+            cachedInputTokens: resultCached,
+            contextWindowUsedTokens,
+            contextWindowSize: getQwenContextWindowSize(
+              model ?? this.resolvedModel
+            ),
+          }
+        : sawUsageMetadata
+          ? {
+              inputTokens: totalInputTokens,
+              outputTokens: totalOutputTokens,
+              totalTokens: totalInputTokens + totalOutputTokens,
+              totalConfidence: TOKEN_TOTAL_CONFIDENCE.ACCUMULATED,
+              cachedInputTokens:
+                totalCachedTokens > 0 ? totalCachedTokens : undefined,
+              contextWindowUsedTokens,
+              contextWindowSize: getQwenContextWindowSize(
+                model ?? this.resolvedModel
+              ),
+            }
+          : undefined;
 
     return {
       events: outputEvents,

@@ -484,11 +484,10 @@ children's work:
 
 Usage from a child source that can't be read (missing file, link never
 resolved) marks the attempt's coverage partial, so totals show **≥** instead
-of silently undercounting. Note that today `calculateAttemptCost`
-(`src/utils/ModelPricing.ts`) returns no cost at all for
-`TOKEN_TOTAL_CONFIDENCE.PARTIAL`; decide whether a missing child should
-suppress the whole attempt's cost (current behaviour, safest) or show a lower
-bound, and document the choice here.
+of silently undercounting. `calculateAttemptCost`
+(`src/utils/ModelPricing.ts`) continues to suppress the whole attempt's cost
+for `TOKEN_TOTAL_CONFIDENCE.PARTIAL`. A lower-bound estimate would risk being
+read as the full bill; the token count still exposes the lower-bound marker.
 
 Per-model usage is a new optional field on the persisted `TokenUsage` /
 `CliOutput.tokens`; adding it is additive and needs no timeline schema bump,
@@ -640,7 +639,7 @@ Each item is one session; tick it when it lands.
 - [x] 2. claude-cli headless inline stamping, spawn normalization, and
       `task_*` status/completion. Fixes the reported interleaving bug.
 - [x] 3. copilot-cli inline stamping (both modes).
-- [ ] 4. Per-model usage and pricing, plus the inline-source usage fixes that
+- [x] 4. Per-model usage and pricing, plus the inline-source usage fixes that
       need no follower: claude-cli headless `result.modelUsage`, copilot-cli
       per-model `chat` spans and the child context-window leak, qwen-cli
       headless `result.usage`.

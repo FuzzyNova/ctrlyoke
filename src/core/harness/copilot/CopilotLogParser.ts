@@ -276,6 +276,15 @@ export class CopilotLogParser extends BaseLogParser {
   private otelCumulativeCacheReadTokens = 0;
   /** Running total of cache-write tokens across all chat spans seen this invocation. */
   private otelCumulativeCacheWriteTokens = 0;
+  private otelModelUsage: Record<
+    string,
+    {
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadInputTokens: number;
+      cacheCreationInputTokens: number;
+    }
+  > = {};
   /** Whether at least one OTel chat span was observed this invocation. */
   private otelChatSpanSeen = false;
   /** Exact context-window usage emitted by Copilot's per-turn OTel event. */
@@ -321,6 +330,7 @@ export class CopilotLogParser extends BaseLogParser {
     this.otelCumulativeOutputTokens = 0;
     this.otelCumulativeCacheReadTokens = 0;
     this.otelCumulativeCacheWriteTokens = 0;
+    this.otelModelUsage = {};
     this.otelChatSpanSeen = false;
   }
 
@@ -424,6 +434,29 @@ export class CopilotLogParser extends BaseLogParser {
         const output = line.attributes[COPILOT_OTEL_OUTPUT_TOKENS_ATTRIBUTE];
         const cacheRead = line.attributes[COPILOT_OTEL_CACHE_READ_ATTRIBUTE];
         const cacheWrite = line.attributes[COPILOT_OTEL_CACHE_WRITE_ATTRIBUTE];
+        const modelId = line.name
+          .slice(COPILOT_OTEL_CHAT_SPAN_PREFIX.length)
+          .trim();
+        if (modelId) {
+          const modelUsage = (this.otelModelUsage[modelId] ??= {
+            inputTokens: 0,
+            outputTokens: 0,
+            cacheReadInputTokens: 0,
+            cacheCreationInputTokens: 0,
+          });
+          if (typeof input === "number")
+            modelUsage.inputTokens += Math.max(
+              input -
+                (typeof cacheRead === "number" ? cacheRead : 0) -
+                (typeof cacheWrite === "number" ? cacheWrite : 0),
+              0
+            );
+          if (typeof output === "number") modelUsage.outputTokens += output;
+          if (typeof cacheRead === "number")
+            modelUsage.cacheReadInputTokens += cacheRead;
+          if (typeof cacheWrite === "number")
+            modelUsage.cacheCreationInputTokens += cacheWrite;
+        }
         if (typeof input === "number") {
           // Copilot's OTel input count includes both cache pools. Store the
           // non-cached amount so all downstream usage consumers see disjoint
@@ -469,6 +502,14 @@ export class CopilotLogParser extends BaseLogParser {
           typeof size === "number" &&
           size > 0
         ) {
+          // Child agents can use a smaller context tier and emit usage_info
+          // on the same invoke_agent span. Keep the parent reading, whose
+          // effective context limit is the largest in the invocation.
+          if (
+            this.otelContextWindowSize !== undefined &&
+            size < this.otelContextWindowSize
+          )
+            continue;
           this.otelContextWindowUsedTokens = used;
           this.otelContextWindowSize = size;
           contextUpdated = true;
@@ -503,6 +544,15 @@ export class CopilotLogParser extends BaseLogParser {
     contextWindowUsedTokens?: number;
     contextWindowSize?: number;
     totalConfidence: typeof TOKEN_TOTAL_CONFIDENCE.ACCUMULATED;
+    modelUsage?: Record<
+      string,
+      {
+        inputTokens: number;
+        outputTokens: number;
+        cacheReadInputTokens: number;
+        cacheCreationInputTokens: number;
+      }
+    >;
   } | null {
     if (!this.otelChatSpanSeen) {
       return null;
@@ -523,6 +573,17 @@ export class CopilotLogParser extends BaseLogParser {
       contextWindowUsedTokens: this.otelContextWindowUsedTokens,
       contextWindowSize: this.otelContextWindowSize,
       totalConfidence: TOKEN_TOTAL_CONFIDENCE.ACCUMULATED,
+      modelUsage: Object.fromEntries(
+        Object.entries(this.otelModelUsage).map(([model, usage]) => [
+          model,
+          {
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            cacheReadInputTokens: usage.cacheReadInputTokens,
+            cacheCreationInputTokens: usage.cacheCreationInputTokens,
+          },
+        ])
+      ),
     };
   }
 

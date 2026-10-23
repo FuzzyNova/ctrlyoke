@@ -376,6 +376,8 @@ export interface ProviderModelUsage {
   outputTokens?: number;
   cacheReadInputTokens?: number;
   cacheCreationInputTokens?: number;
+  /** 1-hour cache-write subset, when available. */
+  cacheCreationLongTtlInputTokens?: number;
   webSearchRequests?: number;
   costUSD?: number;
   contextWindow?: number;
@@ -581,4 +583,6 @@ export interface TokenUsage {
   contextWindowUsedTokens?: number;
   /** Model's total context window capacity in tokens (e.g. 200000 or 128000). */
   contextWindowSize?: number;
+  /** Optional billing usage partitioned by model; older outputs remain blended. */
+  modelUsage?: Record<string, ProviderModelUsage>;
 }

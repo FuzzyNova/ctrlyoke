@@ -41,6 +41,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every cache write at the cheaper 5-minute rate. Estimates for Claude Code steps were up to about a
   quarter too low and now match the cost Claude Code reports itself. Costs already recorded for earlier runs
   are unchanged.
+- **Claude Code headless and Qwen Code headless token totals include subagent work.** Claude Code
+  uses its per-model result totals, and Qwen Code uses the process-wide result usage. Earlier runs
+  keep their recorded totals.
+- **Cost estimates account for the model used by each call.** When a harness reports usage by model,
+  ctrlyoke applies each model's own rates before summing the attempt cost.
 - **A model pricing override now applies even when the harness reports its own cost.** OpenCode
   steps, and Claude Code steps run headless, used the harness's figure and ignored your
   override.

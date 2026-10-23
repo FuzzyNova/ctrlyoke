@@ -346,7 +346,37 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           harnessReportedCostUsd = event.total_cost_usd;
         }
         if (event.modelUsage) {
-          modelUsage = event.modelUsage;
+          modelUsage = Object.fromEntries(
+            Object.entries(event.modelUsage).map(([modelId, usage]) => [
+              modelId,
+              modelId === event.model && cacheCreationLongTtlTokens > 0
+                ? {
+                    ...usage,
+                    cacheCreationLongTtlInputTokens: cacheCreationLongTtlTokens,
+                  }
+                : usage,
+            ])
+          );
+          // result.modelUsage includes foreground subagents; result.usage is
+          // parent-only and remains the source for the parent's context fill
+          // and Claude's cache TTL split.
+          totalInputTokens = Object.values(event.modelUsage).reduce(
+            (sum, usage) => sum + (usage.inputTokens ?? 0),
+            0
+          );
+          totalOutputTokens = Object.values(event.modelUsage).reduce(
+            (sum, usage) => sum + (usage.outputTokens ?? 0),
+            0
+          );
+          cacheReadTokens = Object.values(event.modelUsage).reduce(
+            (sum, usage) => sum + (usage.cacheReadInputTokens ?? 0),
+            0
+          );
+          cacheCreationTokens = Object.values(event.modelUsage).reduce(
+            (sum, usage) => sum + (usage.cacheCreationInputTokens ?? 0),
+            0
+          );
+          resultTotalTokens = undefined;
           if (!model && Object.keys(event.modelUsage).length === 1) {
             model = Object.keys(event.modelUsage)[0];
           }
@@ -439,7 +469,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           }
           // Track last assistant turn's usage — this represents the current
           // context window state (not cumulative across turns like the totals above)
-          if (!isSyntheticMessage) {
+          if (!isSyntheticMessage && !event.parent_tool_use_id) {
             lastAssistantUsage = usage;
           }
         }
@@ -568,6 +598,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
                   cacheCreationLongTtlTokens > 0
                     ? cacheCreationLongTtlTokens
                     : undefined,
+                modelUsage,
                 contextWindowUsedTokens,
                 contextWindowSize: getClaudeContextWindowSize(
                   model ?? this.resolvedModel

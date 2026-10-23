@@ -158,6 +158,32 @@ suite("ModelPricing", () => {
     );
   });
 
+  test("prices each model in a usage breakdown separately", () => {
+    const result = calculateAttemptCost({
+      harnessId: HARNESS_IDS.CLAUDE_CLI,
+      modelId: "claude-sonnet-4-5-20250929",
+      prompt: 1_000_000,
+      completion: 100,
+      modelUsage: {
+        "claude-sonnet-4-5-20250929": { inputTokens: 1_000_000 },
+        "claude-haiku-4-5-20251001": { inputTokens: 1_000_000 },
+      },
+    });
+    assert.ok(result.cost);
+    assert.ok(result.cost.usd > 0);
+    assert.strictEqual(result.cost.breakdown?.inputUsd, result.cost.usd);
+  });
+
+  test("uses the legacy single-model path without a model breakdown", () => {
+    const result = calculateAttemptCost({
+      harnessId: HARNESS_IDS.CLAUDE_CLI,
+      modelId: "sonnet",
+      prompt: 1_000_000,
+      completion: 0,
+    });
+    assert.strictEqual(result.cost?.modelId, "sonnet");
+  });
+
   test("marks table estimates as complete and price-table sourced", () => {
     const result = calculateAttemptCost({
       harnessId: HARNESS_IDS.CLAUDE_CLI,

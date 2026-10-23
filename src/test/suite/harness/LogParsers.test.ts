@@ -779,6 +779,66 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(response.metadata.model, "claude-sonnet-4-5-20250929");
     });
 
+    test("uses result modelUsage totals while retaining parent context usage", () => {
+      const response = parser.extractResponse([
+        {
+          type: "assistant",
+          parent_tool_use_id: null,
+          message: {
+            model: "claude-opus-4-6",
+            usage: {
+              input_tokens: 12,
+              output_tokens: 3,
+              cache_read_input_tokens: 5,
+            },
+            content: [{ type: "text", text: "parent" }],
+          },
+        },
+        {
+          type: "assistant",
+          parent_tool_use_id: "spawn",
+          message: {
+            model: "claude-haiku-4-5",
+            usage: {
+              input_tokens: 500,
+              output_tokens: 20,
+              cache_read_input_tokens: 100,
+            },
+            content: [{ type: "text", text: "child" }],
+          },
+        },
+        {
+          type: "result",
+          model: "claude-opus-4-6",
+          usage: {
+            input_tokens: 12,
+            output_tokens: 3,
+            cache_read_input_tokens: 5,
+          },
+          modelUsage: {
+            "claude-opus-4-6": {
+              inputTokens: 12,
+              outputTokens: 3,
+              cacheReadInputTokens: 5,
+            },
+            "claude-haiku-4-5": {
+              inputTokens: 500,
+              outputTokens: 20,
+              cacheReadInputTokens: 100,
+            },
+          },
+        },
+      ] as any);
+      assert.strictEqual(response.metadata.usage?.inputTokens, 512);
+      assert.strictEqual(response.metadata.usage?.outputTokens, 23);
+      assert.strictEqual(response.metadata.usage?.cachedInputTokens, 105);
+      assert.strictEqual(response.metadata.usage?.contextWindowUsedTokens, 17);
+      assert.strictEqual(
+        Object.keys(response.metadata.usage?.modelUsage ?? {}).length,
+        2
+      );
+    });
+
     test("should extract tool results from user events", () => {
       const events = [
         {
@@ -3745,6 +3805,7 @@ suite("CopilotLogParser", () => {
         assert.strictEqual(final?.contextWindowUsedTokens, 20692);
         assert.strictEqual(final?.contextWindowSize, 1000000);
         assert.strictEqual(final?.outputTokens, 42);
+        assert.strictEqual(final?.modelUsage?.["gpt-5.4"]?.inputTokens, 18689);
       } finally {
         cleanupTempFile(filePath);
       }
@@ -3856,6 +3917,7 @@ suite("CopilotLogParser", () => {
             { name: "github.copilot.user.message", attributes: {} },
             usageInfoEvent(17319, 272000),
             usageInfoEvent(20411, 272000),
+            usageInfoEvent(18000, 200000),
           ],
         },
       ];
@@ -7250,6 +7312,31 @@ suite("OpenCodeLogParser", () => {
 // ============================================================================
 
 suite("QwenLogParser", () => {
+  test("uses headless result usage as the whole-process total", () => {
+    const parser = new QwenLogParser();
+    const output = parser.extractResponse([
+      {
+        type: QWEN_EVENT_TYPES.ASSISTANT,
+        model: "qwen3-coder-plus",
+        message: { role: "assistant", parts: [] },
+        usageMetadata: {
+          promptTokenCount: 10,
+          candidatesTokenCount: 2,
+          thoughtsTokenCount: 0,
+          totalTokenCount: 12,
+          cachedContentTokenCount: 0,
+        },
+      },
+      {
+        type: QWEN_EVENT_TYPES.RESULT,
+        usage: { input_tokens: 90, output_tokens: 8, total_tokens: 98 },
+      },
+    ] as any);
+    assert.strictEqual(output.metadata.usage?.inputTokens, 90);
+    assert.strictEqual(output.metadata.usage?.outputTokens, 8);
+    assert.strictEqual(output.metadata.usage?.totalTokens, 98);
+  });
+
   suite("sanitizeQwenProjectPath", () => {
     test("replaces dots, underscores, and spaces with dashes", () => {
       const user = process.platform === "win32" ? "user" : "User";
