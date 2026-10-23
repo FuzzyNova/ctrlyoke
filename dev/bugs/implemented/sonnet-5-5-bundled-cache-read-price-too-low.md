@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-23 by Claude Code, during a token and cost accuracy audit
 - **Area:** `src/utils/generated/modelPricingRegistryData.json`, `scripts/sync-model-pricing.mjs`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -39,3 +39,5 @@ layer in `ModelPricingRegistry.ts` that `sync-model-pricing.mjs` checks for
 staleness, so a fix doesn't silently outlive the upstream correction. Until
 then, users can add a `modelPricing` override for `claude-cli` /
 `claude-sonnet-5-5` with `cachedInputPerMTok: 0.2`.
+
+The upstream models.dev report remains to be filed by the maintainer.

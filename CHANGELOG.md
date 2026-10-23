@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Antigravity cost estimates now include separately reported thinking tokens.**
+- **Sonnet 5.5 cache reads use the corrected $0.20/M rate.** The sync script
+  checks the upstream value so the temporary correction can be removed when
+  models.dev is updated.
 - **Step cost estimates include parent agent tokens and price subagents at their own model.**
 
 - **MCP `edit_step` no longer lets agents set or clear harness arguments.** The deprecated

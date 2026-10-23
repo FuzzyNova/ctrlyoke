@@ -1,0 +1,18 @@
+[
+  {
+    "provider": "anthropic",
+    "modelId": "claude-sonnet-5-5",
+    "field": "cacheRead",
+    "upstreamValue": 0.1,
+    "correctedValue": 0.2,
+    "reason": "Anthropic cache reads are 10% of the $2/M input rate."
+  },
+  {
+    "provider": "github-copilot",
+    "modelId": "claude-sonnet-5.5",
+    "field": "cacheRead",
+    "upstreamValue": 0.1,
+    "correctedValue": 0.2,
+    "reason": "Anthropic cache reads are 10% of the $2/M input rate."
+  }
+]
