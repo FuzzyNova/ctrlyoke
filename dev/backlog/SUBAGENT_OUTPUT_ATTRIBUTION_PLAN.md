@@ -696,7 +696,7 @@ Each item is one session; tick it when it lands.
       pipelines.
 - [x] 6b. qwen-cli on the follower (both modes, bridge unwrapping, qwen
       interactive child usage).
-- [ ] 7. claude-cli interactive follower plus child usage (the largest
+- [x] 7. claude-cli interactive follower plus child usage (the largest
       measured usage gap).
 - [ ] 8. codex-cli follower plus child usage.
 - [ ] 9. antigravity-cli follower (N children, asynchronous completion) plus

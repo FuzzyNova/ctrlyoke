@@ -52,6 +52,11 @@ export const CLAUDE_SUBAGENT_TOOL_NAMES = {
   LEGACY_TASK: "Task",
 } as const;
 
+/** Foreground child transcript metadata values used for attribution. */
+export const CLAUDE_SUBAGENT_REQUEST_SHAPES = {
+  FOREGROUND: "foreground",
+} as const;
+
 /** Terminal status values Claude reports in `task_notification` records. */
 export const CLAUDE_TASK_STATUSES = {
   COMPLETED: "completed",
@@ -73,4 +78,5 @@ export const CLAUDE_HOOK_CONFIG_TYPES = {
 
 export const CLAUDE_STOP_REASONS = {
   TOOL_USE: "tool_use",
+  END_TURN: "end_turn",
 } as const;

@@ -33,6 +33,11 @@ import {
 } from "../../../types/DashboardConstants";
 import { ClaudeToolBuilder } from "./ClaudeToolBuilder";
 import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
+import { SubagentSourceFollower } from "../shared/SubagentSourceFollower";
+import type {
+  SubagentChildSource,
+  SubagentRecordUsage,
+} from "../shared/interfaces/SubagentChildSource";
 import {
   CLAUDE_ATTACHMENT_TYPES,
   CLAUDE_CONTENT_BLOCK_TYPES,
@@ -44,6 +49,7 @@ import {
   CLAUDE_STOP_REASONS,
   CLAUDE_SYSTEM_SUBTYPES,
   CLAUDE_SUBAGENT_TOOL_NAMES,
+  CLAUDE_SUBAGENT_REQUEST_SHAPES,
   CLAUDE_TASK_STATUSES,
 } from "./ClaudeProtocolConstants";
 
@@ -148,6 +154,11 @@ interface ClaudeProviderEvent extends BaseCliEvent {
 type UnconfirmedAsyncLaunch = (typeof CLAUDE_TOOL_NAMES)["AGENT" | "MONITOR"];
 
 export class ClaudeLogParser extends BaseLogParser implements ILogParser {
+  private readonly subagentFollower = new SubagentSourceFollower();
+
+  getSubagentFollower(): SubagentSourceFollower {
+    return this.subagentFollower;
+  }
   /**
    * Workspace root directory — set by CliIntegration after construction.
    * Used by getClaudeProjectDirectory() to locate Claude's session log folder.
@@ -202,6 +213,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * tracking must do this at its own boundary.
    */
   private resetSessionTrackingState(): void {
+    this.subagentFollower.reset();
     this.pendingStreamingToolUses.clear();
     this.backgroundFollowUpState.reset();
     this.unconfirmedAsyncLaunches.clear();
@@ -1446,6 +1458,15 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           );
           if (block.id && block.name) {
             this.pendingStreamingToolUses.set(block.id, block.name);
+            if (
+              !("parent_tool_use_id" in e) &&
+              e.sessionId &&
+              (block.name === CLAUDE_SUBAGENT_TOOL_NAMES.AGENT ||
+                block.name === CLAUDE_SUBAGENT_TOOL_NAMES.LEGACY_TASK) &&
+              block.input?.run_in_background !== true
+            ) {
+              this.registerInteractiveSubagentSource(e.sessionId, block.id);
+            }
           }
         }
       }
@@ -1559,6 +1580,117 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     }
 
     return events;
+  }
+
+  private registerInteractiveSubagentSource(
+    sessionId: string,
+    parentToolUseId: string
+  ): void {
+    const subagentsDirectory = path.join(
+      this.getClaudeProjectDirectory() ?? "",
+      sessionId,
+      "subagents"
+    );
+    const source: SubagentChildSource<ClaudeProviderEvent> = {
+      key: `claude:${sessionId}:${parentToolUseId}`,
+      attribution: { parentToolCallId: parentToolUseId },
+      read: async (fromOffset) => {
+        let agentId: string | undefined;
+        try {
+          for (const filename of fs.readdirSync(subagentsDirectory)) {
+            if (
+              !filename.startsWith("agent-") ||
+              !filename.endsWith(".meta.json")
+            )
+              continue;
+            try {
+              const metadata: unknown = JSON.parse(
+                fs.readFileSync(path.join(subagentsDirectory, filename), "utf8")
+              );
+              if (
+                metadata &&
+                typeof metadata === "object" &&
+                "toolUseId" in metadata &&
+                metadata.toolUseId === parentToolUseId &&
+                "requestShape" in metadata &&
+                metadata.requestShape ===
+                  CLAUDE_SUBAGENT_REQUEST_SHAPES.FOREGROUND
+              ) {
+                agentId = filename.slice("agent-".length, -".meta.json".length);
+                break;
+              }
+            } catch {
+              // A metadata file may still be being written; retry on the next poll.
+            }
+          }
+        } catch {
+          return { records: [], nextOffset: fromOffset };
+        }
+        if (!agentId) return { records: [], nextOffset: fromOffset };
+        const transcriptPath = path.join(
+          subagentsDirectory,
+          `agent-${agentId}.jsonl`
+        );
+        let buffer: Buffer;
+        try {
+          buffer = fs.readFileSync(transcriptPath);
+        } catch {
+          return { records: [], nextOffset: fromOffset };
+        }
+        const appended = buffer.subarray(fromOffset);
+        const lastNewline = appended.lastIndexOf(0x0a);
+        const completeBytes =
+          lastNewline < 0
+            ? Buffer.alloc(0)
+            : appended.subarray(0, lastNewline + 1);
+        const lines = completeBytes.toString("utf8").split(/\r?\n/u);
+        const records: ClaudeProviderEvent[] = [];
+        for (const line of lines.slice(0, -1)) {
+          if (!line.trim()) continue;
+          try {
+            const record: ClaudeProviderEvent = JSON.parse(line);
+            records.push(record);
+          } catch {
+            // Ignore malformed complete lines and continue with later records.
+          }
+        }
+        return { records, nextOffset: fromOffset + completeBytes.length };
+      },
+      map: (record) => this.extractStructuredEventsFromEvent(record),
+      usage: (record): SubagentRecordUsage | undefined => {
+        const message = record.message;
+        const usage = message?.usage;
+        const model = message?.model;
+        const messageId = message?.id;
+        if (
+          record.type !== CLAUDE_EVENT_TYPES.ASSISTANT ||
+          typeof model !== "string" ||
+          !model ||
+          model === CLAUDE_MODEL_SENTINELS.SYNTHETIC ||
+          typeof messageId !== "string" ||
+          !usage ||
+          typeof usage !== "object"
+        ) {
+          return undefined;
+        }
+        const cacheCreation = usage.cache_creation as
+          ClaudeCacheCreationUsage | undefined;
+        return {
+          recordId: messageId,
+          model,
+          inputTokens: usage.input_tokens,
+          outputTokens: usage.output_tokens,
+          cacheReadInputTokens: usage.cache_read_input_tokens,
+          cacheCreationInputTokens: usage.cache_creation_input_tokens,
+          cacheCreationLongTtlInputTokens:
+            cacheCreation?.ephemeral_1h_input_tokens,
+        };
+      },
+      isComplete: (record) =>
+        record.type === CLAUDE_EVENT_TYPES.ASSISTANT &&
+        record.message?.stop_reason === CLAUDE_STOP_REASONS.END_TURN,
+    };
+    this.subagentFollower.register(source);
   }
 
   /** Convert Claude task lifecycle records into updates keyed by Agent tool id. */

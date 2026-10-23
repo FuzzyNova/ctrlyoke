@@ -300,6 +300,190 @@ suite("ClaudeLogParser", () => {
     );
   });
 
+  test("follows interactive foreground transcripts once and keeps parent context", async () => {
+    const workspace = makeTempDir("claude-subagent-");
+    const normalizedWorkspace = workspace.replace(/[\\/.]/g, "-");
+    const sessionId = `claude-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const subagentsDirectory = path.join(
+      os.homedir(),
+      ".claude",
+      "projects",
+      normalizedWorkspace,
+      sessionId,
+      "subagents"
+    );
+    fs.mkdirSync(subagentsDirectory, { recursive: true });
+    parser.setWorkspaceRoot(workspace);
+    try {
+      const parentSpawnEvents = parser.extractStructuredEventsFromEvent({
+        type: "assistant",
+        sessionId,
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "interactive-agent-call",
+              name: "Agent",
+              input: {
+                description: "Inspect with Haiku",
+                subagent_type: "Explore",
+                prompt: "Inspect the code",
+              },
+            },
+          ],
+        },
+      } as BaseCliEvent);
+      const spawnCall = parentSpawnEvents.find(
+        (event) => event.type === CLI_EVENT_TYPES.TOOL_CALL
+      );
+      assert.strictEqual(
+        (spawnCall?.data as ToolCall).subagentSpawn?.description,
+        "Inspect with Haiku"
+      );
+      fs.writeFileSync(
+        path.join(subagentsDirectory, "agent-foreground.meta.json"),
+        JSON.stringify({
+          toolUseId: "interactive-agent-call",
+          requestShape: "foreground",
+        })
+      );
+      fs.writeFileSync(
+        path.join(subagentsDirectory, "agent-background.meta.json"),
+        JSON.stringify({
+          toolUseId: "unrelated-background-call",
+          requestShape: "background",
+        })
+      );
+      fs.writeFileSync(
+        path.join(subagentsDirectory, "agent-background.jsonl"),
+        JSON.stringify({
+          type: "assistant",
+          message: { content: [{ type: "text", text: "background child" }] },
+        }) + "\n"
+      );
+      const childRecords = [
+        {
+          type: "assistant",
+          isSidechain: true,
+          message: {
+            id: "child-usage-1",
+            model: "claude-haiku-child",
+            usage: {
+              input_tokens: 11,
+              output_tokens: 7,
+              cache_read_input_tokens: 5,
+              cache_creation_input_tokens: 13,
+              cache_creation: { ephemeral_1h_input_tokens: 9 },
+            },
+            content: [
+              {
+                type: "tool_use",
+                id: "child-tool-call",
+                name: "Bash",
+                input: { command: "echo child" },
+                caller: { type: "direct" },
+              },
+            ],
+          },
+        },
+        {
+          type: "assistant",
+          isSidechain: true,
+          message: {
+            id: "child-usage-1",
+            model: "claude-haiku-child",
+            usage: { input_tokens: 999, output_tokens: 999 },
+            content: [{ type: "text", text: "duplicate usage" }],
+          },
+        },
+        {
+          type: "user",
+          isSidechain: true,
+          message: {
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "child-tool-call",
+                content: "child output",
+              },
+            ],
+          },
+        },
+        {
+          type: "assistant",
+          isSidechain: true,
+          message: {
+            id: "child-final",
+            model: "claude-haiku-child",
+            stop_reason: "end_turn",
+            content: [{ type: "text", text: "child done" }],
+          },
+        },
+      ];
+      fs.writeFileSync(
+        path.join(subagentsDirectory, "agent-foreground.jsonl"),
+        childRecords.map((record) => JSON.stringify(record)).join("\n") + "\n"
+      );
+
+      const drain = await parser.getSubagentFollower().drainToEof(500);
+      const output = mergeSubagentOutput(
+        {
+          events: [],
+          metadata: {
+            usage: {
+              inputTokens: 20,
+              outputTokens: 3,
+              totalTokens: 23,
+              contextWindowUsedTokens: 18,
+              modelUsage: {
+                "claude-opus-parent": { inputTokens: 20, outputTokens: 3 },
+              },
+            },
+          },
+        },
+        drain
+      );
+      const childTool = output.events.find(
+        (event) => event.type === CLI_EVENT_TYPES.BASH_COMMAND
+      );
+      assert.strictEqual(
+        childTool?.subagent?.parentToolCallId,
+        "interactive-agent-call"
+      );
+      assert.strictEqual(
+        output.metadata.usage?.modelUsage?.["claude-haiku-child"]?.inputTokens,
+        11
+      );
+      assert.strictEqual(
+        output.metadata.usage?.modelUsage?.["claude-haiku-child"]?.outputTokens,
+        7
+      );
+      assert.strictEqual(
+        output.metadata.usage?.modelUsage?.["claude-haiku-child"]
+          ?.cacheCreationLongTtlInputTokens,
+        9
+      );
+      assert.strictEqual(output.metadata.usage?.inputTokens, 31);
+      assert.strictEqual(output.metadata.usage?.contextWindowUsedTokens, 18);
+      assert.ok(
+        !output.events.some(
+          (event) =>
+            event.type === CLI_EVENT_TYPES.TEXT &&
+            (event.data as TextData).text === "background child"
+        )
+      );
+    } finally {
+      await removeTempDir(workspace);
+      fs.rmSync(
+        path.join(os.homedir(), ".claude", "projects", normalizedWorkspace),
+        {
+          recursive: true,
+          force: true,
+        }
+      );
+    }
+  });
+
   test("streams Claude task progress and completion as spawn updates", () => {
     const progress = parser.extractStructuredEventsFromEvent({
       type: "system",

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Claude Code interactive output and token totals include foreground subagents.** Child usage is priced at each child's model rates, including its reported 1-hour cache writes.
 - **Qwen Code interactive output and token totals include foreground subagents.** Background memory and extraction calls remain outside interactive totals; headless totals include them through Qwen's process-wide usage.
 - **OpenCode subagent output and token usage are included in the parent step.**
 - **Antigravity subagent output and token usage are included in the parent step.**

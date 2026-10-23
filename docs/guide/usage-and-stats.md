@@ -243,10 +243,11 @@ Runs recorded by ctrlyoke 0.2.2 or earlier left cache writes out of these totals
 their Claude Code, Copilot, OpenCode and Antigravity figures read lower.
 
 Subagent tokens and output are included in totals for all supported harnesses.
-Qwen Code interactive runs include foreground subagent output and usage; its
-background memory and extraction calls are not included because they are only
-reported in telemetry. Headless Qwen totals use process-wide result usage, which
-already includes those calls.
+Claude Code interactive runs count foreground subagent transcripts. Qwen Code
+interactive runs include foreground subagent output and usage; its background
+memory and extraction calls are not included because they are only reported in
+telemetry. Headless Qwen totals use process-wide result usage, which already
+includes those calls.
 
 When Antigravity's counts come only from its status line, they can cover the
 last model call rather than the whole attempt.
