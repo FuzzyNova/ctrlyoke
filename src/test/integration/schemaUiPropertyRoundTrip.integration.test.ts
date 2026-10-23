@@ -109,6 +109,10 @@ function promptStepOwnBranch(): SchemaObject {
 const NOT_AUTHORABLE = new Map<string, string>([
   ["_runtime", "engine-written runtime block"],
   ["_templateMeta", "template-authoring surface, not a workflow property"],
+  [
+    "conditions",
+    "author-defined MCP preset catalog; preserved as workflow metadata and tested below, not edited as a dashboard execution property",
+  ],
   ["runtimeMetadata", "engine-written runtime block"],
   ["startedAt", "engine-written timestamp"],
   ["definitionRevision", "engine-written optimistic-concurrency counter"],
@@ -146,6 +150,14 @@ function authorableProperties(node: SchemaObject): string[] {
  */
 const SAMPLES: Record<string, unknown> = {
   color: "#123456",
+  conditions: {
+    committed: {
+      script: "git status --porcelain",
+      compareSource: "stdout",
+      operator: "isEmpty",
+      params: ["BUG_FILE"],
+    },
+  },
   additionalArgs: "--effort high",
   maxSteps: 30,
   agent: "seeded-agent",
@@ -520,6 +532,31 @@ suite("Schema -> dashboard property round trip", () => {
       await fs.rm(workspace, { recursive: true, force: true });
       workspace = "";
     }
+  });
+
+  test("condition presets validate and survive a dashboard save", async () => {
+    const conditions = sampleFor("conditions");
+    workspace = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-presets-"));
+    const ajv = new Ajv({ allErrors: true, strict: false });
+    const validate = ajv.compile(schema);
+    assert.strictEqual(
+      validate({ steps: [promptStepSeed()], conditions }),
+      true,
+      JSON.stringify(validate.errors)
+    );
+
+    const run = await createPromotedRun(workspace, {
+      steps: [{ prompt: PROMPT_TEXT }],
+    });
+    const harness = createRoundTripHarness(workspace, run);
+    await harness.patchRunDefinition((head) => {
+      head.conditions = conditions;
+    });
+    await harness.routeWorkflowPropertyUpdate("model", "sonnet");
+    assert.deepStrictEqual(
+      (await harness.readRunDefinition()).conditions,
+      conditions
+    );
   });
 
   suite("sample coverage", () => {

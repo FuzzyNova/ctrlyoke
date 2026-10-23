@@ -240,10 +240,13 @@ Each item is one session; tick it when it lands.
       `resolveCliExecutionMode`, but does not export it to the MCP child.
       `ParallelGroupPreflight` applies the same interactive multiplex check to
       queued groups regardless of whether members were authored or appended.
-- [ ] 2a. Stage 2 schema: the `conditions` root field and `params` (legal only
+- [x] 2a. Stage 2 schema: the `conditions` root field and `params` (legal only
       inside `conditions` entries), `schema:update`, the TypeScript types,
       parser validation, and the serializer/schema round-trip suites. No MCP
-      behavior yet.
+      behavior yet. No schema bump: `conditions` is optional and older hosts
+      can ignore it as described by CONTRIBUTING.md. Preset names use
+      `^[A-Za-z][A-Za-z0-9_-]*$`; `params` uses environment-variable names
+      (`^[A-Za-z_][A-Za-z0-9_]*$`) and is legal only on a preset.
 - [ ] 2b. Stage 2 resolution: preset resolution and materialization in the MCP
       layer (`append_step` and `edit_step`), the override and parameter rules,
       `McpServer.test.ts` coverage, and the executor-level `committed` retry

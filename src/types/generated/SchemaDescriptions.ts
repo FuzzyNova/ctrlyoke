@@ -148,6 +148,24 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "commit.model": "Model override for commit message generation. Empty = use the commit harness default.",
   "commit.systemPrompt": "System prompt sent before the git diff. The diff is appended automatically.",
   "compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.",
+  "conditions": "Named condition presets that MCP agents may attach to steps by name. Authors define every script; MCP agents can choose a preset but can never supply or override its scripts. Preset scripts that use declared params must quote each value (for example, `\"$BUG_FILE\"`) because values are passed through environment variables. A param name may not collide with a key in that preset's own `env`.",
+  "conditions.*": "Author-defined condition preset available to MCP steps.",
+  "conditions.*.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.",
+  "conditions.*.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
+  "conditions.*.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.",
+  "conditions.*.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.",
+  "conditions.*.maxRetries": "Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.",
+  "conditions.*.onFail": "Action when the condition fails. Valid actions depend on whether the preset is used as an end condition or pre-condition.",
+  "conditions.*.onPass": "Action when the condition passes. Valid actions depend on whether the preset is used as an end condition or pre-condition.",
+  "conditions.*.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors.",
+  "conditions.*.params": "Environment-variable names whose values MCP agents may supply when attaching this preset.",
+  "conditions.*.passRetryPrompt": "Template for the prompt sent after the end condition passes and onPass is 'retry'. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource); both prefixes are substituted on a pass retry. If omitted, the step's own prompt is re-sent.",
+  "conditions.*.resumeSessionOnRetry": "Whether retries continue in the same session. Default: true (retries resume the existing session for context continuity). Set to false to start a fresh session for each retry.",
+  "conditions.*.retryPrompt": "Template for retry prompt. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:* works in the step and retry prompts; $endCondition:* is only available in the retry prompt.",
+  "conditions.*.returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
+  "conditions.*.script": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.",
+  "conditions.*.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted.",
+  "conditions.*.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.",
   "coordination": "Retention and participant settings for the execution-root coordination board.",
   "coordination.allowExternalParticipants": "Allow participants not launched by ctrlyoke to join the coordination board.",
   "coordination.cliParticipantTtlMinutes": "Lease lifetime for participants delivered through the CLI or built-in skill.",
@@ -1289,6 +1307,39 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "stdout",
     "stderr",
     "exitCode"
+  ],
+  "conditions.*.compareSource": [
+    "stdout",
+    "stderr",
+    "exitCode"
+  ],
+  "conditions.*.maxRetries": [
+    -1
+  ],
+  "conditions.*.onFail": [
+    "continue",
+    "retry",
+    "skipPrompt",
+    "stopWorkflow"
+  ],
+  "conditions.*.onPass": [
+    "continue",
+    "retry",
+    "skipPrompt",
+    "stopWorkflow"
+  ],
+  "conditions.*.operator": [
+    "eq",
+    "ne",
+    "contains",
+    "notContains",
+    "gte",
+    "gt",
+    "lte",
+    "lt",
+    "matches",
+    "isEmpty",
+    "isNotEmpty"
   ],
   "defaults.agent": [
     ""
@@ -2616,6 +2667,9 @@ export const SCHEMA_VARIANT_DESCRIPTIONS: Readonly<Record<string, Readonly<Recor
   },
   "agent": {
     "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
+  },
+  "conditions.*.maxRetries": {
+    "-1": "Unlimited."
   },
   "defaults.agent": {
     "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."

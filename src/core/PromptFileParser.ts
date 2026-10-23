@@ -523,6 +523,36 @@ export class PromptFileParser {
         });
       }
     }
+    if (isObject(parsed) && isObject(parsed.conditions)) {
+      for (const [presetName, preset] of Object.entries(parsed.conditions)) {
+        if (!isObject(preset) || !Array.isArray(preset.params)) continue;
+        const envKeys = new Set(
+          (isObject(preset.env) ? Object.keys(preset.env) : []).map((key) =>
+            key.toLowerCase()
+          )
+        );
+        const paramNames = new Set<string>();
+        for (const param of preset.params) {
+          if (typeof param !== "string") continue;
+          const normalizedParam = param.toLowerCase();
+          if (paramNames.has(normalizedParam)) {
+            issues.push({
+              instancePath: `/conditions/${PromptFileParser.escapePointerSegment(presetName)}/params`,
+              message: `Parameter "${param}" duplicates another parameter name`,
+              severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR,
+            });
+          }
+          paramNames.add(normalizedParam);
+          if (envKeys.has(normalizedParam)) {
+            issues.push({
+              instancePath: `/conditions/${PromptFileParser.escapePointerSegment(presetName)}/params`,
+              message: `Parameter "${param}" collides with a key in the preset's env`,
+              severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR,
+            });
+          }
+        }
+      }
+    }
 
     const validation = this.validateSchema(parsed);
     const warningByPointer = new Map(
@@ -1302,6 +1332,8 @@ export class PromptFileParser {
       }
     }
     if (parsed.vars !== undefined) promptFile.vars = parsed.vars;
+    if (parsed.conditions !== undefined)
+      promptFile.conditions = parsed.conditions;
   }
 
   /** Copy every schema-backed execution property while preserving null values. */

@@ -204,6 +204,81 @@ suite("Workflow template schema", () => {
     );
   });
 
+  test("validates named condition presets and confines params to presets", async () => {
+    const preset = {
+      script: 'test -f "$BUG_FILE"',
+      params: ["BUG_FILE"],
+      env: { CI: "1" },
+      onFail: "skipPrompt",
+    };
+    assert.strictEqual(
+      validate({
+        steps: [{ prompt: "work" }],
+        conditions: { bugStillOpen: preset },
+      }),
+      true,
+      JSON.stringify(validate.errors)
+    );
+
+    for (const conditions of [
+      { "bad preset": preset },
+      { duplicate: { script: "echo ok", params: ["BUG_FILE", "BUG_FILE"] } },
+      { invalidParam: { script: "echo ok", params: ["not-valid"] } },
+    ]) {
+      assert.strictEqual(
+        validate({ steps: [{ prompt: "work" }], conditions }),
+        false,
+        JSON.stringify(conditions)
+      );
+    }
+
+    const parser = new PromptFileParser();
+    await assert.rejects(
+      parser.validateAndNormalize(
+        {
+          steps: [{ prompt: "work" }],
+          conditions: {
+            bugStillOpen: {
+              ...preset,
+              env: { BUG_FILE: "author value" },
+            },
+          },
+        },
+        process.cwd()
+      ),
+      /collides with a key in the preset's env/
+    );
+    await assert.rejects(
+      parser.validateAndNormalize(
+        {
+          steps: [{ prompt: "work" }],
+          conditions: {
+            bugStillOpen: {
+              script: "echo ok",
+              params: ["BUG_FILE", "bug_file"],
+            },
+          },
+        },
+        process.cwd()
+      ),
+      /duplicates another parameter name/
+    );
+    await assert.rejects(
+      parser.validateAndNormalize(
+        {
+          steps: [
+            {
+              prompt: "work",
+              endCondition: { script: "echo ok", params: ["BUG_FILE"] },
+            },
+          ],
+        },
+        process.cwd()
+      ),
+      /Validation failed/
+    );
+  });
+
   test("requires exactly one MCP command or URL", () => {
     const workflow = (entry: Record<string, unknown>) => ({
       mcpServers: [{ id: "server", ...entry }],

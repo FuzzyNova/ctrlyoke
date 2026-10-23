@@ -3951,6 +3951,7 @@ export const PROMPT_PROPERTIES = {
   PARALLEL: "parallel",
   FINAL_STEP: "finalStep",
   VARS: "vars",
+  CONDITIONS: "conditions",
   WORKTREE: "worktree",
   TRUSTED_EXTERNAL_ROOTS: "trustedExternalRoots",
   MAX_STEPS: "maxSteps",
