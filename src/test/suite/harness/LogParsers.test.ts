@@ -3,7 +3,10 @@ import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
 import { makeTempDir, removeTempDir } from "../../helpers/tempWorkspace";
-import { ClaudeLogParser } from "../../../core/harness/claude/ClaudeLogParser";
+import {
+  ClaudeLogParser,
+  normalizeClaudeWorkspacePath,
+} from "../../../core/harness/claude/ClaudeLogParser";
 import { ClaudeCliProvider } from "../../../core/harness/claude/ClaudeCliProvider";
 import { CopilotLogParser } from "../../../core/harness/copilot/CopilotLogParser";
 import { CopilotCliProvider } from "../../../core/harness/copilot/CopilotCliProvider";
@@ -143,9 +146,23 @@ function extractThinkingBlocks(output: UniversalCliOutput): ThinkingBlock[] {
 
 suite("ClaudeLogParser", () => {
   let parser: ClaudeLogParser;
+  const originalHome = process.env.HOME;
+  const originalUserProfile = process.env.USERPROFILE;
+  let testHome: string | undefined;
 
   setup(() => {
     parser = new ClaudeLogParser();
+  });
+
+  teardown(() => {
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+    if (originalUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = originalUserProfile;
+    if (testHome) {
+      removeTempDir(testHome);
+      testHome = undefined;
+    }
   });
 
   test("attributes parallel headless subagent calls and results by parent tool id", () => {
@@ -302,7 +319,10 @@ suite("ClaudeLogParser", () => {
 
   test("follows interactive foreground transcripts once and keeps parent context", async () => {
     const workspace = makeTempDir("claude-subagent-");
-    const normalizedWorkspace = workspace.replace(/[\\/.]/g, "-");
+    testHome = makeTempDir("claude-home-");
+    process.env.HOME = testHome;
+    process.env.USERPROFILE = testHome;
+    const normalizedWorkspace = normalizeClaudeWorkspacePath(workspace);
     const sessionId = `claude-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const subagentsDirectory = path.join(
       os.homedir(),
@@ -475,7 +495,7 @@ suite("ClaudeLogParser", () => {
     } finally {
       await removeTempDir(workspace);
       fs.rmSync(
-        path.join(os.homedir(), ".claude", "projects", normalizedWorkspace),
+        path.join(testHome, ".claude", "projects", normalizedWorkspace),
         {
           recursive: true,
           force: true,
@@ -486,7 +506,10 @@ suite("ClaudeLogParser", () => {
 
   test("follows interactive background-shaped transcripts without run_in_background input", async () => {
     const workspace = makeTempDir("claude-subagent-bg-");
-    const normalizedWorkspace = workspace.replace(/[\\/.]/g, "-");
+    testHome = makeTempDir("claude-home-");
+    process.env.HOME = testHome;
+    process.env.USERPROFILE = testHome;
+    const normalizedWorkspace = normalizeClaudeWorkspacePath(workspace);
     const sessionId = `claude-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const subagentsDirectory = path.join(
       os.homedir(),
@@ -550,7 +573,7 @@ suite("ClaudeLogParser", () => {
     } finally {
       await removeTempDir(workspace);
       fs.rmSync(
-        path.join(os.homedir(), ".claude", "projects", normalizedWorkspace),
+        path.join(testHome, ".claude", "projects", normalizedWorkspace),
         { recursive: true, force: true }
       );
     }
@@ -619,6 +642,85 @@ suite("ClaudeLogParser", () => {
     );
     assert.strictEqual(
       (finalUpdates[2].data as any).subagentSpawn.state,
+      "completed"
+    );
+  });
+
+  test("attributes nested spawn updates so they merge into the child card", () => {
+    const headless = parser.extractResponse([
+      {
+        type: "assistant",
+        parent_tool_use_id: "parent-spawn",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "nested-headless-spawn",
+              name: "Agent",
+              input: { description: "Grandchild work", prompt: "Do it" },
+            },
+          ],
+        },
+      },
+      {
+        type: "system",
+        subtype: "task_notification",
+        tool_use_id: "nested-headless-spawn",
+        status: "completed",
+      },
+    ] as BaseCliEvent[]);
+    const normalizedHeadless = normalizeCliEvents(headless.events);
+    const headlessCard = normalizedHeadless.filter(
+      (event) => (event.data as ToolCall).id === "nested-headless-spawn"
+    );
+    assert.strictEqual(headlessCard.length, 1);
+    assert.strictEqual(
+      headlessCard[0].subagent?.parentToolCallId,
+      "parent-spawn"
+    );
+    assert.strictEqual(
+      (headlessCard[0].data as ToolCall).subagentSpawn?.state,
+      "completed"
+    );
+    assert.strictEqual(
+      (headlessCard[0].data as ToolCall).subagentSpawn?.description,
+      "Grandchild work"
+    );
+
+    const interactiveAssistant = parser.extractStructuredEventsFromEvent({
+      type: "assistant",
+      parent_tool_use_id: "interactive-parent-spawn",
+      message: {
+        content: [
+          {
+            type: "tool_use",
+            id: "nested-interactive-spawn",
+            name: "Agent",
+            input: { description: "Interactive grandchild", prompt: "Do it" },
+          },
+        ],
+      },
+    } as BaseCliEvent);
+    const interactiveNotification = parser.extractStructuredEventsFromEvent({
+      type: "system",
+      subtype: "task_notification",
+      tool_use_id: "nested-interactive-spawn",
+      status: "completed",
+    } as BaseCliEvent);
+    const normalizedInteractive = normalizeCliEvents([
+      ...interactiveAssistant,
+      ...interactiveNotification,
+    ]);
+    const interactiveCard = normalizedInteractive.filter(
+      (event) => (event.data as ToolCall).id === "nested-interactive-spawn"
+    );
+    assert.strictEqual(interactiveCard.length, 1);
+    assert.strictEqual(
+      interactiveCard[0].subagent?.parentToolCallId,
+      "interactive-parent-spawn"
+    );
+    assert.strictEqual(
+      (interactiveCard[0].data as ToolCall).subagentSpawn?.state,
       "completed"
     );
   });

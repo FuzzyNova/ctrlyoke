@@ -162,6 +162,13 @@ function isClaudeProviderEvent(value: unknown): value is ClaudeProviderEvent {
 
 type UnconfirmedAsyncLaunch = (typeof CLAUDE_TOOL_NAMES)["AGENT" | "MONITOR"];
 
+/** Match Claude's workspace naming under `~/.claude/projects`. */
+export function normalizeClaudeWorkspacePath(workspacePath: string): string {
+  return workspacePath
+    .replace(/^([A-Z]):[\\/]/i, "$1--")
+    .replace(/[\\/.]/g, "-");
+}
+
 export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   private readonly subagentFollower = new SubagentSourceFollower();
 
@@ -177,6 +184,12 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
 
   /** Maps tool_use id → tool name for associating streaming tool results with their calls. */
   private pendingStreamingToolUses = new Map<string, string>();
+
+  /** Parent group for nested Agent tool calls, used by their lifecycle updates. */
+  private subagentSpawnAttributions = new Map<
+    string,
+    { parentToolCallId: string }
+  >();
 
   /** Background follow-up state; Claude's provider-specific signals feed it below. */
   private readonly backgroundFollowUpState = new BackgroundFollowUpState();
@@ -221,6 +234,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   private resetSessionTrackingState(): void {
     this.subagentFollower.reset();
     this.pendingStreamingToolUses.clear();
+    this.subagentSpawnAttributions.clear();
     this.backgroundFollowUpState.reset();
     this.unconfirmedAsyncLaunches.clear();
     this.backgroundTaskLaunchToolUseIds.clear();
@@ -452,6 +466,16 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           if (contentBlock.type === CLAUDE_CONTENT_BLOCK_TYPES.TOOL_USE) {
             if (contentBlock.id && contentBlock.name) {
               pendingToolNames.set(contentBlock.id, contentBlock.name);
+            }
+            if (
+              contentBlock.id &&
+              event.parent_tool_use_id &&
+              (contentBlock.name === CLAUDE_SUBAGENT_TOOL_NAMES.AGENT ||
+                contentBlock.name === CLAUDE_SUBAGENT_TOOL_NAMES.LEGACY_TASK)
+            ) {
+              this.subagentSpawnAttributions.set(contentBlock.id, {
+                parentToolCallId: event.parent_tool_use_id,
+              });
             }
             outputEvents.push(
               ...ClaudeToolBuilder.buildInitiatedEvents(
@@ -1464,6 +1488,15 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           if (block.id && block.name) {
             this.pendingStreamingToolUses.set(block.id, block.name);
             if (
+              e.parent_tool_use_id &&
+              (block.name === CLAUDE_SUBAGENT_TOOL_NAMES.AGENT ||
+                block.name === CLAUDE_SUBAGENT_TOOL_NAMES.LEGACY_TASK)
+            ) {
+              this.subagentSpawnAttributions.set(block.id, {
+                parentToolCallId: e.parent_tool_use_id,
+              });
+            }
+            if (
               !("parent_tool_use_id" in e) &&
               e.sessionId &&
               (block.name === CLAUDE_SUBAGENT_TOOL_NAMES.AGENT ||
@@ -1717,18 +1750,20 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           : undefined
         : undefined;
 
-    return [
-      {
-        type: CLI_EVENT_TYPES.TOOL_CALL,
-        timestamp,
-        data: {
-          name: CLAUDE_SUBAGENT_TOOL_NAMES.AGENT,
-          parameters: {},
-          id: toolUseId,
-          subagentSpawn: { ...(statusLine ? { statusLine } : {}), state },
-        } as ToolCall,
-      },
-    ];
+    const update: CliEvent = {
+      type: CLI_EVENT_TYPES.TOOL_CALL,
+      timestamp,
+      ...(this.subagentSpawnAttributions.has(toolUseId)
+        ? { subagent: this.subagentSpawnAttributions.get(toolUseId) }
+        : {}),
+      data: {
+        name: CLAUDE_SUBAGENT_TOOL_NAMES.AGENT,
+        parameters: {},
+        id: toolUseId,
+        subagentSpawn: { ...(statusLine ? { statusLine } : {}), state },
+      } as ToolCall,
+    };
+    return [update];
   }
 
   /**
@@ -1811,7 +1846,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   private getClaudeProjectDirectory(): string | null {
     // Use stored workspaceRoot (set by CliIntegration) or fall back to process.cwd()
     const workspacePath = this.workspaceRoot ?? process.cwd();
-    const normalizedPath = this.normalizeWorkspacePath(workspacePath);
+    const normalizedPath = normalizeClaudeWorkspacePath(workspacePath);
 
     // Build Claude project directory path
     const homeDir = os.homedir();
@@ -1823,37 +1858,5 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     );
 
     return projectDir;
-  }
-
-  /**
-   * Normalize workspace path for Claude project directory
-   *
-   * Converts filesystem path to Claude's normalized format.
-   *
-   * @param workspacePath - Absolute workspace path
-   * @returns Normalized path (e.g., "C--dev-ctrlyoke")
-   *
-   * @remarks
-   * **Normalization Rules:**
-   * - Convert drive colon to double dash (Windows: `C:\` → `C--`)
-   * - Replace path separators and periods with dashes (leading slash becomes a leading dash)
-   * - Example Windows: `C:\dev\ctrlyoke` → `C--dev-ctrlyoke`
-   * - Example worktree: `C:\dev\ctrlyoke.worktrees\run` →
-   *   `C--dev-ctrlyoke-worktrees-run`
-   * - Example Unix: `/home/name/dev/ctrlyoke` → `-home-name-dev-ctrlyoke`
-   *
-   * **Note:** This is based on observed Claude CLI behavior.
-   * The actual normalization may vary depending on Claude CLI version.
-   */
-  private normalizeWorkspacePath(workspacePath: string): string {
-    // Replace drive letter colon with double dash on Windows (e.g., "C:\dev\ctrlyoke" → "C--dev-ctrlyoke")
-    let normalized = workspacePath.replace(/^([A-Z]):[\\\/]/i, "$1--");
-
-    // Claude also replaces periods in path components. This matters for the
-    // default managed-worktree parent (`<repo>.worktrees`): preserving the dot
-    // makes us poll a project directory Claude never writes.
-    normalized = normalized.replace(/[\\\/.]/g, "-");
-
-    return normalized;
   }
 }

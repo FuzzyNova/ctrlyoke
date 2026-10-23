@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-23 by a Claude Code session running `npm test` after the Qwen background-work fix
 - **Area:** `src/test/suite/harness/LogParsers.test.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Nested Claude subagent spawn cards now receive their progress and completion updates.**
+  Updates emitted while a subagent starts another subagent stay attributed to the nested card,
+  so it completes in place instead of leaving a running card and adding a duplicate row.
 - **Step token totals and cost estimates include foreground subagents.** Subagent work was
   missing from every harness except Copilot; in measured Claude Code interactive sessions it was
   about 40% of the cost. Claude Code headless uses its per-model result totals, Qwen Code
