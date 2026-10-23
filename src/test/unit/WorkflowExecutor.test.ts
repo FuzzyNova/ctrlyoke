@@ -4620,6 +4620,41 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.strictEqual(runtimeAfterError?.status, STEP_STATUS.FAILED);
   });
 
+  test("a harness reporting success after the user stopped the step neither completes it nor consumes the next step", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+    const sent: string[] = [];
+
+    // Mirrors WorkflowInstance.stop(): the stop is requested and confirmed
+    // (which cancels the in-flight step and advances past it) while the
+    // harness call is still outstanding, and the harness then resolves with
+    // success because its completion signal arrived late.
+    integration.onSend = async (prompt) => {
+      sent.push(prompt.prompt);
+      if (prompt.prompt === "stop-me") {
+        await requestQueueStop(queue);
+        await confirmQueueStopped(queue);
+      }
+      return { success: true, responseText: "ok" };
+    };
+
+    queue.loadPrompts({
+      steps: [{ prompt: "stop-me" }, { prompt: "after-stop" }],
+    });
+
+    await executor.execute(integration, makeContext(integration));
+
+    const state = queue.getState();
+    assert.deepStrictEqual(sent, ["stop-me"]);
+    assert.strictEqual(state.status, EXECUTION_STATES.STOPPED);
+    assert.strictEqual(state.results[0].status, STEP_STATUS.CANCELLED);
+    assert.strictEqual(state.results[1].status, STEP_STATUS.PENDING);
+    assert.strictEqual(state.currentIndex, 1);
+    assert.strictEqual(state.steps[1]._runtime?.startedAt, undefined);
+    assert.strictEqual(state.steps[1]._runtime?.completedAt, undefined);
+  });
+
   test("persists user-stopped output without an error message and emits a warning status", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);

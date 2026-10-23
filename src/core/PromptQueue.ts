@@ -945,7 +945,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
   async markStepAsSent(stepIndex: number): Promise<void> {
     const currentResult = this.state.results[stepIndex];
-    if (!currentResult) {
+    // A CLI send resolves only when the response does, so a step the user
+    // stopped mid-response is already cancelled by the time this runs.
+    if (!currentResult || currentResult.status === STEP_STATUS.CANCELLED) {
       return;
     }
 
