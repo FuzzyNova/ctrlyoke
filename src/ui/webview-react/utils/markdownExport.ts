@@ -369,7 +369,9 @@ function renderStructuredEventsToMarkdown(
 
       case CLI_EVENT_TYPES.BACKGROUND_WORK_ABANDONED: {
         const data = event.data as BackgroundWorkAbandonedData;
-        lines.push(`> ⚠ ${getBackgroundWorkAbandonedNotice(data.pendingTasks)}`);
+        lines.push(
+          `> ⚠ ${getBackgroundWorkAbandonedNotice(data.pendingTasks)}`
+        );
         lines.push("");
         break;
       }

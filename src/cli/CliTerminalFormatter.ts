@@ -1731,7 +1731,9 @@ export class CliTerminalFormatter {
         CliTerminalFormatter.beginEventOutput(target);
         const data = event.data as BackgroundWorkAbandonedData;
         writeEventLine(
-          chalk.yellow(`⚠ ${getBackgroundWorkAbandonedNotice(data.pendingTasks)}`),
+          chalk.yellow(
+            `⚠ ${getBackgroundWorkAbandonedNotice(data.pendingTasks)}`
+          ),
           chalk.yellow
         );
         break;
