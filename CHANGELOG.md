@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Faster startup on Windows.** Reading stored secrets and license details no longer starts a
+  new PowerShell process for every value. One helper process serves them all, so VS Code no
+  longer pauses for several seconds while ctrlyoke starts, and saving or removing a secret takes
+  a fraction of a second.
+
 - **Workspace tool permissions wider than yours need approval.** A `defaults.toolPermissions`
   value in a workspace's `.ctrlyoke/settings.json` that grants more than your user setting (for
   example `dangerouslyAllowAll`, a removed denied tool, or `none`) now waits for the same

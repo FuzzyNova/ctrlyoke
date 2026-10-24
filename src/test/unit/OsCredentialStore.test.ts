@@ -7,6 +7,7 @@ import { suite, suiteTeardown, test } from "mocha";
 import {
   OsCredentialStore,
   SecretStoreUnavailableError,
+  WindowsCredentialHelper,
 } from "../../platform/OsCredentialStore";
 
 /** `CRED_MAX_CREDENTIAL_BLOB_SIZE`, the limit this suite exists to prove. */
@@ -780,5 +781,69 @@ suite("OsCredentialStore", () => {
       ),
       []
     );
+  });
+});
+
+/**
+ * The persistent helper against real PowerShell and the real vault. Reads of
+ * random missing targets only, so the user's credentials are never touched.
+ */
+suite("WindowsCredentialHelper", () => {
+  const helpers: WindowsCredentialHelper[] = [];
+  const createHelper = () => {
+    const helper = new WindowsCredentialHelper();
+    helpers.push(helper);
+    return helper;
+  };
+  const missingTarget = () => `ctrlyoke.test-missing.${crypto.randomUUID()}`;
+
+  suiteTeardown(() => {
+    for (const helper of helpers) helper.close();
+  });
+
+  test("serves every operation from one PowerShell process", async function () {
+    if (process.platform !== "win32") this.skip();
+    this.timeout(60_000);
+    const helper = createHelper();
+
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () => helper.execute("get", missingTarget()))
+    );
+    const batch = await helper.execute(
+      "batch",
+      "ctrlyoke.",
+      Buffer.from(JSON.stringify([missingTarget()]), "utf8").toString("base64")
+    );
+
+    assert.deepStrictEqual(
+      results.map(({ exitCode }) => exitCode),
+      [44, 44, 44, 44, 44]
+    );
+    assert.strictEqual(batch.exitCode, 0, batch.stderr);
+    assert.deepStrictEqual(
+      Object.values(
+        JSON.parse(Buffer.from(batch.stdout, "base64").toString("utf8"))
+      ),
+      [null]
+    );
+    assert.strictEqual(helper.spawnCount, 1);
+  });
+
+  test("starts a new process after the previous one ends", async function () {
+    if (process.platform !== "win32") this.skip();
+    this.timeout(60_000);
+    const helper = createHelper();
+
+    assert.strictEqual(
+      (await helper.execute("get", missingTarget())).exitCode,
+      44
+    );
+    helper.close();
+    assert.strictEqual(
+      (await helper.execute("get", missingTarget())).exitCode,
+      44
+    );
+
+    assert.strictEqual(helper.spawnCount, 2);
   });
 });

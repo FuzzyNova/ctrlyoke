@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-23 by Claude (extension-host CPU profile, `npm run dev:host:profile:startup`)
 - **Area:** `src/platform/OsCredentialStore.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit. A persistent `WindowsCredentialHelper` replaces the process per operation; a startup re-profile shows one 313 ms launch instead of 16 launches totalling 5.9 s.
 
 ## Symptom
 
