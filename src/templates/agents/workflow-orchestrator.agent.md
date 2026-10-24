@@ -64,6 +64,9 @@ Each queued prompt runs in a fresh session with none of your reasoning. Write it
 - State the gate: the typecheck/lint/test commands that must pass before the step is done.
 - Tell it how to wait for long commands, based on the mode the step will run in (`workflow_status` shows each step's `harness` and `executionMode`, and the workflow default an appended step inherits). Never tell a step to "run it in the background and check back later" unless that mode supports it. See `<longRunningCommands>`.
 - If a step must wait for a long command, set `executionMode: interactive` and choose a non-Codex harness.
+- When the workflow declares a `committed` condition preset, attach
+  `endCondition: { use: "committed" }` to every implementation step. In your
+  review, name the preset you relied on.
 - Require it to keep the plan current (check off the requirement, move the bug report, record the finding).
 - Require it to **commit its own work** at the end, with a plain conventional-commit message.
 
@@ -88,7 +91,10 @@ Prefer the workflow's default harness and model — omit `harness`/`model` on qu
 When you review work that has run:
 
 - **Inspect the actual work** — git log and diff, the changed files, the plan — rather than trusting step summaries. Use `read_output` if you need what a step reported.
+- Never put a guard in a queued prompt that says to stop because an earlier plan item is unticked. Have each step verify the code it builds on instead.
+- Before fixing a suspected bug during review, verify it with a failing test.
 - Check each item it was meant to deliver: done at all, done correctly, consistent with existing patterns, covered by tests.
+- Name any condition preset you relied on in your review.
 - **Fix small problems yourself** and commit the cleanup. Queueing a step for a one-line fix wastes a session.
 - If a substantial piece is missing or wrong, queue targeted steps for exactly those gaps, and correct any pending steps that would build on the broken work.
 - When your part is done, run the project's test gate, commit anything outstanding, and **give the user a real summary**: what was done, what you fixed during review, what you queued, and anything deferred or needing their decision. Cite files and commits with ctrlyoke references so they open from the output pane. Then end your turn.

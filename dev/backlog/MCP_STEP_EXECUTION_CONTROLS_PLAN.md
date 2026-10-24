@@ -1,6 +1,6 @@
 # MCP Step Execution Controls Plan
 
-**Status:** In progress (2026-10-23). Item 0 landed; items 1–5 are queued.
+**Status:** In progress (2026-10-23). Items 0–3 landed; items 4–5 are queued.
 
 **Related:**
 
@@ -255,7 +255,7 @@ Each item is one session; tick it when it lands.
       `clearProperties` cannot clear condition gates; attaching a preset
       replaces a workflow-level inherited gate, as described on the fields.
       User docs, templates, and CHANGELOG adoption are deferred to item 3.
-- [ ] 3. Stage 2 adoption plus stage 3 item 4: presets in the loop templates,
+- [x] 3. Stage 2 adoption plus stage 3 item 4: presets in the loop templates,
       orchestrator agent guidance (presets and the stage 3 item 4 lessons, which
       edit the same template), `docs/reference/mcp-tools.md` and a guide section
       on presets, and a CHANGELOG entry under **Added**.
