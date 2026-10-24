@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-23 by Claude Code, during a token and cost accuracy audit
 - **Area:** `src/utils/ModelPricing.ts` (`calculateTokenCost`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

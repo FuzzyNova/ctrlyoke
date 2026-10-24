@@ -186,7 +186,11 @@ export function formatCostTooltip(
     noteCode === ATTEMPT_COST_NOTE_CODES.HARNESS_DIVERGENCE
       ? " The harness-reported value diverged from the calculated value, so the calculated value is shown."
       : "";
-  return `${label} ${formatCostSourcePhrase(sources)}.${partialNote}${divergenceNote}`;
+  const upperBoundNote =
+    noteCode === ATTEMPT_COST_NOTE_CODES.CACHE_READ_UPPER_BOUND
+      ? " This is an upper bound: no cache-read price is known for this model, so cache reads are priced at the full input rate. Set cachedInputPerMTok in a model pricing override for an exact figure."
+      : "";
+  return `${label} ${formatCostSourcePhrase(sources)}.${partialNote}${divergenceNote}${upperBoundNote}`;
 }
 
 export function formatAttemptCostTooltip(

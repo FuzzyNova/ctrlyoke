@@ -175,6 +175,56 @@ suite("ModelPricing", () => {
     assert.strictEqual(result.cost.breakdown?.inputUsd, result.cost.usd);
   });
 
+  test("marks full-rate cache reads as an upper bound when no cache-read rate is known", () => {
+    const { cachedInputPerMTok: _omitted, ...noCacheRead } = testPricing;
+    const disjoint = semantics(
+      ATTEMPT_COST_CACHE_RELATIONSHIPS.DISJOINT,
+      ATTEMPT_COST_REASONING_RELATIONSHIPS.INCLUDED_IN_OUTPUT
+    );
+
+    const withHits = calculateTokenCost(noCacheRead, disjoint, {
+      prompt: 0,
+      completion: 0,
+      cached: 1_000_000,
+    });
+    assert.strictEqual(withHits?.breakdown?.cachedInputUsd, 10);
+    assert.strictEqual(
+      withHits?.noteCode,
+      ATTEMPT_COST_NOTE_CODES.CACHE_READ_UPPER_BOUND
+    );
+
+    const noHits = calculateTokenCost(noCacheRead, disjoint, {
+      prompt: 1_000_000,
+      completion: 0,
+    });
+    assert.strictEqual(noHits?.noteCode, undefined);
+
+    const knownRate = calculateTokenCost(testPricing, disjoint, {
+      prompt: 0,
+      completion: 0,
+      cached: 1_000_000,
+    });
+    assert.strictEqual(knownRate?.noteCode, undefined);
+  });
+
+  test("carries the cache-read upper bound through a per-model breakdown", () => {
+    const result = calculateAttemptCost({
+      harnessId: HARNESS_IDS.QWEN_CLI,
+      modelId: "custom-qwen",
+      prompt: 1_000,
+      completion: 0,
+      cached: 1_000_000,
+      pricingOverride: { inputPerMTok: 0.4, outputPerMTok: 1.2 },
+      modelUsage: {
+        "custom-qwen": { inputTokens: 1_000, cacheReadInputTokens: 1_000_000 },
+      },
+    });
+    assert.strictEqual(
+      result.cost?.noteCode,
+      ATTEMPT_COST_NOTE_CODES.CACHE_READ_UPPER_BOUND
+    );
+  });
+
   test("uses the legacy single-model path without a model breakdown", () => {
     const result = calculateAttemptCost({
       harnessId: HARNESS_IDS.CLAUDE_CLI,
