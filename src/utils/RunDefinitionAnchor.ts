@@ -1,7 +1,12 @@
 import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
-import type { WorkingFile, WorkflowStep } from "../types/CtrlYokeTypes";
+import type {
+  RunRef,
+  WorkflowKey,
+  WorkingFile,
+  WorkflowStep,
+} from "../types/CtrlYokeTypes";
 import {
   RUN_DEFINITION_CHANGE_SCOPES,
   RUN_DEFINITION_INTEGRITY,
@@ -19,6 +24,7 @@ import { runStateWriteOptions } from "./RunStateWrites";
 
 export { describeRunDefinitionChanges };
 import { stableStringify } from "./StableJson";
+import * as WorkflowPaths from "./WorkflowPaths";
 import { definitionAnchorPath } from "./WorkflowPaths";
 
 /**
@@ -344,6 +350,52 @@ async function writeAnchorAt(
     JSON.stringify(anchor),
     runStateWriteOptions(anchorPath, "RunDefinitionAnchor")
   );
+}
+
+/**
+ * Remove the anchors of runs that were deleted for good: retention pruning, or
+ * a purge of Recently deleted. A run in Recently deleted keeps its anchor so a
+ * restore stays trusted, and a run whose directory exists again (restored, or
+ * a live run under the same reference) keeps its own. With `includeDraft`,
+ * the lineage's draft anchor goes too, and the lineage's anchor directory once
+ * the lineage itself is gone.
+ */
+export async function removeRunDefinitionAnchors(
+  stateRoot: string,
+  workflowKey: WorkflowKey,
+  runRefs: readonly RunRef[],
+  options: { includeDraft?: boolean } = {}
+): Promise<void> {
+  const workingFiles = runRefs.map((runRef) => ({
+    workingFilePath: WorkflowPaths.runFilePath(stateRoot, workflowKey, runRef),
+    ownerDir: WorkflowPaths.runDir(stateRoot, workflowKey, runRef),
+  }));
+  if (options.includeDraft) {
+    workingFiles.push({
+      workingFilePath: WorkflowPaths.draftFilePath(stateRoot, workflowKey),
+      ownerDir: WorkflowPaths.draftDir(stateRoot, workflowKey),
+    });
+  }
+  let lineageAnchorDir: string | undefined;
+  for (const { workingFilePath, ownerDir } of workingFiles) {
+    const anchorPath = definitionAnchorPath(workingFilePath);
+    if (!anchorPath) {
+      continue;
+    }
+    lineageAnchorDir = path.dirname(anchorPath);
+    if (fs.existsSync(ownerDir)) {
+      continue;
+    }
+    await fs.promises.rm(anchorPath, { force: true });
+  }
+  if (
+    options.includeDraft &&
+    lineageAnchorDir &&
+    !fs.existsSync(WorkflowPaths.lineageDir(stateRoot, workflowKey))
+  ) {
+    // Only an empty directory goes; anything left belongs to a live run.
+    await fs.promises.rmdir(lineageAnchorDir).catch(() => undefined);
+  }
 }
 
 function judge(

@@ -152,7 +152,9 @@ suite("ProjectStateRegistry", () => {
     );
   });
 
-  test("does nothing in workspace mode", async () => {
+  // Workspace-mode run definition anchors live in the user project directory,
+  // which must be registered for `history prune`/`relink` to find it.
+  test("registers the user project directory in workspace mode", async () => {
     const registry = new ProjectStateRegistry(RUN_HISTORY_LOCATIONS.WORKSPACE);
     const result = await registry.initialize(stateRoot);
 
@@ -161,10 +163,14 @@ suite("ProjectStateRegistry", () => {
       projectStateRoot(stateRoot, RUN_HISTORY_LOCATIONS.WORKSPACE)
     );
     await assert.rejects(() => fs.stat(result.projectRoot), { code: "ENOENT" });
-    await assert.rejects(
-      () => fs.stat(path.join(result.projectRoot, "project.json")),
-      { code: "ENOENT" }
+    const userProjectRoot = projectStateRoot(
+      stateRoot,
+      RUN_HISTORY_LOCATIONS.USER
     );
+    const metadata = JSON.parse(
+      await fs.readFile(path.join(userProjectRoot, "project.json"), "utf8")
+    ) as { statePath: string };
+    assert.strictEqual(metadata.statePath, path.resolve(stateRoot));
   });
 
   test("rejects a symlinked project directory", async function () {

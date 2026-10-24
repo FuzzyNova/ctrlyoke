@@ -144,7 +144,8 @@ ctrlyoke keeps a record of every definition it writes, under
   [`ctrlyoke step accept-definition`](/cli/ctrlyoke#ctrlyoke-step-accept-definition).
 
 Runs from before ctrlyoke kept this record, and history copied in from another
-machine, are trusted the first time you open them.
+machine, are trusted the first time you open them. A run's record is kept while
+the run is in Recently deleted and removed once the run is deleted for good.
 
 ## How long runs are kept
 

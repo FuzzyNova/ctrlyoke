@@ -32,6 +32,7 @@ import {
   PERSISTED_STORES,
 } from "../../utils/PersistedSchemaGuard";
 import { readWorkflowLockInspection } from "../../utils/WorkflowLockInspector";
+import { removeRunDefinitionAnchors } from "../../utils/RunDefinitionAnchor";
 import { isProcessAlive } from "../../utils/LockSafetyPrimitives";
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import { Log } from "../../utils/Log";
@@ -895,7 +896,22 @@ export class HistoryTrashRepository {
     if (!(await pathExists(entryDir))) {
       throw new Error(TRASH_ENTRY_GONE_MESSAGE);
     }
+    const items = await this.describePayload(
+      path.join(entryDir, PAYLOAD_DIR_NAME)
+    );
     await fs.promises.rm(entryDir, { recursive: true, force: true });
+    for (const item of items) {
+      await removeRunDefinitionAnchors(
+        this.stateRoot,
+        item.workflowKey,
+        item.runRefs,
+        { includeDraft: item.wholeLineage }
+      ).catch((error: unknown) =>
+        Log.warn(
+          `${LOG_PREFIX} could not remove definition anchors for ${item.workflowKey}: ${getErrorMessage(error)}`
+        )
+      );
+    }
     Log.info(`${LOG_PREFIX} purged id=${entryId} reason=${reason}`);
   }
 

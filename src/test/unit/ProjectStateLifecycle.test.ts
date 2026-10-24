@@ -55,6 +55,25 @@ suite("ProjectStateLifecycle", () => {
     await assert.rejects(() => fs.stat(orphan.projectRoot), { code: "ENOENT" });
   });
 
+  test("prune deletes a deleted workspace-mode project's definition anchors", async () => {
+    const stateRoot = path.join(stateHome, "workspace-mode");
+    await fs.mkdir(stateRoot, { recursive: true });
+    await new ProjectStateRegistry(RUN_HISTORY_LOCATIONS.WORKSPACE).initialize(
+      stateRoot,
+      stateRoot
+    );
+    // Workspace-mode run history leaves only its anchors in the user project.
+    const projectRoot = projectStateRoot(stateRoot, RUN_HISTORY_LOCATIONS.USER);
+    const anchorDir = path.join(projectRoot, ".definition-anchors", "workflow");
+    await fs.mkdir(anchorDir, { recursive: true });
+    await fs.writeFile(path.join(anchorDir, "draft.json"), "{}");
+    await fs.rm(stateRoot, { recursive: true, force: true });
+
+    await pruneHistoryCommand({ yes: true }, makeIo([], false));
+
+    await assert.rejects(() => fs.stat(projectRoot), { code: "ENOENT" });
+  });
+
   test("prune classifies inaccessible state paths as unknown", async () => {
     const project = await makeProject("inaccessible");
     const blocker = path.join(stateHome, "not-a-directory");
