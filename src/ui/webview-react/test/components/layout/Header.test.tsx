@@ -487,26 +487,36 @@ describe("Header execution controls", () => {
       );
     });
 
-    it("switches the setting to Never from Don't ask again, and back when unchecked", () => {
-      showCompletedRun(RERUN_CONFIRMATION_MODES.ALWAYS, false);
+    it("shows every choice with the current one selected, and saves a new pick", () => {
+      showCompletedRun(RERUN_CONFIRMATION_MODES.EXCEPT_FAVORITES, false);
 
       fireEvent.click(screen.getByRole("button", { name: "Re-run" }));
-      const checkbox = within(screen.getByRole("dialog")).getByRole(
-        "checkbox",
-        { name: "Don't ask me again before re-running" }
-      );
+      const dialog = within(screen.getByRole("dialog"));
+      const always = dialog.getByRole("radio", { name: /^Always/ });
+      const exceptFavorites = dialog.getByRole("radio", {
+        name: /^Except favorites/,
+      });
+      const never = dialog.getByRole("radio", { name: /^Never/ });
+      expect(exceptFavorites).toBeChecked();
+      expect(always).not.toBeChecked();
+      expect(never).not.toBeChecked();
 
-      fireEvent.click(checkbox);
+      fireEvent.click(never);
+      expect(never).toBeChecked();
       expect(postMessage).toHaveBeenLastCalledWith({
         type: MESSAGE_TYPES.UPDATE_CONFIRM_RERUN,
         value: RERUN_CONFIRMATION_MODES.NEVER,
       });
 
-      fireEvent.click(checkbox);
+      fireEvent.click(always);
       expect(postMessage).toHaveBeenLastCalledWith({
         type: MESSAGE_TYPES.UPDATE_CONFIRM_RERUN,
         value: RERUN_CONFIRMATION_MODES.ALWAYS,
       });
+      // Changing the choice does not re-run by itself.
+      expect(postMessage).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: MESSAGE_TYPES.SEED_NEW_RUN })
+      );
     });
   });
 

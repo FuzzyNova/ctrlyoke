@@ -43,8 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so a stray tap could restart a long conversation-style workflow. It now shows
   a confirmation for every workflow that isn't a favorite. The new
   `ui.confirmRerunOperations` setting chooses **Always**, **Except favorites**
-  (the default) or **Never**, and the dialog's **Don't ask me again** switches
-  it to **Never**.
+  (the default) or **Never**. The dialog lists all three with the current
+  choice selected, and picking another one saves it.
 
 - **On narrow screens the header keeps every run button that works.** A
   stopped run with steps left to execute showed only **Re-run** below 380px
