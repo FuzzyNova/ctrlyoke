@@ -5,6 +5,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
+import type { WorkspaceCommitInfo } from "@root/types/HostedWorkspaceViewerTypes";
 
 const mocks = vi.hoisted(() => ({ workspaceWorktreeDiff: vi.fn() }));
 vi.mock("@utils/hostedApi", async (importOriginal) => ({
@@ -103,21 +104,21 @@ describe("search state", () => {
     expect(store().activeTab).toBe("search");
   });
 
-  it("close clears transient search state but preserves file drafts", () => {
+  it("close keeps the search and file drafts for the still-mounted viewer", () => {
     useWorkspaceViewerStore.setState({
       fileDrafts: { "src/draft.ts": { content: "draft" } },
     });
-    store().setSearchQuery("query");
-    store().setSearchResults([
+    const results = [
       {
         kind: WORKSPACE_ENTRY_KINDS.FILE,
         path: "src/query.ts",
         name: "query.ts",
       },
-    ]);
+    ];
+    store().setSearchQuery("query");
     store().appendSearchPage({
       searchId: "search-1",
-      results: [],
+      results,
       totalCount: 1,
       complete: false,
       capped: false,
@@ -126,10 +127,10 @@ describe("search state", () => {
 
     store().close();
 
-    expect(store().searchQuery).toBe("");
-    expect(store().searchResults).toEqual([]);
-    expect(store().searchLoading).toBe(false);
-    expect(store().searchStatus).toBeNull();
+    expect(store().searchQuery).toBe("query");
+    expect(store().searchResults).toEqual(results);
+    expect(store().searchLoading).toBe(true);
+    expect(store().searchStatus).not.toBeNull();
     expect(store().fileDrafts).toEqual({
       "src/draft.ts": { content: "draft" },
     });
@@ -408,12 +409,53 @@ describe("worktree diff request sequencing", () => {
   });
 });
 
-describe("close() clears transient diff state", () => {
-  it("resets diffFiles and diffRefLoading on close", () => {
+describe("close() keeps the diff view for the still-mounted viewer", () => {
+  it("keeps a ref diff, its commit info and its loading flag", () => {
+    const commitInfo: WorkspaceCommitInfo = {
+      hash: "abc1234",
+      shortHash: "abc1234",
+      subject: "fix",
+      body: "",
+      author: "Dev",
+      authorEmail: "dev@example.com",
+      date: "2026-10-24",
+      relativeDate: "now",
+    };
+    useWorkspaceViewerStore.setState({
+      diffFiles: [],
+      diffRefLabel: "Commit abc1234",
+      diffRefLoading: true,
+      diffCommitInfo: commitInfo,
+      diffRef: "~abc1234",
+    });
     store().close();
-    expect(store().diffFiles).toBeNull();
-    expect(store().diffRefLabel).toBeNull();
-    expect(store().diffRefLoading).toBe(false);
+    expect(store().diffFiles).toEqual([]);
+    expect(store().diffRefLabel).toBe("Commit abc1234");
+    expect(store().diffRefLoading).toBe(true);
+    expect(store().diffCommitInfo).toBe(commitInfo);
+    expect(store().diffRef).toBe("~abc1234");
+  });
+
+  it("keeps a single-file diff and its loading flag", () => {
+    useWorkspaceViewerStore.setState({
+      selectedDiffPath: "src/file.ts",
+      diffOldContent: "old",
+      diffNewContent: "new",
+      diffLoading: true,
+    });
+    store().close();
+    expect(store().selectedDiffPath).toBe("src/file.ts");
+    expect(store().diffOldContent).toBe("old");
+    expect(store().diffNewContent).toBe("new");
+    expect(store().diffLoading).toBe(true);
+  });
+
+  it("keeps the file history view", () => {
+    store().openToFileHistory("src/file.ts");
+    store().close();
+    expect(store().fileHistoryActive).toBe(true);
+    expect(store().fileHistoryPath).toBe("src/file.ts");
+    expect(store().pendingFileHistory).toBeNull();
   });
 });
 
@@ -467,10 +509,10 @@ describe("diffRef tracking", () => {
     expect(store().pendingDiff).toBeNull();
   });
 
-  it("close clears diffRef and pendingDiff", () => {
+  it("close keeps diffRef but clears pendingDiff", () => {
     useWorkspaceViewerStore.setState({ diffRef: "abc123", pendingDiff: "x" });
     store().close();
-    expect(store().diffRef).toBeNull();
+    expect(store().diffRef).toBe("abc123");
     expect(store().pendingDiff).toBeNull();
   });
 });

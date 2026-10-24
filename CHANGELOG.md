@@ -52,6 +52,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   extension host. Ignored folders are now searched after your other files, and
   only as far as the results you scroll to need.
 
+- **The workspace viewer reopens where you left it.** Closing and reopening it
+  keeps the Search tab's query and results, and the commit, ref or file-history
+  diff shown in Source Control, instead of clearing them.
+
 - **Web searches show what they found, on every harness.** A web search row now
   shows the query as its heading, with the answer and sources in the same
   collapsible output as other tool calls. Searches from Claude and OpenCode
