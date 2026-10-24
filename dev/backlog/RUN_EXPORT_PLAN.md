@@ -1,12 +1,13 @@
 # Run Export / Import
 
-> **Status:** Export half built 2026-10-18 (for media replay, `MEDIA_CAPTURE_AUTOMATION_PLAN.md`
-> phase 2); import, the dashboard UI and asset bundling are not. Written 2026-08-14 against
-> current code.
+> **Status:** Export half built 2026-10-18 and shipped in `0.2.0` (`ctrlyoke export`, bundle
+> schema 1). Not built: import, **continuing an imported run** (§5, added 2026-10-24), bundling
+> workspace changes and assets, and the dashboard UI. Originally written 2026-08-14.
 >
 > **Built 2026-10-18:** `exportRunBundle` (`src/core/orchestration/RunBundleExporter.ts`), the
-> loader `readRunBundle` (`RunBundleReader.ts`), the format types (`src/types/RunBundleTypes.ts`)
-> and `ctrlyoke export` (see `docs/cli/ctrlyoke.md`). Where it differs from the text below:
+> loader `readRunBundle` (`RunBundleReader.ts`, today used only by media replay), the format types
+> (`src/types/RunBundleTypes.ts`) and `ctrlyoke export` (see `docs/cli/ctrlyoke.md`). Where it
+> differs from the original text:
 >
 > - **Paths are tokenized, not root-relative** (`src/utils/RunBundlePaths.ts`): the workspace
 >   becomes `${workspaceFolder}/…` and the exporter's home `~/…`, matched in every spelling a run
@@ -17,141 +18,110 @@
 > - **`--run`, not `--from`**, matching `history show/steps`; `--redact <policy>` is not offered,
 >   the policy is fixed at `secrets-v1` (heuristics plus re-resolved declared secrets).
 > - **The definition is the authored workflow** (`buildAuthoredWorkflow`, shared with
->   `WorkflowSerializer`), so no `_runtime` reaches the bundle.
+>   `WorkflowSerializer`), so no `_runtime` reaches the bundle. That makes today's bundle
+>   _viewable_ but not _continuable_; §5 adds the runtime state as a separate file.
 > - **Snapshots are dropped unless `--with-snapshots`** (open question 4, settled as proposed).
 > - Export refuses a run whose runner lock is live, and writes through a staging directory and
 >   an atomic rename.
 >
-> **2026-10-10 audit:** Still not started (no exporter, bundle format, materializer, or
-> `export`/`import` CLI command). Since writing, user-scoped run history
-> (`dev/implemented/USER_SCOPED_RUN_HISTORY_PLAN.md`), workflow-relative asset refs, and
-> secrets/redaction (`dev/implemented/SECRETS_AND_REDACTION_PLAN.md`) have all shipped; references
-> updated accordingly. Corrected: `TIMELINE_EVENT_TYPES` gained
-> `workflowRuntimeTransitionRecorded`; the asset writer is the `writeWorkflowBundle` function;
-> undo-guard/undo-hook line refs; and the redaction step — live outputs are already scrubbed of
-> resolved secrets by `StreamingSecretRedactor` before they reach `events.jsonl`, but a
-> `RunSecretRedactor` only holds values while its run executes, so the exporter has to re-resolve
-> the workflow's declared secrets itself (see §2.1).
+> **Compatibility (released contract).** Bundle schema 1, the `ctrlyoke export` flags and its
+> `--json` envelope have shipped. Everything below extends them **additively**: new optional
+> files and `run.json` fields stay within schema 1, so a `0.2.x` reader still loads a bundle
+> written by a newer exporter and simply ignores the continuation parts. Bump to schema 2 only
+> if a bundle stops being readable as a schema-1 history bundle.
 >
 > **Problem in one line:** run history is machine-local and (since the user-scoped history
-> change) lives outside the repo by default, so there is no supported way to hand someone a run — and
-> `USER_SCOPED_RUN_HISTORY_PLAN.md` §2.6.1 rules out the obvious workaround of
-> committing the run-storage directory.
+> change) lives outside the repo by default, so there is no supported way to hand someone a run,
+> or to stop a run on one machine and finish it on another. `USER_SCOPED_RUN_HISTORY_PLAN.md`
+> §2.6.1 rules out the obvious workaround of committing the run-storage directory.
 >
 > **Relationship to neighbours.** `dev/implemented/USER_SCOPED_RUN_HISTORY_PLAN.md` §2.6.2 names
 > this document as the answer it defers to. `HARNESS_SESSION_IMPORT_PLAN.md` (still backlog)
-> already specifies the run **materializer** this plan's importer reuses — one
-> materializer, two sources. `dev/implemented/WORKFLOW_RELATIVE_ASSET_REFS_PLAN.md` listed
-> "making live run storage portable" as an explicit non-goal; this is where that
-> gets picked up.
+> specifies the run **materializer** this plan's importer reuses: one materializer, two sources.
+> `dev/implemented/WORKFLOW_RELATIVE_ASSET_REFS_PLAN.md` listed "making live run storage
+> portable" as an explicit non-goal; this is where that gets picked up.
 
 ---
 
 ## 1. Why a storage setting cannot answer this
 
-`storage.runHistoryLocation: "workspace"` puts run history back inside the repo,
-and that is genuinely useful for durability and locality. It is not sharing, for
-reasons `USER_SCOPED_RUN_HISTORY_PLAN.md` §2.6.1 works through: a run directory
-is untracked until someone commits it, so plain `git clean -fd` still destroys
-in-flight runs; `runner.json` carries a live PID that means nothing on another
-machine; `workflow.json`'s `nextRunId`/`latestRunRef` conflict on every
-concurrent run; and `events.jsonl` is raw harness transcript.
+`storage.runHistoryLocation: "workspace"` puts run history back inside the repo, and that is
+genuinely useful for durability and locality. It is not sharing, for reasons
+`USER_SCOPED_RUN_HISTORY_PLAN.md` §2.6.1 works through: a run directory is untracked until
+someone commits it, so plain `git clean -fd` still destroys in-flight runs; `runner.json` carries
+a live PID that means nothing on another machine; `workflow.json`'s `nextRunId`/`latestRunRef`
+conflict on every concurrent run; and `events.jsonl` is raw harness transcript.
 
-The last one is the decisive one. **Storage location is a placement decision;
-sharing is an egress decision.** They need different machinery — path rewriting,
-identity stripping, redaction, asset bundling — none of which a location enum
-can express. Conflating them is what produced the inert `.gitignore` dial.
+The last one is the decisive one. **Storage location is a placement decision; sharing is an
+egress decision.** They need different machinery (path rewriting, identity stripping,
+redaction, asset bundling) that a location enum cannot express.
 
-Three concrete requests this plan serves:
+The requests this plan serves:
 
 - "Attach the run that produced this bug to the bug report."
 - "Commit the run that justifies this PR, next to the PR."
 - "Send me the run where the harness went sideways so I can look at it."
+- **"I stopped this run on my desktop; finish it on my laptop."** (§5)
 
-None of them want a shared live history. All of them want one immutable,
-reviewable artifact.
+None of them want a shared live history. The first three want one immutable, reviewable
+artifact. The fourth wants that artifact plus enough state to pick the run back up.
 
 ---
 
 ## 2. What a run actually is
 
-Verified against current code. Every path below is constructed by
-`src/utils/WorkflowPaths.ts` from `runsRoot()` — never assembled by hand.
+Verified against current code. Every path below is constructed by `src/utils/WorkflowPaths.ts`
+from `runsRoot()`, never assembled by hand.
 
-| Artifact                               | Owner                                         | Export?                                                                 |
-| -------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------- |
-| `run-<ts>/workflow.ctrlyoke.json`      | `WorkingFileManager`                          | **Yes** — the definition, with `_runtime` blocks stripped to provenance |
-| `run-<ts>/manifest.json`               | `TimelineRecorder` (`WorkflowRunManifest`)    | **Yes** — minus identity fields (2.3)                                   |
-| `run-<ts>/events.jsonl`                | `TimelineRecorder.appendEvents`               | **Yes** — the payload, after rewrite + redaction                        |
-| `<lineage>/workflow.json`              | `WorkflowLineageRepository`                   | No — `latestRunRef`/`nextRunId` are per-root allocator state            |
-| `<lineage>/runner.json`                | lock                                          | **Never** — a live PID                                                  |
-| `<lineage>/draft/`                     | pre-first-run definition                      | No                                                                      |
-| Referenced attachments / prompt bodies | `<stateRoot>/.ctrlyoke/{attachments,prompts}` | **Yes** — bundled (2.4)                                                 |
-| `.search-index/`, `.usage/`            | derived projections                           | No — rebuilt by the importer's own writes                               |
+| Artifact                               | Owner                                         | Export?                                                                                        |
+| -------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `run-<ts>/workflow.ctrlyoke.json`      | `WorkingFileManager`                          | **Yes**, twice: authored (`buildAuthoredWorkflow`) and, for continuation, with `_runtime` (§5) |
+| `run-<ts>/manifest.json`               | `TimelineRecorder` (`WorkflowRunManifest`)    | **Yes**, minus identity fields                                                                 |
+| `run-<ts>/events.jsonl`                | `TimelineRecorder.appendEvents`               | **Yes**, the payload, after rewrite + redaction                                                |
+| `<lineage>/workflow.json`              | `WorkflowLineageRepository`                   | No: `latestRunRef`/`nextRunId` are per-root allocator state                                    |
+| `<lineage>/runner.json`                | lock                                          | **Never**: a live PID                                                                          |
+| `<lineage>/draft/`                     | pre-first-run definition                      | No                                                                                             |
+| Pre-rewind backup beside the run       | `_runtime.pendingRewind`                      | No: export refuses a run with an uncommitted rewind (§5.2)                                     |
+| Referenced attachments / prompt bodies | `<stateRoot>/.ctrlyoke/{attachments,prompts}` | **Yes**, bundled (2.1)                                                                         |
+| The checkout's file changes            | git working tree / managed worktree           | **Only for continuation**, as a patch (§5.3)                                                   |
+| `.search-index/`, `.usage/`            | derived projections                           | No: rebuilt by the importer's own writes                                                       |
 
-`WorkflowRunManifest` (`src/types/WorkflowTimelineTypes.ts:93-118`) carries
-`schemaVersion`, `storageKind`, `workflowId`, `runId`, `startedAt`,
-`completedAt`, `activeExecutionMs`, `executionState`, `definitionRevision`,
-`initialDefinition`, `stepCount`, `eventCount`, `nextSequence`, `lastUpdatedAt`,
-and `tokenTotals`. Everything except the identity triple survives export intact.
+`WorkflowRunManifest` (`src/types/WorkflowTimelineTypes.ts`) carries `schemaVersion`,
+`storageKind`, `workflowId`, `runId`, `startedAt`, `completedAt`, `activeExecutionMs`,
+`executionState`, `definitionRevision`, `initialDefinition`, `stepCount`, `eventCount`,
+`nextSequence`, `lastUpdatedAt` and `tokenTotals`. Everything except the identity survives
+export intact.
 
-`events.jsonl` holds the union in `TIMELINE_EVENT_TYPES`
-(`WorkflowTimelineTypes.ts:35-57`) — `workflowRuntimeTransitionRecorded`, `cliOutputRecorded`,
-`cliOutputChunkAppended`, `cliOutputEventsAppended`, `attemptStarted`,
-`attemptTerminated`, `scriptExecutionRecorded`, `retryScheduled`,
-`followUpResponseAppended`, `runTerminated`, `statusMessageRecorded`,
-`definitionRevisionCommitted`, `workspaceSnapshotCaptured`, `undoApplied`,
-`redoApplied`, plus three legacy aggregates retained for read compatibility.
+`events.jsonl` holds the union in `TIMELINE_EVENT_TYPES` (`WorkflowTimelineTypes.ts`), plus three
+legacy aggregates retained for read compatibility.
 
 ### 2.1 Four things make a run non-portable
 
-This is the whole plan. Everything else is plumbing.
+**Absolute paths.** Built: `RunBundlePaths` tokenizes them, and `externalPaths` in `run.json`
+lists absolute paths the run touched outside the workspace and home.
 
-**Absolute paths.** Every `CliOutput` carries `workingDirectory`; structured
-tool-call events carry absolute file paths as the harnesses emit them; a
-`workspaceSnapshotCaptured` payload carries the captured file set. Export
-records a declared `sourceRoot` and rewrites every path **under** it to
-root-relative. Paths outside it stay absolute and are listed in `run.json` as
-`externalPaths` so a reader can see what the run touched outside the project
-without the bundle silently claiming those files are its own.
+**Identity.** `allocateWorkflowKey` guarantees uniqueness only within one runs root. Export
+demotes `workflowKey`/`runRef`/`runId` to `provenance`; import allocates fresh ones through the
+normal lineage path and records the originals, the same shape as `importedFrom` in
+`HARNESS_SESSION_IMPORT_PLAN.md`. Harness session IDs are carried in `provenance.steps` and,
+for continuation, in `_runtime`. Whether they still _resolve_ is decided at continue time (§5.4),
+never assumed.
 
-**Identity.** `allocateWorkflowKey` guarantees uniqueness only within one runs
-root (`USER_SCOPED_RUN_HISTORY_PLAN.md` §2.1). A bundle that carried its
-`workflowKey`/`runRef`/`runId` as authoritative would collide on import. Export
-demotes all three to provenance; import allocates fresh ones through the normal
-lineage path and records the originals — the same shape as `importedFrom` in
-`HARNESS_SESSION_IMPORT_PLAN.md`. Harness `sessionId` is provenance too: it
-refers to a session log that exists only on the exporting machine.
+**Secrets.** Built: redaction runs at the export boundary and is irreversible by design. The
+exporter re-resolves the workflow's declared secrets (a `RunSecretRedactor` only holds values
+while its run executes) and runs `redactPreviewText` with those exact values plus heuristics.
+`run.json` records `redaction.removedCount` and `byRule`. Continuation adds one requirement: the
+redaction summary must say **which file** was touched, because a removal inside a _pending_
+step's prompt changes what the importing machine will execute (§5.2).
 
-**Secrets.** `events.jsonl` is everything the harness printed, including what it
-read out of the repo. `SECRETS_AND_REDACTION_PLAN.md` already names exports as
-an egress point that must not leak resolved values. **Redaction runs at the
-export boundary and is irreversible by design** — the bundle is the redacted
-artifact, not a redacted view over a full one. Ship export with at least the
-resolved-secret scrub, and surface a redaction summary in `run.json` so the
-exporter can see what was removed before sharing.
-
-What already exists: during execution, `StreamingSecretRedactor`
-(`src/utils/SecretRedactionService.ts`, used by `CliTransportCoordinator`,
-`PtyProcessManager`, and `ScriptExecutionReporter`) scrubs resolved secret
-values out of output before it is persisted, so a run's `events.jsonl` should
-already be free of the secrets _that run_ resolved. That is not sufficient for
-export: a `RunSecretRedactor` holds values only while its run executes (cleared on
-unregister), heuristics may have been off, and the harness can still print
-secrets it read from the repo that ctrlyoke never resolved. The exporter should
-therefore re-resolve the workflow's declared `${secret:NAME}` values from the
-secret store where available and run `redactPreviewText`
-(`src/types/PreviewRedactor.ts`) with those exact values **plus** heuristics over
-every rewritten payload. Do not write a second matcher.
-
-**Assets.** Attachments and prompt bodies referenced by the run live in
-`<stateRoot>/.ctrlyoke/{attachments,prompts}/`, are gitignored, and stay
-workspace-scoped (`USER_SCOPED_RUN_HISTORY_PLAN.md` §2.3). A bundle without them
-is a bundle of dangling `@` references. **Reuse the Save As machinery** —
-`analyzeWorkflowBundle` / `WorkflowBundleAnalyzer` (`src/utils/WorkflowBundleAnalyzer.ts`)
-already discovers references, plans copies, inlines lone prompt bodies, and
-rewrites refs; `writeWorkflowBundle` (`src/utils/WorkflowBundleWriter.ts`) already stages and
-publishes them atomically. Do not write a second asset copier.
+**Assets.** Not built. Attachments and prompt bodies live in
+`<stateRoot>/.ctrlyoke/{attachments,prompts}/`, are gitignored, and stay workspace-scoped. A
+bundle without them is a bundle of dangling `@` references, and a continuable bundle without
+them runs pending steps against missing files. **Reuse the Save As machinery**:
+`analyzeWorkflowBundle` (`src/utils/WorkflowBundleAnalyzer.ts`) discovers references, plans
+copies, inlines lone prompt bodies and rewrites refs; `writeWorkflowBundle`
+(`src/utils/WorkflowBundleWriter.ts`) stages and publishes them atomically. Do not write a
+second asset copier.
 
 ---
 
@@ -162,195 +132,398 @@ A **directory**, not an archive:
 ```
 <name>.ctrlyokerun/
   run.json                 ← bundle manifest (below)
-  workflow.ctrlyoke.json   ← definition at the exported revision, refs rewritten bundle-relative
+  workflow.ctrlyoke.json   ← authored definition (no _runtime); loadable as an ordinary workflow
   manifest.json            ← WorkflowRunManifest, identity demoted to provenance
   events.jsonl             ← rewritten + redacted timeline, event order preserved
   assets/                  ← bundled attachments, same convention as Save As `*.assets/`
+  run.ctrlyoke.json        ← NEW, optional: the working file WITH _runtime (§5.1)
+  changes.patch            ← NEW, optional: workspace changes since the base commit (§5.3)
 ```
 
-Directory-and-JSONL because the point is to put this in a PR, an issue, or a
-repo. It diffs, it reviews, it greps. A zip is opaque in exactly the place people
-want to use it. Anyone who wants one file can archive the directory themselves.
+Directory-and-JSONL because the point is to put this in a PR, an issue, or a repo. It diffs, it
+reviews, it greps. Anyone who wants one file can archive the directory themselves.
 
-`run.json`:
+Because `workflow.ctrlyoke.json` is a plain authored workflow, **Load Workflow already opens
+it**: "start this workflow over on my machine" needs no import at all.
+
+`run.json` (shipped fields abbreviated; new fields are optional and additive):
 
 ```jsonc
 {
   "schemaVersion": 1,
   "kind": "ctrlyoke.run.bundle",
-  "exportedAt": "2026-08-14T18:04:00.000Z",
-  "exportedByVersion": "0.9.x",
-  "sourceRoot": "C:\\dev\\ctrlyoke", // what relative paths inside are relative to
+  "exportedAt": "2026-10-24T18:04:00.000Z",
+  "exportedByVersion": "0.3.0",
+  "sourceRoot": "~/dev/ctrlyoke",
   "lineage": {
     "workflowName": "Fix tests",
-    "originalFile": "workflows/fix-tests.ctrlyoke.yaml", // optional
+    "originalFile": "${workspaceFolder}/workflows/fix-tests.ctrlyoke.yaml",
   },
   "provenance": {
-    "workflowKey": "fix-tests-2026-08-01T…",
-    "runRef": "run-1786712286",
+    "workflowKey": "…",
+    "runRef": "run-…",
     "runId": 7,
-    "harnessId": "claude-cli",
-    "model": "claude-opus-5",
-    "sessionId": "…", // informational only
+    "steps": [/* harness, model, sessionId */],
   },
-  "redaction": { "policy": "secrets-v1", "removedCount": 3 },
-  "externalPaths": ["C:\\other-repo\\notes.md"],
-  "assets": [{ "path": "assets/shot one.png", "sha256": "…", "bytes": 51234 }],
+  "includesSnapshots": false,
+  "redaction": {
+    "policy": "secrets-v1",
+    "removedCount": 3,
+    "byRule": { "exact-secret": 2, "bearer-token": 1 },
+    "byFile": { "events.jsonl": 2, "run.ctrlyoke.json": 1 }, // NEW
+  },
+  "externalPaths": [],
+  "assets": [{ "path": "assets/shot one.png", "sha256": "…", "bytes": 51234 }], // NEW (phase 2)
+  // NEW, present only when run.ctrlyoke.json is (§5)
+  "continuation": {
+    "executionState": "stopped",
+    "nextStep": { "kind": "queue", "stepIndex": 3 }, // or { "kind": "finalStep", "pass": 2 }
+    "pendingStepCount": 4,
+    "worktreeMode": "managed", // none | managed | named
+    "workspace": {
+      "baseCommit": "3f9c2a1…", // the commit the patch applies to
+      "branch": "fix-tests", // informational
+      "patch": {
+        "file": "changes.patch",
+        "sha256": "…",
+        "files": 12,
+        "binary": 1,
+      },
+    },
+  },
 }
 ```
 
-`sourceRoot` is recorded, not applied: the importer resolves relative paths
-against **its own** workspace and never against the exporter's absolute path.
-Keeping the original visible is for the reader; using it would be the bug.
+`sourceRoot` is recorded, not applied: the importer resolves `${workspaceFolder}` against **its
+own** workspace and never against the exporter's path.
 
 ---
 
 ## 4. Export pipeline
 
-`RunBundleExporter` (`src/core/orchestration/`, vscode-free so the CLI and the
-extension share it):
+`RunBundleExporter` (`src/core/orchestration/`, vscode-free so the CLI and the extension share
+it). Steps 1, 2, 4, 5 and 6 are built.
 
-1. **Resolve the run.** `WorkflowPaths.manifestPath` / `eventsPath` /
-   `runFilePath` from `{ workflowKey, runRef }`. Refuse to export a run whose
-   lineage holds a live `runner.json` — a run still being written has no stable
-   `eventCount`.
-2. **Read.** Reuse the existing timeline read path rather than parsing
-   `events.jsonl` again; `OutputHistoryManager`/`RunOutputResolver` already own
-   streaming reads and legacy-event normalization.
-3. **Plan assets.** `analyzeWorkflowBundle` over the run's definition → copy plan
-   - inline plan + diagnostics. Surface its diagnostics as export warnings; a
-     missing attachment must be reported, not silently dropped.
-4. **Rewrite.** Apply the `sourceRoot`-relative path transform across the
-   definition, the manifest, and each event payload. One transform module, one
-   test suite — this is where portability actually lives.
-5. **Redact.** Apply the export policy over the rewritten payloads. Count and
-   summarize.
-6. **Write atomically.** Stage into a hidden sibling of the destination, fsync,
-   then rename into place — the same discipline `writeWorkflowBundle` and
-   `WorkflowPaths.stagingRunDir` already use. A half-written bundle that someone
-   commits is worse than a failed export.
+1. **Resolve the run** and refuse one whose lineage holds a live `runner.json`. _Built._
+   Continuation adds: refuse a run with `_runtime.pendingRewind` (commit or discard the rewind
+   first), and refuse states `pausing`/`cancelling` (transient; the lock check normally catches
+   them).
+2. **Read** through `TimelineRecorder.streamEvents`. _Built._
+3. **Plan assets** with `analyzeWorkflowBundle`; surface its diagnostics as export warnings. A
+   missing attachment is reported, not silently dropped. _Not built._
+4. **Rewrite** paths. _Built._
+5. **Redact.** _Built._ Add the per-file breakdown.
+6. **Write atomically** through a staging sibling and a rename. _Built._
+7. **NEW, continuation only:** write `run.ctrlyoke.json` and `changes.patch` (§5.1, §5.3).
 
-CLI surface, registered alongside the existing run-scoped commands in
-`src/cli/CliRunCommandDefinitions.ts` (which already own `rerun`/`append`/
-`continue` and the `--from <ref|runId>` selector via `resolveCliRunRefAtLineage` in
-`src/cli/CliRunSelector.ts`):
+Whether a bundle is continuable is **derived, not chosen**: the exporter writes the continuation
+parts whenever the run has pending work (`assertRunHasWorkToContinue` in
+`RunContinuationService.ts` says yes) and the run is `stopped`, `paused` or `error`. A completed
+run gets a history-only bundle. One format, one exporter, no "export kind" to pick.
+
+CLI (additive to the shipped command):
 
 ```
-ctrlyoke export [--from <ref|runId>] --out <dir> [--redact <policy>] [--json]
-ctrlyoke import <bundleDir> [--open]
+ctrlyoke export -w <workflow> [--run <ref|runId>] -o <dir> [--with-snapshots] [--no-changes] [--force] [--json]
+ctrlyoke import <bundleDir> [--continue] [--json]
 ```
 
-Dashboard surface: an **Export run…** action on a run in the history list, and a
-drop target / **Import run bundle…** entry in `WorkflowControls.tsx`, beside the
-harness-session import entry once `HARNESS_SESSION_IMPORT_PLAN.md` adds it (it does
-not exist yet).
+`--no-changes` skips `changes.patch` (for a run whose changes the user syncs through git
+themselves). The `export` description changes from "one finished run" to "one settled run";
+the `--json` envelope gains `continuable` and `continuation`.
 
 ---
 
-## 5. Import pipeline — the same materializer, a second source
+## 5. Continuing an imported run
 
-This is why the plan is cheap. `HARNESS_SESSION_IMPORT_PLAN.md` §"Import
-pipeline" already specifies materializing a synthetic run: allocate the lineage
-and run directory, `OutputHistoryManager.initializeRunAt(workflowKey, runRef,
-runDir, runId, startedAt, …)`, append `cliOutputRecorded` events, then
-`finalizeRun`. **Factor that into one `RunMaterializer` with two callers:**
+**Goal:** stop a run on machine A, export it, import it on machine B (or into another checkout on
+A), press Continue, and have it behave as if it had never moved. Where something cannot move (a
+harness session that only exists on A), the run continues degraded and **says so**. It never
+fails silently, and it never continues against a workspace that doesn't hold the earlier steps'
+work.
 
-| Source                       | Produces                                       |
-| ---------------------------- | ---------------------------------------------- |
-| Native harness session log   | turns → synthesized definition + events        |
-| ctrlyoke run bundle (`this`) | definition + events, already in ctrlyoke shape |
+### 5.1 Runtime state: `run.ctrlyoke.json`
 
-The bundle path is strictly simpler — no turn segmentation, no per-harness
-parsing, because the events are already ctrlyoke timeline events. If the two
-plans are built independently they will grow two materializers, and the second
-one will drift. Build the materializer once, with the bundle importer as its
-first consumer (it is the easier of the two to get right, and it exercises the
-seam without depending on `segmentSessionTurns`).
+The working file with its `_runtime` blocks, through the same path rewrite and redaction as
+everything else. This is what `continue` already reads: `currentIndex`, `executionState`,
+per-step terminal status and session IDs, `finalStep` pass state, `activeParallelGroup`
+admission, appended steps and their authorship. It is a separate file from
+`workflow.ctrlyoke.json` so the shipped authored definition stays exactly as it is (Load Workflow
+and schema-1 readers keep working) and a reviewer can see the run state on its own.
 
-Import steps: validate → allocate identity → rewrite paths to the importing
-workspace → materialize → record provenance → refresh search index (already a
-side effect of the history writes).
+On import, the root `_runtime` is normalized, not trusted:
+
+- `executionState` becomes `stopped` (a `paused` run continues the same way); timing fields are
+  kept so `activeExecutionMs` stays truthful.
+- `worktree` is **dropped** and rebuilt by §5.3. It is full of the exporter's absolute paths and
+  branch state.
+- `stopReason`, `worktreeNotice` and `pendingRewind` are dropped (export refused the last one
+  anyway).
+- A new optional `_runtime.importedFrom` records the bundle's `provenance`, `exportedAt`,
+  `exportedByVersion` and `sourceRoot`. It is additive in the run-file format, so no
+  `schemaVersion` bump is needed; older ctrlyoke ignores it.
+
+### 5.2 The importing machine must hold what the run will execute
+
+A continuable bundle is a **workflow that will run** on the importing machine, not just a
+document. Everything §6 says about untrusted input applies, plus:
+
+- **Import never auto-continues.** `--continue` on the CLI and the Continue button after the
+  import preview are the only triggers.
+- The **preview** lists every pending step with what it will run: prompt, script steps and
+  pre/end-condition scripts, `additionalArgs`, MCP servers, secret grants, and the harness/model
+  each step **will resolve to on this machine** next to what the run used before. Settings
+  differ between machines, so a pending step that inherited `claude-cli` on A may resolve
+  differently on B.
+- If redaction removed anything from `run.ctrlyoke.json` (`redaction.byFile`), the preview flags
+  the affected pending steps: their prompt text is no longer what A would have sent.
+- Secret grants follow the normal rule: a grant not approved for this workspace stops the
+  workflow at that step. The preview names them up front so the stop isn't a surprise.
+- Missing bundled assets (phase 2) block Continue for the steps that reference them.
+
+### 5.3 Workspace changes: `changes.patch`
+
+This is the gap the original plan did not have to face. A history bundle only describes edits;
+a continued run needs them **on disk**. Step 4 on machine B assumes steps 1–3 already edited the
+checkout. ctrlyoke must not copy files around ad hoc, so carry the changes git-natively:
+
+- **Export** records `baseCommit` (the run's worktree `baseCommit` for a managed or named
+  worktree, otherwise `HEAD` of the checkout) and writes `git diff --binary <baseCommit>` of the
+  working tree, untracked files included (respecting `.gitignore`), as `changes.patch`. A diff
+  from the base commit to the working tree covers both commits made during the run and
+  uncommitted edits, so it doesn't matter whether steps committed. Commit history isn't
+  preserved, only the tree, and that is enough to continue.
+- The patch goes through the **same redaction pass** (it is file contents leaving the machine),
+  and the export summary shows its file count before anything is shared. `--no-changes` skips it.
+- **Import** requires `baseCommit` to exist locally (`git cat-file -e`). If it doesn't, the user
+  is told exactly what to do ("push/fetch commit 3f9c2a1"), and the run imports as view-only
+  until they do.
+- **Where the patch lands** depends on the run's `worktreeMode`:
+  - `managed`: create a **new managed worktree** at `baseCommit` through `WorktreeManager` and
+    apply the patch there. The user's checkout is never touched, so this is the safe default.
+  - `none`: apply to the current checkout only if it is clean and at `baseCommit`. If it isn't,
+    the preview offers "Continue in a managed worktree instead" or "I've synced the code myself"
+    (skip the patch; ctrlyoke compares the tree to the patch and warns on mismatch).
+  - `named`: the user picks the target checkout. Apply the same clean-at-base check.
+- `git apply --index --3way`; on any rejection nothing is half-applied, and the run stays
+  view-only.
+
+Same-machine moves (from a worktree checkout back to the main checkout, say) use the same path.
+The patch just happens to be local.
+
+### 5.4 Harness sessions: resolve, else start fresh and warn
+
+Session IDs survive in `_runtime` exactly as recorded. Whether one still resolves depends on the
+harness, and "same machine" is not a sufficient test. Claude keys its session store by project
+directory, so even on machine A a run imported into a different checkout path may not find its
+Claude sessions, while Codex and Copilot keep a per-user store.
+
+Today, `SessionResolver.resolveWithProperties` picks the session (`resumeSession` auto-chaining,
+numeric `sessionId`, `"finalStep"`, or a literal ID) and `SessionValidator` checks only its
+**format**. When a resume is rejected at runtime, only `claude-cli` and `qwen-cli` implement
+`isRecoverableSessionError` (`CliExecutionRunner` retries without the resume flag); the other
+four harnesses just fail the step. A vanished session is rare in a native run, but in an
+imported one it's the expected case.
+
+**Decision (2026-10-24): a missing session is handled the same way in every run, imported or
+not. ctrlyoke warns and starts a new session. It never adds context on the user's behalf.**
+Rejected: automatically injecting the earlier steps' output as `priorContext`. To do it
+correctly ctrlyoke would have to work out every executed step that ran in the missing session.
+If steps 1, 3 and 7 shared one session and step 9 resumes it, the right context is
+`$step:1,3,7`, not just the step that `sessionId` names. ctrlyoke can compute that, but it would
+silently change what the step sends, in a way native runs never do. A step that quietly behaves
+differently after a move is the surprise to avoid. A predictable warning is better.
+
+- **One fallback for every run.** Today the fallback depends on the harness (Claude/Qwen recover,
+  the other four fail), so "same as native" first means making native behavior uniform:
+  - **Preflight probe.** Add an optional `probeResumableSession(sessionId, workspaceRoot)` to
+    `ICliProvider`, returning `available | missing | unknown`. It's backed by each log parser's
+    existing session-store lookup, but **by ID only**: `discoverSessionLog` falls back to
+    prompt-text matching when the ID isn't found, and that fallback must not count as "found".
+  - **Where it runs:** in `CliSessionResolverAdapter.resolve`, for **every** resolved resume,
+    not only imported runs. It's a lookup in the local session store, cheap next to a harness
+    launch. There's no import special case to keep in sync.
+  - **`unknown`** (a harness whose store can't be probed) is treated as available and left to
+    the runtime path. Extend `isRecoverableSessionError` to each remaining provider whose CLI
+    prints a recognizable "session not found" error, so the runtime path ends in the same
+    fallback instead of a failed step.
+- **On `missing`:** start a new session, record a `statusMessageRecorded` warning on the timeline
+  ("Step 9 could not resume the claude-cli session from step 7; it was not found on this machine.
+  Started a new session."), and show it in the step's output. Later steps that resume
+  automatically chain onto the new session, as they do natively.
+- **The import preview shows the impact before anything runs.** It runs the same probe for every
+  pending step, so the user sees "Steps 9 and 11 will start a new session: the sessions they
+  resume are not on this machine" **before** pressing Continue. For each affected step it lists
+  the executed steps that ran in that session (1, 3, 7), so the workaround below is copy-paste.
+  The preview doesn't change anything; it only informs.
+- **Documented workaround** (in the export/import guide page, phase 6): when a run moves to
+  another machine, any pending step that continues an earlier step's conversation starts fresh
+  instead. Before continuing, either accept that, or give the step that context explicitly. Set
+  its `priorContext` to the steps the preview listed (`[1, 3, 7]`, or `$step:1,3,7` in the
+  prompt) and optionally remove its `sessionId` / set `resumeSession: false`. Pending steps are
+  editable in the imported run like in any stopped run.
+- **Possible follow-up, not planned:** if users ask for it, the preview could offer an explicit
+  per-step _Add earlier output as context_ button that makes exactly that edit, visibly, in the
+  step definition. It would be user-initiated and show up in the definition, unlike the rejected
+  automatic version. The step list it needs is already computed for the preview.
+
+### 5.5 Undo and snapshots across the move
+
+Steps executed **after** import capture snapshots and undo normally; they are native. Steps
+executed **before** import are display-only: their snapshots are dropped by default, and when
+`--with-snapshots` kept them, undo stays gated as §6 describes. The recorded
+`workingDirectory` of every imported output is recomputed to the importing workspace (or the
+new managed worktree) on materialization, never taken from the bundle.
+
+### 5.6 What lands in history
+
+The import is a **new lineage** with a fresh `workflowKey`/`runRef` (default name: the bundle's
+`workflowName`). Its run carries `importedFrom` and renders with the origin badge (§6). Imported
+events keep their order and are re-stamped with the new identity, continuing from the bundle
+manifest's `nextSequence`. Events appended after import are ordinary. From then on it is a normal
+run: `continue`, `append`, `rerun` and export all work, and exporting it again (A → B → A)
+produces a bundle whose `importedFrom` chain shows where it has been.
 
 ---
 
-## 6. Security — a bundle is untrusted input
+## 6. Import pipeline: the same materializer, a second source
 
-Export is an egress decision; **import is an ingress one**, and the ingress side
-is the sharper risk. A bundle arrives from a repo, an issue attachment, or a
-stranger.
+`HARNESS_SESSION_IMPORT_PLAN.md` §"Import pipeline" already specifies materializing a synthetic
+run: allocate the lineage and run directory, `OutputHistoryManager.initializeRunAt(…)`, append
+events, then `finalizeRun`. **Factor that into one `RunMaterializer` with two callers:**
 
-- **Validate before touching disk.** Reject an unknown `kind` or a newer
-  `schemaVersion`. Cap total bytes, event count, and per-event payload size.
-- **Contain every path.** Asset paths and rewritten references must resolve
-  inside the bundle directory / importing workspace. Use the existing
-  `isPathWithinDirectory` (`src/utils/PathSecurity.ts`) — the same helper
-  `FileAccessPolicy` and the undo guard use. No second containment
-  implementation.
-- **Never restore `workingDirectory` from a bundle.** This is the one that
-  matters. `WorkspaceSnapshotService.undoFiles` guards undo writes against
-  `workspacePath` plus the named roots
-  (`src/utils/WorkspaceSnapshotService.ts`, `undoFiles` ~`:1089`), and the webview still
-  derives that `workspacePath` from an output's recorded `workingDirectory`
-  (`useOutputUndoActions.ts`, ~`:220` and `:505`). A bundle that sets `workingDirectory` to
-  an attacker-chosen directory therefore chooses where "undo" writes. Recompute
-  `workingDirectory` to the importing workspace on materialization, and gate undo
-  on the resolved VS Code workspace rather than on anything the bundle said.
-  `HARNESS_SESSION_IMPORT_PLAN.md` found this for _foreign_ imports; for bundles
-  the same value is _adversarial_, so the clamp is required, not advisory.
-- **Imported runs are read-only by default.** Display, search, and browse fully;
-  undo/apply is off unless the user explicitly enables it for a bundle whose
-  paths resolve inside the open workspace.
-- **Show the provenance.** An imported run renders with an origin badge (shared
-  with the harness-session import badge), naming the bundle and its declared
-  `sourceRoot`. A run that looks native but came from elsewhere is the failure
-  mode to avoid.
+| Source                       | Produces                                                      |
+| ---------------------------- | ------------------------------------------------------------- |
+| Native harness session log   | turns → synthesized definition + events                       |
+| ctrlyoke run bundle (`this`) | definition + events, plus runtime state when continuable (§5) |
+
+The bundle path is strictly simpler (no turn segmentation, no per-harness parsing), so build the
+materializer once with the bundle importer as its first consumer.
+
+Import steps: validate → allocate identity → resolve `${workspaceFolder}` onto the importing
+workspace (`readRunBundle`, built) → materialize history → **if continuable:** normalize
+`_runtime` (§5.1), place workspace changes (§5.3), write the run file, leave it `stopped` → record
+provenance → refresh the search index (already a side effect of the history writes).
+
+### 6.1 Security: a bundle is untrusted input
+
+Export is an egress decision; **import is an ingress one**, and the ingress side is the sharper
+risk. A continuable bundle raises it further: it is effectively a workflow file from someone
+else, with scripts.
+
+- **Validate before touching disk.** Reject an unknown `kind` or a newer `schemaVersion` (built).
+  Cap total bytes, event count and per-event payload size (per-file cap built). Check
+  `changes.patch` and asset `sha256` against `run.json`.
+- **Contain every path.** Asset paths, patch targets and rewritten references must resolve
+  inside the bundle directory / importing workspace or the new worktree. Use
+  `isPathWithinDirectory` (`src/utils/PathSecurity.ts`). `git apply` already refuses paths
+  outside the tree, but check before calling it anyway.
+- **Never restore `workingDirectory` from a bundle.** `WorkspaceSnapshotService.undoFiles`
+  guards undo writes against `workspacePath`, and the webview derives that from an output's
+  recorded `workingDirectory` (`useOutputUndoActions.ts`). A bundle that sets it chooses where
+  "undo" writes. Recompute it on materialization and gate undo on the resolved workspace.
+- **Pre-import steps are read-only.** Display, search and browse fully; undo/apply on them is off
+  unless the user explicitly enables it for a bundle whose paths resolve inside the open
+  workspace.
+- **Show the provenance.** An imported run renders with an origin badge (shared with the
+  harness-session import badge) naming the bundle, its `sourceRoot` and `exportedAt`.
+- **Nothing executes on import** (§5.2).
 
 ---
 
-## 7. Non-goals
+## 7. Dashboard surface, next to Save/Load but not inside it
 
-- Not a sync mechanism, and not shared live history. A bundle is a snapshot.
-- Does not change where run history is stored — orthogonal to
-  `storage.runHistoryLocation`.
+**Decision: separate actions, placed beside Save and Load, sharing their dialog parts. No
+"include runtime state" toggle on the Save dialog.**
+
+Why not a toggle on Save:
+
+- **Different artifacts.** Save writes one authored, schema-validated `.ctrlyoke.{yaml,json}`
+  that Load opens as a draft, the editor lints, and people edit and commit. Export writes a
+  directory of history, run state and possibly a code patch. A toggle would make Save's output
+  sometimes not openable by Load. That would be the confusing part.
+- **Different trust posture.** Save/Load moves your own definition around. Export is an egress
+  decision (redaction summary, patch file count, external paths to review before sharing).
+  Import is ingress (untrusted input, preview before anything runs). Neither belongs behind a
+  checkbox in a dialog whose job is "pick a file name".
+- **Different scope.** Save works on any workflow, including a draft. Export works on a
+  **run**, and continuation on a settled run with pending work.
+
+How they work together instead:
+
+- **Placement.** In the run view's file menu (`useWorkflowFileMenuItems.ts`): _Save Workflow…_,
+  then _Export Run…_. In the Load area of `WorkflowControls.tsx`: _Load Workflow…_, then
+  _Import Run…_ (beside the harness-session import entry once that plan adds it). The history
+  list's per-run menu gets _Export Run…_ too.
+- **Load routes bundles.** When Load Workflow is pointed at a `.ctrlyokerun` directory, it offers
+  "Import this run (continue where it stopped)" or "Load its workflow only (start over)". The
+  second is just a Load of the bundle's `workflow.ctrlyoke.json`. Users who reach for Load still
+  land in the right place, and the pipelines stay separate.
+- **Shared parts, not a shared dialog.** Extract the location/name/browse fields from
+  `SaveWorkflowDialog.tsx` (including its `selectWorkspacePath` capability branch between the
+  native folder picker and the hosted `FileBrowserModal`) into a component that both Save and
+  Export use. Export adds its own sections: _what's included_ (history; run state and changes
+  when continuable, with the patch's file count; snapshots off), and the redaction summary
+  shown after the export, before the user shares the result.
+- **Import preview** is its own modal: provenance, base-commit check, where the changes will
+  land (§5.3), per-step session availability (§5.4) with the steps each missing session covered, pending
+  steps with scripts called out, secret grants. It has two buttons: _Import_ (view-only, still
+  continuable later) and _Import and Continue_.
+
+---
+
+## 8. Non-goals
+
+- Not a sync mechanism, and not shared live history. A bundle is a snapshot; continuing it
+  forks the run onto the importing machine. The original on machine A is untouched and nothing
+  reconciles the two.
+- Does not change where run history is stored; orthogonal to `storage.runHistoryLocation`.
 - Does not make live run storage itself committable; the bundle is the committable form.
-- No round-trip fidelity guarantee. Redaction is lossy on purpose, and identity
-  is intentionally not preserved.
+- No round-trip fidelity guarantee. Redaction is lossy on purpose, identity is intentionally not
+  preserved, and git commit history inside the run isn't carried (only the resulting tree).
+- Does not move harness sessions. Session logs belong to each harness's own store and can carry
+  far more than ctrlyoke redacts. §5.4 degrades gracefully instead.
 
 ---
 
-## 8. Phasing
+## 9. Phasing
 
-| Phase | Content                                                                                             | Ships value alone?                    |
-| ----- | --------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| 1     | Bundle format, path-rewrite module, `RunBundleExporter`, `ctrlyoke export`, asset reuse via Save As | Yes — produces shareable artifacts    |
-| 2     | `RunMaterializer` + bundle importer + `ctrlyoke import`, with the ingress guards in 6               | Yes — completes the loop              |
-| 3     | Redaction policy integration (reuse `redactPreviewText` / `SecretRedactionService`)                 | Gate for recommending export publicly |
-| 4     | Dashboard export action, import drop target, origin badge                                           | Yes                                   |
+| Phase | Content                                                                                                      | Ships value alone?                         |
+| ----- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
+| 1 ✅  | Bundle format, path rewrite, `RunBundleExporter`, `ctrlyoke export`, redaction (`secrets-v1`)                | Yes: shareable artifacts (shipped `0.2.0`) |
+| 2     | Asset bundling via the Save As machinery; `redaction.byFile`                                                 | Yes: bundles stop dangling `@` refs        |
+| 3     | `RunMaterializer` + `ctrlyoke import` (view-only), ingress guards (§6.1), origin badge                       | Yes: completes the share loop              |
+| 4     | Continuation: `run.ctrlyoke.json`, `changes.patch`, `_runtime` normalization, `import --continue`            | Yes: the machine-to-machine handoff        |
+| 5     | Session preflight probe for all runs, uniform warn-and-start-fresh fallback (§5.4)                           | Yes: fixes native runs too                 |
+| 6     | Dashboard: Export Run / Import Run actions, shared location fields, Load routing, import preview, guide page | Yes                                        |
 
-Phase 3 is a **release gate on phase 1**, not an enhancement: shipping an export
-command that writes unredacted transcripts into repos is worse than shipping
-nothing. Ship phase 1 behind the redaction policy or with a blunt scrub, never
-without one.
+Phase 5 is a **release gate on phase 4**, the way redaction was on phase 1: without it, four of
+six harnesses fail the first step that tries to resume a session from the other machine. It has
+no dependency on the import work, so it can land first. A native run whose harness session was
+cleaned up benefits the same way.
 
 ---
 
-## 9. Open questions
+## 10. Open questions
 
-1. **Bundle a lineage or a single run?** Proposed: a single run in v1. A
-   lineage bundle is a trivial extension of the same format (a directory of run
-   bundles plus a shared asset store) once the single-run case is right.
-2. **Redaction default.** Refuse to export when the policy is unset, or export
-   with a blunt scrub and a loud warning? Proposed: blunt scrub plus warning.
-   (`SECRETS_AND_REDACTION_PLAN.md` has since shipped, so the "blunt scrub" is
-   simply `redactPreviewText` with heuristics on plus any re-resolvable secrets.)
-3. **Chunk events.** Keep `cliOutputChunkAppended` streaming deltas, or collapse
-   to the sealed aggregate at export? Proposed: collapse — the deltas are a
-   streaming implementation detail and they dominate bundle size.
-4. **Workspace snapshots.** `workspaceSnapshotCaptured` payloads can carry file
-   contents for undo. Export them (large, and the most likely place for
-   unintended content), or drop them and accept display-only imports? Proposed:
-   drop by default, `--with-snapshots` to opt in.
-5. **Re-import of an already-imported bundle.** New lineage every time, or
-   dedupe on `provenance.runRef` + `sourceRoot` and offer "open existing"? Same
-   question `HARNESS_SESSION_IMPORT_PLAN.md` open question 2 asks; answer both
-   the same way.
+1. **Bundle a lineage or a single run?** Settled: a single run. A lineage bundle is a directory of
+   run bundles plus a shared asset store, if ever wanted.
+2. **Redaction default.** Settled: always on (`secrets-v1`); no opt-out.
+3. **Chunk events.** Keep `cliOutputChunkAppended` streaming deltas, or collapse to the sealed
+   aggregate at export? Proposed: collapse. The deltas are a streaming implementation detail
+   and dominate bundle size. Still open: the shipped exporter copies them as-is.
+4. **Workspace snapshots.** Settled: dropped by default, `--with-snapshots` to opt in.
+5. **Re-import of an already-imported bundle.** Settled 2026-10-24: detect (match on
+   `provenance.runRef` + `sourceRoot` + `exportedAt`) and offer "open the existing import", with
+   "import again" as the explicit second choice. Importing the same bundle twice and continuing
+   both would fork the work twice. Answer `HARNESS_SESSION_IMPORT_PLAN.md` open question 2 the
+   same way.
+6. **Missing-session default (§5.4).** Settled 2026-10-24: warn and start a new session, the
+   same in every run. No automatic context injection; the preview and docs point to
+   `priorContext` as the manual fix.
+7. **Uncommitted changes on export when the run is `none`-mode in a dirty checkout.** Settled
+   2026-10-24: include them (the run may have depended on them). The export summary lists every
+   file in the patch so the user can cancel before sharing.
+8. **Exporting a run that is `stopped` mid-step.** The in-flight step re-runs from its start on
+   continue (as it does natively), but on another machine its partial edits are in the patch.
+   Proposed: same as native; the step's retry sees a partially edited tree either way.
