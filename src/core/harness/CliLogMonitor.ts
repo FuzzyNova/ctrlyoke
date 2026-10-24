@@ -198,7 +198,11 @@ export class CliLogMonitor {
       dispatchedPromptText,
     });
     const subagentFollower = parser.getSubagentFollower?.();
+    subagentFollower?.beginTurn();
     subagentFollower?.start(this.deps.hostCallbacks.onStreamingEvents);
+    // The interactive session outlives this prompt, so children still
+    // running at completion stay registered for SessionActivityWatcher.
+    const subagentDrainOptions = { retainUnfinished: true };
     // undefined means unlimited (-1 setting) — no timeout will be set
     const timeoutMs = ConfigurationUtils.getMaxPromptExecutionTimeMs();
 
@@ -248,7 +252,10 @@ export class CliLogMonitor {
           // ignore drain failures during failure finalization
         }
 
-        const partialDrain = await subagentFollower?.drainToEof();
+        const partialDrain = await subagentFollower?.drainToEof(
+          undefined,
+          subagentDrainOptions
+        );
 
         let partialResponse =
           events.length > 0 || (partialDrain?.events.length ?? 0) > 0
@@ -324,7 +331,10 @@ export class CliLogMonitor {
           parser.extractResponse(events),
           observedSyntheticEvents
         );
-        const subagentDrain = await subagentFollower?.drainToEof();
+        const subagentDrain = await subagentFollower?.drainToEof(
+          undefined,
+          subagentDrainOptions
+        );
         if (subagentDrain)
           response = mergeSubagentOutput(response, subagentDrain);
 

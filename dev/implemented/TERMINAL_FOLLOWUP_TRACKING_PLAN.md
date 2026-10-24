@@ -33,6 +33,16 @@ in the same poll.
 instance. The monitor pauses the watcher while it owns the next prompt, then
 the watcher resumes from the same read offset after that prompt settles.
 
+Subagent transcripts are separate files, so the watcher also runs the parser's
+`SubagentSourceFollower`. The monitor's completion drain passes
+`retainUnfinished`, which keeps any child that is still running registered,
+with its offsets, instead of resetting the follower. Retained ("carried")
+children go on streaming as follow-up activity. Later drains read them but do
+not wait for them or mark usage partial because of them, and `beginTurn()`
+drops the output the watcher streamed so the next prompt does not record it
+again. Headless drains still reset: the process is gone, so its unfinished
+children never grow.
+
 The hold has **no time-based release**. It ends only when the parser reports
 no pending work, or on cancellation, PTY exit, a harness error notification, or
 `maxPromptTimeout`. An earlier version capped the hold at 10 minutes from hold
@@ -71,6 +81,13 @@ background mode. `trackAsyncLaunchResult` treats any tool_result carrying
 `backgroundTaskId` as a launch for this reason, independent of the input-flag
 path. Missing this case let a step complete before its own background
 command (and that command's later `<task-notification>`) had finished.
+
+The `Workflow` tool is a third launch shape: it has no input flag and always
+runs in the background, and its result is
+`{status: "async_launched", taskId, taskType: "local_workflow", runId, summary}`.
+`getAsyncLaunchTaskId` therefore treats any `async_launched` result with a
+`taskId` as a launch. Missing it let a step complete at the Stop that ended
+the launching turn, about 12 minutes before the workflow's notification.
 
 A launch remains pending until Claude delivers the matching task notification:
 

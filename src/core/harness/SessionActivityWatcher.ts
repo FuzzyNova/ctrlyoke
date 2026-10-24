@@ -38,7 +38,7 @@ export class SessionActivityWatcher {
   private logPath?: string;
   private paused = false;
 
-  constructor(deps: SessionActivityWatcherDeps) {
+  constructor(private readonly deps: SessionActivityWatcherDeps) {
     this.pump = new CliLogEventPump({
       parser: deps.parser,
       model: deps.model,
@@ -84,6 +84,7 @@ export class SessionActivityWatcher {
   private detach(): void {
     this.watcher?.close();
     this.watcher = undefined;
+    this.deps.parser.getSubagentFollower?.()?.stop();
   }
 
   private async attach(): Promise<void> {
@@ -96,6 +97,9 @@ export class SessionActivityWatcher {
     this.watcher = this.pump.watch(logPath, new Date(0), (event) => {
       this.pump.processEvent(event);
     });
+    // Subagent transcripts are separate files: keep following the children
+    // the last prompt left running, and any the resumed session spawns.
+    this.deps.parser.getSubagentFollower?.()?.start(this.deps.onResumedEvents);
 
     // Catch up on anything written between the last authoritative read and this
     // watcher re-attaching — mirrors CliLogMonitor's own initial-read-after-watch

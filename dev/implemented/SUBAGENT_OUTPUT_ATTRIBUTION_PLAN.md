@@ -107,7 +107,17 @@ also carry `agent_id`.
   (records have `isSidechain: true` and `agentId`), with a sibling
   `agent-<agentId>.meta.json`:
   `{"agentType":"general-purpose","description":"…","toolUseId":"toolu_01Go…","spawnDepth":1,"requestShape":"foreground",…}`.
-  `toolUseId` is the link. The earlier plan put interactive mode out of scope
+  `toolUseId` is the link. **Workflow agents are different** (2.1.310): they
+  write to `<sessionId>/subagents/workflows/<runId>/agent-<agentId>.jsonl`, and
+  their meta has no `toolUseId`. The link is the `runId` in the `Workflow`
+  call's `async_launched` result. The run's `journal.jsonl` announces each
+  agent (`started` with `agentId`, `label`, `phase`) and its finish (`result`).
+  A workflow agent ends on its structured-output `tool_use`, never an
+  `end_turn`, so the journal result is its completion signal, and the
+  workflow's task notification completes the card. `ClaudeLogParser` follows
+  the journal as one more child of the `Workflow` call, and that child
+  registers each agent's transcript as it starts.
+  The earlier plan put interactive mode out of scope
   because it needs a sidechain tailer. Qwen, Codex and Antigravity need that
   tailer anyway (below), so Claude interactive now comes in at low cost.
 
