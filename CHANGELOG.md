@@ -38,6 +38,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A claude-cli step that starts a Claude Code workflow waits for the
+  workflow.** A step whose agent launched a `Workflow` and then ended its turn
+  used to complete right away while the workflow's agents were still running.
+  It now waits, like it does for other background work, until the workflow
+  reports back and Claude's follow-up turn ends. The workflow shows as a
+  subagent card listing each of its agents and the current phase. Each agent's
+  activity streams into the output under that card, and its tokens count
+  toward the step's usage.
+
+- **Subagents still running when an interactive step completes keep streaming.**
+  Their later activity now appears as follow-up output instead of stopping at
+  the step's completion.
+
 - **claude-cli notices are labelled System message, not User message.** Notes
   that Claude Code adds to the conversation itself, such as the image-resize
   note after a screenshot is read, appear in the output as **System message**

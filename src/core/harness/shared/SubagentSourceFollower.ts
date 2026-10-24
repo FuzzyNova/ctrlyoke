@@ -36,8 +36,24 @@ interface RegisteredSource {
   offset: number;
   complete: boolean;
   childComplete: boolean;
+  /**
+   * Still running when an earlier turn's drain retained it. It keeps
+   * streaming, and what it writes later lands in whichever turn reads it,
+   * but no later drain waits for it or turns partial because of it.
+   */
+  carried: boolean;
   seenEvents: Set<string>;
   seenUsage: Set<string>;
+}
+
+export interface SubagentDrainOptions {
+  /**
+   * Keep sources that have not finished registered, with their read offsets,
+   * so they go on streaming after this drain (an interactive session stays
+   * open after a prompt completes). Off by default: a headless process is
+   * gone once drained, so its unfinished children never grow again.
+   */
+  retainUnfinished?: boolean;
 }
 
 /** Follows registered child logs for live output and a bounded final EOF drain. */
@@ -73,6 +89,7 @@ export class SubagentSourceFollower {
       offset: 0,
       complete: false,
       childComplete: false,
+      carried: false,
       seenEvents: new Set(),
       seenUsage: new Set(),
     });
@@ -94,13 +111,37 @@ export class SubagentSourceFollower {
     const parentId = source.attribution.parentToolCallId;
     if (this.completedSpawns.has(parentId)) return [];
     this.completedSpawns.add(parentId);
-    const event = this.buildSpawnStateEvent(
-      parentId,
-      SUBAGENT_SPAWN_STATES.COMPLETED
-    );
+    const event = this.buildSpawnUpdateEvent(parentId, {
+      state: SUBAGENT_SPAWN_STATES.COMPLETED,
+    });
     this.events.push(event);
     this.callback?.([event]);
     return [event];
+  }
+
+  /**
+   * Stream a spawn-card update discovered while following a child source,
+   * such as a newly started workflow agent. It is kept for the final output
+   * like the follower's own completion updates.
+   */
+  updateSpawn(parentToolCallId: string, spawn: SubagentSpawn): void {
+    if (this.completedSpawns.has(parentToolCallId)) return;
+    const event = this.buildSpawnUpdateEvent(parentToolCallId, spawn);
+    this.events.push(event);
+    this.callback?.([event]);
+  }
+
+  /**
+   * Start a new turn's accumulation. Output and usage streamed since the last
+   * drain (by `SessionActivityWatcher`, between prompts) were already
+   * delivered as follow-up activity and must not land in the next prompt's
+   * final output too. Registered sources and their offsets are kept.
+   */
+  beginTurn(): void {
+    this.events.length = 0;
+    for (const model of Object.keys(this.usageByModel))
+      delete this.usageByModel[model];
+    this.partial = false;
   }
 
   start(
@@ -133,14 +174,21 @@ export class SubagentSourceFollower {
   }
 
   async drainToEof(
-    deadlineMs = DRAIN_DEADLINE_MS
+    deadlineMs = DRAIN_DEADLINE_MS,
+    options: SubagentDrainOptions = {}
   ): Promise<SubagentDrainResult> {
     const deadline = Date.now() + deadlineMs;
     this.stop();
+    const awaited = () =>
+      [...this.sources.values()].filter((source) => !source.carried);
+    // Always read once, so carried children are caught up too, even though
+    // the drain does not wait for them.
+    let firstPass = this.sources.size > 0;
     while (
-      Date.now() < deadline &&
-      [...this.sources.values()].some((source) => !source.complete)
+      firstPass ||
+      (Date.now() < deadline && awaited().some((source) => !source.complete))
     ) {
+      firstPass = false;
       const remainingMs = deadline - Date.now();
       const pollCompleted = await new Promise<boolean>((resolve) => {
         const timeout = setTimeout(() => resolve(false), remainingMs);
@@ -153,7 +201,7 @@ export class SubagentSourceFollower {
         this.partial = true;
         break;
       }
-      if ([...this.sources.values()].every((source) => source.complete)) break;
+      if (awaited().every((source) => source.complete)) break;
       await new Promise((resolve) =>
         setTimeout(
           resolve,
@@ -161,14 +209,21 @@ export class SubagentSourceFollower {
         )
       );
     }
-    if ([...this.sources.values()].some((source) => !source.complete))
-      this.partial = true;
+    if (awaited().some((source) => !source.complete)) this.partial = true;
     const result = {
       events: [...this.events],
       usageByModel: { ...this.usageByModel },
       partial: this.partial,
     };
-    this.reset();
+    if (options.retainUnfinished) {
+      this.beginTurn();
+      for (const [key, source] of this.sources) {
+        if (source.complete) this.sources.delete(key);
+        else source.carried = true;
+      }
+    } else {
+      this.reset();
+    }
     return result;
   }
 
@@ -230,10 +285,9 @@ export class SubagentSourceFollower {
           !this.completedSpawns.has(parentId)
         ) {
           this.completedSpawns.add(parentId);
-          const event = this.buildSpawnStateEvent(
-            parentId,
-            SUBAGENT_SPAWN_STATES.COMPLETED
-          );
+          const event = this.buildSpawnUpdateEvent(parentId, {
+            state: SUBAGENT_SPAWN_STATES.COMPLETED,
+          });
           this.events.push(event);
           emitted.push(event);
         }
@@ -241,7 +295,7 @@ export class SubagentSourceFollower {
       if (emitted.length) this.callback?.(emitted);
     } catch {
       if (generation !== this.generation) return;
-      this.partial = true;
+      if (!source.carried) this.partial = true;
       source.complete = true;
     }
   }
@@ -262,9 +316,9 @@ export class SubagentSourceFollower {
       (model.reasoningOutputTokens ?? 0) + (usage.reasoningOutputTokens ?? 0);
   }
 
-  private buildSpawnStateEvent(
+  private buildSpawnUpdateEvent(
     parentToolCallId: string,
-    state: SubagentSpawn["state"]
+    spawn: SubagentSpawn
   ): CliEvent {
     return {
       type: CLI_EVENT_TYPES.TOOL_CALL,
@@ -273,7 +327,7 @@ export class SubagentSourceFollower {
         id: parentToolCallId,
         name: SUBAGENT_SPAWN_UPDATE_TOOL_NAME,
         parameters: {},
-        subagentSpawn: { state },
+        subagentSpawn: spawn,
       },
     };
   }

@@ -39,6 +39,7 @@ import {
   CLI_OUTPUT_METADATA_KEYS,
   HARNESS_IDS,
   OPERATION_STATUS,
+  SUBAGENT_SPAWN_STATES,
   TOKEN_TOTAL_CONFIDENCE,
   WEB_SEARCH_ACTIONS,
 } from "../../../types/DashboardConstants";
@@ -494,6 +495,195 @@ suite("ClaudeLogParser", () => {
             event.type === CLI_EVENT_TYPES.TEXT &&
             (event.data as TextData).text === "background child"
         )
+      );
+    } finally {
+      await removeTempDir(workspace);
+      fs.rmSync(
+        path.join(testHome, ".claude", "projects", normalizedWorkspace),
+        {
+          recursive: true,
+          force: true,
+        }
+      );
+    }
+  });
+
+  test("follows a Workflow run's agent transcripts through its journal", async () => {
+    const workspace = makeTempDir("claude-workflow-");
+    testHome = makeTempDir("claude-home-");
+    process.env.HOME = testHome;
+    process.env.USERPROFILE = testHome;
+    const normalizedWorkspace = normalizeClaudeWorkspacePath(workspace);
+    const sessionId = `claude-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const runDirectory = path.join(
+      os.homedir(),
+      ".claude",
+      "projects",
+      normalizedWorkspace,
+      sessionId,
+      "subagents",
+      "workflows",
+      "wf_57a5fed4-5cd"
+    );
+    fs.mkdirSync(runDirectory, { recursive: true });
+    parser.setWorkspaceRoot(workspace);
+    const writeJsonl = (file: string, records: object[]) =>
+      fs.writeFileSync(
+        path.join(runDirectory, file),
+        records.map((record) => JSON.stringify(record)).join("\n") + "\n"
+      );
+    try {
+      const parentEvents = [
+        ...parser.extractStructuredEventsFromEvent({
+          type: "assistant",
+          sessionId,
+          message: {
+            content: [
+              {
+                type: "tool_use",
+                id: "workflow-call",
+                name: "Workflow",
+                input: { script: "export const meta = { name: 'sweep' }" },
+              },
+            ],
+          },
+        } as BaseCliEvent),
+        // Shape captured from Claude Code 2.1.310's Workflow tool.
+        ...parser.extractStructuredEventsFromEvent({
+          type: "user",
+          sessionId,
+          message: {
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "workflow-call",
+                content: "Workflow launched in background. Task ID: whovzfsh4",
+              },
+            ],
+          },
+          toolUseResult: {
+            status: "async_launched",
+            taskId: "whovzfsh4",
+            taskType: "local_workflow",
+            workflowName: "sweep",
+            runId: "wf_57a5fed4-5cd",
+            summary: "Sweep src/ for arbitrary timeouts",
+          },
+        } as BaseCliEvent),
+      ];
+      const spawnCall = parentEvents.find(
+        (event) => event.type === CLI_EVENT_TYPES.TOOL_CALL
+      );
+      assert.strictEqual(
+        (spawnCall?.data as ToolCall).subagentSpawn?.agentType,
+        "workflow"
+      );
+
+      writeJsonl("journal.jsonl", [
+        { type: "launched" },
+        { type: "started", agentId: "afind", label: "find:ui", phase: "Find" },
+        { type: "result", agentId: "afind", result: { findings: [] } },
+        {
+          type: "started",
+          agentId: "averify",
+          label: "verify:ui",
+          phase: "Verify",
+        },
+        { type: "result", agentId: "averify", result: { filed: [] } },
+      ]);
+      writeJsonl("agent-afind.jsonl", [
+        {
+          type: "assistant",
+          isSidechain: true,
+          agentId: "afind",
+          message: {
+            id: "find-msg",
+            model: "claude-haiku-child",
+            usage: { input_tokens: 40, output_tokens: 5 },
+            // A workflow agent ends on its structured-output tool call.
+            stop_reason: "tool_use",
+            content: [
+              {
+                type: "tool_use",
+                id: "find-bash",
+                name: "Bash",
+                input: { command: "echo find" },
+              },
+            ],
+          },
+        },
+      ]);
+      writeJsonl("agent-averify.jsonl", [
+        {
+          type: "assistant",
+          isSidechain: true,
+          agentId: "averify",
+          message: {
+            id: "verify-msg",
+            model: "claude-haiku-child",
+            usage: { input_tokens: 2, output_tokens: 1 },
+            content: [{ type: "text", text: "verified" }],
+          },
+        },
+      ]);
+
+      const follower = parser.getSubagentFollower();
+      const live: CliEvent[] = [];
+      follower.start((events) => live.push(...events), 10);
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      // Both agents are done, but the workflow is not until its notification.
+      assert.ok(
+        !live.some(
+          (event) =>
+            (event.data as ToolCall).subagentSpawn?.state ===
+            SUBAGENT_SPAWN_STATES.COMPLETED
+        )
+      );
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          role: "user",
+          content:
+            "<task-notification>\n<task-id>whovzfsh4</task-id>\n" +
+            "<tool-use-id>workflow-call</tool-use-id>\n" +
+            "<status>completed</status>\n</task-notification>",
+        },
+      });
+
+      const drain = await follower.drainToEof(500);
+      const output = mergeSubagentOutput(
+        { events: parentEvents, metadata: {} },
+        drain
+      );
+      const childCommand = output.events.find(
+        (event) => event.type === CLI_EVENT_TYPES.BASH_COMMAND
+      );
+      assert.deepStrictEqual(childCommand?.subagent, {
+        parentToolCallId: "workflow-call",
+        agentId: "afind",
+      });
+      const childText = output.events.find(
+        (event) =>
+          event.type === CLI_EVENT_TYPES.TEXT &&
+          (event.data as TextData).text === "verified"
+      );
+      assert.strictEqual(childText?.subagent?.agentId, "averify");
+      const spawn = output.events
+        .map((event) => event.data as ToolCall)
+        .find((data) => data.id === "workflow-call" && data.subagentSpawn);
+      assert.strictEqual(spawn?.name, "Workflow");
+      assert.deepStrictEqual(spawn?.subagentSpawn?.children, [
+        { agentId: "afind", label: "find:ui" },
+        { agentId: "averify", label: "verify:ui" },
+      ]);
+      assert.strictEqual(
+        spawn?.subagentSpawn?.state,
+        SUBAGENT_SPAWN_STATES.COMPLETED
+      );
+      assert.strictEqual(drain.partial, false);
+      assert.strictEqual(
+        drain.usageByModel["claude-haiku-child"]?.inputTokens,
+        42
       );
     } finally {
       await removeTempDir(workspace);
@@ -2895,6 +3085,75 @@ suite("ClaudeLogParser", () => {
       });
 
       assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+    });
+
+    test("should hold completion for a Workflow launch until its notification's resumed turn ends", () => {
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_workflow",
+              name: "Workflow",
+              input: { script: "export const meta = { name: 'sweep' }" },
+            },
+          ],
+        },
+      });
+      // A Workflow call has no run_in_background input: only its result,
+      // whose shape was captured from Claude Code 2.1.310, says it launched.
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_workflow",
+              content: "Workflow launched in background. Task ID: whovzfsh4",
+            },
+          ],
+        },
+        toolUseResult: {
+          status: "async_launched",
+          taskId: "whovzfsh4",
+          taskType: "local_workflow",
+          workflowName: "sweep",
+          runId: "wf_57a5fed4-5cd",
+          summary: "Sweep src/ for arbitrary timeouts",
+        },
+      });
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+      assert.strictEqual(
+        parser.getBackgroundWorkHoldSnapshot().pendingTasks[0]?.description,
+        "Sweep src/ for arbitrary timeouts"
+      );
+
+      // The turn that launched it ends while the workflow runs.
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: { content: [], stop_reason: "end_turn" },
+      });
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          role: "user",
+          content:
+            "<task-notification>\n<task-id>whovzfsh4</task-id>\n" +
+            "<tool-use-id>toolu_workflow</tool-use-id>\n" +
+            "<status>completed</status>\n</task-notification>",
+        },
+      });
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: { content: [], stop_reason: "end_turn" },
+      });
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
     });
 
     test("should consume a task-notification missing <tool-use-id> via <task-id> correlated from an Agent launch's agentId", () => {

@@ -52,6 +52,10 @@ import {
   CLAUDE_SUBAGENT_TOOL_NAMES,
   CLAUDE_TASK_STATUSES,
   CLAUDE_ASYNC_LAUNCH_RESULT_MARKERS,
+  CLAUDE_TOOL_RESULT_STATUSES,
+  CLAUDE_WORKFLOW_JOURNAL_TYPES,
+  CLAUDE_WORKFLOW_PATHS,
+  CLAUDE_WORKFLOW_TOOL_NAME,
   isClaudeSubagentToolName,
 } from "./ClaudeProtocolConstants";
 
@@ -168,6 +172,64 @@ function isClaudeProviderEvent(value: unknown): value is ClaudeProviderEvent {
   );
 }
 
+/** One line of a workflow run's `journal.jsonl`. */
+interface ClaudeWorkflowJournalRecord {
+  type: string;
+  agentId?: string;
+  label?: string;
+  phase?: string;
+}
+
+function isClaudeWorkflowJournalRecord(
+  value: unknown
+): value is ClaudeWorkflowJournalRecord {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    typeof value.type === "string"
+  );
+}
+
+/** A followed workflow run: its agents and the journal that announces them. */
+interface FollowedWorkflowRun {
+  journalAgentId: string;
+  children: { agentId: string; label?: string }[];
+  /** The workflow's task notification (or a TaskStop) has been seen. */
+  finished: boolean;
+}
+
+/** Claude's ids for a workflow run and its agents are plain path segments. */
+const CLAUDE_PATH_SEGMENT_PATTERN = /^[\w-]+$/;
+
+/**
+ * Task id of an asynchronous launch confirmed by a tool result: an
+ * auto-promoted or background shell's `backgroundTaskId`, an async Agent's
+ * `agentId`, or any other `status: "async_launched"` result's `taskId` (the
+ * Workflow tool reports only that).
+ */
+function getAsyncLaunchTaskId(
+  resultMetadata: Record<string, unknown> | undefined
+): string | undefined {
+  if (!resultMetadata) return undefined;
+  if (typeof resultMetadata.backgroundTaskId === "string") {
+    return resultMetadata.backgroundTaskId;
+  }
+  if (
+    resultMetadata.isAsync === true &&
+    typeof resultMetadata.agentId === "string"
+  ) {
+    return resultMetadata.agentId;
+  }
+  if (
+    resultMetadata.status === CLAUDE_TOOL_RESULT_STATUSES.ASYNC_LAUNCHED &&
+    typeof resultMetadata.taskId === "string"
+  ) {
+    return resultMetadata.taskId;
+  }
+  return undefined;
+}
+
 type UnconfirmedAsyncLaunch = (typeof CLAUDE_TOOL_NAMES)["AGENT" | "MONITOR"];
 
 /** Match Claude's workspace naming under `~/.claude/projects`. */
@@ -205,6 +267,9 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     string,
     { parentToolCallId: string }
   >();
+
+  /** Workflow tool_use id -> the run whose agent transcripts are followed. */
+  private followedWorkflowRuns = new Map<string, FollowedWorkflowRun>();
 
   /** Background follow-up state; Claude's provider-specific signals feed it below. */
   private readonly backgroundFollowUpState = new BackgroundFollowUpState();
@@ -251,6 +316,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     this.pendingStreamingToolUses.clear();
     this.agentSpawnToolUseIds.clear();
     this.subagentSpawnAttributions.clear();
+    this.followedWorkflowRuns.clear();
     this.backgroundFollowUpState.reset();
     this.unconfirmedAsyncLaunches.clear();
     this.backgroundTaskLaunchToolUseIds.clear();
@@ -558,14 +624,16 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           Record<string, any>
         >) {
           if (block.type !== CLAUDE_CONTENT_BLOCK_TYPES.TOOL_RESULT) continue;
+          const toolName = pendingToolNames.get(block.tool_use_id);
           outputEvents.push(
             ...this.buildBackgroundSpawnUpdate(
-              pendingToolNames.get(block.tool_use_id),
+              toolName,
               block.tool_use_id,
               ClaudeToolBuilder.extractToolResultText(block.content),
               block.is_error === true,
               timestamp
-            )
+            ),
+            ...this.buildWorkflowLaunchUpdate(toolName, block, event, timestamp)
           );
         }
 
@@ -991,31 +1059,22 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         !Array.isArray(e.toolUseResult)
           ? (e.toolUseResult as Record<string, unknown>)
           : undefined;
-      const backgroundTaskId = resultMetadata?.backgroundTaskId;
-      if (block.is_error !== true && typeof backgroundTaskId === "string") {
-        this.backgroundTaskLaunchToolUseIds.set(backgroundTaskId, toolUseId);
+      // The task id is recorded so a later notification can be correlated
+      // back to this launch by <task-id> even when it arrives without a
+      // <tool-use-id> tag (see the task-id fallback in
+      // trackBackgroundWorkState), and so a TaskStop can find it. A Workflow
+      // call has no description input; its result's `summary` names it.
+      const asyncTaskId = getAsyncLaunchTaskId(resultMetadata);
+      if (block.is_error !== true && asyncTaskId) {
+        this.backgroundTaskLaunchToolUseIds.set(asyncTaskId, toolUseId);
+        const resultSummary =
+          typeof resultMetadata?.summary === "string"
+            ? resultMetadata.summary
+            : undefined;
         this.backgroundFollowUpState.launch(toolUseId, {
           ...summary,
-          taskId: backgroundTaskId,
-        });
-      }
-
-      // An Agent launch's confirmed-async result carries `agentId` (e.g.
-      // `{isAsync:true, status:"async_launched", agentId:"..."}`) instead of
-      // `backgroundTaskId`. Record it under the same map so a later
-      // notification can be correlated back to this launch by <task-id> even
-      // when it arrives without a <tool-use-id> tag — see the task-id
-      // fallback in trackBackgroundWorkState.
-      const agentId = resultMetadata?.agentId;
-      if (
-        block.is_error !== true &&
-        resultMetadata?.isAsync === true &&
-        typeof agentId === "string"
-      ) {
-        this.backgroundTaskLaunchToolUseIds.set(agentId, toolUseId);
-        this.backgroundFollowUpState.launch(toolUseId, {
-          ...summary,
-          taskId: agentId,
+          description: summary?.description ?? resultSummary,
+          taskId: asyncTaskId,
         });
       }
 
@@ -1028,6 +1087,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           if (launchToolUseId) {
             this.backgroundFollowUpState.remove(launchToolUseId);
             this.backgroundTaskLaunchToolUseIds.delete(stoppedTaskId);
+            this.finishFollowedWorkflowRun(launchToolUseId);
           }
         }
       }
@@ -1072,7 +1132,9 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * - **Launch:** any `assistant` `tool_use` block with
    *   `input.run_in_background === true` (Claude uses both `Bash` and
    *   `PowerShell` command tools), or an Agent/Monitor result that confirms
-   *   asynchronous execution. Every outstanding id is retained because Claude
+   *   asynchronous execution, or any result with `status: "async_launched"`
+   *   and a `taskId` (the `Workflow` tool, which has no input flag and always
+   *   runs in the background). Every outstanding id is retained because Claude
    *   can run and notify several background tools concurrently. A second,
    *   independent path lives in `trackAsyncLaunchResult`: any tool_result
    *   carrying `toolUseResult.backgroundTaskId` is also a launch, regardless
@@ -1151,21 +1213,19 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       const toolUseIdMatch = text.match(/<tool-use-id>([^<]+)<\/tool-use-id>/);
       const taskIdMatch = text.match(/<task-id>([^<]+)<\/task-id>/);
 
-      if (toolUseIdMatch) {
-        this.backgroundFollowUpState.consumeNotification(toolUseIdMatch[1]);
-      } else if (taskIdMatch) {
-        // Some notifications — observed on a resumed agent's later stop, which
-        // is not the tool_use call's own original completion — omit
-        // <tool-use-id> entirely. Fall back to the launch id recorded against
-        // this <task-id> (populated in trackAsyncLaunchResult from
-        // toolUseResult.backgroundTaskId/agentId) so the launch still gets
-        // consumed instead of blocking completion forever.
-        const launchToolUseId = this.backgroundTaskLaunchToolUseIds.get(
-          taskIdMatch[1]
-        );
-        if (launchToolUseId) {
-          this.backgroundFollowUpState.consumeNotification(launchToolUseId);
-        }
+      // Some notifications — observed on a resumed agent's later stop, which
+      // is not the tool_use call's own original completion — omit
+      // <tool-use-id> entirely. Fall back to the launch id recorded against
+      // this <task-id> (populated in trackAsyncLaunchResult) so the launch
+      // still gets consumed instead of blocking completion forever.
+      const launchToolUseId =
+        toolUseIdMatch?.[1] ??
+        (taskIdMatch
+          ? this.backgroundTaskLaunchToolUseIds.get(taskIdMatch[1])
+          : undefined);
+      if (launchToolUseId) {
+        this.backgroundFollowUpState.consumeNotification(launchToolUseId);
+        this.finishFollowedWorkflowRun(launchToolUseId);
       }
 
       if (taskIdMatch) {
@@ -1576,6 +1636,12 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
                 },
               } as ToolResultData,
             });
+            const workflowLaunch = this.buildWorkflowLaunchUpdate(
+              toolName,
+              block,
+              e,
+              timestamp
+            );
             events.push(
               ...this.buildBackgroundSpawnUpdate(
                 toolName,
@@ -1583,8 +1649,22 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
                 outputText,
                 block.is_error === true,
                 timestamp
-              )
+              ),
+              ...workflowLaunch
             );
+            const runId = (e.toolUseResult as Record<string, unknown>)?.runId;
+            if (
+              workflowLaunch.length &&
+              !("parent_tool_use_id" in e) &&
+              e.sessionId &&
+              typeof runId === "string"
+            ) {
+              this.registerWorkflowSubagentSources(
+                e.sessionId,
+                block.tool_use_id,
+                runId
+              );
+            }
           }
           if (block.tool_use_id) {
             this.pendingStreamingToolUses.delete(block.tool_use_id);
@@ -1711,35 +1791,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         );
       },
       map: (record) => this.extractStructuredEventsFromEvent(record),
-      usage: (record): SubagentRecordUsage | undefined => {
-        const message = record.message;
-        const usage = message?.usage;
-        const model = message?.model;
-        const messageId = message?.id;
-        if (
-          record.type !== CLAUDE_EVENT_TYPES.ASSISTANT ||
-          typeof model !== "string" ||
-          !model ||
-          model === CLAUDE_MODEL_SENTINELS.SYNTHETIC ||
-          typeof messageId !== "string" ||
-          !usage ||
-          typeof usage !== "object"
-        ) {
-          return undefined;
-        }
-        const cacheCreation = usage.cache_creation as
-          ClaudeCacheCreationUsage | undefined;
-        return {
-          recordId: messageId,
-          model,
-          inputTokens: usage.input_tokens,
-          outputTokens: usage.output_tokens,
-          cacheReadInputTokens: usage.cache_read_input_tokens,
-          cacheCreationInputTokens: usage.cache_creation_input_tokens,
-          cacheCreationLongTtlInputTokens:
-            cacheCreation?.ephemeral_1h_input_tokens,
-        };
-      },
+      usage: (record) => this.getSubagentRecordUsage(record),
       isComplete: (record) =>
         record.type === CLAUDE_EVENT_TYPES.ASSISTANT &&
         record.message?.stop_reason === CLAUDE_STOP_REASONS.END_TURN,
@@ -1829,10 +1881,219 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     ];
   }
 
+  /** Per-call usage of a child transcript's assistant record, deduped by message id. */
+  private getSubagentRecordUsage(
+    record: ClaudeProviderEvent
+  ): SubagentRecordUsage | undefined {
+    const message = record.message;
+    const usage = message?.usage;
+    const model = message?.model;
+    const messageId = message?.id;
+    if (
+      record.type !== CLAUDE_EVENT_TYPES.ASSISTANT ||
+      typeof model !== "string" ||
+      !model ||
+      model === CLAUDE_MODEL_SENTINELS.SYNTHETIC ||
+      typeof messageId !== "string" ||
+      !usage ||
+      typeof usage !== "object"
+    ) {
+      return undefined;
+    }
+    const cacheCreation = usage.cache_creation as
+      ClaudeCacheCreationUsage | undefined;
+    return {
+      recordId: messageId,
+      model,
+      inputTokens: usage.input_tokens,
+      outputTokens: usage.output_tokens,
+      cacheReadInputTokens: usage.cache_read_input_tokens,
+      cacheCreationInputTokens: usage.cache_creation_input_tokens,
+      cacheCreationLongTtlInputTokens: cacheCreation?.ephemeral_1h_input_tokens,
+    };
+  }
+
+  /**
+   * Name a launched workflow's spawn card from its launch result, which is
+   * the only record that carries the workflow's summary. The result is a
+   * launch acknowledgement, not the workflow's report.
+   */
+  private buildWorkflowLaunchUpdate(
+    toolName: string | undefined,
+    block: Record<string, any>,
+    event: ClaudeProviderEvent,
+    timestamp: number
+  ): CliEvent[] {
+    const toolUseId = block.tool_use_id;
+    const result =
+      event.toolUseResult &&
+      typeof event.toolUseResult === "object" &&
+      !Array.isArray(event.toolUseResult)
+        ? (event.toolUseResult as Record<string, unknown>)
+        : undefined;
+    if (
+      toolName !== CLAUDE_WORKFLOW_TOOL_NAME ||
+      typeof toolUseId !== "string" ||
+      block.is_error === true ||
+      result?.status !== CLAUDE_TOOL_RESULT_STATUSES.ASYNC_LAUNCHED
+    ) {
+      return [];
+    }
+    const description =
+      typeof result.summary === "string"
+        ? result.summary
+        : typeof result.workflowName === "string"
+          ? result.workflowName
+          : undefined;
+    return [
+      this.buildSpawnUpdateEvent(
+        toolUseId,
+        {
+          ...(description ? { description } : {}),
+          background: true,
+          state: SUBAGENT_SPAWN_STATES.RUNNING,
+        },
+        timestamp,
+        CLAUDE_WORKFLOW_TOOL_NAME
+      ),
+    ];
+  }
+
+  /**
+   * Follow a workflow run's agents. Their meta files carry no `toolUseId`, so
+   * the link is the run directory named by the launch result. The journal is
+   * registered as one more child of the Workflow call: it emits nothing
+   * itself, but registers each agent's transcript when the agent starts,
+   * completes it when the agent's result lands, and finishes when the
+   * workflow's own task notification arrives, so the spawn card completes
+   * only after every phase has run.
+   */
+  private registerWorkflowSubagentSources(
+    sessionId: string,
+    workflowToolUseId: string,
+    runId: string
+  ): void {
+    const projectDirectory = this.getClaudeProjectDirectory();
+    if (
+      !projectDirectory ||
+      !CLAUDE_PATH_SEGMENT_PATTERN.test(runId) ||
+      this.followedWorkflowRuns.has(workflowToolUseId)
+    ) {
+      return;
+    }
+    const runDirectory = path.join(
+      projectDirectory,
+      sessionId,
+      CLAUDE_WORKFLOW_PATHS.SUBAGENTS_DIRECTORY,
+      CLAUDE_WORKFLOW_PATHS.WORKFLOWS_DIRECTORY,
+      runId
+    );
+    const run: FollowedWorkflowRun = {
+      journalAgentId: `${runId}:${CLAUDE_WORKFLOW_PATHS.JOURNAL_FILE}`,
+      children: [],
+      finished: false,
+    };
+    this.followedWorkflowRuns.set(workflowToolUseId, run);
+    const journalSource: SubagentChildSource<ClaudeWorkflowJournalRecord> = {
+      key: `claude:${sessionId}:${workflowToolUseId}:journal`,
+      attribution: {
+        parentToolCallId: workflowToolUseId,
+        agentId: run.journalAgentId,
+      },
+      read: async (fromOffset) => {
+        const result = await readIncrementalJsonl(
+          path.join(runDirectory, CLAUDE_WORKFLOW_PATHS.JOURNAL_FILE),
+          fromOffset,
+          isClaudeWorkflowJournalRecord
+        );
+        for (const record of result.records) {
+          this.applyWorkflowJournalRecord(
+            sessionId,
+            workflowToolUseId,
+            runDirectory,
+            run,
+            record
+          );
+        }
+        return { records: [], nextOffset: result.nextOffset };
+      },
+      map: () => [],
+      isComplete: () => false,
+    };
+    this.subagentFollower.register(journalSource);
+  }
+
+  private applyWorkflowJournalRecord(
+    sessionId: string,
+    workflowToolUseId: string,
+    runDirectory: string,
+    run: FollowedWorkflowRun,
+    record: ClaudeWorkflowJournalRecord
+  ): void {
+    const agentId = record.agentId;
+    if (
+      typeof agentId !== "string" ||
+      !CLAUDE_PATH_SEGMENT_PATTERN.test(agentId)
+    ) {
+      return;
+    }
+    if (record.type === CLAUDE_WORKFLOW_JOURNAL_TYPES.RESULT) {
+      this.subagentFollower.markChildComplete(agentId);
+      return;
+    }
+    if (
+      record.type !== CLAUDE_WORKFLOW_JOURNAL_TYPES.STARTED ||
+      run.children.some((child) => child.agentId === agentId)
+    ) {
+      return;
+    }
+    run.children.push({
+      agentId,
+      ...(typeof record.label === "string" ? { label: record.label } : {}),
+    });
+    const transcriptPath = path.join(runDirectory, `agent-${agentId}.jsonl`);
+    this.subagentFollower.register<ClaudeProviderEvent>({
+      key: `claude:${sessionId}:${workflowToolUseId}:${agentId}`,
+      attribution: { parentToolCallId: workflowToolUseId, agentId },
+      read: (fromOffset) =>
+        readIncrementalJsonl(transcriptPath, fromOffset, isClaudeProviderEvent),
+      map: (childRecord) => this.extractStructuredEventsFromEvent(childRecord),
+      usage: (childRecord) => this.getSubagentRecordUsage(childRecord),
+      // A workflow agent ends on its structured-output tool call, not an
+      // end_turn, so its journal result is the completion signal.
+      isComplete: () => false,
+    });
+    if (run.finished) {
+      // Read only after the workflow ended: its transcript is already whole.
+      this.subagentFollower.markChildComplete(agentId);
+      return;
+    }
+    this.subagentFollower.updateSpawn(workflowToolUseId, {
+      children: [...run.children],
+      ...(typeof record.phase === "string" ? { statusLine: record.phase } : {}),
+      state: SUBAGENT_SPAWN_STATES.RUNNING,
+    });
+  }
+
+  /**
+   * The workflow's task finished or was stopped, so every agent it ran is
+   * done too, including one whose journal result never landed.
+   */
+  private finishFollowedWorkflowRun(workflowToolUseId: string): void {
+    const run = this.followedWorkflowRuns.get(workflowToolUseId);
+    if (!run || run.finished) return;
+    run.finished = true;
+    for (const child of run.children) {
+      this.subagentFollower.markChildComplete(child.agentId);
+    }
+    this.subagentFollower.markChildComplete(run.journalAgentId);
+  }
+
   private buildSpawnUpdateEvent(
     toolUseId: string,
     spawn: SubagentSpawn,
-    timestamp: number
+    timestamp: number,
+    toolName: string = CLAUDE_SUBAGENT_TOOL_NAMES.AGENT
   ): CliEvent {
     return {
       type: CLI_EVENT_TYPES.TOOL_CALL,
@@ -1841,7 +2102,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         ? { subagent: this.subagentSpawnAttributions.get(toolUseId) }
         : {}),
       data: {
-        name: CLAUDE_SUBAGENT_TOOL_NAMES.AGENT,
+        name: toolName,
         parameters: {},
         id: toolUseId,
         subagentSpawn: spawn,

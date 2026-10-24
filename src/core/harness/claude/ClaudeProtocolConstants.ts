@@ -58,6 +58,36 @@ export const CLAUDE_ASYNC_LAUNCH_RESULT_MARKERS = {
   MONITOR: "Monitor started",
 } as const;
 
+/** `toolUseResult.status` of a tool call that started an asynchronous task. */
+export const CLAUDE_TOOL_RESULT_STATUSES = {
+  ASYNC_LAUNCHED: "async_launched",
+} as const;
+
+/**
+ * Claude Code's multi-agent `Workflow` tool. It always runs in the background:
+ * its result is `{status: "async_launched", taskId, runId, ...}` and its agents
+ * write transcripts under `<sessionId>/subagents/workflows/<runId>/`.
+ */
+export const CLAUDE_WORKFLOW_TOOL_NAME = "Workflow";
+
+/** Spawn-card agent type shown for a `Workflow` call. */
+export const CLAUDE_WORKFLOW_AGENT_TYPE = "workflow";
+
+/** Directory and file names of a workflow run under the session's `subagents/`. */
+export const CLAUDE_WORKFLOW_PATHS = {
+  SUBAGENTS_DIRECTORY: "subagents",
+  WORKFLOWS_DIRECTORY: "workflows",
+  JOURNAL_FILE: "journal.jsonl",
+} as const;
+
+/** `type` values in a workflow run's `journal.jsonl` that ctrlyoke reads. */
+export const CLAUDE_WORKFLOW_JOURNAL_TYPES = {
+  /** An agent started: carries `agentId`, `label` and `phase`. */
+  STARTED: "started",
+  /** An agent finished: carries `agentId` and its structured result. */
+  RESULT: "result",
+} as const;
+
 /** Whether a Claude tool name spawns a subagent (`Agent`, or the older `Task`). */
 export function isClaudeSubagentToolName(name: unknown): boolean {
   return (

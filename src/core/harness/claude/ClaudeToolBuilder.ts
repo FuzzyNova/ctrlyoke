@@ -22,6 +22,8 @@ import { BaseToolBuilder } from "../shared/BaseToolBuilder";
 import {
   CLAUDE_CONTENT_BLOCK_TYPES,
   CLAUDE_TOOL_RESULT_TYPES,
+  CLAUDE_WORKFLOW_AGENT_TYPE,
+  CLAUDE_WORKFLOW_TOOL_NAME,
   isClaudeSubagentToolName,
 } from "./ClaudeProtocolConstants";
 
@@ -126,6 +128,21 @@ export class ClaudeToolBuilder {
                 ? input.subagent_type
                 : undefined,
             prompt: typeof input.prompt === "string" ? input.prompt : undefined,
+            state: SUBAGENT_SPAWN_STATES.RUNNING,
+          };
+        }
+      }
+    }
+    // A workflow spawns its agents in the background; the script is the
+    // closest thing it has to a prompt. Its description and agents arrive
+    // later, from the launch result and the run's journal.
+    if (toolName === CLAUDE_WORKFLOW_TOOL_NAME) {
+      for (const event of events) {
+        if (event.type === CLI_EVENT_TYPES.TOOL_CALL) {
+          (event.data as ToolCall).subagentSpawn = {
+            agentType: CLAUDE_WORKFLOW_AGENT_TYPE,
+            prompt: typeof input.script === "string" ? input.script : undefined,
+            background: true,
             state: SUBAGENT_SPAWN_STATES.RUNNING,
           };
         }
