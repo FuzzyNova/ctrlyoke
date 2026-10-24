@@ -32,6 +32,10 @@ import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
 import { getFileReadHeaderText } from "@root/utils/FileReadHeaderText";
 import { formatMcpToolLabel } from "@root/utils/formatMcpToolLabel";
 import { getToolResultText } from "@root/utils/toolResultText";
+import {
+  getWebSearchLabel,
+  getWebSearchToolResult,
+} from "@root/utils/WebSearchText";
 
 type OutputFindField =
   | "header"
@@ -275,8 +279,11 @@ function getBaseOutputRowSearchSegments(
         case CLI_EVENT_TYPES.WEB_SEARCH: {
           const data = event.data as WebSearchData;
           return createSegments([
-            { field: "response", text: data.query },
-            { field: "error", text: data.error },
+            { field: "toolLabel", text: getWebSearchLabel(data) },
+            {
+              field: "toolContent",
+              text: getToolResultText(getWebSearchToolResult(data)),
+            },
           ]);
         }
         case CLI_EVENT_TYPES.TOOL_CALL: {

@@ -11,6 +11,7 @@ import {
   type AskUserQuestionEntry,
   type AskUserQuestionOption,
   type TokenUsage,
+  type WebSearchData,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -229,6 +230,24 @@ export function mapOpenCodeToolPartToCliEvent(
     default: {
       const mcpHint = findOpenCodeMcpToolHint(toolName, attachedMcpServerIds);
       const classification = CliEventMapper.classifyTool(toolName, mcpHint);
+      if (classification.type === CLI_EVENT_TYPES.WEB_SEARCH) {
+        const results = isCompleted ? parseOpenCodeWebResults(output) : [];
+        return {
+          type: CLI_EVENT_TYPES.WEB_SEARCH,
+          timestamp,
+          data: {
+            query: typeof input.query === "string" ? input.query : "",
+            toolCallId: part.callID,
+            ...(results.length > 0
+              ? { results }
+              : isCompleted && typeof output === "string"
+                ? { output }
+                : {}),
+            ...(isCompleted ? { success: true } : {}),
+            ...(isFailed ? { success: false, error } : {}),
+          } as WebSearchData,
+        };
+      }
       if (classification.type === CLI_EVENT_TYPES.MCP_TOOL_CALL) {
         return {
           type: classification.type,
@@ -273,6 +292,42 @@ export function mapOpenCodeToolPartToCliEvent(
       };
     }
   }
+}
+
+/**
+ * OpenCode's websearch output is JSON: `results[]` of `{ url, title,
+ * excerpts[] }`. Each becomes a source with its first excerpt as the snippet;
+ * anything else yields none, and the raw output is shown instead.
+ */
+function parseOpenCodeWebResults(
+  output: unknown
+): NonNullable<WebSearchData["results"]> {
+  let parsed: unknown = output;
+  if (typeof output === "string") {
+    try {
+      parsed = JSON.parse(output);
+    } catch {
+      return [];
+    }
+  }
+  const results = (parsed as { results?: unknown } | null)?.results;
+  if (!Array.isArray(results)) return [];
+  return results.flatMap((result) => {
+    const item = result as {
+      url?: unknown;
+      title?: unknown;
+      excerpts?: unknown;
+    };
+    if (typeof item?.url !== "string") return [];
+    const excerpt = Array.isArray(item.excerpts) ? item.excerpts[0] : undefined;
+    return [
+      {
+        title: typeof item.title === "string" ? item.title : item.url,
+        url: item.url,
+        ...(typeof excerpt === "string" ? { snippet: excerpt.trim() } : {}),
+      },
+    ];
+  });
 }
 
 /** Resolve OpenCode's `<server>_<tool>` name using only execution-attached ids. */

@@ -11,6 +11,7 @@ import type {
   HarnessId,
   McpCallVia,
   TokenTotalConfidence,
+  WebSearchAction,
 } from "./DashboardConstants";
 
 export type { CliEventType };
@@ -539,8 +540,14 @@ export interface McpToolCallData {
  * Data for a web search operation.
  */
 export interface WebSearchData {
-  /** Search query */
+  /** Search query; for `findInPage`, the text searched for. Empty when only `url` applies. */
   query: string;
+  /** What the call did; absent means a web search. */
+  action?: WebSearchAction;
+  /** Page opened or searched, for the `openPage`/`findInPage` actions. */
+  url?: string;
+  /** Result text the harness returned to the model, when it reports one. */
+  output?: string;
   /** Search results (optional) */
   results?: Array<{
     title: string;

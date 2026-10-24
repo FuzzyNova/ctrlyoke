@@ -47,6 +47,7 @@ import {
 } from "./diffUtils";
 import { redactPreviewText } from "@root/types/PreviewRedactor";
 import { formatMcpToolLabel } from "@root/utils/formatMcpToolLabel";
+import { getWebSearchLabel } from "@root/utils/WebSearchText";
 import { useSettingsStore } from "@store/settingsStore";
 import {
   extractKeyParameters,
@@ -302,12 +303,20 @@ function renderStructuredEventsToMarkdown(
 
       case CLI_EVENT_TYPES.WEB_SEARCH: {
         const data = event.data as WebSearchData;
-        lines.push(`● Web search: "${data.query}"`);
-        for (const result of data.results ?? []) {
-          lines.push(`- [${result.title}](${result.url})`);
-          if (result.snippet) lines.push(`  ${result.snippet}`);
+        lines.push(`● ${getWebSearchLabel(data)}`);
+        if (data.output || data.error) {
+          lines.push(
+            formatToolResultForMarkdown({
+              success: !data.error,
+              output: data.output,
+              error: data.error,
+            })
+          );
         }
-        if (data.error) lines.push(`  Error: ${data.error}`);
+        for (const source of data.results ?? []) {
+          lines.push(`- [${source.title}](${source.url})`);
+          if (source.snippet) lines.push(`  ${source.snippet}`);
+        }
         lines.push("");
         break;
       }

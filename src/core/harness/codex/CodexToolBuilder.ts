@@ -13,10 +13,12 @@ import {
   TextData,
   McpToolCallData,
   UnifiedDiffHunk,
+  WebSearchData,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
+  WEB_SEARCH_ACTIONS,
 } from "../../../types/DashboardConstants";
 import { CliEventMapper } from "../shared/CliEventMapper";
 import { ApplyPatchParser } from "../shared/ApplyPatchParser";
@@ -30,6 +32,8 @@ import {
   CODEX_EXEC_OPERATION_KINDS,
   CODEX_TOOL_NAMES,
   CODEX_TODO_ITEM_STATUS,
+  CODEX_WEB_SEARCH_ACTION_TYPES,
+  CODEX_WEB_SEARCH_STATUSES,
 } from "./CodexProtocolConstants";
 
 type CodexExecOperation =
@@ -58,7 +62,8 @@ type CodexExecOperation =
  * Event types that need toolCallMap registration (i.e. they have a matching
  * COMPLETED event format that references the same call_id).
  *
- * WEB_SEARCH is point-in-time — no separate completion event arrives for it.
+ * WEB_SEARCH is point-in-time — `buildWebSearchCallEvent` builds it already
+ * finished, from the one `web_search_call` record Codex writes.
  * TOOL_CALL (generic fallback) also has no tracked completion. BASH, FILE_*,
  * MCP_TOOL_CALL, and request_user_input have matching output events.
  */
@@ -90,6 +95,61 @@ const TYPES_WITH_COMPLETION = new Set<string>([
  */
 export class CodexToolBuilder {
   private static readonly REQUEST_USER_INPUT_TOOL_NAME = "request_user_input";
+
+  // ── LOG FORMAT: BUILT-IN WEB SEARCH ───────────────────────────────────────
+
+  /**
+   * Build the WEB_SEARCH event for a `web_search_call` response_item. Codex
+   * logs only the finished call (no start record) and never the result text,
+   * which goes straight to the model. `action` is a search (`query`, or
+   * several `queries`), an `open_page` (`url`) or a `find_in_page`
+   * (`pattern` within `url`); a call naming none of those has nothing to show.
+   */
+  static buildWebSearchCallEvent(
+    payload: Record<string, unknown>,
+    timestamp: number
+  ): CliEvent | undefined {
+    const action = (payload.action ?? {}) as Record<string, unknown>;
+    const str = (value: unknown) =>
+      typeof value === "string" && value ? value : undefined;
+    const url = str(action.url);
+    const queries = Array.isArray(action.queries)
+      ? action.queries.filter((query): query is string => !!str(query))
+      : [];
+    let data: WebSearchData;
+    switch (action.type) {
+      case CODEX_WEB_SEARCH_ACTION_TYPES.OPEN_PAGE:
+        if (!url) return undefined;
+        data = { query: "", action: WEB_SEARCH_ACTIONS.OPEN_PAGE, url };
+        break;
+      case CODEX_WEB_SEARCH_ACTION_TYPES.FIND_IN_PAGE: {
+        const pattern = str(action.pattern);
+        if (!pattern) return undefined;
+        data = {
+          query: pattern,
+          action: WEB_SEARCH_ACTIONS.FIND_IN_PAGE,
+          ...(url ? { url } : {}),
+        };
+        break;
+      }
+      default: {
+        const query = str(action.query) ?? queries.join(" | ");
+        if (!query) return undefined;
+        data = { query };
+      }
+    }
+    const failed = payload.status === CODEX_WEB_SEARCH_STATUSES.FAILED;
+    return {
+      type: CLI_EVENT_TYPES.WEB_SEARCH,
+      timestamp,
+      data: {
+        ...data,
+        success: !failed,
+        ...(failed ? { error: "Web search failed" } : {}),
+        ...(str(payload.id) ? { toolCallId: str(payload.id) } : {}),
+      } as WebSearchData,
+    };
+  }
 
   // ── LOG FORMAT: INITIATED ─────────────────────────────────────────────────
 

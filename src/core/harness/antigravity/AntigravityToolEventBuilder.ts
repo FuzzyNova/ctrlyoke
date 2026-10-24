@@ -208,11 +208,11 @@ export class AntigravityToolEventBuilder {
           data: {
             query,
             results: this.parseWebSources(resultText),
-            summary: this.webSummary(resultText),
+            output: this.webSummary(resultText),
             success,
             error,
             toolCallId: mapping.toolCallId,
-          } as WebSearchData & { summary?: string },
+          } as WebSearchData,
         },
       ];
     }
@@ -795,8 +795,16 @@ export class AntigravityToolEventBuilder {
     return sources.length > 0 ? sources : undefined;
   }
 
+  /**
+   * The answer before its `Sources:` list, without the `Created At:` /
+   * `Completed At:` lines Antigravity puts first (the row already has the
+   * search's timing).
+   */
   private static webSummary(text: string): string | undefined {
-    const summary = text.split(/\r?\n\s*Sources\s*:/i)[0]?.trim();
+    const summary = text
+      .replace(/^(?:(?:Created|Completed) At:[^\n]*\r?\n)+/, "")
+      .split(/\r?\n\s*Sources\s*:/i)[0]
+      ?.trim();
     return summary || undefined;
   }
 

@@ -139,6 +139,12 @@ step's output, are shown as a summary of what happened. Click **Raw** on one to
 see the underlying call and its result. See [Dynamic workflows](/workflows/dynamic-workflows)
 and [MCP tools](/reference/mcp-tools).
 
+A web search made with the harness's own search tool reads **Web search:**
+followed by the query, and **Show full output** shows the answer and the sources
+the harness reported. Codex's web tool can also open a page (**Open page:**) or
+search within one (**Find in page:**); Codex does not record what those
+returned, so their rows show only the heading.
+
 Each subagent call has a dedicated **Subagent:** card showing the agent, its
 live progress, the prompt it was given (click **Hide prompt** to collapse it),
 and the final result. A background agent's report appears with its own activity

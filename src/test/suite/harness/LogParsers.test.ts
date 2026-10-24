@@ -40,6 +40,7 @@ import {
   HARNESS_IDS,
   OPERATION_STATUS,
   TOKEN_TOTAL_CONFIDENCE,
+  WEB_SEARCH_ACTIONS,
 } from "../../../types/DashboardConstants";
 import {
   BaseCliEvent,
@@ -1086,6 +1087,55 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(response.metadata.usage!.inputTokens, 100);
       assert.strictEqual(response.metadata.usage!.outputTokens, 50);
       assert.strictEqual(response.metadata.usage!.totalTokens, 150);
+    });
+
+    test("maps WebSearch to a web search row carrying its result text", () => {
+      const resultText =
+        'Web search results for query: "vitest version"\n\nLinks: [{"title":"vitest - npm","url":"https://www.npmjs.com/package/vitest"}]\n\nThe latest version is 5.0.5.';
+      const events = [
+        {
+          type: "assistant",
+          message: {
+            content: [
+              {
+                type: "tool_use",
+                id: "toolu_ws",
+                name: "WebSearch",
+                input: { query: "vitest version" },
+              },
+            ],
+          },
+        },
+        {
+          type: "user",
+          message: {
+            role: "user",
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "toolu_ws",
+                content: resultText,
+              },
+            ],
+          },
+        },
+      ];
+
+      const normalized = normalizeCliEvents(
+        parser.extractResponse(events).events
+      );
+
+      assert.deepStrictEqual(
+        normalized.map((event) => event.type),
+        [CLI_EVENT_TYPES.WEB_SEARCH]
+      );
+      assert.deepStrictEqual(normalized[0].data, {
+        query: "vitest version",
+        toolCallId: "toolu_ws",
+        output: resultText,
+        success: true,
+        error: undefined,
+      });
     });
 
     test("should handle multiple content blocks (text, thinking, tool calls)", () => {
@@ -3537,6 +3587,90 @@ suite("CopilotLogParser", () => {
       );
       assert.strictEqual(response.metadata.sessionId, "copilot-session-123");
       assert.strictEqual(response.metadata.model, "gpt-5");
+    });
+
+    test("maps the built-in web_search to one web search row with its answer and sources", () => {
+      // Shape captured from Copilot CLI: the search is served by the built-in
+      // GitHub MCP server under its bare name, and the result content is an
+      // output_text object written twice.
+      const answer = {
+        annotations: null,
+        bing_searches: [{ text: "vitest latest release version" }],
+        text: {
+          annotations: [
+            {
+              url_citation: {
+                title: "Vitest releases",
+                url: "https://github.com/vitest-dev/vitest/releases",
+              },
+            },
+            {
+              url_citation: {
+                title: "vitest - npm",
+                url: "https://www.npmjs.com/package/vitest",
+              },
+            },
+            {
+              url_citation: {
+                title: "Vitest releases",
+                url: "https://github.com/vitest-dev/vitest/releases",
+              },
+            },
+          ],
+          value:
+            "The latest release of Vitest is 5.0.5【3:7†source】【3:2†source】.",
+        },
+        type: "output_text",
+      };
+      const events = [
+        {
+          type: "tool.execution_start",
+          data: {
+            toolCallId: "call_ws",
+            toolName: "web_search",
+            arguments: { query: "vitest latest release version" },
+            mcpServerName: "github-mcp-server",
+            mcpConfigServerName: "github-mcp-server",
+            mcpConfigSource: "builtin",
+            mcpToolName: "web_search",
+          },
+          timestamp: "2026-10-24T15:06:10.467Z",
+        },
+        {
+          type: "tool.execution_complete",
+          data: {
+            toolCallId: "call_ws",
+            success: true,
+            result: {
+              content: `${JSON.stringify(answer)}\n\n${JSON.stringify(answer)}`,
+            },
+          },
+          timestamp: "2026-10-24T15:06:14.000Z",
+        },
+      ];
+
+      const normalized = normalizeCliEvents(
+        parser.extractResponse(events as unknown as BaseCliEvent[]).events
+      );
+
+      assert.deepStrictEqual(
+        normalized.map((event) => event.type),
+        [CLI_EVENT_TYPES.WEB_SEARCH]
+      );
+      const search = normalized[0].data as WebSearchData;
+      assert.strictEqual(search.query, "vitest latest release version");
+      assert.strictEqual(search.success, true);
+      assert.strictEqual(
+        search.output,
+        "The latest release of Vitest is 5.0.5."
+      );
+      assert.deepStrictEqual(search.results, [
+        {
+          title: "Vitest releases",
+          url: "https://github.com/vitest-dev/vitest/releases",
+        },
+        { title: "vitest - npm", url: "https://www.npmjs.com/package/vitest" },
+      ]);
     });
 
     test("should extract tool requests from assistant messages", () => {
@@ -6043,6 +6177,110 @@ suite("CodexLogParser", () => {
         output.events.some(
           (event) => event.type === CLI_EVENT_TYPES.BASH_COMMAND
         )
+      );
+    });
+
+    test("maps built-in web_search_call items to web search rows in both parse paths", () => {
+      // Real rollout records: a search, a multi-query search, a page open, a
+      // find-in-page, and a page open with no URL (nothing to show). Newer
+      // Codex also writes each call as an item_completed WebSearch item,
+      // which must not add a second row.
+      const records = [
+        {
+          type: "event_msg",
+          payload: {
+            type: "item_completed",
+            item: {
+              type: "WebSearch",
+              id: "ws_1",
+              query: "weather: Austin, TX",
+              action: { type: "search", query: "weather: Austin, TX" },
+            },
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "web_search_call",
+            id: "ws_1",
+            status: "completed",
+            action: {
+              type: "search",
+              query: "weather: Austin, TX",
+              queries: ["weather: Austin, TX"],
+            },
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "web_search_call",
+            status: "completed",
+            action: { type: "search", queries: ["codemirror 6", "lsp client"] },
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "web_search_call",
+            status: "completed",
+            action: { type: "open_page", url: "https://example.test/docs" },
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "web_search_call",
+            status: "failed",
+            action: {
+              type: "find_in_page",
+              url: "https://example.test/docs",
+              pattern: "restartExtensionHost",
+            },
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "web_search_call",
+            status: "completed",
+            action: { type: "open_page" },
+          },
+        },
+      ];
+      const expected = [
+        { query: "weather: Austin, TX", success: true, toolCallId: "ws_1" },
+        { query: "codemirror 6 | lsp client", success: true },
+        {
+          query: "",
+          action: WEB_SEARCH_ACTIONS.OPEN_PAGE,
+          url: "https://example.test/docs",
+          success: true,
+        },
+        {
+          query: "restartExtensionHost",
+          action: WEB_SEARCH_ACTIONS.FIND_IN_PAGE,
+          url: "https://example.test/docs",
+          success: false,
+          error: "Web search failed",
+        },
+      ];
+      const searches = (events: CliEvent[]) =>
+        events
+          .filter((event) => event.type === CLI_EVENT_TYPES.WEB_SEARCH)
+          .map((event) => event.data);
+
+      assert.deepStrictEqual(
+        searches(parser.extractResponse(records).events),
+        expected
+      );
+      assert.deepStrictEqual(
+        searches(
+          records.flatMap((record) =>
+            new CodexLogParser().extractStructuredEventsFromEvent(record)
+          )
+        ),
+        expected
       );
     });
   });

@@ -1622,7 +1622,7 @@ suite("AntigravityLogParser", () => {
           "Antigravity transcript parser"
         );
         assert.strictEqual(
-          (search?.data as { summary?: string }).summary,
+          (search?.data as { output?: string }).output,
           "Summary text"
         );
 

@@ -525,12 +525,15 @@ export class CopilotToolBuilder {
     }
 
     if (classifiedType === CLI_EVENT_TYPES.WEB_SEARCH) {
+      const answer = this.parseWebSearchAnswer(resultContent);
       return [
         {
           type: CLI_EVENT_TYPES.WEB_SEARCH,
           timestamp: Date.now(),
           data: {
             query: query || "",
+            output: answer?.text ?? resultContent,
+            ...(answer?.results.length ? { results: answer.results } : {}),
             success,
             error: errorMsg,
             toolCallId: completionData.toolCallId,
@@ -573,6 +576,53 @@ export class CopilotToolBuilder {
         } as ToolCall,
       },
     ];
+  }
+
+  /**
+   * Copilot's web_search result content is a JSON `output_text` object, its
+   * answer in `text.value` with `【n:m†source】` citation markers and the cited
+   * pages in `text.annotations[].url_citation`. Copilot writes the object
+   * twice, separated by a blank line, so only the first copy is parsed.
+   * Returns undefined for any other shape, leaving the raw content to show.
+   */
+  private static parseWebSearchAnswer(
+    content: string | undefined
+  ):
+    | { text: string; results: NonNullable<WebSearchData["results"]> }
+    | undefined {
+    if (!content) return undefined;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(content.split(/\n\n(?=\{)/)[0]);
+    } catch {
+      return undefined;
+    }
+    const text = (
+      parsed as { text?: { value?: unknown; annotations?: unknown } }
+    )?.text;
+    if (typeof text?.value !== "string") return undefined;
+    const results: NonNullable<WebSearchData["results"]> = [];
+    for (const annotation of Array.isArray(text.annotations)
+      ? text.annotations
+      : []) {
+      const citation = (
+        annotation as { url_citation?: { title?: unknown; url?: unknown } }
+      )?.url_citation;
+      if (
+        typeof citation?.url === "string" &&
+        !results.some((result) => result.url === citation.url)
+      ) {
+        results.push({
+          title:
+            typeof citation.title === "string" ? citation.title : citation.url,
+          url: citation.url,
+        });
+      }
+    }
+    return {
+      text: text.value.replace(/【[^】]*】/g, "").trim(),
+      results,
+    };
   }
 
   /**

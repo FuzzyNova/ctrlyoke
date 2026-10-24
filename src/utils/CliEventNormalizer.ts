@@ -308,6 +308,23 @@ function createPendingEvent(
   return undefined;
 }
 
+/**
+ * A tool event that already carries its outcome, so it completes the earlier
+ * event with the same call id instead of opening a row (Copilot and OpenCode
+ * report a call's start and its finish as two events of the same type).
+ */
+function isResultCarryingToolEvent(event: CliEvent): boolean {
+  switch (event.type) {
+    case CLI_EVENT_TYPES.TOOL_CALL:
+    case CLI_EVENT_TYPES.MCP_TOOL_CALL:
+      return !!(event.data as ToolCall | McpToolCallData).result;
+    case CLI_EVENT_TYPES.WEB_SEARCH:
+      return createPendingEvent(event, 0) === undefined;
+    default:
+      return false;
+  }
+}
+
 /** True when the event opens a slot that may be completed by a later event. */
 export function isOpenCliOperation(event: CliEvent): boolean {
   return createPendingEvent(event, 0) !== undefined;
@@ -612,6 +629,7 @@ function mergeInitiatedWithResult(
         ...event,
         data: {
           ...data,
+          output: data.output ?? result.output,
           success: result.success,
           error: result.success ? undefined : (result.error ?? result.output),
         } as WebSearchData,
@@ -699,6 +717,22 @@ function mergeCompletedData(
           toolCallId: initiatedData.toolCallId ?? completedData.toolCallId,
           result: completedData.result ?? initiatedData.result,
         } as McpToolCallData,
+      };
+    }
+    case CLI_EVENT_TYPES.WEB_SEARCH: {
+      const initiatedData = initiated.data as WebSearchData;
+      const completedData = completed.data as WebSearchData;
+      return {
+        ...completed,
+        timestamp: initiated.timestamp ?? completed.timestamp,
+        data: {
+          ...initiatedData,
+          ...completedData,
+          query: completedData.query || initiatedData.query,
+          output: completedData.output ?? initiatedData.output,
+          results: completedData.results ?? initiatedData.results,
+          toolCallId: initiatedData.toolCallId ?? completedData.toolCallId,
+        } as WebSearchData,
       };
     }
     case CLI_EVENT_TYPES.BASH_COMMAND: {
@@ -902,11 +936,7 @@ export class CliEventNormalizer {
         }
       }
 
-      if (
-        (event.type === CLI_EVENT_TYPES.TOOL_CALL ||
-          event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL) &&
-        (event.data as ToolCall | McpToolCallData).result
-      ) {
+      if (isResultCarryingToolEvent(event)) {
         const toolCallId = getToolCallId(event);
         if (toolCallId) {
           const pendingMatch = [...this.pending]

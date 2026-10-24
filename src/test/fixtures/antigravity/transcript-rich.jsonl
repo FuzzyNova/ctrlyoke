@@ -10,7 +10,7 @@
 {"step_index":13,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","created_at":"2026-07-26T20:00:09.000Z","tool_calls":[{"name":"call_mcp_tool","args":{"Target":"ctrlyoke/queue_status","Arguments":{"workflow":"demo"}}}]}
 {"step_index":6,"source":"MODEL","type":"GENERIC","status":"DONE","created_at":"2026-07-26T20:00:10.000Z","content":"queued: false"}
 {"step_index":14,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","created_at":"2026-07-26T20:00:11.000Z","tool_calls":[{"name":"search_web","args":{"SearchQuery":"Antigravity transcript parser"}}]}
-{"step_index":7,"source":"MODEL","type":"GENERIC","status":"DONE","created_at":"2026-07-26T20:00:12.000Z","content":"Summary text\nSources:\n1. https://example.com/antigravity"}
+{"step_index":7,"source":"MODEL","type":"GENERIC","status":"DONE","created_at":"2026-07-26T20:00:12.000Z","content":"Created At: 2026-07-26T15:00:11-05:00\nCompleted At: 2026-07-26T15:00:12-05:00\nSummary text\nSources:\n1. https://example.com/antigravity"}
 {"step_index":15,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","created_at":"2026-07-26T20:00:13.000Z","tool_calls":[{"name":"run_command","args":{"CommandLine":"Start-Sleep -Seconds 25","Cwd":"C:/workspace","WaitMsBeforeAsync":1000}}]}
 {"step_index":16,"source":"MODEL","type":"GENERIC","status":"RUNNING","created_at":"2026-07-26T20:00:14.000Z","content":"Tool is running as a background task with task id: session/task-1."}
 {"step_index":17,"source":"SYSTEM","type":"SYSTEM_MESSAGE","status":"DONE","created_at":"2026-07-26T20:00:15.000Z","content":"Task id \"session/task-1\" finished with result: failed (exit code 1)"}

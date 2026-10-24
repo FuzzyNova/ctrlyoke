@@ -81,3 +81,75 @@ suite("OpenCodeEventMapper MCP tool names", () => {
     assert.strictEqual(event?.type, CLI_EVENT_TYPES.TOOL_CALL);
   });
 });
+
+suite("OpenCodeEventMapper websearch", () => {
+  // Output shape captured from `opencode run` with the websearch tool.
+  const searchOutput = JSON.stringify({
+    search_id: "search_1",
+    results: [
+      {
+        url: "https://vitest.dev/blog/vitest-5.html",
+        title: "Vitest 5.0 is out!",
+        publish_date: null,
+        excerpts: ["  Vitest 5 has several breaking changes.  ", "more"],
+      },
+      { url: "https://releases.sh/vitest", title: "Overview", excerpts: [] },
+      { title: "no url" },
+    ],
+  });
+
+  test("maps a completed websearch to a web search with its sources", () => {
+    const event = mapOpenCodeToolPartToCliEvent(1000, {
+      tool: "websearch",
+      callID: "call_ws",
+      state: {
+        status: "completed",
+        input: { query: "vitest latest release version" },
+        output: searchOutput,
+      },
+    });
+
+    assert.strictEqual(event?.type, CLI_EVENT_TYPES.WEB_SEARCH);
+    assert.deepStrictEqual(event?.data, {
+      query: "vitest latest release version",
+      toolCallId: "call_ws",
+      results: [
+        {
+          title: "Vitest 5.0 is out!",
+          url: "https://vitest.dev/blog/vitest-5.html",
+          snippet: "Vitest 5 has several breaking changes.",
+        },
+        { title: "Overview", url: "https://releases.sh/vitest" },
+      ],
+      success: true,
+    });
+  });
+
+  test("keeps unparseable output as text and leaves a running search pending", () => {
+    const completed = mapOpenCodeToolPartToCliEvent(1000, {
+      tool: "websearch",
+      callID: "call_ws",
+      state: {
+        status: "completed",
+        input: { query: "q" },
+        output: "plain text answer",
+      },
+    });
+    const running = mapOpenCodeToolPartToCliEvent(1000, {
+      tool: "websearch",
+      callID: "call_ws",
+      state: { status: "running", input: { query: "q" } },
+    });
+
+    assert.deepStrictEqual(completed?.data, {
+      query: "q",
+      toolCallId: "call_ws",
+      output: "plain text answer",
+      success: true,
+    });
+    assert.deepStrictEqual(running?.data, {
+      query: "q",
+      toolCallId: "call_ws",
+    });
+  });
+});

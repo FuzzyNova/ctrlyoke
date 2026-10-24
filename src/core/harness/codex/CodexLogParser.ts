@@ -284,6 +284,7 @@ export class CodexLogParser extends BaseLogParser {
           codexEvent.payload?.type === CODEX_PAYLOAD_TYPES.CUSTOM_TOOL_CALL ||
           codexEvent.payload?.type ===
             CODEX_PAYLOAD_TYPES.CUSTOM_TOOL_CALL_OUTPUT ||
+          codexEvent.payload?.type === CODEX_PAYLOAD_TYPES.WEB_SEARCH_CALL ||
           codexEvent.payload?.type === CODEX_PAYLOAD_TYPES.TODO_LIST)
       );
     };
@@ -756,6 +757,9 @@ export class CodexLogParser extends BaseLogParser {
           });
         }
       }
+
+      const webSearch = this.mapWebSearchCall(event, timestamp);
+      if (webSearch) outputEvents.push(webSearch);
 
       // compacted → context window compaction event
       if (event.type === CODEX_EVENT_TYPES.COMPACTED) {
@@ -1582,6 +1586,21 @@ export class CodexLogParser extends BaseLogParser {
     this.subagentFollower.register(source);
   }
 
+  /**
+   * The built-in web tool's `response_item`. Newer Codex also writes the same
+   * call as an `item_completed` `WebSearch` item; only this record is read, so
+   * each call becomes one row in every Codex version.
+   */
+  private mapWebSearchCall(
+    e: CodexProviderEvent,
+    timestamp: number
+  ): CliEvent | undefined {
+    return e.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
+      e.payload?.type === CODEX_PAYLOAD_TYPES.WEB_SEARCH_CALL
+      ? CodexToolBuilder.buildWebSearchCallEvent(e.payload, timestamp)
+      : undefined;
+  }
+
   /** Map one log event to CliEvents, before reasoning grouping. */
   private mapStreamingEvent(e: CodexProviderEvent): CliEvent[] {
     const timestamp = e.timestamp
@@ -1703,6 +1722,12 @@ export class CodexLogParser extends BaseLogParser {
       e.payload?.type === CODEX_PAYLOAD_TYPES.PATCH_APPLY_END
     ) {
       this.applyPatchApplyEndPositions(e.payload, this.pendingStreamingCalls);
+      return results;
+    }
+
+    const webSearch = this.mapWebSearchCall(e, timestamp);
+    if (webSearch) {
+      results.push(webSearch);
       return results;
     }
 

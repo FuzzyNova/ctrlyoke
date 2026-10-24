@@ -35,7 +35,7 @@ export interface McpToolHint {
  * - File write: `write`, `write_file`, `create`, `create_file`
  * - File edit: `edit`, `edit_file`, `modify_file`, `replace_string_in_file`, `multiedit`, `apply_patch`
  * - File delete: `delete`, `delete_file`, `remove_file` (`rm` is a shell command → TOOL_CALL)
- * - Web search: `web_search`, `search` (`webfetch`/`web_fetch` take a URL → TOOL_CALL)
+ * - Web search: `web_search`, `search`, `google_web_search`, `websearch` (Claude, OpenCode) (`webfetch`/`web_fetch` take a URL → TOOL_CALL)
  * - MCP tools: `server(tool)` (Copilot), `server.tool` / `mcp_*` (Claude), `server__tool` (Codex)
  *
  * @example
@@ -102,6 +102,7 @@ export class CliEventMapper {
     "web_search",
     "search",
     "google_web_search",
+    "websearch",
   ]);
 
   /**

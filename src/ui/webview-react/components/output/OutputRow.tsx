@@ -88,6 +88,7 @@ import {
 import { formatMcpToolLabel } from "@root/utils/formatMcpToolLabel";
 import { getToolResultText } from "@root/utils/toolResultText";
 import { getFileReadHeaderText } from "@root/utils/FileReadHeaderText";
+import { getWebSearchLabel } from "@root/utils/WebSearchText";
 import { formatThinkingLabel } from "@root/utils/ThinkingBlockFormat";
 import {
   getOutputRowSearchSegments,
@@ -137,6 +138,7 @@ import { SUBAGENT_ROW_INDENT_PX } from "@utils/outputRows";
 import {
   getDisplayStructuredPatch,
   getSnapshotBeforeContent,
+  getToolCallBody,
   isRenderableStructuredEvent,
   isScriptOutput,
 } from "@utils/outputRenderUtils";
@@ -788,14 +790,11 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
     }
 
     let pendingToolCallExpand: ToolCallExpansionSection | null = null;
-    if (
-      isActiveRow &&
-      (event.type === CLI_EVENT_TYPES.TOOL_CALL ||
-        event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL)
-    ) {
-      const data = event.data as ToolCall | McpToolCallData;
+    const toolCallBody = isActiveRow ? getToolCallBody(event) : undefined;
+    if (toolCallBody) {
       const toolContentIsError =
-        !data.result?.success && typeof data.result?.error === "string";
+        !toolCallBody.result?.success &&
+        typeof toolCallBody.result?.error === "string";
       const expansion =
         row.toolCall?.expansion ?? DEFAULT_TOOL_CALL_EXPANSION_STATE;
       const sectionExpanded = toolContentIsError
@@ -812,7 +811,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       } else if (
         activeFindMatch?.field === OUTPUT_FIND_TOOL_CONTENT_FIELD &&
         isActiveMatchHidden(
-          getToolResultText(data.result),
+          getToolResultText(toolCallBody.result),
           getFieldMatches("toolContent"),
           sectionExpanded,
           collapsedToolOutputLineCount,
@@ -1172,28 +1171,28 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       }
       case CLI_EVENT_TYPES.WEB_SEARCH: {
         const data = event.data as WebSearchData;
+        // Same output/error split as the find segments; see TOOL_CALL below.
+        const toolContentMatches = getFieldMatches("toolContent");
+        const result = getToolCallBody(event)?.result;
+        const toolContentIsError =
+          !result?.success && typeof result?.error === "string";
         return (
           <WebSearchOutput
-            query={data.query}
-            success={data.success}
-            error={data.error}
-            queryContent={
-              <>
-                Web search: &ldquo;
-                {highlightText(
-                  data.query,
-                  getFieldMatches(HISTORY_MATCH_FIELDS.RESPONSE)
-                )}
-                &rdquo;
-              </>
+            data={data}
+            labelContent={highlightText(
+              getWebSearchLabel(data),
+              getFieldMatches("toolLabel")
+            )}
+            outputFindMatches={
+              toolContentIsError ? undefined : toolContentMatches
             }
-            errorContent={
-              data.error
-                ? highlightText(
-                    data.error,
-                    getFieldMatches(HISTORY_MATCH_FIELDS.ERROR)
-                  )
-                : undefined
+            errorFindMatches={
+              toolContentIsError ? toolContentMatches : undefined
+            }
+            expansion={row.toolCall?.expansion}
+            renderPlan={row.toolCall?.renderPlan}
+            onExpansionChange={(section, expanded) =>
+              onToolCallExpansionChange?.(row.key, section, expanded)
             }
           />
         );

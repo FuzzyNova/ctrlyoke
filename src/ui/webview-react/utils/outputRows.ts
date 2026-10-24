@@ -61,6 +61,7 @@ import {
   getCliTextForCopy,
   getOutputDiffKey,
   getRawTextOutput,
+  getToolCallBody,
   getVisibleStructuredEvents,
   isRenderableStructuredEvent,
   isScriptOutput,
@@ -1577,14 +1578,6 @@ function estimateStructuredTextHeight(
         data.error
       );
     }
-    case CLI_EVENT_TYPES.WEB_SEARCH: {
-      const data = row.event.data as { query?: string; error?: string };
-      return estimateTerminalSummaryHeight(
-        `Web search ${data.query ?? ""} ${data.error ?? ""}`.trim(),
-        outputContentWidth,
-        outputFontSize
-      );
-    }
     case CLI_EVENT_TYPES.TOOL_RESULT: {
       const data = row.event.data as {
         result?: { success: boolean; output?: string; error?: string };
@@ -1665,11 +1658,7 @@ function estimateBaseStructuredEventHeight(
   outputContentWidth: number | undefined,
   outputFontSize: number
 ): number {
-  if (
-    (row.event.type === CLI_EVENT_TYPES.TOOL_CALL ||
-      row.event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL) &&
-    row.toolCall
-  ) {
+  if (row.toolCall) {
     return estimateToolCallStructuredEventHeight(
       row,
       outputFontSize,
@@ -1704,17 +1693,14 @@ function estimateToolCallStructuredEventHeight(
   outputFontSize: number,
   outputContentWidth?: number
 ): number {
-  if (
-    (row.event.type !== CLI_EVENT_TYPES.TOOL_CALL &&
-      row.event.type !== CLI_EVENT_TYPES.MCP_TOOL_CALL) ||
-    !row.toolCall
-  ) {
+  const body = getToolCallBody(row.event);
+  if (!body || !row.toolCall) {
     return 64;
   }
 
-  const data = row.event.data as ToolCall | McpToolCallData;
   if (row.event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL) {
-    const resolved = resolveCtrlYokeToolView(data as McpToolCallData);
+    const data = row.event.data as McpToolCallData;
+    const resolved = resolveCtrlYokeToolView(data);
     if (resolved) {
       if (outputContentWidth == null && row.toolCall.customViewHeight != null) {
         return row.toolCall.customViewHeight;
@@ -1722,7 +1708,7 @@ function estimateToolCallStructuredEventHeight(
       return resolved.view.estimateHeight(
         resolved.params,
         resolved.result,
-        data as McpToolCallData,
+        data,
         row.toolCall.expansion,
         outputContentWidth == null
           ? undefined
@@ -1738,8 +1724,8 @@ function estimateToolCallStructuredEventHeight(
     return row.toolCall.renderPlan.totalHeight;
   }
   return estimateGenericToolCallHeight(
-    data.parameters,
-    data.result,
+    body.parameters,
+    body.result,
     row.toolCall.expansion,
     outputFontSize,
     outputContentWidth == null
@@ -2867,27 +2853,20 @@ export function buildOutputRows(
         diffStats && diffStats.added + diffStats.removed > 0
           ? diffKeyBase
           : null;
-      const toolCallExpansion =
-        visibleEvent.event.type === CLI_EVENT_TYPES.TOOL_CALL ||
-        visibleEvent.event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL
-          ? (input.toolCallExpansionState.get(rowKey) ??
-            DEFAULT_TOOL_CALL_EXPANSION_STATE)
-          : undefined;
-      const toolCallRenderPlan =
-        visibleEvent.event.type === CLI_EVENT_TYPES.TOOL_CALL ||
-        visibleEvent.event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL
-          ? buildToolCallRenderPlan({
-              parameters: (
-                visibleEvent.event.data as ToolCall | McpToolCallData
-              ).parameters,
-              result: (visibleEvent.event.data as ToolCall | McpToolCallData)
-                .result,
-              expansion: toolCallExpansion,
-              outputFontSize: input.outputFontSize,
-              outputContentWidth: toolCallContentWidth,
-              maxResultLines: collapsedToolOutputLineCount,
-            })
-          : undefined;
+      const toolCallBody = getToolCallBody(visibleEvent.event);
+      const toolCallExpansion = toolCallBody
+        ? (input.toolCallExpansionState.get(rowKey) ??
+          DEFAULT_TOOL_CALL_EXPANSION_STATE)
+        : undefined;
+      const toolCallRenderPlan = toolCallBody
+        ? buildToolCallRenderPlan({
+            ...toolCallBody,
+            expansion: toolCallExpansion,
+            outputFontSize: input.outputFontSize,
+            outputContentWidth: toolCallContentWidth,
+            maxResultLines: collapsedToolOutputLineCount,
+          })
+        : undefined;
       const customToolCallHeight =
         visibleEvent.event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL
           ? (() => {

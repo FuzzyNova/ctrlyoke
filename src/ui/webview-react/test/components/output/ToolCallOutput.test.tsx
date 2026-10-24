@@ -4,9 +4,11 @@ import userEvent from "@testing-library/user-event";
 import {
   GenericToolCallOutput,
   McpToolCallOutput,
+  WebSearchOutput,
 } from "@components/output/ToolCallOutput";
 import { buildToolCallRenderPlan } from "@utils/toolCallLayout";
 import { DEFAULT_COLLAPSED_OUTPUT_MAX_LINES } from "@utils/outputTruncation";
+import { WEB_SEARCH_ACTIONS } from "@root/types/DashboardConstants";
 
 describe("GenericToolCallOutput", () => {
   // 12-line fixtures: enough that the collapsed preview always hides more than
@@ -368,5 +370,73 @@ describe("McpToolCallOutput", () => {
     mark = container.querySelector("mark");
     expect(mark).toHaveTextContent("alpha");
     expect(mark).not.toHaveAttribute("data-find-active");
+  });
+});
+
+describe("WebSearchOutput", () => {
+  const answer = Array.from(
+    { length: 12 },
+    (_, index) => `line ${index + 1}`
+  ).join("\n");
+
+  it("shows the query as the heading and the answer in a collapsible section", async () => {
+    const user = userEvent.setup();
+    render(
+      <WebSearchOutput
+        data={{
+          query: "vitest version",
+          output: answer,
+          results: [{ title: "npm", url: "https://npmjs.com/vitest" }],
+          success: true,
+        }}
+      />
+    );
+
+    expect(
+      screen.getByText('Web search: "vitest version"')
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/https:\/\/npmjs\.com\/vitest/)).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Show full output" }));
+    expect(
+      screen.getByText(/https:\/\/npmjs\.com\/vitest/)
+    ).toBeInTheDocument();
+  });
+
+  it("shows only the heading while running or when the harness reports no text", () => {
+    const { container, rerender } = render(
+      <WebSearchOutput
+        data={{
+          query: "",
+          action: WEB_SEARCH_ACTIONS.OPEN_PAGE,
+          url: "https://example.test/docs",
+        }}
+      />
+    );
+    expect(
+      screen.getByText("Open page: https://example.test/docs")
+    ).toBeInTheDocument();
+
+    rerender(
+      <WebSearchOutput
+        data={{
+          query: "",
+          action: WEB_SEARCH_ACTIONS.OPEN_PAGE,
+          url: "https://example.test/docs",
+          success: true,
+        }}
+      />
+    );
+    // Status dot + heading; no output section and no "Success" filler.
+    expect(container.textContent).toBe("●Open page: https://example.test/docs");
+  });
+
+  it("shows a failure in the error section", () => {
+    render(
+      <WebSearchOutput
+        data={{ query: "q", success: false, error: "quota exceeded" }}
+      />
+    );
+    expect(screen.getByText("quota exceeded")).toBeInTheDocument();
   });
 });

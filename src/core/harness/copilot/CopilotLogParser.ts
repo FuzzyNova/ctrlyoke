@@ -8,7 +8,7 @@ import {
   UserEventClassification,
 } from "../shared/interfaces/ILogParser";
 import { CopilotToolBuilder } from "./CopilotToolBuilder";
-import type { McpToolHint } from "../shared/CliEventMapper";
+import { CliEventMapper, type McpToolHint } from "../shared/CliEventMapper";
 import { Log } from "../../../utils/Log";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import {
@@ -107,10 +107,20 @@ type CopilotPendingTool = {
 };
 
 function getCopilotMcpHint(
-  data: CopilotMcpToolIdentity
+  data: CopilotMcpToolIdentity & { toolName?: string }
 ): McpToolHint | undefined {
   const server = data.mcpServerName ?? data.mcpConfigServerName;
   const tool = data.mcpToolName;
+  // Copilot serves its own web search from the built-in GitHub MCP server
+  // under the bare tool name (user MCP tools arrive as `<server>-<tool>`).
+  // That is the harness's web search, so it keeps its web search row.
+  if (
+    typeof tool === "string" &&
+    data.toolName === tool &&
+    CliEventMapper.classifyTool(tool).type === CLI_EVENT_TYPES.WEB_SEARCH
+  ) {
+    return undefined;
+  }
   return typeof server === "string" &&
     server.length > 0 &&
     typeof tool === "string" &&

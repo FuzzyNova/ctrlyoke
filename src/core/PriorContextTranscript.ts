@@ -89,6 +89,8 @@ export type PriorContextTranscriptEntry =
   | (EntryBase & {
       kind: typeof PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.SEARCH;
       query: string;
+      url?: string;
+      output?: PriorContextText;
       results: NonNullable<WebSearchData["results"]>;
       failed?: true;
     })
@@ -356,6 +358,16 @@ function projectEvent(
       return {
         kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.SEARCH,
         query: data.query,
+        ...(data.url ? { url: data.url } : {}),
+        ...(data.output
+          ? {
+              output: boundPriorContextText(
+                data.output,
+                PRIOR_CONTEXT_LIMITS.TOOL_RESULT_TAIL_BYTES,
+                PRIOR_CONTEXT_TRUNCATION.TAIL
+              ),
+            }
+          : {}),
         results: data.results ?? [],
         ...(data.success === false || !!data.error ? { failed: true } : {}),
       };

@@ -39,6 +39,21 @@ export const CODEX_PAYLOAD_TYPES = {
   FUNCTION_CALL_OUTPUT: "function_call_output",
   CUSTOM_TOOL_CALL: "custom_tool_call",
   CUSTOM_TOOL_CALL_OUTPUT: "custom_tool_call_output",
+  /** Built-in web tool call; its result goes to the model, not the log. */
+  WEB_SEARCH_CALL: "web_search_call",
+} as const;
+
+/** `action.type` values on a `web_search_call` response item. */
+export const CODEX_WEB_SEARCH_ACTION_TYPES = {
+  SEARCH: "search",
+  OPEN_PAGE: "open_page",
+  FIND_IN_PAGE: "find_in_page",
+} as const;
+
+/** `status` values on a `web_search_call` response item. */
+export const CODEX_WEB_SEARCH_STATUSES = {
+  COMPLETED: "completed",
+  FAILED: "failed",
 } as const;
 
 export const CODEX_ITEM_TYPES = {

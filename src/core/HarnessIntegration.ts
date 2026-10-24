@@ -374,7 +374,7 @@ function renderPriorContextEntry(entry: PriorContextTranscriptEntry): string {
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TOOL:
       return `<tool name="${escapeXmlAttribute(entry.name)}"${failed}>\n<arguments${omittedAttributes(entry.arguments)}>\n${entry.arguments.text}\n</arguments>\n<output${omittedAttributes(entry.result)}>\n${entry.result.text}\n</output>\n</tool>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.SEARCH:
-      return `<search query="${escapeXmlAttribute(entry.query)}"${failed}>\n${entry.results.map((result) => `${result.title ?? ""} ${result.url ?? ""}`.trim()).join("\n")}\n</search>`;
+      return `<search query="${escapeXmlAttribute(entry.query)}"${entry.url ? ` url="${escapeXmlAttribute(entry.url)}"` : ""}${failed}>\n${entry.output ? `<output${omittedAttributes(entry.output)}>\n${entry.output.text}\n</output>\n` : ""}${entry.results.map((result) => `${result.title ?? ""} ${result.url ?? ""}`.trim()).join("\n")}\n</search>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.QUESTION:
       return `<question${failed}>\n${JSON.stringify({ questions: entry.questions, declined: entry.declined })}\n</question>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.USER_STEER:

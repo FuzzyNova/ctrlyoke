@@ -4276,6 +4276,18 @@ export const CLI_EVENT_TYPES = {
   CONTEXT_WINDOW_SYNC: "contextWindowSync",
 } as const;
 
+/**
+ * What a `WEB_SEARCH` event did. Absent means a search; Codex's built-in web
+ * tool also opens a page or searches within one, recorded on the same event.
+ */
+export const WEB_SEARCH_ACTIONS = {
+  SEARCH: "search",
+  OPEN_PAGE: "openPage",
+  FIND_IN_PAGE: "findInPage",
+} as const;
+export type WebSearchAction =
+  (typeof WEB_SEARCH_ACTIONS)[keyof typeof WEB_SEARCH_ACTIONS];
+
 /** Text projection used when copying or displaying a step's output. */
 export const StepOutputTextMode = {
   ASSISTANT: "assistant",

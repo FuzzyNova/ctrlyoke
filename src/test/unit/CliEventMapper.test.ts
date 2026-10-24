@@ -103,9 +103,20 @@ suite("CliEventMapper", () => {
 
     // ── WEB_SEARCH ────────────────────────────────────────────────────────────
 
-    test("web_search → WEB_SEARCH", () => {
-      const result = CliEventMapper.classifyTool("web_search");
-      assert.strictEqual(result.type, CLI_EVENT_TYPES.WEB_SEARCH);
+    test("every harness's built-in search tool → WEB_SEARCH", () => {
+      // Copilot/Codex/Qwen, Antigravity's Gemini name, Claude, OpenCode.
+      for (const name of [
+        "web_search",
+        "google_web_search",
+        "WebSearch",
+        "websearch",
+      ]) {
+        assert.strictEqual(
+          CliEventMapper.classifyTool(name).type,
+          CLI_EVENT_TYPES.WEB_SEARCH,
+          name
+        );
+      }
     });
 
     test("page fetch tools → TOOL_CALL, not WEB_SEARCH", () => {

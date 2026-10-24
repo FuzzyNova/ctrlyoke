@@ -99,12 +99,14 @@ export function truncateCliEventTextFields(
       break;
     }
     case CLI_EVENT_TYPES.WEB_SEARCH: {
-      truncateStringProperty(
-        event.data,
-        "query",
-        maxTextLength,
-        onStringTruncated
-      );
+      for (const key of ["query", "output", "error"] as const) {
+        truncateStringProperty(
+          event.data,
+          key,
+          maxTextLength,
+          onStringTruncated
+        );
+      }
       const results = (event.data as { results?: unknown }).results;
       if (Array.isArray(results)) {
         for (const result of results) {

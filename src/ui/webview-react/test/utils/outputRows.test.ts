@@ -220,6 +220,62 @@ describe("outputRows", () => {
     expect(children[7].subagent?.showLabel).toBe(true);
   });
 
+  it("gives a web search row the tool-call layout for its result", () => {
+    const rows = buildOutputRows({
+      allMessages: [
+        {
+          type: "cli",
+          target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+          timestamp: 1000,
+          attemptIndex: 0,
+          runIndex: 0,
+          data: {
+            structured: {
+              events: [
+                {
+                  type: CLI_EVENT_TYPES.WEB_SEARCH,
+                  data: {
+                    query: "vitest",
+                    output: Array.from({ length: 40 }, (_, i) => `l${i}`).join(
+                      "\n"
+                    ),
+                    success: true,
+                  },
+                },
+              ],
+              metadata: {},
+            },
+            elapsed: 1,
+            isStreaming: false,
+          },
+        },
+      ],
+      steps,
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+    }).rows.filter((row) => row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT);
+
+    expect(rows).toHaveLength(1);
+    const toolCall =
+      rows[0].rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT
+        ? rows[0].toolCall
+        : undefined;
+    expect(toolCall?.renderPlan.output.canToggle).toBe(true);
+    expect(toolCall?.renderPlan.output.isExpanded).toBe(false);
+  });
+
   it("builds no row for an event that renders nothing, so the subagent label lands on drawn content", () => {
     const subagent = { parentToolCallId: "spawn", agentId: "a" };
     const rows = buildOutputRows({

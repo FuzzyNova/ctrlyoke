@@ -699,6 +699,48 @@ suite("CliEventNormalizer", () => {
     assert.strictEqual(beta.error, undefined);
   });
 
+  test("folds a web search's finish into its start and keeps the parsed answer", () => {
+    // Copilot: a start, a finish with the parsed answer, then the raw result.
+    const events: CliEvent[] = [
+      {
+        type: CLI_EVENT_TYPES.WEB_SEARCH,
+        timestamp: 1,
+        data: { query: "vitest", toolCallId: "call_ws" } as WebSearchData,
+      },
+      {
+        type: CLI_EVENT_TYPES.WEB_SEARCH,
+        timestamp: 2,
+        data: {
+          query: "vitest",
+          toolCallId: "call_ws",
+          output: "Vitest 5.0.5",
+          results: [{ title: "npm", url: "https://npmjs.com/vitest" }],
+          success: true,
+        } as WebSearchData,
+      },
+      {
+        type: CLI_EVENT_TYPES.TOOL_RESULT,
+        timestamp: 3,
+        data: {
+          toolCallId: "call_ws",
+          result: { success: true, output: '{"type":"output_text"}' },
+        },
+      },
+    ];
+
+    const normalized = normalizeCliEvents(events);
+
+    assert.strictEqual(normalized.length, 1);
+    assert.strictEqual(normalized[0].timestamp, 1);
+    assert.deepStrictEqual(normalized[0].data, {
+      query: "vitest",
+      toolCallId: "call_ws",
+      output: "Vitest 5.0.5",
+      results: [{ title: "npm", url: "https://npmjs.com/vitest" }],
+      success: true,
+    });
+  });
+
   test("pairs same-text commands running in parallel by their own call ids", () => {
     const initiated = (toolCallId: string, timestamp: number): CliEvent => ({
       type: CLI_EVENT_TYPES.BASH_COMMAND,

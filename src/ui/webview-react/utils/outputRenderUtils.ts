@@ -6,12 +6,19 @@ import {
 import { expandFromRawCode } from "react-diff-view";
 import type { HunkData, ViewType } from "react-diff-view";
 import { isRenderableThinkingBlock } from "@root/utils/ThinkingBlockFormat";
+import {
+  getWebSearchToolResult,
+  hasWebSearchTarget,
+} from "@root/utils/WebSearchText";
 import type {
   CliEvent,
   CliOutput as CliOutputType,
   FileEditData,
   McpToolCallData,
   ThinkingBlock,
+  ToolCall,
+  ToolResult,
+  WebSearchData,
 } from "../types/cliEvents";
 import { CLI_EVENT_TYPES, FINAL_STEP_PHASES } from "../types/messages";
 import type { WorkspaceSnapshot } from "@root/types/OutputHistoryTypes";
@@ -116,6 +123,31 @@ export function getRawTextOutput(output: CliOutputType): boolean {
   return !!output.rawTextOutput || !!output.structured?.metadata?.rawTextOutput;
 }
 
+/** What the shared tool-call body lays out: collapsible parameters and result. */
+export interface ToolCallBody {
+  parameters?: Record<string, unknown>;
+  result?: ToolResult;
+}
+
+/**
+ * The tool-call body of an event that renders one, which also gives its row
+ * the tool-call expansion state and layout plan. A web search has no
+ * parameters to show (its query is the heading), only its result.
+ */
+export function getToolCallBody(event: CliEvent): ToolCallBody | undefined {
+  switch (event.type) {
+    case CLI_EVENT_TYPES.TOOL_CALL:
+    case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
+      const data = event.data as ToolCall | McpToolCallData;
+      return { parameters: data.parameters, result: data.result };
+    }
+    case CLI_EVENT_TYPES.WEB_SEARCH:
+      return { result: getWebSearchToolResult(event.data as WebSearchData) };
+    default:
+      return undefined;
+  }
+}
+
 /**
  * Whether `OutputRow` draws anything for a structured event. `buildOutputRows`
  * builds no row for an event that fails this, so an empty event cannot claim
@@ -139,7 +171,7 @@ export function isRenderableStructuredEvent(event: CliEvent): boolean {
       return !!data.server && !!data.tool;
     }
     case CLI_EVENT_TYPES.WEB_SEARCH:
-      return !!(event.data as { query?: string }).query;
+      return hasWebSearchTarget(event.data as WebSearchData);
     case CLI_EVENT_TYPES.TOOL_CALL:
       return !!(event.data as { name?: string }).name;
     case CLI_EVENT_TYPES.TOOL_RESULT:

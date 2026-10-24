@@ -303,6 +303,8 @@ export class HistoryCandidateExtractor {
       case CLI_EVENT_TYPES.WEB_SEARCH: {
         const data = event.data as {
           query?: unknown;
+          url?: unknown;
+          output?: unknown;
           results?: Array<{ title?: string; snippet?: string; url?: string }>;
         };
         candidates.push(
@@ -310,6 +312,16 @@ export class HistoryCandidateExtractor {
             HISTORY_EVENT_KINDS.WEB_SEARCH,
             HISTORY_MATCH_FIELDS.COMMAND,
             this.getStringValue(data.query)
+          ),
+          ...this.toCandidate(
+            HISTORY_EVENT_KINDS.WEB_SEARCH,
+            HISTORY_MATCH_FIELDS.COMMAND,
+            this.getStringValue(data.url)
+          ),
+          ...this.toCandidate(
+            HISTORY_EVENT_KINDS.WEB_SEARCH,
+            HISTORY_MATCH_FIELDS.CONTENT,
+            this.getStringValue(data.output)
           )
         );
         for (const result of data.results ?? []) {

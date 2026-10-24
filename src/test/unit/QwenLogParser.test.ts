@@ -5,6 +5,8 @@ import * as path from "path";
 import { QwenLogParser } from "../../core/harness/qwen/QwenLogParser";
 import type { BaseCliEvent } from "../../core/harness/shared/interfaces/ILogParser";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
+import { normalizeCliEvents } from "../../utils/CliEventNormalizer";
+import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
 
 const FIXTURE_ROOT = path.resolve(__dirname, "../../../src/test/fixtures/qwen");
 
@@ -364,5 +366,28 @@ suite("QwenLogParser session discovery", () => {
       ),
       sessionPath
     );
+  });
+});
+
+suite("QwenLogParser web search", () => {
+  test("pairs web_search with its result text by call id", () => {
+    const output =
+      'Web search results for "vitest version" (via DashScope):\n\n1. **Vitest**\n   Source: https://vitest.dev';
+    const events = new QwenLogParser().extractResponse([
+      functionCall("call_ws", "web_search", { query: "vitest version" }),
+      toolResult("call_ws", "web_search", output),
+    ]).events;
+
+    const searches = normalizeCliEvents(events).filter(
+      (event) => event.type === CLI_EVENT_TYPES.WEB_SEARCH
+    );
+    assert.strictEqual(searches.length, 1);
+    assert.deepStrictEqual(searches[0].data, {
+      query: "vitest version",
+      toolCallId: "call_ws",
+      output,
+      success: true,
+      error: undefined,
+    });
   });
 });

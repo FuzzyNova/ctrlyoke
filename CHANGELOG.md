@@ -38,6 +38,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Web searches show what they found, on every harness.** A web search row now
+  shows the query as its heading, with the answer and sources in the same
+  collapsible output as other tool calls. Searches from Claude and OpenCode
+  previously appeared as generic tool calls, Copilot's appeared as an MCP call
+  to `github-mcp-server`, and Codex's did not appear at all; all of them now
+  show as web searches. Codex's page opens and in-page searches are shown too.
+  Search results are also included in prior-step context, run history search,
+  and markdown export.
+
 - **Parallel web searches keep their own results.** When two web searches ran at once, for
   example in two subagents, one search's result or error could show on the other's row while
   that row stayed pending. Each search is now paired with its result by its tool call ID.

@@ -10,8 +10,9 @@ import type { RefObject } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import { CLI_EVENT_TYPES } from "@/types/messages";
-import type { ThinkingBlock } from "@root/types/CliOutputTypes";
+import type { ThinkingBlock, WebSearchData } from "@root/types/CliOutputTypes";
 import { isRenderableThinkingBlock } from "@root/utils/ThinkingBlockFormat";
+import { hasWebSearchTarget } from "@root/utils/WebSearchText";
 import { clamp } from "@utils/number";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 import {
@@ -114,7 +115,7 @@ function getZeroHeightStructuredEventReason(
       return data.tool ? null : "missing-mcp-tool";
     }
     case CLI_EVENT_TYPES.WEB_SEARCH:
-      return (row.event.data as { query?: string }).query
+      return hasWebSearchTarget(row.event.data as WebSearchData)
         ? null
         : "missing-web-search-query";
     case CLI_EVENT_TYPES.TOOL_CALL:

@@ -23,12 +23,15 @@ import {
   type ToolCallSectionRenderPlan,
 } from "@utils/toolCallLayout";
 import { highlightText, type RowFindDecoration } from "@utils/outputFind";
-import { TOOL_ERROR_LINE } from "./outputStyles";
 import { CollapsibleOutputSection } from "./CollapsibleOutputSection";
 import { ToolDot } from "./FileOperationOutput";
 import { ToolCallBlock } from "./ToolCallBlock";
 import { ToolCallExpandToggle } from "./ToolCallExpandToggle";
-import type { ToolResult } from "../../types/cliEvents";
+import type { ToolResult, WebSearchData } from "../../types/cliEvents";
+import {
+  getWebSearchLabel,
+  getWebSearchToolResult,
+} from "@root/utils/WebSearchText";
 import {
   TOOL_CALL_EXPANSION_SECTIONS,
   TOOL_RESULT_STATUSES,
@@ -236,51 +239,76 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
 // ============================================================================
 
 interface WebSearchOutputProps {
-  query: string;
-  success?: boolean;
-  error?: string;
-  queryContent?: React.ReactNode;
-  errorContent?: React.ReactNode;
+  data: WebSearchData;
+  labelContent?: React.ReactNode;
+  outputFindMatches?: RowFindDecoration["matches"];
+  errorFindMatches?: RowFindDecoration["matches"];
+  expansion?: ToolCallExpansionState;
+  renderPlan?: ToolCallRenderPlan;
+  onExpansionChange?: (
+    section: ToolCallExpansionSection,
+    expanded: boolean
+  ) => void;
   className?: string;
 }
 
+/**
+ * A web search: the query (or page) as the heading, and what the harness
+ * returned in the same collapsible output and error sections as a tool call.
+ */
 export const WebSearchOutput: React.FC<WebSearchOutputProps> = ({
-  query,
-  success,
-  error,
-  queryContent,
-  errorContent,
+  data,
+  labelContent,
+  outputFindMatches,
+  errorFindMatches,
+  expansion,
+  renderPlan,
+  onExpansionChange,
   className = "",
-}) => (
-  <ToolCallBlock
-    className={className}
-    dot={
-      <ToolDot
-        status={
-          success === undefined
-            ? TOOL_RESULT_STATUSES.PENDING
-            : success
-              ? TOOL_RESULT_STATUSES.SUCCESS
-              : TOOL_RESULT_STATUSES.ERROR
-        }
-      />
-    }
-    header={
-      <span className="min-w-0 wrap-anywhere">
-        {queryContent ?? <>Web search: &ldquo;{query}&rdquo;</>}
-      </span>
-    }
-  >
-    {error && (
-      <div className={`${TOOL_ERROR_LINE} flex items-start gap-1`}>
-        <span className="shrink-0">⎿</span>
-        <div className="min-w-0 flex-1 whitespace-pre-wrap wrap-anywhere">
-          {errorContent ?? error}
-        </div>
-      </div>
-    )}
-  </ToolCallBlock>
-);
+}) => {
+  const [resolvedExpansion, updateExpansion] = useToolCallExpansion(
+    expansion,
+    onExpansionChange
+  );
+  const containerId = useId();
+  const result = getWebSearchToolResult(data);
+  const { output: outputStr, error: errorStr } =
+    getGenericToolCallOutput(result);
+  const resolvedRenderPlan =
+    renderPlan ??
+    buildToolCallRenderPlan({ result, expansion: resolvedExpansion });
+
+  return (
+    <ToolCallBlock
+      className={className}
+      dot={<ToolDot status={resultDotStatus(result)} />}
+      header={
+        <span className="min-w-0 flex-1 wrap-anywhere">
+          {labelContent ?? getWebSearchLabel(data)}
+        </span>
+      }
+    >
+      {outputStr &&
+        renderToolResultSection(
+          containerId,
+          outputStr,
+          TOOL_CALL_EXPANSION_SECTIONS.OUTPUT,
+          resolvedRenderPlan.output,
+          outputFindMatches,
+          updateExpansion
+        )}
+      {errorStr &&
+        renderToolResultSection(
+          containerId,
+          errorStr,
+          TOOL_CALL_EXPANSION_SECTIONS.ERROR,
+          resolvedRenderPlan.error,
+          errorFindMatches,
+          updateExpansion
+        )}
+    </ToolCallBlock>
+  );
+};
 
 // ============================================================================
 // GenericToolCallOutput
