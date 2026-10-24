@@ -34,6 +34,7 @@ import {
 } from "../../utils/McpToolDefinitions";
 import type {
   RunRef,
+  PromptStep,
   WorkflowKey,
   WorkflowLineageDescriptor,
   WorkflowStep,
@@ -1247,6 +1248,68 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
   });
 
+  test("workflow_status reports finished prompt-step git outcomes when recorded", async () => {
+    const server = await setup();
+    const run = await createRun("git-outcome", "2026-01-01T00-00-00-000Z", {
+      stepCount: 3,
+    });
+    const manifestPath = WorkflowPaths.manifestPath(
+      workspaceRoot,
+      run.workflowKey,
+      run.runRef
+    );
+    const gitSnapshot = {
+      capturedAt: 3,
+      strategy: "git" as const,
+      changedFiles: [],
+      gitOutcome: {
+        repositories: [
+          {
+            headAtStart: "before-commit",
+            headAtEnd: "after-commit",
+            dirtyAtEnd: true,
+          },
+        ],
+        dirtyAtEnd: true,
+      },
+    };
+    await new TimelineRecorder().appendEvents(manifestPath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_CAPTURED,
+        timestampMs: 3,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        payload: { workspaceSnapshot: gitSnapshot },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_CAPTURED,
+        timestampMs: 4,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 },
+        payload: { workspaceSnapshot: gitSnapshot },
+      },
+    ]);
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    delete workingFile.steps![2]._runtime?.completedAt;
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const status = responseJson(await server.invokeTool("workflow_status", {}));
+
+    assert.deepStrictEqual(status.steps[0].gitOutcome, {
+      repositories: [
+        {
+          headAtStart: "before-commit",
+          headAtEnd: "after-commit",
+          dirtyAtEnd: true,
+        },
+      ],
+      dirtyAtEnd: true,
+    });
+    assert.ok(!("gitOutcome" in status.steps[1]));
+    assert.ok(!("gitOutcome" in status.steps[2]));
+  });
+
   test("workflow_status reports each step's harness and executionMode", async () => {
     const server = await setup();
     const run = await createRun("modes", "2026-01-01T00-00-00-000Z", {
@@ -1862,7 +1925,13 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       enabled: false,
       color: "blue",
       skills: ["skill-name"],
+      executionMode: EXECUTION_MODES.HEADLESS,
     };
+    const initial = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    initial.executionMode = EXECUTION_MODES.INTERACTIVE;
+    await fs.writeFile(run.runFilePath, JSON.stringify(initial), "utf8");
     try {
       await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, { index: 2, updates });
       const updated = JSON.parse(
@@ -1879,6 +1948,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         enabled: false,
         color: "blue",
         skills: ["skill-name"],
+        executionMode: EXECUTION_MODES.HEADLESS,
       });
 
       await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
@@ -1894,12 +1964,20 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
           "enabled",
           "color",
           "skills",
+          "executionMode",
         ],
       });
       const cleared = JSON.parse(
         await fs.readFile(run.runFilePath, "utf8")
       ) as WorkingFile;
       assert.deepStrictEqual(cleared.steps?.[2], { prompt: "updated prompt" });
+      const status = responseJson(
+        await server.invokeTool("workflow_status", {})
+      );
+      assert.strictEqual(
+        status.steps[2].executionMode,
+        EXECUTION_MODES.INTERACTIVE
+      );
     } finally {
       await releaseActiveRun(run, ownerToken);
     }
@@ -1944,6 +2022,483 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     } finally {
       await releaseActiveRun(run, ownerToken);
     }
+  });
+
+  test("append_step stores and reports an executionMode override", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "append-execution-mode",
+      "2026-01-01T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.RUNNING }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.harness = HARNESS_IDS.CLAUDE_CLI;
+    workingFile.executionMode = EXECUTION_MODES.HEADLESS;
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const result = responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          {
+            prompt: "interactive task",
+            executionMode: EXECUTION_MODES.INTERACTIVE,
+          },
+        ],
+      })
+    );
+    const persisted = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    const status = responseJson(await server.invokeTool("workflow_status", {}));
+
+    assert.strictEqual(
+      persisted.steps?.[1].executionMode,
+      EXECUTION_MODES.INTERACTIVE
+    );
+    assert.strictEqual(
+      status.steps[1].executionMode,
+      EXECUTION_MODES.INTERACTIVE
+    );
+    assert.strictEqual("warnings" in result, false);
+  });
+
+  test("append_step accepts agent and skills and echoes effective settings", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "append-effective-settings",
+      "2026-01-01T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.RUNNING }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.harness = HARNESS_IDS.CLAUDE_CLI;
+    workingFile.model = "workflow-model";
+    workingFile.executionMode = EXECUTION_MODES.HEADLESS;
+    workingFile.resumeSession = true;
+    workingFile.conditions = {
+      committed: { script: "git status --porcelain" },
+      ready: { script: "npm run typecheck" },
+    };
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const result = responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          {
+            prompt: "inherit settings",
+            endCondition: { use: "committed" },
+            preCondition: { use: "ready" },
+          },
+          {
+            prompt: "override settings",
+            harness: HARNESS_IDS.CODEX_CLI,
+            model: "step-model",
+            executionMode: EXECUTION_MODES.INTERACTIVE,
+            resumeSession: false,
+            agent: "reviewer",
+            skills: ["security-review"],
+          },
+          {
+            parallel: [
+              { prompt: "parallel one", model: "parallel-model" },
+              { prompt: "parallel two", agent: "implementer" },
+            ],
+          },
+        ],
+      })
+    );
+    const persisted = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+
+    assert.strictEqual((persisted.steps![2] as PromptStep).agent, "reviewer");
+    assert.deepStrictEqual((persisted.steps![2] as PromptStep).skills, [
+      "security-review",
+    ]);
+    assert.deepStrictEqual(result.effectiveSettings, [
+      {
+        index: 1,
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        model: "workflow-model",
+        executionMode: EXECUTION_MODES.HEADLESS,
+        resumeSession: true,
+        endConditionPreset: "committed",
+        preConditionPreset: "ready",
+      },
+      {
+        index: 2,
+        harness: HARNESS_IDS.CODEX_CLI,
+        model: "step-model",
+        executionMode: EXECUTION_MODES.INTERACTIVE,
+        resumeSession: false,
+      },
+      {
+        index: 3,
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        model: "parallel-model",
+        executionMode: EXECUTION_MODES.HEADLESS,
+        resumeSession: true,
+      },
+      {
+        index: 4,
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        model: "workflow-model",
+        executionMode: EXECUTION_MODES.HEADLESS,
+        resumeSession: true,
+      },
+    ]);
+
+    await assert.rejects(
+      server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [{ prompt: "forbidden args", additionalArgs: ["--danger"] }],
+      }),
+      /append_step\.steps\[0\].*(additionalArgs|oneOf|object)/i
+    );
+  });
+
+  test("materializes condition presets for append and edit, including parallel members", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "condition-presets",
+      "2026-01-01T00-00-00-000Z",
+      {
+        stepCount: 2,
+        currentIndex: 1,
+        executionState: EXECUTION_STATES.RUNNING,
+      }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.endCondition = { script: "workflow end gate" };
+    workingFile.conditions = {
+      committed: {
+        script: "git status --porcelain",
+        compareSource: "stdout",
+        operator: "isEmpty",
+        maxRetries: 2,
+        retryPrompt: "preset retry",
+        env: { AUTHOR_VALUE: "fixed" },
+      },
+      inspect: {
+        script: 'node "$BUG_FILE"',
+        env: { PREFIX: "src/" },
+        params: ["BUG_FILE"],
+        maxRetries: 1,
+      },
+    };
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+      position: "end",
+      steps: [
+        {
+          prompt: "append with gate",
+          endCondition: {
+            use: "committed",
+            retryPrompt: "override retry",
+            maxRetries: 1,
+          },
+          preCondition: {
+            use: "inspect",
+            params: { BUG_FILE: "dev/bugs/backlog/example.md" },
+          },
+        },
+        {
+          parallel: [
+            { prompt: "parallel a", endCondition: { use: "committed" } },
+            {
+              prompt: "parallel b",
+              preCondition: { use: "inspect", params: { BUG_FILE: "b.md" } },
+            },
+          ],
+        },
+      ],
+    });
+
+    const persisted = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    const appended = persisted.steps![2] as PromptStep;
+    assert.deepStrictEqual(appended.endCondition, {
+      script: "git status --porcelain",
+      compareSource: "stdout",
+      operator: "isEmpty",
+      maxRetries: 1,
+      retryPrompt: "override retry",
+      env: { AUTHOR_VALUE: "fixed" },
+    });
+    assert.deepStrictEqual(appended.preCondition, {
+      script: 'node "$BUG_FILE"',
+      env: { PREFIX: "src/", BUG_FILE: "dev/bugs/backlog/example.md" },
+      maxRetries: 1,
+    });
+    assert.strictEqual(
+      (persisted.steps![3] as PromptStep).endCondition?.script,
+      "git status --porcelain"
+    );
+    assert.deepStrictEqual(
+      (persisted.steps![4] as PromptStep).preCondition?.env,
+      {
+        PREFIX: "src/",
+        BUG_FILE: "b.md",
+      }
+    );
+    assert.strictEqual(
+      (persisted.steps![2] as PromptStep).preCondition?.script,
+      'node "$BUG_FILE"'
+    );
+
+    await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+      index: 2,
+      updates: { endCondition: { use: "committed", maxRetries: 2 } },
+    });
+    const afterEdit = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    assert.deepStrictEqual((afterEdit.steps![2] as PromptStep).endCondition, {
+      script: "git status --porcelain",
+      compareSource: "stdout",
+      operator: "isEmpty",
+      maxRetries: 2,
+      retryPrompt: "preset retry",
+      env: { AUTHOR_VALUE: "fixed" },
+    });
+
+    afterEdit.conditions!.committed.script = "echo changed later";
+    await fs.writeFile(run.runFilePath, JSON.stringify(afterEdit), "utf8");
+    const later = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    assert.strictEqual(
+      (later.steps![2] as PromptStep).endCondition?.script,
+      "git status --porcelain"
+    );
+  });
+
+  test("rejects unknown presets, unsafe condition overrides, null, and clearing gates", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "condition-preset-rejections",
+      "2026-01-01T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.RUNNING }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.conditions = {
+      committed: { script: "git status --porcelain" },
+    };
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await assert.rejects(
+      server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [{ prompt: "unknown", endCondition: { use: "missing" } }],
+      }),
+      /unknown condition preset 'missing'.*committed/
+    );
+    for (const key of ["script", "env", "shell"]) {
+      await assert.rejects(
+        server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "end",
+          steps: [
+            {
+              prompt: "unsafe",
+              endCondition: { use: "committed", [key]: "override" },
+            },
+          ],
+        }),
+        /append_step\.steps\[0\] must be object or object/
+      );
+    }
+    await assert.rejects(
+      server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 0,
+        updates: { endCondition: null },
+      }),
+      /edit_step\.updates\.endCondition must be an object/
+    );
+    await assert.rejects(
+      server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 0,
+        updates: {},
+        clearProperties: ["endCondition"],
+      }),
+      /clearProperties\[0\] must be one of/
+    );
+  });
+
+  test("caps preset retries and validates declared parameter values", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "condition-preset-limits",
+      "2026-01-01T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.RUNNING }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.conditions = {
+      committed: { script: "git status --porcelain", maxRetries: 1 },
+      inspect: { script: 'node "$FILE"', params: ["FILE"] },
+    };
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await assert.rejects(
+      server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          {
+            prompt: "too many",
+            endCondition: { use: "committed", maxRetries: 2 },
+          },
+        ],
+      }),
+      /maxRetries 2 exceeds preset 'committed' limit 1/
+    );
+    await assert.rejects(
+      server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [{ prompt: "missing", preCondition: { use: "inspect" } }],
+      }),
+      /requires param 'FILE'/
+    );
+    await assert.rejects(
+      server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          {
+            prompt: "undeclared",
+            preCondition: {
+              use: "inspect",
+              params: { FILE: "known.md", OTHER: "value" },
+            },
+          },
+        ],
+      }),
+      /param 'OTHER' is not declared/
+    );
+    for (const value of ["", "x\0y", "x".repeat(4097)]) {
+      await assert.rejects(
+        server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "end",
+          steps: [
+            {
+              prompt: "invalid value",
+              preCondition: { use: "inspect", params: { FILE: value } },
+            },
+          ],
+        }),
+        /must not be empty|must not contain NUL|must be at most 4096/
+      );
+    }
+  });
+
+  test("warns for resolved Codex interactive steps and omits warnings otherwise", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "codex-interactive-warning",
+      "2026-01-01T00-00-00-000Z",
+      {
+        stepCount: 3,
+        currentIndex: 1,
+        executionState: EXECUTION_STATES.RUNNING,
+      }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.harness = HARNESS_IDS.CODEX_CLI;
+    workingFile.executionMode = EXECUTION_MODES.INTERACTIVE;
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const inheritedInteractive = responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [{ prompt: "needs background wait" }],
+      })
+    );
+    const editedInteractive = responseJson(
+      await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 3,
+        updates: { executionMode: EXECUTION_MODES.INTERACTIVE },
+      })
+    );
+    const explicitHeadless = responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          { prompt: "headless", executionMode: EXECUTION_MODES.HEADLESS },
+        ],
+      })
+    );
+    const editedHeadless = responseJson(
+      await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 3,
+        updates: { executionMode: EXECUTION_MODES.HEADLESS },
+      })
+    );
+
+    assert.match(inheritedInteractive.warnings[0], /Codex cannot wait/u);
+    assert.match(editedInteractive.warnings[0], /Codex cannot wait/u);
+    assert.strictEqual("warnings" in explicitHeadless, false);
+    assert.strictEqual("warnings" in editedHeadless, false);
+  });
+
+  test("accepts an interactive member in an appended parallel group", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "append-interactive-parallel-member",
+      "2026-01-01T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.RUNNING }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.harness = HARNESS_IDS.CLAUDE_CLI;
+    workingFile.executionMode = EXECUTION_MODES.HEADLESS;
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const result = responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          {
+            parallel: [
+              {
+                prompt: "interactive member",
+                executionMode: EXECUTION_MODES.INTERACTIVE,
+              },
+              { prompt: "headless member" },
+            ],
+          },
+        ],
+      })
+    );
+    const persisted = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+
+    assert.strictEqual(result.stepsAdded, 2);
+    assert.strictEqual(
+      persisted.steps?.[1].executionMode,
+      EXECUTION_MODES.INTERACTIVE
+    );
+    assert.strictEqual(persisted.parallelGroups?.length, 1);
   });
 
   test("rejects editing a parallel member to target its sibling", async () => {

@@ -1,4 +1,14 @@
 schemaVersion: 1
+conditions:
+  committed:
+    script: git status --porcelain
+    compareSource: stdout
+    operator: isEmpty
+    maxRetries: 2
+    retryPrompt: |
+      You left uncommitted changes. Finish the work, run its gate, and commit
+      your own files with a plain conventional commit message.
+      $endCondition:stdout
 _templateMeta:
   name: Feature-Driven Loop
   description: "Describe a feature and get a plan-first self-extending loop that queues and reviews work until the goal is met."

@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`workflow_status` reports per-step git outcomes.** Finished prompt steps show HEAD at start and end for captured repositories, plus whether the workspace was dirty when the step ended.
+
+- **MCP `append_step` accepts agent and skills overrides and reports effective settings.** The append result shows the resolved harness, model, execution mode, session behavior, and condition preset names for every added step, including parallel members.
+
+- **Condition presets for MCP-queued steps.** Workflows can define named,
+  author-controlled condition scripts that MCP agents attach to steps by name.
+
+- **MCP `append_step` and `edit_step` can set `executionMode`.** Their results warn when a step resolves to Codex in interactive mode, since Codex cannot wait on background work in either mode.
+
 - **Subagent calls have dedicated output cards** showing agent details, live progress, an optional prompt, and the final result.
 
 - **The `workflow_status` MCP tool reports execution mode.** Its metadata gives the workflow's

@@ -1335,6 +1335,13 @@ suite("WorkflowSerializer", () => {
           workingFilePath,
           JSON.stringify({
             workflowName: "parallel serializer test",
+            conditions: {
+              committed: {
+                script: "git status --porcelain",
+                compareSource: "stdout",
+                operator: "isEmpty",
+              },
+            },
             steps: [
               { prompt: "before" },
               { prompt: "first member" },
@@ -1369,10 +1376,18 @@ suite("WorkflowSerializer", () => {
 
         const saved = JSON.parse(await fs.readFile(outputPath, "utf8")) as {
           schemaVersion: number;
+          conditions: Record<string, unknown>;
           steps: Array<Record<string, unknown>>;
           parallelGroups?: unknown;
         };
         assert.strictEqual(saved.schemaVersion, 1);
+        assert.deepStrictEqual(saved.conditions, {
+          committed: {
+            script: "git status --porcelain",
+            compareSource: "stdout",
+            operator: "isEmpty",
+          },
+        });
         assert.strictEqual(saved.parallelGroups, undefined);
         assert.deepStrictEqual(saved.steps[1], {
           parallel: [

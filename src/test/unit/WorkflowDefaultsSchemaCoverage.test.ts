@@ -16,6 +16,8 @@ const DEFAULT_OPT_OUTS: Record<string, string> = {
   sessionId:
     "Session IDs identify a particular run and cannot be a reusable default.",
   vars: "Workflow variables are authored per workflow and may contain workflow-specific values.",
+  conditions:
+    "Condition presets are authored per workflow; a global default would let settings supply scripts MCP agents can attach.",
 };
 
 suite("Workflow defaults schema coverage", () => {

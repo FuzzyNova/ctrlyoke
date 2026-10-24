@@ -54,10 +54,13 @@ import {
   DEFAULT_MAX_STEPS,
   ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
+  EXECUTION_MODES,
+  HARNESS_IDS,
   StepOutputTextMode,
   LOGS_DIR,
   QUEUE_POSITION,
   STEP_TYPES,
+  STEP_STATUS,
   type ExecutionState,
 } from "./types/DashboardConstants";
 import type { CapabilitiesFile } from "./types/CapabilitiesTypes";
@@ -153,6 +156,7 @@ import {
   MCP_WORKFLOW_MUTATION_TOOL_NAMES,
   MCP_WORKFLOW_STATUS_TOOL_NAME,
   type McpAppendStepArguments,
+  type McpAppendStepInput,
   type McpAppendStepResult,
   type McpClaimPathsArguments,
   type McpEditStepArguments,
@@ -166,13 +170,16 @@ import {
   type McpReleasePathsArguments,
 } from "./utils/McpToolDefinitions";
 import { validateMcpToolCall } from "./utils/McpSchemaValidator";
+import { materializeMcpConditionPreset } from "./utils/McpConditionPresetResolver";
 import {
   getCoordinationAttribution,
   resolveCoordinationParticipantKind,
 } from "./utils/CoordinationAttribution";
 import { CTRLYOKE_VERSION } from "./utils/BuildConfig";
 import { PromptFileParser } from "./core/PromptFileParser";
+import { RunMetadataScanner } from "./core/orchestration/RunMetadataScanner";
 import type { WorkflowValidationWarning } from "./types/CtrlYokeTypes";
+import type { WorkspaceSnapshot } from "./types/OutputHistoryTypes";
 
 export { MCP_TOOL_DEFINITIONS } from "./utils/McpToolDefinitions";
 
@@ -386,7 +393,7 @@ export { MAX_GLOBAL_STATUS_RESULTS };
 
 function toWorkflowStepUpdates(
   updates: McpEditStepArguments["updates"]
-): Partial<WorkflowStep> {
+): Partial<PromptStep> {
   const allowedFields = new Set<string>(MCP_STEP_UPDATE_FIELDS);
   const additionalArgsKey = Object.keys({ additionalArgs: undefined })[0];
   return Object.fromEntries(
@@ -398,7 +405,113 @@ function toWorkflowStepUpdates(
           ? formatArgString(value)
           : value,
       ])
-  ) as Partial<WorkflowStep>;
+  ) as Partial<PromptStep>;
+}
+
+function materializeConditionUpdates(
+  workingFile: WorkingFile,
+  updates: McpEditStepArguments["updates"]
+): Partial<PromptStep> {
+  const { endCondition, preCondition, ...fieldsWithoutConditions } = updates;
+  const stepFields = toWorkflowStepUpdates(fieldsWithoutConditions);
+  return {
+    ...stepFields,
+    ...(endCondition
+      ? {
+          endCondition: materializeMcpConditionPreset(
+            workingFile,
+            "endCondition",
+            endCondition
+          ) as PromptStep["endCondition"],
+        }
+      : {}),
+    ...(preCondition
+      ? {
+          preCondition: materializeMcpConditionPreset(
+            workingFile,
+            "preCondition",
+            preCondition
+          ) as PromptStep["preCondition"],
+        }
+      : {}),
+  };
+}
+
+function materializeAppendStep(
+  workingFile: WorkingFile,
+  step: McpAppendStepInput
+): PromptStep {
+  const { endCondition, preCondition, ...stepFields } = step;
+  return {
+    ...stepFields,
+    ...(endCondition
+      ? {
+          endCondition: materializeMcpConditionPreset(
+            workingFile,
+            "endCondition",
+            endCondition
+          ),
+        }
+      : {}),
+    ...(preCondition
+      ? {
+          preCondition: materializeMcpConditionPreset(
+            workingFile,
+            "preCondition",
+            preCondition
+          ),
+        }
+      : {}),
+  } as PromptStep;
+}
+
+function resolveEffectiveStepSettings(
+  step: PromptStep,
+  workflow: WorkingFile
+): {
+  harness: string;
+  model: string | null;
+  executionMode: (typeof EXECUTION_MODES)[keyof typeof EXECUTION_MODES];
+  resumeSession: boolean;
+} {
+  const workflowResumeSession =
+    workflow.resumeSession ?? CTRLYOKE_SETTINGS_DEFAULTS.defaults.resumeSession;
+  return {
+    harness:
+      step._runtime?.harness ??
+      step.harness ??
+      workflow.harness ??
+      PropertyResolver.resolveHarnessValue(undefined, undefined),
+    model: step.model ?? workflow.model ?? null,
+    executionMode:
+      step._runtime?.executionMode ??
+      step.executionMode ??
+      workflow.executionMode ??
+      CTRLYOKE_SETTINGS_DEFAULTS.defaults.executionMode,
+    resumeSession: step.resumeSession ?? workflowResumeSession,
+  };
+}
+
+function executionModeWarnings(
+  steps: readonly WorkflowStep[],
+  workingFile: WorkingFile
+): string[] {
+  const hasCodexInteractiveStep = steps.some((step) => {
+    if (isScriptStep(step)) return false;
+    return (
+      PropertyResolver.resolveHarnessValue(
+        step.harness,
+        workingFile.harness
+      ) === HARNESS_IDS.CODEX_CLI &&
+      PropertyResolver.resolveExecutionMode(step, workingFile) ===
+        EXECUTION_MODES.INTERACTIVE
+    );
+  });
+  return hasCodexInteractiveStep
+    ? [
+        "Codex cannot wait on background work in either execution mode; choose a non-Codex harness for steps that must wait for long commands.",
+      ]
+    : [];
 }
 
 export class CtrlYokeMCPServer {
@@ -1067,6 +1180,19 @@ export class CtrlYokeMCPServer {
       undefined,
       runtime.finalStep?.phase
     );
+    let workspaceSnapshots = new Map<number, WorkspaceSnapshot>();
+    try {
+      workspaceSnapshots =
+        await new RunMetadataScanner().findLatestQueueWorkspaceSnapshots(
+          WorkflowPaths.manifestPath(
+            this.workspaceRoot,
+            selected.workflowKey,
+            selected.runRef
+          )
+        );
+    } catch {
+      // Git outcome is advisory; status stays available if history is missing.
+    }
     let schemaWarnings: WorkflowValidationWarning[] = [];
     const workflowDescriptor = await lineageRepository.readDescriptor(
       this.workspaceRoot,
@@ -1103,6 +1229,9 @@ export class CtrlYokeMCPServer {
     // read_output call away.
     const steps = allSteps.map((p, index) => {
       const scriptStep = isScriptStep(p);
+      const effective = isScriptStep(p)
+        ? undefined
+        : resolveEffectiveStepSettings(p, queueData);
       const prompt = scriptStep ? p.script : p.prompt;
       const preview = promptFirstLinePreview(
         prompt,
@@ -1120,22 +1249,21 @@ export class CtrlYokeMCPServer {
             : { promptTruncated: true }
           : {}),
         status: stepStatuses[index],
+        ...((stepStatuses[index] === STEP_STATUS.COMPLETED ||
+          stepStatuses[index] === STEP_STATUS.FAILED ||
+          stepStatuses[index] === STEP_STATUS.CANCELLED) &&
+        !scriptStep &&
+        workspaceSnapshots.get(index)?.gitOutcome
+          ? { gitOutcome: workspaceSnapshots.get(index)?.gitOutcome }
+          : {}),
         // A step that has started reports what it actually ran with (its
         // _runtime), which includes the headless clamp a terminal-less
         // `ctrlyoke run` applies; a pending step reports its configured value.
-        harness: scriptStep
-          ? undefined
-          : (p._runtime?.harness ?? p.harness ?? queueData.harness),
-        executionMode: scriptStep
-          ? undefined
-          : (p._runtime?.executionMode ??
-            p.executionMode ??
-            workflowExecutionMode),
-        model: scriptStep ? undefined : p.model,
+        harness: effective?.harness,
+        executionMode: effective?.executionMode,
+        model: effective?.model,
         sessionId: scriptStep ? null : (p.sessionId ?? null),
-        resumeSession: scriptStep
-          ? false
-          : (p.resumeSession ?? workflowResumeSession),
+        resumeSession: effective?.resumeSession ?? false,
       };
     });
 
@@ -1244,7 +1372,7 @@ export class CtrlYokeMCPServer {
       true
     );
 
-    const resolvedItems: ResolvedParallelItem[] = steps.map((item) =>
+    const resolvedItems = steps.map((item) =>
       "parallel" in item
         ? {
             parallel: item.parallel.map((member) => ({ ...member })),
@@ -1260,10 +1388,24 @@ export class CtrlYokeMCPServer {
         "parallelWithCurrent accepts flat steps only; use next, end, or a numeric position for a future parallel group"
       );
     }
-    const flattened = flattenParallelItems(resolvedItems);
     const attachedRun = await this.readAttachedRun(
       MCP_APPEND_STEP_TOOL_NAME,
       selected.filePath
+    );
+    const materializedItems: ResolvedParallelItem[] = resolvedItems.map(
+      (item) =>
+        "parallel" in item
+          ? {
+              ...item,
+              parallel: item.parallel.map((step) =>
+                materializeAppendStep(attachedRun, step)
+              ),
+            }
+          : materializeAppendStep(attachedRun, item)
+    );
+    const flattened = flattenParallelItems(materializedItems);
+    const requestedSteps = resolvedItems.flatMap((item) =>
+      "parallel" in item ? item.parallel : [item]
     );
 
     await this.validateStepHarnessAndModelCapabilities(
@@ -1354,6 +1496,34 @@ export class CtrlYokeMCPServer {
       throw new Error("Failed to append steps: no response generated");
     }
 
+    const executionWarnings = executionModeWarnings(
+      flattened.topology.steps,
+      updatedWorkingFile
+    );
+    if (executionWarnings.length > 0) {
+      response.warnings = executionWarnings;
+    }
+
+    response.effectiveSettings = requestedSteps.map((requested, offset) => {
+      const index = response!.insertIndex + offset;
+      const addedStep = updatedWorkingFile!.steps?.[index];
+      if (!addedStep || isScriptStep(addedStep)) {
+        throw new Error(
+          `Failed to resolve effective settings for appended step at index ${index}`
+        );
+      }
+      return {
+        index,
+        ...resolveEffectiveStepSettings(addedStep, updatedWorkingFile!),
+        ...(requested.endCondition
+          ? { endConditionPreset: requested.endCondition.use }
+          : {}),
+        ...(requested.preCondition
+          ? { preConditionPreset: requested.preCondition.use }
+          : {}),
+      };
+    });
+
     // Steps appended mid-run never pass the start-time approval prompt, so
     // tell the appending agent now instead of letting the step fail at
     // dispatch with nobody listening.
@@ -1420,7 +1590,7 @@ export class CtrlYokeMCPServer {
     if (existingStep) {
       const effectiveStep = mergeWorkflowStepUpdate(
         existingStep,
-        toWorkflowStepUpdates(updates),
+        materializeConditionUpdates(workingFile, updates),
         clearProperties
       );
       await this.validateStepHarnessAndModelCapabilities(
@@ -1434,19 +1604,23 @@ export class CtrlYokeMCPServer {
       selected.runRef,
       index,
       {
-        updates: toWorkflowStepUpdates(updates),
+        updates: materializeConditionUpdates(workingFile, updates),
         clearProperties,
       },
       target.definitionRevision,
       lineageRepository,
       target.allowInterruptedRun
     );
+    const effectiveStep = edited.workingFile.steps?.[index];
+    const warnings = effectiveStep
+      ? executionModeWarnings([effectiveStep], edited.workingFile)
+      : [];
     return this.mutationResponse(
       MCP_EDIT_STEP_TOOL_NAME,
       selected,
       edited,
       target.definitionRevision,
-      { index }
+      { index, ...(warnings.length > 0 ? { warnings } : {}) }
     );
   }
 

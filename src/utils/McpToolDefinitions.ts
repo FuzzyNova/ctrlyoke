@@ -1,5 +1,7 @@
 import {
+  EXECUTION_MODES,
   QUEUE_POSITION,
+  type ExecutionMode,
   type QueuePosition,
 } from "../types/DashboardConstants";
 import type { ParallelGroupInsertPlacement } from "../core/ParallelGroupTopology";
@@ -21,15 +23,27 @@ export interface McpToolInputSchema {
   oneOf?: readonly McpToolInputSchema[];
   minimum?: number;
   minItems?: number;
-  additionalProperties?: false;
+  additionalProperties?: false | McpToolInputSchema;
 }
 
 export type McpAppendStepInput = Pick<
   PromptStep,
-  "prompt" | "name" | "model" | "harness" | "resumeSession"
+  "prompt" | "name" | "model" | "harness" | "resumeSession" | "agent" | "skills"
 > & {
   sessionId?: number;
+  executionMode?: ExecutionMode;
+  endCondition?: McpConditionPresetUse;
+  preCondition?: McpConditionPresetUse;
 };
+
+/** Agent-selectable preset reference; script execution settings stay author-owned. */
+export interface McpConditionPresetUse {
+  use: string;
+  params?: Record<string, string>;
+  retryPrompt?: string;
+  passRetryPrompt?: string;
+  maxRetries?: number;
+}
 
 export interface McpAppendParallelGroupInput {
   parallel: McpAppendStepInput[];
@@ -79,6 +93,18 @@ export interface McpAppendStepResult {
    * positional references the insert shifted (references are never rewritten).
    */
   warning?: string;
+  /** Execution constraints that callers should account for. */
+  warnings?: string[];
+  /** Effective execution settings for each added prompt step, in queue order. */
+  effectiveSettings?: Array<{
+    index: number;
+    harness: string;
+    model: string | null;
+    executionMode: ExecutionMode;
+    resumeSession: boolean;
+    endConditionPreset?: string;
+    preConditionPreset?: string;
+  }>;
 }
 
 export type McpStepUpdateArguments = Omit<
@@ -95,11 +121,14 @@ export type McpStepUpdateArguments = Omit<
       | "enabled"
       | "color"
       | "skills"
+      | "executionMode"
     >
   >,
   "additionalArgs"
 > & {
   additionalArgs?: string[];
+  endCondition?: McpConditionPresetUse;
+  preCondition?: McpConditionPresetUse;
 };
 
 export interface McpEditStepArguments {
@@ -203,6 +232,16 @@ export const MCP_CLAIM_PATHS_TOOL_NAME = "claim_paths";
 /** Release execution-root-relative path claims. */
 export const MCP_RELEASE_PATHS_TOOL_NAME = "release_paths";
 
+const MCP_AGENT_SCHEMA: McpToolInputSchema = {
+  type: "string",
+  description: "The agent override.",
+};
+const MCP_SKILLS_SCHEMA: McpToolInputSchema = {
+  type: "array",
+  items: { type: "string" },
+  description: "Skills to make available to the step.",
+};
+
 const MCP_APPEND_STEP_INPUT_SCHEMA: McpToolInputSchema = {
   type: "object",
   properties: {
@@ -225,6 +264,16 @@ const MCP_APPEND_STEP_INPUT_SCHEMA: McpToolInputSchema = {
       description:
         "Harness to run this step with. Defaults to the workflow's harness.",
     },
+    executionMode: {
+      type: "string",
+      enum: Object.values(EXECUTION_MODES),
+      description:
+        "How to run this step. Defaults to the workflow's executionMode.",
+    },
+    agent: MCP_AGENT_SCHEMA,
+    skills: MCP_SKILLS_SCHEMA,
+    endCondition: conditionPresetUseSchema("endCondition"),
+    preCondition: conditionPresetUseSchema("preCondition"),
     resumeSession: {
       type: "boolean",
       description:
@@ -280,6 +329,13 @@ const MCP_STEP_UPDATE_SCHEMA: McpToolInputSchema = {
     name: { type: "string", description: "The step's display label." },
     model: { type: "string", description: "The model override." },
     harness: { type: "string", description: "The harness override." },
+    executionMode: {
+      type: "string",
+      enum: Object.values(EXECUTION_MODES),
+      description: "The execution mode override.",
+    },
+    endCondition: conditionPresetUseSchema("endCondition"),
+    preCondition: conditionPresetUseSchema("preCondition"),
     resumeSession: {
       type: "boolean",
       description: "Whether the step should resume a previous session.",
@@ -288,7 +344,7 @@ const MCP_STEP_UPDATE_SCHEMA: McpToolInputSchema = {
       oneOf: [{ type: "string" }, { type: "number" }],
       description: "A 1-based step number or a session id string to resume.",
     },
-    agent: { type: "string", description: "The agent override." },
+    agent: MCP_AGENT_SCHEMA,
     enabled: { type: "boolean", description: "Whether the step is enabled." },
     color: { type: "string", description: "The step's display color." },
     additionalArgs: {
@@ -297,31 +353,72 @@ const MCP_STEP_UPDATE_SCHEMA: McpToolInputSchema = {
       description:
         "Deprecated: harness arguments can only be set by the workflow author for security reasons. edit_step rejects setting or clearing this field.",
     },
-    skills: {
-      type: "array",
-      items: { type: "string" },
-      description: "Skills to make available to the step.",
-    },
+    skills: MCP_SKILLS_SCHEMA,
   },
 };
+
+/** Step fields that take an MCP condition preset reference. */
+const MCP_CONDITION_PRESET_FIELDS = ["endCondition", "preCondition"] as const;
+
+function conditionPresetUseSchema(
+  fieldName: (typeof MCP_CONDITION_PRESET_FIELDS)[number]
+): McpToolInputSchema {
+  return {
+    type: "object",
+    additionalProperties: false,
+    description: `Attach a named author-defined ${fieldName} preset. This replaces any workflow-level ${fieldName} inherited by the step. The preset owns its script and execution settings; only retry text, a capped maxRetries value, and declared params can be supplied.`,
+    properties: {
+      use: {
+        type: "string",
+        description: "Name of a preset in workflow conditions.",
+      },
+      params: {
+        type: "object",
+        additionalProperties: { type: "string" },
+        description:
+          "Values for every declared preset parameter. Values are passed as environment variables and are never inserted into script text.",
+      },
+      retryPrompt: {
+        type: "string",
+        description: "Optional retry-prompt text override.",
+      },
+      passRetryPrompt: {
+        type: "string",
+        description: "Optional pass-retry prompt text override.",
+      },
+      maxRetries: {
+        type: "number",
+        minimum: 0,
+        description:
+          "Optional retry limit; it cannot exceed the preset's own maxRetries.",
+      },
+    },
+    required: ["use"],
+  };
+}
 
 /** Allowed fields for edit_step, shared by its update and clear schemas. */
 export const MCP_STEP_UPDATE_FIELDS = Object.keys(
   MCP_STEP_UPDATE_SCHEMA.properties ?? {}
 ) as (keyof McpStepUpdateArguments)[];
 
+/** Fields edit_step may clear; condition preset references are intentionally excluded. */
+export const MCP_STEP_CLEARABLE_FIELDS = MCP_STEP_UPDATE_FIELDS.filter(
+  (field) => !(MCP_CONDITION_PRESET_FIELDS as readonly string[]).includes(field)
+);
+
 /** The single source of truth for ctrlyoke's exposed MCP tool definitions. */
 export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: MCP_WORKFLOW_STATUS_TOOL_NAME,
     description:
-      "See each workflow step's type, status, sessionId, and whether it resumes an earlier session (resumeSession, including a value inherited from the workflow). Each prompt step also shows its harness and executionMode (interactive or headless): what it ran with once started, otherwise what it will run with. Prompt steps include a prompt preview; script steps include a script preview. metadata shows the workflow's harness, model, resumeSession, and executionMode, which appended prompt steps inherit; append_step can override all but executionMode. A headless step cannot wait on background work: its process exits when the agent ends its turn. Call read_output with a step's index to read its full prompt or script.",
+      "See each workflow step's type, status, sessionId, and whether it resumes an earlier session (resumeSession, including a value inherited from the workflow). Each prompt step also shows its harness and executionMode (interactive or headless): what it ran with once started, otherwise what it will run with. Finished prompt steps include gitOutcome when the git snapshot succeeded: HEAD at start and end for each repository, plus whether the tree was dirty at the end. This is advisory data, not an execution gate; it is omitted when unavailable. Prompt steps include a prompt preview; script steps include a script preview. metadata shows the workflow's harness, model, resumeSession, and executionMode, which appended prompt steps inherit; append_step can override these. A headless step cannot wait on background work: its process exits when the agent ends its turn. Codex cannot wait on background work in either mode. Call read_output with a step's index to read its full prompt or script.",
     inputSchema: { type: "object", properties: {} },
   },
   {
     name: MCP_APPEND_STEP_TOOL_NAME,
     description:
-      "Add one or more prompt steps or future parallel groups to your workflow's queue. Script steps cannot be appended through MCP. This is how you build up or extend the workflow — from staging the very first steps of a plan to adding a follow-up once you discover more work is needed. Position 'next' queues after an active parallel group and never joins it; use 'parallelWithCurrent' to join the active group. Call list_harnesses first if you want to choose a harness or model for the new steps.",
+      "Add one or more prompt steps or future parallel groups to your workflow's queue. Steps can include agent and skills overrides. Harness arguments and permission fields are never accepted. Script steps cannot be appended through MCP. Each added step's effective harness, model, execution mode, session behavior, and condition preset names are returned. Position 'next' queues after an active parallel group and never joins it; use 'parallelWithCurrent' to join the active group. Call list_harnesses first if you want to choose a harness or model for the new steps.",
     inputSchema: {
       type: "object",
       properties: {
@@ -406,9 +503,9 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
         updates: MCP_STEP_UPDATE_SCHEMA,
         clearProperties: {
           type: "array",
-          items: { type: "string", enum: MCP_STEP_UPDATE_FIELDS },
+          items: { type: "string", enum: MCP_STEP_CLEARABLE_FIELDS },
           description:
-            "Optional step fields to remove so they inherit defaults.",
+            "Optional step fields to remove so they inherit defaults. Condition gates cannot be cleared through MCP; attach an author-defined preset to replace a workflow-level inherited gate.",
         },
       },
       required: ["index", "updates"],

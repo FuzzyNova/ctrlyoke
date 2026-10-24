@@ -414,6 +414,16 @@
           "description": "Default values for `{{varName}}` substitutions.",
           "$ref": "#/$defs/varsConfig"
         },
+        "conditions": {
+          "type": "object",
+          "description": "Named condition presets that MCP agents may attach to steps by name. Authors define every script; MCP agents can choose a preset but can never supply or override its scripts. Preset scripts that use declared params must quote each value (for example, `\"$BUG_FILE\"`) because values are passed through environment variables. A param name may not collide with a key in that preset's own `env`.",
+          "propertyNames": {
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/conditionPreset"
+          }
+        },
         "trustedExternalRoots": {
           "oneOf": [
             {
@@ -1100,6 +1110,60 @@
           "enum": ["continue", "retry", "stopWorkflow"],
           "default": "stopWorkflow",
           "description": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times); if retryPrompt is omitted, a fallback prompt includes the expected and actual values and script output. When maxRetries is omitted, one retry is allowed. 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default). A retryPrompt alone does not enable retries; set maxRetries above 0 on the condition or in defaults.endCondition.maxRetries, or use onFail: retry."
+        }
+      },
+      "required": ["script"],
+      "unevaluatedProperties": false
+    },
+    "conditionPreset": {
+      "type": "object",
+      "description": "Author-defined condition preset available to MCP steps.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/scriptProperties"
+        }
+      ],
+      "properties": {
+        "script": { "$ref": "#/$defs/scriptProperties/properties/script" },
+        "env": { "$ref": "#/$defs/scriptProperties/properties/env" },
+        "compareSource": {
+          "$ref": "#/$defs/scriptProperties/properties/compareSource"
+        },
+        "returns": { "$ref": "#/$defs/scriptProperties/properties/returns" },
+        "timeoutSec": {
+          "$ref": "#/$defs/scriptProperties/properties/timeoutSec"
+        },
+        "shell": { "$ref": "#/$defs/scriptProperties/properties/shell" },
+        "operator": { "$ref": "#/$defs/scriptProperties/properties/operator" },
+        "expected": { "$ref": "#/$defs/scriptProperties/properties/expected" },
+        "ignoreCase": {
+          "$ref": "#/$defs/scriptProperties/properties/ignoreCase"
+        },
+        "maxRetries": { "$ref": "#/$defs/endCondition/properties/maxRetries" },
+        "retryPrompt": {
+          "$ref": "#/$defs/endCondition/properties/retryPrompt"
+        },
+        "passRetryPrompt": {
+          "$ref": "#/$defs/endCondition/properties/passRetryPrompt"
+        },
+        "resumeSessionOnRetry": {
+          "$ref": "#/$defs/endCondition/properties/resumeSessionOnRetry"
+        },
+        "onPass": {
+          "type": "string",
+          "enum": ["continue", "retry", "skipPrompt", "stopWorkflow"],
+          "description": "Action when the condition passes. Valid actions depend on whether the preset is used as an end condition or pre-condition."
+        },
+        "onFail": {
+          "type": "string",
+          "enum": ["continue", "retry", "skipPrompt", "stopWorkflow"],
+          "description": "Action when the condition fails. Valid actions depend on whether the preset is used as an end condition or pre-condition."
+        },
+        "params": {
+          "type": "array",
+          "description": "Environment-variable names whose values MCP agents may supply when attaching this preset.",
+          "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+          "uniqueItems": true
         }
       },
       "required": ["script"],

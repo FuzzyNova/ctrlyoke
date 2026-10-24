@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { execFileSync } from "child_process";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
@@ -43,6 +44,7 @@ import {
   GUARDRAIL_STOP_CODES,
   WORKFLOW_ATTEMPT_STATUS,
   StepOutputTextMode,
+  SNAPSHOT_STRATEGIES,
 } from "../../types/DashboardConstants";
 import {
   TIMELINE_ATTEMPT_START_REASONS,
@@ -292,14 +294,33 @@ class RecordingSnapshotService extends WorkspaceSnapshotService {
   captureCount = 0;
 
   override async captureWorkspaceState(
-    _executionRoot: string,
+    executionRoot: string,
     strategy: "git" | "filesystem"
   ): Promise<RawWorkspaceState> {
     this.captureCount += 1;
+    const git =
+      strategy === SNAPSHOT_STRATEGIES.GIT
+        ? { headCommit: `head-${this.captureCount}` }
+        : undefined;
+    const dirty =
+      strategy === SNAPSHOT_STRATEGIES.GIT
+        ? this.captureCount % 2 === 0
+        : undefined;
     return {
       capturedAt: this.captureCount,
       strategy,
-      segments: [],
+      git,
+      segments: [
+        {
+          prefix: "",
+          root: executionRoot,
+          pathspec: "",
+          strategy,
+          git,
+          dirty,
+          files: new Map(),
+        },
+      ],
     };
   }
 
@@ -1808,6 +1829,16 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.ok(
       captured.every(({ snapshot }) => snapshot.parallelGroupId === undefined)
     );
+    assert.deepStrictEqual(captured[0]?.snapshot.gitOutcome, {
+      repositories: [
+        {
+          headAtStart: "head-1",
+          headAtEnd: "head-2",
+          dirtyAtEnd: true,
+        },
+      ],
+      dirtyAtEnd: true,
+    });
   });
 
   test("closes settled participants and releases group claims at the join", async () => {
@@ -2508,6 +2539,69 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.deepStrictEqual(sibling.sentPrompts, ["sibling"]);
     assert.strictEqual(queue.getState().currentIndex, 2);
     assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+  });
+
+  test("a materialized committed gate retries a step that leaves a dirty tree", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-committed-gate-")
+    );
+    const git = (args: string[]) =>
+      execFileSync("git", args, { cwd: workspace, stdio: "ignore" });
+    try {
+      git(["init"]);
+      git(["config", "user.email", "ctrlyoke-test@example.invalid"]);
+      git(["config", "user.name", "ctrlyoke test"]);
+      await fs.writeFile(path.join(workspace, "baseline.txt"), "baseline\n");
+      git(["add", "baseline.txt"]);
+      git(["commit", "-m", "test baseline"]);
+
+      const queue = new PromptQueue();
+      const integration = new MockHarnessIntegration(undefined, false);
+      let retryCount = 0;
+      integration.onSend = async () => {
+        retryCount += 1;
+        if (retryCount === 2) {
+          git(["add", "left-dirty.txt"]);
+          git(["commit", "-m", "retry cleaned the tree"]);
+        }
+        return { responseText: "done" };
+      };
+      await fs.writeFile(path.join(workspace, "left-dirty.txt"), "work\n");
+      queue.loadPrompts({
+        steps: [
+          {
+            prompt: "finish the work",
+            endCondition: {
+              script: "git status --porcelain",
+              compareSource: "stdout",
+              operator: "isEmpty",
+              maxRetries: 1,
+              retryPrompt:
+                "You left uncommitted changes. Finish and commit them.",
+              onFail: CONDITION_ACTIONS.RETRY,
+            },
+          },
+        ],
+      });
+
+      const context = makeContext(integration);
+      context.workspaceFolderPath = workspace;
+      context.executionWorkspace = createNoWorktreeExecutionWorkspace(
+        new MockPlatform(workspace)
+      );
+      await makeExecutor(
+        queue,
+        new EndConditionEvaluator(new MockPlatform(workspace))
+      ).execute(integration, context);
+
+      assert.deepStrictEqual(integration.sentPrompts, [
+        "finish the work",
+        "You left uncommitted changes. Finish and commit them.",
+      ]);
+      assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
   });
 
   test("preflights inherited/default session collisions before any group member launches", async () => {

@@ -61,6 +61,7 @@ import {
   PROMPT_TERMINAL_STATUS,
   STEP_CLAIM_OUTCOMES,
   getEffectiveParallelGroupWidth,
+  SNAPSHOT_STRATEGIES,
   type ConditionAction,
   type StatusMessageSeverity,
   type WorkflowExecutionOutcome,
@@ -3022,12 +3023,58 @@ export class WorkflowExecutor {
       executionRoot
     );
 
+    const gitRepositories = afterState.segments.flatMap((afterSegment) => {
+      if (afterSegment.strategy !== SNAPSHOT_STRATEGIES.GIT) return [];
+      const beforeSegment = beforeState.segments.find(
+        (segment) =>
+          segment.prefix === afterSegment.prefix &&
+          path.resolve(segment.root) === path.resolve(afterSegment.root)
+      );
+      const outcome = {
+        ...(afterState.segments.length > 1
+          ? { prefix: afterSegment.prefix }
+          : {}),
+        ...(beforeSegment?.git?.headCommit
+          ? { headAtStart: beforeSegment.git.headCommit }
+          : {}),
+        ...(afterSegment.git?.headCommit
+          ? { headAtEnd: afterSegment.git.headCommit }
+          : {}),
+        ...(afterSegment.dirty === undefined
+          ? {}
+          : { dirtyAtEnd: afterSegment.dirty }),
+      };
+      const hasGitData =
+        outcome.headAtStart !== undefined ||
+        outcome.headAtEnd !== undefined ||
+        outcome.dirtyAtEnd !== undefined;
+      return hasGitData ? [outcome] : [];
+    });
+    const gitOutcome =
+      gitRepositories.length > 0
+        ? {
+            repositories: gitRepositories,
+            ...(afterState.segments.every(
+              (segment) =>
+                segment.strategy === SNAPSHOT_STRATEGIES.GIT &&
+                segment.dirty !== undefined
+            )
+              ? {
+                  dirtyAtEnd: afterState.segments.some(
+                    (segment) => segment.dirty
+                  ),
+                }
+              : {}),
+          }
+        : undefined;
+
     let snapshot: WorkspaceSnapshot = {
       capturedAt: afterState.capturedAt,
       strategy,
       git: afterState.git,
       repos: context.snapshotService.snapshotRepoInfos(afterState),
       changedFiles,
+      ...(gitOutcome ? { gitOutcome } : {}),
       ...(parallelGroupId ? { parallelGroupId } : {}),
     };
 

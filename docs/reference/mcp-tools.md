@@ -36,13 +36,14 @@ Returns `workflowKey`, `runRef`, a `metadata` object, and `steps`.
 
 - `metadata`: `workflowName`, `harness`, `model`, `resumeSession`, `executionMode` (`interactive` or `headless`), `currentIndex`, `totalSteps`, `completedSteps`, `executionState`, `maxSteps` and `remainingSteps` (numbers, or `"unlimited"`), `workingFile`, `runDirectory`, `definitionRevision`, `descriptorRevision`. The limit fields report the effective cap after applying the workflow's `maxSteps` override to the global `queue.maxSteps` setting; `remainingSteps` is based on the current total step count.
 - `steps[]`: `index`, `prompt` for prompt steps, or `type: "script"` and `script` for script steps, `status` (`completed`, `failed`, `cancelled`, `skipped`, `running`, or `pending`), `resumeSession`, `sessionId`, and `harness`, `executionMode` and `model` for prompt steps. The workflow-level `harness`, `model`, `resumeSession` and `executionMode` are what an appended step inherits. A step that has started reports the harness and mode it actually ran with. A `ctrlyoke run` without a terminal runs interactive steps headless, for example. A pending step reports its configured value.
+- Finished prompt steps may include `gitOutcome` when git snapshots are available. `repositories` lists `headAtStart`, `headAtEnd` and `dirtyAtEnd` for each captured repository; top-level `dirtyAtEnd` is present only when every workspace root had a successful git status capture. This is advisory data and is omitted when unavailable, including filesystem snapshots and unfinished steps.
 
 A headless step cannot wait for background work: the harness process, and anything it started, exits when the agent ends its turn. Prompts queued for headless steps should run long commands in the foreground or poll until they finish. Codex cannot wait on background work in interactive mode either.
 
 ## `append_step`
 
 - `steps`: one or more queue items, in order. Each item is either a step or a future parallel group.
-  - A prompt step takes `prompt` (required), `name`, `model`, `harness`, `resumeSession`, and `sessionId` (1-based step number; needs `resumeSession: true`). No other fields are accepted, and script steps cannot be appended through MCP.
+  - A prompt step takes `prompt` (required), `name`, `model`, `harness`, `agent`, `skills`, `executionMode` (`interactive` or `headless`), `endCondition`, `preCondition`, `resumeSession`, and `sessionId` (1-based step number; needs `resumeSession: true`). Omit execution settings to inherit the workflow values. Condition fields attach named author-defined presets from the workflow's `conditions` map; see [condition presets](/workflows/end-conditions#condition-presets). No other fields are accepted; in particular, harness arguments and permission fields cannot be appended. Script steps cannot be appended through MCP.
   - A parallel group is `{ "parallel": [step, step, ...], "failFast": true }` with at least two steps. `failFast` defaults to `true`.
 - `position`:
   - `"next"` — after the current step, or after the running parallel group. Never joins that group.
@@ -72,11 +73,15 @@ Example:
 }
 ```
 
-Returns `success`, `destination` (`queue` or `activeParallelGroup`), `queueItemsAdded`, `stepsAdded`, `newQueueSize`, `insertIndex`, `insertedEndIndex`, `placement`, `parallelGroupsAdded`, `joinedParallelGroup` (when joining), plus `workingFile`, `runDirectory`, `workflowKey`, `runRef`, `definitionRevision`, and `descriptorRevision`. With `"next"`, `insertIndex` is resolved at write time and can differ from what an earlier `workflow_status` suggested if the run advanced in between.
+Returns `success`, `destination` (`queue` or `activeParallelGroup`), `queueItemsAdded`, `stepsAdded`, `newQueueSize`, `insertIndex`, `insertedEndIndex`, `placement`, `parallelGroupsAdded`, `joinedParallelGroup` (when joining), plus `workingFile`, `runDirectory`, `workflowKey`, `runRef`, `definitionRevision`, and `descriptorRevision`. `effectiveSettings` lists each appended prompt step in queue order, including parallel members, with its zero-based `index`, resolved `harness`, `model`, `executionMode`, `resumeSession`, and any materialized condition preset names. These values use the same inheritance and runtime resolution as `workflow_status`. With `"next"`, `insertIndex` is resolved at write time and can differ from what an earlier `workflow_status` suggested if the run advanced in between.
+
+The optional `warnings` array calls out execution constraints. In particular, Codex cannot wait on background work in either mode; use a non-Codex harness for a step that must wait for a long command.
+
+For `endCondition` or `preCondition`, pass `{ "use": "presetName" }` to attach a preset from the workflow's `conditions` map. The object may also include declared `params`, retry-prompt overrides, and a `maxRetries` value no higher than the preset limit. The preset owns its script and execution settings. Attaching it replaces any workflow-level condition that the step would inherit. See [condition presets](/workflows/end-conditions#condition-presets) for authoring and parameter rules.
 
 ## Step mutations
 
-- `edit_step` takes a zero-based `index` and an `updates` object. Updatable fields: `prompt`, `name`, `model`, `harness`, `resumeSession`, `sessionId`, `agent`, `enabled`, `color`, `skills`. Other fields are rejected. Omitted fields keep their values. `clearProperties` lists updatable fields to remove so they inherit workflow defaults again; the required `prompt` cannot be cleared. The deprecated `additionalArgs` input remains in the schema for compatibility, but setting or clearing it is rejected: harness arguments can only be set by the workflow author, for security reasons.
+- `edit_step` takes a zero-based `index` and an `updates` object. Updatable fields: `prompt`, `name`, `model`, `harness`, `executionMode`, `endCondition`, `preCondition`, `resumeSession`, `sessionId`, `agent`, `enabled`, `color`, `skills`. Condition fields attach named presets as described above. Other fields are rejected. Omitted fields keep their values. `clearProperties` lists updatable fields to remove so they inherit workflow defaults again; the required `prompt` cannot be cleared, and condition fields cannot be cleared. The result may include a `warnings` array for execution constraints. The deprecated `additionalArgs` input remains in the schema for compatibility, but setting or clearing it is rejected: harness arguments can only be set by the workflow author, for security reasons.
 - `remove_step` takes the same `index`.
 - `reorder_steps` takes `indices`: only the not-yet-started steps' absolute zero-based indices in the desired execution order. Never include a running or completed step.
 
