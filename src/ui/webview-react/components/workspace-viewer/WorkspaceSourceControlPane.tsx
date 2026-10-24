@@ -13,6 +13,7 @@ import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useSettingsStore } from "@store/settingsStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import {
+  hostedErrorMessage,
   workspaceDiff,
   workspaceDiscard,
   workspaceRepos,
@@ -133,7 +134,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
       setOutgoingCommitCount(result.outgoingCommitCount);
       return result.files;
     } catch (err) {
-      setScmError(String(err));
+      setScmError(hostedErrorMessage(err));
       return [];
     } finally {
       setSourceControlLoading(false);
@@ -206,7 +207,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
         setDiffData(filePath, result);
       } catch (err) {
         if (!isCurrentRequest()) return;
-        setScmError(String(err));
+        setScmError(hostedErrorMessage(err));
       } finally {
         if (isCurrentRequest()) setDiffLoading(false);
       }
@@ -285,7 +286,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
         await loadStatus();
         refreshCommitHistory();
       } catch (err) {
-        setScmError(String(err));
+        setScmError(hostedErrorMessage(err));
       }
     },
     [loadStatus, refreshCommitHistory, setScmError]
@@ -298,7 +299,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
         await loadStatus();
         refreshCommitHistory();
       } catch (err) {
-        setScmError(String(err));
+        setScmError(hostedErrorMessage(err));
       }
     },
     [loadStatus, refreshCommitHistory, setScmError]
@@ -312,7 +313,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
         }
         await refreshAfterMutation(paths);
       } catch (err) {
-        setScmError(String(err));
+        setScmError(hostedErrorMessage(err));
       }
     },
     [refreshAfterMutation, setScmError]
@@ -375,7 +376,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
       await loadStatus();
       refreshCommitHistory();
     } catch (err) {
-      setScmError(String(err));
+      setScmError(hostedErrorMessage(err));
     }
   }, [changed, loadStatus, refreshCommitHistory, setScmError]);
 
@@ -391,7 +392,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
       await loadStatus();
       refreshCommitHistory();
     } catch (err) {
-      setScmError(String(err));
+      setScmError(hostedErrorMessage(err));
     }
   }, [loadStatus, refreshCommitHistory, setScmError, staged]);
 

@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import {
+  hostedErrorMessage,
   workspaceCommit,
   workspacePush,
   workspacePull,
@@ -57,6 +58,14 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
   const clearDiff = useWorkspaceViewerStore((s) => s.clearDiff);
 
   const [generationDotCount, setGenerationDotCount] = useState(0);
+  const scmErrorRef = useRef<HTMLDivElement>(null);
+
+  // A failing git hook can report hundreds of lines; git's own verdict and
+  // the hook's summary come last, so open the error scrolled to its end.
+  useEffect(() => {
+    const element = scmErrorRef.current;
+    if (element) element.scrollTop = element.scrollHeight;
+  }, [scmError]);
 
   useEffect(() => {
     if (!generatingCommitMessage) {
@@ -91,7 +100,7 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
       }
     } catch (err) {
       if (abortController.signal.aborted) return;
-      setScmError(String(err));
+      setScmError(hostedErrorMessage(err));
     } finally {
       if (generateAbortController === abortController) {
         generateAbortController = null;
@@ -133,7 +142,7 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
       clearDiff();
       await onRefresh();
     } catch (err) {
-      setScmError(String(err));
+      setScmError(hostedErrorMessage(err));
     } finally {
       setCommitting(false);
     }
@@ -157,7 +166,7 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
       await workspacePush(selectedRepoId ?? undefined);
       await onRefresh();
     } catch (err) {
-      setScmError(String(err));
+      setScmError(hostedErrorMessage(err));
     } finally {
       setPushing(false);
     }
@@ -171,7 +180,7 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
       await workspacePull(selectedRepoId ?? undefined);
       await onRefresh();
     } catch (err) {
-      setScmError(String(err));
+      setScmError(hostedErrorMessage(err));
     } finally {
       setPulling(false);
     }
@@ -309,7 +318,15 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
         Commit
       </button>
 
-      {scmError && <p className="mt-1 text-xs text-error-fg">{scmError}</p>}
+      {scmError && (
+        <div
+          ref={scmErrorRef}
+          role="alert"
+          className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap wrap-break-word font-mono text-xs text-error-fg"
+        >
+          {scmError}
+        </div>
+      )}
     </div>
   );
 };

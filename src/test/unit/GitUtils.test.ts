@@ -36,7 +36,9 @@ import {
   getChangedFilesWithBinaryStatus,
   GitLocationMemo,
   countGitWorkingTreeChanges,
+  describeGitFailure,
   execGit,
+  GIT_FAILURE_MESSAGE_MAX_CHARS,
   type GitLocationLookup,
 } from "../../utils/GitUtils";
 
@@ -88,6 +90,57 @@ suite("GitUtils.execGit", function () {
     } finally {
       await fs.rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+suite("GitUtils.describeGitFailure", function () {
+  /** The shape `execFile` rejects with: a message that leads with the command. */
+  function execFailure(stdout: string, stderr: string): Error {
+    return Object.assign(
+      new Error(`Command failed: git -C /repo push\n${stderr}`),
+      { stdout, stderr }
+    );
+  }
+
+  test("prefers git's stderr over the command-line message", () => {
+    assert.strictEqual(
+      describeGitFailure(
+        execFailure("", "error: failed to push some refs to 'origin'\n")
+      ),
+      "error: failed to push some refs to 'origin'"
+    );
+  });
+
+  test("falls back to stdout when git explains itself there", () => {
+    assert.strictEqual(
+      describeGitFailure(
+        execFailure("nothing to commit, working tree clean\n", "")
+      ),
+      "nothing to commit, working tree clean"
+    );
+  });
+
+  test("falls back to the error message when git wrote nothing", () => {
+    assert.strictEqual(
+      describeGitFailure(new Error("git push timed out after 300 seconds")),
+      "git push timed out after 300 seconds"
+    );
+  });
+
+  test("strips the colors a hook's test runner writes", () => {
+    assert.strictEqual(
+      describeGitFailure(execFailure("", "\u001b[31mFAIL\u001b[39m ui suite")),
+      "FAIL ui suite"
+    );
+  });
+
+  test("keeps the end of very long hook output, where the verdict is", () => {
+    const stderr = `${"x".repeat(GIT_FAILURE_MESSAGE_MAX_CHARS)}\nerror: failed to push some refs`;
+    const message = describeGitFailure(execFailure("", stderr));
+
+    assert.strictEqual(message.length, GIT_FAILURE_MESSAGE_MAX_CHARS + 1);
+    assert.ok(message.startsWith("…"));
+    assert.ok(message.endsWith("error: failed to push some refs"));
   });
 });
 

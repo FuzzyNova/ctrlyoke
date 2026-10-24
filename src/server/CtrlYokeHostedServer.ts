@@ -1960,15 +1960,7 @@ export class CtrlYokeHostedServer
           await this.viewerService.stageFile(body.path);
           res.json({});
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          if (message === "Path not allowed") {
-            res.status(403).json({ error: message });
-          } else {
-            Log.error(
-              `[CtrlYokeHostedServer] workspace-viewer /stage error: ${message}`
-            );
-            res.status(500).json({ error: "Internal server error" });
-          }
+          this.sendWorkspaceGitActionError(res, "/stage", err);
         }
       }
     );
@@ -1986,15 +1978,7 @@ export class CtrlYokeHostedServer
           await this.viewerService.unstageFile(body.path);
           res.json({});
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          if (message === "Path not allowed") {
-            res.status(403).json({ error: message });
-          } else {
-            Log.error(
-              `[CtrlYokeHostedServer] workspace-viewer /unstage error: ${message}`
-            );
-            res.status(500).json({ error: "Internal server error" });
-          }
+          this.sendWorkspaceGitActionError(res, "/unstage", err);
         }
       }
     );
@@ -2012,15 +1996,7 @@ export class CtrlYokeHostedServer
           await this.viewerService.discardFile(body.path);
           res.json({});
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          if (message === "Path not allowed") {
-            res.status(403).json({ error: message });
-          } else {
-            Log.error(
-              `[CtrlYokeHostedServer] workspace-viewer /discard error: ${message}`
-            );
-            res.status(500).json({ error: "Internal server error" });
-          }
+          this.sendWorkspaceGitActionError(res, "/discard", err);
         }
       }
     );
@@ -2039,10 +2015,7 @@ export class CtrlYokeHostedServer
           await this.viewerService.commit(body.message, repo);
           res.json({});
         } catch (err) {
-          Log.error(
-            `[CtrlYokeHostedServer] workspace-viewer /commit error: ${String(err)}`
-          );
-          res.status(500).json({ error: "Internal server error" });
+          this.sendWorkspaceGitActionError(res, "/commit", err);
         }
       }
     );
@@ -2056,10 +2029,7 @@ export class CtrlYokeHostedServer
         try {
           res.json(await this.viewerService.push(repo));
         } catch (err) {
-          Log.error(
-            `[CtrlYokeHostedServer] workspace-viewer /push error: ${String(err)}`
-          );
-          res.status(500).json({ error: "Internal server error" });
+          this.sendWorkspaceGitActionError(res, "/push", err);
         }
       }
     );
@@ -2073,10 +2043,7 @@ export class CtrlYokeHostedServer
         try {
           res.json(await this.viewerService.pull(repo));
         } catch (err) {
-          Log.error(
-            `[CtrlYokeHostedServer] workspace-viewer /pull error: ${String(err)}`
-          );
-          res.status(500).json({ error: "Internal server error" });
+          this.sendWorkspaceGitActionError(res, "/pull", err);
         }
       }
     );
@@ -2675,6 +2642,27 @@ export class CtrlYokeHostedServer
       pricingUrl: LICENSE_UI.PRICING_URL,
     });
     return true;
+  }
+
+  /**
+   * Report a failed SCM action (stage, commit, push, ...) to the browser with
+   * the reason git gave, so a rejected push or failing hook reads as such
+   * instead of a generic server error.
+   */
+  private sendWorkspaceGitActionError(
+    res: express.Response,
+    route: string,
+    error: unknown
+  ): void {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message === "Path not allowed") {
+      res.status(403).json({ error: message });
+      return;
+    }
+    Log.error(
+      `[CtrlYokeHostedServer] workspace-viewer ${route} error: ${message}`
+    );
+    res.status(500).json({ error: message });
   }
 
   // ── WebSocket ─────────────────────────────────────────────────────────────
