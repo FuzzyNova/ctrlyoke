@@ -429,31 +429,21 @@ export const useWorkspaceViewerStore = create<
         set({ isOpen: true });
       },
 
-      // Leaves committing/generatingCommitMessage/pushing/pulling alone: the
-      // modal stays mounted while hidden, so those requests keep running and
-      // their own `finally` clears the flag. Resetting them here dropped the
-      // spinner mid-push and let a reopened viewer start a second one.
+      // The modal stays mounted while hidden, so a reopened viewer should show
+      // exactly what was left: the search query and results, and the diff,
+      // ref diff or file history in the SCM pane are kept. For the same
+      // reason committing/generatingCommitMessage/pushing/pulling and the
+      // search/diff loading flags are left alone: their requests keep running
+      // and their own completion clears the flag. Resetting the SCM ones here
+      // dropped the spinner mid-push and let a reopened viewer start a second.
       close() {
         set({
           isOpen: false,
           fileLoading: false,
           fileSaving: false,
           sourceControlLoading: false,
-          diffLoading: false,
-          searchLoading: false,
-          searchResults: [],
-          searchTruncated: false,
-          searchQuery: "",
-          diffFiles: null,
-          diffRefLabel: null,
-          diffRefLoading: false,
-          diffCommitInfo: null,
-          diffRef: null,
           pendingDiff: null,
           pendingFileHistory: null,
-          fileHistoryActive: false,
-          fileHistoryPath: null,
-          fileHistoryRepoId: null,
           scmError: null,
           error: null,
           languageReferences: null,

@@ -7,7 +7,7 @@ Workspace viewer is a full-screen modal for browsing/editing files and SCM state
 </purpose>
 
 <architecture>
-- `WorkspaceViewerModal.tsx` is a portal with enter/exit animation state. Once opened it stays mounted (CSS-hidden) across close, so in-flight requests keep running. `close()` clears view-scoped transient state, but must **not** reset the SCM action flags (`committing`/`generatingCommitMessage`/`pushing`/`pulling`): each is owned by its request's `finally`, and clearing it early dropped the spinner mid-push (a long pre-push hook) and let a reopened viewer start a duplicate push.
+- `WorkspaceViewerModal.tsx` is a portal with enter/exit animation state. Once opened it stays mounted (CSS-hidden) across close, so in-flight requests keep running. `close()` must keep what the panes show (search query/results, the single-file, ref or file-history diff) so a reopened viewer is exactly where it was; it clears only one-shot handoffs (`pendingDiff`/`pendingFileHistory`) and errors. It must also **not** reset the search/diff loading flags or the SCM action flags (`committing`/`generatingCommitMessage`/`pushing`/`pulling`): each is owned by its request's `finally`, and clearing it early dropped the spinner mid-push (a long pre-push hook) and let a reopened viewer start a duplicate push.
 - Explorer and SCM panes call `utils/hostedApi.ts` directly. In hosted mode those requests carry the dashboard token; keep new endpoints in that helper instead of open-coding `fetch`.
 - `workspaceViewerStore` caches unsaved file drafts by normalized workspace-relative path. Components should keep using those canonical keys, even if navigation starts from absolute paths or mixed separators.
 </architecture>
