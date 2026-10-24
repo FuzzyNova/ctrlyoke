@@ -58,15 +58,23 @@ export class VsCodeSymbolIndex implements SymbolIndex {
 
   async workspaceSymbols(
     query: string,
-    _maxResults: number
+    _maxResults: number,
+    signal?: AbortSignal
   ): Promise<IndexedSymbol[]> {
+    if (signal?.aborted) return [];
     const root = getVsCodeWorkspaceRoot();
     if (!root) return [];
-    await this.warmupLanguageFamilies();
+    await awaitWithAbort(this.warmupLanguageFamilies(), signal);
+    if (signal?.aborted) return [];
     const namedRoots = getVsCodeNamedWorkspaceRoots();
-    const symbols = await vscode.commands.executeCommand<
-      vscode.SymbolInformation[]
-    >("vscode.executeWorkspaceSymbolProvider", query);
+    const symbols = await awaitWithAbort(
+      vscode.commands.executeCommand<vscode.SymbolInformation[]>(
+        "vscode.executeWorkspaceSymbolProvider",
+        query
+      ),
+      signal
+    );
+    if (signal?.aborted) return [];
     return (symbols ?? []).map((symbol) =>
       indexedSymbol(symbol, root, namedRoots)
     );
@@ -192,4 +200,26 @@ export class VsCodeSymbolIndex implements SymbolIndex {
     visit(symbols ?? []);
     return indexed;
   }
+}
+
+function awaitWithAbort<T>(
+  promise: PromiseLike<T>,
+  signal?: AbortSignal
+): Promise<T> {
+  if (!signal) return Promise.resolve(promise);
+  if (signal.aborted) return Promise.resolve(undefined as T);
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => resolve(undefined as T);
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      }
+    );
+  });
 }

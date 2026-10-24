@@ -189,6 +189,7 @@ const SLOW_ROUTE_WAIT_MS = 1000;
  * client that is connected when it finishes.
  */
 const OFF_QUEUE_MESSAGE_TYPES: ReadonlySet<string> = new Set([
+  MESSAGE_TYPES.REQUEST_COMPLETIONS,
   MESSAGE_TYPES.REQUEST_SECRET_REGISTRY,
   MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_SEARCH,
   MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_AUDITS,
@@ -327,6 +328,10 @@ export class WebviewMessageRouter {
     string,
     HistorySearchClientRegistration
   >();
+  private readonly completionAbortControllers = new Map<
+    string,
+    AbortController
+  >();
 
   constructor(
     private readonly defaultPostMessage: PostMessageFn,
@@ -424,6 +429,13 @@ export class WebviewMessageRouter {
       options?.postMessage ?? this.defaultPostMessage,
       interactionPort
     );
+    let completionController: AbortController | undefined;
+    if (message?.type === MESSAGE_TYPES.REQUEST_COMPLETIONS) {
+      this.completionAbortControllers.get(clientId)?.abort();
+      completionController = new AbortController();
+      this.completionAbortControllers.set(clientId, completionController);
+      ctx = { ...ctx, completionAbortSignal: completionController.signal };
+    }
     if (OFF_QUEUE_MESSAGE_TYPES.has(message?.type)) {
       // These can take seconds (credential-store reads on Windows, requests to
       // skills.sh and GitHub). Keep them outside the shared routeQueue, and
@@ -438,7 +450,16 @@ export class WebviewMessageRouter {
           }
         },
       };
-      await this.routeSingleMessage(message, ctx);
+      try {
+        await this.routeSingleMessage(message, ctx);
+      } finally {
+        if (
+          completionController &&
+          this.completionAbortControllers.get(clientId) === completionController
+        ) {
+          this.completionAbortControllers.delete(clientId);
+        }
+      }
       return;
     }
     let releaseHistorySearch: (() => void) | undefined;
@@ -523,6 +544,8 @@ export class WebviewMessageRouter {
       (this.clientRouteEpochs.get(clientId) ?? 0) + 1
     );
     this.languageServerManager.disposeClient(clientId);
+    this.completionAbortControllers.get(clientId)?.abort();
+    this.completionAbortControllers.delete(clientId);
     this.clientInteractionPorts.get(clientId)?.disposeAllPending();
     this.clientInteractionPorts.delete(clientId);
     for (const controller of this.historySearchAbortControllers.get(clientId)

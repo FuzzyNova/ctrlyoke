@@ -53,7 +53,8 @@ function buildRouter(
   actions: DashboardHostActions = {
     openWorkspaceTarget: async () => ({ status: "unsupported" }),
   },
-  getNamedRoots: () => NamedRoot[] = getVsCodeNamedWorkspaceRoots
+  getNamedRoots: () => NamedRoot[] = getVsCodeNamedWorkspaceRoots,
+  completionCore?: import("../../completions/CompletionCore").CompletionCore
 ): WebviewMessageRouter {
   const settingsSync = {
     sendWorkflowPropertiesToSettings: async () => {},
@@ -67,9 +68,126 @@ function buildRouter(
     { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} },
     undefined,
     licenseService,
-    { actions, getNamedRoots }
+    { actions, getNamedRoots, completionCore }
   );
 }
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => (resolve = done));
+  return { promise, resolve };
+}
+
+suite("WebviewMessageRouter — completion routing", () => {
+  test("routes completions while a queued handler is still running", async () => {
+    const slow = deferred<unknown>();
+    const completion = deferred<unknown[]>();
+    const emitted: unknown[] = [];
+    const router = buildRouter(
+      {
+        getWorkspaceStatsService: () => ({ getSnapshot: () => slow.promise }),
+        refreshWorkspaceStats: async () => undefined,
+      },
+      () => undefined,
+      undefined,
+      undefined,
+      () => [],
+      {
+        getHashSelectionCompletions: () => [],
+        getHashCompletions: () => completion.promise,
+      } as any
+    );
+    const queued = router.route({
+      type: MESSAGE_TYPES.REQUEST_WORKSPACE_STATS,
+    });
+    let completionFinished = false;
+    const request = router
+      .route(
+        {
+          type: MESSAGE_TYPES.REQUEST_COMPLETIONS,
+          trigger: "#",
+          prefix: "#W",
+          position: 2,
+        },
+        {
+          clientTag: "browser:completion",
+          postMessage: (message) => emitted.push(message),
+        }
+      )
+      .then(() => {
+        completionFinished = true;
+      });
+    await Promise.resolve();
+    assert.strictEqual(
+      completionFinished,
+      false,
+      "completion awaits its own lookup"
+    );
+    completion.resolve([]);
+    await request;
+    assert.strictEqual(
+      completionFinished,
+      true,
+      "completion did not wait behind the queued handler"
+    );
+    slow.resolve({});
+    await queued;
+    router.disposeClient("browser:completion");
+  });
+
+  test("a newer same-client completion aborts the first and suppresses its reply", async () => {
+    const first = deferred<unknown[]>();
+    const emitted: unknown[] = [];
+    let calls = 0;
+    const router = buildRouter(
+      undefined,
+      () => undefined,
+      undefined,
+      undefined,
+      () => [],
+      {
+        getHashSelectionCompletions: () => [],
+        getHashCompletions: () =>
+          ++calls === 1 ? first.promise : Promise.resolve([]),
+      } as any
+    );
+    const postMessage = (message: unknown) => emitted.push(message);
+    const stale = router.route(
+      {
+        type: MESSAGE_TYPES.REQUEST_COMPLETIONS,
+        trigger: "#",
+        prefix: "#W",
+        position: 2,
+        seq: 1,
+      },
+      { clientTag: "browser:completion", postMessage }
+    );
+    await Promise.resolve();
+    await router.route(
+      {
+        type: MESSAGE_TYPES.REQUEST_COMPLETIONS,
+        trigger: "#",
+        prefix: "#Wi",
+        position: 3,
+        seq: 2,
+      },
+      { clientTag: "browser:completion", postMessage }
+    );
+    first.resolve([{ label: "Widget", insertText: "sym" }]);
+    await stale;
+    assert.deepStrictEqual(
+      emitted
+        .filter(
+          (message) =>
+            (message as { type?: string }).type ===
+            MESSAGE_TYPES.COMPLETIONS_RESPONSE
+        )
+        .map((message) => (message as { seq?: number }).seq),
+      [2]
+    );
+    router.disposeClient("browser:completion");
+  });
+});
 
 class FakeLicenseActionService implements LicenseActionService {
   readonly calls: string[] = [];

@@ -347,11 +347,14 @@ export class CompletionCore {
     );
   }
 
-  async getHashCompletions(query: string): Promise<PlainCompletionItem[]> {
+  async getHashCompletions(
+    query: string,
+    signal?: AbortSignal
+  ): Promise<PlainCompletionItem[]> {
     const selections = this.getHashSelectionCompletions().filter((item) =>
       fuzzyMatches(item.filterText ?? item.label, query)
     );
-    const symbols = await this.getSymbolCompletions(query);
+    const symbols = await this.getSymbolCompletions(query, signal);
     return [...selections, ...symbols];
   }
 
@@ -575,17 +578,19 @@ export class CompletionCore {
   }
 
   private async getSymbolCompletions(
-    query: string
+    query: string,
+    signal?: AbortSignal
   ): Promise<PlainCompletionItem[]> {
     if (!this.workspace.symbols) return [];
     try {
       const prefix = query.slice(0, SYMBOL_PREFIX_LENGTH);
       const [full, abbreviated] = await Promise.all([
-        this.workspace.symbols.workspaceSymbols(query, 500),
+        this.workspace.symbols.workspaceSymbols(query, 500, signal),
         prefix === query
           ? []
-          : this.workspace.symbols.workspaceSymbols(prefix, 500),
+          : this.workspace.symbols.workspaceSymbols(prefix, 500, signal),
       ]);
+      if (signal?.aborted) return [];
       const key = (s: IndexedSymbol) =>
         `${s.viewerPath}::${s.name}::${s.kind}::${s.startLine}:${s.endLine}`;
       const fullKeys = new Set(full.map(key));

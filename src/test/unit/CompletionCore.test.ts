@@ -81,6 +81,23 @@ async function waitForCondition(
 }
 
 suite("CompletionCore", () => {
+  test("passes the hash completion abort signal to workspace symbol queries", async () => {
+    const controller = new AbortController();
+    let received: AbortSignal | undefined;
+    const core = createCore({
+      symbols: {
+        workspaceSymbols: async (_query, _limit, signal) => {
+          received = signal;
+          return [];
+        },
+        documentSymbols: async () => [],
+      },
+    });
+
+    await core.getHashCompletions("Widget", controller.signal);
+    assert.strictEqual(received, controller.signal);
+  });
+
   test("returns and cancels the latest file snapshot when its budget expires", async () => {
     let receivedSignal: AbortSignal | undefined;
     const files = {
