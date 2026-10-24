@@ -299,6 +299,18 @@ export interface WorkspaceSnapshot {
    * `beforeContent` enrichment for large git-clean files.
    */
   repos?: SnapshotRepoInfo[];
+  /** Git state at the start and end of the prompt attempt, when both captures succeeded. */
+  gitOutcome?: {
+    repositories: Array<{
+      /** Folder-name prefix for multi-root workspaces. */
+      prefix?: string;
+      headAtStart?: string;
+      headAtEnd?: string;
+      dirtyAtEnd?: boolean;
+    }>;
+    /** Present only when every workspace segment had a successful git status capture. */
+    dirtyAtEnd?: boolean;
+  };
   /**
    * Files changed during this prompt that have NO structured event attribution.
    * May include changes from parallel workflows — shown with a warning in the dialog.

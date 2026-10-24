@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`workflow_status` reports per-step git outcomes.** Finished prompt steps show HEAD at start and end for captured repositories, plus whether the workspace was dirty when the step ended.
+
 - **MCP `append_step` accepts agent and skills overrides and reports effective settings.** The append result shows the resolved harness, model, execution mode, session behavior, and condition preset names for every added step, including parallel members.
 
 - **Condition presets for MCP-queued steps.** Workflows can define named,

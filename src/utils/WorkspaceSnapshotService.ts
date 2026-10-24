@@ -96,6 +96,8 @@ export interface RawWorkspaceSegment {
   pathspec: string;
   strategy: SnapshotStrategy;
   git?: WorkspaceSnapshotGitInfo;
+  /** Whether git status succeeded and found any dirty files. */
+  dirty?: boolean;
   files: Map<string, RawFileState>;
 }
 
@@ -666,6 +668,7 @@ export class WorkspaceSnapshotService {
             pathspec,
             strategy,
             git: seg.git,
+            dirty: seg.dirty,
             files: seg.files,
           },
         ],
@@ -693,10 +696,12 @@ export class WorkspaceSnapshotService {
     pathspec: string
   ): Promise<{
     git?: WorkspaceSnapshotGitInfo;
+    dirty?: boolean;
     files: Map<string, RawFileState>;
   }> {
     const files = new Map<string, RawFileState>();
     let git: WorkspaceSnapshotGitInfo | undefined;
+    let dirty: boolean | undefined;
 
     try {
       if (strategy === SNAPSHOT_STRATEGIES.GIT) {
@@ -720,6 +725,7 @@ export class WorkspaceSnapshotService {
         }
 
         const entries = parseGitPorcelainV1Z(stdout);
+        dirty = entries.length > 0;
         for (const entry of entries) {
           const { x, y, path: filePath, originalPath } = entry;
           if (!filePath) {
@@ -790,7 +796,7 @@ export class WorkspaceSnapshotService {
       return { git, files: new Map() };
     }
 
-    return { git, files };
+    return { git, dirty, files };
   }
 
   /**
@@ -827,6 +833,7 @@ export class WorkspaceSnapshotService {
           pathspec,
           strategy: SNAPSHOT_STRATEGIES.GIT,
           git: seg.git,
+          dirty: seg.dirty,
           files: seg.files,
         });
       } else {
@@ -841,6 +848,7 @@ export class WorkspaceSnapshotService {
           pathspec: "",
           strategy: SNAPSHOT_STRATEGIES.FILESYSTEM,
           git: undefined,
+          dirty: undefined,
           files: seg.files,
         });
       }

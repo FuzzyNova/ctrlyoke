@@ -213,6 +213,23 @@ None of these is covered by a filed bug.
      step.
    - Report it as data only. It must not fail a step; stage 2's `committed`
      preset is the enforcement.
+
+   **Investigation (2026-10-23):** `WorkflowExecutor.executeWithSnapshot`
+   captured a `RawWorkspaceState` before and after each prompt attempt using
+   the existing git calls in `WorkspaceSnapshotService`: `rev-parse HEAD`,
+   branch lookup and `git status --porcelain`. `captureAndEmitSnapshot` already
+   persisted the after `HEAD` and changed-file snapshot in the run timeline,
+   but discarded the before `HEAD` and whether the after status contained any
+   dirty paths. No per-step commit interval or end-dirty flag was available to
+   `workflow_status` without a new capture. The implementation reuses those
+   captures and adds optional `gitOutcome` metadata to the existing snapshot
+   event. Since the timeline manifest carries `schemaVersion`, its format is
+   bumped to v3 with an in-memory v2→v3 migration; old v2 events remain valid
+   because the new snapshot member is optional. This follows the persisted
+   state compatibility rule while keeping old readers able to ignore the
+   additive event payload. Git outcome stays advisory and is omitted for
+   unavailable snapshots, filesystem-only workspaces and unfinished steps.
+
 4. **Workflow-orchestrator template guidance.** Add the planning lessons the
    template doesn't already have:
    - Never write "stop if an earlier item is unticked" guards into queued
@@ -260,8 +277,9 @@ Each item is one session; tick it when it lands.
       edit the same template), `docs/reference/mcp-tools.md` and a guide section
       on presets, and a CHANGELOG entry under **Added**.
 - [x] 4. Stage 3 items 1–2 (append parity, effective-settings echo).
-- [ ] 5. Stage 3 item 3 (per-step git outcome), after the investigation it
-      names.
+- [x] 5. Stage 3 item 3 (per-step git outcome), using the existing before/after
+      workspace snapshots and adding optional snapshot metadata with a timeline
+      format migration.
 
 ## Tests
 

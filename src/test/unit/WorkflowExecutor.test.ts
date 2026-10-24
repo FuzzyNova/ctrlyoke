@@ -293,14 +293,30 @@ class RecordingSnapshotService extends WorkspaceSnapshotService {
   captureCount = 0;
 
   override async captureWorkspaceState(
-    _executionRoot: string,
+    executionRoot: string,
     strategy: "git" | "filesystem"
   ): Promise<RawWorkspaceState> {
     this.captureCount += 1;
+    const git =
+      strategy === "git"
+        ? { headCommit: `head-${this.captureCount}` }
+        : undefined;
+    const dirty = strategy === "git" ? this.captureCount % 2 === 0 : undefined;
     return {
       capturedAt: this.captureCount,
       strategy,
-      segments: [],
+      git,
+      segments: [
+        {
+          prefix: "",
+          root: executionRoot,
+          pathspec: "",
+          strategy,
+          git,
+          dirty,
+          files: new Map(),
+        },
+      ],
     };
   }
 
@@ -1809,6 +1825,16 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.ok(
       captured.every(({ snapshot }) => snapshot.parallelGroupId === undefined)
     );
+    assert.deepStrictEqual(captured[0]?.snapshot.gitOutcome, {
+      repositories: [
+        {
+          headAtStart: "head-1",
+          headAtEnd: "head-2",
+          dirtyAtEnd: true,
+        },
+      ],
+      dirtyAtEnd: true,
+    });
   });
 
   test("closes settled participants and releases group claims at the join", async () => {

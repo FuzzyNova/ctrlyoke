@@ -44,6 +44,24 @@ export class RunMetadataScanner {
     return snapshot;
   }
 
+  /** Latest queue-step snapshots in one streaming pass. */
+  async findLatestQueueWorkspaceSnapshots(
+    manifestPath: string
+  ): Promise<Map<number, WorkspaceSnapshot>> {
+    const snapshots = new Map<number, WorkspaceSnapshot>();
+    for await (const event of this.recorder.streamEvents(manifestPath)) {
+      if (
+        (event.eventType === TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_CAPTURED ||
+          event.eventType ===
+            TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_UPDATED) &&
+        event.target.kind === FINAL_STEP_PHASES.QUEUE
+      ) {
+        snapshots.set(event.target.stepIndex, event.payload.workspaceSnapshot);
+      }
+    }
+    return snapshots;
+  }
+
   /** Latest undo record recorded for `target`, or undefined if none. */
   async findLatestUndoRecord(
     manifestPath: string,

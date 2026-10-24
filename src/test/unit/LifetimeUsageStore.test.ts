@@ -16,7 +16,10 @@ import type {
   LifetimeHarnessContribution,
   LifetimeRunContribution,
 } from "../../types/UsageTypes";
-import type { WorkflowRunManifest } from "../../types/WorkflowTimelineTypes";
+import {
+  TIMELINE_SCHEMA_VERSION,
+  type WorkflowRunManifest,
+} from "../../types/WorkflowTimelineTypes";
 import {
   LifetimeUsageStore,
   LIFETIME_USAGE_ERROR_CODES,
@@ -101,7 +104,7 @@ suite("LifetimeUsageStore", () => {
       recursive: true,
     });
     const manifest: WorkflowRunManifest = {
-      schemaVersion: 2,
+      schemaVersion: TIMELINE_SCHEMA_VERSION,
       storageKind: "timeline",
       workflowId: workflowKey,
       runId: 1,

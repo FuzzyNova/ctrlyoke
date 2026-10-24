@@ -8,7 +8,10 @@ import {
   WORKFLOW_TOKEN_COVERAGE,
   WORKSPACE_STATS_BACKFILL_STATES,
 } from "../../types/DashboardConstants";
-import type { WorkflowRunManifest } from "../../types/WorkflowTimelineTypes";
+import {
+  TIMELINE_SCHEMA_VERSION,
+  type WorkflowRunManifest,
+} from "../../types/WorkflowTimelineTypes";
 import type { LifetimeBackfillBatch } from "../../core/harness/shared/usage/LifetimeUsageStore";
 import { LifetimeUsageStore } from "../../core/harness/shared/usage/LifetimeUsageStore";
 import { WorkspaceStatsService } from "../../core/harness/shared/usage/WorkspaceStatsService";
@@ -61,7 +64,7 @@ suite("WorkspaceStatsService", () => {
       recursive: true,
     });
     const manifest: WorkflowRunManifest = {
-      schemaVersion: 2,
+      schemaVersion: TIMELINE_SCHEMA_VERSION,
       storageKind: "timeline",
       workflowId: workflowKey,
       runId: 1,

@@ -1249,6 +1249,68 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
   });
 
+  test("workflow_status reports finished prompt-step git outcomes when recorded", async () => {
+    const server = await setup();
+    const run = await createRun("git-outcome", "2026-01-01T00-00-00-000Z", {
+      stepCount: 3,
+    });
+    const manifestPath = WorkflowPaths.manifestPath(
+      workspaceRoot,
+      run.workflowKey,
+      run.runRef
+    );
+    const gitSnapshot = {
+      capturedAt: 3,
+      strategy: "git" as const,
+      changedFiles: [],
+      gitOutcome: {
+        repositories: [
+          {
+            headAtStart: "before-commit",
+            headAtEnd: "after-commit",
+            dirtyAtEnd: true,
+          },
+        ],
+        dirtyAtEnd: true,
+      },
+    };
+    await new TimelineRecorder().appendEvents(manifestPath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_CAPTURED,
+        timestampMs: 3,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        payload: { workspaceSnapshot: gitSnapshot },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_CAPTURED,
+        timestampMs: 4,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 },
+        payload: { workspaceSnapshot: gitSnapshot },
+      },
+    ]);
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    delete workingFile.steps![2]._runtime?.completedAt;
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const status = responseJson(await server.invokeTool("workflow_status", {}));
+
+    assert.deepStrictEqual(status.steps[0].gitOutcome, {
+      repositories: [
+        {
+          headAtStart: "before-commit",
+          headAtEnd: "after-commit",
+          dirtyAtEnd: true,
+        },
+      ],
+      dirtyAtEnd: true,
+    });
+    assert.ok(!("gitOutcome" in status.steps[1]));
+    assert.ok(!("gitOutcome" in status.steps[2]));
+  });
+
   test("workflow_status reports each step's harness and executionMode", async () => {
     const server = await setup();
     const run = await createRun("modes", "2026-01-01T00-00-00-000Z", {

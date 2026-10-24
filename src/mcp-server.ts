@@ -60,6 +60,7 @@ import {
   LOGS_DIR,
   QUEUE_POSITION,
   STEP_TYPES,
+  STEP_STATUS,
   type ExecutionState,
 } from "./types/DashboardConstants";
 import type { CapabilitiesFile } from "./types/CapabilitiesTypes";
@@ -176,7 +177,9 @@ import {
 } from "./utils/CoordinationAttribution";
 import { CTRLYOKE_VERSION } from "./utils/BuildConfig";
 import { PromptFileParser } from "./core/PromptFileParser";
+import { RunMetadataScanner } from "./core/orchestration/RunMetadataScanner";
 import type { WorkflowValidationWarning } from "./types/CtrlYokeTypes";
+import type { WorkspaceSnapshot } from "./types/OutputHistoryTypes";
 
 export { MCP_TOOL_DEFINITIONS } from "./utils/McpToolDefinitions";
 
@@ -1177,6 +1180,19 @@ export class CtrlYokeMCPServer {
       undefined,
       runtime.finalStep?.phase
     );
+    let workspaceSnapshots = new Map<number, WorkspaceSnapshot>();
+    try {
+      workspaceSnapshots =
+        await new RunMetadataScanner().findLatestQueueWorkspaceSnapshots(
+          WorkflowPaths.manifestPath(
+            this.workspaceRoot,
+            selected.workflowKey,
+            selected.runRef
+          )
+        );
+    } catch {
+      // Git outcome is advisory; status stays available if history is missing.
+    }
     let schemaWarnings: WorkflowValidationWarning[] = [];
     const workflowDescriptor = await lineageRepository.readDescriptor(
       this.workspaceRoot,
@@ -1230,6 +1246,13 @@ export class CtrlYokeMCPServer {
             : { promptTruncated: true }
           : {}),
         status: stepStatuses[index],
+        ...((stepStatuses[index] === STEP_STATUS.COMPLETED ||
+          stepStatuses[index] === STEP_STATUS.FAILED ||
+          stepStatuses[index] === STEP_STATUS.CANCELLED) &&
+        !scriptStep &&
+        workspaceSnapshots.get(index)?.gitOutcome
+          ? { gitOutcome: workspaceSnapshots.get(index)?.gitOutcome }
+          : {}),
         // A step that has started reports what it actually ran with (its
         // _runtime), which includes the headless clamp a terminal-less
         // `ctrlyoke run` applies; a pending step reports its configured value.

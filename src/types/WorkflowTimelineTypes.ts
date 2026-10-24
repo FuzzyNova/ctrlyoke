@@ -31,7 +31,7 @@ export const TIMELINE_STORAGE_FILES = {
 } as const;
 
 export const TIMELINE_STORAGE_KIND = "timeline" as const;
-export const TIMELINE_SCHEMA_VERSION = 2 as const;
+export const TIMELINE_SCHEMA_VERSION = 3 as const;
 
 /** Timeline-v1 output shape retained only for per-line legacy reads. */
 export type LegacyCliOutputV1 = CliOutput & {
