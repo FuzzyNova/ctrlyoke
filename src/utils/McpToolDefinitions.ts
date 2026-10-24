@@ -28,7 +28,7 @@ export interface McpToolInputSchema {
 
 export type McpAppendStepInput = Pick<
   PromptStep,
-  "prompt" | "name" | "model" | "harness" | "resumeSession"
+  "prompt" | "name" | "model" | "harness" | "resumeSession" | "agent" | "skills"
 > & {
   sessionId?: number;
   executionMode?: ExecutionMode;
@@ -95,6 +95,16 @@ export interface McpAppendStepResult {
   warning?: string;
   /** Execution constraints that callers should account for. */
   warnings?: string[];
+  /** Effective execution settings for each added prompt step, in queue order. */
+  effectiveSettings?: Array<{
+    index: number;
+    harness: string;
+    model: string | null;
+    executionMode: ExecutionMode;
+    resumeSession: boolean;
+    endConditionPreset?: string;
+    preConditionPreset?: string;
+  }>;
 }
 
 export type McpStepUpdateArguments = Omit<
@@ -222,6 +232,16 @@ export const MCP_CLAIM_PATHS_TOOL_NAME = "claim_paths";
 /** Release execution-root-relative path claims. */
 export const MCP_RELEASE_PATHS_TOOL_NAME = "release_paths";
 
+const MCP_AGENT_SCHEMA: McpToolInputSchema = {
+  type: "string",
+  description: "The agent override.",
+};
+const MCP_SKILLS_SCHEMA: McpToolInputSchema = {
+  type: "array",
+  items: { type: "string" },
+  description: "Skills to make available to the step.",
+};
+
 const MCP_APPEND_STEP_INPUT_SCHEMA: McpToolInputSchema = {
   type: "object",
   properties: {
@@ -250,6 +270,8 @@ const MCP_APPEND_STEP_INPUT_SCHEMA: McpToolInputSchema = {
       description:
         "How to run this step. Defaults to the workflow's executionMode.",
     },
+    agent: MCP_AGENT_SCHEMA,
+    skills: MCP_SKILLS_SCHEMA,
     endCondition: conditionPresetUseSchema("endCondition"),
     preCondition: conditionPresetUseSchema("preCondition"),
     resumeSession: {
@@ -322,7 +344,7 @@ const MCP_STEP_UPDATE_SCHEMA: McpToolInputSchema = {
       oneOf: [{ type: "string" }, { type: "number" }],
       description: "A 1-based step number or a session id string to resume.",
     },
-    agent: { type: "string", description: "The agent override." },
+    agent: MCP_AGENT_SCHEMA,
     enabled: { type: "boolean", description: "Whether the step is enabled." },
     color: { type: "string", description: "The step's display color." },
     additionalArgs: {
@@ -331,11 +353,7 @@ const MCP_STEP_UPDATE_SCHEMA: McpToolInputSchema = {
       description:
         "Deprecated: harness arguments can only be set by the workflow author for security reasons. edit_step rejects setting or clearing this field.",
     },
-    skills: {
-      type: "array",
-      items: { type: "string" },
-      description: "Skills to make available to the step.",
-    },
+    skills: MCP_SKILLS_SCHEMA,
   },
 };
 
@@ -397,7 +415,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: MCP_APPEND_STEP_TOOL_NAME,
     description:
-      "Add one or more prompt steps or future parallel groups to your workflow's queue. Script steps cannot be appended through MCP. This is how you build up or extend the workflow — from staging the very first steps of a plan to adding a follow-up once you discover more work is needed. Position 'next' queues after an active parallel group and never joins it; use 'parallelWithCurrent' to join the active group. Call list_harnesses first if you want to choose a harness or model for the new steps.",
+      "Add one or more prompt steps or future parallel groups to your workflow's queue. Steps can include agent and skills overrides. Harness arguments and permission fields are never accepted. Script steps cannot be appended through MCP. Each added step's effective harness, model, execution mode, session behavior, and condition preset names are returned. Position 'next' queues after an active parallel group and never joins it; use 'parallelWithCurrent' to join the active group. Call list_harnesses first if you want to choose a harness or model for the new steps.",
     inputSchema: {
       type: "object",
       properties: {

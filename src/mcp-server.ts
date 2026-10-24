@@ -462,6 +462,33 @@ function materializeAppendStep(
   } as PromptStep;
 }
 
+function resolveEffectiveStepSettings(
+  step: PromptStep,
+  workflow: WorkingFile
+): {
+  harness: string;
+  model: string | null;
+  executionMode: (typeof EXECUTION_MODES)[keyof typeof EXECUTION_MODES];
+  resumeSession: boolean;
+} {
+  const workflowResumeSession =
+    workflow.resumeSession ?? CTRLYOKE_SETTINGS_DEFAULTS.defaults.resumeSession;
+  return {
+    harness:
+      step._runtime?.harness ??
+      step.harness ??
+      workflow.harness ??
+      PropertyResolver.resolveHarnessValue(undefined, undefined),
+    model: step.model ?? workflow.model ?? null,
+    executionMode:
+      step._runtime?.executionMode ??
+      step.executionMode ??
+      workflow.executionMode ??
+      CTRLYOKE_SETTINGS_DEFAULTS.defaults.executionMode,
+    resumeSession: step.resumeSession ?? workflowResumeSession,
+  };
+}
+
 function executionModeWarnings(
   steps: readonly WorkflowStep[],
   workingFile: WorkingFile
@@ -1208,17 +1235,19 @@ export class CtrlYokeMCPServer {
         // `ctrlyoke run` applies; a pending step reports its configured value.
         harness: scriptStep
           ? undefined
-          : (p._runtime?.harness ?? p.harness ?? queueData.harness),
+          : resolveEffectiveStepSettings(p as PromptStep, queueData).harness,
         executionMode: scriptStep
           ? undefined
-          : (p._runtime?.executionMode ??
-            p.executionMode ??
-            workflowExecutionMode),
-        model: scriptStep ? undefined : p.model,
+          : resolveEffectiveStepSettings(p as PromptStep, queueData)
+              .executionMode,
+        model: scriptStep
+          ? undefined
+          : resolveEffectiveStepSettings(p as PromptStep, queueData).model,
         sessionId: scriptStep ? null : (p.sessionId ?? null),
         resumeSession: scriptStep
           ? false
-          : (p.resumeSession ?? workflowResumeSession),
+          : resolveEffectiveStepSettings(p as PromptStep, queueData)
+              .resumeSession,
       };
     });
 
@@ -1359,6 +1388,9 @@ export class CtrlYokeMCPServer {
           : materializeAppendStep(attachedRun, item)
     );
     const flattened = flattenParallelItems(materializedItems);
+    const requestedSteps = resolvedItems.flatMap((item) =>
+      "parallel" in item ? item.parallel : [item]
+    );
 
     await this.validateStepHarnessAndModelCapabilities(
       flattened.topology.steps,
@@ -1455,6 +1487,26 @@ export class CtrlYokeMCPServer {
     if (executionWarnings.length > 0) {
       response.warnings = executionWarnings;
     }
+
+    response.effectiveSettings = requestedSteps.map((requested, offset) => {
+      const index = response!.insertIndex + offset;
+      const addedStep = updatedWorkingFile!.steps?.[index];
+      if (!addedStep || isScriptStep(addedStep)) {
+        throw new Error(
+          `Failed to resolve effective settings for appended step at index ${index}`
+        );
+      }
+      return {
+        index,
+        ...resolveEffectiveStepSettings(addedStep, updatedWorkingFile!),
+        ...(requested.endCondition
+          ? { endConditionPreset: requested.endCondition.use }
+          : {}),
+        ...(requested.preCondition
+          ? { preConditionPreset: requested.preCondition.use }
+          : {}),
+      };
+    });
 
     // Steps appended mid-run never pass the start-time approval prompt, so
     // tell the appending agent now instead of letting the step fail at

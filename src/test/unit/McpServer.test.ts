@@ -1964,6 +1964,104 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.strictEqual("warnings" in result, false);
   });
 
+  test("append_step accepts agent and skills and echoes effective settings", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "append-effective-settings",
+      "2026-01-01T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.RUNNING }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.harness = HARNESS_IDS.CLAUDE_CLI;
+    workingFile.model = "workflow-model";
+    workingFile.executionMode = EXECUTION_MODES.HEADLESS;
+    workingFile.resumeSession = true;
+    workingFile.conditions = {
+      committed: { script: "git status --porcelain" },
+      ready: { script: "npm run typecheck" },
+    };
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const result = responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          {
+            prompt: "inherit settings",
+            endCondition: { use: "committed" },
+            preCondition: { use: "ready" },
+          },
+          {
+            prompt: "override settings",
+            harness: HARNESS_IDS.CODEX_CLI,
+            model: "step-model",
+            executionMode: EXECUTION_MODES.INTERACTIVE,
+            resumeSession: false,
+            agent: "reviewer",
+            skills: ["security-review"],
+          },
+          {
+            parallel: [
+              { prompt: "parallel one", model: "parallel-model" },
+              { prompt: "parallel two", agent: "implementer" },
+            ],
+          },
+        ],
+      })
+    );
+    const persisted = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+
+    assert.strictEqual((persisted.steps![2] as PromptStep).agent, "reviewer");
+    assert.deepStrictEqual((persisted.steps![2] as PromptStep).skills, [
+      "security-review",
+    ]);
+    assert.deepStrictEqual(result.effectiveSettings, [
+      {
+        index: 1,
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        model: "workflow-model",
+        executionMode: EXECUTION_MODES.HEADLESS,
+        resumeSession: true,
+        endConditionPreset: "committed",
+        preConditionPreset: "ready",
+      },
+      {
+        index: 2,
+        harness: HARNESS_IDS.CODEX_CLI,
+        model: "step-model",
+        executionMode: EXECUTION_MODES.INTERACTIVE,
+        resumeSession: false,
+      },
+      {
+        index: 3,
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        model: "parallel-model",
+        executionMode: EXECUTION_MODES.HEADLESS,
+        resumeSession: true,
+      },
+      {
+        index: 4,
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        model: "workflow-model",
+        executionMode: EXECUTION_MODES.HEADLESS,
+        resumeSession: true,
+      },
+    ]);
+
+    await assert.rejects(
+      server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [{ prompt: "forbidden args", additionalArgs: ["--danger"] }],
+      }),
+      /append_step\.steps\[0\].*(additionalArgs|oneOf|object)/i
+    );
+  });
+
   test("materializes condition presets for append and edit, including parallel members", async () => {
     const server = await setup();
     const run = await createRun(

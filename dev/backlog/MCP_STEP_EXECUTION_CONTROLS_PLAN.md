@@ -259,7 +259,7 @@ Each item is one session; tick it when it lands.
       orchestrator agent guidance (presets and the stage 3 item 4 lessons, which
       edit the same template), `docs/reference/mcp-tools.md` and a guide section
       on presets, and a CHANGELOG entry under **Added**.
-- [ ] 4. Stage 3 items 1–2 (append parity, effective-settings echo).
+- [x] 4. Stage 3 items 1–2 (append parity, effective-settings echo).
 - [ ] 5. Stage 3 item 3 (per-step git outcome), after the investigation it
       names.
 
