@@ -426,8 +426,17 @@ async function start(mode, launchOptions) {
     args.push(`--extensionDevelopmentPath=${extensionPath}`);
   }
   // Opt-in inspector port for CPU profiling the extension host over CDP.
+  // CTRLYOKE_DEV_HOST_INSPECT_BRK=1 also holds the host before activation
+  // until a debugger resumes it, so a profiler can capture startup in full
+  // (scripts/profile-extension-host.mjs --launch does both).
   const inspectPort = process.env.CTRLYOKE_DEV_HOST_INSPECT_PORT;
-  if (inspectPort) args.push(`--inspect-extensions=${inspectPort}`);
+  if (inspectPort) {
+    const inspectFlag =
+      process.env.CTRLYOKE_DEV_HOST_INSPECT_BRK === "1"
+        ? "--inspect-brk-extensions"
+        : "--inspect-extensions";
+    args.push(`${inspectFlag}=${inspectPort}`);
+  }
   args.push(mode.workspace);
 
   const child = spawnShim(CODE_BIN, args, {

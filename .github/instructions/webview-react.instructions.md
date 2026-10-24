@@ -7,7 +7,7 @@ React dashboard shared by the VS Code webview and the hosted browser client. The
 </purpose>
 
 <bootSequence>
-- `main.tsx` must keep `./wdyr` as the first import and rehydrate persisted stores before rendering. Moving React mount ahead of rehydrate causes first-paint layout/state drift.
+- `main.tsx` must rehydrate persisted stores before rendering. Moving React mount ahead of rehydrate causes first-paint layout/state drift.
 - `BootstrapApp.tsx` is the handshake guard. In the VS Code panel it sends `READY` and captured theme vars before lazy-importing `App`; in standalone mode it must skip that because the hosted server already owns bootstrap/theme caching.
 - `types/messages.ts` is a re-export layer over `src/types/DashboardConstants.ts` and `src/types/WebviewMessageTypes.ts`. Do not create webview-only copies of message names or payload shapes.
 </bootSequence>
