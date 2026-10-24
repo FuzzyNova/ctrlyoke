@@ -24,7 +24,7 @@ synchronous `CreateProcess` call under
 1. On Windows, with at least a license key stored, run
    `npm run dev:host:profile:startup`.
 2. Read the "Busy stretches" section of the summary, or run
-   `node scripts/profile-extension-host.mjs --summarize <file>` on the capture.
+   `node scripts/profile-dev-host.mjs --summarize <file>` on the capture.
 3. The longest ctrlyoke-attributed stretches are under `OsCredentialStore`.
 
 ## Root Cause

@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import test from "node:test";
 import {
   FRAME_CATEGORIES,
+  PROFILE_TARGETS,
+  localOutFileForUrl,
+  summarizeHeapProfile,
   summarizeProfile,
-} from "./profile-extension-host.mjs";
+} from "./profile-dev-host.mjs";
 
 const frame = (functionName, category) => ({ functionName, category });
 
@@ -82,4 +86,72 @@ test("ranks self time without idle frames and totals by category", () => {
 test("drops busy stretches shorter than the threshold", () => {
   const summary = summarizeProfile(profile, resolveFrame, { minStallMs: 500 });
   assert.equal(summary.stalls.length, 0);
+});
+
+test("maps extension-host and webview script URLs to the same out/ tree", () => {
+  const outDir = path.join("C:", "dev", "ctrlyoke", "out");
+  assert.equal(
+    localOutFileForUrl("file:///c:/dev/ctrlyoke/out/extension.js", outDir),
+    path.join(outDir, "extension.js")
+  );
+  assert.equal(
+    localOutFileForUrl(
+      "https://file+.vscode-resource.vscode-cdn.net/c%3A/dev/ctrlyoke/out/ui/webview-react/assets/dashboard.js?v=1",
+      outDir
+    ),
+    path.join(outDir, "ui", "webview-react", "assets", "dashboard.js")
+  );
+  assert.equal(
+    localOutFileForUrl("file:///c:/other/out/extension.js", outDir),
+    undefined
+  );
+});
+
+test("attributes allocations to their function and its ctrlyoke callers", () => {
+  const node = (functionName, category, selfSize, children = []) => ({
+    callFrame: frame(functionName, category),
+    selfSize,
+    children,
+  });
+  const summary = summarizeHeapProfile(
+    {
+      head: node("(root)", FRAME_CATEGORIES.program, 0, [
+        node("buildRows", FRAME_CATEGORIES.ctrlyoke, 1_000, [
+          node("structuredClone", FRAME_CATEGORIES.other, 9_000),
+        ]),
+        node("(garbage collector)", FRAME_CATEGORIES.gc, 500),
+      ]),
+    },
+    resolveFrame
+  );
+
+  assert.equal(summary.totalBytes, 10_500);
+  assert.deepEqual(
+    summary.topSelf.map(({ label, bytes }) => [label, bytes]),
+    [
+      ["structuredClone", 9_000],
+      ["buildRows", 1_000],
+    ]
+  );
+  assert.deepEqual(
+    summary.topCtrlyokeTotal.map(({ label, bytes }) => [label, bytes]),
+    [["buildRows", 10_000]]
+  );
+});
+
+test("attaches to the dashboard view rather than another ctrlyoke webview", () => {
+  const webview = (purpose, extensionId = "fuzzynova.ctrlyoke") => ({
+    type: "iframe",
+    webSocketDebuggerUrl: `ws://${purpose}`,
+    url: `vscode-webview://x/index.html?extensionId=${extensionId}&purpose=${purpose}`,
+  });
+
+  const picked = PROFILE_TARGETS.dashboard.pick([
+    { type: "page", url: "vscode-file://vscode-app/workbench.html" },
+    webview("webviewView", "other.extension"),
+    webview("webviewEditor"),
+    webview("webviewView"),
+  ]);
+
+  assert.equal(picked.webSocketDebuggerUrl, "ws://webviewView");
 });

@@ -1,26 +1,35 @@
 #!/usr/bin/env node
 /**
- * CPU-profile the Extension Development Host over the Chrome DevTools
- * Protocol and print where its time went.
+ * Profile the Extension Development Host over the Chrome DevTools Protocol and
+ * print where its time (and, for the dashboard, its memory) went.
+ *
+ * Targets (--target, default exthost):
+ *   exthost    The extension host's CPU. Attaches to a dev host started with
+ *              CTRLYOKE_DEV_HOST_INSPECT_PORT=<port> (default 9229).
+ *   dashboard  The dashboard webview's CPU plus a sampling allocation profile
+ *              that counts garbage-collected objects too, so it shows what
+ *              allocates, not only what survives. Attaches to a dev host
+ *              started with CTRLYOKE_DEV_HOST_RENDERER_PORT=<port> (default
+ *              9222).
  *
  * Usage:
- *   node scripts/profile-extension-host.mjs --launch [isolated|shared|onboarding]
- *       Restarts the dev host held before activation, attaches, then resumes
- *       it, so the capture includes extension activation and startup.
- *   node scripts/profile-extension-host.mjs
- *       Attaches to a dev host already started with
- *       CTRLYOKE_DEV_HOST_INSPECT_PORT=<port>.
- *   node scripts/profile-extension-host.mjs --summarize <file.cpuprofile>
+ *   node scripts/profile-dev-host.mjs [--target <t>] --launch [isolated|shared|onboarding]
+ *       Restarts the dev host with the target's port open first. For exthost
+ *       the host is held before activation, so startup is captured in full.
+ *   node scripts/profile-dev-host.mjs [--target <t>]
+ *       Attaches to a dev host that is already running.
+ *   node scripts/profile-dev-host.mjs --summarize <file.cpuprofile|file.heapprofile>
  *       Re-prints the summary of an earlier capture.
  *
- * Options: --port <n> (default 9229), --seconds <n> (default 60; Enter or
- * Ctrl+C stops sooner), --interval-us <n> (sampling interval, default 1000),
+ * Options: --port <n>, --seconds <n> (default 60; Enter or Ctrl+C stops
+ * sooner), --interval-us <n> (CPU sampling interval, default 1000),
  * --min-stall-ms <n> (busy stretches to report, default 200), --top <n>.
  *
- * The extension host is bundled, so frames in out/*.js are mapped back to
- * their TypeScript source through the sibling .js.map. The .cpuprofile is
- * written to .ctrlyoke/logs/profiles/ and opens as a flame chart in VS Code
- * or Chrome DevTools (Performance > Load profile).
+ * Both the extension host and the dashboard are bundled, so frames in out/
+ * are mapped back to their TypeScript source through the sibling .js.map.
+ * Captures are written to .ctrlyoke/logs/profiles/; a .cpuprofile opens as a
+ * flame chart in VS Code or Chrome DevTools (Performance > Load profile), and
+ * a .heapprofile in Chrome DevTools (Memory > Load).
  */
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -42,6 +51,49 @@ const META_FRAMES = new Set([
   "(idle)",
 ]);
 
+const packageJson = JSON.parse(
+  readFileSync(path.join(REPO_ROOT, "package.json"), "utf8")
+);
+const EXTENSION_ID = `${packageJson.publisher}.${packageJson.name}`;
+
+/**
+ * What each --target attaches to. The dashboard is ctrlyoke's webview iframe
+ * in the window's renderer; `purpose=webviewView` picks the dashboard view
+ * over any editor-tab webview ctrlyoke has open.
+ */
+export const PROFILE_TARGETS = {
+  exthost: {
+    label: "extension host",
+    defaultPort: 9229,
+    portEnv: "CTRLYOKE_DEV_HOST_INSPECT_PORT",
+    launchEnv: { CTRLYOKE_DEV_HOST_INSPECT_BRK: "1" },
+    holdsAtLaunch: true,
+    sampleHeap: false,
+    pick: (targets) => targets.find((t) => t.webSocketDebuggerUrl),
+  },
+  dashboard: {
+    label: "dashboard webview",
+    defaultPort: 9222,
+    portEnv: "CTRLYOKE_DEV_HOST_RENDERER_PORT",
+    launchEnv: {},
+    holdsAtLaunch: false,
+    sampleHeap: true,
+    pick: (targets) => {
+      const ours = targets.filter(
+        (t) =>
+          t.type === "iframe" &&
+          t.webSocketDebuggerUrl &&
+          decodeURIComponent(t.url).includes(`extensionId=${EXTENSION_ID}`)
+      );
+      return (
+        ours.find((t) =>
+          decodeURIComponent(t.url).includes("purpose=webviewView")
+        ) ?? ours[0]
+      );
+    },
+  },
+};
+
 /** Frame categories, in the order the summary prints them. */
 export const FRAME_CATEGORIES = {
   ctrlyoke: "ctrlyoke",
@@ -55,7 +107,8 @@ export const FRAME_CATEGORIES = {
 
 function parseArgs(argv) {
   const options = {
-    port: 9229,
+    target: "exthost",
+    port: undefined,
     seconds: 60,
     intervalUs: 1000,
     minStallMs: 200,
@@ -67,6 +120,14 @@ function parseArgs(argv) {
     const arg = argv[i];
     const next = () => argv[++i];
     switch (arg) {
+      case "--target":
+        options.target = next();
+        if (!Object.hasOwn(PROFILE_TARGETS, options.target)) {
+          throw new Error(
+            `unknown target ${options.target}; choose ${Object.keys(PROFILE_TARGETS).join(" or ")}`
+          );
+        }
+        break;
       case "--port":
         options.port = Number(next());
         break;
@@ -93,6 +154,7 @@ function parseArgs(argv) {
         throw new Error(`unknown option ${arg}`);
     }
   }
+  options.port ??= PROFILE_TARGETS[options.target].defaultPort;
   return options;
 }
 
@@ -100,21 +162,20 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ── CDP ──────────────────────────────────────────────────────────────────────
 
-async function findInspectorTarget(port, timeoutMs) {
+async function findInspectorTarget(target, port, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
       const response = await fetch(`http://127.0.0.1:${port}/json/list`);
-      const targets = await response.json();
-      const target = targets.find((t) => t.webSocketDebuggerUrl);
-      if (target) return target.webSocketDebuggerUrl;
+      const found = target.pick(await response.json());
+      if (found) return found.webSocketDebuggerUrl;
     } catch {
       // Not listening yet.
     }
     await sleep(500);
   }
   throw new Error(
-    `no inspector on port ${port} — start the dev host with CTRLYOKE_DEV_HOST_INSPECT_PORT=${port}, or pass --launch`
+    `no ${target.label} to attach to on port ${port} — start the dev host with ${target.portEnv}=${port}, or pass --launch`
   );
 }
 
@@ -170,9 +231,9 @@ function waitForStop(seconds) {
   });
 }
 
-function launchDevHost(mode, port) {
+function launchDevHost(mode, target, port) {
   console.log(
-    `restarting the dev host (${mode}) held for the profiler on port ${port}...`
+    `restarting the dev host (${mode}) with the ${target.label} on port ${port}...`
   );
   const child = spawn(
     process.execPath,
@@ -181,8 +242,8 @@ function launchDevHost(mode, port) {
       cwd: REPO_ROOT,
       env: {
         ...process.env,
-        CTRLYOKE_DEV_HOST_INSPECT_PORT: String(port),
-        CTRLYOKE_DEV_HOST_INSPECT_BRK: "1",
+        [target.portEnv]: String(port),
+        ...target.launchEnv,
       },
       stdio: ["ignore", "inherit", "inherit"],
     }
@@ -190,12 +251,34 @@ function launchDevHost(mode, port) {
   return new Promise((resolveExit) => child.on("exit", resolveExit));
 }
 
+/**
+ * Counts objects later collected by GC as well, so the profile measures
+ * allocation churn rather than only what is still alive at the end. Older
+ * Chromium rejects the flags; then only surviving objects are counted.
+ */
+async function startHeapSampling(cdp) {
+  await cdp.send("HeapProfiler.enable");
+  try {
+    await cdp.send("HeapProfiler.startSampling", {
+      samplingInterval: 32_768,
+      includeObjectsCollectedByMajorGC: true,
+      includeObjectsCollectedByMinorGC: true,
+    });
+    return true;
+  } catch {
+    await cdp.send("HeapProfiler.startSampling", { samplingInterval: 32_768 });
+    return false;
+  }
+}
+
 async function capture(options) {
+  const target = PROFILE_TARGETS[options.target];
   const devHostExit = options.launch
-    ? launchDevHost(options.launch, options.port)
+    ? launchDevHost(options.launch, target, options.port)
     : undefined;
   // --launch compiles first, so give it far longer than an attach.
   const url = await findInspectorTarget(
+    target,
     options.port,
     options.launch ? 300_000 : 5_000
   );
@@ -205,29 +288,60 @@ async function capture(options) {
     interval: options.intervalUs,
   });
   await cdp.send("Profiler.start");
-  if (options.launch) {
+  const countsCollected = target.sampleHeap
+    ? await startHeapSampling(cdp)
+    : undefined;
+  if (options.launch && target.holdsAtLaunch) {
     await cdp.send("Runtime.runIfWaitingForDebugger");
     await cdp.send("Debugger.enable");
     await cdp.send("Debugger.resume").catch(() => {});
     await cdp.send("Debugger.disable");
   }
   console.log(
-    `profiling the extension host — reproduce the slowdown now; stopping after ${options.seconds}s${process.stdin.isTTY ? " or on Enter" : ""}.`
+    `profiling the ${target.label} — reproduce the slowdown now; stopping after ${options.seconds}s${process.stdin.isTTY ? " or on Enter" : ""}.`
   );
   const reason = await waitForStop(options.seconds);
   const { profile } = await cdp.send("Profiler.stop");
+  const heapProfile = target.sampleHeap
+    ? (await cdp.send("HeapProfiler.stopSampling")).profile
+    : undefined;
   cdp.close();
   await devHostExit;
 
   mkdirSync(PROFILE_DIR, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const file = path.join(PROFILE_DIR, `exthost-${stamp}.cpuprofile`);
-  writeFileSync(file, JSON.stringify(profile));
-  console.log(`\nstopped (${reason}); profile written to ${file}\n`);
-  return profile;
+  const base = path.join(PROFILE_DIR, `${options.target}-${stamp}`);
+  writeFileSync(`${base}.cpuprofile`, JSON.stringify(profile));
+  if (heapProfile) {
+    writeFileSync(`${base}.heapprofile`, JSON.stringify(heapProfile));
+  }
+  console.log(
+    `\nstopped (${reason}); written to ${base}.cpuprofile${heapProfile ? ` and .heapprofile${countsCollected ? "" : " (surviving objects only: this Chromium cannot count collected ones)"}` : ""}\n`
+  );
+  return { profile, heapProfile };
 }
 
 // ── Frame resolution ────────────────────────────────────────────────────────
+
+/**
+ * The local out/ file a script URL was served from, or undefined. The
+ * extension host loads `file:///c:/…/out/extension.js`; the webview loads the
+ * same path through a resource URL such as
+ * `https://file+.vscode-resource.vscode-cdn.net/c%3A/…/out/ui/…/dashboard.js`.
+ */
+export function localOutFileForUrl(url, outDir = OUT_DIR) {
+  const outMarker = `${outDir.replace(/\\/g, "/").toLowerCase()}/`;
+  let decoded;
+  try {
+    decoded = decodeURIComponent(url.split(/[?#]/)[0]).replace(/\\/g, "/");
+  } catch {
+    return undefined;
+  }
+  const at = decoded.toLowerCase().indexOf(outMarker);
+  return at < 0
+    ? undefined
+    : path.join(outDir, decoded.slice(at + outMarker.length));
+}
 
 /**
  * Resolves a CDP call frame to a readable `source:line` location, mapping
@@ -235,15 +349,14 @@ async function capture(options) {
  */
 export function createFrameResolver(outDir = OUT_DIR) {
   const maps = new Map();
-  const outPrefix = pathToFileURL(outDir).href.toLowerCase();
 
   function sourceMapFor(url) {
     if (!maps.has(url)) {
       let map = null;
       try {
-        const mapPath = `${fileURLToPath(url)}.map`;
-        if (existsSync(mapPath))
-          map = new SourceMap(JSON.parse(readFileSync(mapPath, "utf8")));
+        const file = localOutFileForUrl(url, outDir);
+        if (file && existsSync(`${file}.map`))
+          map = new SourceMap(JSON.parse(readFileSync(`${file}.map`, "utf8")));
       } catch {
         map = null;
       }
@@ -274,7 +387,7 @@ export function createFrameResolver(outDir = OUT_DIR) {
         category: FRAME_CATEGORIES.node,
       };
     }
-    if (url.toLowerCase().startsWith(outPrefix)) {
+    if (localOutFileForUrl(url, outDir)) {
       const entry = sourceMapFor(url)?.findEntry(
         callFrame.lineNumber,
         callFrame.columnNumber
@@ -421,6 +534,69 @@ export function summarizeProfile(
   };
 }
 
+/**
+ * Turns a sampling heap profile into bytes allocated per function (self) and
+ * per ctrlyoke function including its callees (total). Sizes are V8's
+ * sample-scaled estimates. Pure so it can be tested on a synthetic profile.
+ */
+export function summarizeHeapProfile(profile, resolveFrame, { top = 25 } = {}) {
+  const self = new Map();
+  const total = new Map();
+  const categories = new Map();
+  const labelByKey = new Map();
+  const categoryByKey = new Map();
+  const add = (map, key, bytes) => map.set(key, (map.get(key) ?? 0) + bytes);
+  let totalBytes = 0;
+
+  const visit = (node, stack) => {
+    const frame = resolveFrame(node.callFrame);
+    labelByKey.set(frame.key, frame.label);
+    categoryByKey.set(frame.key, frame.category);
+    const keys = new Set(stack).add(frame.key);
+    if (node.selfSize > 0) {
+      totalBytes += node.selfSize;
+      add(self, frame.key, node.selfSize);
+      add(categories, frame.category, node.selfSize);
+      for (const key of keys) add(total, key, node.selfSize);
+    }
+    for (const child of node.children ?? []) visit(child, keys);
+  };
+  visit(profile.head, new Set());
+
+  const ranked = (map, filter) =>
+    [...map.entries()]
+      .filter(([key]) => filter(key))
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, top)
+      .map(([key, bytes]) => ({ label: labelByKey.get(key) ?? key, bytes }));
+
+  return {
+    totalBytes,
+    categories: Object.values(FRAME_CATEGORIES)
+      .map((name) => ({ name, bytes: categories.get(name) ?? 0 }))
+      .filter(({ bytes }) => bytes > 0),
+    topSelf: ranked(self, (key) => !META_FRAMES.has(key)),
+    topCtrlyokeTotal: ranked(
+      total,
+      (key) => categoryByKey.get(key) === FRAME_CATEGORIES.ctrlyoke
+    ),
+  };
+}
+
+function printHeapSummary(summary) {
+  const fmt = (bytes) => `${(bytes / 1024 / 1024).toFixed(1).padStart(7)}MB`;
+  console.log(
+    `\nAllocated ${fmt(summary.totalBytes).trim()} in total.\n\nAllocation by category:`
+  );
+  for (const { name, bytes } of summary.categories)
+    console.log(`  ${fmt(bytes)}  ${name}`);
+  console.log("\nLargest allocators by self bytes:");
+  for (const f of summary.topSelf) console.log(`  ${fmt(f.bytes)}  ${f.label}`);
+  console.log("\nLargest ctrlyoke allocators including callees:");
+  for (const f of summary.topCtrlyokeTotal)
+    console.log(`  ${fmt(f.bytes)}  ${f.label}`);
+}
+
 function printSummary(summary) {
   const fmt = (ms) => `${ms.toFixed(0).padStart(7)}ms`;
   const pct = (ms) =>
@@ -431,7 +607,7 @@ function printSummary(summary) {
   for (const { name, ms } of summary.categories)
     console.log(`  ${fmt(ms)} ${pct(ms)}  ${name}`);
 
-  console.log("\nBusy stretches that blocked the event loop (longest first):");
+  console.log("\nBusy stretches that blocked the main thread (longest first):");
   if (summary.stalls.length === 0) console.log("  none");
   for (const s of summary.stalls) {
     console.log(`  ${fmt(s.durationMs)} at +${(s.startMs / 1000).toFixed(2)}s`);
@@ -452,15 +628,29 @@ if (
 ) {
   try {
     const options = parseArgs(process.argv.slice(2));
-    const profile = options.summarize
-      ? JSON.parse(readFileSync(options.summarize, "utf8"))
-      : await capture(options);
-    printSummary(
-      summarizeProfile(profile, createFrameResolver(), {
-        minStallMs: options.minStallMs,
-        top: options.top,
-      })
-    );
+    const resolveFrame = createFrameResolver();
+    let profile;
+    let heapProfile;
+    if (!options.summarize) {
+      ({ profile, heapProfile } = await capture(options));
+    } else if (options.summarize.endsWith(".heapprofile")) {
+      heapProfile = JSON.parse(readFileSync(options.summarize, "utf8"));
+    } else {
+      profile = JSON.parse(readFileSync(options.summarize, "utf8"));
+    }
+    if (profile) {
+      printSummary(
+        summarizeProfile(profile, resolveFrame, {
+          minStallMs: options.minStallMs,
+          top: options.top,
+        })
+      );
+    }
+    if (heapProfile) {
+      printHeapSummary(
+        summarizeHeapProfile(heapProfile, resolveFrame, { top: options.top })
+      );
+    }
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;
