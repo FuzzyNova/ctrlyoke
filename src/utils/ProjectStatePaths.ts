@@ -24,16 +24,34 @@ export function ctrlyokeStateHome(): string {
 }
 
 /**
+ * `projectKey` is pure in its resolved input, and every run-history path
+ * (`runsRoot`, `lineageDir`, `runDir`, …) recomputes it, so listing history
+ * hashed the same root once per entry. A process sees a handful of roots, so
+ * the cap only guards against unbounded growth.
+ */
+const PROJECT_KEY_CACHE_LIMIT = 64;
+const projectKeyCache = new Map<string, string>();
+
+/**
  * Build the stable, readable directory key for a resolved ctrlyoke state root.
  * The hash is based on PathCasing's platform-aware comparison form so Windows
  * drive-letter and path casing differences do not create separate projects.
  */
 export function projectKey(stateRoot: string): string {
   const resolvedStateRoot = path.resolve(stateRoot);
+  const cached = projectKeyCache.get(resolvedStateRoot);
+  if (cached !== undefined) {
+    return cached;
+  }
+
   const slug = sanitizeProjectSlug(path.basename(resolvedStateRoot));
   const hash = hashPathForCompare(resolvedStateRoot).slice(0, HASH_LENGTH);
-
-  return `${slug}-${hash}`;
+  const key = `${slug}-${hash}`;
+  if (projectKeyCache.size >= PROJECT_KEY_CACHE_LIMIT) {
+    projectKeyCache.clear();
+  }
+  projectKeyCache.set(resolvedStateRoot, key);
+  return key;
 }
 
 /** Resolve the root directory for a project's selected run-history location. */
