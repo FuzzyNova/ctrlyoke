@@ -42,6 +42,16 @@ export function getGitMutationTimeoutMs(): number {
   return getGitTimeoutMs(true);
 }
 
+/**
+ * Timeout for read-only commands whose cost grows with the whole checkout,
+ * such as `git status` over every file. They share the mutation ceiling: it
+ * guards against a hung process, not a budget a large repository can outrun
+ * (the short default does, on a cold Windows checkout).
+ */
+export function getGitWholeRepoTimeoutMs(): number {
+  return getGitTimeoutMs(true);
+}
+
 function gitCommandName(args: readonly string[]): string {
   const commandStart = args[0] === "-C" ? 2 : 0;
   const command = args[commandStart] ?? "";
@@ -259,7 +269,12 @@ const execFileAsync = async (
 export const GIT_COMMAND_TIMEOUT_MS = GIT_TIMEOUT_MS;
 export const GIT_COMMAND_MAX_BUFFER = GIT_MAX_BUFFER;
 
-async function execGit(
+/**
+ * Run git with the shared timeout and output limits. Prefer this to a bare
+ * `promisify(execFile)`, whose 1 MiB default `maxBuffer` kills git once its
+ * output is path-sized (about 15k `git status` entries).
+ */
+export async function execGit(
   args: readonly string[],
   options: ExecFileOptions = {}
 ): Promise<{ stdout: string; stderr: string }> {

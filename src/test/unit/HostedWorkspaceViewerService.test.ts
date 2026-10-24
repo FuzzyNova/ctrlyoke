@@ -1659,6 +1659,24 @@ suite("HostedWorkspaceViewerService", function () {
       assert.strictEqual(result.outgoingCommitCount, 0);
     });
 
+    test("rejects instead of reporting a clean tree when git status fails", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "tracked.txt", "one\n", "initial commit");
+      fs.writeFileSync(path.join(root, "tracked.txt"), "two\n");
+      fs.writeFileSync(path.join(root, ".git", "index"), "not an index");
+
+      const svc = new HostedWorkspaceViewerService(root);
+
+      await assert.rejects(svc.getStatus(), /git status failed/);
+      await assert.rejects(svc.discardFile("tracked.txt"), /git status failed/);
+      assert.strictEqual(
+        fs.readFileSync(path.join(root, "tracked.txt"), "utf8"),
+        "two\n"
+      );
+    });
+
     test("reports outgoing commits relative to the upstream branch", async () => {
       const remoteRoot = createWorkspace();
       const root = createWorkspace();

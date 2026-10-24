@@ -34,8 +34,14 @@ import {
 } from "../platform/WorkspaceViewerPath";
 import { discoverRepos } from "./WorkspaceRepoDiscovery";
 import { isPathWithinDirectory } from "./PathSecurity";
-import { parseGitNameStatusZ, parseGitPorcelainV1Z } from "./GitUtils";
+import {
+  execGit,
+  getGitWholeRepoTimeoutMs,
+  parseGitNameStatusZ,
+  parseGitPorcelainV1Z,
+} from "./GitUtils";
 
+/** Blob and metadata reads; whole-repo listings go through `execGit`. */
 const execFileAsync = promisify(execFile);
 
 /** Normalize Windows line endings to LF before diff computation. */
@@ -474,8 +480,9 @@ export class WorkspaceSnapshotService {
       if (segment.pathspec) {
         diffArgs.push("--", segment.pathspec);
       }
-      const result = await execFileAsync("git", diffArgs, {
+      const result = await execGit(diffArgs, {
         cwd: workspacePath,
+        timeout: getGitWholeRepoTimeoutMs(),
       });
       stdout = result.stdout;
     } catch (err) {
@@ -717,9 +724,14 @@ export class WorkspaceSnapshotService {
           if (pathspec) {
             args.push("--", pathspec);
           }
-          const result = await execFileAsync("git", args, { cwd: root });
+          const result = await execGit(args, {
+            cwd: root,
+            timeout: getGitWholeRepoTimeoutMs(),
+          });
           stdout = result.stdout;
         } catch (err) {
+          // `dirty` stays undefined: that is how `computeSegmentChanges`
+          // knows this segment's file map is unknown rather than clean.
           Log.warn(`[WorkspaceSnapshotService] git status failed: ${err}`);
           return { git, files };
         }
@@ -915,6 +927,8 @@ export class WorkspaceSnapshotService {
           pathspec: afterSeg.pathspec,
           strategy: afterSeg.strategy,
           git: undefined,
+          // A root first seen after the prompt had nothing dirty before it.
+          dirty: false,
           files: new Map<string, RawFileState>(),
         } satisfies RawWorkspaceSegment);
       changes.push(...(await this.computeSegmentChanges(beforeSeg, afterSeg)));
@@ -935,8 +949,28 @@ export class WorkspaceSnapshotService {
     // Git-relative keys already surfaced, so the commit-range pass can skip them.
     const seenSegmentPaths = new Set<string>();
 
+    // A failed `git status` leaves an empty file map. Before the prompt, that
+    // map would read as a clean tree, so every file already dirty would look
+    // created or modified by the prompt and its undo would revert work the
+    // prompt never touched: only the commit range can be trusted. After the
+    // prompt, the files dirty beforehand are still checked against the disk
+    // below; only files the prompt newly dirtied go unseen.
+    const isGit = strategy === SNAPSHOT_STRATEGIES.GIT;
+    const beforeStatusFailed = isGit && before.dirty === undefined;
+    if (beforeStatusFailed) {
+      Log.warn(
+        `[WorkspaceSnapshotService] skipping uncommitted changes in ${workspacePath}: git status failed before the prompt`
+      );
+    } else if (isGit && after.dirty === undefined) {
+      Log.warn(
+        `[WorkspaceSnapshotService] git status failed after the prompt in ${workspacePath}: files it newly changed are not recorded`
+      );
+    }
+
     // Files in after: created or modified
-    for (const [filePath, afterState] of after.files) {
+    for (const [filePath, afterState] of beforeStatusFailed
+      ? []
+      : after.files) {
       seenSegmentPaths.add(filePath);
       const beforeState = before.files.get(filePath);
       if (afterState.isDeleted) {

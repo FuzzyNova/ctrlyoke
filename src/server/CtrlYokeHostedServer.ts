@@ -1811,10 +1811,12 @@ export class CtrlYokeHostedServer
         try {
           res.json(await this.viewerService.getStatus(repo));
         } catch (err) {
+          // The message is shown in the SCM pane in place of a file list.
+          const message = err instanceof Error ? err.message : String(err);
           Log.error(
-            `[CtrlYokeHostedServer] workspace-viewer /status error: ${String(err)}`
+            `[CtrlYokeHostedServer] workspace-viewer /status error: ${message}`
           );
-          res.status(500).json({ error: "Internal server error" });
+          res.status(500).json({ error: message });
         }
       }
     );

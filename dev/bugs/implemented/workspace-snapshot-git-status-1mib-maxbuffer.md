@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-24 by timeout-budget bug sweep workflow (utils-git-config)
 - **Area:** `src/utils/WorkspaceSnapshotService.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

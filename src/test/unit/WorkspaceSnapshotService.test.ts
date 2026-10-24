@@ -107,6 +107,59 @@ suite("WorkspaceSnapshotService", function () {
     assert.strictEqual(changes[0]?.contentToRestore, "base\n");
   });
 
+  test("does not attribute already-dirty files to the prompt when git status failed before it", async () => {
+    await writeWorkspaceFile("tracked.txt", "dirty before prompt\n");
+    await writeWorkspaceFile("untracked-before.txt", "user work\n");
+    const indexPath = path.join(workspaceRoot, ".git", "index");
+    const index = await fs.readFile(indexPath);
+    await fs.writeFile(indexPath, "not an index");
+    const before = await snapshotService.captureWorkspaceState(
+      workspaceRoot,
+      SNAPSHOT_STRATEGIES.GIT
+    );
+    await fs.writeFile(indexPath, index);
+
+    const after = await snapshotService.captureWorkspaceState(
+      workspaceRoot,
+      SNAPSHOT_STRATEGIES.GIT
+    );
+    const changes = await snapshotService.computeSnapshotChanges(
+      before,
+      after,
+      workspaceRoot
+    );
+
+    assert.strictEqual(before.segments[0]?.dirty, undefined);
+    assert.strictEqual(after.segments[0]?.files.size, 2);
+    assert.deepStrictEqual(changes, []);
+  });
+
+  test("still records changes to already-dirty files when git status failed after the prompt", async () => {
+    await writeWorkspaceFile("tracked.txt", "dirty before prompt\n");
+    const before = await snapshotService.captureWorkspaceState(
+      workspaceRoot,
+      SNAPSHOT_STRATEGIES.GIT
+    );
+    await writeWorkspaceFile("tracked.txt", "edited by prompt\n");
+    await fs.writeFile(path.join(workspaceRoot, ".git", "index"), "corrupt");
+
+    const after = await snapshotService.captureWorkspaceState(
+      workspaceRoot,
+      SNAPSHOT_STRATEGIES.GIT
+    );
+    const changes = await snapshotService.computeSnapshotChanges(
+      before,
+      after,
+      workspaceRoot
+    );
+
+    assert.strictEqual(after.segments[0]?.dirty, undefined);
+    assert.deepStrictEqual(
+      changes.map((change) => [change.path, change.changeType]),
+      [["tracked.txt", "modified"]]
+    );
+  });
+
   test("scopes a single-root git snapshot to a workspace below the repo root", async () => {
     const packageRoot = path.join(workspaceRoot, "packages", "foo");
     await fs.mkdir(packageRoot, { recursive: true });

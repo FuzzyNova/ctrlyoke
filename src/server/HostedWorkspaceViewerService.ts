@@ -101,7 +101,9 @@ import {
   getGitIgnoredEntries,
   getDiffBetweenRefs,
   GIT_COMMAND_TIMEOUT_MS,
+  execGit,
   getGitMutationTimeoutMs,
+  getGitWholeRepoTimeoutMs,
 } from "../utils/GitUtils";
 import {
   DIFF_CHANGE_TYPES,
@@ -1602,13 +1604,16 @@ export class HostedWorkspaceViewerService {
     };
   }
 
-  /** Status for a single repo toplevel, with viewer-prefixed file paths. */
+  /**
+   * Status for a single repo toplevel, with viewer-prefixed file paths. A
+   * failed `git status` throws: an empty list would show a dirty tree as
+   * clean, and callers (the SCM pane, discard, diff) act on what it reports.
+   */
   private async getRepoStatus(
     repoRoot: string
   ): Promise<WorkspaceScmStatusResponse> {
-    const [statusResult, syncCountsResult] = await Promise.allSettled([
-      execFileAsync(
-        "git",
+    const [statusResult, syncCounts] = await Promise.all([
+      execGit(
         [
           "-c",
           "core.quotepath=false",
@@ -1618,29 +1623,18 @@ export class HostedWorkspaceViewerService {
           "--porcelain=v1",
           "-z",
         ],
-        { timeout: GIT_COMMAND_TIMEOUT_MS }
-      ),
+        { timeout: getGitWholeRepoTimeoutMs() }
+      ).catch((err: unknown) => {
+        throw new Error(
+          `git status failed in ${repoRoot}: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }),
+      // Never rejects: an unknown upstream reads as nothing to sync.
       this.getSyncCounts(repoRoot),
     ]);
 
-    if (statusResult.status !== PROMISE_SETTLED_STATUSES.FULFILLED) {
-      return {
-        files: [],
-        incomingCommitCount: 0,
-        outgoingCommitCount: 0,
-      };
-    }
-
-    const syncCounts =
-      syncCountsResult.status === PROMISE_SETTLED_STATUSES.FULFILLED
-        ? syncCountsResult.value
-        : {
-            incomingCommitCount: 0,
-            outgoingCommitCount: 0,
-          };
-
     return {
-      files: this.parsePorcelainV1(statusResult.value.stdout, repoRoot),
+      files: this.parsePorcelainV1(statusResult.stdout, repoRoot),
       ...syncCounts,
     };
   }

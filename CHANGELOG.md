@@ -59,6 +59,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   extension host. Ignored folders are now searched after your other files, and
   only as far as the results you scroll to need.
 
+- **A step's file changes are no longer lost in a workspace with many changed
+  files.** Once a workspace had roughly 15,000 or more uncommitted or untracked
+  files, for example a virtual environment or dependency folder created before
+  it was git-ignored, `git status` produced more output than ctrlyoke accepted.
+  Every step then recorded no file changes and offered nothing to undo. The
+  limit is now 50 MB. If `git status` still fails when a step starts, files that
+  were already changed are no longer reported as the step's changes, so undo
+  cannot revert your own work.
+
+- **Source Control shows an error when git status fails, not a clean tree.** In
+  the workspace viewer, a large checkout whose `git status` timed out after 10
+  seconds or produced too much output showed **no changes**. Status now gets
+  the same limits as other long Git operations, and a failure shows its error.
+  Discarding a file and opening its diff also fail with that error instead of
+  guessing the file's state.
+
 - **The workspace viewer reopens where you left it.** Closing and reopening it
   keeps the Search tab's query and results, and the commit, ref or file-history
   diff shown in Source Control, instead of clearing them.

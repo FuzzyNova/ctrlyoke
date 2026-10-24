@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-24 by timeout-budget bug sweep workflow (server-completions)
 - **Area:** `src/server/HostedWorkspaceViewerService.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -41,12 +41,12 @@ writes 1.1 MB rejects with `ERR_CHILD_PROCESS_STDIO_MAXBUFFER`.
 ## Root Cause
 
 - `src/server/HostedWorkspaceViewerService.ts:142`: `const execFileAsync =
-  promisify(execFile);` is the plain Node helper, not GitUtils' wrapper (which sets
+promisify(execFile);` is the plain Node helper, not GitUtils' wrapper (which sets
   `GIT_MAX_BUFFER = 50 MB`).
 - `HostedWorkspaceViewerService.ts:1606-1632` (`getRepoStatus`) runs `git status` with
   only `{ timeout: GIT_COMMAND_TIMEOUT_MS }`. On any failure (timeout, buffer overflow,
   lock contention), it returns `{ files: [], incomingCommitCount: 0,
-  outgoingCommitCount: 0 }`, with no error and no truncated flag.
+outgoingCommitCount: 0 }`, with no error and no truncated flag.
 - Callers: `getScmStatus` (line 1589), `getFileDiff` (line 1776) and `discardFile`
   (lines 1964-1975, the untracked check).
 
@@ -55,7 +55,7 @@ writes 1.1 MB rejects with `ERR_CHILD_PROCESS_STDIO_MAXBUFFER`.
 - Run status with an explicit large `maxBuffer`, or better, `spawn` it and parse the
   NUL-separated stream incrementally. That removes the size limit entirely.
 - Do not turn failure into "clean". Return an error state (for example `error:
-  "timeout" | "failed"`) that the SCM pane shows, with a retry, and let `discardFile`
+"timeout" | "failed"`) that the SCM pane shows, with a retry, and let `discardFile`
   and `getFileDiff` fail loudly instead of guessing.
 - The time cost grows with the size of the checkout, so use the longer GitUtils timeout
   for status (or make it configurable). If needed, report progress rather than a fixed

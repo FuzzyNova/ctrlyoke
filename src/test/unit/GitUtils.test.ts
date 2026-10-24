@@ -36,6 +36,7 @@ import {
   getChangedFilesWithBinaryStatus,
   GitLocationMemo,
   countGitWorkingTreeChanges,
+  execGit,
   type GitLocationLookup,
 } from "../../utils/GitUtils";
 
@@ -63,6 +64,30 @@ suite("GitUtils.countGitWorkingTreeChanges", function () {
         conflicted: 3,
       }
     );
+  });
+});
+
+suite("GitUtils.execGit", function () {
+  test("returns output larger than Node's default 1 MiB exec buffer", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cy-exec-git-"));
+    try {
+      // A config value is the cheapest way to make git print megabytes;
+      // `git status` gets there only with tens of thousands of files.
+      const value = "x".repeat(2 * 1024 * 1024);
+      const configPath = path.join(dir, "big.cfg");
+      await fs.writeFile(configPath, `[big]\n\tvalue = ${value}\n`);
+
+      const { stdout } = await execGit([
+        "config",
+        "--file",
+        configPath,
+        "big.value",
+      ]);
+
+      assert.strictEqual(stdout.trim().length, value.length);
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
   });
 });
 
