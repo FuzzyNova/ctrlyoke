@@ -39,6 +39,9 @@ import {
   TEMPLATE_VARIABLE_DEFAULT_SOURCES,
   EDITOR_FONT_SIZE_VSCODE,
   isHarnessId,
+  isRerunConfirmationMode,
+  RERUN_CONFIRMATION_MODES,
+  type RerunConfirmationMode,
   type EditorFontSize,
   type StatusLineHarnessId,
   type HarnessId,
@@ -171,6 +174,7 @@ export const CONFIG_KEYS = {
   UI_CONFIRM_RESET_OPERATIONS: "ui.confirmResetOperations",
   UI_CONFIRM_CONTINUATION_DISCARD_OPERATIONS:
     "ui.confirmContinuationDiscardOperations",
+  UI_CONFIRM_RERUN_OPERATIONS: "ui.confirmRerunOperations",
   UI_SHOW_HEADLESS_PERMISSION_WARNING: "ui.showHeadlessPermissionWarning",
   UI_AUTO_FOCUS_OUTPUT_ON_EXECUTION: "ui.autoFocusOutputOnExecution",
   UI_OUTPUT_VIRTUALIZATION_ROW_THRESHOLD: "ui.outputVirtualizationRowThreshold",
@@ -1546,6 +1550,27 @@ export const ConfigurationUtils = {
     await configService.set(
       CONFIG_KEYS.UI_CONFIRM_CONTINUATION_DISCARD_OPERATIONS,
       enabled,
+      CONFIG_SCOPE.USER
+    );
+  },
+
+  /**
+   * Which workflows show a confirmation before Re-run starts a new run. A
+   * hand-edited value outside the enum falls back to the default.
+   */
+  getRerunConfirmationMode(): RerunConfirmationMode {
+    const value: unknown = configService.get(
+      CONFIG_KEYS.UI
+    ).confirmRerunOperations;
+    return isRerunConfirmationMode(value)
+      ? value
+      : RERUN_CONFIRMATION_MODES.EXCEPT_FAVORITES;
+  },
+
+  async setRerunConfirmationMode(mode: RerunConfirmationMode): Promise<void> {
+    await configService.set(
+      CONFIG_KEYS.UI_CONFIRM_RERUN_OPERATIONS,
+      mode,
       CONFIG_SCOPE.USER
     );
   },

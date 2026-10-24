@@ -180,6 +180,7 @@ describe("setGlobalSettings", () => {
       confirmDeleteOperations: false,
       confirmResetOperations: false,
       confirmContinuationDiscardOperations: false,
+      confirmRerunOperations: "never",
       hideGitIgnoredFiles: true,
       wordWrap: true,
       outputFontSize: 13,

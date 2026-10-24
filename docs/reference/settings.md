@@ -1051,6 +1051,13 @@ Show a confirmation dialog before resetting workflow start position.
 
 Show a confirmation dialog before discarding a continuation's edited suffix (Discard Continuation, Start New Run Instead).
 
+### `ui.confirmRerunOperations` {#ui-confirmrerunoperations}
+
+- **Type:** `"always" | "exceptFavorites" | "never"`
+- **Default:** `"exceptFavorites"`
+
+When to show a confirmation dialog before Re-run starts a new run of the workflow from its first step. 'always' asks for every workflow, 'exceptFavorites' (the default) asks for every workflow except favorites, so the workflows you re-run on purpose start straight away, and 'never' re-runs without asking.
+
 ### `ui.hideGitIgnoredFiles` {#ui-hidegitignoredfiles}
 
 - **Type:** `boolean`

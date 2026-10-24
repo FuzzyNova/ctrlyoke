@@ -11,8 +11,13 @@ import { Header } from "@components/layout/Header";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
+import { useSettingsStore } from "@store/settingsStore";
 import { EXECUTION_STATES, MESSAGE_TYPES, RUNNER_IDS } from "@/types/messages";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import {
+  RERUN_CONFIRMATION_MODES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+  type RerunConfirmationMode,
+} from "@root/types/DashboardConstants";
 
 const postMessage = vi.fn();
 const runRef = "run-2026-07-20T10-30-00-000Z" as never;
@@ -384,6 +389,127 @@ describe("Header execution controls", () => {
     }
   });
 
+  describe("Re-run confirmation", () => {
+    const seedNewRunMessage = {
+      type: MESSAGE_TYPES.SEED_NEW_RUN,
+      address: {
+        workflowKey: "workflow-a",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef,
+      },
+      expectedDefinitionRevision: 3,
+      expectedDescriptorRevision: 7,
+    };
+
+    const showCompletedRun = (
+      mode: RerunConfirmationMode,
+      isFavorite: boolean
+    ) => {
+      useSettingsStore.setState((state) => ({
+        globalSettings: {
+          ...state.globalSettings,
+          confirmRerunOperations: mode,
+        },
+      }));
+      useUiStore.setState({
+        executionRunRef: null,
+        pendingRewind: null,
+        runSummaries: [],
+        recentWorkflows: [
+          {
+            address: {
+              workflowKey: "workflow-a" as never,
+              kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+              runRef,
+            },
+            workflowName: "Run view",
+            executionState: EXECUTION_STATES.COMPLETED,
+            isFavorite,
+          },
+        ],
+      });
+      useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.COMPLETED);
+      render(<Header />);
+    };
+
+    beforeEach(() => {
+      useSettingsStore.getState().resetSettings();
+    });
+
+    it("asks before re-running a workflow that is not a favorite", () => {
+      showCompletedRun(RERUN_CONFIRMATION_MODES.EXCEPT_FAVORITES, false);
+
+      fireEvent.click(screen.getByRole("button", { name: "Re-run" }));
+      expect(postMessage).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: MESSAGE_TYPES.SEED_NEW_RUN })
+      );
+
+      const dialog = screen.getByRole("dialog");
+      expect(
+        within(dialog).getByText(
+          'Start a new run of "Run view" from its first step?'
+        )
+      ).toBeInTheDocument();
+      fireEvent.click(within(dialog).getByRole("button", { name: "Re-run" }));
+
+      expect(postMessage).toHaveBeenCalledWith(seedNewRunMessage);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("re-runs a favorite straight away under Except favorites", () => {
+      showCompletedRun(RERUN_CONFIRMATION_MODES.EXCEPT_FAVORITES, true);
+
+      fireEvent.click(screen.getByRole("button", { name: "Re-run" }));
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(postMessage).toHaveBeenCalledWith(seedNewRunMessage);
+    });
+
+    it("never asks under Never", () => {
+      showCompletedRun(RERUN_CONFIRMATION_MODES.NEVER, false);
+
+      fireEvent.click(screen.getByRole("button", { name: "Re-run" }));
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(postMessage).toHaveBeenCalledWith(seedNewRunMessage);
+    });
+
+    it("asks for favorites too under Always, and Cancel re-runs nothing", () => {
+      showCompletedRun(RERUN_CONFIRMATION_MODES.ALWAYS, true);
+
+      fireEvent.click(screen.getByRole("button", { name: "Re-run" }));
+      const dialog = screen.getByRole("dialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(postMessage).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: MESSAGE_TYPES.SEED_NEW_RUN })
+      );
+    });
+
+    it("switches the setting to Never from Don't ask again, and back when unchecked", () => {
+      showCompletedRun(RERUN_CONFIRMATION_MODES.ALWAYS, false);
+
+      fireEvent.click(screen.getByRole("button", { name: "Re-run" }));
+      const checkbox = within(screen.getByRole("dialog")).getByRole(
+        "checkbox",
+        { name: "Don't ask me again before re-running" }
+      );
+
+      fireEvent.click(checkbox);
+      expect(postMessage).toHaveBeenLastCalledWith({
+        type: MESSAGE_TYPES.UPDATE_CONFIRM_RERUN,
+        value: RERUN_CONFIRMATION_MODES.NEVER,
+      });
+
+      fireEvent.click(checkbox);
+      expect(postMessage).toHaveBeenLastCalledWith({
+        type: MESSAGE_TYPES.UPDATE_CONFIRM_RERUN,
+        value: RERUN_CONFIRMATION_MODES.ALWAYS,
+      });
+    });
+  });
+
   // `Set start position` on the first step seeds a run without executing it, so
   // a run can sit here having run nothing. Re-run would fork yet another empty
   // run; Run executes the one on screen via the same continuation path.
@@ -462,7 +588,10 @@ describe("Header execution controls", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows only Re-run below xs for a stopped run", () => {
+  // Narrow widths hide only the slots that would be disabled at wider widths:
+  // a stopped run with steps left can be resumed, so Resume must stay visible
+  // beside Re-run instead of collapsing to Re-run alone.
+  it("keeps Re-run and Resume visible below xs for a stopped run", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "workflow-a" as never,
@@ -482,10 +611,16 @@ describe("Header execution controls", () => {
     );
     const resumeButton = screen.getByRole("button", { name: "Resume" });
     expect(resumeButton).toBeEnabled();
-    expect(resumeButton.className).toContain("hidden xs:flex");
+    expect(resumeButton.className).toContain("flex bg-btn-secondary-bg");
+    expect(resumeButton.className).not.toContain("hidden");
     expect(screen.getByRole("button", { name: "Stop" }).className).toContain(
       "hidden xs:flex"
     );
+    const dividers = screen
+      .getByRole("group", { name: "Workflow execution controls" })
+      .querySelectorAll(".cy-button-group-divider");
+    expect(dividers[0].className).not.toContain("hidden");
+    expect(dividers[1].className).toContain("hidden xs:block");
   });
 
   it("keeps a divider visible when both of the slots it separates are", () => {

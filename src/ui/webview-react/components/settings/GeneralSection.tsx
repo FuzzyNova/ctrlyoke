@@ -16,6 +16,7 @@ import {
 import {
   DEFAULT_FORMAT_OPTIONS_META,
   STEP_COLOR_MODE_OPTIONS_META,
+  RERUN_CONFIRMATION_MODE_OPTIONS_META,
   CTRLYOKE_MCP_MODE_OPTIONS_META,
   SERVER_THEME_OPTIONS_META,
   toSelectOptions,
@@ -289,6 +290,22 @@ export function GeneralSection({
           }
           {...rowProps}
         />
+        <SettingInputRow
+          settingKey="ui.confirmRerunOperations"
+          id="ui-confirm-rerun-operations"
+          {...rowProps}
+        >
+          <CustomSelect
+            id="ui-confirm-rerun-operations"
+            value={ui.confirmRerunOperations}
+            onChange={(v) => onUpdate("ui.confirmRerunOperations", v)}
+            schemaPath="ui.confirmRerunOperations"
+            options={toSelectOptions(
+              RERUN_CONFIRMATION_MODE_OPTIONS_META,
+              "ui.confirmRerunOperations"
+            )}
+          />
+        </SettingInputRow>
         <SettingToggleRow
           settingKey="ui.hideGitIgnoredFiles"
           checked={ui.hideGitIgnoredFiles}

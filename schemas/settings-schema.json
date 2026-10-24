@@ -803,6 +803,12 @@
           "description": "Show a confirmation dialog before discarding a continuation's edited suffix (Discard Continuation, Start New Run Instead).",
           "default": true
         },
+        "confirmRerunOperations": {
+          "type": "string",
+          "enum": ["always", "exceptFavorites", "never"],
+          "description": "When to show a confirmation dialog before Re-run starts a new run of the workflow from its first step. 'always' asks for every workflow, 'exceptFavorites' (the default) asks for every workflow except favorites, so the workflows you re-run on purpose start straight away, and 'never' re-runs without asking.",
+          "default": "exceptFavorites"
+        },
         "hideGitIgnoredFiles": {
           "type": "boolean",
           "description": "Hide files and directories ignored by .gitignore in the workspace file explorer and workflow file picker.",

@@ -2,17 +2,14 @@ import React, { useCallback, useMemo } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
-import {
-  EXECUTION_STATES,
-  MESSAGE_TYPES,
-  RUNNER_IDS,
-} from "../../types/messages";
+import { MESSAGE_TYPES, RUNNER_IDS } from "../../types/messages";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useIsMobile, useMediaQuery } from "@hooks/useMediaQuery";
 import { useLongPress } from "@hooks/useLongPress";
 import { useIsViewingDeletedWorkflow } from "@hooks/useIsViewingDeletedWorkflow";
 import { useIsSystemGeneratedWorkflow } from "@hooks/useIsSystemGeneratedWorkflow";
+import { useIsDisplayedWorkflowFavorite } from "@hooks/useIsDisplayedWorkflowFavorite";
 import { sendMessage } from "@hooks/useMessageHandler";
 import { WebviewLog } from "@utils/logger";
 import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
@@ -28,6 +25,7 @@ import { DuplicateWorkflowDialog } from "../workflow/DuplicateWorkflowDialog";
 import { TemplateModal } from "../workflow/TemplateModal";
 import { FileBrowserModal } from "../workflow/FileBrowserModal";
 import { SuffixEditConfirmModal } from "../shared/SuffixEditConfirmModal";
+import { RerunConfirmModal } from "../shared/RerunConfirmModal";
 import { UndoRedoControl } from "../shared/UndoRedoControl";
 import { NavHistoryControls } from "../shared/NavHistoryControls";
 import { DryRunModal } from "../shared/DryRunModal";
@@ -45,6 +43,7 @@ import {
   PREVIEW_SCOPES,
   WORKFLOW_EXECUTION_CONTROL_ACTIONS,
   WORKFLOW_VIEW_ADDRESS_KIND,
+  shouldConfirmRerun,
 } from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
 
@@ -165,6 +164,12 @@ export const Header: React.FC<{
   const workflowExternalRootsApprovalRequired = useSettingsStore(
     (state) => state.workflowExternalRootsApprovalRequired
   );
+  const rerunConfirmationMode = useSettingsStore(
+    (state) => state.globalSettings.confirmRerunOperations
+  );
+  const isDisplayedFavorite = useIsDisplayedWorkflowFavorite();
+  const workflowName = useWorkflowStore((s) => s.workflowName);
+  const [rerunConfirmOpen, setRerunConfirmOpen] = React.useState(false);
 
   const activeWorkflow = loadedWorkflows.find(
     (workflow) => workflow.id === activeWorkflowId
@@ -352,7 +357,11 @@ export const Header: React.FC<{
           });
         }
       } else if (action === "rerun") {
-        postViewedRunAction(MESSAGE_TYPES.SEED_NEW_RUN);
+        if (shouldConfirmRerun(rerunConfirmationMode, isDisplayedFavorite)) {
+          setRerunConfirmOpen(true);
+        } else {
+          postViewedRunAction(MESSAGE_TYPES.SEED_NEW_RUN);
+        }
       } else if (action === "continue" || action === "start-run") {
         // Starting a never-executed run *is* a continuation from its own step 0:
         // the run directory, working file, and timeline already exist, so the
@@ -385,9 +394,20 @@ export const Header: React.FC<{
       displayedDescriptorRevision,
       displayedViewAddress,
       executionRunAddress,
+      isDisplayedFavorite,
       postViewedRunAction,
+      rerunConfirmationMode,
     ]
   );
+
+  const handleConfirmRerun = useCallback(() => {
+    setRerunConfirmOpen(false);
+    postViewedRunAction(MESSAGE_TYPES.SEED_NEW_RUN);
+  }, [postViewedRunAction]);
+
+  const handleCancelRerun = useCallback(() => {
+    setRerunConfirmOpen(false);
+  }, []);
 
   const handleDiscardContinuation = useCallback(() => {
     postViewedRunAction(MESSAGE_TYPES.DISCARD_CONTINUATION);
@@ -498,7 +518,8 @@ export const Header: React.FC<{
     </div>
   );
 
-  // Below xs (380px), show only actionable execution slots. If none are
+  // Below xs (380px), a slot is hidden only when it would be disabled at wider
+  // widths, so narrow never offers fewer actions than wide. If no slot is
   // actionable, retain the disabled Run slot so the primary affordance never
   // disappears completely. From xs upward all three fixed slots remain visible.
   const slot1Enabled =
@@ -510,15 +531,7 @@ export const Header: React.FC<{
     slot2.enabled && !isExternallyManaged && !isLineageReadOnly;
   const slot3Enabled =
     (slot3.enabled || isExternallyManaged) && !isLineageReadOnly;
-  const restartOnlyOnNarrow =
-    executionState === EXECUTION_STATES.STOPPED &&
-    !isRunning &&
-    !isPausing &&
-    !isPaused &&
-    !isCancelling;
-  const slot2NarrowVisible = slot2Enabled && !restartOnlyOnNarrow;
-  const slot1NarrowVisible =
-    slot1Enabled || (!slot2NarrowVisible && !slot3Enabled);
+  const slot1NarrowVisible = slot1Enabled || (!slot2Enabled && !slot3Enabled);
   const HIDDEN_UNTIL_XS = "hidden xs:flex";
   const dividerClass = (bothVisible: boolean) =>
     `cy-button-group-divider${bothVisible ? "" : " hidden xs:block"}`;
@@ -564,16 +577,14 @@ export const Header: React.FC<{
           <Icon name={slot1.icon} className={btnSize.icon} />
         </button>
 
-        <div
-          className={dividerClass(slot1NarrowVisible && slot2NarrowVisible)}
-        />
+        <div className={dividerClass(slot1NarrowVisible && slot2Enabled)} />
 
         <button
           className={`control-button h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
             slot2.emphasized ? "font-bold" : ""
           } ${
             slot2Enabled
-              ? `${slot2NarrowVisible ? "flex" : HIDDEN_UNTIL_XS} bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover`
+              ? "flex bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
               : `${HIDDEN_UNTIL_XS} bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed`
           }`}
           onClick={() => handleSlotAction(slot2.action)}
@@ -595,7 +606,7 @@ export const Header: React.FC<{
           />
         </button>
 
-        <div className={dividerClass(slot2NarrowVisible && slot3Enabled)} />
+        <div className={dividerClass(slot2Enabled && slot3Enabled)} />
 
         <button
           className={`control-button h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
@@ -816,6 +827,14 @@ export const Header: React.FC<{
           onConfirm={handleConfirmSuffixEditDiscard}
           onCancel={handleCancelSuffixEditConfirmation}
         />
+
+        {rerunConfirmOpen && (
+          <RerunConfirmModal
+            workflowName={workflowName}
+            onConfirm={handleConfirmRerun}
+            onCancel={handleCancelRerun}
+          />
+        )}
 
         {dryRunScope && <DryRunModal scope={dryRunScope} />}
 

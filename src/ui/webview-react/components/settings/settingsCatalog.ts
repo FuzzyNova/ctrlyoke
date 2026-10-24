@@ -224,6 +224,14 @@ const STATIC_SETTINGS_CATALOG = {
     description:
       "Show a confirmation dialog before discarding a continuation's edited suffix (Discard Continuation, Start New Run Instead).",
   },
+  "ui.confirmRerunOperations": {
+    id: "ui.confirmRerunOperations",
+    path: "ui.confirmRerunOperations",
+    tab: GLOBAL_SETTINGS_TABS.GENERAL,
+    label: "Confirm re-run",
+    description:
+      "When to ask before Re-run starts a new run of the workflow from its first step. Except favorites lets the workflows you re-run on purpose start straight away.",
+  },
   "ui.hideGitIgnoredFiles": {
     id: "ui.hideGitIgnoredFiles",
     path: "ui.hideGitIgnoredFiles",

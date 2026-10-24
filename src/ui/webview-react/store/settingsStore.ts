@@ -33,6 +33,7 @@ import {
   type StepColorMode,
   type ToastLevelMode,
   type PriorContextDetail,
+  type RerunConfirmationMode,
 } from "@root/types/DashboardConstants";
 import type {
   CommitMessageGenerationRecord,
@@ -140,6 +141,8 @@ export interface GlobalSettings {
   confirmDeleteOperations: boolean;
   confirmResetOperations: boolean;
   confirmContinuationDiscardOperations: boolean;
+  /** Mirrored `ui.confirmRerunOperations`. */
+  confirmRerunOperations: RerunConfirmationMode;
   hideGitIgnoredFiles: boolean;
   wordWrap: boolean;
   /** Mirrored `ui.outputFontSize`. */
@@ -451,6 +454,7 @@ const initialGlobalSettings: GlobalSettings = {
   confirmDeleteOperations: true,
   confirmResetOperations: true,
   confirmContinuationDiscardOperations: true,
+  confirmRerunOperations: CTRLYOKE_SETTINGS_DEFAULTS.ui.confirmRerunOperations,
   hideGitIgnoredFiles: false,
   wordWrap: CTRLYOKE_SETTINGS_DEFAULTS.ui.wordWrap,
   outputFontSize: CTRLYOKE_SETTINGS_DEFAULTS.ui.outputFontSize,

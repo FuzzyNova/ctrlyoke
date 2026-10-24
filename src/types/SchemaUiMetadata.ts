@@ -22,6 +22,7 @@ import {
   LIMIT_SELECTION_VALUES,
   NONE_OPTION,
   PROPERTY_EDITOR_MODES,
+  RERUN_CONFIRMATION_MODES,
   RESUME_SESSION_SELECTIONS,
   RUN_HISTORY_LOCATIONS,
   SESSION_ID_SENTINELS,
@@ -45,6 +46,7 @@ import {
   type HookEvent,
   type NotificationEventMode,
   type PermissionMode,
+  type RerunConfirmationMode,
   type ServerThemeMode,
   type StepColorMode,
   type TerminalCursorStyle,
@@ -708,6 +710,24 @@ export const STEP_COLOR_MODE_OPTIONS_META: Record<
   [STEP_COLOR_MODES.UNIQUE]: {
     value: STEP_COLOR_MODES.UNIQUE,
     label: "Unique",
+  },
+};
+
+export const RERUN_CONFIRMATION_MODE_OPTIONS_META: Record<
+  RerunConfirmationMode,
+  SchemaOptionMeta<RerunConfirmationMode>
+> = {
+  [RERUN_CONFIRMATION_MODES.ALWAYS]: {
+    value: RERUN_CONFIRMATION_MODES.ALWAYS,
+    label: "Always",
+  },
+  [RERUN_CONFIRMATION_MODES.EXCEPT_FAVORITES]: {
+    value: RERUN_CONFIRMATION_MODES.EXCEPT_FAVORITES,
+    label: "Except favorites",
+  },
+  [RERUN_CONFIRMATION_MODES.NEVER]: {
+    value: RERUN_CONFIRMATION_MODES.NEVER,
+    label: "Never",
   },
 };
 

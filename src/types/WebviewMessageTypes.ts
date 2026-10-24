@@ -58,6 +58,7 @@ import {
   type WorktreeManagementAction,
   type WorkflowFileFormat,
   type StepColorMode,
+  type RerunConfirmationMode,
   type EditorFontSize,
   type HarnessStatusString,
   type CtrlYokeFileKind,
@@ -580,6 +581,7 @@ export interface InitMessageData {
     collapsedToolOutputLineCount?: number;
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
+    confirmRerunOperations?: RerunConfirmationMode;
     hideGitIgnoredFiles?: boolean;
     wordWrap?: boolean;
     outputFontSize?: number;
@@ -1811,6 +1813,7 @@ export interface GlobalSettingsUpdatedMessage {
     collapsedToolOutputLineCount?: number;
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
+    confirmRerunOperations?: RerunConfirmationMode;
     hideGitIgnoredFiles?: boolean;
     wordWrap?: boolean;
     outputFontSize?: number;

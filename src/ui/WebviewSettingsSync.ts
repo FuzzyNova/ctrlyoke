@@ -950,6 +950,7 @@ export class WebviewSettingsSync {
       confirmResetOperations: ConfigurationUtils.shouldConfirmResetOperations(),
       confirmContinuationDiscardOperations:
         ConfigurationUtils.shouldConfirmContinuationDiscardOperations(),
+      confirmRerunOperations: ConfigurationUtils.getRerunConfirmationMode(),
       hideGitIgnoredFiles: ConfigurationUtils.shouldHideGitIgnoredFiles(),
       wordWrap: ConfigurationUtils.shouldWrapCodeLines(),
       outputFontSize: ConfigurationUtils.getOutputFontSize(),

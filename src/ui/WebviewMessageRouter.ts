@@ -16,6 +16,7 @@ import {
   QUEUE_POSITION,
   USER_FEEDBACK_SEVERITY,
   isStatusLineHarnessId,
+  isRerunConfirmationMode,
   END_CONDITION_SCRIPT_TYPES,
   HISTORY_SEARCH_COUNT_STATES,
   SEARCH_HISTORY_ERROR_CODES,
@@ -2996,6 +2997,13 @@ export class WebviewMessageRouter {
         }
       }
     );
+
+    table.set(MESSAGE_TYPES.UPDATE_CONFIRM_RERUN, async (message) => {
+      const { value } = message;
+      if (isRerunConfirmationMode(value)) {
+        await ConfigurationUtils.setRerunConfirmationMode(value);
+      }
+    });
   }
 
   private registerUndoRedo(table: DispatchTable): void {

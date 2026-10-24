@@ -38,6 +38,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Re-run asks before starting a new run, except for favorites.** Re-run
+  replays a workflow from its first step and sits beside the workflow picker,
+  so a stray tap could restart a long conversation-style workflow. It now shows
+  a confirmation for every workflow that isn't a favorite. The new
+  `ui.confirmRerunOperations` setting chooses **Always**, **Except favorites**
+  (the default) or **Never**, and the dialog's **Don't ask me again** switches
+  it to **Never**.
+
+- **On narrow screens the header keeps every run button that works.** A
+  stopped run with steps left to execute showed only **Re-run** below 380px
+  wide, hiding **Resume**. Narrow layouts now hide only the buttons that would
+  be disabled at full width.
+
 - **Failed push, pull and commit in the workspace viewer show git's own
   error.** When a push is rejected, a pull would overwrite local changes, or a
   pre-commit or pre-push hook fails, the Source Control tab shows what git and

@@ -959,6 +959,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "ui.collapsedToolOutputLineCount": "Approximate number of wrapped lines shown for Bash and generic tool results before they collapse.",
   "ui.confirmContinuationDiscardOperations": "Show a confirmation dialog before discarding a continuation's edited suffix (Discard Continuation, Start New Run Instead).",
   "ui.confirmDeleteOperations": "Show a confirmation dialog before delete operations like removing prompts, deleting workflow history, or discarding untracked files.",
+  "ui.confirmRerunOperations": "When to show a confirmation dialog before Re-run starts a new run of the workflow from its first step. 'always' asks for every workflow, 'exceptFavorites' (the default) asks for every workflow except favorites, so the workflows you re-run on purpose start straight away, and 'never' re-runs without asking.",
   "ui.confirmResetOperations": "Show a confirmation dialog before resetting workflow start position.",
   "ui.editorFontSize": "Font size of the prompt editor, retry prompts, condition and script-step scripts, and the workspace file editor, in pixels. 'vscode' matches the VS Code editor font size; a browser connected to the ctrlyoke server uses 14px for 'vscode' because it cannot read VS Code's setting. One-line form fields such as additional arguments, hook commands, and permission lists keep their own fixed size.",
   "ui.harnessColors": "Controls the per-harness identity colors used to correlate workflow steps across the dashboard.",
@@ -2628,6 +2629,11 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
   "type": [
     "prompt",
     "script"
+  ],
+  "ui.confirmRerunOperations": [
+    "always",
+    "exceptFavorites",
+    "never"
   ],
   "ui.editorFontSize": [
     "vscode"

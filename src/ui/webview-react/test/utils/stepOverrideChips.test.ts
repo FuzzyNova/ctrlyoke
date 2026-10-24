@@ -50,6 +50,7 @@ const globalSettings: GlobalSettings = {
   confirmDeleteOperations: true,
   confirmResetOperations: true,
   confirmContinuationDiscardOperations: true,
+  confirmRerunOperations: "exceptFavorites",
   hideGitIgnoredFiles: false,
   wordWrap: true,
   outputFontSize: 13,

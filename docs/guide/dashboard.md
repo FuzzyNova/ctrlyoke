@@ -75,7 +75,12 @@ workflow you're viewing.
 
 - **Run** starts the workflow from its first step.
 - **Re-run** creates a new run from the same steps and settings and starts it.
-  The earlier run stays in history unchanged.
+  The earlier run stays in history unchanged. By default it asks first unless
+  the workflow is a favorite, so the workflows you re-run often start straight
+  away. Change this with
+  [`ui.confirmRerunOperations`](/reference/settings#ui-confirmrerunoperations)
+  (**Always**, **Except favorites** or **Never**), or tick **Don't ask me again**
+  in the dialog.
 - **Pause** lets the current step finish, then stops before the next one. A
   banner reads "Workflow will pause after the current step completes", with a
   **Cancel** button. While paused you can edit, add, reorder or delete the

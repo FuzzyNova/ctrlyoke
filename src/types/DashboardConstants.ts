@@ -933,6 +933,7 @@ export const MESSAGE_TYPES = {
   RESOLVE_RUN_DEFINITION_CHANGE: "resolveRunDefinitionChange", // Accept or restore a definition changed outside ctrlyoke: { address, decision }
   REORDER_PROMPTS: "reorderPrompts",
   UPDATE_CONFIRM_RESET: "updateConfirmReset",
+  UPDATE_CONFIRM_RERUN: "updateConfirmRerun", // Update confirmRerunOperations setting: { value: RerunConfirmationMode }
 
   // Queue Position Control — Extension → Webview
   REORDER_PROMPTS_CONFIRMED: "reorderPromptsConfirmed",
@@ -2369,6 +2370,35 @@ export const STEP_COLOR_MODES = {
 
 export type StepColorMode =
   (typeof STEP_COLOR_MODES)[keyof typeof STEP_COLOR_MODES];
+
+/** `ui.confirmRerunOperations`: which workflows ask before Re-run starts a new run. */
+export const RERUN_CONFIRMATION_MODES = {
+  ALWAYS: "always",
+  EXCEPT_FAVORITES: "exceptFavorites",
+  NEVER: "never",
+} as const;
+
+export type RerunConfirmationMode =
+  (typeof RERUN_CONFIRMATION_MODES)[keyof typeof RERUN_CONFIRMATION_MODES];
+
+export function isRerunConfirmationMode(
+  value: unknown
+): value is RerunConfirmationMode {
+  return Object.values(RERUN_CONFIRMATION_MODES).includes(
+    value as RerunConfirmationMode
+  );
+}
+
+/** Whether Re-run should ask first for a workflow under the given mode. */
+export function shouldConfirmRerun(
+  mode: RerunConfirmationMode,
+  isFavorite: boolean
+): boolean {
+  return (
+    mode === RERUN_CONFIRMATION_MODES.ALWAYS ||
+    (mode === RERUN_CONFIRMATION_MODES.EXCEPT_FAVORITES && !isFavorite)
+  );
+}
 
 /**
  * `ui.editorFontSize` value that keeps prompt and code editors at the host

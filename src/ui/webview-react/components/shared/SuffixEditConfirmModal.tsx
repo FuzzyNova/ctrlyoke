@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Modal } from "./Modal";
 import { Button } from "./Button";
+import { DontAskAgainCheckbox } from "./DontAskAgainCheckbox";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "../../types/messages";
@@ -41,8 +42,7 @@ export const SuffixEditConfirmModal: React.FC<SuffixEditConfirmModalProps> = ({
     !globalSettings.confirmContinuationDiscardOperations
   );
 
-  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const checked = e.target.checked;
+  const handleCheckboxChange = (checked: boolean) => {
     setDontAsk(checked);
     // Persist setting immediately so it survives cancel too
     vscode.postMessage({
@@ -70,21 +70,12 @@ export const SuffixEditConfirmModal: React.FC<SuffixEditConfirmModalProps> = ({
     >
       <p className="text-foreground">{message}</p>
 
-      {/* Don't ask again toggle */}
-      <label
-        htmlFor="suffix-edit-discard-dont-ask"
-        className="mt-4 flex items-center gap-2 cursor-pointer select-none text-sm text-description-fg hover:text-foreground transition-colors"
-      >
-        <input
-          id="suffix-edit-discard-dont-ask"
-          type="checkbox"
-          checked={dontAsk}
-          onChange={handleCheckboxChange}
-          aria-label="Don't ask me again for continuation discard operations"
-          className="w-3.5 h-3.5 accent-button-bg cursor-pointer"
-        />
-        Don't ask me again for continuation discard operations
-      </label>
+      <DontAskAgainCheckbox
+        id="suffix-edit-discard-dont-ask"
+        label="Don't ask me again for continuation discard operations"
+        checked={dontAsk}
+        onChange={handleCheckboxChange}
+      />
     </Modal>
   );
 };

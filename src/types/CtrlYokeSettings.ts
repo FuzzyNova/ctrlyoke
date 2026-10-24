@@ -27,6 +27,8 @@ import {
   STATUS_LINE_HARNESS_IDS,
   STEP_COLOR_MODES,
   TOAST_LEVEL_MODES,
+  RERUN_CONFIRMATION_MODES,
+  type RerunConfirmationMode,
   type StepColorMode,
   type StatusLineHarnessId,
   type ToastLevelMode,
@@ -321,6 +323,8 @@ export interface CtrlYokeGlobalSettings {
     confirmDeleteOperations: boolean;
     confirmResetOperations: boolean;
     confirmContinuationDiscardOperations: boolean;
+    /** Which workflows show a confirmation before Re-run starts a new run. */
+    confirmRerunOperations: RerunConfirmationMode;
     hideGitIgnoredFiles: boolean;
     /**
      * Wrap long lines in code views (workspace file editor, script/condition
@@ -644,6 +648,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     confirmDeleteOperations: true,
     confirmResetOperations: true,
     confirmContinuationDiscardOperations: true,
+    confirmRerunOperations: RERUN_CONFIRMATION_MODES.EXCEPT_FAVORITES,
     hideGitIgnoredFiles: false,
     wordWrap: true,
     outputFontSize: 13,
