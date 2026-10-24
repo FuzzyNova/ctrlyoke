@@ -1477,6 +1477,8 @@ export class CodexLogParser extends BaseLogParser {
                   meta.agent_path === agentPath
                 ) {
                   childPath = candidate;
+                  if ("model" in meta && typeof meta.model === "string")
+                    childModel = meta.model;
                   if (
                     threadSpawn &&
                     typeof threadSpawn === "object" &&
@@ -1529,13 +1531,6 @@ export class CodexLogParser extends BaseLogParser {
         return events;
       },
       usage: (record) => {
-        if (
-          record.type === CODEX_EVENT_TYPES.SESSION_META &&
-          typeof record.payload?.model === "string"
-        ) {
-          childModel = record.payload.model;
-          return undefined;
-        }
         if (
           record.type !== CODEX_EVENT_TYPES.EVENT_MSG ||
           record.payload?.type !== CODEX_PAYLOAD_TYPES.TOKEN_COUNT

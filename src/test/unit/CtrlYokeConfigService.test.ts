@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import { suite, test, setup, teardown } from "mocha";
 import {
@@ -10,6 +11,7 @@ import { FileConfigBackend } from "../../config/FileConfigBackend";
 import { uniqueAtomicTempPath } from "../../config/AtomicFileWrite";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
+import { PERMISSION_MODES } from "../../types/DashboardConstants";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import { FakeWorkspaceSettingsTrust } from "../helpers/fakeWorkspaceSettingsTrust";
 
@@ -300,10 +302,14 @@ suite("CtrlYokeConfigService", () => {
     );
     assert.strictEqual(service.get("defaults").toolPermissions, null);
 
+    // A workspace null is wider than the shipped default, so it is gated;
+    // approve it to test the merge rather than the trust gate.
+    service.setWorkspaceSettingsTrust(new FakeWorkspaceSettingsTrust(true));
     service.setUserBackend(makeBackend({}));
     service.setWorkspaceBackend({
       getAll: () => ({ defaults: { toolPermissions: null } }),
       set: async () => ({}),
+      workspaceRoot: os.tmpdir(),
     });
     assert.strictEqual(service.get("defaults").toolPermissions, null);
   });
@@ -799,6 +805,52 @@ suite("CtrlYokeConfigService workspace sensitive settings", () => {
     assert.strictEqual(all.terminal.shellExecutable, "bash");
     assert.deepStrictEqual(all.defaults.hooks, []);
     assert.strictEqual(service.resolve("terminal").source, "workspace");
+  });
+
+  test("withholds wider workspace tool permissions until approved", async () => {
+    service.setWorkspaceBackend(
+      workspaceBackend({
+        defaults: {
+          toolPermissions: { mode: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL },
+        } as never,
+      })
+    );
+
+    assert.strictEqual(
+      service.getAll().defaults.toolPermissions?.mode,
+      PERMISSION_MODES.ALLOW_ALL,
+      "the shipped default applies while the request is undecided"
+    );
+    const [request] = service
+      .getWorkspaceSensitiveSettingStates()
+      .map((state) => state.request);
+    await trust.setDecisions(
+      service.getWorkspaceTrustIdentity()!,
+      [request!],
+      "allow"
+    );
+    // The real store's change event does this; the fake has none.
+    service.notify();
+    assert.strictEqual(
+      service.getAll().defaults.toolPermissions?.mode,
+      PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL
+    );
+  });
+
+  test("applies narrower workspace tool permissions without a request", () => {
+    service.setWorkspaceBackend(
+      workspaceBackend({
+        defaults: {
+          toolPermissions: { mode: PERMISSION_MODES.CUSTOM },
+        } as never,
+      })
+    );
+
+    assert.strictEqual(
+      service.getAll().defaults.toolPermissions?.mode,
+      PERMISSION_MODES.CUSTOM
+    );
+    assert.deepStrictEqual(service.getWorkspaceSensitiveSettingStates(), []);
   });
 
   test("withholds everything when the workspace backend has no root", () => {

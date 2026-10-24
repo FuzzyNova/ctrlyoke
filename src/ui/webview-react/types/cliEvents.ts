@@ -39,6 +39,7 @@ export {
   type UserSteerData,
   type FollowUpResumedData,
   type BackgroundWorkHoldData,
+  type BackgroundWorkAbandonedData,
   type BackgroundTaskSummary,
   type ContextWindowSyncData,
   type UnifiedDiffHunk,

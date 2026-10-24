@@ -1,11 +1,12 @@
 # Terminal Follow-up Tracking
 
-**Status: Implemented (Claude CLI, Copilot CLI, and Antigravity CLI)**
+**Status: Implemented (Claude CLI, Copilot CLI, Antigravity CLI, and Qwen CLI)**
 
 This document records the shipped architecture for detecting background work and
-resumed turns in the three CLI harnesses that expose structured session logs.
-Codex, Qwen, and OpenCode continue to use the ordinary Layer-1 activity path;
-they do not have provider-specific follow-up completion signals here.
+resumed turns in the four CLI harnesses that expose structured session logs.
+Codex and OpenCode continue to use the ordinary Layer-1 activity path; they do
+not have provider-specific follow-up completion signals here. Qwen was added
+after its CLI gained asynchronous background waits (verified on 0.26.0).
 
 ## Architecture
 
@@ -177,6 +178,36 @@ notification and terminal planner response both landed via the transcript
 watcher ~2s before the session's only Stop hook fired; with the guard in
 place this held for the full backstop instead of completing immediately.
 
+## Qwen CLI
+
+Qwen delivers background notifications only in the interactive TUI. Its
+headless modes never feed them to the model: one-shot `-p` exits after the
+final turn, and with ctrlyoke's `--input-format stream-json` flags the model
+polls the shell's status files with `read_file` instead.
+
+A launch is confirmed by the tool-result text, which is the only place the task
+id appears: `Background shell started.\nid: <id>` (`run_shell_command` with
+`is_background: true`), `Background agent launched successfully.\ntask_id: <id>`
+(`agent`; top-level subagents run in the background by default), and
+`Monitor started.\nid: <id>` (`monitor`). Each task's terminal
+`<task-notification>` (`<task-id>`, `<status>` `completed`/`failed`/`cancelled`)
+arrives as a `user` record with `subtype: "notification"` and
+`provenance: "system"`, and starts its own model turn. That turn closes at its
+next assistant record without a `functionCall`. A monitor's `running` pulses
+wake turns too but do not finish it, and `task_stop` cancels a monitor without
+any notification, so the parser clears it from the `Monitor "<id>" cancelled.`
+result. A stopped shell or agent still gets its terminal notification.
+
+Only a notification record stamped `deliveredTurn: true` latches a resumed turn.
+Qwen also persists unstamped copies, before delivery or for a delivery into the
+turn already running, and no new turn is guaranteed to follow those, so they
+only clear the task. One record can carry several envelopes when Qwen drains a
+backlog into one turn. Like Copilot and Antigravity, Qwen runs with no
+stale-stop guard. The parser resets at the start of `discoverSessionLog()`,
+because Qwen writes one log file per session. The real capture is
+`src/test/fixtures/qwen/interactive-background-shells.session.jsonl`: three
+concurrent shells (10/20/30 s), one notification and one resumed turn each.
+
 ## User-steer and completion flow
 
 The provider parser classifies genuine user-steer records separately from the
@@ -191,6 +222,7 @@ The implementation and regressions are covered by:
 
 - `src/test/unit/BackgroundFollowUpState.test.ts`
 - `src/test/unit/AntigravityLogParser.test.ts`
+- `src/test/unit/QwenLogParser.test.ts`
 - `src/test/unit/CliLogMonitor.test.ts`
 - `src/test/suite/harness/LogParsers.test.ts`
 

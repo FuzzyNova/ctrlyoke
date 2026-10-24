@@ -148,6 +148,24 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "commit.model": "Model override for commit message generation. Empty = use the commit harness default.",
   "commit.systemPrompt": "System prompt sent before the git diff. The diff is appended automatically.",
   "compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.",
+  "conditions": "Named condition presets that MCP agents may attach to steps by name. Authors define every script; MCP agents can choose a preset but can never supply or override its scripts. Preset scripts that use declared params must quote each value (for example, `\"$BUG_FILE\"`) because values are passed through environment variables. A param name may not collide with a key in that preset's own `env`.",
+  "conditions.*": "Author-defined condition preset available to MCP steps.",
+  "conditions.*.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.",
+  "conditions.*.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
+  "conditions.*.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.",
+  "conditions.*.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.",
+  "conditions.*.maxRetries": "Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.",
+  "conditions.*.onFail": "Action when the condition fails. Valid actions depend on whether the preset is used as an end condition or pre-condition.",
+  "conditions.*.onPass": "Action when the condition passes. Valid actions depend on whether the preset is used as an end condition or pre-condition.",
+  "conditions.*.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors.",
+  "conditions.*.params": "Environment-variable names whose values MCP agents may supply when attaching this preset.",
+  "conditions.*.passRetryPrompt": "Template for the prompt sent after the end condition passes and onPass is 'retry'. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource); both prefixes are substituted on a pass retry. If omitted, the step's own prompt is re-sent.",
+  "conditions.*.resumeSessionOnRetry": "Whether retries continue in the same session. Default: true (retries resume the existing session for context continuity). Set to false to start a fresh session for each retry.",
+  "conditions.*.retryPrompt": "Template for retry prompt. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:* works in the step and retry prompts; $endCondition:* is only available in the retry prompt.",
+  "conditions.*.returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
+  "conditions.*.script": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.",
+  "conditions.*.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted.",
+  "conditions.*.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.",
   "coordination": "Retention and participant settings for the execution-root coordination board.",
   "coordination.allowExternalParticipants": "Allow participants not launched by ctrlyoke to join the coordination board.",
   "coordination.cliParticipantTtlMinutes": "Lease lifetime for participants delivered through the CLI or built-in skill.",
@@ -217,7 +235,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "defaults.resumeSession": "Default for whether a step continues an earlier step's conversation instead of starting a new session. With no sessionId, a step continues the most recent earlier step on the same harness; the first step always starts a new session. Workflows and individual steps can override this, e.g. set resumeSession: false at the workflow level for loops whose steps must each start fresh.",
   "defaults.secrets": "Default secret environment-variable names granted to new workflows. Values are resolved by the execution host and never stored in workflow definitions.",
   "defaults.skills": "Default portable ctrlyoke workflow skill attachments for new workflows. Native harness skill discovery is managed separately by the Agents & Skills settings page and does not determine workflow skill support.",
-  "defaults.toolPermissions": "Default tool permission settings for prompt execution. Allowed Tools and Denied Tools are currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline granular support and OpenCode uses OPENCODE_CONFIG_CONTENT without writing a workspace opencode.json. Codex and Antigravity only support an overall permission mode, not individual tool patterns, and do NOT ENFORCE these lists, except that Codex enforces denied `mcp__<server>__<tool>` entries for MCP servers the workflow attaches. While a list is still the shipped default, a harness that can't enforce it reports an information note rather than a compatibility warning.",
+  "defaults.toolPermissions": "Default tool permission settings for prompt execution. Allowed Tools and Denied Tools are currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline granular support and OpenCode uses OPENCODE_CONFIG_CONTENT without writing a workspace opencode.json. Codex and Antigravity only support an overall permission mode, not individual tool patterns, and do NOT ENFORCE these lists, except that Codex enforces denied `mcp__<server>__<tool>` entries for MCP servers the workflow attaches. While a list is still the shipped default, a harness that can't enforce it reports an information note rather than a compatibility warning. A workspace-scope value that grants more than your user value (a broader mode, an allowed tool your custom list lacks, a denied tool removed, or `none`/`null` while yours is managed) takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies. A workspace value that only narrows permissions applies without asking.",
   "defaults.toolPermissions.allowedTools": "Tool patterns to allow (used in custom mode). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Codex and Antigravity only support an overall permission mode, not individual tool patterns; Allowed Tools are NOT ENFORCED by those harnesses.",
   "defaults.toolPermissions.deniedTools": "Tool patterns to deny (takes precedence over allow list). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity only supports an overall permission mode and does NOT ENFORCE Denied Tools. Codex enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT ENFORCE shell or other tool patterns.",
   "defaults.toolPermissions.mode": "Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects deny list. 'custom' uses allowedTools + deniedTools only. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config).",
@@ -907,7 +925,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[].toolPermissions.mode": "Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects deny list. 'custom' uses allowedTools + deniedTools only. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config).",
   "steps[].type": "Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible).",
   "storage": "User-only storage location configuration.",
-  "storage.runHistoryLocation": "Store run history under the user state home or beside the workspace. Recently deleted runs, observed usage, and the history search index move with it. User scope only. Takes effect after a window reload, and existing history is not moved: the other location appears as a separate history, and switching back restores it.",
+  "storage.runHistoryLocation": "Store run history under the user state home or beside the workspace. Recently deleted runs, observed usage, and the history search index move with it. User scope only. Takes effect after a window reload, and existing history is not moved: the other location appears as a separate history, and switching back restores it. With `workspace`, each run's live definition sits where any agent with write access to the workspace can edit it, including a pending step's scripts and permissions. ctrlyoke keeps a record of every definition it writes under the user state home: a running workflow ignores a change made outside ctrlyoke, and a run with one cannot run or be edited until you accept or restore it. Choose `workspace` only for agents and repositories you trust.",
   "storage.trashRetentionDays": "Days a deleted run or workflow stays in Recently deleted before it is permanently removed. Every history delete, including Clear all history, moves runs to Recently deleted, where they can be restored until then.",
   "templates": "Template-specific settings.",
   "templates.variableDefaults": "Saved defaults for declared template variables. Workspace values override User values per variable. A harness and its linked model variables resolve together from one scope; if that scope has no model value, the model uses the template's authored default. Unknown or invalid values are ignored until corrected or the template definition changes.",
@@ -1289,6 +1307,39 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "stdout",
     "stderr",
     "exitCode"
+  ],
+  "conditions.*.compareSource": [
+    "stdout",
+    "stderr",
+    "exitCode"
+  ],
+  "conditions.*.maxRetries": [
+    -1
+  ],
+  "conditions.*.onFail": [
+    "continue",
+    "retry",
+    "skipPrompt",
+    "stopWorkflow"
+  ],
+  "conditions.*.onPass": [
+    "continue",
+    "retry",
+    "skipPrompt",
+    "stopWorkflow"
+  ],
+  "conditions.*.operator": [
+    "eq",
+    "ne",
+    "contains",
+    "notContains",
+    "gte",
+    "gt",
+    "lte",
+    "lt",
+    "matches",
+    "isEmpty",
+    "isNotEmpty"
   ],
   "defaults.agent": [
     ""
@@ -2616,6 +2667,9 @@ export const SCHEMA_VARIANT_DESCRIPTIONS: Readonly<Record<string, Readonly<Recor
   },
   "agent": {
     "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
+  },
+  "conditions.*.maxRetries": {
+    "-1": "Unlimited."
   },
   "defaults.agent": {
     "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."

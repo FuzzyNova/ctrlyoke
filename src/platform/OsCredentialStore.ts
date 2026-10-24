@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import { Socket } from "node:net";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { withFileLock } from "../utils/FileLockUtils";
 import { SecretStoreUnavailableError, type SecretStore } from "./SecretStore";
@@ -63,7 +64,7 @@ const BACKEND_UNAVAILABLE_PATTERNS: Partial<
   win32: [/Win32 error 1312\b/i],
 };
 
-const WINDOWS_CREDENTIAL_SCRIPT = `
+const WINDOWS_CREDENTIAL_FUNCTIONS = `
 $ProgressPreference = 'SilentlyContinue'
 
 Add-Type @'
@@ -101,135 +102,179 @@ public static class CtrlYokeCredentialManager {
 }
 '@
 
-$credential = [IntPtr]::Zero
+# Returns the exit code; output and errors go through [Console]::Out/Error, and
+# a value to store arrives on [Console]::In, so the one-shot script and the
+# persistent helper below share this body unchanged.
+function Invoke-CtrlYokeCredentialOperation([string]$operation, [string]$target) {
+  $credential = [IntPtr]::Zero
 
-if ($operation -eq 'batch') {
-  $keysJson = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([Console]::In.ReadToEnd()))
-  $keys = ConvertFrom-Json -InputObject $keysJson
-  $results = @{}
-  foreach ($keyName in $keys) {
-    $targetName = "$target$keyName"
-    $credential = [IntPtr]::Zero
-    if ([CtrlYokeCredentialManager]::CredRead($targetName, 1, 0, [ref]$credential)) {
-      try {
-        $native = [Runtime.InteropServices.Marshal]::PtrToStructure($credential, [type][CtrlYokeCredentialManager+CREDENTIAL])
-        $bytes = New-Object byte[] $native.CredentialBlobSize
-        if ($bytes.Length -gt 0) { [Runtime.InteropServices.Marshal]::Copy($native.CredentialBlob, $bytes, 0, $bytes.Length) }
-        $value = [Text.Encoding]::Unicode.GetString($bytes)
-      } finally { [CtrlYokeCredentialManager]::CredFree($credential) }
-      if ($value.Length -ge 1279) {
-        $countCredential = [IntPtr]::Zero
-        if ([CtrlYokeCredentialManager]::CredRead("$targetName#count", 1, 0, [ref]$countCredential)) {
-          try {
-            $countNative = [Runtime.InteropServices.Marshal]::PtrToStructure($countCredential, [type][CtrlYokeCredentialManager+CREDENTIAL])
-            $countBytes = New-Object byte[] $countNative.CredentialBlobSize
-            if ($countBytes.Length -gt 0) { [Runtime.InteropServices.Marshal]::Copy($countNative.CredentialBlob, $countBytes, 0, $countBytes.Length) }
-            $countRaw = [Text.Encoding]::Unicode.GetString($countBytes)
-            $countParts = $countRaw -split ':', 2
-            $count = [int]$countParts[0]
-            if ($count -gt 1) {
-              $parts = @($value)
-              for ($index = 1; $index -lt $count; $index++) {
-                $chunkCredential = [IntPtr]::Zero
-                if (-not [CtrlYokeCredentialManager]::CredRead("$targetName#$index", 1, 0, [ref]$chunkCredential)) { throw "CredRead failed with Win32 error $([Runtime.InteropServices.Marshal]::GetLastWin32Error())." }
-                try {
-                  $chunkNative = [Runtime.InteropServices.Marshal]::PtrToStructure($chunkCredential, [type][CtrlYokeCredentialManager+CREDENTIAL])
-                  $chunkBytes = New-Object byte[] $chunkNative.CredentialBlobSize
-                  if ($chunkBytes.Length -gt 0) { [Runtime.InteropServices.Marshal]::Copy($chunkNative.CredentialBlob, $chunkBytes, 0, $chunkBytes.Length) }
-                  $parts += [Text.Encoding]::Unicode.GetString($chunkBytes)
-                } finally { [CtrlYokeCredentialManager]::CredFree($chunkCredential) }
+  if ($operation -eq 'batch') {
+    $keysJson = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([Console]::In.ReadToEnd()))
+    $keys = ConvertFrom-Json -InputObject $keysJson
+    $results = @{}
+    foreach ($keyName in $keys) {
+      $targetName = "$target$keyName"
+      $credential = [IntPtr]::Zero
+      if ([CtrlYokeCredentialManager]::CredRead($targetName, 1, 0, [ref]$credential)) {
+        try {
+          $native = [Runtime.InteropServices.Marshal]::PtrToStructure($credential, [type][CtrlYokeCredentialManager+CREDENTIAL])
+          $bytes = New-Object byte[] $native.CredentialBlobSize
+          if ($bytes.Length -gt 0) { [Runtime.InteropServices.Marshal]::Copy($native.CredentialBlob, $bytes, 0, $bytes.Length) }
+          $value = [Text.Encoding]::Unicode.GetString($bytes)
+        } finally { [CtrlYokeCredentialManager]::CredFree($credential) }
+        if ($value.Length -ge 1279) {
+          $countCredential = [IntPtr]::Zero
+          if ([CtrlYokeCredentialManager]::CredRead("$targetName#count", 1, 0, [ref]$countCredential)) {
+            try {
+              $countNative = [Runtime.InteropServices.Marshal]::PtrToStructure($countCredential, [type][CtrlYokeCredentialManager+CREDENTIAL])
+              $countBytes = New-Object byte[] $countNative.CredentialBlobSize
+              if ($countBytes.Length -gt 0) { [Runtime.InteropServices.Marshal]::Copy($countNative.CredentialBlob, $countBytes, 0, $countBytes.Length) }
+              $countRaw = [Text.Encoding]::Unicode.GetString($countBytes)
+              $countParts = $countRaw -split ':', 2
+              $count = [int]$countParts[0]
+              if ($count -gt 1) {
+                $parts = @($value)
+                for ($index = 1; $index -lt $count; $index++) {
+                  $chunkCredential = [IntPtr]::Zero
+                  if (-not [CtrlYokeCredentialManager]::CredRead("$targetName#$index", 1, 0, [ref]$chunkCredential)) { throw "CredRead failed with Win32 error $([Runtime.InteropServices.Marshal]::GetLastWin32Error())." }
+                  try {
+                    $chunkNative = [Runtime.InteropServices.Marshal]::PtrToStructure($chunkCredential, [type][CtrlYokeCredentialManager+CREDENTIAL])
+                    $chunkBytes = New-Object byte[] $chunkNative.CredentialBlobSize
+                    if ($chunkBytes.Length -gt 0) { [Runtime.InteropServices.Marshal]::Copy($chunkNative.CredentialBlob, $chunkBytes, 0, $chunkBytes.Length) }
+                    $parts += [Text.Encoding]::Unicode.GetString($chunkBytes)
+                  } finally { [CtrlYokeCredentialManager]::CredFree($chunkCredential) }
+                }
+                $value = $parts -join ''
+                if ($countParts.Length -gt 1) {
+                  $sha = [Security.Cryptography.SHA256]::Create()
+                  try { $actualTag = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($value))).Replace('-', '').ToLowerInvariant() }
+                  finally { $sha.Dispose() }
+                  if ($actualTag -ne $countParts[1]) { throw 'Credential chunk integrity check failed.' }
+                }
               }
-              $value = $parts -join ''
-              if ($countParts.Length -gt 1) {
-                $sha = [Security.Cryptography.SHA256]::Create()
-                try { $actualTag = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($value))).Replace('-', '').ToLowerInvariant() }
-                finally { $sha.Dispose() }
-                if ($actualTag -ne $countParts[1]) { throw 'Credential chunk integrity check failed.' }
-              }
-            }
-          } finally { [CtrlYokeCredentialManager]::CredFree($countCredential) }
-        } else {
-          $lastError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
-          if ($lastError -ne 1168) { [Console]::Error.Write("CredRead failed with Win32 error $lastError."); exit 45 }
+            } finally { [CtrlYokeCredentialManager]::CredFree($countCredential) }
+          } else {
+            $lastError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+            if ($lastError -ne 1168) { [Console]::Error.Write("CredRead failed with Win32 error $lastError."); return 45 }
+          }
         }
+        $results[$keyName] = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($value))
+      } else {
+        $lastError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        if ($lastError -ne 1168) { [Console]::Error.Write("CredRead failed with Win32 error $lastError."); return 45 }
+        $results[$keyName] = $null
       }
-      $results[$keyName] = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($value))
-    } else {
-      $lastError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
-      if ($lastError -ne 1168) { [Console]::Error.Write("CredRead failed with Win32 error $lastError."); exit 45 }
-      $results[$keyName] = $null
     }
+    $json = ConvertTo-Json -InputObject $results -Compress
+    [Console]::Out.Write([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json)))
+    return 0
   }
-  $json = ConvertTo-Json -InputObject $results -Compress
-  [Console]::Out.Write([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json)))
-  exit 0
-}
 
-if ($operation -eq 'get') {
-  if (-not [CtrlYokeCredentialManager]::CredRead($target, 1, 0, [ref]$credential)) {
-    $lastError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
-    if ($lastError -eq 1168) { exit 44 }
-    [Console]::Error.Write("CredRead failed with Win32 error $lastError.")
-    exit 45
-  }
-  try {
-    $native = [Runtime.InteropServices.Marshal]::PtrToStructure(
-      $credential,
-      [type][CtrlYokeCredentialManager+CREDENTIAL]
-    )
-    if ($native.CredentialBlobSize -eq 0) {
-      [Console]::Out.Write('')
-    } else {
-      $bytes = New-Object byte[] $native.CredentialBlobSize
-      [Runtime.InteropServices.Marshal]::Copy($native.CredentialBlob, $bytes, 0, $bytes.Length)
-      $value = [Text.Encoding]::Unicode.GetString($bytes)
-      $utf8 = [Text.Encoding]::UTF8.GetBytes($value)
-      [Console]::Out.Write([Convert]::ToBase64String($utf8))
-    }
-  } finally {
-    [CtrlYokeCredentialManager]::CredFree($credential)
-  }
-  exit 0
-}
-
-if ($operation -eq 'store') {
-  $valueBase64 = [Console]::In.ReadToEnd()
-  $value = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($valueBase64))
-  $bytes = [Text.Encoding]::Unicode.GetBytes($value)
-  $blob = [Runtime.InteropServices.Marshal]::AllocCoTaskMem($bytes.Length)
-  try {
-    [Runtime.InteropServices.Marshal]::Copy($bytes, 0, $blob, $bytes.Length)
-    $native = New-Object CtrlYokeCredentialManager+CREDENTIAL
-    $native.Type = 1
-    $native.TargetName = $target
-    $native.CredentialBlobSize = [UInt32]$bytes.Length
-    $native.CredentialBlob = $blob
-    $native.Persist = 2
-    $native.UserName = 'ctrlyoke'
-    if (-not [CtrlYokeCredentialManager]::CredWrite([ref]$native, 0)) {
+  if ($operation -eq 'get') {
+    if (-not [CtrlYokeCredentialManager]::CredRead($target, 1, 0, [ref]$credential)) {
       $lastError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
-      [Console]::Error.Write(
-        "CredWrite failed with Win32 error $lastError for a $($bytes.Length)-byte blob."
+      if ($lastError -eq 1168) { return 44 }
+      [Console]::Error.Write("CredRead failed with Win32 error $lastError.")
+      return 45
+    }
+    try {
+      $native = [Runtime.InteropServices.Marshal]::PtrToStructure(
+        $credential,
+        [type][CtrlYokeCredentialManager+CREDENTIAL]
       )
-      exit 45
+      if ($native.CredentialBlobSize -eq 0) {
+        [Console]::Out.Write('')
+      } else {
+        $bytes = New-Object byte[] $native.CredentialBlobSize
+        [Runtime.InteropServices.Marshal]::Copy($native.CredentialBlob, $bytes, 0, $bytes.Length)
+        $value = [Text.Encoding]::Unicode.GetString($bytes)
+        $utf8 = [Text.Encoding]::UTF8.GetBytes($value)
+        [Console]::Out.Write([Convert]::ToBase64String($utf8))
+      }
+    } finally {
+      [CtrlYokeCredentialManager]::CredFree($credential)
     }
+    return 0
+  }
+
+  if ($operation -eq 'store') {
+    $valueBase64 = [Console]::In.ReadToEnd()
+    $value = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($valueBase64))
+    $bytes = [Text.Encoding]::Unicode.GetBytes($value)
+    $blob = [Runtime.InteropServices.Marshal]::AllocCoTaskMem($bytes.Length)
+    try {
+      [Runtime.InteropServices.Marshal]::Copy($bytes, 0, $blob, $bytes.Length)
+      $native = New-Object CtrlYokeCredentialManager+CREDENTIAL
+      $native.Type = 1
+      $native.TargetName = $target
+      $native.CredentialBlobSize = [UInt32]$bytes.Length
+      $native.CredentialBlob = $blob
+      $native.Persist = 2
+      $native.UserName = 'ctrlyoke'
+      if (-not [CtrlYokeCredentialManager]::CredWrite([ref]$native, 0)) {
+        $lastError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        [Console]::Error.Write(
+          "CredWrite failed with Win32 error $lastError for a $($bytes.Length)-byte blob."
+        )
+        return 45
+      }
+    } finally {
+      [Runtime.InteropServices.Marshal]::FreeCoTaskMem($blob)
+    }
+    return 0
+  }
+
+  if ($operation -eq 'delete') {
+    if (-not [CtrlYokeCredentialManager]::CredDelete($target, 1, 0)) {
+      $lastError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+      if ($lastError -eq 1168) { return 44 }
+      [Console]::Error.Write("CredDelete failed with Win32 error $lastError.")
+      return 45
+    }
+    return 0
+  }
+
+  throw "Unsupported credential operation: $operation"
+}
+`;
+
+/** One operation per process, used when a test injects `runCommand`. */
+const WINDOWS_ONE_SHOT_SCRIPT = `${WINDOWS_CREDENTIAL_FUNCTIONS}
+$exitCode = @(Invoke-CtrlYokeCredentialOperation $operation $target)
+exit $exitCode[-1]
+`;
+
+/**
+ * A long-lived host that runs one operation per stdin line. Requests and
+ * responses are base64 UTF-8 JSON, so the console's code page never touches
+ * a value. Each operation's console streams are swapped for in-memory ones so
+ * its output cannot interleave with the protocol.
+ */
+const WINDOWS_HELPER_SCRIPT = `${WINDOWS_CREDENTIAL_FUNCTIONS}
+$hostIn = [Console]::In
+$hostOut = [Console]::Out
+$hostErr = [Console]::Error
+while ($null -ne ($line = $hostIn.ReadLine())) {
+  $request = ConvertFrom-Json -InputObject ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($line)))
+  $requestOut = New-Object IO.StringWriter
+  $requestErr = New-Object IO.StringWriter
+  [Console]::SetOut($requestOut)
+  [Console]::SetError($requestErr)
+  [Console]::SetIn((New-Object IO.StringReader([string]$request.input)))
+  try {
+    $exitCode = [int](@(Invoke-CtrlYokeCredentialOperation $request.operation $request.target)[-1])
+  } catch {
+    $requestErr.Write($_.Exception.Message)
+    $exitCode = 1
   } finally {
-    [Runtime.InteropServices.Marshal]::FreeCoTaskMem($blob)
+    [Console]::SetOut($hostOut)
+    [Console]::SetError($hostErr)
+    [Console]::SetIn($hostIn)
   }
-  exit 0
+  $response = ConvertTo-Json -Compress -InputObject @{ id = $request.id; exitCode = $exitCode; stdout = $requestOut.ToString(); stderr = $requestErr.ToString() }
+  $hostOut.WriteLine([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($response)))
+  $hostOut.Flush()
 }
-
-if ($operation -eq 'delete') {
-  if (-not [CtrlYokeCredentialManager]::CredDelete($target, 1, 0)) {
-    $lastError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
-    if ($lastError -eq 1168) { exit 44 }
-    [Console]::Error.Write("CredDelete failed with Win32 error $lastError.")
-    exit 45
-  }
-  exit 0
-}
-
-throw "Unsupported credential operation: $operation"
 `;
 
 interface CommandResult {
@@ -251,8 +296,22 @@ interface CredentialBackend {
   delete(key: string): Promise<void>;
 }
 
+type WindowsCredentialOperation = "get" | "store" | "delete" | "batch";
+
+/** Runs one CredMan operation; `input` is the base64 value it reads. */
+type WindowsCredentialTransport = (
+  operation: WindowsCredentialOperation,
+  target: string,
+  input?: string
+) => Promise<CommandResult>;
+
 export interface OsCredentialStoreOptions {
   readonly platform?: NodeJS.Platform;
+  /**
+   * Replaces every native command. On Windows this also replaces the
+   * persistent PowerShell helper with one process per operation, so a fake
+   * can see each operation's script.
+   */
   readonly runCommand?: CommandRunner;
   /** Waits between retries of a torn key-index read; tests shorten them. */
   readonly indexReadRetryDelaysMs?: readonly number[];
@@ -293,6 +352,7 @@ class TornCredentialReadError extends Error {}
 export class OsCredentialStore implements SecretStore {
   private readonly platform: NodeJS.Platform;
   private readonly runCommand: CommandRunner;
+  private readonly injectedRunCommand: boolean;
   private readonly backend: CredentialBackend;
   private readonly indexReadRetryDelaysMs: readonly number[];
   private readonly indexLockTarget: string;
@@ -301,6 +361,7 @@ export class OsCredentialStore implements SecretStore {
   constructor(options: OsCredentialStoreOptions = {}) {
     this.platform = options.platform ?? process.platform;
     this.runCommand = options.runCommand ?? runCommand;
+    this.injectedRunCommand = options.runCommand !== undefined;
     this.indexReadRetryDelaysMs =
       options.indexReadRetryDelaysMs ?? INDEX_READ_RETRY_DELAYS_MS;
     this.indexLockTarget = options.indexLockTarget ?? defaultIndexLockTarget();
@@ -398,7 +459,11 @@ export class OsCredentialStore implements SecretStore {
       case "linux":
         return new LinuxCredentialBackend(this.runCommand);
       case "win32":
-        return new WindowsCredentialBackend(this.runCommand);
+        return new WindowsCredentialBackend(
+          this.injectedRunCommand
+            ? oneShotWindowsTransport(this.runCommand)
+            : sharedWindowsCredentialHelper().execute
+        );
       default:
         return new UnavailableCredentialBackend(this.platform);
     }
@@ -725,8 +790,8 @@ class ChunkedCredentialBackend<
 
 /** Windows Credential Manager, which also batches reads in one PowerShell run. */
 class WindowsCredentialBackend extends ChunkedCredentialBackend<WindowsCredentialItems> {
-  constructor(run: CommandRunner) {
-    super(new WindowsCredentialItems(run));
+  constructor(transport: WindowsCredentialTransport) {
+    super(new WindowsCredentialItems(transport));
   }
 
   async getMany(
@@ -757,7 +822,7 @@ class WindowsCredentialItems implements CredentialItems {
   readonly chunkLength = WINDOWS_CHUNK_LENGTH;
   readonly label = "CredMan";
 
-  constructor(private readonly run: CommandRunner) {}
+  constructor(private readonly transport: WindowsCredentialTransport) {}
 
   async read(key: string): Promise<string | undefined> {
     const result = await this.execute("get", key);
@@ -787,41 +852,218 @@ class WindowsCredentialItems implements CredentialItems {
     }
   }
 
+  /** Values travel as base64 UTF-8, never through the console code page. */
   execute(
-    operation: "get" | "store" | "delete" | "batch",
+    operation: WindowsCredentialOperation,
     key: string,
     value?: string
   ): Promise<CommandResult> {
-    const operationValue = Buffer.from(operation, "utf8").toString("base64");
-    const targetValue = Buffer.from(
+    return this.transport(
+      operation,
       `${WINDOWS_TARGET_PREFIX}${key}`,
-      "utf8"
-    ).toString("base64");
-    const operationAndTarget = `$operation = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${operationValue}'))
-$target = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${targetValue}'))
-`;
-    const script = Buffer.from(
-      WINDOWS_CREDENTIAL_SCRIPT.replace(
-        "$credential = [IntPtr]::Zero",
-        `${operationAndTarget}$credential = [IntPtr]::Zero`
-      ),
-      "utf16le"
-    ).toString("base64");
-    return this.run(
-      "powershell.exe",
-      [
-        "-NoProfile",
-        "-NonInteractive",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-EncodedCommand",
-        script,
-      ],
       value === undefined
         ? undefined
         : Buffer.from(value, "utf8").toString("base64")
     );
   }
+}
+
+const POWERSHELL_ARGS = [
+  "-NoProfile",
+  "-NonInteractive",
+  "-ExecutionPolicy",
+  "Bypass",
+  "-EncodedCommand",
+] as const;
+
+function encodePowerShellCommand(script: string): string {
+  return Buffer.from(script, "utf16le").toString("base64");
+}
+
+function powerShellUtf8Literal(text: string): string {
+  const base64 = Buffer.from(text, "utf8").toString("base64");
+  return `[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${base64}'))`;
+}
+
+/** A `powershell.exe` per operation, with the operation baked into its script. */
+function oneShotWindowsTransport(
+  run: CommandRunner
+): WindowsCredentialTransport {
+  return (operation, target, input) => {
+    const script = `$operation = ${powerShellUtf8Literal(operation)}
+$target = ${powerShellUtf8Literal(target)}
+${WINDOWS_ONE_SHOT_SCRIPT}`;
+    return run(
+      "powershell.exe",
+      [...POWERSHELL_ARGS, encodePowerShellCommand(script)],
+      input
+    );
+  };
+}
+
+/**
+ * How long the helper outlives its last operation. Startup reads arrive in
+ * bursts several seconds apart, and each respawn costs a full process launch.
+ */
+const WINDOWS_HELPER_IDLE_MS = 60_000;
+
+interface PendingCredentialRequest {
+  /** The helper process the request was written to. */
+  readonly child: ChildProcessWithoutNullStreams;
+  resolve(result: CommandResult): void;
+  reject(error: Error): void;
+}
+
+interface CredentialHelperResponse {
+  readonly id?: unknown;
+  readonly exitCode?: unknown;
+  readonly stdout?: unknown;
+  readonly stderr?: unknown;
+}
+
+/**
+ * One `powershell.exe` that serves every CredMan operation in this process.
+ * On Windows, `spawn` blocks the event loop for the whole `CreateProcess`
+ * call (300 ms to over 2 s for PowerShell under antivirus scanning), and the
+ * script's C# `Add-Type` compiles again in every new process. A process per
+ * read made a few startup secret reads freeze the extension host for seconds.
+ * While idle the helper is unreferenced, so it never keeps a CLI run alive,
+ * and it exits on its own once its stdin closes.
+ */
+export class WindowsCredentialHelper {
+  private child: ChildProcessWithoutNullStreams | undefined;
+  private readonly pending = new Map<number, PendingCredentialRequest>();
+  private nextId = 1;
+  private idleTimer: NodeJS.Timeout | undefined;
+  /** Helper processes started so far; tests assert reuse with it. */
+  spawnCount = 0;
+
+  constructor(private readonly idleMs = WINDOWS_HELPER_IDLE_MS) {}
+
+  readonly execute: WindowsCredentialTransport = (operation, target, input) =>
+    new Promise<CommandResult>((resolve, reject) => {
+      const child = this.ensureChild();
+      const id = this.nextId++;
+      this.pending.set(id, { child, resolve, reject });
+      this.setActive(true);
+      const request = JSON.stringify({ id, operation, target, input });
+      child.stdin.write(`${Buffer.from(request, "utf8").toString("base64")}\n`);
+    });
+
+  /**
+   * Ends the helper once it has answered what it already received. It is
+   * detached first, so an operation arriving meanwhile starts a new one
+   * instead of writing to a process on its way out.
+   */
+  close(): void {
+    const child = this.child;
+    if (!child) return;
+    this.child = undefined;
+    clearTimeout(this.idleTimer);
+    child.stdin.end();
+  }
+
+  private ensureChild(): ChildProcessWithoutNullStreams {
+    if (this.child) return this.child;
+    const child = spawn(
+      "powershell.exe",
+      [...POWERSHELL_ARGS, encodePowerShellCommand(WINDOWS_HELPER_SCRIPT)],
+      { stdio: ["pipe", "pipe", "pipe"], windowsHide: true }
+    );
+    this.spawnCount += 1;
+    this.child = child;
+    let stdoutBuffer = "";
+    let stderrTail = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdoutBuffer += chunk;
+      let newline = stdoutBuffer.indexOf("\n");
+      while (newline >= 0) {
+        const line = stdoutBuffer.slice(0, newline).trim();
+        stdoutBuffer = stdoutBuffer.slice(newline + 1);
+        if (line) this.onResponse(line);
+        newline = stdoutBuffer.indexOf("\n");
+      }
+    });
+    child.stderr.on("data", (chunk: string) => {
+      stderrTail = (stderrTail + chunk).slice(-2000);
+    });
+    // A write to a helper that already died surfaces through "exit" instead.
+    child.stdin.on("error", () => {});
+    child.once("error", (error) => this.fail(child, error));
+    child.once("exit", (code) => {
+      const detail = stderrTail.trim();
+      this.fail(
+        child,
+        new Error(
+          `CredMan helper exited with code ${code ?? "unknown"}${detail ? `: ${detail}` : "."}`
+        )
+      );
+    });
+    return child;
+  }
+
+  private onResponse(line: string): void {
+    let response: CredentialHelperResponse;
+    try {
+      response = JSON.parse(
+        Buffer.from(line, "base64").toString("utf8")
+      ) as CredentialHelperResponse;
+    } catch {
+      return; // Stray host output, not a protocol line.
+    }
+    if (typeof response.id !== "number") return;
+    const request = this.pending.get(response.id);
+    if (!request) return;
+    this.pending.delete(response.id);
+    request.resolve({
+      exitCode: typeof response.exitCode === "number" ? response.exitCode : 1,
+      stdout: typeof response.stdout === "string" ? response.stdout : "",
+      stderr: typeof response.stderr === "string" ? response.stderr : "",
+    });
+    if (this.pending.size === 0) this.setActive(false);
+  }
+
+  /** Rejects whatever that process still owed; other processes are unaffected. */
+  private fail(child: ChildProcessWithoutNullStreams, error: Error): void {
+    if (this.child === child) {
+      this.child = undefined;
+      clearTimeout(this.idleTimer);
+    }
+    for (const [id, request] of this.pending) {
+      if (request.child !== child) continue;
+      this.pending.delete(id);
+      request.reject(error);
+    }
+  }
+
+  /** Keeps this process alive only while an operation is outstanding. */
+  private setActive(active: boolean): void {
+    const child = this.child;
+    if (!child) return;
+    clearTimeout(this.idleTimer);
+    for (const stream of [child.stdin, child.stdout, child.stderr]) {
+      if (!(stream instanceof Socket)) continue;
+      if (active) stream.ref();
+      else stream.unref();
+    }
+    if (active) {
+      child.ref();
+      return;
+    }
+    child.unref();
+    this.idleTimer = setTimeout(() => this.close(), this.idleMs);
+    this.idleTimer.unref();
+  }
+}
+
+let windowsCredentialHelper: WindowsCredentialHelper | undefined;
+
+/** Every store in this process shares one helper. */
+function sharedWindowsCredentialHelper(): WindowsCredentialHelper {
+  windowsCredentialHelper ??= new WindowsCredentialHelper();
+  return windowsCredentialHelper;
 }
 
 function createIntegrityTag(value: string): string {

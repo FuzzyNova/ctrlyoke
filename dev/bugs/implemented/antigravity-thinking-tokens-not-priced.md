@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-23 by Claude Code, during a token and cost accuracy audit
 - **Area:** `src/utils/TokenSemantics.ts`, `src/core/harness/antigravity/AntigravityStreamJsonUsage.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

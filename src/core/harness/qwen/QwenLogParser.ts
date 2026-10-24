@@ -22,6 +22,8 @@ import {
   AskUserQuestionData,
   AskUserQuestionEntry,
   AskUserQuestionOption,
+  BackgroundTaskSummary,
+  BackgroundWorkHoldSnapshot,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -38,10 +40,17 @@ import { BaseToolBuilder } from "../shared/BaseToolBuilder";
 import { SubagentSourceFollower } from "../shared/SubagentSourceFollower";
 import { readIncrementalJsonl } from "../shared/IncrementalJsonlReader";
 import type { SubagentChildSource } from "../shared/interfaces/SubagentChildSource";
+import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
 import {
   QWEN_AGENT_ARGUMENTS,
+  QWEN_BACKGROUND_LAUNCH_RESULTS,
   QWEN_EVENT_TYPES,
+  QWEN_MONITOR_STOPPED_RESULT,
+  QWEN_REAL_USER_PROVENANCE,
+  QWEN_TASK_NOTIFICATION_PATTERN,
+  QWEN_TERMINAL_TASK_STATUSES,
   QWEN_TOOL_NAMES,
+  QWEN_USER_RECORD_SUBTYPES,
 } from "./QwenProtocolConstants";
 
 /** Match Qwen's `sanitizeCwd` naming for directories under `~/.qwen/projects`. */
@@ -65,7 +74,9 @@ export function sanitizeQwenProjectPath(projectPath: string): string {
  *
  * **Event Types:**
  * 1. `system`      - Telemetry/context; subtype `"at_command"` or `"ui_telemetry"`
- * 2. `user`        - User message; `message.parts[].text`
+ * 2. `user`        - User message; `message.parts[].text`. Qwen also writes
+ *                    `subtype: "notification"` user records carrying a background
+ *                    task's `<task-notification>` (see `trackBackgroundWorkState`)
  * 3. `assistant`   - AI response; `message.parts[]` with text, thinking, and functionCall parts
  * 4. `tool_result` - Tool execution result; `message.parts[].functionResponse`
  *
@@ -83,8 +94,10 @@ export function sanitizeQwenProjectPath(projectPath: string): string {
  * - `totalTokenCount` - Total tokens for this call
  *
  * **Completion Detection:**
- * No `stop_reason` or `result` event. A session is complete when an assistant
- * event has no `functionCall` parts (pure text/thinking response).
+ * No `stop_reason` or `result` event. A turn ends when an assistant event has
+ * no `functionCall` parts (pure text/thinking response). In the interactive
+ * TUI a background task can wake further turns after that; the Stop hook is
+ * gated by `hasPendingBackgroundWork()` until they finish.
  *
  * **Session Discovery:**
  * - Uses an exact cross-project filename lookup when a session ID is known,
@@ -162,6 +175,13 @@ interface QwenProviderEvent extends BaseCliEvent {
     cachedContentTokenCount: number;
   };
   subtype?: string;
+  /** Who wrote the record (`real_user`, `system`, `assistant_output`, ...). */
+  provenance?: string;
+  /**
+   * Set on a `notification` record that is the user entry of a turn Qwen
+   * actually sent; copies persisted before delivery leave it unset.
+   */
+  deliveredTurn?: boolean;
   usage?: Record<string, number>;
   systemPayload?: Record<string, any>;
   toolCallResult?: {
@@ -428,21 +448,162 @@ export class QwenLogParser extends BaseLogParser {
    * Qwen has no `stop_reason` field or `result` event type. A session is
    * complete when an `assistant` event contains no `functionCall` parts —
    * if it had tool calls, Qwen would continue with a `tool_result` event
-   * and another API round.
+   * and another API round. In the interactive TUI this marks only the end of
+   * a turn: a pending background task wakes another one, which
+   * `trackBackgroundWorkState` gates.
    *
    * @param event - Single parsed Qwen log event
    * @returns True if event signals completion
    */
   isComplete(event: BaseCliEvent): boolean {
-    // Qwen has no stop_reason or result event. An assistant event is the final
-    // response when it contains no functionCall parts — if it did have tool calls,
-    // Qwen would have continued with tool_result events and another API round.
-    if (event.type !== QWEN_EVENT_TYPES.ASSISTANT) {
-      return false;
+    return this.isTurnEnd(event as QwenProviderEvent);
+  }
+
+  /** An assistant record with no `functionCall` part ends a model turn. */
+  private isTurnEnd(event: QwenProviderEvent): boolean {
+    return (
+      event.type === QWEN_EVENT_TYPES.ASSISTANT &&
+      !(event.message?.parts ?? []).some((p) => p.functionCall !== undefined)
+    );
+  }
+
+  /**
+   * Background tasks launched in the interactive TUI. A launch is confirmed
+   * by its tool-result text (`QWEN_BACKGROUND_LAUNCH_RESULTS`); each task's
+   * terminal `<task-notification>` arrives later as a `user` record with
+   * `subtype: "notification"` and starts its own model turn, which closes at
+   * that turn's next assistant record without a `functionCall`. Headless runs
+   * never get here: Qwen's headless modes do not deliver background
+   * notifications to the model.
+   *
+   * No stale-stop guard, for the same reason as Copilot and Antigravity: the
+   * log watcher stays active during a hold, so the resumed turn is normally
+   * seen closing live between Stop hooks rather than inside one Stop's
+   * catch-up read.
+   */
+  private readonly backgroundFollowUpState = new BackgroundFollowUpState();
+
+  /**
+   * functionCall id -> display summary, held until that call's tool_result,
+   * which does not repeat the command or description.
+   */
+  private readonly toolCallSummaries = new Map<string, BackgroundTaskSummary>();
+
+  override trackBackgroundWorkState(event: BaseCliEvent): void {
+    const e = event as QwenProviderEvent;
+    const parts = e.message?.parts ?? [];
+
+    if (e.type === QWEN_EVENT_TYPES.ASSISTANT) {
+      for (const part of parts) {
+        const call = part.functionCall;
+        if (call?.id) {
+          const args = call.args ?? {};
+          this.toolCallSummaries.set(call.id, {
+            toolName: call.name,
+            description:
+              typeof args.description === "string"
+                ? args.description
+                : undefined,
+            command:
+              typeof args.command === "string" ? args.command : undefined,
+          });
+        }
+      }
+      if (
+        this.isTurnEnd(e) &&
+        this.backgroundFollowUpState.isResumedTurnPending()
+      ) {
+        this.backgroundFollowUpState.resumedTurnClosed();
+      }
+      return;
     }
 
-    const parts = (event as QwenProviderEvent).message?.parts ?? [];
-    return !parts.some((p) => p.functionCall !== undefined);
+    if (e.type === QWEN_EVENT_TYPES.TOOL_RESULT) {
+      for (const part of parts) {
+        const response = part.functionResponse;
+        if (!response) {
+          continue;
+        }
+        const summary = this.toolCallSummaries.get(response.id);
+        this.toolCallSummaries.delete(response.id);
+        const output = response.response?.output;
+        if (response.response?.error || typeof output !== "string") {
+          continue;
+        }
+        const launchedTaskId = QWEN_BACKGROUND_LAUNCH_RESULTS.get(
+          response.name
+        )?.exec(output)?.[1];
+        if (launchedTaskId) {
+          this.backgroundFollowUpState.launch(launchedTaskId, {
+            ...summary,
+            taskId: launchedTaskId,
+          });
+          continue;
+        }
+        if (response.name === QWEN_TOOL_NAMES.TASK_STOP) {
+          const stoppedMonitorId =
+            QWEN_MONITOR_STOPPED_RESULT.exec(output)?.[1];
+          if (stoppedMonitorId) {
+            this.backgroundFollowUpState.remove(stoppedMonitorId);
+          }
+        }
+      }
+      return;
+    }
+
+    if (
+      e.type === QWEN_EVENT_TYPES.USER &&
+      e.subtype === QWEN_USER_RECORD_SUBTYPES.NOTIFICATION
+    ) {
+      for (const taskId of this.extractTerminalNotificationTaskIds(e)) {
+        if (e.deliveredTurn === true) {
+          this.backgroundFollowUpState.consumeNotification(taskId);
+        } else {
+          // An unstamped copy was persisted outside a turn Qwen sent (a
+          // pre-delivery copy, or a boundary delivery into the running
+          // turn), so no resumed turn is guaranteed to follow it. Clearing
+          // the task without latching one keeps it from staying pending.
+          this.backgroundFollowUpState.remove(taskId);
+        }
+      }
+    }
+  }
+
+  override hasPendingBackgroundWork(): boolean {
+    return this.backgroundFollowUpState.isCompletionBlocked();
+  }
+
+  override getBackgroundWorkHoldSnapshot(): BackgroundWorkHoldSnapshot {
+    return this.backgroundFollowUpState.snapshot();
+  }
+
+  /**
+   * Task ids of every terminal `<task-notification>` in a notification
+   * record. Qwen can drain a backlog of notifications into a single turn, so
+   * one record may carry several envelopes.
+   */
+  private extractTerminalNotificationTaskIds(e: QwenProviderEvent): string[] {
+    const taskIds: string[] = [];
+    const text = this.extractUserMessageText(e);
+    for (const match of text.matchAll(QWEN_TASK_NOTIFICATION_PATTERN)) {
+      const body = match[1];
+      const taskId = /<task-id>([^<]+)<\/task-id>/.exec(body)?.[1]?.trim();
+      const status = /<status>([^<]+)<\/status>/.exec(body)?.[1]?.trim();
+      if (taskId && status && QWEN_TERMINAL_TASK_STATUSES.has(status)) {
+        taskIds.push(taskId);
+      }
+    }
+    return taskIds;
+  }
+
+  /**
+   * Clear all per-session tracking at Qwen's session boundary — one log file
+   * per session, so this runs at the start of `discoverSessionLog()`. See
+   * `ILogParser.trackBackgroundWorkState`'s session-reset contract.
+   */
+  private resetSessionTrackingState(): void {
+    this.backgroundFollowUpState.reset();
+    this.toolCallSummaries.clear();
   }
 
   override extractLiveContextWindow(
@@ -462,10 +623,11 @@ export class QwenLogParser extends BaseLogParser {
   }
 
   /**
-   * Classify a `user` log event. Qwen's `user` type is only ever the initial
-   * prompt or a genuine follow-up typed into the live TUI (tool results arrive
-   * as a separate `tool_result` event type — see `extractResponse`), so the
-   * only distinction needed is against ctrlyoke's own sent prompt.
+   * Classify a `user` log event. Tool results arrive as a separate
+   * `tool_result` event type (see `extractResponse`), but Qwen also writes
+   * `user` records on its own behalf: background-task notifications and cron
+   * prompts (`subtype`), and multi-agent messages (`provenance`). Only a
+   * record a human typed is then told apart from ctrlyoke's own sent prompt.
    */
   override classifyUserEvent(
     event: BaseCliEvent,
@@ -473,6 +635,15 @@ export class QwenLogParser extends BaseLogParser {
   ): UserEventClassification {
     const e = event as QwenProviderEvent;
     if (e.type !== QWEN_EVENT_TYPES.USER) {
+      return "other";
+    }
+    if (
+      e.subtype === QWEN_USER_RECORD_SUBTYPES.NOTIFICATION ||
+      e.subtype === QWEN_USER_RECORD_SUBTYPES.CRON
+    ) {
+      return "resume-signal";
+    }
+    if (e.provenance && e.provenance !== QWEN_REAL_USER_PROVENANCE) {
       return "other";
     }
 
@@ -533,6 +704,9 @@ export class QwenLogParser extends BaseLogParser {
     sessionId?: string,
     signal?: AbortSignal
   ): Promise<string | null> {
+    // See ILogParser.trackBackgroundWorkState's session-reset contract.
+    this.resetSessionTrackingState();
+
     try {
       if (signal?.aborted) {
         return null;

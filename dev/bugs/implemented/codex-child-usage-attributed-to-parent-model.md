@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-23 by subagent-attribution review (codex-cli followed child source)
 - **Area:** `src/core/harness/codex/CodexLogParser.ts` (`registerCodexSubagent`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-23 by review of the subagent output attribution plan (section 4)
 - **Area:** `src/core/harness/shared/mergeSubagentOutput.ts`, `src/utils/ModelPricing.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

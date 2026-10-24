@@ -13,7 +13,6 @@ import {
 import { getGlobalMaxSteps } from "../../utils/QueueLimitUtils";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import { STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS } from "../../utils/TextUtils";
-import { parseArgString } from "../../utils/CliArgParser";
 import { ensureMcpStorageInitialized } from "../helpers/mcpStorage";
 import { removeTempDir } from "../helpers/tempWorkspace";
 import {
@@ -35,10 +34,10 @@ import {
 } from "../../utils/McpToolDefinitions";
 import type {
   RunRef,
+  PromptStep,
   WorkflowKey,
   WorkflowLineageDescriptor,
   WorkflowStep,
-  PromptStep,
   WorkingFile,
   WorkingFileWorktreeRuntime,
 } from "../../types/CtrlYokeTypes";
@@ -52,14 +51,17 @@ import {
   PARALLEL_GROUP_ADMISSION,
   PROMPT_TERMINAL_STATUS,
   RUNNER_IDS,
+  RUN_DEFINITION_INTEGRITY,
   RUN_HISTORY_LOCATIONS,
   STEP_STATUS,
   STEP_TYPES,
   type ExecutionState,
 } from "../../types/DashboardConstants";
+import { verifyRunDefinitionFile } from "../../utils/RunDefinitionAnchor";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { ProjectStateRegistry } from "../../utils/ProjectStateRegistry";
+import { writeTrustedRunFile } from "../helpers/trustedRunFile";
 import {
   initializeRunHistoryLocation,
   isRunHistoryLocationInitialized,
@@ -238,7 +240,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       JSON.stringify(descriptor),
       "utf8"
     );
-    await fs.writeFile(runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(runFilePath, workingFile);
     if (!options.draftOnly) {
       const recorder = new TimelineRecorder();
       const manifestPath = await recorder.initializeRunAt(
@@ -304,7 +306,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       currentIndex: 1,
       executionState: EXECUTION_STATES.RUNNING,
     };
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
     const ownerToken = `mcp-${suffix}-owner`;
     await WorkflowLockManager.acquireLock(workspaceRoot, run.workflowKey, {
@@ -342,11 +344,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     workingFile.parallelGroups = [
       { id: groupId, startIndex: 1, endIndex: 3, failFast: true },
     ];
-    await fs.writeFile(
-      active.run.runFilePath,
-      JSON.stringify(workingFile),
-      "utf8"
-    );
+    await writeTrustedRunFile(active.run.runFilePath, workingFile);
     process.env.CTRLYOKE_PROMPT_INDEX = "1";
     process.env.CTRLYOKE_PARALLEL_GROUP_ID = groupId;
     return active;
@@ -1223,7 +1221,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       { prompt: "inherits the workflow" },
       { type: "script", script: "npm test" },
     ];
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const status = responseJson(await server.invokeTool("workflow_status", {}));
@@ -1237,7 +1235,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
 
     delete workingFile.resumeSession;
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     const unset = responseJson(await server.invokeTool("workflow_status", {}));
 
     assert.strictEqual(
@@ -1248,6 +1246,68 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       unset.steps[1].resumeSession,
       CTRLYOKE_SETTINGS_DEFAULTS.defaults.resumeSession
     );
+  });
+
+  test("workflow_status reports finished prompt-step git outcomes when recorded", async () => {
+    const server = await setup();
+    const run = await createRun("git-outcome", "2026-01-01T00-00-00-000Z", {
+      stepCount: 3,
+    });
+    const manifestPath = WorkflowPaths.manifestPath(
+      workspaceRoot,
+      run.workflowKey,
+      run.runRef
+    );
+    const gitSnapshot = {
+      capturedAt: 3,
+      strategy: "git" as const,
+      changedFiles: [],
+      gitOutcome: {
+        repositories: [
+          {
+            headAtStart: "before-commit",
+            headAtEnd: "after-commit",
+            dirtyAtEnd: true,
+          },
+        ],
+        dirtyAtEnd: true,
+      },
+    };
+    await new TimelineRecorder().appendEvents(manifestPath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_CAPTURED,
+        timestampMs: 3,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        payload: { workspaceSnapshot: gitSnapshot },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_CAPTURED,
+        timestampMs: 4,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 },
+        payload: { workspaceSnapshot: gitSnapshot },
+      },
+    ]);
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    delete workingFile.steps![2]._runtime?.completedAt;
+    await writeTrustedRunFile(run.runFilePath, workingFile);
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const status = responseJson(await server.invokeTool("workflow_status", {}));
+
+    assert.deepStrictEqual(status.steps[0].gitOutcome, {
+      repositories: [
+        {
+          headAtStart: "before-commit",
+          headAtEnd: "after-commit",
+          dirtyAtEnd: true,
+        },
+      ],
+      dirtyAtEnd: true,
+    });
+    assert.ok(!("gitOutcome" in status.steps[1]));
+    assert.ok(!("gitOutcome" in status.steps[2]));
   });
 
   test("workflow_status reports each step's harness and executionMode", async () => {
@@ -1279,7 +1339,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       },
       { type: "script", script: "npm test" },
     ];
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const status = responseJson(await server.invokeTool("workflow_status", {}));
@@ -1299,7 +1359,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
 
     delete workingFile.executionMode;
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     const unset = responseJson(await server.invokeTool("workflow_status", {}));
     assert.strictEqual(
       unset.metadata.executionMode,
@@ -1864,9 +1924,14 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       agent: "agent-name",
       enabled: false,
       color: "blue",
-      additionalArgs: ["--flag", "value"],
       skills: ["skill-name"],
+      executionMode: EXECUTION_MODES.HEADLESS,
     };
+    const initial = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    initial.executionMode = EXECUTION_MODES.INTERACTIVE;
+    await writeTrustedRunFile(run.runFilePath, initial);
     try {
       await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, { index: 2, updates });
       const updated = JSON.parse(
@@ -1882,8 +1947,8 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         agent: "agent-name",
         enabled: false,
         color: "blue",
-        additionalArgs: "--flag value",
         skills: ["skill-name"],
+        executionMode: EXECUTION_MODES.HEADLESS,
       });
 
       await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
@@ -1898,17 +1963,542 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
           "agent",
           "enabled",
           "color",
-          "additionalArgs",
           "skills",
+          "executionMode",
         ],
       });
       const cleared = JSON.parse(
         await fs.readFile(run.runFilePath, "utf8")
       ) as WorkingFile;
       assert.deepStrictEqual(cleared.steps?.[2], { prompt: "updated prompt" });
+      const status = responseJson(
+        await server.invokeTool("workflow_status", {})
+      );
+      assert.strictEqual(
+        status.steps[2].executionMode,
+        EXECUTION_MODES.INTERACTIVE
+      );
     } finally {
       await releaseActiveRun(run, ownerToken);
     }
+  });
+
+  test("edit_step keeps the definition anchor valid and refuses a definition changed outside ctrlyoke", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("edit-step-anchor");
+    try {
+      await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 2,
+        updates: { prompt: "first edit" },
+      });
+      await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 3,
+        updates: { prompt: "second edit" },
+      });
+      assert.strictEqual(
+        (await verifyRunDefinitionFile(run.runFilePath))?.verdict.status,
+        RUN_DEFINITION_INTEGRITY.TRUSTED
+      );
+
+      // An agent with write access to the run file adds a raw condition
+      // script; the MCP surface must not launder it into a trusted edit.
+      const workingFile = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+      (workingFile.steps?.[3] as { endCondition?: unknown }).endCondition = {
+        script: "node pwned.js",
+      };
+      await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+      const tampered = await fs.readFile(run.runFilePath, "utf8");
+
+      await assert.rejects(
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 2,
+          updates: { prompt: "third edit" },
+        }),
+        /changed outside ctrlyoke \(step 4: endCondition\)/
+      );
+      assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), tampered);
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
+  test("append_step stores and reports an executionMode override", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "append-execution-mode",
+      "2026-01-01T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.RUNNING }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.harness = HARNESS_IDS.CLAUDE_CLI;
+    workingFile.executionMode = EXECUTION_MODES.HEADLESS;
+    await writeTrustedRunFile(run.runFilePath, workingFile);
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const result = responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          {
+            prompt: "interactive task",
+            executionMode: EXECUTION_MODES.INTERACTIVE,
+          },
+        ],
+      })
+    );
+    const persisted = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    const status = responseJson(await server.invokeTool("workflow_status", {}));
+
+    assert.strictEqual(
+      persisted.steps?.[1].executionMode,
+      EXECUTION_MODES.INTERACTIVE
+    );
+    assert.strictEqual(
+      status.steps[1].executionMode,
+      EXECUTION_MODES.INTERACTIVE
+    );
+    assert.strictEqual("warnings" in result, false);
+  });
+
+  test("append_step accepts agent and skills and echoes effective settings", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "append-effective-settings",
+      "2026-01-01T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.RUNNING }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.harness = HARNESS_IDS.CLAUDE_CLI;
+    workingFile.model = "workflow-model";
+    workingFile.executionMode = EXECUTION_MODES.HEADLESS;
+    workingFile.resumeSession = true;
+    workingFile.conditions = {
+      committed: { script: "git status --porcelain" },
+      ready: { script: "npm run typecheck" },
+    };
+    await writeTrustedRunFile(run.runFilePath, workingFile);
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const result = responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          {
+            prompt: "inherit settings",
+            endCondition: { use: "committed" },
+            preCondition: { use: "ready" },
+          },
+          {
+            prompt: "override settings",
+            harness: HARNESS_IDS.CODEX_CLI,
+            model: "step-model",
+            executionMode: EXECUTION_MODES.INTERACTIVE,
+            resumeSession: false,
+            agent: "reviewer",
+            skills: ["security-review"],
+          },
+          {
+            parallel: [
+              { prompt: "parallel one", model: "parallel-model" },
+              { prompt: "parallel two", agent: "implementer" },
+            ],
+          },
+        ],
+      })
+    );
+    const persisted = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+
+    assert.strictEqual((persisted.steps![2] as PromptStep).agent, "reviewer");
+    assert.deepStrictEqual((persisted.steps![2] as PromptStep).skills, [
+      "security-review",
+    ]);
+    assert.deepStrictEqual(result.effectiveSettings, [
+      {
+        index: 1,
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        model: "workflow-model",
+        executionMode: EXECUTION_MODES.HEADLESS,
+        resumeSession: true,
+        endConditionPreset: "committed",
+        preConditionPreset: "ready",
+      },
+      {
+        index: 2,
+        harness: HARNESS_IDS.CODEX_CLI,
+        model: "step-model",
+        executionMode: EXECUTION_MODES.INTERACTIVE,
+        resumeSession: false,
+      },
+      {
+        index: 3,
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        model: "parallel-model",
+        executionMode: EXECUTION_MODES.HEADLESS,
+        resumeSession: true,
+      },
+      {
+        index: 4,
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        model: "workflow-model",
+        executionMode: EXECUTION_MODES.HEADLESS,
+        resumeSession: true,
+      },
+    ]);
+
+    await assert.rejects(
+      server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [{ prompt: "forbidden args", additionalArgs: ["--danger"] }],
+      }),
+      /append_step\.steps\[0\].*(additionalArgs|oneOf|object)/i
+    );
+  });
+
+  test("materializes condition presets for append and edit, including parallel members", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "condition-presets",
+      "2026-01-01T00-00-00-000Z",
+      {
+        stepCount: 2,
+        currentIndex: 1,
+        executionState: EXECUTION_STATES.RUNNING,
+      }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.endCondition = { script: "workflow end gate" };
+    workingFile.conditions = {
+      committed: {
+        script: "git status --porcelain",
+        compareSource: "stdout",
+        operator: "isEmpty",
+        maxRetries: 2,
+        retryPrompt: "preset retry",
+        env: { AUTHOR_VALUE: "fixed" },
+      },
+      inspect: {
+        script: 'node "$BUG_FILE"',
+        env: { PREFIX: "src/" },
+        params: ["BUG_FILE"],
+        maxRetries: 1,
+      },
+    };
+    await writeTrustedRunFile(run.runFilePath, workingFile);
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+      position: "end",
+      steps: [
+        {
+          prompt: "append with gate",
+          endCondition: {
+            use: "committed",
+            retryPrompt: "override retry",
+            maxRetries: 1,
+          },
+          preCondition: {
+            use: "inspect",
+            params: { BUG_FILE: "dev/bugs/backlog/example.md" },
+          },
+        },
+        {
+          parallel: [
+            { prompt: "parallel a", endCondition: { use: "committed" } },
+            {
+              prompt: "parallel b",
+              preCondition: { use: "inspect", params: { BUG_FILE: "b.md" } },
+            },
+          ],
+        },
+      ],
+    });
+
+    const persisted = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    const appended = persisted.steps![2] as PromptStep;
+    assert.deepStrictEqual(appended.endCondition, {
+      script: "git status --porcelain",
+      compareSource: "stdout",
+      operator: "isEmpty",
+      maxRetries: 1,
+      retryPrompt: "override retry",
+      env: { AUTHOR_VALUE: "fixed" },
+    });
+    assert.deepStrictEqual(appended.preCondition, {
+      script: 'node "$BUG_FILE"',
+      env: { PREFIX: "src/", BUG_FILE: "dev/bugs/backlog/example.md" },
+      maxRetries: 1,
+    });
+    assert.strictEqual(
+      (persisted.steps![3] as PromptStep).endCondition?.script,
+      "git status --porcelain"
+    );
+    assert.deepStrictEqual(
+      (persisted.steps![4] as PromptStep).preCondition?.env,
+      {
+        PREFIX: "src/",
+        BUG_FILE: "b.md",
+      }
+    );
+    assert.strictEqual(
+      (persisted.steps![2] as PromptStep).preCondition?.script,
+      'node "$BUG_FILE"'
+    );
+
+    await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+      index: 2,
+      updates: { endCondition: { use: "committed", maxRetries: 2 } },
+    });
+    const afterEdit = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    assert.deepStrictEqual((afterEdit.steps![2] as PromptStep).endCondition, {
+      script: "git status --porcelain",
+      compareSource: "stdout",
+      operator: "isEmpty",
+      maxRetries: 2,
+      retryPrompt: "preset retry",
+      env: { AUTHOR_VALUE: "fixed" },
+    });
+
+    afterEdit.conditions!.committed.script = "echo changed later";
+    await writeTrustedRunFile(run.runFilePath, afterEdit);
+    const later = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    assert.strictEqual(
+      (later.steps![2] as PromptStep).endCondition?.script,
+      "git status --porcelain"
+    );
+  });
+
+  test("rejects unknown presets, unsafe condition overrides, null, and clearing gates", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "condition-preset-rejections",
+      "2026-01-01T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.RUNNING }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.conditions = {
+      committed: { script: "git status --porcelain" },
+    };
+    await writeTrustedRunFile(run.runFilePath, workingFile);
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await assert.rejects(
+      server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [{ prompt: "unknown", endCondition: { use: "missing" } }],
+      }),
+      /unknown condition preset 'missing'.*committed/
+    );
+    for (const key of ["script", "env", "shell"]) {
+      await assert.rejects(
+        server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "end",
+          steps: [
+            {
+              prompt: "unsafe",
+              endCondition: { use: "committed", [key]: "override" },
+            },
+          ],
+        }),
+        /append_step\.steps\[0\] must be object or object/
+      );
+    }
+    await assert.rejects(
+      server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 0,
+        updates: { endCondition: null },
+      }),
+      /edit_step\.updates\.endCondition must be an object/
+    );
+    await assert.rejects(
+      server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 0,
+        updates: {},
+        clearProperties: ["endCondition"],
+      }),
+      /clearProperties\[0\] must be one of/
+    );
+  });
+
+  test("caps preset retries and validates declared parameter values", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "condition-preset-limits",
+      "2026-01-01T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.RUNNING }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.conditions = {
+      committed: { script: "git status --porcelain", maxRetries: 1 },
+      inspect: { script: 'node "$FILE"', params: ["FILE"] },
+    };
+    await writeTrustedRunFile(run.runFilePath, workingFile);
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await assert.rejects(
+      server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          {
+            prompt: "too many",
+            endCondition: { use: "committed", maxRetries: 2 },
+          },
+        ],
+      }),
+      /maxRetries 2 exceeds preset 'committed' limit 1/
+    );
+    await assert.rejects(
+      server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [{ prompt: "missing", preCondition: { use: "inspect" } }],
+      }),
+      /requires param 'FILE'/
+    );
+    await assert.rejects(
+      server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          {
+            prompt: "undeclared",
+            preCondition: {
+              use: "inspect",
+              params: { FILE: "known.md", OTHER: "value" },
+            },
+          },
+        ],
+      }),
+      /param 'OTHER' is not declared/
+    );
+    for (const value of ["", "x\0y", "x".repeat(4097)]) {
+      await assert.rejects(
+        server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "end",
+          steps: [
+            {
+              prompt: "invalid value",
+              preCondition: { use: "inspect", params: { FILE: value } },
+            },
+          ],
+        }),
+        /must not be empty|must not contain NUL|must be at most 4096/
+      );
+    }
+  });
+
+  test("warns for resolved Codex interactive steps and omits warnings otherwise", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "codex-interactive-warning",
+      "2026-01-01T00-00-00-000Z",
+      {
+        stepCount: 3,
+        currentIndex: 1,
+        executionState: EXECUTION_STATES.RUNNING,
+      }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.harness = HARNESS_IDS.CODEX_CLI;
+    workingFile.executionMode = EXECUTION_MODES.INTERACTIVE;
+    await writeTrustedRunFile(run.runFilePath, workingFile);
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const inheritedInteractive = responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [{ prompt: "needs background wait" }],
+      })
+    );
+    const editedInteractive = responseJson(
+      await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 3,
+        updates: { executionMode: EXECUTION_MODES.INTERACTIVE },
+      })
+    );
+    const explicitHeadless = responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          { prompt: "headless", executionMode: EXECUTION_MODES.HEADLESS },
+        ],
+      })
+    );
+    const editedHeadless = responseJson(
+      await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 3,
+        updates: { executionMode: EXECUTION_MODES.HEADLESS },
+      })
+    );
+
+    assert.match(inheritedInteractive.warnings[0], /Codex cannot wait/u);
+    assert.match(editedInteractive.warnings[0], /Codex cannot wait/u);
+    assert.strictEqual("warnings" in explicitHeadless, false);
+    assert.strictEqual("warnings" in editedHeadless, false);
+  });
+
+  test("accepts an interactive member in an appended parallel group", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "append-interactive-parallel-member",
+      "2026-01-01T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.RUNNING }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.harness = HARNESS_IDS.CLAUDE_CLI;
+    workingFile.executionMode = EXECUTION_MODES.HEADLESS;
+    await writeTrustedRunFile(run.runFilePath, workingFile);
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const result = responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          {
+            parallel: [
+              {
+                prompt: "interactive member",
+                executionMode: EXECUTION_MODES.INTERACTIVE,
+              },
+              { prompt: "headless member" },
+            ],
+          },
+        ],
+      })
+    );
+    const persisted = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+
+    assert.strictEqual(result.stepsAdded, 2);
+    assert.strictEqual(
+      persisted.steps?.[1].executionMode,
+      EXECUTION_MODES.INTERACTIVE
+    );
+    assert.strictEqual(persisted.parallelGroups?.length, 1);
   });
 
   test("rejects editing a parallel member to target its sibling", async () => {
@@ -1933,7 +2523,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       currentIndex: 2,
       executionState: EXECUTION_STATES.RUNNING,
     };
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
     const before = await fs.readFile(run.runFilePath, "utf8");
 
@@ -1951,23 +2541,44 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     }
   });
 
-  test("preserves additionalArgs boundaries when editing a pending step", async () => {
+  test("rejects setting or clearing additionalArgs without applying other edits", async () => {
     const server = await setup();
     const { run, ownerToken } = await prepareActiveRun("edit-step-args");
-    const args = ["--append-system-prompt", "be terse", "it's"];
     try {
+      const before = await fs.readFile(run.runFilePath, "utf8");
+      for (const request of [
+        {
+          updates: {
+            prompt: "must not be applied",
+            additionalArgs: ["--dangerously-skip-permissions"],
+          },
+        },
+        {
+          updates: { prompt: "must not be applied" },
+          clearProperties: ["additionalArgs"],
+        },
+      ]) {
+        await assert.rejects(
+          server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+            index: 2,
+            ...request,
+          }),
+          /harness arguments can only be set by the workflow author, for security reasons/
+        );
+        assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
+      }
+
       await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
         index: 2,
-        updates: { additionalArgs: args },
+        updates: { prompt: "ordinary edits still work", agent: "reviewer" },
       });
       const persisted = JSON.parse(
         await fs.readFile(run.runFilePath, "utf8")
       ) as WorkingFile;
-
-      assert.deepStrictEqual(
-        parseArgString((persisted.steps?.[2] as PromptStep).additionalArgs!),
-        args
-      );
+      assert.deepStrictEqual(persisted.steps?.[2], {
+        prompt: "ordinary edits still work",
+        agent: "reviewer",
+      });
     } finally {
       await releaseActiveRun(run, ownerToken);
     }
@@ -1987,7 +2598,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         onFail: "stopWorkflow",
         _runtime: { stepId: "script-step-2" },
       };
-      await fs.writeFile(run.runFilePath, JSON.stringify(file), "utf8");
+      await writeTrustedRunFile(run.runFilePath, file);
 
       await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
         index: 2,
@@ -2131,7 +2742,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       workingFile.parallelGroups = [
         { id: "group-reorder", startIndex: 2, endIndex: 3, failFast: true },
       ];
-      await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+      await writeTrustedRunFile(run.runFilePath, workingFile);
 
       const result = responseJson(
         await server.invokeTool(MCP_REORDER_STEPS_TOOL_NAME, {
@@ -2178,7 +2789,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
           failFast: true,
         },
       ];
-      await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+      await writeTrustedRunFile(run.runFilePath, workingFile);
 
       const result = responseJson(
         await server.invokeTool(MCP_REORDER_STEPS_TOOL_NAME, {
@@ -2347,7 +2958,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       await fs.readFile(run.runFilePath, "utf8")
     ) as WorkingFile;
     workingFile.harness = "claude-cli";
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     const capabilitiesDirectory = path.join(workspaceRoot, ".ctrlyoke");
     await fs.mkdir(capabilitiesDirectory, { recursive: true });
     await fs.writeFile(
@@ -2433,7 +3044,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     workingFile.steps = workingFile.steps?.map((step) => ({
       prompt: (step as { prompt: string }).prompt,
     })) as WorkflowStep[];
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const result = responseJson(
@@ -2704,7 +3315,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         "Workflow stopped - Maximum execution time reached (601s / 600s).",
     };
     workingFile._runtime!.stopReason = stopReason;
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const status = responseJson(await server.invokeTool("workflow_status", {}));
@@ -2823,7 +3434,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       currentIndex: workingFile._runtime?.currentIndex ?? 0,
       executionState: EXECUTION_STATES.RUNNING,
     };
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
     await WorkflowLockManager.acquireLock(workspaceRoot, run.workflowKey, {
       schemaVersion: 2,
@@ -2911,7 +3522,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       currentIndex: 1,
       executionState: EXECUTION_STATES.RUNNING,
     };
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
     await WorkflowLockManager.acquireLock(workspaceRoot, run.workflowKey, {
       schemaVersion: 2,
@@ -3047,7 +3658,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
       },
     };
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     try {
       const result = responseJson(
         await invokeAppendHandler(server, {
@@ -3099,7 +3710,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
       },
     };
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     const before = await fs.readFile(run.runFilePath, "utf8");
     try {
       await assert.rejects(
@@ -3167,7 +3778,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         startedAt: 3,
       },
     };
-    await fs.writeFile(finalRun.runFilePath, JSON.stringify(finalFile), "utf8");
+    await writeTrustedRunFile(finalRun.runFilePath, finalFile);
     await rejectJoin(finalRun, /final step/i);
 
     for (const [suffix, state] of [
@@ -3185,7 +3796,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         currentIndex: file._runtime?.currentIndex ?? 0,
         executionState: state,
       };
-      await fs.writeFile(run.runFilePath, JSON.stringify(file), "utf8");
+      await writeTrustedRunFile(run.runFilePath, file);
       await rejectJoin(run, /state|executing|running/i, ownerToken);
     }
 
@@ -3307,7 +3918,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       currentIndex: -1,
       executionState: EXECUTION_STATES.RUNNING,
     };
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const result = responseJson(
@@ -3344,7 +3955,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       currentIndex: 0,
       executionState: EXECUTION_STATES.PAUSED,
     };
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const result = responseJson(
@@ -3378,7 +3989,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
           await fs.readFile(run.runFilePath, "utf8")
         ) as WorkingFile;
         file._runtime = { ...file._runtime!, executionState: state };
-        await fs.writeFile(run.runFilePath, JSON.stringify(file), "utf8");
+        await writeTrustedRunFile(run.runFilePath, file);
 
         const append = server.invokeTool("append_step", {
           position: "end",
@@ -3553,7 +4164,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       ...step,
       _runtime: { startedAt: 1 },
     }));
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const status = responseJson(await server.invokeTool("workflow_status", {}));
@@ -3583,7 +4194,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       completedAt: 2,
       terminalStatus: PROMPT_TERMINAL_STATUS.FAILED,
     };
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const status = responseJson(await server.invokeTool("workflow_status", {}));
@@ -3606,7 +4217,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       { prompt: "x".repeat(STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS + 50) },
       { prompt: "short" },
     ];
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const status = responseJson(await server.invokeTool("workflow_status", {}));
@@ -3655,7 +4266,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       },
       { prompt: "Review the build" },
     ];
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const status = responseJson(await server.invokeTool("workflow_status", {}));
@@ -3689,7 +4300,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       await fs.readFile(run.runFilePath, "utf8")
     ) as WorkingFile;
     workingFile.schemaVersion = 2;
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     await assert.rejects(
@@ -3758,7 +4369,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       { prompt: "running", _runtime: { startedAt: 1 } },
       { prompt: "pending" },
     ] as WorkflowStep[];
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const unchanged = responseJson(

@@ -14,7 +14,19 @@ import {
   PROMPT_TERMINAL_STATUS,
   STEP_CLAIM_OUTCOMES,
   QUEUE_POSITION,
+  RUN_DEFINITION_DECISIONS,
+  RUN_DEFINITION_INTEGRITY,
 } from "../types/DashboardConstants";
+import {
+  isRunDefinitionChangedError,
+  readRunDefinitionAnchor,
+  verifyRunDefinitionFile,
+} from "../utils/RunDefinitionAnchor";
+import {
+  definitionAnchorLayout,
+  definitionAnchorPath,
+} from "../utils/WorkflowPaths";
+import type { RunDefinitionRejection } from "../core/WorkingFileManager";
 import {
   ParallelGroupDefinition,
   PromptStep,
@@ -27,6 +39,7 @@ import { RunContinuationService } from "../core/orchestration/RunContinuationSer
 import { WorkflowLineageRepository } from "../core/orchestration/WorkflowLineageRepository";
 import { WorkingFileManager } from "../core/WorkingFileManager";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
+import { writeTrustedRunFile } from "./helpers/trustedRunFile";
 import { withFileLock } from "../utils/FileLockUtils";
 
 /**
@@ -429,10 +442,7 @@ suite("PromptQueue State Machine Tests", () => {
             admission: PARALLEL_GROUP_ADMISSION.CLOSING,
           },
         };
-        await fs.writeFile(
-          workingFilePath,
-          JSON.stringify(workingFile, null, 2)
-        );
+        await writeTrustedRunFile(workingFilePath, workingFile);
 
         const resumed = new PromptQueue();
         await resumed.restoreFromWorkingFile(workingFilePath);
@@ -2420,7 +2430,7 @@ suite("PromptQueue State Machine Tests", () => {
             tokenTotals: { attemptCount: prompts.length, costUsd },
           },
         } as WorkingFile;
-        await fs.writeFile(run.runFilePath, JSON.stringify(finished));
+        await writeTrustedRunFile(run.runFilePath, finished);
       };
       const ownRevision = queue.getState().definitionRevision;
       await finishRun(["s0", "s1", "s2"], ownRevision, 1.37);
@@ -3646,6 +3656,219 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(state.steps[1]._runtime?.contextWindowSize, undefined);
       assert.strictEqual(state.currentIndex, 2);
       assert.strictEqual(state.results[1].status, STEP_STATUS.COMPLETED);
+    });
+  });
+
+  suite("definition anchors", () => {
+    let workspace: string;
+
+    setup(async () => {
+      workspace = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-prompt-queue-anchor-")
+      );
+    });
+
+    teardown(async () => {
+      await fs.rm(workspace, { recursive: true, force: true });
+    });
+
+    /** A queue executing a promoted run, as the live runner does. */
+    async function createLiveQueue(steps: PromptStep[]): Promise<string> {
+      queue.loadPrompts(createPromptFile(steps));
+      await queue.createWorkingFile("anchor-workflow", steps, workspace);
+      const promotion = await queue.promoteToNewRun(workspace, 100);
+      assert.ok(promotion);
+      await startQueueExecution(queue);
+      return promotion.workingFilePath;
+    }
+
+    async function readDisk(workingFilePath: string): Promise<WorkingFile> {
+      return JSON.parse(await fs.readFile(workingFilePath, "utf8"));
+    }
+
+    /** What a sandboxed agent with write access to the run file can do. */
+    async function addEndConditionOutsideCtrlyoke(
+      workingFilePath: string,
+      stepIndex: number
+    ): Promise<void> {
+      const workingFile = await readDisk(workingFilePath);
+      (workingFile.steps![stepIndex] as PromptStep).endCondition = {
+        script: "node pwned.js",
+      };
+      await fs.writeFile(workingFilePath, JSON.stringify(workingFile));
+    }
+
+    test("a tampered endCondition never reaches the queue at a step boundary", async () => {
+      const workingFilePath = await createLiveQueue([
+        { prompt: "first" },
+        { prompt: "second" },
+      ]);
+      const rejections: RunDefinitionRejection[] = [];
+      queue.onDidRejectDiskDefinition((rejection) =>
+        rejections.push(rejection)
+      );
+      await queue.markStepAsSent(0);
+      await addEndConditionOutsideCtrlyoke(workingFilePath, 1);
+
+      await queue.commitStepOutcomeAndAdvance({
+        target: { kind: "queue", stepIndex: 0 },
+        status: "completed",
+      });
+
+      const pending = queue.getState().steps[1] as PromptStep;
+      assert.strictEqual(pending.endCondition, undefined);
+      assert.strictEqual(
+        (queue.getWorkflowFile().steps?.[1] as PromptStep).endCondition,
+        undefined
+      );
+      const disk = await readDisk(workingFilePath);
+      assert.strictEqual(
+        (disk.steps![1] as PromptStep).endCondition,
+        undefined,
+        "the runner's own write puts the trusted definition back"
+      );
+      assert.ok(
+        disk.steps![0]._runtime?.completedAt !== undefined,
+        "the step outcome is still recorded"
+      );
+      assert.strictEqual(rejections.length, 1);
+      assert.deepStrictEqual(rejections[0].changes, [
+        { scope: "step", stepNumber: 2, fields: ["endCondition"] },
+      ]);
+      assert.strictEqual(
+        (await verifyRunDefinitionFile(workingFilePath))?.verdict.status,
+        RUN_DEFINITION_INTEGRITY.TRUSTED
+      );
+    });
+
+    test("a step appended by another ctrlyoke process is merged", async () => {
+      const workingFilePath = await createLiveQueue([{ prompt: "first" }]);
+      const rejections: RunDefinitionRejection[] = [];
+      queue.onDidRejectDiskDefinition((rejection) =>
+        rejections.push(rejection)
+      );
+      const appended = await readDisk(workingFilePath);
+      appended.steps = [...(appended.steps ?? []), { prompt: "appended" }];
+      appended.definitionRevision = (appended.definitionRevision ?? 1) + 1;
+      // The anchored writer every ctrlyoke process (CLI, MCP) goes through.
+      await WorkingFileManager.writeWorkingFileAtomic(
+        workingFilePath,
+        appended
+      );
+
+      assert.strictEqual(await queue.mergeStepsFromDisk(), 1);
+      assert.strictEqual(
+        (queue.getState().steps[1] as PromptStep).prompt,
+        "appended"
+      );
+      assert.strictEqual(rejections.length, 0);
+    });
+
+    test("a step claim restores a tampered definition instead of failing", async () => {
+      const workingFilePath = await createLiveQueue([
+        { prompt: "first" },
+        { prompt: "second" },
+      ]);
+      const state = queue.getState();
+      await addEndConditionOutsideCtrlyoke(workingFilePath, 1);
+
+      const claim = await queue.claimStepById(
+        state.steps[1]._runtime!.stepId!,
+        Date.now(),
+        workspace
+      );
+
+      assert.strictEqual(claim.status, STEP_CLAIM_OUTCOMES.CLAIMED);
+      assert.strictEqual(
+        ((await readDisk(workingFilePath)).steps![1] as PromptStep)
+          .endCondition,
+        undefined
+      );
+    });
+
+    test("a run loaded with an outside change is read-only until reviewed", async () => {
+      const workingFilePath = await createLiveQueue([
+        { prompt: "first" },
+        { prompt: "second" },
+      ]);
+      await addEndConditionOutsideCtrlyoke(workingFilePath, 1);
+      const tampered = await fs.readFile(workingFilePath, "utf8");
+
+      const resumed = new PromptQueue();
+      await resumed.restoreFromWorkingFile(workingFilePath, true);
+
+      await assert.rejects(
+        resumed.updateWorkingFile(),
+        isRunDefinitionChangedError
+      );
+      assert.strictEqual(await fs.readFile(workingFilePath, "utf8"), tampered);
+
+      assert.strictEqual(
+        await WorkingFileManager.resolveDefinitionChange(
+          workingFilePath,
+          RUN_DEFINITION_DECISIONS.RESTORE
+        ),
+        true
+      );
+      const reloaded = new PromptQueue();
+      await reloaded.restoreFromWorkingFile(workingFilePath, true);
+      assert.strictEqual(
+        (reloaded.getState().steps[1] as PromptStep).endCondition,
+        undefined
+      );
+      await reloaded.updateWorkingFile();
+    });
+
+    test("in user storage, a run an older ctrlyoke created after the baseline is trusted", async () => {
+      const workingFilePath = await createLiveQueue([{ prompt: "real" }]);
+      // The baseline stays; only this run's anchor is missing, as for a run a
+      // VS Code window still running an older build created.
+      await fs.rm(definitionAnchorPath(workingFilePath)!, { force: true });
+      const older = await readDisk(workingFilePath);
+      (older.steps![0] as PromptStep).prompt = "written by an older build";
+      await fs.writeFile(workingFilePath, JSON.stringify(older));
+
+      assert.deepStrictEqual(
+        await WorkingFileManager.inspectDefinitionIntegrity(workingFilePath),
+        { status: RUN_DEFINITION_INTEGRITY.TRUSTED }
+      );
+      assert.ok(await readRunDefinitionAnchor(workingFilePath));
+      const resumed = new PromptQueue();
+      await resumed.restoreFromWorkingFile(workingFilePath, true);
+      await resumed.updateWorkingFile();
+      assert.strictEqual(
+        ((await readDisk(workingFilePath)).steps![0] as PromptStep).prompt,
+        "written by an older build"
+      );
+    });
+
+    test("history written before anchors is trusted and anchored on first load", async () => {
+      const workingFilePath = await createLiveQueue([{ prompt: "legacy" }]);
+      // Before anchors there was no anchor and no baseline in this storage.
+      const layout = definitionAnchorLayout(workingFilePath)!;
+      await fs.rm(path.dirname(layout.baselinePath), {
+        recursive: true,
+        force: true,
+      });
+      const legacy = await readDisk(workingFilePath);
+      (legacy.steps![0] as PromptStep).prompt = "edited by an older ctrlyoke";
+      await fs.writeFile(workingFilePath, JSON.stringify(legacy));
+
+      assert.deepStrictEqual(
+        await WorkingFileManager.inspectDefinitionIntegrity(workingFilePath),
+        { status: RUN_DEFINITION_INTEGRITY.TRUSTED }
+      );
+      assert.strictEqual(
+        (await verifyRunDefinitionFile(workingFilePath))?.verdict.status,
+        RUN_DEFINITION_INTEGRITY.TRUSTED
+      );
+      const resumed = new PromptQueue();
+      await resumed.restoreFromWorkingFile(workingFilePath, true);
+      await resumed.updateWorkingFile();
+      assert.strictEqual(
+        ((await readDisk(workingFilePath)).steps![0] as PromptStep).prompt,
+        "edited by an older ctrlyoke"
+      );
     });
   });
 });

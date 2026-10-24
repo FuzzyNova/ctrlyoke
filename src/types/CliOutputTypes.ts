@@ -57,6 +57,7 @@ export type CliEventData =
   | UserSteerData
   | FollowUpResumedData
   | BackgroundWorkHoldData
+  | BackgroundWorkAbandonedData
   | ContextWindowSyncData
   | AskUserQuestionData
   | TerminalOutputData;
@@ -126,6 +127,13 @@ export interface BackgroundWorkHoldData {
    * ended yet — the step is waiting on that turn rather than on a task.
    */
   awaitingResumedTurn: boolean;
+}
+
+/** Data for a headless step's display-only notice that pending background work
+ * was stopped when the harness session ended. */
+export interface BackgroundWorkAbandonedData {
+  /** Background tasks still running when the headless session ended. */
+  pendingTasks: BackgroundTaskSummary[];
 }
 
 /** What a log parser reports about its pending background work at a Stop. */

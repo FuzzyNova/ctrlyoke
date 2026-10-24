@@ -579,12 +579,30 @@ const STATIC_SETTINGS_CATALOG = {
     label: "Enable performance profiling",
     devOnly: true,
   },
+  "developer.slowPhaseThresholdMs": {
+    id: "developer.slowPhaseThresholdMs",
+    tab: GLOBAL_SETTINGS_TABS.DEVELOPER,
+    label: "Slow phase threshold (ms)",
+    description:
+      "Timed phases, React commits and row measurements are logged only when they take at least this long.",
+    keywords: ["profiler", "performance"],
+    devOnly: true,
+  },
   "developer.logLongFrames": {
     id: "developer.logLongFrames",
     tab: GLOBAL_SETTINGS_TABS.DEVELOPER,
     label: "Log long frames",
     description:
       "Captures requestAnimationFrame gaps and browser long-task entries across the entire webview — use to find render hotspots anywhere in the UI.",
+    devOnly: true,
+  },
+  "developer.longFrameThresholdMs": {
+    id: "developer.longFrameThresholdMs",
+    tab: GLOBAL_SETTINGS_TABS.DEVELOPER,
+    label: "Long frame threshold (ms)",
+    description:
+      "Logs a frame gap only at or above this. Keep it above the display's frame interval (17ms at 60 Hz, 33ms at 30 Hz) or every frame is logged.",
+    keywords: ["profiler", "performance", "jank"],
     devOnly: true,
   },
   "developer.logRowMeasurements": {

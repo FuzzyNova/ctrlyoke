@@ -4,7 +4,9 @@ import { useUiStore } from "@store/uiStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "@/types/messages";
 import { Button } from "@components/shared/Button";
+import { SettingInputRow } from "@components/shared/SettingInputRow";
 import { SettingToggleRow } from "@components/shared/SettingToggleRow";
+import { LocalNumberInput } from "@components/shared/LocalInputs";
 import {
   configureProfiler,
   getProfilerState,
@@ -15,6 +17,16 @@ import { notifyUser } from "@utils/notifyUser";
 
 const TERMINATION_WARNING =
   "Reload and restart actions terminate active workflows, PTY sessions, and CLI processes.";
+
+const THRESHOLD_INPUT_CLASS =
+  "w-24 bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border";
+
+function parseThresholdMs(raw: string): number | undefined {
+  const value = Number(raw);
+  return Number.isFinite(value) && raw.trim() !== ""
+    ? Math.max(0, value)
+    : undefined;
+}
 
 interface DevAction {
   label: string;
@@ -116,20 +128,7 @@ export function DeveloperSection() {
   }
 
   function updateProfilerEnabled(enabled: boolean) {
-    setProfilerState(
-      setProfilingEnabled(
-        enabled,
-        enabled
-          ? {
-              slowThresholdMs: 8,
-              logMeasurements: true,
-              logVirtualRanges: true,
-              logAllScrollFrames: false,
-              logLongFrames: true,
-            }
-          : undefined
-      )
-    );
+    setProfilerState(setProfilingEnabled(enabled));
     notifyUser(
       enabled
         ? "Performance profiling enabled."
@@ -248,6 +247,21 @@ export function DeveloperSection() {
               <h4 className="text-xs font-semibold text-description-fg">
                 General (whole UI)
               </h4>
+              <SettingInputRow
+                settingKey="developer.slowPhaseThresholdMs"
+                id="developer-slow-phase-threshold"
+              >
+                <LocalNumberInput
+                  id="developer-slow-phase-threshold"
+                  min={0}
+                  value={profilerState.slowThresholdMs}
+                  onCommit={(value) =>
+                    updateProfilerOptions({ slowThresholdMs: value })
+                  }
+                  parse={parseThresholdMs}
+                  className={THRESHOLD_INPUT_CLASS}
+                />
+              </SettingInputRow>
               <SettingToggleRow
                 settingKey="developer.logLongFrames"
                 checked={profilerState.logLongFrames}
@@ -255,6 +269,23 @@ export function DeveloperSection() {
                   updateProfilerOptions({ logLongFrames: checked })
                 }
               />
+              {profilerState.logLongFrames && (
+                <SettingInputRow
+                  settingKey="developer.longFrameThresholdMs"
+                  id="developer-long-frame-threshold"
+                >
+                  <LocalNumberInput
+                    id="developer-long-frame-threshold"
+                    min={0}
+                    value={profilerState.longFrameThresholdMs}
+                    onCommit={(value) =>
+                      updateProfilerOptions({ longFrameThresholdMs: value })
+                    }
+                    parse={parseThresholdMs}
+                    className={THRESHOLD_INPUT_CLASS}
+                  />
+                </SettingInputRow>
+              )}
             </div>
             <div className="space-y-1">
               <h4 className="text-xs font-semibold text-description-fg">

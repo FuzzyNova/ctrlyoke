@@ -16,6 +16,20 @@ suite("ProjectStatePaths", () => {
     assert.strictEqual(projectKey("C:\\dev\\x"), projectKey("c:/dev/x"));
   });
 
+  test("returns the same key from its cache, including after the cache fills", () => {
+    const first = path.join(os.tmpdir(), "cached-project");
+    const expected = projectKey(first);
+
+    // More distinct roots than the cache holds, so it is cleared on the way.
+    const keys = Array.from({ length: 100 }, (_unused, index) =>
+      projectKey(path.join(os.tmpdir(), `cached-project-${index}`))
+    );
+
+    assert.strictEqual(new Set(keys).size, keys.length);
+    assert.strictEqual(projectKey(first), expected);
+    assert.strictEqual(projectKey(`${first}${path.sep}`), expected);
+  });
+
   test("sanitizes and caps the readable project slug", () => {
     const stateRoot = path.join(os.tmpdir(), "My Project_É-" + "x".repeat(60));
     const key = projectKey(stateRoot);

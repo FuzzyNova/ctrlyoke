@@ -138,6 +138,14 @@ function validateSchema(
             throw new Error(`${fieldPath}.${name} is not allowed`);
           }
         }
+      } else if (schema.additionalProperties) {
+        for (const [name, propertyValue] of Object.entries(record)) {
+          validateSchema(
+            schema.additionalProperties,
+            propertyValue,
+            `${fieldPath}.${name}`
+          );
+        }
       }
       for (const required of getMcpSchemaRequiredProperties(schema)) {
         if (record[required] === undefined) {

@@ -23,6 +23,7 @@ import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { removeTempDir } from "../helpers/tempWorkspace";
+import { writeTrustedRunFile } from "../helpers/trustedRunFile";
 import {
   CURRENT_SCHEMA_VERSIONS,
   NewerSchemaError,
@@ -409,6 +410,93 @@ suite("HistoryTrashRepository", () => {
     assert.deepStrictEqual(result.conflicts, [`${workflowKey}/${runRef}`]);
     const [remaining] = await trash.list(30);
     assert.strictEqual(remaining.id, entry.id);
+  });
+
+  suite("definition anchors", () => {
+    async function anchorWorkingFile(workingFilePath: string): Promise<string> {
+      await fs.mkdir(path.dirname(workingFilePath), { recursive: true });
+      await writeTrustedRunFile(workingFilePath, {
+        definitionRevision: 1,
+        steps: [{ prompt: "anchored" }],
+      });
+      const anchorPath = WorkflowPaths.definitionAnchorPath(workingFilePath);
+      assert.ok(anchorPath && (await exists(anchorPath)));
+      return anchorPath;
+    }
+
+    function runFile(workflowKey: WorkflowKey, runRef: RunRef): string {
+      return WorkflowPaths.runFilePath(workspace, workflowKey, runRef);
+    }
+
+    async function trashRun(workflowKey: WorkflowKey, runRef: RunRef) {
+      const batch = trash.begin(HISTORY_TRASH_ENTRY_KINDS.RUN, REQUESTER);
+      await new OutputHistoryManager(workspace).deleteRunByRef(
+        workflowKey,
+        runRef,
+        batch
+      );
+      const entry = await batch.commit();
+      assert.ok(entry);
+      return entry;
+    }
+
+    test("a trashed run keeps its anchor until it is purged", async () => {
+      const workflowKey = await createLineage("anchor-purge");
+      const runRef = await addRun(workflowKey, 1);
+      const anchorPath = await anchorWorkingFile(runFile(workflowKey, runRef));
+
+      const restorable = await trashRun(workflowKey, runRef);
+      assert.ok(await exists(anchorPath));
+      await trash.restore(restorable.id);
+      assert.ok(await exists(anchorPath));
+
+      const purged = await trashRun(workflowKey, runRef);
+      await trash.purge(purged.id, "test");
+      assert.strictEqual(await exists(anchorPath), false);
+    });
+
+    test("purging a whole workflow removes its anchor directory", async () => {
+      const workflowKey = await createLineage("anchor-lineage");
+      const runRef = await addRun(workflowKey, 1);
+      const runAnchor = await anchorWorkingFile(runFile(workflowKey, runRef));
+      const draftAnchor = await anchorWorkingFile(
+        WorkflowPaths.draftFilePath(workspace, workflowKey)
+      );
+
+      const entry = await trash.trashLineage(workflowKey, REQUESTER);
+      assert.ok(entry);
+      await trash.purge(entry.id, "test");
+
+      assert.strictEqual(await exists(runAnchor), false);
+      assert.strictEqual(await exists(draftAnchor), false);
+      assert.strictEqual(await exists(path.dirname(runAnchor)), false);
+    });
+
+    test("a purge keeps the anchor of a live run under the same reference", async () => {
+      const workflowKey = await createLineage("anchor-conflict");
+      const runRef = await addRun(workflowKey, 1);
+      await anchorWorkingFile(runFile(workflowKey, runRef));
+      const entry = await trashRun(workflowKey, runRef);
+      // The run's slot is taken again before the trashed copy is purged.
+      const anchorPath = await anchorWorkingFile(runFile(workflowKey, runRef));
+
+      await trash.purge(entry.id, "test");
+
+      assert.ok(await exists(anchorPath));
+    });
+
+    test("retention pruning removes the deleted run's anchor", async () => {
+      const workflowKey = await createLineage("anchor-retention");
+      const older = await addRun(workflowKey, 1);
+      const newer = await addRun(workflowKey, 2);
+      const olderAnchor = await anchorWorkingFile(runFile(workflowKey, older));
+      const newerAnchor = await anchorWorkingFile(runFile(workflowKey, newer));
+
+      await lineages.deleteRun(workspace, workflowKey, older);
+
+      assert.strictEqual(await exists(olderAnchor), false);
+      assert.ok(await exists(newerAnchor));
+    });
   });
 
   test("purgeExpired removes entries past the retention window and keeps younger ones", async () => {

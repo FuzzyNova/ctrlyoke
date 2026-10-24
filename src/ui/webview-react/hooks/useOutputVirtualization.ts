@@ -128,6 +128,7 @@ function getZeroHeightStructuredEventReason(
     case CLI_EVENT_TYPES.BASH_COMMAND:
     case CLI_EVENT_TYPES.COMPACTION:
     case CLI_EVENT_TYPES.BACKGROUND_WORK_HOLD:
+    case CLI_EVENT_TYPES.BACKGROUND_WORK_ABANDONED:
       return null;
     default:
       return "unsupported-structured-event";

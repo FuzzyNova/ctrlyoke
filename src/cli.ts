@@ -27,10 +27,12 @@ import {
   CLI_VALIDATE_ERROR_CODES,
   getHarnessDisplayName,
   STATUS_MESSAGE_SEVERITY,
+  RUN_DEFINITION_DECISIONS,
 } from "./types/DashboardConstants";
 import type {
   CliValidateStrictPolicy,
   HarnessId,
+  RunDefinitionDecision,
 } from "./types/DashboardConstants";
 import type {
   FinalStepRuntimeState,
@@ -181,8 +183,10 @@ import {
   editStepCommand,
   removeStepCommand,
   reorderStepsCommand,
+  reviewRunDefinitionCommand,
 } from "./cli/StepCommands";
 import type {
+  StepDefinitionReviewOptions,
   StepEditOptions,
   StepRemoveOptions,
   StepReorderOptions,
@@ -434,7 +438,26 @@ registerStepCommands(program, {
       ),
       options.json === true
     ),
+  acceptDefinition: (options) =>
+    reviewRunDefinition(RUN_DEFINITION_DECISIONS.ACCEPT, options),
+  restoreDefinition: (options) =>
+    reviewRunDefinition(RUN_DEFINITION_DECISIONS.RESTORE, options),
 });
+
+function reviewRunDefinition(
+  decision: RunDefinitionDecision,
+  options: StepDefinitionReviewOptions
+): Promise<void> {
+  return handleStepCommand(
+    prepareStepCommand(options).then((context) =>
+      reviewRunDefinitionCommand(decision, options, context, {
+        writeOut: (message) => console.log(message),
+        writeErr: (message) => console.error(message),
+      })
+    ),
+    options.json === true
+  );
+}
 
 registerSecretCommands(program, {
   set: (name, options) =>
@@ -1610,7 +1633,11 @@ function handleStepCommand(
 }
 
 async function prepareStepCommand(
-  options: StepEditOptions | StepRemoveOptions | StepReorderOptions
+  options:
+    | StepEditOptions
+    | StepRemoveOptions
+    | StepReorderOptions
+    | StepDefinitionReviewOptions
 ) {
   const workspace = await bootstrapCliWorkspace(options);
   return createStepCommandContext(

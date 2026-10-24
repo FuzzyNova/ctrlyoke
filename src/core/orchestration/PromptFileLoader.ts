@@ -542,7 +542,7 @@ export class PromptFileLoader {
       }
     }
 
-    for (const key of ["vars", "finalStep"] as const) {
+    for (const key of ["vars", "conditions", "finalStep"] as const) {
       const value = promptFile[key];
       if (value !== undefined) {
         updates[key] = value;

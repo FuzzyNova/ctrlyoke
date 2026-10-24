@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`workflow_status` reports per-step git outcomes.** Finished prompt steps show HEAD at start and end for captured repositories, plus whether the workspace was dirty when the step ended.
+
+- **MCP `append_step` accepts agent and skills overrides and reports effective settings.** The append result shows the resolved harness, model, execution mode, session behavior, and condition preset names for every added step, including parallel members.
+
+- **Condition presets for MCP-queued steps.** Workflows can define named,
+  author-controlled condition scripts that MCP agents attach to steps by name.
+
+- **MCP `append_step` and `edit_step` can set `executionMode`.** Their results warn when a step resolves to Codex in interactive mode, since Codex cannot wait on background work in either mode.
+
 - **Subagent calls have dedicated output cards** showing agent details, live progress, an optional prompt, and the final result.
 
 - **The `workflow_status` MCP tool reports execution mode.** Its metadata gives the workflow's
@@ -29,6 +38,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Faster startup on Windows.** Reading stored secrets and license details no longer starts a
+  new PowerShell process for every value. One helper process serves them all, so VS Code no
+  longer pauses for several seconds while ctrlyoke starts, and saving or removing a secret takes
+  a fraction of a second.
+
+- **Workspace tool permissions wider than yours need approval.** A `defaults.toolPermissions`
+  value in a workspace's `.ctrlyoke/settings.json` that grants more than your user setting (for
+  example `dangerouslyAllowAll`, a removed denied tool, or `none`) now waits for the same
+  one-time approval as workspace hooks and default scripts, through the dashboard prompt or
+  `ctrlyoke trust-workspace-settings`. Until you approve it, your user value applies, and a
+  noninteractive `ctrlyoke run` exits with code `2`. A workspace value that only narrows your
+  permissions still applies without asking.
+
+- **Run definitions changed outside ctrlyoke are refused.** ctrlyoke now keeps a record of every
+  run definition it writes, under `~/.ctrlyoke/projects/` in both storage modes, so an agent that
+  edits a run file in `<workspace>/.ctrlyoke/.runs/` can no longer change a pending step's
+  scripts, end conditions or tool permissions. A running workflow ignores such a change, puts back
+  the definition ctrlyoke last wrote and shows a warning on the current step. Any other run
+  becomes read-only, with a **Definition changed outside ctrlyoke** banner, until you choose
+  **Restore** or **Accept change** (or run `ctrlyoke step restore-definition` /
+  `ctrlyoke step accept-definition`). Hand-editing a run file now needs the same review. In
+  `workspace` mode, a run ctrlyoke has no record of writing, such as one created outside it or
+  pulled from another machine, is read-only until you accept it. Runs already in your history
+  when you upgrade are trusted.
+
+- **Headless steps warn when they end with background work still running.** The warning appears as a ctrlyoke notice rather than in the reply; headless prompts also tell agents to wait for long commands in the foreground.
+- **Antigravity cost estimates now include separately reported thinking tokens.**
+- **Sonnet 5.5 cache reads use the corrected $0.20/M rate.** The sync script
+  checks the upstream value so the temporary correction can be removed when
+  models.dev is updated.
+- **Step cost estimates include parent agent tokens and price subagents at their own model.**
+
+- **MCP `edit_step` no longer lets agents set or clear harness arguments.** The deprecated
+  `additionalArgs` input remains accepted by the schema for compatibility, but calls using it
+  fail without applying any edits. Workflow authors retain control of harness command flags.
+- **Nested Claude subagent spawn cards now receive their progress and completion updates.**
+  Updates emitted while a subagent starts another subagent stay attributed to the nested card,
+  so it completes in place instead of leaving a running card and adding a duplicate row.
 - **Step token totals and cost estimates include foreground subagents.** Subagent work was
   missing from every harness except Copilot; in measured Claude Code interactive sessions it was
   about 40% of the cost. Claude Code headless uses its per-model result totals, Qwen Code
@@ -48,6 +95,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ends.** When Copilot waited on a background shell with `read_powershell` and the shell finished
   during that wait, ctrlyoke kept treating the shell as running. The step stayed running for 10
   minutes after Copilot was done, until the idle timeout completed it.
+- **An interactive Qwen Code step waits for its background work.** When Qwen Code started
+  background shells, monitors or subagents and ended its turn, the step completed straight away,
+  before the work finished or Qwen Code dealt with its result. Each task's completion
+  notification was also shown as a message you had typed. The step now keeps running until the
+  last task's follow-up turn ends, like Claude Code, Copilot and Antigravity steps.
 - **The "CLI is older than this extension" notice only names a CLI installed with npm.** After an
   extension update, it could name the CLI copy bundled in the previous extension version's folder,
   which runs whenever you or an agent type `ctrlyoke` in a VS Code terminal, even if you never

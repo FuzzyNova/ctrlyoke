@@ -424,7 +424,7 @@ export interface ILogParser {
    * `hasPendingBackgroundWork()`.
    *
    * Default (`BaseLogParser`) is a no-op. Harnesses confirmed to background a
-   * task and auto-resume the same session (Claude, Copilot, Antigravity)
+   * task and auto-resume the same session (Claude, Copilot, Antigravity, Qwen)
    * override this to track their own launch/completion markers — see each
    * harness's implementation for its specific rule.
    *

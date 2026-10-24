@@ -60,6 +60,7 @@ import {
   type QueuePosition,
   type ActionType,
   type WorktreeManagementAction,
+  type RunDefinitionDecision,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
@@ -135,8 +136,8 @@ import {
   RunViewPublisher,
   type DefinitionRollbackInvalidation,
   type StepColorInvalidation,
-  sameViewAddress,
 } from "./orchestration/RunViewPublisher";
+import { sameViewAddress } from "../utils/WorkflowViewAddress";
 import {
   RunLifecycleService,
   type RunLifecycleViewPort,
@@ -4606,6 +4607,17 @@ export class WorkflowOrchestrator {
       );
     }
     return result;
+  }
+
+  /** Accept or restore a run/draft definition changed outside ctrlyoke. */
+  async resolveDefinitionChangeAtAddress(
+    address: WorkflowViewAddress,
+    decision: RunDefinitionDecision
+  ): Promise<void> {
+    await this.runLifecycleService.resolveDefinitionChangeAtAddress(
+      address,
+      decision
+    );
   }
 
   /**

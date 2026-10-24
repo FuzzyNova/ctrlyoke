@@ -152,6 +152,13 @@ const WORKFLOW_PAGES = [
         properties: [{ pointer: "#/$defs/endCondition/properties" }],
       },
       {
+        id: "condition-presets",
+        title: "Condition presets",
+        summary: "Author-defined named conditions available to MCP steps.",
+        refs: ["#/$defs/conditionPreset"],
+        properties: [{ pointer: "#/$defs/conditionPreset/properties" }],
+      },
+      {
         id: "script-fields",
         title: "Shared script fields",
         refs: ["#/$defs/scriptProperties"],

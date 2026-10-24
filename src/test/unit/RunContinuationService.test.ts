@@ -19,6 +19,7 @@ import type { ParallelGroupTopology } from "../../core/ParallelGroupTopology";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { writeTrustedRunFile } from "../helpers/trustedRunFile";
 import type {
   RunRef,
   RunnerHostIdentity,
@@ -382,18 +383,14 @@ suite("RunContinuationService topology append transaction", () => {
       runRef
     );
     await fs.mkdir(path.dirname(runFilePath), { recursive: true });
-    await fs.writeFile(
-      runFilePath,
-      JSON.stringify({
-        workflowName: "Topology append",
-        startedAt: 0,
-        definitionRevision: 1,
-        steps,
-        parallelGroups,
-        _runtime: { currentIndex: 0, executionState: EXECUTION_STATES.IDLE },
-      }),
-      "utf8"
-    );
+    await writeTrustedRunFile(runFilePath, {
+      workflowName: "Topology append",
+      startedAt: 0,
+      definitionRevision: 1,
+      steps,
+      parallelGroups,
+      _runtime: { currentIndex: 0, executionState: EXECUTION_STATES.IDLE },
+    });
   }
 
   afterEach(async () => {
@@ -678,7 +675,7 @@ suite("RunContinuationService topology append transaction", () => {
       await fs.readFile(runPath, "utf8")
     ) as WorkingFile;
     source.maxSteps = 2;
-    await fs.writeFile(runPath, JSON.stringify(source), "utf8");
+    await writeTrustedRunFile(runPath, source);
 
     const first = await RunContinuationService.appendStepsToRun(
       workspace,
@@ -691,7 +688,7 @@ suite("RunContinuationService topology append transaction", () => {
     );
     const edited = first.workingFile;
     edited.maxSteps = 1;
-    await fs.writeFile(runPath, JSON.stringify(edited), "utf8");
+    await writeTrustedRunFile(runPath, edited);
 
     await assert.rejects(
       RunContinuationService.appendStepsToRun(
@@ -807,7 +804,7 @@ suite("RunContinuationService topology append transaction", () => {
         admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
       },
     };
-    await fs.writeFile(runPath, JSON.stringify(source), "utf8");
+    await writeTrustedRunFile(runPath, source);
 
     const joined =
       await RunContinuationService.appendStepsToActiveParallelGroup(
@@ -865,7 +862,7 @@ suite("RunContinuationService topology append transaction", () => {
         admission: PARALLEL_GROUP_ADMISSION.CLOSING,
       },
     };
-    await fs.writeFile(runPath, JSON.stringify(closing), "utf8");
+    await writeTrustedRunFile(runPath, closing);
     const before = await fs.readFile(runPath, "utf8");
     await assert.rejects(
       RunContinuationService.appendStepsToActiveParallelGroup(
@@ -902,7 +899,7 @@ suite("RunContinuationService topology append transaction", () => {
       currentIndex: 1,
       executionState: EXECUTION_STATES.RUNNING,
     };
-    await fs.writeFile(runPath, JSON.stringify(source), "utf8");
+    await writeTrustedRunFile(runPath, source);
 
     const joined =
       await RunContinuationService.appendStepsToActiveParallelGroup(
@@ -952,7 +949,7 @@ suite("RunContinuationService topology append transaction", () => {
         admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
       },
     };
-    await fs.writeFile(runPath, JSON.stringify(source), "utf8");
+    await writeTrustedRunFile(runPath, source);
     const before = await fs.readFile(runPath, "utf8");
 
     await assert.rejects(
@@ -1008,21 +1005,17 @@ suite("RunContinuationService addressed step mutations", () => {
       runRef
     );
     await fs.mkdir(path.dirname(runFilePath), { recursive: true });
-    await fs.writeFile(
-      runFilePath,
-      JSON.stringify({
-        workflowName: "Addressed mutations",
-        startedAt: 0,
-        definitionRevision: 1,
-        steps,
-        _runtime: {
-          currentIndex,
-          executionState,
-          ...(finalStepPhase ? { finalStep: { phase: finalStepPhase } } : {}),
-        },
-      }),
-      "utf8"
-    );
+    await writeTrustedRunFile(runFilePath, {
+      workflowName: "Addressed mutations",
+      startedAt: 0,
+      definitionRevision: 1,
+      steps,
+      _runtime: {
+        currentIndex,
+        executionState,
+        ...(finalStepPhase ? { finalStep: { phase: finalStepPhase } } : {}),
+      },
+    });
   }
 
   afterEach(async () => {
@@ -1058,16 +1051,12 @@ suite("RunContinuationService addressed step mutations", () => {
     const seeded = JSON.parse(
       await fs.readFile(runPath, "utf8")
     ) as WorkingFile;
-    await fs.writeFile(
-      runPath,
-      JSON.stringify({
-        ...seeded,
-        priorContext: [2, 4],
-        sessionId: 1,
-        finalStep: { prompt: "final $step:3", priorContext: [5], sessionId: 4 },
-      }),
-      "utf8"
-    );
+    await writeTrustedRunFile(runPath, {
+      ...seeded,
+      priorContext: [2, 4],
+      sessionId: 1,
+      finalStep: { prompt: "final $step:3", priorContext: [5], sessionId: 4 },
+    });
 
     const authored = (file: WorkingFile) => ({
       steps: Object.fromEntries(
@@ -1214,7 +1203,7 @@ suite("RunContinuationService addressed step mutations", () => {
     source.parallelGroups = [
       { id: "edit-group", startIndex: 1, endIndex: 2, failFast: true },
     ];
-    await fs.writeFile(runPath, JSON.stringify(source), "utf8");
+    await writeTrustedRunFile(runPath, source);
     const before = await fs.readFile(runPath, "utf8");
 
     await assert.rejects(
@@ -1354,7 +1343,7 @@ suite("RunContinuationService addressed step mutations", () => {
     workingFile.parallelGroups = [
       { id: "G", startIndex: 2, endIndex: 3, failFast: true },
     ];
-    await fs.writeFile(runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(runFilePath, workingFile);
     const before = await fs.readFile(runFilePath, "utf8");
     const repository = new WorkflowLineageRepository();
 
@@ -1734,7 +1723,7 @@ suite("RunContinuationService addressed step mutations", () => {
     run.parallelGroups = [
       { id: "live-group", startIndex: 1, endIndex: 2, failFast: true },
     ];
-    await fs.writeFile(runFilePath, JSON.stringify(run), "utf8");
+    await writeTrustedRunFile(runFilePath, run);
 
     const appended = await RunContinuationService.appendStepsToRun(
       workspace,

@@ -4,7 +4,7 @@
   planning MCP step-control additions
 - **Area:** `src/utils/McpToolDefinitions.ts`, `src/mcp-server.ts`, every
   `src/core/harness/*/*CliProvider.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -36,6 +36,21 @@ repository file or tool output that steers the agent into "fixing" a later step
 this way.
 
 Not verified end to end against a live harness; the code path above is direct.
+
+## Resolution notes
+
+`edit_step` keeps `additionalArgs` in its input schema for compatibility, marks it
+deprecated, and rejects both setting and clearing it before reading or mutating
+the run. The rejection applies to the whole call, so accompanying edits are not
+partially written. Agent and skill edits remain available: agent frontmatter
+`tools` overrides are explicitly discarded by `AgentExpander.stripFrontmatter`,
+and agent bodies and skill references are injected as prompt instructions by
+`AgentExpander`/`SkillExpander`. They do not become harness-native tool or
+permission settings. Harness permissions are resolved separately from the
+workflow/settings permission configuration and mapped by each harness; those
+properties are not editable through MCP. `append_step` has no corresponding
+hole because its accepted step schema does not expose `additionalArgs` or
+permission properties.
 
 ## Steps to Reproduce
 

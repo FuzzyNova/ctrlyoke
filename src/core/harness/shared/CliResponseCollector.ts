@@ -1,8 +1,10 @@
 import type {
+  BackgroundWorkAbandonedData,
   CliResult,
   UniversalCliOutput,
 } from "../../../types/CliOutputTypes";
 import {
+  CLI_EVENT_TYPES,
   FAILURE_KINDS,
   HEADLESS_SOURCE_MODES,
 } from "../../../types/DashboardConstants";
@@ -135,6 +137,23 @@ export class CliResponseCollector {
 
     if (this.deps.provider.augmentParsedOutput) {
       parsedOutput = await this.deps.provider.augmentParsedOutput(parsedOutput);
+    }
+
+    const logParser = this.deps.provider.logParser;
+    if (logParser?.hasPendingBackgroundWork?.()) {
+      const pendingTasks =
+        logParser.getBackgroundWorkHoldSnapshot?.().pendingTasks ?? [];
+      parsedOutput = {
+        ...parsedOutput,
+        events: [
+          ...parsedOutput.events,
+          {
+            type: CLI_EVENT_TYPES.BACKGROUND_WORK_ABANDONED,
+            timestamp: Date.now(),
+            data: { pendingTasks } satisfies BackgroundWorkAbandonedData,
+          },
+        ],
+      };
     }
     // Deliberately not redacted here: `parsedOutput.events` become the
     // harness's canonical record — rendered verbatim as `$previous`/`$step:N`

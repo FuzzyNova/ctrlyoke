@@ -8,8 +8,11 @@ import {
 } from "../../types/CtrlYokeTypes";
 import {
   MESSAGE_TYPES,
+  RUN_DEFINITION_INTEGRITY,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../../types/DashboardConstants";
+import { WorkingFileManager } from "../WorkingFileManager";
+import { sameViewAddress } from "../../utils/WorkflowViewAddress";
 import type {
   ActiveTerminalWorkflowRef,
   RunSummariesLoadedMessage,
@@ -114,18 +117,7 @@ interface AddressedRunView {
   descriptorRevision: number;
   workflowName: string;
   isSystemGenerated: boolean;
-}
-
-export function sameViewAddress(
-  a: WorkflowViewAddress | null | undefined,
-  b: WorkflowViewAddress | null | undefined
-): boolean {
-  if (!a || !b) return false;
-  if (a.workflowKey !== b.workflowKey || a.kind !== b.kind) return false;
-  return (
-    a.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN ||
-    (b.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN && a.runRef === b.runRef)
-  );
+  definitionChangedOutside?: RunViewLoadedMessage["definitionChangedOutside"];
 }
 
 function describeViewAddress(address: WorkflowViewAddress | null): string {
@@ -418,7 +410,7 @@ export class RunViewPublisher implements RunLifecycleViewPort {
     Log.debug(`${logPrefix} definition read at ${Date.now() - startTime}ms`);
 
     const historyManager = new OutputHistoryManager(workspaceRoot);
-    const [history, runSummaries, descriptor] = await Promise.all([
+    const [history, runSummaries, descriptor, integrity] = await Promise.all([
       address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
         ? historyManager.loadHistory(
             historyManager.getHistoryFilePath(
@@ -432,6 +424,7 @@ export class RunViewPublisher implements RunLifecycleViewPort {
         workspaceRoot,
         address.workflowKey
       ),
+      WorkingFileManager.inspectDefinitionIntegrity(filePath),
     ]);
     Log.debug(
       `${logPrefix} summaries/descriptor/history read at ${Date.now() - startTime}ms`
@@ -449,6 +442,11 @@ export class RunViewPublisher implements RunLifecycleViewPort {
       descriptorRevision: descriptor.revision,
       workflowName: descriptor.workflowName,
       isSystemGenerated: descriptor.isSystemGenerated ?? false,
+      ...(integrity.status === RUN_DEFINITION_INTEGRITY.CHANGED_OUTSIDE
+        ? { definitionChangedOutside: { changes: integrity.changes ?? [] } }
+        : integrity.status === RUN_DEFINITION_INTEGRITY.UNRECORDED
+          ? { definitionChangedOutside: { changes: [], unrecorded: true } }
+          : {}),
     };
   }
 
@@ -516,6 +514,9 @@ export class RunViewPublisher implements RunLifecycleViewPort {
       pendingRewind: workingFile._runtime?.pendingRewind,
       descriptorRevision: view.descriptorRevision,
       isSystemGenerated: view.isSystemGenerated,
+      ...(view.definitionChangedOutside
+        ? { definitionChangedOutside: view.definitionChangedOutside }
+        : {}),
       ...(definitionRollback &&
       (workingFile.definitionRevision ?? 1) ===
         definitionRollback.restoredRevision &&

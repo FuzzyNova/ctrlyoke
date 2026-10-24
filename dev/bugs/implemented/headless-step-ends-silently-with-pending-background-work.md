@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-23 by the workflow-orchestrator step (claude-cli) of the subagent output attribution run, reviewing codex-cli headless steps
 - **Area:** `src/core/harness/shared/HeadlessLogTail.ts`, `src/core/harness/CliLogMonitor.ts`, `src/core/harness/shared/interfaces/ILogParser.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

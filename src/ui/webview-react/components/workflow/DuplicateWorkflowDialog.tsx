@@ -17,7 +17,7 @@ import {
   MESSAGE_TYPES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
-import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
+import { sameViewAddress } from "@root/utils/WorkflowViewAddress";
 import { viewedRunLabel } from "@utils/runNavigation";
 
 const SAME_AS_SOURCE = "";
@@ -26,19 +26,6 @@ let duplicateRequestSequence = 0;
 function nextDuplicateRequestId(): string {
   duplicateRequestSequence += 1;
   return `duplicate-${Date.now()}-${duplicateRequestSequence}`;
-}
-
-function isSameAddress(
-  left: WorkflowViewAddress,
-  right: WorkflowViewAddress | null
-): boolean {
-  return (
-    right?.workflowKey === left.workflowKey &&
-    right?.kind === left.kind &&
-    (left.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN ||
-      (right.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
-        right.runRef === left.runRef))
-  );
 }
 
 export const DuplicateWorkflowDialog: React.FC = () => {
@@ -83,7 +70,7 @@ export const DuplicateWorkflowDialog: React.FC = () => {
 
   const sourceMatchesDisplayedAddress =
     dialogData !== null &&
-    isSameAddress(dialogData.source, displayedViewAddress);
+    sameViewAddress(dialogData.source, displayedViewAddress);
   const sourceRunSummaries =
     dialogData &&
     displayedViewAddress?.workflowKey === dialogData.source.workflowKey

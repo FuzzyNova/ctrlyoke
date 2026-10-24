@@ -6,6 +6,7 @@ import type { ModelPricing } from "./ModelPricing";
 // `npm run sync-model-pricing` / `npm run chores -- --task
 // sync-model-pricing`; do not hand-edit.
 import modelPricingRegistryData from "./generated/modelPricingRegistryData.json";
+import modelPricingCorrectionData from "./modelPricingCorrections.json";
 
 export interface RegistryCostEntry {
   input?: number;
@@ -19,6 +20,23 @@ export interface ModelPricingRegistryData {
   generatedAt: string;
   providers: Record<string, Record<string, RegistryCostEntry>>;
 }
+
+interface ModelPricingCorrection {
+  provider: string;
+  modelId: string;
+  field: keyof RegistryCostEntry;
+  upstreamValue: number;
+  correctedValue: number;
+  reason: string;
+}
+
+/**
+ * Temporary, documented corrections for known models.dev pricing errors.
+ * `scripts/sync-model-pricing.mjs` checks every correction against fresh
+ * upstream data and fails once a correction is stale or no longer needed.
+ */
+export const MODEL_PRICING_CORRECTIONS =
+  modelPricingCorrectionData as readonly ModelPricingCorrection[];
 
 const DATA = modelPricingRegistryData as ModelPricingRegistryData;
 
@@ -128,7 +146,7 @@ function versionParts(key: string, familyPrefix: string): number[] {
 function pickLatestVersionedModel(
   bucket: Record<string, RegistryCostEntry>,
   familyPrefix: string
-): RegistryCostEntry | undefined {
+): { modelId: string; entry: RegistryCostEntry } | undefined {
   const candidates = Object.keys(bucket).filter(
     (key) => key.startsWith(familyPrefix) && !DATED_SNAPSHOT_SUFFIX.test(key)
   );
@@ -145,7 +163,7 @@ function pickLatestVersionedModel(
     return 0;
   });
 
-  return bucket[candidates[0]];
+  return { modelId: candidates[0], entry: bucket[candidates[0]] };
 }
 
 /**
@@ -161,14 +179,14 @@ function findInBucket(
   bucket: Record<string, RegistryCostEntry>,
   candidate: string,
   allowFuzzy: boolean
-): RegistryCostEntry | undefined {
-  if (bucket[candidate]) return bucket[candidate];
+): string | undefined {
+  if (bucket[candidate]) return candidate;
 
   const normalized = candidate.toLowerCase();
   const suffixKey = Object.keys(bucket).find((key) =>
     key.toLowerCase().endsWith(`/${normalized}`)
   );
-  if (suffixKey) return bucket[suffixKey];
+  if (suffixKey) return suffixKey;
 
   if (!allowFuzzy) return undefined;
 
@@ -176,23 +194,30 @@ function findInBucket(
     const lower = key.toLowerCase();
     return lower.includes(normalized) || normalized.includes(lower);
   });
-  return fuzzyKey ? bucket[fuzzyKey] : undefined;
+  return fuzzyKey;
 }
 
 function toModelPricing(
   entry: RegistryCostEntry,
+  modelId: string,
   providerId: string,
   data: ModelPricingRegistryData
 ): ModelPricing {
+  const correctedEntry = { ...entry };
+  for (const correction of MODEL_PRICING_CORRECTIONS) {
+    if (correction.provider === providerId && correction.modelId === modelId) {
+      correctedEntry[correction.field] = correction.correctedValue;
+    }
+  }
   return {
-    inputPerMTok: entry.input ?? 0,
-    outputPerMTok: entry.output ?? 0,
-    ...(entry.cacheRead === undefined
+    inputPerMTok: correctedEntry.input ?? 0,
+    outputPerMTok: correctedEntry.output ?? 0,
+    ...(correctedEntry.cacheRead === undefined
       ? {}
-      : { cachedInputPerMTok: entry.cacheRead }),
-    ...(entry.cacheWrite === undefined
+      : { cachedInputPerMTok: correctedEntry.cacheRead }),
+    ...(correctedEntry.cacheWrite === undefined
       ? {}
-      : { cacheWritePerMTok: entry.cacheWrite }),
+      : { cacheWritePerMTok: correctedEntry.cacheWrite }),
     sourceUrl: `${data.sourceUrl} (model-pricing registry, provider="${providerId}")`,
     verifiedOn: data.generatedAt,
   };
@@ -228,7 +253,9 @@ export function resolveModelPricingFromRegistry(
     const anthropicBucket = data.providers["anthropic"];
     if (familyPrefix && anthropicBucket) {
       const hit = pickLatestVersionedModel(anthropicBucket, familyPrefix);
-      if (hit) return toModelPricing(hit, "anthropic", data);
+      if (hit) {
+        return toModelPricing(hit.entry, hit.modelId, "anthropic", data);
+      }
     }
   }
 
@@ -237,8 +264,15 @@ export function resolveModelPricingFromRegistry(
   if (explicitProvider) {
     const bucket = data.providers[explicitProvider];
     if (bucket) {
-      const hit = findInBucket(bucket, candidate, true);
-      if (hit) return toModelPricing(hit, explicitProvider, data);
+      const modelKey = findInBucket(bucket, candidate, true);
+      if (modelKey) {
+        return toModelPricing(
+          bucket[modelKey],
+          modelKey,
+          explicitProvider,
+          data
+        );
+      }
     }
   }
 
@@ -247,8 +281,10 @@ export function resolveModelPricingFromRegistry(
     if (providerId === explicitProvider) continue;
     const bucket = data.providers[providerId];
     if (!bucket) continue;
-    const hit = findInBucket(bucket, candidate, true);
-    if (hit) return toModelPricing(hit, providerId, data);
+    const modelKey = findInBucket(bucket, candidate, true);
+    if (modelKey) {
+      return toModelPricing(bucket[modelKey], modelKey, providerId, data);
+    }
   }
 
   // 3. Last resort: an exact/suffix-only sweep across every remaining
@@ -258,8 +294,10 @@ export function resolveModelPricingFromRegistry(
   for (const [providerId, bucket] of Object.entries(data.providers)) {
     if (providerId === explicitProvider) continue;
     if (preferredProviders.includes(providerId)) continue;
-    const hit = findInBucket(bucket, candidate, false);
-    if (hit) return toModelPricing(hit, providerId, data);
+    const modelKey = findInBucket(bucket, candidate, false);
+    if (modelKey) {
+      return toModelPricing(bucket[modelKey], modelKey, providerId, data);
+    }
   }
 
   return undefined;

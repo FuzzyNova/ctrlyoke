@@ -9,6 +9,7 @@ import {
 import type {
   AskUserQuestionData,
   BackgroundWorkHoldData,
+  BackgroundWorkAbandonedData,
   CliOutput as CliOutputType,
   CliEvent,
   McpToolCallData,
@@ -20,6 +21,7 @@ import type {
   ScriptVerdict,
 } from "@root/types/CtrlYokeTypes";
 import { findParallelGroupForStep } from "./parallelGroups";
+import { getBackgroundWorkAbandonedNotice } from "@root/utils/BackgroundWorkHoldText";
 import {
   OUTPUT_ROW_KINDS,
   OUTPUT_MESSAGE_TYPES,
@@ -1632,6 +1634,16 @@ function estimateStructuredTextHeight(
       return estimateBackgroundWorkHoldHeight(
         row.event.data as BackgroundWorkHoldData,
         outputFontSize
+      );
+    }
+    case CLI_EVENT_TYPES.BACKGROUND_WORK_ABANDONED: {
+      return estimateTerminalSummaryHeight(
+        getBackgroundWorkAbandonedNotice(
+          (row.event.data as BackgroundWorkAbandonedData).pendingTasks
+        ),
+        fullContentWidth,
+        outputFontSize,
+        16
       );
     }
     case CLI_EVENT_TYPES.ASK_USER_QUESTION: {

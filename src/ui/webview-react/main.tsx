@@ -1,4 +1,3 @@
-import "./wdyr"; // must be first — patches React before any component is imported
 import React from "react";
 import ReactDOM from "react-dom/client";
 import BootstrapApp from "./BootstrapApp";

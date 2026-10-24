@@ -20,11 +20,13 @@ import type {
   CompactionData,
   FollowUpResumedData,
   BackgroundWorkHoldData,
+  BackgroundWorkAbandonedData,
   UserSteerData,
 } from "../types/CliOutputTypes";
 import {
   getBackgroundTaskLabel,
   getBackgroundWorkHoldHeadline,
+  getBackgroundWorkAbandonedNotice,
 } from "../utils/BackgroundWorkHoldText";
 import {
   CLI_EVENT_TYPES,
@@ -1722,6 +1724,18 @@ export class CliTerminalFormatter {
             writeEventLine(chalk.dim(`    $ ${command}`), chalk.yellow);
           }
         }
+        break;
+      }
+
+      case CLI_EVENT_TYPES.BACKGROUND_WORK_ABANDONED: {
+        CliTerminalFormatter.beginEventOutput(target);
+        const data = event.data as BackgroundWorkAbandonedData;
+        writeEventLine(
+          chalk.yellow(
+            `⚠ ${getBackgroundWorkAbandonedNotice(data.pendingTasks)}`
+          ),
+          chalk.yellow
+        );
         break;
       }
 

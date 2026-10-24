@@ -41,8 +41,7 @@ export const HARNESS_TOKEN_SEMANTICS: Record<HarnessId, HarnessTokenSemantics> =
     },
     [HARNESS_IDS.ANTIGRAVITY_CLI]: {
       cacheInputRelationship: ATTEMPT_COST_CACHE_RELATIONSHIPS.DISJOINT,
-      reasoningRelationship:
-        ATTEMPT_COST_REASONING_RELATIONSHIPS.INCLUDED_IN_OUTPUT,
+      reasoningRelationship: ATTEMPT_COST_REASONING_RELATIONSHIPS.DISJOINT,
     },
     [HARNESS_IDS.COPILOT_CLI]: {
       cacheInputRelationship: ATTEMPT_COST_CACHE_RELATIONSHIPS.DISJOINT,

@@ -44,6 +44,7 @@ import {
 } from "./BashOutput";
 import { ScriptVerdict } from "./ScriptVerdict";
 import { BackgroundWorkHoldOutput } from "./BackgroundWorkHoldOutput";
+import { BackgroundWorkAbandonedOutput } from "./BackgroundWorkAbandonedOutput";
 import { resolveCtrlYokeToolView } from "./ctrlyoke-tools/registry";
 import { CTRLYOKE_TOOL_VIEW_BODIES } from "./ctrlyoke-tools/viewComponents";
 import { CtrlYokeToolHeading } from "./ctrlyoke-tools/CtrlYokeToolHeading";
@@ -53,6 +54,7 @@ import type { McpToolName } from "@root/utils/McpToolDefinitions";
 import type {
   AskUserQuestionData,
   BackgroundWorkHoldData,
+  BackgroundWorkAbandonedData,
   BashCommandData,
   CliEvent,
   CompactionData,
@@ -1317,6 +1319,12 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             data={event.data as BackgroundWorkHoldData}
           />
         );
+      case CLI_EVENT_TYPES.BACKGROUND_WORK_ABANDONED:
+        return (
+          <BackgroundWorkAbandonedOutput
+            data={event.data as BackgroundWorkAbandonedData}
+          />
+        );
       default:
         return null;
     }
@@ -2111,8 +2119,11 @@ function OutputRowComponent({
       className={[
         // clip, not hidden: overflow-x: hidden turns the row into a scroll
         // container, which captures a sticky "Hide full output" toggle so it
-        // offsets from the row instead of sticking to the pane.
-        "bg-(--bg-primary) px-(--spacing-md) overflow-x-clip",
+        // offsets from the row instead of sticking to the pane. clip creates
+        // no block formatting context, so flow-root does: without it the
+        // children's vertical margins collapse out of the row, past its
+        // background, and break the step identity bar into segments.
+        "flow-root bg-(--bg-primary) px-(--spacing-md) overflow-x-clip",
         isActiveRow ? "rounded-xs ring-1 ring-focus-border" : "",
         row.groupStart ? "pt-(--spacing-sm)" : "",
         row.groupEnd

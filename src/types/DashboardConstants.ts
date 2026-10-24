@@ -930,6 +930,7 @@ export const MESSAGE_TYPES = {
   // Queue Position Control — Webview → Extension
   SET_START_POSITION: "setStartPosition",
   DISCARD_CONTINUATION: "discardContinuation",
+  RESOLVE_RUN_DEFINITION_CHANGE: "resolveRunDefinitionChange", // Accept or restore a definition changed outside ctrlyoke: { address, decision }
   REORDER_PROMPTS: "reorderPrompts",
   UPDATE_CONFIRM_RESET: "updateConfirmReset",
 
@@ -2258,6 +2259,7 @@ export const SETTING_PATHS = {
   DEFAULTS_MCP_SERVERS: "defaults.mcpServers",
   DEFAULTS_END_CONDITION: "defaults.endCondition",
   DEFAULTS_PRE_CONDITION: "defaults.preCondition",
+  DEFAULTS_TOOL_PERMISSIONS: "defaults.toolPermissions",
 } as const;
 
 /** Status values emitted by the managed language-server backend. */
@@ -2683,6 +2685,63 @@ export const WORKFLOW_VIEW_ADDRESS_KIND = {
   DRAFT: "draft",
   RUN: "run",
 } as const;
+
+// ============================================================================
+// RUN DEFINITION INTEGRITY - run files checked against their user-home anchor
+// ============================================================================
+
+/**
+ * How a run/draft definition on disk compares with the anchor ctrlyoke
+ * recorded the last time one of its own writers wrote it
+ * (`src/utils/RunDefinitionAnchor.ts`).
+ */
+export const RUN_DEFINITION_INTEGRITY = {
+  /** The file is not at a run-storage path ctrlyoke can anchor. */
+  UNANCHORABLE: "unanchorable",
+  /**
+   * Workspace storage mode only: no anchor, although every run present when
+   * anchoring began was given one. Created by something other than a ctrlyoke
+   * writer, or copied in from another machine. Untrusted until the user
+   * accepts it.
+   */
+  UNRECORDED: "unrecorded",
+  TRUSTED: "trusted",
+  /** Changed by something other than a ctrlyoke writer. */
+  CHANGED_OUTSIDE: "changedOutside",
+} as const;
+
+export type RunDefinitionIntegrity =
+  (typeof RUN_DEFINITION_INTEGRITY)[keyof typeof RUN_DEFINITION_INTEGRITY];
+
+/** The user's answer to a run definition changed outside ctrlyoke. */
+export const RUN_DEFINITION_DECISIONS = {
+  /** Trust the definition as it is now on disk. */
+  ACCEPT: "accept",
+  /** Put back the last definition ctrlyoke wrote. */
+  RESTORE: "restore",
+} as const;
+
+export type RunDefinitionDecision =
+  (typeof RUN_DEFINITION_DECISIONS)[keyof typeof RUN_DEFINITION_DECISIONS];
+
+/** Which part of a definition an outside change touched. */
+export const RUN_DEFINITION_CHANGE_SCOPES = {
+  WORKFLOW: "workflow",
+  STEP: "step",
+  FINAL_STEP: "finalStep",
+} as const;
+
+export type RunDefinitionChangeScope =
+  (typeof RUN_DEFINITION_CHANGE_SCOPES)[keyof typeof RUN_DEFINITION_CHANGE_SCOPES];
+
+/** One part of a definition changed outside ctrlyoke, for warnings. */
+export interface RunDefinitionChange {
+  scope: RunDefinitionChangeScope;
+  /** 1-based, for `STEP` only. */
+  stepNumber?: number;
+  /** Changed field names; `added`/`removed` for a whole step. */
+  fields: string[];
+}
 
 // ============================================================================
 // HISTORY TRASH - Recently deleted run history
@@ -3954,6 +4013,7 @@ export const PROMPT_PROPERTIES = {
   PARALLEL: "parallel",
   FINAL_STEP: "finalStep",
   VARS: "vars",
+  CONDITIONS: "conditions",
   WORKTREE: "worktree",
   TRUSTED_EXTERNAL_ROOTS: "trustedExternalRoots",
   MAX_STEPS: "maxSteps",
@@ -4202,6 +4262,10 @@ export const CLI_EVENT_TYPES = {
    *  hold). Display-only; emitted once per absorbed Stop so the user can see why the
    *  step hasn't completed and which background tasks it is waiting on. */
   BACKGROUND_WORK_HOLD: "backgroundWorkHold",
+
+  /** A headless step ended while background tasks were still running; the harness
+   *  stopped them when its session exited. Display-only. */
+  BACKGROUND_WORK_ABANDONED: "backgroundWorkAbandoned",
 
   /** Invisible marker carrying updated context-window usage discovered during
    *  post-completion follow-up activity. Never rendered — consumed by the merge

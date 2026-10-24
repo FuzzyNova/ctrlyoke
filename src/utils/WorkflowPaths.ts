@@ -3,8 +3,12 @@ import * as crypto from "crypto";
 import * as path from "path";
 import { PATH_CONSTANTS } from "./ConfigurationUtils";
 import { isPathWithinDirectory } from "./PathSecurity";
+import { pathsEqual } from "./PathCasing";
 import { getFrozenRunHistoryLocation } from "./RunHistoryStoragePolicy";
-import { projectStateRoot } from "./ProjectStatePaths";
+import {
+  projectStateRoot,
+  userProjectDirForProjectStateRoot,
+} from "./ProjectStatePaths";
 import { TIMELINE_STORAGE_FILES } from "../types/WorkflowTimelineTypes";
 import type { RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
 
@@ -27,6 +31,8 @@ export const RUNNER_LOCK_FILE_NAME = "runner.json";
 const STOP_REQUEST_FILE_PREFIX = "stop-request-";
 const DRAFT_DIR_NAME = "draft";
 const CREATING_PREFIX = ".creating-";
+const DEFINITION_ANCHORS_DIR_NAME = ".definition-anchors";
+const DEFINITION_BASELINE_FILE_NAME = "baseline.json";
 
 const RUN_REF_PREFIX = "run-";
 /** Matches `run-<ISO timestamp with `:`/`.` replaced by `-`>`, e.g. `run-2026-07-20T10-30-00-000Z`. */
@@ -564,6 +570,68 @@ export function runArtifactStem(workingFilePath: string): string {
     .update(normalizedPath)
     .digest("hex")
     .slice(0, 16);
+}
+
+/**
+ * Where the definition anchor for a run/draft working file lives:
+ * `<user project dir>/.definition-anchors/<workflowKey>/<runRef|draft>.json`.
+ *
+ * Always under the user state home, in both storage modes. In workspace mode
+ * the working file sits inside every harness's writable workspace, so its
+ * anchor must not. Returns `undefined` for a path that is not a run-storage
+ * working file (nonstandard test paths, staging directories).
+ */
+export function definitionAnchorPath(
+  workingFilePath: string
+): string | undefined {
+  return definitionAnchorLayout(workingFilePath)?.anchorPath;
+}
+
+/**
+ * The anchor of a working file together with the run storage it belongs to
+ * and that storage's baseline marker
+ * (`<user project dir>/.definition-anchors/baseline.json`), which records that
+ * every run present when anchoring began was anchored.
+ */
+export function definitionAnchorLayout(workingFilePath: string):
+  | {
+      anchorPath: string;
+      baselinePath: string;
+      runsRoot: string;
+      /**
+       * The run storage is itself under the user state home (user storage
+       * mode), beside its anchors: anything able to write a run there could
+       * write its anchor too.
+       */
+      runsInUserStateHome: boolean;
+    }
+  | undefined {
+  const address = parseWorkingFileAddressFromPath(workingFilePath);
+  if (!address) {
+    return undefined;
+  }
+  const runsRootDir = path.dirname(
+    path.dirname(path.dirname(path.resolve(workingFilePath)))
+  );
+  if (path.basename(runsRootDir) !== PATH_CONSTANTS.RUNS_DIR) {
+    return undefined;
+  }
+  const projectStateDir = path.dirname(runsRootDir);
+  const projectDir = userProjectDirForProjectStateRoot(projectStateDir);
+  if (!projectDir) {
+    return undefined;
+  }
+  const anchorsRoot = path.join(projectDir, DEFINITION_ANCHORS_DIR_NAME);
+  return {
+    anchorPath: path.join(
+      anchorsRoot,
+      address.workflowKey,
+      `${address.runRef ?? DRAFT_DIR_NAME}.json`
+    ),
+    baselinePath: path.join(anchorsRoot, DEFINITION_BASELINE_FILE_NAME),
+    runsRoot: runsRootDir,
+    runsInUserStateHome: pathsEqual(projectStateDir, projectDir),
+  };
 }
 
 // ---- WorkflowKey allocation ----

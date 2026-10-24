@@ -35,6 +35,7 @@ import {
   WORKFLOW_LOCK_LOCALITIES,
   WORKFLOW_VIEW_ADDRESS_KIND,
   WORKTREE_EDIT_KINDS,
+  type RunDefinitionDecision,
 } from "../../types/DashboardConstants";
 import type { DefinitionRollbackInvalidation } from "./RunViewPublisher";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
@@ -1062,6 +1063,51 @@ export class RunLifecycleService {
       );
     }
     return result;
+  }
+
+  /**
+   * The user's answer to a run or draft definition changed outside ctrlyoke
+   * (`definitionChangedOutside` on the run view). Residents that only cache
+   * the file adopt the answer; the executing owner rejects outside changes on
+   * its own and picks up an accepted one at its next merge.
+   */
+  async resolveDefinitionChangeAtAddress(
+    address: WorkflowViewAddress,
+    decision: RunDefinitionDecision
+  ): Promise<void> {
+    const workspaceRoot = this.requireWorkspaceRoot();
+    const filePath =
+      address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
+        ? WorkflowPaths.runFilePath(
+            workspaceRoot,
+            address.workflowKey,
+            address.runRef
+          )
+        : WorkflowPaths.draftFilePath(workspaceRoot, address.workflowKey);
+    const resolved = await WorkingFileManager.resolveDefinitionChange(
+      filePath,
+      decision
+    );
+    if (address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
+      await this.host.views.invalidateDraftViews(address.workflowKey);
+      return;
+    }
+    if (resolved) {
+      for (const instance of this.findResidentInstancesForRun(
+        address.workflowKey,
+        address.runRef
+      )) {
+        await this.reconcileResidentWithRunFile(instance, address.runRef);
+      }
+    }
+    await this.host.views.publishRunRevisionsToViewers(
+      address.workflowKey,
+      address.runRef
+    );
+    await this.host.views.invalidateRunViews(
+      address.workflowKey,
+      address.runRef
+    );
   }
 
   async commitPendingRewindRevision(

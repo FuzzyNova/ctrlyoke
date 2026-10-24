@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { FAILURE_KINDS } from "../../types/DashboardConstants";
+import type { BackgroundWorkAbandonedData } from "../../types/CliOutputTypes";
 import { getTranscriptText } from "../../utils/StepOutputText";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { CliResponseCollector } from "../../core/harness/shared/CliResponseCollector";
@@ -38,6 +39,75 @@ function createCollector(provider: any) {
 }
 
 suite("CliResponseCollector", () => {
+  test("records a display-only notice when headless output ends with pending background work", async () => {
+    const collector = createCollector({
+      ...createProvider(),
+      logParser: {
+        extractResponse: () => createParsedOutput(),
+        hasPendingBackgroundWork: () => true,
+        getBackgroundWorkHoldSnapshot: () => ({
+          pendingTasks: [{ taskId: "task-1" }, { taskId: "task-2" }],
+          awaitingResumedTurn: false,
+        }),
+      },
+    });
+
+    const result = await collector.collectHeadlessResponse({
+      stdout: "",
+      stderr: "",
+      exitCode: 0,
+      promptForSessionLog: "",
+      executionStartTime: new Date(),
+    });
+
+    const warningEvent = result.parsedOutput.events.at(-1);
+    assert.strictEqual(
+      warningEvent?.type,
+      CLI_EVENT_TYPES.BACKGROUND_WORK_ABANDONED
+    );
+    assert.deepStrictEqual(
+      (warningEvent?.data as BackgroundWorkAbandonedData).pendingTasks,
+      [{ taskId: "task-1" }, { taskId: "task-2" }]
+    );
+    assert.strictEqual(
+      getTranscriptText(result.parsedOutput.events),
+      "hello world"
+    );
+  });
+
+  test("does not add a warning when no headless background work is pending", async () => {
+    const collector = createCollector({
+      ...createProvider(),
+      logParser: {
+        extractResponse: () => createParsedOutput(),
+        hasPendingBackgroundWork: () => false,
+        getBackgroundWorkHoldSnapshot: () => ({
+          pendingTasks: [],
+          awaitingResumedTurn: false,
+        }),
+      },
+    });
+
+    const result = await collector.collectHeadlessResponse({
+      stdout: "",
+      stderr: "",
+      exitCode: 0,
+      promptForSessionLog: "",
+      executionStartTime: new Date(),
+    });
+
+    assert.strictEqual(result.parsedOutput.events.length, 1);
+    assert.ok(
+      result.parsedOutput.events.every(
+        (event) => event.type !== CLI_EVENT_TYPES.BACKGROUND_WORK_ABANDONED
+      )
+    );
+    assert.strictEqual(
+      getTranscriptText(result.parsedOutput.events),
+      "hello world"
+    );
+  });
+
   test("drains child events before returning headless output", async () => {
     const follower = new SubagentSourceFollower();
     follower.register({

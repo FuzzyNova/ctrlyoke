@@ -63,6 +63,8 @@ import {
   type CtrlYokeFileKind,
   type PriorContextDetail,
   type WorkspaceFolderPicker,
+  type RunDefinitionChange,
+  type RunDefinitionDecision,
 } from "./DashboardConstants";
 import type { ScriptRuntimeOutput } from "./CtrlYokeTypes";
 import type { HarnessVersionAssessment } from "../utils/HarnessVersion";
@@ -341,6 +343,7 @@ export type {
   UserSteerData,
   FollowUpResumedData,
   BackgroundWorkHoldData,
+  BackgroundWorkAbandonedData,
   BackgroundTaskSummary,
   ContextWindowSyncData,
   UniversalCliOutput,
@@ -2093,6 +2096,19 @@ export interface RunViewLoadedMessage {
   /** Descriptor revision paired with this snapshot for optimistic mutations. */
   descriptorRevision: number;
   /**
+   * Present when the addressed definition was changed outside ctrlyoke
+   * (`src/utils/RunDefinitionAnchor.ts`). Every write to it is refused until
+   * the user answers with `RESOLVE_RUN_DEFINITION_CHANGE`.
+   */
+  definitionChangedOutside?: {
+    changes: RunDefinitionChange[];
+    /**
+     * ctrlyoke has no record of writing this run at all (created outside it,
+     * or copied in), so there is no earlier definition to restore.
+     */
+    unrecorded?: boolean;
+  };
+  /**
    * True for internal lineages the extension creates for itself (e.g. commit
    * message generation) — mirrors `WorkflowLineageDescriptor.isSystemGenerated`.
    * Drives read-only lockdown of workflow-mutating controls in the dashboard.
@@ -2428,6 +2444,17 @@ export interface DiscardContinuationMessage {
   expectedDescriptorRevision: number;
   /** Set only after the caller has confirmed suffix edits will be lost. */
   confirmEditedSuffix?: boolean;
+}
+
+/**
+ * Webview → Extension: the user's answer to `definitionChangedOutside` on the
+ * addressed run view. `accept` trusts the file as it is; `restore` puts back
+ * the definition ctrlyoke last wrote.
+ */
+export interface ResolveRunDefinitionChangeMessage {
+  type: typeof MESSAGE_TYPES.RESOLVE_RUN_DEFINITION_CHANGE;
+  address: WorkflowViewAddress;
+  decision: RunDefinitionDecision;
 }
 
 /**

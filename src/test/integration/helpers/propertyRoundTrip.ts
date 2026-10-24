@@ -7,6 +7,7 @@ import {
   type RunLifecycleInstancePort,
 } from "../../../core/orchestration/RunLifecycleService";
 import * as WorkflowPaths from "../../../utils/WorkflowPaths";
+import { writeTrustedRunFile } from "../../helpers/trustedRunFile";
 import {
   EXECUTION_STATES,
   MESSAGE_TYPES,
@@ -419,20 +420,12 @@ export function createRoundTripHarness(
     async patchRunDefinition(mutate) {
       const definition = await readRunDefinition();
       mutate(definition);
-      await fs.writeFile(
-        runFilePath(),
-        JSON.stringify(definition, null, 2),
-        "utf8"
-      );
+      await writeTrustedRunFile(runFilePath(), definition);
     },
     async advanceRunDefinitionRevisionExternally() {
       const definition = await readRunDefinition();
       definition.definitionRevision = (definition.definitionRevision ?? 1) + 1;
-      await fs.writeFile(
-        runFilePath(),
-        JSON.stringify(definition, null, 2),
-        "utf8"
-      );
+      await writeTrustedRunFile(runFilePath(), definition);
     },
   };
 }

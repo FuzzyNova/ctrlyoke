@@ -74,7 +74,14 @@ import {
   STEP_REFERENCE_CHANGES,
   withWarning,
 } from "../StepReferenceShifts";
-import { prepareRunFileForWrite } from "../../utils/PersistedSchemaGuard";
+import {
+  isNewerSchemaError,
+  prepareRunFileForWrite,
+} from "../../utils/PersistedSchemaGuard";
+import {
+  isRunDefinitionChangedError,
+  writeAnchoredRunDefinition,
+} from "../../utils/RunDefinitionAnchor";
 import { assertStepIndex } from "./StepIndexValidation";
 
 export const RUN_CONTINUATION_ACTIONS = {
@@ -1463,12 +1470,19 @@ async function writeWorkingFileAtomic(
 ): Promise<void> {
   const stamped = prepareRunFileForWrite(workingFile, filePath);
   try {
-    await writeFileAtomic(
-      filePath,
-      JSON.stringify(stamped, null, 2),
-      runStateWriteOptions(filePath, "RunContinuationService")
+    // Every transaction here builds its content from the file it read, so a
+    // definition changed outside ctrlyoke is refused rather than anchored.
+    await writeAnchoredRunDefinition(filePath, stamped, () =>
+      writeFileAtomic(
+        filePath,
+        JSON.stringify(stamped, null, 2),
+        runStateWriteOptions(filePath, "RunContinuationService")
+      )
     );
   } catch (error) {
+    if (isRunDefinitionChangedError(error) || isNewerSchemaError(error)) {
+      throw error;
+    }
     throw new Error(
       `Failed to write working file: ${error instanceof Error ? error.message : String(error)}`
     );

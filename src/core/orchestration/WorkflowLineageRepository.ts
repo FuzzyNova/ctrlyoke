@@ -23,6 +23,7 @@ import {
   PERSISTED_STORES,
 } from "../../utils/PersistedSchemaGuard";
 import { migrateToCurrent } from "../../utils/FormatMigrations";
+import { removeRunDefinitionAnchors } from "../../utils/RunDefinitionAnchor";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { selectorNamesLineage } from "./WorkflowRunSelector";
 
@@ -179,6 +180,9 @@ export class WorkflowLineageRepository {
     await fs.promises.rm(WorkflowPaths.lineageDir(workspaceRoot, workflowKey), {
       recursive: true,
       force: true,
+    });
+    await removeRunDefinitionAnchors(workspaceRoot, workflowKey, [], {
+      includeDraft: true,
     });
   }
 
@@ -420,16 +424,27 @@ export class WorkflowLineageRepository {
    *
    * `removeRunDir` decides where the directory goes. User deletes pass one that
    * moves it into Recently deleted (`HistoryTrashBatch.moveRunDir`); retention
-   * pruning keeps the default, a permanent delete. It must fail with ENOENT
-   * when the directory is missing.
+   * pruning keeps the default, a permanent delete that also drops the run's
+   * definition anchor. It must fail with ENOENT when the directory is missing.
    */
   async deleteRun(
     workspaceRoot: string,
     workflowKey: WorkflowKey,
     runRef: RunRef,
     protectedRunRefs: ReadonlySet<RunRef> = new Set(),
-    removeRunDir: (runDir: string) => Promise<void> = (runDir) =>
-      fs.promises.rm(runDir, { recursive: true, force: false })
+    removeRunDir: (runDir: string) => Promise<void> = async (runDir) => {
+      await fs.promises.rm(runDir, { recursive: true, force: false });
+      // The run is already gone; a leftover anchor must not stop the
+      // descriptor repair below.
+      await removeRunDefinitionAnchors(workspaceRoot, workflowKey, [
+        runRef,
+      ]).catch((error: unknown) =>
+        // console.warn (not Log) — this module is imported by mcp-server.ts, which has no vscode logging infrastructure.
+        console.warn(
+          `[WorkflowLineageRepository] Failed to remove definition anchor for ${workflowKey}/${runRef}: ${getErrorMessage(error)}`
+        )
+      );
+    }
   ): Promise<DeletedRun> {
     const descriptorPath = WorkflowPaths.descriptorPath(
       workspaceRoot,

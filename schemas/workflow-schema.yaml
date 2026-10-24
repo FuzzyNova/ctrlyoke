@@ -426,6 +426,19 @@ $defs:
         description: Default values for `{{varName}}` substitutions.
         $ref: '#/$defs/varsConfig'
         title: Vars
+      conditions:
+        type: object
+        description: >-
+          Named condition presets that MCP agents may attach to steps by name. Authors define every
+          script; MCP agents can choose a preset but can never supply or override its scripts.
+          Preset scripts that use declared params must quote each value (for example, `"$BUG_FILE"`)
+          because values are passed through environment variables. A param name may not collide with
+          a key in that preset's own `env`.
+        propertyNames:
+          pattern: ^[A-Za-z][A-Za-z0-9_-]*$
+        additionalProperties:
+          $ref: '#/$defs/conditionPreset'
+        title: Conditions
       trustedExternalRoots:
         oneOf:
           - type: array
@@ -1197,6 +1210,84 @@ $defs:
           (default). A retryPrompt alone does not enable retries; set maxRetries above 0 on the
           condition or in defaults.endCondition.maxRetries, or use onFail: retry.
         title: On Fail
+    required:
+      - script
+    unevaluatedProperties: false
+  conditionPreset:
+    type: object
+    description: Author-defined condition preset available to MCP steps.
+    allOf:
+      - $ref: '#/$defs/scriptProperties'
+    properties:
+      script:
+        $ref: '#/$defs/scriptProperties/properties/script'
+        title: Script
+      env:
+        $ref: '#/$defs/scriptProperties/properties/env'
+        title: Env
+      compareSource:
+        $ref: '#/$defs/scriptProperties/properties/compareSource'
+        title: Compare Source
+      returns:
+        $ref: '#/$defs/scriptProperties/properties/returns'
+        title: Returns
+      timeoutSec:
+        $ref: '#/$defs/scriptProperties/properties/timeoutSec'
+        title: Timeout Sec
+      shell:
+        $ref: '#/$defs/scriptProperties/properties/shell'
+        title: Shell
+      operator:
+        $ref: '#/$defs/scriptProperties/properties/operator'
+        title: Operator
+      expected:
+        $ref: '#/$defs/scriptProperties/properties/expected'
+        title: Expected
+      ignoreCase:
+        $ref: '#/$defs/scriptProperties/properties/ignoreCase'
+        title: Ignore Case
+      maxRetries:
+        $ref: '#/$defs/endCondition/properties/maxRetries'
+        title: Max Retries
+      retryPrompt:
+        $ref: '#/$defs/endCondition/properties/retryPrompt'
+        title: Retry Prompt
+      passRetryPrompt:
+        $ref: '#/$defs/endCondition/properties/passRetryPrompt'
+        title: Pass Retry Prompt
+      resumeSessionOnRetry:
+        $ref: '#/$defs/endCondition/properties/resumeSessionOnRetry'
+        title: Resume Session On Retry
+      onPass:
+        type: string
+        enum:
+          - continue
+          - retry
+          - skipPrompt
+          - stopWorkflow
+        description: >-
+          Action when the condition passes. Valid actions depend on whether the preset is used as an
+          end condition or pre-condition.
+        title: On Pass
+      onFail:
+        type: string
+        enum:
+          - continue
+          - retry
+          - skipPrompt
+          - stopWorkflow
+        description: >-
+          Action when the condition fails. Valid actions depend on whether the preset is used as an
+          end condition or pre-condition.
+        title: On Fail
+      params:
+        type: array
+        description: Environment-variable names whose values MCP agents may supply when attaching this preset.
+        items:
+          type: string
+          pattern: ^[A-Za-z_][A-Za-z0-9_]*$
+        uniqueItems: true
+        title: Params
     required:
       - script
     unevaluatedProperties: false

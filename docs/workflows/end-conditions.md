@@ -95,6 +95,51 @@ as a failed comparison and does not trigger `onFail: retry`.
 in the `defaults` settings) and are inherited by every prompt step. Set either to
 `null` on a step to switch an inherited condition off.
 
+Workflows can also define named [condition presets](#condition-presets) for
+MCP agents to attach to queued steps. Presets keep condition scripts under the
+workflow author's control while letting an agent choose a gate per step.
+
+## Condition presets {#condition-presets}
+
+Declare presets in the workflow's root `conditions` map. The scripts and their
+execution settings come from the workflow author; an MCP agent names a preset
+when appending or editing a step and cannot supply or change its script.
+
+```yaml
+conditions:
+  committed:
+    script: git status --porcelain
+    compareSource: stdout
+    operator: isEmpty
+    maxRetries: 2
+    retryPrompt: |
+      Finish the work, run its gate, and commit your own files.
+      $endCondition:stdout
+```
+
+An agent attaches the preset by name:
+
+<!-- no-validate -->
+
+```json
+{
+  "prompt": "Implement the next planned change",
+  "endCondition": { "use": "committed" }
+}
+```
+
+The MCP tools materialize the preset onto the step when it is queued, so later
+changes to the workflow preset do not affect that step. Attaching a preset
+replaces a workflow-level condition the step would otherwise inherit. The agent
+may supply declared `params` and override retry text or `maxRetries`, but the
+retry count cannot exceed the preset's limit. Parameter values become
+environment variables and are not inserted into the script; preset scripts
+must quote them, for example `"$BUG_FILE"`. A parameter name cannot collide
+with a key set by the preset's own `env`.
+
+See [MCP tools](/reference/mcp-tools#append_step) for the `append_step` and
+`edit_step` fields.
+
 ## Comparing output {#comparing-output}
 
 A condition with no `compareSource`/`operator`/`expected` **passes when the script

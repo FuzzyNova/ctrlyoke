@@ -32,7 +32,7 @@
  *   npm run chores -- --task sync-model-pricing
  */
 
-import { writeFileSync, mkdirSync } from "fs";
+import { writeFileSync, mkdirSync, readFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -45,6 +45,11 @@ const OUTPUT_PATH = resolve(
   ROOT_DIR,
   "src/utils/generated/modelPricingRegistryData.json"
 );
+const CORRECTIONS_PATH = resolve(
+  ROOT_DIR,
+  "src/utils/modelPricingCorrections.json"
+);
+const PRICING_CORRECTIONS = JSON.parse(readFileSync(CORRECTIONS_PATH, "utf8"));
 
 /**
  * Trim one models.dev model entry down to just the USD-per-million-token
@@ -65,7 +70,29 @@ function trimCost(cost) {
     : undefined;
 }
 
-async function main() {
+/** Fail when a temporary correction no longer matches upstream's known value. */
+export function assertPricingCorrectionsCurrent(
+  providers,
+  corrections = PRICING_CORRECTIONS
+) {
+  for (const correction of corrections) {
+    const cost = trimCost(
+      providers[correction.provider]?.models?.[correction.modelId]?.cost
+    );
+    const upstreamValue = cost?.[correction.field];
+    if (upstreamValue !== correction.upstreamValue) {
+      const state =
+        upstreamValue === correction.correctedValue
+          ? "upstream now has the corrected value"
+          : `upstream value is ${String(upstreamValue)}`;
+      throw new Error(
+        `Pricing correction ${correction.provider}/${correction.modelId} ${correction.field} is stale: ${state}. Remove or update the correction in ${CORRECTIONS_PATH}.`
+      );
+    }
+  }
+}
+
+export async function main() {
   console.log(`Fetching ${MODELS_DEV_URL} ...`);
   const response = await fetch(MODELS_DEV_URL);
   if (!response.ok) {
@@ -75,6 +102,7 @@ async function main() {
   }
   /** @type {Record<string, { models?: Record<string, { cost?: unknown }> }>} */
   const registry = await response.json();
+  assertPricingCorrectionsCurrent(registry);
 
   const providers = {};
   let providerCount = 0;
@@ -111,7 +139,9 @@ async function main() {
   console.log(`  ${OUTPUT_PATH}`);
 }
 
-main().catch((error) => {
-  console.error(`✗ Failed to sync model pricing: ${error.message}`);
-  process.exitCode = 1;
-});
+if (process.argv[1] && resolve(process.argv[1]) === __filename) {
+  main().catch((error) => {
+    console.error(`✗ Failed to sync model pricing: ${error.message}`);
+    process.exitCode = 1;
+  });
+}

@@ -34,6 +34,7 @@ import {
 } from "../../types/DashboardConstants";
 import {
   TIMELINE_EVENT_TYPES,
+  TIMELINE_SCHEMA_VERSION,
   TIMELINE_STORAGE_FILES,
   TIMELINE_STORAGE_KIND,
   type WorkflowRunManifest,
@@ -2189,7 +2190,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
         const startedAt =
           WorkflowPaths.parseRunRefTimestamp(parsed.runRef) ?? 0;
         return {
-          schemaVersion: 2,
+          schemaVersion: TIMELINE_SCHEMA_VERSION,
           storageKind: "timeline",
           workflowId: workflowKey,
           runId: startedAt - Date.UTC(2025, 0, 1),

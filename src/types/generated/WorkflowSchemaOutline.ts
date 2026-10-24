@@ -240,6 +240,10 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "valueKind": "object",
         "description": "Default values for `{{varName}}` substitutions."
       },
+      "conditions": {
+        "valueKind": "object",
+        "description": "Named condition presets that MCP agents may attach to steps by name. Authors define every script; MCP agents can choose a preset but can never supply or override its scripts. Preset scripts that use declared params must quote each value (for example, `\"$BUG_FILE\"`) because values are passed through environment variables. A param name may not collide with a key in that preset's own `env`."
+      },
       "trustedExternalRoots": {
         "valueKind": "oneOf",
         "alternatives": [

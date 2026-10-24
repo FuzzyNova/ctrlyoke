@@ -27,6 +27,19 @@ export function getBackgroundWorkHoldHeadline(
   return "Stop hook received — step kept running until background work finishes";
 }
 
+/** Notice shown when a headless session exits with background work pending. */
+export function getBackgroundWorkAbandonedNotice(
+  pendingTasks: readonly BackgroundTaskSummary[]
+): string {
+  const count = pendingTasks.length;
+  const workLabel =
+    count === 0
+      ? "background work"
+      : `${count} background task${count === 1 ? "" : "s"}`;
+  const stopped = count > 1 ? "they were" : "it was";
+  return `The step ended with ${workLabel} still running; ${stopped} stopped when the headless session ended.`;
+}
+
 /**
  * Label for a pending task: its best human-readable name, the launching tool
  * and provider task id when those add information, and the command line when

@@ -92,7 +92,8 @@ that have not been approved yet" refers to a workflow's `trustedExternalRoots`; 
 ## "This workspace's settings choose programs for ctrlyoke to run"
 
 The workspace's `.ctrlyoke/settings.json` or MCP registry sets a shell, hook, MCP server, harness
-flag, or default script that nobody has reviewed on this machine. ctrlyoke ignores these values
+flag, default script, or tool permissions wider than yours that nobody has reviewed on this
+machine. ctrlyoke ignores these values
 until you approve them. In a terminal, `ctrlyoke run` asks about each one. Without a terminal, it
 exits with code `2`. Run `ctrlyoke trust-workspace-settings` to review them. In VS Code, the
 dashboard asks when it opens. See

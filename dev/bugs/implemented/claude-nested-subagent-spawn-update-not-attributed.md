@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-23 by subagent output attribution review (inline stamping area)
 - **Area:** `src/core/harness/claude/ClaudeLogParser.ts`, `src/utils/CliEventNormalizer.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -4,6 +4,9 @@ import { HeaderStatusBanner } from "@components/layout/HeaderStatusBanner";
 import type { HeaderStatusBannerProps } from "@components/layout/HeaderStatusBanner";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import {
+  MESSAGE_TYPES,
+  RUN_DEFINITION_CHANGE_SCOPES,
+  RUN_DEFINITION_DECISIONS,
   RUNNER_IDS,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
@@ -154,6 +157,67 @@ describe("HeaderStatusBanner", () => {
     expect(
       screen.queryByRole("button", { name: "Edit in settings" })
     ).not.toBeInTheDocument();
+  });
+
+  describe("definition review", () => {
+    beforeEach(() => {
+      (window.vscodeApi?.postMessage as ReturnType<typeof vi.fn>).mockClear();
+    });
+    afterEach(() => {
+      useUiStore.setState({ definitionChangedOutside: null });
+    });
+
+    it("offers Restore and Accept for a definition changed outside ctrlyoke", () => {
+      useUiStore.setState({
+        definitionChangedOutside: {
+          address: runAddress,
+          changes: [
+            {
+              scope: RUN_DEFINITION_CHANGE_SCOPES.STEP,
+              stepNumber: 2,
+              fields: ["endCondition"],
+            },
+          ],
+        },
+      });
+      renderBanner();
+
+      expect(
+        screen.getByText(/Definition changed outside ctrlyoke/)
+      ).toBeInTheDocument();
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: "Restore the definition ctrlyoke last wrote",
+        })
+      );
+      expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.RESOLVE_RUN_DEFINITION_CHANGE,
+        address: runAddress,
+        decision: RUN_DEFINITION_DECISIONS.RESTORE,
+      });
+    });
+
+    it("offers only Accept for a run ctrlyoke has no record of", () => {
+      useUiStore.setState({
+        definitionChangedOutside: {
+          address: runAddress,
+          changes: [],
+          unrecorded: true,
+        },
+      });
+      renderBanner();
+
+      expect(
+        screen.getByText(/ctrlyoke has no record of writing this run/)
+      ).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Restore/ })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Accept run" }));
+      expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.RESOLVE_RUN_DEFINITION_CHANGE,
+        address: runAddress,
+        decision: RUN_DEFINITION_DECISIONS.ACCEPT,
+      });
+    });
   });
 
   it("renders the rewind banner and calls its discard action", () => {

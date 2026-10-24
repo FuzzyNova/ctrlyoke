@@ -16,6 +16,7 @@ import {
   type HarnessTokenSemantics,
   type ModelPricing,
 } from "../../utils/ModelPricing";
+import { getModelPricingFromRegistry } from "../../utils/ModelPricingRegistry";
 
 const testPricing: ModelPricing = {
   inputPerMTok: 10,
@@ -79,7 +80,7 @@ suite("ModelPricing", () => {
     assert.strictEqual(
       HARNESS_TOKEN_SEMANTICS[HARNESS_IDS.ANTIGRAVITY_CLI]
         .reasoningRelationship,
-      ATTEMPT_COST_REASONING_RELATIONSHIPS.INCLUDED_IN_OUTPUT
+      ATTEMPT_COST_REASONING_RELATIONSHIPS.DISJOINT
     );
     assert.strictEqual(
       HARNESS_TOKEN_SEMANTICS[HARNESS_IDS.OPENCODE_CLI].reasoningRelationship,
@@ -398,6 +399,49 @@ suite("ModelPricing", () => {
       result?.usd,
       (24_073 / 1_000_000) * 2 + ((207 + 749) / 1_000_000) * 7
     );
+  });
+
+  test("prices Antigravity thinking tokens separately from output", () => {
+    const result = calculateTokenCost(
+      testPricing,
+      HARNESS_TOKEN_SEMANTICS[HARNESS_IDS.ANTIGRAVITY_CLI],
+      { prompt: 0, completion: 1_000_000, reasoning: 500_000 }
+    );
+
+    assert.strictEqual(result?.breakdown?.reasoningUsd, 15);
+    assert.strictEqual(result?.usd, 35);
+  });
+
+  test("applies the Sonnet 5.5 bundled cache-read correction", () => {
+    const anthropic = getModelPricingFromRegistry(
+      HARNESS_IDS.CLAUDE_CLI,
+      "claude-sonnet-5-5"
+    );
+    const copilot = getModelPricingFromRegistry(
+      HARNESS_IDS.COPILOT_CLI,
+      "claude-sonnet-5.5"
+    );
+
+    assert.strictEqual(anthropic?.cachedInputPerMTok, 0.2);
+    assert.strictEqual(copilot?.cachedInputPerMTok, 0.2);
+  });
+
+  test("user pricing overrides take precedence over bundled corrections", () => {
+    const result = calculateAttemptCost({
+      harnessId: HARNESS_IDS.CLAUDE_CLI,
+      modelId: "claude-sonnet-5-5",
+      prompt: 0,
+      cached: 1_000_000,
+      completion: 0,
+      pricingOverride: {
+        inputPerMTok: 2,
+        outputPerMTok: 10,
+        cachedInputPerMTok: 0.15,
+      },
+    });
+
+    assert.strictEqual(result.cost?.source, ATTEMPT_COST_SOURCES.USER_OVERRIDE);
+    assert.strictEqual(result.cost?.usd, 0.15);
   });
 
   test("reports unknown model for a Copilot model absent from the bundled table", () => {

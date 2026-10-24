@@ -2,6 +2,7 @@ import {
   PERMISSION_CAPABILITY_KEYS,
   PERMISSION_MODES,
   permissionModeAppliesToolList,
+  type PermissionMode,
 } from "./DashboardConstants";
 import type { McpServerConfig } from "./CtrlYokeTypes";
 import type { ToolPermissionConfig } from "./ExecutionPropertyTypes";
@@ -133,6 +134,71 @@ export function foldMcpToolDenialsIntoServers(
     }),
     unfolded,
   };
+}
+
+/** Breadth of each managed mode; `none` defers to the harness and has no rank. */
+const PERMISSION_MODE_BREADTH: Partial<Record<PermissionMode, number>> = {
+  [PERMISSION_MODES.CUSTOM]: 0,
+  [PERMISSION_MODES.ALLOW_ALL]: 1,
+  [PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL]: 2,
+};
+
+/** `null` and mode `none` both pass no flags, leaving the harness's own config. */
+function defersToHarness(config: ToolPermissionConfig | null): boolean {
+  return config === null || config.mode === PERMISSION_MODES.NONE;
+}
+
+/**
+ * True when `candidate` provably lets a harness do no more without asking
+ * than `baseline`. Patterns compare as exact strings, so anything this can't
+ * prove narrower (a reworded pattern, deferring to the harness's own config
+ * while the baseline does not) counts as wider.
+ */
+export function isToolPermissionConfigNoWiderThan(
+  candidate: ToolPermissionConfig | null,
+  baseline: ToolPermissionConfig | null
+): boolean {
+  if (defersToHarness(candidate) || defersToHarness(baseline)) {
+    return defersToHarness(candidate) && defersToHarness(baseline);
+  }
+  const candidateConfig = candidate!;
+  const baselineConfig = baseline!;
+  const candidateBreadth = PERMISSION_MODE_BREADTH[candidateConfig.mode]!;
+  const baselineBreadth = PERMISSION_MODE_BREADTH[baselineConfig.mode]!;
+  if (candidateBreadth > baselineBreadth) return false;
+  if (candidateConfig.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
+    return true;
+  }
+
+  const appliedList = (
+    config: ToolPermissionConfig,
+    list:
+      | typeof PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS
+      | typeof PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
+  ): readonly string[] =>
+    permissionModeAppliesToolList(config.mode, list) ? config[list] : [];
+
+  const candidateDenied = new Set(
+    appliedList(candidateConfig, PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS)
+  );
+  const keepsBaselineDenials = appliedList(
+    baselineConfig,
+    PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
+  ).every((pattern) => candidateDenied.has(pattern));
+  if (!keepsBaselineDenials) return false;
+
+  // A custom allow-list only widens anything against another custom list;
+  // against allowAll it is already a subset.
+  if (
+    candidateConfig.mode !== PERMISSION_MODES.CUSTOM ||
+    baselineConfig.mode !== PERMISSION_MODES.CUSTOM
+  ) {
+    return true;
+  }
+  const baselineAllowed = new Set(baselineConfig.allowedTools);
+  return candidateConfig.allowedTools.every((pattern) =>
+    baselineAllowed.has(pattern)
+  );
 }
 
 function findMcpToolDenialTarget(

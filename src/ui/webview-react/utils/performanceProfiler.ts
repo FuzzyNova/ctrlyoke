@@ -4,6 +4,7 @@ import { BOOLEAN_STRING_VALUES } from "@root/types/DashboardConstants";
 
 type PerformanceProfilerOptions = {
   slowThresholdMs?: number;
+  longFrameThresholdMs?: number;
   logAllScrollFrames?: boolean;
   logLongFrames?: boolean;
   logMeasurements?: boolean;
@@ -30,11 +31,17 @@ declare global {
 
 const LOG_PREFIX = "[cy-perf]";
 const STORAGE_KEY = "ctrlyoke.profiler.enabled";
+const OPTIONS_STORAGE_KEY = "ctrlyoke.profiler.options";
+// A frame gap is only "long" once it clearly exceeds the display's own vsync
+// interval: Chromium paces requestAnimationFrame at 30-60 Hz depending on the
+// monitor, power mode and iframe throttling, so anything under ~34ms is
+// cadence, not work. 50ms is also the browser's own long-task boundary.
 const DEFAULT_STATE: PerformanceProfilerState = {
   enabled: false,
-  slowThresholdMs: 200,
+  slowThresholdMs: 16,
+  longFrameThresholdMs: 50,
   logAllScrollFrames: false,
-  logLongFrames: false,
+  logLongFrames: true,
   logMeasurements: false,
   logVirtualRanges: false,
   logScrollAttribution: false,
@@ -44,6 +51,7 @@ const state: PerformanceProfilerState = {
   ...DEFAULT_STATE,
   enabled: readEnabledFlag(),
 };
+applyOptions(readStoredOptions());
 
 let longFrameAnimationFrame: number | null = null;
 let longFrameLastFrameAt: number | null = null;
@@ -79,6 +87,41 @@ function writeEnabledFlag(enabled: boolean): void {
   }
 }
 
+function readStoredOptions(): PerformanceProfilerOptions {
+  if (typeof window === "undefined") {
+    return {};
+  }
+
+  try {
+    const raw = window.localStorage.getItem(OPTIONS_STORAGE_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === "object"
+      ? (parsed as PerformanceProfilerOptions)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredOptions(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const { enabled: _enabled, ...options } = state;
+  try {
+    window.localStorage.setItem(OPTIONS_STORAGE_KEY, JSON.stringify(options));
+  } catch {
+    // Ignore storage failures; the current in-memory options still apply.
+  }
+}
+
+function readThreshold(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, value)
+    : undefined;
+}
+
 function roundMs(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -110,9 +153,10 @@ function log(label: string, details?: Record<string, unknown>): void {
 }
 
 function applyOptions(options: PerformanceProfilerOptions): void {
-  if (options.slowThresholdMs != null) {
-    state.slowThresholdMs = Math.max(0, options.slowThresholdMs);
-  }
+  state.slowThresholdMs =
+    readThreshold(options.slowThresholdMs) ?? state.slowThresholdMs;
+  state.longFrameThresholdMs =
+    readThreshold(options.longFrameThresholdMs) ?? state.longFrameThresholdMs;
   if (options.logAllScrollFrames != null) {
     state.logAllScrollFrames = options.logAllScrollFrames;
   }
@@ -147,7 +191,7 @@ function logLongFrame(now: number): void {
 
   if (longFrameLastFrameAt != null) {
     const gapMs = now - longFrameLastFrameAt;
-    if (gapMs >= state.slowThresholdMs) {
+    if (gapMs >= state.longFrameThresholdMs) {
       log("longFrame", {
         gapMs,
         visibilityState: document.visibilityState,
@@ -211,6 +255,7 @@ export function setProfilingEnabled(
   state.enabled = enabled;
   applyOptions(options ?? {});
   writeEnabledFlag(enabled);
+  writeStoredOptions();
   syncLongFrameMonitor();
   log(enabled ? "enabled" : "disabled", state);
   return { ...state };
@@ -220,6 +265,7 @@ export function configureProfiler(
   options: PerformanceProfilerOptions
 ): PerformanceProfilerState {
   applyOptions(options);
+  writeStoredOptions();
   syncLongFrameMonitor();
   log("configured", state);
   return { ...state };

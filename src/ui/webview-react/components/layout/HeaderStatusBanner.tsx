@@ -3,8 +3,17 @@ import type {
   WorkflowKey,
   WorkflowViewAddress,
 } from "@root/types/CtrlYokeTypes";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import {
+  MESSAGE_TYPES,
+  RUN_DEFINITION_DECISIONS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+  type RunDefinitionChange,
+  type RunDefinitionDecision,
+} from "@root/types/DashboardConstants";
+import { describeRunDefinitionChanges } from "@root/utils/RunDefinitionChanges";
+import { sameViewAddress } from "@root/utils/WorkflowViewAddress";
 import { useActiveWorkflowExternalOwner } from "@hooks/useActiveWorkflowExternalOwner";
+import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useIsSystemGeneratedWorkflow } from "@hooks/useIsSystemGeneratedWorkflow";
 import {
   getExternalReadOnlyLabel,
@@ -43,6 +52,9 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
   const setGlobalSettingsTab = useUiStore((s) => s.setGlobalSettingsTab);
   const toggleGlobalSettings = useUiStore((s) => s.toggleGlobalSettings);
   const globalSettingsOpen = useUiStore((s) => s.globalSettingsOpen);
+  const definitionChangedOutside = useUiStore(
+    (s) => s.definitionChangedOutside
+  );
   const externalReadOnlyLabel = getExternalReadOnlyLabel(externalOwner);
   const externalRunnerLabel = getExternalRunnerLabel(externalOwner);
   const isSystemGeneratedLocked =
@@ -127,6 +139,19 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
         </StatusBanner>
       )}
       {!props.isViewingDeletedWorkflow &&
+        definitionChangedOutside &&
+        props.displayedViewAddress &&
+        sameViewAddress(
+          definitionChangedOutside.address,
+          props.displayedViewAddress
+        ) && (
+          <DefinitionChangedOutsideBanner
+            address={props.displayedViewAddress}
+            changes={definitionChangedOutside.changes}
+            unrecorded={definitionChangedOutside.unrecorded === true}
+          />
+        )}
+      {!props.isViewingDeletedWorkflow &&
         !isLocked &&
         props.pendingRewind &&
         props.displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN && (
@@ -136,6 +161,76 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
           />
         )}
     </>
+  );
+};
+
+/**
+ * The addressed definition was changed by something other than ctrlyoke (an
+ * agent editing the run file, for example). Every write to it is refused until
+ * the user restores the last definition ctrlyoke wrote or accepts the change.
+ * An unrecorded run (ctrlyoke never wrote it) has nothing to restore, so it
+ * can only be accepted.
+ */
+const DefinitionChangedOutsideBanner: React.FC<{
+  address: WorkflowViewAddress;
+  changes: RunDefinitionChange[];
+  unrecorded: boolean;
+}> = ({ address, changes, unrecorded }) => {
+  const vscode = useVsCodeApi();
+  const resolve = (decision: RunDefinitionDecision) =>
+    vscode.postMessage({
+      type: MESSAGE_TYPES.RESOLVE_RUN_DEFINITION_CHANGE,
+      address,
+      decision,
+    });
+  const description = describeRunDefinitionChanges(changes);
+  const acceptLink = (
+    <button
+      type="button"
+      className={STATUS_BANNER_LINK_CLASS}
+      onClick={() => resolve(RUN_DEFINITION_DECISIONS.ACCEPT)}
+      title="Trust the definition as it is now and allow running and editing it"
+    >
+      {unrecorded ? "Accept run" : "Accept change"}
+    </button>
+  );
+
+  if (unrecorded) {
+    return (
+      <StatusBanner
+        tone={STATUS_BANNER_TONES.ERROR}
+        icon="shield"
+        aria-label="ctrlyoke has no record of writing this run"
+        narrowChildren={<>Not written by ctrlyoke. {acceptLink}</>}
+      >
+        <span className="mr-2">
+          ctrlyoke has no record of writing this run. It can&apos;t run or be
+          edited until you review it.
+        </span>
+        {acceptLink}
+      </StatusBanner>
+    );
+  }
+
+  return (
+    <StatusBanner
+      tone={STATUS_BANNER_TONES.ERROR}
+      icon="shield"
+      aria-label={`Definition changed outside ctrlyoke: ${description}`}
+      narrowChildren={<>Changed outside ctrlyoke. {acceptLink}</>}
+      action={{
+        label: "Restore",
+        onClick: () => resolve(RUN_DEFINITION_DECISIONS.RESTORE),
+        title: "Put back the definition ctrlyoke last wrote",
+        "aria-label": "Restore the definition ctrlyoke last wrote",
+      }}
+    >
+      <span className="mr-2">
+        Definition changed outside ctrlyoke ({description}). It can&apos;t run
+        or be edited until you review it.
+      </span>
+      {acceptLink}
+    </StatusBanner>
   );
 };
 

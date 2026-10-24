@@ -29,6 +29,8 @@ ctrlyoke export --workflow <key-or-name> [--run <ref|runId>] --out <dir> [--with
 ctrlyoke step edit [file] --workflow <key-or-name> --run <ref|runId> --index <index> [--prompt <text>]
 ctrlyoke step remove --workflow <key-or-name> --run <ref|runId> --index <index>
 ctrlyoke step reorder --workflow <key-or-name> --run <ref|runId> --order <indices>
+ctrlyoke step accept-definition --workflow <key-or-name> --run <ref|runId>
+ctrlyoke step restore-definition --workflow <key-or-name> --run <ref|runId>
 ctrlyoke secret set <NAME> [--stdin] [--scope user|workspace] [--cwd <path>]
 ctrlyoke secret list [--cwd <path>]
 ctrlyoke secret rm <NAME> [--yes] [--scope user|workspace] [--cwd <path>]
@@ -242,7 +244,8 @@ reviewed:
 - secret grants the workflow declares that are not approved
   (`ctrlyoke trust-secret-grants <file>`)
 - workspace settings that choose a program to run: a shell, hook, MCP server,
-  harness flag, or default script (`ctrlyoke trust-workspace-settings`)
+  harness flag, default script, or tool permissions wider than yours
+  (`ctrlyoke trust-workspace-settings`)
 
 In a terminal, `run` lists them, asks, and continues. A declined root or
 setting stays blocked and the run goes on without it; a declined secret grant
@@ -925,8 +928,35 @@ the desired execution order. Never include a running or completed step:
 ctrlyoke step reorder --workflow release --run 7 --order 3,4,5
 ```
 
-All three commands support `--cwd <path>` and `--json`. JSON output is a
-versioned one-line result envelope; failures exit with code `2`.
+### `ctrlyoke step restore-definition`
+
+When a run's definition was changed outside ctrlyoke, ctrlyoke will not run or
+edit it until the change is reviewed (see
+[Changes made outside ctrlyoke](/guide/history#changes-made-outside-ctrlyoke)).
+`restore-definition` discards the change and puts back the definition ctrlyoke
+last wrote:
+
+```bash
+ctrlyoke step restore-definition --workflow release --run 7
+```
+
+### `ctrlyoke step accept-definition`
+
+Trust the changed definition as it is now:
+
+```bash
+ctrlyoke step accept-definition --workflow release --run 7
+```
+
+`accept-definition` is also how you trust a run ctrlyoke has no record of
+writing. `restore-definition` fails for such a run, because there is no
+earlier definition to put back.
+
+Both commands succeed without changing anything when the run has no unreviewed
+change; their JSON result reports `"changed": false` in that case.
+
+All `ctrlyoke step` commands support `--cwd <path>` and `--json`. JSON output
+is a versioned one-line result envelope; failures exit with code `2`.
 
 ## Environment variables
 

@@ -63,6 +63,10 @@ Each queued prompt runs in a fresh session with none of your reasoning. Write it
 - Describe precisely what to do and what not to touch — including invariants that are easy to break.
 - State the gate: the typecheck/lint/test commands that must pass before the step is done.
 - Tell it how to wait for long commands, based on the mode the step will run in (`workflow_status` shows each step's `harness` and `executionMode`, and the workflow default an appended step inherits). Never tell a step to "run it in the background and check back later" unless that mode supports it. See `<longRunningCommands>`.
+- If a step must wait for a long command, set `executionMode: interactive` and choose a non-Codex harness.
+- When the workflow declares a `committed` condition preset, attach
+  `endCondition: { use: "committed" }` to every implementation step. In your
+  review, name the preset you relied on.
 - Require it to keep the plan current (check off the requirement, move the bug report, record the finding).
 - Require it to **commit its own work** at the end, with a plain conventional-commit message.
 
@@ -74,6 +78,7 @@ Whether a step can wait on background work depends on its mode and harness:
 - **Headless (any harness): no background waits.** When the agent ends its turn, the harness process exits and takes every subprocess it started with it. An agent that starts a test run in the background and ends its turn "until it finishes" kills the run and never commits.
 - **Interactive: every harness except codex-cli** can wait in the background, because the TUI stays alive after the agent ends its turn and resumes it when the job finishes.
 - **codex-cli: no background waits in either mode.**
+- For a step that must wait on a long command, set `executionMode: interactive` and choose a non-Codex harness.
 
 When a queued step cannot wait in the background, say so in its prompt. It must run the gate in the foreground, raising its tool's timeout where the tool allows. If the command can outlive that timeout, the step starts it writing to a log file and polls that file in a foreground loop, within the same turn, until it finishes. Only then does it commit and end its turn. Keep these steps' gates narrow (targeted tests rather than a full suite) so they fit, and run the full gate yourself during review.
 </longRunningCommands>
@@ -86,7 +91,10 @@ Prefer the workflow's default harness and model — omit `harness`/`model` on qu
 When you review work that has run:
 
 - **Inspect the actual work** — git log and diff, the changed files, the plan — rather than trusting step summaries. Use `read_output` if you need what a step reported.
+- Never put a guard in a queued prompt that says to stop because an earlier plan item is unticked. Have each step verify the code it builds on instead.
+- Before fixing a suspected bug during review, verify it with a failing test.
 - Check each item it was meant to deliver: done at all, done correctly, consistent with existing patterns, covered by tests.
+- Name any condition preset you relied on in your review.
 - **Fix small problems yourself** and commit the cleanup. Queueing a step for a one-line fix wastes a session.
 - If a substantial piece is missing or wrong, queue targeted steps for exactly those gaps, and correct any pending steps that would build on the broken work.
 - When your part is done, run the project's test gate, commit anything outstanding, and **give the user a real summary**: what was done, what you fixed during review, what you queued, and anything deferred or needing their decision. Cite files and commits with ctrlyoke references so they open from the output pane. Then end your turn.

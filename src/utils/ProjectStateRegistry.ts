@@ -57,62 +57,79 @@ export class ProjectStateRegistry {
     gitToplevel?: string
   ): Promise<ProjectStateInitialization> {
     const resolvedStateRoot = path.resolve(stateRoot);
-    const projectRoot = projectStateRoot(resolvedStateRoot, this.location);
-
+    // Workspace-mode history still keeps its run definition anchors in the
+    // user project directory, so that directory is registered in both modes:
+    // the record is what lets `history prune` and `history relink` handle it.
+    const registration = await registerUserProject(
+      resolvedStateRoot,
+      gitToplevel
+    );
     if (this.location === RUN_HISTORY_LOCATIONS.WORKSPACE) {
-      return { projectRoot };
+      return {
+        projectRoot: projectStateRoot(resolvedStateRoot, this.location),
+      };
     }
-
-    const projectsRoot = path.dirname(projectRoot);
-    await ensurePrivateDirectory(ctrlyokeStateHome());
-    await ensurePrivateDirectory(projectsRoot);
-    await assertContainedByRealRoot(projectsRoot, projectRoot);
-
-    // The lock is a sibling of the project directory so it can be acquired
-    // before the directory exists. It is still inside the private projects
-    // root and is removed by withFileLock after the transaction completes.
-    return withUserProjectRegistryLock(async () => {
-      return withFileLock(projectRoot, async () => {
-        await assertContainedByRealRoot(projectsRoot, projectRoot);
-        await rejectSymlinkProjectDirectory(projectRoot);
-
-        const projectExists = await pathExists(projectRoot);
-        if (!projectExists) {
-          await fs.mkdir(projectRoot, {
-            recursive: false,
-            mode: PRIVATE_DIRECTORY_MODE,
-          });
-        } else {
-          const stats = await fs.lstat(projectRoot);
-          if (!stats.isDirectory()) {
-            throw new Error(
-              `Project state path is not a directory: ${projectRoot}`
-            );
-          }
-        }
-        await fs.chmod(projectRoot, PRIVATE_DIRECTORY_MODE);
-
-        await assertContainedByRealRoot(projectsRoot, projectRoot);
-        await rejectSymlinkProjectDirectory(projectRoot);
-
-        const metadataPath = path.join(projectRoot, PROJECT_METADATA_FILE_NAME);
-        const metadata = await readOrCreateMetadata(
-          projectRoot,
-          metadataPath,
-          resolvedStateRoot,
-          gitToplevel
-        );
-        await writeMetadataAtomically(
-          projectsRoot,
-          projectRoot,
-          metadataPath,
-          metadata
-        );
-
-        return { projectRoot, metadataPath, metadata };
-      });
-    });
+    return registration;
   }
+}
+
+async function registerUserProject(
+  resolvedStateRoot: string,
+  gitToplevel: string | undefined
+): Promise<ProjectStateInitialization> {
+  const projectRoot = projectStateRoot(
+    resolvedStateRoot,
+    RUN_HISTORY_LOCATIONS.USER
+  );
+  const projectsRoot = path.dirname(projectRoot);
+  await ensurePrivateDirectory(ctrlyokeStateHome());
+  await ensurePrivateDirectory(projectsRoot);
+  await assertContainedByRealRoot(projectsRoot, projectRoot);
+
+  // The lock is a sibling of the project directory so it can be acquired
+  // before the directory exists. It is still inside the private projects
+  // root and is removed by withFileLock after the transaction completes.
+  return withUserProjectRegistryLock(async () => {
+    return withFileLock(projectRoot, async () => {
+      await assertContainedByRealRoot(projectsRoot, projectRoot);
+      await rejectSymlinkProjectDirectory(projectRoot);
+
+      const projectExists = await pathExists(projectRoot);
+      if (!projectExists) {
+        await fs.mkdir(projectRoot, {
+          recursive: false,
+          mode: PRIVATE_DIRECTORY_MODE,
+        });
+      } else {
+        const stats = await fs.lstat(projectRoot);
+        if (!stats.isDirectory()) {
+          throw new Error(
+            `Project state path is not a directory: ${projectRoot}`
+          );
+        }
+      }
+      await fs.chmod(projectRoot, PRIVATE_DIRECTORY_MODE);
+
+      await assertContainedByRealRoot(projectsRoot, projectRoot);
+      await rejectSymlinkProjectDirectory(projectRoot);
+
+      const metadataPath = path.join(projectRoot, PROJECT_METADATA_FILE_NAME);
+      const metadata = await readOrCreateMetadata(
+        projectRoot,
+        metadataPath,
+        resolvedStateRoot,
+        gitToplevel
+      );
+      await writeMetadataAtomically(
+        projectsRoot,
+        projectRoot,
+        metadataPath,
+        metadata
+      );
+
+      return { projectRoot, metadataPath, metadata };
+    });
+  });
 }
 
 /** Resolve the private project-state directory used by user-scoped history. */

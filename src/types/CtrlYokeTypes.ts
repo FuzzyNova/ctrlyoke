@@ -424,6 +424,8 @@ export interface PromptFile extends ExecutionProperties {
   worktree?: WorktreeConfig;
   /** External roots requested for this workflow, or null to disable access. */
   trustedExternalRoots?: string[] | null;
+  /** Author-defined named condition presets available to MCP steps. */
+  conditions?: Record<string, ConditionPreset>;
   prompt?: string;
   steps?: WorkflowStep[];
   /** Normalized flat-step topology for authored parallel groups. */
@@ -1194,6 +1196,18 @@ export interface PreCondition extends ScriptProperties {
   onPass?: PreConditionAction;
   /** What to do when the pre-condition fails. Default: "skipPrompt". */
   onFail?: PreConditionAction;
+}
+
+/** Author-defined condition preset, including its MCP-only parameter declarations. */
+export interface ConditionPreset extends ScriptProperties {
+  maxRetries?: number;
+  retryPrompt?: string;
+  passRetryPrompt?: string;
+  resumeSessionOnRetry?: boolean;
+  onPass?: EndConditionAction | PreConditionAction;
+  onFail?: EndConditionAction | PreConditionAction;
+  /** Environment-variable names an MCP agent may provide when selecting this preset. */
+  params?: string[];
 }
 
 /**
