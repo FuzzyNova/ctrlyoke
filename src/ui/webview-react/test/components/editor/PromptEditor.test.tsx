@@ -8,7 +8,13 @@
  * run when an older run was selected.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EditorView } from "@codemirror/view";
 
@@ -951,6 +957,42 @@ describe("PromptEditor — prompt-file action", () => {
       })
     );
     expect(useEditorStore.getState().promptText).toBe("keep this text");
+  });
+
+  it("applies a successful conversion reply after the waiting deadline", async () => {
+    useEditorStore.getState().setPromptText("convert me");
+    const getAction = renderWithAction();
+    await waitFor(() =>
+      expect(getAction()?.tooltip).toBe("Convert to prompt file")
+    );
+    vi.useFakeTimers();
+    getAction()?.onClick();
+    const request = postMessageSpy.mock.calls.find(
+      ([message]) =>
+        (message as { type?: string }).type ===
+        MESSAGE_TYPES.CONVERT_PROMPT_TO_FILE
+    )?.[0] as { seq: number };
+
+    act(() => vi.advanceTimersByTime(30_000));
+    expect(useEditorStore.getState().promptText).toBe("convert me");
+
+    act(() =>
+      fireEvent(
+        window,
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.PROMPT_FILE_CREATED,
+            seq: request.seq,
+            reference: "./.ctrlyoke/prompts/convert-me.prompt.md",
+            resolvedPath: "C:/workspace/.ctrlyoke/prompts/convert-me.prompt.md",
+          },
+        })
+      )
+    );
+    expect(useEditorStore.getState().promptText).toBe(
+      "./.ctrlyoke/prompts/convert-me.prompt.md"
+    );
+    vi.useRealTimers();
   });
 
   it("reports a resolved prompt file's content and refreshes it on window focus", async () => {

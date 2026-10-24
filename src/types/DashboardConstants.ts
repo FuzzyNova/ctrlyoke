@@ -3087,13 +3087,13 @@ export const PASTING_IMAGE_PLACEHOLDER = "[Pasting image…]";
 /** Placeholder inserted at the cursor while an output snapshot saves asynchronously. */
 export const CAPTURING_OUTPUT_PLACEHOLDER = "[Capturing output…]";
 
-/** Milliseconds before an unanswered SAVE_PASTED_IMAGE round trip is treated as failed. */
+/** Milliseconds before an unanswered SAVE_PASTED_IMAGE round trip reports that it is still pending. */
 export const PASTED_IMAGE_SAVE_TIMEOUT_MS = 30_000;
 
-/** Milliseconds before an unanswered SAVE_OUTPUT_SNAPSHOT round trip is treated as failed. */
+/** Milliseconds before an unanswered SAVE_OUTPUT_SNAPSHOT round trip reports that it is still pending. */
 export const OUTPUT_SNAPSHOT_SAVE_TIMEOUT_MS = PASTED_IMAGE_SAVE_TIMEOUT_MS;
 
-/** Milliseconds before an unanswered prompt-file conversion is treated as failed. */
+/** Milliseconds before an unanswered prompt-file conversion reports that it is still pending. */
 export const PROMPT_FILE_CONVERSION_TIMEOUT_MS = 30_000;
 
 /**

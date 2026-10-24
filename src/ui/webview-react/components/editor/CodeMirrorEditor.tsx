@@ -69,6 +69,7 @@ import {
   USER_FEEDBACK_SEVERITY,
   CTRLYOKE_SLASH_TOKEN_KINDS,
   OUTPUT_SNAPSHOT_SAVE_TIMEOUT_MS,
+  CAPTURING_OUTPUT_PLACEHOLDER,
   type CodeMirrorEditorMode,
 } from "@root/types/DashboardConstants";
 import { COMPLETION_KIND_ICONS } from "@root/types/SymbolKindConstants";
@@ -214,7 +215,8 @@ export type { ContextReferenceValidationResult };
 interface PendingPlaceholder {
   from: number;
   to: number;
-  timeoutId: ReturnType<typeof setTimeout>;
+  text: string;
+  timeoutId: ReturnType<typeof setTimeout> | null;
 }
 
 const MOUSE_SELECTION_TEARDOWN_EVENTS = {
@@ -638,8 +640,8 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   }, [affUri, dicUri]);
 
   // Replace a pending placeholder with final text — a `@ref ` on success or
-  // an empty string on failure/timeout — then forget the entry. Ranges are
-  // clamped to the current doc length to survive races with concurrent edits.
+  // an empty string on failure — then forget the entry. Find the placeholder
+  // again in the current document so edits before it do not stale its position.
   const resolvePendingPlaceholder = useCallback(
     (
       pending: Map<number, PendingPlaceholder>,
@@ -647,29 +649,56 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       replacement: string
     ) => {
       const entry = pending.get(seq);
-      if (!entry) return;
-      clearTimeout(entry.timeoutId);
+      if (!entry) return false;
+      if (entry.timeoutId) clearTimeout(entry.timeoutId);
       pending.delete(seq);
       const view = viewRef.current;
-      if (!view) return;
-      const docLen = view.state.doc.length;
-      const from = Math.min(entry.from, docLen);
-      const to = Math.min(Math.max(entry.to, from), docLen);
-      view.dispatch({ changes: { from, to, insert: replacement } });
+      if (!view) return false;
+      const document = view.state.doc.toString();
+      let from = -1;
+      let nearestDistance = Number.POSITIVE_INFINITY;
+      for (
+        let candidate = document.indexOf(entry.text);
+        candidate !== -1;
+        candidate = document.indexOf(entry.text, candidate + 1)
+      ) {
+        const distance = Math.abs(candidate - entry.from);
+        if (distance < nearestDistance) {
+          from = candidate;
+          nearestDistance = distance;
+        }
+      }
+      if (from === -1) return false;
+      view.dispatch({
+        changes: {
+          from,
+          to: from + entry.text.length,
+          insert: replacement,
+        },
+      });
+      return true;
     },
     []
   );
 
   const resolvePendingPaste = useCallback(
     (seq: number, replacement: string) => {
-      resolvePendingPlaceholder(pendingPastesRef.current, seq, replacement);
+      return resolvePendingPlaceholder(
+        pendingPastesRef.current,
+        seq,
+        replacement
+      );
     },
     [resolvePendingPlaceholder]
   );
 
   const resolvePendingCapture = useCallback(
     (seq: number, replacement: string) => {
-      resolvePendingPlaceholder(pendingCapturesRef.current, seq, replacement);
+      return resolvePendingPlaceholder(
+        pendingCapturesRef.current,
+        seq,
+        replacement
+      );
     },
     [resolvePendingPlaceholder]
   );
@@ -686,7 +715,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         return;
       }
       // Trailing space terminates the @ref token so the user can keep typing.
-      resolvePendingCapture(seq, `@${relativePath} `);
+      if (!resolvePendingCapture(seq, `@${relativePath} `)) {
+        notifyUser(
+          `Output snapshot saved at @${relativePath}`,
+          USER_FEEDBACK_SEVERITY.INFO
+        );
+      }
     },
     [resolvePendingCapture]
   );
@@ -695,20 +729,27 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     (captureId: string, from: number, to: number) => {
       const seq = ++captureSeqRef.current;
       const timeoutId = setTimeout(() => {
-        handleOutputSnapshotSaved(
-          seq,
-          undefined,
-          "Timed out saving output snapshot"
+        const entry = pendingCapturesRef.current.get(seq);
+        if (!entry) return;
+        entry.timeoutId = null;
+        notifyUser(
+          "Still waiting for the output snapshot to be saved",
+          USER_FEEDBACK_SEVERITY.INFO
         );
       }, OUTPUT_SNAPSHOT_SAVE_TIMEOUT_MS);
-      pendingCapturesRef.current.set(seq, { from, to, timeoutId });
+      pendingCapturesRef.current.set(seq, {
+        from,
+        to,
+        text: CAPTURING_OUTPUT_PLACEHOLDER,
+        timeoutId,
+      });
       vscode.postMessage({
         type: MESSAGE_TYPES.SAVE_OUTPUT_SNAPSHOT,
         seq,
         captureId,
       });
     },
-    [vscode, handleOutputSnapshotSaved]
+    [vscode]
   );
 
   // Latest-value refs let the one long-lived client read current values without
@@ -765,7 +806,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         return;
       }
       // Trailing space terminates the @ref token so the user can keep typing.
-      resolvePendingPaste(seq, `@${relativePath} `);
+      if (!resolvePendingPaste(seq, `@${relativePath} `)) {
+        notifyUser(
+          `Pasted image saved at @${relativePath}`,
+          USER_FEEDBACK_SEVERITY.INFO
+        );
+      }
     },
     [resolvePendingPaste]
   );
@@ -783,11 +829,18 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 
       const seq = ++pasteSeqRef.current;
       const timeoutId = setTimeout(() => {
-        handlePastedImageSaved(seq, undefined, "Timed out saving pasted image");
+        const entry = pendingPastesRef.current.get(seq);
+        if (!entry) return;
+        entry.timeoutId = null;
+        notifyUser(
+          "Still waiting for the pasted image to be saved",
+          USER_FEEDBACK_SEVERITY.INFO
+        );
       }, PASTED_IMAGE_SAVE_TIMEOUT_MS);
       pendingPastesRef.current.set(seq, {
         from: pos,
         to: pos + PASTING_IMAGE_PLACEHOLDER.length,
+        text: PASTING_IMAGE_PLACEHOLDER,
         timeoutId,
       });
 
@@ -860,10 +913,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     const pendingCaptures = pendingCapturesRef.current;
     return () => {
       for (const entry of pendingPastes.values()) {
-        clearTimeout(entry.timeoutId);
+        if (entry.timeoutId) clearTimeout(entry.timeoutId);
       }
       for (const entry of pendingCaptures.values()) {
-        clearTimeout(entry.timeoutId);
+        if (entry.timeoutId) clearTimeout(entry.timeoutId);
       }
       pendingPastes.clear();
       pendingCaptures.clear();

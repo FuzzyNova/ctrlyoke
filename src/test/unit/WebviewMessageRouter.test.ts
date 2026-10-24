@@ -189,6 +189,59 @@ suite("WebviewMessageRouter — completion routing", () => {
   });
 });
 
+suite("WebviewMessageRouter — standalone editor file routing", () => {
+  test("routes conversion, attachment, and preview requests while the queue is blocked", async () => {
+    const slow = deferred<unknown>();
+    const router = buildRouter(
+      {
+        getWorkspaceStatsService: () => ({ getSnapshot: () => slow.promise }),
+        refreshWorkspaceStats: async () => undefined,
+      },
+      () => undefined,
+      undefined,
+      undefined,
+      () => []
+    );
+    const queued = router.route({
+      type: MESSAGE_TYPES.REQUEST_WORKSPACE_STATS,
+    });
+    const requests: Array<Record<string, unknown>> = [
+      { type: MESSAGE_TYPES.CONVERT_PROMPT_TO_FILE, seq: 1, text: "prompt" },
+      {
+        type: MESSAGE_TYPES.SAVE_PASTED_IMAGE,
+        seq: 2,
+        mimeType: "image/png",
+        dataBase64: "AQ==",
+      },
+      {
+        type: MESSAGE_TYPES.SAVE_OUTPUT_SNAPSHOT,
+        seq: 3,
+        captureId: "missing",
+      },
+      {
+        type: MESSAGE_TYPES.REQUEST_FILE_PREVIEW_URI,
+        seq: 4,
+        relativePath: "image.png",
+      },
+    ];
+
+    for (const message of requests) {
+      let completed = false;
+      await router.route(message, { clientTag: "panel" }).then(() => {
+        completed = true;
+      });
+      assert.strictEqual(
+        completed,
+        true,
+        `${String(message.type)} waited on routeQueue`
+      );
+    }
+
+    slow.resolve({});
+    await queued;
+  });
+});
+
 class FakeLicenseActionService implements LicenseActionService {
   readonly calls: string[] = [];
   readonly machines: LicenseMachineSummary[] = [

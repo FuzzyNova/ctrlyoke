@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
 import { EditorView } from "@codemirror/view";
 import { EditorState, type Extension } from "@codemirror/state";
 import {
@@ -1171,6 +1171,63 @@ describe("CodeMirrorEditor output capture completions", () => {
       view.destroy();
       parent.remove();
     }
+  });
+});
+
+describe("CodeMirrorEditor late attachment replies", () => {
+  it("replaces a pasted-image placeholder when the save reply arrives after timeout", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      "FileReader",
+      class {
+        result: string | ArrayBuffer | null = "data:image/png;base64,AQ==";
+        onload: ((event: ProgressEvent<FileReader>) => unknown) | null = null;
+        readAsDataURL() {
+          this.onload?.(new ProgressEvent("load") as ProgressEvent<FileReader>);
+        }
+      }
+    );
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+    const { container } = render(
+      <CodeMirrorEditor value="" onChange={vi.fn()} affUri="" dicUri="" />
+    );
+    const content = container.querySelector(".cm-content") as HTMLElement;
+    fireEvent.paste(content, {
+      clipboardData: {
+        items: [
+          {
+            type: "image/png",
+            getAsFile: () =>
+              new File(["image"], "paste.png", { type: "image/png" }),
+          },
+        ],
+      },
+    });
+    const request = postMessage.mock.calls.find(
+      ([message]) =>
+        (message as { type?: string }).type === MESSAGE_TYPES.SAVE_PASTED_IMAGE
+    )?.[0] as { seq: number };
+    expect(request).toBeDefined();
+
+    vi.advanceTimersByTime(30_000);
+    const editor = container.querySelector(".cm-editor") as HTMLElement;
+    const view = EditorView.findFromDOM(editor)!;
+    view.dispatch({ changes: { from: 0, insert: "edited " } });
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        data: {
+          type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
+          seq: request.seq,
+          relativePath: "./.ctrlyoke/attachments/paste.png",
+        },
+      })
+    );
+    expect(EditorView.findFromDOM(editor)?.state.doc.toString()).toBe(
+      "edited @./.ctrlyoke/attachments/paste.png "
+    );
+    vi.useRealTimers();
   });
 });
 

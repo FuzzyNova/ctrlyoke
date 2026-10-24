@@ -290,9 +290,14 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   const validationSeqRef = useRef(0);
   const validationTargetRef = useRef("");
   const conversionSeqRef = useRef(0);
-  const conversionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null
+  const conversionRequestsRef = useRef(
+    new Map<
+      number,
+      { originalText: string; timeoutId: ReturnType<typeof setTimeout> | null }
+    >()
   );
+  const promptTextRef = useRef(promptText);
+  promptTextRef.current = promptText;
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const initializedRef = useRef(false);
 
@@ -698,19 +703,19 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
 
     const seq = ++conversionSeqRef.current;
     setIsPromptFileConversionBusy(true);
-    if (conversionTimeoutRef.current) {
-      clearTimeout(conversionTimeoutRef.current);
-    }
-    conversionTimeoutRef.current = setTimeout(() => {
-      if (conversionSeqRef.current !== seq) return;
-      conversionSeqRef.current = 0;
-      conversionTimeoutRef.current = null;
+    const request = {
+      originalText: promptText,
+      timeoutId: null as ReturnType<typeof setTimeout> | null,
+    };
+    request.timeoutId = setTimeout(() => {
+      request.timeoutId = null;
       setIsPromptFileConversionBusy(false);
       notifyUser(
-        "Timed out converting prompt to a file",
-        USER_FEEDBACK_SEVERITY.ERROR
+        "Still waiting for the prompt file to be created",
+        USER_FEEDBACK_SEVERITY.INFO
       );
     }, PROMPT_FILE_CONVERSION_TIMEOUT_MS);
+    conversionRequestsRef.current.set(seq, request);
 
     vscode.postMessage({
       type: MESSAGE_TYPES.CONVERT_PROMPT_TO_FILE,
@@ -735,14 +740,12 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     const handleMessage = (event: MessageEvent) => {
       const message = event.data;
       if (message?.type !== MESSAGE_TYPES.PROMPT_FILE_CREATED) return;
-      if (!message.seq || message.seq !== conversionSeqRef.current) return;
-
-      if (conversionTimeoutRef.current) {
-        clearTimeout(conversionTimeoutRef.current);
-        conversionTimeoutRef.current = null;
-      }
-      conversionSeqRef.current = 0;
-      setIsPromptFileConversionBusy(false);
+      const request = conversionRequestsRef.current.get(message.seq);
+      if (!request) return;
+      conversionRequestsRef.current.delete(message.seq);
+      if (request.timeoutId) clearTimeout(request.timeoutId);
+      if (message.seq === conversionSeqRef.current)
+        setIsPromptFileConversionBusy(false);
 
       if (typeof message.error === "string" || !message.reference) {
         notifyUser(
@@ -759,8 +762,15 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         return;
       }
 
-      setPromptText(message.reference);
-      persistPromptFileReference(message.reference);
+      if (promptTextRef.current === request.originalText) {
+        setPromptText(message.reference);
+        persistPromptFileReference(message.reference);
+      } else {
+        notifyUser(
+          `Prompt file created at ${message.reference}; the editor changed while it was being created`,
+          USER_FEEDBACK_SEVERITY.INFO
+        );
+      }
       vscode.postMessage({
         type: MESSAGE_TYPES.OPEN_PROMPT_FILE,
         path: message.resolvedPath,
@@ -771,11 +781,13 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   }, [persistPromptFileReference, setPromptText, vscode]);
 
   useEffect(() => {
+    const conversionRequests = conversionRequestsRef.current;
     return () => {
       conversionSeqRef.current = 0;
-      if (conversionTimeoutRef.current) {
-        clearTimeout(conversionTimeoutRef.current);
+      for (const request of conversionRequests.values()) {
+        if (request.timeoutId) clearTimeout(request.timeoutId);
       }
+      conversionRequests.clear();
     };
   }, []);
 
