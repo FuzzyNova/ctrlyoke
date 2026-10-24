@@ -23,7 +23,7 @@ export interface McpToolInputSchema {
   oneOf?: readonly McpToolInputSchema[];
   minimum?: number;
   minItems?: number;
-  additionalProperties?: false;
+  additionalProperties?: false | McpToolInputSchema;
 }
 
 export type McpAppendStepInput = Pick<
@@ -32,7 +32,18 @@ export type McpAppendStepInput = Pick<
 > & {
   sessionId?: number;
   executionMode?: ExecutionMode;
+  endCondition?: McpConditionPresetUse;
+  preCondition?: McpConditionPresetUse;
 };
+
+/** Agent-selectable preset reference; script execution settings stay author-owned. */
+export interface McpConditionPresetUse {
+  use: string;
+  params?: Record<string, string>;
+  retryPrompt?: string;
+  passRetryPrompt?: string;
+  maxRetries?: number;
+}
 
 export interface McpAppendParallelGroupInput {
   parallel: McpAppendStepInput[];
@@ -106,6 +117,8 @@ export type McpStepUpdateArguments = Omit<
   "additionalArgs"
 > & {
   additionalArgs?: string[];
+  endCondition?: McpConditionPresetUse;
+  preCondition?: McpConditionPresetUse;
 };
 
 export interface McpEditStepArguments {
@@ -237,6 +250,8 @@ const MCP_APPEND_STEP_INPUT_SCHEMA: McpToolInputSchema = {
       description:
         "How to run this step. Defaults to the workflow's executionMode.",
     },
+    endCondition: conditionPresetUseSchema("endCondition"),
+    preCondition: conditionPresetUseSchema("preCondition"),
     resumeSession: {
       type: "boolean",
       description:
@@ -297,6 +312,8 @@ const MCP_STEP_UPDATE_SCHEMA: McpToolInputSchema = {
       enum: Object.values(EXECUTION_MODES),
       description: "The execution mode override.",
     },
+    endCondition: conditionPresetUseSchema("endCondition"),
+    preCondition: conditionPresetUseSchema("preCondition"),
     resumeSession: {
       type: "boolean",
       description: "Whether the step should resume a previous session.",
@@ -322,10 +339,52 @@ const MCP_STEP_UPDATE_SCHEMA: McpToolInputSchema = {
   },
 };
 
+function conditionPresetUseSchema(
+  fieldName: "endCondition" | "preCondition"
+): McpToolInputSchema {
+  return {
+    type: "object",
+    additionalProperties: false,
+    description: `Attach a named author-defined ${fieldName} preset. This replaces any workflow-level ${fieldName} inherited by the step. The preset owns its script and execution settings; only retry text, a capped maxRetries value, and declared params can be supplied.`,
+    properties: {
+      use: {
+        type: "string",
+        description: "Name of a preset in workflow conditions.",
+      },
+      params: {
+        type: "object",
+        additionalProperties: { type: "string" },
+        description:
+          "Values for every declared preset parameter. Values are passed as environment variables and are never inserted into script text.",
+      },
+      retryPrompt: {
+        type: "string",
+        description: "Optional retry-prompt text override.",
+      },
+      passRetryPrompt: {
+        type: "string",
+        description: "Optional pass-retry prompt text override.",
+      },
+      maxRetries: {
+        type: "number",
+        minimum: 0,
+        description:
+          "Optional retry limit; it cannot exceed the preset's own maxRetries.",
+      },
+    },
+    required: ["use"],
+  };
+}
+
 /** Allowed fields for edit_step, shared by its update and clear schemas. */
 export const MCP_STEP_UPDATE_FIELDS = Object.keys(
   MCP_STEP_UPDATE_SCHEMA.properties ?? {}
 ) as (keyof McpStepUpdateArguments)[];
+
+/** Fields edit_step may clear; condition preset references are intentionally excluded. */
+export const MCP_STEP_CLEARABLE_FIELDS = MCP_STEP_UPDATE_FIELDS.filter(
+  (field) => field !== "endCondition" && field !== "preCondition"
+);
 
 /** The single source of truth for ctrlyoke's exposed MCP tool definitions. */
 export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
@@ -423,9 +482,9 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
         updates: MCP_STEP_UPDATE_SCHEMA,
         clearProperties: {
           type: "array",
-          items: { type: "string", enum: MCP_STEP_UPDATE_FIELDS },
+          items: { type: "string", enum: MCP_STEP_CLEARABLE_FIELDS },
           description:
-            "Optional step fields to remove so they inherit defaults.",
+            "Optional step fields to remove so they inherit defaults. Condition gates cannot be cleared through MCP; attach an author-defined preset to replace a workflow-level inherited gate.",
         },
       },
       required: ["index", "updates"],

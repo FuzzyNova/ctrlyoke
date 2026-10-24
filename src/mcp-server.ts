@@ -155,6 +155,7 @@ import {
   MCP_WORKFLOW_MUTATION_TOOL_NAMES,
   MCP_WORKFLOW_STATUS_TOOL_NAME,
   type McpAppendStepArguments,
+  type McpAppendStepInput,
   type McpAppendStepResult,
   type McpClaimPathsArguments,
   type McpEditStepArguments,
@@ -168,6 +169,7 @@ import {
   type McpReleasePathsArguments,
 } from "./utils/McpToolDefinitions";
 import { validateMcpToolCall } from "./utils/McpSchemaValidator";
+import { materializeMcpConditionPreset } from "./utils/McpConditionPresetResolver";
 import {
   getCoordinationAttribution,
   resolveCoordinationParticipantKind,
@@ -388,7 +390,7 @@ export { MAX_GLOBAL_STATUS_RESULTS };
 
 function toWorkflowStepUpdates(
   updates: McpEditStepArguments["updates"]
-): Partial<WorkflowStep> {
+): Partial<PromptStep> {
   const allowedFields = new Set<string>(MCP_STEP_UPDATE_FIELDS);
   const additionalArgsKey = Object.keys({ additionalArgs: undefined })[0];
   return Object.fromEntries(
@@ -400,7 +402,64 @@ function toWorkflowStepUpdates(
           ? formatArgString(value)
           : value,
       ])
-  ) as Partial<WorkflowStep>;
+  ) as Partial<PromptStep>;
+}
+
+function materializeConditionUpdates(
+  workingFile: WorkingFile,
+  updates: McpEditStepArguments["updates"]
+): Partial<PromptStep> {
+  const { endCondition, preCondition, ...fieldsWithoutConditions } = updates;
+  const stepFields = toWorkflowStepUpdates(fieldsWithoutConditions);
+  return {
+    ...stepFields,
+    ...(endCondition
+      ? {
+          endCondition: materializeMcpConditionPreset(
+            workingFile,
+            "endCondition",
+            endCondition
+          ) as PromptStep["endCondition"],
+        }
+      : {}),
+    ...(preCondition
+      ? {
+          preCondition: materializeMcpConditionPreset(
+            workingFile,
+            "preCondition",
+            preCondition
+          ) as PromptStep["preCondition"],
+        }
+      : {}),
+  };
+}
+
+function materializeAppendStep(
+  workingFile: WorkingFile,
+  step: McpAppendStepInput
+): PromptStep {
+  const { endCondition, preCondition, ...stepFields } = step;
+  return {
+    ...stepFields,
+    ...(endCondition
+      ? {
+          endCondition: materializeMcpConditionPreset(
+            workingFile,
+            "endCondition",
+            endCondition
+          ),
+        }
+      : {}),
+    ...(preCondition
+      ? {
+          preCondition: materializeMcpConditionPreset(
+            workingFile,
+            "preCondition",
+            preCondition
+          ),
+        }
+      : {}),
+  } as PromptStep;
 }
 
 function executionModeWarnings(
@@ -1268,7 +1327,7 @@ export class CtrlYokeMCPServer {
       true
     );
 
-    const resolvedItems: ResolvedParallelItem[] = steps.map((item) =>
+    const resolvedItems = steps.map((item) =>
       "parallel" in item
         ? {
             parallel: item.parallel.map((member) => ({ ...member })),
@@ -1284,11 +1343,22 @@ export class CtrlYokeMCPServer {
         "parallelWithCurrent accepts flat steps only; use next, end, or a numeric position for a future parallel group"
       );
     }
-    const flattened = flattenParallelItems(resolvedItems);
     const attachedRun = await this.readAttachedRun(
       MCP_APPEND_STEP_TOOL_NAME,
       selected.filePath
     );
+    const materializedItems: ResolvedParallelItem[] = resolvedItems.map(
+      (item) =>
+        "parallel" in item
+          ? {
+              ...item,
+              parallel: item.parallel.map((step) =>
+                materializeAppendStep(attachedRun, step)
+              ),
+            }
+          : materializeAppendStep(attachedRun, item)
+    );
+    const flattened = flattenParallelItems(materializedItems);
 
     await this.validateStepHarnessAndModelCapabilities(
       flattened.topology.steps,
@@ -1452,7 +1522,7 @@ export class CtrlYokeMCPServer {
     if (existingStep) {
       const effectiveStep = mergeWorkflowStepUpdate(
         existingStep,
-        toWorkflowStepUpdates(updates),
+        materializeConditionUpdates(workingFile, updates),
         clearProperties
       );
       await this.validateStepHarnessAndModelCapabilities(
@@ -1466,7 +1536,7 @@ export class CtrlYokeMCPServer {
       selected.runRef,
       index,
       {
-        updates: toWorkflowStepUpdates(updates),
+        updates: materializeConditionUpdates(workingFile, updates),
         clearProperties,
       },
       target.definitionRevision,

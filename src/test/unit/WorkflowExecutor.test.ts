@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { execFileSync } from "child_process";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
@@ -2508,6 +2509,69 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.deepStrictEqual(sibling.sentPrompts, ["sibling"]);
     assert.strictEqual(queue.getState().currentIndex, 2);
     assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+  });
+
+  test("a materialized committed gate retries a step that leaves a dirty tree", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-committed-gate-")
+    );
+    const git = (args: string[]) =>
+      execFileSync("git", args, { cwd: workspace, stdio: "ignore" });
+    try {
+      git(["init"]);
+      git(["config", "user.email", "ctrlyoke-test@example.invalid"]);
+      git(["config", "user.name", "ctrlyoke test"]);
+      await fs.writeFile(path.join(workspace, "baseline.txt"), "baseline\n");
+      git(["add", "baseline.txt"]);
+      git(["commit", "-m", "test baseline"]);
+
+      const queue = new PromptQueue();
+      const integration = new MockHarnessIntegration(undefined, false);
+      let retryCount = 0;
+      integration.onSend = async () => {
+        retryCount += 1;
+        if (retryCount === 2) {
+          git(["add", "left-dirty.txt"]);
+          git(["commit", "-m", "retry cleaned the tree"]);
+        }
+        return { responseText: "done" };
+      };
+      await fs.writeFile(path.join(workspace, "left-dirty.txt"), "work\n");
+      queue.loadPrompts({
+        steps: [
+          {
+            prompt: "finish the work",
+            endCondition: {
+              script: "git status --porcelain",
+              compareSource: "stdout",
+              operator: "isEmpty",
+              maxRetries: 1,
+              retryPrompt:
+                "You left uncommitted changes. Finish and commit them.",
+              onFail: CONDITION_ACTIONS.RETRY,
+            },
+          },
+        ],
+      });
+
+      const context = makeContext(integration);
+      context.workspaceFolderPath = workspace;
+      context.executionWorkspace = createNoWorktreeExecutionWorkspace(
+        new MockPlatform(workspace)
+      );
+      await makeExecutor(
+        queue,
+        new EndConditionEvaluator(new MockPlatform(workspace))
+      ).execute(integration, context);
+
+      assert.deepStrictEqual(integration.sentPrompts, [
+        "finish the work",
+        "You left uncommitted changes. Finish and commit them.",
+      ]);
+      assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
   });
 
   test("preflights inherited/default session collisions before any group member launches", async () => {

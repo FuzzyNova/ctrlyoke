@@ -34,6 +34,7 @@ import {
 } from "../../utils/McpToolDefinitions";
 import type {
   RunRef,
+  PromptStep,
   WorkflowKey,
   WorkflowLineageDescriptor,
   WorkflowStep,
@@ -1961,6 +1962,248 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       EXECUTION_MODES.INTERACTIVE
     );
     assert.strictEqual("warnings" in result, false);
+  });
+
+  test("materializes condition presets for append and edit, including parallel members", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "condition-presets",
+      "2026-01-01T00-00-00-000Z",
+      {
+        stepCount: 2,
+        currentIndex: 1,
+        executionState: EXECUTION_STATES.RUNNING,
+      }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.endCondition = { script: "workflow end gate" };
+    workingFile.conditions = {
+      committed: {
+        script: "git status --porcelain",
+        compareSource: "stdout",
+        operator: "isEmpty",
+        maxRetries: 2,
+        retryPrompt: "preset retry",
+        env: { AUTHOR_VALUE: "fixed" },
+      },
+      inspect: {
+        script: 'node "$BUG_FILE"',
+        env: { PREFIX: "src/" },
+        params: ["BUG_FILE"],
+        maxRetries: 1,
+      },
+    };
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+      position: "end",
+      steps: [
+        {
+          prompt: "append with gate",
+          endCondition: {
+            use: "committed",
+            retryPrompt: "override retry",
+            maxRetries: 1,
+          },
+          preCondition: {
+            use: "inspect",
+            params: { BUG_FILE: "dev/bugs/backlog/example.md" },
+          },
+        },
+        {
+          parallel: [
+            { prompt: "parallel a", endCondition: { use: "committed" } },
+            {
+              prompt: "parallel b",
+              preCondition: { use: "inspect", params: { BUG_FILE: "b.md" } },
+            },
+          ],
+        },
+      ],
+    });
+
+    const persisted = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    const appended = persisted.steps![2] as PromptStep;
+    assert.deepStrictEqual(appended.endCondition, {
+      script: "git status --porcelain",
+      compareSource: "stdout",
+      operator: "isEmpty",
+      maxRetries: 1,
+      retryPrompt: "override retry",
+      env: { AUTHOR_VALUE: "fixed" },
+    });
+    assert.deepStrictEqual(appended.preCondition, {
+      script: 'node "$BUG_FILE"',
+      env: { PREFIX: "src/", BUG_FILE: "dev/bugs/backlog/example.md" },
+      maxRetries: 1,
+    });
+    assert.strictEqual(
+      (persisted.steps![3] as PromptStep).endCondition?.script,
+      "git status --porcelain"
+    );
+    assert.deepStrictEqual(
+      (persisted.steps![4] as PromptStep).preCondition?.env,
+      {
+        PREFIX: "src/",
+        BUG_FILE: "b.md",
+      }
+    );
+    assert.strictEqual(
+      (persisted.steps![2] as PromptStep).preCondition?.script,
+      'node "$BUG_FILE"'
+    );
+
+    await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+      index: 2,
+      updates: { endCondition: { use: "committed", maxRetries: 2 } },
+    });
+    const afterEdit = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    assert.deepStrictEqual((afterEdit.steps![2] as PromptStep).endCondition, {
+      script: "git status --porcelain",
+      compareSource: "stdout",
+      operator: "isEmpty",
+      maxRetries: 2,
+      retryPrompt: "preset retry",
+      env: { AUTHOR_VALUE: "fixed" },
+    });
+
+    afterEdit.conditions!.committed.script = "echo changed later";
+    await fs.writeFile(run.runFilePath, JSON.stringify(afterEdit), "utf8");
+    const later = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    assert.strictEqual(
+      (later.steps![2] as PromptStep).endCondition?.script,
+      "git status --porcelain"
+    );
+  });
+
+  test("rejects unknown presets, unsafe condition overrides, null, and clearing gates", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "condition-preset-rejections",
+      "2026-01-01T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.RUNNING }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.conditions = {
+      committed: { script: "git status --porcelain" },
+    };
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await assert.rejects(
+      server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [{ prompt: "unknown", endCondition: { use: "missing" } }],
+      }),
+      /unknown condition preset 'missing'.*committed/
+    );
+    for (const key of ["script", "env", "shell"]) {
+      await assert.rejects(
+        server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "end",
+          steps: [
+            {
+              prompt: "unsafe",
+              endCondition: { use: "committed", [key]: "override" },
+            },
+          ],
+        }),
+        /append_step\.steps\[0\] must be object or object/
+      );
+    }
+    await assert.rejects(
+      server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 0,
+        updates: { endCondition: null },
+      }),
+      /edit_step\.updates\.endCondition must be an object/
+    );
+    await assert.rejects(
+      server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 0,
+        updates: {},
+        clearProperties: ["endCondition"],
+      }),
+      /clearProperties\[0\] must be one of/
+    );
+  });
+
+  test("caps preset retries and validates declared parameter values", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "condition-preset-limits",
+      "2026-01-01T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.RUNNING }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.conditions = {
+      committed: { script: "git status --porcelain", maxRetries: 1 },
+      inspect: { script: 'node "$FILE"', params: ["FILE"] },
+    };
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await assert.rejects(
+      server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          {
+            prompt: "too many",
+            endCondition: { use: "committed", maxRetries: 2 },
+          },
+        ],
+      }),
+      /maxRetries 2 exceeds preset 'committed' limit 1/
+    );
+    await assert.rejects(
+      server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [{ prompt: "missing", preCondition: { use: "inspect" } }],
+      }),
+      /requires param 'FILE'/
+    );
+    await assert.rejects(
+      server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          {
+            prompt: "undeclared",
+            preCondition: {
+              use: "inspect",
+              params: { FILE: "known.md", OTHER: "value" },
+            },
+          },
+        ],
+      }),
+      /param 'OTHER' is not declared/
+    );
+    for (const value of ["", "x\0y", "x".repeat(4097)]) {
+      await assert.rejects(
+        server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "end",
+          steps: [
+            {
+              prompt: "invalid value",
+              preCondition: { use: "inspect", params: { FILE: value } },
+            },
+          ],
+        }),
+        /must not be empty|must not contain NUL|must be at most 4096/
+      );
+    }
   });
 
   test("warns for resolved Codex interactive steps and omits warnings otherwise", async () => {

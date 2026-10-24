@@ -247,10 +247,14 @@ Each item is one session; tick it when it lands.
       can ignore it as described by CONTRIBUTING.md. Preset names use
       `^[A-Za-z][A-Za-z0-9_-]*$`; `params` uses environment-variable names
       (`^[A-Za-z_][A-Za-z0-9_]*$`) and is legal only on a preset.
-- [ ] 2b. Stage 2 resolution: preset resolution and materialization in the MCP
+- [x] 2b. Stage 2 resolution: preset resolution and materialization in the MCP
       layer (`append_step` and `edit_step`), the override and parameter rules,
       `McpServer.test.ts` coverage, and the executor-level `committed` retry
-      test.
+      test. A `maxRetries` override above a finite preset limit is rejected
+      with an error (presets with no limit allow only 0; `-1` remains unlimited).
+      `clearProperties` cannot clear condition gates; attaching a preset
+      replaces a workflow-level inherited gate, as described on the fields.
+      User docs, templates, and CHANGELOG adoption are deferred to item 3.
 - [ ] 3. Stage 2 adoption plus stage 3 item 4: presets in the loop templates,
       orchestrator agent guidance (presets and the stage 3 item 4 lessons, which
       edit the same template), `docs/reference/mcp-tools.md` and a guide section
