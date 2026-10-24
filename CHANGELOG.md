@@ -27,6 +27,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Workspace tool permissions wider than yours need approval.** A `defaults.toolPermissions`
+  value in a workspace's `.ctrlyoke/settings.json` that grants more than your user setting (for
+  example `dangerouslyAllowAll`, a removed denied tool, or `none`) now waits for the same
+  one-time approval as workspace hooks and default scripts, through the dashboard prompt or
+  `ctrlyoke trust-workspace-settings`. Until you approve it, your user value applies, and a
+  noninteractive `ctrlyoke run` exits with code `2`. A workspace value that only narrows your
+  permissions still applies without asking.
+
 - **Headless steps warn when they end with background work still running.** The warning appears as a ctrlyoke notice rather than in the reply; headless prompts also tell agents to wait for long commands in the foreground.
 - **Antigravity cost estimates now include separately reported thinking tokens.**
 - **Sonnet 5.5 cache reads use the corrected $0.20/M rate.** The sync script

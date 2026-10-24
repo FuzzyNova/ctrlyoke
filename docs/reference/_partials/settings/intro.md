@@ -25,6 +25,10 @@ Some settings choose a program for ctrlyoke to run:
 - `defaults.hooks`
 - the entries in `defaults.mcpServers` that launch a command
 - `defaults.endCondition` and `defaults.preCondition`
+- `defaults.toolPermissions`, when it grants more than your user value: a
+  broader mode, an allowed tool your custom list lacks, a denied tool removed,
+  or `none`/`null` while yours is a managed mode. A value that only narrows
+  your permissions applies without asking.
 - servers in the workspace MCP registry that launch a command
 
 A repository can commit any of these in its `.ctrlyoke/settings.json`. So a

@@ -242,7 +242,8 @@ reviewed:
 - secret grants the workflow declares that are not approved
   (`ctrlyoke trust-secret-grants <file>`)
 - workspace settings that choose a program to run: a shell, hook, MCP server,
-  harness flag, or default script (`ctrlyoke trust-workspace-settings`)
+  harness flag, default script, or tool permissions wider than yours
+  (`ctrlyoke trust-workspace-settings`)
 
 In a terminal, `run` lists them, asks, and continues. A declined root or
 setting stays blocked and the run goes on without it; a declined secret grant

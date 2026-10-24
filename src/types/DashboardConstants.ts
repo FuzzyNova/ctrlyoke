@@ -2255,6 +2255,7 @@ export const SETTING_PATHS = {
   DEFAULTS_MCP_SERVERS: "defaults.mcpServers",
   DEFAULTS_END_CONDITION: "defaults.endCondition",
   DEFAULTS_PRE_CONDITION: "defaults.preCondition",
+  DEFAULTS_TOOL_PERMISSIONS: "defaults.toolPermissions",
 } as const;
 
 /** Status values emitted by the managed language-server backend. */

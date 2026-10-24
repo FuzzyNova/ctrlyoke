@@ -1,7 +1,13 @@
 import { createHash } from "crypto";
-import type { PartialCtrlYokeSettings } from "../types/CtrlYokeSettings";
-import type { McpServerConfig } from "../types/CtrlYokeTypes";
 import {
+  CTRLYOKE_SETTINGS_DEFAULTS,
+  type PartialCtrlYokeSettings,
+} from "../types/CtrlYokeSettings";
+import type { McpServerConfig } from "../types/CtrlYokeTypes";
+import type { ToolPermissionConfig } from "../types/ExecutionPropertyTypes";
+import { isToolPermissionConfigNoWiderThan } from "../types/ToolPermissionUtils";
+import {
+  PERMISSION_CAPABILITY_KEYS,
   SETTING_PATHS,
   WORKSPACE_MCP_REGISTRY_TRUST_PATH,
 } from "../types/DashboardConstants";
@@ -44,6 +50,14 @@ interface SensitiveSettingDescriptor {
   shape: SensitiveSettingShape;
   /** Whether a leaf value / array entry can actually launch anything. */
   isSensitive: (value: unknown) => boolean;
+  /**
+   * `value` shape only: whether the user's own setting already grants what
+   * the workspace value asks for, so it needs no approval. Defaults to the
+   * two values being identical.
+   */
+  isCoveredByUser?: (workspaceValue: unknown, userValue: unknown) => boolean;
+  /** Approval-prompt text for a value, when the generic JSON would hide what matters. */
+  summarize?: (value: unknown) => string;
 }
 
 function isNonEmptyString(value: unknown): boolean {
@@ -58,6 +72,64 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+/**
+ * Layer one scope's `toolPermissions` value over the effective value below
+ * it, the way `CtrlYokeConfigService`'s merge does: `null` replaces, an
+ * object merges per key (arrays replace), and an object over `null` merges
+ * onto the shipped default.
+ */
+function layerToolPermissions(
+  base: ToolPermissionConfig | null,
+  value: unknown
+): ToolPermissionConfig | null {
+  if (value === undefined) return base;
+  if (!isPlainObject(value)) return null;
+  const defined = Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry !== undefined)
+  );
+  return {
+    ...(base ?? CTRLYOKE_SETTINGS_DEFAULTS.defaults.toolPermissions!),
+    ...defined,
+  } as ToolPermissionConfig;
+}
+
+/**
+ * A workspace may narrow tool permissions freely; only a value that could let
+ * a harness do more without asking than the user's own setting (or the
+ * shipped default) needs approval.
+ */
+function toolPermissionsCoveredByUser(
+  workspaceValue: unknown,
+  userValue: unknown
+): boolean {
+  const userEffective = layerToolPermissions(
+    CTRLYOKE_SETTINGS_DEFAULTS.defaults.toolPermissions,
+    userValue
+  );
+  return isToolPermissionConfigNoWiderThan(
+    layerToolPermissions(userEffective, workspaceValue),
+    userEffective
+  );
+}
+
+/**
+ * Lead with the mode: the generic sorted JSON puts `mode` last, where a long
+ * allow-list would truncate it out of the prompt.
+ */
+function summarizeToolPermissions(value: unknown): string {
+  if (!isPlainObject(value)) {
+    return "null (use each harness's own permission settings)";
+  }
+  const mode = typeof value.mode === "string" ? value.mode : "inherited mode";
+  const lists = [
+    PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS,
+    PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS,
+  ]
+    .filter((key) => Array.isArray(value[key]))
+    .map((key) => `${key} ${stableStringify(value[key])}`);
+  return summarizeValue([mode, ...lists].join(", "));
+}
+
 /** A stdio MCP server names a command; registry IDs and URL servers do not. */
 function isStdioMcpServer(value: unknown): boolean {
   return isPlainObject(value) && isNonEmptyString(value.command);
@@ -70,7 +142,9 @@ function isStdioMcpServer(value: unknown): boolean {
  * - the shell for the dashboard terminal and every inline script;
  * - extra harness CLI flags (e.g. `--settings` can inject harness hooks);
  * - hook commands and stdio MCP server commands attached to every step;
- * - default end/pre-conditions, which are scripts run on every step.
+ * - default end/pre-conditions, which are scripts run on every step;
+ * - default tool permissions wider than the user's, which let every step's
+ *   harness run programs without asking.
  */
 const SENSITIVE_WORKSPACE_SETTINGS: readonly SensitiveSettingDescriptor[] = [
   {
@@ -102,6 +176,14 @@ const SENSITIVE_WORKSPACE_SETTINGS: readonly SensitiveSettingDescriptor[] = [
     path: SETTING_PATHS.DEFAULTS_PRE_CONDITION,
     shape: SENSITIVE_SETTING_SHAPES.VALUE,
     isSensitive: isPresent,
+  },
+  {
+    path: SETTING_PATHS.DEFAULTS_TOOL_PERMISSIONS,
+    shape: SENSITIVE_SETTING_SHAPES.VALUE,
+    // `null` is meaningful here: it defers to the harness's own config.
+    isSensitive: (value) => value !== undefined,
+    isCoveredByUser: toolPermissionsCoveredByUser,
+    summarize: summarizeToolPermissions,
   },
 ];
 
@@ -143,13 +225,28 @@ function summarizeValue(value: unknown): string {
 function createRequest(
   settingPath: string,
   value: unknown,
-  label: string = settingPath
+  label: string = settingPath,
+  valueText: string = summarizeValue(value)
 ): WorkspaceSensitiveSettingRequest {
   return {
     settingPath,
     fingerprint: fingerprintOf(value),
-    summary: `${label}: ${summarizeValue(value)}`,
+    summary: `${label}: ${valueText}`,
   };
+}
+
+/** Create a request for one descriptor leaf, using its own summary if any. */
+function createDescriptorRequest(
+  descriptor: SensitiveSettingDescriptor,
+  settingPath: string,
+  value: unknown
+): WorkspaceSensitiveSettingRequest {
+  return createRequest(
+    settingPath,
+    value,
+    settingPath,
+    descriptor.summarize?.(value)
+  );
 }
 
 /** Stable identifier of a request, unique within one workspace. */
@@ -190,6 +287,14 @@ function setAtPath(
   }
 }
 
+function isValueCoveredByUser(
+  descriptor: SensitiveSettingDescriptor,
+  workspaceValue: unknown,
+  userValue: unknown
+): boolean {
+  return (descriptor.isCoveredByUser ?? valuesEqual)(workspaceValue, userValue);
+}
+
 /** Visit every sensitive leaf/entry of a workspace settings object. */
 function forEachSensitiveValue(
   workspace: PartialCtrlYokeSettings,
@@ -207,8 +312,8 @@ function forEachSensitiveValue(
     if (descriptor.shape === SENSITIVE_SETTING_SHAPES.VALUE) {
       if (descriptor.isSensitive(workspaceValue)) {
         visit(
-          createRequest(descriptor.path, workspaceValue),
-          valuesEqual(workspaceValue, userValue)
+          createDescriptorRequest(descriptor, descriptor.path, workspaceValue),
+          isValueCoveredByUser(descriptor, workspaceValue, userValue)
         );
       }
       continue;
@@ -288,7 +393,7 @@ export function removeUntrustedWorkspaceSensitiveSettings(
         !keep(
           descriptor.path,
           workspaceValue,
-          valuesEqual(workspaceValue, userValue)
+          isValueCoveredByUser(descriptor, workspaceValue, userValue)
         )
       ) {
         setAtPath(result, descriptor.path, undefined);

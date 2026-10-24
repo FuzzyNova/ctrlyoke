@@ -34,6 +34,10 @@ Some settings choose a program for ctrlyoke to run:
 - `defaults.hooks`
 - the entries in `defaults.mcpServers` that launch a command
 - `defaults.endCondition` and `defaults.preCondition`
+- `defaults.toolPermissions`, when it grants more than your user value: a
+  broader mode, an allowed tool your custom list lacks, a denied tool removed,
+  or `none`/`null` while yours is a managed mode. A value that only narrows
+  your permissions applies without asking.
 - servers in the workspace MCP registry that launch a command
 
 A repository can commit any of these in its `.ctrlyoke/settings.json`. So a
@@ -325,7 +329,7 @@ Fields:
 - **Type:** `{ mode?, allowedTools?, deniedTools? }` or `null`
 - **Workflow field:** [`toolPermissions`](/reference/workflow-schema#execution-properties-toolpermissions) — a workflow or step value overrides this default
 
-Default tool permission settings for prompt execution. Allowed Tools and Denied Tools are currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline granular support and OpenCode uses OPENCODE\_CONFIG\_CONTENT without writing a workspace opencode.json. Codex and Antigravity only support an overall permission mode, not individual tool patterns, and do NOT ENFORCE these lists, except that Codex enforces denied `mcp__<server>__<tool>` entries for MCP servers the workflow attaches. While a list is still the shipped default, a harness that can't enforce it reports an information note rather than a compatibility warning.
+Default tool permission settings for prompt execution. Allowed Tools and Denied Tools are currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline granular support and OpenCode uses OPENCODE\_CONFIG\_CONTENT without writing a workspace opencode.json. Codex and Antigravity only support an overall permission mode, not individual tool patterns, and do NOT ENFORCE these lists, except that Codex enforces denied `mcp__<server>__<tool>` entries for MCP servers the workflow attaches. While a list is still the shipped default, a harness that can't enforce it reports an information note rather than a compatibility warning. A workspace-scope value that grants more than your user value (a broader mode, an allowed tool your custom list lacks, a denied tool removed, or `none`/`null` while yours is managed) takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies. A workspace value that only narrows permissions applies without asking.
 
 Accepted forms:
 

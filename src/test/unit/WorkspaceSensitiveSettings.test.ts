@@ -9,6 +9,7 @@ import {
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
 import type { McpServerConfig } from "../../types/CtrlYokeTypes";
 import {
+  PERMISSION_MODES,
   SETTING_PATHS,
   WORKSPACE_MCP_REGISTRY_TRUST_PATH,
 } from "../../types/DashboardConstants";
@@ -176,6 +177,125 @@ suite("WorkspaceSensitiveSettings", () => {
       assert.deepStrictEqual(result.defaults?.additionalArgs, {
         "codex-cli": "--ok",
       });
+    });
+  });
+
+  suite("defaults.toolPermissions", () => {
+    const toolPermissionRequests = (
+      workspace: unknown,
+      user: unknown = undefined
+    ) =>
+      collectWorkspaceSensitiveSettingRequests(
+        settings({ defaults: { toolPermissions: workspace } }),
+        user === undefined
+          ? {}
+          : settings({ defaults: { toolPermissions: user } })
+      );
+
+    test("requests a mode wider than the shipped default", () => {
+      const requests = toolPermissionRequests({
+        mode: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
+      });
+      assert.deepStrictEqual(
+        requests.map((request) => request.settingPath),
+        [SETTING_PATHS.DEFAULTS_TOOL_PERMISSIONS]
+      );
+      assert.ok(
+        requests[0]!.summary.startsWith(
+          `${SETTING_PATHS.DEFAULTS_TOOL_PERMISSIONS}: dangerouslyAllowAll`
+        ),
+        requests[0]!.summary
+      );
+    });
+
+    test("requests deferring to the harness while the user's is managed", () => {
+      assert.strictEqual(toolPermissionRequests(null).length, 1);
+      assert.strictEqual(
+        toolPermissionRequests({ mode: PERMISSION_MODES.NONE }).length,
+        1
+      );
+    });
+
+    test("requests removing a denial the user's setting applies", () => {
+      const requests = toolPermissionRequests(
+        { deniedTools: [] },
+        {
+          mode: PERMISSION_MODES.ALLOW_ALL,
+          allowedTools: [],
+          deniedTools: ["shell(rm:*)"],
+        }
+      );
+      assert.strictEqual(requests.length, 1);
+    });
+
+    test("requests a custom allow-list entry the user's custom list lacks", () => {
+      const user = {
+        mode: PERMISSION_MODES.CUSTOM,
+        allowedTools: ["write"],
+        deniedTools: [],
+      };
+      assert.strictEqual(
+        toolPermissionRequests({ allowedTools: ["write", "shell"] }, user)
+          .length,
+        1
+      );
+      assert.strictEqual(
+        toolPermissionRequests({ allowedTools: [] }, user).length,
+        0
+      );
+    });
+
+    test("needs no approval for a workspace that only narrows", () => {
+      assert.strictEqual(
+        toolPermissionRequests({ mode: PERMISSION_MODES.CUSTOM }).length,
+        0
+      );
+      assert.strictEqual(
+        toolPermissionRequests(
+          { deniedTools: ["shell(rm:*)", "shell(curl:*)"] },
+          {
+            mode: PERMISSION_MODES.ALLOW_ALL,
+            allowedTools: [],
+            deniedTools: ["shell(rm:*)"],
+          }
+        ).length,
+        0
+      );
+    });
+
+    test("needs no approval for a mode the user already grants", () => {
+      assert.strictEqual(
+        toolPermissionRequests(
+          { mode: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL },
+          { mode: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL }
+        ).length,
+        0
+      );
+      assert.strictEqual(toolPermissionRequests(null, null).length, 0);
+    });
+
+    test("withholds an unapproved wider value so the user value applies", () => {
+      const result = removeUntrustedWorkspaceSensitiveSettings(
+        settings({
+          defaults: {
+            toolPermissions: { mode: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL },
+            executionMode: "headless",
+          },
+        }),
+        {},
+        () => false
+      ) as Record<string, Record<string, unknown>>;
+      assert.deepStrictEqual(result.defaults, { executionMode: "headless" });
+    });
+
+    test("keeps a narrower value without asking", () => {
+      const narrower = { mode: PERMISSION_MODES.CUSTOM };
+      const result = removeUntrustedWorkspaceSensitiveSettings(
+        settings({ defaults: { toolPermissions: narrower } }),
+        {},
+        () => false
+      ) as Record<string, Record<string, unknown>>;
+      assert.deepStrictEqual(result.defaults, { toolPermissions: narrower });
     });
   });
 
