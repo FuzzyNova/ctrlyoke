@@ -41,6 +41,7 @@ export const PERSISTED_STORES = {
   SESSION_ATTACHMENTS: "session-attachments",
   SKILL_ORIGIN: "skill-origin",
   RUN_DEFINITION_ANCHOR: "run-definition-anchor",
+  RUN_DEFINITION_BASELINE: "run-definition-baseline",
 } as const;
 
 export type PersistedStore =
@@ -72,6 +73,7 @@ export const CURRENT_SCHEMA_VERSIONS = {
   [PERSISTED_STORES.SESSION_ATTACHMENTS]: 1,
   [PERSISTED_STORES.SKILL_ORIGIN]: 1,
   [PERSISTED_STORES.RUN_DEFINITION_ANCHOR]: 1,
+  [PERSISTED_STORES.RUN_DEFINITION_BASELINE]: 1,
 } as const satisfies Record<PersistedStore, number>;
 
 const STORE_LABELS: Record<PersistedStore, string> = {
@@ -96,6 +98,7 @@ const STORE_LABELS: Record<PersistedStore, string> = {
   [PERSISTED_STORES.SESSION_ATTACHMENTS]: "session attachment ledger",
   [PERSISTED_STORES.SKILL_ORIGIN]: "skill origin record",
   [PERSISTED_STORES.RUN_DEFINITION_ANCHOR]: "run definition anchor",
+  [PERSISTED_STORES.RUN_DEFINITION_BASELINE]: "run definition baseline",
 };
 
 /** Thrown instead of writing a store that a newer ctrlyoke version owns. */

@@ -21,7 +21,10 @@ import {
   isRunDefinitionChangedError,
   verifyRunDefinitionFile,
 } from "../utils/RunDefinitionAnchor";
-import { definitionAnchorPath } from "../utils/WorkflowPaths";
+import {
+  definitionAnchorLayout,
+  definitionAnchorPath,
+} from "../utils/WorkflowPaths";
 import type { RunDefinitionRejection } from "../core/WorkingFileManager";
 import {
   ParallelGroupDefinition,
@@ -3815,9 +3818,35 @@ suite("PromptQueue State Machine Tests", () => {
       await reloaded.updateWorkingFile();
     });
 
+    test("a run ctrlyoke has no record of loads read-only", async () => {
+      const workingFilePath = await createLiveQueue([{ prompt: "real" }]);
+      // The run storage's baseline stays; only this run's anchor is missing,
+      // as for a run directory an agent created.
+      await fs.rm(definitionAnchorPath(workingFilePath)!, { force: true });
+      const forged = await readDisk(workingFilePath);
+      (forged.steps![0] as PromptStep).prompt = "forged";
+      await fs.writeFile(workingFilePath, JSON.stringify(forged));
+
+      assert.deepStrictEqual(
+        await WorkingFileManager.inspectDefinitionIntegrity(workingFilePath),
+        { status: RUN_DEFINITION_INTEGRITY.UNRECORDED }
+      );
+      const resumed = new PromptQueue();
+      await resumed.restoreFromWorkingFile(workingFilePath, true);
+      await assert.rejects(
+        () => resumed.updateWorkingFile(),
+        /no record of writing/
+      );
+    });
+
     test("history written before anchors is trusted and anchored on first load", async () => {
       const workingFilePath = await createLiveQueue([{ prompt: "legacy" }]);
-      await fs.rm(definitionAnchorPath(workingFilePath)!, { force: true });
+      // Before anchors there was no anchor and no baseline in this storage.
+      const layout = definitionAnchorLayout(workingFilePath)!;
+      await fs.rm(path.dirname(layout.baselinePath), {
+        recursive: true,
+        force: true,
+      });
       const legacy = await readDisk(workingFilePath);
       (legacy.steps![0] as PromptStep).prompt = "edited by an older ctrlyoke";
       await fs.writeFile(workingFilePath, JSON.stringify(legacy));

@@ -148,6 +148,7 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
           <DefinitionChangedOutsideBanner
             address={props.displayedViewAddress}
             changes={definitionChangedOutside.changes}
+            unrecorded={definitionChangedOutside.unrecorded === true}
           />
         )}
       {!props.isViewingDeletedWorkflow &&
@@ -167,11 +168,14 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
  * The addressed definition was changed by something other than ctrlyoke (an
  * agent editing the run file, for example). Every write to it is refused until
  * the user restores the last definition ctrlyoke wrote or accepts the change.
+ * An unrecorded run (ctrlyoke never wrote it) has nothing to restore, so it
+ * can only be accepted.
  */
 const DefinitionChangedOutsideBanner: React.FC<{
   address: WorkflowViewAddress;
   changes: RunDefinitionChange[];
-}> = ({ address, changes }) => {
+  unrecorded: boolean;
+}> = ({ address, changes, unrecorded }) => {
   const vscode = useVsCodeApi();
   const resolve = (decision: RunDefinitionDecision) =>
     vscode.postMessage({
@@ -187,9 +191,26 @@ const DefinitionChangedOutsideBanner: React.FC<{
       onClick={() => resolve(RUN_DEFINITION_DECISIONS.ACCEPT)}
       title="Trust the definition as it is now and allow running and editing it"
     >
-      Accept change
+      {unrecorded ? "Accept run" : "Accept change"}
     </button>
   );
+
+  if (unrecorded) {
+    return (
+      <StatusBanner
+        tone={STATUS_BANNER_TONES.ERROR}
+        icon="shield"
+        aria-label="ctrlyoke has no record of writing this run"
+        narrowChildren={<>Not written by ctrlyoke. {acceptLink}</>}
+      >
+        <span className="mr-2">
+          ctrlyoke has no record of writing this run. It can&apos;t run or be
+          edited until you review it.
+        </span>
+        {acceptLink}
+      </StatusBanner>
+    );
+  }
 
   return (
     <StatusBanner

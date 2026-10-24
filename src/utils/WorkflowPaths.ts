@@ -31,6 +31,7 @@ const STOP_REQUEST_FILE_PREFIX = "stop-request-";
 const DRAFT_DIR_NAME = "draft";
 const CREATING_PREFIX = ".creating-";
 const DEFINITION_ANCHORS_DIR_NAME = ".definition-anchors";
+const DEFINITION_BASELINE_FILE_NAME = "baseline.json";
 
 const RUN_REF_PREFIX = "run-";
 /** Matches `run-<ISO timestamp with `:`/`.` replaced by `-`>`, e.g. `run-2026-07-20T10-30-00-000Z`. */
@@ -582,6 +583,22 @@ export function runArtifactStem(workingFilePath: string): string {
 export function definitionAnchorPath(
   workingFilePath: string
 ): string | undefined {
+  return definitionAnchorLayout(workingFilePath)?.anchorPath;
+}
+
+/**
+ * The anchor of a working file together with the run storage it belongs to
+ * and that storage's baseline marker
+ * (`<user project dir>/.definition-anchors/baseline.json`), which records that
+ * every run present when anchoring began was anchored.
+ */
+export function definitionAnchorLayout(workingFilePath: string):
+  | {
+      anchorPath: string;
+      baselinePath: string;
+      runsRoot: string;
+    }
+  | undefined {
   const address = parseWorkingFileAddressFromPath(workingFilePath);
   if (!address) {
     return undefined;
@@ -598,12 +615,16 @@ export function definitionAnchorPath(
   if (!projectDir) {
     return undefined;
   }
-  return path.join(
-    projectDir,
-    DEFINITION_ANCHORS_DIR_NAME,
-    address.workflowKey,
-    `${address.runRef ?? DRAFT_DIR_NAME}.json`
-  );
+  const anchorsRoot = path.join(projectDir, DEFINITION_ANCHORS_DIR_NAME);
+  return {
+    anchorPath: path.join(
+      anchorsRoot,
+      address.workflowKey,
+      `${address.runRef ?? DRAFT_DIR_NAME}.json`
+    ),
+    baselinePath: path.join(anchorsRoot, DEFINITION_BASELINE_FILE_NAME),
+    runsRoot: runsRootDir,
+  };
 }
 
 // ---- WorkflowKey allocation ----

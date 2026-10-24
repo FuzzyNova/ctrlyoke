@@ -60,6 +60,7 @@ import { verifyRunDefinitionFile } from "../../utils/RunDefinitionAnchor";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { ProjectStateRegistry } from "../../utils/ProjectStateRegistry";
+import { writeTrustedRunFile } from "../helpers/trustedRunFile";
 import {
   initializeRunHistoryLocation,
   isRunHistoryLocationInitialized,
@@ -238,7 +239,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       JSON.stringify(descriptor),
       "utf8"
     );
-    await fs.writeFile(runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(runFilePath, workingFile);
     if (!options.draftOnly) {
       const recorder = new TimelineRecorder();
       const manifestPath = await recorder.initializeRunAt(
@@ -304,7 +305,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       currentIndex: 1,
       executionState: EXECUTION_STATES.RUNNING,
     };
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
     const ownerToken = `mcp-${suffix}-owner`;
     await WorkflowLockManager.acquireLock(workspaceRoot, run.workflowKey, {
@@ -342,11 +343,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     workingFile.parallelGroups = [
       { id: groupId, startIndex: 1, endIndex: 3, failFast: true },
     ];
-    await fs.writeFile(
-      active.run.runFilePath,
-      JSON.stringify(workingFile),
-      "utf8"
-    );
+    await writeTrustedRunFile(active.run.runFilePath, workingFile);
     process.env.CTRLYOKE_PROMPT_INDEX = "1";
     process.env.CTRLYOKE_PARALLEL_GROUP_ID = groupId;
     return active;
@@ -1223,7 +1220,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       { prompt: "inherits the workflow" },
       { type: "script", script: "npm test" },
     ];
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const status = responseJson(await server.invokeTool("workflow_status", {}));
@@ -1237,7 +1234,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
 
     delete workingFile.resumeSession;
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     const unset = responseJson(await server.invokeTool("workflow_status", {}));
 
     assert.strictEqual(
@@ -1279,7 +1276,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       },
       { type: "script", script: "npm test" },
     ];
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const status = responseJson(await server.invokeTool("workflow_status", {}));
@@ -1299,7 +1296,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
 
     delete workingFile.executionMode;
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     const unset = responseJson(await server.invokeTool("workflow_status", {}));
     assert.strictEqual(
       unset.metadata.executionMode,
@@ -1971,7 +1968,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       currentIndex: 2,
       executionState: EXECUTION_STATES.RUNNING,
     };
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
     const before = await fs.readFile(run.runFilePath, "utf8");
 
@@ -2046,7 +2043,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         onFail: "stopWorkflow",
         _runtime: { stepId: "script-step-2" },
       };
-      await fs.writeFile(run.runFilePath, JSON.stringify(file), "utf8");
+      await writeTrustedRunFile(run.runFilePath, file);
 
       await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
         index: 2,
@@ -2190,7 +2187,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       workingFile.parallelGroups = [
         { id: "group-reorder", startIndex: 2, endIndex: 3, failFast: true },
       ];
-      await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+      await writeTrustedRunFile(run.runFilePath, workingFile);
 
       const result = responseJson(
         await server.invokeTool(MCP_REORDER_STEPS_TOOL_NAME, {
@@ -2237,7 +2234,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
           failFast: true,
         },
       ];
-      await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+      await writeTrustedRunFile(run.runFilePath, workingFile);
 
       const result = responseJson(
         await server.invokeTool(MCP_REORDER_STEPS_TOOL_NAME, {
@@ -2406,7 +2403,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       await fs.readFile(run.runFilePath, "utf8")
     ) as WorkingFile;
     workingFile.harness = "claude-cli";
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     const capabilitiesDirectory = path.join(workspaceRoot, ".ctrlyoke");
     await fs.mkdir(capabilitiesDirectory, { recursive: true });
     await fs.writeFile(
@@ -2492,7 +2489,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     workingFile.steps = workingFile.steps?.map((step) => ({
       prompt: (step as { prompt: string }).prompt,
     })) as WorkflowStep[];
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const result = responseJson(
@@ -2763,7 +2760,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         "Workflow stopped - Maximum execution time reached (601s / 600s).",
     };
     workingFile._runtime!.stopReason = stopReason;
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const status = responseJson(await server.invokeTool("workflow_status", {}));
@@ -2882,7 +2879,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       currentIndex: workingFile._runtime?.currentIndex ?? 0,
       executionState: EXECUTION_STATES.RUNNING,
     };
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
     await WorkflowLockManager.acquireLock(workspaceRoot, run.workflowKey, {
       schemaVersion: 2,
@@ -2970,7 +2967,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       currentIndex: 1,
       executionState: EXECUTION_STATES.RUNNING,
     };
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
     await WorkflowLockManager.acquireLock(workspaceRoot, run.workflowKey, {
       schemaVersion: 2,
@@ -3106,7 +3103,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
       },
     };
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     try {
       const result = responseJson(
         await invokeAppendHandler(server, {
@@ -3158,7 +3155,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
       },
     };
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     const before = await fs.readFile(run.runFilePath, "utf8");
     try {
       await assert.rejects(
@@ -3226,7 +3223,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         startedAt: 3,
       },
     };
-    await fs.writeFile(finalRun.runFilePath, JSON.stringify(finalFile), "utf8");
+    await writeTrustedRunFile(finalRun.runFilePath, finalFile);
     await rejectJoin(finalRun, /final step/i);
 
     for (const [suffix, state] of [
@@ -3244,7 +3241,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         currentIndex: file._runtime?.currentIndex ?? 0,
         executionState: state,
       };
-      await fs.writeFile(run.runFilePath, JSON.stringify(file), "utf8");
+      await writeTrustedRunFile(run.runFilePath, file);
       await rejectJoin(run, /state|executing|running/i, ownerToken);
     }
 
@@ -3366,7 +3363,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       currentIndex: -1,
       executionState: EXECUTION_STATES.RUNNING,
     };
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const result = responseJson(
@@ -3403,7 +3400,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       currentIndex: 0,
       executionState: EXECUTION_STATES.PAUSED,
     };
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const result = responseJson(
@@ -3437,7 +3434,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
           await fs.readFile(run.runFilePath, "utf8")
         ) as WorkingFile;
         file._runtime = { ...file._runtime!, executionState: state };
-        await fs.writeFile(run.runFilePath, JSON.stringify(file), "utf8");
+        await writeTrustedRunFile(run.runFilePath, file);
 
         const append = server.invokeTool("append_step", {
           position: "end",
@@ -3612,7 +3609,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       ...step,
       _runtime: { startedAt: 1 },
     }));
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const status = responseJson(await server.invokeTool("workflow_status", {}));
@@ -3642,7 +3639,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       completedAt: 2,
       terminalStatus: PROMPT_TERMINAL_STATUS.FAILED,
     };
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const status = responseJson(await server.invokeTool("workflow_status", {}));
@@ -3665,7 +3662,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       { prompt: "x".repeat(STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS + 50) },
       { prompt: "short" },
     ];
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const status = responseJson(await server.invokeTool("workflow_status", {}));
@@ -3714,7 +3711,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       },
       { prompt: "Review the build" },
     ];
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const status = responseJson(await server.invokeTool("workflow_status", {}));
@@ -3748,7 +3745,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       await fs.readFile(run.runFilePath, "utf8")
     ) as WorkingFile;
     workingFile.schemaVersion = 2;
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     await assert.rejects(
@@ -3817,7 +3814,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       { prompt: "running", _runtime: { startedAt: 1 } },
       { prompt: "pending" },
     ] as WorkflowStep[];
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const unchanged = responseJson(

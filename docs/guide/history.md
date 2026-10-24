@@ -143,9 +143,16 @@ ctrlyoke keeps a record of every definition it writes, under
   or
   [`ctrlyoke step accept-definition`](/cli/ctrlyoke#ctrlyoke-step-accept-definition).
 
-Runs from before ctrlyoke kept this record, and history copied in from another
-machine, are trusted the first time you open them. A run's record is kept while
-the run is in Recently deleted and removed once the run is deleted for good.
+- **A run ctrlyoke has no record of is read-only too.** This is a run created
+  by something other than ctrlyoke, or copied in from another machine, for
+  example by a `git pull` of a committed `.ctrlyoke/.runs` folder. The banner
+  reads **ctrlyoke has no record of writing this run**. There is nothing to
+  restore, so choose **Accept run** if you trust it, or delete it.
+
+The runs already in your history when ctrlyoke first started keeping this
+record are trusted. History synced between machines in the default mode
+carries its record with it. A run's record is kept while the run is in
+Recently deleted and removed once the run is deleted for good.
 
 ## How long runs are kept
 

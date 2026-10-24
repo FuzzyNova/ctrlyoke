@@ -2695,8 +2695,12 @@ export const WORKFLOW_VIEW_ADDRESS_KIND = {
 export const RUN_DEFINITION_INTEGRITY = {
   /** The file is not at a run-storage path ctrlyoke can anchor. */
   UNANCHORABLE: "unanchorable",
-  /** No anchor yet: written before anchoring existed, or copied in. */
-  UNANCHORED: "unanchored",
+  /**
+   * No anchor, although every run present when anchoring began was given one:
+   * created by something other than a ctrlyoke writer, or copied in from
+   * another machine. Untrusted until the user accepts it.
+   */
+  UNRECORDED: "unrecorded",
   TRUSTED: "trusted",
   /** Changed by something other than a ctrlyoke writer. */
   CHANGED_OUTSIDE: "changedOutside",

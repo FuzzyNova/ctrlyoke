@@ -13,6 +13,7 @@ import {
   type RunDefinitionChange,
 } from "../types/DashboardConstants";
 import { writeFileAtomic } from "./AtomicFileUtils";
+import { withFileLock } from "./FileLockUtils";
 import {
   assertWritableSchema,
   CURRENT_SCHEMA_VERSIONS,
@@ -49,6 +50,12 @@ import { definitionAnchorPath } from "./WorkflowPaths";
  * `finalStep`, ...) exist only in the file, so a hash alone could detect a
  * changed setting but never put the trusted one back.
  *
+ * A working file with no anchor is not trusted either. The first time a run
+ * storage is checked, every run already in it is anchored as it is and a
+ * baseline marker is recorded (see {@link readAnchorEstablishingBaseline}), so
+ * only a run created outside ctrlyoke after that point has none; otherwise an
+ * agent could forge a whole new run directory instead of editing one.
+ *
  * Only the definition is anchored. `_runtime` blocks are written constantly by
  * the executor and are not authored, so they are excluded; the copy keeps each
  * step's `_runtime.stepId` (unhashed) so a restore can match runtime to steps.
@@ -79,7 +86,10 @@ export interface RunDefinitionAnchor {
 
 export type RunDefinitionVerdict =
   | { status: typeof RUN_DEFINITION_INTEGRITY.UNANCHORABLE }
-  | { status: typeof RUN_DEFINITION_INTEGRITY.UNANCHORED }
+  | {
+      status: typeof RUN_DEFINITION_INTEGRITY.UNRECORDED;
+      definitionHash: string;
+    }
   | {
       status: typeof RUN_DEFINITION_INTEGRITY.TRUSTED;
       anchor: RunDefinitionAnchor;
@@ -96,23 +106,58 @@ export type ChangedRunDefinitionVerdict = Extract<
   { status: typeof RUN_DEFINITION_INTEGRITY.CHANGED_OUTSIDE }
 >;
 
+/** A definition ctrlyoke must not honor until the user reviews it. */
+export type UntrustedRunDefinitionVerdict = Extract<
+  RunDefinitionVerdict,
+  {
+    status:
+      | typeof RUN_DEFINITION_INTEGRITY.CHANGED_OUTSIDE
+      | typeof RUN_DEFINITION_INTEGRITY.UNRECORDED;
+  }
+>;
+
+export function isUntrustedRunDefinition(
+  verdict: RunDefinitionVerdict
+): verdict is UntrustedRunDefinitionVerdict {
+  return (
+    verdict.status === RUN_DEFINITION_INTEGRITY.CHANGED_OUTSIDE ||
+    verdict.status === RUN_DEFINITION_INTEGRITY.UNRECORDED
+  );
+}
+
 /**
  * Thrown instead of writing over (and so re-anchoring) a definition that was
- * changed outside ctrlyoke. Every writer builds its content from the file it
- * just read, so writing would launder the outside change into a trusted one.
+ * changed outside ctrlyoke, or that no ctrlyoke writer recorded. Every writer
+ * builds its content from the file it just read, so writing would launder the
+ * outside change into a trusted one.
  */
 export class RunDefinitionChangedError extends Error {
+  readonly changes: readonly RunDefinitionChange[];
+  readonly unrecorded: boolean;
+
   constructor(
     readonly workingFilePath: string,
-    readonly changes: readonly RunDefinitionChange[]
+    verdict:
+      | UntrustedRunDefinitionVerdict
+      | { changes: readonly RunDefinitionChange[] }
   ) {
+    const unrecorded =
+      "status" in verdict &&
+      verdict.status === RUN_DEFINITION_INTEGRITY.UNRECORDED;
+    const changes = "changes" in verdict ? verdict.changes : [];
     super(
-      `This run's definition was changed outside ctrlyoke (${describeRunDefinitionChanges(changes)}), ` +
-        `so ctrlyoke will not run or edit it until you review the change. ` +
-        `Accept or restore it from the dashboard, or with "ctrlyoke step accept-definition" ` +
-        `or "ctrlyoke step restore-definition". (${workingFilePath})`
+      unrecorded
+        ? `ctrlyoke has no record of writing this run's definition, so it will not run or edit it ` +
+            `until you review it. Accept it from the dashboard or with "ctrlyoke step accept-definition", ` +
+            `or delete the run. (${workingFilePath})`
+        : `This run's definition was changed outside ctrlyoke (${describeRunDefinitionChanges(changes)}), ` +
+            `so ctrlyoke will not run or edit it until you review the change. ` +
+            `Accept or restore it from the dashboard, or with "ctrlyoke step accept-definition" ` +
+            `or "ctrlyoke step restore-definition". (${workingFilePath})`
     );
     this.name = "RunDefinitionChangedError";
+    this.changes = changes;
+    this.unrecorded = unrecorded;
   }
 }
 
@@ -327,8 +372,8 @@ async function readAnchorAt(
     throw error;
   }
   // Anchors are replaced atomically, so an unparseable one was damaged by
-  // something outside ctrlyoke. It proves nothing either way; the next write
-  // replaces it.
+  // something outside ctrlyoke. It proves nothing, so the file it covers is
+  // reviewed like an unrecorded one.
   return parseAnchor(raw);
 }
 
@@ -398,12 +443,111 @@ export async function removeRunDefinitionAnchors(
   }
 }
 
+type AnchorLayout = NonNullable<
+  ReturnType<typeof WorkflowPaths.definitionAnchorLayout>
+>;
+
+interface DefinitionBaseline {
+  schemaVersion: number;
+  recordedAt: number;
+  /** Runs and drafts the baseline sweep anchored, for diagnostics. */
+  anchoredRuns: number;
+}
+
+/**
+ * A working file's anchor. When it has none, the run storage's baseline is
+ * established first: the first time any anchor is looked for in a run
+ * storage, every run and draft already in it is anchored as it is (history
+ * from before anchors, trusted as it always was) and a baseline marker is
+ * recorded. Every ctrlyoke writer anchors what it writes from then on, so a
+ * working file that still has no anchor was not written by ctrlyoke.
+ *
+ * The sweep takes no working-file locks, so a caller holding one cannot
+ * deadlock it. It only anchors files that have no anchor, and any writer that
+ * finds no anchor waits here behind the baseline lock before writing one.
+ */
+async function readAnchorEstablishingBaseline(
+  layout: AnchorLayout
+): Promise<RunDefinitionAnchor | undefined> {
+  const anchor = await readAnchorAt(layout.anchorPath);
+  if (anchor || fs.existsSync(layout.baselinePath)) {
+    return anchor;
+  }
+  await fs.promises.mkdir(path.dirname(layout.baselinePath), {
+    recursive: true,
+  });
+  await withFileLock(layout.baselinePath, async () => {
+    if (fs.existsSync(layout.baselinePath)) {
+      return;
+    }
+    const baseline: DefinitionBaseline = {
+      schemaVersion:
+        CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.RUN_DEFINITION_BASELINE],
+      recordedAt: Date.now(),
+      anchoredRuns: await anchorUnrecordedHistory(layout.runsRoot),
+    };
+    await writeFileAtomic(
+      layout.baselinePath,
+      JSON.stringify(baseline),
+      runStateWriteOptions(layout.baselinePath, "RunDefinitionBaseline")
+    );
+  });
+  return readAnchorAt(layout.anchorPath);
+}
+
+/** Anchors every run and draft under `runsRoot` that has no anchor yet. */
+async function anchorUnrecordedHistory(runsRoot: string): Promise<number> {
+  let anchored = 0;
+  for (const lineage of await readDirIfPresent(runsRoot)) {
+    if (!lineage.isDirectory()) continue;
+    const lineageDir = path.join(runsRoot, lineage.name);
+    for (const entry of await readDirIfPresent(lineageDir)) {
+      if (!entry.isDirectory()) continue;
+      const workingFilePath = path.join(
+        lineageDir,
+        entry.name,
+        WorkflowPaths.WORKING_FILE_NAME
+      );
+      const anchorPath = definitionAnchorPath(workingFilePath);
+      if (
+        !anchorPath ||
+        fs.existsSync(anchorPath) ||
+        !fs.existsSync(workingFilePath)
+      ) {
+        continue;
+      }
+      try {
+        await anchorRunDefinitionOnDisk(workingFilePath);
+        anchored += 1;
+      } catch {
+        // Unreadable or written by a newer ctrlyoke: left unanchored, so it
+        // is reviewed like any other unrecorded run.
+      }
+    }
+  }
+  return anchored;
+}
+
+async function readDirIfPresent(dir: string): Promise<fs.Dirent[]> {
+  try {
+    return await fs.promises.readdir(dir, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
+}
+
 function judge(
   anchor: RunDefinitionAnchor | undefined,
   workingFile: unknown
 ): RunDefinitionVerdict {
   if (!anchor) {
-    return { status: RUN_DEFINITION_INTEGRITY.UNANCHORED };
+    return {
+      status: RUN_DEFINITION_INTEGRITY.UNRECORDED,
+      definitionHash: hashRunDefinition(extractRunDefinition(workingFile)),
+    };
   }
   // A newer ctrlyoke may anchor a different shape; this build cannot judge
   // it, and every write it would make is refused by the schema guard anyway.
@@ -431,11 +575,11 @@ export async function verifyRunDefinition(
   workingFilePath: string,
   workingFile: unknown
 ): Promise<RunDefinitionVerdict> {
-  const anchorPath = definitionAnchorPath(workingFilePath);
-  if (!anchorPath) {
+  const layout = WorkflowPaths.definitionAnchorLayout(workingFilePath);
+  if (!layout) {
     return { status: RUN_DEFINITION_INTEGRITY.UNANCHORABLE };
   }
-  return judge(await readAnchorAt(anchorPath), workingFile);
+  return judge(await readAnchorEstablishingBaseline(layout), workingFile);
 }
 
 /**
@@ -453,7 +597,7 @@ export async function verifyRunDefinitionFile(
 ): Promise<
   { verdict: RunDefinitionVerdict; workingFile: WorkingFile } | undefined
 > {
-  const anchorPath = definitionAnchorPath(workingFilePath);
+  const layout = WorkflowPaths.definitionAnchorLayout(workingFilePath);
   let result:
     { verdict: RunDefinitionVerdict; workingFile: WorkingFile } | undefined;
   for (let attempt = 0; attempt < VERIFY_READ_ATTEMPTS; attempt++) {
@@ -467,11 +611,11 @@ export async function verifyRunDefinitionFile(
       throw error;
     }
     const workingFile = JSON.parse(raw) as WorkingFile;
-    const verdict: RunDefinitionVerdict = anchorPath
-      ? judge(await readAnchorAt(anchorPath), workingFile)
+    const verdict: RunDefinitionVerdict = layout
+      ? judge(await readAnchorEstablishingBaseline(layout), workingFile)
       : { status: RUN_DEFINITION_INTEGRITY.UNANCHORABLE };
     result = { verdict, workingFile };
-    if (verdict.status !== RUN_DEFINITION_INTEGRITY.CHANGED_OUTSIDE) {
+    if (!isUntrustedRunDefinition(verdict)) {
       return result;
     }
   }
@@ -536,9 +680,9 @@ export interface AnchoredWriteOptions {
  * working file with exactly that content. Callers hold the working-file lock.
  *
  * Refuses (with {@link RunDefinitionChangedError}) to replace a file whose
- * current definition changed outside ctrlyoke, unless the caller says its
- * content does not derive from that change. A file with no anchor yet (older
- * history) is trusted, so the write anchors it. If `write` fails, the previous
+ * current definition changed outside ctrlyoke or was never recorded by it,
+ * unless the caller says its content does not derive from that file. A file
+ * that does not exist yet is simply written. If `write` fails, the previous
  * anchor is put back; otherwise the in-flight `previousDefinitionHash` is
  * dropped so a reverted outside edit can never pass as the old definition.
  */
@@ -548,24 +692,25 @@ export async function writeAnchoredRunDefinition(
   write: () => Promise<void>,
   options: AnchoredWriteOptions = {}
 ): Promise<void> {
-  const anchorPath = definitionAnchorPath(workingFilePath);
-  if (!anchorPath) {
+  const layout = WorkflowPaths.definitionAnchorLayout(workingFilePath);
+  if (!layout) {
     await write();
     return;
   }
+  const { anchorPath } = layout;
 
-  const existing = await readAnchorAt(anchorPath);
+  const existing = await readAnchorEstablishingBaseline(layout);
   assertWritableSchema(
     PERSISTED_STORES.RUN_DEFINITION_ANCHOR,
     existing,
     anchorPath
   );
-  if (existing && !options.overwriteChangedDefinition) {
+  if (!options.overwriteChangedDefinition) {
     const current = await readJsonIfPresent(workingFilePath);
     if (current !== undefined) {
       const verdict = judge(existing, current);
-      if (verdict.status === RUN_DEFINITION_INTEGRITY.CHANGED_OUTSIDE) {
-        throw new RunDefinitionChangedError(workingFilePath, verdict.changes);
+      if (isUntrustedRunDefinition(verdict)) {
+        throw new RunDefinitionChangedError(workingFilePath, verdict);
       }
     }
   }
@@ -619,8 +764,9 @@ export async function writeAnchoredRunDefinition(
 
 /**
  * Anchor the definition currently on disk as trusted without rewriting the
- * file: a user accepting an outside change, or the first load of history that
- * predates anchors. Callers hold the working-file lock.
+ * file: a user accepting an outside change or an unrecorded run, or the
+ * baseline sweep of history that predates anchors. Callers hold the
+ * working-file lock, except that sweep.
  */
 export async function anchorRunDefinitionOnDisk(
   workingFilePath: string
@@ -669,10 +815,9 @@ export async function assertTrustedRewindBase(
   }
   const definition = extractRunDefinition(snapshot);
   if (hashRunDefinition(definition) !== anchor.rewindBaseHash) {
-    throw new RunDefinitionChangedError(
-      workingFilePath,
-      diffRunDefinitions(anchor.definition, definition)
-    );
+    throw new RunDefinitionChangedError(workingFilePath, {
+      changes: diffRunDefinitions(anchor.definition, definition),
+    });
   }
 }
 

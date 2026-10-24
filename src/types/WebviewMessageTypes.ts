@@ -2102,6 +2102,11 @@ export interface RunViewLoadedMessage {
    */
   definitionChangedOutside?: {
     changes: RunDefinitionChange[];
+    /**
+     * ctrlyoke has no record of writing this run at all (created outside it,
+     * or copied in), so there is no earlier definition to restore.
+     */
+    unrecorded?: boolean;
   };
   /**
    * True for internal lineages the extension creates for itself (e.g. commit

@@ -692,6 +692,7 @@ interface UiState {
   definitionChangedOutside: {
     address: WorkflowViewAddress;
     changes: RunDefinitionChange[];
+    unrecorded?: boolean;
   } | null;
   /**
    * Set when the lineage currently displayed is deleted (from history) while

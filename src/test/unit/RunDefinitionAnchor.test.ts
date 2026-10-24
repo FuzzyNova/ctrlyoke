@@ -6,8 +6,10 @@ import { suite, setup, teardown, test } from "mocha";
 import type { WorkingFile, WorkflowStep } from "../../types/CtrlYokeTypes";
 import {
   RUN_DEFINITION_CHANGE_SCOPES,
+  RUN_DEFINITION_DECISIONS,
   RUN_DEFINITION_INTEGRITY,
 } from "../../types/DashboardConstants";
+import { WorkingFileManager } from "../../core/WorkingFileManager";
 import {
   assertTrustedRewindBase,
   describeRunDefinitionChanges,
@@ -106,14 +108,82 @@ suite("RunDefinitionAnchor", () => {
     );
   });
 
-  test("history with no anchor is unanchored until ctrlyoke writes it", async () => {
+  /** Another lineage's run file in the same run storage. */
+  function siblingRunFile(name: string): string {
+    return path.join(
+      workspaceRoot,
+      ".ctrlyoke",
+      ".runs",
+      `${name}-2026-01-01T00-00-00`,
+      RUN_REF,
+      "workflow.ctrlyoke.json"
+    );
+  }
+
+  test("history from before anchors is anchored, and trusted, by the baseline sweep", async () => {
+    const sibling = siblingRunFile("older");
+    await fs.mkdir(path.dirname(sibling), { recursive: true });
+    await fs.writeFile(sibling, JSON.stringify(runFile([{ prompt: "old" }])));
     await writeOutside(runFile([{ prompt: "legacy" }]));
+
+    // The first check in this run storage anchors every run already in it.
+    assert.strictEqual(await statusOnDisk(), RUN_DEFINITION_INTEGRITY.TRUSTED);
+    assert.ok(await readRunDefinitionAnchor(sibling));
     assert.strictEqual(
-      await statusOnDisk(),
-      RUN_DEFINITION_INTEGRITY.UNANCHORED
+      (await verifyRunDefinitionFile(sibling))?.verdict.status,
+      RUN_DEFINITION_INTEGRITY.TRUSTED
+    );
+  });
+
+  test("a run created outside ctrlyoke after the baseline is unrecorded and refused", async () => {
+    // ctrlyoke has already written in this run storage, so the baseline exists.
+    const sibling = siblingRunFile("real");
+    await fs.mkdir(path.dirname(sibling), { recursive: true });
+    const real = runFile([{ prompt: "real" }]);
+    await writeAnchoredRunDefinition(sibling, real, () =>
+      fs.writeFile(sibling, JSON.stringify(real))
     );
 
-    await writeAsCtrlyoke(runFile([{ prompt: "legacy" }]));
+    // An agent forges a whole new run directory.
+    await writeOutside(
+      runFile([{ prompt: "forged" }], {
+        toolPermissions: { mode: "dangerouslyAllowAll" },
+      })
+    );
+    assert.strictEqual(
+      await statusOnDisk(),
+      RUN_DEFINITION_INTEGRITY.UNRECORDED
+    );
+    await assert.rejects(
+      () => writeAsCtrlyoke(runFile([{ prompt: "forged" }])),
+      (error: unknown) =>
+        isRunDefinitionChangedError(error) &&
+        error.unrecorded &&
+        /no record of writing/.test(error.message)
+    );
+    assert.strictEqual(
+      await WorkingFileManager.inspectDefinitionIntegrity(workingFilePath).then(
+        (integrity) => integrity.status
+      ),
+      RUN_DEFINITION_INTEGRITY.UNRECORDED
+    );
+
+    // Nothing to restore; accepting trusts it as it is.
+    await assert.rejects(
+      () =>
+        WorkingFileManager.resolveDefinitionChange(
+          workingFilePath,
+          RUN_DEFINITION_DECISIONS.RESTORE
+        ),
+      /no earlier definition of this run to restore/
+    );
+    assert.strictEqual(
+      await WorkingFileManager.resolveDefinitionChange(
+        workingFilePath,
+        RUN_DEFINITION_DECISIONS.ACCEPT
+      ),
+      true
+    );
     assert.strictEqual(await statusOnDisk(), RUN_DEFINITION_INTEGRITY.TRUSTED);
   });
 

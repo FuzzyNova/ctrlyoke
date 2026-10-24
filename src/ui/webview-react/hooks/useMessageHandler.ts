@@ -2877,7 +2877,7 @@ export function createMessageHandlers(
     );
     ui.setDefinitionChangedOutside(
       message.definitionChangedOutside
-        ? { address, changes: message.definitionChangedOutside.changes }
+        ? { address, ...message.definitionChangedOutside }
         : null
     );
     ui.clearPendingRunViewLoad();

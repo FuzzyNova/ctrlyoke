@@ -444,7 +444,9 @@ export class RunViewPublisher implements RunLifecycleViewPort {
       isSystemGenerated: descriptor.isSystemGenerated ?? false,
       ...(integrity.status === RUN_DEFINITION_INTEGRITY.CHANGED_OUTSIDE
         ? { definitionChangedOutside: { changes: integrity.changes ?? [] } }
-        : {}),
+        : integrity.status === RUN_DEFINITION_INTEGRITY.UNRECORDED
+          ? { definitionChangedOutside: { changes: [], unrecorded: true } }
+          : {}),
     };
   }
 

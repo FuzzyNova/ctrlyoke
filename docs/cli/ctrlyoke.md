@@ -948,6 +948,10 @@ Trust the changed definition as it is now:
 ctrlyoke step accept-definition --workflow release --run 7
 ```
 
+`accept-definition` is also how you trust a run ctrlyoke has no record of
+writing. `restore-definition` fails for such a run, because there is no
+earlier definition to put back.
+
 Both commands succeed without changing anything when the run has no unreviewed
 change; their JSON result reports `"changed": false` in that case.
 

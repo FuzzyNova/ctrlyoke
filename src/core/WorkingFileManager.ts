@@ -43,12 +43,14 @@ import {
   assertTrustedRewindBase,
   describeRunDefinitionChanges,
   isRunDefinitionChangedError,
+  isUntrustedRunDefinition,
   restoreTrustedRunDefinition,
   runDefinitionHashOf,
   verifyRunDefinitionFile,
   writeAnchoredRunDefinition,
   type AnchoredWriteOptions,
   type ChangedRunDefinitionVerdict,
+  type UntrustedRunDefinitionVerdict,
   RunDefinitionChangedError,
 } from "../utils/RunDefinitionAnchor";
 import { invalidateRunSummaryFor } from "./orchestration/RunSummaryCache";
@@ -641,13 +643,13 @@ export class WorkingFileManager {
    * change is rejected: the trusted definition is returned with the file's
    * runtime, the rejection is reported once, and this queue's next write puts
    * the trusted definition back on disk. When this queue never trusted the
-   * file (it is loading it), the file is returned as it is and `changedOutside`
-   * is set; every write to it is then refused until the user accepts or
-   * restores the change.
+   * file (it is loading it), or no ctrlyoke writer ever recorded it, the file
+   * is returned as it is and `untrusted` is set; every write to it is then
+   * refused until the user accepts (or restores) it.
    */
   private async readVerifiedWorkingFile(workingFilePath: string): Promise<{
     workingFile: WorkingFile;
-    changedOutside?: ChangedRunDefinitionVerdict;
+    untrusted?: UntrustedRunDefinitionVerdict;
   }> {
     let verified: Awaited<ReturnType<typeof verifyRunDefinitionFile>>;
     try {
@@ -662,13 +664,16 @@ export class WorkingFileManager {
       );
     }
     const { verdict, workingFile } = verified;
-    if (verdict.status !== RUN_DEFINITION_INTEGRITY.CHANGED_OUTSIDE) {
+    if (!isUntrustedRunDefinition(verdict)) {
       this.trustedDefinitionPath = workingFilePath;
       return {
         workingFile: normalizeParsedWorkingFile(workingFile, workingFilePath),
       };
     }
-    if (this.holdsTrustedDefinition(workingFilePath)) {
+    if (
+      verdict.status === RUN_DEFINITION_INTEGRITY.CHANGED_OUTSIDE &&
+      this.holdsTrustedDefinition(workingFilePath)
+    ) {
       this.reportRejectedDefinition(workingFilePath, verdict);
       return {
         workingFile: normalizeParsedWorkingFile(
@@ -679,7 +684,7 @@ export class WorkingFileManager {
     }
     return {
       workingFile: normalizeParsedWorkingFile(workingFile, workingFilePath),
-      changedOutside: verdict,
+      untrusted: verdict,
     };
   }
 
@@ -875,11 +880,8 @@ export class WorkingFileManager {
     }
     // A new run is anchored as trusted, so it must never be seeded from a
     // change the user has not reviewed.
-    if (head.changedOutside) {
-      throw new RunDefinitionChangedError(
-        currentPath,
-        head.changedOutside.changes
-      );
+    if (head.untrusted) {
+      throw new RunDefinitionChangedError(currentPath, head.untrusted);
     }
     return head.workingFile;
   }
@@ -1181,8 +1183,8 @@ export class WorkingFileManager {
 
   /**
    * Reads a definition another file is about to be built from (Re-run's
-   * source run). A source changed outside ctrlyoke is refused: the copy would
-   * be anchored as trusted. History older than anchors is trusted.
+   * source run). A source changed outside ctrlyoke, or never recorded by it,
+   * is refused: the copy would be anchored as trusted.
    */
   private static async readTrustedSourceDefinition(
     workingFilePath: string
@@ -1191,19 +1193,16 @@ export class WorkingFileManager {
     if (!verified) {
       return readWorkingFileFromDisk(workingFilePath);
     }
-    if (verified.verdict.status === RUN_DEFINITION_INTEGRITY.CHANGED_OUTSIDE) {
-      throw new RunDefinitionChangedError(
-        workingFilePath,
-        verified.verdict.changes
-      );
+    if (isUntrustedRunDefinition(verified.verdict)) {
+      throw new RunDefinitionChangedError(workingFilePath, verified.verdict);
     }
     return normalizeParsedWorkingFile(verified.workingFile, workingFilePath);
   }
 
   /**
    * Whether a run/draft file's definition is still the one ctrlyoke last
-   * wrote. History that predates anchors gets one here, the first time it is
-   * looked at, and is trusted from then on.
+   * wrote. The first check in a run storage anchors the history already in it
+   * (see `RunDefinitionAnchor`), so older history stays trusted.
    */
   public static async inspectDefinitionIntegrity(
     workingFilePath: string
@@ -1219,26 +1218,16 @@ export class WorkingFileManager {
     if (verdict.status === RUN_DEFINITION_INTEGRITY.CHANGED_OUTSIDE) {
       return { status: verdict.status, changes: verdict.changes };
     }
-    if (verdict.status === RUN_DEFINITION_INTEGRITY.UNANCHORED) {
-      // Under the lock, so a ctrlyoke write landing meanwhile is never
-      // overwritten by an anchor of the file it replaced.
-      await withFileLock(workingFilePath, async () => {
-        const current = await verifyRunDefinitionFile(workingFilePath);
-        if (current?.verdict.status === RUN_DEFINITION_INTEGRITY.UNANCHORED) {
-          await anchorRunDefinitionOnDisk(workingFilePath);
-        }
-      });
-      return { status: RUN_DEFINITION_INTEGRITY.TRUSTED };
-    }
     return { status: verdict.status };
   }
 
   /**
-   * Applies the user's answer to a definition changed outside ctrlyoke:
-   * `accept` trusts the file as it is now; `restore` puts back the last
-   * definition ctrlyoke wrote, keeping the run's runtime. A restore lands
-   * above both revisions so no client mistakes it for a stale snapshot.
-   * Returns false when there was nothing to resolve.
+   * Applies the user's answer to a definition changed outside ctrlyoke, or
+   * one ctrlyoke never recorded: `accept` trusts the file as it is now;
+   * `restore` puts back the last definition ctrlyoke wrote, keeping the run's
+   * runtime (an unrecorded run has none to put back, so it is refused). A
+   * restore lands above both revisions so no client mistakes it for a stale
+   * snapshot. Returns false when there was nothing to resolve.
    */
   public static async resolveDefinitionChange(
     workingFilePath: string,
@@ -1246,12 +1235,14 @@ export class WorkingFileManager {
   ): Promise<boolean> {
     return withFileLock(workingFilePath, async () => {
       const verified = await verifyRunDefinitionFile(workingFilePath);
-      if (
-        verified?.verdict.status !== RUN_DEFINITION_INTEGRITY.CHANGED_OUTSIDE
-      ) {
+      if (!verified || !isUntrustedRunDefinition(verified.verdict)) {
         return false;
       }
       const { verdict, workingFile } = verified;
+      const description =
+        verdict.status === RUN_DEFINITION_INTEGRITY.CHANGED_OUTSIDE
+          ? `a definition change made outside ctrlyoke to ${workingFilePath} (${describeRunDefinitionChanges(verdict.changes)})`
+          : `a run definition ctrlyoke has no record of writing: ${workingFilePath}`;
       if (decision === RUN_DEFINITION_DECISIONS.ACCEPT) {
         assertWritableSchema(
           PERSISTED_STORES.RUN_FILE,
@@ -1259,11 +1250,13 @@ export class WorkingFileManager {
           workingFilePath
         );
         await anchorRunDefinitionOnDisk(workingFilePath);
-        Log.warn(
-          `[WorkingFileManager] Accepted a definition change made outside ctrlyoke to ${workingFilePath} ` +
-            `(${describeRunDefinitionChanges(verdict.changes)})`
-        );
+        Log.warn(`[WorkingFileManager] Accepted ${description}`);
         return true;
+      }
+      if (verdict.status === RUN_DEFINITION_INTEGRITY.UNRECORDED) {
+        throw new Error(
+          `ctrlyoke has no earlier definition of this run to restore. Accept it, or delete the run. (${workingFilePath})`
+        );
       }
       const restored = restoreTrustedRunDefinition(workingFile, verdict.anchor);
       await writeWorkingFileAtomicTo(
