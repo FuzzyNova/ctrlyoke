@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  SKILLS_REGISTRY_MIN_INSTALLS_OPTIONS,
   SKILLS_REGISTRY_MIN_QUERY_LENGTH,
   SKILLS_REGISTRY_PAGE_SIZE,
   getRegistrySkillKey,
@@ -45,6 +46,10 @@ export function formatSkillInstalls(installs: number): string {
   return `${installCountFormat.format(installs)} install${installs === 1 ? "" : "s"} on ${SKILLS_SH.label}`;
 }
 
+const snapshotDateFormat = new Intl.DateTimeFormat("en", {
+  dateStyle: "medium",
+});
+
 const AUDIT_STATUS_RANK: Record<SkillAuditStatus, number> = {
   [SKILL_AUDIT_STATUSES.PASS]: 0,
   [SKILL_AUDIT_STATUSES.WARN]: 1,
@@ -80,6 +85,47 @@ export function needsRiskAcknowledgement(
     (entry) => entry.status !== SKILL_AUDIT_STATUSES.PASS
   );
 }
+
+/** Whether every audit provider passed the skill; unaudited does not count. */
+export function hasPassedAudits(
+  audit: RegistrySkillAuditState | undefined
+): boolean {
+  return Boolean(audit && !audit.loading) && !needsRiskAcknowledgement(audit);
+}
+
+/**
+ * Results that clear the install floor and, when `auditsPassedOnly`, whose
+ * audits have answered and all passed. `pendingAudits` counts the results
+ * still waiting on their audits, which may yet appear.
+ */
+export function filterRegistrySkills(
+  results: readonly RegistrySkillEntry[],
+  audits: Readonly<Record<string, RegistrySkillAuditState>>,
+  minInstalls: number,
+  auditsPassedOnly: boolean
+): { entries: RegistrySkillEntry[]; pendingAudits: number } {
+  const byInstalls = results.filter((entry) => entry.installs >= minInstalls);
+  if (!auditsPassedOnly) return { entries: byInstalls, pendingAudits: 0 };
+  return {
+    entries: byInstalls.filter((entry) => hasPassedAudits(audits[entry.id])),
+    pendingAudits: byInstalls.filter((entry) => {
+      const audit = audits[entry.id];
+      return !audit || audit.loading;
+    }).length,
+  };
+}
+
+function formatMinInstalls(minInstalls: number): string {
+  return minInstalls === 0
+    ? "Any"
+    : `${installCountFormat.format(minInstalls)}+`;
+}
+
+const FILTER_CHIP_CLASS =
+  "rounded-sm border px-1.5 py-0 text-xxs transition-colors";
+const FILTER_CHIP_ACTIVE_CLASS = "border-btn-bg bg-btn-bg text-btn-fg";
+const FILTER_CHIP_INACTIVE_CLASS =
+  "border-panel-border text-description-fg hover:border-focus-border hover:text-foreground";
 
 const AUDIT_STATUS_STYLES: Record<
   SkillAuditStatus,
@@ -404,6 +450,14 @@ export function SkillsRegistryPanel({
   const setQuery = useSkillsRegistryStore((s) => s.setQuery);
   const search = useSkillsRegistryStore((s) => s.search);
   const results = useSkillsRegistryStore((s) => s.results);
+  const isTop = useSkillsRegistryStore((s) => s.isTop);
+  const topSnapshotDate = useSkillsRegistryStore((s) => s.topSnapshotDate);
+  const minInstalls = useSkillsRegistryStore((s) => s.minInstalls);
+  const setMinInstalls = useSkillsRegistryStore((s) => s.setMinInstalls);
+  const auditsPassedOnly = useSkillsRegistryStore((s) => s.auditsPassedOnly);
+  const setAuditsPassedOnly = useSkillsRegistryStore(
+    (s) => s.setAuditsPassedOnly
+  );
   const isSearching = useSkillsRegistryStore((s) => s.isSearching);
   const searchError = useSkillsRegistryStore((s) => s.searchError);
   const page = useSkillsRegistryStore((s) => s.page);
@@ -421,28 +475,55 @@ export function SkillsRegistryPanel({
 
   useEffect(() => {
     if (!isOpen || lastSearchedQuery.current === query) return;
+    // Opening the tab shows the bundled top skills straight away; typing is
+    // debounced.
+    const delayMs =
+      lastSearchedQuery.current === null && !query.trim()
+        ? 0
+        : SEARCH_DEBOUNCE_MS;
     const handle = window.setTimeout(() => {
       lastSearchedQuery.current = query;
       search(query);
-    }, SEARCH_DEBOUNCE_MS);
+    }, delayMs);
     return () => window.clearTimeout(handle);
   }, [isOpen, query, search]);
 
-  const pageCount = results
-    ? Math.max(1, Math.ceil(results.length / SKILLS_REGISTRY_PAGE_SIZE))
-    : 0;
+  const { entries: filteredResults, pendingAudits } = useMemo(
+    () =>
+      filterRegistrySkills(
+        results ?? [],
+        audits,
+        minInstalls,
+        auditsPassedOnly
+      ),
+    [results, audits, minInstalls, auditsPassedOnly]
+  );
+
+  const pageCount = Math.ceil(
+    filteredResults.length / SKILLS_REGISTRY_PAGE_SIZE
+  );
   const pageEntries = useMemo(
     () =>
-      (results ?? []).slice(
+      filteredResults.slice(
         page * SKILLS_REGISTRY_PAGE_SIZE,
         (page + 1) * SKILLS_REGISTRY_PAGE_SIZE
       ),
-    [results, page]
+    [filteredResults, page]
+  );
+
+  // "Audits passed" can only filter results whose audits have answered, so
+  // it asks for every result's audits; otherwise only the visible page's.
+  const auditTargets = useMemo(
+    () =>
+      auditsPassedOnly
+        ? (results ?? []).filter((entry) => entry.installs >= minInstalls)
+        : pageEntries,
+    [auditsPassedOnly, results, minInstalls, pageEntries]
   );
 
   useEffect(() => {
-    if (pageEntries.length > 0) requestAudits(pageEntries);
-  }, [pageEntries, requestAudits]);
+    if (auditTargets.length > 0) requestAudits(auditTargets);
+  }, [auditTargets, requestAudits]);
 
   const searchNow = () => {
     lastSearchedQuery.current = query;
@@ -450,6 +531,7 @@ export function SkillsRegistryPanel({
   };
 
   const trimmedQuery = query.trim();
+  const hasResults = Boolean(results && results.length > 0);
 
   return (
     <div className="min-w-0 space-y-2">
@@ -489,7 +571,8 @@ export function SkillsRegistryPanel({
             >
               {SKILLS_SH.host}
             </a>{" "}
-            ({SKILLS_SH.operator}), and your search text is sent there. Skills
+            ({SKILLS_SH.operator}), and your search text is sent there. The list
+            shown before you search is a snapshot bundled with ctrlyoke. Skills
             are published by third parties and are downloaded from their GitHub
             repositories when you install one, so review a skill before you
             install it.
@@ -523,20 +606,89 @@ export function SkillsRegistryPanel({
             </button>
           </div>
 
+          {!isSearching && !searchError && hasResults && (
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="text-xxs text-description-fg">Installs:</span>
+              {SKILLS_REGISTRY_MIN_INSTALLS_OPTIONS.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setMinInstalls(option)}
+                  aria-pressed={minInstalls === option}
+                  title={
+                    option === 0
+                      ? "Show skills with any install count"
+                      : `Show skills with at least ${option.toLocaleString("en")} installs on ${SKILLS_SH.label}`
+                  }
+                  className={`${FILTER_CHIP_CLASS} ${
+                    minInstalls === option
+                      ? FILTER_CHIP_ACTIVE_CLASS
+                      : FILTER_CHIP_INACTIVE_CLASS
+                  }`}
+                >
+                  {formatMinInstalls(option)}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setAuditsPassedOnly(!auditsPassedOnly)}
+                aria-pressed={auditsPassedOnly}
+                title={`Show only skills that every ${SKILLS_SH.label} audit provider passed. Fetches the audits of every result.`}
+                className={`ml-1 flex items-center gap-1 ${FILTER_CHIP_CLASS} ${
+                  auditsPassedOnly
+                    ? FILTER_CHIP_ACTIVE_CLASS
+                    : FILTER_CHIP_INACTIVE_CLASS
+                }`}
+              >
+                <Icon name="pass" className="text-xxs" />
+                Audits passed
+              </button>
+            </div>
+          )}
+
           {isSearching ? (
             <div className="flex items-center gap-1.5 text-xs text-description-fg">
               <Icon name="loading" className="codicon-modifier-spin text-xxs" />
-              Searching {SKILLS_SH.host}…
+              {isTop ? "Loading top skills…" : `Searching ${SKILLS_SH.host}…`}
             </div>
           ) : searchError ? (
             <div className="text-xs text-error-fg">{searchError}</div>
-          ) : trimmedQuery.length < SKILLS_REGISTRY_MIN_QUERY_LENGTH ? (
+          ) : isTop && !hasResults ? (
             <div className="text-xs text-description-fg italic">
               Type at least {SKILLS_REGISTRY_MIN_QUERY_LENGTH} characters to
               search {SKILLS_SH.label}.
             </div>
-          ) : results && results.length > 0 ? (
+          ) : hasResults ? (
             <>
+              {isTop && (
+                <div
+                  className="text-xxs font-semibold uppercase tracking-wide text-description-fg"
+                  title={`A snapshot of the ${SKILLS_SH.label} all-time leaderboard bundled with ctrlyoke. Install counts are as of that date; search for live results.`}
+                >
+                  Top skills on {SKILLS_SH.label}
+                  {topSnapshotDate
+                    ? ` · as of ${snapshotDateFormat.format(new Date(topSnapshotDate))}`
+                    : ""}
+                </div>
+              )}
+              {pendingAudits > 0 && (
+                <div
+                  className="flex items-center gap-1.5 text-xxs text-description-fg"
+                  role="status"
+                >
+                  <Icon
+                    name="loading"
+                    className="codicon-modifier-spin text-xxs"
+                  />
+                  Checking audits for {pendingAudits} more skill
+                  {pendingAudits === 1 ? "" : "s"}…
+                </div>
+              )}
+              {filteredResults.length === 0 && pendingAudits === 0 && (
+                <div className="text-xs text-description-fg italic">
+                  No {isTop ? "top skills" : "results"} match these filters.
+                </div>
+              )}
               <div className="space-y-2">
                 {pageEntries.map((entry) => {
                   const copy = findCtrlYokeCopy(

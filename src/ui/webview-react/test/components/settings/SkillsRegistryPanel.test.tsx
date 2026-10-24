@@ -14,6 +14,7 @@ import {
   SkillOriginBadge,
   SkillsRegistryPanel,
   formatSkillInstalls,
+  filterRegistrySkills,
   getWorstSkillAudit,
   needsRiskAcknowledgement,
 } from "@components/settings/SkillsRegistryPanel";
@@ -129,7 +130,7 @@ describe("SkillsRegistryPanel", () => {
     vi.useRealTimers();
   });
 
-  it("names skills.sh as the source and sends nothing until the tab is opened", () => {
+  it("names skills.sh as the source and asks for nothing until the tab is opened", () => {
     renderPanel();
     const tab = screen.getByRole("button", {
       name: DATA_SOURCES.SKILLS_SH.label,
@@ -147,13 +148,163 @@ describe("SkillsRegistryPanel", () => {
       screen.getByRole("link", { name: DATA_SOURCES.SKILLS_SH.host })
     ).toBeTruthy();
     expect(screen.getByText(/your search text is sent there/)).toBeTruthy();
-    expect(screen.getByText(/Type at least 2 characters/)).toBeTruthy();
     act(() => {
-      vi.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(0);
     });
-    expect(
-      sentOfType(MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_SEARCH)
-    ).toHaveLength(0);
+    // Opening asks the extension for the bundled top skills: an empty query,
+    // which reaches no network.
+    expect(sentOfType(MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_SEARCH)).toEqual([
+      [
+        MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_SEARCH,
+        { requestId: 1, query: "" },
+      ],
+    ]);
+    expect(screen.getByText("Loading top skills…")).toBeTruthy();
+
+    // Without a snapshot the tab falls back to asking for a search.
+    answerSearch([]);
+    expect(screen.getByText(/Type at least 2 characters/)).toBeTruthy();
+  });
+
+  describe("top skills", () => {
+    function openTop(skills: RegistrySkillEntry[]) {
+      renderPanel();
+      fireEvent.click(
+        screen.getByRole("button", { name: DATA_SOURCES.SKILLS_SH.label })
+      );
+      act(() => {
+        vi.advanceTimersByTime(0);
+      });
+      act(() => {
+        const { latestRequestId, setSearchResult } =
+          useSkillsRegistryStore.getState();
+        setSearchResult(
+          latestRequestId,
+          skills,
+          undefined,
+          "2026-10-23T08:00:00.000Z"
+        );
+      });
+    }
+
+    it("shows the dated snapshot before a search, and again once it is cleared", () => {
+      openTop([PDF, DOCX]);
+      expect(
+        screen.getByText(/Top skills on skills\.sh · as of Oct 23, 2026/)
+      ).toBeTruthy();
+      expect(screen.getByText("pdf")).toBeTruthy();
+
+      searchFor("excel");
+      answerSearch([]);
+      expect(screen.queryByText(/Top skills on/)).toBeNull();
+
+      // Clearing the search asks for the snapshot again, still with no
+      // query text.
+      sendMessageMock.mockClear();
+      searchFor("");
+      expect(sentOfType(MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_SEARCH)).toEqual([
+        [
+          MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_SEARCH,
+          { requestId: 3, query: "" },
+        ],
+      ]);
+    });
+
+    it("does not ask again while the snapshot is showing", () => {
+      openTop([PDF]);
+      sendMessageMock.mockClear();
+      searchFor("p");
+      expect(
+        sentOfType(MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_SEARCH)
+      ).toHaveLength(0);
+      expect(screen.getByText(/Top skills on/)).toBeTruthy();
+    });
+
+    it("filters by install count", () => {
+      openTop([PDF, DOCX]);
+      fireEvent.click(screen.getByRole("button", { name: "100K+" }));
+      expect(screen.getByText("pdf")).toBeTruthy();
+      expect(screen.queryByText("docx")).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Any" }));
+      expect(screen.getByText("docx")).toBeTruthy();
+    });
+
+    it("Audits passed fetches every result's audits and keeps only all-pass skills", () => {
+      const skills = Array.from({ length: 30 }, (_, index) => ({
+        ...PDF,
+        id: `a/b/skill-${index}`,
+        source: "a/b",
+        slug: `skill-${index}`,
+        name: `skill-${index}`,
+      }));
+      openTop(skills);
+      sendMessageMock.mockClear();
+      fireEvent.click(screen.getByRole("button", { name: /Audits passed/ }));
+
+      // The first page's ten were already requested; the other twenty go out
+      // now, at most 25 to a message.
+      const batches = sentOfType(MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_AUDITS);
+      expect(batches.map(([, payload]) => payload.skills.length)).toEqual([20]);
+      expect(
+        screen.getByText(/Checking audits for 30 more skills/)
+      ).toBeTruthy();
+
+      act(() => {
+        useSkillsRegistryStore.getState().setAuditResults(
+          skills.map((skill, index) => ({
+            source: skill.source,
+            slug: skill.slug,
+            audits:
+              index === 3
+                ? [
+                    {
+                      provider: "Socket",
+                      providerSlug: "socket",
+                      status: "pass" as const,
+                    },
+                  ]
+                : index === 4
+                  ? [
+                      {
+                        provider: "Snyk",
+                        providerSlug: "snyk",
+                        status: "warn" as const,
+                      },
+                    ]
+                  : null,
+          }))
+        );
+      });
+      expect(screen.getByText("skill-3")).toBeTruthy();
+      expect(screen.queryByText("skill-4")).toBeNull();
+      expect(screen.queryByText("skill-0")).toBeNull();
+      expect(screen.queryByText(/Checking audits for/)).toBeNull();
+    });
+  });
+
+  it("filters out results whose audits are pending, failed or not all pass", () => {
+    const audits = {
+      [PDF.id]: {
+        source: PDF.source,
+        slug: PDF.slug,
+        audits: [
+          {
+            provider: "Socket",
+            providerSlug: "socket",
+            status: SKILL_AUDIT_STATUSES.PASS,
+          },
+        ],
+      },
+      [DOCX.id]: { loading: true as const },
+    };
+    expect(filterRegistrySkills([PDF, DOCX], audits, 0, true)).toEqual({
+      entries: [PDF],
+      pendingAudits: 1,
+    });
+    expect(filterRegistrySkills([PDF, DOCX], audits, 100, false)).toEqual({
+      entries: [PDF],
+      pendingAudits: 0,
+    });
   });
 
   it("debounces the search, shows loading, then results with audits requested", () => {

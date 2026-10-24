@@ -3285,7 +3285,10 @@ export interface RegistrySkillLocation {
   description?: string;
 }
 
-/** Webview → Extension: search skills.sh. */
+/**
+ * Webview → Extension: search skills.sh. An empty `query` asks for the top
+ * skills snapshot bundled with ctrlyoke instead, which sends nothing.
+ */
 export interface RequestSkillsRegistrySearchMessage {
   type: typeof MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_SEARCH;
   requestId: number;
@@ -3297,6 +3300,8 @@ export interface SkillsRegistrySearchResultMessage {
   type: typeof MESSAGE_TYPES.SKILLS_REGISTRY_SEARCH_RESULT;
   requestId: number;
   skills: RegistrySkillEntry[];
+  /** ISO date of the snapshot, set only when `skills` is the top skills list. */
+  topSnapshotDate?: string;
   error?: string;
 }
 

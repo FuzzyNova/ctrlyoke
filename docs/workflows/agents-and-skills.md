@@ -211,13 +211,26 @@ applies one action to the selected rows:
 
 In the **Skills** list, the **skills.sh** tab under **Discover & import**
 searches [skills.sh](https://skills.sh), the public skills directory run by
-Vercel. Nothing is sent until you open the tab and type at least two
-characters; your search text is sent to skills.sh.
+Vercel. On a wide window, **Discover & import** sits to the right of the skills
+list.
+
+Opening the tab lists the **top skills** on skills.sh by all-time installs. This
+list is a snapshot bundled with each ctrlyoke release, so its install counts are
+as of the date shown above it. Type at least two characters to search
+skills.sh instead; your search text is sent there, and clearing the search box
+brings the top skills back.
 
 Results are sorted by their install count on skills.sh, ten to a page. Each
 one shows a security audit badge with the worst verdict from skills.sh's audit
 providers. Click the badge to open that audit on skills.sh. **Not audited**
 means skills.sh has not audited the skill yet.
+
+Two filters narrow the list:
+
+- **Installs** hides skills with fewer installs than 1K, 10K or 100K.
+- **Audits passed** keeps only skills that every audit provider passed. It
+  fetches the audits of every result, not just the visible page, so the list
+  fills in as they arrive. Skills that are not audited yet are hidden.
 
 **Import** opens a review dialog before anything is written. The dialog shows:
 

@@ -9,6 +9,7 @@ import {
   type InstalledRegistrySkill,
   parseSkillAuditResponse,
   parseSkillsSearchResponse,
+  parseTopSkillsSnapshot,
   rankSkillMdCandidates,
   sanitizeRegistryText,
   selectSkillFiles,
@@ -210,6 +211,84 @@ suite("SkillsRegistryClient", () => {
   });
 
   suite("response parsing", () => {
+    test("the top skills snapshot is validated like a search and sorted", () => {
+      const snapshot = parseTopSkillsSnapshot({
+        generatedAt: "2026-10-23T08:00:00.000Z",
+        view: "all-time",
+        skills: [
+          {
+            id: "a/b/low",
+            source: "a/b",
+            skillId: "low",
+            name: "low",
+            installs: 5,
+          },
+          {
+            id: "../x",
+            source: "../evil",
+            skillId: "x",
+            name: "x",
+            installs: 9,
+          },
+          {
+            id: "a/b/high",
+            source: "a/b",
+            skillId: "high",
+            name: "high\x1b[31m",
+            installs: 7,
+          },
+        ],
+      });
+      assert.strictEqual(snapshot.generatedAt, "2026-10-23T08:00:00.000Z");
+      assert.deepStrictEqual(
+        snapshot.skills.map((skill) => [skill.slug, skill.name]),
+        [
+          ["high", "high"],
+          ["low", "low"],
+        ]
+      );
+    });
+
+    test("a missing, undated or malformed snapshot is no snapshot", () => {
+      for (const data of [
+        { generatedAt: null, skills: [] },
+        { skills: [{ id: "a/b/c", source: "a/b", skillId: "c", installs: 1 }] },
+        {
+          generatedAt: "not a date",
+          skills: [{ id: "a/b/c", source: "a/b", skillId: "c", installs: 1 }],
+        },
+        "nope",
+        null,
+      ]) {
+        assert.deepStrictEqual(parseTopSkillsSnapshot(data), { skills: [] });
+      }
+    });
+
+    test("the client reads the top skills from its snapshot without a request", () => {
+      const fake = fakeFetch({});
+      const registry = new SkillsShRegistryClient({
+        fetch: fake.fetch,
+        baseUrl: BASE,
+        topSkillsSnapshot: {
+          generatedAt: "2026-10-23T08:00:00.000Z",
+          skills: [
+            {
+              id: "a/b/c",
+              source: "a/b",
+              skillId: "c",
+              name: "c",
+              installs: 1,
+            },
+          ],
+        },
+      });
+      assert.deepStrictEqual(
+        registry.getTopSkills().skills.map((skill) => skill.id),
+        ["a/b/c"]
+      );
+      assert.strictEqual(fake.urls.length, 0);
+    });
+
     test("search keeps valid entries and derives the slug", () => {
       const skills = parseSkillsSearchResponse({
         skills: [

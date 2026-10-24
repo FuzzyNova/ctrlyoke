@@ -463,6 +463,9 @@ export const SKILL_AUDIT_STATUSES = {
 export type SkillAuditStatus =
   (typeof SKILL_AUDIT_STATUSES)[keyof typeof SKILL_AUDIT_STATUSES];
 
+/** How many skills one skills.sh audits request may name. */
+export const SKILLS_REGISTRY_MAX_AUDIT_BATCH = 25;
+
 /** The skills.sh page for one skill. */
 export function getSkillsShSkillUrl(source: string, slug: string): string {
   return `${DATA_SOURCES.SKILLS_SH.url}/${source}/${encodeURIComponent(slug)}`;
@@ -909,8 +912,8 @@ export const MESSAGE_TYPES = {
   OPEN_HARNESS_DIR_RESULT: "openHarnessDirResult", // Extension -> Webview: { success, error? }
 
   // Skills registry (skills.sh) — Webview ↔ Extension
-  REQUEST_SKILLS_REGISTRY_SEARCH: "requestSkillsRegistrySearch", // Webview -> Extension: { requestId, query }
-  SKILLS_REGISTRY_SEARCH_RESULT: "skillsRegistrySearchResult", // Extension -> Webview: { requestId, skills: RegistrySkillEntry[], error? }
+  REQUEST_SKILLS_REGISTRY_SEARCH: "requestSkillsRegistrySearch", // Webview -> Extension: { requestId, query } — an empty query asks for the bundled top-skills snapshot
+  SKILLS_REGISTRY_SEARCH_RESULT: "skillsRegistrySearchResult", // Extension -> Webview: { requestId, skills: RegistrySkillEntry[], topSnapshotDate?, error? }
   REQUEST_SKILLS_REGISTRY_AUDITS: "requestSkillsRegistryAudits", // Webview -> Extension: { skills: { source, slug }[] }
   SKILLS_REGISTRY_AUDITS_RESULT: "skillsRegistryAuditsResult", // Extension -> Webview: { results: RegistrySkillAuditResult[] }
   REQUEST_REGISTRY_SKILL_LOCATION: "requestRegistrySkillLocation", // Webview -> Extension: { source, slug }

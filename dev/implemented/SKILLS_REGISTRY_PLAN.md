@@ -223,6 +223,30 @@ and a full install of `anthropics/skills/pdf`).
   in `WebviewMessageRouter`), like `REQUEST_SECRET_REGISTRY`, so a slow
   skills.sh or GitHub request can't stall the dashboard. The MCP registry search
   still runs on the queue.
+- **Top skills before a search** (added 2026-10-23). No keyless route lists
+  the leaderboard: `/api/v1/skills` (`view=all-time|trending|hot`) needs the
+  OIDC token, `/api/search` rejects queries under 2 characters and ignores
+  `sort`/`minInstalls`, and the homepage leaderboard is HTML. So
+  `npm run sync-skills-snapshot` (`scripts/sync-skills-snapshot.mjs`, also a
+  `chores` task outside `all`) fetches the all-time leaderboard with a
+  maintainer's `VERCEL_OIDC_TOKEN` (`vercel link` + `vercel env pull`) before
+  a release. It drops `isDuplicate` and non-GitHub skills, keeps only the most-installed
+  skill per slug (unflagged clones under other owners filled 12 of 100 slots,
+  and a slug is the install folder name), and writes the top
+  100 to `src/utils/generated/skillsShTopSkills.json` in the `/api/search`
+  shape plus `generatedAt`, so `parseTopSkillsSnapshot` reuses the search
+  parser. An empty query in `REQUEST_SKILLS_REGISTRY_SEARCH` answers with that
+  snapshot and `topSnapshotDate`, without a request; the panel labels it with
+  the date. Opening the tab now fetches the first page's audits (public
+  `owner/repo` only). Trending/hot are not snapshotted: they are stale within
+  hours.
+- **Filters are client-side** over the up-to-50 results: an install floor
+  (1K/10K/100K) and **Audits passed**, which requests every result's audits in
+  batches of `SKILLS_REGISTRY_MAX_AUDIT_BATCH` and keeps those whose audits
+  all pass (`hasPassedAudits`, the inverse of the install dialog's
+  acknowledgement rule).
+- **Layout:** in the Skills view, the list and the skills.sh panel are two
+  columns at `lg`, as in the MCP Manager.
 - **Not built:**
   - **Host capability gate.** Capabilities are derived from optional
     `DashboardHostActions` methods, and no host forbids network access today

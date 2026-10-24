@@ -333,6 +333,27 @@ async function syncModelPricing() {
 }
 
 /**
+ * Task: Snapshot the skills.sh leaderboard shown before a skills search
+ *
+ * Needs a Vercel OIDC token (`vercel link` + `vercel env pull`), so it is
+ * not part of `all`.
+ */
+async function syncSkillsSnapshot() {
+  logHeader("Syncing skills.sh Top Skills Snapshot");
+
+  try {
+    await runCommand("npm", ["run", "sync-skills-snapshot"]);
+    console.log();
+    logSuccess("skills.sh snapshot updated");
+    logInfo("File updated:");
+    logInfo("  - src/utils/generated/skillsShTopSkills.json");
+  } catch (error) {
+    logError(`Failed to sync the skills.sh snapshot: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
  * Task: Run all checks (lint, format, test)
  */
 async function runAllChecks() {
@@ -384,6 +405,7 @@ ${colors.cyan}Available Tasks:${colors.reset}
   ${colors.green}check-clis${colors.reset}      Check installed CLI tool versions
   ${colors.green}sync-models${colors.reset}     Discover Copilot CLI models + sync registry
   ${colors.green}sync-model-pricing${colors.reset}  Re-download the models.dev pricing registry for all harnesses
+  ${colors.green}sync-skills-snapshot${colors.reset}  Snapshot the skills.sh leaderboard (needs a Vercel OIDC token)
   ${colors.green}check-all${colors.reset}       Run all checks (lint, format, tests)
   ${colors.green}all${colors.reset}             Run all automated chores
 
@@ -444,6 +466,10 @@ async function main() {
 
       case "sync-model-pricing":
         await syncModelPricing();
+        break;
+
+      case "sync-skills-snapshot":
+        await syncSkillsSnapshot();
         break;
 
       case "check-all":

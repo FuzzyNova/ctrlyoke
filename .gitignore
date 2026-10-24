@@ -65,3 +65,6 @@ ctrlyoke-fuzzno.code-workspace
 
 # Media capture work folder (demo-app clone and dev host state; see media/lib/paths.ts)
 media/.work/
+
+# Vercel CLI project link for the skills.sh snapshot (CHORES.md #7)
+.vercel

@@ -652,6 +652,10 @@ export function AgentSkillsManagerSection({
     });
   }, [activeScope, activeType, defaultSkills, managedFiles, selectedFiles]);
 
+  // Skills get the skills.sh browser beside the list on wide screens, laid
+  // out like the MCP Manager's "Discover & import" column.
+  const showRegistry = activeType === HARNESS_FILE_TYPES.SKILL;
+
   const getContextDescription = (): string => {
     if (activeType === HARNESS_FILE_TYPES.AGENT) {
       return "Workflow agent fields are portable ctrlyoke prompt attachments: content is resolved into categorized prompt references and wrapped in <agentInstructions>. This page separately manages optional harness-native discovery; native discovery does not determine workflow agent support. Built-in ctrlyoke agents are always available to workflows.";
@@ -720,83 +724,98 @@ export function AgentSkillsManagerSection({
         </p>
       </div>
 
-      {/* Bulk actions */}
-      <div className="rounded-sm border border-panel-border bg-editor-bg px-3 py-2">
-        <BulkSelectionActionsBar
-          totalCount={managedFiles.length}
-          selectedCount={selectedFiles.length}
-          selectAllState={selectAllState}
-          onToggleSelectAll={handleToggleSelectAll}
-          availableActions={availableBulkActions}
-          getTargetsForScope={(scope) =>
-            scope === SETTING_SCOPES.WORKSPACE
-              ? getWorkspaceTargets(availableIds)
-              : getUserTargets(availableIds)
-          }
-          getTargetLabel={getTargetLabel}
-          getTargetDescription={(id, scope) =>
-            formatPathForDisplay(
-              getTargetDirectoryPath(targetDirectories, id, scope) ?? ""
-            )
-          }
-          defaultTargetId={HARNESS_IDS.CLAUDE_CLI as HarnessId}
-          defaultScope={activeScope}
-          activeScope={activeScope}
-          onSave={handleSaveAll}
-          onDelete={handleDeleteAllRequest}
-          onSetDefault={handleSetDefault}
-        />
-      </div>
-
-      {/* File list */}
-      <div className="border border-panel-border rounded-sm overflow-hidden">
-        {loading && (
-          <div className="px-3 py-4 text-xs text-description-fg text-center">
-            Loading…
+      <div
+        className={`grid min-w-0 gap-4 ${showRegistry ? "lg:grid-cols-2" : ""}`}
+      >
+        <div className="min-w-0 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-xxs font-semibold uppercase tracking-wide text-description-fg">
+              Managed {activeType}s
+            </div>
+            <span className="text-xxs text-description-fg">
+              {managedFiles.length} total
+            </span>
           </div>
-        )}
 
-        {!loading && error && (
-          <div className="px-3 py-4 text-xs text-error-fg">{error}</div>
-        )}
-
-        {!loading && !error && managedFiles.length === 0 && (
-          <div className="px-3 py-4 text-xs text-description-fg text-center">
-            No {activeType}s discovered in any harness directory.
-          </div>
-        )}
-
-        {!loading &&
-          managedFiles.map((file) => (
-            <FileRow
-              key={file.name}
-              file={file}
-              availableIds={availableIds}
-              targetDirectories={targetDirectories}
-              isDefault={isFileDefault(file)}
-              selected={selectedIds.has(file.name)}
-              onToggleSelected={handleToggleSelected}
-              onSave={handleSave}
-              onDelete={handleDeleteRequest}
-              onToggleDefault={handleToggleDefault}
-              onEdit={handleEditFile}
+          {/* Bulk actions */}
+          <div className="rounded-sm border border-panel-border bg-editor-bg px-3 py-2">
+            <BulkSelectionActionsBar
+              totalCount={managedFiles.length}
+              selectedCount={selectedFiles.length}
+              selectAllState={selectAllState}
+              onToggleSelectAll={handleToggleSelectAll}
+              availableActions={availableBulkActions}
+              getTargetsForScope={(scope) =>
+                scope === SETTING_SCOPES.WORKSPACE
+                  ? getWorkspaceTargets(availableIds)
+                  : getUserTargets(availableIds)
+              }
+              getTargetLabel={getTargetLabel}
+              getTargetDescription={(id, scope) =>
+                formatPathForDisplay(
+                  getTargetDirectoryPath(targetDirectories, id, scope) ?? ""
+                )
+              }
+              defaultTargetId={HARNESS_IDS.CLAUDE_CLI as HarnessId}
+              defaultScope={activeScope}
+              activeScope={activeScope}
+              onSave={handleSaveAll}
+              onDelete={handleDeleteAllRequest}
+              onSetDefault={handleSetDefault}
             />
-          ))}
-      </div>
+          </div>
 
-      {activeType === HARNESS_FILE_TYPES.SKILL && (
-        <SkillsRegistryPanel
-          activeScope={activeScope}
-          managedFiles={managedFiles}
-          skillsDirectory={formatPathForDisplay(
-            getTargetDirectoryPath(
-              targetDirectories,
-              SPECIAL_TARGET_IDS.CTRLYOKE,
-              activeScope
-            ) ?? ""
-          )}
-        />
-      )}
+          {/* File list */}
+          <div className="border border-panel-border rounded-sm overflow-hidden">
+            {loading && (
+              <div className="px-3 py-4 text-xs text-description-fg text-center">
+                Loading…
+              </div>
+            )}
+
+            {!loading && error && (
+              <div className="px-3 py-4 text-xs text-error-fg">{error}</div>
+            )}
+
+            {!loading && !error && managedFiles.length === 0 && (
+              <div className="px-3 py-4 text-xs text-description-fg text-center">
+                No {activeType}s discovered in any harness directory.
+              </div>
+            )}
+
+            {!loading &&
+              managedFiles.map((file) => (
+                <FileRow
+                  key={file.name}
+                  file={file}
+                  availableIds={availableIds}
+                  targetDirectories={targetDirectories}
+                  isDefault={isFileDefault(file)}
+                  selected={selectedIds.has(file.name)}
+                  onToggleSelected={handleToggleSelected}
+                  onSave={handleSave}
+                  onDelete={handleDeleteRequest}
+                  onToggleDefault={handleToggleDefault}
+                  onEdit={handleEditFile}
+                />
+              ))}
+          </div>
+        </div>
+
+        {showRegistry && (
+          <SkillsRegistryPanel
+            activeScope={activeScope}
+            managedFiles={managedFiles}
+            skillsDirectory={formatPathForDisplay(
+              getTargetDirectoryPath(
+                targetDirectories,
+                SPECIAL_TARGET_IDS.CTRLYOKE,
+                activeScope
+              ) ?? ""
+            )}
+          />
+        )}
+      </div>
 
       {/* Delete confirmation modal */}
       {confirmDelete && (

@@ -2205,7 +2205,12 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.SKILLS_REGISTRY_SEARCH_RESULT] = (message) => {
     useSkillsRegistryStore
       .getState()
-      .setSearchResult(message.requestId, message.skills ?? [], message.error);
+      .setSearchResult(
+        message.requestId,
+        message.skills ?? [],
+        message.error,
+        message.topSnapshotDate
+      );
   };
   handlers[MESSAGE_TYPES.SKILLS_REGISTRY_AUDITS_RESULT] = (message) => {
     useSkillsRegistryStore.getState().setAuditResults(message.results ?? []);

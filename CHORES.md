@@ -2,7 +2,8 @@
 
 Regular maintenance tasks for ctrlyoke development. These are manual tasks that don't happen automatically during builds.
 
-**Scope**: everything in this document is safe to run unattended (e.g. on a schedule) —
+**Scope**: everything in this document except the skills.sh snapshot (chore #7, which needs a
+Vercel login) is safe to run unattended (e.g. on a schedule) —
 `npm update` only moves within the semver ranges already declared in `package.json`, so it never
 silently jumps a major version. Deliberate major-version dependency bumps (TypeScript, etc.) live
 in [`MAJOR_DEPENDENCY_UPGRADES.md`](MAJOR_DEPENDENCY_UPGRADES.md) instead — nothing in this file
@@ -398,6 +399,46 @@ The Marketplace icon is already in place: `package.json` has `"icon": "images/ic
 master (`images/ctrlyoke-logo-master.svg`), then verify with `vsce package` and a local VSIX
 install.
 
+### 7. skills.sh Top Skills Snapshot
+
+**Frequency**: Before each release that isn't a patch release
+
+The Agent & Skills Manager's skills.sh tab lists the top skills before the user searches. skills.sh
+serves its leaderboard only to callers holding a Vercel OIDC token, so ctrlyoke bundles a snapshot,
+`src/utils/generated/skillsShTopSkills.json`, and labels it with the date it was taken. Refreshing
+it needs that token, so it isn't part of `--task all` and can't run unattended.
+
+**One-time setup on each machine** (the `.vercel/` link and the token are gitignored, so they
+don't follow you between machines):
+
+```bash
+npm i -g vercel        # the Vercel CLI
+vercel login           # opens the browser; or pass --token <account API token> to each command below
+vercel link            # from the repo root; pick or create any project (it never needs deploying)
+```
+
+`vercel link` writes `.vercel/` and offers to add `.env*` to `.gitignore`. Decline, or remove the
+line afterwards: `.env` and `.env.*` are already ignored, and a later `.env*` would also cancel
+the `!.env.example` exception.
+
+**Each refresh**:
+
+```bash
+vercel env pull .env.local          # writes VERCEL_OIDC_TOKEN; it expires after ~12 hours
+npm run sync-skills-snapshot        # or: npm run chores -- --task sync-skills-snapshot
+```
+
+The script reads `VERCEL_OIDC_TOKEN` from the environment or from `.env.local` (not `.env`).
+An account API token is **not** an OIDC token: skills.sh answers 401 to it. If the script reports
+HTTP 401, the OIDC token has expired, so pull it again. If `env pull` writes no
+`VERCEL_OIDC_TOKEN`, turn on OIDC Federation under the project's Settings in the Vercel dashboard.
+
+Then check the diff before committing: `generatedAt` is today, there are 100 skills sorted by
+installs, and nothing looks out of place. The script drops skills that skills.sh flags as
+duplicates, skills not hosted on GitHub, and every skill whose name (slug) a more-installed skill
+already has, since copies republished under other owners aren't always flagged. Commit the JSON on its own (`chore: refresh skills.sh
+top skills snapshot`).
+
 ---
 
 ## Pre-Release Checklist
@@ -407,6 +448,7 @@ Before releasing a new version, run these tasks:
 - [ ] Update CLI tools to latest (chore #1), run `npm run test:harness` once, and set each
       provider's `versionPolicy.testedWith` to the versions that passed
 - [ ] Update models (`npm run chores -- --task sync-models`)
+- [ ] Refresh the skills.sh top skills snapshot (chore #7; needs a Vercel login)
 - [ ] Update VS Code commands (list and document)
 - [ ] Update dependencies (`npm update` + `npm audit`)
 - [ ] Review [`MAJOR_DEPENDENCY_UPGRADES.md`](MAJOR_DEPENDENCY_UPGRADES.md) for anything worth
@@ -439,6 +481,7 @@ npm run chores -- --task all
 # Run specific tasks
 npm run chores -- --task sync-models
 npm run chores -- --task sync-model-pricing
+npm run chores -- --task sync-skills-snapshot
 npm run chores -- --task update-clis
 npm run chores -- --task check-clis
 npm run chores -- --task update-deps
@@ -451,6 +494,8 @@ npm run chores -- --task check-all
   display labels, and sync the model registry to `package.json`/schema
 - `sync-model-pricing` - Re-download the models.dev registry snapshot used to price every
   harness's models (see section 2d)
+- `sync-skills-snapshot` - Snapshot the skills.sh leaderboard shown before a skills search.
+  Needs a Vercel OIDC token, so `all` skips it (see section 7)
 - `update-clis` - Update CLI tools (copilot, claude, codex, qwen, opencode, antigravity)
   via their built-in updaters (npm for Qwen)
 - `check-clis` - Check installed CLI tool versions

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { MESSAGE_TYPES, type SettingWriteScope } from "@/types/messages";
+import { SKILLS_REGISTRY_MAX_AUDIT_BATCH } from "@root/types/DashboardConstants";
 import type {
   RegistrySkillAuditResult,
   RegistrySkillEntry,
@@ -10,8 +11,12 @@ import { sendMessage } from "@hooks/useMessageHandler";
 
 /** Results shown per page; skills.sh returns up to 50 per search. */
 export const SKILLS_REGISTRY_PAGE_SIZE = 10;
-/** skills.sh rejects shorter queries. */
+/** skills.sh rejects shorter queries; the top skills show until then. */
 export const SKILLS_REGISTRY_MIN_QUERY_LENGTH = 2;
+/** Install-count floors the results can be filtered to; 0 shows all. */
+export const SKILLS_REGISTRY_MIN_INSTALLS_OPTIONS = [
+  0, 1_000, 10_000, 100_000,
+] as const;
 
 /** The key every per-skill map uses: `<owner>/<repo>/<slug>`, as `RegistrySkillEntry.id`. */
 export function getRegistrySkillKey(source: string, slug: string): string {
@@ -66,6 +71,17 @@ export interface SkillsRegistryState {
   query: string;
   /** `undefined` until a search has answered. */
   results: RegistrySkillEntry[] | undefined;
+  /**
+   * Whether the latest request is for the bundled top skills (the query is
+   * shorter than {@link SKILLS_REGISTRY_MIN_QUERY_LENGTH}), not a search.
+   */
+  isTop: boolean;
+  /** ISO date of the top skills snapshot, when `results` holds it. */
+  topSnapshotDate: string | undefined;
+  /** Hide results with fewer installs than this. */
+  minInstalls: number;
+  /** Show only results every audit provider passed. */
+  auditsPassedOnly: boolean;
   isSearching: boolean;
   searchError: string | undefined;
   latestRequestId: number;
@@ -85,9 +101,12 @@ export interface SkillsRegistryState {
   setSearchResult: (
     requestId: number,
     skills: RegistrySkillEntry[],
-    error?: string
+    error?: string,
+    topSnapshotDate?: string
   ) => void;
   setPage: (page: number) => void;
+  setMinInstalls: (minInstalls: number) => void;
+  setAuditsPassedOnly: (auditsPassedOnly: boolean) => void;
   requestAudits: (entries: readonly RegistrySkillReviewEntry[]) => void;
   setAuditResults: (results: readonly RegistrySkillAuditResult[]) => void;
   openReview: (
@@ -116,6 +135,10 @@ export const useSkillsRegistryStore = create<SkillsRegistryState>(
     isOpen: false,
     query: "",
     results: undefined,
+    isTop: true,
+    topSnapshotDate: undefined,
+    minInstalls: 0,
+    auditsPassedOnly: false,
     isSearching: false,
     searchError: undefined,
     latestRequestId: 0,
@@ -132,35 +155,37 @@ export const useSkillsRegistryStore = create<SkillsRegistryState>(
 
     search: (query) => {
       const trimmed = query.trim();
-      if (trimmed.length < SKILLS_REGISTRY_MIN_QUERY_LENGTH) {
-        set({
-          query,
-          results: undefined,
-          isSearching: false,
-          searchError: undefined,
-          page: 0,
-        });
+      const isTop = trimmed.length < SKILLS_REGISTRY_MIN_QUERY_LENGTH;
+      const state = get();
+      // The top skills are bundled and never change, so showing them again
+      // after a search was cleared needs no new request.
+      if (isTop && state.isTop && state.results && !state.isSearching) {
+        set({ query });
         return;
       }
-      const requestId = get().latestRequestId + 1;
+      const requestId = state.latestRequestId + 1;
       set({
         query,
+        isTop,
         latestRequestId: requestId,
         isSearching: true,
         searchError: undefined,
         page: 0,
       });
+      // An empty query asks for the bundled top skills; nothing is sent to
+      // skills.sh until the user types a search.
       sendMessage(MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_SEARCH, {
         requestId,
-        query: trimmed,
+        query: isTop ? "" : trimmed,
       });
     },
 
-    setSearchResult: (requestId, skills, error) => {
+    setSearchResult: (requestId, skills, error, topSnapshotDate) => {
       // A slower, older search must not replace a newer one's results.
       if (requestId !== get().latestRequestId) return;
       set({
         results: error ? undefined : skills,
+        topSnapshotDate,
         searchError: error,
         isSearching: false,
         page: 0,
@@ -168,6 +193,11 @@ export const useSkillsRegistryStore = create<SkillsRegistryState>(
     },
 
     setPage: (page) => set({ page }),
+
+    setMinInstalls: (minInstalls) => set({ minInstalls, page: 0 }),
+
+    setAuditsPassedOnly: (auditsPassedOnly) =>
+      set({ auditsPassedOnly, page: 0 }),
 
     requestAudits: (entries) => {
       const { audits } = get();
@@ -181,9 +211,17 @@ export const useSkillsRegistryStore = create<SkillsRegistryState>(
           ),
         },
       }));
-      sendMessage(MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_AUDITS, {
-        skills: missing.map(({ source, slug }) => ({ source, slug })),
-      });
+      for (
+        let start = 0;
+        start < missing.length;
+        start += SKILLS_REGISTRY_MAX_AUDIT_BATCH
+      ) {
+        sendMessage(MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_AUDITS, {
+          skills: missing
+            .slice(start, start + SKILLS_REGISTRY_MAX_AUDIT_BATCH)
+            .map(({ source, slug }) => ({ source, slug })),
+        });
+      }
     },
 
     setAuditResults: (results) =>

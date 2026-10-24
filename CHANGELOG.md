@@ -19,7 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Install skills from skills.sh in the Agent & Skills Manager.** The Skills list has a
   **skills.sh** tab that searches the public skills.sh directory, sorted by install count, with
-  each skill's security audit verdict. **Import** shows the audits and the skill's `SKILL.md` on
+  each skill's security audit verdict. Before you search it lists the top skills on skills.sh, from
+  a snapshot bundled with the release, and the results can be filtered by install count or to
+  skills that passed every audit. On wide windows it sits beside the skills list. **Import** shows the audits and the skill's `SKILL.md` on
   GitHub, then installs that commit into your workspace or user ctrlyoke skills folder. A skill
   with audit warnings or no audit needs an extra confirmation. **Check for updates** compares
   installed skills with their GitHub repositories, and **Update** reviews and installs the newer

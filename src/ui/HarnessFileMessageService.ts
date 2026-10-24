@@ -7,6 +7,7 @@ import {
   DATA_SOURCES,
   HARNESS_FILE_TYPES,
   MESSAGE_TYPES,
+  SKILLS_REGISTRY_MAX_AUDIT_BATCH,
   type HarnessFileType,
 } from "../types/DashboardConstants";
 import {
@@ -37,9 +38,6 @@ import type {
   SkillUpdateCheckResult,
 } from "../types/WebviewMessageTypes";
 import type { WebviewClientContext } from "./WebviewClientContext";
-
-/** How many skills one audits request may name (one search page and then some). */
-const MAX_AUDIT_BATCH = 25;
 
 /**
  * Agent/skill file-manager message handlers (the dashboard's "Agents & Skills"
@@ -205,6 +203,16 @@ export class HarnessFileMessageService {
     ctx: WebviewClientContext,
     message: RequestSkillsRegistrySearchMessage
   ): Promise<void> {
+    if (!message.query.trim()) {
+      const top = this.skillsRegistry.getTopSkills();
+      ctx.emit({
+        type: MESSAGE_TYPES.SKILLS_REGISTRY_SEARCH_RESULT,
+        requestId: message.requestId,
+        skills: top.skills,
+        ...(top.generatedAt ? { topSnapshotDate: top.generatedAt } : {}),
+      });
+      return;
+    }
     try {
       const skills = await this.skillsRegistry.searchSkills(message.query);
       ctx.emit({
@@ -231,7 +239,10 @@ export class HarnessFileMessageService {
     ctx: WebviewClientContext,
     message: RequestSkillsRegistryAuditsMessage
   ): Promise<void> {
-    const skills = (message.skills ?? []).slice(0, MAX_AUDIT_BATCH);
+    const skills = (message.skills ?? []).slice(
+      0,
+      SKILLS_REGISTRY_MAX_AUDIT_BATCH
+    );
     ctx.emit({
       type: MESSAGE_TYPES.SKILLS_REGISTRY_AUDITS_RESULT,
       results: await fetchSkillAuditsBatch(this.skillsRegistry, skills),

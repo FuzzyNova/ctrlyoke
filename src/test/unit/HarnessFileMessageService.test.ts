@@ -23,6 +23,7 @@ import type {
   InstalledRegistrySkill,
   SkillUpdateCheck,
   SkillsRegistry,
+  TopSkillsSnapshot,
 } from "../../utils/SkillsRegistryClient";
 
 const NEWER_COMMIT = "1111111111111111111111111111111111111111";
@@ -301,7 +302,13 @@ suite("HarnessFileMessageService", () => {
         if (this.updateCheck instanceof Error) throw this.updateCheck;
         return this.updateCheck;
       }
-      async searchSkills(): Promise<RegistrySkillEntry[]> {
+      searches: string[] = [];
+      topSkills: TopSkillsSnapshot = { skills: [] };
+      getTopSkills(): TopSkillsSnapshot {
+        return this.topSkills;
+      }
+      async searchSkills(query: string): Promise<RegistrySkillEntry[]> {
+        this.searches.push(query);
         if (this.failWith) throw new Error(this.failWith);
         return [
           {
@@ -372,6 +379,32 @@ suite("HarnessFileMessageService", () => {
         skills: [],
         error: "skills.sh search is unavailable (HTTP 503)",
       });
+    });
+
+    test("an empty query answers with the bundled top skills, sending nothing", async () => {
+      const top: RegistrySkillEntry = {
+        id: "vercel-labs/skills/find-skills",
+        source: "vercel-labs/skills",
+        slug: "find-skills",
+        name: "find-skills",
+        installs: 4_000_000,
+      };
+      registry.topSkills = {
+        skills: [top],
+        generatedAt: "2026-10-23T00:00:00.000Z",
+      };
+      await service.handleSkillsRegistrySearch(ctx(), {
+        type: MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_SEARCH,
+        requestId: 3,
+        query: "  ",
+      });
+      assert.deepStrictEqual(lastResult(), {
+        type: MESSAGE_TYPES.SKILLS_REGISTRY_SEARCH_RESULT,
+        requestId: 3,
+        skills: [top],
+        topSnapshotDate: "2026-10-23T00:00:00.000Z",
+      });
+      assert.deepStrictEqual(registry.searches, []);
     });
 
     test("audits report one result per skill, failures included", async () => {

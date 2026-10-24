@@ -31,6 +31,7 @@ import {
 import { parseAgentFrontmatter } from "./AgentDiscovery";
 import { getErrorMessage } from "./ErrorUtils";
 import { isSafePathSegment } from "./PathSecurity";
+import topSkillsSnapshotData from "./generated/skillsShTopSkills.json";
 
 type FetchFn = typeof fetch;
 type JsonRecord = Record<string, unknown>;
@@ -129,9 +130,19 @@ export interface SkillUpdateCheck {
   latestCommitSha: string;
 }
 
+/** The skills.sh leaderboard bundled with ctrlyoke (`npm run sync-skills-snapshot`). */
+export interface TopSkillsSnapshot {
+  /** Sorted by installs, most first. Empty when no snapshot was taken. */
+  skills: RegistrySkillEntry[];
+  /** ISO date the snapshot was taken. */
+  generatedAt?: string;
+}
+
 /** The registry operations the Agent & Skills Manager uses. */
 export interface SkillsRegistry {
   searchSkills(query: string): Promise<RegistrySkillEntry[]>;
+  /** The bundled top skills; reads no network. */
+  getTopSkills(): TopSkillsSnapshot;
   /** `null` when skills.sh has not audited the skill yet. */
   getSkillAudits(
     source: string,
@@ -271,6 +282,27 @@ export function parseSkillsSearchResponse(data: unknown): RegistrySkillEntry[] {
       },
     ];
   });
+}
+
+/**
+ * Parse the bundled top skills snapshot, which keeps the `/api/search` shape
+ * plus `generatedAt`. An unexpected shape reads as no snapshot.
+ */
+export function parseTopSkillsSnapshot(data: unknown): TopSkillsSnapshot {
+  if (!isPlainObject(data) || !Array.isArray(data.skills)) {
+    return { skills: [] };
+  }
+  const skills = parseSkillsSearchResponse(data).sort(
+    (a, b) => b.installs - a.installs
+  );
+  const generatedAt =
+    typeof data.generatedAt === "string" &&
+    !Number.isNaN(Date.parse(data.generatedAt))
+      ? data.generatedAt
+      : undefined;
+  return skills.length > 0 && generatedAt
+    ? { skills, generatedAt }
+    : { skills: [] };
 }
 
 /** Parse a `/api/v1/skills/audit` body. Throws on an unexpected shape. */
@@ -515,12 +547,16 @@ export interface SkillsShRegistryClientOptions {
   fetch?: FetchFn;
   /** skills.sh base URL; defaults to {@link SKILLS_API_URL_ENV} or skills.sh. */
   baseUrl?: string;
+  /** Raw top skills snapshot; defaults to the bundled one. */
+  topSkillsSnapshot?: unknown;
 }
 
 /** {@link SkillsRegistry} backed by skills.sh search/audits and GitHub files. */
 export class SkillsShRegistryClient implements SkillsRegistry {
   private readonly fetchFn: FetchFn;
   private readonly baseUrl: string;
+  private readonly topSkillsSnapshot: unknown;
+  private topSkills: TopSkillsSnapshot | undefined;
   /** Trees by `source@commit`; a commit's tree never changes. */
   private readonly treeCache = new Map<string, GitTreeEntry[]>();
   private readonly headCache = new Map<
@@ -530,6 +566,7 @@ export class SkillsShRegistryClient implements SkillsRegistry {
 
   constructor(options: SkillsShRegistryClientOptions = {}) {
     this.fetchFn = options.fetch ?? ((input, init) => fetch(input, init));
+    this.topSkillsSnapshot = options.topSkillsSnapshot ?? topSkillsSnapshotData;
     this.baseUrl = (
       options.baseUrl ??
       process.env[SKILLS_API_URL_ENV] ??
@@ -553,6 +590,11 @@ export class SkillsShRegistryClient implements SkillsRegistry {
       await this.readJson(response, REGISTRY_SERVICES.SKILLS_SH)
     );
     return results.sort((a, b) => b.installs - a.installs);
+  }
+
+  getTopSkills(): TopSkillsSnapshot {
+    this.topSkills ??= parseTopSkillsSnapshot(this.topSkillsSnapshot);
+    return this.topSkills;
   }
 
   async getSkillAudits(
