@@ -762,6 +762,7 @@ export function AgentSkillsManagerSection({
               onSave={handleSaveAll}
               onDelete={handleDeleteAllRequest}
               onSetDefault={handleSetDefault}
+              alwaysWrap={showRegistry}
             />
           </div>
 
