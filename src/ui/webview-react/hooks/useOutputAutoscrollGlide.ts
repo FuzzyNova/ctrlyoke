@@ -42,6 +42,30 @@ interface RunningGlide {
   scrollTop: number;
 }
 
+/** The pane's `scrollTop` as of the last frame the browser painted. */
+interface PaintedScroll {
+  element: HTMLElement;
+  listener: () => void;
+  scrollTop: number;
+}
+
+/**
+ * Scroll events are dispatched in the rendering steps, before paint, so the
+ * value read in one is the value that frame shows. Commits between frames
+ * (a clamp, the lock's write) move `scrollTop` without updating it.
+ */
+function trackPaintedScrollTop(element: HTMLElement): PaintedScroll {
+  const painted: PaintedScroll = {
+    element,
+    listener: () => {
+      painted.scrollTop = element.scrollTop;
+    },
+    scrollTop: element.scrollTop,
+  };
+  element.addEventListener("scroll", painted.listener, { passive: true });
+  return painted;
+}
+
 /** Where a running glide is right now, read from its own clock and curve. */
 function sampleRunningGlide(glide: RunningGlide) {
   const currentTime = glide.animation.currentTime;
@@ -80,6 +104,14 @@ function sampleRunningGlide(glide: RunningGlide) {
  * the full estimated delta would then paint the content that far below where
  * the user last saw it — a jump up before gliding back down. So every commit
  * reconciles a running glide with where `scrollTop` actually is now.
+ *
+ * The same clamp can also land before any glide starts. A row replaced by its
+ * completed form ("Editing" → "Edited", a running command → its exit) first
+ * lays out shorter, the browser clamps `scrollTop` down, and the real height
+ * is committed and scrolled to in the same frame. The lock's write delta is
+ * then measured from the clamped value, so a glide sized from it would paint
+ * the content that far too low. With no glide running, the delta is taken
+ * from the last painted `scrollTop` instead.
  */
 export function useOutputAutoscrollGlide({
   autoscrollEnabledRef,
@@ -89,6 +121,7 @@ export function useOutputAutoscrollGlide({
   scrollSeekPlaceholderRef,
 }: UseOutputAutoscrollGlideInput) {
   const runningGlideRef = useRef<RunningGlide | null>(null);
+  const paintedScrollRef = useRef<PaintedScroll | null>(null);
 
   const releaseGlide = useCallback((glide: RunningGlide) => {
     if (runningGlideRef.current === glide) {
@@ -185,13 +218,18 @@ export function useOutputAutoscrollGlide({
         settleGlide();
         return;
       }
-      // Measured from the running glide's own `scrollTop`, not from where this
-      // write started: a clamp that landed in between moved the pane too.
+      // Measured from where the content last stood, not from where this write
+      // started: a clamp that landed in between moved the pane too. That is
+      // the running glide's own `scrollTop`, or with none running the last
+      // painted one.
       const running = runningGlideRef.current;
+      const painted = paintedScrollRef.current;
       const scrollDeltaPx =
         running && running.element === container
           ? scrollElement.scrollTop - running.scrollTop
-          : appliedDeltaPx;
+          : painted?.element === scrollElement
+            ? scrollElement.scrollTop - painted.scrollTop
+            : appliedDeltaPx;
       retargetGlide(scrollElement, container, scrollDeltaPx);
     },
     [
@@ -219,6 +257,27 @@ export function useOutputAutoscrollGlide({
     if (Math.abs(scrollDeltaPx) < 1) return;
     retargetGlide(scrollElement, running.element, scrollDeltaPx);
   });
+
+  // Follows the pane element across remounts; an unchanged pane costs one
+  // comparison per commit.
+  useLayoutEffect(() => {
+    const scrollElement = outputRef.current;
+    const painted = paintedScrollRef.current;
+    if (painted?.element === scrollElement) return;
+    painted?.element.removeEventListener("scroll", painted.listener);
+    paintedScrollRef.current = scrollElement
+      ? trackPaintedScrollTop(scrollElement)
+      : null;
+  });
+
+  useEffect(
+    () => () => {
+      const painted = paintedScrollRef.current;
+      painted?.element.removeEventListener("scroll", painted.listener);
+      paintedScrollRef.current = null;
+    },
+    []
+  );
 
   useEffect(() => settleGlide, [settleGlide]);
 

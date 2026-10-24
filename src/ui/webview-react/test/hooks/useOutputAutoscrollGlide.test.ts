@@ -58,6 +58,12 @@ function buildPane() {
   return { animations, clip, container, scrollElement };
 }
 
+/** Scrolls to `scrollTop` and lets the frame paint there. */
+function paintAt(scrollElement: HTMLElement, scrollTop: number) {
+  scrollElement.scrollTop = scrollTop;
+  scrollElement.dispatchEvent(new Event("scroll"));
+}
+
 function renderGlide(scrollElement: HTMLDivElement) {
   const refs = {
     autoscrollEnabledRef: { current: true },
@@ -91,6 +97,7 @@ describe("useOutputAutoscrollGlide", () => {
     const { animations, clip, scrollElement } = buildPane();
     const { result } = renderGlide(scrollElement);
 
+    scrollElement.scrollTop = 48;
     result.current.glideAfterScrollWrite(
       OUTPUT_SCROLL_APPLY_PHASES.AUTO_SCROLL,
       BOTTOM,
@@ -112,6 +119,7 @@ describe("useOutputAutoscrollGlide", () => {
     const { animations, scrollElement } = buildPane();
     const { result } = renderGlide(scrollElement);
 
+    scrollElement.scrollTop = 30;
     result.current.glideAfterScrollWrite(
       OUTPUT_SCROLL_APPLY_PHASES.AUTO_SCROLL,
       BOTTOM,
@@ -165,6 +173,7 @@ describe("useOutputAutoscrollGlide", () => {
     const { animations, clip, scrollElement } = buildPane();
     const { result, rerender } = renderGlide(scrollElement);
 
+    paintAt(scrollElement, 1000);
     scrollElement.scrollTop = 1096;
     result.current.glideAfterScrollWrite(
       OUTPUT_SCROLL_APPLY_PHASES.LAYOUT_EFFECT,
@@ -183,6 +192,7 @@ describe("useOutputAutoscrollGlide", () => {
     const { animations, scrollElement } = buildPane();
     const { result, rerender } = renderGlide(scrollElement);
 
+    paintAt(scrollElement, 1000);
     scrollElement.scrollTop = 1096;
     result.current.glideAfterScrollWrite(
       OUTPUT_SCROLL_APPLY_PHASES.LAYOUT_EFFECT,
@@ -221,6 +231,43 @@ describe("useOutputAutoscrollGlide", () => {
     });
   });
 
+  // A row replaced by its completed form first lays out shorter: the browser
+  // clamps scrollTop down, and the real height is committed and written back
+  // before the frame paints. The write's own delta starts from the clamp.
+  it("does not glide when a same-height replacement clamps before the write", () => {
+    const { animations, scrollElement } = buildPane();
+    const { result } = renderGlide(scrollElement);
+
+    paintAt(scrollElement, 1000);
+    scrollElement.scrollTop = 965;
+    scrollElement.scrollTop = 1000;
+    result.current.glideAfterScrollWrite(
+      OUTPUT_SCROLL_APPLY_PHASES.LAYOUT_EFFECT,
+      BOTTOM,
+      35
+    );
+
+    expect(animations).toHaveLength(0);
+  });
+
+  it("glides only past the painted position when a clamped replacement grows", () => {
+    const { animations, scrollElement } = buildPane();
+    const { result } = renderGlide(scrollElement);
+
+    paintAt(scrollElement, 1000);
+    scrollElement.scrollTop = 992;
+    scrollElement.scrollTop = 1024;
+    result.current.glideAfterScrollWrite(
+      OUTPUT_SCROLL_APPLY_PHASES.LAYOUT_EFFECT,
+      BOTTOM,
+      32
+    );
+
+    expect(animations[0]?.keyframes[0]).toEqual({
+      transform: "translateY(24px)",
+    });
+  });
+
   it("leaves a running glide alone across commits that did not move the pane", () => {
     const { animations, scrollElement } = buildPane();
     const { result, rerender } = renderGlide(scrollElement);
@@ -241,6 +288,7 @@ describe("useOutputAutoscrollGlide", () => {
     const { animations, clip, scrollElement } = buildPane();
     const { result } = renderGlide(scrollElement);
 
+    scrollElement.scrollTop = 30;
     result.current.glideAfterScrollWrite(
       OUTPUT_SCROLL_APPLY_PHASES.AUTO_SCROLL,
       BOTTOM,
@@ -287,6 +335,7 @@ describe("useOutputAutoscrollGlide", () => {
     const { animations, scrollElement } = buildPane();
     const { result } = renderGlide(scrollElement);
 
+    scrollElement.scrollTop = 400;
     result.current.glideAfterScrollWrite(
       OUTPUT_SCROLL_APPLY_PHASES.AUTO_SCROLL,
       BOTTOM,
@@ -309,6 +358,7 @@ describe("useOutputAutoscrollGlide", () => {
     const { animations, clip, scrollElement } = buildPane();
     const { result } = renderGlide(scrollElement);
 
+    scrollElement.scrollTop = 30;
     result.current.glideAfterScrollWrite(
       OUTPUT_SCROLL_APPLY_PHASES.AUTO_SCROLL,
       BOTTOM,
