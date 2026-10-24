@@ -305,6 +305,7 @@ function describeWorktreeActionSuccess(
  */
 export class WebviewMessageRouter {
   private routeQueue: Promise<void> = Promise.resolve();
+  private readonly loadRunViewRoutes = new Map<string, Promise<void>>();
   private readonly clientInteractionPorts = new Map<
     string,
     WebviewUserInteractionPort
@@ -426,6 +427,18 @@ export class WebviewMessageRouter {
    */
   async route(message: any, options?: WebviewRouteOptions): Promise<void> {
     const clientId = options?.clientTag ?? PANEL_CLIENT_ID;
+    const loadRunViewKey =
+      message?.type === MESSAGE_TYPES.LOAD_RUN_VIEW &&
+      typeof message.requestId === "string"
+        ? `${clientId}\0${message.requestId}`
+        : undefined;
+    if (loadRunViewKey) {
+      const existing = this.loadRunViewRoutes.get(loadRunViewKey);
+      if (existing) {
+        await existing;
+        return;
+      }
+    }
     const interactionPort = this.getClientInteractionPort(
       clientId,
       options?.postMessage ?? this.defaultPostMessage
@@ -500,7 +513,20 @@ export class WebviewMessageRouter {
       }
     });
 
-    await this.routeQueue;
+    const queuedRoute = this.routeQueue;
+    if (loadRunViewKey) {
+      this.loadRunViewRoutes.set(loadRunViewKey, queuedRoute);
+    }
+    try {
+      await queuedRoute;
+    } finally {
+      if (
+        loadRunViewKey &&
+        this.loadRunViewRoutes.get(loadRunViewKey) === queuedRoute
+      ) {
+        this.loadRunViewRoutes.delete(loadRunViewKey);
+      }
+    }
   }
 
   /**

@@ -104,6 +104,7 @@
     _state = { storageVersion: STORAGE_VERSION };
   }
   let ws;
+  window.__ctrlyokeTransportConnected = false;
   let reconnectTimer;
   let connectWatchdogTimer;
   let reconnectAttempt = 0;
@@ -532,6 +533,7 @@
     socket.addEventListener("open", () => {
       clearConnectWatchdog();
       socketOpened = true;
+      window.__ctrlyokeTransportConnected = true;
       consecutiveConnectFailures = 0;
       hideConnectionErrorBanner();
       reconnectAttempt = 0;
@@ -560,6 +562,7 @@
       if (wasCurrentSocket) {
         clearConnectWatchdog();
         ws = undefined;
+        window.__ctrlyokeTransportConnected = false;
       }
       clearForegroundProbe(socket);
       connectionLog(

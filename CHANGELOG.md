@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Run-view loads no longer retry or roll back because of slow responses.** The panel waits for its reliable message transport; hosted clients retry after reconnect, duplicate requests join in-flight work, and a late snapshot can still complete the latest navigation.
 - **Editor file operations stay responsive and complete after slow replies.** Prompt conversion, pasted images, output snapshots and image preview lookups bypass the shared route queue; client deadlines report that work is still pending, and late replies are applied or surfaced without caching preview timeouts.
 - **Dashboard completion requests no longer block other clients and are superseded immediately by newer keystrokes.** Slow workspace symbol lookups and file-index polling stop emitting results after cancellation.
 - **Statusline forwarding preserves the last good custom output when a command times out.** The wrapper allows 1.5 seconds, skips unused forwarding in ctrlyoke-style mode, and kills Windows command process trees on timeout.

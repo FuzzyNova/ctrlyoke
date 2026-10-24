@@ -639,6 +639,8 @@ interface UiState {
   appliedDefinitionRevision: number | null;
   /** Latest client-initiated run-view request; not persisted across reloads. */
   pendingRunViewRequestId: string | null;
+  /** Last request retired by the watchdog, eligible for one late snapshot. */
+  retiredRunViewRequestId: string | null;
   /**
    * The address `pendingRunViewRequestId` asked for. Recorded for *every*
    * pending request, unlike `pendingRunViewSwitch` (cross-lineage only), so the
@@ -1336,6 +1338,7 @@ const initialState: UiState = {
   appliedViewAddress: null,
   appliedDefinitionRevision: null,
   pendingRunViewRequestId: null,
+  retiredRunViewRequestId: null,
   pendingRunViewAddress: null,
   pendingRunViewSwitch: null,
   runViewLoadRetrying: false,
@@ -2416,6 +2419,7 @@ export const useUiStore = create<UiState & UiActions>()(
         );
         set({
           pendingRunViewRequestId: requestId,
+          retiredRunViewRequestId: null,
           pendingRunViewAddress: address,
           runViewLoadRetrying: false,
           runViewLoadRollback: rollback,
@@ -2446,6 +2450,7 @@ export const useUiStore = create<UiState & UiActions>()(
           const rollback = state.runViewLoadRollback;
           const retired = {
             pendingRunViewRequestId: null,
+            retiredRunViewRequestId: state.pendingRunViewRequestId,
             pendingRunViewAddress: null,
             pendingRunViewSwitch: null,
             runViewLoadRetrying: false,

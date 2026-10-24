@@ -1243,6 +1243,46 @@ suite("WebviewMessageRouter — workflow variant delivery", () => {
 suite(
   "WebviewMessageRouter — LOAD_RUN_VIEW always answers its requestId",
   () => {
+    test("joins a duplicate in-flight requestId for the same client", async () => {
+      let resolveLoad!: () => void;
+      const loadGate = new Promise<void>((resolve) => {
+        resolveLoad = resolve;
+      });
+      let loadCount = 0;
+      const router = new WebviewMessageRouter(
+        () => {},
+        { sendWorkflowPropertiesToSettings: async () => {} } as any,
+        {} as any,
+        () =>
+          ({
+            loadRunViewForClient: async () => {
+              loadCount++;
+              await loadGate;
+            },
+            publishViewIdentityToViewers: async () => undefined,
+          }) as any,
+        {} as any,
+        { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+      );
+      const message = {
+        type: MESSAGE_TYPES.LOAD_RUN_VIEW,
+        address: {
+          workflowKey: "workflow-a",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "run-2026-01-01T00-00-00-000Z",
+        },
+        requestId: "run-view-duplicate",
+      };
+
+      const first = router.route(message, { clientTag: "browser:1" });
+      const duplicate = router.route(message, { clientTag: "browser:1" });
+      await Promise.resolve();
+      assert.strictEqual(loadCount, 1);
+      resolveLoad();
+      await Promise.all([first, duplicate]);
+      assert.strictEqual(loadCount, 1);
+    });
+
     test("replies with a failure when the orchestrator is not available yet", async () => {
       const emitted: any[] = [];
       const router = new WebviewMessageRouter(
