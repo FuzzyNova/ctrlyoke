@@ -35,6 +35,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   noninteractive `ctrlyoke run` exits with code `2`. A workspace value that only narrows your
   permissions still applies without asking.
 
+- **Run definitions changed outside ctrlyoke are refused.** ctrlyoke now keeps a record of every
+  run definition it writes, under `~/.ctrlyoke/projects/` in both storage modes, so an agent that
+  edits a run file in `<workspace>/.ctrlyoke/.runs/` can no longer change a pending step's
+  scripts, end conditions or tool permissions. A running workflow ignores such a change, puts back
+  the definition ctrlyoke last wrote and shows a warning on the current step. Any other run
+  becomes read-only, with a **Definition changed outside ctrlyoke** banner, until you choose
+  **Restore** or **Accept change** (or run `ctrlyoke step restore-definition` /
+  `ctrlyoke step accept-definition`). Hand-editing a run file now needs the same review. Runs
+  from earlier versions are trusted the first time they are opened.
+
 - **Headless steps warn when they end with background work still running.** The warning appears as a ctrlyoke notice rather than in the reply; headless prompts also tell agents to wait for long commands in the foreground.
 - **Antigravity cost estimates now include separately reported thinking tokens.**
 - **Sonnet 5.5 cache reads use the corrected $0.20/M rate.** The sync script

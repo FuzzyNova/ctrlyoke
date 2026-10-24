@@ -21,10 +21,16 @@ import {
   IN_FLIGHT_EXECUTION_STATES,
   PROMPT_PROPERTIES,
   QUEUE_POSITION,
+  RUN_DEFINITION_DECISIONS,
+  RUN_DEFINITION_INTEGRITY,
   WORKTREE_EDIT_KINDS,
   type HarnessId,
   type QueuePosition,
+  type RunDefinitionChange,
+  type RunDefinitionDecision,
+  type RunDefinitionIntegrity,
 } from "../types/DashboardConstants";
+import { pathsEqual } from "../utils/PathCasing";
 import type { ExecutionState } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
@@ -32,6 +38,19 @@ import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { withFileLock } from "../utils/FileLockUtils";
 import { writeFileAtomic } from "../utils/AtomicFileUtils";
 import { runStateWriteOptions } from "../utils/RunStateWrites";
+import {
+  anchorRunDefinitionOnDisk,
+  assertTrustedRewindBase,
+  describeRunDefinitionChanges,
+  isRunDefinitionChangedError,
+  restoreTrustedRunDefinition,
+  runDefinitionHashOf,
+  verifyRunDefinitionFile,
+  writeAnchoredRunDefinition,
+  type AnchoredWriteOptions,
+  type ChangedRunDefinitionVerdict,
+  RunDefinitionChangedError,
+} from "../utils/RunDefinitionAnchor";
 import { invalidateRunSummaryFor } from "./orchestration/RunSummaryCache";
 import { stripLegacyWorkingFileLineageMetadata } from "../utils/WorkingFileMetadata";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
@@ -155,29 +174,40 @@ async function readWorkingFileFromDisk(
 ): Promise<WorkingFile> {
   try {
     const content = await fs.readFile(workingFilePath, "utf-8");
-    const parsed = JSON.parse(content) as WorkingFile;
-    const schemaVersion = readSchemaVersion(parsed);
-    if (
-      isNewerSchemaVersion(PERSISTED_STORES.WORKFLOW_DEFINITION, schemaVersion)
-    ) {
-      refuseNewerSchema(
-        PERSISTED_STORES.WORKFLOW_DEFINITION,
-        schemaVersion as number,
-        `${workingFilePath.split(/[\\/]/).pop()} (JSON)`
-      );
-    }
-    const workingFile = stripLegacyWorkingFileLineageMetadata(parsed);
-    return stripTimelineDuplicatedWorkingFileOutput(workingFile);
+    return normalizeParsedWorkingFile(
+      JSON.parse(content) as WorkingFile,
+      workingFilePath
+    );
   } catch (error) {
     if (isNewerSchemaError(error)) throw error;
     throw new Error(`Failed to read working file: ${getErrorMessage(error)}`);
   }
 }
 
+/** The in-memory shape of a working file parsed from disk. */
+function normalizeParsedWorkingFile(
+  parsed: WorkingFile,
+  workingFilePath: string
+): WorkingFile {
+  const schemaVersion = readSchemaVersion(parsed);
+  if (
+    isNewerSchemaVersion(PERSISTED_STORES.WORKFLOW_DEFINITION, schemaVersion)
+  ) {
+    refuseNewerSchema(
+      PERSISTED_STORES.WORKFLOW_DEFINITION,
+      schemaVersion as number,
+      `${workingFilePath.split(/[\\/]/).pop()} (JSON)`
+    );
+  }
+  const workingFile = stripLegacyWorkingFileLineageMetadata(parsed);
+  return stripTimelineDuplicatedWorkingFileOutput(workingFile);
+}
+
 type WorkingFileWriteOptions = {
   skipLock?: boolean;
   operation?: string;
   attemptedFields?: readonly string[];
+  anchor?: AnchoredWriteOptions;
 };
 
 type WorkingFileFieldStatus = "added" | "removed" | "changed" | "no-op";
@@ -399,16 +429,25 @@ async function writeWorkingFileAtomicTo(
   const writeAction = async () => {
     try {
       await logWorkingFileWriteDiagnostics(workingFilePath, stamped, options);
-      await writeFileAtomic(
+      await writeAnchoredRunDefinition(
         workingFilePath,
-        JSON.stringify(
-          stripTimelineDuplicatedWorkingFileOutput(stamped),
-          null,
-          2
-        ),
-        runStateWriteOptions(workingFilePath, "WorkingFileManager")
+        stamped,
+        () =>
+          writeFileAtomic(
+            workingFilePath,
+            JSON.stringify(
+              stripTimelineDuplicatedWorkingFileOutput(stamped),
+              null,
+              2
+            ),
+            runStateWriteOptions(workingFilePath, "WorkingFileManager")
+          ),
+        options.anchor
       );
     } catch (error) {
+      if (isRunDefinitionChangedError(error) || isNewerSchemaError(error)) {
+        throw error;
+      }
       throw new Error(
         `Failed to write working file: ${getErrorMessage(error)}`
       );
@@ -473,6 +512,12 @@ async function restoreSnapshotAtomic(
 
 class DiscardConfirmationRequiredError extends Error {}
 
+/** A definition change made outside ctrlyoke that the live queue rejected. */
+export interface RunDefinitionRejection {
+  workingFilePath: string;
+  changes: RunDefinitionChange[];
+}
+
 /**
  * Interface providing queue state access for working file persistence operations.
  * Implemented as an adapter by PromptQueue to decouple file I/O from queue state management.
@@ -524,6 +569,9 @@ export interface IWorkingFileQueueAccess {
   /** Notify the execution owner that disk supplied new queue members. */
   onDiskStepsMerged?(steps: readonly WorkflowStep[]): void;
 
+  /** A definition change made outside ctrlyoke was found and rejected. */
+  onDiskDefinitionRejected?(rejection: RunDefinitionRejection): void;
+
   /** Adopt the rewind marker present in the working file. */
   setPendingRewind?(pendingRewind: WorkingFileRuntime["pendingRewind"]): void;
 
@@ -562,6 +610,9 @@ export class WorkingFileManager {
   private operationQueue: Promise<void> = Promise.resolve();
   private expectedDefinitionRevision: number | undefined;
   private readonly lineageRepository: WorkflowLineageRepository;
+  /** The working file whose definition this queue has read as trusted or written. */
+  private trustedDefinitionPath: string | undefined;
+  private lastRejectedDefinitionKey: string | undefined;
 
   constructor(
     private readonly queueAccess: IWorkingFileQueueAccess,
@@ -579,7 +630,115 @@ export class WorkingFileManager {
    * @returns Parsed working file
    */
   public async readWorkingFile(workingFilePath: string): Promise<WorkingFile> {
-    return WorkingFileManager.readWorkingFileFromDisk(workingFilePath);
+    return (await this.readVerifiedWorkingFile(workingFilePath)).workingFile;
+  }
+
+  /**
+   * The queue's single read of a working file, checked against its anchor.
+   *
+   * When the definition was changed outside ctrlyoke after this queue already
+   * held it as trusted (the live runner merging at a step boundary), the
+   * change is rejected: the trusted definition is returned with the file's
+   * runtime, the rejection is reported once, and this queue's next write puts
+   * the trusted definition back on disk. When this queue never trusted the
+   * file (it is loading it), the file is returned as it is and `changedOutside`
+   * is set; every write to it is then refused until the user accepts or
+   * restores the change.
+   */
+  private async readVerifiedWorkingFile(workingFilePath: string): Promise<{
+    workingFile: WorkingFile;
+    changedOutside?: ChangedRunDefinitionVerdict;
+  }> {
+    let verified: Awaited<ReturnType<typeof verifyRunDefinitionFile>>;
+    try {
+      verified = await verifyRunDefinitionFile(workingFilePath);
+    } catch (error) {
+      if (isNewerSchemaError(error)) throw error;
+      throw new Error(`Failed to read working file: ${getErrorMessage(error)}`);
+    }
+    if (!verified) {
+      throw new Error(
+        `Failed to read working file: ENOENT: no such file or directory, open '${workingFilePath}'`
+      );
+    }
+    const { verdict, workingFile } = verified;
+    if (verdict.status !== RUN_DEFINITION_INTEGRITY.CHANGED_OUTSIDE) {
+      this.trustedDefinitionPath = workingFilePath;
+      return {
+        workingFile: normalizeParsedWorkingFile(workingFile, workingFilePath),
+      };
+    }
+    if (this.holdsTrustedDefinition(workingFilePath)) {
+      this.reportRejectedDefinition(workingFilePath, verdict);
+      return {
+        workingFile: normalizeParsedWorkingFile(
+          restoreTrustedRunDefinition(workingFile, verdict.anchor),
+          workingFilePath
+        ),
+      };
+    }
+    return {
+      workingFile: normalizeParsedWorkingFile(workingFile, workingFilePath),
+      changedOutside: verdict,
+    };
+  }
+
+  /**
+   * Puts the trusted definition back on disk when an outside change to this
+   * queue's file is waiting to be rejected. The queue's own writes do that on
+   * their own; this is for the cross-process transactions the live queue runs
+   * through `RunContinuationService` (step claims), which would otherwise
+   * refuse the changed file and fail the step.
+   */
+  public async restoreRejectedDefinition(): Promise<void> {
+    const workingFilePath = this.queueAccess.getWorkingFilePath();
+    if (!workingFilePath || !this.holdsTrustedDefinition(workingFilePath)) {
+      return;
+    }
+    await withFileLock(workingFilePath, async () => {
+      const verified = await verifyRunDefinitionFile(workingFilePath);
+      if (
+        verified?.verdict.status !== RUN_DEFINITION_INTEGRITY.CHANGED_OUTSIDE
+      ) {
+        return;
+      }
+      this.reportRejectedDefinition(workingFilePath, verified.verdict);
+      await this.writeWorkingFileAtomic(
+        workingFilePath,
+        restoreTrustedRunDefinition(
+          verified.workingFile,
+          verified.verdict.anchor
+        ),
+        { skipLock: true, operation: "restore-rejected-definition" }
+      );
+    });
+  }
+
+  private holdsTrustedDefinition(workingFilePath: string): boolean {
+    return (
+      this.trustedDefinitionPath !== undefined &&
+      pathsEqual(this.trustedDefinitionPath, workingFilePath)
+    );
+  }
+
+  private reportRejectedDefinition(
+    workingFilePath: string,
+    verdict: ChangedRunDefinitionVerdict
+  ): void {
+    // Every read until the next write restores the file sees the same change.
+    const key = `${workingFilePath}\0${verdict.definitionHash}`;
+    if (this.lastRejectedDefinitionKey === key) {
+      return;
+    }
+    this.lastRejectedDefinitionKey = key;
+    Log.warn(
+      `[WorkingFileManager] Rejected a definition change made outside ctrlyoke to ${workingFilePath} ` +
+        `(${describeRunDefinitionChanges(verdict.changes)}); keeping the last definition ctrlyoke wrote`
+    );
+    this.queueAccess.onDiskDefinitionRejected?.({
+      workingFilePath,
+      changes: verdict.changes,
+    });
   }
 
   /** Read any run-storage working file without requiring a live queue adapter. */
@@ -627,7 +786,18 @@ export class WorkingFileManager {
     workingFile: WorkingFile,
     options: WorkingFileWriteOptions = {}
   ): Promise<void> {
-    return writeWorkingFileAtomicTo(workingFilePath, workingFile, options);
+    // This queue builds every write from `readVerifiedWorkingFile`, which hands
+    // back the trusted definition once it holds one, so its writes may replace
+    // an outside change (that is how a rejected change leaves the disk).
+    await writeWorkingFileAtomicTo(workingFilePath, workingFile, {
+      ...options,
+      anchor: {
+        overwriteChangedDefinition:
+          this.holdsTrustedDefinition(workingFilePath),
+        ...options.anchor,
+      },
+    });
+    this.trustedDefinitionPath = workingFilePath;
   }
 
   // ==================== Higher-Level Operations ====================
@@ -695,13 +865,23 @@ export class WorkingFileManager {
   private async readCurrentDefinitionHead(): Promise<WorkingFile | undefined> {
     const currentPath = this.queueAccess.getWorkingFilePath();
     if (!currentPath) return undefined;
+    let head: Awaited<ReturnType<typeof this.readVerifiedWorkingFile>>;
     try {
-      return await readWorkingFileFromDisk(currentPath);
+      head = await this.readVerifiedWorkingFile(currentPath);
     } catch {
       // A missing/unreadable head is not fatal: promotion still produces a
       // valid run from queue state, exactly as it did before.
       return undefined;
     }
+    // A new run is anchored as trusted, so it must never be seeded from a
+    // change the user has not reviewed.
+    if (head.changedOutside) {
+      throw new RunDefinitionChangedError(
+        currentPath,
+        head.changedOutside.changes
+      );
+    }
+    return head.workingFile;
   }
 
   /**
@@ -792,12 +972,17 @@ export class WorkingFileManager {
         workingFile.parallelGroups
       )
     );
-    await WorkingFileManager.finalizeAllocatedRun(
+    await WorkingFileManager.publishAnchoredRun(
       workspaceFolderPath,
       workflowKey,
       allocation,
+      workingFile,
       this.lineageRepository
     );
+    // This queue wrote the run's definition, so it is the live owner of a
+    // trusted copy from the start: an outside edit landing before its first
+    // read is rejected, not mistaken for a load of someone else's file.
+    this.trustedDefinitionPath = allocation.runFilePath;
 
     Log.info(
       `[WorkingFileManager] Promoted lineage ${workflowKey} to new run ${allocation.runRef}`
@@ -860,7 +1045,8 @@ export class WorkingFileManager {
       workflowKey,
       fromRunRef
     );
-    const source = await readWorkingFileFromDisk(sourceFilePath);
+    const source =
+      await WorkingFileManager.readTrustedSourceDefinition(sourceFilePath);
     assertWritableSchema(
       PERSISTED_STORES.RUN_FILE,
       source._runtime,
@@ -942,10 +1128,11 @@ export class WorkingFileManager {
         workingFile.parallelGroups
       )
     );
-    await WorkingFileManager.finalizeAllocatedRun(
+    await WorkingFileManager.publishAnchoredRun(
       workspaceFolderPath,
       workflowKey,
       allocation,
+      workingFile,
       lineageRepository
     );
 
@@ -963,6 +1150,140 @@ export class WorkingFileManager {
       allocation,
       startedAt,
     };
+  }
+
+  /**
+   * Anchors a staged run's definition at the path it is about to be published
+   * to, then publishes it. The staging directory has no address to anchor, and
+   * anchoring after the rename would leave a window in which an outside edit
+   * of the brand-new file would be anchored as trusted on its first write.
+   */
+  private static async publishAnchoredRun(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    allocation: import("./orchestration/WorkflowLineageRepository").AllocatedRun,
+    workingFile: WorkingFile,
+    lineageRepository: WorkflowLineageRepository
+  ): Promise<void> {
+    await writeAnchoredRunDefinition(
+      allocation.runFilePath,
+      workingFile,
+      () =>
+        WorkingFileManager.finalizeAllocatedRun(
+          workspaceFolderPath,
+          workflowKey,
+          allocation,
+          lineageRepository
+        ),
+      { overwriteChangedDefinition: true }
+    );
+  }
+
+  /**
+   * Reads a definition another file is about to be built from (Re-run's
+   * source run). A source changed outside ctrlyoke is refused: the copy would
+   * be anchored as trusted. History older than anchors is trusted.
+   */
+  private static async readTrustedSourceDefinition(
+    workingFilePath: string
+  ): Promise<WorkingFile> {
+    const verified = await verifyRunDefinitionFile(workingFilePath);
+    if (!verified) {
+      return readWorkingFileFromDisk(workingFilePath);
+    }
+    if (verified.verdict.status === RUN_DEFINITION_INTEGRITY.CHANGED_OUTSIDE) {
+      throw new RunDefinitionChangedError(
+        workingFilePath,
+        verified.verdict.changes
+      );
+    }
+    return normalizeParsedWorkingFile(verified.workingFile, workingFilePath);
+  }
+
+  /**
+   * Whether a run/draft file's definition is still the one ctrlyoke last
+   * wrote. History that predates anchors gets one here, the first time it is
+   * looked at, and is trusted from then on.
+   */
+  public static async inspectDefinitionIntegrity(
+    workingFilePath: string
+  ): Promise<{
+    status: RunDefinitionIntegrity;
+    changes?: RunDefinitionChange[];
+  }> {
+    const verified = await verifyRunDefinitionFile(workingFilePath);
+    if (!verified) {
+      return { status: RUN_DEFINITION_INTEGRITY.UNANCHORABLE };
+    }
+    const { verdict } = verified;
+    if (verdict.status === RUN_DEFINITION_INTEGRITY.CHANGED_OUTSIDE) {
+      return { status: verdict.status, changes: verdict.changes };
+    }
+    if (verdict.status === RUN_DEFINITION_INTEGRITY.UNANCHORED) {
+      // Under the lock, so a ctrlyoke write landing meanwhile is never
+      // overwritten by an anchor of the file it replaced.
+      await withFileLock(workingFilePath, async () => {
+        const current = await verifyRunDefinitionFile(workingFilePath);
+        if (current?.verdict.status === RUN_DEFINITION_INTEGRITY.UNANCHORED) {
+          await anchorRunDefinitionOnDisk(workingFilePath);
+        }
+      });
+      return { status: RUN_DEFINITION_INTEGRITY.TRUSTED };
+    }
+    return { status: verdict.status };
+  }
+
+  /**
+   * Applies the user's answer to a definition changed outside ctrlyoke:
+   * `accept` trusts the file as it is now; `restore` puts back the last
+   * definition ctrlyoke wrote, keeping the run's runtime. A restore lands
+   * above both revisions so no client mistakes it for a stale snapshot.
+   * Returns false when there was nothing to resolve.
+   */
+  public static async resolveDefinitionChange(
+    workingFilePath: string,
+    decision: RunDefinitionDecision
+  ): Promise<boolean> {
+    return withFileLock(workingFilePath, async () => {
+      const verified = await verifyRunDefinitionFile(workingFilePath);
+      if (
+        verified?.verdict.status !== RUN_DEFINITION_INTEGRITY.CHANGED_OUTSIDE
+      ) {
+        return false;
+      }
+      const { verdict, workingFile } = verified;
+      if (decision === RUN_DEFINITION_DECISIONS.ACCEPT) {
+        assertWritableSchema(
+          PERSISTED_STORES.RUN_FILE,
+          workingFile._runtime,
+          workingFilePath
+        );
+        await anchorRunDefinitionOnDisk(workingFilePath);
+        Log.warn(
+          `[WorkingFileManager] Accepted a definition change made outside ctrlyoke to ${workingFilePath} ` +
+            `(${describeRunDefinitionChanges(verdict.changes)})`
+        );
+        return true;
+      }
+      const restored = restoreTrustedRunDefinition(workingFile, verdict.anchor);
+      await writeWorkingFileAtomicTo(
+        workingFilePath,
+        {
+          ...restored,
+          definitionRevision:
+            Math.max(
+              restored.definitionRevision ?? 1,
+              workingFile.definitionRevision ?? 1
+            ) + 1,
+        },
+        { skipLock: true, anchor: { overwriteChangedDefinition: true } }
+      );
+      Log.info(
+        `[WorkingFileManager] Restored the last ctrlyoke-written definition of ${workingFilePath} ` +
+          `(discarded ${describeRunDefinitionChanges(verdict.changes)})`
+      );
+      return true;
+    });
   }
 
   /** Publishes a staged run only after TimelineRecorder created its two artifacts. */
@@ -1100,6 +1421,9 @@ export class WorkingFileManager {
           };
           await writeWorkingFileAtomicTo(runFilePath, workingFile, {
             skipLock: true,
+            // The snapshot sits beside the run file, so discarding the rewind
+            // later may only restore the exact definition anchored here.
+            anchor: { rewindBaseHash: runDefinitionHashOf(sourceForRewind) },
           });
           return {
             value: {
@@ -1992,7 +2316,13 @@ export class WorkingFileManager {
               throw new DiscardConfirmationRequiredError();
             }
 
-            await restoreSnapshotAtomic(runFilePath, snapshotBytes);
+            await assertTrustedRewindBase(runFilePath, base);
+            await writeAnchoredRunDefinition(
+              runFilePath,
+              base,
+              () => restoreSnapshotAtomic(runFilePath, snapshotBytes),
+              { overwriteChangedDefinition: true, rewindBaseHash: null }
+            );
             // Never recursively remove this directory: a damaged/foreign entry
             // must survive for investigation rather than being silently erased.
             await fs.unlink(snapshotPath);
@@ -2165,7 +2495,7 @@ export class WorkingFileManager {
       await writeWorkingFileAtomicTo(
         runFilePath,
         { ...current, _runtime: nextRuntime },
-        { skipLock: true }
+        { skipLock: true, anchor: { rewindBaseHash: null } }
       );
       // Best-effort snapshot cleanup: the run head is now durable, so a
       // leftover snapshot must never be able to overwrite it. Never

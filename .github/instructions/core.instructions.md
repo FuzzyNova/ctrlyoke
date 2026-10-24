@@ -12,7 +12,7 @@ Top-level ctrlyoke core orchestration only: workflow registry, per-workflow runt
 - `WorkflowInstance` owns one workflow's runtime state and composes queue, executor, history, watchers, and execution integrations.
 - `WorkflowStateMachine` is the **only** owner of execution status/timing/attempt state.
 - `PromptQueue` owns queue topology/runtime metadata, but delegates status transitions to `WorkflowStateMachine`.
-- `WorkingFileManager` is the only place that should write a run/draft `workflow.ctrlyoke.json` under run storage. `WorkflowLineageRepository` (in `src/core/orchestration/`) owns the lineage descriptor (`workflow.json`), `WorkflowKey`/`RunRef` allocation, and run-directory promotion — see `orchestration.instructions.md`.
+- `WorkingFileManager` is the only place that should write a run/draft `workflow.ctrlyoke.json` under run storage. **Every definition write must go through `writeAnchoredRunDefinition` (`src/utils/RunDefinitionAnchor.ts`)** — `WorkingFileManager.writeWorkingFileAtomicTo` and `RunContinuationService`'s private writer already do. It records the definition's hash and a trusted copy under the user state home (`.definition-anchors/`, both storage modes) so a sandboxed agent's edit to a workspace-mode run file is detected; a raw `fs` write of a changed definition is indistinguishable from tampering and makes the run read-only until the user accepts or restores it. Runtime-only writes (`_runtime`, `schemaVersion`, step IDs are excluded from the hash) need no new anchor. `WorkflowLineageRepository` (in `src/core/orchestration/`) owns the lineage descriptor (`workflow.json`), `WorkflowKey`/`RunRef` allocation, and run-directory promotion — see `orchestration.instructions.md`.
 
 </boundaries>
 

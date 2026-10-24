@@ -3,7 +3,11 @@ import { PromptFileParser } from "./PromptFileParser";
 import { rebaseWorkflowStepPaths } from "./WorkflowStepPathRebaser";
 import { PromptQueue, type ParallelGroupMemberInsertion } from "./PromptQueue";
 import { isActiveQueueWorkRunning } from "./ParallelGroupRuntime";
-import { WorkingFileManager } from "./WorkingFileManager";
+import {
+  WorkingFileManager,
+  type RunDefinitionRejection,
+} from "./WorkingFileManager";
+import { describeRunDefinitionChanges } from "../utils/RunDefinitionAnchor";
 import { assertDefinitionRevision } from "./orchestration/RevisionPrecondition";
 import {
   buildClearUpdates,
@@ -779,9 +783,33 @@ export class WorkflowInstance
 
     // Subscribe to queue state changes
     this.promptQueue.onDidChangeState(this.onQueueStateChanged.bind(this));
+    this.promptQueue.onDidRejectDiskDefinition(
+      this.reportRejectedDiskDefinition.bind(this)
+    );
     this.workflowRuntime.onDidTransition(this.onRuntimeTransition.bind(this));
     this.workflowRuntime.onDidAttemptTransition(
       this.onAttemptTransition.bind(this)
+    );
+  }
+
+  /**
+   * A definition change made outside ctrlyoke reached the live queue and was
+   * rejected. Report it on the current step: the status message is both the
+   * dashboard warning and the run's timeline record.
+   */
+  private reportRejectedDiskDefinition(
+    rejection: RunDefinitionRejection
+  ): void {
+    const { currentIndex, steps } = this.promptQueue.getState();
+    this.statusMessageReporter.report(
+      {
+        kind: FINAL_STEP_PHASES.QUEUE,
+        stepIndex: Math.max(0, Math.min(currentIndex, steps.length - 1)),
+      },
+      `Ignored a change to this run's definition made outside ctrlyoke ` +
+        `(${describeRunDefinitionChanges(rejection.changes)}). ` +
+        `The run continues with the definition ctrlyoke last wrote.`,
+      STATUS_MESSAGE_SEVERITY.WARNING
     );
   }
 

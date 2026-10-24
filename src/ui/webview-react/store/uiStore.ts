@@ -14,6 +14,7 @@ import { isExecutionFinished } from "../utils/status";
 import type {
   OutputTab,
   PickerShortcutTarget,
+  RunDefinitionChange,
   TemplateVariableType,
   TemplateVariableDefaultSource,
 } from "@root/types/DashboardConstants";
@@ -684,6 +685,15 @@ interface UiState {
     baseDefinitionRevision: number;
   } | null;
   /**
+   * The last run view whose definition was changed outside ctrlyoke, with
+   * what changed. Keyed by address so a switch that skips `RUN_VIEW_LOADED`
+   * can never show the banner on another workflow. Not persisted.
+   */
+  definitionChangedOutside: {
+    address: WorkflowViewAddress;
+    changes: RunDefinitionChange[];
+  } | null;
+  /**
    * Set when the lineage currently displayed is deleted (from history) while
    * being viewed in this session — the backing files are gone, but the cached
    * view stays on screen until the user navigates away. Not persisted: a
@@ -1153,6 +1163,9 @@ interface UiActions {
   ) => void;
   /** Advances the applied revision for content pushed without a full snapshot. */
   markAppliedDefinitionRevision: (definitionRevision: number) => void;
+  setDefinitionChangedOutside: (
+    value: UiState["definitionChangedOutside"]
+  ) => void;
   requestRunViewLoad: (
     address: WorkflowViewAddress,
     summaries: RunSummary[],
@@ -1330,6 +1343,7 @@ const initialState: UiState = {
   displayedDefinitionRevision: null,
   displayedDescriptorRevision: null,
   pendingRewind: null,
+  definitionChangedOutside: null,
   viewingDeletedWorkflow: null,
   footerOpenPicker: null,
   mobileStepsOpen: false,
@@ -2360,6 +2374,9 @@ export const useUiStore = create<UiState & UiActions>()(
               ? definitionRevision
               : Math.max(state.appliedDefinitionRevision, definitionRevision),
         })),
+
+      setDefinitionChangedOutside: (value) =>
+        set({ definitionChangedOutside: value }),
 
       requestRunViewLoad: (
         address,

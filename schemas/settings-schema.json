@@ -363,7 +363,7 @@
           "type": "string",
           "enum": ["user", "workspace"],
           "default": "user",
-          "description": "Store run history under the user state home or beside the workspace. Recently deleted runs, observed usage, and the history search index move with it. User scope only. Takes effect after a window reload, and existing history is not moved: the other location appears as a separate history, and switching back restores it."
+          "description": "Store run history under the user state home or beside the workspace. Recently deleted runs, observed usage, and the history search index move with it. User scope only. Takes effect after a window reload, and existing history is not moved: the other location appears as a separate history, and switching back restores it. With `workspace`, each run's live definition sits where any agent with write access to the workspace can edit it, including a pending step's scripts and permissions. ctrlyoke keeps a record of every definition it writes under the user state home: a running workflow ignores a change made outside ctrlyoke, and a run with one cannot run or be edited until you accept or restore it. Choose `workspace` only for agents and repositories you trust."
         },
         "trashRetentionDays": {
           "type": "integer",

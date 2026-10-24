@@ -122,6 +122,30 @@ runs and saved usage move with this setting.
 
 For the files inside each run, see [Run files](/reference/run-files).
 
+### Changes made outside ctrlyoke {#changes-made-outside-ctrlyoke}
+
+In `workspace` mode, a run's definition sits where any agent that can write to
+the workspace can edit it, including a pending step's scripts and tool
+permissions. Use that mode only with agents and repositories you trust.
+
+ctrlyoke keeps a record of every definition it writes, under
+`~/.ctrlyoke/projects/` in both modes, and compares each run file with it:
+
+- **A running workflow ignores the change.** It keeps the definition ctrlyoke
+  last wrote, puts it back in the file, and shows a warning on the current
+  step, which also stays in the run's history.
+- **Any other run becomes read-only.** A banner reads **Definition changed
+  outside ctrlyoke** and names the steps and fields that changed. The run
+  can't be run or edited until you choose **Restore**, which puts back the
+  definition ctrlyoke last wrote, or **Accept change**, which trusts the file
+  as it is. From a terminal, use
+  [`ctrlyoke step restore-definition`](/cli/ctrlyoke#ctrlyoke-step-restore-definition)
+  or
+  [`ctrlyoke step accept-definition`](/cli/ctrlyoke#ctrlyoke-step-accept-definition).
+
+Runs from before ctrlyoke kept this record, and history copied in from another
+machine, are trusted the first time you open them.
+
 ## How long runs are kept
 
 History is always on, and by default every run is kept.

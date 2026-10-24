@@ -2875,6 +2875,11 @@ export function createMessageHandlers(
       message.runDirectory,
       message.isSystemGenerated
     );
+    ui.setDefinitionChangedOutside(
+      message.definitionChangedOutside
+        ? { address, changes: message.definitionChangedOutside.changes }
+        : null
+    );
     ui.clearPendingRunViewLoad();
     // A rewind starts a new, suffix-only editing epoch. Re-baselining here
     // prevents zundo from crossing into the full-runtime pre-rewind state.

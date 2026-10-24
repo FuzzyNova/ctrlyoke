@@ -28,10 +28,8 @@ import type { DashboardHostActions } from "../HostPorts";
 import type { UserInteractionPort } from "../../ui/UserInteractionPort";
 import { getPtyProcessManager } from "../harness/PtyProcessManager";
 import { Log } from "../../utils/Log";
-import {
-  sameViewAddress,
-  type RunViewPublisherRegistryPort,
-} from "./RunViewPublisher";
+import type { RunViewPublisherRegistryPort } from "./RunViewPublisher";
+import { sameViewAddress } from "../../utils/WorkflowViewAddress";
 import type { RunLifecycleRegistryPort } from "./RunLifecycleService";
 
 export interface LineageExecutionClaim {

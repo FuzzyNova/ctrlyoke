@@ -6,9 +6,15 @@ import { Command } from "commander";
 import { afterEach, suite, test } from "mocha";
 import {
   EXECUTION_STATES,
+  RUN_DEFINITION_DECISIONS,
+  RUN_DEFINITION_INTEGRITY,
   RUNNER_IDS,
   type ExecutionState,
 } from "../../types/DashboardConstants";
+import {
+  isRunDefinitionChangedError,
+  verifyRunDefinitionFile,
+} from "../../utils/RunDefinitionAnchor";
 import type {
   RunRef,
   WorkflowKey,
@@ -22,12 +28,14 @@ import {
   editStepCommand,
   removeStepCommand,
   reorderStepsCommand,
+  reviewRunDefinitionCommand,
   createStepCommandContext,
   type StepCommandContext,
   type StepCommandIo,
 } from "../../cli/StepCommands";
 import {
   registerStepCommands,
+  type StepDefinitionReviewOptions,
   type StepEditOptions,
   type StepRemoveOptions,
   type StepReorderOptions,
@@ -56,6 +64,8 @@ suite("CLI step command parser", () => {
       edit?: { file: string | undefined; options: StepEditOptions };
       remove?: StepRemoveOptions;
       reorder?: StepReorderOptions;
+      accept?: StepDefinitionReviewOptions;
+      restore?: StepDefinitionReviewOptions;
     } = {};
     const program = new Command();
     program.exitOverride();
@@ -70,7 +80,32 @@ suite("CLI step command parser", () => {
       reorder: async (options) => {
         calls.reorder = options;
       },
+      acceptDefinition: async (options) => {
+        calls.accept = options;
+      },
+      restoreDefinition: async (options) => {
+        calls.restore = options;
+      },
     });
+    await program.parseAsync(
+      ["step", "accept-definition", "--workflow", "release", "--run", "7"],
+      { from: "user" }
+    );
+    await program.parseAsync(
+      [
+        "step",
+        "restore-definition",
+        "--workflow",
+        "release",
+        "--run",
+        "8",
+        "--json",
+      ],
+      { from: "user" }
+    );
+    assert.strictEqual(calls.accept?.run, "7");
+    assert.strictEqual(calls.restore?.run, "8");
+    assert.strictEqual(calls.restore?.json, true);
 
     await program.parseAsync(
       [
@@ -342,6 +377,146 @@ suite("CLI step command handlers", () => {
     }
   });
 
+  test("consecutive edits keep the definition anchor valid", async () => {
+    await seedRun(EXECUTION_STATES.IDLE, 0, [
+      { prompt: "first" },
+      { prompt: "second" },
+    ]);
+
+    await editStepCommand(
+      undefined,
+      editOptions({ index: "0", prompt: "edited once" }),
+      context(),
+      new RecordingIo()
+    );
+    await editStepCommand(
+      undefined,
+      editOptions({ index: "1", prompt: "edited twice" }),
+      context(),
+      new RecordingIo()
+    );
+
+    assert.deepStrictEqual(
+      (await readRun()).steps?.map(
+        (step) => (step as { prompt?: string }).prompt
+      ),
+      ["edited once", "edited twice"]
+    );
+    const verified = await verifyRunDefinitionFile(runFilePath());
+    assert.strictEqual(
+      verified?.verdict.status,
+      RUN_DEFINITION_INTEGRITY.TRUSTED
+    );
+  });
+
+  test("refuses to edit a run whose definition was changed outside ctrlyoke", async () => {
+    await seedRun(EXECUTION_STATES.IDLE, 0, [
+      { prompt: "first" },
+      { prompt: "second" },
+    ]);
+    await editStepCommand(
+      undefined,
+      editOptions({ index: "0", prompt: "anchored" }),
+      context(),
+      new RecordingIo()
+    );
+    await injectOutsideEndCondition();
+
+    await assert.rejects(
+      () =>
+        editStepCommand(
+          undefined,
+          editOptions({ index: "0", prompt: "laundered" }),
+          context(),
+          new RecordingIo()
+        ),
+      (error: unknown) =>
+        isRunDefinitionChangedError(error) &&
+        /step 2: endCondition/.test(error.message)
+    );
+    const persisted = await readRun();
+    assert.strictEqual(
+      (persisted.steps?.[0] as { prompt?: string }).prompt,
+      "anchored"
+    );
+  });
+
+  test("restore-definition puts back the definition ctrlyoke last wrote", async () => {
+    await seedRun(EXECUTION_STATES.IDLE, 0, [
+      { prompt: "first" },
+      { prompt: "second" },
+    ]);
+    await editStepCommand(
+      undefined,
+      editOptions({ index: "0", prompt: "anchored" }),
+      context(),
+      new RecordingIo()
+    );
+    await injectOutsideEndCondition();
+    const io = new RecordingIo();
+
+    await reviewRunDefinitionCommand(
+      RUN_DEFINITION_DECISIONS.RESTORE,
+      { workflow: workflowKey, run: runRef, json: true },
+      context(),
+      io
+    );
+
+    const persisted = await readRun();
+    assert.strictEqual(
+      (persisted.steps?.[1] as { endCondition?: unknown }).endCondition,
+      undefined
+    );
+    assert.deepStrictEqual(JSON.parse(io.output[0]), {
+      schemaVersion: 1,
+      success: true,
+      operation: RUN_DEFINITION_DECISIONS.RESTORE,
+      workflowKey,
+      runRef,
+      changed: true,
+    });
+    // Editable again.
+    await editStepCommand(
+      undefined,
+      editOptions({ index: "1", prompt: "after restore" }),
+      context(),
+      new RecordingIo()
+    );
+  });
+
+  test("accept-definition trusts the changed definition as it is", async () => {
+    await seedRun(EXECUTION_STATES.IDLE, 0, [
+      { prompt: "first" },
+      { prompt: "second" },
+    ]);
+    await editStepCommand(
+      undefined,
+      editOptions({ index: "0", prompt: "anchored" }),
+      context(),
+      new RecordingIo()
+    );
+    await injectOutsideEndCondition();
+
+    await reviewRunDefinitionCommand(
+      RUN_DEFINITION_DECISIONS.ACCEPT,
+      { workflow: workflowKey, run: runRef },
+      context(),
+      new RecordingIo()
+    );
+
+    await editStepCommand(
+      undefined,
+      editOptions({ index: "0", prompt: "after accept" }),
+      context(),
+      new RecordingIo()
+    );
+    const persisted = await readRun();
+    assert.ok(
+      (persisted.steps?.[1] as { endCondition?: unknown }).endCondition,
+      "the accepted outside change is kept"
+    );
+  });
+
   test("rejects an unresolvable --run reference", async () => {
     await seedRun(EXECUTION_STATES.IDLE, 0, [{ prompt: "pending" }]);
     await assert.rejects(
@@ -448,6 +623,19 @@ suite("CLI step command handlers", () => {
       lastHeartbeat: Date.now(),
     });
     return ownerToken;
+  }
+
+  function runFilePath(): string {
+    return WorkflowPaths.runFilePath(workspaceRoot, workflowKey, runRef);
+  }
+
+  /** What a sandboxed agent with write access to the run file could do. */
+  async function injectOutsideEndCondition(): Promise<void> {
+    const workingFile = JSON.parse(
+      await fs.readFile(runFilePath(), "utf8")
+    ) as { steps: Array<Record<string, unknown>> };
+    workingFile.steps[1].endCondition = { script: "node pwned.js" };
+    await fs.writeFile(runFilePath(), JSON.stringify(workingFile), "utf8");
   }
 
   async function readRun(): Promise<{

@@ -11,6 +11,7 @@ import {
   SETTING_PATHS,
   WORKSPACE_MCP_REGISTRY_TRUST_PATH,
 } from "../types/DashboardConstants";
+import { stableStringify } from "../utils/StableJson";
 
 /**
  * One workspace-scoped value that can choose a program for ctrlyoke to run.
@@ -186,21 +187,6 @@ const SENSITIVE_WORKSPACE_SETTINGS: readonly SensitiveSettingDescriptor[] = [
     summarize: summarizeToolPermissions,
   },
 ];
-
-/** JSON with object keys sorted, so equal values always hash equally. */
-function stableStringify(value: unknown): string {
-  if (Array.isArray(value)) {
-    return `[${value.map(stableStringify).join(",")}]`;
-  }
-  if (isPlainObject(value)) {
-    return `{${Object.keys(value)
-      .sort()
-      .filter((key) => value[key] !== undefined)
-      .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(value) ?? "null";
-}
 
 function fingerprintOf(value: unknown): string {
   return createHash("sha256")

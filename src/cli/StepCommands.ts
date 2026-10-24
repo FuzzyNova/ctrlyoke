@@ -9,7 +9,13 @@ import type {
   WorkflowKey,
   WorkflowStep,
 } from "../types/CtrlYokeTypes";
-import { RUNNER_IDS } from "../types/DashboardConstants";
+import {
+  RUN_DEFINITION_DECISIONS,
+  RUNNER_IDS,
+  type RunDefinitionDecision,
+} from "../types/DashboardConstants";
+import { WorkingFileManager } from "../core/WorkingFileManager";
+import * as WorkflowPaths from "../utils/WorkflowPaths";
 import {
   resolveCliWorkflowKey,
   resolveCliRunRefAtLineage,
@@ -17,6 +23,7 @@ import {
   type CliRunSummaryProvider,
 } from "./CliRunSelector";
 import type {
+  StepDefinitionReviewOptions,
   StepEditOptions,
   StepRemoveOptions,
   StepReorderOptions,
@@ -180,6 +187,64 @@ export async function reorderStepsCommand(
     `Reordered pending steps in ${target.workflowKey}/${target.runRef} (definition revision ${reordered.definitionRevision}).`
   );
   if (reordered.warning) io.writeErr?.(reordered.warning);
+}
+
+interface DefinitionReviewJsonResult {
+  schemaVersion: typeof CLI_STEP_MUTATION_JSON_SCHEMA_VERSION;
+  success: true;
+  operation: RunDefinitionDecision;
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
+  /** False when the definition had no change made outside ctrlyoke. */
+  changed: boolean;
+}
+
+/**
+ * Answers a run definition changed outside ctrlyoke: `accept` trusts it as it
+ * is, `restore` puts back the definition ctrlyoke last wrote. Until one of
+ * these runs, every run and edit of that run is refused.
+ */
+export async function reviewRunDefinitionCommand(
+  decision: RunDefinitionDecision,
+  options: StepDefinitionReviewOptions,
+  context: StepCommandContext,
+  io: StepCommandIo
+): Promise<void> {
+  const workflowKey = await resolveCliWorkflowKey(
+    context.workspaceRoot,
+    context.lineageRepository,
+    options.workflow,
+    io.writeErr ?? ((message) => console.error(message))
+  );
+  const runRef = await resolveCliRunRefAtLineage(
+    context.workspaceRoot,
+    context.outputHistoryManager,
+    workflowKey,
+    options.run,
+    "--run"
+  );
+  const changed = await WorkingFileManager.resolveDefinitionChange(
+    WorkflowPaths.runFilePath(context.workspaceRoot, workflowKey, runRef),
+    decision
+  );
+  const result: DefinitionReviewJsonResult = {
+    schemaVersion: CLI_STEP_MUTATION_JSON_SCHEMA_VERSION,
+    success: true,
+    operation: decision,
+    workflowKey,
+    runRef,
+    changed,
+  };
+  const target = `${workflowKey}/${runRef}`;
+  io.writeOut(
+    options.json === true
+      ? JSON.stringify(result)
+      : !changed
+        ? `${target} has no definition changes made outside ctrlyoke.`
+        : decision === RUN_DEFINITION_DECISIONS.ACCEPT
+          ? `Accepted the outside change to ${target}; it can run and be edited again.`
+          : `Restored the definition ctrlyoke last wrote to ${target}.`
+  );
 }
 
 async function resolveEditTarget(

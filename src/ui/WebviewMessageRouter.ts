@@ -51,6 +51,7 @@ import type {
   SetStartPositionMessage,
   ReorderPromptsMessage,
   DiscardContinuationMessage,
+  ResolveRunDefinitionChangeMessage,
   RequestMcpConfigPreviewMessage,
   RequestMcpRegistrySearchMessage,
   SaveMcpRegistryServerMessage,
@@ -1206,6 +1207,16 @@ export class WebviewMessageRouter {
         message as DiscardContinuationMessage
       );
     });
+
+    table.set(
+      MESSAGE_TYPES.RESOLVE_RUN_DEFINITION_CHANGE,
+      async (message, ctx) => {
+        await this.workflowStepHandlers.handleResolveRunDefinitionChange(
+          ctx,
+          message as ResolveRunDefinitionChangeMessage
+        );
+      }
+    );
 
     table.set(MESSAGE_TYPES.REORDER_PROMPTS, async (message, ctx) => {
       await this.workflowStepHandlers.handleReorderPrompts(

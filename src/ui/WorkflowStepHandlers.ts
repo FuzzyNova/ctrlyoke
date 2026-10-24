@@ -1,6 +1,7 @@
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import {
   MESSAGE_TYPES,
+  RUN_DEFINITION_DECISIONS,
   USER_FEEDBACK_SEVERITY,
   WORKFLOW_PROPERTY_KEYS,
   WORKFLOW_VIEW_ADDRESS_KIND,
@@ -10,6 +11,7 @@ import type {
   AppendAndContinueRunMessage,
   ContinueRunMessage,
   DiscardContinuationMessage,
+  ResolveRunDefinitionChangeMessage,
   DeletePromptMessage,
   ExecuteDraftMessage,
   InsertWorkflowStepMessage,
@@ -778,6 +780,30 @@ export class WorkflowStepHandlers {
       this.mutationCoordinator.showRunActionFailure(
         ctx,
         "discard continuation",
+        error
+      );
+    }
+  }
+
+  async handleResolveRunDefinitionChange(
+    ctx: WebviewClientContext,
+    message: ResolveRunDefinitionChangeMessage
+  ): Promise<void> {
+    const orchestrator = this.getOrchestrator();
+    if (!orchestrator) {
+      throw new Error("WorkflowOrchestrator not initialized");
+    }
+    try {
+      await orchestrator.resolveDefinitionChangeAtAddress(
+        message.address,
+        message.decision
+      );
+    } catch (error) {
+      this.mutationCoordinator.showRunActionFailure(
+        ctx,
+        message.decision === RUN_DEFINITION_DECISIONS.ACCEPT
+          ? "accept definition change"
+          : "restore definition",
         error
       );
     }

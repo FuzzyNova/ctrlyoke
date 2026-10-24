@@ -80,7 +80,10 @@ import { PropertyResolver } from "../utils/PropertyResolver";
 import { reportPromptCompleted } from "../utils/TelemetryEvents";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkingFileManager } from "./WorkingFileManager";
-import type { IWorkingFileQueueAccess } from "./WorkingFileManager";
+import type {
+  IWorkingFileQueueAccess,
+  RunDefinitionRejection,
+} from "./WorkingFileManager";
 import { WorkflowStateMachine } from "./WorkflowStateMachine";
 import {
   assertBulkWorkflowStepUpdateAllowed,
@@ -142,11 +145,16 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   private readonly onDiskStepsMergedEmitter = new TypedEmitter<
     readonly WorkflowStep[]
   >();
+  private readonly onDiskDefinitionRejectedEmitter =
+    new TypedEmitter<RunDefinitionRejection>();
 
   // Public event for state changes
   public readonly onDidChangeState = this.onStateChanged.event;
   /** Fired when a working-file merge discovers new queue members. */
   public readonly onDidMergeDiskSteps = this.onDiskStepsMergedEmitter.event;
+  /** Fired when a definition change made outside ctrlyoke was rejected. */
+  public readonly onDidRejectDiskDefinition =
+    this.onDiskDefinitionRejectedEmitter.event;
 
   constructor(stateMachine: WorkflowStateMachine = new WorkflowStateMachine()) {
     this.stateMachine = stateMachine;
@@ -182,6 +190,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         options?: { authoritativeRuntime?: boolean }
       ) => this.mergeDiskSteps(diskSteps, parallelGroups, options),
       onDiskStepsMerged: (steps) => this.onDiskStepsMergedEmitter.fire(steps),
+      onDiskDefinitionRejected: (rejection) =>
+        this.onDiskDefinitionRejectedEmitter.fire(rejection),
       emitStateChange: () => this.emitStateChange(),
       getFinalStepRuntime: () => this.getFinalStepRuntime(),
       getFinalStepExecutionMetadata: () =>
@@ -1659,6 +1669,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         return;
       }
 
+      // The claim transaction refuses a definition changed outside ctrlyoke;
+      // the live queue rejects that change instead, so put it back first.
+      await this.workingFileManager.restoreRejectedDefinition();
       result = await RunContinuationService.claimStepAtRun(
         workspaceRoot,
         state.workflowKey,

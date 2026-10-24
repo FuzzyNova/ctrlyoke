@@ -30,6 +30,7 @@ import { RunDidNotPrepareError } from "../../core/orchestration/RunLifecycleServ
 import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
 import { HistoryTrashRepository } from "../../core/orchestration/HistoryTrashRepository";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { writeTrustedRunFile } from "../helpers/trustedRunFile";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import { ExternalExecutionResolver } from "../../core/orchestration/ExternalExecutionResolver";
@@ -3691,7 +3692,7 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
             tokenTotals: { attemptCount: prompts.length, costUsd },
           },
         } as WorkingFile;
-        await fs.writeFile(promotion.workingFilePath, JSON.stringify(finished));
+        await writeTrustedRunFile(promotion.workingFilePath, finished);
       };
 
       // This process ran the first three steps and retired the instance...

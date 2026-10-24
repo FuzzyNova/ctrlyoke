@@ -50,11 +50,13 @@ import {
   PARALLEL_GROUP_ADMISSION,
   PROMPT_TERMINAL_STATUS,
   RUNNER_IDS,
+  RUN_DEFINITION_INTEGRITY,
   RUN_HISTORY_LOCATIONS,
   STEP_STATUS,
   STEP_TYPES,
   type ExecutionState,
 } from "../../types/DashboardConstants";
+import { verifyRunDefinitionFile } from "../../utils/RunDefinitionAnchor";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { ProjectStateRegistry } from "../../utils/ProjectStateRegistry";
@@ -1901,6 +1903,47 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         await fs.readFile(run.runFilePath, "utf8")
       ) as WorkingFile;
       assert.deepStrictEqual(cleared.steps?.[2], { prompt: "updated prompt" });
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
+  test("edit_step keeps the definition anchor valid and refuses a definition changed outside ctrlyoke", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("edit-step-anchor");
+    try {
+      await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 2,
+        updates: { prompt: "first edit" },
+      });
+      await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 3,
+        updates: { prompt: "second edit" },
+      });
+      assert.strictEqual(
+        (await verifyRunDefinitionFile(run.runFilePath))?.verdict.status,
+        RUN_DEFINITION_INTEGRITY.TRUSTED
+      );
+
+      // An agent with write access to the run file adds a raw condition
+      // script; the MCP surface must not launder it into a trusted edit.
+      const workingFile = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+      (workingFile.steps?.[3] as { endCondition?: unknown }).endCondition = {
+        script: "node pwned.js",
+      };
+      await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+      const tampered = await fs.readFile(run.runFilePath, "utf8");
+
+      await assert.rejects(
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 2,
+          updates: { prompt: "third edit" },
+        }),
+        /changed outside ctrlyoke \(step 4: endCondition\)/
+      );
+      assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), tampered);
     } finally {
       await releaseActiveRun(run, ownerToken);
     }

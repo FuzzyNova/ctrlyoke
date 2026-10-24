@@ -22,6 +22,7 @@ import {
   STEP_TYPES,
 } from "../../types/DashboardConstants";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { writeTrustedRunFile } from "../helpers/trustedRunFile";
 import {
   clearRunSummaryCache,
   runSummaryCacheSize,
@@ -1104,7 +1105,7 @@ suite("WorkingFileManager", () => {
         }),
         worktree: makeWorktreeRuntime(),
       };
-      await writeTempJson(sourcePath, source);
+      await writeTrustedRunFile(sourcePath, source);
 
       const seeded = await WorkingFileManager.seedNewRun(
         tmpWorkspace,
@@ -2050,7 +2051,7 @@ suite("WorkingFileManager", () => {
         model: "old-model",
         _runtime: { startedAt: 10, completedAt: 20 },
       };
-      await fs.writeFile(runFilePath, JSON.stringify(seeded, null, 2), "utf8");
+      await writeTrustedRunFile(runFilePath, seeded);
 
       const script = await WorkingFileManager.updateFinalStepAtRun(
         workspace,
@@ -2086,7 +2087,7 @@ suite("WorkingFileManager", () => {
         await fs.readFile(runFilePath, "utf8")
       ) as WorkingFile;
       seeded.finalStep = { prompt: "final prompt", name: "Wrap-up" };
-      await fs.writeFile(runFilePath, JSON.stringify(seeded, null, 2), "utf8");
+      await writeTrustedRunFile(runFilePath, seeded);
 
       const result = await WorkingFileManager.updateFinalStepAtRun(
         workspace,
@@ -2118,7 +2119,7 @@ suite("WorkingFileManager", () => {
         await fs.readFile(runFilePath, "utf8")
       ) as WorkingFile;
       seeded.finalStep = { prompt: "remove me" };
-      await fs.writeFile(runFilePath, JSON.stringify(seeded, null, 2), "utf8");
+      await writeTrustedRunFile(runFilePath, seeded);
 
       const result = await WorkingFileManager.updateFinalStepAtRun(
         workspace,
@@ -2268,7 +2269,7 @@ suite("WorkingFileManager", () => {
         await fs.readFile(runFilePath, "utf8")
       ) as WorkingFile;
       before.steps![0] = { type: STEP_TYPES.SCRIPT, script: "echo one" };
-      await fs.writeFile(runFilePath, JSON.stringify(before), "utf8");
+      await writeTrustedRunFile(runFilePath, before);
       await assert.rejects(
         WorkingFileManager.updateStepsAtRun(
           workspace,

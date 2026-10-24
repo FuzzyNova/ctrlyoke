@@ -1,6 +1,6 @@
 import * as os from "node:os";
 import * as path from "node:path";
-import { hashPathForCompare } from "./PathCasing";
+import { hashPathForCompare, pathsEqual } from "./PathCasing";
 import type { RunHistoryLocation } from "../types/CtrlYokeSettings";
 
 const CTRLYOKE_DIR = ".ctrlyoke";
@@ -66,6 +66,28 @@ export function noWorkspacePlaceholderRoot(): string {
 /** Resolve the user-scoped project registry root without consulting frozen policy. */
 export function userProjectsRoot(): string {
   return path.join(ctrlyokeStateHome(), PROJECTS_DIR);
+}
+
+/**
+ * The user-scoped project directory for an already-selected project state
+ * root, whichever location that root uses: a user-mode root is returned as
+ * is, and a workspace-mode `<stateRoot>/.ctrlyoke` maps to the user-mode
+ * directory the same project would have. Lets state that must stay out of
+ * every harness's writable workspace live in the user home in both modes.
+ * Returns `undefined` for a directory of neither shape.
+ */
+export function userProjectDirForProjectStateRoot(
+  projectStateDir: string
+): string | undefined {
+  const resolved = path.resolve(projectStateDir);
+  const projectsRoot = path.resolve(userProjectsRoot());
+  if (pathsEqual(path.dirname(resolved), projectsRoot)) {
+    return resolved;
+  }
+  if (path.basename(resolved) === CTRLYOKE_DIR) {
+    return path.join(projectsRoot, projectKey(path.dirname(resolved)));
+  }
+  return undefined;
 }
 
 function sanitizeProjectSlug(basename: string): string {

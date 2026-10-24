@@ -4,7 +4,7 @@
   while working out the MCP step-control security boundary
 - **Area:** `src/core/PromptQueue.ts`, `src/utils/WorkflowPaths.ts`,
   `src/core/RunContinuationService.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
