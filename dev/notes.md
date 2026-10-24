@@ -96,3 +96,11 @@ readAddressedRunView is slow on large histories — measured 4.1s for the summar
 ☑️ "Show only this step output" doesn't work with final step, should show all instances of final step.
 
 ☑️ shared board notes are getting rendered in the output pane when steps are hidden.
+
+add a way to gracefully kill terminals from context menus or bulk kill
+
+fix built in templates: spec should have orchestrator and implementer harness/model
+
+allow custom words in spell check, like "ctrlyoke", plus ability to import other language
+
+setting for auto spell fix as you type (this might need AI to read sentence context and pick the right spelling from the list instead of always picking the top).
