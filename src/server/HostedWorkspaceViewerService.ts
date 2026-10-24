@@ -99,6 +99,7 @@ import {
   getIgnoredEntryNames,
   getGitTrackedFiles,
   getGitIgnoredEntries,
+  isNotGitRepositoryError,
   getDiffBetweenRefs,
   GIT_COMMAND_TIMEOUT_MS,
   describeGitFailure,
@@ -881,10 +882,16 @@ export class HostedWorkspaceViewerService {
     let trackedFiles: string[];
     try {
       trackedFiles = await getGitTrackedFiles(root);
-    } catch {
-      // Not a Git checkout: walk it, skipping dependency and build output.
-      yield* iterateSearchFiles(root);
-      return;
+    } catch (error) {
+      if (isNotGitRepositoryError(error)) {
+        // Not a Git checkout: walk it, skipping dependency and build output.
+        yield* iterateSearchFiles(root);
+        return;
+      }
+      Log.warn(
+        `[HostedWorkspaceViewerService] git ls-files failed for ${root}: ${String(error)}`
+      );
+      throw error;
     }
     yield* chunked(trackedFiles, SEARCH_CANDIDATE_CHUNK);
     if (!includeGitIgnored) return;
@@ -892,8 +899,11 @@ export class HostedWorkspaceViewerService {
     let ignoredEntries: string[];
     try {
       ignoredEntries = await getGitIgnoredEntries(root);
-    } catch {
-      return;
+    } catch (error) {
+      Log.warn(
+        `[HostedWorkspaceViewerService] git ignored-file listing failed for ${root}: ${String(error)}`
+      );
+      throw error;
     }
     const ignoredDirectories = new Set(
       ignoredEntries.filter((entry) => entry.endsWith("/"))
@@ -1134,15 +1144,18 @@ export class HostedWorkspaceViewerService {
       rootRelativeDir
     );
     const isGitRepo = ignoredNames !== null;
+    const directoryIsIgnored =
+      ignoredNames?.has("./") === true || ignoredNames?.has("") === true;
     const candidates = dirents
       .filter((dirent) => dirent.isDirectory() || dirent.isFile())
       .map((dirent) => {
         const gitIgnored =
           dirent.name === ".git"
             ? isGitRepo
-            : dirent.isDirectory()
-              ? (ignoredNames?.has(`${dirent.name}/`) ?? false)
-              : (ignoredNames?.has(dirent.name) ?? false);
+            : directoryIsIgnored ||
+              (dirent.isDirectory()
+                ? (ignoredNames?.has(`${dirent.name}/`) ?? false)
+                : (ignoredNames?.has(dirent.name) ?? false));
         return {
           name: dirent.name,
           path: this.relativePath(path.join(resolved, dirent.name)),

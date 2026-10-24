@@ -596,6 +596,28 @@ suite("HostedWorkspaceViewerService", function () {
       assert.strictEqual(byName.get(".git")?.gitIgnored, true);
     });
 
+    test("marks children of a wholly ignored directory as gitignored", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      fs.writeFileSync(path.join(root, ".gitignore"), "ignored_dir/\n");
+      fs.mkdirSync(path.join(root, "ignored_dir", "nested"), {
+        recursive: true,
+      });
+      fs.writeFileSync(path.join(root, "ignored_dir", "visible-looking.txt"), "x");
+      fs.writeFileSync(
+        path.join(root, "ignored_dir", "nested", "child.txt"),
+        "x"
+      );
+
+      const result = await new HostedWorkspaceViewerService(root).listDirectory({
+        path: "ignored_dir",
+        includeGitIgnored: true,
+      });
+
+      assert.ok(result.entries.length > 0);
+      assert.ok(result.entries.every((entry) => entry.gitIgnored));
+    });
+
     test("makes every entry beyond the old 1,000-entry cutoff reachable", async () => {
       const root = createWorkspace();
       for (let index = 0; index < 1_005; index++) {

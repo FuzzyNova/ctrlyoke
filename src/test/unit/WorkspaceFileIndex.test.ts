@@ -154,6 +154,29 @@ suite("WorkspaceFileIndex", () => {
     fallback.dispose();
   });
 
+  test("treats a Git listing timeout as a degraded build and logs the fallback", async () => {
+    const warnings: string[] = [];
+    const harness = makeHarness({
+      getGitTrackedFiles: async () => {
+        const error = new Error("git ls-files timed out") as NodeJS.ErrnoException;
+        error.code = "ETIMEDOUT";
+        throw error;
+      },
+    });
+    const pipeline = new WorkspaceFileIndexPipeline(
+      harness.roots,
+      true,
+      harness.dependencies,
+      { onWarning: (message) => warnings.push(message) }
+    );
+    await pipeline.build();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(pipeline.getStatus().state, "degraded");
+    assert.ok(warnings.some((message) => message.includes("Git file listing failed")));
+    assert.ok((await pipeline.queryFiles("ignored target")).length > 0);
+    pipeline.dispose();
+  });
+
   test("batches create, delete, and directory-create changes without rebuilding", async () => {
     let rebuilds = 0;
     const harness = makeHarness({

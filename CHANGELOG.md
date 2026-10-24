@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Large Git file listings use the long Git timeout.** Git listing failures are no longer mistaken for non-repositories; recovery paths log when they use a degraded filesystem walk, and the hosted workspace explorer marks children of wholly ignored directories as ignored.
 - **Editor `@` completions resume budgeted scans across keystrokes.** Extending a query continues from the last scanned index position, so files later in large workspaces can appear without sacrificing fuzzy ranking.
 - **Run-view loads no longer retry or roll back because of slow responses.** The panel waits for its reliable message transport; hosted clients retry after reconnect, duplicate requests join in-flight work, and a late snapshot can still complete the latest navigation.
 - **Editor file operations stay responsive and complete after slow replies.** Prompt conversion, pasted images, output snapshots and image preview lookups bypass the shared route queue; client deadlines report that work is still pending, and late replies are applied or surfaced without caching preview timeouts.

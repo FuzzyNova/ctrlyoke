@@ -302,6 +302,16 @@ export function describeGitFailure(error: unknown): string {
     : message;
 }
 
+/** Return true only when Git explicitly reports that the cwd is not a repo. */
+export function isNotGitRepositoryError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const gitError = error as { message?: unknown; stderr?: unknown };
+  return [gitError.stderr, gitError.message].some((value) => {
+    if (value === undefined || value === null) return false;
+    return /fatal:\s*not a git repository\b/i.test(String(value));
+  });
+}
+
 /**
  * Run git with the shared timeout and output limits. Prefer this to a bare
  * `promisify(execFile)`, whose 1 MiB default `maxBuffer` kills git once its
@@ -1163,7 +1173,7 @@ export async function getGitTrackedFiles(repoRoot: string): Promise<string[]> {
     ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
     {
       cwd: repoRoot,
-      timeout: GIT_TIMEOUT_MS,
+      timeout: getGitWholeRepoTimeoutMs(),
       maxBuffer: 500 * 1024 * 1024, // 500 MB — large monorepos can exceed 100 MB
     }
   );
@@ -1184,7 +1194,7 @@ export async function getGitTrackedAndUntrackedFiles(
       "--exclude-standard",
       "-z",
     ],
-    { maxBuffer: GIT_MAX_BUFFER }
+    { timeout: getGitWholeRepoTimeoutMs(), maxBuffer: GIT_MAX_BUFFER }
   );
   return parseGitNulSeparatedPaths(stdout);
 }
@@ -1195,7 +1205,7 @@ export async function getGitUntrackedFiles(
 ): Promise<string[]> {
   const { stdout } = await execGit(
     ["-C", repoRoot, "ls-files", "--others", "--exclude-standard", "-z"],
-    { maxBuffer: GIT_MAX_BUFFER }
+    { timeout: getGitWholeRepoTimeoutMs(), maxBuffer: GIT_MAX_BUFFER }
   );
   return parseGitNulSeparatedPaths(stdout);
 }
@@ -1222,7 +1232,7 @@ export async function getGitIgnoredEntries(
       "--directory",
       "-z",
     ],
-    { maxBuffer: GIT_MAX_BUFFER }
+    { timeout: getGitWholeRepoTimeoutMs(), maxBuffer: GIT_MAX_BUFFER }
   );
   return parseGitNulSeparatedPaths(stdout);
 }

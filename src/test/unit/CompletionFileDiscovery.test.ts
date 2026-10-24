@@ -67,6 +67,23 @@ suite("CompletionFileDiscovery", () => {
     }
   });
 
+  test("falls back to a walk for a real non-repository directory", async () => {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-completion-non-repo-")
+    );
+    try {
+      await fs.writeFile(path.join(root, "workflow.prompt.md"), "prompt");
+      assert.deepStrictEqual(await getSourceFiles(root), ["workflow.prompt.md"]);
+    } finally {
+      await fs.rm(root, {
+        recursive: true,
+        force: true,
+        maxRetries: 5,
+        retryDelay: 50,
+      });
+    }
+  });
+
   test("cacheSourceFiles shares one listing and retries after a failure", async () => {
     let loads = 0;
     let fail = true;

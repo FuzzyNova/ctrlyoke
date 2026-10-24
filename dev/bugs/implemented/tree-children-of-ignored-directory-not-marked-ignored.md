@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-24 by timeout-budget bug sweep workflow (server-completions)
 - **Area:** `src/server/HostedWorkspaceViewerService.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -23,10 +23,10 @@ Confirmed: `cd node_modules && git ls-files --others --ignored --exclude-standar
 
 ## Root Cause
 
-- `src/server/HostedWorkspaceViewerService.ts:1129-1142` (`createListingSnapshot`) gets
+- `src/server/HostedWorkspaceViewerService.ts:1142-1166` (`createListingSnapshot`) gets
   `ignoredNames` from `getIgnoredEntryNames(containingRoot, rootRelativeDir)` and marks
   each child by `ignoredNames.has(`${name}/`)` or `ignoredNames.has(name)`.
-- `src/utils/GitUtils.ts:1251-1278` runs `git ls-files --others --ignored
+- `src/utils/GitUtils.ts:1309-1335` runs `git ls-files --others --ignored
   --exclude-standard --directory .` with `cwd` set to the listed directory. When that
   directory is itself wholly ignored, git collapses it to the single entry `./`, so no
   child name matches and every child gets `gitIgnored: false`.

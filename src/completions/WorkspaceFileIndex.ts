@@ -9,7 +9,11 @@ import {
   walkSearchFiles,
   type SearchWalkResult,
 } from "../utils/WorkspaceSearchFileWalker";
-import { getGitIgnoredPaths, getGitTrackedFiles } from "../utils/GitUtils";
+import {
+  getGitIgnoredPaths,
+  getGitTrackedFiles,
+  isNotGitRepositoryError,
+} from "../utils/GitUtils";
 import {
   USER_FEEDBACK_SEVERITY,
   WORKSPACE_ENTRY_KINDS,
@@ -376,7 +380,13 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
             await this.dependencies.getGitTrackedFiles(root.path),
             roots
           );
-        } catch {
+        } catch (error) {
+          const reason = isNotGitRepositoryError(error)
+            ? "root is not a Git repository"
+            : `Git file listing failed: ${String(error)}`;
+          const message = `[WorkspaceFileIndex] ${reason} for ${root.path}; using degraded filesystem walk.`;
+          Log.warn(message);
+          this.options.onWarning?.(message);
           gitSucceeded = false;
           return [];
         }

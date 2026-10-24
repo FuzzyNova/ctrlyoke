@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-24 by timeout-budget bug sweep workflow (utils-git-config)
 - **Area:** `src/utils/GitUtils.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -42,15 +42,15 @@ metadata, instead of the git listing.
 
 ## Root Cause
 
-- `src/utils/GitUtils.ts:11`: `const GIT_TIMEOUT_MS = 10_000;`
-- `:1112-1123`: `getGitTrackedFiles` passes `timeout: GIT_TIMEOUT_MS` together
+- `src/utils/GitUtils.ts:12`: `const GIT_TIMEOUT_MS = 10_000;`
+- `:1170-1181`: `getGitTrackedFiles` passes `timeout: GIT_TIMEOUT_MS` together
   with `maxBuffer: 500 * 1024 * 1024`.
-- `:1126-1180`: the other listings go through `execGit` -> `execFileAsync`,
+- `:1184-1240`: the other listings go through `execGit` -> `execFileAsync`,
   whose default is `options.timeout ?? getGitTimeoutMs()` (`:235`).
-- Callers that read any error as "not git": `src/server/HostedWorkspaceViewerService.ts:879-884`,
-  `src/completions/WorkspaceFileIndex.ts:373-381`,
-  `src/utils/CompletionFileDiscovery.ts:13-21`,
-  `src/server/CtrlYokeHostedServer.ts:1471`.
+- Callers that read any error as "not git": `src/server/HostedWorkspaceViewerService.ts:878-896`,
+  `src/completions/WorkspaceFileIndex.ts:374-388`,
+  `src/utils/CompletionFileDiscovery.ts:12-23`,
+  `src/server/CtrlYokeHostedServer.ts:1472-1494`.
 
 ## Suggested Fix
 
