@@ -51,6 +51,7 @@ import {
   CLAUDE_SYSTEM_SUBTYPES,
   CLAUDE_SUBAGENT_TOOL_NAMES,
   CLAUDE_TASK_STATUSES,
+  isClaudeSubagentToolName,
 } from "./ClaudeProtocolConstants";
 
 /**
@@ -185,6 +186,13 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   /** Maps tool_use id → tool name for associating streaming tool results with their calls. */
   private pendingStreamingToolUses = new Map<string, string>();
 
+  /**
+   * Agent/Task tool_use ids. Claude emits the same `task_*` lifecycle records
+   * for long-running Bash, Monitor and workflow tasks, so only these ids may
+   * become subagent spawn updates.
+   */
+  private agentSpawnToolUseIds = new Set<string>();
+
   /** Parent group for nested Agent tool calls, used by their lifecycle updates. */
   private subagentSpawnAttributions = new Map<
     string,
@@ -234,6 +242,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   private resetSessionTrackingState(): void {
     this.subagentFollower.reset();
     this.pendingStreamingToolUses.clear();
+    this.agentSpawnToolUseIds.clear();
     this.subagentSpawnAttributions.clear();
     this.backgroundFollowUpState.reset();
     this.unconfirmedAsyncLaunches.clear();
@@ -469,13 +478,14 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
             }
             if (
               contentBlock.id &&
-              event.parent_tool_use_id &&
-              (contentBlock.name === CLAUDE_SUBAGENT_TOOL_NAMES.AGENT ||
-                contentBlock.name === CLAUDE_SUBAGENT_TOOL_NAMES.LEGACY_TASK)
+              isClaudeSubagentToolName(contentBlock.name)
             ) {
-              this.subagentSpawnAttributions.set(contentBlock.id, {
-                parentToolCallId: event.parent_tool_use_id,
-              });
+              this.agentSpawnToolUseIds.add(contentBlock.id);
+              if (event.parent_tool_use_id) {
+                this.subagentSpawnAttributions.set(contentBlock.id, {
+                  parentToolCallId: event.parent_tool_use_id,
+                });
+              }
             }
             outputEvents.push(
               ...ClaudeToolBuilder.buildInitiatedEvents(
@@ -1487,22 +1497,16 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           );
           if (block.id && block.name) {
             this.pendingStreamingToolUses.set(block.id, block.name);
-            if (
-              e.parent_tool_use_id &&
-              (block.name === CLAUDE_SUBAGENT_TOOL_NAMES.AGENT ||
-                block.name === CLAUDE_SUBAGENT_TOOL_NAMES.LEGACY_TASK)
-            ) {
-              this.subagentSpawnAttributions.set(block.id, {
-                parentToolCallId: e.parent_tool_use_id,
-              });
-            }
-            if (
-              !("parent_tool_use_id" in e) &&
-              e.sessionId &&
-              (block.name === CLAUDE_SUBAGENT_TOOL_NAMES.AGENT ||
-                block.name === CLAUDE_SUBAGENT_TOOL_NAMES.LEGACY_TASK)
-            ) {
-              this.registerInteractiveSubagentSource(e.sessionId, block.id);
+            if (isClaudeSubagentToolName(block.name)) {
+              this.agentSpawnToolUseIds.add(block.id);
+              if (e.parent_tool_use_id) {
+                this.subagentSpawnAttributions.set(block.id, {
+                  parentToolCallId: e.parent_tool_use_id,
+                });
+              }
+              if (!("parent_tool_use_id" in e) && e.sessionId) {
+                this.registerInteractiveSubagentSource(e.sessionId, block.id);
+              }
             }
           }
         }
@@ -1714,7 +1718,11 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     timestamp: number
   ): CliEvent[] {
     const toolUseId = (event as any).tool_use_id;
-    if (typeof toolUseId !== "string" || !toolUseId) return [];
+    if (
+      typeof toolUseId !== "string" ||
+      !this.agentSpawnToolUseIds.has(toolUseId)
+    )
+      return [];
 
     const subtype = event.subtype;
     if (

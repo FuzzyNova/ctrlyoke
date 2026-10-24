@@ -880,6 +880,19 @@ export class CliEventNormalizer {
             );
             continue;
           }
+          // A spawn card is always a TOOL_CALL. Histories recorded before the
+          // Claude parser filtered its task lifecycle records hold "Agent"
+          // updates for long-running Bash calls; those would otherwise become
+          // a stray card that swallows the command's result.
+          if (
+            this.output.some(
+              (candidate) =>
+                candidate.type !== CLI_EVENT_TYPES.TOOL_CALL &&
+                getToolCallId(candidate) === data.id
+            )
+          ) {
+            continue;
+          }
         }
       }
 

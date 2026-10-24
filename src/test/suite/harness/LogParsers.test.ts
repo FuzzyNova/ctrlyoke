@@ -580,7 +580,18 @@ suite("ClaudeLogParser", () => {
     }
   });
 
+  /** Streams the Agent tool_use that Claude's task lifecycle records refer to. */
+  const streamClaudeToolUse = (id: string, name = "Agent") =>
+    parser.extractStructuredEventsFromEvent({
+      type: "assistant",
+      parent_tool_use_id: null,
+      message: {
+        content: [{ type: "tool_use", id, name, input: { description: id } }],
+      },
+    } as BaseCliEvent);
+
   test("streams Claude task progress and completion as spawn updates", () => {
+    streamClaudeToolUse("spawn-a");
     const progress = parser.extractStructuredEventsFromEvent({
       type: "system",
       subtype: "task_progress",
@@ -727,6 +738,7 @@ suite("ClaudeLogParser", () => {
   });
 
   test("normalizes Claude background Agent tasks as spawn updates too", () => {
+    streamClaudeToolUse("background-agent");
     const events = parser.extractStructuredEventsFromEvent({
       type: "system",
       subtype: "task_started",
@@ -736,6 +748,43 @@ suite("ClaudeLogParser", () => {
     assert.strictEqual(events.length, 1);
     assert.strictEqual((events[0].data as any).id, "background-agent");
     assert.strictEqual((events[0].data as any).subagentSpawn.state, "running");
+  });
+
+  test("keeps Claude task records for a long-running Bash call off the Agent card", () => {
+    const bashTask = (subtype: string, extra: Record<string, unknown>) =>
+      ({
+        type: "system",
+        subtype,
+        task_id: "b1",
+        tool_use_id: "long-bash",
+        ...extra,
+      }) as BaseCliEvent;
+    const streamed = [
+      ...streamClaudeToolUse("long-bash", "Bash"),
+      ...parser.extractStructuredEventsFromEvent(
+        bashTask("task_started", { task_type: "local_bash" })
+      ),
+      ...parser.extractStructuredEventsFromEvent(
+        bashTask("task_notification", { status: "completed" })
+      ),
+      ...parser.extractStructuredEventsFromEvent({
+        type: "user",
+        message: {
+          content: [
+            { type: "tool_result", tool_use_id: "long-bash", content: "ok" },
+          ],
+        },
+      } as BaseCliEvent),
+    ];
+
+    assert.ok(
+      streamed.every((event) => event.type !== CLI_EVENT_TYPES.TOOL_CALL),
+      "a Bash task must not produce an Agent spawn update"
+    );
+    const normalized = normalizeCliEvents(streamed);
+    assert.strictEqual(normalized.length, 1);
+    assert.strictEqual(normalized[0].type, CLI_EVENT_TYPES.BASH_COMMAND);
+    assert.strictEqual((normalized[0].data as any).status, "completed");
   });
 
   test("counts assistant usage once when content blocks share a message id", () => {
@@ -3047,6 +3096,34 @@ suite("CopilotLogParser", () => {
 
   setup(() => {
     parser = new CopilotLogParser();
+  });
+
+  test("applies Copilot subagent lifecycle events only to task calls in the final parse", () => {
+    const start = (toolCallId: string, toolName: string): BaseCliEvent => ({
+      type: "tool.execution_start",
+      data: { toolCallId, toolName, arguments: { description: toolCallId } },
+    });
+    const started = (toolCallId: string): BaseCliEvent => ({
+      type: "subagent.started",
+      data: { toolCallId, agentName: "agent", agentDisplayName: "Agent" },
+    });
+    const output = parser.extractResponse([
+      start("spawn", "task"),
+      start("other", "custom_tool"),
+      started("spawn"),
+      started("other"),
+    ]);
+    const spawnOf = (id: string) =>
+      (
+        output.events.find(
+          (event) =>
+            event.type === CLI_EVENT_TYPES.TOOL_CALL &&
+            (event.data as ToolCall).id === id
+        )?.data as ToolCall | undefined
+      )?.subagentSpawn;
+
+    assert.ok(spawnOf("spawn"), "the task call keeps its spawn card");
+    assert.strictEqual(spawnOf("other"), undefined);
   });
 
   test("attributes Copilot subagent events and shell output across interleaved children", () => {

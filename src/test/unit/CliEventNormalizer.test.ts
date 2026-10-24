@@ -58,6 +58,43 @@ suite("CliEventNormalizer", () => {
     });
   });
 
+  test("drops a recorded spawn update that names a Bash call's id", () => {
+    const spawnUpdate = (state: "running" | "completed"): CliEvent => ({
+      type: CLI_EVENT_TYPES.TOOL_CALL,
+      data: {
+        name: "Agent",
+        id: "long-bash",
+        parameters: {},
+        subagentSpawn: { state },
+      } as ToolCall,
+    });
+    const normalized = normalizeCliEvents([
+      {
+        type: CLI_EVENT_TYPES.BASH_COMMAND,
+        data: {
+          command: "npm test",
+          status: OPERATION_STATUS.INITIATED,
+          toolCallId: "long-bash",
+        } as BashCommandData,
+      },
+      spawnUpdate("running"),
+      spawnUpdate("completed"),
+      {
+        type: CLI_EVENT_TYPES.TOOL_RESULT,
+        data: {
+          toolCallId: "long-bash",
+          result: { success: true, output: "TEST SUMMARY" },
+        },
+      },
+    ]);
+
+    assert.strictEqual(normalized.length, 1);
+    assert.strictEqual(normalized[0].type, CLI_EVENT_TYPES.BASH_COMMAND);
+    const bash = normalized[0].data as BashCommandData;
+    assert.strictEqual(bash.status, OPERATION_STATUS.COMPLETED);
+    assert.strictEqual(bash.output, "TEST SUMMARY");
+  });
+
   test("accepts persisted legacy direct callerType fields", () => {
     const legacy = JSON.parse(
       `{"type":"${CLI_EVENT_TYPES.TEXT}","data":{"text":"legacy"},"callerType":"direct"}`

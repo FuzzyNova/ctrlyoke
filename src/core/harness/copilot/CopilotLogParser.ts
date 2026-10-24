@@ -921,7 +921,13 @@ export class CopilotLogParser extends BaseLogParser {
         const spawn = outputEvents.find(
           (candidate) => (candidate.data as any)?.id === event.data?.toolCallId
         );
-        if (spawn && spawn.type === CLI_EVENT_TYPES.TOOL_CALL) {
+        // Same `task` check as the streaming path: only a task call is a spawn.
+        if (
+          spawn &&
+          spawn.type === CLI_EVENT_TYPES.TOOL_CALL &&
+          (spawn.data as import("../../../types/CliOutputTypes").ToolCall)
+            .name === COPILOT_TOOL_NAMES.TASK
+        ) {
           const toolCall =
             spawn.data as import("../../../types/CliOutputTypes").ToolCall;
           const spawnData = event.data ?? {};

@@ -52,6 +52,14 @@ export const CLAUDE_SUBAGENT_TOOL_NAMES = {
   LEGACY_TASK: "Task",
 } as const;
 
+/** Whether a Claude tool name spawns a subagent (`Agent`, or the older `Task`). */
+export function isClaudeSubagentToolName(name: unknown): boolean {
+  return (
+    name === CLAUDE_SUBAGENT_TOOL_NAMES.AGENT ||
+    name === CLAUDE_SUBAGENT_TOOL_NAMES.LEGACY_TASK
+  );
+}
+
 /** Terminal status values Claude reports in `task_notification` records. */
 export const CLAUDE_TASK_STATUSES = {
   COMPLETED: "completed",

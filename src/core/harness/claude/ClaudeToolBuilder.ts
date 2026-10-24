@@ -22,7 +22,7 @@ import { BaseToolBuilder } from "../shared/BaseToolBuilder";
 import {
   CLAUDE_CONTENT_BLOCK_TYPES,
   CLAUDE_TOOL_RESULT_TYPES,
-  CLAUDE_SUBAGENT_TOOL_NAMES,
+  isClaudeSubagentToolName,
 } from "./ClaudeProtocolConstants";
 
 /**
@@ -112,10 +112,7 @@ export class ClaudeToolBuilder {
       toolId,
       timestamp
     );
-    if (
-      toolName === CLAUDE_SUBAGENT_TOOL_NAMES.AGENT ||
-      toolName === CLAUDE_SUBAGENT_TOOL_NAMES.LEGACY_TASK
-    ) {
+    if (isClaudeSubagentToolName(toolName)) {
       for (const event of events) {
         if (event.type === CLI_EVENT_TYPES.TOOL_CALL) {
           const toolCall = event.data as ToolCall;
