@@ -164,9 +164,12 @@ filter options, and no replace.
   repository.
 
 Results are grouped by file, with up to three matching lines per file. Select a
-line to open the file there. **Load more** fetches more results. Very large
-searches stop early and say so; narrow the query to see the rest. Binary files
-and files over 2 MB aren't searched.
+line to open the file there. More results load as you scroll. The count above
+the results reads like **150+ results** while the search is still looking, and
+becomes exact once it has read every file. A search stops after 10,000 results;
+narrow the query to see the rest. With **Include git-ignored files** on, your
+other files are searched first, then the ignored ones. Binary files and files
+over 2 MB aren't searched.
 
 ## On a phone
 

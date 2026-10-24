@@ -211,6 +211,8 @@ export async function workspaceSearch(
   const params = new URLSearchParams({ query: req.query, scope: req.scope });
   if (req.includeGitIgnored) params.set("includeGitIgnored", "true");
   if (req.repo) params.set("repo", req.repo);
+  if (req.searchId) params.set("searchId", req.searchId);
+  if (req.offset) params.set("offset", String(req.offset));
   if (req.limit) params.set("limit", String(req.limit));
   return hostedFetch<WorkspaceSearchResponse>(
     `/api/workspace-viewer/search?${params.toString()}`

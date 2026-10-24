@@ -4,20 +4,39 @@ import React, {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import type {
   WorkspaceSearchContentMatch,
+  WorkspaceSearchFileMatch,
   WorkspaceSearchResult,
   WorkspaceSearchScope,
 } from "@root/types/HostedWorkspaceViewerTypes";
 import { useSettingsStore } from "@store/settingsStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { workspaceRepos, workspaceSearch } from "@utils/hostedApi";
-import { truncateSnippet } from "@utils/string";
+import { formatSearchResultCount, truncateSnippet } from "@utils/string";
 import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
+import {
+  VirtualizedPagedList,
+  type VirtualizedListRange,
+} from "@components/shared";
 import { Icon } from "../shared/Icon";
 
-const INITIAL_RESULT_LIMIT = 50;
+export const WORKSPACE_SEARCH_DEBOUNCE_MS = 400;
+export const WORKSPACE_SEARCH_PAGE_SIZE = 50;
+
+/**
+ * Placeholder rows after the loaded results while more may exist. They are
+ * the loading indicator, and the list's range reaching them is what requests
+ * the next page — there is no "Load more" button.
+ */
+const LOADING_TAIL_ROWS = 3;
+/** Below this many rows the list renders densely rather than virtualized. */
+const VIRTUALIZE_THRESHOLD = 100;
+const FILE_ROW_ESTIMATE = 52;
+const LINE_ROW_ESTIMATE = 36;
+const PATH_HEADING_ESTIMATE = 22;
 
 const SCOPE_OPTIONS: Array<{
   value: WorkspaceSearchScope;
@@ -28,27 +47,30 @@ const SCOPE_OPTIONS: Array<{
   { value: "both", label: "Both" },
 ];
 
-interface ContentMatchGroup {
-  path: string;
-  matches: WorkspaceSearchContentMatch[];
-}
+/**
+ * One rendered row. Results arrive in scan order with a file's content
+ * matches together, so the first match of each file carries that file's path
+ * as a heading instead of a separate row.
+ */
+type SearchRow =
+  | { result: WorkspaceSearchFileMatch }
+  | { result: WorkspaceSearchContentMatch; showPath: boolean };
 
-function groupContentMatches(
-  results: WorkspaceSearchResult[]
-): ContentMatchGroup[] {
-  const groups = new Map<string, WorkspaceSearchContentMatch[]>();
-  for (const result of results) {
-    if (result.kind !== WORKSPACE_ENTRY_KINDS.CONTENT) continue;
-    const matches = groups.get(result.path);
-    if (matches) {
-      matches.push(result);
-    } else {
-      groups.set(result.path, [result]);
+function toSearchRows(results: WorkspaceSearchResult[]): SearchRow[] {
+  let previousContentPath: string | null = null;
+  return results.map((result) => {
+    if (result.kind !== WORKSPACE_ENTRY_KINDS.CONTENT) {
+      previousContentPath = null;
+      return { result };
     }
-  }
-
-  return Array.from(groups, ([path, matches]) => ({ path, matches }));
+    const showPath = result.path !== previousContentPath;
+    previousContentPath = result.path;
+    return { result, showPath };
+  });
 }
+
+const ROW_BUTTON_CLASS =
+  "min-h-[44px] w-full rounded-sm border border-transparent px-3 py-2 text-left transition-colors hover:border-focus-border hover:bg-list-hover-bg focus:border-focus-border focus:bg-list-hover-bg focus:outline-hidden sm:min-h-0";
 
 export const WorkspaceSearchPane: React.FC = () => {
   const searchQuery = useWorkspaceViewerStore((s) => s.searchQuery);
@@ -58,7 +80,7 @@ export const WorkspaceSearchPane: React.FC = () => {
   );
   const searchResults = useWorkspaceViewerStore((s) => s.searchResults);
   const searchLoading = useWorkspaceViewerStore((s) => s.searchLoading);
-  const searchTruncated = useWorkspaceViewerStore((s) => s.searchTruncated);
+  const searchStatus = useWorkspaceViewerStore((s) => s.searchStatus);
   const repos = useWorkspaceViewerStore((s) => s.repos);
   const selectedRepoId = useWorkspaceViewerStore((s) => s.selectedRepoId);
   const setSearchQuery = useWorkspaceViewerStore((s) => s.setSearchQuery);
@@ -66,10 +88,10 @@ export const WorkspaceSearchPane: React.FC = () => {
   const setSearchIncludeGitIgnored = useWorkspaceViewerStore(
     (s) => s.setSearchIncludeGitIgnored
   );
-  const setSearchResults = useWorkspaceViewerStore((s) => s.setSearchResults);
   const setSearchLoading = useWorkspaceViewerStore((s) => s.setSearchLoading);
-  const setSearchTruncated = useWorkspaceViewerStore(
-    (s) => s.setSearchTruncated
+  const appendSearchPage = useWorkspaceViewerStore((s) => s.appendSearchPage);
+  const resetSearchResults = useWorkspaceViewerStore(
+    (s) => s.resetSearchResults
   );
   const setSelectedRepoId = useWorkspaceViewerStore((s) => s.setSelectedRepoId);
   const setRepos = useWorkspaceViewerStore((s) => s.setRepos);
@@ -78,16 +100,20 @@ export const WorkspaceSearchPane: React.FC = () => {
     (s) => s.globalSettings.hideGitIgnoredFiles
   );
 
-  const requestSequenceRef = useRef(0);
-  const resultLimitRef = useRef(INITIAL_RESULT_LIMIT);
+  /** Identifies the current search; a response for an older one is dropped. */
+  const searchSequenceRef = useRef(0);
   const hasSeededGitIgnoredRef = useRef(false);
-  const [moreAvailable, setMoreAvailable] = useState(false);
+  const resultsScrollContainerRef = useRef<HTMLDivElement>(null);
+  const [searchFailed, setSearchFailed] = useState(false);
   const trimmedQuery = searchQuery.trim();
   // Scoping only means something when there is more than one repo to choose
   // between; with none or one, search every root the viewer can browse (a
   // multi-root workspace can also hold roots that are in no repo at all).
   const scopedRepoId =
     repos.length > 1 ? (selectedRepoId ?? undefined) : undefined;
+  const listingId = `workspace-search:${trimmedQuery}:${searchScope}:${
+    searchIncludeGitIgnored ? "ignored" : "tracked"
+  }:${scopedRepoId ?? ""}`;
 
   useEffect(() => {
     if (hasSeededGitIgnoredRef.current) return;
@@ -107,99 +133,199 @@ export const WorkspaceSearchPane: React.FC = () => {
       });
   }, [setRepos]);
 
-  const runSearch = useCallback(
-    (limit: number) => {
-      const requestId = ++requestSequenceRef.current;
-      setSearchLoading(true);
+  /**
+   * Requests the page after the results already loaded. Reads the store
+   * directly so a call from a stale render still continues from the latest
+   * page rather than re-requesting one it already has.
+   */
+  const loadNextPage = useCallback(() => {
+    const sequence = searchSequenceRef.current;
+    const { searchResults: loaded, searchStatus: status } =
+      useWorkspaceViewerStore.getState();
+    setSearchLoading(true);
+    setSearchFailed(false);
 
-      void workspaceSearch({
-        query: trimmedQuery,
-        scope: searchScope,
-        includeGitIgnored: searchIncludeGitIgnored,
-        repo: scopedRepoId,
-        limit,
+    void workspaceSearch({
+      query: trimmedQuery,
+      scope: searchScope,
+      includeGitIgnored: searchIncludeGitIgnored,
+      repo: scopedRepoId,
+      searchId: status?.searchId,
+      offset: loaded.length,
+      limit: WORKSPACE_SEARCH_PAGE_SIZE,
+    })
+      .then((page) => {
+        if (sequence !== searchSequenceRef.current) return;
+        appendSearchPage(page);
+        // A page that found nothing new before its scan budget ran out adds
+        // no rows, so the list's range never changes to ask again — keep the
+        // scan going from here instead.
+        if (page.results.length === 0 && !page.complete) {
+          loadNextPageRef.current();
+        }
       })
-        .then((response) => {
-          if (requestId !== requestSequenceRef.current) return;
-          setSearchResults(response.results);
-          setSearchTruncated(response.truncated);
-          // `truncated` only reports a scan that ran out of budget. A result
-          // set that filled `limit` exactly is also incomplete, and is the
-          // common case on a broad query — both need "Load more".
-          setMoreAvailable(
-            response.truncated || response.results.length >= limit
-          );
-          setSearchLoading(false);
-        })
-        .catch(() => {
-          if (requestId !== requestSequenceRef.current) return;
-          setSearchResults([]);
-          setSearchTruncated(false);
-          setMoreAvailable(false);
-          setSearchLoading(false);
-        });
-    },
-    [
-      scopedRepoId,
-      searchIncludeGitIgnored,
-      searchScope,
-      setSearchLoading,
-      setSearchResults,
-      setSearchTruncated,
-      trimmedQuery,
-    ]
-  );
+      .catch(() => {
+        if (sequence !== searchSequenceRef.current) return;
+        setSearchFailed(true);
+        setSearchLoading(false);
+      });
+  }, [
+    appendSearchPage,
+    scopedRepoId,
+    searchIncludeGitIgnored,
+    searchScope,
+    setSearchLoading,
+    trimmedQuery,
+  ]);
+  const loadNextPageRef = useRef(loadNextPage);
+  loadNextPageRef.current = loadNextPage;
 
   useEffect(() => {
-    const scheduledRequestId = ++requestSequenceRef.current;
-    resultLimitRef.current = INITIAL_RESULT_LIMIT;
-    setSearchResults([]);
-    setSearchTruncated(false);
-    setMoreAvailable(false);
-    setSearchLoading(false);
+    const sequence = ++searchSequenceRef.current;
+    resetSearchResults();
+    setSearchFailed(false);
+    if (resultsScrollContainerRef.current) {
+      resultsScrollContainerRef.current.scrollTop = 0;
+    }
 
     if (trimmedQuery.length < 2) return;
 
     const timeoutId = window.setTimeout(() => {
-      if (scheduledRequestId !== requestSequenceRef.current) return;
-      runSearch(INITIAL_RESULT_LIMIT);
-    }, 400);
+      if (sequence !== searchSequenceRef.current) return;
+      loadNextPageRef.current();
+    }, WORKSPACE_SEARCH_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timeoutId);
   }, [
-    runSearch,
-    searchQuery,
-    searchScope,
-    searchIncludeGitIgnored,
+    resetSearchResults,
     scopedRepoId,
-    setSearchLoading,
-    setSearchResults,
-    setSearchTruncated,
+    searchIncludeGitIgnored,
+    searchScope,
     trimmedQuery,
   ]);
 
-  const handleLoadMore = useCallback(() => {
-    if (searchLoading || !moreAvailable || trimmedQuery.length < 2) return;
-    const nextLimit = resultLimitRef.current * 2;
-    resultLimitRef.current = nextLimit;
-    runSearch(nextLimit);
-  }, [moreAvailable, runSearch, searchLoading, trimmedQuery.length]);
+  const rows = useMemo(() => toSearchRows(searchResults), [searchResults]);
+  const hasMore =
+    !searchFailed &&
+    searchStatus !== null &&
+    (!searchStatus.complete || searchResults.length < searchStatus.totalCount);
+  const rowCount = rows.length + (hasMore ? LOADING_TAIL_ROWS : 0);
 
-  const contentMatchGroups = useMemo(
-    () => groupContentMatches(searchResults),
-    [searchResults]
-  );
-  const filenameMatches = useMemo(
-    () =>
-      searchResults.filter(
-        (result) => result.kind === WORKSPACE_ENTRY_KINDS.FILE
-      ),
-    [searchResults]
+  const handleRangeChange = useCallback(
+    (range: VirtualizedListRange): void => {
+      if (!hasMore || range.overscanEndIndex < rows.length) return;
+      if (useWorkspaceViewerStore.getState().searchLoading) return;
+      loadNextPage();
+    },
+    [hasMore, loadNextPage, rows.length]
   );
 
-  const showInitialLoading = searchLoading && searchResults.length === 0;
+  const getItem = useCallback(
+    (index: number): SearchRow | undefined => rows[index],
+    [rows]
+  );
+  const getItemKey = useCallback(
+    (row: SearchRow): string =>
+      row.result.kind === WORKSPACE_ENTRY_KINDS.CONTENT
+        ? `line:${row.result.path}:${row.result.line}`
+        : `file:${row.result.path}`,
+    []
+  );
+  const estimateItemSize = useCallback(
+    (index: number): number => {
+      const row = rows[index];
+      if (!row) return LINE_ROW_ESTIMATE;
+      if (!("showPath" in row)) return FILE_ROW_ESTIMATE;
+      return LINE_ROW_ESTIMATE + (row.showPath ? PATH_HEADING_ESTIMATE : 0);
+    },
+    [rows]
+  );
+  const renderItem = useCallback(
+    (row: SearchRow): ReactNode => {
+      if (!("showPath" in row)) {
+        const { result } = row;
+        return (
+          <button
+            type="button"
+            onClick={() => openToFile(result.path)}
+            className={ROW_BUTTON_CLASS}
+          >
+            <div className="flex min-w-0 items-center gap-1.5">
+              <Icon
+                name="file"
+                className="shrink-0 text-xs text-description-fg"
+              />
+              <span className="truncate text-sm font-semibold text-foreground">
+                {result.name}
+              </span>
+            </div>
+            <div className="truncate text-xs text-description-fg">
+              {result.path}
+            </div>
+          </button>
+        );
+      }
+      const { result, showPath } = row;
+      return (
+        <div className={showPath ? "pt-2" : undefined}>
+          {showPath && (
+            <div className="truncate px-3 text-xs font-semibold text-foreground">
+              {result.path}
+            </div>
+          )}
+          <button
+            type="button"
+            aria-label={`Open ${result.path} at line ${result.line}`}
+            onClick={() => openToFile(result.path, result.line, result.line)}
+            className={ROW_BUTTON_CLASS}
+          >
+            <div className="flex items-start gap-2 text-xs text-description-fg">
+              <span className="shrink-0 font-mono">Line {result.line}</span>
+              <span className="min-w-0 truncate text-foreground">
+                {truncateSnippet(result.matchSnippet)}
+              </span>
+            </div>
+          </button>
+        </div>
+      );
+    },
+    [openToFile]
+  );
+  const renderPlaceholder = useCallback(
+    (index: number): ReactNode => (
+      <div
+        className="px-3 py-2"
+        data-workspace-search-placeholder="true"
+        data-placeholder-index={index}
+        aria-hidden="true"
+      >
+        <div className="h-3 w-2/5 animate-pulse rounded-sm bg-description-fg/20" />
+        <div className="mt-2 h-3 w-4/5 animate-pulse rounded-sm bg-description-fg/15" />
+      </div>
+    ),
+    []
+  );
+
+  const totalCount = searchStatus?.totalCount ?? 0;
+  const summaryLabel =
+    trimmedQuery.length >= 2 && totalCount > 0 && searchStatus
+      ? formatSearchResultCount(
+          totalCount,
+          searchStatus.complete && !searchStatus.capped
+        )
+      : "";
+  const scanning =
+    searchLoading || (searchStatus !== null && !searchStatus.complete);
+  const showInitialLoading =
+    trimmedQuery.length >= 2 &&
+    searchResults.length === 0 &&
+    !searchFailed &&
+    scanning;
   const showEmpty =
-    trimmedQuery.length >= 2 && !searchLoading && searchResults.length === 0;
+    trimmedQuery.length >= 2 &&
+    searchResults.length === 0 &&
+    !searchFailed &&
+    searchStatus?.complete === true;
 
   return (
     <div className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-editor-bg">
@@ -285,9 +411,27 @@ export const WorkspaceSearchPane: React.FC = () => {
             </label>
           )}
         </div>
+
+        {summaryLabel && (
+          <div className="flex h-4 items-center gap-1.5 text-xs text-description-fg">
+            <span>{summaryLabel}</span>
+            {/* Once rows are showing, this is what still says the scan behind
+                them has not finished. */}
+            {scanning && (
+              <Icon
+                name="loading"
+                className="animate-spin text-xs"
+                aria-label="Still searching"
+              />
+            )}
+          </div>
+        )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 py-3">
+      <div
+        ref={resultsScrollContainerRef}
+        className="flex-1 overflow-y-auto px-3 py-3"
+      >
         {trimmedQuery.length < 2 && (
           <div className="py-6 text-center text-sm text-description-fg">
             Type at least 2 characters
@@ -307,92 +451,36 @@ export const WorkspaceSearchPane: React.FC = () => {
           </div>
         )}
 
-        {searchResults.length > 0 && (
-          <div className="flex flex-col gap-3">
-            {filenameMatches.length > 0 && (
-              <section aria-label="Filename matches">
-                <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-description-fg">
-                  Files
-                </h2>
-                <div className="flex flex-col gap-1">
-                  {filenameMatches.map((result) => (
-                    <button
-                      key={`file:${result.path}`}
-                      type="button"
-                      onClick={() => openToFile(result.path)}
-                      className="min-h-[44px] w-full rounded-sm border border-transparent px-3 py-2 text-left transition-colors hover:border-focus-border hover:bg-list-hover-bg focus:border-focus-border focus:bg-list-hover-bg focus:outline-hidden sm:min-h-0"
-                    >
-                      <div className="truncate text-sm font-semibold text-foreground">
-                        {result.name}
-                      </div>
-                      <div className="truncate text-xs text-description-fg">
-                        {result.path}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {contentMatchGroups.length > 0 && (
-              <section aria-label="Content matches">
-                <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-description-fg">
-                  Content
-                </h2>
-                <div className="flex flex-col gap-2">
-                  {contentMatchGroups.map((group) => (
-                    <div key={`content:${group.path}`}>
-                      <div className="truncate px-3 text-xs font-semibold text-foreground">
-                        {group.path}
-                      </div>
-                      <div className="mt-1 flex flex-col gap-1">
-                        {group.matches.map((result) => (
-                          <button
-                            key={`${result.path}:${result.line}`}
-                            type="button"
-                            aria-label={`Open ${result.path} at line ${result.line}`}
-                            onClick={() =>
-                              openToFile(result.path, result.line, result.line)
-                            }
-                            className="min-h-[44px] w-full rounded-sm border border-transparent px-3 py-2 text-left transition-colors hover:border-focus-border hover:bg-list-hover-bg focus:border-focus-border focus:bg-list-hover-bg focus:outline-hidden sm:min-h-0"
-                          >
-                            <div className="flex items-start gap-2 text-xs text-description-fg">
-                              <span className="shrink-0 font-mono">
-                                Line {result.line}
-                              </span>
-                              <span className="min-w-0 truncate text-foreground">
-                                {truncateSnippet(result.matchSnippet)}
-                              </span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
+        {searchFailed && (
+          <div className="flex flex-col items-center gap-2 py-6 text-sm text-description-fg">
+            <span>Search failed.</span>
+            <button
+              type="button"
+              onClick={loadNextPage}
+              className="flex min-h-[44px] items-center justify-center rounded-sm border border-btn-border bg-btn-secondary-bg px-4 text-xs font-medium text-btn-secondary-fg hover:bg-btn-secondary-hover sm:min-h-0 sm:py-1"
+            >
+              Retry
+            </button>
           </div>
         )}
 
-        {moreAvailable && (
-          <div className="flex flex-col items-center gap-2 border-t border-panel-border pt-3">
-            <div className="text-center text-xs text-description-fg">
-              {searchTruncated
-                ? "The scan stopped early. More matches may be available."
-                : "Results are limited. More matches may be available."}
-            </div>
-            <button
-              type="button"
-              onClick={handleLoadMore}
-              disabled={searchLoading}
-              className="flex min-h-[44px] items-center justify-center gap-2 rounded-sm border border-btn-border bg-btn-secondary-bg px-4 text-xs font-medium text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-60 sm:min-h-0"
-            >
-              {searchLoading && (
-                <Icon name="loading" className="animate-spin" />
-              )}
-              <span>{searchLoading ? "Loading..." : "Load more"}</span>
-            </button>
+        {rows.length > 0 && (
+          <div
+            className="flex flex-col"
+            data-workspace-search-listing-id={listingId}
+          >
+            <VirtualizedPagedList
+              totalCount={rowCount}
+              listingId={listingId}
+              getItem={getItem}
+              getItemKey={getItemKey}
+              renderItem={renderItem}
+              renderPlaceholder={renderPlaceholder}
+              scrollContainerRef={resultsScrollContainerRef}
+              estimateItemSize={estimateItemSize}
+              threshold={VIRTUALIZE_THRESHOLD}
+              onRangeChange={handleRangeChange}
+            />
           </div>
         )}
       </div>

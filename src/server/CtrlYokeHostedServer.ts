@@ -1540,6 +1540,16 @@ export class CtrlYokeHostedServer
             : NaN;
         const limit =
           Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : undefined;
+        const rawOffset =
+          typeof req.query.offset === "string"
+            ? Number.parseInt(req.query.offset, 10)
+            : NaN;
+        const offset =
+          Number.isFinite(rawOffset) && rawOffset > 0 ? rawOffset : undefined;
+        const searchId =
+          typeof req.query.searchId === "string" && req.query.searchId
+            ? req.query.searchId
+            : undefined;
 
         try {
           res.json(
@@ -1548,6 +1558,8 @@ export class CtrlYokeHostedServer
               scope,
               includeGitIgnored,
               repo,
+              searchId,
+              offset,
               limit,
             })
           );

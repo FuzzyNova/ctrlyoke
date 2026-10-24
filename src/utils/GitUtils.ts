@@ -1152,8 +1152,17 @@ export async function getGitUntrackedFiles(
   return parseGitNulSeparatedPaths(stdout);
 }
 
-/** Return ignored untracked paths recursively, preserving Git's NUL-safe output. */
-export async function getGitIgnoredFiles(repoRoot: string): Promise<string[]> {
+/**
+ * Return ignored untracked paths, preserving Git's NUL-safe output. A wholly
+ * ignored directory is collapsed to one entry with a trailing "/" (e.g.
+ * "node_modules/") instead of being expanded: the recursive listing is every
+ * file under `node_modules/`, `dist/` and the like, which on a real checkout
+ * is six figures of paths and takes seconds to produce and parse. Callers
+ * that need the files walk those directories themselves, as far as they need.
+ */
+export async function getGitIgnoredEntries(
+  repoRoot: string
+): Promise<string[]> {
   const { stdout } = await execGit(
     [
       "-C",
@@ -1162,6 +1171,7 @@ export async function getGitIgnoredFiles(repoRoot: string): Promise<string[]> {
       "--others",
       "--ignored",
       "--exclude-standard",
+      "--directory",
       "-z",
     ],
     { maxBuffer: GIT_MAX_BUFFER }

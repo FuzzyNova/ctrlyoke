@@ -36,8 +36,6 @@ import type {
   GitRefLabel,
   WorkspaceSearchRequest,
   WorkspaceSearchResponse,
-  WorkspaceSearchResult,
-  WorkspaceSearchScope,
   WorkspaceSearchContentMatch,
   WorkspaceTreeEntry,
 } from "../types/HostedWorkspaceViewerTypes";
@@ -100,7 +98,7 @@ import {
   type GitChangedFile,
   getIgnoredEntryNames,
   getGitTrackedFiles,
-  getGitIgnoredFiles,
+  getGitIgnoredEntries,
   getDiffBetweenRefs,
   GIT_COMMAND_TIMEOUT_MS,
   getGitMutationTimeoutMs,
@@ -114,7 +112,16 @@ import {
 } from "../types/DashboardConstants";
 import { pathsEqual } from "../utils/PathCasing";
 import { streamFileLines } from "../utils/TextLines";
-import { walkSearchFiles } from "../utils/WorkspaceSearchFileWalker";
+import {
+  COMPLETION_ALL_FILES_SKIP_DIRECTORIES,
+  iterateSearchFiles,
+} from "../utils/WorkspaceSearchFileWalker";
+import {
+  WorkspaceSearchSession,
+  WorkspaceSearchSessionStore,
+  type WorkspaceSearchCandidate,
+  type WorkspaceSearchParams,
+} from "./WorkspaceSearchSession";
 import {
   REDACTION_MARKER,
   secretRedactionService,
@@ -137,10 +144,19 @@ export const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
 const DIFF_SIDE_TOO_LARGE = Symbol("diff-side-too-large");
 const BINARY_CHECK_BYTES = 8192;
 const WORKSPACE_TREE_STAT_CONCURRENCY = 8;
+/** Scan time one search page request may spend before answering with what it has. */
 const SEARCH_MAX_DURATION_MS = 3000;
-const SEARCH_MAX_FILENAME_MATCHES = 30;
+/** Time a page request keeps counting past its page; see `WorkspaceSearchSession.page`. */
+const SEARCH_COUNT_LOOKAHEAD_MS = 250;
+/** When a page with some results answers rather than filling up; see `WorkspaceSearchPageBudget`. */
+const SEARCH_PARTIAL_PAGE_MS = 500;
+/** Results one search session keeps before it stops scanning. */
+const SEARCH_MAX_RESULTS = 10_000;
 const SEARCH_MAX_CONTENT_MATCHES_PER_FILE = 3;
-const SEARCH_CONCURRENCY = 8;
+const SEARCH_SESSION_MAX_COUNT = 4;
+const SEARCH_SESSION_IDLE_TTL_MS = 2 * 60 * 1000;
+/** Paths handed to the session per batch from an already-listed set (git ls-files). */
+const SEARCH_CANDIDATE_CHUNK = 256;
 const SEARCH_DEFAULT_LIMIT = 100;
 const SEARCH_MAX_LIMIT = 500;
 const SEARCH_SNIPPET_MAX_LENGTH = 200;
@@ -232,16 +248,6 @@ async function mapWithBoundedConcurrency<T, R>(
   return results;
 }
 
-interface SearchCandidate {
-  absolutePath: string;
-  viewerPath: string;
-}
-
-interface SearchContentScan {
-  matches: WorkspaceSearchContentMatch[];
-  truncated: boolean;
-}
-
 /** Extension → Monaco language ID mapping. */
 const LANGUAGE_MAP: Record<string, string> = {
   ts: "typescript",
@@ -306,6 +312,35 @@ function languageFromPath(filePath: string): string | undefined {
 /** Convert OS path separators to forward slashes for git commands. */
 function toGitPath(p: string): string {
   return p.split(path.sep).join("/");
+}
+
+const EMPTY_SEARCH_RESPONSE: WorkspaceSearchResponse = {
+  searchId: "",
+  results: [],
+  totalCount: 0,
+  complete: true,
+  capped: false,
+};
+
+function* chunked<T>(values: readonly T[], size: number): Generator<T[]> {
+  for (let start = 0; start < values.length; start += size) {
+    yield values.slice(start, start + size);
+  }
+}
+
+/** Whether a Git-relative path lies inside one of `directories` (each ending in "/"). */
+function hasAncestorIn(
+  gitPath: string,
+  directories: ReadonlySet<string>
+): boolean {
+  for (
+    let slash = gitPath.indexOf("/");
+    slash !== -1;
+    slash = gitPath.indexOf("/", slash + 1)
+  ) {
+    if (directories.has(gitPath.slice(0, slash + 1))) return true;
+  }
+  return false;
 }
 
 function normalizeScmPath(p: string): string {
@@ -419,6 +454,10 @@ export class WorkspaceFileConflictError extends Error {
 export class HostedWorkspaceViewerService {
   private readonly commitGenerator: CommitMessageGenerator;
   private readonly listingSnapshotCache = new WorkspaceListingSnapshotCache();
+  private readonly searchSessions = new WorkspaceSearchSessionStore(
+    SEARCH_SESSION_MAX_COUNT,
+    SEARCH_SESSION_IDLE_TTL_MS
+  );
   private readonly fileHistorySnapshots = new Map<
     string,
     FileHistorySnapshot
@@ -442,8 +481,8 @@ export class HostedWorkspaceViewerService {
   }
 
   /**
-   * File-count budget for one search, past which the response is marked
-   * truncated. An instance member rather than a module constant so a test
+   * Files one search page request may examine before it answers with what it
+   * has (`complete: false`, so the client asks again). An instance member rather than a module constant so a test
    * subclass can shrink it: proving the budget with the real 5000 meant
    * creating 5001 files per run, which on Windows is slow enough to time the
    * test out under full-suite load without telling us anything the small
@@ -727,15 +766,20 @@ export class HostedWorkspaceViewerService {
   ): Promise<WorkspaceSearchResponse> {
     const query = request.query.trim();
     if (query.length < 2) {
-      return { results: [], truncated: false };
+      return EMPTY_SEARCH_RESPONSE;
     }
 
-    const scope: WorkspaceSearchScope =
-      request.scope === WORKSPACE_SEARCH_SCOPES.FILES ||
-      request.scope === WORKSPACE_SEARCH_SCOPES.CONTENT ||
-      request.scope === WORKSPACE_SEARCH_SCOPES.BOTH
-        ? request.scope
-        : WORKSPACE_SEARCH_SCOPES.BOTH;
+    const params: WorkspaceSearchParams = {
+      query,
+      scope:
+        request.scope === WORKSPACE_SEARCH_SCOPES.FILES ||
+        request.scope === WORKSPACE_SEARCH_SCOPES.CONTENT ||
+        request.scope === WORKSPACE_SEARCH_SCOPES.BOTH
+          ? request.scope
+          : WORKSPACE_SEARCH_SCOPES.BOTH,
+      includeGitIgnored: request.includeGitIgnored === true,
+      repo: request.repo,
+    };
     const requestedLimit = Number.isFinite(request.limit)
       ? Math.floor(request.limit ?? SEARCH_DEFAULT_LIMIT)
       : SEARCH_DEFAULT_LIMIT;
@@ -743,131 +787,43 @@ export class HostedWorkspaceViewerService {
       SEARCH_MAX_LIMIT,
       requestedLimit > 0 ? requestedLimit : SEARCH_DEFAULT_LIMIT
     );
+    const offset =
+      Number.isFinite(request.offset) && (request.offset ?? 0) > 0
+        ? Math.floor(request.offset ?? 0)
+        : 0;
     const startedAt = Date.now();
-    const roots = await this.searchRoots(request.repo);
-    if (roots.length === 0) {
-      return { results: [], truncated: false };
-    }
 
-    const discovered = await Promise.all(
-      roots.map((root) =>
-        this.discoverSearchCandidates(root.fsPath, request, startedAt)
-      )
-    );
-    const candidates = discovered.flatMap((result) => result.candidates);
-    let truncated = discovered.some((result) => result.truncated);
-    let scannedFiles = 0;
-    const queryLower = query.toLowerCase();
-    const filenameResults: WorkspaceSearchResult[] = [];
-    const surfacedFilenamePaths = new Set<string>();
-    const contentCandidates: SearchCandidate[] = [];
-    const filenameLimit = Math.min(SEARCH_MAX_FILENAME_MATCHES, limit);
-
-    for (const candidate of candidates) {
-      if (filenameResults.length >= limit) break;
-      if (
-        scannedFiles >= this.searchMaxFiles ||
-        Date.now() - startedAt >= SEARCH_MAX_DURATION_MS
-      ) {
-        truncated = true;
-        break;
+    let session = this.searchSessions.find(request.searchId, params);
+    if (!session) {
+      const roots = await this.searchRoots(params.repo);
+      if (roots.length === 0) {
+        return EMPTY_SEARCH_RESPONSE;
       }
-      scannedFiles++;
-
-      if (scope !== WORKSPACE_SEARCH_SCOPES.CONTENT) {
-        const name = path.basename(candidate.absolutePath);
-        if (
-          filenameResults.length < filenameLimit &&
-          name.toLowerCase().includes(queryLower)
-        ) {
-          filenameResults.push({
-            kind: WORKSPACE_ENTRY_KINDS.FILE,
-            path: candidate.viewerPath,
-            name,
-          });
-          surfacedFilenamePaths.add(candidate.absolutePath);
-        }
-      }
-
-      if (
-        (scope === WORKSPACE_SEARCH_SCOPES.CONTENT ||
-          scope === WORKSPACE_SEARCH_SCOPES.BOTH) &&
-        !surfacedFilenamePaths.has(candidate.absolutePath)
-      ) {
-        contentCandidates.push(candidate);
-      }
-    }
-
-    if (
-      scope === WORKSPACE_SEARCH_SCOPES.FILES ||
-      filenameResults.length >= limit
-    ) {
-      return { results: filenameResults.slice(0, limit), truncated };
-    }
-
-    const contentResultLimit = limit - filenameResults.length;
-    const contentMatchesByCandidate = new Map<
-      number,
-      WorkspaceSearchContentMatch[]
-    >();
-    let contentMatchCount = 0;
-    let nextCandidateIndex = 0;
-
-    const scanContent = async (): Promise<void> => {
-      while (true) {
-        if (
-          contentMatchCount >= contentResultLimit ||
-          Date.now() - startedAt >= SEARCH_MAX_DURATION_MS
-        ) {
-          if (Date.now() - startedAt >= SEARCH_MAX_DURATION_MS) {
-            truncated = true;
-          }
-          return;
-        }
-
-        const candidateIndex = nextCandidateIndex++;
-        if (candidateIndex >= contentCandidates.length) return;
-        const scan = await this.scanSearchFile(
-          contentCandidates[candidateIndex],
-          queryLower,
-          Math.min(
-            SEARCH_MAX_CONTENT_MATCHES_PER_FILE,
-            contentResultLimit - contentMatchCount
+      // Resolved once per session rather than per file: `realpathsOf` is
+      // synchronous, and repeating it for every scanned file cost more than
+      // the scan itself on Windows.
+      const realTrustedRoots = this.realpathsOf(this.trustedRoots);
+      session = new WorkspaceSearchSession(
+        params,
+        this.searchCandidates(roots, params.includeGitIgnored),
+        (candidate, queryLower, maxMatches) =>
+          this.scanSearchFile(
+            candidate,
+            queryLower,
+            Math.min(maxMatches, SEARCH_MAX_CONTENT_MATCHES_PER_FILE),
+            realTrustedRoots
           ),
-          startedAt
-        );
-        if (scan.truncated) truncated = true;
-
-        const remaining = contentResultLimit - contentMatchCount;
-        if (remaining > 0 && scan.matches.length > 0) {
-          const matches = scan.matches.slice(0, remaining);
-          contentMatchesByCandidate.set(candidateIndex, matches);
-          contentMatchCount += matches.length;
-        }
-      }
-    };
-
-    await Promise.all(
-      Array.from(
-        {
-          length: Math.min(SEARCH_CONCURRENCY, contentCandidates.length),
-        },
-        () => scanContent()
-      )
-    );
-
-    const contentResults: WorkspaceSearchContentMatch[] = [];
-    for (let i = 0; i < contentCandidates.length; i++) {
-      const matches = contentMatchesByCandidate.get(i);
-      if (!matches) continue;
-      contentResults.push(...matches);
-      if (contentResults.length >= contentResultLimit) break;
+        SEARCH_MAX_RESULTS
+      );
+      this.searchSessions.add(session);
     }
 
-    return {
-      results: [...filenameResults, ...contentResults].slice(0, limit),
-      truncated,
-    };
+    return session.page(offset, limit, {
+      deadline: startedAt + SEARCH_MAX_DURATION_MS,
+      maxFiles: this.searchMaxFiles,
+      lookaheadMs: SEARCH_COUNT_LOOKAHEAD_MS,
+      partialPageMs: SEARCH_PARTIAL_PAGE_MS,
+    });
   }
 
   private async searchRoots(
@@ -883,53 +839,91 @@ export class HostedWorkspaceViewerService {
     return roots.filter((root) => prefixRepoIds[root.name] === repoId);
   }
 
-  private async discoverSearchCandidates(
-    rootPath: string,
-    request: WorkspaceSearchRequest,
-    startedAt: number
-  ): Promise<{ candidates: SearchCandidate[]; truncated: boolean }> {
-    let relativeFiles: string[];
-    let truncated = false;
-    try {
-      const trackedFiles = await getGitTrackedFiles(rootPath);
-      relativeFiles = trackedFiles;
-      if (request.includeGitIgnored) {
-        const ignoredFiles = await getGitIgnoredFiles(rootPath);
-        relativeFiles = [...new Set([...trackedFiles, ...ignoredFiles])];
+  /** Every root's searchable files in scan order, discovered only as the session pulls them. */
+  private async *searchCandidates(
+    roots: readonly ResolverWorkspaceFolder[],
+    includeGitIgnored: boolean
+  ): AsyncGenerator<WorkspaceSearchCandidate[]> {
+    for (const { fsPath } of roots) {
+      const root = path.resolve(fsPath);
+      for await (const relativeFiles of this.searchRootFiles(
+        root,
+        includeGitIgnored
+      )) {
+        const candidates: WorkspaceSearchCandidate[] = [];
+        for (const relativeFile of relativeFiles) {
+          const absolutePath = path.resolve(root, relativeFile);
+          if (!isPathWithinDirectory(absolutePath, root)) continue;
+          candidates.push({
+            absolutePath,
+            viewerPath: this.relativePath(absolutePath),
+          });
+        }
+        if (candidates.length > 0) yield candidates;
       }
-    } catch {
-      const walked = await walkSearchFiles(
-        rootPath,
-        startedAt,
-        this.searchMaxFiles,
-        SEARCH_MAX_DURATION_MS
-      );
-      relativeFiles = walked.files;
-      truncated = walked.truncated;
     }
+  }
 
-    const candidates: SearchCandidate[] = [];
-    const root = path.resolve(rootPath);
-    for (const relativeFile of relativeFiles) {
-      const absolutePath = path.resolve(root, relativeFile);
-      if (!isPathWithinDirectory(absolutePath, root)) continue;
-      candidates.push({
-        absolutePath,
-        viewerPath: this.relativePath(absolutePath),
-      });
+  /**
+   * One root's files, relative to it: Git's non-ignored files first, then (on
+   * request) the ignored ones. Git reports a wholly ignored directory as one
+   * entry, which is walked lazily rather than listed up front — listing every
+   * ignored file recursively took seconds on a checkout with `node_modules/`
+   * and spent the whole page budget before a single file was searched.
+   */
+  private async *searchRootFiles(
+    root: string,
+    includeGitIgnored: boolean
+  ): AsyncGenerator<string[]> {
+    let trackedFiles: string[];
+    try {
+      trackedFiles = await getGitTrackedFiles(root);
+    } catch {
+      // Not a Git checkout: walk it, skipping dependency and build output.
+      yield* iterateSearchFiles(root);
+      return;
     }
-    return { candidates, truncated };
+    yield* chunked(trackedFiles, SEARCH_CANDIDATE_CHUNK);
+    if (!includeGitIgnored) return;
+
+    let ignoredEntries: string[];
+    try {
+      ignoredEntries = await getGitIgnoredEntries(root);
+    } catch {
+      return;
+    }
+    const ignoredDirectories = new Set(
+      ignoredEntries.filter((entry) => entry.endsWith("/"))
+    );
+    // Git can list a file inside an ignored directory alongside the directory
+    // itself; the walk below reaches it, so it is dropped here.
+    const ignoredFiles = ignoredEntries.filter(
+      (entry) =>
+        !entry.endsWith("/") && !hasAncestorIn(entry, ignoredDirectories)
+    );
+    yield* chunked(ignoredFiles, SEARCH_CANDIDATE_CHUNK);
+
+    // A tracked file can sit inside an ignored directory; it was already
+    // searched above.
+    const tracked = new Set(trackedFiles);
+    for await (const files of iterateSearchFiles(
+      root,
+      [...ignoredDirectories],
+      COMPLETION_ALL_FILES_SKIP_DIRECTORIES,
+      false
+    )) {
+      const untracked = files.filter((file) => !tracked.has(toGitPath(file)));
+      if (untracked.length > 0) yield untracked;
+    }
   }
 
   private async isSearchFileWithinTrustedRoots(
-    filePath: string
+    filePath: string,
+    realTrustedRoots: readonly string[]
   ): Promise<string | null> {
     try {
       const realPath = await fs.promises.realpath(filePath);
-      return isPathWithinAnyDirectory(
-        realPath,
-        this.realpathsOf(this.trustedRoots)
-      )
+      return isPathWithinAnyDirectory(realPath, realTrustedRoots)
         ? realPath
         : null;
     } catch {
@@ -937,33 +931,39 @@ export class HostedWorkspaceViewerService {
     }
   }
 
+  /**
+   * Content matches in one file. The file is always read to the end (or to
+   * `maxMatches`), never cut off by the page's time budget: a session resumes
+   * at the next file, so a half-scanned file would lose its remaining matches.
+   * Files over `MAX_FILE_SIZE` are skipped, which bounds the cost.
+   */
   private async scanSearchFile(
-    candidate: SearchCandidate,
+    candidate: WorkspaceSearchCandidate,
     queryLower: string,
     maxMatches: number,
-    startedAt: number
-  ): Promise<SearchContentScan> {
+    realTrustedRoots: readonly string[]
+  ): Promise<WorkspaceSearchContentMatch[]> {
     const safePath = await this.isSearchFileWithinTrustedRoots(
-      candidate.absolutePath
+      candidate.absolutePath,
+      realTrustedRoots
     );
-    if (!safePath) return { matches: [], truncated: false };
+    if (!safePath) return [];
 
     let stat: fs.Stats;
     try {
       stat = await fs.promises.stat(safePath);
     } catch {
-      return { matches: [], truncated: false };
+      return [];
     }
     if (!stat.isFile() || stat.size > MAX_FILE_SIZE) {
-      return { matches: [], truncated: false };
+      return [];
     }
     if (await this.isBinaryFile(safePath)) {
-      return { matches: [], truncated: false };
+      return [];
     }
 
     const matches: WorkspaceSearchContentMatch[] = [];
     let lineNumber = 0;
-    let truncated = false;
     try {
       // `streamFileLines` rather than `readline` so the line number reported
       // here addresses the same line the editor scrolls to: the client renders
@@ -971,10 +971,6 @@ export class HostedWorkspaceViewerService {
       // break on a lone CR. See `TextLines.ts`.
       for await (const line of streamFileLines(safePath)) {
         lineNumber++;
-        if (Date.now() - startedAt >= SEARCH_MAX_DURATION_MS) {
-          truncated = true;
-          break;
-        }
         if (line.toLowerCase().includes(queryLower)) {
           const trimmed = line.trim();
           matches.push({
@@ -990,9 +986,9 @@ export class HostedWorkspaceViewerService {
         }
       }
     } catch {
-      return { matches: [], truncated };
+      return [];
     }
-    return { matches, truncated };
+    return matches;
   }
 
   // ── Directory listing ────────────────────────────────────────────────────
@@ -3143,6 +3139,7 @@ export class HostedWorkspaceViewerService {
     this.fileHistorySnapshots.clear();
     this.commitLogSnapshots.clear();
     this.gitRefDiffSnapshots.clear();
+    this.searchSessions.dispose();
   }
 }
 

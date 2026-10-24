@@ -5,10 +5,26 @@ import {
   render,
   screen,
 } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
-import type { WorkspaceSearchResponse } from "@root/types/HostedWorkspaceViewerTypes";
-import { WorkspaceSearchPane } from "@components/workspace-viewer/WorkspaceSearchPane";
+import type {
+  WorkspaceSearchResponse,
+  WorkspaceSearchResult,
+} from "@root/types/HostedWorkspaceViewerTypes";
+import {
+  WORKSPACE_SEARCH_DEBOUNCE_MS,
+  WORKSPACE_SEARCH_PAGE_SIZE,
+  WorkspaceSearchPane,
+} from "@components/workspace-viewer/WorkspaceSearchPane";
 import { useSettingsStore } from "@store/settingsStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { workspaceRepos, workspaceSearch } from "@utils/hostedApi";
@@ -21,19 +37,91 @@ vi.mock("@utils/hostedApi", () => ({
 const workspaceSearchMock = vi.mocked(workspaceSearch);
 const workspaceReposMock = vi.mocked(workspaceRepos);
 
-const EMPTY_RESPONSE: WorkspaceSearchResponse = {
-  results: [],
-  truncated: false,
-};
+// The results list is virtualized; TanStack sizes its window from the scroll
+// container's offsetHeight, which jsdom reports as 0.
+const originalOffsetHeight = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  "offsetHeight"
+);
+const originalOffsetWidth = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  "offsetWidth"
+);
+
+beforeAll(() => {
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+    configurable: true,
+    get(this: HTMLElement) {
+      return this.classList.contains("overflow-y-auto") ? 200 : 20;
+    },
+  });
+  Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
+    configurable: true,
+    get: () => 400,
+  });
+});
+
+afterAll(() => {
+  if (originalOffsetHeight) {
+    Object.defineProperty(
+      HTMLElement.prototype,
+      "offsetHeight",
+      originalOffsetHeight
+    );
+  }
+  if (originalOffsetWidth) {
+    Object.defineProperty(
+      HTMLElement.prototype,
+      "offsetWidth",
+      originalOffsetWidth
+    );
+  }
+});
+
+function page(
+  results: WorkspaceSearchResult[],
+  overrides: Partial<WorkspaceSearchResponse> = {}
+): WorkspaceSearchResponse {
+  return {
+    searchId: "search-1",
+    results,
+    totalCount: results.length,
+    complete: true,
+    capped: false,
+    ...overrides,
+  };
+}
+
+function files(count: number, start = 0): WorkspaceSearchResult[] {
+  return Array.from({ length: count }, (_, i) => ({
+    kind: WORKSPACE_ENTRY_KINDS.FILE,
+    path: `src/file-${start + i}.ts`,
+    name: `file-${start + i}.ts`,
+  }));
+}
+
+const EMPTY_RESPONSE = page([]);
 
 function advanceDebounce() {
   return act(async () => {
-    await vi.advanceTimersByTimeAsync(400);
+    await vi.advanceTimersByTimeAsync(WORKSPACE_SEARCH_DEBOUNCE_MS);
   });
 }
 
-function setSearchResults(response: WorkspaceSearchResponse) {
-  workspaceSearchMock.mockResolvedValueOnce(response);
+function flushResponses() {
+  return act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+}
+
+function search(query: string) {
+  fireEvent.change(
+    screen.getByRole("searchbox", { name: "Search workspace" }),
+    {
+      target: { value: query },
+    }
+  );
+  return advanceDebounce();
 }
 
 describe("WorkspaceSearchPane", () => {
@@ -75,26 +163,27 @@ describe("WorkspaceSearchPane", () => {
       scope: "both",
       includeGitIgnored: true,
       repo: undefined,
-      limit: 50,
+      searchId: undefined,
+      offset: 0,
+      limit: WORKSPACE_SEARCH_PAGE_SIZE,
     });
   });
 
   it("passes the selected scope and git-ignore override to the search", async () => {
     render(<WorkspaceSearchPane />);
-    const input = screen.getByRole("searchbox", { name: "Search workspace" });
-    fireEvent.change(input, { target: { value: "ab" } });
-    await advanceDebounce();
+    await search("ab");
 
     fireEvent.click(screen.getByRole("button", { name: "Content" }));
     await advanceDebounce();
 
-    expect(workspaceSearchMock).toHaveBeenLastCalledWith({
-      query: "ab",
-      scope: "content",
-      includeGitIgnored: true,
-      repo: undefined,
-      limit: 50,
-    });
+    expect(workspaceSearchMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        query: "ab",
+        scope: "content",
+        includeGitIgnored: true,
+        offset: 0,
+      })
+    );
 
     const includeIgnored = screen.getByRole("checkbox", {
       name: "Include git-ignored files",
@@ -104,13 +193,14 @@ describe("WorkspaceSearchPane", () => {
     await advanceDebounce();
 
     expect(includeIgnored).not.toBeChecked();
-    expect(workspaceSearchMock).toHaveBeenLastCalledWith({
-      query: "ab",
-      scope: "content",
-      includeGitIgnored: false,
-      repo: undefined,
-      limit: 50,
-    });
+    expect(workspaceSearchMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        query: "ab",
+        scope: "content",
+        includeGitIgnored: false,
+        offset: 0,
+      })
+    );
     expect(useSettingsStore.getState().globalSettings.hideGitIgnoredFiles).toBe(
       false
     );
@@ -181,10 +271,7 @@ describe("WorkspaceSearchPane", () => {
     });
 
     render(<WorkspaceSearchPane />);
-    fireEvent.change(screen.getByRole("searchbox"), {
-      target: { value: "ab" },
-    });
-    await advanceDebounce();
+    await search("ab");
 
     // A lone repo must not scope the scan away from non-repo workspace roots.
     expect(workspaceSearchMock).toHaveBeenLastCalledWith(
@@ -213,102 +300,120 @@ describe("WorkspaceSearchPane", () => {
       })
     );
     render(<WorkspaceSearchPane />);
-    fireEvent.change(screen.getByRole("searchbox"), {
-      target: { value: "ab" },
-    });
-    await advanceDebounce();
+    await search("ab");
     expect(screen.getByText("Searching...")).toBeInTheDocument();
 
     resolveSearch(EMPTY_RESPONSE);
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await flushResponses();
     expect(screen.getByText("No results")).toBeInTheDocument();
   });
 
-  it("shows a truncated notice and loads more with a higher limit", async () => {
-    setSearchResults({
-      results: [
-        {
-          kind: WORKSPACE_ENTRY_KINDS.FILE,
-          path: "src/app.ts",
-          name: "app.ts",
-        },
-      ],
-      truncated: true,
-    });
-    workspaceSearchMock.mockResolvedValueOnce({
-      results: [
-        {
-          kind: WORKSPACE_ENTRY_KINDS.FILE,
-          path: "src/app.ts",
-          name: "app.ts",
-        },
-        {
-          kind: WORKSPACE_ENTRY_KINDS.FILE,
-          path: "src/main.ts",
-          name: "main.ts",
-        },
-      ],
-      truncated: false,
-    });
+  it("shows an exact count, or a lower bound while the scan is unfinished", async () => {
+    workspaceSearchMock.mockResolvedValueOnce(page(files(3)));
     render(<WorkspaceSearchPane />);
-    fireEvent.change(screen.getByRole("searchbox"), {
-      target: { value: "app" },
-    });
-    await advanceDebounce();
-    expect(
-      screen.getByText("The scan stopped early. More matches may be available.")
-    ).toBeInTheDocument();
+    await search("file");
+    expect(screen.getByText("3 results")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(workspaceSearchMock).toHaveBeenCalledTimes(2);
-    expect(workspaceSearchMock).toHaveBeenLastCalledWith({
-      query: "app",
-      scope: "both",
-      includeGitIgnored: true,
-      repo: undefined,
-      limit: 100,
-    });
-    expect(screen.getByText("main.ts")).toBeInTheDocument();
+    workspaceSearchMock.mockResolvedValueOnce(
+      page(files(WORKSPACE_SEARCH_PAGE_SIZE), {
+        totalCount: 150,
+        complete: false,
+      })
+    );
+    await search("files");
+    expect(screen.getByText("150+ results")).toBeInTheDocument();
+
+    workspaceSearchMock.mockResolvedValueOnce(
+      page(files(WORKSPACE_SEARCH_PAGE_SIZE), {
+        totalCount: 10_000,
+        capped: true,
+      })
+    );
+    await search("filez");
+    expect(screen.getByText("10,000+ results")).toBeInTheDocument();
   });
 
-  it("offers Load more when the result cap is filled without a truncated scan", async () => {
-    // A full page of results is incomplete even though the scan finished
-    // inside its budget, so `truncated: false` must still offer Load more.
-    setSearchResults({
-      results: Array.from({ length: 50 }, (_, i) => ({
-        kind: WORKSPACE_ENTRY_KINDS.FILE,
-        path: `src/file-${i}.ts`,
-        name: `file-${i}.ts`,
-      })),
-      truncated: false,
-    });
+  it("loads the next page of the same search when scrolled to the end", async () => {
+    workspaceSearchMock
+      .mockResolvedValueOnce(
+        page(files(WORKSPACE_SEARCH_PAGE_SIZE), {
+          totalCount: 80,
+          complete: false,
+        })
+      )
+      .mockResolvedValueOnce(
+        page(files(30, WORKSPACE_SEARCH_PAGE_SIZE), {
+          totalCount: 80,
+        })
+      );
+    const { container } = render(<WorkspaceSearchPane />);
+    await search("file");
 
-    render(<WorkspaceSearchPane />);
-    fireEvent.change(screen.getByRole("searchbox"), {
-      target: { value: "file" },
-    });
-    await advanceDebounce();
+    // The first page fills the viewport, so nothing more is requested yet.
+    expect(workspaceSearchMock).toHaveBeenCalledOnce();
+    expect(screen.getByText("80+ results")).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-workspace-search-placeholder="true"]')
+    ).not.toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    const scroller = container.querySelector<HTMLElement>(".overflow-y-auto")!;
     await act(async () => {
-      await Promise.resolve();
+      scroller.scrollTop = 100_000;
+      scroller.dispatchEvent(new Event("scroll"));
     });
+    await flushResponses();
 
+    expect(workspaceSearchMock).toHaveBeenCalledTimes(2);
     expect(workspaceSearchMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({ limit: 100 })
+      expect.objectContaining({
+        searchId: "search-1",
+        offset: WORKSPACE_SEARCH_PAGE_SIZE,
+      })
     );
+    expect(screen.getByText("file-79.ts")).toBeInTheDocument();
+    expect(screen.getByText("80 results")).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-workspace-search-placeholder="true"]')
+    ).toBeNull();
+  });
+
+  it("keeps loading while a short page leaves the list's end in view", async () => {
+    workspaceSearchMock
+      .mockResolvedValueOnce(page(files(2), { complete: false }))
+      .mockResolvedValueOnce(page(files(1, 2), { totalCount: 3 }));
+    render(<WorkspaceSearchPane />);
+    await search("file");
+    await flushResponses();
+
+    expect(workspaceSearchMock).toHaveBeenCalledTimes(2);
+    expect(workspaceSearchMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ searchId: "search-1", offset: 2 })
+    );
+    expect(screen.getByText("file-2.ts")).toBeInTheDocument();
+    expect(screen.getByText("3 results")).toBeInTheDocument();
+  });
+
+  it("continues a scan whose page budget ran out before finding anything", async () => {
+    workspaceSearchMock
+      .mockResolvedValueOnce(page([], { complete: false }))
+      .mockResolvedValueOnce(page(files(1)));
+    render(<WorkspaceSearchPane />);
+    await search("file");
+    expect(screen.queryByText("No results")).not.toBeInTheDocument();
+    await flushResponses();
+
+    expect(workspaceSearchMock).toHaveBeenCalledTimes(2);
+    expect(workspaceSearchMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ searchId: "search-1", offset: 0 })
+    );
+    expect(screen.getByText("file-0.ts")).toBeInTheDocument();
   });
 
   it("opens filename and content matches through store navigation", async () => {
     const openToFile = vi.fn();
     useWorkspaceViewerStore.setState({ openToFile });
-    setSearchResults({
-      results: [
+    workspaceSearchMock.mockResolvedValueOnce(
+      page([
         {
           kind: WORKSPACE_ENTRY_KINDS.FILE,
           path: "src/app.ts",
@@ -320,14 +425,19 @@ describe("WorkspaceSearchPane", () => {
           line: 12,
           matchSnippet: "a very long matching line",
         },
-      ],
-      truncated: false,
-    });
+        {
+          kind: WORKSPACE_ENTRY_KINDS.CONTENT,
+          path: "src/lib.ts",
+          line: 30,
+          matchSnippet: "another match",
+        },
+      ])
+    );
     render(<WorkspaceSearchPane />);
-    fireEvent.change(screen.getByRole("searchbox"), {
-      target: { value: "app" },
-    });
-    await advanceDebounce();
+    await search("app");
+
+    // A file's matches share one path heading.
+    expect(screen.getAllByText("src/lib.ts")).toHaveLength(1);
 
     fireEvent.click(screen.getByRole("button", { name: /app\.ts/ }));
     fireEvent.click(
@@ -346,32 +456,41 @@ describe("WorkspaceSearchPane", () => {
           resolveFirst = resolve;
         })
       )
-      .mockResolvedValueOnce({
-        results: [
+      .mockResolvedValueOnce(
+        page([
           { kind: WORKSPACE_ENTRY_KINDS.FILE, path: "new.ts", name: "new.ts" },
-        ],
-        truncated: false,
-      });
+        ])
+      );
 
     render(<WorkspaceSearchPane />);
-    const input = screen.getByRole("searchbox");
-    fireEvent.change(input, { target: { value: "old" } });
-    await advanceDebounce();
-    fireEvent.change(input, { target: { value: "new" } });
-    await advanceDebounce();
+    await search("old");
+    await search("new");
     expect(screen.getByRole("button", { name: /new\.ts/ })).toBeInTheDocument();
 
-    resolveFirst({
-      results: [
+    resolveFirst(
+      page([
         { kind: WORKSPACE_ENTRY_KINDS.FILE, path: "old.ts", name: "old.ts" },
-      ],
-      truncated: false,
-    });
-    await act(async () => {
-      await Promise.resolve();
-    });
+      ])
+    );
+    await flushResponses();
 
     expect(screen.queryByText("old.ts")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /new\.ts/ })).toBeInTheDocument();
+  });
+
+  it("offers a retry when a page request fails", async () => {
+    workspaceSearchMock
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce(page(files(1)));
+    render(<WorkspaceSearchPane />);
+    await search("file");
+    await flushResponses();
+
+    expect(screen.getByText("Search failed.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await flushResponses();
+
+    expect(screen.queryByText("Search failed.")).not.toBeInTheDocument();
+    expect(screen.getByText("file-0.ts")).toBeInTheDocument();
   });
 });

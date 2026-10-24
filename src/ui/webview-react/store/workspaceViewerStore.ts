@@ -6,8 +6,10 @@ import type {
   DiffKind,
   WorkspaceCommitInfo,
   WorkspaceRepo,
+  WorkspaceSearchResponse,
   WorkspaceSearchResult,
   WorkspaceSearchScope,
+  WorkspaceSearchStatus,
   WorkspaceDiffEntry,
   WorkspaceImageDiffSides,
   WorkspaceScmDiffResponse,
@@ -172,7 +174,8 @@ interface WorkspaceViewerState {
   searchIncludeGitIgnored: boolean;
   searchResults: WorkspaceSearchResult[];
   searchLoading: boolean;
-  searchTruncated: boolean;
+  /** Progress of the search `searchResults` came from; null before its first page. */
+  searchStatus: WorkspaceSearchStatus | null;
   languageReferences: LanguageReferencesView | null;
   /** Mobile only: whether the references panel covers the viewer. Desktop
    * shows the panel whenever `languageReferences` is set. */
@@ -282,7 +285,10 @@ interface WorkspaceViewerActions {
   setSearchIncludeGitIgnored(include: boolean): void;
   setSearchResults(results: WorkspaceSearchResult[]): void;
   setSearchLoading(loading: boolean): void;
-  setSearchTruncated(truncated: boolean): void;
+  /** Appends a page's results in order and takes its status; ends loading. */
+  appendSearchPage(page: WorkspaceSearchResponse): void;
+  /** Drops results and status ahead of a new search. */
+  resetSearchResults(): void;
   /**
    * Show the references for `origin`, keeping already-loaded results when the
    * origin is unchanged. With no selection the mobile panel opens; with one it
@@ -377,7 +383,7 @@ const INITIAL_STATE: WorkspaceViewerState = {
   searchIncludeGitIgnored: false,
   searchResults: [],
   searchLoading: false,
-  searchTruncated: false,
+  searchStatus: null,
   languageReferences: null,
   languageReferencesPanelOpen: false,
 
@@ -442,7 +448,7 @@ export const useWorkspaceViewerStore = create<
           diffLoading: false,
           searchLoading: false,
           searchResults: [],
-          searchTruncated: false,
+          searchStatus: null,
           searchQuery: "",
           diffFiles: null,
           diffRefLabel: null,
@@ -877,8 +883,19 @@ export const useWorkspaceViewerStore = create<
         set({ searchLoading: loading });
       },
 
-      setSearchTruncated(truncated) {
-        set({ searchTruncated: truncated });
+      appendSearchPage({ results, ...status }) {
+        set((state) => ({
+          searchResults:
+            results.length > 0
+              ? [...state.searchResults, ...results]
+              : state.searchResults,
+          searchStatus: status,
+          searchLoading: false,
+        }));
+      },
+
+      resetSearchResults() {
+        set({ searchResults: [], searchStatus: null, searchLoading: false });
       },
 
       showLanguageReferences(origin, selected = null) {

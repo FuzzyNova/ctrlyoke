@@ -29,7 +29,7 @@ import {
 import type { HistoryEventKind } from "@root/types/WorkflowTimelineTypes";
 import type { WorkflowKey } from "@root/types/CtrlYokeTypes";
 import { formatRelativeTimeVerbose } from "@utils/time";
-import { truncateSnippet } from "@utils/string";
+import { formatSearchResultCount, truncateSnippet } from "@utils/string";
 import {
   ALL_WORKFLOW_HARNESSES,
   ALL_WORKFLOW_STATES,
@@ -690,11 +690,10 @@ export function HistorySearchDrawer() {
     // "+" marks totalCount as a lower bound rather than the true count — an
     // early-terminated (or still in-progress) scan hasn't read far enough to
     // know the real total yet.
-    const isExact = countState === HISTORY_SEARCH_COUNT_STATES.EXACT;
-    const countLabel = `${totalCount.toLocaleString()}${isExact ? "" : "+"}`;
-    return `${countLabel} result${totalCount === 1 && isExact ? "" : "s"}${
-      activeFilterCount > 0 ? " (filtered)" : ""
-    }`;
+    return `${formatSearchResultCount(
+      totalCount,
+      countState === HISTORY_SEARCH_COUNT_STATES.EXACT
+    )}${activeFilterCount > 0 ? " (filtered)" : ""}`;
   }, [activeFilterCount, countState, totalCount, trimmedQuery.length]);
 
   const workflowScopeAvailable =

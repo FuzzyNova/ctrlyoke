@@ -38,6 +38,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Workspace search loads results as you scroll and shows a result count.**
+  The workspace viewer's Search tab no longer has a **Load more** button: the
+  next results load when you scroll near the end of the list. A count above the
+  results reads like **150+ results** while the search is still looking and
+  becomes exact once every file has been read. A search stops after 10,000
+  results.
+
+- **Workspace search finds git-ignored files again.** With **Include git-ignored
+  files** on, a workspace with a large ignored folder such as `node_modules/`
+  returned no results at all, because listing every ignored file used up the
+  search's time limit before any file was searched. It also briefly froze the
+  extension host. Ignored folders are now searched after your other files, and
+  only as far as the results you scroll to need.
+
 - **Web searches show what they found, on every harness.** A web search row now
   shows the query as its heading, with the answer and sources in the same
   collapsible output as other tool calls. Searches from Claude and OpenCode

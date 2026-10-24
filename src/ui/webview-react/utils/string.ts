@@ -44,6 +44,20 @@ export function truncateSnippet(snippet: string, maxLength = 80): string {
 }
 
 /**
+ * A search's result count, e.g. "1 result", "1,234 results". A count that is
+ * only a lower bound (a scan that has not finished, or stopped at a cap) is
+ * marked "150+ results".
+ */
+export function formatSearchResultCount(
+  count: number,
+  isExact: boolean
+): string {
+  return `${count.toLocaleString()}${isExact ? "" : "+"} result${
+    count === 1 && isExact ? "" : "s"
+  }`;
+}
+
+/**
  * Get workflow name from file path
  * Extracts filename and removes ctrlyoke-specific extensions
  *

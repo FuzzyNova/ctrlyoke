@@ -1245,6 +1245,96 @@ suite("HostedWorkspaceViewerService", function () {
       assert.strictEqual(included.results[0]?.path, "ignored.txt");
     });
 
+    test("searches inside wholly ignored directories after tracked files", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      fs.writeFileSync(path.join(root, ".gitignore"), "deps/\n");
+      fs.mkdirSync(path.join(root, "deps", "nested"), { recursive: true });
+      fs.writeFileSync(path.join(root, "deps", "top.txt"), "needle top\n");
+      fs.writeFileSync(
+        path.join(root, "deps", "nested", "deep.txt"),
+        "needle deep\n"
+      );
+      // A force-added file inside the ignored directory is tracked, so it is
+      // found with the tracked files and must not be reported twice.
+      fs.writeFileSync(
+        path.join(root, "deps", "forced.txt"),
+        "needle forced\n"
+      );
+      runGit(root, "add", "-f", "deps/forced.txt");
+      commitFile(root, "tracked.txt", "needle tracked\n", "initial");
+
+      const result = await new HostedWorkspaceViewerService(
+        root
+      ).searchWorkspace({
+        query: "needle",
+        scope: "content",
+        includeGitIgnored: true,
+      });
+
+      assert.deepStrictEqual(
+        result.results.map((match) => match.path),
+        [
+          "deps/forced.txt",
+          "tracked.txt",
+          "deps/top.txt",
+          "deps/nested/deep.txt",
+        ]
+      );
+      assert.strictEqual(result.complete, true);
+      assert.strictEqual(result.totalCount, 4);
+    });
+
+    test("pages a search in scan order through its session", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      for (let i = 0; i < 5; i++) {
+        fs.writeFileSync(path.join(root, `page-${i}.txt`), "paged needle\n");
+      }
+      const svc = new HostedWorkspaceViewerService(root);
+
+      const first = await svc.searchWorkspace({
+        query: "needle",
+        scope: "content",
+        limit: 2,
+      });
+      const second = await svc.searchWorkspace({
+        query: "needle",
+        scope: "content",
+        searchId: first.searchId,
+        offset: 2,
+        limit: 2,
+      });
+      // An unknown session (expired, or from a restarted server) is replaced
+      // by a fresh scan that still answers from the requested offset.
+      const restarted = await svc.searchWorkspace({
+        query: "needle",
+        scope: "content",
+        searchId: "expired",
+        offset: 4,
+        limit: 2,
+      });
+
+      assert.deepStrictEqual(
+        first.results.map((match) => match.path),
+        ["page-0.txt", "page-1.txt"]
+      );
+      assert.strictEqual(second.searchId, first.searchId);
+      assert.deepStrictEqual(
+        second.results.map((match) => match.path),
+        ["page-2.txt", "page-3.txt"]
+      );
+      assert.notStrictEqual(restarted.searchId, first.searchId);
+      assert.deepStrictEqual(
+        restarted.results.map((match) => match.path),
+        ["page-4.txt"]
+      );
+      // The count looks past the page, so a small result set is exact at once.
+      assert.strictEqual(first.totalCount, 5);
+      assert.strictEqual(first.complete, true);
+    });
+
     test("uses a bounded non-git fallback walk", async () => {
       const root = createWorkspace();
       fs.mkdirSync(path.join(root, "node_modules"));
@@ -1304,20 +1394,26 @@ suite("HostedWorkspaceViewerService", function () {
       );
     });
 
-    test("marks the response truncated when the scan file budget is exceeded", async () => {
+    test("answers incomplete when a page's file budget runs out, and continues", async () => {
       const root = createWorkspace();
       for (let i = 0; i < BUDGETED_SEARCH_MAX_FILES + 1; i++) {
         fs.writeFileSync(path.join(root, `file-${i}.txt`), "contents\n");
       }
+      const svc = new BudgetedWorkspaceViewerService(root);
 
-      const result = await new BudgetedWorkspaceViewerService(
-        root
-      ).searchWorkspace({
+      const first = await svc.searchWorkspace({
         query: "missing",
         scope: "files",
       });
+      const next = await svc.searchWorkspace({
+        query: "missing",
+        scope: "files",
+        searchId: first.searchId,
+      });
 
-      assert.strictEqual(result.truncated, true);
+      assert.strictEqual(first.complete, false);
+      assert.strictEqual(next.complete, true);
+      assert.strictEqual(next.totalCount, 0);
     });
   });
 

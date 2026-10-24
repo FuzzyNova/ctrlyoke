@@ -174,12 +174,27 @@ export interface WorkspaceReposResponse {
   prefixRepoIds: Record<string, string>;
 }
 
+/**
+ * One page of a workspace search. The server keeps each search as a session
+ * that scans the workspace incrementally, so a page asks for results by
+ * position and the scan advances only as far as the pages read need. Results
+ * keep scan order, which never changes once a result is returned: a client
+ * reads pages in order and appends them.
+ */
 export interface WorkspaceSearchRequest {
   query: string;
   scope: WorkspaceSearchScope;
   includeGitIgnored?: boolean;
   repo?: string;
-  limit?: number; // results cap; re-issued with a higher limit for "Load more"
+  /**
+   * Continues the search a previous response named. Omitted, or naming a
+   * session that expired or was started with different parameters, starts a
+   * new scan (which then replays up to `offset`).
+   */
+  searchId?: string;
+  /** Index of the first result to return. */
+  offset?: number;
+  limit?: number;
 }
 
 export interface WorkspaceSearchFileMatch {
@@ -203,9 +218,26 @@ export type WorkspaceSearchResult =
   WorkspaceSearchFileMatch | WorkspaceSearchContentMatch;
 
 export interface WorkspaceSearchResponse {
+  /** Session to pass back as `WorkspaceSearchRequest.searchId` for the next page. */
+  searchId: string;
+  /** Results from `offset`; fewer than `limit` when the scan has not found more yet. */
   results: WorkspaceSearchResult[];
-  truncated: boolean; // true if the scan hit its file/time budget before finishing
+  /**
+   * Matches found so far, which can run ahead of the pages read: the scan
+   * looks past each page so the count is often final for a small result set.
+   */
+  totalCount: number;
+  /** The scan has stopped: `totalCount` will not grow. */
+  complete: boolean;
+  /**
+   * The scan stopped at the session's result cap with more matches left, so
+   * `totalCount` is a lower bound even though `complete` is set.
+   */
+  capped: boolean;
 }
+
+/** Everything about a search's progress except the results themselves. */
+export type WorkspaceSearchStatus = Omit<WorkspaceSearchResponse, "results">;
 
 export interface SourceControlFile {
   path: string;

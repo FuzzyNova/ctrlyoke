@@ -6,7 +6,7 @@ import { execFileSync } from "child_process";
 import { suite, test, setup, teardown } from "mocha";
 import {
   gitRefExists,
-  getGitIgnoredFiles,
+  getGitIgnoredEntries,
   getGitIgnoredPaths,
   parseGitWorktreePorcelain,
   listWorktrees,
@@ -574,7 +574,7 @@ suite("GitUtils worktree plumbing", function () {
   });
 });
 
-suite("GitUtils.getGitIgnoredFiles", function () {
+suite("GitUtils.getGitIgnoredEntries", function () {
   const temporaryRoots: string[] = [];
 
   async function createRepo(): Promise<string> {
@@ -609,7 +609,7 @@ suite("GitUtils.getGitIgnoredFiles", function () {
     }
   });
 
-  test("lists root and nested ignored files recursively", async () => {
+  test("lists ignored files and collapses wholly ignored directories", async () => {
     const root = await createRepo();
     await writeRepoFile(root, ".gitignore", "*.log\nignored-directory/\n");
     await writeRepoFile(root, "root.log", "ignored\n");
@@ -619,20 +619,12 @@ suite("GitUtils.getGitIgnoredFiles", function () {
     await writeRepoFile(root, "nested/secret.txt", "ignored\n");
     await writeRepoFile(root, "nested/visible.txt", "visible\n");
 
-    const ignoredFiles = await getGitIgnoredFiles(root);
+    const ignoredEntries = await getGitIgnoredEntries(root);
 
     assert.deepStrictEqual(
-      ignoredFiles.sort(),
-      [
-        "ignored-directory/nested/two.txt",
-        "ignored-directory/one.txt",
-        "nested/secret.txt",
-        "root.log",
-      ].sort()
+      ignoredEntries.sort(),
+      ["ignored-directory/", "nested/secret.txt", "root.log"].sort()
     );
-    assert.ok(ignoredFiles.includes("ignored-directory/one.txt"));
-    assert.ok(ignoredFiles.includes("ignored-directory/nested/two.txt"));
-    assert.ok(!ignoredFiles.includes("ignored-directory/"));
   });
 
   test("returns an empty list when nothing is ignored", async () => {
@@ -640,7 +632,7 @@ suite("GitUtils.getGitIgnoredFiles", function () {
     await writeRepoFile(root, "visible.txt", "visible\n");
     await writeRepoFile(root, "nested/also-visible.txt", "visible\n");
 
-    assert.deepStrictEqual(await getGitIgnoredFiles(root), []);
+    assert.deepStrictEqual(await getGitIgnoredEntries(root), []);
   });
 });
 

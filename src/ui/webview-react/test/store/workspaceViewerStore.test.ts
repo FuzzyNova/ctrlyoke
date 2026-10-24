@@ -40,7 +40,7 @@ describe("initial state", () => {
     expect(store().searchIncludeGitIgnored).toBe(false);
     expect(store().searchResults).toEqual([]);
     expect(store().searchLoading).toBe(false);
-    expect(store().searchTruncated).toBe(false);
+    expect(store().searchStatus).toBeNull();
   });
 });
 
@@ -57,14 +57,45 @@ describe("search state", () => {
     store().setSearchIncludeGitIgnored(true);
     store().setSearchResults([result]);
     store().setSearchLoading(true);
-    store().setSearchTruncated(true);
 
     expect(store().searchQuery).toBe("search");
     expect(store().searchScope).toBe("content");
     expect(store().searchIncludeGitIgnored).toBe(true);
     expect(store().searchResults).toEqual([result]);
     expect(store().searchLoading).toBe(true);
-    expect(store().searchTruncated).toBe(true);
+  });
+
+  it("appends pages in order and resets them for a new search", () => {
+    const page = (name: string, totalCount: number, complete: boolean) => ({
+      searchId: "search-1",
+      results: [
+        { kind: WORKSPACE_ENTRY_KINDS.FILE, path: `src/${name}`, name },
+      ],
+      totalCount,
+      complete,
+      capped: false,
+    });
+
+    store().setSearchLoading(true);
+    store().appendSearchPage(page("one.ts", 5, false));
+    store().setSearchLoading(true);
+    store().appendSearchPage(page("two.ts", 7, true));
+
+    expect(store().searchResults.map((result) => result.path)).toEqual([
+      "src/one.ts",
+      "src/two.ts",
+    ]);
+    expect(store().searchStatus).toEqual({
+      searchId: "search-1",
+      totalCount: 7,
+      complete: true,
+      capped: false,
+    });
+    expect(store().searchLoading).toBe(false);
+
+    store().resetSearchResults();
+    expect(store().searchResults).toEqual([]);
+    expect(store().searchStatus).toBeNull();
   });
 
   it('accepts the "search" active tab', () => {
@@ -84,15 +115,21 @@ describe("search state", () => {
         name: "query.ts",
       },
     ]);
+    store().appendSearchPage({
+      searchId: "search-1",
+      results: [],
+      totalCount: 1,
+      complete: false,
+      capped: false,
+    });
     store().setSearchLoading(true);
-    store().setSearchTruncated(true);
 
     store().close();
 
     expect(store().searchQuery).toBe("");
     expect(store().searchResults).toEqual([]);
     expect(store().searchLoading).toBe(false);
-    expect(store().searchTruncated).toBe(false);
+    expect(store().searchStatus).toBeNull();
     expect(store().fileDrafts).toEqual({
       "src/draft.ts": { content: "draft" },
     });
