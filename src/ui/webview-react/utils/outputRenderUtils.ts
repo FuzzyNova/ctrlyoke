@@ -5,10 +5,13 @@ import {
 } from "@root/utils/CliEventVisibility";
 import { expandFromRawCode } from "react-diff-view";
 import type { HunkData, ViewType } from "react-diff-view";
+import { isRenderableThinkingBlock } from "@root/utils/ThinkingBlockFormat";
 import type {
   CliEvent,
   CliOutput as CliOutputType,
   FileEditData,
+  McpToolCallData,
+  ThinkingBlock,
 } from "../types/cliEvents";
 import { CLI_EVENT_TYPES, FINAL_STEP_PHASES } from "../types/messages";
 import type { WorkspaceSnapshot } from "@root/types/OutputHistoryTypes";
@@ -111,6 +114,47 @@ export function isScriptOutput(output: Pick<CliOutputType, "source">): boolean {
 
 export function getRawTextOutput(output: CliOutputType): boolean {
   return !!output.rawTextOutput || !!output.structured?.metadata?.rawTextOutput;
+}
+
+/**
+ * Whether `OutputRow` draws anything for a structured event. `buildOutputRows`
+ * builds no row for an event that fails this, so an empty event cannot claim
+ * its subagent group's label or carry a height estimate; `OutputRow` returns
+ * `null` on the same rule.
+ */
+export function isRenderableStructuredEvent(event: CliEvent): boolean {
+  switch (event.type) {
+    case CLI_EVENT_TYPES.TEXT:
+    case CLI_EVENT_TYPES.USER_STEER:
+      return !!(event.data as { text?: string }).text;
+    case CLI_EVENT_TYPES.THINKING:
+      return isRenderableThinkingBlock(event.data as ThinkingBlock);
+    case CLI_EVENT_TYPES.FILE_EDIT:
+    case CLI_EVENT_TYPES.FILE_WRITE:
+    case CLI_EVENT_TYPES.FILE_READ:
+    case CLI_EVENT_TYPES.FILE_DELETE:
+      return !!(event.data as { path?: string }).path;
+    case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
+      const data = event.data as Partial<McpToolCallData>;
+      return !!data.server && !!data.tool;
+    }
+    case CLI_EVENT_TYPES.WEB_SEARCH:
+      return !!(event.data as { query?: string }).query;
+    case CLI_EVENT_TYPES.TOOL_CALL:
+      return !!(event.data as { name?: string }).name;
+    case CLI_EVENT_TYPES.TOOL_RESULT:
+      return !!(event.data as { result?: unknown }).result;
+    case CLI_EVENT_TYPES.TERMINAL_OUTPUT:
+    case CLI_EVENT_TYPES.BASH_COMMAND:
+    case CLI_EVENT_TYPES.ASK_USER_QUESTION:
+    case CLI_EVENT_TYPES.COMPACTION:
+    case CLI_EVENT_TYPES.FOLLOW_UP_RESUMED:
+    case CLI_EVENT_TYPES.BACKGROUND_WORK_HOLD:
+    case CLI_EVENT_TYPES.BACKGROUND_WORK_ABANDONED:
+      return true;
+    default:
+      return false;
+  }
 }
 
 export function getVisibleStructuredEvents(

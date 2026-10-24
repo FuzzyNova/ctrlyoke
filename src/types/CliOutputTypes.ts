@@ -551,6 +551,9 @@ export interface WebSearchData {
   success?: boolean;
   /** Error message (if failed) */
   error?: string;
+  /** Tool call ID, used to pair a search with its own result when several
+   *  are in flight. Absent on events recorded before it was added. */
+  toolCallId?: string;
 }
 
 /**

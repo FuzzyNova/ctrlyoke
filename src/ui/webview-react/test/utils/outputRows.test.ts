@@ -220,6 +220,68 @@ describe("outputRows", () => {
     expect(children[7].subagent?.showLabel).toBe(true);
   });
 
+  it("builds no row for an event that renders nothing, so the subagent label lands on drawn content", () => {
+    const subagent = { parentToolCallId: "spawn", agentId: "a" };
+    const rows = buildOutputRows({
+      allMessages: [
+        {
+          type: "cli",
+          target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+          timestamp: 1000,
+          attemptIndex: 0,
+          runIndex: 0,
+          data: {
+            structured: {
+              events: [
+                {
+                  type: CLI_EVENT_TYPES.WEB_SEARCH,
+                  data: { query: "" },
+                  subagent,
+                },
+                {
+                  type: CLI_EVENT_TYPES.TOOL_CALL,
+                  data: { name: "", parameters: {} },
+                  subagent,
+                },
+                {
+                  type: CLI_EVENT_TYPES.TEXT,
+                  data: { text: "found it" },
+                  subagent,
+                },
+              ],
+              metadata: {},
+            },
+            elapsed: 1,
+            isStreaming: false,
+          },
+        },
+      ],
+      steps,
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+    }).rows.filter((row) => row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT);
+
+    expect(
+      rows.map(
+        (row) =>
+          row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT && row.event.type
+      )
+    ).toEqual([CLI_EVENT_TYPES.TEXT]);
+    expect(rows[0].subagent?.showLabel).toBe(true);
+  });
+
   // Regression: the timeline-v2 migration dropped `CliOutput.prompt` and the
   // prompt row went with it, leaving every attempt as header + command only.
   // The prompt now travels on the attempt's history entry, so these tests

@@ -38,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Parallel web searches keep their own results.** When two web searches ran at once, for
+  example in two subagents, one search's result or error could show on the other's row while
+  that row stayed pending. Each search is now paired with its result by its tool call ID.
+
 - **Copilot steps finish when the workspace is a subdirectory of a repository.** Copilot loads
   hooks only from the repository root's `.github/hooks/`, but ctrlyoke wrote its hook files under
   the workspace folder, so Copilot never reported a step's start or end. Hook files now go in the

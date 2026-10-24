@@ -533,6 +533,7 @@ export class CopilotToolBuilder {
             query: query || "",
             success,
             error: errorMsg,
+            toolCallId: completionData.toolCallId,
           } as WebSearchData,
         },
       ];

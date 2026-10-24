@@ -88,10 +88,7 @@ import {
 import { formatMcpToolLabel } from "@root/utils/formatMcpToolLabel";
 import { getToolResultText } from "@root/utils/toolResultText";
 import { getFileReadHeaderText } from "@root/utils/FileReadHeaderText";
-import {
-  formatThinkingLabel,
-  isRenderableThinkingBlock,
-} from "@root/utils/ThinkingBlockFormat";
+import { formatThinkingLabel } from "@root/utils/ThinkingBlockFormat";
 import {
   getOutputRowSearchSegments,
   highlightText,
@@ -140,6 +137,7 @@ import { SUBAGENT_ROW_INDENT_PX } from "@utils/outputRows";
 import {
   getDisplayStructuredPatch,
   getSnapshotBeforeContent,
+  isRenderableStructuredEvent,
   isScriptOutput,
 } from "@utils/outputRenderUtils";
 import {
@@ -840,10 +838,11 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       }
     }, [pendingToolCallExpand, row.key, onToolCallExpansionChange]);
 
+    if (!isRenderableStructuredEvent(event)) return null;
+
     switch (event.type) {
       case CLI_EVENT_TYPES.TEXT: {
         const data = event.data as TextData;
-        if (!data.text) return null;
         return (
           <TextOutput
             text={data.text}
@@ -871,7 +870,6 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       }
       case CLI_EVENT_TYPES.THINKING: {
         const data = event.data as ThinkingBlock;
-        if (!isRenderableThinkingBlock(data)) return null;
         return (
           <ThinkingOutput
             text={data.text}
@@ -904,7 +902,6 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       }
       case CLI_EVENT_TYPES.USER_STEER: {
         const data = event.data as UserSteerData;
-        if (!data.text) return null;
         return (
           <UserSteerOutput
             text={data.text}
@@ -945,7 +942,6 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       }
       case CLI_EVENT_TYPES.FILE_EDIT: {
         const data = event.data as FileEditData;
-        if (!data.path) return null;
         const displayStructuredPatch = getDisplayStructuredPatch(
           data.path,
           data.structuredPatch,
@@ -1022,7 +1018,6 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       }
       case CLI_EVENT_TYPES.FILE_WRITE: {
         const data = event.data as FileWriteData;
-        if (!data.path) return null;
         return (
           <FileWriteOutput
             path={data.path}
@@ -1052,7 +1047,6 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       }
       case CLI_EVENT_TYPES.FILE_READ: {
         const data = event.data as FileReadData;
-        if (!data.path) return null;
         return (
           <FileReadOutput
             path={data.path}
@@ -1071,7 +1065,6 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       }
       case CLI_EVENT_TYPES.FILE_DELETE: {
         const data = event.data as FileDeleteData;
-        if (!data.path) return null;
         return (
           <FileDeleteOutput
             path={data.path}
@@ -1100,7 +1093,6 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       }
       case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
         const data = event.data as McpToolCallData;
-        if (!data.server || !data.tool) return null;
         const customView = resolveCtrlYokeToolView(data);
         const Body = CTRLYOKE_TOOL_VIEW_BODIES[data.tool as McpToolName];
         if (customView && Body && row.toolCall) {
@@ -1180,7 +1172,6 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       }
       case CLI_EVENT_TYPES.WEB_SEARCH: {
         const data = event.data as WebSearchData;
-        if (!data.query) return null;
         return (
           <WebSearchOutput
             query={data.query}
@@ -1209,7 +1200,6 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       }
       case CLI_EVENT_TYPES.TOOL_CALL: {
         const data = event.data as ToolCall;
-        if (!data.name) return null;
         if (data.subagentSpawn) {
           return (
             <SubagentSpawnOutput
@@ -1253,7 +1243,6 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       }
       case CLI_EVENT_TYPES.TOOL_RESULT: {
         const data = event.data as ToolResultData;
-        if (!data.result) return null;
         return (
           <ToolResultOutput
             result={data.result}

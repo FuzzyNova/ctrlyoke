@@ -32,6 +32,7 @@ import {
   AskUserQuestionData,
   BashCommandData,
   McpToolCallData,
+  WebSearchData,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -6025,8 +6026,13 @@ suite("CodexLogParser", () => {
             (event.data as TextData).text.includes("Todo List:")
         )
       );
-      assert.ok(
-        output.events.some((event) => event.type === CLI_EVENT_TYPES.WEB_SEARCH)
+      const webSearch = output.events.find(
+        (event) => event.type === CLI_EVENT_TYPES.WEB_SEARCH
+      );
+      // The call id pairs the search with its own result when several run.
+      assert.strictEqual(
+        (webSearch?.data as WebSearchData | undefined)?.toolCallId,
+        "web-1"
       );
       assert.ok(
         output.events.some(

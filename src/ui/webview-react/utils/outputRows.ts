@@ -62,6 +62,7 @@ import {
   getOutputDiffKey,
   getRawTextOutput,
   getVisibleStructuredEvents,
+  isRenderableStructuredEvent,
   isScriptOutput,
 } from "./outputRenderUtils";
 import type { DiffGapExpansionState } from "./outputRenderUtils";
@@ -2823,6 +2824,9 @@ export function buildOutputRows(
     }
 
     for (const visibleEvent of visibleEvents) {
+      // Skipped before the subagent label is assigned, so the label lands on
+      // the group's first row that draws something.
+      if (!isRenderableStructuredEvent(visibleEvent.event)) continue;
       const subagent = resolveSubagentMetadata(
         visibleEvent.event,
         previousSubagentGroup

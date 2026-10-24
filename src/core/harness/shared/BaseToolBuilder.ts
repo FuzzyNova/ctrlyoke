@@ -189,6 +189,7 @@ export class BaseToolBuilder {
             timestamp,
             data: {
               query: (input.query as string) || "",
+              toolCallId: toolId,
             } as WebSearchData,
           },
         ];

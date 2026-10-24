@@ -211,6 +211,7 @@ export class AntigravityToolEventBuilder {
             summary: this.webSummary(resultText),
             success,
             error,
+            toolCallId: mapping.toolCallId,
           } as WebSearchData & { summary?: string },
         },
       ];

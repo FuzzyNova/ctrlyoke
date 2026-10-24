@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-24 by Claude (claude-cli) while reviewing subagent output display
 - **Area:** `src/types/CliOutputTypes.ts` (`WebSearchData`), `src/core/harness/shared/BaseToolBuilder.ts`, `src/utils/CliEventNormalizer.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

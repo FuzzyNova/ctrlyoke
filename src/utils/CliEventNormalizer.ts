@@ -174,6 +174,9 @@ function getEventKey(event: CliEvent): string | undefined {
     }
     case CLI_EVENT_TYPES.WEB_SEARCH: {
       const data = event.data as WebSearchData;
+      if (data.toolCallId) {
+        return `web:call:${data.toolCallId}`;
+      }
       return data.query ? `web:${data.query}` : undefined;
     }
     case CLI_EVENT_TYPES.TOOL_CALL: {
@@ -297,6 +300,7 @@ function createPendingEvent(
         kind: PENDING_KINDS.WEB_SEARCH,
         type: event.type,
         key: getEventKey(event),
+        toolCallId: data.toolCallId,
       };
     }
   }

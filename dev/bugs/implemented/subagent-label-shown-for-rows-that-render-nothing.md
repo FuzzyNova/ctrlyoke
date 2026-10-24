@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-24 by Claude (claude-cli) while reviewing subagent output display
 - **Area:** `src/ui/webview-react/components/output/OutputRow.tsx`, `src/ui/webview-react/utils/outputRows.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

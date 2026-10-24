@@ -666,6 +666,39 @@ suite("CliEventNormalizer", () => {
     assert.strictEqual(search.results, undefined);
   });
 
+  test("pairs parallel web searches with their own results by call id", () => {
+    const search = (
+      query: string,
+      toolCallId: string,
+      timestamp: number
+    ): CliEvent => ({
+      type: CLI_EVENT_TYPES.WEB_SEARCH,
+      timestamp,
+      data: { query, toolCallId } as WebSearchData,
+    });
+    const events: CliEvent[] = [
+      search("alpha", "call_alpha", 1),
+      search("beta", "call_beta", 2),
+      {
+        type: CLI_EVENT_TYPES.TOOL_RESULT,
+        timestamp: 3,
+        data: {
+          toolCallId: "call_alpha",
+          result: { success: false, error: "alpha failed" },
+        },
+      },
+    ];
+
+    const normalized = normalizeCliEvents(events);
+
+    assert.strictEqual(normalized.length, 2);
+    const [alpha, beta] = normalized.map((e) => e.data as WebSearchData);
+    assert.strictEqual(alpha.success, false);
+    assert.strictEqual(alpha.error, "alpha failed");
+    assert.strictEqual(beta.success, undefined);
+    assert.strictEqual(beta.error, undefined);
+  });
+
   test("pairs same-text commands running in parallel by their own call ids", () => {
     const initiated = (toolCallId: string, timestamp: number): CliEvent => ({
       type: CLI_EVENT_TYPES.BASH_COMMAND,
