@@ -50,11 +50,12 @@ import { definitionAnchorPath } from "./WorkflowPaths";
  * `finalStep`, ...) exist only in the file, so a hash alone could detect a
  * changed setting but never put the trusted one back.
  *
- * A working file with no anchor is not trusted either. The first time a run
- * storage is checked, every run already in it is anchored as it is and a
- * baseline marker is recorded (see {@link readAnchorEstablishingBaseline}), so
- * only a run created outside ctrlyoke after that point has none; otherwise an
- * agent could forge a whole new run directory instead of editing one.
+ * In workspace storage mode a working file with no anchor is not trusted
+ * either. The first time a run storage is checked, every run already in it is
+ * anchored as it is and a baseline marker is recorded (see
+ * {@link readAnchorEstablishingBaseline}), so only a run created outside
+ * ctrlyoke after that point has none; otherwise an agent could forge a whole
+ * new run directory instead of editing one.
  *
  * Only the definition is anchored. `_runtime` blocks are written constantly by
  * the executor and are not authored, so they are excluded; the copy keeps each
@@ -459,18 +460,29 @@ interface DefinitionBaseline {
  * established first: the first time any anchor is looked for in a run
  * storage, every run and draft already in it is anchored as it is (history
  * from before anchors, trusted as it always was) and a baseline marker is
- * recorded. Every ctrlyoke writer anchors what it writes from then on, so a
- * working file that still has no anchor was not written by ctrlyoke.
+ * recorded. Every ctrlyoke writer anchors what it writes from then on, so in
+ * workspace storage mode a working file that still has no anchor was not
+ * written by this ctrlyoke: an agent created it, or it was copied in.
  *
- * The sweep takes no working-file locks, so a caller holding one cannot
- * deadlock it. It only anchors files that have no anchor, and any writer that
- * finds no anchor waits here behind the baseline lock before writing one.
+ * In user storage mode the runs live beside their anchors under the user
+ * state home, so anything able to create a run there could anchor it too and
+ * refusing it protects nothing. There a run with no anchor is anchored on
+ * first sight instead, which is what keeps runs written by an older ctrlyoke
+ * (a VS Code window not yet reloaded after an update, an older CLI) usable.
+ *
+ * Neither takes a working-file lock, so a caller holding one cannot deadlock
+ * them. They only anchor files that have no anchor, and any writer that finds
+ * no anchor waits here behind the baseline lock before writing one.
  */
 async function readAnchorEstablishingBaseline(
+  workingFilePath: string,
   layout: AnchorLayout
 ): Promise<RunDefinitionAnchor | undefined> {
   const anchor = await readAnchorAt(layout.anchorPath);
-  if (anchor || fs.existsSync(layout.baselinePath)) {
+  if (
+    anchor ||
+    (fs.existsSync(layout.baselinePath) && !layout.runsInUserStateHome)
+  ) {
     return anchor;
   }
   await fs.promises.mkdir(path.dirname(layout.baselinePath), {
@@ -478,6 +490,9 @@ async function readAnchorEstablishingBaseline(
   });
   await withFileLock(layout.baselinePath, async () => {
     if (fs.existsSync(layout.baselinePath)) {
+      if (!fs.existsSync(layout.anchorPath) && fs.existsSync(workingFilePath)) {
+        await anchorRunDefinitionOnDisk(workingFilePath);
+      }
       return;
     }
     const baseline: DefinitionBaseline = {
@@ -579,7 +594,10 @@ export async function verifyRunDefinition(
   if (!layout) {
     return { status: RUN_DEFINITION_INTEGRITY.UNANCHORABLE };
   }
-  return judge(await readAnchorEstablishingBaseline(layout), workingFile);
+  return judge(
+    await readAnchorEstablishingBaseline(workingFilePath, layout),
+    workingFile
+  );
 }
 
 /**
@@ -612,7 +630,10 @@ export async function verifyRunDefinitionFile(
     }
     const workingFile = JSON.parse(raw) as WorkingFile;
     const verdict: RunDefinitionVerdict = layout
-      ? judge(await readAnchorEstablishingBaseline(layout), workingFile)
+      ? judge(
+          await readAnchorEstablishingBaseline(workingFilePath, layout),
+          workingFile
+        )
       : { status: RUN_DEFINITION_INTEGRITY.UNANCHORABLE };
     result = { verdict, workingFile };
     if (!isUntrustedRunDefinition(verdict)) {
@@ -699,7 +720,10 @@ export async function writeAnchoredRunDefinition(
   }
   const { anchorPath } = layout;
 
-  const existing = await readAnchorEstablishingBaseline(layout);
+  const existing = await readAnchorEstablishingBaseline(
+    workingFilePath,
+    layout
+  );
   assertWritableSchema(
     PERSISTED_STORES.RUN_DEFINITION_ANCHOR,
     existing,

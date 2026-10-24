@@ -3,6 +3,7 @@ import * as crypto from "crypto";
 import * as path from "path";
 import { PATH_CONSTANTS } from "./ConfigurationUtils";
 import { isPathWithinDirectory } from "./PathSecurity";
+import { pathsEqual } from "./PathCasing";
 import { getFrozenRunHistoryLocation } from "./RunHistoryStoragePolicy";
 import {
   projectStateRoot,
@@ -597,6 +598,12 @@ export function definitionAnchorLayout(workingFilePath: string):
       anchorPath: string;
       baselinePath: string;
       runsRoot: string;
+      /**
+       * The run storage is itself under the user state home (user storage
+       * mode), beside its anchors: anything able to write a run there could
+       * write its anchor too.
+       */
+      runsInUserStateHome: boolean;
     }
   | undefined {
   const address = parseWorkingFileAddressFromPath(workingFilePath);
@@ -609,9 +616,8 @@ export function definitionAnchorLayout(workingFilePath: string):
   if (path.basename(runsRootDir) !== PATH_CONSTANTS.RUNS_DIR) {
     return undefined;
   }
-  const projectDir = userProjectDirForProjectStateRoot(
-    path.dirname(runsRootDir)
-  );
+  const projectStateDir = path.dirname(runsRootDir);
+  const projectDir = userProjectDirForProjectStateRoot(projectStateDir);
   if (!projectDir) {
     return undefined;
   }
@@ -624,6 +630,7 @@ export function definitionAnchorLayout(workingFilePath: string):
     ),
     baselinePath: path.join(anchorsRoot, DEFINITION_BASELINE_FILE_NAME),
     runsRoot: runsRootDir,
+    runsInUserStateHome: pathsEqual(projectStateDir, projectDir),
   };
 }
 

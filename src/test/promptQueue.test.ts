@@ -19,6 +19,7 @@ import {
 } from "../types/DashboardConstants";
 import {
   isRunDefinitionChangedError,
+  readRunDefinitionAnchor,
   verifyRunDefinitionFile,
 } from "../utils/RunDefinitionAnchor";
 import {
@@ -3818,24 +3819,26 @@ suite("PromptQueue State Machine Tests", () => {
       await reloaded.updateWorkingFile();
     });
 
-    test("a run ctrlyoke has no record of loads read-only", async () => {
+    test("in user storage, a run an older ctrlyoke created after the baseline is trusted", async () => {
       const workingFilePath = await createLiveQueue([{ prompt: "real" }]);
-      // The run storage's baseline stays; only this run's anchor is missing,
-      // as for a run directory an agent created.
+      // The baseline stays; only this run's anchor is missing, as for a run a
+      // VS Code window still running an older build created.
       await fs.rm(definitionAnchorPath(workingFilePath)!, { force: true });
-      const forged = await readDisk(workingFilePath);
-      (forged.steps![0] as PromptStep).prompt = "forged";
-      await fs.writeFile(workingFilePath, JSON.stringify(forged));
+      const older = await readDisk(workingFilePath);
+      (older.steps![0] as PromptStep).prompt = "written by an older build";
+      await fs.writeFile(workingFilePath, JSON.stringify(older));
 
       assert.deepStrictEqual(
         await WorkingFileManager.inspectDefinitionIntegrity(workingFilePath),
-        { status: RUN_DEFINITION_INTEGRITY.UNRECORDED }
+        { status: RUN_DEFINITION_INTEGRITY.TRUSTED }
       );
+      assert.ok(await readRunDefinitionAnchor(workingFilePath));
       const resumed = new PromptQueue();
       await resumed.restoreFromWorkingFile(workingFilePath, true);
-      await assert.rejects(
-        () => resumed.updateWorkingFile(),
-        /no record of writing/
+      await resumed.updateWorkingFile();
+      assert.strictEqual(
+        ((await readDisk(workingFilePath)).steps![0] as PromptStep).prompt,
+        "written by an older build"
       );
     });
 

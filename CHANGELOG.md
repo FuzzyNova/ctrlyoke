@@ -56,10 +56,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the definition ctrlyoke last wrote and shows a warning on the current step. Any other run
   becomes read-only, with a **Definition changed outside ctrlyoke** banner, until you choose
   **Restore** or **Accept change** (or run `ctrlyoke step restore-definition` /
-  `ctrlyoke step accept-definition`). Hand-editing a run file now needs the same review. A run
-  ctrlyoke has no record of writing, such as one created outside it or pulled from another
-  machine, is read-only until you accept it. Runs already in your history when you upgrade are
-  trusted.
+  `ctrlyoke step accept-definition`). Hand-editing a run file now needs the same review. In
+  `workspace` mode, a run ctrlyoke has no record of writing, such as one created outside it or
+  pulled from another machine, is read-only until you accept it. Runs already in your history
+  when you upgrade are trusted.
 
 - **Headless steps warn when they end with background work still running.** The warning appears as a ctrlyoke notice rather than in the reply; headless prompts also tell agents to wait for long commands in the foreground.
 - **Antigravity cost estimates now include separately reported thinking tokens.**

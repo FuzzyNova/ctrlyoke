@@ -1291,7 +1291,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       await fs.readFile(run.runFilePath, "utf8")
     ) as WorkingFile;
     delete workingFile.steps![2]._runtime?.completedAt;
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const status = responseJson(await server.invokeTool("workflow_status", {}));
@@ -1931,7 +1931,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       await fs.readFile(run.runFilePath, "utf8")
     ) as WorkingFile;
     initial.executionMode = EXECUTION_MODES.INTERACTIVE;
-    await fs.writeFile(run.runFilePath, JSON.stringify(initial), "utf8");
+    await writeTrustedRunFile(run.runFilePath, initial);
     try {
       await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, { index: 2, updates });
       const updated = JSON.parse(
@@ -2036,7 +2036,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     ) as WorkingFile;
     workingFile.harness = HARNESS_IDS.CLAUDE_CLI;
     workingFile.executionMode = EXECUTION_MODES.HEADLESS;
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const result = responseJson(
@@ -2084,7 +2084,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       committed: { script: "git status --porcelain" },
       ready: { script: "npm run typecheck" },
     };
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const result = responseJson(
@@ -2195,7 +2195,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         maxRetries: 1,
       },
     };
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
@@ -2275,7 +2275,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     });
 
     afterEdit.conditions!.committed.script = "echo changed later";
-    await fs.writeFile(run.runFilePath, JSON.stringify(afterEdit), "utf8");
+    await writeTrustedRunFile(run.runFilePath, afterEdit);
     const later = JSON.parse(
       await fs.readFile(run.runFilePath, "utf8")
     ) as WorkingFile;
@@ -2298,7 +2298,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     workingFile.conditions = {
       committed: { script: "git status --porcelain" },
     };
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     await assert.rejects(
@@ -2353,7 +2353,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       committed: { script: "git status --porcelain", maxRetries: 1 },
       inspect: { script: 'node "$FILE"', params: ["FILE"] },
     };
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     await assert.rejects(
@@ -2422,7 +2422,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     ) as WorkingFile;
     workingFile.harness = HARNESS_IDS.CODEX_CLI;
     workingFile.executionMode = EXECUTION_MODES.INTERACTIVE;
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const inheritedInteractive = responseJson(
@@ -2470,7 +2470,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     ) as WorkingFile;
     workingFile.harness = HARNESS_IDS.CLAUDE_CLI;
     workingFile.executionMode = EXECUTION_MODES.HEADLESS;
-    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    await writeTrustedRunFile(run.runFilePath, workingFile);
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const result = responseJson(

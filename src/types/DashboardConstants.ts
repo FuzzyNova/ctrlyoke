@@ -2696,9 +2696,10 @@ export const RUN_DEFINITION_INTEGRITY = {
   /** The file is not at a run-storage path ctrlyoke can anchor. */
   UNANCHORABLE: "unanchorable",
   /**
-   * No anchor, although every run present when anchoring began was given one:
-   * created by something other than a ctrlyoke writer, or copied in from
-   * another machine. Untrusted until the user accepts it.
+   * Workspace storage mode only: no anchor, although every run present when
+   * anchoring began was given one. Created by something other than a ctrlyoke
+   * writer, or copied in from another machine. Untrusted until the user
+   * accepts it.
    */
   UNRECORDED: "unrecorded",
   TRUSTED: "trusted",

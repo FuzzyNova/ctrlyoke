@@ -143,11 +143,13 @@ ctrlyoke keeps a record of every definition it writes, under
   or
   [`ctrlyoke step accept-definition`](/cli/ctrlyoke#ctrlyoke-step-accept-definition).
 
-- **A run ctrlyoke has no record of is read-only too.** This is a run created
-  by something other than ctrlyoke, or copied in from another machine, for
-  example by a `git pull` of a committed `.ctrlyoke/.runs` folder. The banner
-  reads **ctrlyoke has no record of writing this run**. There is nothing to
-  restore, so choose **Accept run** if you trust it, or delete it.
+- **In `workspace` mode, a run ctrlyoke has no record of is read-only too.**
+  This is a run created by something other than ctrlyoke, or copied in from
+  another machine, for example by a `git pull` of a committed
+  `.ctrlyoke/.runs` folder. The banner reads **ctrlyoke has no record of
+  writing this run**. There is nothing to restore, so choose **Accept run** if
+  you trust it, or delete it. In the default mode such a run is trusted, so
+  runs started by a window or CLI still on an older ctrlyoke keep working.
 
 The runs already in your history when ctrlyoke first started keeping this
 record are trusted. History synced between machines in the default mode
