@@ -27,10 +27,10 @@ src/server/HostedWorkspaceViewerService.ts` takes about 184 ms for the full hist
 
 - `src/server/HostedWorkspaceViewerService.ts:2162-2167`: a request without a
   `historyId` calls `getFileHistoryCommits(repoRoot, gitPath, undefined, 0, headHash,
-  true)`. A comment says omitting max-count is intentional, because the full result is
+true)`. A comment says omitting max-count is intentional, because the full result is
   the frozen snapshot that later pages are served from.
 - `src/utils/GitUtils.ts:427-454`: the function runs `git log --follow -z
-  --name-status` with no `-n` when `limit` is undefined, through `execFileAsync` with
+--name-status` with no `-n` when `limit` is undefined, through `execFileAsync` with
   the default 10 s `getGitTimeoutMs()` and the 50 MB buffer. `--follow` makes git diff
   trees with rename detection for every commit in the history, so the cost grows with
   the total history, not with how many commits touched the file. With `-n`, git stops

@@ -61,7 +61,7 @@ Page from git instead of snapshotting the whole history:
   `--skip` costs grow with the offset, but only for users who scroll that far. A cursor
   (continuing from the last hash seen) would avoid even that.
 - The total commit count, if the UI needs it, can come from `git rev-list --count
-  <tip>`. That call is cheap and has a small output. It can also be left out, with the
+<tip>`. That call is cheap and has a small output. It can also be left out, with the
   client paging until a short page comes back.
 
 This removes the buffer limit, keeps each git call proportional to one page, and

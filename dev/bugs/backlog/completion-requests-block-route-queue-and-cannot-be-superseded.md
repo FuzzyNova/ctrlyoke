@@ -31,11 +31,11 @@ The same thing happens with `@` while the workspace file index is `BUILDING`. Th
 
 - `src/ui/WebviewMessageRouter.ts:191-198`: `OFF_QUEUE_MESSAGE_TYPES` does not include `REQUEST_COMPLETIONS`, so it is chained onto `this.routeQueue` at `:466`.
 - `src/ui/PromptEditorSupportService.ts:317-334`: the `#` branch awaits `completionCore.getHashCompletions()` with no `AbortSignal`. It ends in `VsCodeSymbolIndex.workspaceSymbols()` (`src/platform/VsCodeSymbolIndex.ts:59-72`), which runs the language-family warm-up and then `vscode.executeWorkspaceSymbolProvider`.
-- `src/ui/PromptEditorSupportService.ts:310`: the supersession `this.activeFileCompletionRequests.get(ctx.clientId)?.abort()` only runs once the *newer* request reaches the head of `routeQueue`. The stale handler is what holds the head, so the abort never pre-empts anything. It only fires after the stale work has finished.
+- `src/ui/PromptEditorSupportService.ts:310`: the supersession `this.activeFileCompletionRequests.get(ctx.clientId)?.abort()` only runs once the _newer_ request reaches the head of `routeQueue`. The stale handler is what holds the head, so the abort never pre-empts anything. It only fires after the stale work has finished.
 - `src/ui/PromptEditorSupportService.ts:345-397`: while `getFileIndexStatus()` is `BUILDING`, the `@` branch re-queries every 500 ms (`:383`) inside the same handler, so the queue stays held for the entire index build. The newer keystroke that should abort it is stuck behind it.
 - On the client, `promptCompletionResult.ts:139-140` re-queries on every keystroke, so a backlog of stale requests builds up behind the slow one. Each still runs in full on the host after the client has thrown its answer away.
 
-`SEARCH_HISTORY` already has the right pattern: `beginHistorySearch()` registers the abort synchronously in `route()`, *before* the message is queued (`WebviewMessageRouter.ts:445-457`). A precedent in this same class was `dev/bugs/implemented/secret-registry-request-blocks-route-queue-with-powershell-spawns.md`, which was fixed by moving that request off-queue.
+`SEARCH_HISTORY` already has the right pattern: `beginHistorySearch()` registers the abort synchronously in `route()`, _before_ the message is queued (`WebviewMessageRouter.ts:445-457`). A precedent in this same class was `dev/bugs/implemented/secret-registry-request-blocks-route-queue-with-powershell-spawns.md`, which was fixed by moving that request off-queue.
 
 ## Suggested Fix
 

@@ -13,7 +13,7 @@ Both streams grow with the number of files:
 
 - With `core.autocrlf=true` (the Git for Windows default), `git add -A` prints
   one `warning: in the working copy of '<path>', LF will be replaced by CRLF the
-  next time Git touches it` line per LF file. That is about 108 bytes per file
+next time Git touches it` line per LF file. That is about 108 bytes per file
   for short paths, so roughly 9-10k files exceed 1 MiB of stderr.
 - `git commit` prints a ` create mode 100644 <path>` line per new file on
   stdout, and pre-commit hooks (lint-staged, formatters, test runners) can write

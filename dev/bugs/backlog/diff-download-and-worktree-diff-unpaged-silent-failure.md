@@ -37,11 +37,11 @@ Two features still request the whole patch in one call:
 
 - `src/ui/webview-react/components/workspace-viewer/WorkspaceDiffPane.tsx:193-201`
   calls `await workspaceGitRefDiff(ref, ...)` and then has `catch { // ignore download
-  errors }`.
+errors }`.
 - `src/server/HostedWorkspaceViewerService.ts:3016-3108` (`getGitRefDiff`) gets the full
   patch with a single `getWorkingTreeDiff`, `getStagedDiff`, `getStashDiff` or
   `getCommitDiff` call. For example, `src/utils/GitUtils.ts:553-568` runs `git show
-  --stat -p` through `execFileAsync`, which uses `GIT_TIMEOUT_MS = 10_000` and
+--stat -p` through `execFileAsync`, which uses `GIT_TIMEOUT_MS = 10_000` and
   `GIT_MAX_BUFFER = 50 MB` (`GitUtils.ts:11-13`).
 - The same method also computes `nonTextEntries` through `buildNonTextDiffEntries`
   (`HostedWorkspaceViewerService.ts:2773-2850`). The download throws that result away.

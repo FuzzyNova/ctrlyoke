@@ -27,5 +27,5 @@ An image thumbnail in output markdown sometimes shows as a plain file-ref chip i
 
 - Cache only definitive host answers. On timeout, resolve the current render with `null`, but delete the in-flight entry and leave `imagePreviewUriCache` untouched, so the next mount asks again. Optionally keep the seq resolver registered so a late answer still fills the cache and updates any mounted thumbnail.
 - Clear the timeout when the host answers.
-- Consider a short TTL, or invalidating cached `null`s on file-change events, too. A host `null` for an image that does not exist *yet* (one a step writes later) is cached forever today.
+- Consider a short TTL, or invalidating cached `null`s on file-change events, too. A host `null` for an image that does not exist _yet_ (one a step writes later) is cached forever today.
 - The underlying delay is the shared `routeQueue`. `REQUEST_FILE_PREVIEW_URI` is a read-only lookup and could go in `OFF_QUEUE_MESSAGE_TYPES`.
