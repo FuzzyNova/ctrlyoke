@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import {
+  ATTEMPT_COST_NOTE_CODES,
   ATTEMPT_COST_SOURCES,
   HARNESS_IDS,
   WORKFLOW_TOKEN_COVERAGE,
@@ -126,6 +127,21 @@ suite("TokenFormatting", () => {
     assert.match(
       formatCostTooltip(0.41, [ATTEMPT_COST_SOURCES.PRICE_TABLE], true),
       /unpriceable/
+    );
+  });
+
+  test("labels a full-rate cache-read estimate as an upper bound", () => {
+    const tooltip = formatCostTooltip(
+      0.41,
+      [ATTEMPT_COST_SOURCES.PRICE_TABLE],
+      false,
+      ATTEMPT_COST_NOTE_CODES.CACHE_READ_UPPER_BOUND
+    );
+    assert.match(tooltip, /This is an upper bound/);
+    assert.match(tooltip, /cachedInputPerMTok/);
+    assert.doesNotMatch(
+      formatCostTooltip(0.41, [ATTEMPT_COST_SOURCES.PRICE_TABLE]),
+      /upper bound/
     );
   });
 

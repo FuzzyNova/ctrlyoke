@@ -156,6 +156,10 @@ export function calculateTokenCost(
       : 0;
 
   const inputUsd = perMillion(nonCachedInput, pricingData.inputPerMTok);
+  // Without a cache-read rate, cache hits are priced as misses: never an
+  // under-estimate, but flagged so the tooltip can call it an upper bound.
+  const cacheReadRateUnknown =
+    cached > 0 && pricingData.cachedInputPerMTok === undefined;
   const cachedInputUsd = perMillion(
     cached,
     pricingData.cachedInputPerMTok ?? pricingData.inputPerMTok
@@ -179,6 +183,9 @@ export function calculateTokenCost(
     usd: inputUsd + cachedInputUsd + cacheWriteUsd + outputUsd + reasoningUsd,
     source,
     confidence: ATTEMPT_COST_CONFIDENCE.COMPLETE,
+    ...(cacheReadRateUnknown
+      ? { noteCode: ATTEMPT_COST_NOTE_CODES.CACHE_READ_UPPER_BOUND }
+      : {}),
     ...(modelId === undefined ? {} : { modelId }),
     breakdown: {
       inputUsd,
@@ -286,6 +293,7 @@ function calculatePerModelCost(
     cacheWriteUsd: 0,
     reasoningUsd: 0,
   };
+  let cacheReadUpperBound = false;
   for (const [modelId, usage] of Object.entries(input.modelUsage ?? {})) {
     const pricing = getModelPricing(
       input.harnessId,
@@ -312,6 +320,8 @@ function calculatePerModelCost(
       modelId
     );
     if (!cost) return undefined;
+    cacheReadUpperBound ||=
+      cost.noteCode === ATTEMPT_COST_NOTE_CODES.CACHE_READ_UPPER_BOUND;
     usd += cost.usd;
     breakdown.inputUsd += cost.breakdown?.inputUsd ?? 0;
     breakdown.outputUsd += cost.breakdown?.outputUsd ?? 0;
@@ -325,6 +335,9 @@ function calculatePerModelCost(
       ? ATTEMPT_COST_SOURCES.USER_OVERRIDE
       : ATTEMPT_COST_SOURCES.PRICE_TABLE,
     confidence: ATTEMPT_COST_CONFIDENCE.COMPLETE,
+    ...(cacheReadUpperBound
+      ? { noteCode: ATTEMPT_COST_NOTE_CODES.CACHE_READ_UPPER_BOUND }
+      : {}),
     ...(input.modelId === undefined ? {} : { modelId: input.modelId }),
     breakdown,
   };

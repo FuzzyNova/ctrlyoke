@@ -98,6 +98,12 @@ its prompt cache with a 1-hour lifetime, which Anthropic bills at twice the
 input rate rather than the usual cache-write rate, so ctrlyoke prices those
 writes at twice the model's input rate.
 
+Some models have no known cache-read price. ctrlyoke then prices their cache
+reads at the full input rate, and the cost tooltip says the estimate is an
+upper bound, because most providers charge less for cache hits. For an exact
+figure, add a [model pricing override](#model-pricing-overrides) with the
+**Cached input** rate.
+
 List prices come from [models.dev](https://models.dev), an open-source model
 pricing database. Each ctrlyoke release bundles a copy, so ctrlyoke never
 fetches prices while you work. The Stats tab names this source too.

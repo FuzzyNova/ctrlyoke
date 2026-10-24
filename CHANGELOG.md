@@ -70,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Headless steps warn when they end with background work still running.** The warning appears as a ctrlyoke notice rather than in the reply; headless prompts also tell agents to wait for long commands in the foreground.
 - **Antigravity cost estimates now include separately reported thinking tokens.**
+- **Cost tooltips flag upper-bound estimates.** When a model has no known cache-read price, its cache reads are still priced at the full input rate, but the tooltip now says the figure is an upper bound and how to get an exact one with a pricing override.
 - **Sonnet 5.5 cache reads use the corrected $0.20/M rate.** The sync script
   checks the upstream value so the temporary correction can be removed when
   models.dev is updated.

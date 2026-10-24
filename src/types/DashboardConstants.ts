@@ -1780,6 +1780,9 @@ export const ATTEMPT_COST_CONFIDENCE = {
 
 export const ATTEMPT_COST_NOTE_CODES = {
   HARNESS_DIVERGENCE: "harness-divergence",
+  /** Cache reads were priced at the full input rate because the model has no
+   *  known cache-read rate, so the estimate is an upper bound. */
+  CACHE_READ_UPPER_BOUND: "cache-read-upper-bound",
 } as const;
 
 export const ATTEMPT_COST_UNAVAILABLE_REASONS = {
