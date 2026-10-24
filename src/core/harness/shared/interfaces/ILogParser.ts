@@ -35,10 +35,18 @@ export interface BaseCliEvent {
  * - `"resume-signal"` — a harness-internal wake-up message (e.g. Claude's
  *   `<task-notification>`), not something a human typed.
  * - `"human-steer"` — genuine human text typed directly into the live TUI.
+ * - `"system-message"` — a notice the harness injected into the conversation
+ *   (e.g. Claude's `isMeta` image-resize note). Shown like a steer, but
+ *   attributed to the system rather than the user.
  * - `"other"` — none of the above (default for harnesses with no ambiguity).
  */
 export type UserEventClassification =
-  "tool-result" | "injected-prompt" | "resume-signal" | "human-steer" | "other";
+  | "tool-result"
+  | "injected-prompt"
+  | "resume-signal"
+  | "human-steer"
+  | "system-message"
+  | "other";
 
 /**
  * Interface for CLI harness log parsers
@@ -403,16 +411,16 @@ export interface ILogParser {
 
   /**
    * Extract the display text for a log event already classified as
-   * `"human-steer"` by `classifyUserEvent`. Each harness owns its own event
-   * shape (Claude's `message.content` blocks, Copilot's `data.content`
-   * string, Qwen's `message.parts[].text`, etc.), so text extraction is
-   * parser-owned rather than assumed generically by the caller.
+   * `"human-steer"` or `"system-message"` by `classifyUserEvent`. Each harness
+   * owns its own event shape (Claude's `message.content` blocks, Copilot's
+   * `data.content` string, Qwen's `message.parts[].text`, etc.), so text
+   * extraction is parser-owned rather than assumed generically by the caller.
    *
    * Called by `CliLogEventPump` only after `classifyUserEvent` has already
-   * returned `"human-steer"` for the same event.
+   * returned one of those classifications for the same event.
    *
    * @param event - Single parsed log event
-   * @returns The text the human typed, or undefined if it can't be extracted
+   * @returns The message text, or undefined if it can't be extracted
    */
   extractUserSteerText?(event: BaseCliEvent): string | undefined;
 

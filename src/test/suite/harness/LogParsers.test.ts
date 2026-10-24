@@ -3031,6 +3031,23 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(classification, "injected-prompt");
     });
 
+    test("should classify a CLI-injected isMeta message as a system message", () => {
+      const resizeNote =
+        "[Image: original 3390x748, displayed at 2000x441. Multiply coordinates by 1.70 to map to original image.]";
+      const event = {
+        type: "user",
+        isMeta: true,
+        message: { role: "user", content: resizeNote },
+      };
+
+      assert.strictEqual(parser.classifyUserEvent(event, {}), "system-message");
+      assert.strictEqual(parser.extractUserSteerText(event), resizeNote);
+      assert.strictEqual(
+        parser.classifyUserEvent({ ...event, isMeta: false }, {}),
+        "human-steer"
+      );
+    });
+
     test("should not classify a subagent's prompt as a human steer", () => {
       const prompt = "You are bug-hunting in the ctrlyoke repo.";
       const subagentPrompt = {

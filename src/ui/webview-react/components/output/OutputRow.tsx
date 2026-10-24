@@ -20,7 +20,9 @@ import {
   OUTPUT_ROW_KINDS,
   TOOL_CALL_EXPANSION_SECTIONS,
   TOOL_RESULT_STATUSES,
+  USER_STEER_ATTRIBUTIONS,
   WORKFLOW_VIEW_ADDRESS_KIND,
+  type UserSteerAttribution,
 } from "@root/types/DashboardConstants";
 import {
   AskUserQuestionOutput,
@@ -506,6 +508,7 @@ const ThinkingOutput: React.FC<{
 
 const UserSteerOutput: React.FC<{
   text: string;
+  attribution?: UserSteerAttribution;
   findQuery?: string;
   findCaseSensitive?: boolean;
   highlightActiveIndex?: number;
@@ -514,32 +517,46 @@ const UserSteerOutput: React.FC<{
   priorContextStepCount?: number;
 }> = ({
   text,
+  attribution,
   findQuery,
   findCaseSensitive,
   highlightActiveIndex,
   findDecorations,
   atomicContextReferences = false,
   priorContextStepCount,
-}) => (
-  <div className="my-2">
-    <div className="text-(length:--cy-output-font-size-xs) text-indicator-info mb-1">
-      ● User message
-    </div>
-    <div className="text-editor-fg pl-3 border-l border-indicator-info/50 whitespace-pre-wrap wrap-anywhere">
-      <MarkdownText
-        highlightQuery={findQuery}
-        highlightCaseSensitive={findCaseSensitive}
-        highlightActiveIndex={highlightActiveIndex}
-        findDecorations={findDecorations}
-        atomicContextReferences={atomicContextReferences}
-        priorContextStepCount={priorContextStepCount}
-        contextReferences
+}) => {
+  const isSystem = attribution === USER_STEER_ATTRIBUTIONS.SYSTEM;
+  return (
+    <div className="my-2">
+      <div
+        className={`text-(length:--cy-output-font-size-xs) mb-1 ${
+          isSystem ? "text-description-fg" : "text-indicator-info"
+        }`}
       >
-        {text}
-      </MarkdownText>
+        {isSystem ? "● System message" : "● User message"}
+      </div>
+      <div
+        className={`pl-3 border-l whitespace-pre-wrap wrap-anywhere ${
+          isSystem
+            ? "text-description-fg border-panel-border"
+            : "text-editor-fg border-indicator-info/50"
+        }`}
+      >
+        <MarkdownText
+          highlightQuery={findQuery}
+          highlightCaseSensitive={findCaseSensitive}
+          highlightActiveIndex={highlightActiveIndex}
+          findDecorations={findDecorations}
+          atomicContextReferences={atomicContextReferences}
+          priorContextStepCount={priorContextStepCount}
+          contextReferences
+        >
+          {text}
+        </MarkdownText>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const ToolResultOutput: React.FC<{
   result: { success: boolean; output?: string; error?: string };
@@ -904,6 +921,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
         return (
           <UserSteerOutput
             text={data.text}
+            attribution={data.attribution}
             findQuery={findQuery}
             findCaseSensitive={findCaseSensitive}
             highlightActiveIndex={getActiveMatchIndex(

@@ -14,7 +14,11 @@ import {
   type StructuredEventRow,
 } from "@utils/outputRows";
 import { findOutputMatches, type OutputFindMatch } from "@utils/outputFind";
-import { CLI_EVENT_TYPES, OPERATION_STATUS } from "@/types/cliEvents";
+import {
+  CLI_EVENT_TYPES,
+  OPERATION_STATUS,
+  type UserSteerData,
+} from "@/types/cliEvents";
 import {
   FINAL_STEP_PHASES,
   MESSAGE_TYPES,
@@ -27,6 +31,7 @@ import {
   OUTPUT_ROW_KINDS,
   SCRIPT_VERDICT_OUTCOMES,
   STEP_TYPES,
+  USER_STEER_ATTRIBUTIONS,
 } from "@root/types/DashboardConstants";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
@@ -561,6 +566,48 @@ describe("OutputRow script commands", () => {
     expect(
       container.querySelector(".border-l-output-script-border")
     ).not.toBeNull();
+  });
+});
+
+describe("OutputRow steer attribution", () => {
+  function buildSteerRow(data: UserSteerData): StructuredEventRow {
+    return {
+      key: "row-steer",
+      target: TARGET,
+      estimateSize: 0,
+      rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
+      event: { type: CLI_EVENT_TYPES.USER_STEER, data },
+      eventIndex: 0,
+      rawTextOutput: false,
+      hideDiff: false,
+    };
+  }
+
+  it("labels a steer with no attribution as a user message", () => {
+    const { container } = render(
+      <OutputRow
+        row={buildSteerRow({ text: "also fix the tests" })}
+        isExecutionActive={false}
+      />
+    );
+
+    expect(container).toHaveTextContent("● User message");
+    expect(container).not.toHaveTextContent("System message");
+  });
+
+  it("labels a system-attributed steer as a system message", () => {
+    const { container } = render(
+      <OutputRow
+        row={buildSteerRow({
+          text: "[Image: original 3390x748, displayed at 2000x441.]",
+          attribution: USER_STEER_ATTRIBUTIONS.SYSTEM,
+        })}
+        isExecutionActive={false}
+      />
+    );
+
+    expect(container).toHaveTextContent("● System message");
+    expect(container).not.toHaveTextContent("User message");
   });
 });
 

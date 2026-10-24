@@ -32,6 +32,7 @@ import {
 import {
   DIFF_LINE_TYPES,
   OUTPUT_MESSAGE_TYPES,
+  USER_STEER_ATTRIBUTIONS,
 } from "@root/types/DashboardConstants";
 import {
   formatThinkingLabel,
@@ -337,7 +338,11 @@ function renderStructuredEventsToMarkdown(
 
       case CLI_EVENT_TYPES.USER_STEER: {
         const data = event.data as UserSteerData;
-        lines.push(`● User steer: ${data.text}`);
+        lines.push(
+          data.attribution === USER_STEER_ATTRIBUTIONS.SYSTEM
+            ? `● System message: ${data.text}`
+            : `● User steer: ${data.text}`
+        );
         lines.push("");
         break;
       }

@@ -40,6 +40,7 @@ import {
   SCRIPT_SOURCE_LABELS,
   SCRIPT_VERDICT_OUTCOMES,
   STATUS_MESSAGE_SEVERITY,
+  USER_STEER_ATTRIBUTIONS,
   type HarnessId,
 } from "../types/DashboardConstants";
 import {
@@ -1742,7 +1743,11 @@ export class CliTerminalFormatter {
       case CLI_EVENT_TYPES.USER_STEER: {
         CliTerminalFormatter.beginEventOutput(target);
         const data = event.data as UserSteerData;
-        writeEventLine(chalk.blue("● User message"), chalk.blue);
+        if (data.attribution === USER_STEER_ATTRIBUTIONS.SYSTEM) {
+          writeEventLine(chalk.dim("● System message"), chalk.dim);
+        } else {
+          writeEventLine(chalk.blue("● User message"), chalk.blue);
+        }
         writeBoundedEventDetail(data.text, MAX_PREVIEW_LINES, "  ");
         console.log();
         break;

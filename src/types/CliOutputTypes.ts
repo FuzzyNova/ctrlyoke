@@ -11,6 +11,7 @@ import type {
   HarnessId,
   McpCallVia,
   TokenTotalConfidence,
+  UserSteerAttribution,
   WebSearchAction,
 } from "./DashboardConstants";
 
@@ -82,8 +83,10 @@ export interface TextData {
  * mid-step or after a step/workflow has already completed. Display-only.
  */
 export interface UserSteerData {
-  /** The text the human typed */
+  /** The message text */
   text: string;
+  /** Who wrote it; absent (older events) means a human. */
+  attribution?: UserSteerAttribution;
 }
 
 /**

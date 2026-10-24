@@ -38,6 +38,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **claude-cli notices are labelled System message, not User message.** Notes
+  that Claude Code adds to the conversation itself, such as the image-resize
+  note after a screenshot is read, appear in the output as **System message**
+  (in the dashboard, the CLI and Markdown exports) and as `<systemMessage>` in
+  `$previous` context. Messages you type into the terminal are still labelled
+  **User message**.
+
 - **Workspace search loads results as you scroll and shows a result count.**
   The workspace viewer's Search tab no longer has a **Load more** button: the
   next results load when you scroll near the end of the list. A count above the

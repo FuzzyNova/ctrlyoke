@@ -40,6 +40,7 @@ import {
   PRIOR_CONTEXT_DETAILS,
   PRIOR_CONTEXT_LIMITS,
   PRIOR_CONTEXT_TRUNCATION,
+  USER_STEER_ATTRIBUTIONS,
   type TerminalEndReason,
 } from "../types/DashboardConstants";
 import type {
@@ -378,7 +379,9 @@ function renderPriorContextEntry(entry: PriorContextTranscriptEntry): string {
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.QUESTION:
       return `<question${failed}>\n${JSON.stringify({ questions: entry.questions, declined: entry.declined })}\n</question>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.USER_STEER:
-      return `<userSteer${failed}>\n${entry.text}\n</userSteer>`;
+      return entry.attribution === USER_STEER_ATTRIBUTIONS.SYSTEM
+        ? `<systemMessage${failed}>\n${entry.text}\n</systemMessage>`
+        : `<userSteer${failed}>\n${entry.text}\n</userSteer>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TERMINAL_OUTPUT:
       return `<terminalOutput reason="${escapeXmlAttribute(entry.reason)}">\n${entry.text}\n</terminalOutput>`;
   }

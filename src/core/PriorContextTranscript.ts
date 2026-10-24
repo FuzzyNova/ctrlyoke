@@ -19,6 +19,7 @@ import {
   PRIOR_CONTEXT_LIMITS,
   PRIOR_CONTEXT_TRUNCATION,
   PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS,
+  type UserSteerAttribution,
 } from "../types/DashboardConstants";
 import {
   countStructuredPatchChanges,
@@ -102,6 +103,7 @@ export type PriorContextTranscriptEntry =
   | (EntryBase & {
       kind: typeof PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.USER_STEER;
       text: string;
+      attribution?: UserSteerAttribution;
     })
   | (EntryBase & {
       kind: typeof PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TERMINAL_OUTPUT;
@@ -381,11 +383,14 @@ function projectEvent(
         ...(data.status === OPERATION_STATUS.FAILED ? { failed: true } : {}),
       };
     }
-    case CLI_EVENT_TYPES.USER_STEER:
+    case CLI_EVENT_TYPES.USER_STEER: {
+      const data = event.data as UserSteerData;
       return {
         kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.USER_STEER,
-        text: (event.data as UserSteerData).text,
+        text: data.text,
+        ...(data.attribution ? { attribution: data.attribution } : {}),
       };
+    }
     case CLI_EVENT_TYPES.TERMINAL_OUTPUT: {
       const data = event.data as TerminalOutputData;
       return {

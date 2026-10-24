@@ -10,6 +10,7 @@ import {
   PRIOR_CONTEXT_LIMITS,
   SCRIPT_OPERATORS,
   SCRIPT_VERDICT_OUTCOMES,
+  USER_STEER_ATTRIBUTIONS,
 } from "../../types/DashboardConstants";
 import { inlinePriorContextRefToPriorContext } from "../../utils/PriorContextMerge";
 
@@ -244,6 +245,11 @@ suite("prior-context XML", () => {
             text: "Keep going",
           },
           {
+            kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.USER_STEER,
+            text: "Image resized",
+            attribution: USER_STEER_ATTRIBUTIONS.SYSTEM,
+          },
+          {
             kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TERMINAL_OUTPUT,
             text: "crashed",
             reason: "exit & failed",
@@ -269,6 +275,7 @@ suite("prior-context XML", () => {
       '<search query="A &amp; B">',
       "<question>",
       "<userSteer>\nKeep going\n</userSteer>",
+      "<systemMessage>\nImage resized\n</systemMessage>",
       '<terminalOutput reason="exit &amp; failed">\ncrashed\n</terminalOutput>',
       '<earlierAttempts count="2">\n<filesChanged>\nRemoved src/old.ts',
     ])

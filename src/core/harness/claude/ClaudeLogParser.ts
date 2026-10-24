@@ -133,6 +133,12 @@ interface ClaudeProviderEvent extends BaseCliEvent {
    * exchanges, naming the parent's Agent tool_use. `null` on the main thread.
    */
   parent_tool_use_id?: string | null;
+  /**
+   * Set on a `user` message the CLI injected itself rather than one a human
+   * typed, e.g. the "[Image: original WxH, displayed at …]" resize note that
+   * follows a screenshot read, or a loaded skill's body.
+   */
+  isMeta?: boolean;
   usage?: {
     input_tokens?: number;
     output_tokens?: number;
@@ -772,7 +778,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   /**
    * Classify a `user` log event per the four-way rule (see `UserEventClassification`):
    * Claude's log uses the `user` role for tool results, ctrlyoke's own injected
-   * prompts echoed back, its own `<task-notification>` resume signal, and genuine
+   * prompts echoed back, its own `<task-notification>` resume signal, notices the
+   * CLI injects itself (flagged `isMeta`, shown as system messages), and genuine
    * human follow-ups typed into the live TUI — only the last is a "user steer".
    *
    * A message typed while a turn is still running never becomes a `user` event:
@@ -816,6 +823,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
 
     if (text.includes("<task-notification>")) {
       return "resume-signal";
+    }
+
+    if (e.isMeta === true) {
+      return "system-message";
     }
 
     return this.matchesDispatchedPrompt(text, ctx.dispatchedPromptText)
@@ -862,7 +873,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
 
   /**
    * Extract the display text for an event already classified as `"human-steer"`
-   * by `classifyUserEvent`. Reuses the same extraction helpers so the two stay
+   * or `"system-message"` by `classifyUserEvent`. Reuses the same extraction helpers so the two stay
    * in sync — see `extractUserMessageText` and `extractHumanQueuedCommandText`.
    */
   override extractUserSteerText(event: BaseCliEvent): string | undefined {

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { REDACTION_MARKER } from "@root/types/PreviewRedactor";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
+import { USER_STEER_ATTRIBUTIONS } from "@root/types/DashboardConstants";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import { useSettingsStore } from "@store/settingsStore";
 import {
@@ -594,6 +595,13 @@ describe("generateMarkdownExport", () => {
             data: { text: "Please add a test" },
           },
           {
+            type: CLI_EVENT_TYPES.USER_STEER,
+            data: {
+              text: "Image resized",
+              attribution: USER_STEER_ATTRIBUTIONS.SYSTEM,
+            },
+          },
+          {
             type: CLI_EVENT_TYPES.WEB_SEARCH,
             data: {
               query: "docs",
@@ -622,6 +630,7 @@ describe("generateMarkdownExport", () => {
     expect(md).toContain("+export const value = 1;");
     expect(md).toContain("Answer: Yes");
     expect(md).toContain("User steer: Please add a test");
+    expect(md).toContain("System message: Image resized");
     expect(md).toContain("[Guide](https://example.test/guide)");
     expect(md).toContain("last terminal line");
   });

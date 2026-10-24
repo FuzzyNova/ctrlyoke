@@ -4250,8 +4250,10 @@ export const CLI_EVENT_TYPES = {
   /** Conversation compaction checkpoint — shown when the AI auto-compacts the context window */
   COMPACTION: "compaction",
 
-  /** Genuine human text typed directly into a live TUI, mid-step or after completion.
-   *  Display-only — never changes workflow/queue state. See UserEventClassification. */
+  /** A message that reached the agent outside ctrlyoke's dispatched prompt: human text
+   *  typed directly into a live TUI (mid-step or after completion), or a harness-injected
+   *  system message. `UserSteerData.attribution` says which. Display-only — never changes
+   *  workflow/queue state. See UserEventClassification. */
   USER_STEER: "userSteer",
 
   /** Divider marking where post-completion follow-up activity (a harness auto-resume
@@ -4275,6 +4277,20 @@ export const CLI_EVENT_TYPES = {
    *  logic that refreshes a completed step's stats footer (tokens/contextWindow). */
   CONTEXT_WINDOW_SYNC: "contextWindowSync",
 } as const;
+
+/**
+ * Who wrote a `USER_STEER` message. Events persisted before this field existed
+ * carry none and are treated as `USER`.
+ */
+export const USER_STEER_ATTRIBUTIONS = {
+  /** Text a human typed into the live TUI. */
+  USER: "user",
+  /** A notice the harness injected into the conversation on its own, such as
+   *  Claude's image-resize note after a screenshot is read. */
+  SYSTEM: "system",
+} as const;
+export type UserSteerAttribution =
+  (typeof USER_STEER_ATTRIBUTIONS)[keyof typeof USER_STEER_ATTRIBUTIONS];
 
 /**
  * What a `WEB_SEARCH` event did. Absent means a search; Codex's built-in web

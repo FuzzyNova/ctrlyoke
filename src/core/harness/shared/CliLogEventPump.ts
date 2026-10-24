@@ -1,6 +1,10 @@
 import type * as fs from "fs";
 import type { CliEvent, UserSteerData } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  USER_STEER_ATTRIBUTIONS,
+  type UserSteerAttribution,
+} from "../../../types/DashboardConstants";
 import type { BaseCliEvent, ILogParser } from "./interfaces/ILogParser";
 import { McpSkillEventRewriter } from "../../../utils/McpSkillCommandRecognizer";
 
@@ -40,7 +44,7 @@ export class CliLogEventPump {
   /**
    * Process a single log event: stream its structured CliEvents, update the
    * context window, and emit a synthetic USER_STEER event when the event is
-   * classified as genuine human input.
+   * classified as genuine human input or a harness-injected system message.
    */
   processEvent(event: BaseCliEvent): void {
     this.deps.parser.trackBackgroundWorkState?.(event);
@@ -109,7 +113,12 @@ export class CliLogEventPump {
     const classification = this.deps.parser.classifyUserEvent(event, {
       dispatchedPromptText: this.deps.dispatchedPromptText,
     });
-    if (classification !== "human-steer") {
+    let attribution: UserSteerAttribution;
+    if (classification === "human-steer") {
+      attribution = USER_STEER_ATTRIBUTIONS.USER;
+    } else if (classification === "system-message") {
+      attribution = USER_STEER_ATTRIBUTIONS.SYSTEM;
+    } else {
       return undefined;
     }
 
@@ -125,7 +134,7 @@ export class CliLogEventPump {
     return {
       type: CLI_EVENT_TYPES.USER_STEER,
       timestamp,
-      data: { text } as UserSteerData,
+      data: { text, attribution } satisfies UserSteerData,
     };
   }
 }

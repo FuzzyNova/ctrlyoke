@@ -4,16 +4,19 @@ import { CliLogEventPump } from "../../core/harness/shared/CliLogEventPump";
 import type {
   BaseCliEvent,
   ILogParser,
+  UserEventClassification,
 } from "../../core/harness/shared/interfaces/ILogParser";
 import type {
   BashCommandData,
   CliEvent,
   McpToolCallData,
+  UserSteerData,
 } from "../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
   MCP_CALL_VIA,
   OPERATION_STATUS,
+  USER_STEER_ATTRIBUTIONS,
 } from "../../types/DashboardConstants";
 import { normalizeCliEvents } from "../../utils/CliEventNormalizer";
 
@@ -95,5 +98,41 @@ suite("CliLogEventPump", () => {
     const normalized = normalizeCliEvents(streamedEvents);
     assert.strictEqual(normalized.length, 1);
     assert.strictEqual(normalized[0].type, CLI_EVENT_TYPES.MCP_TOOL_CALL);
+  });
+
+  test("attributes steers to the user or the system by classification", () => {
+    const streamedEvents: CliEvent[] = [];
+    const parser = {
+      extractStructuredEventsFromEvent: () => [],
+      classifyUserEvent: (event: BaseCliEvent) =>
+        event.classification as UserEventClassification,
+      extractUserSteerText: (event: BaseCliEvent) => event.text as string,
+    } as unknown as ILogParser;
+    const pump = new CliLogEventPump({
+      parser,
+      model: "test-model",
+      onStreamingEvents: (events) => streamedEvents.push(...events),
+    });
+
+    for (const classification of [
+      "human-steer",
+      "system-message",
+      "resume-signal",
+    ]) {
+      pump.processEvent({
+        type: "user",
+        timestamp: 1,
+        classification,
+        text: classification,
+      });
+    }
+
+    assert.deepStrictEqual(
+      streamedEvents.map((event) => event.data as UserSteerData),
+      [
+        { text: "human-steer", attribution: USER_STEER_ATTRIBUTIONS.USER },
+        { text: "system-message", attribution: USER_STEER_ATTRIBUTIONS.SYSTEM },
+      ]
+    );
   });
 });
