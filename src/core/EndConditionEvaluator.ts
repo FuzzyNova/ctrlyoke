@@ -1,7 +1,7 @@
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
-import { spawn } from "child_process";
+import { execFile, spawn } from "child_process";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { type ScriptProperties } from "../types/CtrlYokeTypes";
@@ -56,8 +56,41 @@ import {
 } from "../types/CommandDisplayFormatter";
 import { buildCmdExeVerbatimArgs } from "./harness/shared/WindowsCmdEscaping";
 
-const pythonExecutables = new Map<string, string>();
-const powerShellExecutables = new Map<string, string>();
+export type InterpreterProbe = (
+  executable: string,
+  args: string[],
+  timeoutMs: number
+) => Promise<void>;
+
+const interpreterExecutables = new Map<string, Promise<string>>();
+let interpreterProbe: InterpreterProbe = (executable, args, timeoutMs) =>
+  new Promise((resolve, reject) => {
+    execFile(
+      executable,
+      args,
+      { timeout: timeoutMs, windowsHide: true },
+      (error) => (error ? reject(error) : resolve())
+    );
+  });
+
+/** Replace interpreter probing and clear cached results in unit tests. */
+export function setEndConditionInterpreterProbeForTests(
+  probe: InterpreterProbe
+): () => void {
+  const previousProbe = interpreterProbe;
+  interpreterProbe = probe;
+  resetEndConditionInterpreterCacheForTests();
+  return () => {
+    interpreterProbe = previousProbe;
+    resetEndConditionInterpreterCacheForTests();
+  };
+}
+
+/** Clear interpreter resolutions between unit tests. */
+export function resetEndConditionInterpreterCacheForTests(): void {
+  interpreterExecutables.clear();
+}
+
 const SHEBANG_SHELL_NAMES = new Set<string>([
   ...Object.values(SHELL_TYPES),
   SHELL_KINDS.PWSH,
@@ -243,7 +276,7 @@ export class EndConditionEvaluator {
       ) {
         // A plain file command can use direct argv dispatch. If its arguments
         // include shell syntax, the command below must retain shell semantics.
-        const fileCommand = this.getScriptCommand(
+        const fileCommand = await this.getScriptCommand(
           resolvedScriptPath,
           additionalArgs
         );
@@ -286,7 +319,7 @@ export class EndConditionEvaluator {
           condition.shell
         );
         const shellScript = resolvedScriptPath
-          ? this.buildResolvedScriptShellCommand(
+          ? await this.buildResolvedScriptShellCommand(
               condition.script,
               resolvedScriptPath,
               initialShellInvocation.shellKind
@@ -653,14 +686,14 @@ export class EndConditionEvaluator {
   /**
    * Get command and arguments for script execution
    */
-  protected getScriptCommand(
+  protected async getScriptCommand(
     scriptPath: string,
     additionalArgs: string[] = []
-  ): {
+  ): Promise<{
     executable: string;
     args: string[];
     windowsVerbatimArguments?: boolean;
-  } | null {
+  } | null> {
     const ext = path.extname(scriptPath).toLowerCase();
 
     const interpreter = this.isScriptFileExtension(ext)
@@ -686,11 +719,13 @@ export class EndConditionEvaluator {
 
     const commandByInterpreter: {
       [kind in ScriptFileInterpreterKind]: {
-        (): { executable: string; args: string[] };
+        ():
+          | Promise<{ executable: string; args: string[] }>
+          | { executable: string; args: string[] };
       };
     } = {
-      [SCRIPT_FILE_INTERPRETER_KINDS.PYTHON]: () => ({
-        executable: this.resolvePythonExecutable(),
+      [SCRIPT_FILE_INTERPRETER_KINDS.PYTHON]: async () => ({
+        executable: await this.resolvePythonExecutable(),
         args: [scriptPath],
       }),
       [SCRIPT_FILE_INTERPRETER_KINDS.NODE]: () => ({
@@ -708,13 +743,13 @@ export class EndConditionEvaluator {
         args: buildCmdExeVerbatimArgs(scriptPath, additionalArgs),
         windowsVerbatimArguments: true,
       }),
-      [SCRIPT_FILE_INTERPRETER_KINDS.POWERSHELL]: () => ({
-        executable: this.resolvePowerShellExecutable(),
+      [SCRIPT_FILE_INTERPRETER_KINDS.POWERSHELL]: async () => ({
+        executable: await this.resolvePowerShellExecutable(),
         args: ["-ExecutionPolicy", "Bypass", "-File", scriptPath],
       }),
     };
 
-    return commandByInterpreter[interpreter]();
+    return await commandByInterpreter[interpreter]();
   }
 
   /**
@@ -722,12 +757,12 @@ export class EndConditionEvaluator {
    * command while leaving the original shell expression after that token
    * untouched (for example, `&& echo SECOND`).
    */
-  private buildResolvedScriptShellCommand(
+  private async buildResolvedScriptShellCommand(
     originalScript: string,
     resolvedScriptPath: string,
     shellKind: ReturnType<typeof resolveShellInvocation>["shellKind"]
-  ): string {
-    const fileCommand = this.getScriptCommand(resolvedScriptPath);
+  ): Promise<string> {
+    const fileCommand = await this.getScriptCommand(resolvedScriptPath);
     if (!fileCommand) {
       throw new Error(
         `Unsupported script type: ${path.extname(resolvedScriptPath)}`
@@ -793,9 +828,9 @@ export class EndConditionEvaluator {
    * interpreter is reduced to the same executable vocabulary used by the
    * extension dispatcher so POSIX paths are never passed to Windows spawn.
    */
-  private getShebangCommand(
+  private async getShebangCommand(
     scriptPath: string
-  ): { executable: string; args: string[] } | null {
+  ): Promise<{ executable: string; args: string[] } | null> {
     const interpreter = this.readShebangInterpreter(scriptPath);
     if (!interpreter) {
       return null;
@@ -807,7 +842,7 @@ export class EndConditionEvaluator {
       interpreterName === SCRIPT_SHEBANG_INTERPRETER_NAMES.PYTHON3
     ) {
       return {
-        executable: this.resolvePythonExecutable(),
+        executable: await this.resolvePythonExecutable(),
         args: [scriptPath],
       };
     }
@@ -829,7 +864,7 @@ export class EndConditionEvaluator {
       shellKind === SHELL_KINDS.POWERSHELL
     ) {
       return {
-        executable: this.resolvePowerShellExecutable(),
+        executable: await this.resolvePowerShellExecutable(),
         args: [scriptPath],
       };
     }
@@ -998,62 +1033,88 @@ export class EndConditionEvaluator {
   /**
    * Resolve Python executable — prefer `python3` (Linux/macOS standard), fall back to `python`.
    */
-  private resolvePythonExecutable(): string {
+  private async resolvePythonExecutable(): Promise<string> {
     const platform = process.platform;
-    const cachedExecutable = pythonExecutables.get(platform);
-    if (cachedExecutable !== undefined) {
-      return cachedExecutable;
-    }
-
-    let executable: string;
     if (platform === "win32") {
-      executable = "python";
-    } else {
-      try {
-        const { execSync } = require("child_process");
-        execSync("python3 --version", { stdio: "ignore", timeout: 5000 });
-        executable = "python3";
-      } catch {
-        executable = "python";
-      }
+      return this.resolveAndCacheInterpreter(
+        `python:${platform}`,
+        "python",
+        [],
+        "python"
+      );
     }
-
-    pythonExecutables.set(platform, executable);
-    Log.debug(
-      `[EndConditionEvaluator] Python executable resolved for ${platform}: ${executable}`
+    return this.resolveAndCacheInterpreter(
+      `python:${platform}`,
+      "python3",
+      ["--version"],
+      "python"
     );
-    return executable;
   }
 
   /**
    * Resolve PowerShell executable — prefer `pwsh` (PowerShell 7+), fall back to
    * `powershell.exe` on Windows PowerShell 5.1.
    */
-  protected resolvePowerShellExecutable(): string {
+  protected async resolvePowerShellExecutable(): Promise<string> {
     const platform = process.platform;
-    const cachedExecutable = powerShellExecutables.get(platform);
-    if (cachedExecutable !== undefined) {
-      return cachedExecutable;
-    }
-
-    let executable: string;
     if (platform !== "win32") {
-      executable = "pwsh";
+      return this.resolveAndCacheInterpreter(
+        `powershell:${platform}`,
+        "pwsh",
+        [],
+        "pwsh"
+      );
+    }
+    return this.resolveAndCacheInterpreter(
+      `powershell:${platform}`,
+      "pwsh",
+      ["-Version"],
+      "powershell.exe"
+    );
+  }
+
+  private resolveAndCacheInterpreter(
+    cacheKey: string,
+    preferred: string,
+    args: string[],
+    fallback: string
+  ): Promise<string> {
+    const cached = interpreterExecutables.get(cacheKey);
+    if (cached) return cached;
+
+    let probe: Promise<string>;
+    if (args.length === 0) {
+      probe = Promise.resolve(preferred);
     } else {
-      try {
-        const { execSync } = require("child_process");
-        execSync("pwsh -Version", { stdio: "ignore", timeout: 5000 });
-        executable = "pwsh";
-      } catch {
-        executable = "powershell.exe";
-      }
+      probe = Promise.resolve()
+        .then(() => interpreterProbe(preferred, args, 5000))
+        .then(
+          () => preferred,
+          (error: unknown) => {
+            const errorCode =
+              error && typeof error === "object" && "code" in error
+                ? (error as NodeJS.ErrnoException).code
+                : undefined;
+            const isNotFound = errorCode === "ENOENT";
+            const isTimeout = errorCode === "ETIMEDOUT";
+            const reason = isTimeout
+              ? "probe timed out"
+              : isNotFound
+                ? "was not found"
+                : "probe failed";
+            Log.warn(
+              `[EndConditionEvaluator] ${preferred} ${reason}; using ${fallback} for this script`
+            );
+            if (!isNotFound && interpreterExecutables.get(cacheKey) === probe) {
+              interpreterExecutables.delete(cacheKey);
+            }
+            return fallback;
+          }
+        );
     }
 
-    powerShellExecutables.set(platform, executable);
-    Log.debug(
-      `[EndConditionEvaluator] PowerShell executable resolved for ${platform}: ${executable}`
-    );
-    return executable;
+    interpreterExecutables.set(cacheKey, probe);
+    return probe;
   }
 
   /**
