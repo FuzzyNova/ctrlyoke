@@ -51,6 +51,7 @@ import {
   CLAUDE_SYSTEM_SUBTYPES,
   CLAUDE_SUBAGENT_TOOL_NAMES,
   CLAUDE_TASK_STATUSES,
+  CLAUDE_ASYNC_LAUNCH_RESULT_MARKERS,
   isClaudeSubagentToolName,
 } from "./ClaudeProtocolConstants";
 
@@ -547,6 +548,20 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
               toolUseId ? pendingToolNames.get(toolUseId) : undefined,
           }
         );
+        for (const block of event.message.content as Array<
+          Record<string, any>
+        >) {
+          if (block.type !== CLAUDE_CONTENT_BLOCK_TYPES.TOOL_RESULT) continue;
+          outputEvents.push(
+            ...this.buildBackgroundSpawnUpdate(
+              pendingToolNames.get(block.tool_use_id),
+              block.tool_use_id,
+              ClaudeToolBuilder.extractToolResultText(block.content),
+              block.is_error === true,
+              timestamp
+            )
+          );
+        }
 
         // Process structured tool_use_result metadata for rich diff data
         // This contains accurate line numbers and full file context for Edit
@@ -1015,8 +1030,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       const resultText = ClaudeToolBuilder.extractToolResultText(block.content);
       const launchConfirmed =
         candidateType === CLAUDE_TOOL_NAMES.AGENT
-          ? resultText.includes("Async agent launched successfully")
-          : resultText.includes("Monitor started");
+          ? resultText.includes(CLAUDE_ASYNC_LAUNCH_RESULT_MARKERS.AGENT)
+          : resultText.includes(CLAUDE_ASYNC_LAUNCH_RESULT_MARKERS.MONITOR);
       if (block.is_error !== true && launchConfirmed) {
         // A Monitor's result names its task as `toolUseResult.taskId` — not
         // `backgroundTaskId` or `agentId` — so record it here, or a TaskStop
@@ -1550,6 +1565,15 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
                 },
               } as ToolResultData,
             });
+            events.push(
+              ...this.buildBackgroundSpawnUpdate(
+                toolName,
+                block.tool_use_id,
+                outputText,
+                block.is_error === true,
+                timestamp
+              )
+            );
           }
           if (block.tool_use_id) {
             this.pendingStreamingToolUses.delete(block.tool_use_id);
@@ -1758,7 +1782,48 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           : undefined
         : undefined;
 
-    const update: CliEvent = {
+    return [
+      this.buildSpawnUpdateEvent(
+        toolUseId,
+        { ...(statusLine ? { statusLine } : {}), state },
+        timestamp
+      ),
+    ];
+  }
+
+  /**
+   * Mark an Agent call whose result confirms a background launch, so its card
+   * does not present that launch acknowledgement as the agent's report.
+   */
+  private buildBackgroundSpawnUpdate(
+    toolName: string | undefined,
+    toolUseId: string | undefined,
+    resultText: string,
+    isError: boolean,
+    timestamp: number
+  ): CliEvent[] {
+    if (
+      !toolUseId ||
+      isError ||
+      !isClaudeSubagentToolName(toolName) ||
+      !resultText.includes(CLAUDE_ASYNC_LAUNCH_RESULT_MARKERS.AGENT)
+    )
+      return [];
+    return [
+      this.buildSpawnUpdateEvent(
+        toolUseId,
+        { background: true, state: SUBAGENT_SPAWN_STATES.RUNNING },
+        timestamp
+      ),
+    ];
+  }
+
+  private buildSpawnUpdateEvent(
+    toolUseId: string,
+    spawn: SubagentSpawn,
+    timestamp: number
+  ): CliEvent {
+    return {
       type: CLI_EVENT_TYPES.TOOL_CALL,
       timestamp,
       ...(this.subagentSpawnAttributions.has(toolUseId)
@@ -1768,10 +1833,9 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         name: CLAUDE_SUBAGENT_TOOL_NAMES.AGENT,
         parameters: {},
         id: toolUseId,
-        subagentSpawn: { ...(statusLine ? { statusLine } : {}), state },
+        subagentSpawn: spawn,
       } as ToolCall,
     };
-    return [update];
   }
 
   /**

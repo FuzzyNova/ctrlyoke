@@ -34,6 +34,7 @@ import {
   McpToolCallOutput,
   ParallelGroupHeaderRowView,
   SubagentSpawnOutput,
+  SUBAGENT_LABEL_PREFIX,
   StatusMessage,
   WebSearchOutput,
 } from ".";
@@ -2107,6 +2108,7 @@ function OutputRowComponent({
       >
         {row.subagent.showLabel && (
           <div className="text-xs text-description-fg" aria-hidden="true">
+            {SUBAGENT_LABEL_PREFIX}
             {row.subagent.label}
           </div>
         )}

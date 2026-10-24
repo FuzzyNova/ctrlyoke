@@ -212,6 +212,11 @@ export interface SubagentSpawn {
   prompt?: string;
   children?: { agentId: string; label?: string }[];
   statusLine?: string;
+  /**
+   * The agent was launched in the background, so the spawn call's own tool
+   * result is only a launch acknowledgement, not the agent's report.
+   */
+  background?: boolean;
   state: import("./DashboardConstants").SubagentSpawnState;
 }
 

@@ -13,6 +13,9 @@ interface SubagentSpawnOutputProps {
   promptFindMatches?: RowFindDecoration["matches"];
 }
 
+/** Marks a spawn card and every row of its child activity as a subagent's. */
+export const SUBAGENT_LABEL_PREFIX = "Subagent: ";
+
 /** Renders the spawn lifecycle independently of the tool result lifecycle. */
 export const SubagentSpawnOutput = memo<SubagentSpawnOutputProps>(
   ({
@@ -23,7 +26,7 @@ export const SubagentSpawnOutput = memo<SubagentSpawnOutputProps>(
     statusFindMatches,
     promptFindMatches,
   }) => {
-    const [promptExpanded, setPromptExpanded] = useState(false);
+    const [promptExpanded, setPromptExpanded] = useState(true);
     const promptId = useId();
     const label =
       spawn.children?.map((child) => child.label || child.agentId).join(", ") ||
@@ -35,12 +38,16 @@ export const SubagentSpawnOutput = memo<SubagentSpawnOutputProps>(
         : spawn.state === SUBAGENT_SPAWN_STATES.FAILED
           ? "Failed"
           : "Running";
-    const resultText = result?.error || result?.output;
+    // A background launch's result only acknowledges the launch; the agent's
+    // report arrives later as its own child activity.
+    const resultText =
+      result?.error || (spawn.background ? undefined : result?.output);
 
     return (
       <section className="rounded-md border border-panel-border bg-panel px-3 py-2 text-sm">
         <header className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
           <span className="min-w-0 flex-1 font-medium">
+            {SUBAGENT_LABEL_PREFIX}
             {highlightText(
               spawn.description || label,
               descriptionFindMatches ?? []

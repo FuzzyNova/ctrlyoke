@@ -671,6 +671,8 @@ function mergeCompletedData(
         timestamp: initiated.timestamp ?? completed.timestamp,
         data: {
           ...completedData,
+          // Spawn state updates carry no tool name; keep the call's own.
+          name: initiatedData.name || completedData.name,
           parameters: initiatedData.parameters ?? completedData.parameters,
           id: initiatedData.id ?? completedData.id,
           result: completedData.result ?? initiatedData.result,

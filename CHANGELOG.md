@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **MCP `append_step` and `edit_step` can set `executionMode`.** Their results warn when a step resolves to Codex in interactive mode, since Codex cannot wait on background work in either mode.
 
-- **Subagent calls have dedicated output cards** showing agent details, live progress, an optional prompt, and the final result.
+- **Subagent calls have dedicated output cards** labelled **Subagent:**, showing agent details, live progress, the prompt the agent was given, and the final result. Rows from a subagent's own activity carry the same **Subagent:** label.
 
 - **The `workflow_status` MCP tool reports execution mode.** Its metadata gives the workflow's
   `executionMode`, and each prompt step lists the `harness` and `executionMode` it ran with (or will

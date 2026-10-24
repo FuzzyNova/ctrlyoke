@@ -750,6 +750,51 @@ suite("ClaudeLogParser", () => {
     assert.strictEqual((events[0].data as any).subagentSpawn.state, "running");
   });
 
+  test("marks a Claude background Agent launch so its card hides the launch result", () => {
+    const launchResult = {
+      type: "user",
+      message: {
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: "bg-agent",
+            content: "Async agent launched successfully.\nagentId: abc",
+          },
+        ],
+      },
+    } as BaseCliEvent;
+    const assistant = {
+      type: "assistant",
+      parent_tool_use_id: null,
+      message: {
+        content: [
+          {
+            type: "tool_use",
+            id: "bg-agent",
+            name: "Agent",
+            input: { description: "Weather", prompt: "Find it" },
+          },
+        ],
+      },
+    } as BaseCliEvent;
+
+    const streamed = normalizeCliEvents([
+      ...parser.extractStructuredEventsFromEvent(assistant),
+      ...parser.extractStructuredEventsFromEvent(launchResult),
+    ]);
+    const final = normalizeCliEvents(
+      parser.extractResponse([assistant, launchResult]).events
+    );
+
+    for (const events of [streamed, final]) {
+      assert.strictEqual(events.length, 1);
+      const card = events[0].data as ToolCall;
+      assert.strictEqual(card.name, "Agent");
+      assert.strictEqual(card.subagentSpawn?.background, true);
+      assert.strictEqual(card.subagentSpawn?.prompt, "Find it");
+    }
+  });
+
   test("keeps Claude task records for a long-running Bash call off the Agent card", () => {
     const bashTask = (subtype: string, extra: Record<string, unknown>) =>
       ({

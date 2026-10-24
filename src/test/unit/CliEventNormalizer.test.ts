@@ -95,6 +95,35 @@ suite("CliEventNormalizer", () => {
     assert.strictEqual(bash.output, "TEST SUMMARY");
   });
 
+  test("keeps the spawn call's name when a nameless state update merges in", () => {
+    const normalized = normalizeCliEvents([
+      {
+        type: CLI_EVENT_TYPES.TOOL_CALL,
+        data: {
+          name: "Agent",
+          id: "spawn-1",
+          parameters: { prompt: "Find the weather" },
+          subagentSpawn: { description: "Weather", state: "running" },
+        } as ToolCall,
+      },
+      {
+        type: CLI_EVENT_TYPES.TOOL_CALL,
+        data: {
+          name: "",
+          id: "spawn-1",
+          parameters: {},
+          subagentSpawn: { state: "completed" },
+        } as ToolCall,
+      },
+    ]);
+
+    assert.strictEqual(normalized.length, 1);
+    const card = normalized[0].data as ToolCall;
+    assert.strictEqual(card.name, "Agent");
+    assert.strictEqual(card.subagentSpawn?.state, "completed");
+    assert.strictEqual(card.subagentSpawn?.description, "Weather");
+  });
+
   test("accepts persisted legacy direct callerType fields", () => {
     const legacy = JSON.parse(
       `{"type":"${CLI_EVENT_TYPES.TEXT}","data":{"text":"legacy"},"callerType":"direct"}`

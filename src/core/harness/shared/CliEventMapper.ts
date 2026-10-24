@@ -35,7 +35,7 @@ export interface McpToolHint {
  * - File write: `write`, `write_file`, `create`, `create_file`
  * - File edit: `edit`, `edit_file`, `modify_file`, `replace_string_in_file`, `multiedit`, `apply_patch`
  * - File delete: `delete`, `delete_file`, `remove_file` (`rm` is a shell command → TOOL_CALL)
- * - Web search: `web_search`, `search`, `webfetch`
+ * - Web search: `web_search`, `search` (`webfetch`/`web_fetch` take a URL → TOOL_CALL)
  * - MCP tools: `server(tool)` (Copilot), `server.tool` / `mcp_*` (Claude), `server__tool` (Codex)
  *
  * @example
@@ -101,10 +101,15 @@ export class CliEventMapper {
   private static readonly WEB_SEARCH_TOOLS = new Set([
     "web_search",
     "search",
-    "webfetch",
     "google_web_search",
-    "web_fetch",
   ]);
+
+  /**
+   * Built-in page fetch tools. They take a URL rather than a query, so they
+   * stay generic TOOL_CALLs (showing their parameters and paired by call id)
+   * and are listed only so a dotted variant is never mistaken for MCP.
+   */
+  private static readonly WEB_FETCH_TOOLS = new Set(["webfetch", "web_fetch"]);
 
   /**
    * Classify a tool name into a semantic event type
@@ -272,7 +277,8 @@ export class CliEventMapper {
       this.FILE_WRITE_TOOLS.has(lowerName) ||
       this.FILE_EDIT_TOOLS.has(lowerName) ||
       this.FILE_DELETE_TOOLS.has(lowerName) ||
-      this.WEB_SEARCH_TOOLS.has(lowerName)
+      this.WEB_SEARCH_TOOLS.has(lowerName) ||
+      this.WEB_FETCH_TOOLS.has(lowerName)
     );
   }
 }

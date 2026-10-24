@@ -139,10 +139,12 @@ step's output, are shown as a summary of what happened. Click **Raw** on one to
 see the underlying call and its result. See [Dynamic workflows](/workflows/dynamic-workflows)
 and [MCP tools](/reference/mcp-tools).
 
-Foreground subagent calls have a dedicated card showing the agent, live
-progress, an optional collapsible prompt, and the final result. Child activity
-is indented and labelled under its spawn card, so parallel agents remain
-distinguishable.
+Each subagent call has a dedicated **Subagent:** card showing the agent, its
+live progress, the prompt it was given (click **Hide prompt** to collapse it),
+and the final result. A background agent's report appears with its own activity
+instead of on the card. Child activity is indented under its spawn card, and
+each run of it is labelled **Subagent:** with the agent's description, so
+parallel agents remain distinguishable.
 
 ## Diffs
 

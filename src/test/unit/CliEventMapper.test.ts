@@ -108,9 +108,19 @@ suite("CliEventMapper", () => {
       assert.strictEqual(result.type, CLI_EVENT_TYPES.WEB_SEARCH);
     });
 
-    test("webfetch → WEB_SEARCH", () => {
-      const result = CliEventMapper.classifyTool("webfetch");
-      assert.strictEqual(result.type, CLI_EVENT_TYPES.WEB_SEARCH);
+    test("page fetch tools → TOOL_CALL, not WEB_SEARCH", () => {
+      for (const name of [
+        "WebFetch",
+        "webfetch",
+        "web_fetch",
+        "web_fetch.v2",
+      ]) {
+        assert.strictEqual(
+          CliEventMapper.classifyTool(name).type,
+          CLI_EVENT_TYPES.TOOL_CALL,
+          name
+        );
+      }
     });
 
     // ── MCP_TOOL_CALL — Copilot paren format ─────────────────────────────────

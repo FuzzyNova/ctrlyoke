@@ -52,6 +52,12 @@ export const CLAUDE_SUBAGENT_TOOL_NAMES = {
   LEGACY_TASK: "Task",
 } as const;
 
+/** Tool-result text that confirms an asynchronous (background) launch. */
+export const CLAUDE_ASYNC_LAUNCH_RESULT_MARKERS = {
+  AGENT: "Async agent launched successfully",
+  MONITOR: "Monitor started",
+} as const;
+
 /** Whether a Claude tool name spawns a subagent (`Agent`, or the older `Task`). */
 export function isClaudeSubagentToolName(name: unknown): boolean {
   return (
