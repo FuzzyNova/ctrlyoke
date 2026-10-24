@@ -121,6 +121,7 @@ export function GlobalSettingsDrawer() {
   );
   const isFullWidthSettingsTab =
     effectiveActiveTab === GLOBAL_SETTINGS_TABS.MCP_MANAGER ||
+    effectiveActiveTab === GLOBAL_SETTINGS_TABS.AGENT_SKILLS_MANAGER ||
     effectiveActiveTab === GLOBAL_SETTINGS_TABS.LANGUAGE_SERVERS;
 
   useEffect(() => {

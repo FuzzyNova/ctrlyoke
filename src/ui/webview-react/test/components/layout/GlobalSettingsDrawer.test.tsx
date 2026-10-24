@@ -64,13 +64,16 @@ describe("GlobalSettingsDrawer", () => {
     ).not.toBeNull();
   });
 
-  it("lets the MCP Manager use the full settings content width", () => {
-    useUiStore.setState({ globalSettingsActiveTab: "mcpmanager" });
+  it.each([
+    ["mcpmanager", "MCP Manager"],
+    ["agentskillsmanager", "Agent & Skills Manager"],
+  ])("lets the %s tab use the full settings content width", (tab, heading) => {
+    useUiStore.setState({ globalSettingsActiveTab: tab });
 
     render(<GlobalSettingsDrawer />);
 
     const content = screen
-      .getByText("MCP Manager", { selector: "h3" })
+      .getByText(heading, { selector: "h3" })
       .closest("div.p-4");
 
     expect(content).toHaveClass("max-w-none");
