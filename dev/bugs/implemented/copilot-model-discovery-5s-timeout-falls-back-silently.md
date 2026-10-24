@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-24 by timeout-budget bug sweep workflow (utils-git-config)
 - **Area:** `src/utils/ModelRegistry.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
