@@ -28,6 +28,10 @@ export interface WorkspacePathQueryOptions {
   readonly limit?: number;
   readonly signal?: AbortSignal;
   readonly onProgress?: (progress: WorkspacePathProgress) => void;
+  /** Preserve incomplete scans so a longer query can resume from their end. */
+  readonly resumeOnAbort?: boolean;
+  /** Deterministic scan budget for query tests. */
+  readonly maxScanEntries?: number;
 }
 
 interface ScoredEntry {
@@ -51,6 +55,11 @@ export class WorkspacePathQuery {
   private previousQuery = "";
   private previousVersion = -1;
   private previousSurvivors: number[] = [];
+  private partialQuery = "";
+  private partialVersion = -1;
+  private partialPosition = 0;
+  private partialSurvivors: number[] = [];
+  private narrowingGeneration = 0;
 
   constructor(private readonly store: WorkspacePathStore) {}
 
@@ -188,16 +197,38 @@ export class WorkspacePathQuery {
     const child =
       hasPath && !endsInSlash ? filter.slice(filter.lastIndexOf("/") + 1) : "";
     if (!hasPath && filter) {
+      const partial = this.partialNarrowing(filter);
+      const narrowed = partial ? undefined : this.narrowedPositions(filter);
+      const canResumeFromStoreStart = narrowed === undefined || partial;
+      const generation = ++this.narrowingGeneration;
+      const version = store.version;
       const scanned = await this.scan(
-        this.narrowedPositions(filter),
+        narrowed,
         options,
         options.limit ?? FILE_LIMIT,
-        (position) => this.scoreAt(position, filter, fileKeys)
+        (position) => this.scoreAt(position, filter, fileKeys),
+        partial,
+        options.resumeOnAbort && canResumeFromStoreStart
+          ? (position, survivors) =>
+              generation === this.narrowingGeneration &&
+              version === store.version &&
+              this.rememberPartialNarrowing(filter, position, survivors)
+          : undefined
       );
-      // An aborted scan saw only part of the store, so its survivors are not
-      // a superset of the next query's matches.
-      if (!options.signal?.aborted) {
+      if (
+        generation !== this.narrowingGeneration ||
+        version !== store.version
+      ) {
+        return scanned.entries.map(asResult);
+      }
+      if (scanned.complete) {
         this.rememberNarrowing(filter, scanned.survivors);
+      } else if (options.resumeOnAbort && canResumeFromStoreStart) {
+        this.rememberPartialNarrowing(
+          filter,
+          scanned.scannedThrough,
+          scanned.survivors
+        );
       }
       return scanned.entries.map(asResult);
     }
@@ -238,6 +269,25 @@ export class WorkspacePathQuery {
     return undefined;
   }
 
+  /** Partial survivors cover [0, position); later queries can filter them. */
+  private partialNarrowing(
+    query: string
+  ): { position: number; survivors: number[] } | undefined {
+    if (
+      this.partialVersion === this.store.version &&
+      this.partialQuery.length > 0 &&
+      query.startsWith(this.partialQuery)
+    ) {
+      return {
+        position: this.partialPosition,
+        survivors: this.partialSurvivors.filter(
+          (position) => this.scoreAt(position, query, fileKeys) !== undefined
+        ),
+      };
+    }
+    return undefined;
+  }
+
   private scoreAt(
     position: number,
     query: string,
@@ -255,6 +305,21 @@ export class WorkspacePathQuery {
     this.previousQuery = query;
     this.previousVersion = this.store.version;
     this.previousSurvivors = positions;
+    this.partialQuery = "";
+    this.partialVersion = -1;
+    this.partialPosition = 0;
+    this.partialSurvivors = [];
+  }
+
+  private rememberPartialNarrowing(
+    query: string,
+    position: number,
+    survivors: number[]
+  ): void {
+    this.partialQuery = query;
+    this.partialVersion = this.store.version;
+    this.partialPosition = position;
+    this.partialSurvivors = [...survivors];
   }
 
   private async rankCandidates(
@@ -277,13 +342,32 @@ export class WorkspacePathQuery {
     candidates: Positions,
     options: WorkspacePathQueryOptions,
     limit: number,
-    score: (position: number) => ScoredEntry | undefined
-  ): Promise<{ entries: WorkspacePathEntry[]; survivors: number[] }> {
-    const total = candidates?.length ?? this.store.size;
+    score: (position: number) => ScoredEntry | undefined,
+    resume?: { position: number; survivors: number[] },
+    onCheckpoint?: (position: number, survivors: number[]) => void
+  ): Promise<{
+    entries: WorkspacePathEntry[];
+    survivors: number[];
+    scannedThrough: number;
+    complete: boolean;
+  }> {
+    const total = resume
+      ? this.store.size
+      : (candidates?.length ?? this.store.size);
     const heap = new TopKHeap(limit === 0 ? total : Math.max(0, limit));
     const survivors: number[] = [];
+    if (resume) {
+      for (const position of resume.survivors) {
+        const match = score(position);
+        if (match) {
+          heap.push(match);
+          survivors.push(position);
+        }
+      }
+    }
     let scanned = 0;
     let lastProgress = Date.now();
+    let scannedThrough = resume?.position ?? 0;
     const publish = (): void => {
       if (
         !options.onProgress ||
@@ -297,26 +381,58 @@ export class WorkspacePathQuery {
       });
       lastProgress = Date.now();
     };
-    for (let start = 0; start < total; start += SCAN_CHUNK_SIZE) {
+    const scanStart = resume?.position ?? 0;
+    const scanTotal = resume ? total - scanStart : total;
+    for (let start = 0; start < scanTotal; start += SCAN_CHUNK_SIZE) {
       if (options.signal?.aborted) break;
-      const end = Math.min(total, start + SCAN_CHUNK_SIZE);
+      const end = Math.min(scanTotal, start + SCAN_CHUNK_SIZE);
       for (let i = start; i < end; i++) {
+        if (
+          options.maxScanEntries !== undefined &&
+          scanned >= options.maxScanEntries
+        )
+          break;
         if (options.signal?.aborted) break;
         scanned++;
-        const position = candidates ? candidates[i] : i;
+        const position = resume
+          ? scanStart + i
+          : candidates
+            ? candidates[i]
+            : i;
         const match = score(position);
         if (match) {
           heap.push(match);
           survivors.push(position);
         }
+        scannedThrough = position + 1;
       }
+      onCheckpoint?.(scannedThrough, survivors);
       publish();
-      if (end < total && !options.signal?.aborted) {
+      if (
+        end < scanTotal &&
+        !options.signal?.aborted &&
+        (options.maxScanEntries === undefined ||
+          scanned < options.maxScanEntries)
+      ) {
         await new Promise<void>((resolve) => setImmediate(resolve));
       }
+      if (
+        options.maxScanEntries !== undefined &&
+        scanned >= options.maxScanEntries
+      )
+        break;
     }
     publish();
-    return { entries: heap.sorted().map(({ entry }) => entry), survivors };
+    const complete = resume
+      ? scannedThrough >= this.store.size
+      : scanned >= total || total === 0;
+    if (!resume && complete) scannedThrough = this.store.size;
+    return {
+      entries: heap.sorted().map(({ entry }) => entry),
+      survivors,
+      scannedThrough,
+      complete,
+    };
   }
 }
 

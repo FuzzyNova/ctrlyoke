@@ -197,6 +197,51 @@ suite("WorkspacePathQuery", () => {
     );
   });
 
+  test("budgeted extending queries resume through the store and keep full-scan ranking", async () => {
+    const files = [
+      ...Array.from({ length: 699 }, (_, i) => `generated/noise-${i}.ts`),
+      "generated/targetfile.ts",
+    ];
+    const { query } = create(files);
+    const budget = { resumeOnAbort: true, maxScanEntries: 200, limit: 500 };
+    let results = await query.queryFiles("t", budget);
+    assert.ok(!results.some((entry) => entry.relativePath === files[699]));
+    results = await query.queryFiles("ta", budget);
+    assert.ok(!results.some((entry) => entry.relativePath === files[699]));
+    results = await query.queryFiles("tar", budget);
+    assert.ok(!results.some((entry) => entry.relativePath === files[699]));
+    results = await query.queryFiles("targ", budget);
+    assert.ok(results.some((entry) => entry.relativePath === files[699]));
+
+    const complete = await query.queryFiles("targetfile", {
+      resumeOnAbort: true,
+      limit: 500,
+    });
+    assert.deepStrictEqual(
+      complete,
+      await create(files).query.queryFiles("targetfile", { limit: 500 })
+    );
+  });
+
+  test("store mutation invalidates a partial narrowing", async () => {
+    const { store, query } = create(
+      Array.from({ length: 100 }, (_, i) => `generated/noise-${i}.ts`)
+    );
+    await query.queryFiles("t", {
+      resumeOnAbort: true,
+      maxScanEntries: 20,
+    });
+    store.replaceAll([
+      "target.ts",
+      ...Array.from({ length: 99 }, (_, i) => `new/noise-${i}.ts`),
+    ]);
+    const result = await query.queryFiles("target", {
+      resumeOnAbort: true,
+      maxScanEntries: 20,
+    });
+    assert.ok(result.some((entry) => entry.relativePath === "target.ts"));
+  });
+
   test("reports progress on a large scan and aborts at a chunk boundary", async () => {
     const { query } = create(
       Array.from({ length: 100_000 }, (_, i) => `generated/file-${i}.ts`)

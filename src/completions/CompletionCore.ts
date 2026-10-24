@@ -226,6 +226,7 @@ export class CompletionCore {
       .queryFiles(filter, {
         limit,
         signal: controller.signal,
+        resumeOnAbort: options.budgetMs !== undefined,
         onProgress: (progress) => {
           latest = toItems(progress.results);
           options.onPartial?.(latest);
