@@ -249,6 +249,37 @@ suite("Codex usage tracking", () => {
     );
   });
 
+  test("resolves the Codex launcher before spawning app-server", async () => {
+    let resolverCalled = false;
+    let spawnArgs: { command: string; args: readonly string[]; verbatim?: boolean } | undefined;
+    const client = new CodexAppServerClient({
+      resolveCommand: async (command, args) => {
+        resolverCalled = true;
+        assert.strictEqual(command, "codex");
+        assert.deepStrictEqual(args, ["app-server", "--listen", "stdio://"]);
+        return {
+          command: "resolved-codex.cmd",
+          args: ["/c", "resolved-codex.cmd", ...args],
+          displayCommand: "codex",
+          launcherKind: "cmd-file",
+          requiresShellVerbatimArgs: true,
+        };
+      },
+      spawnProcess: (command, args, verbatim) => {
+        spawnArgs = { command, args, verbatim };
+        return new FakeAppServerProcess();
+      },
+    });
+
+    await client.readRateLimits();
+    assert.strictEqual(resolverCalled, true);
+    assert.deepStrictEqual(spawnArgs, {
+      command: "resolved-codex.cmd",
+      args: ["/c", "resolved-codex.cmd", "app-server", "--listen", "stdio://"],
+      verbatim: true,
+    });
+  });
+
   test("aborts and tears down a hung app-server probe", async () => {
     let process: FakeAppServerProcess | undefined;
     const client = new CodexAppServerClient({
@@ -260,6 +291,7 @@ suite("Codex usage tracking", () => {
     });
     const controller = new AbortController();
     const pending = client.readRateLimits(controller.signal);
+    await new Promise<void>((resolve) => setImmediate(resolve));
     controller.abort();
     await assert.rejects(pending, /aborted|timed out/);
     assert.strictEqual(process?.killCount, 1);

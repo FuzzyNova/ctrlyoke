@@ -38,6 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Codex quota refresh works with Windows npm installs.** The app-server probe now resolves the Codex launcher before spawning it.
+- **`ctrlyoke commit` handles large commits.** Git add and commit output no longer hits Node's default 1 MiB buffer limit.
+
 - **Copilot and OpenCode model discovery handles slow and large CLI output.** Discovery waits up to the shared 30-second CLI check limit, retries Copilot after a timeout on a later registry initialization, and no longer accepts truncated OpenCode output as a complete model list.
 
 - **Failed push, pull and commit in the workspace viewer show git's own

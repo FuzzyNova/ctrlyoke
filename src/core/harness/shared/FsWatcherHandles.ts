@@ -1,12 +1,20 @@
 import { EventEmitter } from "events";
 import type * as fs from "fs";
 
-/** fs.FSWatcher-compatible handle backed by a polling interval. */
+/** fs.FSWatcher-compatible handle backed by a polling timer. */
 export class PollingFsWatcher extends EventEmitter implements fs.FSWatcher {
   private closed = false;
+  private readonly closePoll: () => void;
+  private readonly timer?: NodeJS.Timeout;
 
-  constructor(private readonly interval: NodeJS.Timeout) {
+  constructor(timerOrClose: NodeJS.Timeout | (() => void)) {
     super();
+    if (typeof timerOrClose === "function") {
+      this.closePoll = timerOrClose;
+    } else {
+      this.timer = timerOrClose;
+      this.closePoll = () => clearInterval(timerOrClose);
+    }
   }
 
   close(): void {
@@ -14,17 +22,17 @@ export class PollingFsWatcher extends EventEmitter implements fs.FSWatcher {
       return;
     }
     this.closed = true;
-    clearInterval(this.interval);
+    this.closePoll();
     this.emit("close");
   }
 
   ref(): this {
-    this.interval.ref();
+    this.timer?.ref();
     return this;
   }
 
   unref(): this {
-    this.interval.unref();
+    this.timer?.unref();
     return this;
   }
 }

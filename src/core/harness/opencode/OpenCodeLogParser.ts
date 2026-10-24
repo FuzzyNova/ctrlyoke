@@ -262,7 +262,7 @@ export class OpenCodeLogParser extends BaseLogParser {
   }
 
   /**
-   * Override: set up a polling interval that calls `opencode export <sessionId>`
+   * Override: poll `opencode export <sessionId>` without overlapping exports
    * instead of watching a file with fs.watch.
    *
    * @param sessionId The "log path" — actually the session ID for this harness
@@ -275,7 +275,10 @@ export class OpenCodeLogParser extends BaseLogParser {
     callback: (entry: BaseCliEvent) => void,
     startTime: Date
   ): fs.FSWatcher {
-    const interval = setInterval(async () => {
+    let closed = false;
+    let timeout: NodeJS.Timeout | undefined;
+    const poll = async (): Promise<void> => {
+      if (closed) return;
       try {
         const newEvents = await this.fetchNewEvents(sessionId);
         for (const event of newEvents) {
@@ -287,10 +290,19 @@ export class OpenCodeLogParser extends BaseLogParser {
         }
       } catch (error) {
         Log.trace(`[OpenCodeLogParser] Export poll error: ${error}`);
+      } finally {
+        if (!closed) {
+          timeout = setTimeout(() => void poll(), EXPORT_POLL_INTERVAL_MS);
+        }
       }
-    }, EXPORT_POLL_INTERVAL_MS);
+    };
 
-    return new PollingFsWatcher(interval);
+    const watcher = new PollingFsWatcher(() => {
+      closed = true;
+      if (timeout) clearTimeout(timeout);
+    });
+    void poll();
+    return watcher;
   }
 
   /** Running total from the most recent step_finish token event — updated in extractLiveContextWindow. */

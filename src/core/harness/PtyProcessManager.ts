@@ -351,6 +351,8 @@ export class PtySession {
   /** Shell variant for SHELL sessions. Undefined for ai-cli sessions. */
   readonly shellKind?: ShellKind;
   readonly pty: IPty;
+  /** Canonicalized working directory used to create this PTY. */
+  readonly cwd?: string;
   status: TerminalSessionStatus;
   /**
    * Why ctrlyoke is ending this session, recorded before the kill is issued.
@@ -387,7 +389,8 @@ export class PtySession {
     harnessId?: string,
     parallelGroupId?: string,
     shellKind?: ShellKind,
-    reconnectBufferMaxBytes = 50_000
+    reconnectBufferMaxBytes = 50_000,
+    cwd?: string
   ) {
     this.id = id;
     this.workflowId = workflowId;
@@ -399,6 +402,7 @@ export class PtySession {
     this.parallelGroupId = parallelGroupId;
     this.shellKind = shellKind;
     this.pty = ptyInstance;
+    this.cwd = cwd;
     this.status = TERMINAL_SESSION_STATUS.RUNNING;
     this.reconnectBufferMaxBytes = reconnectBufferMaxBytes;
   }
@@ -714,7 +718,8 @@ export class PtyProcessManager {
       options.harnessId,
       options.parallelGroupId,
       options.shellKind,
-      reconnectBufferMaxBytes
+      reconnectBufferMaxBytes,
+      canonicalizeDriveLetter(options.cwd)
     );
     // PtySession's lastReportedCols/Rows default to DEFAULT_COLS×ROWS; correct
     // them to the size we actually spawned at so the first resizeSession log
@@ -921,7 +926,7 @@ export class PtyProcessManager {
       return undefined;
     }
 
-    const cwd = session.pty.process; // best-effort: use same workflowId/cwd
+    const cwd = session.cwd ?? process.cwd();
     const workflowId = session.workflowId;
     session.markEnding(TERMINAL_END_REASONS.SUPERSEDED);
     session.pty.kill();
@@ -929,7 +934,7 @@ export class PtyProcessManager {
 
     return this.spawnShell({
       workflowId,
-      cwd: cwd || process.cwd(),
+      cwd,
       onData: opts.onData,
       onExit: opts.onExit,
     });

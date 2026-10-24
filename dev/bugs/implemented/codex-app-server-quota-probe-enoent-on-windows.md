@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-24 by timeout-budget bug sweep workflow (harness-cli)
 - **Area:** `src/core/harness/codex/CodexAppServerClient.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
