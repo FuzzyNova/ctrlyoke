@@ -38,6 +38,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Failed push, pull and commit in the workspace viewer show git's own
+  error.** When a push is rejected, a pull would overwrite local changes, or a
+  pre-commit or pre-push hook fails, the Source Control tab shows what git and
+  the hook printed instead of `HTTP 500: Internal server error`. Long hook
+  output scrolls in place and opens at its end, where the verdict is. The same
+  applies to staging, unstaging and discarding a file. A commit, push or pull
+  whose hook prints more than 1 MB of output no longer fails because of it.
+
 - **claude-cli notices are labelled System message, not User message.** Notes
   that Claude Code adds to the conversation itself, such as the image-resize
   note after a screenshot is read, appear in the output as **System message**

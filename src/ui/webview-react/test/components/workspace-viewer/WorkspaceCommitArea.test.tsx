@@ -4,17 +4,29 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceCommitArea } from "@components/workspace-viewer/WorkspaceCommitArea";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import {
+  HostedHttpError,
+  workspaceCommit,
   workspaceGenerateCommitMessage,
+  workspacePull,
   workspacePush,
 } from "@utils/hostedApi";
 
-vi.mock("@utils/hostedApi", () => ({
+vi.mock("@utils/hostedApi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@utils/hostedApi")>()),
   workspaceCommit: vi.fn(),
   workspacePull: vi.fn(),
   workspacePush: vi.fn(),
   workspaceStage: vi.fn(),
   workspaceGenerateCommitMessage: vi.fn(),
 }));
+
+/** A failed hosted git route, exactly as `hostedFetch` rejects with it. */
+function gitRouteError(gitMessage: string): HostedHttpError {
+  return new HostedHttpError(
+    500,
+    `HTTP 500: ${JSON.stringify({ error: gitMessage })}`
+  );
+}
 
 describe("WorkspaceCommitArea", () => {
   beforeEach(() => {
@@ -264,6 +276,58 @@ describe("WorkspaceCommitArea", () => {
         screen.getByRole("button", { name: "Commit" })
       ).toBeInTheDocument();
     });
+  });
+
+  describe("git failures", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    function renderCommitArea() {
+      return render(
+        <WorkspaceCommitArea
+          incomingCommitCount={0}
+          onRefresh={vi.fn().mockResolvedValue(undefined)}
+          outgoingCommitCount={0}
+        />
+      );
+    }
+
+    it.each([
+      {
+        action: "push",
+        button: "Push commits",
+        mock: workspacePush,
+        gitMessage:
+          "husky - pre-push hook exited with code 1 (error)\nerror: failed to push some refs to 'origin'",
+      },
+      {
+        action: "pull",
+        button: "Pull commits",
+        mock: workspacePull,
+        gitMessage:
+          "error: Your local changes to the following files would be overwritten by merge:\n\tsrc/app.ts",
+      },
+      {
+        action: "commit",
+        button: "Commit",
+        mock: workspaceCommit,
+        gitMessage: "prettier: src/app.ts is not formatted",
+      },
+    ])(
+      "shows git's own message when a $action fails",
+      async ({ button, mock, gitMessage }) => {
+        const user = userEvent.setup();
+        vi.mocked(mock).mockRejectedValue(gitRouteError(gitMessage));
+        renderCommitArea();
+
+        await user.click(screen.getByRole("button", { name: button }));
+
+        const alert = await screen.findByRole("alert");
+        expect(alert.textContent).toBe(gitMessage);
+        expect(alert.textContent).not.toMatch(/HostedHttpError|HTTP 500/);
+      }
+    );
   });
 
   describe("repo selector", () => {

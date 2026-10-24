@@ -101,6 +101,7 @@ import {
   getGitIgnoredEntries,
   getDiffBetweenRefs,
   GIT_COMMAND_TIMEOUT_MS,
+  describeGitFailure,
   execGit,
   getGitMutationTimeoutMs,
   getGitWholeRepoTimeoutMs,
@@ -1929,9 +1930,10 @@ export class HostedWorkspaceViewerService {
     if (!resolved) throw new Error("Path not allowed");
     const repoRoot = await this.requireRepoRootForPath(resolved);
     const relPath = toGitPath(this.relativeToRepo(resolved, repoRoot));
-    await execFileAsync("git", ["-C", repoRoot, "add", "--", relPath], {
-      timeout: GIT_COMMAND_TIMEOUT_MS,
-    });
+    await this.runGitAction(
+      ["-C", repoRoot, "add", "--", relPath],
+      GIT_COMMAND_TIMEOUT_MS
+    );
   }
 
   async unstageFile(filePath: string): Promise<void> {
@@ -1939,10 +1941,9 @@ export class HostedWorkspaceViewerService {
     if (!resolved) throw new Error("Path not allowed");
     const repoRoot = await this.requireRepoRootForPath(resolved);
     const relPath = toGitPath(this.relativeToRepo(resolved, repoRoot));
-    await execFileAsync(
-      "git",
+    await this.runGitAction(
       ["-C", repoRoot, "restore", "--staged", "--", relPath],
-      { timeout: GIT_COMMAND_TIMEOUT_MS }
+      GIT_COMMAND_TIMEOUT_MS
     );
   }
 
@@ -1969,8 +1970,7 @@ export class HostedWorkspaceViewerService {
       return;
     }
 
-    await execFileAsync(
-      "git",
+    await this.runGitAction(
       [
         "-C",
         repoRoot,
@@ -1979,7 +1979,7 @@ export class HostedWorkspaceViewerService {
         "--",
         toGitPath(this.relativeToRepo(resolved, repoRoot)),
       ],
-      { timeout: GIT_COMMAND_TIMEOUT_MS }
+      GIT_COMMAND_TIMEOUT_MS
     );
   }
 
@@ -1988,9 +1988,10 @@ export class HostedWorkspaceViewerService {
   async commit(message: string, repoId?: string): Promise<void> {
     if (!message.trim()) throw new Error("Commit message is required");
     const repoRoot = await this.resolveRepoRoot(repoId);
-    await execFileAsync("git", ["-C", repoRoot, "commit", "-m", message], {
-      timeout: getGitMutationTimeoutMs(),
-    });
+    await this.runGitAction(
+      ["-C", repoRoot, "commit", "-m", message],
+      getGitMutationTimeoutMs()
+    );
   }
 
   // ── Git push ─────────────────────────────────────────────────────────────
@@ -2001,9 +2002,10 @@ export class HostedWorkspaceViewerService {
       this.currentBranch(repoRoot),
       this.currentRemote(repoRoot),
     ]);
-    await execFileAsync("git", ["-C", repoRoot, "push"], {
-      timeout: getGitMutationTimeoutMs(),
-    });
+    await this.runGitAction(
+      ["-C", repoRoot, "push"],
+      getGitMutationTimeoutMs()
+    );
     return { branch, remote };
   }
 
@@ -2059,13 +2061,30 @@ export class HostedWorkspaceViewerService {
       this.currentBranch(repoRoot),
       this.currentRemote(repoRoot),
     ]);
-    await execFileAsync("git", ["-C", repoRoot, "pull"], {
-      timeout: getGitMutationTimeoutMs(),
-    });
+    await this.runGitAction(
+      ["-C", repoRoot, "pull"],
+      getGitMutationTimeoutMs()
+    );
     return { branch, remote };
   }
 
   // ── Git helpers ──────────────────────────────────────────────────────────
+
+  /**
+   * Run a git command the user asked for from the SCM pane. A failure is
+   * rethrown carrying git's own explanation (a rejected push, a failing hook,
+   * a merge conflict) so the route can hand it to the browser verbatim.
+   */
+  private async runGitAction(
+    args: readonly string[],
+    timeoutMs: number
+  ): Promise<void> {
+    try {
+      await execGit(args, { timeout: timeoutMs });
+    } catch (err) {
+      throw new Error(describeGitFailure(err));
+    }
+  }
 
   private async currentBranch(repoRoot: string): Promise<string> {
     try {

@@ -5,6 +5,7 @@ import * as fs from "fs/promises";
 import type { ExecFileOptions } from "child_process";
 import { GIT_CHANGE_KINDS } from "../types/DashboardConstants";
 import { foldPathForCompare } from "./PathCasing";
+import { sanitizeTerminalOutput } from "./TerminalOutputSanitizer";
 
 export const GIT_DIFF_NO_EXT_DIFF_OPTION = "--no-ext-diff";
 
@@ -268,6 +269,38 @@ const execFileAsync = async (
 
 export const GIT_COMMAND_TIMEOUT_MS = GIT_TIMEOUT_MS;
 export const GIT_COMMAND_MAX_BUFFER = GIT_MAX_BUFFER;
+
+/**
+ * Longest git failure message `describeGitFailure` returns. Hook output (a
+ * pre-push hook running a test suite) can run to thousands of lines; git's own
+ * verdict and the hook's summary are at the end, so the tail is kept.
+ */
+export const GIT_FAILURE_MESSAGE_MAX_CHARS = 16_000;
+
+/**
+ * Git's own explanation of a failed command, for showing to a user: stderr
+ * (where git and its hooks report), else stdout (`nothing to commit`), else
+ * the error message (a timeout from `execGit`, or git failing to spawn).
+ * Unlike `error.message` it does not lead with the command line, which names
+ * the repository's absolute path.
+ */
+export function describeGitFailure(error: unknown): string {
+  const output =
+    error && typeof error === "object"
+      ? (error as { stdout?: unknown; stderr?: unknown })
+      : {};
+  const outputText = (value: unknown): string =>
+    value === undefined || value === null
+      ? ""
+      : sanitizeTerminalOutput(String(value)).trim();
+  const message =
+    outputText(output.stderr) ||
+    outputText(output.stdout) ||
+    (error instanceof Error ? error.message : String(error));
+  return message.length > GIT_FAILURE_MESSAGE_MAX_CHARS
+    ? `…${message.slice(-GIT_FAILURE_MESSAGE_MAX_CHARS)}`
+    : message;
+}
 
 /**
  * Run git with the shared timeout and output limits. Prefer this to a bare

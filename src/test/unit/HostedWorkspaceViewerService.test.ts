@@ -120,7 +120,8 @@ suite("HostedWorkspaceViewerService", function () {
       });
       try {
         await assert.rejects(
-          new HostedWorkspaceViewerService(root).commit("Timed commit")
+          new HostedWorkspaceViewerService(root).commit("Timed commit"),
+          /git commit timed out/
         );
         assert.strictEqual(runGit(root, "log", "-1", "--format=%s"), "Initial");
         assert.strictEqual(
@@ -130,6 +131,72 @@ suite("HostedWorkspaceViewerService", function () {
       } finally {
         restoreTimeouts();
       }
+    });
+  });
+
+  suite("git action failures", () => {
+    function createRepo(): string {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      runGit(root, "config", "commit.gpgsign", "false");
+      commitFile(root, "file.txt", "initial\n", "Initial");
+      return root;
+    }
+
+    /** The message the browser receives must be git's, not Node's wrapper. */
+    async function assertGitFailure(
+      action: Promise<unknown>,
+      root: string,
+      expected: RegExp
+    ): Promise<void> {
+      await assert.rejects(action, (err: Error) => {
+        assert.match(err.message, expected);
+        assert.doesNotMatch(err.message, /^Command failed/);
+        assert.ok(
+          !err.message.includes(root),
+          `message names the repository path: ${err.message}`
+        );
+        return true;
+      });
+    }
+
+    test("a commit rejected by a hook reports the hook's output", async () => {
+      const root = createRepo();
+      fs.writeFileSync(path.join(root, "file.txt"), "updated\n");
+      runGit(root, "add", "file.txt");
+      const hookPath = path.join(root, ".git", "hooks", "pre-commit");
+      fs.writeFileSync(
+        hookPath,
+        "#!/bin/sh\necho 'prettier: file.txt is not formatted' >&2\nexit 1\n"
+      );
+      fs.chmodSync(hookPath, 0o755);
+
+      await assertGitFailure(
+        new HostedWorkspaceViewerService(root).commit("Hooked commit"),
+        root,
+        /prettier: file\.txt is not formatted/
+      );
+    });
+
+    test("a commit with nothing staged reports git's stdout explanation", async () => {
+      const root = createRepo();
+
+      await assertGitFailure(
+        new HostedWorkspaceViewerService(root).commit("Empty commit"),
+        root,
+        /nothing to commit/
+      );
+    });
+
+    test("a push with no remote reports git's reason", async () => {
+      const root = createRepo();
+
+      await assertGitFailure(
+        new HostedWorkspaceViewerService(root).push(),
+        root,
+        /No configured push destination/
+      );
     });
   });
 
