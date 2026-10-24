@@ -334,6 +334,22 @@ If steps 1, 3 and 7 shared one session and step 9 resumes it, the right context 
 silently change what the step sends, in a way native runs never do. A step that quietly behaves
 differently after a move is the surprise to avoid. A predictable warning is better.
 
+**One rule for every way of naming a session (decided 2026-10-24).** Auto-chaining
+(`resumeSession` with no `sessionId`), a step number, `"finalStep"` and an exact ID all behave the
+same: if the session can't be resumed on this machine, warn and start a new session. Considered
+and rejected: stopping the workflow when an _exact_ ID is missing, on the grounds that a
+hand-pinned ID is deliberate. In practice most exact IDs aren't hand-pinned: **Reply to Step**
+(`dev/implemented/REPLY_TO_STEP_PLAN.md` §6) writes the concrete session ID of the replied-to step
+into the new step. "Reply to step 2 from step 4, then move the run before step 4 runs" is a
+normal flow, and it should warn rather than block. One rule also keeps the mental model small
+while the product is new. If users turn out to rely on pinned IDs failing loudly, add an opt-in
+setting to make a missing session an error. That is additive, so it can come later.
+
+**Badly formatted IDs follow the same rule.** Today `CliSessionResolverAdapter` drops an ID that
+fails `SessionValidator.validate` with only a `Log.info` line and starts a new session, so the
+user never learns the step didn't resume anything. It gets the same warning as a missing session,
+with its own reason ("…is not a valid claude-cli session ID"), recorded and shown the same way.
+
 - **One fallback for every run.** Today the fallback depends on the harness (Claude/Qwen recover,
   the other four fail), so "same as native" first means making native behavior uniform:
   - **Preflight probe.** Add an optional `probeResumableSession(sessionId, workspaceRoot)` to
@@ -355,13 +371,23 @@ differently after a move is the surprise to avoid. A predictable warning is bett
   pending step, so the user sees "Steps 9 and 11 will start a new session: the sessions they
   resume are not on this machine" **before** pressing Continue. For each affected step it lists
   the executed steps that ran in that session (1, 3, 7), so the workaround below is copy-paste.
-  The preview doesn't change anything; it only informs.
+  For an exact ID this means the executed steps whose `_runtime.sessionId` equals it. That
+  covers Reply to Step ("step 4 replies to step 2's session, which isn't on this machine; use
+  `priorContext` instead"). An exact ID that no executed step produced is reported as "not from
+  this run". Badly formatted IDs are listed too. The preview doesn't change anything; it only
+  informs.
 - **Documented workaround** (in the export/import guide page, phase 6): when a run moves to
   another machine, any pending step that continues an earlier step's conversation starts fresh
   instead. Before continuing, either accept that, or give the step that context explicitly. Set
   its `priorContext` to the steps the preview listed (`[1, 3, 7]`, or `$step:1,3,7` in the
   prompt) and optionally remove its `sessionId` / set `resumeSession: false`. Pending steps are
-  editable in the imported run like in any stopped run.
+  editable in the imported run like in any stopped run. Call out Reply to Step: it sets
+  `priorContext` to an explicit None (its §3), so a reply step needs that changed, not just
+  added.
+- **Changelog (Changed), when phase 5 ships:** a resume whose session can't be found, or whose ID
+  is badly formatted, now warns and starts a new session on every harness. Before, Copilot,
+  Codex, opencode and Antigravity failed the step, and Claude/Qwen and badly formatted IDs started
+  a new session without telling the user.
 - **Possible follow-up, not planned:** if users ask for it, the preview could offer an explicit
   per-step _Add earlier output as context_ button that makes exactly that edit, visibly, in the
   step definition. It would be user-initiated and show up in the definition, unlike the rejected
@@ -494,7 +520,7 @@ How they work together instead:
 | 2     | Asset bundling via the Save As machinery; `redaction.byFile`                                                 | Yes: bundles stop dangling `@` refs        |
 | 3     | `RunMaterializer` + `ctrlyoke import` (view-only), ingress guards (§6.1), origin badge                       | Yes: completes the share loop              |
 | 4     | Continuation: `run.ctrlyoke.json`, `changes.patch`, `_runtime` normalization, `import --continue`            | Yes: the machine-to-machine handoff        |
-| 5     | Session preflight probe for all runs, uniform warn-and-start-fresh fallback (§5.4)                           | Yes: fixes native runs too                 |
+| 5     | Session preflight probe for all runs, uniform warn-and-start-fresh fallback, malformed IDs included (§5.4)   | Yes: fixes native runs too                 |
 | 6     | Dashboard: Export Run / Import Run actions, shared location fields, Load routing, import preview, guide page | Yes                                        |
 
 Phase 5 is a **release gate on phase 4**, the way redaction was on phase 1: without it, four of
@@ -519,8 +545,10 @@ cleaned up benefits the same way.
    both would fork the work twice. Answer `HARNESS_SESSION_IMPORT_PLAN.md` open question 2 the
    same way.
 6. **Missing-session default (§5.4).** Settled 2026-10-24: warn and start a new session, the
-   same in every run. No automatic context injection; the preview and docs point to
-   `priorContext` as the manual fix.
+   same in every run and for every way of naming the session (auto, step number, `"finalStep"`,
+   exact ID), and for badly formatted IDs too. No automatic context injection, and no error for
+   missing exact IDs (Reply to Step writes them). The preview and docs point to `priorContext`
+   as the manual fix. An opt-in "error on missing session" setting is a possible later addition.
 7. **Uncommitted changes on export when the run is `none`-mode in a dirty checkout.** Settled
    2026-10-24: include them (the run may have depended on them). The export summary lists every
    file in the patch so the user can cancel before sharing.
