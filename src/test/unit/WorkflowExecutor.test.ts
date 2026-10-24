@@ -44,6 +44,7 @@ import {
   GUARDRAIL_STOP_CODES,
   WORKFLOW_ATTEMPT_STATUS,
   StepOutputTextMode,
+  SNAPSHOT_STRATEGIES,
 } from "../../types/DashboardConstants";
 import {
   TIMELINE_ATTEMPT_START_REASONS,
@@ -298,10 +299,13 @@ class RecordingSnapshotService extends WorkspaceSnapshotService {
   ): Promise<RawWorkspaceState> {
     this.captureCount += 1;
     const git =
-      strategy === "git"
+      strategy === SNAPSHOT_STRATEGIES.GIT
         ? { headCommit: `head-${this.captureCount}` }
         : undefined;
-    const dirty = strategy === "git" ? this.captureCount % 2 === 0 : undefined;
+    const dirty =
+      strategy === SNAPSHOT_STRATEGIES.GIT
+        ? this.captureCount % 2 === 0
+        : undefined;
     return {
       capturedAt: this.captureCount,
       strategy,

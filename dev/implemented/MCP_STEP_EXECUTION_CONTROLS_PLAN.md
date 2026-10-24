@@ -1,6 +1,12 @@
 # MCP Step Execution Controls Plan
 
-**Status:** In progress (2026-10-23). Items 0–3 landed; items 4–5 are queued.
+**Status:** Implemented 2026-10-23. Still open: whether the MCP server can
+learn the host's terminal capability (see the open question in Stage 1).
+
+**Review notes:** step-level `params` is rejected by the strict schema, but
+like any unknown key the parser downgrades it to a warning and carries it
+through as inert data. Only a preset's params are ever copied into a
+condition's `env`.
 
 **Related:**
 
@@ -223,12 +229,13 @@ None of these is covered by a filed bug.
    dirty paths. No per-step commit interval or end-dirty flag was available to
    `workflow_status` without a new capture. The implementation reuses those
    captures and adds optional `gitOutcome` metadata to the existing snapshot
-   event. Since the timeline manifest carries `schemaVersion`, its format is
-   bumped to v3 with an in-memory v2→v3 migration; old v2 events remain valid
-   because the new snapshot member is optional. This follows the persisted
-   state compatibility rule while keeping old readers able to ignore the
-   additive event payload. Git outcome stays advisory and is omitted for
-   unavailable snapshots, filesystem-only workspaces and unfinished steps.
+   event. The timeline format is **not** bumped: the field is optional, and the
+   timeline is append-only, so an older build neither misreads nor drops it.
+   `PersistedSchemaGuard` says to bump only for such a change, and a bump would
+   make every new run read-only to 0.2.0. (The implementing step first bumped
+   it to v3; the review reverted that.) Git outcome stays advisory and is
+   omitted for unavailable snapshots, filesystem-only workspaces and
+   unfinished steps.
 
 4. **Workflow-orchestrator template guidance.** Add the planning lessons the
    template doesn't already have:
@@ -278,8 +285,8 @@ Each item is one session; tick it when it lands.
       on presets, and a CHANGELOG entry under **Added**.
 - [x] 4. Stage 3 items 1–2 (append parity, effective-settings echo).
 - [x] 5. Stage 3 item 3 (per-step git outcome), using the existing before/after
-      workspace snapshots and adding optional snapshot metadata with a timeline
-      format migration.
+      workspace snapshots and adding optional snapshot metadata (no timeline
+      format bump).
 
 ## Tests
 

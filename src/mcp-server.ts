@@ -1229,6 +1229,9 @@ export class CtrlYokeMCPServer {
     // read_output call away.
     const steps = allSteps.map((p, index) => {
       const scriptStep = isScriptStep(p);
+      const effective = isScriptStep(p)
+        ? undefined
+        : resolveEffectiveStepSettings(p, queueData);
       const prompt = scriptStep ? p.script : p.prompt;
       const preview = promptFirstLinePreview(
         prompt,
@@ -1256,21 +1259,11 @@ export class CtrlYokeMCPServer {
         // A step that has started reports what it actually ran with (its
         // _runtime), which includes the headless clamp a terminal-less
         // `ctrlyoke run` applies; a pending step reports its configured value.
-        harness: scriptStep
-          ? undefined
-          : resolveEffectiveStepSettings(p as PromptStep, queueData).harness,
-        executionMode: scriptStep
-          ? undefined
-          : resolveEffectiveStepSettings(p as PromptStep, queueData)
-              .executionMode,
-        model: scriptStep
-          ? undefined
-          : resolveEffectiveStepSettings(p as PromptStep, queueData).model,
+        harness: effective?.harness,
+        executionMode: effective?.executionMode,
+        model: effective?.model,
         sessionId: scriptStep ? null : (p.sessionId ?? null),
-        resumeSession: scriptStep
-          ? false
-          : resolveEffectiveStepSettings(p as PromptStep, queueData)
-              .resumeSession,
+        resumeSession: effective?.resumeSession ?? false,
       };
     });
 

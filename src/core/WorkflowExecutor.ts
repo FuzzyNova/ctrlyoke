@@ -61,6 +61,7 @@ import {
   PROMPT_TERMINAL_STATUS,
   STEP_CLAIM_OUTCOMES,
   getEffectiveParallelGroupWidth,
+  SNAPSHOT_STRATEGIES,
   type ConditionAction,
   type StatusMessageSeverity,
   type WorkflowExecutionOutcome,
@@ -3023,7 +3024,7 @@ export class WorkflowExecutor {
     );
 
     const gitRepositories = afterState.segments.flatMap((afterSegment) => {
-      if (afterSegment.strategy !== "git") return [];
+      if (afterSegment.strategy !== SNAPSHOT_STRATEGIES.GIT) return [];
       const beforeSegment = beforeState.segments.find(
         (segment) =>
           segment.prefix === afterSegment.prefix &&
@@ -3055,7 +3056,8 @@ export class WorkflowExecutor {
             repositories: gitRepositories,
             ...(afterState.segments.every(
               (segment) =>
-                segment.strategy === "git" && segment.dirty !== undefined
+                segment.strategy === SNAPSHOT_STRATEGIES.GIT &&
+                segment.dirty !== undefined
             )
               ? {
                   dirtyAtEnd: afterState.segments.some(

@@ -67,12 +67,6 @@ export const MIGRATIONS: Record<PersistedStore, readonly FormatMigration[]> = {
       describe: "Stamp timeline manifest format v2",
       migrate: (doc) => doc,
     },
-    {
-      store: PERSISTED_STORES.TIMELINE,
-      from: 2,
-      describe: "Allow per-step git outcome in workspace snapshots",
-      migrate: (doc) => doc,
-    },
   ],
   [PERSISTED_STORES.PROJECT_METADATA]: [],
   [PERSISTED_STORES.EXTERNAL_ROOTS_TRUST]: [],

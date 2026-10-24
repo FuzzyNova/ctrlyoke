@@ -263,19 +263,25 @@ suite("Workflow template schema", () => {
       ),
       /duplicates another parameter name/
     );
-    await assert.rejects(
-      parser.validateAndNormalize(
-        {
-          steps: [
-            {
-              prompt: "work",
-              endCondition: { script: "echo ok", params: ["BUG_FILE"] },
-            },
-          ],
-        },
-        process.cwd()
+    // Unknown keys are forward-compatible warnings, never errors: step-level
+    // params is reported, and stays inert because only a preset's params are
+    // ever copied into a condition's env.
+    const stepParams = await parser.validateAndNormalize(
+      {
+        steps: [
+          {
+            prompt: "work",
+            endCondition: { script: "echo ok", params: ["BUG_FILE"] },
+          },
+        ],
+      },
+      process.cwd()
+    );
+    assert.ok(
+      stepParams.warnings?.some(
+        (warning) => warning.propertyPointer === "/steps/0/endCondition/params"
       ),
-      /Validation failed/
+      JSON.stringify(stepParams.warnings)
     );
   });
 

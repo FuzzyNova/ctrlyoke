@@ -357,8 +357,11 @@ const MCP_STEP_UPDATE_SCHEMA: McpToolInputSchema = {
   },
 };
 
+/** Step fields that take an MCP condition preset reference. */
+const MCP_CONDITION_PRESET_FIELDS = ["endCondition", "preCondition"] as const;
+
 function conditionPresetUseSchema(
-  fieldName: "endCondition" | "preCondition"
+  fieldName: (typeof MCP_CONDITION_PRESET_FIELDS)[number]
 ): McpToolInputSchema {
   return {
     type: "object",
@@ -401,7 +404,7 @@ export const MCP_STEP_UPDATE_FIELDS = Object.keys(
 
 /** Fields edit_step may clear; condition preset references are intentionally excluded. */
 export const MCP_STEP_CLEARABLE_FIELDS = MCP_STEP_UPDATE_FIELDS.filter(
-  (field) => field !== "endCondition" && field !== "preCondition"
+  (field) => !(MCP_CONDITION_PRESET_FIELDS as readonly string[]).includes(field)
 );
 
 /** The single source of truth for ctrlyoke's exposed MCP tool definitions. */
