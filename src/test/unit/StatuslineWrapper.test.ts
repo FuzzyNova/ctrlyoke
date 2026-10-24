@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import { spawn } from "child_process";
+import { EventEmitter } from "events";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
@@ -32,6 +33,16 @@ type SharedWrapper = {
   forwardToCommand(
     command: string | undefined,
     input: string | Buffer,
+    timeoutMs?: number,
+    options?: {
+      spawnImpl?: (command: string, argsOrOptions?: unknown, options?: unknown) => any;
+      platform?: string;
+    }
+  ): Promise<{ output: Buffer; timedOut: boolean }>;
+  forwardStatuslineCommand(
+    command: string | undefined,
+    input: string | Buffer,
+    harnessId: string,
     timeoutMs?: number
   ): Promise<Buffer>;
   parsePayload(input: string): Record<string, unknown>;
@@ -262,7 +273,7 @@ suite("Shared statusline wrappers", function () {
     );
     const payload = { model: { id: "test-model" } };
 
-    assert.strictEqual(shared.FORWARD_TIMEOUT_MS, 200);
+    assert.strictEqual(shared.FORWARD_TIMEOUT_MS, 1500);
     const claudePath = shared.writeSnapshotAtomic(
       tempDirectory,
       "claude-statusline",
@@ -1187,9 +1198,10 @@ suite("Shared statusline wrappers", function () {
     const failed = await shared.forwardToCommand(
       nodeCommand("process.exit(1)"),
       "input",
-      200
+      20_000
     );
-    assert.strictEqual(failed.length, 0);
+    assert.strictEqual(failed.output.length, 0);
+    assert.strictEqual(failed.timedOut, false);
 
     // The child outlives its budget by a wide margin so that "the budget was
     // enforced" stays distinguishable from "the child happened to finish" even
@@ -1201,8 +1213,84 @@ suite("Shared statusline wrappers", function () {
       "input",
       25
     );
-    assert.strictEqual(timedOut.length, 0);
+    assert.strictEqual(timedOut.output.length, 0);
+    assert.strictEqual(timedOut.timedOut, true);
     assert.ok(Date.now() - startedAt < 30_000);
+  });
+
+  test("kills the Windows forwarded process tree on timeout", async () => {
+    const calls: Array<{ command: string; args?: unknown; options?: unknown }> = [];
+    const stdout = new EventEmitter();
+    const stdin = new EventEmitter() as EventEmitter & {
+      end: (input: Buffer) => void;
+    };
+    stdin.end = () => undefined;
+    const child = new EventEmitter() as EventEmitter & {
+      pid: number;
+      stdin: typeof stdin;
+      stdout: typeof stdout;
+      kill: () => boolean;
+    };
+    child.pid = 4321;
+    child.stdin = stdin;
+    child.stdout = stdout;
+    let childKilled = false;
+    child.kill = () => {
+      childKilled = true;
+      return true;
+    };
+    const result = await shared.forwardToCommand("user command", "input", 10, {
+      platform: "win32",
+      spawnImpl: (command, args, options) => {
+        calls.push({ command, args, options });
+        return child;
+      },
+    });
+    assert.strictEqual(result.timedOut, true);
+    assert.strictEqual(childKilled, false);
+    assert.deepStrictEqual(calls[1], {
+      command: "taskkill",
+      args: ["/T", "/F", "/PID", "4321"],
+      options: { windowsHide: true, stdio: "ignore" },
+    });
+  });
+
+  test("returns cached forwarded output when a later command times out", async () => {
+    await createHome();
+    tempDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-statusline-cache-")
+    );
+    const cachePath = path.join(
+      tempHome,
+      ".ctrlyoke",
+      "cache",
+      "statusline-forwarded",
+      "claude-cli.txt"
+    );
+    const first = await shared.forwardStatuslineCommand(
+      nodeCommand("process.stdout.write('last-good')"),
+      "input",
+      "claude-cli",
+      20_000
+    );
+    assert.strictEqual(first.toString("utf8"), "last-good");
+    assert.strictEqual(await fs.readFile(cachePath, "utf8"), "last-good");
+
+    await writeMachineSettings(tempHome, "claude", {
+      customCommand: nodeCommand("setTimeout(() => {}, 60000)"),
+      useCtrlyokeStyle: false,
+    });
+    const result = await runWrapper(
+      scriptPath("ctrlyoke-claude-statusline.js"),
+      JSON.stringify({ model: { id: "claude-model" } }),
+      {
+        HOME: tempHome,
+        USERPROFILE: tempHome,
+        CTRLYOKE_STATUSLINE_FORWARD_TIMEOUT_MS: "50",
+      }
+    );
+    assert.strictEqual(result.code, 0);
+    assert.strictEqual(result.stdout, "last-good");
   });
 
   for (const [provider, script] of [
@@ -1211,7 +1299,7 @@ suite("Shared statusline wrappers", function () {
     ["copilot", scriptPath("ctrlyoke-copilot-statusline.js")],
     ["qwen", scriptPath("ctrlyoke-qwen-statusline.js")],
   ] as const) {
-    test(`${provider} always writes and forwards while branded style discards stdout`, async () => {
+    test(`${provider} skips forwarding while branded style discards stdout`, async () => {
       await createHome();
       tempDirectory = await fs.mkdtemp(
         path.join(os.tmpdir(), `ctrlyoke-${provider}-statusline-`)
@@ -1240,7 +1328,13 @@ suite("Shared statusline wrappers", function () {
       );
 
       assert.strictEqual(result.code, 0);
-      assert.strictEqual(await fs.readFile(marker, "utf8"), "ran");
+      assert.strictEqual(
+        await fs
+          .readFile(marker, "utf8")
+          .then(() => true)
+          .catch(() => false),
+        false
+      );
       assert.match(result.stdout, /edit in ctrlyoke/);
       assert.doesNotMatch(result.stdout, /custom/);
       const filename =

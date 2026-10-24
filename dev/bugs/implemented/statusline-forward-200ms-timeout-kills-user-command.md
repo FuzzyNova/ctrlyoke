@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-24 by timeout-budget bug sweep workflow (harness-cli)
 - **Area:** `src/scripts/ctrlyoke-statusline-wrapper.js`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

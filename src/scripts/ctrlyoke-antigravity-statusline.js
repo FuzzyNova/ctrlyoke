@@ -4,10 +4,11 @@
 
 const {
   FORWARD_TIMEOUT_MS,
+  STATUSLINE_HARNESS_IDS,
   STATUSLINE_PROVIDERS,
   formatBrandedStatusLine,
   formatCompactTokenCount,
-  forwardToCommand,
+  forwardStatuslineCommand,
   buildSnapshotPayload,
   calculateContextPercentage,
   getContextBand,
@@ -48,11 +49,6 @@ async function runStatusline(input, env = process.env) {
     );
   }
 
-  const forwardedOutput = await forwardToCommand(
-    settings.customCommand,
-    input,
-    FORWARD_TIMEOUT_MS
-  );
   if (settings.enabled && settings.useCtrlyokeStyle) {
     writeStdoutSafely(
       formatBrandedStatusLine(
@@ -64,6 +60,12 @@ async function runStatusline(input, env = process.env) {
     );
     return;
   }
+  const forwardedOutput = await forwardStatuslineCommand(
+    settings.customCommand,
+    input,
+    STATUSLINE_HARNESS_IDS[STATUSLINE_PROVIDERS.ANTIGRAVITY],
+    FORWARD_TIMEOUT_MS
+  );
   writeStdoutSafely(forwardedOutput);
 }
 

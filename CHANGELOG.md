@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Statusline forwarding preserves the last good custom output when a command times out.** The wrapper allows 1.5 seconds, skips unused forwarding in ctrlyoke-style mode, and kills Windows command process trees on timeout.
 - **Python and PowerShell interpreter probes no longer block the extension host.** Timed-out or failed probes fall back for one script and retry on the next resolution.
 - **Codex quota refresh works with Windows npm installs.** The app-server probe now resolves the Codex launcher before spawning it.
 - **`ctrlyoke commit` handles large commits.** Git add and commit output no longer hits Node's default 1 MiB buffer limit.
