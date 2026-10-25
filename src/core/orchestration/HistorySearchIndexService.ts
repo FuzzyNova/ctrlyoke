@@ -141,6 +141,8 @@ interface ProjectedHistorySearchMatch {
 
 export interface HistorySearchIndexSearchOptions {
   allowRebuild?: boolean;
+  /** Start or join a rebuild without waiting for it in the search request. */
+  rebuildInBackground?: boolean;
   waitForLiveLock?: boolean;
   snippetChars?: number;
 }
@@ -352,7 +354,8 @@ export class HistorySearchIndexService {
         onRebuildProgress,
         options?.allowRebuild !== false,
         signal,
-        options?.waitForLiveLock === true
+        options?.waitForLiveLock === true,
+        options?.rebuildInBackground === true
       );
     } else {
       await this.loadIfPossible(workspaceFolderPath);
@@ -965,7 +968,9 @@ export class HistorySearchIndexService {
           this.rebuildQueued = false;
           passCount += 1;
           const passStart = Date.now();
-          await this.rebuild(workspaceFolderPath, {});
+          await this.rebuild(workspaceFolderPath, {
+            waitForLiveLock: true,
+          });
           Log.debug(
             `[HistorySearchIndexService] refresh pass ${passCount} complete: durationMs=${Date.now() - passStart} requeued=${this.rebuildQueued}`
           );
@@ -989,7 +994,8 @@ export class HistorySearchIndexService {
     onRebuildProgress?: IndexRebuildProgressCallback,
     allowRebuild = true,
     signal?: AbortSignal,
-    waitForLiveLock = false
+    waitForLiveLock = false,
+    rebuildInBackground = false
   ): Promise<HistorySearchResponse["indexState"]> {
     if (signal?.aborted) {
       throw new HistorySearchCancelledError();
@@ -1022,6 +1028,9 @@ export class HistorySearchIndexService {
       Log.info(
         "[HistorySearchIndexService] index missing or stale; searching without synchronous rebuild"
       );
+      if (rebuildInBackground) {
+        void this.enqueueWorkspaceRefresh(workspaceFolderPath);
+      }
       return HISTORY_SEARCH_INDEX_STATES.BUILDING;
     }
 

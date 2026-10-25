@@ -2047,21 +2047,22 @@ export class WebviewMessageRouter {
       }
 
       try {
+        const searchRequest = {
+          query,
+          limit,
+          offset:
+            typeof message.offset === "number" && message.offset > 0
+              ? Math.floor(message.offset)
+              : undefined,
+          filters:
+            message.filters && typeof message.filters === "object"
+              ? message.filters
+              : undefined,
+          deep: message.deep === true,
+          regex: message.regex === true,
+        };
         const response = await this.historySearchService.search(
-          {
-            query,
-            limit,
-            offset:
-              typeof message.offset === "number" && message.offset > 0
-                ? Math.floor(message.offset)
-                : undefined,
-            filters:
-              message.filters && typeof message.filters === "object"
-                ? message.filters
-                : undefined,
-            deep: message.deep === true,
-            regex: message.regex === true,
-          },
+          searchRequest,
           workspacePath,
           (processedRuns, totalRuns) => {
             ctx.emit({
@@ -2078,13 +2079,40 @@ export class WebviewMessageRouter {
               ...partialResponse,
             });
           },
-          { allowRebuild: false }
+          { allowRebuild: false, rebuildInBackground: true }
         );
         ctx.emit({
           type: MESSAGE_TYPES.SEARCH_HISTORY_RESULTS,
           ...listingScope,
           ...response,
         });
+        if (response.indexState === "building") {
+          void this.historySearchService
+            .enqueueWorkspaceRefresh(workspacePath)
+            .then(async () => {
+              if (ctx.historySearchAbortSignal?.aborted) return;
+              const refreshedResponse = await this.historySearchService.search(
+                searchRequest,
+                workspacePath,
+                undefined,
+                ctx.historySearchAbortSignal,
+                undefined,
+                { allowRebuild: false }
+              );
+              if (ctx.historySearchAbortSignal?.aborted) return;
+              ctx.emit({
+                type: MESSAGE_TYPES.SEARCH_HISTORY_RESULTS,
+                ...listingScope,
+                ...refreshedResponse,
+              });
+            })
+            .catch((error: unknown) => {
+              if (error instanceof HistorySearchCancelledError) return;
+              Log.warn(
+                `[WebviewMessageRouter] history search refresh failed: query="${query}" error=${getErrorMessage(error)}`
+              );
+            });
+        }
       } catch (error) {
         if (error instanceof HistorySearchCancelledError) {
           // A newer search for this client already superseded this one; a

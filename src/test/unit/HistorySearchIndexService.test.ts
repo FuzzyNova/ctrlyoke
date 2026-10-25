@@ -1773,7 +1773,7 @@ suite("HistorySearchIndexService", () => {
           undefined,
           undefined,
           undefined,
-          { allowRebuild: false }
+          { allowRebuild: false, rebuildInBackground: true }
         ),
         new Promise<never>((_, reject) =>
           (timeout = setTimeout(
@@ -1786,10 +1786,96 @@ suite("HistorySearchIndexService", () => {
       assert.strictEqual(response.indexState, "building");
       assert.strictEqual(response.totalCount, 1);
       assert.ok(
+        (
+          index as unknown as { rebuildPromise?: Promise<void> }
+        ).rebuildPromise,
+        "the search should start a background rebuild that encounters the lock"
+      );
+      assert.ok(
         response.results[0]?.matchSnippet.includes("foreign-lock-existing-term")
       );
     } finally {
       if (timeout) clearTimeout(timeout);
+      releaseHolder();
+      await holder;
+      await index.enqueueWorkspaceRefresh(workspaceRoot);
+    }
+  });
+
+  test("rebuilds a missing index in the background after returning building", async () => {
+    await createRun("background-missing-index-2026-10-25T00-00-00", 1, 80000, [
+      createStatusDraft(80100, "background-missing-index-term"),
+    ]);
+    const index = new HistorySearchIndexService();
+    const initial = await index.search(
+      { query: "background-missing-index-term", limit: 10 },
+      workspaceRoot,
+      undefined,
+      undefined,
+      undefined,
+      { allowRebuild: false, rebuildInBackground: true }
+    );
+
+    assert.strictEqual(initial.indexState, "building");
+    assert.strictEqual(initial.totalCount, 0);
+    assert.ok(
+      (index as unknown as { rebuildPromise?: Promise<void> }).rebuildPromise,
+      "search must start its own background rebuild"
+    );
+
+    await index.enqueueWorkspaceRefresh(workspaceRoot);
+    const ready = await index.search(
+      { query: "background-missing-index-term", limit: 10 },
+      workspaceRoot,
+      undefined,
+      undefined,
+      undefined,
+      { allowRebuild: false }
+    );
+    assert.strictEqual(ready.indexState, "ready");
+    assert.strictEqual(ready.totalCount, 1);
+  });
+
+  test("background refresh waits past its lock timeout for a live foreign rebuild lock", async function () {
+    // Prove the background path waits beyond the worker's ordinary 60-second
+    // acquisition timeout instead of abandoning the refresh.
+    this.timeout(75_000);
+    await createRun("background-lock-wait-2026-10-25T00-00-00", 1, 81000, [
+      createStatusDraft(81100, "background-lock-wait-term"),
+    ]);
+    const manifestPath = path.join(
+      getSearchIndexDir(workspaceRoot, getFrozenRunHistoryLocation()),
+      "manifest.json"
+    );
+    await fs.mkdir(path.dirname(manifestPath), { recursive: true });
+    let releaseHolder!: () => void;
+    const holderGate = new Promise<void>((resolve) => {
+      releaseHolder = resolve;
+    });
+    const holder = withFileLock(manifestPath, () => holderGate);
+    const lockPath = lockFilePath(manifestPath);
+    const index = new HistorySearchIndexService();
+
+    try {
+      while (!(await fs.stat(lockPath).catch(() => undefined))) {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+      }
+      const refresh = index.enqueueWorkspaceRefresh(workspaceRoot);
+      await new Promise((resolve) => setTimeout(resolve, 61_000));
+      releaseHolder();
+      await holder;
+      await refresh;
+
+      const ready = await index.search(
+        { query: "background-lock-wait-term", limit: 10 },
+        workspaceRoot,
+        undefined,
+        undefined,
+        undefined,
+        { allowRebuild: false }
+      );
+      assert.strictEqual(ready.totalCount, 1);
+    } finally {
       releaseHolder();
       await holder;
     }

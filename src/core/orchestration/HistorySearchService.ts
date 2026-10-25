@@ -71,6 +71,12 @@ export class HistorySearchService {
     MAX_INDEXED_TEXT_LENGTH
   );
 
+  enqueueWorkspaceRefresh(workspaceFolderPath: string): Promise<void> {
+    return getSharedHistorySearchIndexService(
+      workspaceFolderPath
+    ).enqueueWorkspaceRefresh(workspaceFolderPath);
+  }
+
   async search(
     query: string | HistorySearchQuery,
     workspaceFolderPath: string,

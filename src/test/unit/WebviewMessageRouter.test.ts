@@ -1810,6 +1810,8 @@ suite("WebviewMessageRouter — license actions", () => {
       regex?: boolean;
       signal?: AbortSignal;
       allowRebuild?: boolean;
+      rebuildInBackground?: boolean;
+      indexState?: "ready" | "building";
       resolve: () => void;
     }
 
@@ -1839,7 +1841,10 @@ suite("WebviewMessageRouter — license actions", () => {
           _onProgress: unknown,
           signal?: AbortSignal,
           _onPartialResults?: unknown,
-          options?: { allowRebuild?: boolean }
+          options?: {
+            allowRebuild?: boolean;
+            rebuildInBackground?: boolean;
+          }
         ) =>
           new Promise((resolve) => {
             recorded.push({
@@ -1849,6 +1854,7 @@ suite("WebviewMessageRouter — license actions", () => {
               regex: request.regex,
               signal,
               allowRebuild: options?.allowRebuild,
+              rebuildInBackground: options?.rebuildInBackground,
               resolve: () =>
                 resolve({
                   query: request.query,
@@ -1857,10 +1863,11 @@ suite("WebviewMessageRouter — license actions", () => {
                   totalCount: 0,
                   countState: "exact",
                   hasMore: false,
-                  indexState: "ready",
+                  indexState: recorded.at(-1)?.indexState ?? "ready",
                 }),
             });
           }),
+        enqueueWorkspaceRefresh: () => Promise.resolve(),
       };
       const router = new WebviewMessageRouter(
         (message) => emitted.push(message),
@@ -1904,6 +1911,7 @@ suite("WebviewMessageRouter — license actions", () => {
         await settle();
         assert.strictEqual(recorded.length, 1);
         assert.strictEqual(recorded[0].allowRebuild, false);
+        assert.strictEqual(recorded[0].rebuildInBackground, true);
 
         const second = router.route({
           type: MESSAGE_TYPES.SEARCH_HISTORY,
@@ -1957,6 +1965,46 @@ suite("WebviewMessageRouter — license actions", () => {
         await settle();
         recorded[1].resolve();
         await second;
+      } finally {
+        restore();
+      }
+    });
+
+    test("repeats the active search after its background rebuild finishes", async () => {
+      const recorded: RecordedSearch[] = [];
+      const rebuild = deferred<void>();
+      const { router, restore, emitted } = buildSearchRouter(recorded);
+      try {
+        const service = (router as any).historySearchService;
+        service.enqueueWorkspaceRefresh = () => rebuild.promise;
+        const first = router.route({
+          type: MESSAGE_TYPES.SEARCH_HISTORY,
+          query: "background-ready-term",
+          listingId: "listing-ready",
+          limit: 10,
+        });
+        await settle();
+        assert.strictEqual(recorded.length, 1);
+        recorded[0].indexState = "building";
+        recorded[0].resolve();
+        await first;
+        assert.strictEqual(recorded.length, 1);
+
+        rebuild.resolve();
+        await settle();
+        assert.strictEqual(recorded.length, 2);
+        recorded[1].resolve();
+        await settle();
+        assert.strictEqual(recorded[1].query, "background-ready-term");
+        assert.strictEqual(recorded[1].offset, undefined);
+        assert.ok(
+          emitted.filter(
+            (message) =>
+              message.type === MESSAGE_TYPES.SEARCH_HISTORY_RESULTS &&
+              message.listingId === "listing-ready"
+          ).length >= 2,
+          "the building reply and refreshed active-listing results should both be emitted"
+        );
       } finally {
         restore();
       }

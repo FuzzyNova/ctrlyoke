@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-25 by bug-drain review of 55a7e00b2
 - **Area:** `src/ui/WebviewMessageRouter.ts`, `src/core/orchestration/HistorySearchIndexService.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
