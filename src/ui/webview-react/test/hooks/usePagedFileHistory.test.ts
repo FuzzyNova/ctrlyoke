@@ -275,6 +275,52 @@ describe("usePagedFileHistory", () => {
     ]);
   });
 
+  it("does not repeat a short continuation page when the cursor stops advancing", async () => {
+    const fetchPage = vi
+      .fn<PagedFileHistoryFetcher>()
+      .mockResolvedValueOnce({
+        ...response(
+          HISTORY_A,
+          0,
+          Array.from({ length: 10 }, (_, i) => entry(i)),
+          30
+        ),
+        pageSize: 30,
+        hasMore: true,
+        nextOffset: 10,
+        nextCursor: "cursor-10",
+      })
+      .mockResolvedValue({
+        ...response(
+          HISTORY_A,
+          10,
+          Array.from({ length: 5 }, (_, i) => entry(i + 10)),
+          60
+        ),
+        pageSize: 30,
+        hasMore: true,
+        nextOffset: 10,
+        nextCursor: "cursor-10",
+      });
+    const { result } = renderHistory(fetchPage, 30);
+
+    await waitFor(() => expect(result.current.loadedCount).toBe(10));
+    act(() =>
+      result.current.onRangeChange({
+        visibleStartIndex: 0,
+        visibleEndIndex: 15,
+        overscanStartIndex: 0,
+        overscanEndIndex: 27,
+        startIndex: 0,
+        endIndex: 15,
+      })
+    );
+
+    await waitFor(() => expect(result.current.loadedCount).toBe(15));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+  });
+
   it("does not duplicate a continuation request while it is in flight", async () => {
     const continuation = deferred<WorkspaceFileHistoryPageResponse>();
     const fetchPage = vi

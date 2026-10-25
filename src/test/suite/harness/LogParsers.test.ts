@@ -9218,17 +9218,28 @@ suite("Antigravity subagent attribution", () => {
         .forEach((event) => parser.extractStructuredEventsFromEvent(event));
 
       const streamed: CliEvent[] = [];
+      const toolNames = () =>
+        streamed
+          .filter((event) => event.type === CLI_EVENT_TYPES.TOOL_CALL)
+          .map((event) => (event.data as ToolCall).name);
+      // Wait on the streamed state rather than a fixed sleep: under the
+      // concurrent npm test suites a 5 ms poll can miss a 30 ms window.
+      const waitForToolCount = async (count: number) => {
+        const deadline = Date.now() + 5_000;
+        while (toolNames().length < count && Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+      };
       parser
         .getSubagentFollower()
         .start((events) => streamed.push(...events), 5);
-      await new Promise((resolve) => setTimeout(resolve, 30));
+      await waitForToolCount(1);
       append([result(2), planner("second_tool", 3), result(4)]);
+      await waitForToolCount(2);
+      // A few more polls so a re-emitted record would show up as a duplicate.
       await new Promise((resolve) => setTimeout(resolve, 30));
 
-      const toolNames = streamed
-        .filter((event) => event.type === CLI_EVENT_TYPES.TOOL_CALL)
-        .map((event) => (event.data as ToolCall).name);
-      assert.deepStrictEqual(toolNames, ["first_tool", "second_tool"]);
+      assert.deepStrictEqual(toolNames(), ["first_tool", "second_tool"]);
     } finally {
       parser.getSubagentFollower().reset();
       removeTempDir(workspace);

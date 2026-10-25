@@ -476,7 +476,12 @@ export function usePagedFileHistory(
                 loadedLength >= lastRange.overscanStartIndex &&
                 loadedLength <= lastRange.overscanEndIndex))
           ) {
-            setTimeout(() => rangeRequestRef.current(loadedLength), 0);
+            setTimeout(() => {
+              // A navigate/refresh inside this tick starts a new listing that
+              // must not inherit the old listing's continuation offset.
+              if (generationRef.current !== generation) return;
+              rangeRequestRef.current(loadedLength);
+            }, 0);
           }
         })
         .catch((value: unknown) => {

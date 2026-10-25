@@ -1201,46 +1201,46 @@ describe("CodeMirrorEditor late attachment replies", () => {
   it("removes a paste placeholder after the final deadline and still applies a late success", () => {
     vi.useFakeTimers();
     try {
-    vi.stubGlobal(
-      "FileReader",
-      class {
-        result: string | ArrayBuffer | null = "data:image/png;base64,AQ==";
-        onload: ((event: ProgressEvent<FileReader>) => unknown) | null = null;
-        readAsDataURL() {
+      vi.stubGlobal(
+        "FileReader",
+        class {
+          result: string | ArrayBuffer | null = "data:image/png;base64,AQ==";
+          onload: ((event: ProgressEvent<FileReader>) => unknown) | null = null;
+          readAsDataURL() {
             this.onload?.(
               new ProgressEvent("load") as ProgressEvent<FileReader>
             );
+          }
         }
-      }
-    );
-    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
-    postMessage.mockClear();
-    const { container } = render(
-      <CodeMirrorEditor value="" onChange={vi.fn()} affUri="" dicUri="" />
-    );
-    pasteImage(container);
-    const request = pastedImageRequests()[0];
-    expect(request?.seq).toBeDefined();
+      );
+      const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+      postMessage.mockClear();
+      const { container } = render(
+        <CodeMirrorEditor value="" onChange={vi.fn()} affUri="" dicUri="" />
+      );
+      pasteImage(container);
+      const request = pastedImageRequests()[0];
+      expect(request?.seq).toBeDefined();
 
-    act(() => vi.advanceTimersByTime(10 * 60_000));
-    const editor = container.querySelector(".cm-editor") as HTMLElement;
-    const view = EditorView.findFromDOM(editor)!;
-    expect(view.state.doc.toString()).toBe("");
+      act(() => vi.advanceTimersByTime(10 * 60_000));
+      const editor = container.querySelector(".cm-editor") as HTMLElement;
+      const view = EditorView.findFromDOM(editor)!;
+      expect(view.state.doc.toString()).toBe("");
 
-    fireEvent(
-      window,
-      new MessageEvent("message", {
-        data: {
-          type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
-          seq: request!.seq,
-          relativePath: "./.ctrlyoke/attachments/late.png",
-        },
-      })
-    );
-    expect(view.state.doc.toString()).toBe(
-      "@./.ctrlyoke/attachments/late.png "
-    );
-    vi.useRealTimers();
+      fireEvent(
+        window,
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
+            seq: request!.seq,
+            relativePath: "./.ctrlyoke/attachments/late.png",
+          },
+        })
+      );
+      expect(view.state.doc.toString()).toBe(
+        "@./.ctrlyoke/attachments/late.png "
+      );
+      vi.useRealTimers();
     } finally {
       vi.useRealTimers();
     }
@@ -1249,60 +1249,60 @@ describe("CodeMirrorEditor late attachment replies", () => {
   it("does not insert a late paste reply after the editor value is replaced", () => {
     vi.useFakeTimers();
     try {
-    vi.stubGlobal(
-      "FileReader",
-      class {
-        result: string | ArrayBuffer | null = "data:image/png;base64,AQ==";
-        onload: ((event: ProgressEvent<FileReader>) => unknown) | null = null;
-        readAsDataURL() {
+      vi.stubGlobal(
+        "FileReader",
+        class {
+          result: string | ArrayBuffer | null = "data:image/png;base64,AQ==";
+          onload: ((event: ProgressEvent<FileReader>) => unknown) | null = null;
+          readAsDataURL() {
             this.onload?.(
               new ProgressEvent("load") as ProgressEvent<FileReader>
             );
+          }
         }
-      }
-    );
-    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
-    postMessage.mockClear();
-    const onChange = vi.fn();
-    const { container, rerender } = render(
-      <CodeMirrorEditor
-        value="step A"
-        onChange={onChange}
-        affUri=""
-        dicUri=""
-      />
-    );
-    pasteImage(container);
-    const request = pastedImageRequests()[0];
-    const editor = container.querySelector(".cm-editor") as HTMLElement;
-    const view = EditorView.findFromDOM(editor)!;
+      );
+      const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+      postMessage.mockClear();
+      const onChange = vi.fn();
+      const { container, rerender } = render(
+        <CodeMirrorEditor
+          value="step A"
+          onChange={onChange}
+          affUri=""
+          dicUri=""
+        />
+      );
+      pasteImage(container);
+      const request = pastedImageRequests()[0];
+      const editor = container.querySelector(".cm-editor") as HTMLElement;
+      const view = EditorView.findFromDOM(editor)!;
 
-    rerender(
-      <CodeMirrorEditor
-        value="step B"
-        onChange={onChange}
-        affUri=""
-        dicUri=""
-      />
-    );
-    fireEvent(
-      window,
-      new MessageEvent("message", {
-        data: {
-          type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
-          seq: request!.seq,
-          relativePath: "./.ctrlyoke/attachments/late.png",
-        },
-      })
-    );
+      rerender(
+        <CodeMirrorEditor
+          value="step B"
+          onChange={onChange}
+          affUri=""
+          dicUri=""
+        />
+      );
+      fireEvent(
+        window,
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
+            seq: request!.seq,
+            relativePath: "./.ctrlyoke/attachments/late.png",
+          },
+        })
+      );
 
-    expect(view.state.doc.toString()).toBe("step B");
-    expect(postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK,
-        message: "Pasted image saved at @./.ctrlyoke/attachments/late.png",
-      })
-    );
+      expect(view.state.doc.toString()).toBe("step B");
+      expect(postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK,
+          message: "Pasted image saved at @./.ctrlyoke/attachments/late.png",
+        })
+      );
       act(() => vi.advanceTimersByTime(10 * 60_000));
       expect(
         postMessage.mock.calls
@@ -1533,45 +1533,45 @@ describe("CodeMirrorEditor late attachment replies", () => {
   it("removes a pending placeholder after a prompt round trip when its reply is lost", () => {
     vi.useFakeTimers();
     try {
-    vi.stubGlobal(
-      "FileReader",
-      class {
-        result: string | ArrayBuffer | null = "data:image/png;base64,AQ==";
-        onload: ((event: ProgressEvent<FileReader>) => unknown) | null = null;
-        readAsDataURL() {
+      vi.stubGlobal(
+        "FileReader",
+        class {
+          result: string | ArrayBuffer | null = "data:image/png;base64,AQ==";
+          onload: ((event: ProgressEvent<FileReader>) => unknown) | null = null;
+          readAsDataURL() {
             this.onload?.(
               new ProgressEvent("load") as ProgressEvent<FileReader>
             );
+          }
         }
-      }
-    );
-    const { container, rerender } = render(
-      <CodeMirrorEditor
-        value="prompt A"
-        documentKey="A"
-        onChange={vi.fn()}
-        affUri=""
-        dicUri=""
-      />
-    );
-    pasteImage(container);
-    const props = { onChange: vi.fn(), affUri: "", dicUri: "" };
+      );
+      const { container, rerender } = render(
+        <CodeMirrorEditor
+          value="prompt A"
+          documentKey="A"
+          onChange={vi.fn()}
+          affUri=""
+          dicUri=""
+        />
+      );
+      pasteImage(container);
+      const props = { onChange: vi.fn(), affUri: "", dicUri: "" };
       rerender(
         <CodeMirrorEditor {...props} value="prompt B" documentKey="B" />
       );
-    rerender(
-      <CodeMirrorEditor
-        {...props}
-        value="prompt A[Pasting image…]"
-        documentKey="A"
-      />
-    );
-    act(() => vi.advanceTimersByTime(5 * 60_000));
-    const view = EditorView.findFromDOM(
-      container.querySelector(".cm-editor") as HTMLElement
-    )!;
-    expect(view.state.doc.toString()).toBe("prompt A");
-    vi.useRealTimers();
+      rerender(
+        <CodeMirrorEditor
+          {...props}
+          value="prompt A[Pasting image…]"
+          documentKey="A"
+        />
+      );
+      act(() => vi.advanceTimersByTime(5 * 60_000));
+      const view = EditorView.findFromDOM(
+        container.querySelector(".cm-editor") as HTMLElement
+      )!;
+      expect(view.state.doc.toString()).toBe("prompt A");
+      vi.useRealTimers();
     } finally {
       vi.useRealTimers();
     }
@@ -1759,114 +1759,114 @@ describe("CodeMirrorEditor late attachment replies", () => {
   it("does not dispatch a successful paste reply after the editor becomes read-only", () => {
     vi.useFakeTimers();
     try {
-    vi.stubGlobal(
-      "FileReader",
-      class {
-        result: string | ArrayBuffer | null = "data:image/png;base64,AQ==";
-        onload: ((event: ProgressEvent<FileReader>) => unknown) | null = null;
-        readAsDataURL() {
+      vi.stubGlobal(
+        "FileReader",
+        class {
+          result: string | ArrayBuffer | null = "data:image/png;base64,AQ==";
+          onload: ((event: ProgressEvent<FileReader>) => unknown) | null = null;
+          readAsDataURL() {
             this.onload?.(
               new ProgressEvent("load") as ProgressEvent<FileReader>
             );
+          }
         }
-      }
-    );
-    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
-    postMessage.mockClear();
-    const props = { value: "", onChange: vi.fn(), affUri: "", dicUri: "" };
-    const { container, rerender } = render(<CodeMirrorEditor {...props} />);
-    pasteImage(container);
-    const request = pastedImageRequests()[0];
-    const editor = container.querySelector(".cm-editor") as HTMLElement;
-    const view = EditorView.findFromDOM(editor)!;
+      );
+      const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+      postMessage.mockClear();
+      const props = { value: "", onChange: vi.fn(), affUri: "", dicUri: "" };
+      const { container, rerender } = render(<CodeMirrorEditor {...props} />);
+      pasteImage(container);
+      const request = pastedImageRequests()[0];
+      const editor = container.querySelector(".cm-editor") as HTMLElement;
+      const view = EditorView.findFromDOM(editor)!;
 
-    rerender(<CodeMirrorEditor {...props} readOnly />);
-    fireEvent(
-      window,
-      new MessageEvent("message", {
-        data: {
-          type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
-          seq: request!.seq,
-          relativePath: "./.ctrlyoke/attachments/late.png",
-        },
-      })
-    );
+      rerender(<CodeMirrorEditor {...props} readOnly />);
+      fireEvent(
+        window,
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
+            seq: request!.seq,
+            relativePath: "./.ctrlyoke/attachments/late.png",
+          },
+        })
+      );
 
-    expect(view.state.doc.toString()).toContain("[Pasting image");
-    expect(view.state.doc.toString()).not.toContain(
-      "@./.ctrlyoke/attachments/late.png"
-    );
-    expect(postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK,
-        message: "Pasted image saved at @./.ctrlyoke/attachments/late.png",
-      })
-    );
-    act(() => vi.advanceTimersByTime(5 * 60_000));
-    expect(view.state.doc.toString()).toBe("");
-    vi.useRealTimers();
+      expect(view.state.doc.toString()).toContain("[Pasting image");
+      expect(view.state.doc.toString()).not.toContain(
+        "@./.ctrlyoke/attachments/late.png"
+      );
+      expect(postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK,
+          message: "Pasted image saved at @./.ctrlyoke/attachments/late.png",
+        })
+      );
+      act(() => vi.advanceTimersByTime(5 * 60_000));
+      expect(view.state.doc.toString()).toBe("");
+      vi.useRealTimers();
     } finally {
-    vi.useRealTimers();
+      vi.useRealTimers();
     }
   });
 
   it("replaces a pasted-image placeholder when the save reply arrives after timeout", async () => {
     vi.useFakeTimers();
     try {
-    vi.stubGlobal(
-      "FileReader",
-      class {
-        result: string | ArrayBuffer | null = "data:image/png;base64,AQ==";
-        onload: ((event: ProgressEvent<FileReader>) => unknown) | null = null;
-        readAsDataURL() {
+      vi.stubGlobal(
+        "FileReader",
+        class {
+          result: string | ArrayBuffer | null = "data:image/png;base64,AQ==";
+          onload: ((event: ProgressEvent<FileReader>) => unknown) | null = null;
+          readAsDataURL() {
             this.onload?.(
               new ProgressEvent("load") as ProgressEvent<FileReader>
             );
+          }
         }
-      }
-    );
-    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
-    postMessage.mockClear();
-    const { container } = render(
-      <CodeMirrorEditor value="" onChange={vi.fn()} affUri="" dicUri="" />
-    );
-    const content = container.querySelector(".cm-content") as HTMLElement;
-    fireEvent.paste(content, {
-      clipboardData: {
-        items: [
-          {
-            type: "image/png",
-            getAsFile: () =>
-              new File(["image"], "paste.png", { type: "image/png" }),
-          },
-        ],
-      },
-    });
-    const request = postMessage.mock.calls.find(
-      ([message]) =>
+      );
+      const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+      postMessage.mockClear();
+      const { container } = render(
+        <CodeMirrorEditor value="" onChange={vi.fn()} affUri="" dicUri="" />
+      );
+      const content = container.querySelector(".cm-content") as HTMLElement;
+      fireEvent.paste(content, {
+        clipboardData: {
+          items: [
+            {
+              type: "image/png",
+              getAsFile: () =>
+                new File(["image"], "paste.png", { type: "image/png" }),
+            },
+          ],
+        },
+      });
+      const request = postMessage.mock.calls.find(
+        ([message]) =>
           (message as { type?: string }).type ===
           MESSAGE_TYPES.SAVE_PASTED_IMAGE
-    )?.[0] as { seq: number };
-    expect(request).toBeDefined();
+      )?.[0] as { seq: number };
+      expect(request).toBeDefined();
 
-    vi.advanceTimersByTime(30_000);
-    const editor = container.querySelector(".cm-editor") as HTMLElement;
-    const view = EditorView.findFromDOM(editor)!;
-    view.dispatch({ changes: { from: 0, insert: "edited " } });
-    fireEvent(
-      window,
-      new MessageEvent("message", {
-        data: {
-          type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
-          seq: request.seq,
-          relativePath: "./.ctrlyoke/attachments/paste.png",
-        },
-      })
-    );
-    expect(EditorView.findFromDOM(editor)?.state.doc.toString()).toBe(
-      "edited @./.ctrlyoke/attachments/paste.png "
-    );
-    vi.useRealTimers();
+      vi.advanceTimersByTime(30_000);
+      const editor = container.querySelector(".cm-editor") as HTMLElement;
+      const view = EditorView.findFromDOM(editor)!;
+      view.dispatch({ changes: { from: 0, insert: "edited " } });
+      fireEvent(
+        window,
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
+            seq: request.seq,
+            relativePath: "./.ctrlyoke/attachments/paste.png",
+          },
+        })
+      );
+      expect(EditorView.findFromDOM(editor)?.state.doc.toString()).toBe(
+        "edited @./.ctrlyoke/attachments/paste.png "
+      );
+      vi.useRealTimers();
     } finally {
       vi.useRealTimers();
     }
