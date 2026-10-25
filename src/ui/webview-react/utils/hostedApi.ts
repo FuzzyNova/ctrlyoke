@@ -476,6 +476,27 @@ export async function workspaceWorktreeDiff(
   );
 }
 
+export async function workspaceWorktreeDiffPage(
+  sourceCheckoutRoot: string,
+  baseCommit: string,
+  branchName: string,
+  offset = 0,
+  pageSize = WORKSPACE_GIT_REF_DIFF_DEFAULT_PAGE_SIZE,
+  diffId?: string
+): Promise<WorkspaceGitRefDiffPageResponse> {
+  const params = new URLSearchParams({
+    sourceCheckoutRoot,
+    baseCommit,
+    branchName,
+    offset: String(offset),
+  });
+  if (diffId) params.set("diffId", diffId);
+  else params.set("pageSize", String(pageSize));
+  return hostedFetch<WorkspaceGitRefDiffPageResponse>(
+    `/api/workspace-viewer/worktree-diff-page?${params.toString()}`
+  );
+}
+
 export async function workspaceCheckoutCommit(
   req: WorkspaceCheckoutCommitRequest
 ): Promise<{ detached: boolean }> {

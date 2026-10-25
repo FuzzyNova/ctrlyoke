@@ -2947,6 +2947,50 @@ suite("HostedWorkspaceViewerService", function () {
       assert.ok(result.unifiedDiff.includes("feature.txt"));
     });
 
+    test("pages a worktree diff larger than GitUtils' default maxBuffer", async function () {
+      this.timeout(60_000);
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "baseline.txt", "baseline\n", "Baseline");
+      const baseCommit = runGit(root, "rev-parse", "HEAD");
+      runGit(root, "checkout", "-b", "feature/large-worktree");
+      const content = "0123456789abcdef".repeat(7000) + "\n";
+      for (let index = 0; index < 520; index++) {
+        const fileName = `large-${String(index).padStart(3, "0")}.txt`;
+        fs.writeFileSync(path.join(root, fileName), content);
+      }
+      runGit(root, "add", ".");
+      runGit(root, "commit", "-m", "Large worktree change");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const first = await svc.getWorktreeDiffPage(
+        root,
+        baseCommit,
+        "feature/large-worktree",
+        0,
+        1
+      );
+      assert.strictEqual(first.totalEntries, 520);
+      assert.strictEqual(first.entries.length, 1);
+      assert.strictEqual(first.entries[0]?.payloadKind, DIFF_PAYLOAD_KINDS.TEXT);
+      assert.strictEqual(first.entries[0]?.newContent, content);
+
+      commitFile(root, "later.txt", "after snapshot\n", "Move branch tip");
+      const second = await svc.getWorktreeDiffPage(
+        root,
+        baseCommit,
+        "feature/large-worktree",
+        1,
+        undefined,
+        first.diffId
+      );
+      assert.strictEqual(second.diffId, first.diffId);
+      assert.strictEqual(second.totalEntries, 520);
+      assert.strictEqual(second.offset, 1);
+      assert.ok(!second.entries.some((entry) => entry.path === "later.txt"));
+    });
+
     test("scopes a nested workspace diff to its trusted root", async () => {
       const root = createWorkspace();
       runGit(root, "init");

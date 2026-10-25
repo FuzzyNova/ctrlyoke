@@ -4,16 +4,11 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { RunSummaryBanner } from "@components/output/RunSummaryBanner";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { EXECUTION_STATES } from "@/types/messages";
-import { workspaceWorktreeDiff } from "@utils/hostedApi";
 import { useUiStore } from "@store/uiStore";
 
 vi.hoisted(() => {
   window.__ctrlyokeStandalone = true;
 });
-
-vi.mock("@utils/hostedApi", () => ({
-  workspaceWorktreeDiff: vi.fn(),
-}));
 
 const worktree = {
   mode: "named" as const,
@@ -49,7 +44,6 @@ describe("RunSummaryBanner in the hosted browser (isStandalone)", () => {
   beforeEach(() => {
     useWorkspaceViewerStore.getState().reset();
     useUiStore.setState({ hostCapabilities: [] });
-    vi.mocked(workspaceWorktreeDiff).mockReset();
   });
 
   it("shows a copy-path action when the host cannot open a new native window", () => {
@@ -67,18 +61,17 @@ describe("RunSummaryBanner in the hosted browser (isStandalone)", () => {
   });
 
   it("opens the recorded branch diff in the workspace viewer instead of posting a message", () => {
-    vi.mocked(workspaceWorktreeDiff).mockResolvedValue({ unifiedDiff: "" });
     renderBanner();
 
     fireEvent.click(screen.getByRole("button", { name: "View Diff" }));
 
-    expect(workspaceWorktreeDiff).toHaveBeenCalledWith(
-      worktree.sourceCheckoutRoot,
-      worktree.baseCommit,
-      worktree.branchName
-    );
     const state = useWorkspaceViewerStore.getState();
     expect(state.isOpen).toBe(true);
     expect(state.activeTab).toBe("sourceControl");
+    expect(state.worktreeDiffRequest).toEqual({
+      sourceCheckoutRoot: worktree.sourceCheckoutRoot,
+      baseCommit: worktree.baseCommit,
+      branchName: worktree.branchName,
+    });
   });
 });

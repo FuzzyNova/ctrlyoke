@@ -18,6 +18,7 @@ import {
   workspaceGitRefDiff,
   workspaceGitRefDiffDownload,
   workspaceGitRefDiffPage,
+  workspaceWorktreeDiffPage,
 } from "@utils/hostedApi";
 import type {
   WorkspaceCommitInfo,
@@ -39,6 +40,7 @@ vi.mock("@utils/hostedApi", () => ({
   workspaceGitRefDiff: vi.fn(),
   workspaceGitRefDiffDownload: vi.fn(),
   workspaceGitRefDiffPage: vi.fn(),
+  workspaceWorktreeDiffPage: vi.fn(),
 }));
 
 vi.mock("@components/shared", async (importOriginal) => {
@@ -50,8 +52,30 @@ vi.mock("@components/shared", async (importOriginal) => {
       getItem: (index: number) => WorkspaceGitRefDiffEntry | undefined;
       renderItem: (item: WorkspaceGitRefDiffEntry, index: number) => ReactNode;
       renderPlaceholder: (index: number) => ReactNode;
+      onRangeChange?: (range: {
+        visibleStartIndex: number;
+        visibleEndIndex: number;
+        overscanStartIndex: number;
+        overscanEndIndex: number;
+        startIndex: number;
+        endIndex: number;
+      }) => void;
     }) => (
       <div data-testid="virtualized-paged-list">
+        <button
+          type="button"
+          aria-label="Load next diff page"
+          onClick={() =>
+            props.onRangeChange?.({
+              visibleStartIndex: 20,
+              visibleEndIndex: 20,
+              overscanStartIndex: 20,
+              overscanEndIndex: 20,
+              startIndex: 20,
+              endIndex: 20,
+            })
+          }
+        />
         {Array.from(
           { length: Math.min(props.totalCount, 3) },
           (_unused, index) => {
@@ -173,11 +197,79 @@ beforeEach(() => {
   vi.mocked(workspaceGitRefDiff).mockReset();
   vi.mocked(workspaceGitRefDiffDownload).mockReset();
   vi.mocked(workspaceGitRefDiffPage).mockReset();
+  vi.mocked(workspaceWorktreeDiffPage).mockReset();
   vi.mocked(downloadBlob).mockReset();
   vi.mocked(notifyUser).mockReset();
   vi.mocked(workspaceGitRefDiffPage).mockResolvedValue(
     pageResponse([textEntry("src/file.ts")])
   );
+  vi.mocked(workspaceWorktreeDiffPage).mockResolvedValue(
+    pageResponse([textEntry("src/file.ts")])
+  );
+});
+
+describe("WorkspaceDiffPane worktree diff paging", () => {
+  it("loads worktree diff pages with the frozen snapshot id", async () => {
+    vi.mocked(workspaceWorktreeDiffPage)
+      .mockResolvedValueOnce(pageResponse([textEntry("src/file.ts")], 21))
+      .mockResolvedValueOnce(pageResponse([], 21, 20, undefined));
+    useWorkspaceViewerStore.getState().openToWorktreeDiff(
+      "/repo",
+      "base-hash",
+      "feature/worktree"
+    );
+    render(<WorkspaceDiffPane />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Open src/file.ts" })
+      ).toBeInTheDocument()
+    );
+    expect(workspaceWorktreeDiffPage).toHaveBeenCalledWith(
+      "/repo",
+      "base-hash",
+      "feature/worktree",
+      0,
+      20,
+      undefined
+    );
+    expect(screen.getByText("Branch feature/worktree")).toBeInTheDocument();
+    await userEvent.setup().click(
+      screen.getByRole("button", { name: "Load next diff page" })
+    );
+    await waitFor(() =>
+      expect(workspaceWorktreeDiffPage).toHaveBeenCalledTimes(2)
+    );
+    expect(workspaceWorktreeDiffPage).toHaveBeenLastCalledWith(
+      "/repo",
+      "base-hash",
+      "feature/worktree",
+      20,
+      20,
+      "diff-1"
+    );
+  });
+
+  it("shows a retryable error when the first worktree page fails", async () => {
+    const user = userEvent.setup();
+    vi.mocked(workspaceWorktreeDiffPage).mockRejectedValueOnce(
+      new Error("worktree page unavailable")
+    );
+    useWorkspaceViewerStore.getState().openToWorktreeDiff(
+      "/repo",
+      "base-hash",
+      "feature/worktree"
+    );
+    render(<WorkspaceDiffPane />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Unable to load diff."
+    );
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() =>
+      expect(workspaceWorktreeDiffPage).toHaveBeenCalledTimes(2)
+    );
+  });
 });
 
 describe("WorkspaceDiffPane commit diff controls", () => {

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-24 by timeout-budget bug sweep workflow (server-completions)
 - **Area:** `src/server/HostedWorkspaceViewerService.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -70,4 +70,4 @@ Two features still request the whole patch in one call:
 
 ## Progress
 
-The Download half is fixed in this commit; the worktree diff half remains.
+The Download and worktree diff halves are fixed in this commit.

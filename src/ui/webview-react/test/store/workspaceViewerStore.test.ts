@@ -2,20 +2,13 @@
  * Tests for workspaceViewerStore — focusing on the pending-navigation actions
  * added to support CodeMirror link clicks opening the workspace viewer.
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 import type { WorkspaceCommitInfo } from "@root/types/HostedWorkspaceViewerTypes";
 
-const mocks = vi.hoisted(() => ({ workspaceWorktreeDiff: vi.fn() }));
-vi.mock("@utils/hostedApi", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@utils/hostedApi")>()),
-  workspaceWorktreeDiff: mocks.workspaceWorktreeDiff,
-}));
-
 beforeEach(() => {
   useWorkspaceViewerStore.getState().reset();
-  mocks.workspaceWorktreeDiff.mockReset();
 });
 
 function store() {
@@ -366,46 +359,19 @@ describe("selectDiff", () => {
 });
 
 describe("worktree diff request sequencing", () => {
-  function deferred<T>() {
-    let resolve!: (value: T) => void;
-    let reject!: (reason?: unknown) => void;
-    const promise = new Promise<T>((res, rej) => {
-      resolve = res;
-      reject = rej;
+  it("keeps the branch request for the paged loader and clears it for a file diff", () => {
+    store().openToWorktreeDiff("/repo", "base", "branch");
+    expect(store().worktreeDiffRequest).toEqual({
+      sourceCheckoutRoot: "/repo",
+      baseCommit: "base",
+      branchName: "branch",
     });
-    return { promise, resolve, reject };
-  }
-
-  it("keeps the later worktree diff when responses resolve out of order", async () => {
-    const first = deferred<{ unifiedDiff: string; nonTextEntries: never[] }>();
-    const second = deferred<{ unifiedDiff: string; nonTextEntries: never[] }>();
-    mocks.workspaceWorktreeDiff
-      .mockReturnValueOnce(first.promise)
-      .mockReturnValueOnce(second.promise);
-    const requestA = store().openToWorktreeDiff("/repo", "base-a", "branch-a");
-    const requestB = store().openToWorktreeDiff("/repo", "base-b", "branch-b");
-    second.resolve({ unifiedDiff: "", nonTextEntries: [] });
-    await requestB;
-    first.resolve({ unifiedDiff: "", nonTextEntries: [] });
-    await requestA;
-    expect(store().diffRefLabel).toBe("Branch branch-b");
+    expect(store().diffRefLabel).toBe("Branch branch");
     expect(store().diffRefLoading).toBe(false);
-  });
-
-  it("does not replace a selected file diff with a pending worktree diff", async () => {
-    const pending = deferred<{
-      unifiedDiff: string;
-      nonTextEntries: never[];
-    }>();
-    mocks.workspaceWorktreeDiff.mockReturnValue(pending.promise);
-    const request = store().openToWorktreeDiff("/repo", "base", "branch");
     store().selectDiff("src/file.ts");
-    pending.resolve({ unifiedDiff: "", nonTextEntries: [] });
-    await request;
     expect(store().selectedDiffPath).toBe("src/file.ts");
     expect(store().diffFiles).toBeNull();
-    expect(store().diffRefLabel).toBeNull();
-    expect(store().diffRefLoading).toBe(false);
+    expect(store().worktreeDiffRequest).toBeNull();
   });
 });
 

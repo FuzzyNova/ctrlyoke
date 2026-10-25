@@ -16,11 +16,15 @@ import {
 } from "@components/diff";
 import { DiffFileHistoryList } from "@components/diff/DiffFileHistoryList";
 import { DiffRefDiffList } from "@components/diff/DiffRefDiffList";
-import { usePagedGitRefDiff } from "@hooks/usePagedGitRefDiff";
+import {
+  usePagedGitRefDiff,
+  type PagedGitRefDiffPageRequest,
+} from "@hooks/usePagedGitRefDiff";
 import { downloadBlob } from "@utils/download";
 import {
   hostedErrorMessage,
   workspaceGitRefDiffDownload,
+  workspaceWorktreeDiffPage,
 } from "@utils/hostedApi";
 import {
   DIFF_PAYLOAD_KINDS,
@@ -49,6 +53,9 @@ export const WorkspaceDiffPane: React.FC = () => {
   const selectedRepoId = useWorkspaceViewerStore((s) => s.selectedRepoId);
   const diffRefLoading = useWorkspaceViewerStore((s) => s.diffRefLoading);
   const diffRef = useWorkspaceViewerStore((s) => s.diffRef);
+  const worktreeDiffRequest = useWorkspaceViewerStore(
+    (s) => s.worktreeDiffRequest
+  );
   const diffKind = useWorkspaceViewerStore((s) => s.diffKind);
   const diffPayloadKind = useWorkspaceViewerStore((s) => s.diffPayloadKind);
   const diffImage = useWorkspaceViewerStore((s) => s.diffImage);
@@ -112,11 +119,37 @@ export const WorkspaceDiffPane: React.FC = () => {
     [sourceForParsedFile, visibleFiles]
   );
 
+  const fetchWorktreeDiffPage = useCallback(
+    (
+      request: PagedGitRefDiffPageRequest,
+      _signal?: AbortSignal
+    ) => {
+      if (!worktreeDiffRequest) {
+        throw new Error("Worktree diff request is no longer active");
+      }
+      return workspaceWorktreeDiffPage(
+        worktreeDiffRequest.sourceCheckoutRoot,
+        worktreeDiffRequest.baseCommit,
+        worktreeDiffRequest.branchName,
+        request.offset,
+        request.pageSize,
+        request.diffId
+      );
+    },
+    [worktreeDiffRequest]
+  );
+  const activeDiffRef = diffRef ?? (worktreeDiffRequest ? "worktree" : "");
   const pagedGitRefDiff = usePagedGitRefDiff({
-    ref: diffRef ?? "",
+    ref: worktreeDiffRequest
+      ? `worktree:${JSON.stringify(worktreeDiffRequest)}`
+      : (diffRef ?? ""),
     repo: selectedRepoId ?? undefined,
-    enabled: diffRef !== null,
+    enabled: diffRef !== null || worktreeDiffRequest !== null,
+    fetchPage: worktreeDiffRequest ? fetchWorktreeDiffPage : undefined,
   });
+  const activeDiffLabel = worktreeDiffRequest
+    ? `Branch ${worktreeDiffRequest.branchName}`
+    : pagedGitRefDiff.refLabel;
 
   const sourceForSingleFile = useMemo((): DiffFileCardProps["source"] => {
     switch (diffPayloadKind) {
@@ -256,7 +289,10 @@ export const WorkspaceDiffPane: React.FC = () => {
 
   // ── Multi-file git-ref diff mode ──────────────────────────────────────────
 
-  if (diffRef !== null && pagedGitRefDiff.initialLoading) {
+  if (
+    (diffRef !== null || worktreeDiffRequest !== null) &&
+    pagedGitRefDiff.initialLoading
+  ) {
     return (
       <div className="flex items-center justify-center h-full gap-2 text-editor-fg opacity-50">
         <Icon name="loading" className="animate-spin" />
@@ -265,7 +301,7 @@ export const WorkspaceDiffPane: React.FC = () => {
     );
   }
 
-  if (diffRef !== null) {
+  if (diffRef !== null || worktreeDiffRequest !== null) {
     return (
       <div className="flex flex-col h-full overflow-hidden">
         {/* Ref header banner */}
@@ -276,7 +312,7 @@ export const WorkspaceDiffPane: React.FC = () => {
               className="shrink-0 text-sm text-editor-fg opacity-60"
             />
             <span className="text-xs font-semibold text-editor-fg truncate">
-              {pagedGitRefDiff.refLabel}
+              {activeDiffLabel}
             </span>
             <span className="text-xs text-editor-fg opacity-40 shrink-0">
               {pagedGitRefDiff.totalCount === 1
@@ -292,18 +328,20 @@ export const WorkspaceDiffPane: React.FC = () => {
                 onCollapse={handleCollapseAllDiffs}
               />
             )}
-            <button
-              onClick={() => void handleDownload()}
-              disabled={downloading}
-              className="flex items-center gap-1 text-xs text-editor-fg opacity-60 hover:opacity-100 transition-opacity disabled:opacity-30"
-              title="Download as .diff file"
-            >
-              <Icon
-                name={downloading ? "loading" : "cloud-download"}
-                className={downloading ? "animate-spin" : undefined}
-              />
-              Download
-            </button>
+            {diffRef !== null && (
+              <button
+                onClick={() => void handleDownload()}
+                disabled={downloading}
+                className="flex items-center gap-1 text-xs text-editor-fg opacity-60 hover:opacity-100 transition-opacity disabled:opacity-30"
+                title="Download as .diff file"
+              >
+                <Icon
+                  name={downloading ? "loading" : "cloud-download"}
+                  className={downloading ? "animate-spin" : undefined}
+                />
+                Download
+              </button>
+            )}
           </div>
         </div>
 
@@ -359,7 +397,7 @@ export const WorkspaceDiffPane: React.FC = () => {
         >
           <DiffRefDiffList
             ref={diffFileListRef}
-            gitRef={diffRef}
+            gitRef={activeDiffRef}
             repo={selectedRepoId ?? undefined}
             controller={pagedGitRefDiff}
             command={{

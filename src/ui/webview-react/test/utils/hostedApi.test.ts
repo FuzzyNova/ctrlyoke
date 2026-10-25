@@ -3,6 +3,7 @@ import {
   HostedHttpError,
   hostedErrorMessage,
   workspaceGitRefDiffPage,
+  workspaceWorktreeDiffPage,
   workspaceTree,
 } from "@utils/hostedApi";
 import {
@@ -96,6 +97,33 @@ describe("hostedApi workspaceGitRefDiffPage", () => {
     await workspaceGitRefDiffPage("~abcdef0", 12, 12, "diff-1", "repo-a");
     expect(fetchMock.mock.calls[1]?.[0]).toBe(
       "/api/workspace-viewer/git-ref-diff-page?ref=%7Eabcdef0&offset=12&diffId=diff-1&repo=repo-a"
+    );
+  });
+});
+
+describe("hostedApi workspaceWorktreeDiffPage", () => {
+  it("serializes the worktree identity and continuation snapshot", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(() =>
+        Promise.resolve(new Response(JSON.stringify({ entries: [] })))
+      );
+
+    await workspaceWorktreeDiffPage("/repo", "base-hash", "feature/test", 0, 4);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "/api/workspace-viewer/worktree-diff-page?sourceCheckoutRoot=%2Frepo&baseCommit=base-hash&branchName=feature%2Ftest&offset=0&pageSize=4"
+    );
+
+    await workspaceWorktreeDiffPage(
+      "/repo",
+      "base-hash",
+      "feature/test",
+      4,
+      4,
+      "diff-1"
+    );
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      "/api/workspace-viewer/worktree-diff-page?sourceCheckoutRoot=%2Frepo&baseCommit=base-hash&branchName=feature%2Ftest&offset=4&diffId=diff-1"
     );
   });
 });

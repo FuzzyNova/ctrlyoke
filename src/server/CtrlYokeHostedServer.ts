@@ -2321,6 +2321,60 @@ export class CtrlYokeHostedServer
       }
     );
 
+    this.app.get(
+      "/api/workspace-viewer/worktree-diff-page",
+      requireToken,
+      async (req, res) => {
+        const sourceCheckoutRoot = req.query.sourceCheckoutRoot;
+        const baseCommit = req.query.baseCommit;
+        const branchName = req.query.branchName;
+        const offset =
+          typeof req.query.offset === "string"
+            ? Number(req.query.offset)
+            : 0;
+        const pageSize =
+          typeof req.query.pageSize === "string"
+            ? Number(req.query.pageSize)
+            : undefined;
+        const diffId =
+          typeof req.query.diffId === "string" ? req.query.diffId : undefined;
+        if (
+          typeof sourceCheckoutRoot !== "string" ||
+          !sourceCheckoutRoot ||
+          typeof baseCommit !== "string" ||
+          !baseCommit ||
+          typeof branchName !== "string" ||
+          !branchName
+        ) {
+          res.status(400).json({
+            error:
+              "sourceCheckoutRoot, baseCommit, and branchName are required",
+          });
+          return;
+        }
+        try {
+          const result = await this.viewerService.getWorktreeDiffPage(
+            sourceCheckoutRoot,
+            baseCommit,
+            branchName,
+            offset,
+            pageSize,
+            diffId
+          );
+          res.json(result satisfies WorkspaceGitRefDiffPageResponse);
+        } catch (err) {
+          if (err instanceof WorkspaceTreeHttpError) {
+            res.status(err.statusCode).json({ error: err.message });
+            return;
+          }
+          Log.error(
+            `[CtrlYokeHostedServer] workspace-viewer /worktree-diff-page error: ${String(err)}`
+          );
+          res.status(500).json({ error: "Internal server error" });
+        }
+      }
+    );
+
     this.app.post(
       "/api/workspace-viewer/checkout-commit",
       requireToken,
