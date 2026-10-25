@@ -738,6 +738,67 @@ suite("SkillsRegistryClient", () => {
       );
     });
 
+    test("a retry walks past a slug-named folder whose SKILL.md was rejected", async () => {
+      const trees: Record<string, unknown> = {
+        [COMMIT]: {
+          tree: [
+            { path: "alpha", type: "tree", sha: "alpha" },
+            { path: "nested", type: "tree", sha: "nested" },
+          ],
+        },
+        alpha: { tree: [{ path: "SKILL.md", type: "blob" }] },
+        nested: {
+          tree: [{ path: "alpha", type: "tree", sha: "nested-alpha" }],
+        },
+        "nested-alpha": { tree: [{ path: "SKILL.md", type: "blob" }] },
+      };
+      const routes: Record<string, Route> = {
+        "https://api.github.com/repos/anthropics/skills/commits/HEAD": () =>
+          new Response(`${COMMIT}\n`),
+        "https://api.github.com/repos/anthropics/skills/git/trees/": (url) => {
+          if (url.endsWith("?recursive=1")) {
+            return json({ tree: [], truncated: true });
+          }
+          const treeSha = url.split("/git/trees/")[1]?.split("?")[0] ?? "";
+          return json(trees[treeSha] ?? { tree: [] });
+        },
+        "https://raw.githubusercontent.com/anthropics/skills/": (url) =>
+          new Response(
+            url.endsWith("/nested/alpha/SKILL.md")
+              ? "---\nname: alpha\n---\n"
+              : "---\nname: something-else\n---\n"
+          ),
+      };
+      const { registry } = client(routes);
+
+      await assert.rejects(
+        registry.resolveSkill("anthropics/skills", "alpha"),
+        /the truncated repository tree still has unsearched directories/
+      );
+      const location = await registry.resolveSkill(
+        "anthropics/skills",
+        "alpha"
+      );
+      assert.strictEqual(location.skillMdPath, "nested/alpha/SKILL.md");
+    });
+
+    test("a SKILL.md that failed to download is probed again on retry", async () => {
+      let pdfReads = 0;
+      const routes = githubRoutes();
+      const rawPrefix = `https://raw.githubusercontent.com/anthropics/skills/${COMMIT}/`;
+      const readFile = routes[rawPrefix]!;
+      routes[rawPrefix] = (url) =>
+        url.endsWith("/skills/pdf/SKILL.md") && ++pdfReads === 1
+          ? new Response("unavailable", { status: 503 })
+          : readFile(url);
+      const { registry } = client(routes);
+
+      await assert.rejects(registry.resolveSkill("anthropics/skills", "pdf"));
+      const location = await registry.resolveSkill("anthropics/skills", "pdf");
+      assert.strictEqual(location.skillMdPath, "skills/pdf/SKILL.md");
+      assert.strictEqual(pdfReads, 2);
+    });
+
     test("continues a cached truncated-tree walk for another slug", async () => {
       const entries: Record<string, unknown> = {
         [COMMIT]: { tree: [{ path: "skills", type: "tree", sha: "skills" }] },

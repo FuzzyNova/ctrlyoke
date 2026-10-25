@@ -903,10 +903,9 @@ export class SkillsShRegistryClient implements SkillsRegistry {
       for (let index = 0; index < batch.length; index++) {
         const skillMdPath = batch[index]!;
         const content = contents[index];
-        if (content === null || content === undefined) {
-          cache.rejectedSkillMdPaths.add(skillMdPath);
-          continue;
-        }
+        // A failed download may be transient, so only a read whose name
+        // does not match is remembered as rejected.
+        if (content === null || content === undefined) continue;
         const frontmatter = parseAgentFrontmatter(content);
         const folderPath = getFolderPath(skillMdPath);
         const name = frontmatter.name ?? getFolderName(folderPath, source);
@@ -1009,7 +1008,7 @@ export class SkillsShRegistryClient implements SkillsRegistry {
         )) &&
       !(
         preferredSlug &&
-        this.hasRankedSlugCandidate(cached.entries, source, preferredSlug)
+        this.hasRankedSlugCandidate(cached, source, preferredSlug)
       )
     ) {
       await this.continueTruncatedTreeWalk(
@@ -1093,7 +1092,7 @@ export class SkillsShRegistryClient implements SkillsRegistry {
               entry.path === knownSkillMdPath
           )) ||
         (preferredSlug !== undefined &&
-          this.hasRankedSlugCandidate(cache.entries, source, preferredSlug))
+          this.hasRankedSlugCandidate(cache, source, preferredSlug))
       ) {
         return;
       }
@@ -1193,7 +1192,7 @@ export class SkillsShRegistryClient implements SkillsRegistry {
             entry.path === knownSkillMdPath
         )) ||
       (preferredSlug !== undefined &&
-        this.hasRankedSlugCandidate(cache.entries, source, preferredSlug));
+        this.hasRankedSlugCandidate(cache, source, preferredSlug));
 
     if (state.expanded.size === 0 && state.pending.length === 0) {
       const root = await this.fetchNonRecursiveTree(source, commitSha);
@@ -1222,18 +1221,26 @@ export class SkillsShRegistryClient implements SkillsRegistry {
     cache.complete = state.pending.length === 0;
   }
 
+  /**
+   * Whether the walked entries already hold a slug-named candidate. A
+   * candidate whose frontmatter was rejected doesn't count, so a retry keeps
+   * walking instead of stopping at the same mismatched folder.
+   */
   private hasRankedSlugCandidate(
-    entries: readonly GitTreeEntry[],
+    cache: CachedGitTree,
     source: string,
     slug: string
   ): boolean {
-    return rankSkillMdCandidates(entries, source, slug).some((skillMdPath) => {
-      const folderPath = getFolderPath(skillMdPath);
-      const segments = folderPath
-        ? folderPath.split("/")
-        : [source.split("/").pop() ?? source];
-      return segments.some((segment) => toSkillSlug(segment) === slug);
-    });
+    return rankSkillMdCandidates(cache.entries, source, slug).some(
+      (skillMdPath) => {
+        if (cache.rejectedSkillMdPaths.has(skillMdPath)) return false;
+        const folderPath = getFolderPath(skillMdPath);
+        const segments = folderPath
+          ? folderPath.split("/")
+          : [source.split("/").pop() ?? source];
+        return segments.some((segment) => toSkillSlug(segment) === slug);
+      }
+    );
   }
 
   private isTreeComplete(source: string, commitSha: string): boolean {

@@ -848,7 +848,6 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           if (entry.timeoutId) clearTimeout(entry.timeoutId);
           entry.timeoutId = null;
           entry.removalTimeoutId = null;
-          entry.detachedTimeoutId = null;
           entry.removalRequested = true;
           scheduleDetachedPlaceholderExpiry(entry, pending, seq);
           WebviewLog.warn(

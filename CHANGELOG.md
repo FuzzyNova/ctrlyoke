@@ -43,8 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   candidates with bounded concurrency, reporting when its safety bound applies.
 - Skills registry resolution and update checks resume bounded walks of truncated
   repository trees, stop when the requested skill is found, and keep unmatched
-  lookups within one walk budget while reusing rejected candidates across
-  lookups. They verify skill-folder completeness before installing files or
+  lookups within one walk budget. Later lookups skip candidates whose name did
+  not match, so a retry searches further. They verify skill-folder completeness before installing files or
   comparing updates, and root-level skills fail loudly when a truncated
   repository walk cannot confirm their full folder tree.
 - Run bundle loading streams `events.jsonl` and limits individual event lines,
