@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Run bundle loading streams `events.jsonl` and limits individual event lines,
   so exported bundles can exceed the small JSON file size cap.
 
+### Fixed
+
+- Managed language-server disposal stops servers before awaiting in-flight starts,
+  and an unanswered initialize request now times out after 60 seconds and is reported as a crash.
+
 ### Added
 
 - **`workflow_status` reports per-step git outcomes.** Finished prompt steps show HEAD at start and end for captured repositories, plus whether the workspace was dirty when the step ended.
