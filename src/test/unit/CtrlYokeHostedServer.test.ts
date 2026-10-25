@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import { EventEmitter } from "events";
+import { PassThrough } from "stream";
 import * as fs from "fs";
 import { request as httpRequest } from "http";
 import * as path from "path";
@@ -1264,6 +1265,77 @@ suite("CtrlYokeHostedServer file history route", () => {
       assert.deepStrictEqual(JSON.parse(response.body), {
         error: "ref is required",
       });
+    } finally {
+      server.dispose();
+    }
+  });
+
+  test("streams a commit patch larger than Git's default buffer as an attachment", async () => {
+    const token = "route-test-token-diff-download";
+    const server = createHostedServer({ workspaceRoot: process.cwd(), token });
+    const internals = server as unknown as {
+      viewerService: {
+        spawnGitRefDiffDownload: () => Promise<unknown>;
+      };
+    };
+    internals.viewerService.spawnGitRefDiffDownload = async () => {
+      const stdout = new PassThrough();
+      const stderr = new PassThrough();
+      const child = Object.assign(new EventEmitter(), {
+        stdout,
+        stderr,
+        kill: () => true,
+      });
+      stdout.once("end", () => child.emit("close", 0));
+      setImmediate(async () => {
+        const chunk = Buffer.alloc(1024 * 1024, 97);
+        for (let index = 0; index < 51; index++) {
+          if (!stdout.write(chunk)) {
+            await new Promise<void>((resolve) => stdout.once("drain", resolve));
+          }
+        }
+        stdout.end();
+      });
+      return child;
+    };
+
+    try {
+      const serverUrl = await server.listen();
+      if (!serverUrl) throw new Error("Hosted server did not start");
+      const url = new URL(serverUrl);
+      const response = await new Promise<{
+        statusCode: number | undefined;
+        contentDisposition: string | undefined;
+        bytes: number;
+      }>((resolve, reject) => {
+        const request = httpRequest(
+          {
+            hostname: "127.0.0.1",
+            port: Number(url.port),
+            path: `/api/workspace-viewer/git-ref-diff-download?ref=abc123&token=${encodeURIComponent(token)}`,
+          },
+          (res) => {
+            let bytes = 0;
+            res.on("data", (chunk: Buffer) => {
+              bytes += chunk.length;
+            });
+            res.on("end", () =>
+              resolve({
+                statusCode: res.statusCode,
+                contentDisposition: res.headers["content-disposition"],
+                bytes,
+              })
+            );
+            res.on("error", reject);
+          }
+        );
+        request.on("error", reject);
+        request.end();
+      });
+
+      assert.strictEqual(response.statusCode, 200);
+      assert.match(response.contentDisposition ?? "", /^attachment;/);
+      assert.ok(response.bytes > 50 * 1024 * 1024);
     } finally {
       server.dispose();
     }

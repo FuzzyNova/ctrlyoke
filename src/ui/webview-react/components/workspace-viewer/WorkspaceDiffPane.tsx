@@ -17,9 +17,16 @@ import {
 import { DiffFileHistoryList } from "@components/diff/DiffFileHistoryList";
 import { DiffRefDiffList } from "@components/diff/DiffRefDiffList";
 import { usePagedGitRefDiff } from "@hooks/usePagedGitRefDiff";
-import { downloadTextFile } from "@utils/download";
-import { workspaceGitRefDiff } from "@utils/hostedApi";
-import { DIFF_PAYLOAD_KINDS } from "@root/types/DashboardConstants";
+import { downloadBlob } from "@utils/download";
+import {
+  hostedErrorMessage,
+  workspaceGitRefDiffDownload,
+} from "@utils/hostedApi";
+import {
+  DIFF_PAYLOAD_KINDS,
+  USER_FEEDBACK_SEVERITY,
+} from "@root/types/DashboardConstants";
+import { notifyUser } from "@utils/notifyUser";
 import type { DiffFileCardProps } from "@components/diff/DiffFileCard";
 import {
   mergeNonTextDiffEntries,
@@ -173,10 +180,7 @@ export const WorkspaceDiffPane: React.FC = () => {
     if (!refLabel) return;
     setDownloading(true);
     try {
-      // Re-fetch the raw unified diff text for the download
-      // Reconstruct the ref from the label to avoid storing it separately
-      // We already have the unified diff from the current diffFiles parse, but
-      // we need the raw text. Re-fetch from the same endpoint.
+      // Reconstruct the ref from the label to avoid storing it separately.
       let ref: string;
       if (refLabel === "Working Tree Changes") ref = "~diff";
       else if (refLabel === "Staged Changes") ref = "~staged";
@@ -190,14 +194,18 @@ export const WorkspaceDiffPane: React.FC = () => {
         const fullHash = activeCommitInfo?.hash ?? shortHash;
         ref = `~${fullHash}`;
       }
-      const { unifiedDiff } = await workspaceGitRefDiff(
+      const blob = await workspaceGitRefDiffDownload(
         ref,
         selectedRepoId ?? undefined
       );
       const safeName = refLabel.replace(/[^a-z0-9_]/gi, "-").toLowerCase();
-      downloadTextFile(`ctrlyoke-${safeName}.diff`, unifiedDiff);
-    } catch {
-      // ignore download errors
+      downloadBlob(`ctrlyoke-${safeName}.diff`, blob);
+    } catch (error) {
+      notifyUser(
+        "Failed to download diff",
+        USER_FEEDBACK_SEVERITY.ERROR,
+        hostedErrorMessage(error)
+      );
     } finally {
       setDownloading(false);
     }

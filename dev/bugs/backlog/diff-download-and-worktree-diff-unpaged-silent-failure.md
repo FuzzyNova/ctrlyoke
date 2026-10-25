@@ -67,3 +67,7 @@ Two features still request the whole patch in one call:
   `refs/heads/<branch>` frozen to its hash as the target.
 - Bound `buildNonTextDiffEntries` with `mapWithBoundedConcurrency` wherever it is still
   called on a whole change.
+
+## Progress
+
+The Download half is fixed in this commit; the worktree diff half remains.

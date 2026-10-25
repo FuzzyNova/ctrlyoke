@@ -149,6 +149,24 @@ export async function hostedFetch<T>(
   return JSON.parse(text) as T;
 }
 
+export async function hostedFetchBlob(path: string): Promise<Blob> {
+  const headers: Record<string, string> = {};
+  const clientId = (window as Window & { __CTRLYOKE_CLIENT_ID__?: string })
+    .__CTRLYOKE_CLIENT_ID__;
+  if (clientId) headers["x-ctrlyoke-client-id"] = clientId;
+  if (token) headers["x-ctrlyoke-token"] = token;
+
+  const response = await fetch(path, { headers });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new HostedHttpError(
+      response.status,
+      `HTTP ${response.status}: ${text}`
+    );
+  }
+  return response.blob();
+}
+
 export async function workspaceTree(
   request: WorkspaceTreePageRequest | WorkspaceTreeRangeRequest,
   signal?: AbortSignal
@@ -428,6 +446,17 @@ export async function workspaceGitRefDiff(
   const repoParam = repo ? `&repo=${encodeURIComponent(repo)}` : "";
   return hostedFetch<WorkspaceGitRefDiffResponse>(
     `/api/workspace-viewer/git-ref-diff?ref=${encodeURIComponent(ref)}${repoParam}`
+  );
+}
+
+export async function workspaceGitRefDiffDownload(
+  ref: string,
+  repo?: string
+): Promise<Blob> {
+  const params = new URLSearchParams({ ref });
+  if (repo) params.set("repo", repo);
+  return hostedFetchBlob(
+    `/api/workspace-viewer/git-ref-diff-download?${params.toString()}`
   );
 }
 

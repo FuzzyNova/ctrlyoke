@@ -3107,5 +3107,49 @@ suite("HostedWorkspaceViewerService", function () {
       assert.ok(result.unifiedDiff?.includes("app.txt"));
       assert.ok(result.unifiedDiff?.includes("private-notes.txt"));
     });
+
+    test("computes non-text diff entries with at most eight concurrent reads", async () => {
+      const root = createWorkspace();
+      const service = new HostedWorkspaceViewerService(root) as unknown as {
+        buildNonTextDiffEntries: (
+          repoRoot: string,
+          files: Array<{
+            path: string;
+            status: string;
+            isBinary: boolean;
+          }>,
+          sources: {
+            baseRef: string;
+            targetRef: string;
+            targetIsWorkingTree: boolean;
+          }
+        ) => Promise<unknown[]>;
+        readGitDiffBytes: () => Promise<Buffer>;
+      };
+      let activeReads = 0;
+      let maxActiveReads = 0;
+      service.readGitDiffBytes = async () => {
+        activeReads++;
+        maxActiveReads = Math.max(maxActiveReads, activeReads);
+        await new Promise((resolve) => setTimeout(resolve, 2));
+        activeReads--;
+        return Buffer.from([0, 1, 2]);
+      };
+      const files = Array.from({ length: 20 }, (_unused, index) => ({
+        path: `asset-${index}.bin`,
+        status: "M",
+        isBinary: true,
+      }));
+
+      const entries = await service.buildNonTextDiffEntries(root, files, {
+        baseRef: "HEAD^",
+        targetRef: "HEAD",
+        targetIsWorkingTree: false,
+      });
+
+      assert.strictEqual(entries.length, files.length);
+      assert.ok(maxActiveReads > 1);
+      assert.ok(maxActiveReads <= 8);
+    });
   });
 });

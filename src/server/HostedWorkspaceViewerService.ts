@@ -1,7 +1,12 @@
 import * as fs from "fs";
 import * as path from "path";
 import { randomUUID } from "crypto";
-import { execFile } from "child_process";
+import {
+  execFile,
+  spawn,
+  type ChildProcessByStdio,
+} from "child_process";
+import type { Readable } from "stream";
 import { promisify } from "util";
 import { Log } from "../utils/Log";
 import {
@@ -176,7 +181,15 @@ const GIT_REF_DIFF_REFS = {
   STASH_PREFIX: "~stash:",
 } as const;
 
-type GitRefDiffKind = "workingTree" | "staged" | "stash" | "commit";
+const GIT_REF_DIFF_KINDS = {
+  WORKING_TREE: "workingTree",
+  STASH: "stash",
+} as const;
+
+type GitRefDiffKind =
+  | (typeof GIT_REF_DIFF_KINDS)[keyof typeof GIT_REF_DIFF_KINDS]
+  | "staged"
+  | "commit";
 
 export class RedactionMarkerSaveError extends Error {
   constructor() {
@@ -2696,7 +2709,7 @@ export class HostedWorkspaceViewerService {
   private resolveGitRefDiff(ref: string): GitRefDiffResolution {
     if (ref === GIT_REF_DIFF_REFS.WORKING_TREE) {
       return {
-        kind: "workingTree",
+        kind: GIT_REF_DIFF_KINDS.WORKING_TREE,
         sources: { baseRef: ":", targetIsWorkingTree: true },
         changedFilesArgs: ["diff"],
       };
@@ -2722,7 +2735,7 @@ export class HostedWorkspaceViewerService {
       }
       const stashRef = `stash@{${index}}`;
       return {
-        kind: "stash",
+        kind: GIT_REF_DIFF_KINDS.STASH,
         sources: {
           baseRef: `${stashRef}^1`,
           targetRef: stashRef,
@@ -2811,75 +2824,76 @@ export class HostedWorkspaceViewerService {
     changedFiles: readonly GitChangedFile[],
     sources: NonTextDiffSources
   ): Promise<WorkspaceGitRefDiffResponse["nonTextEntries"]> {
-    const entries = await Promise.all(
-      changedFiles
-        .filter((file) => file.isBinary)
-        .map(async (file) => {
-          const absolutePath = path.resolve(repoRoot, file.path);
-          if (!isPathWithinAnyDirectory(absolutePath, this.trustedRoots)) {
-            return null;
-          }
+    const binaryFiles = changedFiles.filter((file) => file.isBinary);
+    const entries = await mapWithBoundedConcurrency(
+      binaryFiles,
+      8,
+      async (file) => {
+        const absolutePath = path.resolve(repoRoot, file.path);
+        if (!isPathWithinAnyDirectory(absolutePath, this.trustedRoots)) {
+          return null;
+        }
 
-          const changeType = this.diffChangeType(file.status);
-          const oldGitPath = file.oldPath ?? file.path;
-          const oldBytes = await this.readGitDiffBytes(
-            repoRoot,
-            sources.baseRef,
-            oldGitPath
-          );
-          const newBytes = sources.targetIsWorkingTree
-            ? await this.readWorkingTreeDiffBytes(
-                repoRoot,
-                file.path,
-                changeType
-              )
-            : await this.readGitDiffBytes(
-                repoRoot,
-                sources.targetRef ?? "HEAD",
-                file.path
-              );
-          const viewerPath = this.relativePath(absolutePath);
-          const viewerOldPath = file.oldPath
-            ? this.relativePath(path.resolve(repoRoot, file.oldPath))
-            : undefined;
-
-          if (
-            oldBytes === DIFF_SIDE_TOO_LARGE ||
-            newBytes === DIFF_SIDE_TOO_LARGE
-          ) {
-            return {
-              path: viewerPath,
-              oldPath: viewerOldPath,
-              changeType,
-              payloadKind: DIFF_PAYLOAD_KINDS.TOO_LARGE,
-            };
-          }
-
-          if (isImageRefPath(file.path)) {
-            const image = this.buildImageDiffSides(
-              oldBytes,
-              newBytes,
+        const changeType = this.diffChangeType(file.status);
+        const oldGitPath = file.oldPath ?? file.path;
+        const oldBytes = await this.readGitDiffBytes(
+          repoRoot,
+          sources.baseRef,
+          oldGitPath
+        );
+        const newBytes = sources.targetIsWorkingTree
+          ? await this.readWorkingTreeDiffBytes(
+              repoRoot,
               file.path,
-              oldGitPath
+              changeType
+            )
+          : await this.readGitDiffBytes(
+              repoRoot,
+              sources.targetRef ?? "HEAD",
+              file.path
             );
-            if (image) {
-              return {
-                path: viewerPath,
-                oldPath: viewerOldPath,
-                changeType,
-                payloadKind: DIFF_PAYLOAD_KINDS.IMAGE,
-                image,
-              };
-            }
-          }
+        const viewerPath = this.relativePath(absolutePath);
+        const viewerOldPath = file.oldPath
+          ? this.relativePath(path.resolve(repoRoot, file.oldPath))
+          : undefined;
 
+        if (
+          oldBytes === DIFF_SIDE_TOO_LARGE ||
+          newBytes === DIFF_SIDE_TOO_LARGE
+        ) {
           return {
             path: viewerPath,
             oldPath: viewerOldPath,
             changeType,
-            payloadKind: DIFF_PAYLOAD_KINDS.BINARY,
+            payloadKind: DIFF_PAYLOAD_KINDS.TOO_LARGE,
           };
-        })
+        }
+
+        if (isImageRefPath(file.path)) {
+          const image = this.buildImageDiffSides(
+            oldBytes,
+            newBytes,
+            file.path,
+            oldGitPath
+          );
+          if (image) {
+            return {
+              path: viewerPath,
+              oldPath: viewerOldPath,
+              changeType,
+              payloadKind: DIFF_PAYLOAD_KINDS.IMAGE,
+              image,
+            };
+          }
+        }
+
+        return {
+          path: viewerPath,
+          oldPath: viewerOldPath,
+          changeType,
+          payloadKind: DIFF_PAYLOAD_KINDS.BINARY,
+        };
+      }
     );
     return entries.filter(
       (entry): entry is NonNullable<typeof entry> => entry !== null
@@ -3059,7 +3073,7 @@ export class HostedWorkspaceViewerService {
     const diffPathspecs = pathspecs?.length ? pathspecs : undefined;
     const unifiedDiffForNoVisibleRoots = pathspecs?.length === 0;
 
-    if (resolution.kind === "workingTree") {
+    if (resolution.kind === GIT_REF_DIFF_KINDS.WORKING_TREE) {
       const changedFiles = await getChangedFilesWithBinaryStatus(
         repoRoot,
         resolution.changedFilesArgs
@@ -3106,7 +3120,7 @@ export class HostedWorkspaceViewerService {
         ),
       };
     }
-    if (resolution.kind === "stash") {
+    if (resolution.kind === GIT_REF_DIFF_KINDS.STASH) {
       const stashIndex = resolution.stashIndex ?? 0;
       const [unifiedDiff, changedFiles] = await Promise.all([
         unifiedDiffForNoVisibleRoots
@@ -3141,6 +3155,92 @@ export class HostedWorkspaceViewerService {
         resolution.sources
       ),
     };
+  }
+
+  /**
+   * Start an unbuffered Git command for downloading a complete ref diff.
+   * Returns null when the selected repo has no roots visible to this viewer.
+   */
+  async spawnGitRefDiffDownload(
+    ref: string,
+    repoId?: string
+  ): Promise<ChildProcessByStdio<null, Readable, Readable> | null> {
+    const repoRoot = await this.resolveRepoRoot(repoId);
+    const resolution = this.resolveGitRefDiff(ref);
+    const pathspecs = this.getVisibleRepoPathspecs(repoRoot);
+    if (pathspecs?.length === 0) return null;
+
+    let command: string[];
+    if (resolution.kind === GIT_REF_DIFF_KINDS.WORKING_TREE) {
+      const changedFiles = await getChangedFilesWithBinaryStatus(
+        repoRoot,
+        resolution.changedFilesArgs
+      );
+      const unsafeWorkingTreePathspecs = changedFiles
+        .filter(
+          (file) =>
+            this.diffChangeType(file.status) !== DIFF_CHANGE_TYPES.DELETED &&
+            !this.safeResolve(path.resolve(repoRoot, file.path))
+        )
+        .map((file) => `:(exclude,literal)${toGitPath(file.path)}`);
+      const workingTreePathspecs = [
+        ...(pathspecs ?? []),
+        ...unsafeWorkingTreePathspecs,
+      ];
+      command = [
+        "-C",
+        repoRoot,
+        "diff",
+        "--stat",
+        "-p",
+        "--no-ext-diff",
+        ...(workingTreePathspecs.length
+          ? ["--", ...workingTreePathspecs]
+          : []),
+      ];
+    } else if (resolution.kind === GIT_CHANGE_KINDS.STAGED) {
+      command = [
+        "-C",
+        repoRoot,
+        "diff",
+        "--cached",
+        "--stat",
+        "-p",
+        "--no-ext-diff",
+        ...(pathspecs?.length ? ["--", ...pathspecs] : []),
+      ];
+    } else if (resolution.kind === GIT_REF_DIFF_KINDS.STASH) {
+      const stashRef = `stash@{${resolution.stashIndex ?? 0}}`;
+      command = pathspecs?.length
+        ? [
+            "-C",
+            repoRoot,
+            "diff",
+            "--stat",
+            "-p",
+            "--no-ext-diff",
+            "--end-of-options",
+            `${stashRef}^1`,
+            stashRef,
+            "--",
+            ...pathspecs,
+          ]
+        : ["-C", repoRoot, "stash", "show", "-p", stashRef];
+    } else {
+      const hash = resolution.commitHash ?? "";
+      command = [
+        "-C",
+        repoRoot,
+        "show",
+        "--stat",
+        "-p",
+        "--end-of-options",
+        hash,
+        ...(pathspecs?.length ? ["--", ...pathspecs] : []),
+      ];
+    }
+
+    return spawn("git", command, { stdio: ["ignore", "pipe", "pipe"] });
   }
 
   /**

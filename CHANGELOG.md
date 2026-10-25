@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Workspace viewer diff downloads stream Git output without a size cap and
+  report failures to the user.
 - Workspace viewer commit and file history now page from frozen Git tip hashes,
   keeping snapshots small and each Git history request bounded to one page.
 

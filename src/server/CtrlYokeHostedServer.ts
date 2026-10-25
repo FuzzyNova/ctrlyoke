@@ -2181,6 +2181,85 @@ export class CtrlYokeHostedServer
     );
 
     this.app.get(
+      "/api/workspace-viewer/git-ref-diff-download",
+      requireToken,
+      async (req, res) => {
+        const ref = req.query.ref;
+        if (typeof ref !== "string" || !ref) {
+          res.status(400).json({ error: "ref is required" });
+          return;
+        }
+        const repo =
+          typeof req.query.repo === "string" && req.query.repo.trim()
+            ? req.query.repo.trim()
+            : undefined;
+        try {
+          const child = await this.viewerService.spawnGitRefDiffDownload(
+            ref,
+            repo
+          );
+          if (child && (req.aborted || res.destroyed)) {
+            child.kill();
+            return;
+          }
+          const safeRef = ref.replace(/[^a-z0-9_-]/gi, "-").toLowerCase();
+          res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="ctrlyoke-${safeRef}.diff"`
+          );
+          if (!child) {
+            res.end();
+            return;
+          }
+
+          let stderr = "";
+          child.stderr.setEncoding("utf8");
+          child.stderr.on("data", (chunk: string) => {
+            stderr = `${stderr}${chunk}`.slice(-8_000);
+          });
+          res.on("close", () => {
+            if (!res.writableEnded) child.kill();
+          });
+          child.once("error", (err) => {
+            Log.error(
+              `[CtrlYokeHostedServer] workspace-viewer /git-ref-diff-download spawn error: ${String(err)}`
+            );
+            if (!res.headersSent) {
+              res.status(500).json({ error: "Unable to download diff" });
+            } else {
+              res.destroy(err);
+            }
+          });
+          child.once("close", (code) => {
+            if (res.writableEnded || res.destroyed) return;
+            if (code !== 0) {
+              Log.error(
+                `[CtrlYokeHostedServer] workspace-viewer /git-ref-diff-download git exited ${code}: ${stderr.trim()}`
+              );
+              if (!res.headersSent) {
+                res.status(500).json({ error: "Unable to download diff" });
+              } else {
+                res.destroy(new Error("Git diff download failed"));
+              }
+              return;
+            }
+            res.end();
+          });
+          child.stdout.pipe(res, { end: false });
+        } catch (err) {
+          if (err instanceof WorkspaceTreeHttpError) {
+            res.status(err.statusCode).json({ error: err.message });
+            return;
+          }
+          Log.error(
+            `[CtrlYokeHostedServer] workspace-viewer /git-ref-diff-download error: ${String(err)}`
+          );
+          res.status(500).json({ error: "Unable to download diff" });
+        }
+      }
+    );
+
+    this.app.get(
       "/api/workspace-viewer/git-ref-diff",
       requireToken,
       async (req, res) => {
