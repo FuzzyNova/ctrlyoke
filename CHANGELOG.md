@@ -33,7 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Run bundle loading streams `events.jsonl` and limits individual event lines,
   so exported bundles can exceed the small JSON file size cap.
 - Dashboard completion requests from separate sources no longer cancel each
-  other, and a run-view load reply reaches a reconnecting client.
+  other, and hosted run-view reconnects reload on the new connection so later
+  output and replay continue reaching it.
 - Copilot model discovery retries in the background up to two times after a
   subprocess timeout, while its fallback models remain available for validation.
 - Timed-out statusline commands keep any output already produced, and failures

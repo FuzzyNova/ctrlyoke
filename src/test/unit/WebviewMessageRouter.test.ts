@@ -1349,13 +1349,12 @@ suite(
       assert.strictEqual(loadCount, 1);
     });
 
-    test("re-delivers a joined load result through the duplicate connection", async () => {
-      let resolveLoad!: () => void;
-      const loadGate = new Promise<void>((resolve) => {
-        resolveLoad = resolve;
-      });
+    test("loads again after reconnect so later output uses the new connection", async () => {
+      const loadGates = [deferred<void>(), deferred<void>()];
+      let loadCount = 0;
+      let viewSink: ((message: unknown) => void) | undefined;
       const firstReplies: unknown[] = [];
-      const duplicateReplies: unknown[] = [];
+      const reconnectedReplies: unknown[] = [];
       const snapshot = {
         type: MESSAGE_TYPES.RUN_VIEW_LOADED,
         requestId: "run-view-reconnect",
@@ -1370,7 +1369,11 @@ suite(
               _address: unknown,
               send: (message: unknown) => void
             ) => {
-              await loadGate;
+              const call = loadCount++;
+              await loadGates[call].promise;
+              // RunViewPublisher binds its per-client view sink before it
+              // sends the snapshot. A later run-view push uses this sink.
+              viewSink = send;
               send(snapshot);
             },
             publishViewIdentityToViewers: async () => undefined,
@@ -1392,16 +1395,25 @@ suite(
         clientTag: "browser:1",
         postMessage: (reply) => firstReplies.push(reply),
       });
-      const duplicate = router.route(message, {
+      const reconnected = router.route(message, {
         clientTag: "browser:1",
-        postMessage: (reply) => duplicateReplies.push(reply),
+        postMessage: (reply) => reconnectedReplies.push(reply),
       });
       await Promise.resolve();
-      resolveLoad();
-      await Promise.all([first, duplicate]);
+      assert.strictEqual(loadCount, 1);
+
+      loadGates[0].resolve();
+      await first;
+      await Promise.resolve();
+      assert.strictEqual(loadCount, 2);
+      loadGates[1].resolve();
+      await reconnected;
+
+      const liveOutput = { type: MESSAGE_TYPES.CLI_WATCH_OUTPUT, output: "later" };
+      viewSink?.(liveOutput);
 
       assert.deepStrictEqual(firstReplies, [snapshot]);
-      assert.deepStrictEqual(duplicateReplies, [snapshot]);
+      assert.deepStrictEqual(reconnectedReplies, [snapshot, liveOutput]);
     });
 
     test("replies with a failure when the orchestrator is not available yet", async () => {

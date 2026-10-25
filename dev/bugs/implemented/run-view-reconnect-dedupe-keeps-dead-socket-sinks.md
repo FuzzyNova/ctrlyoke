@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-25 by bug-drain review of 156bf83e0
 - **Area:** `src/ui/WebviewMessageRouter.ts`, `src/ui/RunViewPublisher.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

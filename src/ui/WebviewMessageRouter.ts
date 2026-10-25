@@ -315,6 +315,8 @@ function describeWorktreeActionSuccess(
 export class WebviewMessageRouter {
   private routeQueue: Promise<void> = Promise.resolve();
   private readonly loadRunViewRoutes = new Map<string, LoadRunViewRouteEntry>();
+  private readonly loadRunViewConnectionIds = new WeakMap<PostMessageFn, number>();
+  private nextLoadRunViewConnectionId = 1;
   private readonly clientInteractionPorts = new Map<
     string,
     WebviewUserInteractionPort
@@ -436,10 +438,11 @@ export class WebviewMessageRouter {
    */
   async route(message: any, options?: WebviewRouteOptions): Promise<void> {
     const clientId = options?.clientTag ?? PANEL_CLIENT_ID;
+    const postMessage = options?.postMessage ?? this.defaultPostMessage;
     const loadRunViewKey =
       message?.type === MESSAGE_TYPES.LOAD_RUN_VIEW &&
       typeof message.requestId === "string"
-        ? `${clientId}\0${message.requestId}`
+        ? `${clientId}\0${this.getLoadRunViewConnectionId(postMessage)}\0${message.requestId}`
         : undefined;
     if (loadRunViewKey) {
       const existing = this.loadRunViewRoutes.get(loadRunViewKey);
@@ -455,7 +458,6 @@ export class WebviewMessageRouter {
         return;
       }
     }
-    const postMessage = options?.postMessage ?? this.defaultPostMessage;
     const interactionPort = this.getClientInteractionPort(
       clientId,
       postMessage
@@ -654,6 +656,19 @@ export class WebviewMessageRouter {
       controller.abort();
     }
     this.historySearchAbortControllers.delete(clientId);
+  }
+
+  /**
+   * Hosted routes receive one stable send function per WebSocket. Include that
+   * identity in LOAD_RUN_VIEW de-duplication so a reconnect gets its own load
+   * and can replace the per-client view sink with its live transport.
+   */
+  private getLoadRunViewConnectionId(postMessage: PostMessageFn): number {
+    const existingId = this.loadRunViewConnectionIds.get(postMessage);
+    if (existingId !== undefined) return existingId;
+    const connectionId = this.nextLoadRunViewConnectionId++;
+    this.loadRunViewConnectionIds.set(postMessage, connectionId);
+    return connectionId;
   }
 
   private getClientInteractionPort(
