@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-24 by bug-drain review of ce0c69dd4
 - **Area:** `src/completions/WorkspacePathQuery.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

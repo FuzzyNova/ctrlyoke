@@ -197,20 +197,21 @@ suite("WorkspacePathQuery", () => {
     );
   });
 
-  test("budgeted extending queries resume through the store and keep full-scan ranking", async () => {
+  test("budgeted extensions resume a narrowed scan and keep full-scan ranking", async () => {
     const files = [
       ...Array.from({ length: 699 }, (_, i) => `generated/noise-${i}.ts`),
       "generated/targetfile.ts",
     ];
     const { query } = create(files);
+    await query.queryFiles("t", { limit: 500 });
     const budget = { resumeOnAbort: true, maxScanEntries: 200, limit: 500 };
-    let results = await query.queryFiles("t", budget);
-    assert.ok(!results.some((entry) => entry.relativePath === files[699]));
-    results = await query.queryFiles("ta", budget);
+    let results = await query.queryFiles("ta", budget);
     assert.ok(!results.some((entry) => entry.relativePath === files[699]));
     results = await query.queryFiles("tar", budget);
     assert.ok(!results.some((entry) => entry.relativePath === files[699]));
     results = await query.queryFiles("targ", budget);
+    assert.ok(!results.some((entry) => entry.relativePath === files[699]));
+    results = await query.queryFiles("targe", budget);
     assert.ok(results.some((entry) => entry.relativePath === files[699]));
 
     const complete = await query.queryFiles("targetfile", {
@@ -224,17 +225,21 @@ suite("WorkspacePathQuery", () => {
   });
 
   test("store mutation invalidates a partial narrowing", async () => {
-    const { store, query } = create(
-      Array.from({ length: 100 }, (_, i) => `generated/noise-${i}.ts`)
-    );
-    await query.queryFiles("t", {
+    const { store, query } = create([
+      "target-old.ts",
+      ...Array.from({ length: 99 }, (_, i) => `generated/noise-${i}.ts`),
+    ]);
+    await query.queryFiles("target", {
       resumeOnAbort: true,
       maxScanEntries: 20,
     });
-    store.replaceAll([
-      "target.ts",
-      ...Array.from({ length: 99 }, (_, i) => `new/noise-${i}.ts`),
-    ]);
+    const changedFiles = Array.from(
+      { length: 100 },
+      (_, i) => `new/noise-${i}.ts`
+    );
+    changedFiles[0] = "renamed.ts";
+    changedFiles[15] = "target.ts";
+    store.replaceAll(changedFiles);
     const result = await query.queryFiles("target", {
       resumeOnAbort: true,
       maxScanEntries: 20,

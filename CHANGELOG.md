@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Editor `@` completions resume budgeted scans across narrowed file results, so later files can appear as a query is extended.
 - Workspace viewer file history now returns bounded partial `--follow` results,
   pages densely across trusted-root filtering, and keeps commit history available
   when Git cannot count the full history.
