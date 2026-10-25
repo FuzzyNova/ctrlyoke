@@ -116,6 +116,26 @@ suite("HostedWorkspaceViewerService", function () {
     runGit(cwd, "commit", "-m", message);
   }
 
+  function commitFileAt(
+    cwd: string,
+    fileName: string,
+    content: string,
+    message: string,
+    date: string
+  ): void {
+    fs.writeFileSync(path.join(cwd, fileName), content);
+    runGit(cwd, "add", fileName);
+    execFileSync("git", ["-C", cwd, "commit", "-m", message], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        GIT_AUTHOR_DATE: date,
+        GIT_COMMITTER_DATE: date,
+      },
+    });
+  }
+
   suite("checkoutBranch", () => {
     test("rejects option-shaped branch names before git can interpret them", async () => {
       const root = createWorkspace();
@@ -1001,6 +1021,8 @@ suite("HostedWorkspaceViewerService", function () {
         first.entries.map((entry) => entry.subject),
         ["After rename"]
       );
+      assert.match(first.nextCursor ?? "", /^[0-9a-f-]{36}$/i);
+      assert.ok(!first.nextCursor?.includes("new-name.txt"));
       assert.deepStrictEqual(
         second.entries.map((entry) => entry.subject),
         ["Rename file"]
@@ -1025,7 +1047,99 @@ suite("HostedWorkspaceViewerService", function () {
       assert.strictEqual(third.hasMore, false);
     });
 
-    test("resumes a timed-out renamed file walk at its last commit and parent path", async () => {
+    test("pages interleaved merged-branch commits exactly in Git order", async () => {
+      const root = createWorkspace();
+      runGit(root, "init", "-b", "main");
+      configureGitIdentity(root);
+      const baseContent = [
+        "main-slot",
+        ...Array.from({ length: 20 }, (_unused, index) => `middle-${index}`),
+        "side-slot",
+        "",
+      ].join("\n");
+      commitFileAt(
+        root,
+        "history.txt",
+        baseContent,
+        "Base",
+        "2020-01-01T00:00:00Z"
+      );
+      runGit(root, "branch", "side");
+      runGit(root, "checkout", "side");
+      commitFileAt(
+        root,
+        "history.txt",
+        baseContent.replace("side-slot", "side change"),
+        "Side commit",
+        "2020-01-03T00:00:00Z"
+      );
+      runGit(root, "checkout", "main");
+      commitFileAt(
+        root,
+        "history.txt",
+        baseContent.replace("main-slot", "main change"),
+        "Main commit",
+        "2020-01-02T00:00:00Z"
+      );
+      runGit(root, "merge", "--no-ff", "side", "-m", "Merge side");
+
+      const expected = runGit(
+        root,
+        "log",
+        "--follow",
+        "--format=%H",
+        "--",
+        "history.txt"
+      )
+        .split("\n")
+        .filter(Boolean);
+      const svc = new HostedWorkspaceViewerService(root);
+      const actual: string[] = [];
+      let page = await svc.getFileHistory("history.txt", 0, 1);
+      actual.push(...page.entries.map((entry) => entry.hash));
+      while (page.hasMore) {
+        page = await svc.getFileHistory(
+          "history.txt",
+          actual.length,
+          undefined,
+          page.historyId,
+          undefined,
+          undefined,
+          page.nextCursor
+        );
+        actual.push(...page.entries.map((entry) => entry.hash));
+      }
+
+      assert.deepStrictEqual(actual, expected);
+      assert.strictEqual(new Set(actual).size, actual.length);
+    });
+
+    test("rejects a cursor issued for a different history snapshot", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "history.txt", "one\n", "First");
+      commitFile(root, "history.txt", "two\n", "Second");
+      const svc = new HostedWorkspaceViewerService(root);
+      const first = await svc.getFileHistory("history.txt", 0, 1);
+      const other = await svc.getFileHistory("history.txt", 0, 1);
+      assert.ok(first.nextCursor);
+      assert.ok(other.nextCursor);
+      await assert.rejects(
+        svc.getFileHistory(
+          "history.txt",
+          1,
+          undefined,
+          other.historyId,
+          undefined,
+          undefined,
+          first.nextCursor
+        ),
+        (error: unknown) => error instanceof WorkspaceTreeBadRequestError
+      );
+    });
+
+    test("resumes a renamed file walk at its last commit and parent path", async () => {
       const root = createWorkspace();
       runGit(root, "init");
       configureGitIdentity(root);
@@ -1072,8 +1186,17 @@ suite("HostedWorkspaceViewerService", function () {
                 "After rename",
                 "M",
                 "new-name.txt"
-              )
+              ) +
+                formattedRow(
+                  renameHash,
+                  beforeRenameHash,
+                  "Rename file",
+                  "R100",
+                  "old-name.txt",
+                  "new-name.txt"
+                )
             );
+            child.emit("close", 0);
           });
         } else if (spawnCount === 2) {
           setImmediate(() => {
@@ -1113,7 +1236,7 @@ suite("HostedWorkspaceViewerService", function () {
         return child as never;
       });
       try {
-        const svc = new ShortDeadlineWorkspaceViewerService(root);
+        const svc = new HostedWorkspaceViewerService(root);
         const page = await svc.getFileHistory("new-name.txt", 0, 1);
         assert.deepStrictEqual(
           page.entries.map((entry) => entry.subject),
@@ -1324,6 +1447,39 @@ suite("HostedWorkspaceViewerService", function () {
           (error: unknown) =>
             error instanceof Error &&
             error.message.includes("timed out without making progress")
+        );
+      } finally {
+        restoreSpawn();
+      }
+    });
+
+    test("preserves Git failures instead of reporting them as page deadlines", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "history.txt", "one\n", "History entry");
+      const restoreSpawn = setFileHistorySpawnForTests(() => {
+        const child = new EventEmitter() as EventEmitter & {
+          stdout: PassThrough;
+          stderr: PassThrough;
+          kill: () => boolean;
+        };
+        child.stdout = new PassThrough();
+        child.stderr = new PassThrough();
+        child.kill = () => true;
+        setImmediate(() => {
+          child.stderr.write("fatal: synthetic Git failure");
+          child.emit("close", 2);
+        });
+        return child as never;
+      });
+      try {
+        await assert.rejects(
+          new HostedWorkspaceViewerService(root).getFileHistory("history.txt"),
+          (error: unknown) =>
+            error instanceof Error &&
+            error.message.includes("synthetic Git failure") &&
+            !error.message.includes("timed out")
         );
       } finally {
         restoreSpawn();

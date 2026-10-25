@@ -178,6 +178,7 @@ const SEARCH_DEFAULT_LIMIT = 100;
 const SEARCH_MAX_LIMIT = 500;
 const SEARCH_SNIPPET_MAX_LENGTH = 200;
 const FILE_HISTORY_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
+const FILE_HISTORY_CURSOR_CHECK_MINIMUM_MS = 1000;
 const FILE_HISTORY_SNAPSHOT_MAX_COUNT = 32;
 const COMMIT_LOG_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
 const COMMIT_LOG_SNAPSHOT_MAX_COUNT = 32;
@@ -228,12 +229,16 @@ interface FileHistorySnapshot {
   headHash: string;
   pageSize: number;
   lastAccessedAt: number;
+  cursors: Map<string, FileHistoryCursor>;
+  seenHashes: Set<string>;
+  pageCache: Map<string, WorkspaceFileHistoryPageResponse>;
 }
 
 interface FileHistoryCursor {
-  historyId: string;
   hash: string;
   path: string;
+  parentHashes: string[];
+  rawOffset: number;
 }
 
 interface CommitLogSnapshot {
@@ -2240,6 +2245,9 @@ export class HostedWorkspaceViewerService {
       headHash,
       pageSize: resolvedPageSize,
       lastAccessedAt: Date.now(),
+      cursors: new Map(),
+      seenHashes: new Set(),
+      pageCache: new Map(),
     };
     this.fileHistorySnapshots.set(snapshot.historyId, snapshot);
     this.trimFileHistorySnapshots();
@@ -2374,22 +2382,35 @@ export class HostedWorkspaceViewerService {
     let walkRef = snapshot.headHash;
     let walkSkip = rawOffset;
     let continuationCursor: string | undefined;
+    let pageCacheKey = `offset:${rawOffset}`;
     if (requestedNextCursor !== undefined) {
-      const decoded = decodeFileHistoryCursor(requestedNextCursor);
-      if (!decoded || decoded.historyId !== snapshot.historyId) {
+      const cursorState = snapshot.cursors.get(requestedNextCursor);
+      if (!cursorState) {
         throw new WorkspaceTreeBadRequestError("nextCursor is invalid");
       }
-      walkPath = decoded.path;
-      walkRef = `${decoded.hash}^`;
-      walkSkip = 0;
+      pageCacheKey = `cursor:${requestedNextCursor}`;
+      const cachedPage = snapshot.pageCache.get(pageCacheKey);
+      if (cachedPage) return cachedPage;
+      cursor = cursorState.rawOffset;
+      walkSkip = cursorState.rawOffset;
+      if (
+        cursorState.parentHashes.length > 0 &&
+        (await this.canResumeFileHistoryCursor(snapshot, deadline))
+      ) {
+        walkPath = cursorState.path;
+        walkRef = `${cursorState.hash}^`;
+        walkSkip = 0;
+      }
       continuationCursor = requestedNextCursor;
+    } else {
+      const cachedPage = snapshot.pageCache.get(pageCacheKey);
+      if (cachedPage) return cachedPage;
     }
     let hasMore = false;
     let timedOut = false;
-    let reachedRoot = false;
     let foundExtraEntry = false;
     const entryRows: FileHistoryCommitInfo[] = [];
-    while (entryRows.length <= snapshot.pageSize && !reachedRoot) {
+    while (entryRows.length <= snapshot.pageSize) {
       const remainingMs = deadline - Date.now();
       if (remainingMs <= 0) {
         timedOut = true;
@@ -2397,56 +2418,53 @@ export class HostedWorkspaceViewerService {
         break;
       }
       const batchSize = snapshot.pageSize + 1;
-      let result;
-      try {
-        result = await getFileHistoryCommitsBounded(
-          snapshot.repoRoot,
-          walkPath,
-          batchSize,
-          walkSkip,
-          walkRef,
-          true,
-          remainingMs
-        );
-      } catch (error) {
-        if (!continuationCursor) throw error;
-        timedOut = true;
-        hasMore = true;
-        break;
-      }
+      const result = await getFileHistoryCommitsBounded(
+        snapshot.repoRoot,
+        walkPath,
+        batchSize,
+        walkSkip,
+        walkRef,
+        true,
+        remainingMs
+      );
       for (const row of result.commits) {
+        const alreadySeen = snapshot.seenHashes.has(row.hash);
         const oldAbsolute = path.resolve(snapshot.repoRoot, row.oldPath);
         const newAbsolute = path.resolve(snapshot.repoRoot, row.path);
         const isTrusted =
           isPathWithinAnyDirectory(oldAbsolute, this.trustedRoots) &&
           isPathWithinAnyDirectory(newAbsolute, this.trustedRoots);
-        if (isTrusted && entryRows.length === snapshot.pageSize) {
+        if (
+          !alreadySeen &&
+          isTrusted &&
+          entryRows.length === snapshot.pageSize
+        ) {
           hasMore = true;
           foundExtraEntry = true;
           break;
         }
+        snapshot.seenHashes.add(row.hash);
         cursor++;
         if (row.parentHashes.length === 0) {
-          reachedRoot = true;
           continuationCursor = undefined;
+          walkPath = snapshot.gitPath;
+          walkRef = snapshot.headHash;
+          walkSkip = cursor;
         } else {
-          continuationCursor = encodeFileHistoryCursor({
-            historyId: snapshot.historyId,
+          continuationCursor = randomUUID();
+          snapshot.cursors.set(continuationCursor, {
             hash: row.hash,
             path: row.oldPath,
+            parentHashes: row.parentHashes,
+            rawOffset: cursor,
           });
           walkPath = row.oldPath;
           walkRef = `${row.hash}^`;
           walkSkip = 0;
         }
-        if (isTrusted) entryRows.push(row);
-        if (reachedRoot) break;
+        if (isTrusted && !alreadySeen) entryRows.push(row);
       }
       if (foundExtraEntry) {
-        break;
-      }
-      if (reachedRoot) {
-        hasMore = false;
         break;
       }
       if (result.timedOut) {
@@ -2500,7 +2518,7 @@ export class HostedWorkspaceViewerService {
       snapshot.headHash
     );
     for (const entry of entries) entry.pushed = !unpushedHashes.has(entry.hash);
-    return {
+    const response: WorkspaceFileHistoryPageResponse = {
       historyId: snapshot.historyId,
       pageSize: snapshot.pageSize,
       totalEntries: offset + entries.length,
@@ -2512,6 +2530,33 @@ export class HostedWorkspaceViewerService {
         : {}),
       entries,
     };
+    snapshot.pageCache.set(pageCacheKey, response);
+    return response;
+  }
+
+  private async canResumeFileHistoryCursor(
+    snapshot: FileHistorySnapshot,
+    deadline: number
+  ): Promise<boolean> {
+    // Disable the fast path if the frozen history contains any merge. This is
+    // conservative: Git's --follow traversal can interleave branch commits
+    // that are absent from the cursor commit's first-parent chain.
+    const remainingMs = deadline - Date.now();
+    if (remainingMs < FILE_HISTORY_CURSOR_CHECK_MINIMUM_MS) return false;
+    const { stdout } = await execFileAsync(
+      "git",
+      [
+        "-C",
+        snapshot.repoRoot,
+        "rev-list",
+        "--merges",
+        "-n",
+        "1",
+        snapshot.headHash,
+      ],
+      { timeout: remainingMs }
+    );
+    return stdout.trim().length === 0;
   }
 
   private createGitRefDiffId(): string {
@@ -3493,54 +3538,8 @@ function isValidHistoryId(value: string): boolean {
   return isValidListingId(value);
 }
 
-function encodeFileHistoryCursor(cursor: FileHistoryCursor): string {
-  return Buffer.from(JSON.stringify({ v: 1, ...cursor }), "utf8").toString(
-    "base64url"
-  );
-}
-
 function isValidFileHistoryCursor(value: string): boolean {
-  return value.length <= 4096 && decodeFileHistoryCursor(value) !== undefined;
-}
-
-function decodeFileHistoryCursor(value: string): FileHistoryCursor | undefined {
-  if (!value || value.length > 4096 || !/^[A-Za-z0-9_-]+$/.test(value)) {
-    return undefined;
-  }
-  try {
-    const decoded: unknown = JSON.parse(
-      Buffer.from(value, "base64url").toString("utf8")
-    );
-    if (
-      typeof decoded !== "object" ||
-      decoded === null ||
-      !("v" in decoded) ||
-      decoded.v !== 1 ||
-      !("historyId" in decoded) ||
-      typeof decoded.historyId !== "string" ||
-      !isValidHistoryId(decoded.historyId) ||
-      !("hash" in decoded) ||
-      typeof decoded.hash !== "string" ||
-      !/^[0-9a-f]{40}$/i.test(decoded.hash) ||
-      !("path" in decoded) ||
-      typeof decoded.path !== "string" ||
-      !decoded.path ||
-      decoded.path.includes("\\") ||
-      decoded.path.includes("\0") ||
-      path.posix.isAbsolute(decoded.path) ||
-      path.posix.normalize(decoded.path) !== decoded.path ||
-      decoded.path === "." ||
-      decoded.path === ".." ||
-      decoded.path.startsWith("../")
-    ) {
-      return undefined;
-    }
-    return {
-      historyId: decoded.historyId,
-      hash: decoded.hash,
-      path: decoded.path,
-    };
-  } catch {
-    return undefined;
-  }
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value
+  );
 }
