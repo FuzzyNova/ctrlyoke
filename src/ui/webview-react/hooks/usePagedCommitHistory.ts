@@ -378,10 +378,19 @@ export function usePagedCommitHistory(
         current?.pageSize ?? configRef.current.pageSize
       );
       const targetPage = current?.pages.get(targetOffset);
-      const offset =
-        current?.hasMore &&
-        targetPage !== undefined &&
-        requestedOffset >= targetOffset + targetPage.length
+      const loadedCount = current
+        ? [...current.pages.values()].reduce(
+            (count, commits) => count + commits.length,
+            0
+          )
+        : 0;
+      const isContinuation =
+        current?.hasMore && requestedOffset === loadedCount;
+      const offset = isContinuation
+        ? loadedCount
+        : current?.hasMore &&
+            targetPage !== undefined &&
+            requestedOffset >= targetOffset + targetPage.length
           ? targetOffset + targetPage.length
           : targetOffset;
       if (!current?.listingId || current.initialLoading) {
@@ -566,8 +575,22 @@ export function usePagedCommitHistory(
       const firstOffset =
         direction > 0 ? visibleFirstOffset : overscanFirstOffset;
       const lastOffset = direction < 0 ? visibleLastOffset : overscanLastOffset;
+      const loadedCount = current
+        ? [...current.pages.values()].reduce(
+            (count, commits) => count + commits.length,
+            0
+          )
+        : 0;
       for (let offset = firstOffset; offset <= lastOffset; offset += pageSize) {
         requestRange(offset);
+      }
+      if (
+        current?.hasMore &&
+        loadedCount > 0 &&
+        loadedCount >= range.overscanStartIndex &&
+        loadedCount <= range.overscanEndIndex
+      ) {
+        requestRange(loadedCount);
       }
       if (direction > 0) requestRange(lastOffset + pageSize);
       else if (direction < 0 && firstOffset >= pageSize) {

@@ -586,6 +586,23 @@ export function usePagedFileHistory(
       for (let offset = firstOffset; offset <= lastOffset; offset += pageSize) {
         requestRange(offset);
       }
+      const loadedCount = current
+        ? Math.max(
+            virtualLengthRef.current,
+            [...current.pages.values()].reduce(
+              (count, page) => count + page.length,
+              0
+            )
+          )
+        : 0;
+      if (
+        current?.hasMore &&
+        loadedCount > 0 &&
+        loadedCount >= range.overscanStartIndex &&
+        loadedCount <= range.overscanEndIndex
+      ) {
+        requestRange(loadedCount);
+      }
       if (direction > 0) requestRange(lastOffset + pageSize);
       else if (direction < 0 && firstOffset >= pageSize) {
         requestRange(firstOffset - pageSize);

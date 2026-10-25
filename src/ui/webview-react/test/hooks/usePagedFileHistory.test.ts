@@ -55,12 +55,12 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-function renderHistory(fetchPage: PagedFileHistoryFetcher) {
+function renderHistory(fetchPage: PagedFileHistoryFetcher, pageSize = 3) {
   return renderHook(() =>
     usePagedFileHistory({
       path: "src\\file.ts",
       repo: "repo-a",
-      pageSize: 3,
+      pageSize,
       fetchPage,
     })
   );
@@ -209,6 +209,82 @@ describe("usePagedFileHistory", () => {
       offset: 1,
       nextOffset: 5,
       nextCursor: "cursor-5",
+    });
+  });
+
+  it("fills a short page inside the current range without waiting for scroll", async () => {
+    const fetchPage = vi
+      .fn<PagedFileHistoryFetcher>()
+      .mockResolvedValueOnce({
+        ...response(HISTORY_A, 0, Array.from({ length: 10 }, (_, i) => entry(i)), 30),
+        pageSize: 30,
+        hasMore: true,
+      })
+      .mockResolvedValueOnce({
+        ...response(HISTORY_A, 10, Array.from({ length: 20 }, (_, i) => entry(i + 10)), 30),
+        pageSize: 30,
+        hasMore: false,
+      });
+    const { result } = renderHistory(fetchPage, 30);
+
+    await waitFor(() => expect(result.current.loadedCount).toBe(10));
+    act(() =>
+      result.current.onRangeChange({
+        visibleStartIndex: 0,
+        visibleEndIndex: 15,
+        overscanStartIndex: 0,
+        overscanEndIndex: 27,
+        startIndex: 0,
+        endIndex: 15,
+      })
+    );
+
+    await waitFor(() => expect(result.current.loadedCount).toBe(30));
+    expect(fetchPage.mock.calls.map(([request]) => request.offset)).toEqual([
+      0, 10,
+    ]);
+  });
+
+  it("does not duplicate a continuation request while it is in flight", async () => {
+    const continuation = deferred<WorkspaceFileHistoryPageResponse>();
+    const fetchPage = vi
+      .fn<PagedFileHistoryFetcher>()
+      .mockResolvedValueOnce({
+        ...response(HISTORY_A, 0, [entry(0)], 10),
+        hasMore: true,
+      })
+      .mockReturnValueOnce(continuation.promise);
+    const { result } = renderHistory(fetchPage);
+    await waitFor(() => expect(result.current.loadedCount).toBe(1));
+
+    act(() =>
+      result.current.onRangeChange({
+        visibleStartIndex: 0,
+        visibleEndIndex: 5,
+        overscanStartIndex: 0,
+        overscanEndIndex: 8,
+        startIndex: 0,
+        endIndex: 5,
+      })
+    );
+    act(() =>
+      result.current.onRangeChange({
+        visibleStartIndex: 0,
+        visibleEndIndex: 5,
+        overscanStartIndex: 0,
+        overscanEndIndex: 8,
+        startIndex: 0,
+        endIndex: 5,
+      })
+    );
+
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      continuation.resolve({
+        ...response(HISTORY_A, 1, [entry(1)], 2),
+        hasMore: false,
+      });
+      await continuation.promise;
     });
   });
 

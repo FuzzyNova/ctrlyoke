@@ -287,6 +287,109 @@ describe("usePagedCommitHistory", () => {
     expect(fetchPage.mock.calls[1]?.[0].offset).toBe(1);
   });
 
+  it("fills a short page inside the current range without waiting for scroll", async () => {
+    const fetchPage = vi
+      .fn<PagedCommitHistoryFetcher>()
+      .mockResolvedValueOnce({
+        ...response(HISTORY_A, 0, [commit(0)], false, 30),
+        pageSize: 30,
+        hasMore: true,
+      })
+      .mockResolvedValueOnce({
+        ...response(
+          HISTORY_A,
+          1,
+          Array.from({ length: 29 }, (_, i) => commit(i + 1)),
+          false,
+          30
+        ),
+        pageSize: 30,
+        hasMore: false,
+      });
+    const { result } = renderHook(() =>
+      usePagedCommitHistory({
+        repo: "repo-a",
+        branchHint: "main",
+        detached: false,
+        pageSize: 30,
+        fetchPage,
+      })
+    );
+
+    await waitFor(() => expect(result.current.loadedCount).toBe(1));
+    act(() =>
+      result.current.onRangeChange({
+        visibleStartIndex: 0,
+        visibleEndIndex: 15,
+        overscanStartIndex: 0,
+        overscanEndIndex: 27,
+        startIndex: 0,
+        endIndex: 15,
+      })
+    );
+
+    await waitFor(() => expect(result.current.loadedCount).toBe(30));
+    expect(fetchPage.mock.calls.map(([request]) => request.offset)).toEqual([
+      0, 1,
+    ]);
+  });
+
+  it("does not duplicate a continuation request while it is in flight", async () => {
+    const continuation = deferred<WorkspaceCommitLogResponse>();
+    const fetchPage = vi
+      .fn<PagedCommitHistoryFetcher>()
+      .mockResolvedValueOnce({
+        ...response(HISTORY_A, 0, [commit(0)], false, 10),
+        hasMore: true,
+      })
+      .mockReturnValueOnce(continuation.promise);
+    const { result } = renderHistory(fetchPage);
+    await waitFor(() => expect(result.current.loadedCount).toBe(1));
+
+    const range = {
+      visibleStartIndex: 0,
+      visibleEndIndex: 2,
+      overscanStartIndex: 0,
+      overscanEndIndex: 2,
+      startIndex: 0,
+      endIndex: 2,
+    };
+    act(() => result.current.onRangeChange(range));
+    act(() => result.current.onRangeChange(range));
+
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      continuation.resolve({
+        ...response(HISTORY_A, 1, [commit(1)], false, 10),
+        hasMore: true,
+      });
+      await continuation.promise;
+    });
+  });
+
+  it("does not repeat an empty page that still reports more history", async () => {
+    const fetchPage = vi.fn<PagedCommitHistoryFetcher>().mockResolvedValue({
+      ...response(HISTORY_A, 0, [], false, 10),
+      hasMore: true,
+    });
+    const { result } = renderHistory(fetchPage);
+    await waitFor(() => expect(result.current.listingId).toBe(HISTORY_A));
+    act(() =>
+      result.current.onRangeChange({
+        visibleStartIndex: 0,
+        visibleEndIndex: 2,
+        overscanStartIndex: 0,
+        overscanEndIndex: 2,
+        startIndex: 0,
+        endIndex: 2,
+      })
+    );
+
+    await waitFor(() => expect(fetchPage).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fetchPage).toHaveBeenCalledTimes(1);
+  });
+
   it("continues paging by hasMore when the server omits a total", async () => {
     const fetchPage = vi
       .fn<PagedCommitHistoryFetcher>()

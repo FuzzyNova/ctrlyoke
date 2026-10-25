@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-25 by bug-drain review of 90f508194
 - **Area:** `src/ui/webview-react/hooks/usePagedFileHistory.ts` (`onRangeChange`, `requestRange`), `src/ui/webview-react/components/workspace-viewer/DiffFileHistoryList.tsx`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
