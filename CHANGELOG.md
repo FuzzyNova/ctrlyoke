@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-24
+
 ### Added
 
 - **`workflow_status` reports per-step git outcomes.** Finished prompt steps show HEAD at start and end for captured repositories, plus whether the workspace was dirty when the step ended.
