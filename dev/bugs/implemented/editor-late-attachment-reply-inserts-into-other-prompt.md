@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-25 by bug-drain review of 5e1c8aa2b
 - **Area:** `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

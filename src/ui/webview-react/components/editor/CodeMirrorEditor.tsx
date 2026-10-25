@@ -217,6 +217,7 @@ interface PendingPlaceholder {
   to: number;
   text: string;
   placeholderPresent: boolean;
+  removedByTimeout: boolean;
   timeoutId: ReturnType<typeof setTimeout> | null;
   removalTimeoutId: ReturnType<typeof setTimeout> | null;
 }
@@ -659,12 +660,14 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       pending.delete(seq);
       const view = viewRef.current;
       if (!view) return false;
+      if (replacement && readOnlyRef.current) return false;
       const from = Math.min(entry.from, view.state.doc.length);
       const to = Math.min(entry.to, view.state.doc.length);
       const hasPlaceholder =
         entry.placeholderPresent &&
         to - from === entry.text.length &&
         view.state.doc.sliceString(from, to) === entry.text;
+      if (!hasPlaceholder && !entry.removedByTimeout) return false;
       view.dispatch({
         changes: {
           from,
@@ -686,7 +689,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       to - from === entry.text.length &&
       view.state.doc.sliceString(from, to) === entry.text
     ) {
+      entry.removedByTimeout = true;
+      entry.placeholderPresent = false;
+      entry.from = from;
+      entry.to = from;
       view.dispatch({ changes: { from, to, insert: "" } });
+      return;
     }
     entry.from = from;
     entry.to = from;
@@ -773,6 +781,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         to,
         text: CAPTURING_OUTPUT_PLACEHOLDER,
         placeholderPresent: true,
+        removedByTimeout: false,
         timeoutId,
         removalTimeoutId: null,
       });
@@ -880,6 +889,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         to: pos + PASTING_IMAGE_PLACEHOLDER.length,
         text: PASTING_IMAGE_PLACEHOLDER,
         placeholderPresent: true,
+        removedByTimeout: false,
         timeoutId,
         removalTimeoutId: null,
       });
@@ -1179,6 +1189,14 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
                   entry.from,
                   update.changes.mapPos(entry.to, -1)
                 );
+                if (
+                  entry.placeholderPresent &&
+                  (entry.to - entry.from !== entry.text.length ||
+                    update.state.doc.sliceString(entry.from, entry.to) !==
+                      entry.text)
+                ) {
+                  entry.placeholderPresent = false;
+                }
               }
             }
           }
@@ -1294,6 +1312,15 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     const currentValue = viewRef.current.state.doc.toString();
     if (currentValue !== value) {
       completionClient.clearCache();
+      for (const pending of [
+        pendingPastesRef.current,
+        pendingCapturesRef.current,
+      ]) {
+        for (const entry of pending.values()) {
+          entry.placeholderPresent = false;
+          entry.removedByTimeout = false;
+        }
+      }
       viewRef.current.dispatch({
         changes: {
           from: 0,

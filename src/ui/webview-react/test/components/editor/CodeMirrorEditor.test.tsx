@@ -1238,6 +1238,151 @@ describe("CodeMirrorEditor late attachment replies", () => {
     vi.useRealTimers();
   });
 
+  it("does not insert a late paste reply after the editor value is replaced", () => {
+    vi.stubGlobal(
+      "FileReader",
+      class {
+        result: string | ArrayBuffer | null = "data:image/png;base64,AQ==";
+        onload: ((event: ProgressEvent<FileReader>) => unknown) | null = null;
+        readAsDataURL() {
+          this.onload?.(new ProgressEvent("load") as ProgressEvent<FileReader>);
+        }
+      }
+    );
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+    const onChange = vi.fn();
+    const { container, rerender } = render(
+      <CodeMirrorEditor
+        value="step A"
+        onChange={onChange}
+        affUri=""
+        dicUri=""
+      />
+    );
+    pasteImage(container);
+    const request = pastedImageRequests()[0];
+    const editor = container.querySelector(".cm-editor") as HTMLElement;
+    const view = EditorView.findFromDOM(editor)!;
+
+    rerender(
+      <CodeMirrorEditor
+        value="step B"
+        onChange={onChange}
+        affUri=""
+        dicUri=""
+      />
+    );
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        data: {
+          type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
+          seq: request!.seq,
+          relativePath: "./.ctrlyoke/attachments/late.png",
+        },
+      })
+    );
+
+    expect(view.state.doc.toString()).toBe("step B");
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK,
+        message: "Pasted image saved at @./.ctrlyoke/attachments/late.png",
+      })
+    );
+  });
+
+  it("does not insert a late paste reply when the placeholder was edited", () => {
+    vi.stubGlobal(
+      "FileReader",
+      class {
+        result: string | ArrayBuffer | null = "data:image/png;base64,AQ==";
+        onload: ((event: ProgressEvent<FileReader>) => unknown) | null = null;
+        readAsDataURL() {
+          this.onload?.(new ProgressEvent("load") as ProgressEvent<FileReader>);
+        }
+      }
+    );
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+    const { container } = render(
+      <CodeMirrorEditor value="" onChange={vi.fn()} affUri="" dicUri="" />
+    );
+    pasteImage(container);
+    const request = pastedImageRequests()[0];
+    const editor = container.querySelector(".cm-editor") as HTMLElement;
+    const view = EditorView.findFromDOM(editor)!;
+    view.dispatch({ changes: { from: 3, to: 7, insert: "user" } });
+
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        data: {
+          type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
+          seq: request!.seq,
+          relativePath: "./.ctrlyoke/attachments/late.png",
+        },
+      })
+    );
+
+    expect(view.state.doc.toString()).toContain("user");
+    expect(view.state.doc.toString()).not.toContain(
+      "@./.ctrlyoke/attachments/late.png"
+    );
+    expect(view.state.doc.toString()).not.toContain("[Pasting image");
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK,
+        message: "Pasted image saved at @./.ctrlyoke/attachments/late.png",
+      })
+    );
+  });
+
+  it("does not dispatch a successful paste reply after the editor becomes read-only", () => {
+    vi.stubGlobal(
+      "FileReader",
+      class {
+        result: string | ArrayBuffer | null = "data:image/png;base64,AQ==";
+        onload: ((event: ProgressEvent<FileReader>) => unknown) | null = null;
+        readAsDataURL() {
+          this.onload?.(new ProgressEvent("load") as ProgressEvent<FileReader>);
+        }
+      }
+    );
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+    const props = { value: "", onChange: vi.fn(), affUri: "", dicUri: "" };
+    const { container, rerender } = render(<CodeMirrorEditor {...props} />);
+    pasteImage(container);
+    const request = pastedImageRequests()[0];
+    const editor = container.querySelector(".cm-editor") as HTMLElement;
+    const view = EditorView.findFromDOM(editor)!;
+
+    rerender(<CodeMirrorEditor {...props} readOnly />);
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        data: {
+          type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
+          seq: request!.seq,
+          relativePath: "./.ctrlyoke/attachments/late.png",
+        },
+      })
+    );
+
+    expect(view.state.doc.toString()).toContain("[Pasting image");
+    expect(view.state.doc.toString()).not.toContain(
+      "@./.ctrlyoke/attachments/late.png"
+    );
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK,
+        message: "Pasted image saved at @./.ctrlyoke/attachments/late.png",
+      })
+    );
+  });
+
   it("keeps two pending paste replies attached to their own placeholders after typing before both", () => {
     vi.useFakeTimers();
     vi.stubGlobal(
