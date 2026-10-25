@@ -2,7 +2,13 @@
 
 - **Found:** 2026-10-24 by timeout-budget bug sweep workflow (server-completions)
 - **Area:** `src/utils/WorkflowFileDiscovery.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
+
+Discovery now uses Git's tracked and non-ignored untracked paths in checkouts,
+including nested repositories, and falls back to an asynchronous directory walk
+only outside Git. The hosted picker requests ignored workflow files only when
+the user disables its hide-ignored setting; that opt-in path walks ignored
+directories asynchronously.
 
 ## Symptom
 

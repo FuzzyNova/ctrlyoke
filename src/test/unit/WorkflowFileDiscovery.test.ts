@@ -2,9 +2,13 @@ import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import { afterEach, suite, test } from "mocha";
 import { findWorkflowFilesInWorkspace } from "../../utils/WorkflowFileDiscovery";
 import { BUNDLE_MANIFEST_FILE_NAME } from "../../types/DashboardConstants";
+
+const execFileAsync = promisify(execFile);
 
 suite("WorkflowFileDiscovery", () => {
   const tempDirs: string[] = [];
@@ -33,7 +37,7 @@ suite("WorkflowFileDiscovery", () => {
       "utf8"
     );
 
-    assert.deepStrictEqual(findWorkflowFilesInWorkspace(workspaceRoot), []);
+    assert.deepStrictEqual(await findWorkflowFilesInWorkspace(workspaceRoot), []);
   });
 
   test("discovers prompt files inside an unmanifested assets directory", async () => {
@@ -49,11 +53,63 @@ suite("WorkflowFileDiscovery", () => {
       "utf8"
     );
 
-    const files = findWorkflowFilesInWorkspace(workspaceRoot);
+    const files = await findWorkflowFilesInWorkspace(workspaceRoot);
 
     assert.deepStrictEqual(
       files.map((file) => file.relativePath),
       ["mygame.assets/workflow.prompt.md"]
+    );
+  });
+
+  test("uses Git candidates and excludes ignored workflows unless requested", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-workflow-discovery-git-")
+    );
+    tempDirs.push(workspaceRoot);
+    await execFileAsync("git", ["init", "--quiet"], { cwd: workspaceRoot });
+    await fs.writeFile(path.join(workspaceRoot, ".gitignore"), "ignored/\n");
+    await fs.mkdir(path.join(workspaceRoot, "ignored"));
+    await fs.writeFile(path.join(workspaceRoot, "ignored", "hidden.prompt.md"), "ignored");
+    await fs.writeFile(path.join(workspaceRoot, "tracked.ctrlyoke.yaml"), "tracked");
+    await fs.writeFile(path.join(workspaceRoot, "untracked.prompt.md"), "untracked");
+    await execFileAsync("git", ["add", ".gitignore", "tracked.ctrlyoke.yaml"], {
+      cwd: workspaceRoot,
+    });
+
+    const visibleFiles = await findWorkflowFilesInWorkspace(workspaceRoot);
+    assert.deepStrictEqual(
+      visibleFiles.map((file) => file.relativePath),
+      ["tracked.ctrlyoke.yaml", "untracked.prompt.md"]
+    );
+    assert.ok(visibleFiles.every((file) => file.gitIgnored === false));
+
+    const allFiles = await findWorkflowFilesInWorkspace(workspaceRoot, {
+      includeGitIgnored: true,
+    });
+    assert.deepStrictEqual(
+      allFiles.map((file) => [file.relativePath, file.gitIgnored]),
+      [
+        ["ignored/hidden.prompt.md", true],
+        ["tracked.ctrlyoke.yaml", false],
+        ["untracked.prompt.md", false],
+      ]
+    );
+  });
+
+  test("uses the asynchronous filesystem walk outside a Git checkout", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-workflow-discovery-non-git-")
+    );
+    tempDirs.push(workspaceRoot);
+    await fs.mkdir(path.join(workspaceRoot, "nested"));
+    await fs.mkdir(path.join(workspaceRoot, "node_modules"));
+    await fs.writeFile(path.join(workspaceRoot, "nested", "workflow.prompt.md"), "workflow");
+    await fs.writeFile(path.join(workspaceRoot, "node_modules", "hidden.prompt.md"), "hidden");
+
+    const files = await findWorkflowFilesInWorkspace(workspaceRoot);
+    assert.deepStrictEqual(
+      files.map((file) => file.relativePath),
+      ["nested/workflow.prompt.md"]
     );
   });
 });

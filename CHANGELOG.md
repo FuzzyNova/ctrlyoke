@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Workflow file discovery uses Git candidates in checkouts and an asynchronous walk elsewhere.** Ignored workflow files are loaded on demand when the hosted picker is configured to show them.
+
 - **Workspace search and `@` completions include files inside nested Git repositories and initialized submodules.** Directory entries are excluded from search file results and the completion index.
 
 - **Large Git file listings use the long Git timeout.** Git listing failures are no longer mistaken for non-repositories; recovery paths log when they use a degraded filesystem walk, and the hosted workspace explorer marks children of wholly ignored directories as ignored.

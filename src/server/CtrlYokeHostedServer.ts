@@ -69,10 +69,7 @@ import {
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
 import { findWorkflowFilesInWorkspace } from "../utils/WorkflowFileDiscovery";
-import {
-  getGitTrackedFiles,
-  isNotGitRepositoryError,
-} from "../utils/GitUtils";
+import { repoToplevel } from "../utils/GitUtils";
 import { Log } from "../utils/Log";
 import { configService } from "../config/CtrlYokeConfigService";
 import { createHostedHarnessStatusUpdate } from "./HostedServerMessageFactory";
@@ -1469,31 +1466,25 @@ export class CtrlYokeHostedServer
       },
       express.static(webviewDist, { index: false })
     );
-    this.app.get("/api/workflow-files", requireToken, async (_req, res) => {
-      const files = findWorkflowFilesInWorkspace(this.workspaceRoot);
-      let trackedFiles: string[] | null;
+    this.app.get("/api/workflow-files", requireToken, async (req, res) => {
       try {
-        trackedFiles = await getGitTrackedFiles(this.workspaceRoot);
+        const [files, gitRoot] = await Promise.all([
+          findWorkflowFilesInWorkspace(this.workspaceRoot, {
+            includeGitIgnored: req.query.includeGitIgnored === "true",
+          }),
+          repoToplevel(this.workspaceRoot),
+        ]);
+        res.json({
+          workspaceRoot: this.workspaceRoot,
+          isGitRepo: gitRoot !== null,
+          files,
+        });
       } catch (error) {
-        if (!isNotGitRepositoryError(error)) {
-          Log.warn(
-            `[CtrlYokeHostedServer] Git file listing failed for ${this.workspaceRoot}: ${String(error)}`
-          );
-          res.status(500).json({ error: "Git file listing failed" });
-          return;
-        }
-        trackedFiles = null;
+        Log.warn(
+          `[CtrlYokeHostedServer] Workflow file listing failed for ${this.workspaceRoot}: ${String(error)}`
+        );
+        res.status(500).json({ error: "Workflow file listing failed" });
       }
-      const isGitRepo = trackedFiles !== null;
-      const trackedSet = trackedFiles ? new Set(trackedFiles) : null;
-      res.json({
-        workspaceRoot: this.workspaceRoot,
-        isGitRepo,
-        files: files.map((file) => ({
-          ...file,
-          gitIgnored: trackedSet ? !trackedSet.has(file.relativePath) : false,
-        })),
-      });
     });
 
     // ── Workspace Viewer API ────────────────────────────────────────────────

@@ -1188,7 +1188,7 @@ function registerCommands(
       return undefined;
     }
 
-    const promptFiles = findWorkflowFilesInWorkspace(workspaceRoot);
+    const promptFiles = await findWorkflowFilesInWorkspace(workspaceRoot);
 
     if (promptFiles.length === 0) {
       vscode.window.showWarningMessage("No prompt files found in workspace");

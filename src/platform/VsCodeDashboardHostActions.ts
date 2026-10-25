@@ -64,7 +64,7 @@ export class VsCodeDashboardHostActions implements DashboardHostActions {
         );
         return undefined;
       }
-      const files = findWorkflowFilesInWorkspace(workspaceRoot);
+      const files = await findWorkflowFilesInWorkspace(workspaceRoot);
       if (files.length === 0) {
         await vscode.commands.executeCommand(
           VSCODE_COMMANDS.SELECT_PROMPT_FILE
