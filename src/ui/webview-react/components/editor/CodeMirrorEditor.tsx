@@ -225,6 +225,8 @@ interface PendingPlaceholder {
   removalRequested: boolean;
   timeoutId: ReturnType<typeof setTimeout> | null;
   removalTimeoutId: ReturnType<typeof setTimeout> | null;
+  detachedTimeoutId: ReturnType<typeof setTimeout> | null;
+  resolvedReplacement?: string;
 }
 
 const MOUSE_SELECTION_TEARDOWN_EVENTS = {
@@ -233,6 +235,7 @@ const MOUSE_SELECTION_TEARDOWN_EVENTS = {
 } as const;
 
 const FILE_OPERATION_PLACEHOLDER_REMOVAL_TIMEOUT_MS = 5 * 60_000;
+const DETACHED_PLACEHOLDER_TTL_MS = 30 * 60_000;
 let nextPasteSeq = 0;
 let nextCaptureSeq = 0;
 
@@ -652,9 +655,85 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     initTypoChecker();
   }, [affUri, dicUri]);
 
-  // Replace a pending placeholder with final text — a `@ref ` on success or
-  // an empty string on failure — then forget the entry. Its range is mapped
-  // through document changes by the update listener below.
+  const scheduleDetachedPlaceholderExpiry = useCallback(
+    (
+      entry: PendingPlaceholder,
+      pending: Map<number, PendingPlaceholder>,
+      seq: number
+    ) => {
+      if (entry.detachedTimeoutId) clearTimeout(entry.detachedTimeoutId);
+      entry.detachedTimeoutId = setTimeout(() => {
+        if (pending.get(seq) !== entry) return;
+        if (entry.timeoutId) clearTimeout(entry.timeoutId);
+        if (entry.removalTimeoutId) clearTimeout(entry.removalTimeoutId);
+        entry.timeoutId = null;
+        entry.removalTimeoutId = null;
+        entry.detachedTimeoutId = null;
+        pending.delete(seq);
+        WebviewLog.warn(
+          "[CodeMirror] Expired a detached file-operation placeholder after 30 minutes"
+        );
+      }, DETACHED_PLACEHOLDER_TTL_MS);
+    },
+    []
+  );
+
+  const applyPendingPlaceholderOutcome = useCallback(
+    (
+      entry: PendingPlaceholder,
+      pending: Map<number, PendingPlaceholder>,
+      seq: number
+    ) => {
+      if (!entry.removalRequested && entry.resolvedReplacement === undefined) {
+        return false;
+      }
+      const view = viewRef.current;
+      if (
+        !view ||
+        !entry.attached ||
+        entry.documentKey !== documentKeyRef.current
+      ) {
+        return false;
+      }
+
+      const from = Math.min(entry.from, view.state.doc.length);
+      const to = Math.min(entry.to, view.state.doc.length);
+      const hasPlaceholder =
+        entry.placeholderPresent &&
+        to - from === entry.text.length &&
+        view.state.doc.sliceString(from, to) === entry.text;
+      const hasLateSuccess =
+        entry.resolvedReplacement !== undefined && entry.removedByTimeout;
+      if (!hasPlaceholder && !hasLateSuccess) {
+        pending.delete(seq);
+        if (entry.detachedTimeoutId) clearTimeout(entry.detachedTimeoutId);
+        entry.detachedTimeoutId = null;
+        return false;
+      }
+
+      const replacement =
+        entry.resolvedReplacement !== undefined && !readOnlyRef.current
+          ? entry.resolvedReplacement
+          : "";
+      view.dispatch({
+        changes: {
+          from,
+          to: hasPlaceholder ? to : from,
+          insert: replacement,
+        },
+      });
+      if (entry.timeoutId) clearTimeout(entry.timeoutId);
+      if (entry.removalTimeoutId) clearTimeout(entry.removalTimeoutId);
+      if (entry.detachedTimeoutId) clearTimeout(entry.detachedTimeoutId);
+      pending.delete(seq);
+      return true;
+    },
+    []
+  );
+
+  // Replies received while another prompt is active are retained as outcomes
+  // until the matching document returns. The document key guard prevents a
+  // late reply from ever being applied to the currently visible prompt.
   const resolvePendingPlaceholder = useCallback(
     (
       pending: Map<number, PendingPlaceholder>,
@@ -663,37 +742,30 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     ) => {
       const entry = pending.get(seq);
       if (!entry) return false;
-      if (!entry.attached || entry.documentKey !== documentKeyRef.current) {
-        if (entry.timeoutId) clearTimeout(entry.timeoutId);
-        if (entry.removalTimeoutId) clearTimeout(entry.removalTimeoutId);
-        entry.timeoutId = null;
-        entry.removalTimeoutId = null;
-        pending.delete(seq);
+      if (
+        replacement &&
+        entry.attached &&
+        entry.documentKey === documentKeyRef.current &&
+        readOnlyRef.current
+      ) {
         return false;
       }
-      if (replacement && readOnlyRef.current) return false;
       if (entry.timeoutId) clearTimeout(entry.timeoutId);
       if (entry.removalTimeoutId) clearTimeout(entry.removalTimeoutId);
-      pending.delete(seq);
-      const view = viewRef.current;
-      if (!view) return false;
-      const from = Math.min(entry.from, view.state.doc.length);
-      const to = Math.min(entry.to, view.state.doc.length);
-      const hasPlaceholder =
-        entry.placeholderPresent &&
-        to - from === entry.text.length &&
-        view.state.doc.sliceString(from, to) === entry.text;
-      if (!hasPlaceholder && !entry.removedByTimeout) return false;
-      view.dispatch({
-        changes: {
-          from,
-          to: hasPlaceholder ? to : from,
-          insert: replacement,
-        },
-      });
-      return true;
+      entry.timeoutId = null;
+      entry.removalTimeoutId = null;
+
+      if (!entry.attached || entry.documentKey !== documentKeyRef.current) {
+        entry.resolvedReplacement = replacement || undefined;
+        entry.removalRequested = replacement.length === 0;
+        return true;
+      }
+
+      entry.resolvedReplacement = replacement || undefined;
+      entry.removalRequested = replacement.length === 0;
+      return applyPendingPlaceholderOutcome(entry, pending, seq);
     },
-    []
+    [applyPendingPlaceholderOutcome]
   );
 
   const removePendingPlaceholder = useCallback((entry: PendingPlaceholder) => {
@@ -729,52 +801,38 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     (view: EditorView, key: string | undefined) => {
       const document = view.state.doc.toString();
       const candidates = [
-        ...pendingPastesRef.current.values(),
-        ...pendingCapturesRef.current.values(),
-      ].filter((entry) => entry.documentKey === key && !entry.attached);
-      const matches: Array<{
-        entry: PendingPlaceholder;
-        from: number;
-        distance: number;
-      }> = [];
-      for (const entry of candidates) {
-        for (
-          let from = document.indexOf(entry.text);
-          from !== -1;
-          from = document.indexOf(entry.text, from + 1)
-        ) {
-          matches.push({ entry, from, distance: Math.abs(from - entry.from) });
-        }
-      }
-      matches.sort((left, right) => left.distance - right.distance);
+        ...[...pendingPastesRef.current.entries()].map(([seq, entry]) => ({
+          seq,
+          entry,
+          pending: pendingPastesRef.current,
+        })),
+        ...[...pendingCapturesRef.current.entries()].map(([seq, entry]) => ({
+          seq,
+          entry,
+          pending: pendingCapturesRef.current,
+        })),
+      ]
+        .filter(({ entry }) => entry.documentKey === key && !entry.attached)
+        .sort((left, right) => left.entry.from - right.entry.from);
 
-      const claimedEntries = new Set<PendingPlaceholder>();
-      const claimedPositions = new Set<number>();
-      const attachedAt = new Map<PendingPlaceholder, number>();
-      for (const match of matches) {
-        if (
-          claimedEntries.has(match.entry) ||
-          claimedPositions.has(match.from)
-        ) {
-          continue;
-        }
-        claimedEntries.add(match.entry);
-        claimedPositions.add(match.from);
-        attachedAt.set(match.entry, match.from);
-      }
-
-      for (const entry of candidates) {
-        const from = attachedAt.get(entry);
+      let searchFrom = 0;
+      for (const { entry, pending, seq } of candidates) {
+        const from = document.indexOf(entry.text, searchFrom);
         entry.attached = true;
-        entry.placeholderPresent = from !== undefined;
-        if (from !== undefined) {
+        entry.placeholderPresent = from !== -1;
+        if (from !== -1) {
           entry.from = from;
           entry.to = from + entry.text.length;
-          if (entry.removalRequested) removePendingPlaceholder(entry);
+          searchFrom = from + entry.text.length;
+          if (entry.detachedTimeoutId) clearTimeout(entry.detachedTimeoutId);
+          entry.detachedTimeoutId = null;
+          applyPendingPlaceholderOutcome(entry, pending, seq);
+        } else {
+          entry.placeholderPresent = false;
         }
       }
     },
-    [removePendingPlaceholder]
+    [applyPendingPlaceholderOutcome]
   );
 
   const schedulePlaceholderRemoval = useCallback(
@@ -790,7 +848,9 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           if (entry.timeoutId) clearTimeout(entry.timeoutId);
           entry.timeoutId = null;
           entry.removalTimeoutId = null;
-          pending.delete(seq);
+          entry.detachedTimeoutId = null;
+          entry.removalRequested = true;
+          scheduleDetachedPlaceholderExpiry(entry, pending, seq);
           WebviewLog.warn(
             "[CodeMirror] Removed an unresolved file-operation placeholder"
           );
@@ -804,7 +864,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         );
       }, FILE_OPERATION_PLACEHOLDER_REMOVAL_TIMEOUT_MS);
     },
-    [removePendingPlaceholder]
+    [removePendingPlaceholder, scheduleDetachedPlaceholderExpiry]
   );
 
   const resolvePendingPaste = useCallback(
@@ -874,6 +934,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         removalRequested: false,
         timeoutId,
         removalTimeoutId: null,
+        detachedTimeoutId: null,
       });
       schedulePlaceholderRemoval(
         pendingCapturesRef.current.get(seq)!,
@@ -985,6 +1046,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         removalRequested: false,
         timeoutId,
         removalTimeoutId: null,
+        detachedTimeoutId: null,
       });
       schedulePlaceholderRemoval(
         pendingPastesRef.current.get(seq)!,
@@ -1063,10 +1125,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       for (const entry of pendingPastes.values()) {
         if (entry.timeoutId) clearTimeout(entry.timeoutId);
         if (entry.removalTimeoutId) clearTimeout(entry.removalTimeoutId);
+        if (entry.detachedTimeoutId) clearTimeout(entry.detachedTimeoutId);
       }
       for (const entry of pendingCaptures.values()) {
         if (entry.timeoutId) clearTimeout(entry.timeoutId);
         if (entry.removalTimeoutId) clearTimeout(entry.removalTimeoutId);
+        if (entry.detachedTimeoutId) clearTimeout(entry.detachedTimeoutId);
       }
       pendingPastes.clear();
       pendingCaptures.clear();
@@ -1372,10 +1436,11 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 
     return () => {
       for (const pending of [pendingPastes, pendingCaptures]) {
-        for (const entry of pending.values()) {
+        for (const [seq, entry] of pending) {
           if (entry.documentKey !== undefined) {
             entry.attached = false;
             entry.placeholderPresent = false;
+            scheduleDetachedPlaceholderExpiry(entry, pending, seq);
           }
         }
       }
@@ -1386,6 +1451,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     attachPendingPlaceholders,
+    scheduleDetachedPlaceholderExpiry,
     completionClient,
     validateContextReferences,
     handleImagePaste,
@@ -1425,7 +1491,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       pendingPastesRef.current,
       pendingCapturesRef.current,
     ]) {
-      for (const entry of pending.values()) {
+      for (const [seq, entry] of pending) {
         if (
           entry.documentKey !== undefined &&
           (entry.documentKey !== documentKey || currentValue !== value)
@@ -1435,6 +1501,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           // The timed-out offset belongs to the old text; honouring it after
           // reattach would insert the reply into whatever prompt is shown now.
           entry.removedByTimeout = false;
+          scheduleDetachedPlaceholderExpiry(entry, pending, seq);
         }
       }
     }
@@ -1460,7 +1527,13 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       });
     }
     attachPendingPlaceholders(viewRef.current, documentKey);
-  }, [attachPendingPlaceholders, completionClient, documentKey, value]);
+  }, [
+    attachPendingPlaceholders,
+    completionClient,
+    documentKey,
+    scheduleDetachedPlaceholderExpiry,
+    value,
+  ]);
 
   const editorClassName = [
     surface === "input"

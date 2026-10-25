@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-25 by bug-drain review of 84d1bfa51
 - **Area:** `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx` (`resolvePendingPlaceholder`, `schedulePlaceholderRemoval`, the reattach pass in the update listener)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -25,7 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   timeout removed the placeholder. Preview reply resolvers expire after five minutes.
 - Pending editor attachment placeholders now survive prompt switches, bulk mode,
   and step reordering when the step has a stable runtime identity; identical
-  placeholders reattach one-to-one and detached replies clear their timers.
+  placeholders reattach in document order, and detached replies or timeouts are
+  applied when their prompt returns.
 - Dashboard history searches use the available index while another process rebuilds; complete CLI searches can wait for a live rebuild.
 - Dashboard history searches now rebuild missing or stale indexes in the background and show the active query's results when the rebuild finishes.
 - Dashboard history searches join one active rebuild, cancel superseded follow-ups, and report rebuild failures.
