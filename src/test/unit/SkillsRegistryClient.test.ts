@@ -141,6 +141,11 @@ function truncatedTreeRoutes(
     "https://api.github.com/repos/anthropics/skills/git/trees/": (url) => {
       const treeKey = url.split("/git/trees/")[1]?.split("?")[0] ?? "";
       if (url.endsWith("?recursive=1")) {
+        if (treeKey === "pdf-sha") {
+          return json({
+            tree: [{ path: "SKILL.md", type: "blob", sha: "skill-file" }],
+          });
+        }
         return json({ tree: [], truncated: true });
       }
       return json(entries[treeKey] ?? { tree: [] });
@@ -623,8 +628,107 @@ suite("SkillsRegistryClient", () => {
       const { registry } = client(truncatedTreeRoutes(COMMIT));
       await assert.rejects(
         registry.resolveSkill("anthropics/skills", "missing"),
-        /Could not find the "missing" skill in github\.com\/anthropics\/skills after searching likely locations in the truncated repository tree/
+        /Could not find the "missing" skill in github\.com\/anthropics\/skills after exhaustively searching the truncated repository tree/
       );
+    });
+
+    test("continues a cached truncated-tree walk for another slug", async () => {
+      const entries: Record<string, unknown> = {
+        [COMMIT]: { tree: [{ path: "skills", type: "tree", sha: "skills" }] },
+        skills: {
+          tree: [
+            { path: "alpha", type: "tree", sha: "alpha" },
+            ...Array.from({ length: 26 }, (_, index) => ({
+              path: `a-filler-${String(index).padStart(2, "0")}`,
+              type: "tree",
+              sha: `filler-${index}`,
+            })),
+            { path: "beta", type: "tree", sha: "beta" },
+          ],
+        },
+        alpha: { tree: [{ path: "SKILL.md", type: "blob" }] },
+        beta: { tree: [{ path: "SKILL.md", type: "blob" }] },
+      };
+      for (let index = 0; index < 26; index++) {
+        entries[`filler-${index}`] = { tree: [] };
+      }
+      const routes: Record<string, Route> = {
+        "https://api.github.com/repos/anthropics/skills/commits/HEAD": () =>
+          new Response(`${COMMIT}\n`),
+        "https://api.github.com/repos/anthropics/skills/git/trees/": (url) => {
+          const treeKey = url.split("/git/trees/")[1]?.split("?")[0] ?? "";
+          return url.endsWith("?recursive=1")
+            ? json({ tree: [], truncated: true })
+            : json(entries[treeKey] ?? { tree: [] });
+        },
+        "https://raw.githubusercontent.com/anthropics/skills/": (url) =>
+          new Response(
+            url.endsWith("/alpha/SKILL.md")
+              ? "---\nname: alpha\n---"
+              : "---\nname: beta\n---"
+          ),
+      };
+      const { registry } = client(routes);
+      assert.strictEqual(
+        (await registry.resolveSkill("anthropics/skills", "alpha")).skillMdPath,
+        "skills/alpha/SKILL.md"
+      );
+      assert.strictEqual(
+        (await registry.resolveSkill("anthropics/skills", "beta")).skillMdPath,
+        "skills/beta/SKILL.md"
+      );
+    });
+
+    test("completes or rejects a skill subtree beyond the walk request cap", async () => {
+      const treeEntries: Record<string, unknown> = {
+        [COMMIT]: {
+          tree: [{ path: "skills", type: "tree", sha: "skills" }],
+        },
+        skills: { tree: [{ path: "pdf", type: "tree", sha: "pdf" }] },
+        pdf: {
+          tree: Array.from({ length: 50 }, (_, index) => ({
+            path: `part-${index}`,
+            type: "tree",
+            sha: `part-${index}`,
+          })).concat([{ path: "SKILL.md", type: "blob", sha: "skill" }]),
+        },
+      };
+      for (let index = 0; index < 50; index++) {
+        treeEntries[`part-${index}`] = {
+          tree: [
+            { path: `file-${index}.md`, type: "blob", sha: `file-${index}` },
+          ],
+        };
+      }
+      const routes: Record<string, Route> = {
+        "https://api.github.com/repos/anthropics/skills/commits/HEAD": () =>
+          new Response(`${COMMIT}\n`),
+        "https://api.github.com/repos/anthropics/skills/git/trees/": (url) => {
+          if (url.endsWith("/pdf?recursive=1")) {
+            return json({
+              tree: [
+                { path: "SKILL.md", type: "blob", sha: "skill" },
+                ...Array.from({ length: 50 }, (_, index) => ({
+                  path: `part-${index}/file-${index}.md`,
+                  type: "blob",
+                  sha: `file-${index}`,
+                })),
+              ],
+            });
+          }
+          const treeKey = url.split("/git/trees/")[1]?.split("?")[0] ?? "";
+          if (url.endsWith("?recursive=1")) {
+            return json({ tree: [], truncated: true });
+          }
+          return json(treeEntries[treeKey] ?? { tree: [] });
+        },
+        "https://raw.githubusercontent.com/anthropics/skills/": () =>
+          new Response("file"),
+      };
+      const { registry } = client(routes);
+      const location = await registry.resolveSkill("anthropics/skills", "pdf");
+      const files = await registry.downloadSkill(location);
+      assert.strictEqual(files.length, 51);
     });
 
     test("a GitHub rate limit names GitHub and the reset time", async () => {
@@ -799,18 +903,15 @@ suite("SkillsRegistryClient", () => {
       );
     });
 
-    test(
-      "finds an installed skill during update check when the recursive tree is truncated",
-      async () => {
-        const { registry } = client(
-          truncatedTreeRoutes(NEWER, "skills/pdf/SKILL.md")
-        );
-        assert.strictEqual(
-          (await registry.checkForUpdate(installed)).status,
-          SKILL_UPDATE_STATUSES.UPDATE_AVAILABLE
-        );
-      }
-    );
+    test("finds an installed skill during update check when the recursive tree is truncated", async () => {
+      const { registry } = client(
+        truncatedTreeRoutes(NEWER, "skills/pdf/SKILL.md")
+      );
+      assert.strictEqual(
+        (await registry.checkForUpdate(installed)).status,
+        SKILL_UPDATE_STATUSES.UPDATE_AVAILABLE
+      );
+    });
 
     test("a skill gone from its repository is reported as not found", async () => {
       const { registry } = client(
@@ -836,6 +937,57 @@ suite("SkillsRegistryClient", () => {
       );
       assert.strictEqual(
         urls.filter((url) => url.endsWith("/commits/HEAD")).length,
+        1
+      );
+    });
+
+    test("concurrent checks of a truncated repo share its tree walk", async () => {
+      const head = NEWER;
+      const routes: Record<string, Route> = {
+        "https://api.github.com/repos/anthropics/skills/commits/HEAD": () =>
+          new Response(`${head}\n`),
+        "https://api.github.com/repos/anthropics/skills/git/trees/": async (
+          url
+        ) => {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          if (url.endsWith("?recursive=1")) {
+            return json({ tree: [], truncated: true });
+          }
+          const treeSha = url.split("/git/trees/")[1] ?? "";
+          if (treeSha === head) {
+            return json({
+              tree: [{ path: "skills", type: "tree", sha: "skills-sha" }],
+            });
+          }
+          return json({
+            tree: [
+              { path: "alpha", type: "tree", sha: "alpha-sha" },
+              { path: "beta", type: "tree", sha: "beta-sha" },
+            ],
+          });
+        },
+        "https://api.github.com/repos/anthropics/skills/git/trees/alpha-sha":
+          () => json({ tree: [{ path: "SKILL.md", type: "blob", sha: "a" }] }),
+        "https://api.github.com/repos/anthropics/skills/git/trees/beta-sha":
+          () => json({ tree: [{ path: "SKILL.md", type: "blob", sha: "b" }] }),
+      };
+      const { registry, urls } = client(routes);
+      const alpha = {
+        ...installed,
+        slug: "alpha",
+        skillMdPath: "skills/alpha/SKILL.md",
+      };
+      const beta = {
+        ...installed,
+        slug: "beta",
+        skillMdPath: "skills/beta/SKILL.md",
+      };
+      await Promise.all([
+        registry.checkForUpdate(alpha),
+        registry.checkForUpdate(beta),
+      ]);
+      assert.strictEqual(
+        urls.filter((url) => url.endsWith(`/trees/${head}?recursive=1`)).length,
         1
       );
     });

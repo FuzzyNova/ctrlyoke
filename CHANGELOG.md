@@ -34,8 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keeping snapshots small and each Git history request bounded to one page.
 - Skills registry resolution ranks slug matches across folder paths and probes
   candidates with bounded concurrency, reporting when its safety bound applies.
-- Skills registry resolution and update checks fall back to a bounded walk when
-  GitHub truncates a repository's recursive tree.
+- Skills registry resolution and update checks resume bounded walks of truncated
+  repository trees, share concurrent fetches, and verify skill-folder
+  completeness before installing files or comparing updates.
 - Run bundle loading streams `events.jsonl` and limits individual event lines,
   so exported bundles can exceed the small JSON file size cap.
 - Dashboard completion requests from separate sources no longer cancel each

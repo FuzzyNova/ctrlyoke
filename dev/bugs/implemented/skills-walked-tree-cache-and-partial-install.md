@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-25 by bug-drain review of 67d5135c1
 - **Area:** `src/utils/SkillsRegistryClient.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
