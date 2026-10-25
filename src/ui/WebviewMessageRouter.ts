@@ -95,6 +95,7 @@ import type {
   RestartLspServerMessage,
   ValidateWorkflowDocumentMessage,
   RequestAttachmentTokenCountsMessage,
+  ExitIdleTerminalsMessage,
 } from "../types/WebviewMessageTypes";
 import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
 import type {
@@ -2632,6 +2633,48 @@ export class WebviewMessageRouter {
         });
       }
       await sendWorktreeManagementState(true, ctx);
+    });
+    table.set(MESSAGE_TYPES.EXIT_IDLE_TERMINALS, async (rawMessage, ctx) => {
+      const orchestrator = this.getOrchestrator();
+      if (!orchestrator) return;
+      const message = rawMessage as ExitIdleTerminalsMessage;
+      const scope = message.workflowKey ?? "all workflows";
+      Log.info(`[ExitIdleTerminals] requested for ${scope}`);
+      let success = true;
+      let resultMessage: string;
+      try {
+        const exited = await orchestrator.exitIdleWorkflowTerminals(
+          message.workflowKey
+        );
+        resultMessage =
+          exited === 0
+            ? "No idle workflow has an open harness terminal."
+            : `Exited ${exited} workflow terminal${exited === 1 ? "" : "s"}.`;
+        Log.info(`[ExitIdleTerminals] ${resultMessage}`);
+      } catch (error) {
+        success = false;
+        resultMessage = `Exiting terminals failed: ${getErrorMessage(error)}`;
+        Log.error(`[ExitIdleTerminals] failed for ${scope}:`, error);
+      }
+      if (message.requestId) {
+        ctx.emit({
+          type: MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT,
+          requestId: message.requestId,
+          success,
+          message: resultMessage,
+          ...(success ? {} : { error: resultMessage }),
+        });
+      } else {
+        ctx.emit({
+          type: MESSAGE_TYPES.USER_FEEDBACK,
+          id: `exit-idle-terminals-${Date.now()}`,
+          severity: success
+            ? USER_FEEDBACK_SEVERITY.INFO
+            : USER_FEEDBACK_SEVERITY.WARNING,
+          message: resultMessage,
+        });
+      }
+      await sendWorktreeManagementState(false, ctx);
     });
     table.set(MESSAGE_TYPES.OPEN_WORKTREE_OWNER, async (message, ctx) => {
       const openFolder = this.hostDependencies.actions.openFolderWindow;

@@ -14,6 +14,7 @@ import {
 import { writeClipboardText } from "@utils/stepClipboard";
 import { notifyUser } from "@utils/notifyUser";
 import { sendMessage } from "@hooks/useMessageHandler";
+import { useTerminalStore } from "@store/terminalStore";
 
 export interface WorkflowContextMenuTarget {
   address: WorkflowViewAddress;
@@ -52,6 +53,9 @@ interface UseWorkflowContextMenuOptions {
 const copyRunDirectoryTitle =
   "Copies the path; in hosted browser mode, it is on the server's filesystem.";
 
+const exitTerminalExplanation =
+  "Sends the harness its exit keystroke (Ctrl+C) so the TUI quits, then ends the process. Sessions stay resumable, and a named worktree held only by an open terminal is released.";
+
 function copyToClipboard(text: string, what: string): void {
   void writeClipboardText(text)
     .then(() => {
@@ -74,6 +78,9 @@ export function useWorkflowContextMenu({
   const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
     null
   );
+  const activeTerminalWorkflows = useTerminalStore(
+    (state) => state.activeTerminalWorkflows
+  );
 
   const openContextMenu = useCallback(
     (
@@ -83,6 +90,14 @@ export function useWorkflowContextMenu({
       opener: HTMLElement | null = null
     ) => {
       const hasRunDirectory = Boolean(target.runDirectory);
+      const hasOpenTerminal = activeTerminalWorkflows.some(
+        (ref) => ref.workflowKey === target.address.workflowKey
+      );
+      const exitTerminalDisabledTitle = target.isExecuting
+        ? "This workflow is executing or paused — use Stop to end its step"
+        : hasOpenTerminal
+          ? undefined
+          : "This workflow has no open terminal";
       const deleteLabel =
         target.scope === WORKFLOW_DELETE_SCOPES.LINEAGE
           ? "Delete Workflow"
@@ -160,6 +175,34 @@ export function useWorkflowContextMenu({
           },
           { type: "divider" },
           {
+            label: "Exit Terminal",
+            icon: "codicon-debug-stop",
+            disabled: exitTerminalDisabledTitle !== undefined,
+            title: `Exit this workflow's terminal. ${exitTerminalExplanation}`,
+            disabledTitle: exitTerminalDisabledTitle,
+            onClick: () => {
+              onCloseDropdown();
+              sendMessage(MESSAGE_TYPES.EXIT_IDLE_TERMINALS, {
+                workflowKey: target.address.workflowKey,
+              });
+            },
+          },
+          {
+            label: "Exit All Idle Terminals",
+            icon: "codicon-debug-stop",
+            disabled: activeTerminalWorkflows.length === 0,
+            title: `Exit the terminal of every workflow that is not executing or paused. ${exitTerminalExplanation}`,
+            disabledTitle:
+              activeTerminalWorkflows.length === 0
+                ? "No workflow has an open terminal"
+                : undefined,
+            onClick: () => {
+              onCloseDropdown();
+              sendMessage(MESSAGE_TYPES.EXIT_IDLE_TERMINALS, {});
+            },
+          },
+          { type: "divider" },
+          {
             label: target.isFavorite
               ? "Remove from Favorites"
               : "Add to Favorites",
@@ -182,7 +225,13 @@ export function useWorkflowContextMenu({
         ],
       });
     },
-    [onCloseDropdown, onDelete, onDuplicate, onToggleFavorite]
+    [
+      activeTerminalWorkflows,
+      onCloseDropdown,
+      onDelete,
+      onDuplicate,
+      onToggleFavorite,
+    ]
   );
 
   const workflowContextMenuPortal = contextMenu ? (

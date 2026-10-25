@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Exit Terminal and Exit All Idle Terminals** in the workflow list's right-click menu. They send the harness Ctrl+C so its TUI quits, then end the process. Running and paused workflows are left alone, and the session stays resumable.
+
+### Changed
+
+- **The Worktrees settings tab says when an open terminal is the only thing holding a worktree.** A named worktree stays reserved while its finished workflow's harness terminal is open, which blocks Sync. Its row now reads **Held by open terminal** and offers **Exit terminal**. **Exit holding terminals** exits all of them so that **Sync All** includes those worktrees.
+
 ## [0.3.0] - 2026-10-24
 
 ### Added

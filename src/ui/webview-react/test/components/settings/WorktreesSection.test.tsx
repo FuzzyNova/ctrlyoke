@@ -94,6 +94,79 @@ describe("WorktreesSection", () => {
       screen.getByRole("button", { name: "Open owning workspace" })
     ).toBeInTheDocument();
   });
+  it("explains a worktree held only by a finished run's open terminal and offers to exit it", () => {
+    useUiStore.setState({ hostCapabilities: [] });
+    const postMessage = vi.fn();
+    window.vscodeApi = {
+      postMessage,
+      getState: () => undefined,
+      setState: () => undefined,
+    };
+    useSettingsStore.getState().setWorktreeManagement({
+      resolvedRoot: "C:/worktrees",
+      sourceCheckoutRoot: "C:/repo",
+      sourceCheckoutBranch: "main",
+      generatedAt: Date.now(),
+      staleManagedRecords: [],
+      entries: [
+        {
+          worktreePath: "C:/repo.worktrees/small-feature",
+          headCommit: "b",
+          branchName: "small-feature",
+          ownership: "user",
+          branchState: "present",
+          inUse: true,
+          leaseOwners: [
+            {
+              lease: { workflowKey: "wf", runRef: "run", stateRoot: "C:/repo" },
+              ageMs: 1000,
+              heldByOpenTerminal: true,
+            },
+          ],
+          stale: false,
+          branchCleanupEligible: false,
+        },
+      ],
+    });
+
+    render(
+      <WorktreesSection
+        settings={createSettings()}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+
+    expect(
+      screen.getByText(/Held by open terminal — wf\/run/)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/its harness terminal is still open/)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/so Sync All skips it/)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Sync with/ })
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Exit terminal" }));
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.EXIT_IDLE_TERMINALS,
+      workflowKey: "wf",
+      requestId: expect.any(String),
+    });
+
+    postMessage.mockClear();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Exit holding terminals" })
+    );
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.EXIT_IDLE_TERMINALS,
+        workflowKey: "wf",
+      })
+    );
+  });
   it("keeps Retry for an in-use worktree when the host can't open its owner", () => {
     useUiStore.setState({ hostCapabilities: [] });
     window.vscodeApi = {
@@ -137,6 +210,9 @@ describe("WorktreesSection", () => {
     );
 
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Exit terminal" })
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Open owning workspace" })
     ).not.toBeInTheDocument();

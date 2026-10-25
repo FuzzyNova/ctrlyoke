@@ -103,6 +103,14 @@ in these cases, and a strip at the bottom of an ended terminal says why:
 | **Process closed — worktree released**         | The run used a [worktree](/workflows/worktrees), which is released when the run ends. |
 | **Process closed — replaced by a new session** | The terminal was closed to make way for a later step's terminal.                      |
 | **Process stopped**                            | You stopped the run.                                                                  |
+| **Process closed**                             | You exited it, or the workflow was closed.                                            |
+
+To exit a finished workflow's terminal yourself, right-click the workflow in
+the workflow list and choose **Exit Terminal**. **Exit All Idle Terminals**
+does the same for every workflow that isn't running or paused. ctrlyoke sends
+the harness Ctrl+C so it quits, then ends the process. The session stays
+resumable. Exiting also releases a
+[named worktree that the terminal kept reserved](/workflows/worktrees#held-by-open-terminal).
 
 Turn on `execution.closeTerminalOnComplete` to close every AI terminal when its
 work is done. That also turns terminal reuse off, since there is no terminal left

@@ -257,6 +257,61 @@ suite("WebviewMessageRouter — dashboard host actions", () => {
     assert.deepStrictEqual(otherClientReplies, []);
   });
 
+  suite("exit idle terminals", () => {
+    function buildExitRouter(exited: number, scopes: unknown[]) {
+      return buildRouter({
+        executeLoadedPromptFile: async () => {},
+        exitIdleWorkflowTerminals: async (workflowKey?: string) => {
+          scopes.push(workflowKey);
+          return exited;
+        },
+        getWorktreeManagementState: async () => ({ entries: [] }),
+      });
+    }
+
+    test("answers a worktree-panel request with a correlated result, then the fresh worktree state", async () => {
+      const scopes: unknown[] = [];
+      const replies: any[] = [];
+      await buildExitRouter(1, scopes).route(
+        {
+          type: MESSAGE_TYPES.EXIT_IDLE_TERMINALS,
+          workflowKey: "wf",
+          requestId: "req-1",
+        },
+        { clientTag: "test:exit", postMessage: (reply) => replies.push(reply) }
+      );
+
+      assert.deepStrictEqual(scopes, ["wf"]);
+      assert.deepStrictEqual(
+        replies.map((reply) => reply.type),
+        [
+          MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT,
+          MESSAGE_TYPES.WORKTREE_MANAGEMENT_STATE,
+        ]
+      );
+      assert.strictEqual(replies[0].requestId, "req-1");
+      assert.strictEqual(replies[0].success, true);
+      assert.strictEqual(replies[0].message, "Exited 1 workflow terminal.");
+    });
+
+    test("answers a context-menu request with a toast, including when nothing was open", async () => {
+      const scopes: unknown[] = [];
+      const replies: any[] = [];
+      await buildExitRouter(0, scopes).route(
+        { type: MESSAGE_TYPES.EXIT_IDLE_TERMINALS },
+        { clientTag: "test:exit", postMessage: (reply) => replies.push(reply) }
+      );
+
+      assert.deepStrictEqual(scopes, [undefined]);
+      assert.strictEqual(replies[0].type, MESSAGE_TYPES.USER_FEEDBACK);
+      assert.strictEqual(replies[0].severity, USER_FEEDBACK_SEVERITY.INFO);
+      assert.strictEqual(
+        replies[0].message,
+        "No idle workflow has an open harness terminal."
+      );
+    });
+  });
+
   test("replies with a typed unsupported result for every missing native capability", async () => {
     const panelReplies: unknown[] = [];
     const clientReplies: unknown[] = [];

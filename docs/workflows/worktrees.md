@@ -134,6 +134,8 @@ ctrlyoke never commits, merges or removes a named worktree. What the harness
 changes stays as uncommitted work in that worktree, and the next run on the same
 branch picks up where the last one left off. Commit and merge it when you are
 ready, or use **Sync** in the [Worktrees settings tab](#managing-worktrees).
+While the run's harness terminal stays open, the worktree stays reserved; see
+[Worktrees held by an open terminal](#held-by-open-terminal).
 
 ## Setup commands
 
@@ -251,8 +253,29 @@ Above and below the list:
   merges stay a manual choice.
 - **Prune stale Git entries** clears worktree entries whose directory is gone.
 
-A worktree in use by a run can't be removed. Its row names the run, and in VS
+A worktree in use by a run can't be removed or synced. Its row names the run, and in VS
 Code **Open owning workspace** opens the window that owns it.
+
+### Worktrees held by an open terminal {#held-by-open-terminal}
+
+A named worktree stays reserved after its workflow finishes for as long as the
+harness terminal is open, which it is by default
+([Reuse running terminal](/guide/terminal#what-happens-when-a-step-ends)), so
+that follow-up prompts can still run in it. Sync and other runs wait for that
+reservation, because the open harness can still change files in the worktree:
+you can type to it, and its background tasks can still be running. Merging
+underneath it could mix its edits into the merge.
+
+When an open terminal is the only thing holding a worktree, the row says
+**Held by open terminal** and offers **Exit terminal**. **Exit holding
+terminals** at the top of the list exits all of them, so that **Sync All**
+includes those worktrees. Exiting sends the harness Ctrl+C so it quits, then
+ends the process. The session isn't lost: a later step or run can resume it.
+
+To exit terminals from the workflow list, right-click a workflow and choose
+**Exit Terminal**, or **Exit All Idle Terminals** for every workflow that isn't
+running or paused. Turn on `execution.closeTerminalOnComplete` if you would
+rather terminals always close when a workflow finishes.
 
 ## See also
 

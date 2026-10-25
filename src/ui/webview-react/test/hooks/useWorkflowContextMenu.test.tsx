@@ -11,6 +11,7 @@ import {
   type WorkflowContextMenuTarget,
 } from "@hooks/useWorkflowContextMenu";
 import { useUiStore } from "@store/uiStore";
+import { useTerminalStore } from "@store/terminalStore";
 import {
   MESSAGE_TYPES,
   WORKFLOW_VIEW_ADDRESS_KIND,
@@ -73,6 +74,7 @@ function TestHarness({
 describe("useWorkflowContextMenu", () => {
   beforeEach(() => {
     useUiStore.getState().resetUi();
+    useTerminalStore.getState().setActiveTerminalWorkflows([]);
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: { writeText: vi.fn().mockResolvedValue(undefined) },
@@ -81,7 +83,7 @@ describe("useWorkflowContextMenu", () => {
 
   afterEach(() => cleanup());
 
-  it("renders new run, duplicate, copy, divider, favorite, and scoped delete in order", () => {
+  it("renders new run, duplicate, copy, exit terminals, favorite, and scoped delete in order", () => {
     render(<TestHarness />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
@@ -94,10 +96,12 @@ describe("useWorkflowContextMenu", () => {
       "Duplicate Workflow…",
       "Copy Workflow Key",
       "Copy Run Directory Path",
+      "Exit Terminal",
+      "Exit All Idle Terminals",
       "Add to Favorites",
       "Delete Workflow",
     ]);
-    expect(screen.getAllByRole("separator")).toHaveLength(2);
+    expect(screen.getAllByRole("separator")).toHaveLength(3);
     expect(
       screen.getByRole("menuitem", { name: "Copy Run Directory Path" })
     ).toHaveAttribute("title", expect.stringContaining("server's filesystem"));
@@ -119,6 +123,76 @@ describe("useWorkflowContextMenu", () => {
       type: MESSAGE_TYPES.PREPARE_NEW_RUN,
       address: target.address,
     });
+  });
+
+  it("disables both exit items when no workflow has an open terminal", () => {
+    render(<TestHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    expect(
+      screen.getByRole("menuitem", { name: "Exit Terminal" })
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("menuitem", { name: "Exit Terminal" })
+    ).toHaveAttribute("title", "This workflow has no open terminal");
+    expect(
+      screen.getByRole("menuitem", { name: "Exit All Idle Terminals" })
+    ).toBeDisabled();
+  });
+
+  it("exits this workflow's terminal, or every idle one, when terminals are open", () => {
+    const postMessage = vi.fn();
+    Object.defineProperty(window, "vscodeApi", {
+      configurable: true,
+      value: { postMessage, getState: vi.fn(), setState: vi.fn() },
+    });
+    useTerminalStore.getState().setActiveTerminalWorkflows([
+      {
+        workflowId: "instance-1",
+        workflowKey: "workflow-1" as never,
+        runRef: "run-2" as never,
+      },
+    ]);
+    render(<TestHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    const exitTerminal = screen.getByRole("menuitem", {
+      name: "Exit Terminal",
+    });
+    expect(exitTerminal).toHaveAttribute(
+      "title",
+      expect.stringContaining("Ctrl+C")
+    );
+    fireEvent.click(exitTerminal);
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.EXIT_IDLE_TERMINALS,
+      workflowKey: "workflow-1",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: "Exit All Idle Terminals" })
+    );
+    expect(postMessage).toHaveBeenLastCalledWith({
+      type: MESSAGE_TYPES.EXIT_IDLE_TERMINALS,
+    });
+  });
+
+  it("keeps Exit Terminal disabled while the workflow executes", () => {
+    useTerminalStore.getState().setActiveTerminalWorkflows([
+      {
+        workflowId: "instance-1",
+        workflowKey: "workflow-1" as never,
+        runRef: "run-2" as never,
+      },
+    ]);
+    render(<TestHarness menuTarget={{ ...target, isExecuting: true }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    expect(
+      screen.getByRole("menuitem", { name: "Exit Terminal" })
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("menuitem", { name: "Exit All Idle Terminals" })
+    ).toBeEnabled();
   });
 
   it("labels an unstarted run as reopened, and disables new run while executing", () => {

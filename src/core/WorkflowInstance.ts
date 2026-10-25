@@ -62,6 +62,7 @@ import { generateWorkflowNameFromPrompt } from "../utils/workflowNaming";
 import {
   USER_FEEDBACK_SEVERITY,
   ACTION_TYPES,
+  ACTIVE_EXECUTION_STATES,
   COMPARE_SOURCES,
   CONDITION_ACTIONS,
   DEFAULT_WORKFLOW_NAME,
@@ -94,6 +95,7 @@ import {
   type ActionType,
   type ExecutionMode,
   type QueuePosition,
+  type TerminalEndReason,
   type WorkflowTelemetryOutcome,
 } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
@@ -1228,14 +1230,52 @@ export class WorkflowInstance
    * by out-waiting the previous owner.
    */
   async closeRetainedTerminalsForFreshRun(): Promise<void> {
+    await this.closeRetainedTerminals(TERMINAL_END_REASONS.SUPERSEDED);
+  }
+
+  /**
+   * User-requested exit of the harness terminals a finished run kept open for
+   * follow-ups. Releases a named worktree that only those terminals were
+   * holding. Returns false and does nothing while execution owns the run:
+   * stopping a step is Stop's job, and a paused run keeps its terminal for
+   * resume.
+   */
+  async exitRetainedTerminals(): Promise<boolean> {
+    if (this.executionOwnsReservation()) return false;
+    await this.closeRetainedTerminals(TERMINAL_END_REASONS.CLOSED);
+    return true;
+  }
+
+  /**
+   * True when this instance's only claim on its named worktree is a terminal
+   * kept open after the run ended (`execution.reuseRunningTerminal`), so
+   * exiting that terminal releases the worktree.
+   */
+  isHoldingWorktreeForRetainedTerminal(): boolean {
+    return (
+      !this.executionOwnsReservation() &&
+      this.activeWorktree?.mode === WORKTREE_MODES.NAMED &&
+      Array.from(this.liveReusableIntegrations.values()).some((integration) =>
+        integration.canReuseRunningTerminal()
+      )
+    );
+  }
+
+  private executionOwnsReservation(): boolean {
+    return ACTIVE_EXECUTION_STATES.has(this.workflowRuntime.status);
+  }
+
+  private async closeRetainedTerminals(
+    reason: TerminalEndReason
+  ): Promise<void> {
     for (const previous of this.lastRunIntegrations) {
-      previous.closeTerminal(TERMINAL_END_REASONS.SUPERSEDED);
+      previous.closeTerminal(reason);
     }
     this.lastRunIntegrations = [];
 
     for (const liveIntegration of this.liveReusableIntegrations.values()) {
       await this.cleanupRetainedIntegrationArtifacts(liveIntegration);
-      liveIntegration.closeTerminalGracefully(TERMINAL_END_REASONS.SUPERSEDED);
+      liveIntegration.closeTerminalGracefully(reason);
       liveIntegration.dispose();
     }
     this.liveReusableIntegrations.clear();
@@ -5017,12 +5057,7 @@ export class WorkflowInstance
     this.resolveExecutionSettled = undefined;
   }
   private async releaseNamedWorktreeRetentionAfterPtyExit(): Promise<void> {
-    const status = this.workflowRuntime.status;
-    const executionStillOwnsReservation =
-      status === EXECUTION_STATES.RUNNING ||
-      status === EXECUTION_STATES.PAUSING ||
-      status === EXECUTION_STATES.PAUSED ||
-      status === EXECUTION_STATES.CANCELLING;
+    const executionStillOwnsReservation = this.executionOwnsReservation();
     const worktree = this.activeWorktree;
     const hasReusableTerminalIntegration = Array.from(
       this.liveReusableIntegrations.values()

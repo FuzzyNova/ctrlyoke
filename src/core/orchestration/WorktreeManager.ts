@@ -323,6 +323,15 @@ export interface NamedBranchDivergence {
   calculatedAt: number;
 }
 
+export interface WorktreeManagementLeaseOwner extends ExecutionLeaseConflict {
+  /**
+   * The owning run has ended and only its open harness terminal keeps the
+   * lease. Set by `WorkflowOrchestrator` for leases held in this process;
+   * WorktreeManager itself cannot see terminals.
+   */
+  heldByOpenTerminal?: boolean;
+}
+
 export interface WorktreeManagementEntry {
   worktreePath: string;
   headCommit: string;
@@ -334,7 +343,7 @@ export interface WorktreeManagementEntry {
   createdAt?: number;
   ageMs?: number;
   inUse: boolean;
-  leaseOwners: ExecutionLeaseConflict[];
+  leaseOwners: WorktreeManagementLeaseOwner[];
   stale: boolean;
   prunableReason?: string;
   targetBranch?: string;

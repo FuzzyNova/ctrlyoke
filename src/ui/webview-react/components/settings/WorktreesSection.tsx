@@ -41,6 +41,9 @@ const CONFIRMATION_VARIANTS = {
 type ConfirmationVariant =
   (typeof CONFIRMATION_VARIANTS)[keyof typeof CONFIRMATION_VARIANTS];
 
+const EXIT_TERMINAL_TITLE =
+  "Sends the harness its exit keystroke (Ctrl+C) so the TUI quits, then ends the process. The session stays resumable.";
+
 interface Props {
   settings: FullGlobalSettings;
   activeScope: SettingWriteScope;
@@ -214,6 +217,40 @@ function isSyncEligible(
   );
 }
 
+/**
+ * Workflow keys of the finished runs whose open harness terminal is the only
+ * thing keeping `entry` reserved — empty when any owner is still executing
+ * (or lives in another window, where terminals are not visible).
+ */
+function openTerminalHoldWorkflowKeys(
+  entry: WorktreeManagementEntry
+): string[] {
+  if (
+    !entry.inUse ||
+    !entry.leaseOwners.length ||
+    !entry.leaseOwners.every((owner) => owner.heldByOpenTerminal)
+  ) {
+    return [];
+  }
+  return [
+    ...new Set(entry.leaseOwners.map((owner) => owner.lease.workflowKey)),
+  ];
+}
+
+function exitIdleTerminals(
+  vscode: ReturnType<typeof useVsCodeApi>,
+  workflowKeys: string[],
+  requestIds: string[]
+): void {
+  workflowKeys.forEach((workflowKey, index) =>
+    vscode.postMessage({
+      type: MESSAGE_TYPES.EXIT_IDLE_TERMINALS,
+      workflowKey,
+      requestId: requestIds[index],
+    })
+  );
+}
+
 function worktreeRowKey(worktreePath: string, suffix: string): string {
   return `${worktreePath}::${suffix}`;
 }
@@ -354,6 +391,28 @@ export function WorktreesSection({
       ),
     [management]
   );
+
+  const terminalHeldEntryCount = useMemo(
+    () =>
+      (management?.entries ?? []).filter(
+        (entry) => openTerminalHoldWorkflowKeys(entry).length > 0
+      ).length,
+    [management]
+  );
+
+  const exitHoldingTerminals = () => {
+    const workflowKeys = [
+      ...new Set(
+        (management?.entries ?? []).flatMap(openTerminalHoldWorkflowKeys)
+      ),
+    ];
+    if (!workflowKeys.length) return;
+    exitIdleTerminals(
+      vscode,
+      workflowKeys,
+      feedback.begin("exit-holding-terminals", workflowKeys.length)
+    );
+  };
 
   /**
    * Merging branch-into-source then source-into-branch for each eligible
@@ -524,8 +583,28 @@ export function WorktreesSection({
             <p className="text-xs text-description-fg">
               Ownership, leases, branches, and retention actions.
             </p>
+            {terminalHeldEntryCount > 0 && (
+              <p className="mt-1 text-xs text-warning-fg" role="note">
+                {terminalHeldEntryCount === 1
+                  ? "1 worktree is"
+                  : `${terminalHeldEntryCount} worktrees are`}{" "}
+                reserved only by a finished workflow&apos;s open terminal, so
+                Sync All skips {terminalHeldEntryCount === 1 ? "it" : "them"}.
+                Exit those terminals to sync.
+              </p>
+            )}
           </div>
           <div className="flex flex-wrap items-start gap-2">
+            {terminalHeldEntryCount > 0 && (
+              <ActionButton
+                label="Exit holding terminals"
+                pendingLabel="Exiting terminals…"
+                title={EXIT_TERMINAL_TITLE}
+                pending={feedback.isPending("exit-holding-terminals")}
+                feedback={feedback.getFeedback("exit-holding-terminals")}
+                onClick={exitHoldingTerminals}
+              />
+            )}
             <ActionButton
               label={`Sync All with ${management?.sourceCheckoutBranch ?? "checkout"}`}
               pendingLabel="Syncing all…"
@@ -675,11 +754,24 @@ function WorktreeRow({
     )
   );
   const rowKey = (suffix: string) => worktreeRowKey(entry.worktreePath, suffix);
-  const owner = entry.inUse
-    ? `In use — ${entry.leaseOwners.map((item) => `${item.lease.workflowKey}/${item.lease.runRef}`).join(", ")}`
-    : entry.ownership === WORKTREE_MODES.MANAGED
-      ? "ctrlyoke-owned"
-      : "user-owned";
+  const terminalHoldWorkflowKeys = openTerminalHoldWorkflowKeys(entry);
+  const heldOnlyByOpenTerminal = terminalHoldWorkflowKeys.length > 0;
+  const leaseOwnerList = entry.leaseOwners
+    .map((item) => `${item.lease.workflowKey}/${item.lease.runRef}`)
+    .join(", ");
+  const owner = heldOnlyByOpenTerminal
+    ? `Held by open terminal — ${leaseOwnerList}`
+    : entry.inUse
+      ? `In use — ${leaseOwnerList}`
+      : entry.ownership === WORKTREE_MODES.MANAGED
+        ? "ctrlyoke-owned"
+        : "user-owned";
+  const exitTerminal = () =>
+    exitIdleTerminals(
+      vscode,
+      terminalHoldWorkflowKeys,
+      feedback.begin(rowKey("exit-terminal"), terminalHoldWorkflowKeys.length)
+    );
   const retry = () => {
     const [requestId] = feedback.begin(rowKey("retry"));
     vscode.postMessage({
@@ -810,11 +902,20 @@ function WorktreeRow({
                 : "Git entry present"}
         </span>
       </div>
-      {entry.inUse && (
+      {heldOnlyByOpenTerminal ? (
         <div className="mt-1 text-warning-fg">
-          Retry after the owner releases it, or open the owning workspace from
-          its run.
+          The workflow has finished, but its harness terminal is still open for
+          follow-up prompts (Reuse Running Terminal), so ctrlyoke keeps this
+          worktree reserved. Exit the terminal to release it for sync and other
+          runs.
         </div>
+      ) : (
+        entry.inUse && (
+          <div className="mt-1 text-warning-fg">
+            Retry after the owner releases it, or open the owning workspace from
+            its run.
+          </div>
+        )
       )}
       {entry.divergence && (
         <div className="mt-1 text-description-fg">
@@ -823,6 +924,16 @@ function WorktreeRow({
         </div>
       )}
       <div className="mt-2 flex flex-wrap gap-2">
+        {heldOnlyByOpenTerminal && (
+          <ActionButton
+            label="Exit terminal"
+            pendingLabel="Exiting…"
+            title={EXIT_TERMINAL_TITLE}
+            pending={feedback.isPending(rowKey("exit-terminal"))}
+            feedback={feedback.getFeedback(rowKey("exit-terminal"))}
+            onClick={exitTerminal}
+          />
+        )}
         {entry.inUse && entry.leaseOwners[0] && (
           <>
             <ActionButton

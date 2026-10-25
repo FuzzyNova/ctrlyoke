@@ -62,6 +62,8 @@ import {
   type WorktreeManagementAction,
   type RunDefinitionDecision,
   WORKFLOW_VIEW_ADDRESS_KIND,
+  SESSION_KINDS,
+  TERMINAL_SESSION_STATUS,
 } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
@@ -145,6 +147,7 @@ import {
 import {
   WorktreeManager,
   type WorktreeInfo,
+  type WorktreeManagementState,
   type WorktreeSyncResult,
 } from "./orchestration/WorktreeManager";
 import { PromptFileParser } from "./PromptFileParser";
@@ -3702,15 +3705,72 @@ export class WorkflowOrchestrator {
   }
 
   async getWorktreeManagementState() {
-    return new WorktreeManager().getManagementState(
-      this.requireWorkspaceRoot()
+    return this.markOpenTerminalLeases(
+      await new WorktreeManager().getManagementState(
+        this.requireWorkspaceRoot()
+      )
     );
   }
 
   async refreshWorktreeManagementState() {
-    return new WorktreeManager().refreshManagementState(
-      this.requireWorkspaceRoot()
+    return this.markOpenTerminalLeases(
+      await new WorktreeManager().refreshManagementState(
+        this.requireWorkspaceRoot()
+      )
     );
+  }
+
+  /**
+   * Flag lease owners in this process whose run has ended and whose only hold
+   * on the worktree is an open harness terminal, so the dashboard can say why
+   * the worktree is still reserved and offer to exit that terminal.
+   */
+  private markOpenTerminalLeases(
+    state: WorktreeManagementState
+  ): WorktreeManagementState {
+    for (const entry of state.entries) {
+      for (const owner of entry.leaseOwners) {
+        const instance =
+          owner.lease.pid === process.pid
+            ? (this.instances.get(owner.lease.instanceId) ??
+              this.retiredInstances.get(owner.lease.instanceId))
+            : undefined;
+        if (instance?.isHoldingWorktreeForRetainedTerminal()) {
+          owner.heldByOpenTerminal = true;
+        }
+      }
+    }
+    return state;
+  }
+
+  /**
+   * Exit the harness terminals that idle workflows kept open after their run
+   * ended — every workflow's, or only `workflowKey`'s. Executing and paused
+   * workflows are skipped. Returns how many workflows had terminals closed.
+   */
+  async exitIdleWorkflowTerminals(workflowKey?: string): Promise<number> {
+    const ptyManager = getPtyProcessManager();
+    if (!ptyManager) return 0;
+    const residents = new Set([
+      ...this.instances.values(),
+      ...this.retiredInstances.values(),
+    ]);
+    const targets = [...residents].filter(
+      (instance) =>
+        (workflowKey === undefined ||
+          instance.getQueueState().workflowKey === workflowKey) &&
+        ptyManager
+          .getSessionsForWorkflow(instance.id)
+          .some(
+            (session) =>
+              session.kind === SESSION_KINDS.AI_CLI &&
+              session.status === TERMINAL_SESSION_STATUS.RUNNING
+          )
+    );
+    const exited = await Promise.all(
+      targets.map((instance) => instance.exitRetainedTerminals())
+    );
+    return exited.filter(Boolean).length;
   }
 
   async applyWorktreeManagementAction(options: {

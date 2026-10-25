@@ -730,6 +730,7 @@ export const MESSAGE_TYPES = {
   WORKTREE_MANAGEMENT_ACTION: "worktreeManagementAction",
   SYNC_NAMED_WORKTREE: "syncNamedWorktree", // Webview -> Extension: two-way merge a named worktree's branch with the source checkout's current branch
   WORKTREE_MANAGEMENT_ACTION_RESULT: "worktreeManagementActionResult", // Extension -> Webview: round-trip result for a worktree management action/sync, correlated by the requestId the webview sent
+  EXIT_IDLE_TERMINALS: "exitIdleTerminals", // Webview -> Extension: exit the harness terminals idle workflows kept open (one lineage or all), releasing any named worktree they held
   DASHBOARD_HOST_ACTION_RESULT: "dashboardHostActionResult", // Extension -> Webview: scoped native-host action outcome
   OPEN_WORKTREE_OWNER: "openWorktreeOwner",
   OPEN_PRIOR_CONTEXT: "openPriorContext", // Webview -> Extension: preview inline $prior-context expansion (legacy)

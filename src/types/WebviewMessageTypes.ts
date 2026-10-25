@@ -1698,6 +1698,8 @@ export interface WorktreeManagementStateMessage {
 export interface WorktreeManagementLeaseOwner {
   lease: { workflowKey: string; runRef: string; stateRoot: string };
   ageMs: number;
+  /** The owning run has ended; only its open harness terminal keeps the worktree reserved. */
+  heldByOpenTerminal?: boolean;
 }
 
 export interface WorktreeManagementEntry {
@@ -1765,6 +1767,18 @@ export interface SyncNamedWorktreeMessage {
   type: typeof MESSAGE_TYPES.SYNC_NAMED_WORKTREE;
   worktreePath: string;
   /** Echoed back on WorktreeManagementActionResultMessage so the requesting button can resolve its pending state. */
+  requestId?: string;
+}
+
+/**
+ * Webview → Extension: exit the harness terminals that idle workflows kept
+ * open after their run ended. Executing and paused workflows are skipped.
+ */
+export interface ExitIdleTerminalsMessage {
+  type: typeof MESSAGE_TYPES.EXIT_IDLE_TERMINALS;
+  /** Only this lineage's terminals; absent exits every idle workflow's. */
+  workflowKey?: string;
+  /** Present when sent from the worktree panel: the reply is a WorktreeManagementActionResultMessage instead of a toast. */
   requestId?: string;
 }
 

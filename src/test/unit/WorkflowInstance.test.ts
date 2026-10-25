@@ -29,6 +29,7 @@ import {
   STEP_STATUS,
   HARNESS_IDS,
   STATUS_MESSAGE_SEVERITY,
+  TERMINAL_END_REASONS,
   USER_FEEDBACK_SEVERITY,
   WORKTREE_MODES,
   type HarnessId,
@@ -4413,6 +4414,88 @@ suite("WorkflowInstance retained integration artifacts", () => {
     assert.strictEqual(livePrevious.disposeCalls, 1);
     assert.strictEqual((instance as any).lastRunIntegrations.length, 0);
     assert.strictEqual((instance as any).liveReusableIntegrations.size, 0);
+  });
+
+  suite("user-requested exit of retained terminals", () => {
+    class RetainedTerminalIntegration extends MockHarnessIntegration {
+      gracefulCloseReasons: TerminalEndReason[] = [];
+
+      override canReuseRunningTerminal(): boolean {
+        return true;
+      }
+
+      override closeTerminalGracefully(reason: TerminalEndReason): void {
+        this.gracefulCloseReasons.push(reason);
+      }
+    }
+
+    function createNamedWorktreeHolder() {
+      const platform = new MockPlatform();
+      const instance = new WorkflowInstance(
+        platform,
+        undefined,
+        new MockIntegrationFactory(platform),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        process.cwd()
+      );
+      const retained = new RetainedTerminalIntegration(undefined, false);
+      const released = { lease: 0, runnerLock: 0 };
+      (instance as any).liveReusableIntegrations.set(
+        integrationCacheKey(
+          createResolvedProperties({ harness: HARNESS_IDS.CLAUDE_CLI })
+        ),
+        retained
+      );
+      (instance as any).activeWorktree = {
+        mode: "named",
+        runtimeTrust: { release: () => {} },
+      };
+      (instance as any).executionLease = {
+        updateHeartbeat: async () => undefined,
+        release: async () => {
+          released.lease += 1;
+        },
+      };
+      (instance as any).releaseRunnerLock = async () => {
+        released.runnerLock += 1;
+      };
+      return { instance, retained, released };
+    }
+
+    test("a finished run holding a named worktree only through its terminal reports it, and exiting releases the lease", async () => {
+      const { instance, retained, released } = createNamedWorktreeHolder();
+
+      assert.strictEqual(instance.isHoldingWorktreeForRetainedTerminal(), true);
+      assert.strictEqual(await instance.exitRetainedTerminals(), true);
+
+      assert.deepStrictEqual(retained.gracefulCloseReasons, [
+        TERMINAL_END_REASONS.CLOSED,
+      ]);
+      assert.strictEqual(released.lease, 1);
+      assert.strictEqual(released.runnerLock, 1);
+      assert.strictEqual((instance as any).activeWorktree, undefined);
+      assert.strictEqual(
+        instance.isHoldingWorktreeForRetainedTerminal(),
+        false
+      );
+    });
+
+    test("refuses while execution owns the run, leaving terminal and lease alone", async () => {
+      const { instance, retained, released } = createNamedWorktreeHolder();
+      (instance as any).workflowRuntime.startExecution();
+
+      assert.strictEqual(
+        instance.isHoldingWorktreeForRetainedTerminal(),
+        false,
+        "an executing run holds the worktree for itself, not for a terminal"
+      );
+      assert.strictEqual(await instance.exitRetainedTerminals(), false);
+      assert.deepStrictEqual(retained.gracefulCloseReasons, []);
+      assert.strictEqual(released.lease, 0);
+      assert.strictEqual((instance as any).liveReusableIntegrations.size, 1);
+    });
   });
 });
 
