@@ -76,6 +76,14 @@ class ShortDeadlineWorkspaceViewerService extends HostedWorkspaceViewerService {
   protected override readonly fileHistoryPageTimeoutMs = 25;
 }
 
+/** Real-git pages need the normal deadline; only faked walks get a short one. */
+class AdjustableDeadlineWorkspaceViewerService extends HostedWorkspaceViewerService {
+  protected override fileHistoryPageTimeoutMs = 10_000;
+  shortenFileHistoryDeadline(): void {
+    this.fileHistoryPageTimeoutMs = 25;
+  }
+}
+
 suite("HostedWorkspaceViewerService", function () {
   const tempRoots: string[] = [];
 
@@ -1057,13 +1065,15 @@ suite("HostedWorkspaceViewerService", function () {
           `\0${hash}\0${hash.slice(0, 7)}\0${subject}\0ctrlyoke Test\0today\0${parent}\0\0\0${status}\0${paths.join("\0")}\0`;
         if (spawnCount === 1) {
           setImmediate(() => {
-            child.stdout.write(formattedRow(
-              latestHash,
-              renameHash,
-              "After rename",
-              "M",
-              "new-name.txt"
-            ));
+            child.stdout.write(
+              formattedRow(
+                latestHash,
+                renameHash,
+                "After rename",
+                "M",
+                "new-name.txt"
+              )
+            );
           });
         } else if (spawnCount === 2) {
           setImmediate(() => {
@@ -1195,8 +1205,9 @@ suite("HostedWorkspaceViewerService", function () {
         const batch = rows.slice(spawnCount * 2, spawnCount * 2 + 2);
         spawnCount++;
         const output = batch
-          .map(([hash, parent, subject, filePath]) =>
-            `\0${hash}\0${hash.slice(0, 7)}\0${subject}\0ctrlyoke Test\0today\0${parent}\0\0\0M\0${filePath}\0`
+          .map(
+            ([hash, parent, subject, filePath]) =>
+              `\0${hash}\0${hash.slice(0, 7)}\0${subject}\0ctrlyoke Test\0today\0${parent}\0\0\0M\0${filePath}\0`
           )
           .join("");
         setImmediate(() => {
@@ -1268,14 +1279,23 @@ suite("HostedWorkspaceViewerService", function () {
       configureGitIdentity(root);
       commitFile(root, "history.txt", "one\n", "First history entry");
       commitFile(root, "history.txt", "two\n", "Second history entry");
-      const svc = new ShortDeadlineWorkspaceViewerService(root);
+      const svc = new AdjustableDeadlineWorkspaceViewerService(root);
       await assert.rejects(
-        svc.getFileHistory("history.txt", 0, 1, undefined, undefined, undefined, "not-a-cursor"),
+        svc.getFileHistory(
+          "history.txt",
+          0,
+          1,
+          undefined,
+          undefined,
+          undefined,
+          "not-a-cursor"
+        ),
         (error: unknown) => error instanceof WorkspaceTreeBadRequestError
       );
 
       const page = await svc.getFileHistory("history.txt", 0, 1);
       assert.ok(page.nextCursor);
+      svc.shortenFileHistoryDeadline();
       const restoreSpawn = setFileHistorySpawnForTests(() => {
         const child = new EventEmitter() as EventEmitter & {
           stdout: PassThrough;
