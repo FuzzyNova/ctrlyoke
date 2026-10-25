@@ -513,6 +513,45 @@ suite("SkillsRegistryClient", () => {
       assert.strictEqual(location.folderPath, "skills/processing");
     });
 
+    test("finds a frontmatter match ranked after the first twenty candidates", async () => {
+      const paths = Array.from(
+        { length: 21 },
+        (_, index) => `skills/skill-${String(index).padStart(2, "0")}/SKILL.md`
+      );
+      paths.push("skills/zz-skill/SKILL.md");
+      const tree = {
+        tree: paths.map((entry) => ({ path: entry, type: "blob" })),
+      };
+      const files = Object.fromEntries(
+        paths.map((entry) => [entry, "---\nname: other\n---\n"])
+      );
+      files["skills/zz-skill/SKILL.md"] = "---\nname: wanted skill\n---\n";
+      const { registry } = client(githubRoutes(tree, files));
+      const location = await registry.resolveSkill(
+        "anthropics/skills",
+        "wanted-skill"
+      );
+      assert.strictEqual(location.folderPath, "skills/zz-skill");
+    });
+
+    test("reports when the safety bound leaves candidates unsearched", async () => {
+      const paths = Array.from(
+        { length: 201 },
+        (_, index) => `skills/skill-${String(index).padStart(3, "0")}/SKILL.md`
+      );
+      const tree = {
+        tree: paths.map((entry) => ({ path: entry, type: "blob" })),
+      };
+      const files = Object.fromEntries(
+        paths.map((entry) => [entry, "---\nname: other\n---\n"])
+      );
+      const { registry } = client(githubRoutes(tree, files));
+      await assert.rejects(
+        registry.resolveSkill("anthropics/skills", "missing"),
+        /Could not find the "missing" skill.*searched 200 of 201 SKILL\.md files/
+      );
+    });
+
     test("reports a skill that is not in the repository", async () => {
       const { registry } = client(githubRoutes());
       await assert.rejects(
@@ -521,13 +560,13 @@ suite("SkillsRegistryClient", () => {
       );
     });
 
-    test("a truncated tree is an error, not a partial search", async () => {
+    test("a truncated tree error explains that the repository was too large", async () => {
       const { registry } = client(
         githubRoutes({ ...PDF_TREE, truncated: true })
       );
       await assert.rejects(
         registry.resolveSkill("anthropics/skills", "pdf"),
-        /GitHub truncated the repository tree/
+        /GitHub truncated the repository tree because the repository is too large/
       );
     });
 

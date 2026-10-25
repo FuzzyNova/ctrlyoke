@@ -52,7 +52,8 @@ export const SKILLS_SEARCH_LIMIT = 50;
 export const SKILLS_SEARCH_MIN_QUERY_LENGTH = 2;
 
 /** SKILL.md files whose frontmatter may be read to match a slug. */
-const MAX_FRONTMATTER_PROBES = 20;
+/** Safety bound for unusually large repositories; the UI reports when reached. */
+const MAX_FRONTMATTER_PROBES = 200;
 /** Bounds on what one install may download. */
 export const SKILL_INSTALL_LIMITS = {
   MAX_FILES: 200,
@@ -387,7 +388,7 @@ function getFolderName(folderPath: string, source: string): string {
 
 /**
  * SKILL.md paths in a tree, most likely matches for `slug` first: those whose
- * folder name slugs to it, then shallower paths before deeper ones.
+ * folder path contains a segment that slugs to it, then shallower paths.
  */
 export function rankSkillMdCandidates(
   tree: readonly GitTreeEntry[],
@@ -406,10 +407,15 @@ export function rankSkillMdCandidates(
           .every((segment) => !EXCLUDED_DIR_NAMES.has(segment))
     )
     .map((entry) => entry.path);
-  const score = (skillMdPath: string): number =>
-    toSkillSlug(getFolderName(getFolderPath(skillMdPath), source)) === slug
+  const score = (skillMdPath: string): number => {
+    const folderPath = getFolderPath(skillMdPath);
+    const folderSegments = folderPath
+      ? folderPath.split("/")
+      : [source.split("/").pop() ?? source];
+    return folderSegments.some((segment) => toSkillSlug(segment) === slug)
       ? 0
       : 1;
+  };
   return candidates.sort(
     (a, b) =>
       score(a) - score(b) ||
@@ -620,13 +626,17 @@ export class SkillsShRegistryClient implements SkillsRegistry {
   ): Promise<RegistrySkillLocation> {
     this.assertSkillId(source, slug);
     const commitSha = await this.fetchHeadCommit(source);
-    const location = await this.findSkillAtCommit(source, slug, commitSha);
-    if (!location) {
+    const result = await this.findSkillAtCommit(source, slug, commitSha);
+    if (!result.location) {
+      const searchSummary =
+        result.candidateCount > result.searchedCount
+          ? ` (searched ${result.searchedCount} of ${result.candidateCount} SKILL.md files)`
+          : "";
       throw new SkillsRegistryError(
-        `Could not find the "${slug}" skill in ${GITHUB_HOST}/${source}`
+        `Could not find the "${slug}" skill in ${GITHUB_HOST}/${source}${searchSummary}`
       );
     }
-    return location;
+    return result.location;
   }
 
   /**
@@ -646,14 +656,28 @@ export class SkillsShRegistryClient implements SkillsRegistry {
       return { status: SKILL_UPDATE_STATUSES.UP_TO_DATE, latestCommitSha };
     }
     const tree = await this.fetchTree(source, latestCommitSha);
-    const skillMdPath = tree.some(
+    const existingPath = tree.some(
       (entry) =>
         entry.type === GIT_TREE_ENTRY_TYPES.BLOB &&
         entry.path === installed.skillMdPath
     )
       ? installed.skillMdPath
-      : (await this.findSkillAtCommit(source, slug, latestCommitSha))
-          ?.skillMdPath;
+      : undefined;
+    let skillMdPath = existingPath;
+    if (skillMdPath === undefined) {
+      const result = await this.findSkillAtCommit(
+        source,
+        slug,
+        latestCommitSha
+      );
+      skillMdPath = result.location?.skillMdPath;
+      if (!skillMdPath && result.searchedCount < result.candidateCount) {
+        throw new SkillsRegistryError(
+          `Could not confirm the "${slug}" skill in ${GITHUB_HOST}/${source} ` +
+            `(searched ${result.searchedCount} of ${result.candidateCount} SKILL.md files)`
+        );
+      }
+    }
     if (skillMdPath === undefined) {
       return { status: SKILL_UPDATE_STATUSES.NOT_FOUND, latestCommitSha };
     }
@@ -790,33 +814,57 @@ export class SkillsShRegistryClient implements SkillsRegistry {
     source: string,
     slug: string,
     commitSha: string
-  ): Promise<RegistrySkillLocation | undefined> {
+  ): Promise<{
+    location?: RegistrySkillLocation;
+    candidateCount: number;
+    searchedCount: number;
+  }> {
     const tree = await this.fetchTree(source, commitSha);
-    const candidates = rankSkillMdCandidates(tree, source, slug).slice(
-      0,
-      MAX_FRONTMATTER_PROBES
-    );
-    for (const skillMdPath of candidates) {
-      const content = await this.fetchRawText(source, commitSha, skillMdPath);
-      if (content === null) continue;
-      const frontmatter = parseAgentFrontmatter(content);
-      const folderPath = getFolderPath(skillMdPath);
-      const name = frontmatter.name ?? getFolderName(folderPath, source);
-      if (toSkillSlug(name) !== slug) continue;
-      const description = frontmatter.description
-        ? sanitizeRegistryText(frontmatter.description)
-        : undefined;
-      return {
-        source,
-        slug,
-        commitSha,
-        folderPath,
-        skillMdPath,
-        name: sanitizeRegistryText(name, MAX_NAME_LENGTH) || slug,
-        ...(description ? { description } : {}),
-      };
+    const ranked = rankSkillMdCandidates(tree, source, slug);
+    const candidates = ranked.slice(0, MAX_FRONTMATTER_PROBES);
+    for (
+      let offset = 0;
+      offset < candidates.length;
+      offset += DOWNLOAD_CONCURRENCY
+    ) {
+      const batch = candidates.slice(offset, offset + DOWNLOAD_CONCURRENCY);
+      const contents = await Promise.all(
+        batch.map((skillMdPath) =>
+          this.fetchRawText(source, commitSha, skillMdPath)
+        )
+      );
+      // Probe concurrently, but inspect each batch in rank order so the
+      // selected match is deterministic and no lower-ranked batch is needed.
+      for (let index = 0; index < batch.length; index++) {
+        const skillMdPath = batch[index]!;
+        const content = contents[index];
+        if (content === null || content === undefined) continue;
+        const frontmatter = parseAgentFrontmatter(content);
+        const folderPath = getFolderPath(skillMdPath);
+        const name = frontmatter.name ?? getFolderName(folderPath, source);
+        if (toSkillSlug(name) !== slug) continue;
+        const description = frontmatter.description
+          ? sanitizeRegistryText(frontmatter.description)
+          : undefined;
+        return {
+          location: {
+            source,
+            slug,
+            commitSha,
+            folderPath,
+            skillMdPath,
+            name: sanitizeRegistryText(name, MAX_NAME_LENGTH) || slug,
+            ...(description ? { description } : {}),
+          },
+          candidateCount: ranked.length,
+          searchedCount: offset + index + 1,
+        };
+      }
     }
-    return undefined;
+    return {
+      candidateCount: ranked.length,
+      searchedCount: candidates.length,
+    };
   }
 
   /** {@link fetchHeadCommit}, shared for {@link HEAD_COMMIT_CACHE_MS}. */

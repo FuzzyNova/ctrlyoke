@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retryable errors when a page fails to load.
 - Workspace viewer commit and file history now page from frozen Git tip hashes,
   keeping snapshots small and each Git history request bounded to one page.
+- Skills registry resolution ranks slug matches across folder paths and probes
+  candidates with bounded concurrency, reporting when its safety bound applies.
+- Run bundle loading streams `events.jsonl` and limits individual event lines,
+  so exported bundles can exceed the small JSON file size cap.
 
 ### Added
 

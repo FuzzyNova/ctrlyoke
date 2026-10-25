@@ -10,6 +10,10 @@ import {
   exportRunBundle,
   RunBundleExportError,
 } from "../../core/orchestration/RunBundleExporter";
+import {
+  readRunBundle,
+  RunBundleFormatError,
+} from "../../core/orchestration/RunBundleReader";
 import { ReplayIntegrationFactory } from "../../dev/replay/ReplayIntegration";
 import { RunReplaySession } from "../../dev/replay/RunReplaySession";
 import {
@@ -450,6 +454,36 @@ suite("Run replay (bundle -> live engine)", function () {
         event.phase === undefined
     );
     assert.ok(retried, "the recorded failure drove a real retry");
+  });
+
+  test("streams events larger than the configured whole-file cap", async () => {
+    const bundleDir = path.join(root, "large-events.ctrlyokerun");
+    await writeBundle(bundleDir);
+    const event = { eventType: "large-test-event", text: "x".repeat(4096) };
+    await fs.appendFile(
+      path.join(bundleDir, RUN_BUNDLE_FILES.EVENTS),
+      `${JSON.stringify(event)}\n`
+    );
+    const loaded = await readRunBundle(bundleDir, workspace, {
+      maxBundleFileBytes: 512,
+    });
+    assert.strictEqual(loaded.events.length, buildEvents().length + 1);
+    assert.strictEqual(loaded.events.at(-1)?.eventType, "large-test-event");
+  });
+
+  test("rejects an event line larger than the per-line cap", async () => {
+    const bundleDir = path.join(root, "oversized-event.ctrlyokerun");
+    await writeBundle(bundleDir);
+    await fs.appendFile(
+      path.join(bundleDir, RUN_BUNDLE_FILES.EVENTS),
+      `${JSON.stringify({ text: "x".repeat(256) })}\n`
+    );
+    await assert.rejects(
+      readRunBundle(bundleDir, workspace, { maxEventLineBytes: 128 }),
+      (error: unknown) =>
+        error instanceof RunBundleFormatError &&
+        /events\.jsonl line \d+ exceeds the 128-byte limit/.test(error.message)
+    );
   });
 
   test("puts each attempt's file changes on disk", async () => {
