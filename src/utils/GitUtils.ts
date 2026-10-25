@@ -583,7 +583,8 @@ export async function getFileHistoryCommitsBounded(
     "--format=%x00%H%x00%h%x00%s%x00%an%x00%ar%x00%P%x00%D%x00",
   ];
   if (fullRefNames) args.push("--decorate=full");
-  args.push(`--skip=${skip}`, "-n", String(limit));
+  if (skip > 0) args.push(`--skip=${skip}`);
+  args.push("-n", String(limit));
   if (ref.trim()) args.push("--end-of-options", ref.trim());
   args.push("--", gitPath);
   gitCommandObserverForTests?.("git", args);
@@ -615,10 +616,6 @@ export async function getFileHistoryCommitsBounded(
       clearTimeout(timer);
       const stdout = Buffer.concat(chunks).toString("utf8");
       const commits = parseFileHistoryCommitOutput(stdout);
-      if (timedOut && commits.length === 0) {
-        reject(new Error(`git log --follow timed out after ${timeoutMs}ms`));
-        return;
-      }
       if (!timedOut && code !== 0) {
         reject(
           new Error(

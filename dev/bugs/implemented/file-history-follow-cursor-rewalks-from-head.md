@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-25 by bug-drain review of cd7749ebc
 - **Area:** `src/utils/GitUtils.ts` (`getFileHistoryCommitsBounded`), `src/server/HostedWorkspaceViewerService.ts` (`materializeFileHistoryPage`)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

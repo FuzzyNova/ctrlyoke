@@ -437,8 +437,10 @@ export interface WorkspaceFileHistoryPageResponse {
   hasMore: boolean;
   /** Virtual index of the first entry in `entries`. */
   offset: number;
-  /** Raw `git log --follow` cursor for the next request. Omitted by older servers. */
+  /** Legacy raw `git log --follow` offset, retained for older clients. */
   nextOffset?: number;
+  /** Opaque continuation point for the next `--follow` walk. */
+  nextCursor?: string;
   entries: WorkspaceFileHistoryEntry[];
 }
 

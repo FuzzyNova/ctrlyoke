@@ -1873,6 +1873,10 @@ export class CtrlYokeHostedServer
           typeof req.query.nextOffset === "string"
             ? Number.parseInt(req.query.nextOffset, 10)
             : undefined;
+        const nextCursor =
+          typeof req.query.nextCursor === "string"
+            ? req.query.nextCursor
+            : undefined;
         const pageSize =
           rawPageSize === undefined
             ? undefined
@@ -1893,7 +1897,8 @@ export class CtrlYokeHostedServer
               pageSize,
               historyId,
               repo,
-              rawNextOffset
+              rawNextOffset,
+              nextCursor
             )
           );
         } catch (err) {

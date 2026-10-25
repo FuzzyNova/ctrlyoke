@@ -231,6 +231,12 @@ interface FileHistorySnapshot {
   lastAccessedAt: number;
 }
 
+interface FileHistoryCursor {
+  historyId: string;
+  hash: string;
+  path: string;
+}
+
 interface CommitLogSnapshot {
   historyId: string;
   repoRoot: string;
@@ -2165,7 +2171,8 @@ export class HostedWorkspaceViewerService {
     pageSize?: number,
     historyId?: string,
     repoId?: string,
-    nextOffset?: number
+    nextOffset?: number,
+    nextCursor?: string
   ): Promise<WorkspaceFileHistoryPageResponse> {
     if (!Number.isSafeInteger(offset) || offset < 0) {
       throw new WorkspaceTreeBadRequestError(
@@ -2179,6 +2186,9 @@ export class HostedWorkspaceViewerService {
       throw new WorkspaceTreeBadRequestError(
         "nextOffset must be a non-negative integer"
       );
+    }
+    if (nextCursor !== undefined && !isValidFileHistoryCursor(nextCursor)) {
+      throw new WorkspaceTreeBadRequestError("nextCursor is invalid");
     }
 
     const resolved = this.safeResolve(requestedPath);
@@ -2201,7 +2211,12 @@ export class HostedWorkspaceViewerService {
           "path does not match the history snapshot"
         );
       }
-      return this.materializeFileHistoryPage(snapshot, offset, nextOffset);
+      return this.materializeFileHistoryPage(
+        snapshot,
+        offset,
+        nextOffset,
+        nextCursor
+      );
     }
 
     const resolvedPageSize = this.resolveFileHistoryPageSize(pageSize);
@@ -2230,7 +2245,12 @@ export class HostedWorkspaceViewerService {
     this.fileHistorySnapshots.set(snapshot.historyId, snapshot);
     this.trimFileHistorySnapshots();
 
-    return this.materializeFileHistoryPage(snapshot, offset, nextOffset);
+    return this.materializeFileHistoryPage(
+      snapshot,
+      offset,
+      nextOffset,
+      nextCursor
+    );
   }
 
   async getFileHistoryDiff(
@@ -2345,15 +2365,32 @@ export class HostedWorkspaceViewerService {
   private async materializeFileHistoryPage(
     snapshot: FileHistorySnapshot,
     offset: number,
-    requestedNextOffset?: number
+    requestedNextOffset?: number,
+    requestedNextCursor?: string
   ): Promise<WorkspaceFileHistoryPageResponse> {
     const deadline = Date.now() + this.fileHistoryPageTimeoutMs;
     const rawOffset = requestedNextOffset ?? offset;
     let cursor = rawOffset;
+    let walkPath = snapshot.gitPath;
+    let walkRef = snapshot.headHash;
+    let walkSkip = rawOffset;
+    let continuationCursor: string | undefined;
+    if (requestedNextCursor !== undefined) {
+      const decoded = decodeFileHistoryCursor(requestedNextCursor);
+      if (!decoded || decoded.historyId !== snapshot.historyId) {
+        throw new WorkspaceTreeBadRequestError("nextCursor is invalid");
+      }
+      walkPath = decoded.path;
+      walkRef = `${decoded.hash}^`;
+      walkSkip = 0;
+      continuationCursor = requestedNextCursor;
+    }
     let hasMore = false;
     let timedOut = false;
+    let reachedRoot = false;
+    let foundExtraEntry = false;
     const entryRows: FileHistoryCommitInfo[] = [];
-    while (entryRows.length <= snapshot.pageSize) {
+    while (entryRows.length <= snapshot.pageSize && !reachedRoot) {
       const remainingMs = deadline - Date.now();
       if (remainingMs <= 0) {
         timedOut = true;
@@ -2365,15 +2402,15 @@ export class HostedWorkspaceViewerService {
       try {
         result = await getFileHistoryCommitsBounded(
           snapshot.repoRoot,
-          snapshot.gitPath,
+          walkPath,
           batchSize,
-          cursor,
-          snapshot.headHash,
+          walkSkip,
+          walkRef,
           true,
           remainingMs
         );
       } catch (error) {
-        if (entryRows.length === 0) throw error;
+        if (!continuationCursor) throw error;
         timedOut = true;
         hasMore = true;
         break;
@@ -2381,22 +2418,44 @@ export class HostedWorkspaceViewerService {
       for (const row of result.commits) {
         const oldAbsolute = path.resolve(snapshot.repoRoot, row.oldPath);
         const newAbsolute = path.resolve(snapshot.repoRoot, row.path);
-        cursor++;
-        if (
+        const isTrusted =
           isPathWithinAnyDirectory(oldAbsolute, this.trustedRoots) &&
-          isPathWithinAnyDirectory(newAbsolute, this.trustedRoots)
-        )
-          entryRows.push(row);
-        if (entryRows.length > snapshot.pageSize) {
-          cursor--;
+          isPathWithinAnyDirectory(newAbsolute, this.trustedRoots);
+        if (isTrusted && entryRows.length === snapshot.pageSize) {
+          hasMore = true;
+          foundExtraEntry = true;
           break;
         }
+        cursor++;
+        if (row.parentHashes.length === 0) {
+          reachedRoot = true;
+          continuationCursor = undefined;
+        } else {
+          continuationCursor = encodeFileHistoryCursor({
+            historyId: snapshot.historyId,
+            hash: row.hash,
+            path: row.oldPath,
+          });
+          walkPath = row.oldPath;
+          walkRef = `${row.hash}^`;
+          walkSkip = 0;
+        }
+        if (isTrusted) entryRows.push(row);
+        if (reachedRoot) break;
       }
-      if (entryRows.length > snapshot.pageSize) {
-        hasMore = true;
+      if (foundExtraEntry) {
+        break;
+      }
+      if (reachedRoot) {
+        hasMore = false;
         break;
       }
       if (result.timedOut) {
+        if (!continuationCursor && result.commits.length === 0) {
+          throw new Error(
+            "Git file history timed out without making progress; retry the request"
+          );
+        }
         timedOut = true;
         hasMore = true;
         break;
@@ -2409,6 +2468,15 @@ export class HostedWorkspaceViewerService {
       // from the raw cursor while keeping the same per-page deadline.
     }
     if (timedOut) hasMore = true;
+    if (
+      requestedNextCursor &&
+      continuationCursor === requestedNextCursor &&
+      timedOut
+    ) {
+      throw new Error(
+        "Git file history timed out without making progress; retry the request"
+      );
+    }
     const pageRows = entryRows.slice(0, snapshot.pageSize);
     const entries: WorkspaceFileHistoryEntry[] = pageRows.map((row) => {
       const oldAbsolute = path.resolve(snapshot.repoRoot, row.oldPath);
@@ -2440,6 +2508,9 @@ export class HostedWorkspaceViewerService {
       hasMore,
       offset,
       nextOffset: cursor,
+      ...(hasMore && continuationCursor
+        ? { nextCursor: continuationCursor }
+        : {}),
       entries,
     };
   }
@@ -3420,4 +3491,56 @@ function isValidListingId(value: string): boolean {
 
 function isValidHistoryId(value: string): boolean {
   return isValidListingId(value);
+}
+
+function encodeFileHistoryCursor(cursor: FileHistoryCursor): string {
+  return Buffer.from(JSON.stringify({ v: 1, ...cursor }), "utf8").toString(
+    "base64url"
+  );
+}
+
+function isValidFileHistoryCursor(value: string): boolean {
+  return value.length <= 4096 && decodeFileHistoryCursor(value) !== undefined;
+}
+
+function decodeFileHistoryCursor(value: string): FileHistoryCursor | undefined {
+  if (!value || value.length > 4096 || !/^[A-Za-z0-9_-]+$/.test(value)) {
+    return undefined;
+  }
+  try {
+    const decoded: unknown = JSON.parse(
+      Buffer.from(value, "base64url").toString("utf8")
+    );
+    if (
+      typeof decoded !== "object" ||
+      decoded === null ||
+      !("v" in decoded) ||
+      decoded.v !== 1 ||
+      !("historyId" in decoded) ||
+      typeof decoded.historyId !== "string" ||
+      !isValidHistoryId(decoded.historyId) ||
+      !("hash" in decoded) ||
+      typeof decoded.hash !== "string" ||
+      !/^[0-9a-f]{40}$/i.test(decoded.hash) ||
+      !("path" in decoded) ||
+      typeof decoded.path !== "string" ||
+      !decoded.path ||
+      decoded.path.includes("\\") ||
+      decoded.path.includes("\0") ||
+      path.posix.isAbsolute(decoded.path) ||
+      path.posix.normalize(decoded.path) !== decoded.path ||
+      decoded.path === "." ||
+      decoded.path === ".." ||
+      decoded.path.startsWith("../")
+    ) {
+      return undefined;
+    }
+    return {
+      historyId: decoded.historyId,
+      hash: decoded.hash,
+      path: decoded.path,
+    };
+  } catch {
+    return undefined;
+  }
 }
