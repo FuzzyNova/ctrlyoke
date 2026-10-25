@@ -1431,6 +1431,39 @@ suite("HostedWorkspaceViewerService", function () {
       }
     });
 
+    test("does not recurse into an unpopulated submodule", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "outer.txt", "outerneedle in outer repo\n", "outer");
+
+      const source = createWorkspace();
+      runGit(source, "init");
+      configureGitIdentity(source);
+      commitFile(source, "inner.txt", "nested content\n", "inner");
+      // A clone without --recurse-submodules leaves an empty gitlink directory.
+      fs.mkdirSync(path.join(root, "unpopulated"));
+      runGit(
+        root,
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        `160000,${runGit(source, "rev-parse", "HEAD")},unpopulated`
+      );
+      runGit(root, "commit", "-m", "add unpopulated submodule");
+
+      const result = await new HostedWorkspaceViewerService(
+        root
+      ).searchWorkspace({
+        query: "outerneedle",
+        scope: "content",
+      });
+      assert.deepStrictEqual(
+        result.results.map((entry) => entry.path),
+        ["outer.txt"]
+      );
+    });
+
     test("falls back to the workspace walk when Git cannot spawn", async () => {
       const root = createWorkspace();
       fs.writeFileSync(path.join(root, "walk-target.txt"), "walkneedle\n");
@@ -3131,7 +3164,6 @@ suite("HostedWorkspaceViewerService", function () {
       assert.strictEqual(second.offset, 1);
       assert.ok(!second.entries.some((entry) => entry.path === "later.txt"));
     });
-
   });
 
   suite("git ref diff downloads", () => {

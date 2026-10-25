@@ -14,6 +14,8 @@ export const GIT_DIFF_NO_EXT_DIFF_OPTION = "--no-ext-diff";
 const GIT_TIMEOUT_MS = 10_000;
 const GIT_MUTATION_TIMEOUT_MS = 5 * 60_000;
 const GIT_MAX_BUFFER = 50 * 1024 * 1024;
+/** Whole-repository `ls-files` listings: large monorepos can exceed 100 MB. */
+const GIT_WHOLE_REPO_LISTING_MAX_BUFFER = 500 * 1024 * 1024;
 const GIT_SUBMODULE_MODE = "160000";
 const GIT_UNAVAILABLE_ERRNO = "ENOENT";
 const execFilePromisified = promisify(execFile);
@@ -345,7 +347,11 @@ export function isNotGitRepositoryError(error: unknown): boolean {
 export function isGitUnavailableError(error: unknown): boolean {
   if (isNotGitRepositoryError(error)) return true;
   if (!error || typeof error !== "object") return false;
-  const gitError = error as { code?: unknown; message?: unknown; stderr?: unknown };
+  const gitError = error as {
+    code?: unknown;
+    message?: unknown;
+    stderr?: unknown;
+  };
   if (gitError.code === GIT_UNAVAILABLE_ERRNO) return true;
   return [gitError.stderr, gitError.message].some((value) =>
     /detected dubious ownership/i.test(String(value ?? ""))
@@ -985,8 +991,9 @@ export async function getWorkingTreeDiff(
     { timeout: GIT_TIMEOUT_MS }
   );
 
-  return diffOutput + formatUntrackedFilesSection(
-    parseUntrackedFiles(statusOutput, pathspecs)
+  return (
+    diffOutput +
+    formatUntrackedFilesSection(parseUntrackedFiles(statusOutput, pathspecs))
   );
 }
 
@@ -1342,7 +1349,7 @@ export async function getGitTrackedFiles(repoRoot: string): Promise<string[]> {
     {
       cwd: repoRoot,
       timeout: getGitWholeRepoTimeoutMs(),
-      maxBuffer: 500 * 1024 * 1024, // 500 MB — large monorepos can exceed 100 MB
+      maxBuffer: GIT_WHOLE_REPO_LISTING_MAX_BUFFER,
     }
   );
   return parseGitNulSeparatedPaths(stdout);
@@ -1371,8 +1378,13 @@ export async function* getGitFilesIncludingNestedRepos(
   for (const entry of entries) {
     const relative = entry.replace(/\\/g, "/");
     const absolute = path.resolve(repoRoot, relative);
-    let nestedRepository = gitlinks.has(relative);
-    if (!nestedRepository && entry.endsWith("/")) {
+    // A gitlink only marks an entry worth probing: an unpopulated submodule is
+    // an empty directory, and listing inside it falls back to the parent repo
+    // (which reports the submodule as `./`), so recursing without the marker
+    // check never terminates.
+    const isGitlink = gitlinks.has(relative);
+    let nestedRepository = false;
+    if (isGitlink || entry.endsWith("/")) {
       const gitMarker = path.join(absolute, ".git");
       try {
         const entryStat = await probeDependencies.lstat(absolute);
@@ -1385,7 +1397,7 @@ export async function* getGitFilesIncludingNestedRepos(
       }
     }
 
-    if (entry.endsWith("/") || nestedRepository) {
+    if (entry.endsWith("/") || isGitlink) {
       if (chunk.length > 0) yield flush();
       if (!nestedRepository) continue;
       try {
@@ -1426,10 +1438,10 @@ const DEFAULT_NESTED_REPO_PROBE_DEPENDENCIES: GitNestedRepoProbeDependencies = {
 };
 
 async function getGitlinkPaths(repoRoot: string): Promise<Set<string>> {
-  const { stdout } = await execGit(
-    ["-C", repoRoot, "ls-files", "-s", "-z"],
-    { timeout: getGitWholeRepoTimeoutMs(), maxBuffer: GIT_MAX_BUFFER }
-  );
+  const { stdout } = await execGit(["-C", repoRoot, "ls-files", "-s", "-z"], {
+    timeout: getGitWholeRepoTimeoutMs(),
+    maxBuffer: GIT_WHOLE_REPO_LISTING_MAX_BUFFER,
+  });
   const paths = new Set<string>();
   for (const record of parseGitNulSeparatedPaths(stdout)) {
     const tab = record.indexOf("\t");
