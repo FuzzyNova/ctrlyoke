@@ -158,6 +158,8 @@ export interface HistorySearchRebuildWorkerData {
   workspaceFolderPath: string;
   runHistoryLocation: RunHistoryLocation;
   logFilePath?: string;
+  /** CLI/MCP callers may wait for a live holder to finish rebuilding. */
+  waitForLiveLock?: boolean;
 }
 
 export type HistorySearchRebuildProgressCallback = (
@@ -552,8 +554,9 @@ export async function runHistorySearchRebuild(
     },
     {
       timeoutMs: REBUILD_LOCK_TIMEOUT_MS,
-      waitWhileHolderAlive: true,
-      maxWaitMs: REBUILD_LOCK_MAX_WAIT_MS,
+      waitWhileHolderAlive: data.waitForLiveLock === true,
+      maxWaitMs:
+        data.waitForLiveLock === true ? REBUILD_LOCK_MAX_WAIT_MS : undefined,
     }
   );
 

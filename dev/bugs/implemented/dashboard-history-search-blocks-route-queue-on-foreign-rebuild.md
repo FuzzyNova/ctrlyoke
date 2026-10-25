@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-24 by bug-drain review of 76b035219
 - **Area:** `src/core/orchestration/historySearchRebuildWorker.ts`, `src/core/orchestration/HistorySearchIndexService.ts`, `src/ui/WebviewMessageRouter.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -3331,6 +3331,7 @@ suite("CLI history search command", () => {
     });
     assert.deepStrictEqual(service.options, {
       allowRebuild: false,
+      waitForLiveLock: false,
       allowLegacyFallback: false,
       snippetChars: 140,
     });

@@ -2077,7 +2077,8 @@ export class WebviewMessageRouter {
               ...listingScope,
               ...partialResponse,
             });
-          }
+          },
+          { allowRebuild: false }
         );
         ctx.emit({
           type: MESSAGE_TYPES.SEARCH_HISTORY_RESULTS,

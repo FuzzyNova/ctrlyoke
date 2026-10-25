@@ -40,6 +40,7 @@ import { hashPathForCompare } from "../../utils/PathCasing";
 import { getFrozenRunHistoryLocation } from "../../utils/RunHistoryStoragePolicy";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { lockFilePath, withFileLock } from "../../utils/FileLockUtils";
 import {
   getSearchIndexDir,
   INDEX_SCHEMA_VERSION,
@@ -1730,6 +1731,110 @@ suite("HistorySearchIndexService", () => {
 
     assert.strictEqual(addedResponse.totalCount, 1);
     assert.strictEqual(existingResponse.totalCount, 1);
+  });
+
+  test("serves the existing index promptly while a foreign rebuild lock is live", async () => {
+    await createRun("foreign-lock-existing-2026-06-09T23-32-00", 1, 22000, [
+      createStatusDraft(22100, "foreign-lock-existing-term"),
+    ]);
+    const index = new HistorySearchIndexService();
+    const initial = await index.search(
+      { query: "foreign-lock-existing-term", limit: 10 },
+      workspaceRoot
+    );
+    assert.strictEqual(initial.totalCount, 1);
+
+    await createRun("foreign-lock-new-2026-06-09T23-33-00", 1, 23000, [
+      createStatusDraft(23100, "foreign-lock-new-term"),
+    ]);
+
+    const manifestPath = path.join(
+      getSearchIndexDir(workspaceRoot, getFrozenRunHistoryLocation()),
+      "manifest.json"
+    );
+    await fs.mkdir(path.dirname(manifestPath), { recursive: true });
+    let releaseHolder!: () => void;
+    const holderGate = new Promise<void>((resolve) => {
+      releaseHolder = resolve;
+    });
+    const holder = withFileLock(manifestPath, () => holderGate);
+    const lockPath = lockFilePath(manifestPath);
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+
+    try {
+      while (!(await fs.stat(lockPath).catch(() => undefined))) {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+      }
+
+      const response = await Promise.race([
+        index.search(
+          { query: "foreign-lock-existing-term", limit: 10 },
+          workspaceRoot,
+          undefined,
+          undefined,
+          undefined,
+          { allowRebuild: false }
+        ),
+        new Promise<never>((_, reject) =>
+          (timeout = setTimeout(
+            () => reject(new Error("Interactive search waited on rebuild lock")),
+            5_000
+          ))
+        ),
+      ]);
+
+      assert.strictEqual(response.indexState, "building");
+      assert.strictEqual(response.totalCount, 1);
+      assert.ok(
+        response.results[0]?.matchSnippet.includes("foreign-lock-existing-term")
+      );
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      releaseHolder();
+      await holder;
+    }
+  });
+
+  test("cancels a search that is waiting for a live rebuild lock", async () => {
+    await createRun("cancelled-lock-wait-2026-06-09T23-34-00", 1, 24000, [
+      createStatusDraft(24100, "cancelled-lock-wait-term"),
+    ]);
+    const manifestPath = path.join(
+      getSearchIndexDir(workspaceRoot, getFrozenRunHistoryLocation()),
+      "manifest.json"
+    );
+    await fs.mkdir(path.dirname(manifestPath), { recursive: true });
+    let releaseHolder!: () => void;
+    const holderGate = new Promise<void>((resolve) => {
+      releaseHolder = resolve;
+    });
+    const holder = withFileLock(manifestPath, () => holderGate);
+    const lockPath = lockFilePath(manifestPath);
+    const controller = new AbortController();
+    const index = new HistorySearchIndexService();
+
+    try {
+      while (!(await fs.stat(lockPath).catch(() => undefined))) {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+      }
+
+      const search = index.search(
+        { query: "cancelled-lock-wait-term", limit: 10 },
+        workspaceRoot,
+        undefined,
+        controller.signal,
+        undefined,
+        { allowRebuild: true, waitForLiveLock: true }
+      );
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      controller.abort();
+
+      await assert.rejects(search, HistorySearchCancelledError);
+    } finally {
+      controller.abort();
+      releaseHolder();
+      await holder;
+    }
   });
 
   test("skips a redundant rebuild after waiting for a sibling and returns results", async () => {

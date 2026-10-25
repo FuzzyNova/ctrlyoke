@@ -1809,6 +1809,7 @@ suite("WebviewMessageRouter — license actions", () => {
       deep?: boolean;
       regex?: boolean;
       signal?: AbortSignal;
+      allowRebuild?: boolean;
       resolve: () => void;
     }
 
@@ -1836,7 +1837,9 @@ suite("WebviewMessageRouter — license actions", () => {
           },
           _workspacePath: string,
           _onProgress: unknown,
-          signal?: AbortSignal
+          signal?: AbortSignal,
+          _onPartialResults?: unknown,
+          options?: { allowRebuild?: boolean }
         ) =>
           new Promise((resolve) => {
             recorded.push({
@@ -1845,6 +1848,7 @@ suite("WebviewMessageRouter — license actions", () => {
               deep: request.deep,
               regex: request.regex,
               signal,
+              allowRebuild: options?.allowRebuild,
               resolve: () =>
                 resolve({
                   query: request.query,
@@ -1899,6 +1903,7 @@ suite("WebviewMessageRouter — license actions", () => {
         });
         await settle();
         assert.strictEqual(recorded.length, 1);
+        assert.strictEqual(recorded[0].allowRebuild, false);
 
         const second = router.route({
           type: MESSAGE_TYPES.SEARCH_HISTORY,
