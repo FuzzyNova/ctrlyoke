@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-24 by timeout-budget bug sweep workflow (core-orchestration)
 - **Area:** `src/core/orchestration/historySearchRebuildWorker.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

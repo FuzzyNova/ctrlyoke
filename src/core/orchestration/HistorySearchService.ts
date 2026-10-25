@@ -135,7 +135,7 @@ export class HistorySearchService {
       }
       const reason =
         error instanceof FileLockTimeoutError
-          ? `lock still contended after its extended timeout (${getErrorMessage(error)})`
+          ? `lock remained contended through its acquisition limit (${getErrorMessage(error)})`
           : getErrorMessage(error);
       Log.warn(
         `[HistorySearchService] Indexed search failed after ${Date.now() - indexAttemptStart}ms, falling back to disk scan: ${reason}`

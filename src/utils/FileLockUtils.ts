@@ -49,6 +49,10 @@ export class FileLockUnavailableError extends Error {
 
 export interface FileLockOptions {
   timeoutMs?: number;
+  /** Continue waiting past timeoutMs while an existing lock heartbeat is fresh. */
+  waitWhileHolderAlive?: boolean;
+  /** Hard limit for acquisition when waitWhileHolderAlive is enabled. */
+  maxWaitMs?: number;
   /** Injectable for tests; nothing in production passes these. */
   open?: (lockPath: string, flags: "wx") => Promise<fs.FileHandle>;
   rename?: (source: string, destination: string) => Promise<void>;
@@ -82,13 +86,22 @@ async function acquireLock(
   lockPath: string,
   timeoutMs: number,
   ops: LockFileOperations,
-  staleMs: number
+  staleMs: number,
+  waitWhileHolderAlive: boolean,
+  maxWaitMs: number | undefined
 ): Promise<string> {
   const startTime = Date.now();
+  const timeoutAt = startTime + timeoutMs;
+  const ceilingAt =
+    maxWaitMs === undefined ? Number.POSITIVE_INFINITY : startTime + maxWaitMs;
   let lastSharingError: unknown;
   let sawHeldLock = false;
+  let sawLiveHolder = false;
 
-  while (Date.now() - startTime < timeoutMs) {
+  while (Date.now() < ceilingAt) {
+    if (Date.now() >= timeoutAt && !(waitWhileHolderAlive && sawLiveHolder)) {
+      break;
+    }
     try {
       const handle = await ops.open(lockPath, "wx");
       const ownerToken = `${process.pid} ${crypto.randomUUID()}`;
@@ -114,7 +127,11 @@ async function acquireLock(
 
       try {
         const stats = await ops.stat(lockPath);
-        if (Date.now() - stats.mtimeMs > staleMs) {
+        const isStale = Date.now() - stats.mtimeMs > staleMs;
+        if (!isStale) {
+          sawLiveHolder = true;
+        }
+        if (isStale) {
           const judgedPayload = await ops
             .readFile(lockPath, "utf8")
             .catch(() => "");
@@ -249,7 +266,9 @@ export async function withFileLock<T>(
     lockPath,
     options?.timeoutMs ?? LOCK_TIMEOUT_MS,
     ops,
-    staleMs
+    staleMs,
+    options?.waitWhileHolderAlive ?? false,
+    options?.maxWaitMs
   );
   const heartbeat = setInterval(() => {
     void ops

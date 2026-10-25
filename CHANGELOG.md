@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- History search rebuilds wait for a live lock holder to finish, up to a 30-minute ceiling.
 - Workspace viewer diff downloads stream Git output without a size cap and
   report failures to the user.
 - Workspace viewer worktree diffs page from frozen branch snapshots and show

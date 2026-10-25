@@ -52,6 +52,7 @@ export const MAX_INDEXED_TEXT_LENGTH = 2000;
  */
 export const REBUILD_WORKER_MAX_OLD_GENERATION_MB = 2048;
 const REBUILD_LOCK_TIMEOUT_MS = 60_000;
+const REBUILD_LOCK_MAX_WAIT_MS = 30 * 60_000;
 const REBUILD_DIR_MIN_AGE_MS = 5 * 60_000;
 const PROGRESS_LOG_INTERVAL = 200;
 const PROGRESS_EMIT_INTERVAL_MS = 150;
@@ -549,7 +550,11 @@ export async function runHistorySearchRebuild(
         documents: documentCount,
       });
     },
-    { timeoutMs: REBUILD_LOCK_TIMEOUT_MS }
+    {
+      timeoutMs: REBUILD_LOCK_TIMEOUT_MS,
+      waitWhileHolderAlive: true,
+      maxWaitMs: REBUILD_LOCK_MAX_WAIT_MS,
+    }
   );
 
   // A full rebuild is rare, so it is when other versions' indexes are pruned.
