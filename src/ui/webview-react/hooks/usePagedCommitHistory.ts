@@ -142,6 +142,14 @@ function pageOffset(index: number, pageSize: number): number {
   return Math.floor(Math.max(0, index) / pageSize) * pageSize;
 }
 
+function loadedRowCount(
+  pages: ReadonlyMap<number, readonly WorkspaceCommitLogEntry[]>
+): number {
+  let count = 0;
+  for (const commits of pages.values()) count += commits.length;
+  return count;
+}
+
 function errorFrom(value: unknown): Error {
   return value instanceof Error ? value : new Error(String(value));
 }
@@ -377,22 +385,7 @@ export function usePagedCommitHistory(
         requestedOffset,
         current?.pageSize ?? configRef.current.pageSize
       );
-      const targetPage = current?.pages.get(targetOffset);
-      const loadedCount = current
-        ? [...current.pages.values()].reduce(
-            (count, commits) => count + commits.length,
-            0
-          )
-        : 0;
-      const isContinuation =
-        current?.hasMore && requestedOffset === loadedCount;
-      const offset = isContinuation
-        ? loadedCount
-        : current?.hasMore &&
-            targetPage !== undefined &&
-            requestedOffset >= targetOffset + targetPage.length
-          ? targetOffset + targetPage.length
-          : targetOffset;
+      const offset = targetOffset;
       if (!current?.listingId || current.initialLoading) {
         pendingOffsetsRef.current.add(requestedOffset);
         return;
@@ -575,22 +568,8 @@ export function usePagedCommitHistory(
       const firstOffset =
         direction > 0 ? visibleFirstOffset : overscanFirstOffset;
       const lastOffset = direction < 0 ? visibleLastOffset : overscanLastOffset;
-      const loadedCount = current
-        ? [...current.pages.values()].reduce(
-            (count, commits) => count + commits.length,
-            0
-          )
-        : 0;
       for (let offset = firstOffset; offset <= lastOffset; offset += pageSize) {
         requestRange(offset);
-      }
-      if (
-        current?.hasMore &&
-        loadedCount > 0 &&
-        loadedCount >= range.overscanStartIndex &&
-        loadedCount <= range.overscanEndIndex
-      ) {
-        requestRange(loadedCount);
       }
       if (direction > 0) requestRange(lastOffset + pageSize);
       else if (direction < 0 && firstOffset >= pageSize) {
@@ -656,9 +635,7 @@ export function usePagedCommitHistory(
     [state.failedRanges]
   );
   const uniqueLoadedCount = useMemo(() => {
-    let count = 0;
-    for (const commits of state.pages.values()) count += commits.length;
-    return count;
+    return loadedRowCount(state.pages);
   }, [state.pages]);
 
   return {

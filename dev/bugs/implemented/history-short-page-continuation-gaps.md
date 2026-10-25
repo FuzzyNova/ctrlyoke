@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-25 by bug-drain review of cf3acdf4a
 - **Area:** `src/ui/webview-react/hooks/usePagedCommitHistory.ts`, `src/ui/webview-react/hooks/usePagedFileHistory.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

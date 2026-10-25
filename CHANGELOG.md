@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   opaque server-side cursors, pages densely across trusted-root filtering without
   dropping merged-branch commits or re-walking earlier history, and leaves timed
   out pages retryable without caching partial results.
+- Workspace viewer file history continues through consecutive short pages while
+  the loaded rows remain inside the current viewport range.
 - VS Code workflow pickers now show Git-ignored workflow files when
   `hideGitIgnoredFiles` is disabled.
 - Git-backed file listings now skip broken nested repositories and fall back to

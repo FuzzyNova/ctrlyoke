@@ -266,46 +266,58 @@ describe("usePagedCommitHistory", () => {
     expect(result.current.failedRanges).toEqual([]);
   });
 
-  it("fills a short first page when a requested row is inside its page window", async () => {
-    const fetchPage = vi
-      .fn<PagedCommitHistoryFetcher>()
-      .mockResolvedValueOnce({
-        ...response(HISTORY_A, 0, [commit(0)]),
-        hasMore: true,
-      })
-      .mockResolvedValueOnce(response(HISTORY_A, 1, [commit(1)]));
-    const { result } = renderHistory(fetchPage);
-
-    await waitFor(() =>
-      expect(result.current.getCommit(0)?.hash).toBe("hash-0")
-    );
-    act(() => result.current.requestRange(1));
-    await waitFor(() =>
-      expect(result.current.getCommit(1)?.hash).toBe("hash-1")
-    );
-
-    expect(fetchPage.mock.calls[1]?.[0].offset).toBe(1);
-  });
-
-  it("fills a short page inside the current range without waiting for scroll", async () => {
-    const fetchPage = vi
-      .fn<PagedCommitHistoryFetcher>()
-      .mockResolvedValueOnce({
-        ...response(HISTORY_A, 0, [commit(0)], false, 30),
-        pageSize: 30,
-        hasMore: true,
-      })
-      .mockResolvedValueOnce({
-        ...response(
-          HISTORY_A,
-          1,
-          Array.from({ length: 29 }, (_, i) => commit(i + 1)),
-          false,
-          30
-        ),
-        pageSize: 30,
-        hasMore: false,
-      });
+  it("keeps out-of-order page requests aligned and does not retain an unaligned failure", async () => {
+    const fetchPage = vi.fn<PagedCommitHistoryFetcher>((request) => {
+      if (request.offset === 0) {
+        return Promise.resolve({
+          ...response(
+            HISTORY_A,
+            0,
+            Array.from({ length: 30 }, (_, i) => commit(i)),
+            false,
+            1007
+          ),
+          pageSize: 30,
+        });
+      }
+      if (request.offset === 960) {
+        return Promise.resolve({
+          ...response(
+            HISTORY_A,
+            960,
+            Array.from({ length: 30 }, (_, i) => commit(960 + i)),
+            false,
+            1007
+          ),
+          pageSize: 30,
+        });
+      }
+      if (request.offset === 990) {
+        return Promise.resolve({
+          ...response(
+            HISTORY_A,
+            990,
+            Array.from({ length: 17 }, (_, i) => commit(990 + i)),
+            false,
+            1007
+          ),
+          pageSize: 30,
+        });
+      }
+      if (request.offset === 60) {
+        return Promise.resolve({
+          ...response(
+            HISTORY_A,
+            60,
+            Array.from({ length: 30 }, (_, i) => commit(60 + i)),
+            false,
+            1007
+          ),
+          pageSize: 30,
+        });
+      }
+      return Promise.reject(new Error(`unexpected offset ${request.offset}`));
+    });
     const { result } = renderHook(() =>
       usePagedCommitHistory({
         repo: "repo-a",
@@ -316,43 +328,70 @@ describe("usePagedCommitHistory", () => {
       })
     );
 
-    await waitFor(() => expect(result.current.loadedCount).toBe(1));
+    await waitFor(() => expect(result.current.loadedCount).toBe(30));
+    act(() => result.current.requestRange(990));
+    await waitFor(() =>
+      expect(result.current.getCommit(990)?.hash).toBe("hash-990")
+    );
+    act(() => result.current.requestRange(960));
+    await waitFor(() =>
+      expect(result.current.getCommit(960)?.hash).toBe("hash-960")
+    );
     act(() =>
       result.current.onRangeChange({
-        visibleStartIndex: 0,
-        visibleEndIndex: 15,
-        overscanStartIndex: 0,
-        overscanEndIndex: 27,
-        startIndex: 0,
-        endIndex: 15,
+        visibleStartIndex: 77,
+        visibleEndIndex: 77,
+        overscanStartIndex: 77,
+        overscanEndIndex: 77,
+        startIndex: 77,
+        endIndex: 77,
       })
     );
 
-    await waitFor(() => expect(result.current.loadedCount).toBe(30));
+    await waitFor(() => expect(result.current.inFlightOffsets).toEqual([]));
     expect(fetchPage.mock.calls.map(([request]) => request.offset)).toEqual([
-      0, 1,
+      0, 990, 960, 60,
     ]);
+    expect(
+      fetchPage.mock.calls.every(([request]) => request.offset % 30 === 0)
+    ).toBe(true);
+    expect(result.current.failedRanges).toEqual([]);
   });
 
-  it("does not duplicate a continuation request while it is in flight", async () => {
+  it("does not duplicate an aligned page request while it is in flight", async () => {
     const continuation = deferred<WorkspaceCommitLogResponse>();
     const fetchPage = vi
       .fn<PagedCommitHistoryFetcher>()
       .mockResolvedValueOnce({
-        ...response(HISTORY_A, 0, [commit(0)], false, 10),
+        ...response(
+          HISTORY_A,
+          0,
+          Array.from({ length: 10 }, (_, i) => commit(i)),
+          false,
+          30
+        ),
+        pageSize: 10,
         hasMore: true,
       })
       .mockReturnValueOnce(continuation.promise);
-    const { result } = renderHistory(fetchPage);
-    await waitFor(() => expect(result.current.loadedCount).toBe(1));
+    const { result } = renderHook(() =>
+      usePagedCommitHistory({
+        repo: "repo-a",
+        branchHint: "main",
+        detached: false,
+        pageSize: 10,
+        fetchPage,
+      })
+    );
+    await waitFor(() => expect(result.current.loadedCount).toBe(10));
 
     const range = {
-      visibleStartIndex: 0,
-      visibleEndIndex: 2,
-      overscanStartIndex: 0,
-      overscanEndIndex: 2,
-      startIndex: 0,
-      endIndex: 2,
+      visibleStartIndex: 10,
+      visibleEndIndex: 12,
+      overscanStartIndex: 10,
+      overscanEndIndex: 12,
+      startIndex: 10,
+      endIndex: 12,
     };
     act(() => result.current.onRangeChange(range));
     act(() => result.current.onRangeChange(range));
@@ -360,7 +399,14 @@ describe("usePagedCommitHistory", () => {
     expect(fetchPage).toHaveBeenCalledTimes(2);
     await act(async () => {
       continuation.resolve({
-        ...response(HISTORY_A, 1, [commit(1)], false, 10),
+        ...response(
+          HISTORY_A,
+          10,
+          Array.from({ length: 10 }, (_, i) => commit(10 + i)),
+          false,
+          30
+        ),
+        pageSize: 10,
         hasMore: true,
       });
       await continuation.promise;

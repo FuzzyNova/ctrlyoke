@@ -201,9 +201,13 @@ describe("usePagedFileHistory", () => {
       });
     const { result } = renderHistory(fetchPage);
 
-    await waitFor(() => expect(result.current.getEntry(0)?.hash).toBe("hash-0"));
+    await waitFor(() =>
+      expect(result.current.getEntry(0)?.hash).toBe("hash-0")
+    );
     act(() => result.current.requestRange(1));
-    await waitFor(() => expect(result.current.getEntry(1)?.hash).toBe("hash-5"));
+    await waitFor(() =>
+      expect(result.current.getEntry(1)?.hash).toBe("hash-5")
+    );
 
     expect(fetchPage.mock.calls[1]?.[0]).toMatchObject({
       offset: 1,
@@ -212,18 +216,44 @@ describe("usePagedFileHistory", () => {
     });
   });
 
-  it("fills a short page inside the current range without waiting for scroll", async () => {
+  it("fills consecutive short pages inside the current range without another range event", async () => {
     const fetchPage = vi
       .fn<PagedFileHistoryFetcher>()
       .mockResolvedValueOnce({
-        ...response(HISTORY_A, 0, Array.from({ length: 10 }, (_, i) => entry(i)), 30),
+        ...response(
+          HISTORY_A,
+          0,
+          Array.from({ length: 10 }, (_, i) => entry(i)),
+          30
+        ),
         pageSize: 30,
         hasMore: true,
+        nextOffset: 10,
+        nextCursor: "cursor-10",
       })
       .mockResolvedValueOnce({
-        ...response(HISTORY_A, 10, Array.from({ length: 20 }, (_, i) => entry(i + 10)), 30),
+        ...response(
+          HISTORY_A,
+          10,
+          Array.from({ length: 5 }, (_, i) => entry(i + 10)),
+          60
+        ),
+        pageSize: 30,
+        hasMore: true,
+        nextOffset: 15,
+        nextCursor: "cursor-15",
+      })
+      .mockResolvedValueOnce({
+        ...response(
+          HISTORY_A,
+          15,
+          Array.from({ length: 12 }, (_, i) => entry(i + 15)),
+          60
+        ),
         pageSize: 30,
         hasMore: false,
+        nextOffset: 27,
+        nextCursor: "cursor-27",
       });
     const { result } = renderHistory(fetchPage, 30);
 
@@ -239,9 +269,9 @@ describe("usePagedFileHistory", () => {
       })
     );
 
-    await waitFor(() => expect(result.current.loadedCount).toBe(30));
+    await waitFor(() => expect(result.current.loadedCount).toBe(27));
     expect(fetchPage.mock.calls.map(([request]) => request.offset)).toEqual([
-      0, 10,
+      0, 10, 15,
     ]);
   });
 
@@ -307,12 +337,16 @@ describe("usePagedFileHistory", () => {
       });
     const { result } = renderHistory(fetchPage);
 
-    await waitFor(() => expect(result.current.getEntry(0)?.hash).toBe("hash-0"));
+    await waitFor(() =>
+      expect(result.current.getEntry(0)?.hash).toBe("hash-0")
+    );
     act(() => result.current.requestRange(1));
     await waitFor(() => expect(result.current.failedRanges).toHaveLength(1));
 
     act(() => result.current.retryPage(1));
-    await waitFor(() => expect(result.current.getEntry(1)?.hash).toBe("hash-5"));
+    await waitFor(() =>
+      expect(result.current.getEntry(1)?.hash).toBe("hash-5")
+    );
 
     expect(fetchPage.mock.calls.map(([request]) => request.offset)).toEqual([
       0, 1, 1,
@@ -406,13 +440,11 @@ describe("usePagedFileHistory", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(fetchPage).toHaveBeenCalledTimes(2);
-    expect(fetchPage.mock.calls.map(([request]) => request.nextOffset)).toEqual([
-      undefined,
-      4,
-    ]);
-    expect(fetchPage.mock.calls.map(([request]) => request.nextCursor)).toEqual([
-      undefined,
-      "cursor-4",
-    ]);
+    expect(fetchPage.mock.calls.map(([request]) => request.nextOffset)).toEqual(
+      [undefined, 4]
+    );
+    expect(fetchPage.mock.calls.map(([request]) => request.nextCursor)).toEqual(
+      [undefined, "cursor-4"]
+    );
   });
 });

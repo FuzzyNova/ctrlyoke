@@ -122,6 +122,15 @@ function pageOffset(index: number, pageSize: number): number {
   return Math.floor(Math.max(0, index) / pageSize) * pageSize;
 }
 
+function loadedRowCount(
+  pages: ReadonlyMap<number, readonly WorkspaceFileHistoryEntry[]>,
+  minimum = 0
+): number {
+  let count = 0;
+  for (const entries of pages.values()) count += entries.length;
+  return Math.max(minimum, count);
+}
+
 function errorFrom(value: unknown): Error {
   return value instanceof Error ? value : new Error(String(value));
 }
@@ -224,6 +233,7 @@ export function usePagedFileHistory(
   const rawCursorRef = useRef<number | undefined>(undefined);
   const nextCursorRef = useRef<string | undefined>(undefined);
   const lastVisibleStartRef = useRef<number | null>(null);
+  const lastRangeRef = useRef<VirtualizedListRange | null>(null);
   const skipOptionStartRef = useRef<string | null>(null);
 
   const [state, setState] = useState<FileHistoryState>(() =>
@@ -289,6 +299,7 @@ export function usePagedFileHistory(
       rawCursorRef.current = undefined;
       nextCursorRef.current = undefined;
       lastVisibleStartRef.current = null;
+      lastRangeRef.current = null;
 
       const pageSize = configRef.current.pageSize;
       updateState(() => ({
@@ -335,8 +346,7 @@ export function usePagedFileHistory(
             response.entries.length === 0 &&
             response.hasMore &&
             (response.nextCursor !== undefined ||
-              (response.nextOffset !== undefined &&
-                response.nextOffset > 0))
+              (response.nextOffset !== undefined && response.nextOffset > 0))
           ) {
             setTimeout(() => rangeRequestRef.current(0), 0);
           }
@@ -375,9 +385,9 @@ export function usePagedFileHistory(
         pendingOffsetsRef.current.add(targetOffset);
         return;
       }
-      const loadedCount = Math.max(
-        virtualLengthRef.current,
-        [...current.pages.values()].reduce((n, page) => n + page.length, 0)
+      const loadedCount = loadedRowCount(
+        current.pages,
+        virtualLengthRef.current
       );
       const offset = loadedCount;
       if (targetOffset < loadedCount || targetOffset >= current.totalCount) {
@@ -432,10 +442,7 @@ export function usePagedFileHistory(
           updateState((previous) => {
             const pages = new Map(previous.pages);
             pages.set(offset, response.entries);
-            const loadedCount = [...pages.values()].reduce(
-              (n, page) => n + page.length,
-              0
-            );
+            const loadedCount = loadedRowCount(pages);
             return {
               ...previous,
               pages,
@@ -452,18 +459,24 @@ export function usePagedFileHistory(
           );
           rawCursorRef.current = response.nextOffset;
           nextCursorRef.current = response.nextCursor;
-          if (
-            response.entries.length === 0 &&
-            response.hasMore &&
-            (response.nextCursor !== undefined
+          const cursorAdvanced =
+            response.nextCursor !== undefined
               ? response.nextCursor !== requestNextCursor
-              : response.nextOffset !== undefined &&
-                response.nextOffset > (requestCursor ?? offset))
+              : response.nextOffset !== undefined
+                ? response.nextOffset > (requestCursor ?? offset)
+                : response.entries.length > 0;
+          const lastRange = lastRangeRef.current;
+          const loadedLength = virtualLengthRef.current;
+          if (
+            response.hasMore &&
+            cursorAdvanced &&
+            (response.entries.length === 0 ||
+              (response.entries.length < response.pageSize &&
+                lastRange !== null &&
+                loadedLength >= lastRange.overscanStartIndex &&
+                loadedLength <= lastRange.overscanEndIndex))
           ) {
-            setTimeout(
-              () => rangeRequestRef.current(virtualLengthRef.current),
-              0
-            );
+            setTimeout(() => rangeRequestRef.current(loadedLength), 0);
           }
         })
         .catch((value: unknown) => {
@@ -563,6 +576,7 @@ export function usePagedFileHistory(
   const onRangeChange = useCallback(
     (range: VirtualizedListRange): void => {
       const current = stateRef.current;
+      lastRangeRef.current = range;
       const pageSize = current?.pageSize ?? configRef.current.pageSize;
       const previousStart = lastVisibleStartRef.current;
       const direction =
@@ -587,13 +601,7 @@ export function usePagedFileHistory(
         requestRange(offset);
       }
       const loadedCount = current
-        ? Math.max(
-            virtualLengthRef.current,
-            [...current.pages.values()].reduce(
-              (count, page) => count + page.length,
-              0
-            )
-          )
+        ? loadedRowCount(current.pages, virtualLengthRef.current)
         : 0;
       if (
         current?.hasMore &&
@@ -671,9 +679,7 @@ export function usePagedFileHistory(
     [state.failedRanges]
   );
   const uniqueLoadedCount = useMemo(() => {
-    let count = 0;
-    for (const entries of state.pages.values()) count += entries.length;
-    return count;
+    return loadedRowCount(state.pages);
   }, [state.pages]);
 
   return {
