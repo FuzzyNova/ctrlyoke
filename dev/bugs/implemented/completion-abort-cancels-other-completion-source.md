@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-24 by bug-drain review of 65ab2aef7
 - **Area:** `src/ui/WebviewMessageRouter.ts`, `src/ui/PromptEditorSupportService.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

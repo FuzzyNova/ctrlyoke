@@ -244,6 +244,15 @@ export const COMPLETION_TRIGGERS = {
   PATH: "path",
 } as const;
 
+/** Independent completion sources that can request results concurrently. */
+export const COMPLETION_SOURCES = {
+  CUSTOM: "custom",
+  PATH: "path",
+} as const;
+
+export type CompletionSource =
+  (typeof COMPLETION_SOURCES)[keyof typeof COMPLETION_SOURCES];
+
 export type CompletionTrigger =
   (typeof COMPLETION_TRIGGERS)[keyof typeof COMPLETION_TRIGGERS];
 

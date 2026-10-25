@@ -15,6 +15,7 @@ import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
 import {
   LICENSE_ACTIONS,
   MESSAGE_TYPES,
+  COMPLETION_TRIGGERS,
   SETTING_SCOPES,
   FINAL_STEP_PHASES,
   HARNESS_IDS,
@@ -135,7 +136,7 @@ suite("WebviewMessageRouter — completion routing", () => {
     router.disposeClient("browser:completion");
   });
 
-  test("a newer same-client completion aborts the first and suppresses its reply", async () => {
+  test("a newer same-source completion aborts the first with an empty final reply", async () => {
     const first = deferred<unknown[]>();
     const emitted: unknown[] = [];
     let calls = 0;
@@ -175,6 +176,70 @@ suite("WebviewMessageRouter — completion routing", () => {
     );
     first.resolve([{ label: "Widget", insertText: "sym" }]);
     await stale;
+    const replies = emitted.filter(
+      (message) =>
+        (message as { type?: string }).type ===
+        MESSAGE_TYPES.COMPLETIONS_RESPONSE
+    ) as Array<{ seq?: number; items?: unknown[]; partial?: boolean }>;
+    assert.deepStrictEqual(
+      replies.map((message) => message.seq).sort(),
+      [1, 2]
+    );
+    assert.deepStrictEqual(
+      replies.find((message) => message.seq === 1),
+      {
+        type: MESSAGE_TYPES.COMPLETIONS_RESPONSE,
+        items: [],
+        from: 2,
+        seq: 1,
+        partial: false,
+      }
+    );
+    router.disposeClient("browser:completion");
+  });
+
+  test("path and custom completion requests from one client both receive replies", async () => {
+    const path = deferred<unknown[]>();
+    const custom = deferred<unknown[]>();
+    const emitted: unknown[] = [];
+    const router = buildRouter(
+      undefined,
+      () => undefined,
+      undefined,
+      undefined,
+      () => [],
+      {
+        getPromptFileCompletions: () => path.promise,
+        getHashSelectionCompletions: () => [],
+        getHashCompletions: () => custom.promise,
+      } as any
+    );
+    const postMessage = (message: unknown) => emitted.push(message);
+    const pathRequest = router.route(
+      {
+        type: MESSAGE_TYPES.REQUEST_COMPLETIONS,
+        trigger: COMPLETION_TRIGGERS.PATH,
+        prefix: "./",
+        position: 2,
+        seq: 3,
+      },
+      { clientTag: "browser:completion", postMessage }
+    );
+    const customRequest = router.route(
+      {
+        type: MESSAGE_TYPES.REQUEST_COMPLETIONS,
+        trigger: COMPLETION_TRIGGERS.HASH,
+        prefix: "#W",
+        position: 2,
+        seq: 4,
+      },
+      { clientTag: "browser:completion", postMessage }
+    );
+
+    path.resolve([{ label: "workflow.md" }]);
+    custom.resolve([{ label: "Widget" }]);
+    await Promise.all([pathRequest, customRequest]);
+
     assert.deepStrictEqual(
       emitted
         .filter(
@@ -182,8 +247,9 @@ suite("WebviewMessageRouter — completion routing", () => {
             (message as { type?: string }).type ===
             MESSAGE_TYPES.COMPLETIONS_RESPONSE
         )
-        .map((message) => (message as { seq?: number }).seq),
-      [2]
+        .map((message) => (message as { seq?: number }).seq)
+        .sort(),
+      [3, 4]
     );
     router.disposeClient("browser:completion");
   });
@@ -1281,6 +1347,61 @@ suite(
       resolveLoad();
       await Promise.all([first, duplicate]);
       assert.strictEqual(loadCount, 1);
+    });
+
+    test("re-delivers a joined load result through the duplicate connection", async () => {
+      let resolveLoad!: () => void;
+      const loadGate = new Promise<void>((resolve) => {
+        resolveLoad = resolve;
+      });
+      const firstReplies: unknown[] = [];
+      const duplicateReplies: unknown[] = [];
+      const snapshot = {
+        type: MESSAGE_TYPES.RUN_VIEW_LOADED,
+        requestId: "run-view-reconnect",
+      };
+      const router = new WebviewMessageRouter(
+        () => {},
+        { sendWorkflowPropertiesToSettings: async () => {} } as any,
+        {} as any,
+        () =>
+          ({
+            loadRunViewForClient: async (
+              _address: unknown,
+              send: (message: unknown) => void
+            ) => {
+              await loadGate;
+              send(snapshot);
+            },
+            publishViewIdentityToViewers: async () => undefined,
+          }) as any,
+        {} as any,
+        { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+      );
+      const message = {
+        type: MESSAGE_TYPES.LOAD_RUN_VIEW,
+        address: {
+          workflowKey: "workflow-a",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "run-2026-01-01T00-00-00-000Z",
+        },
+        requestId: "run-view-reconnect",
+      };
+
+      const first = router.route(message, {
+        clientTag: "browser:1",
+        postMessage: (reply) => firstReplies.push(reply),
+      });
+      const duplicate = router.route(message, {
+        clientTag: "browser:1",
+        postMessage: (reply) => duplicateReplies.push(reply),
+      });
+      await Promise.resolve();
+      resolveLoad();
+      await Promise.all([first, duplicate]);
+
+      assert.deepStrictEqual(firstReplies, [snapshot]);
+      assert.deepStrictEqual(duplicateReplies, [snapshot]);
     });
 
     test("replies with a failure when the orchestrator is not available yet", async () => {

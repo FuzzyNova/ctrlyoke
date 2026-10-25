@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-24 by bug-drain review of 45a330a96
 - **Area:** `src/ui/WebviewMessageRouter.ts`, `src/server/CtrlYokeHostedServer.ts`, `src/ui/webview-react/hooks/useRunViewLoadWatchdog.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   candidates with bounded concurrency, reporting when its safety bound applies.
 - Run bundle loading streams `events.jsonl` and limits individual event lines,
   so exported bundles can exceed the small JSON file size cap.
+- Dashboard completion requests from separate sources no longer cancel each
+  other, and a run-view load reply reaches a reconnecting client.
 
 ### Fixed
 

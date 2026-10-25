@@ -24,6 +24,9 @@ import {
   type WebviewLogLevel,
   VSCODE_COMMANDS,
   WORKTREE_MANAGEMENT_ACTIONS,
+  COMPLETION_TRIGGERS,
+  COMPLETION_SOURCES,
+  type CompletionSource,
   type WorktreeManagementAction,
   WORKFLOW_VIEW_ADDRESS_KIND,
   DASHBOARD_ACTION_RESULT_STATUSES,
@@ -171,6 +174,12 @@ interface WorkflowVariantRequestCacheEntry {
   completedAt?: number;
 }
 
+interface LoadRunViewRouteEntry {
+  promise: Promise<void>;
+  originalPostMessage: PostMessageFn;
+  replies: unknown[];
+}
+
 const WORKFLOW_VARIANT_REQUEST_CACHE_TTL_MS = 10 * 60 * 1000;
 const WORKFLOW_VARIANT_REQUEST_CACHE_MAX_ENTRIES = 256;
 
@@ -305,7 +314,7 @@ function describeWorktreeActionSuccess(
  */
 export class WebviewMessageRouter {
   private routeQueue: Promise<void> = Promise.resolve();
-  private readonly loadRunViewRoutes = new Map<string, Promise<void>>();
+  private readonly loadRunViewRoutes = new Map<string, LoadRunViewRouteEntry>();
   private readonly clientInteractionPorts = new Map<
     string,
     WebviewUserInteractionPort
@@ -337,7 +346,7 @@ export class WebviewMessageRouter {
   >();
   private readonly completionAbortControllers = new Map<
     string,
-    AbortController
+    Map<CompletionSource, AbortController>
   >();
 
   constructor(
@@ -435,24 +444,59 @@ export class WebviewMessageRouter {
     if (loadRunViewKey) {
       const existing = this.loadRunViewRoutes.get(loadRunViewKey);
       if (existing) {
-        await existing;
+        await existing.promise;
+        const duplicatePostMessage =
+          options?.postMessage ?? this.defaultPostMessage;
+        if (duplicatePostMessage !== existing.originalPostMessage) {
+          for (const reply of existing.replies) {
+            duplicatePostMessage(reply);
+          }
+        }
         return;
       }
     }
+    const postMessage = options?.postMessage ?? this.defaultPostMessage;
     const interactionPort = this.getClientInteractionPort(
       clientId,
-      options?.postMessage ?? this.defaultPostMessage
+      postMessage
     );
     let ctx = createWebviewClientContext(
       clientId,
-      options?.postMessage ?? this.defaultPostMessage,
+      postMessage,
       interactionPort
     );
+    const loadRunViewReplies: unknown[] | undefined = loadRunViewKey
+      ? []
+      : undefined;
+    if (loadRunViewReplies) {
+      const captureReply: PostMessageFn = (reply) => {
+        if (
+          reply !== null &&
+          typeof reply === "object" &&
+          "requestId" in reply &&
+          reply.requestId === message.requestId
+        ) {
+          loadRunViewReplies.push(reply);
+        }
+        postMessage(reply);
+      };
+      ctx = { ...ctx, postMessage: captureReply, emit: captureReply };
+    }
     let completionController: AbortController | undefined;
+    let completionSource: CompletionSource | undefined;
     if (message?.type === MESSAGE_TYPES.REQUEST_COMPLETIONS) {
-      this.completionAbortControllers.get(clientId)?.abort();
+      completionSource =
+        message.trigger === COMPLETION_TRIGGERS.PATH
+          ? COMPLETION_SOURCES.PATH
+          : COMPLETION_SOURCES.CUSTOM;
+      let clientControllers = this.completionAbortControllers.get(clientId);
+      if (!clientControllers) {
+        clientControllers = new Map<CompletionSource, AbortController>();
+        this.completionAbortControllers.set(clientId, clientControllers);
+      }
+      clientControllers.get(completionSource)?.abort();
       completionController = new AbortController();
-      this.completionAbortControllers.set(clientId, completionController);
+      clientControllers.set(completionSource, completionController);
       ctx = { ...ctx, completionAbortSignal: completionController.signal };
     }
     if (OFF_QUEUE_MESSAGE_TYPES.has(message?.type)) {
@@ -472,11 +516,28 @@ export class WebviewMessageRouter {
       try {
         await this.routeSingleMessage(message, ctx);
       } finally {
+        if (completionController?.signal.aborted) {
+          ctx.emit({
+            type: MESSAGE_TYPES.COMPLETIONS_RESPONSE,
+            items: [],
+            from: message.position,
+            seq: message.seq,
+            partial: false,
+          });
+        }
         if (
           completionController &&
-          this.completionAbortControllers.get(clientId) === completionController
+          completionSource &&
+          this.completionAbortControllers
+            .get(clientId)
+            ?.get(completionSource) === completionController
         ) {
-          this.completionAbortControllers.delete(clientId);
+          const clientControllers =
+            this.completionAbortControllers.get(clientId);
+          clientControllers?.delete(completionSource);
+          if (clientControllers?.size === 0) {
+            this.completionAbortControllers.delete(clientId);
+          }
         }
       }
       return;
@@ -515,14 +576,18 @@ export class WebviewMessageRouter {
 
     const queuedRoute = this.routeQueue;
     if (loadRunViewKey) {
-      this.loadRunViewRoutes.set(loadRunViewKey, queuedRoute);
+      this.loadRunViewRoutes.set(loadRunViewKey, {
+        promise: queuedRoute,
+        originalPostMessage: postMessage,
+        replies: loadRunViewReplies ?? [],
+      });
     }
     try {
       await queuedRoute;
     } finally {
       if (
         loadRunViewKey &&
-        this.loadRunViewRoutes.get(loadRunViewKey) === queuedRoute
+        this.loadRunViewRoutes.get(loadRunViewKey)?.promise === queuedRoute
       ) {
         this.loadRunViewRoutes.delete(loadRunViewKey);
       }
@@ -576,7 +641,11 @@ export class WebviewMessageRouter {
       (this.clientRouteEpochs.get(clientId) ?? 0) + 1
     );
     this.languageServerManager.disposeClient(clientId);
-    this.completionAbortControllers.get(clientId)?.abort();
+    for (const controller of this.completionAbortControllers
+      .get(clientId)
+      ?.values() ?? []) {
+      controller.abort();
+    }
     this.completionAbortControllers.delete(clientId);
     this.clientInteractionPorts.get(clientId)?.disposeAllPending();
     this.clientInteractionPorts.delete(clientId);
