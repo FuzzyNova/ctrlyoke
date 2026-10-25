@@ -103,11 +103,10 @@ import {
   getGitIgnoredEntries,
   isGitUnavailableError,
   buildWorkingTreeDiffArgs,
-  buildWorkingTreeStatusArgs,
   buildStagedDiffArgs,
   buildStashDiffArgs,
   buildCommitDiffArgs,
-  parseUntrackedFiles,
+  getWorkingTreeUntrackedFiles,
   formatUntrackedFilesSection,
   GIT_COMMAND_TIMEOUT_MS,
   describeGitFailure,
@@ -3347,14 +3346,15 @@ export class HostedWorkspaceViewerService {
         ? workingTreePathspecs
         : undefined;
       command = buildWorkingTreeDiffArgs(repoRoot, scopedPathspecs);
-      const { stdout } = await execFileAsync(
-        "git",
-        buildWorkingTreeStatusArgs(repoRoot, scopedPathspecs),
-        { timeout: GIT_COMMAND_TIMEOUT_MS }
-      );
-      untrackedSection = formatUntrackedFilesSection(
-        parseUntrackedFiles(stdout, scopedPathspecs)
-      );
+      try {
+        untrackedSection = formatUntrackedFilesSection(
+          await getWorkingTreeUntrackedFiles(repoRoot, scopedPathspecs)
+        );
+      } catch (err) {
+        Log.warn(
+          `[HostedWorkspaceViewerService] Failed to list untracked files for streamed diff in ${repoRoot}: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
     } else if (resolution.kind === GIT_CHANGE_KINDS.STAGED) {
       command = buildStagedDiffArgs(repoRoot, pathspecs);
     } else if (resolution.kind === GIT_REF_DIFF_KINDS.STASH) {

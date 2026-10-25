@@ -3496,6 +3496,52 @@ suite("HostedWorkspaceViewerService", function () {
         "expected the streamed diff to use the buffered untracked-file format"
       );
     });
+
+    test("streams the diff when listing untracked files fails", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "tracked.txt", "committed\n", "base");
+      fs.writeFileSync(path.join(root, "tracked.txt"), "working change\n");
+      fs.writeFileSync(path.join(root, "untracked.txt"), "new file\n");
+
+      const warnings: string[] = [];
+      const originalWarn = Log.warn;
+      Log.warn = (message: string) => warnings.push(message);
+      const restoreObserver = setGitCommandObserverForTests((_file, args) => {
+        if (args.includes("status") && args.includes("--porcelain=v1")) {
+          throw new Error("status listing failed");
+        }
+      });
+      try {
+        const download = await new HostedWorkspaceViewerService(
+          root
+        ).spawnGitRefDiffDownload("~diff");
+        assert.ok(download, "expected a git diff process");
+        const chunks: Buffer[] = [];
+        download.stdout.on("data", (chunk: Buffer | string) => {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        });
+        const [exitCode] = await Promise.all([
+          new Promise<number | null>((resolve, reject) => {
+            download.process.once("error", reject);
+            download.process.once("close", resolve);
+          }),
+          new Promise<void>((resolve) => download.stdout.once("end", resolve)),
+        ]);
+
+        assert.strictEqual(exitCode, 0);
+        const diff = Buffer.concat(chunks).toString("utf8");
+        assert.ok(diff.includes("working change"));
+        assert.ok(!diff.includes("Untracked files:"));
+        assert.ok(
+          warnings.some((message) => message.includes("status listing failed"))
+        );
+      } finally {
+        restoreObserver();
+        Log.warn = originalWarn;
+      }
+    });
   });
 
   suite("getGitRefDiff trusted roots", () => {

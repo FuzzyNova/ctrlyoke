@@ -38,6 +38,7 @@ import {
   countGitWorkingTreeChanges,
   describeGitFailure,
   execGit,
+  parseUntrackedFiles,
   GIT_FAILURE_MESSAGE_MAX_CHARS,
   type GitLocationLookup,
 } from "../../utils/GitUtils";
@@ -276,6 +277,14 @@ suite("GitUtils.gitRefExists", function () {
 
     assert.ok(diff.includes("café.txt"));
     assert.ok(diff.includes("nested folder/naïve.txt"));
+  });
+
+  test("matches exclude-only pathspecs against everything except excluded paths", () => {
+    const status = "?? included.txt\0?? excluded/file.txt\0";
+    assert.deepStrictEqual(
+      parseUntrackedFiles(status, [":(exclude,literal)excluded"]),
+      ["included.txt"]
+    );
   });
 
   test("ignores diff.external when reading staged and working tree patches", async () => {

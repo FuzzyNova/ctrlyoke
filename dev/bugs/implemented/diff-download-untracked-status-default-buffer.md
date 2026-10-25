@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-25 by bug-drain review of 015008464
 - **Area:** `src/server/HostedWorkspaceViewerService.ts`, `src/utils/GitUtils.ts` (`matchesPathspecs`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

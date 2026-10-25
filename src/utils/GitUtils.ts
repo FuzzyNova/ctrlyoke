@@ -229,18 +229,48 @@ function matchesPathspecs(
   pathspecs: readonly string[] | undefined
 ): boolean {
   if (!pathspecs?.length) return true;
-  return pathspecs.some((pathspec) => {
-    const literalPrefix = ":(literal)";
-    const prefix = pathspec.startsWith(literalPrefix)
-      ? pathspec.slice(literalPrefix.length)
-      : pathspec;
-    const normalizedPrefix = prefix.replace(/\\/g, "/").replace(/\/+$/, "");
-    const normalizedPath = filePath.replace(/\\/g, "/");
-    return (
-      normalizedPath === normalizedPrefix ||
-      normalizedPath.startsWith(`${normalizedPrefix}/`)
-    );
-  });
+  const excludes = pathspecs.filter(isExcludePathspec);
+  const includes = pathspecs.filter((pathspec) => !isExcludePathspec(pathspec));
+  return (
+    (includes.length === 0 || includes.some((pathspec) => matchesPathspec(filePath, pathspec))) &&
+    !excludes.some((pathspec) => matchesPathspec(filePath, pathspec))
+  );
+}
+
+function isExcludePathspec(pathspec: string): boolean {
+  return pathspec.startsWith(":(exclude") || pathspec.startsWith(":!");
+}
+
+function matchesPathspec(filePath: string, pathspec: string): boolean {
+  let prefix = pathspec;
+  if (prefix.startsWith(":!")) {
+    prefix = prefix.slice(2);
+  } else if (prefix.startsWith(":(")) {
+    const magicEnd = prefix.indexOf(")");
+    if (magicEnd >= 0) prefix = prefix.slice(magicEnd + 1);
+  }
+  if (prefix.startsWith("literal:")) prefix = prefix.slice("literal:".length);
+  const normalizedPrefix = prefix.replace(/\\/g, "/").replace(/\/+$/, "");
+  const normalizedPath = filePath.replace(/\\/g, "/");
+  return (
+    normalizedPath === normalizedPrefix ||
+    normalizedPath.startsWith(`${normalizedPrefix}/`)
+  );
+}
+
+/**
+ * Return untracked paths for a working-tree diff. Status can span the entire
+ * repository, so use Git's shared large-output buffer and whole-repo timeout.
+ */
+export async function getWorkingTreeUntrackedFiles(
+  workspaceRoot: string,
+  pathspecs?: readonly string[]
+): Promise<string[]> {
+  const { stdout } = await execGit(
+    buildWorkingTreeStatusArgs(workspaceRoot, pathspecs),
+    { timeout: getGitWholeRepoTimeoutMs() }
+  );
+  return parseUntrackedFiles(stdout, pathspecs);
 }
 
 /** Parse `git diff --name-status -z`, including both paths for renames/copies. */
@@ -982,15 +1012,11 @@ export async function getWorkingTreeDiff(
     { timeout: GIT_TIMEOUT_MS }
   );
 
-  const { stdout: statusOutput } = await execFileAsync(
-    "git",
-    buildWorkingTreeStatusArgs(workspaceRoot, pathspecs),
-    { timeout: GIT_TIMEOUT_MS }
-  );
-
   return (
     diffOutput +
-    formatUntrackedFilesSection(parseUntrackedFiles(statusOutput, pathspecs))
+    formatUntrackedFilesSection(
+      await getWorkingTreeUntrackedFiles(workspaceRoot, pathspecs)
+    )
   );
 }
 

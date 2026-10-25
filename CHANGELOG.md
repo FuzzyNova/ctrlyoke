@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dashboard history searches now rebuild missing or stale indexes in the background and show the active query's results when the rebuild finishes.
 - Workspace viewer diff downloads stream Git output without a size cap and
   report failures to the user, including the working tree's untracked file list.
+- Workspace viewer working-tree diff downloads keep streaming when Git cannot
+  list untracked paths, and include those paths when root scoping uses only
+  exclusions.
 - Workspace viewer worktree diffs page from frozen branch snapshots and show
   retryable errors when a page fails to load.
 - Workspace viewer commit and file history now page from frozen Git tip hashes,
