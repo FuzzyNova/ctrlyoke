@@ -1,4 +1,7 @@
 import * as assert from "assert";
+import { execFileSync } from "child_process";
+import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
 import { Worker } from "worker_threads";
@@ -11,6 +14,7 @@ import {
   type WorkspaceFileIndexRoot,
 } from "../../completions/WorkspaceFileIndex";
 import { WorkspacePathStore } from "../../completions/WorkspacePathStore";
+import { getGitFilesIncludingNestedRepos } from "../../utils/GitUtils";
 import type { SearchWalkResult } from "../../utils/WorkspaceSearchFileWalker";
 import {
   WORKSPACE_FILE_CHANGE_KINDS,
@@ -31,6 +35,12 @@ function makeHarness(overrides: Partial<WorkspaceFileIndexDependencies> = {}) {
   const calls: string[] = [];
   const dependencies: WorkspaceFileIndexDependencies = {
     getGitTrackedFiles: async () => ["src/tracked file.ts"],
+    getGitFilesIncludingNestedRepos: async function* (rootPath) {
+      const files = await dependencies.getGitTrackedFiles(rootPath);
+      for (let offset = 0; offset < files.length; offset += 256) {
+        yield files.slice(offset, offset + 256);
+      }
+    },
     getGitIgnoredPaths: async (_root, files) =>
       new Set(files.filter((file) => file.includes("ignored"))),
     walkSearchFiles: async (
@@ -423,6 +433,41 @@ suite("WorkspaceFileIndex", () => {
       WORKSPACE_FILE_INDEX_STATES.DEGRADED
     );
     pipeline.dispose();
+  });
+
+  test("indexes files from an untracked nested repository without its directory entry", async () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "cy-file-index-"));
+    const runGit = (cwd: string, ...args: string[]): void => {
+      execFileSync("git", ["-C", cwd, ...args], { stdio: "ignore" });
+    };
+    try {
+      runGit(workspace, "init");
+      const inner = path.join(workspace, "inner");
+      fs.mkdirSync(inner);
+      runGit(inner, "init");
+      fs.writeFileSync(path.join(inner, "b.txt"), "nested file\n");
+
+      const harness = makeHarness();
+      const dependencies: WorkspaceFileIndexDependencies = {
+        ...harness.dependencies,
+        getGitFilesIncludingNestedRepos: (repoRoot) =>
+          getGitFilesIncludingNestedRepos(repoRoot),
+      };
+      const pipeline = new WorkspaceFileIndexPipeline(
+        [{ path: workspace, name: "workspace" }],
+        true,
+        dependencies
+      );
+      await pipeline.build();
+      const paths = (await pipeline.queryFiles("b.txt")).map(
+        (item) => item.relativePath
+      );
+      assert.ok(paths.includes("inner/b.txt"));
+      assert.ok(!paths.includes("inner/"));
+      pipeline.dispose();
+    } finally {
+      fs.rmSync(workspace, { recursive: true, force: true });
+    }
   });
 
   test("stops walking ignored trees at the memory budget but keeps every Git path", async () => {

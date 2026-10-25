@@ -12,6 +12,7 @@ import {
 import {
   getGitIgnoredPaths,
   getGitTrackedFiles,
+  getGitFilesIncludingNestedRepos,
   isNotGitRepositoryError,
 } from "../utils/GitUtils";
 import {
@@ -78,6 +79,9 @@ export interface WorkspaceFileChange {
 
 export interface WorkspaceFileIndexDependencies {
   readonly getGitTrackedFiles: (root: string) => Promise<string[]>;
+  readonly getGitFilesIncludingNestedRepos: (
+    root: string
+  ) => AsyncIterable<string[]>;
   readonly getGitIgnoredPaths: (
     root: string,
     absolutePaths: readonly string[]
@@ -105,6 +109,7 @@ export interface WorkspaceFileIndexDependencies {
 
 const DEFAULT_DEPENDENCIES: WorkspaceFileIndexDependencies = {
   getGitTrackedFiles,
+  getGitFilesIncludingNestedRepos,
   getGitIgnoredPaths,
   walkSearchFiles,
   stat: (absolutePath) => fs.stat(absolutePath),
@@ -375,11 +380,13 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
     const gitByRoot = await Promise.all(
       roots.map(async (root) => {
         try {
-          return this.prefix(
-            root,
-            await this.dependencies.getGitTrackedFiles(root.path),
-            roots
-          );
+          const files: string[] = [];
+          for await (const chunk of this.dependencies.getGitFilesIncludingNestedRepos(
+            root.path
+          )) {
+            files.push(...chunk.filter((file) => !file.endsWith("/")));
+          }
+          return this.prefix(root, files, roots);
         } catch (error) {
           const reason = isNotGitRepositoryError(error)
             ? "root is not a Git repository"

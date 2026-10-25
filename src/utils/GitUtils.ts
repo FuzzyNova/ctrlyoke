@@ -1180,6 +1180,59 @@ export async function getGitTrackedFiles(repoRoot: string): Promise<string[]> {
   return parseGitNulSeparatedPaths(stdout);
 }
 
+/**
+ * Yield Git-visible files from a repository and any nested repositories or
+ * initialized submodules. Git reports those children as one directory or
+ * gitlink entry in the parent listing, so each child's listing is expanded
+ * when reached. Directory entries themselves are never yielded.
+ */
+export async function* getGitFilesIncludingNestedRepos(
+  repoRoot: string,
+  chunkSize = 256
+): AsyncGenerator<string[]> {
+  const entries = await getGitTrackedFiles(repoRoot);
+  let chunk: string[] = [];
+  const flush = (): string[] => {
+    const result = chunk;
+    chunk = [];
+    return result;
+  };
+
+  for (const entry of entries) {
+    const relative = entry.replace(/\\/g, "/");
+    const absolute = path.resolve(repoRoot, relative);
+    const gitMarker = path.join(absolute, ".git");
+    let nestedRepository = false;
+    try {
+      const entryStat = await fs.lstat(absolute);
+      if (entryStat.isDirectory() && !entryStat.isSymbolicLink()) {
+        await fs.access(gitMarker);
+        nestedRepository = true;
+      }
+    } catch {
+      // Missing entries and uninitialized submodules have nothing to expand.
+    }
+
+    if (entry.endsWith("/") || nestedRepository) {
+      if (chunk.length > 0) yield flush();
+      if (!nestedRepository) continue;
+      for await (const nestedChunk of getGitFilesIncludingNestedRepos(
+        absolute,
+        chunkSize
+      )) {
+        const prefix = relative.endsWith("/") ? relative : `${relative}/`;
+        yield nestedChunk.map((file) => `${prefix}${file}`);
+      }
+      continue;
+    }
+
+    chunk.push(relative);
+    if (chunk.length >= chunkSize) yield flush();
+  }
+
+  if (chunk.length > 0) yield chunk;
+}
+
 /** Return tracked and non-ignored untracked paths, preserving Git's NUL-safe output. */
 export async function getGitTrackedAndUntrackedFiles(
   repoRoot: string

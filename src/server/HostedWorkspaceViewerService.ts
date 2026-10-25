@@ -97,7 +97,7 @@ import {
   getChangedFilesWithBinaryStatus,
   type GitChangedFile,
   getIgnoredEntryNames,
-  getGitTrackedFiles,
+  getGitFilesIncludingNestedRepos,
   getGitIgnoredEntries,
   isNotGitRepositoryError,
   getDiffBetweenRefs,
@@ -879,9 +879,15 @@ export class HostedWorkspaceViewerService {
     root: string,
     includeGitIgnored: boolean
   ): AsyncGenerator<string[]> {
-    let trackedFiles: string[];
+    const trackedFiles = new Set<string>();
     try {
-      trackedFiles = await getGitTrackedFiles(root);
+      for await (const files of getGitFilesIncludingNestedRepos(
+        root,
+        SEARCH_CANDIDATE_CHUNK
+      )) {
+        for (const file of files) trackedFiles.add(file);
+        yield files;
+      }
     } catch (error) {
       if (isNotGitRepositoryError(error)) {
         // Not a Git checkout: walk it, skipping dependency and build output.
@@ -893,7 +899,6 @@ export class HostedWorkspaceViewerService {
       );
       throw error;
     }
-    yield* chunked(trackedFiles, SEARCH_CANDIDATE_CHUNK);
     if (!includeGitIgnored) return;
 
     let ignoredEntries: string[];
@@ -918,14 +923,13 @@ export class HostedWorkspaceViewerService {
 
     // A tracked file can sit inside an ignored directory; it was already
     // searched above.
-    const tracked = new Set(trackedFiles);
     for await (const files of iterateSearchFiles(
       root,
       [...ignoredDirectories],
       COMPLETION_ALL_FILES_SKIP_DIRECTORIES,
       false
     )) {
-      const untracked = files.filter((file) => !tracked.has(toGitPath(file)));
+      const untracked = files.filter((file) => !trackedFiles.has(toGitPath(file)));
       if (untracked.length > 0) yield untracked;
     }
   }

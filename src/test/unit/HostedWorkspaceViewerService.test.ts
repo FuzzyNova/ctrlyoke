@@ -1225,6 +1225,56 @@ suite("HostedWorkspaceViewerService", function () {
   });
 
   suite("searchWorkspace", () => {
+    test("searches nested repositories and never returns their directories as files", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      const inner = path.join(root, "inner");
+      fs.mkdirSync(inner);
+      runGit(inner, "init");
+      configureGitIdentity(inner);
+      commitFile(inner, "b.txt", "nestedneedle in nested repo\n", "nested");
+
+      const submoduleSource = createWorkspace();
+      runGit(submoduleSource, "init");
+      configureGitIdentity(submoduleSource);
+      commitFile(
+        submoduleSource,
+        "c.txt",
+        "nestedneedle in submodule\n",
+        "submodule"
+      );
+      runGit(
+        root,
+        "-c",
+        "protocol.file.allow=always",
+        "submodule",
+        "add",
+        submoduleSource,
+        "submodule"
+      );
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const content = await svc.searchWorkspace({
+        query: "nestedneedle",
+        scope: "content",
+      });
+      assert.deepStrictEqual(
+        content.results.map((result) => result.path).sort(),
+        ["inner/b.txt", "submodule/c.txt"]
+      );
+
+      const directoryName = await svc.searchWorkspace({
+        query: "inner",
+        scope: "files",
+      });
+      assert.deepStrictEqual(directoryName.results, []);
+      assert.ok(
+        content.results.every(
+          (result) => result.kind === WORKSPACE_ENTRY_KINDS.CONTENT
+        )
+      );
+    });
+
     test("returns filename and content matches with 1-based line numbers", async () => {
       const root = createWorkspace();
       runGit(root, "init");
