@@ -165,6 +165,8 @@ type CodeMirrorEditorSurface = "editor" | "input";
 
 interface CodeMirrorEditorProps {
   id?: string;
+  /** Stable identity for the prompt document when this editor is reused across prompts. */
+  documentKey?: string;
   value: string;
   onChange: (value: string) => void;
   onBlur?: () => void;
@@ -213,11 +215,14 @@ interface CodeMirrorEditorProps {
 export type { ContextReferenceValidationResult };
 
 interface PendingPlaceholder {
+  documentKey?: string;
   from: number;
   to: number;
   text: string;
   placeholderPresent: boolean;
   removedByTimeout: boolean;
+  attached: boolean;
+  removalRequested: boolean;
   timeoutId: ReturnType<typeof setTimeout> | null;
   removalTimeoutId: ReturnType<typeof setTimeout> | null;
 }
@@ -228,6 +233,8 @@ const MOUSE_SELECTION_TEARDOWN_EVENTS = {
 } as const;
 
 const FILE_OPERATION_PLACEHOLDER_REMOVAL_TIMEOUT_MS = 5 * 60_000;
+let nextPasteSeq = 0;
+let nextCaptureSeq = 0;
 
 const LINK_TOUCH_MOVE_THRESHOLD_PX = 10;
 const LINK_TOUCH_LONG_PRESS_MS = 500;
@@ -305,6 +312,7 @@ export function buildPromptReferenceInsertion(
 export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const {
     id,
+    documentKey,
     value,
     onChange,
     affUri,
@@ -360,6 +368,8 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const onQueueRef = useRef(onQueue);
   const onBlurRef = useRef(onBlur);
   const readOnlyRef = useRef(readOnly);
+  const documentKeyRef = useRef(documentKey);
+  documentKeyRef.current = documentKey;
   // Tracks last reported signed-overflow to avoid redundant events
   const lastOverflowRef = useRef<number | null>(null);
   const validationSeqRef = useRef(0);
@@ -370,12 +380,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   // seq; the {from,to} range is kept live through edits via mapPos in the
   // updateListener so the placeholder is replaced in the right spot even if the
   // user keeps typing before the save completes.
-  const pasteSeqRef = useRef(0);
   const pendingPastesRef = useRef<Map<number, PendingPlaceholder>>(new Map());
   // Output-capture placeholders use their own sequence space because their
   // replies carry a different message type, but share the same range shape
   // and resolver as pasted-image placeholders.
-  const captureSeqRef = useRef(0);
   const pendingCapturesRef = useRef<Map<number, PendingPlaceholder>>(new Map());
   // Resolved #sym: symbol-kind icons, keyed by symbolIconCacheKey. Populated
   // asynchronously by createContextReferenceLintExtension's validation pass
@@ -655,12 +663,18 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     ) => {
       const entry = pending.get(seq);
       if (!entry) return false;
+      if (replacement && readOnlyRef.current) return false;
+      if (
+        !entry.attached ||
+        entry.documentKey !== documentKeyRef.current
+      ) {
+        return false;
+      }
       if (entry.timeoutId) clearTimeout(entry.timeoutId);
       if (entry.removalTimeoutId) clearTimeout(entry.removalTimeoutId);
       pending.delete(seq);
       const view = viewRef.current;
       if (!view) return false;
-      if (replacement && readOnlyRef.current) return false;
       const from = Math.min(entry.from, view.state.doc.length);
       const to = Math.min(entry.to, view.state.doc.length);
       const hasPlaceholder =
@@ -682,7 +696,15 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 
   const removePendingPlaceholder = useCallback((entry: PendingPlaceholder) => {
     const view = viewRef.current;
-    if (!view || !entry.placeholderPresent) return;
+    if (
+      !view ||
+      !entry.attached ||
+      entry.documentKey !== documentKeyRef.current
+    ) {
+      entry.removalRequested = true;
+      return;
+    }
+    if (!entry.placeholderPresent) return;
     const from = Math.min(entry.from, view.state.doc.length);
     const to = Math.min(entry.to, view.state.doc.length);
     if (
@@ -701,6 +723,41 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     entry.placeholderPresent = false;
   }, []);
 
+  const attachPendingPlaceholders = useCallback(
+    (view: EditorView, key: string | undefined) => {
+      const document = view.state.doc.toString();
+      for (const pending of [
+        pendingPastesRef.current,
+        pendingCapturesRef.current,
+      ]) {
+        for (const entry of pending.values()) {
+          if (entry.documentKey !== key || entry.attached) continue;
+          let from = -1;
+          let nearestDistance = Number.POSITIVE_INFINITY;
+          for (
+            let candidate = document.indexOf(entry.text);
+            candidate !== -1;
+            candidate = document.indexOf(entry.text, candidate + 1)
+          ) {
+            const distance = Math.abs(candidate - entry.from);
+            if (distance < nearestDistance) {
+              from = candidate;
+              nearestDistance = distance;
+            }
+          }
+          entry.attached = true;
+          entry.placeholderPresent = from !== -1;
+          if (from !== -1) {
+            entry.from = from;
+            entry.to = from + entry.text.length;
+            if (entry.removalRequested) removePendingPlaceholder(entry);
+          }
+        }
+      }
+    },
+    [removePendingPlaceholder]
+  );
+
   const schedulePlaceholderRemoval = useCallback(
     (
       entry: PendingPlaceholder,
@@ -710,6 +767,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       entry.removalTimeoutId = setTimeout(() => {
         const current = pending.get(seq);
         if (current !== entry) return;
+        entry.removalRequested = true;
         removePendingPlaceholder(entry);
         entry.removalTimeoutId = null;
         WebviewLog.warn(
@@ -766,7 +824,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 
   const handleOutputCapturePicked = useCallback(
     (captureId: string, from: number, to: number) => {
-      const seq = ++captureSeqRef.current;
+      const seq = ++nextCaptureSeq;
       const timeoutId = setTimeout(() => {
         const entry = pendingCapturesRef.current.get(seq);
         if (!entry) return;
@@ -777,11 +835,14 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         );
       }, OUTPUT_SNAPSHOT_SAVE_TIMEOUT_MS);
       pendingCapturesRef.current.set(seq, {
+        documentKey: documentKeyRef.current,
         from,
         to,
         text: CAPTURING_OUTPUT_PLACEHOLDER,
         placeholderPresent: true,
         removedByTimeout: false,
+        attached: true,
+        removalRequested: false,
         timeoutId,
         removalTimeoutId: null,
       });
@@ -874,7 +935,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         selection: { anchor: pos + PASTING_IMAGE_PLACEHOLDER.length },
       });
 
-      const seq = ++pasteSeqRef.current;
+      const seq = ++nextPasteSeq;
       const timeoutId = setTimeout(() => {
         const entry = pendingPastesRef.current.get(seq);
         if (!entry) return;
@@ -885,11 +946,14 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         );
       }, PASTED_IMAGE_SAVE_TIMEOUT_MS);
       pendingPastesRef.current.set(seq, {
+        documentKey: documentKeyRef.current,
         from: pos,
         to: pos + PASTING_IMAGE_PLACEHOLDER.length,
         text: PASTING_IMAGE_PLACEHOLDER,
         placeholderPresent: true,
         removedByTimeout: false,
+        attached: true,
+        removalRequested: false,
         timeoutId,
         removalTimeoutId: null,
       });
@@ -1012,6 +1076,8 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   // Initialize CodeMirror editor
   useEffect(() => {
     if (!editorRef.current) return;
+    const pendingPastes = pendingPastesRef.current;
+    const pendingCaptures = pendingCapturesRef.current;
 
     // Create editor instance
     const view = new EditorView({
@@ -1184,6 +1250,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
               pendingCapturesRef.current,
             ]) {
               for (const entry of pending.values()) {
+                if (
+                  !entry.attached ||
+                  entry.documentKey !== documentKeyRef.current
+                ) {
+                  continue;
+                }
                 entry.from = update.changes.mapPos(entry.from, 1);
                 entry.to = Math.max(
                   entry.from,
@@ -1242,6 +1314,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     });
 
     viewRef.current = view;
+    attachPendingPlaceholders(view, documentKeyRef.current);
     setViewReady(true);
 
     // Dispatch ready event
@@ -1269,12 +1342,21 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     }
 
     return () => {
+      for (const pending of [pendingPastes, pendingCaptures]) {
+        for (const entry of pending.values()) {
+          if (entry.documentKey !== undefined) {
+            entry.attached = false;
+            entry.placeholderPresent = false;
+          }
+        }
+      }
       view.destroy();
       viewRef.current = null;
       setViewReady(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    attachPendingPlaceholders,
     completionClient,
     validateContextReferences,
     handleImagePaste,
@@ -1310,6 +1392,20 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     if (!viewRef.current) return;
 
     const currentValue = viewRef.current.state.doc.toString();
+    for (const pending of [
+      pendingPastesRef.current,
+      pendingCapturesRef.current,
+    ]) {
+      for (const entry of pending.values()) {
+        if (
+          entry.documentKey !== undefined &&
+          (entry.documentKey !== documentKey || currentValue !== value)
+        ) {
+          entry.attached = false;
+          entry.placeholderPresent = false;
+        }
+      }
+    }
     if (currentValue !== value) {
       completionClient.clearCache();
       for (const pending of [
@@ -1317,8 +1413,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         pendingCapturesRef.current,
       ]) {
         for (const entry of pending.values()) {
-          entry.placeholderPresent = false;
-          entry.removedByTimeout = false;
+          if (entry.documentKey === undefined) {
+            entry.placeholderPresent = false;
+            entry.removedByTimeout = false;
+          }
         }
       }
       viewRef.current.dispatch({
@@ -1329,7 +1427,8 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         },
       });
     }
-  }, [completionClient, value]);
+    attachPendingPlaceholders(viewRef.current, documentKey);
+  }, [attachPendingPlaceholders, completionClient, documentKey, value]);
 
   const editorClassName = [
     surface === "input"

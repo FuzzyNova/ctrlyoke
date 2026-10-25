@@ -1441,6 +1441,11 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         // scroll position left for that behavior to move into.
         <div className="prompt-editor-wrapper flex flex-col flex-1 min-h-0 overflow-clip relative isolate">
           <CodeMirrorEditor
+            documentKey={
+              isBulkMode
+                ? undefined
+                : JSON.stringify([activeWorkflowId, selectionTarget])
+            }
             value={isBulkMode ? "" : promptText}
             onChange={isBulkMode ? ignoreBulkEditorChange : handleTextChange}
             placeholder={

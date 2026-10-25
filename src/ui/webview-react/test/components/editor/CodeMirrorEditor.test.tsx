@@ -1293,6 +1293,118 @@ describe("CodeMirrorEditor late attachment replies", () => {
     );
   });
 
+  it("reattaches a pending placeholder when its prompt becomes current again", () => {
+    vi.stubGlobal(
+      "FileReader",
+      class {
+        result: string | ArrayBuffer | null = "data:image/png;base64,AQ==";
+        onload: ((event: ProgressEvent<FileReader>) => unknown) | null = null;
+        readAsDataURL() {
+          this.onload?.(new ProgressEvent("load") as ProgressEvent<FileReader>);
+        }
+      }
+    );
+    const { container, rerender } = render(
+      <CodeMirrorEditor value="prompt A" documentKey="A" onChange={vi.fn()} affUri="" dicUri="" />
+    );
+    pasteImage(container);
+    const requests = pastedImageRequests();
+    const request = requests[requests.length - 1]!;
+    const props = { onChange: vi.fn(), affUri: "", dicUri: "" };
+    rerender(<CodeMirrorEditor {...props} value="prompt B" documentKey="B" />);
+    rerender(<CodeMirrorEditor {...props} value="prompt A[Pasting image…]" documentKey="A" />);
+    fireEvent(window, new MessageEvent("message", { data: {
+      type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
+      seq: request.seq,
+      relativePath: "./.ctrlyoke/attachments/round-trip.png",
+    }}));
+    const view = EditorView.findFromDOM(container.querySelector(".cm-editor") as HTMLElement)!;
+    expect(view.state.doc.toString()).toBe("prompt A@./.ctrlyoke/attachments/round-trip.png ");
+  });
+
+  it("removes a pending placeholder after a prompt round trip when its reply is lost", () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      "FileReader",
+      class {
+        result: string | ArrayBuffer | null = "data:image/png;base64,AQ==";
+        onload: ((event: ProgressEvent<FileReader>) => unknown) | null = null;
+        readAsDataURL() {
+          this.onload?.(new ProgressEvent("load") as ProgressEvent<FileReader>);
+        }
+      }
+    );
+    const { container, rerender } = render(
+      <CodeMirrorEditor value="prompt A" documentKey="A" onChange={vi.fn()} affUri="" dicUri="" />
+    );
+    pasteImage(container);
+    const props = { onChange: vi.fn(), affUri: "", dicUri: "" };
+    rerender(<CodeMirrorEditor {...props} value="prompt B" documentKey="B" />);
+    rerender(<CodeMirrorEditor {...props} value="prompt A[Pasting image…]" documentKey="A" />);
+    act(() => vi.advanceTimersByTime(5 * 60_000));
+    const view = EditorView.findFromDOM(container.querySelector(".cm-editor") as HTMLElement)!;
+    expect(view.state.doc.toString()).toBe("prompt A");
+    vi.useRealTimers();
+  });
+
+  it("reattaches a pending placeholder after bulk mode is toggled off", () => {
+    vi.stubGlobal(
+      "FileReader",
+      class {
+        result: string | ArrayBuffer | null = "data:image/png;base64,AQ==";
+        onload: ((event: ProgressEvent<FileReader>) => unknown) | null = null;
+        readAsDataURL() {
+          this.onload?.(new ProgressEvent("load") as ProgressEvent<FileReader>);
+        }
+      }
+    );
+    const props = { documentKey: "A", onChange: vi.fn(), affUri: "", dicUri: "" };
+    const { container, rerender } = render(
+      <CodeMirrorEditor {...props} value="prompt A" />
+    );
+    pasteImage(container);
+    const requests = pastedImageRequests();
+    const request = requests[requests.length - 1]!;
+    rerender(<CodeMirrorEditor {...props} documentKey={undefined} value="" readOnly />);
+    rerender(<CodeMirrorEditor {...props} value="prompt A[Pasting image…]" />);
+    fireEvent(window, new MessageEvent("message", { data: {
+      type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
+      seq: request.seq,
+      relativePath: "./.ctrlyoke/attachments/bulk-round-trip.png",
+    }}));
+    const view = EditorView.findFromDOM(container.querySelector(".cm-editor") as HTMLElement)!;
+    expect(view.state.doc.toString()).toBe("prompt A@./.ctrlyoke/attachments/bulk-round-trip.png ");
+  });
+
+  it("keeps request sequences distinct across editor remounts", () => {
+    vi.stubGlobal(
+      "FileReader",
+      class {
+        result: string | ArrayBuffer | null = "data:image/png;base64,AQ==";
+        onload: ((event: ProgressEvent<FileReader>) => unknown) | null = null;
+        readAsDataURL() {
+          this.onload?.(new ProgressEvent("load") as ProgressEvent<FileReader>);
+        }
+      }
+    );
+    const first = render(<CodeMirrorEditor value="" onChange={vi.fn()} affUri="" dicUri="" />);
+    pasteImage(first.container);
+    const [oldRequest] = pastedImageRequests().slice(-1);
+    first.unmount();
+    const second = render(<CodeMirrorEditor value="" onChange={vi.fn()} affUri="" dicUri="" />);
+    pasteImage(second.container);
+    const requests = pastedImageRequests();
+    const newRequest = requests[requests.length - 1]!;
+    expect(newRequest.seq).not.toBe(oldRequest!.seq);
+    fireEvent(window, new MessageEvent("message", { data: {
+      type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
+      seq: oldRequest!.seq,
+      relativePath: "./.ctrlyoke/attachments/old.png",
+    }}));
+    const view = EditorView.findFromDOM(second.container.querySelector(".cm-editor") as HTMLElement)!;
+    expect(view.state.doc.toString()).toContain("[Pasting image");
+  });
+
   it("does not insert a late paste reply when the placeholder was edited", () => {
     vi.stubGlobal(
       "FileReader",
@@ -1340,6 +1452,7 @@ describe("CodeMirrorEditor late attachment replies", () => {
   });
 
   it("does not dispatch a successful paste reply after the editor becomes read-only", () => {
+    vi.useFakeTimers();
     vi.stubGlobal(
       "FileReader",
       class {
@@ -1381,6 +1494,9 @@ describe("CodeMirrorEditor late attachment replies", () => {
         message: "Pasted image saved at @./.ctrlyoke/attachments/late.png",
       })
     );
+    act(() => vi.advanceTimersByTime(5 * 60_000));
+    expect(view.state.doc.toString()).toBe("");
+    vi.useRealTimers();
   });
 
   it("keeps two pending paste replies attached to their own placeholders after typing before both", () => {

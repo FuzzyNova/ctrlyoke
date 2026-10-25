@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-25 by bug-drain review of a14eb8548
 - **Area:** `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx` (pending paste/capture entries, value-sync effect, `resolvePendingPlaceholder`, `removePendingPlaceholder`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
