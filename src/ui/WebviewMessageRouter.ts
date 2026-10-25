@@ -176,8 +176,6 @@ interface WorkflowVariantRequestCacheEntry {
 
 interface LoadRunViewRouteEntry {
   promise: Promise<void>;
-  originalPostMessage: PostMessageFn;
-  replies: unknown[];
 }
 
 const WORKFLOW_VARIANT_REQUEST_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -448,13 +446,6 @@ export class WebviewMessageRouter {
       const existing = this.loadRunViewRoutes.get(loadRunViewKey);
       if (existing) {
         await existing.promise;
-        const duplicatePostMessage =
-          options?.postMessage ?? this.defaultPostMessage;
-        if (duplicatePostMessage !== existing.originalPostMessage) {
-          for (const reply of existing.replies) {
-            duplicatePostMessage(reply);
-          }
-        }
         return;
       }
     }
@@ -467,23 +458,6 @@ export class WebviewMessageRouter {
       postMessage,
       interactionPort
     );
-    const loadRunViewReplies: unknown[] | undefined = loadRunViewKey
-      ? []
-      : undefined;
-    if (loadRunViewReplies) {
-      const captureReply: PostMessageFn = (reply) => {
-        if (
-          reply !== null &&
-          typeof reply === "object" &&
-          "requestId" in reply &&
-          reply.requestId === message.requestId
-        ) {
-          loadRunViewReplies.push(reply);
-        }
-        postMessage(reply);
-      };
-      ctx = { ...ctx, postMessage: captureReply, emit: captureReply };
-    }
     let completionController: AbortController | undefined;
     let completionSource: CompletionSource | undefined;
     if (message?.type === MESSAGE_TYPES.REQUEST_COMPLETIONS) {
@@ -545,6 +519,7 @@ export class WebviewMessageRouter {
       return;
     }
     let releaseHistorySearch: (() => void) | undefined;
+    let deferHistorySearchRelease = false;
     if (message?.type === MESSAGE_TYPES.SEARCH_HISTORY) {
       // Called synchronously, before this message is queued behind whatever
       // is already routing: every message shares `routeQueue`, so a search
@@ -555,7 +530,14 @@ export class WebviewMessageRouter {
         clientId,
         getHistorySearchListingKey(message)
       );
-      ctx = { ...ctx, historySearchAbortSignal: registration.signal };
+      ctx = {
+        ...ctx,
+        historySearchAbortSignal: registration.signal,
+        deferHistorySearchRelease: () => {
+          deferHistorySearchRelease = true;
+          return registration.release;
+        },
+      };
       releaseHistorySearch = registration.release;
     }
     if (
@@ -571,7 +553,7 @@ export class WebviewMessageRouter {
       try {
         await this.routeSingleMessage(message, ctx);
       } finally {
-        releaseHistorySearch?.();
+        if (!deferHistorySearchRelease) releaseHistorySearch?.();
         logSlowRoute(message?.type, clientId, enqueuedAt, startedAt);
       }
     });
@@ -580,8 +562,6 @@ export class WebviewMessageRouter {
     if (loadRunViewKey) {
       this.loadRunViewRoutes.set(loadRunViewKey, {
         promise: queuedRoute,
-        originalPostMessage: postMessage,
-        replies: loadRunViewReplies ?? [],
       });
     }
     try {
@@ -2102,9 +2082,20 @@ export class WebviewMessageRouter {
           ...response,
         });
         if (response.indexState === "building") {
+          const releaseFollowUp = ctx.deferHistorySearchRelease?.();
           void this.historySearchService
-            .enqueueWorkspaceRefresh(workspacePath)
-            .then(async () => {
+            .waitForActiveRefresh(workspacePath)
+            .then(async (outcome) => {
+              if (ctx.historySearchAbortSignal?.aborted) return;
+              if (outcome.failed) {
+                ctx.emit({
+                  type: MESSAGE_TYPES.SEARCH_HISTORY_RESULTS,
+                  ...listingScope,
+                  ...response,
+                  indexState: "fallback",
+                });
+                return;
+              }
               if (ctx.historySearchAbortSignal?.aborted) return;
               const refreshedResponse = await this.historySearchService.search(
                 searchRequest,
@@ -2126,7 +2117,8 @@ export class WebviewMessageRouter {
               Log.warn(
                 `[WebviewMessageRouter] history search refresh failed: query="${query}" error=${getErrorMessage(error)}`
               );
-            });
+            })
+            .finally(() => releaseFollowUp?.());
         }
       } catch (error) {
         if (error instanceof HistorySearchCancelledError) {

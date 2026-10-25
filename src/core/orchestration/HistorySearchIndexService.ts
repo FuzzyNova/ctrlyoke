@@ -173,6 +173,11 @@ export type PartialSearchResultsCallback = (
   partialResponse: HistorySearchResponse
 ) => void;
 
+export interface RefreshOutcome {
+  failed: boolean;
+  error?: unknown;
+}
+
 export class HistorySearchIndexService {
   protected get maxSnapshotResults(): number {
     return MAX_SNAPSHOT_RESULTS;
@@ -187,7 +192,8 @@ export class HistorySearchIndexService {
     HistorySearchMatchSnapshot
   >();
   private matchSnapshotResultTotal = 0;
-  private rebuildPromise?: Promise<void>;
+  private rebuildPromise?: Promise<RefreshOutcome>;
+  private lastRefreshOutcome?: RefreshOutcome;
   private rebuildQueued = false;
   private readonly lineageRepository = new WorkflowLineageRepository();
   private readonly documentCache = new HistorySearchDocumentCache(
@@ -947,7 +953,9 @@ export class HistorySearchIndexService {
     };
   }
 
-  enqueueWorkspaceRefresh(workspaceFolderPath: string): Promise<void> {
+  enqueueWorkspaceRefresh(
+    workspaceFolderPath: string
+  ): Promise<RefreshOutcome> {
     // A workflow completing appends many history events in quick succession.
     // Without coalescing, each append would kick off (and we would previously
     // even await) a full index rebuild. Instead, if a rebuild is already
@@ -961,6 +969,7 @@ export class HistorySearchIndexService {
     }
 
     const refreshStart = Date.now();
+    this.lastRefreshOutcome = undefined;
     let passCount = 0;
     this.rebuildPromise = (async () => {
       try {
@@ -982,11 +991,26 @@ export class HistorySearchIndexService {
         Log.warn(
           `[HistorySearchIndexService] Failed to refresh index after ${passCount} pass(es), ${Date.now() - refreshStart}ms: ${getErrorMessage(error)}`
         );
+        return { failed: true, error };
       } finally {
+        // Retain the result for a dashboard search that joins just after a
+        // very short refresh has already settled.
         this.rebuildPromise = undefined;
       }
+      return { failed: false };
     })();
+    void this.rebuildPromise.then((outcome) => {
+      this.lastRefreshOutcome = outcome;
+    });
     return this.rebuildPromise;
+  }
+
+  /** Join the current refresh without marking another pass as queued. */
+  waitForActiveRefresh(): Promise<RefreshOutcome> {
+    return (
+      this.rebuildPromise ??
+      Promise.resolve(this.lastRefreshOutcome ?? { failed: false })
+    );
   }
 
   private async ensureReady(
@@ -1029,7 +1053,9 @@ export class HistorySearchIndexService {
         "[HistorySearchIndexService] index missing or stale; searching without synchronous rebuild"
       );
       if (rebuildInBackground) {
-        void this.enqueueWorkspaceRefresh(workspaceFolderPath);
+        if (!this.rebuildPromise) {
+          void this.enqueueWorkspaceRefresh(workspaceFolderPath);
+        }
       }
       return HISTORY_SEARCH_INDEX_STATES.BUILDING;
     }

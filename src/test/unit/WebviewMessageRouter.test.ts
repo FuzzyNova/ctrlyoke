@@ -1880,6 +1880,7 @@ suite("WebviewMessageRouter — license actions", () => {
             });
           }),
         enqueueWorkspaceRefresh: () => Promise.resolve(),
+      waitForActiveRefresh: () => Promise.resolve({ failed: false }),
       };
       const router = new WebviewMessageRouter(
         (message) => emitted.push(message),
@@ -1988,7 +1989,16 @@ suite("WebviewMessageRouter — license actions", () => {
       const { router, restore, emitted } = buildSearchRouter(recorded);
       try {
         const service = (router as any).historySearchService;
-        service.enqueueWorkspaceRefresh = () => rebuild.promise;
+        let joins = 0;
+        let enqueues = 0;
+        service.enqueueWorkspaceRefresh = () => {
+          enqueues += 1;
+          return Promise.resolve({ failed: false });
+        };
+        service.waitForActiveRefresh = () => {
+          joins += 1;
+          return rebuild.promise.then(() => ({ failed: false }));
+        };
         const first = router.route({
           type: MESSAGE_TYPES.SEARCH_HISTORY,
           query: "background-ready-term",
@@ -1997,10 +2007,14 @@ suite("WebviewMessageRouter — license actions", () => {
         });
         await settle();
         assert.strictEqual(recorded.length, 1);
+        assert.strictEqual(joins, 0);
+        assert.strictEqual(enqueues, 0);
         recorded[0].indexState = "building";
         recorded[0].resolve();
         await first;
         assert.strictEqual(recorded.length, 1);
+        assert.strictEqual(joins, 1);
+        assert.strictEqual(enqueues, 0);
 
         rebuild.resolve();
         await settle();
@@ -2017,6 +2031,99 @@ suite("WebviewMessageRouter — license actions", () => {
           ).length >= 2,
           "the building reply and refreshed active-listing results should both be emitted"
         );
+      } finally {
+        restore();
+      }
+    });
+
+    test("does not run a superseded search after the rebuild", async () => {
+      const recorded: RecordedSearch[] = [];
+      const rebuild = deferred<void>();
+      const { router, restore } = buildSearchRouter(recorded);
+      try {
+        const service = (router as any).historySearchService;
+        service.waitForActiveRefresh = () =>
+          rebuild.promise.then(() => ({ failed: false }));
+        const first = router.route({
+          type: MESSAGE_TYPES.SEARCH_HISTORY,
+          query: "old-term",
+          limit: 10,
+        });
+        await settle();
+        recorded[0].indexState = "building";
+        recorded[0].resolve();
+        await first;
+        const second = router.route({
+          type: MESSAGE_TYPES.SEARCH_HISTORY,
+          query: "new-term",
+          limit: 10,
+        });
+        await settle();
+        assert.strictEqual(recorded[0].signal?.aborted, true);
+        rebuild.resolve();
+        await settle();
+        assert.strictEqual(recorded.length, 2, "old follow-up must not search");
+        recorded[1].resolve();
+        await second;
+      } finally {
+        restore();
+      }
+    });
+
+    test("disposal aborts the detached follow-up search", async () => {
+      const recorded: RecordedSearch[] = [];
+      const rebuild = deferred<void>();
+      const { router, restore } = buildSearchRouter(recorded);
+      try {
+        const service = (router as any).historySearchService;
+        service.waitForActiveRefresh = () =>
+          rebuild.promise.then(() => ({ failed: false }));
+        const first = router.route(
+          {
+            type: MESSAGE_TYPES.SEARCH_HISTORY,
+            query: "disposed-term",
+            limit: 10,
+          },
+          { clientTag: "browser:dispose" }
+        );
+        await settle();
+        recorded[0].indexState = "building";
+        recorded[0].resolve();
+        await first;
+        router.disposeClient("browser:dispose");
+        assert.strictEqual(recorded[0].signal?.aborted, true);
+        rebuild.resolve();
+        await settle();
+        assert.strictEqual(recorded.length, 1);
+      } finally {
+        restore();
+      }
+    });
+
+    test("reports a failed rebuild with the fallback index state", async () => {
+      const recorded: RecordedSearch[] = [];
+      const { router, restore, emitted } = buildSearchRouter(recorded);
+      try {
+        const service = (router as any).historySearchService;
+        service.waitForActiveRefresh = () =>
+          Promise.resolve({ failed: true, error: new Error("disk full") });
+        const first = router.route({
+          type: MESSAGE_TYPES.SEARCH_HISTORY,
+          query: "failed-term",
+          listingId: "listing-failed",
+          limit: 10,
+        });
+        await settle();
+        recorded[0].indexState = "building";
+        recorded[0].resolve();
+        await first;
+        await settle();
+        const failure = emitted.find(
+          (message) =>
+            message.type === MESSAGE_TYPES.SEARCH_HISTORY_RESULTS &&
+            message.indexState === "fallback"
+        );
+        assert.ok(failure, "failed rebuild should end the building state");
       } finally {
         restore();
       }

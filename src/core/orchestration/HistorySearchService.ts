@@ -24,6 +24,7 @@ import {
   type HistorySearchIndexSearchOptions,
   type IndexRebuildProgressCallback,
   type PartialSearchResultsCallback,
+  type RefreshOutcome,
 } from "./HistorySearchIndexService";
 import { getSharedHistorySearchIndexService } from "./HistorySearchIndexServiceRegistry";
 import { HistoryRunDocumentBuilder } from "./HistoryRunDocumentBuilder";
@@ -71,10 +72,18 @@ export class HistorySearchService {
     MAX_INDEXED_TEXT_LENGTH
   );
 
-  enqueueWorkspaceRefresh(workspaceFolderPath: string): Promise<void> {
+  enqueueWorkspaceRefresh(
+    workspaceFolderPath: string
+  ): Promise<RefreshOutcome> {
     return getSharedHistorySearchIndexService(
       workspaceFolderPath
     ).enqueueWorkspaceRefresh(workspaceFolderPath);
+  }
+
+  waitForActiveRefresh(workspaceFolderPath: string): Promise<RefreshOutcome> {
+    return getSharedHistorySearchIndexService(
+      workspaceFolderPath
+    ).waitForActiveRefresh();
   }
 
   async search(

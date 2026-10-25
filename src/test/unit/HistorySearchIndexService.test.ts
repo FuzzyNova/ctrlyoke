@@ -1836,6 +1836,50 @@ suite("HistorySearchIndexService", () => {
     assert.strictEqual(ready.totalCount, 1);
   });
 
+  test("a second BUILDING search joins the active pass without queueing another", async () => {
+    const index = new HistorySearchIndexService();
+    let releaseRebuild!: () => void;
+    const rebuildGate = new Promise<void>((resolve) => {
+      releaseRebuild = resolve;
+    });
+    let rebuildPasses = 0;
+    (index as any).rebuild = async () => {
+      rebuildPasses += 1;
+      await rebuildGate;
+    };
+
+    try {
+      const first = await index.search(
+        { query: "missing-index-first", limit: 10 },
+        workspaceRoot,
+        undefined,
+        undefined,
+        undefined,
+        { allowRebuild: false, rebuildInBackground: true }
+      );
+      const second = await index.search(
+        { query: "missing-index-second", limit: 10 },
+        workspaceRoot,
+        undefined,
+        undefined,
+        undefined,
+        { allowRebuild: false, rebuildInBackground: true }
+      );
+
+      assert.strictEqual(first.indexState, "building");
+      assert.strictEqual(second.indexState, "building");
+      assert.strictEqual(rebuildPasses, 1);
+      assert.strictEqual(
+        (index as any).rebuildQueued,
+        false,
+        "a search joining the active build must not request another pass"
+      );
+    } finally {
+      releaseRebuild();
+      await index.waitForActiveRefresh();
+    }
+  });
+
   test("background refresh waits past its lock timeout for a live foreign rebuild lock", async function () {
     // Prove the background path waits beyond the worker's ordinary 60-second
     // acquisition timeout instead of abandoning the refresh.
@@ -1998,7 +2042,7 @@ suite("HistorySearchIndexService", () => {
     const firstRebuildStarted = new Promise<void>((resolve) => {
       resolveFirstRebuildStarted = resolve;
     });
-    let secondRefresh: Promise<void> | undefined;
+    let secondRefresh: Promise<unknown> | undefined;
     let firstRebuildStartObserved = false;
 
     Log.debug = (message: string) => {

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-25 by bug-drain review of fdecf81a1 and ad5da660b
 - **Area:** `src/ui/WebviewMessageRouter.ts` (history search handler, `beginHistorySearch`/`releaseHistorySearch`, run-view load dedupe), `src/core/orchestration/HistorySearchIndexService.ts` (`ensureReady`, `enqueueWorkspaceRefresh`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

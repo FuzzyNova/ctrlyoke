@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   timeout removed the placeholder. Preview reply resolvers expire after five minutes.
 - Dashboard history searches use the available index while another process rebuilds; complete CLI searches can wait for a live rebuild.
 - Dashboard history searches now rebuild missing or stale indexes in the background and show the active query's results when the rebuild finishes.
+- Dashboard history searches join one active rebuild, cancel superseded follow-ups, and report rebuild failures.
 - Workspace viewer diff downloads stream Git output without a size cap and
   report failures to the user, including the working tree's untracked file list.
 - Workspace viewer working-tree diff downloads keep streaming when Git cannot

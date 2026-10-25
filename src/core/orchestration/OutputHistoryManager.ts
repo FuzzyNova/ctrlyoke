@@ -2121,6 +2121,7 @@ export class OutputHistoryManager {
   private refreshSearchIndex(): Promise<void> {
     this.pendingIndexRefresh = this.historySearchIndexService
       .enqueueWorkspaceRefresh(this._workspaceFolderPath)
+      .then(() => undefined)
       .catch(() => {
         /* index refresh failures are logged inside the index service */
       });
