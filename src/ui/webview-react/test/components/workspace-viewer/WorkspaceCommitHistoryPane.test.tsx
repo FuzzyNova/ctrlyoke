@@ -7,6 +7,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { WorkspaceCommitHistoryPane } from "@components/workspace-viewer/WorkspaceCommitHistoryPane";
+import { installElementLayout } from "../../fixtures/elementLayout";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import {
   workspaceCheckoutBranch,
@@ -634,17 +635,9 @@ describe("WorkspaceCommitHistoryPane", () => {
   });
 
   it("keeps a commit's graph position stable after scrolling it out and back", async () => {
-    const originalOffsetHeight = Object.getOwnPropertyDescriptor(
-      HTMLElement.prototype,
-      "offsetHeight"
-    );
-    Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
-      configurable: true,
-      get(this: HTMLElement) {
-        return this.dataset.testid === "commit-history-scroll-container"
-          ? 120
-          : (originalOffsetHeight?.get?.call(this) ?? 0);
-      },
+    const restoreElementLayout = installElementLayout({
+      height: (element) =>
+        element.dataset.testid === "commit-history-scroll-container" ? 120 : 0,
     });
 
     try {
@@ -714,13 +707,7 @@ describe("WorkspaceCommitHistoryPane", () => {
         })),
       }).toEqual(before);
     } finally {
-      if (originalOffsetHeight) {
-        Object.defineProperty(
-          HTMLElement.prototype,
-          "offsetHeight",
-          originalOffsetHeight
-        );
-      }
+      restoreElementLayout();
     }
   });
 

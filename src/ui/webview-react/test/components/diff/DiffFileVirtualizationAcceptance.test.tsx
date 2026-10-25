@@ -18,6 +18,7 @@ import {
   DIFF_FILE_FIXTURE_SIZES,
   createDiffFileFixture,
 } from "../../fixtures/diffFileFixture";
+import { stubElementLayoutForFile } from "../../fixtures/elementLayout";
 
 const diffViewUnmountCount = vi.hoisted(() => ({ value: 0 }));
 
@@ -45,33 +46,22 @@ vi.mock("@components/output/DiffView", async () => {
 });
 
 const SCROLLER_CLASS = "diff-fixture-scroller";
-const originalOffsetHeight = Object.getOwnPropertyDescriptor(
-  HTMLElement.prototype,
-  "offsetHeight"
-);
-const originalOffsetWidth = Object.getOwnPropertyDescriptor(
-  HTMLElement.prototype,
-  "offsetWidth"
-);
 const originalGetBoundingClientRect =
   HTMLElement.prototype.getBoundingClientRect;
 
+stubElementLayoutForFile({
+  height: (element) => {
+    if (element.classList.contains(SCROLLER_CLASS)) return 180;
+    const measuredChild =
+      element.querySelector<HTMLElement>("[data-test-height]");
+    return Number(
+      element.dataset.testHeight ?? measuredChild?.dataset.testHeight ?? 24
+    );
+  },
+  width: () => 800,
+});
+
 beforeAll(() => {
-  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
-    configurable: true,
-    get(this: HTMLElement) {
-      if (this.classList.contains(SCROLLER_CLASS)) return 180;
-      const measuredChild =
-        this.querySelector<HTMLElement>("[data-test-height]");
-      return Number(
-        this.dataset.testHeight ?? measuredChild?.dataset.testHeight ?? 24
-      );
-    },
-  });
-  Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
-    configurable: true,
-    get: () => 800,
-  });
   HTMLElement.prototype.getBoundingClientRect = function (): DOMRect {
     const isScroller = this.classList.contains(SCROLLER_CLASS);
     const measuredChild = this.querySelector<HTMLElement>("[data-test-height]");
@@ -95,20 +85,6 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  if (originalOffsetHeight) {
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "offsetHeight",
-      originalOffsetHeight
-    );
-  }
-  if (originalOffsetWidth) {
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "offsetWidth",
-      originalOffsetWidth
-    );
-  }
   HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
 });
 

@@ -1,14 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { stubElementLayoutForFile } from "../../fixtures/elementLayout";
 import {
   HISTORY_SEARCH_DEBOUNCE_MS,
   HistorySearchDrawer,
@@ -34,46 +26,11 @@ import {
 
 const postMessage = vi.mocked(window.vscodeApi!.postMessage);
 
-const originalOffsetHeight = Object.getOwnPropertyDescriptor(
-  HTMLElement.prototype,
-  "offsetHeight"
-);
-const originalOffsetWidth = Object.getOwnPropertyDescriptor(
-  HTMLElement.prototype,
-  "offsetWidth"
-);
-
-beforeAll(() => {
-  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
-    configurable: true,
-    get(this: HTMLElement) {
-      return this.classList.contains("overflow-y-auto") ? 100 : 20;
-    },
-  });
-  Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
-    configurable: true,
-    get: () => 400,
-  });
+stubElementLayoutForFile({
+  height: (element) =>
+    element.classList.contains("overflow-y-auto") ? 100 : 20,
+  width: () => 400,
 });
-
-function restoreLayoutProperties(): void {
-  if (originalOffsetHeight) {
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "offsetHeight",
-      originalOffsetHeight
-    );
-  }
-  if (originalOffsetWidth) {
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "offsetWidth",
-      originalOffsetWidth
-    );
-  }
-}
-
-afterAll(restoreLayoutProperties);
 
 const result = {
   workflowKey: "workflow-1" as never,

@@ -5,15 +5,7 @@
  * uiStore.fileBrowserState (openFileBrowser/closeFileBrowser), so tests seed
  * that state directly, mirroring WorkspaceViewerModal.test.tsx.
  */
-import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeAll,
-  afterAll,
-  beforeEach,
-} from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   act,
   fireEvent,
@@ -38,6 +30,7 @@ import type {
   WorkspaceTreePageResponse,
   WorkspaceTreeRangeRequest,
 } from "@root/types/HostedWorkspaceViewerTypes";
+import { stubElementLayoutForFile } from "../../fixtures/elementLayout";
 
 vi.mock("@utils/hostedApi", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@utils/hostedApi")>();
@@ -55,43 +48,10 @@ const PAGE_SIZE = 100;
 const ROOT_LISTING = "00000000-0000-4000-8000-000000000001";
 const SRC_LISTING = "00000000-0000-4000-8000-000000000002";
 
-const originalOffsetHeight = Object.getOwnPropertyDescriptor(
-  HTMLElement.prototype,
-  "offsetHeight"
-);
-const originalOffsetWidth = Object.getOwnPropertyDescriptor(
-  HTMLElement.prototype,
-  "offsetWidth"
-);
-
-beforeAll(() => {
-  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
-    configurable: true,
-    get(this: HTMLElement) {
-      return this.dataset.testid === "file-browser-directory-list" ? 180 : 20;
-    },
-  });
-  Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
-    configurable: true,
-    get: () => 600,
-  });
-});
-
-afterAll(() => {
-  if (originalOffsetHeight) {
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "offsetHeight",
-      originalOffsetHeight
-    );
-  }
-  if (originalOffsetWidth) {
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "offsetWidth",
-      originalOffsetWidth
-    );
-  }
+stubElementLayoutForFile({
+  height: (element) =>
+    element.dataset.testid === "file-browser-directory-list" ? 180 : 20,
+  width: () => 600,
 });
 
 function entry(

@@ -1,12 +1,4 @@
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  it,
-  expect,
-  vi,
-} from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
 import {
   act,
   fireEvent,
@@ -18,6 +10,7 @@ import { UndoChangesDialog } from "@components/output/UndoChangesDialog";
 import { OutputSectionHeader } from "@components/layout/output-section/OutputSectionHeader";
 import { useOutputUndoActions } from "@hooks/useOutputUndoActions";
 import { useWorkflowStore } from "@store/workflowStore";
+import { stubElementLayoutForFile } from "../../fixtures/elementLayout";
 import { useUiStore } from "@store/uiStore";
 import {
   FINAL_STEP_PHASES,
@@ -57,28 +50,8 @@ vi.mock("@components/output/DiffView", () => ({
   ),
 }));
 
-const originalOffsetHeight = Object.getOwnPropertyDescriptor(
-  HTMLElement.prototype,
-  "offsetHeight"
-);
-
-beforeAll(() => {
-  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
-    configurable: true,
-    get(this: HTMLElement) {
-      return this.classList.contains("flex-1") ? 600 : 40;
-    },
-  });
-});
-
-afterAll(() => {
-  if (originalOffsetHeight) {
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "offsetHeight",
-      originalOffsetHeight
-    );
-  }
+stubElementLayoutForFile({
+  height: (element) => (element.classList.contains("flex-1") ? 600 : 40),
 });
 
 describe("UndoChangesDialog", () => {

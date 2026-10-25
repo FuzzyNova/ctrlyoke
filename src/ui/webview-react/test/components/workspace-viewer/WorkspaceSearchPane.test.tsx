@@ -5,16 +5,7 @@ import {
   render,
   screen,
 } from "@testing-library/react";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 import type {
   WorkspaceSearchResponse,
@@ -28,6 +19,7 @@ import {
 import { useSettingsStore } from "@store/settingsStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { workspaceRepos, workspaceSearch } from "@utils/hostedApi";
+import { stubElementLayoutForFile } from "../../fixtures/elementLayout";
 
 vi.mock("@utils/hostedApi", () => ({
   workspaceSearch: vi.fn(),
@@ -38,44 +30,11 @@ const workspaceSearchMock = vi.mocked(workspaceSearch);
 const workspaceReposMock = vi.mocked(workspaceRepos);
 
 // The results list is virtualized; TanStack sizes its window from the scroll
-// container's offsetHeight, which jsdom reports as 0.
-const originalOffsetHeight = Object.getOwnPropertyDescriptor(
-  HTMLElement.prototype,
-  "offsetHeight"
-);
-const originalOffsetWidth = Object.getOwnPropertyDescriptor(
-  HTMLElement.prototype,
-  "offsetWidth"
-);
-
-beforeAll(() => {
-  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
-    configurable: true,
-    get(this: HTMLElement) {
-      return this.classList.contains("overflow-y-auto") ? 200 : 20;
-    },
-  });
-  Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
-    configurable: true,
-    get: () => 400,
-  });
-});
-
-afterAll(() => {
-  if (originalOffsetHeight) {
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "offsetHeight",
-      originalOffsetHeight
-    );
-  }
-  if (originalOffsetWidth) {
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "offsetWidth",
-      originalOffsetWidth
-    );
-  }
+// container's clientHeight, which jsdom reports as 0.
+stubElementLayoutForFile({
+  height: (element) =>
+    element.classList.contains("overflow-y-auto") ? 200 : 20,
+  width: () => 400,
 });
 
 function page(

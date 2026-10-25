@@ -5,7 +5,8 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { stubElementLayoutForFile } from "../../fixtures/elementLayout";
 import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 import {
   DEFAULT_WORKSPACE_ENTRY_SORT,
@@ -86,13 +87,9 @@ vi.mock("@components/output/MarkdownText", () => ({
   MarkdownText: () => <div />,
 }));
 
-beforeAll(() => {
-  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
-    configurable: true,
-    get(this: HTMLElement) {
-      return this.getAttribute("data-testid") === "file-editor" ? 20 : 200;
-    },
-  });
+stubElementLayoutForFile({
+  height: (element) =>
+    element.getAttribute("data-testid") === "file-editor" ? 20 : 200,
 });
 
 function entry(index: number, ignored = false): WorkspaceTreeEntry {

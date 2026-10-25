@@ -851,7 +851,7 @@
     "@typescript-eslint/eslint-plugin": "^8.71.1",
     "@typescript-eslint/parser": "^8.71.1",
     "@vitejs/plugin-react": "^6.0.2",
-    "@vitest/coverage-v8": "^5.0.3",
+    "@vitest/coverage-v8": "^5.0.5",
     "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^4.0.0",
@@ -879,7 +879,7 @@
     "unist-util-visit": "^5.1.0",
     "vite": "^8.1.5",
     "vitepress": "^2.0.0-alpha.18",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.5"
   },
   "bundledDependencies": [
     "node-pty"

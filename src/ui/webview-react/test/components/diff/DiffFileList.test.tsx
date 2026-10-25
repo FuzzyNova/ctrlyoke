@@ -1,13 +1,5 @@
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { stubElementLayoutForFile } from "../../fixtures/elementLayout";
 import {
   DIFF_VIEW_TYPES,
   WORKSPACE_ENTRY_KINDS,
@@ -64,48 +56,16 @@ vi.mock("@components/output/DiffView", () => ({
 }));
 
 const DIFF_SCROLLER_CLASS = "diff-file-list-test-scroller";
-const originalOffsetHeight = Object.getOwnPropertyDescriptor(
-  HTMLElement.prototype,
-  "offsetHeight"
-);
-const originalOffsetWidth = Object.getOwnPropertyDescriptor(
-  HTMLElement.prototype,
-  "offsetWidth"
-);
-
-beforeAll(() => {
-  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
-    configurable: true,
-    get(this: HTMLElement) {
-      if (this.classList.contains(DIFF_SCROLLER_CLASS)) return 120;
-      const measuredChild =
-        this.querySelector<HTMLElement>("[data-test-height]");
-      return Number(
-        this.dataset.testHeight ?? measuredChild?.dataset.testHeight ?? 24
-      );
-    },
-  });
-  Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
-    configurable: true,
-    get: () => 800,
-  });
-});
-
-afterAll(() => {
-  if (originalOffsetHeight) {
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "offsetHeight",
-      originalOffsetHeight
+stubElementLayoutForFile({
+  height: (element) => {
+    if (element.classList.contains(DIFF_SCROLLER_CLASS)) return 120;
+    const measuredChild =
+      element.querySelector<HTMLElement>("[data-test-height]");
+    return Number(
+      element.dataset.testHeight ?? measuredChild?.dataset.testHeight ?? 24
     );
-  }
-  if (originalOffsetWidth) {
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "offsetWidth",
-      originalOffsetWidth
-    );
-  }
+  },
+  width: () => 800,
 });
 
 function makeFile(key: string) {

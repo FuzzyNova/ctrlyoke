@@ -1,18 +1,11 @@
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { WorkspaceDiffPane } from "@components/workspace-viewer/WorkspaceDiffPane";
 import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { stubElementLayoutForFile } from "../../fixtures/elementLayout";
 import type { ParsedDiffFile } from "@utils/rdvAdapter";
 import { workspaceGitRefDiff, workspaceGitRefDiffPage } from "@utils/hostedApi";
 import type {
@@ -67,28 +60,8 @@ vi.mock("@utils/download", () => ({
   downloadTextFile: vi.fn(),
 }));
 
-const originalOffsetHeight = Object.getOwnPropertyDescriptor(
-  HTMLElement.prototype,
-  "offsetHeight"
-);
-
-beforeAll(() => {
-  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
-    configurable: true,
-    get(this: HTMLElement) {
-      return this.classList.contains("flex-1") ? 600 : 40;
-    },
-  });
-});
-
-afterAll(() => {
-  if (originalOffsetHeight) {
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "offsetHeight",
-      originalOffsetHeight
-    );
-  }
+stubElementLayoutForFile({
+  height: (element) => (element.classList.contains("flex-1") ? 600 : 40),
 });
 
 const diffFile: ParsedDiffFile = {

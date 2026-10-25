@@ -1,52 +1,21 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { useRef } from "react";
 import type { ReactElement } from "react";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { VirtualizedList } from "@components/shared/VirtualizedList";
+import { stubElementLayoutForFile } from "../../fixtures/elementLayout";
 
 const SCROLLER_CLASS = "virtualized-list-test-scroller";
-const originalOffsetHeight = Object.getOwnPropertyDescriptor(
-  HTMLElement.prototype,
-  "offsetHeight"
-);
-const originalOffsetWidth = Object.getOwnPropertyDescriptor(
-  HTMLElement.prototype,
-  "offsetWidth"
-);
-
-beforeAll(() => {
-  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
-    configurable: true,
-    get(this: HTMLElement) {
-      if (this.classList.contains(SCROLLER_CLASS)) return 100;
-      const measuredChild =
-        this.querySelector<HTMLElement>("[data-test-height]");
-      return Number(
-        this.dataset.testHeight ?? measuredChild?.dataset.testHeight ?? 20
-      );
-    },
-  });
-  Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
-    configurable: true,
-    get: () => 400,
-  });
-});
-
-afterAll(() => {
-  if (originalOffsetHeight) {
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "offsetHeight",
-      originalOffsetHeight
+stubElementLayoutForFile({
+  height: (element) => {
+    if (element.classList.contains(SCROLLER_CLASS)) return 100;
+    const measuredChild =
+      element.querySelector<HTMLElement>("[data-test-height]");
+    return Number(
+      element.dataset.testHeight ?? measuredChild?.dataset.testHeight ?? 20
     );
-  }
-  if (originalOffsetWidth) {
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "offsetWidth",
-      originalOffsetWidth
-    );
-  }
+  },
+  width: () => 400,
 });
 
 function Host({

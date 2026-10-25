@@ -8,6 +8,7 @@ import {
   createDiffFileFixture,
   flattenDiffFileFixture,
 } from "../../fixtures/diffFileFixture";
+import { installElementLayout } from "../../fixtures/elementLayout";
 
 const SCROLLER_CLASS = "diff-lazy-fixture-scroller";
 const { tokenizeMock } = vi.hoisted(() => ({
@@ -25,14 +26,7 @@ vi.mock("react-diff-view", async (importOriginal) => {
   };
 });
 
-const originalOffsetHeight = Object.getOwnPropertyDescriptor(
-  HTMLElement.prototype,
-  "offsetHeight"
-);
-const originalOffsetWidth = Object.getOwnPropertyDescriptor(
-  HTMLElement.prototype,
-  "offsetWidth"
-);
+let restoreElementLayout: (() => void) | undefined;
 const originalGetBoundingClientRect =
   HTMLElement.prototype.getBoundingClientRect;
 
@@ -46,15 +40,10 @@ class NoopResizeObserver implements ResizeObserver {
 
 beforeEach(() => {
   window.ResizeObserver = NoopResizeObserver;
-  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
-    configurable: true,
-    get(this: HTMLElement) {
-      return this.classList.contains(SCROLLER_CLASS) ? 180 : 120;
-    },
-  });
-  Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
-    configurable: true,
-    get: () => 800,
+  restoreElementLayout = installElementLayout({
+    height: (element) =>
+      element.classList.contains(SCROLLER_CLASS) ? 180 : 120,
+    width: () => 800,
   });
   HTMLElement.prototype.getBoundingClientRect = function (): DOMRect {
     const isScroller = this.classList.contains(SCROLLER_CLASS);
@@ -74,20 +63,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  if (originalOffsetHeight) {
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "offsetHeight",
-      originalOffsetHeight
-    );
-  }
-  if (originalOffsetWidth) {
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "offsetWidth",
-      originalOffsetWidth
-    );
-  }
+  restoreElementLayout?.();
   HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
 });
 

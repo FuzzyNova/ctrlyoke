@@ -6,49 +6,16 @@
  * without it @tanstack/react-virtual sees a zero-height viewport and renders
  * nothing, which would mask the very behavior under test.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect } from "vitest";
+import { stubElementLayoutForFile } from "../../fixtures/elementLayout";
 import { render, screen } from "@testing-library/react";
 import { useRef } from "react";
 import { VirtualizedDropdownList } from "@components/shared/VirtualizedDropdownList";
 
 const SCROLLER_CLASS = "test-scroller";
-const originalOffsetHeight = Object.getOwnPropertyDescriptor(
-  HTMLElement.prototype,
-  "offsetHeight"
-);
-const originalOffsetWidth = Object.getOwnPropertyDescriptor(
-  HTMLElement.prototype,
-  "offsetWidth"
-);
-
-beforeAll(() => {
-  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
-    configurable: true,
-    get(this: HTMLElement) {
-      return this.classList.contains(SCROLLER_CLASS) ? 400 : 36;
-    },
-  });
-  Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
-    configurable: true,
-    get: () => 400,
-  });
-});
-
-afterAll(() => {
-  if (originalOffsetHeight) {
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "offsetHeight",
-      originalOffsetHeight
-    );
-  }
-  if (originalOffsetWidth) {
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "offsetWidth",
-      originalOffsetWidth
-    );
-  }
+stubElementLayoutForFile({
+  height: (element) => (element.classList.contains(SCROLLER_CLASS) ? 400 : 36),
+  width: () => 400,
 });
 
 /**
