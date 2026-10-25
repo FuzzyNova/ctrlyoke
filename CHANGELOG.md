@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Editor paste and output-capture placeholders are removed after five minutes if no reply arrives, while late successful replies still insert their references; preview reply resolvers expire after five minutes.
 - Dashboard history searches use the available index while another process rebuilds; complete CLI searches can wait for a live rebuild.
 - Workspace viewer diff downloads stream Git output without a size cap and
   report failures to the user.

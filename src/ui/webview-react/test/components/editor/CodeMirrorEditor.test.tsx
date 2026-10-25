@@ -1175,6 +1175,115 @@ describe("CodeMirrorEditor output capture completions", () => {
 });
 
 describe("CodeMirrorEditor late attachment replies", () => {
+  function pasteImage(container: HTMLElement) {
+    fireEvent.paste(container.querySelector(".cm-content") as HTMLElement, {
+      clipboardData: {
+        items: [
+          {
+            type: "image/png",
+            getAsFile: () =>
+              new File(["image"], "paste.png", { type: "image/png" }),
+          },
+        ],
+      },
+    });
+  }
+
+  function pastedImageRequests() {
+    return vi
+      .mocked(window.vscodeApi!.postMessage)
+      .mock.calls.map(([message]) => message as { type?: string; seq?: number })
+      .filter((message) => message.type === MESSAGE_TYPES.SAVE_PASTED_IMAGE);
+  }
+
+  it("removes a paste placeholder after the final deadline and still applies a late success", () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      "FileReader",
+      class {
+        result: string | ArrayBuffer | null = "data:image/png;base64,AQ==";
+        onload: ((event: ProgressEvent<FileReader>) => unknown) | null = null;
+        readAsDataURL() {
+          this.onload?.(new ProgressEvent("load") as ProgressEvent<FileReader>);
+        }
+      }
+    );
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+    const { container } = render(
+      <CodeMirrorEditor value="" onChange={vi.fn()} affUri="" dicUri="" />
+    );
+    pasteImage(container);
+    const request = pastedImageRequests()[0];
+    expect(request?.seq).toBeDefined();
+
+    act(() => vi.advanceTimersByTime(10 * 60_000));
+    const editor = container.querySelector(".cm-editor") as HTMLElement;
+    const view = EditorView.findFromDOM(editor)!;
+    expect(view.state.doc.toString()).toBe("");
+
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        data: {
+          type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
+          seq: request!.seq,
+          relativePath: "./.ctrlyoke/attachments/late.png",
+        },
+      })
+    );
+    expect(view.state.doc.toString()).toBe(
+      "@./.ctrlyoke/attachments/late.png "
+    );
+    vi.useRealTimers();
+  });
+
+  it("keeps two pending paste replies attached to their own placeholders after typing before both", () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      "FileReader",
+      class {
+        result: string | ArrayBuffer | null = "data:image/png;base64,AQ==";
+        onload: ((event: ProgressEvent<FileReader>) => unknown) | null = null;
+        readAsDataURL() {
+          this.onload?.(new ProgressEvent("load") as ProgressEvent<FileReader>);
+        }
+      }
+    );
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+    const { container } = render(
+      <CodeMirrorEditor value="" onChange={vi.fn()} affUri="" dicUri="" />
+    );
+    pasteImage(container);
+    pasteImage(container);
+    const requests = pastedImageRequests();
+    expect(requests).toHaveLength(2);
+
+    const editor = container.querySelector(".cm-editor") as HTMLElement;
+    const view = EditorView.findFromDOM(editor)!;
+    view.dispatch({ changes: { from: 0, insert: "typed before both " } });
+    for (const [request, name] of [
+      [requests[1], "second.png"],
+      [requests[0], "first.png"],
+    ] as const) {
+      fireEvent(
+        window,
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
+            seq: request?.seq,
+            relativePath: `./.ctrlyoke/attachments/${name}`,
+          },
+        })
+      );
+    }
+    expect(view.state.doc.toString()).toBe(
+      "typed before both @./.ctrlyoke/attachments/first.png @./.ctrlyoke/attachments/second.png "
+    );
+    vi.useRealTimers();
+  });
+
   it("replaces a pasted-image placeholder when the save reply arrives after timeout", async () => {
     vi.useFakeTimers();
     vi.stubGlobal(

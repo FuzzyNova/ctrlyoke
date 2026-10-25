@@ -95,6 +95,42 @@ describe("MarkdownText", () => {
     vi.useRealTimers();
   });
 
+  it("evicts a preview resolver after its TTL so stale replies are ignored", () => {
+    vi.useFakeTimers();
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+    const markdown = "See src/expired-preview-unique.png";
+    const first = render(<MarkdownText>{markdown}</MarkdownText>);
+    const previewRequests = () =>
+      postMessage.mock.calls
+        .map(([message]) => message as { type?: string; seq?: number })
+        .filter(
+          (message) => message.type === MESSAGE_TYPES.REQUEST_FILE_PREVIEW_URI
+        );
+    const firstRequest = previewRequests()[0];
+    expect(firstRequest?.seq).toBeDefined();
+
+    act(() => vi.advanceTimersByTime(10 * 60_000));
+    first.unmount();
+    act(() =>
+      fireEvent(
+        window,
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.FILE_PREVIEW_URI_RESPONSE,
+            seq: firstRequest!.seq,
+            uri: "data:image/png;base64,STALE",
+          },
+        })
+      )
+    );
+
+    const second = render(<MarkdownText>{markdown}</MarkdownText>);
+    expect(previewRequests()).toHaveLength(2);
+    second.unmount();
+    vi.useRealTimers();
+  });
+
   it("renders plain text content", async () => {
     render(<MarkdownText>Hello world</MarkdownText>);
     expect(await screen.findByText("Hello world")).toBeInTheDocument();

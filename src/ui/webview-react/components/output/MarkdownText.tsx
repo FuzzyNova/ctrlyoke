@@ -595,6 +595,7 @@ function FileRefButton({
 // window listener regardless of how many thumbnails are on screen.
 
 const PREVIEW_URI_TIMEOUT_MS = 15_000;
+const PREVIEW_RESOLVER_TTL_MS = 5 * 60_000;
 /** path → resolved URI (string) or null when it should fall back to a file-ref. */
 const imagePreviewUriCache = new Map<string, string | null>();
 /** path → in-flight request, so concurrent thumbnails for one path share it. */
@@ -604,6 +605,7 @@ const pendingPreviewResolvers = new Map<
   {
     resolve: (uri: string | null) => void;
     timeoutId: ReturnType<typeof setTimeout>;
+    evictionTimeoutId: ReturnType<typeof setTimeout>;
     path: string;
   }
 >();
@@ -619,6 +621,7 @@ function ensurePreviewListener(): void {
     const pending = pendingPreviewResolvers.get(message.seq);
     if (!pending) return;
     clearTimeout(pending.timeoutId);
+    clearTimeout(pending.evictionTimeoutId);
     pendingPreviewResolvers.delete(message.seq);
     const uri = typeof message.uri === "string" ? message.uri : null;
     imagePreviewUriCache.set(pending.path, uri);
@@ -642,9 +645,13 @@ function requestImagePreviewUri(relativePath: string): Promise<string | null> {
       inFlightPreviewRequests.delete(relativePath);
       resolve(null);
     }, PREVIEW_URI_TIMEOUT_MS);
+    const evictionTimeoutId = setTimeout(() => {
+      pendingPreviewResolvers.delete(seq);
+    }, PREVIEW_RESOLVER_TTL_MS);
     pendingPreviewResolvers.set(seq, {
       resolve,
       timeoutId,
+      evictionTimeoutId,
       path: relativePath,
     });
     getVsCodeApi().postMessage({

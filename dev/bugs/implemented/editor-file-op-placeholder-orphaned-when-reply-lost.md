@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-24 by bug-drain review of b1ed25588
 - **Area:** `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`, `src/ui/webview-react/components/output/MarkdownText.tsx`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

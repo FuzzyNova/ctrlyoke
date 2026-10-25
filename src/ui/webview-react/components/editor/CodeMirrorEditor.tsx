@@ -216,13 +216,17 @@ interface PendingPlaceholder {
   from: number;
   to: number;
   text: string;
+  placeholderPresent: boolean;
   timeoutId: ReturnType<typeof setTimeout> | null;
+  removalTimeoutId: ReturnType<typeof setTimeout> | null;
 }
 
 const MOUSE_SELECTION_TEARDOWN_EVENTS = {
   keydown: "keydown",
   blur: "blur",
 } as const;
+
+const FILE_OPERATION_PLACEHOLDER_REMOVAL_TIMEOUT_MS = 5 * 60_000;
 
 const LINK_TOUCH_MOVE_THRESHOLD_PX = 10;
 const LINK_TOUCH_LONG_PRESS_MS = 500;
@@ -640,8 +644,8 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   }, [affUri, dicUri]);
 
   // Replace a pending placeholder with final text — a `@ref ` on success or
-  // an empty string on failure — then forget the entry. Find the placeholder
-  // again in the current document so edits before it do not stale its position.
+  // an empty string on failure — then forget the entry. Its range is mapped
+  // through document changes by the update listener below.
   const resolvePendingPlaceholder = useCallback(
     (
       pending: Map<number, PendingPlaceholder>,
@@ -651,34 +655,61 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       const entry = pending.get(seq);
       if (!entry) return false;
       if (entry.timeoutId) clearTimeout(entry.timeoutId);
+      if (entry.removalTimeoutId) clearTimeout(entry.removalTimeoutId);
       pending.delete(seq);
       const view = viewRef.current;
       if (!view) return false;
-      const document = view.state.doc.toString();
-      let from = -1;
-      let nearestDistance = Number.POSITIVE_INFINITY;
-      for (
-        let candidate = document.indexOf(entry.text);
-        candidate !== -1;
-        candidate = document.indexOf(entry.text, candidate + 1)
-      ) {
-        const distance = Math.abs(candidate - entry.from);
-        if (distance < nearestDistance) {
-          from = candidate;
-          nearestDistance = distance;
-        }
-      }
-      if (from === -1) return false;
+      const from = Math.min(entry.from, view.state.doc.length);
+      const to = Math.min(entry.to, view.state.doc.length);
+      const hasPlaceholder =
+        entry.placeholderPresent &&
+        to - from === entry.text.length &&
+        view.state.doc.sliceString(from, to) === entry.text;
       view.dispatch({
         changes: {
           from,
-          to: from + entry.text.length,
+          to: hasPlaceholder ? to : from,
           insert: replacement,
         },
       });
       return true;
     },
     []
+  );
+
+  const removePendingPlaceholder = useCallback((entry: PendingPlaceholder) => {
+    const view = viewRef.current;
+    if (!view || !entry.placeholderPresent) return;
+    const from = Math.min(entry.from, view.state.doc.length);
+    const to = Math.min(entry.to, view.state.doc.length);
+    if (
+      to - from === entry.text.length &&
+      view.state.doc.sliceString(from, to) === entry.text
+    ) {
+      view.dispatch({ changes: { from, to, insert: "" } });
+    }
+    entry.from = from;
+    entry.to = from;
+    entry.placeholderPresent = false;
+  }, []);
+
+  const schedulePlaceholderRemoval = useCallback(
+    (
+      entry: PendingPlaceholder,
+      pending: Map<number, PendingPlaceholder>,
+      seq: number
+    ) => {
+      entry.removalTimeoutId = setTimeout(() => {
+        const current = pending.get(seq);
+        if (current !== entry) return;
+        removePendingPlaceholder(entry);
+        entry.removalTimeoutId = null;
+        WebviewLog.warn(
+          "[CodeMirror] Removed an unresolved file-operation placeholder"
+        );
+      }, FILE_OPERATION_PLACEHOLDER_REMOVAL_TIMEOUT_MS);
+    },
+    [removePendingPlaceholder]
   );
 
   const resolvePendingPaste = useCallback(
@@ -741,15 +772,22 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         from,
         to,
         text: CAPTURING_OUTPUT_PLACEHOLDER,
+        placeholderPresent: true,
         timeoutId,
+        removalTimeoutId: null,
       });
+      schedulePlaceholderRemoval(
+        pendingCapturesRef.current.get(seq)!,
+        pendingCapturesRef.current,
+        seq
+      );
       vscode.postMessage({
         type: MESSAGE_TYPES.SAVE_OUTPUT_SNAPSHOT,
         seq,
         captureId,
       });
     },
-    [vscode]
+    [schedulePlaceholderRemoval, vscode]
   );
 
   // Latest-value refs let the one long-lived client read current values without
@@ -841,8 +879,15 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         from: pos,
         to: pos + PASTING_IMAGE_PLACEHOLDER.length,
         text: PASTING_IMAGE_PLACEHOLDER,
+        placeholderPresent: true,
         timeoutId,
+        removalTimeoutId: null,
       });
+      schedulePlaceholderRemoval(
+        pendingPastesRef.current.get(seq)!,
+        pendingPastesRef.current,
+        seq
+      );
 
       const reader = new FileReader();
       reader.onload = () => {
@@ -874,7 +919,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       };
       reader.readAsDataURL(file);
     },
-    [vscode, handlePastedImageSaved]
+    [handlePastedImageSaved, schedulePlaceholderRemoval, vscode]
   );
 
   // Paste handler: intercept clipboard images, let everything else fall through
@@ -914,9 +959,11 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     return () => {
       for (const entry of pendingPastes.values()) {
         if (entry.timeoutId) clearTimeout(entry.timeoutId);
+        if (entry.removalTimeoutId) clearTimeout(entry.removalTimeoutId);
       }
       for (const entry of pendingCaptures.values()) {
         if (entry.timeoutId) clearTimeout(entry.timeoutId);
+        if (entry.removalTimeoutId) clearTimeout(entry.removalTimeoutId);
       }
       pendingPastes.clear();
       pendingCaptures.clear();
@@ -1127,8 +1174,11 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
               pendingCapturesRef.current,
             ]) {
               for (const entry of pending.values()) {
-                entry.from = update.changes.mapPos(entry.from, -1);
-                entry.to = update.changes.mapPos(entry.to, 1);
+                entry.from = update.changes.mapPos(entry.from, 1);
+                entry.to = Math.max(
+                  entry.from,
+                  update.changes.mapPos(entry.to, -1)
+                );
               }
             }
           }
