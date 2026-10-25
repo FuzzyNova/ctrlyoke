@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-25 by bug-drain review of d864277d7
 - **Area:** `src/utils/SkillsRegistryClient.ts` (`findSkillAtCommit`, `continueTruncatedTreeWalk`, `walkTruncatedTreeBudget`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

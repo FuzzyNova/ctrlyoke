@@ -649,6 +649,95 @@ suite("SkillsRegistryClient", () => {
       );
     });
 
+    test("an unmatched truncated lookup stops within one walk budget", async () => {
+      const rootDirs = Array.from({ length: 45 }, (_, index) => ({
+        path: `directory-${index}`,
+        type: "tree",
+        sha: `directory-${index}`,
+      }));
+      const routes: Record<string, Route> = {
+        "https://api.github.com/repos/anthropics/skills/commits/HEAD": () =>
+          new Response(`${COMMIT}\n`),
+        "https://api.github.com/repos/anthropics/skills/git/trees/": (url) => {
+          const treeSha = url.split("/git/trees/")[1]?.split("?")[0] ?? "";
+          if (url.endsWith("?recursive=1")) {
+            return json({ tree: [], truncated: true });
+          }
+          if (treeSha === COMMIT) return json({ tree: rootDirs });
+          return json({ tree: [] });
+        },
+      };
+      const { registry, urls } = client(routes);
+
+      await assert.rejects(
+        registry.resolveSkill("anthropics/skills", "missing"),
+        /the truncated repository tree still has unsearched directories/
+      );
+      const apiRequests = urls.filter((url) =>
+        url.startsWith("https://api.github.com/")
+      );
+      assert.ok(
+        apiRequests.length <= 25,
+        `expected at most 25 GitHub API requests, got ${apiRequests.length}`
+      );
+    });
+
+    test("a name-mismatched truncated candidate stays bounded and is not re-fetched", async () => {
+      const rootDirs = [
+        { path: "alpha", type: "tree", sha: "alpha" },
+        ...Array.from({ length: 45 }, (_, index) => ({
+          path: `directory-${index}`,
+          type: "tree",
+          sha: `directory-${index}`,
+        })),
+        { path: "beta", type: "tree", sha: "beta" },
+      ];
+      const routes: Record<string, Route> = {
+        "https://api.github.com/repos/anthropics/skills/commits/HEAD": () =>
+          new Response(`${COMMIT}\n`),
+        "https://api.github.com/repos/anthropics/skills/git/trees/": (url) => {
+          const treeSha = url.split("/git/trees/")[1]?.split("?")[0] ?? "";
+          if (url.endsWith("?recursive=1")) {
+            return json({ tree: [], truncated: true });
+          }
+          if (treeSha === COMMIT) return json({ tree: rootDirs });
+          if (treeSha === "alpha") {
+            return json({ tree: [{ path: "SKILL.md", type: "blob" }] });
+          }
+          if (treeSha === "beta") {
+            return json({ tree: [{ path: "SKILL.md", type: "blob" }] });
+          }
+          return json({ tree: [] });
+        },
+        "https://raw.githubusercontent.com/anthropics/skills/": (url) =>
+          new Response(
+            url.endsWith("/alpha/SKILL.md")
+              ? "---\nname: something-else\n---\n"
+              : "---\nname: beta\n---\n"
+          ),
+      };
+      const { registry, urls } = client(routes);
+
+      await assert.rejects(
+        registry.resolveSkill("anthropics/skills", "alpha"),
+        /the truncated repository tree still has unsearched directories/
+      );
+      const apiRequestsAfterFirstLookup = urls.filter((url) =>
+        url.startsWith("https://api.github.com/")
+      );
+      assert.ok(apiRequestsAfterFirstLookup.length <= 25);
+
+      assert.strictEqual(
+        (await registry.resolveSkill("anthropics/skills", "beta")).slug,
+        "beta"
+      );
+      assert.strictEqual(
+        urls.filter((url) => url.endsWith("/alpha/SKILL.md")).length,
+        1,
+        "a later walk must not re-fetch a rejected SKILL.md"
+      );
+    });
+
     test("continues a cached truncated-tree walk for another slug", async () => {
       const entries: Record<string, unknown> = {
         [COMMIT]: { tree: [{ path: "skills", type: "tree", sha: "skills" }] },

@@ -359,6 +359,7 @@ interface CachedGitTree {
   complete: boolean;
   walk?: TruncatedTreeWalkState;
   completeFolders: Set<string>;
+  rejectedSkillMdPaths: Set<string>;
 }
 
 /** Parse a GitHub `git/trees?recursive=1` body. */
@@ -878,8 +879,14 @@ export class SkillsShRegistryClient implements SkillsRegistry {
     searchComplete: boolean;
   }> {
     const tree = knownTree ?? (await this.fetchTree(source, commitSha, slug));
+    const cache = this.treeCache.get(`${source}@${commitSha}`)!;
     const ranked = rankSkillMdCandidates(tree, source, slug);
-    const candidates = ranked.slice(0, MAX_FRONTMATTER_PROBES);
+    const previouslyRejected = ranked.filter((skillMdPath) =>
+      cache.rejectedSkillMdPaths.has(skillMdPath)
+    ).length;
+    const candidates = ranked
+      .filter((skillMdPath) => !cache.rejectedSkillMdPaths.has(skillMdPath))
+      .slice(0, MAX_FRONTMATTER_PROBES);
     for (
       let offset = 0;
       offset < candidates.length;
@@ -896,11 +903,17 @@ export class SkillsShRegistryClient implements SkillsRegistry {
       for (let index = 0; index < batch.length; index++) {
         const skillMdPath = batch[index]!;
         const content = contents[index];
-        if (content === null || content === undefined) continue;
+        if (content === null || content === undefined) {
+          cache.rejectedSkillMdPaths.add(skillMdPath);
+          continue;
+        }
         const frontmatter = parseAgentFrontmatter(content);
         const folderPath = getFolderPath(skillMdPath);
         const name = frontmatter.name ?? getFolderName(folderPath, source);
-        if (toSkillSlug(name) !== slug) continue;
+        if (toSkillSlug(name) !== slug) {
+          cache.rejectedSkillMdPaths.add(skillMdPath);
+          continue;
+        }
         const description = frontmatter.description
           ? sanitizeRegistryText(frontmatter.description)
           : undefined;
@@ -915,24 +928,14 @@ export class SkillsShRegistryClient implements SkillsRegistry {
             ...(description ? { description } : {}),
           },
           candidateCount: ranked.length,
-          searchedCount: offset + index + 1,
+          searchedCount: previouslyRejected + offset + index + 1,
           searchComplete: this.isTreeComplete(source, commitSha),
         };
       }
     }
-    if (!this.isTreeComplete(source, commitSha)) {
-      await this.continueTruncatedTreeWalk(
-        source,
-        commitSha,
-        `${source}@${commitSha}`,
-        this.treeCache.get(`${source}@${commitSha}`)!,
-        undefined
-      );
-      return this.findSkillAtCommit(source, slug, commitSha, tree);
-    }
     return {
       candidateCount: ranked.length,
-      searchedCount: candidates.length,
+      searchedCount: previouslyRejected + candidates.length,
       searchComplete: this.isTreeComplete(source, commitSha),
     };
   }
@@ -1042,6 +1045,7 @@ export class SkillsShRegistryClient implements SkillsRegistry {
         complete: false,
         walk: { pending: [], expanded: new Set() },
         completeFolders: new Set(),
+        rejectedSkillMdPaths: new Set(),
       };
       this.treeCache.set(key, cache);
       await this.continueTruncatedTreeWalk(
@@ -1058,6 +1062,7 @@ export class SkillsShRegistryClient implements SkillsRegistry {
       entries: parseGitTreeResponse(data),
       complete: true,
       completeFolders: new Set([""]),
+      rejectedSkillMdPaths: new Set(),
     };
     this.treeCache.set(key, cache);
     return cache;
