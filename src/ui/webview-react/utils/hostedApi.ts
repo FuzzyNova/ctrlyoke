@@ -103,10 +103,7 @@ export function languageIntelligenceSocketUrl(serverId: string): string {
   return `${protocol}//${window.location.host}/ws/lsp?${params.toString()}`;
 }
 
-export async function hostedFetch<T>(
-  path: string,
-  options?: RequestInit
-): Promise<T> {
+function buildHostedHeaders(options?: Pick<RequestInit, "method" | "headers">) {
   const method = options?.method?.toUpperCase();
   const headers: Record<string, string> = {};
   const clientId = (window as Window & { __CTRLYOKE_CLIENT_ID__?: string })
@@ -132,7 +129,14 @@ export async function hostedFetch<T>(
   if (method === "PUT" || method === "POST") {
     headers["Content-Type"] = "application/json";
   }
+  return headers;
+}
 
+export async function hostedFetch<T>(
+  path: string,
+  options?: RequestInit
+): Promise<T> {
+  const headers = buildHostedHeaders(options);
   const response = await fetch(path, { ...options, headers });
   if (!response.ok) {
     const text = await response.text();
@@ -147,6 +151,19 @@ export async function hostedFetch<T>(
     return undefined as unknown as T;
   }
   return JSON.parse(text) as T;
+}
+
+export async function hostedFetchBlob(path: string): Promise<Blob> {
+  const headers = buildHostedHeaders();
+  const response = await fetch(path, { headers });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new HostedHttpError(
+      response.status,
+      `HTTP ${response.status}: ${text}`
+    );
+  }
+  return response.blob();
 }
 
 export async function workspaceTree(
@@ -367,7 +384,9 @@ export async function workspaceFileHistory(
   offset = 0,
   pageSize = WORKSPACE_FILE_HISTORY_DEFAULT_PAGE_SIZE,
   historyId?: string,
-  repo?: string
+  repo?: string,
+  nextOffset?: number,
+  nextCursor?: string
 ): Promise<WorkspaceFileHistoryPageResponse> {
   const params = new URLSearchParams({
     path: filePath,
@@ -379,6 +398,8 @@ export async function workspaceFileHistory(
     params.set("pageSize", String(pageSize));
   }
   if (repo) params.set("repo", repo);
+  if (nextOffset !== undefined) params.set("nextOffset", String(nextOffset));
+  if (nextCursor) params.set("nextCursor", nextCursor);
   return hostedFetch<WorkspaceFileHistoryPageResponse>(
     `/api/workspace-viewer/file-history?${params.toString()}`
   );
@@ -431,19 +452,35 @@ export async function workspaceGitRefDiff(
   );
 }
 
-/** Diff a recorded worktree run's branch against its recorded base commit. */
-export async function workspaceWorktreeDiff(
+export async function workspaceGitRefDiffDownload(
+  ref: string,
+  repo?: string
+): Promise<Blob> {
+  const params = new URLSearchParams({ ref });
+  if (repo) params.set("repo", repo);
+  return hostedFetchBlob(
+    `/api/workspace-viewer/git-ref-diff-download?${params.toString()}`
+  );
+}
+
+export async function workspaceWorktreeDiffPage(
   sourceCheckoutRoot: string,
   baseCommit: string,
-  branchName: string
-): Promise<WorkspaceGitRefDiffResponse> {
+  branchName: string,
+  offset = 0,
+  pageSize = WORKSPACE_GIT_REF_DIFF_DEFAULT_PAGE_SIZE,
+  diffId?: string
+): Promise<WorkspaceGitRefDiffPageResponse> {
   const params = new URLSearchParams({
     sourceCheckoutRoot,
     baseCommit,
     branchName,
+    offset: String(offset),
   });
-  return hostedFetch<WorkspaceGitRefDiffResponse>(
-    `/api/workspace-viewer/worktree-diff?${params.toString()}`
+  if (diffId) params.set("diffId", diffId);
+  else params.set("pageSize", String(pageSize));
+  return hostedFetch<WorkspaceGitRefDiffPageResponse>(
+    `/api/workspace-viewer/worktree-diff-page?${params.toString()}`
   );
 }
 

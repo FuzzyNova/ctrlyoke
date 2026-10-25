@@ -1,17 +1,24 @@
-import { execFile } from "child_process";
+import { execFile, spawn, type ChildProcess } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
 import * as fs from "fs/promises";
+import { StringDecoder } from "string_decoder";
 import type { ExecFileOptions } from "child_process";
 import { GIT_CHANGE_KINDS } from "../types/DashboardConstants";
 import { foldPathForCompare } from "./PathCasing";
 import { sanitizeTerminalOutput } from "./TerminalOutputSanitizer";
+import { isSubprocessTimeoutError } from "./SubprocessUtils";
+import { Log } from "./Log";
 
 export const GIT_DIFF_NO_EXT_DIFF_OPTION = "--no-ext-diff";
 
 const GIT_TIMEOUT_MS = 10_000;
 const GIT_MUTATION_TIMEOUT_MS = 5 * 60_000;
 const GIT_MAX_BUFFER = 50 * 1024 * 1024;
+/** Whole-repository `ls-files` listings: large monorepos can exceed 100 MB. */
+const GIT_WHOLE_REPO_LISTING_MAX_BUFFER = 500 * 1024 * 1024;
+const GIT_SUBMODULE_MODE = "160000";
+const GIT_UNAVAILABLE_ERRNO = "ENOENT";
 const execFilePromisified = promisify(execFile);
 
 interface GitTimeoutOverrides {
@@ -20,6 +27,21 @@ interface GitTimeoutOverrides {
 }
 
 let gitTimeoutOverrides: GitTimeoutOverrides = {};
+let gitCommandObserverForTests:
+  ((file: string, args: readonly string[]) => void) | undefined;
+let fileHistorySpawnForTests:
+  ((file: string, args: readonly string[]) => ChildProcess) | undefined;
+
+export function setFileHistorySpawnForTests(
+  spawnProcess:
+    ((file: string, args: readonly string[]) => ChildProcess) | undefined
+): () => void {
+  const previous = fileHistorySpawnForTests;
+  fileHistorySpawnForTests = spawnProcess;
+  return () => {
+    fileHistorySpawnForTests = previous;
+  };
+}
 
 /** Override Git command timeouts for isolated tests. */
 export function setGitTimeoutOverridesForTests(
@@ -29,6 +51,17 @@ export function setGitTimeoutOverridesForTests(
   gitTimeoutOverrides = overrides;
   return () => {
     gitTimeoutOverrides = previousOverrides;
+  };
+}
+
+/** Observe subprocess arguments in isolated tests. */
+export function setGitCommandObserverForTests(
+  observer: ((file: string, args: readonly string[]) => void) | undefined
+): () => void {
+  const previousObserver = gitCommandObserverForTests;
+  gitCommandObserverForTests = observer;
+  return () => {
+    gitCommandObserverForTests = previousObserver;
   };
 }
 
@@ -66,9 +99,7 @@ function gitCommandName(args: readonly string[]): string {
 }
 
 function isTimeoutError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const execError = error as NodeJS.ErrnoException;
-  return execError.code === "ETIMEDOUT";
+  return isSubprocessTimeoutError(error);
 }
 
 function exceededTimeout(startedAt: number, timeoutMs: number): boolean {
@@ -199,18 +230,48 @@ function matchesPathspecs(
   pathspecs: readonly string[] | undefined
 ): boolean {
   if (!pathspecs?.length) return true;
-  return pathspecs.some((pathspec) => {
-    const literalPrefix = ":(literal)";
-    const prefix = pathspec.startsWith(literalPrefix)
-      ? pathspec.slice(literalPrefix.length)
-      : pathspec;
-    const normalizedPrefix = prefix.replace(/\\/g, "/").replace(/\/+$/, "");
-    const normalizedPath = filePath.replace(/\\/g, "/");
-    return (
-      normalizedPath === normalizedPrefix ||
-      normalizedPath.startsWith(`${normalizedPrefix}/`)
-    );
-  });
+  const excludes = pathspecs.filter(isExcludePathspec);
+  const includes = pathspecs.filter((pathspec) => !isExcludePathspec(pathspec));
+  return (
+    (includes.length === 0 || includes.some((pathspec) => matchesPathspec(filePath, pathspec))) &&
+    !excludes.some((pathspec) => matchesPathspec(filePath, pathspec))
+  );
+}
+
+function isExcludePathspec(pathspec: string): boolean {
+  return pathspec.startsWith(":(exclude") || pathspec.startsWith(":!");
+}
+
+function matchesPathspec(filePath: string, pathspec: string): boolean {
+  let prefix = pathspec;
+  if (prefix.startsWith(":!")) {
+    prefix = prefix.slice(2);
+  } else if (prefix.startsWith(":(")) {
+    const magicEnd = prefix.indexOf(")");
+    if (magicEnd >= 0) prefix = prefix.slice(magicEnd + 1);
+  }
+  if (prefix.startsWith("literal:")) prefix = prefix.slice("literal:".length);
+  const normalizedPrefix = prefix.replace(/\\/g, "/").replace(/\/+$/, "");
+  const normalizedPath = filePath.replace(/\\/g, "/");
+  return (
+    normalizedPath === normalizedPrefix ||
+    normalizedPath.startsWith(`${normalizedPrefix}/`)
+  );
+}
+
+/**
+ * Return untracked paths for a working-tree diff. Status can span the entire
+ * repository, so use Git's shared large-output buffer and whole-repo timeout.
+ */
+export async function getWorkingTreeUntrackedFiles(
+  workspaceRoot: string,
+  pathspecs?: readonly string[]
+): Promise<string[]> {
+  const { stdout } = await execGit(
+    buildWorkingTreeStatusArgs(workspaceRoot, pathspecs),
+    { timeout: getGitWholeRepoTimeoutMs() }
+  );
+  return parseUntrackedFiles(stdout, pathspecs);
 }
 
 /** Parse `git diff --name-status -z`, including both paths for renames/copies. */
@@ -243,6 +304,7 @@ const execFileAsync = async (
   args: readonly string[],
   options: ExecFileOptions = {}
 ): Promise<{ stdout: string; stderr: string }> => {
+  gitCommandObserverForTests?.(file, args);
   const timeoutMs = options.timeout ?? getGitTimeoutMs();
   const startedAt = Date.now();
   let result;
@@ -300,6 +362,31 @@ export function describeGitFailure(error: unknown): string {
   return message.length > GIT_FAILURE_MESSAGE_MAX_CHARS
     ? `…${message.slice(-GIT_FAILURE_MESSAGE_MAX_CHARS)}`
     : message;
+}
+
+/** Return true only when Git explicitly reports that the cwd is not a repo. */
+export function isNotGitRepositoryError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const gitError = error as { message?: unknown; stderr?: unknown };
+  return [gitError.stderr, gitError.message].some((value) => {
+    if (value === undefined || value === null) return false;
+    return /fatal:\s*not a git repository\b/i.test(String(value));
+  });
+}
+
+/** Git cannot provide a repository listing, so filesystem discovery should take over. */
+export function isGitUnavailableError(error: unknown): boolean {
+  if (isNotGitRepositoryError(error)) return true;
+  if (!error || typeof error !== "object") return false;
+  const gitError = error as {
+    code?: unknown;
+    message?: unknown;
+    stderr?: unknown;
+  };
+  if (gitError.code === GIT_UNAVAILABLE_ERRNO) return true;
+  return [gitError.stderr, gitError.message].some((value) =>
+    /detected dubious ownership/i.test(String(value ?? ""))
+  );
 }
 
 /**
@@ -411,9 +498,7 @@ export async function getRecentCommits(
   if (limit !== undefined) {
     args.push("-n", String(limit));
   }
-  if (skip > 0) {
-    args.splice(args.indexOf("log") + 1, 0, `--skip=${skip}`);
-  }
+  args.splice(args.indexOf("log") + 1, 0, `--skip=${skip}`);
   // Explicit ref must come after all options so git treats it as a revision.
   if (ref && ref.trim()) {
     args.push("--end-of-options", ref.trim());
@@ -490,7 +575,7 @@ export async function getFileHistoryCommits(
     "--format=%x00%H%x00%h%x00%s%x00%an%x00%ar%x00%P%x00%D%x00",
   ];
   if (fullRefNames) args.push("--decorate=full");
-  if (skip > 0) args.push(`--skip=${skip}`);
+  args.push(`--skip=${skip}`);
   if (limit !== undefined) {
     args.push("-n", String(limit));
   }
@@ -500,8 +585,228 @@ export async function getFileHistoryCommits(
   args.push("--", gitPath);
 
   const { stdout } = await execFileAsync("git", args);
+  return parseFileHistoryCommitOutput(stdout);
+}
+
+export interface BoundedFileHistoryResult {
+  commits: FileHistoryCommitInfo[];
+  timedOut: boolean;
+  complete: boolean;
+}
+
+export interface FileHistoryCommitWalk {
+  readAt(
+    index: number,
+    timeoutMs: number
+  ): Promise<FileHistoryCommitInfo | undefined>;
+  dispose(): void;
+}
+
+/** Keep one Git traversal alive so callers can continue at its exact output position. */
+export function createFileHistoryCommitWalk(
+  workspaceRoot: string,
+  gitPath: string,
+  ref: string,
+  fullRefNames: boolean
+): FileHistoryCommitWalk {
+  const args = [
+    "-C",
+    workspaceRoot,
+    "log",
+    "--follow",
+    "-z",
+    "--name-status",
+    "--format=%x00%H%x00%h%x00%s%x00%an%x00%ar%x00%P%x00%D%x00",
+  ];
+  if (fullRefNames) args.push("--decorate=full");
+  if (ref.trim()) args.push("--end-of-options", ref.trim());
+  args.push("--", gitPath);
+  gitCommandObserverForTests?.("git", args);
+  const child = (
+    fileHistorySpawnForTests ??
+    ((file, spawnArgs) =>
+      spawn(file, [...spawnArgs], { stdio: ["ignore", "pipe", "pipe"] }))
+  )("git", args);
+  let rows: FileHistoryCommitInfo[] = [];
+  let closed = false;
+  let disposed = false;
+  let failure: Error | undefined;
+  let stderr = "";
+  let waiter: (() => void) | undefined;
+  let pendingOutput = "";
+  const decoder = new StringDecoder("utf8");
+  const parseAvailableRows = (text: string) => {
+    pendingOutput += text;
+    const parsed = parseCompleteFileHistoryCommitOutput(pendingOutput);
+    if (parsed.consumedLength > 0) {
+      rows.push(...parsed.commits);
+      pendingOutput = pendingOutput.slice(parsed.consumedLength);
+    }
+  };
+  child.stdout?.on("data", (chunk: Buffer | string) => {
+    parseAvailableRows(
+      typeof chunk === "string" ? chunk : decoder.write(chunk)
+    );
+    child.stdout?.pause();
+    waiter?.();
+  });
+  child.stderr?.on("data", (chunk) => {
+    stderr += String(chunk);
+  });
+  child.once("error", (error) => {
+    if (closed) return;
+    failure = error;
+    closed = true;
+    waiter?.();
+  });
+  child.once("close", (code) => {
+    // Real child processes close after their output streams drain. Test child
+    // fakes may emit close synchronously after write(), before data is read.
+    setImmediate(() => {
+      if (closed) return;
+      parseAvailableRows(decoder.end());
+      closed = true;
+      if (code !== 0) {
+        failure = new Error(
+          stderr.trim() || `git log --follow exited with code ${code}`
+        );
+      }
+      waiter?.();
+    });
+  });
+  let readChain = Promise.resolve();
+  const readAt = async (
+    index: number,
+    timeoutMs: number
+  ): Promise<FileHistoryCommitInfo | undefined> => {
+    if (!Number.isSafeInteger(index) || index < 0) {
+      throw new Error("Invalid file history position");
+    }
+    while (rows.length <= index && !closed) {
+      child.stdout?.resume();
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          waiter = undefined;
+          child.stdout?.pause();
+          reject(new Error("Git file history timed out; retry the request"));
+        }, timeoutMs);
+        waiter = () => {
+          clearTimeout(timer);
+          waiter = undefined;
+          resolve();
+        };
+      });
+    }
+    if (failure) throw failure;
+    return rows[index];
+  };
+  return {
+    readAt(index, timeoutMs) {
+      const queued = readChain.then(() => readAt(index, timeoutMs));
+      readChain = queued.then(
+        () => undefined,
+        () => undefined
+      );
+      return queued;
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      closed = true;
+      failure = new Error("Git file history walk was disposed");
+      pendingOutput = "";
+      rows = [];
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+      child.kill();
+      waiter?.();
+    },
+  };
+}
+
+/** Stream a bounded --follow walk, preserving complete rows received at deadline. */
+export async function getFileHistoryCommitsBounded(
+  workspaceRoot: string,
+  gitPath: string,
+  limit: number,
+  skip: number,
+  ref: string,
+  fullRefNames: boolean,
+  timeoutMs: number
+): Promise<BoundedFileHistoryResult> {
+  const args = [
+    "-C",
+    workspaceRoot,
+    "log",
+    "--follow",
+    "-z",
+    "--name-status",
+    "--format=%x00%H%x00%h%x00%s%x00%an%x00%ar%x00%P%x00%D%x00",
+  ];
+  if (fullRefNames) args.push("--decorate=full");
+  if (skip > 0) args.push(`--skip=${skip}`);
+  args.push("-n", String(limit));
+  if (ref.trim()) args.push("--end-of-options", ref.trim());
+  args.push("--", gitPath);
+  gitCommandObserverForTests?.("git", args);
+
+  const chunks: Buffer[] = [];
+  const child = (
+    fileHistorySpawnForTests ??
+    ((file, spawnArgs) =>
+      spawn(file, [...spawnArgs], { stdio: ["ignore", "pipe", "pipe"] }))
+  )("git", args);
+  let timedOut = false;
+  return new Promise<BoundedFileHistoryResult>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill();
+    }, timeoutMs);
+    child.stdout?.on("data", (chunk: Buffer | string) => {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    });
+    let stderr = "";
+    child.stderr?.on("data", (chunk: Buffer | string) => {
+      stderr += String(chunk);
+    });
+    child.once("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.once("close", (code) => {
+      clearTimeout(timer);
+      const stdout = Buffer.concat(chunks).toString("utf8");
+      const commits = parseFileHistoryCommitOutput(stdout);
+      if (!timedOut && code !== 0) {
+        reject(
+          new Error(
+            stderr.trim() || `git log --follow exited with code ${code}`
+          )
+        );
+        return;
+      }
+      resolve({ commits, timedOut, complete: !timedOut });
+    });
+  });
+}
+
+function parseFileHistoryCommitOutput(stdout: string): FileHistoryCommitInfo[] {
+  return parseCompleteFileHistoryCommitOutput(stdout).commits;
+}
+
+function parseCompleteFileHistoryCommitOutput(stdout: string): {
+  commits: FileHistoryCommitInfo[];
+  consumedLength: number;
+} {
   const tokens = stdout.split("\0");
+  const tokenOffsets: number[] = [];
+  let tokenOffset = 0;
+  for (const token of tokens) {
+    tokenOffsets.push(tokenOffset);
+    tokenOffset += token.length + 1;
+  }
   const commits: FileHistoryCommitInfo[] = [];
+  let consumedLength = 0;
 
   for (let index = 0; index < tokens.length; index++) {
     const hash = tokens[index] ?? "";
@@ -531,7 +836,8 @@ export async function getFileHistoryCommits(
     const firstPath = tokens[statusIndex + 1];
     const secondPath = isRename ? tokens[statusIndex + 2] : undefined;
     const commitPath = secondPath ?? firstPath;
-    if (!commitPath) continue;
+    const pathTerminatorIndex = statusIndex + (isRename ? 3 : 2);
+    if (!commitPath || tokens[pathTerminatorIndex] === undefined) continue;
 
     commits.push({
       hash,
@@ -544,13 +850,17 @@ export async function getFileHistoryCommits(
       path: commitPath,
       oldPath: secondPath ? (firstPath ?? commitPath) : commitPath,
     });
+    consumedLength =
+      (tokenOffsets[pathTerminatorIndex] ?? 0) +
+      (tokens[pathTerminatorIndex]?.length ?? 0) +
+      1;
 
     // Avoid mistaking a path that happens to look like a hash for the next
     // commit header; the next real header is the following empty token.
     index = statusIndex + (isRename ? 2 : 1);
   }
 
-  return commits;
+  return { commits, consumedLength };
 }
 
 /**
@@ -603,7 +913,19 @@ export async function getCommitDiff(
   hash: string,
   pathspecs?: readonly string[]
 ): Promise<string> {
-  const { stdout } = await execFileAsync("git", [
+  const { stdout } = await execFileAsync(
+    "git",
+    buildCommitDiffArgs(workspaceRoot, hash, pathspecs)
+  );
+  return stdout;
+}
+
+export function buildCommitDiffArgs(
+  workspaceRoot: string,
+  hash: string,
+  pathspecs?: readonly string[]
+): string[] {
+  return [
     "-C",
     workspaceRoot,
     "show",
@@ -612,8 +934,7 @@ export async function getCommitDiff(
     "--end-of-options",
     hash,
     ...(pathspecs?.length ? ["--", ...pathspecs] : []),
-  ]);
-  return stdout;
+  ];
 }
 
 /**
@@ -836,46 +1157,64 @@ export async function getWorkingTreeDiff(
 ): Promise<string> {
   const { stdout: diffOutput } = await execFileAsync(
     "git",
-    [
-      "-C",
-      workspaceRoot,
-      "diff",
-      "--stat",
-      "-p",
-      GIT_DIFF_NO_EXT_DIFF_OPTION,
-      ...(pathspecs?.length ? ["--", ...pathspecs] : []),
-    ],
+    buildWorkingTreeDiffArgs(workspaceRoot, pathspecs),
     { timeout: GIT_TIMEOUT_MS }
   );
 
-  // Append untracked file list from git status --short
-  const { stdout: statusOutput } = await execFileAsync(
-    "git",
-    [
-      "-C",
-      workspaceRoot,
-      "status",
-      "--porcelain=v1",
-      "--untracked-files=all",
-      "-z",
-      ...(pathspecs?.length ? ["--", ...pathspecs] : []),
-    ],
-    { timeout: GIT_TIMEOUT_MS }
+  return (
+    diffOutput +
+    formatUntrackedFilesSection(
+      await getWorkingTreeUntrackedFiles(workspaceRoot, pathspecs)
+    )
   );
+}
 
-  const untrackedLines = parseGitPorcelainV1Z(statusOutput)
+export function buildWorkingTreeDiffArgs(
+  workspaceRoot: string,
+  pathspecs?: readonly string[]
+): string[] {
+  return [
+    "-C",
+    workspaceRoot,
+    "diff",
+    "--stat",
+    "-p",
+    GIT_DIFF_NO_EXT_DIFF_OPTION,
+    ...(pathspecs?.length ? ["--", ...pathspecs] : []),
+  ];
+}
+
+export function buildWorkingTreeStatusArgs(
+  workspaceRoot: string,
+  pathspecs?: readonly string[]
+): string[] {
+  return [
+    "-C",
+    workspaceRoot,
+    "status",
+    "--porcelain=v1",
+    "--untracked-files=all",
+    "-z",
+    ...(pathspecs?.length ? ["--", ...pathspecs] : []),
+  ];
+}
+
+export function parseUntrackedFiles(
+  statusOutput: string,
+  pathspecs?: readonly string[]
+): string[] {
+  return parseGitPorcelainV1Z(statusOutput)
     .filter(
       ({ x, y, path: filePath }) =>
         x === "?" && y === "?" && matchesPathspecs(filePath, pathspecs)
     )
     .map(({ path: filePath }) => filePath);
+}
 
-  if (untrackedLines.length > 0) {
-    const untrackedSection = `\nUntracked files:\n${untrackedLines.map((f) => `  ${f}`).join("\n")}`;
-    return diffOutput + untrackedSection;
-  }
-
-  return diffOutput;
+export function formatUntrackedFilesSection(files: readonly string[]): string {
+  return files.length > 0
+    ? `\nUntracked files:\n${files.map((file) => `  ${file}`).join("\n")}`
+    : "";
 }
 
 /**
@@ -887,19 +1226,26 @@ export async function getStagedDiff(
 ): Promise<string> {
   const { stdout } = await execFileAsync(
     "git",
-    [
-      "-C",
-      workspaceRoot,
-      "diff",
-      "--cached",
-      "--stat",
-      "-p",
-      GIT_DIFF_NO_EXT_DIFF_OPTION,
-      ...(pathspecs?.length ? ["--", ...pathspecs] : []),
-    ],
+    buildStagedDiffArgs(workspaceRoot, pathspecs),
     { timeout: GIT_TIMEOUT_MS }
   );
   return stdout;
+}
+
+export function buildStagedDiffArgs(
+  workspaceRoot: string,
+  pathspecs?: readonly string[]
+): string[] {
+  return [
+    "-C",
+    workspaceRoot,
+    "diff",
+    "--cached",
+    "--stat",
+    "-p",
+    GIT_DIFF_NO_EXT_DIFF_OPTION,
+    ...(pathspecs?.length ? ["--", ...pathspecs] : []),
+  ];
 }
 
 /**
@@ -934,8 +1280,23 @@ export async function getStashDiff(
   index: number,
   pathspecs?: readonly string[]
 ): Promise<string> {
+  const { stdout } = await execFileAsync(
+    "git",
+    buildStashDiffArgs(workspaceRoot, index, pathspecs),
+    {
+      timeout: GIT_TIMEOUT_MS,
+    }
+  );
+  return stdout;
+}
+
+export function buildStashDiffArgs(
+  workspaceRoot: string,
+  index: number,
+  pathspecs?: readonly string[]
+): string[] {
   const stashRef = `stash@{${index}}`;
-  const args = pathspecs?.length
+  return pathspecs?.length
     ? [
         "-C",
         workspaceRoot,
@@ -950,10 +1311,6 @@ export async function getStashDiff(
         ...pathspecs,
       ]
     : ["-C", workspaceRoot, "stash", "show", "-p", stashRef];
-  const { stdout } = await execFileAsync("git", args, {
-    timeout: GIT_TIMEOUT_MS,
-  });
-  return stdout;
 }
 
 /**
@@ -1163,11 +1520,110 @@ export async function getGitTrackedFiles(repoRoot: string): Promise<string[]> {
     ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
     {
       cwd: repoRoot,
-      timeout: GIT_TIMEOUT_MS,
-      maxBuffer: 500 * 1024 * 1024, // 500 MB — large monorepos can exceed 100 MB
+      timeout: getGitWholeRepoTimeoutMs(),
+      maxBuffer: GIT_WHOLE_REPO_LISTING_MAX_BUFFER,
     }
   );
   return parseGitNulSeparatedPaths(stdout);
+}
+
+/**
+ * Yield Git-visible files from a repository and any nested repositories or
+ * initialized submodules. Git reports those children as one directory or
+ * gitlink entry in the parent listing, so each child's listing is expanded
+ * when reached. Directory entries themselves are never yielded.
+ */
+export async function* getGitFilesIncludingNestedRepos(
+  repoRoot: string,
+  chunkSize = 256,
+  probeDependencies: GitNestedRepoProbeDependencies = DEFAULT_NESTED_REPO_PROBE_DEPENDENCIES
+): AsyncGenerator<string[]> {
+  const entries = await getGitTrackedFiles(repoRoot);
+  const gitlinks = await getGitlinkPaths(repoRoot);
+  let chunk: string[] = [];
+  const flush = (): string[] => {
+    const result = chunk;
+    chunk = [];
+    return result;
+  };
+
+  for (const entry of entries) {
+    const relative = entry.replace(/\\/g, "/");
+    const absolute = path.resolve(repoRoot, relative);
+    // A gitlink only marks an entry worth probing: an unpopulated submodule is
+    // an empty directory, and listing inside it falls back to the parent repo
+    // (which reports the submodule as `./`), so recursing without the marker
+    // check never terminates.
+    const isGitlink = gitlinks.has(relative);
+    let nestedRepository = false;
+    if (isGitlink || entry.endsWith("/")) {
+      const gitMarker = path.join(absolute, ".git");
+      try {
+        const entryStat = await probeDependencies.lstat(absolute);
+        if (entryStat.isDirectory() && !entryStat.isSymbolicLink()) {
+          await probeDependencies.access(gitMarker);
+          nestedRepository = true;
+        }
+      } catch {
+        // Missing entries and uninitialized nested repositories have nothing to expand.
+      }
+    }
+
+    if (entry.endsWith("/") || isGitlink) {
+      if (chunk.length > 0) yield flush();
+      if (!nestedRepository) continue;
+      try {
+        for await (const nestedChunk of getGitFilesIncludingNestedRepos(
+          absolute,
+          chunkSize,
+          probeDependencies
+        )) {
+          const prefix = relative.endsWith("/") ? relative : `${relative}/`;
+          yield nestedChunk.map((file) => `${prefix}${file}`);
+        }
+      } catch (error) {
+        Log.warn(
+          `[GitUtils] Could not list nested repository ${absolute}; skipping it: ${String(error)}`
+        );
+      }
+      continue;
+    }
+
+    chunk.push(relative);
+    if (chunk.length >= chunkSize) yield flush();
+  }
+
+  if (chunk.length > 0) yield chunk;
+}
+
+export interface GitNestedRepoProbeDependencies {
+  lstat(absolutePath: string): Promise<{
+    isDirectory(): boolean;
+    isSymbolicLink(): boolean;
+  }>;
+  access(absolutePath: string): Promise<void>;
+}
+
+const DEFAULT_NESTED_REPO_PROBE_DEPENDENCIES: GitNestedRepoProbeDependencies = {
+  lstat: (absolutePath) => fs.lstat(absolutePath),
+  access: (absolutePath) => fs.access(absolutePath),
+};
+
+async function getGitlinkPaths(repoRoot: string): Promise<Set<string>> {
+  const { stdout } = await execGit(["-C", repoRoot, "ls-files", "-s", "-z"], {
+    timeout: getGitWholeRepoTimeoutMs(),
+    maxBuffer: GIT_WHOLE_REPO_LISTING_MAX_BUFFER,
+  });
+  const paths = new Set<string>();
+  for (const record of parseGitNulSeparatedPaths(stdout)) {
+    const tab = record.indexOf("\t");
+    if (tab < 0) continue;
+    const [mode] = record.slice(0, tab).split(" ");
+    if (mode === GIT_SUBMODULE_MODE) {
+      paths.add(record.slice(tab + 1).replace(/\\/g, "/"));
+    }
+  }
+  return paths;
 }
 
 /** Return tracked and non-ignored untracked paths, preserving Git's NUL-safe output. */
@@ -1184,7 +1640,7 @@ export async function getGitTrackedAndUntrackedFiles(
       "--exclude-standard",
       "-z",
     ],
-    { maxBuffer: GIT_MAX_BUFFER }
+    { timeout: getGitWholeRepoTimeoutMs(), maxBuffer: GIT_MAX_BUFFER }
   );
   return parseGitNulSeparatedPaths(stdout);
 }
@@ -1195,7 +1651,7 @@ export async function getGitUntrackedFiles(
 ): Promise<string[]> {
   const { stdout } = await execGit(
     ["-C", repoRoot, "ls-files", "--others", "--exclude-standard", "-z"],
-    { maxBuffer: GIT_MAX_BUFFER }
+    { timeout: getGitWholeRepoTimeoutMs(), maxBuffer: GIT_MAX_BUFFER }
   );
   return parseGitNulSeparatedPaths(stdout);
 }
@@ -1222,7 +1678,7 @@ export async function getGitIgnoredEntries(
       "--directory",
       "-z",
     ],
-    { maxBuffer: GIT_MAX_BUFFER }
+    { timeout: getGitWholeRepoTimeoutMs(), maxBuffer: GIT_MAX_BUFFER }
   );
   return parseGitNulSeparatedPaths(stdout);
 }

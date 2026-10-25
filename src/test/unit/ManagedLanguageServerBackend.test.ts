@@ -917,6 +917,101 @@ suite("ManagedLanguageServerBackend", () => {
     assert.strictEqual(backend.runningServerCount, 0);
   });
 
+  test("dispose stops initializing and running servers before awaiting starts", async () => {
+    const children: EventEmitter[] = [];
+    const settings = {
+      ...CTRLYOKE_SETTINGS_DEFAULTS.languageServers,
+      use: {
+        ...CTRLYOKE_SETTINGS_DEFAULTS.languageServers.use,
+        json: "json-languageserver",
+        typescript: "typescript-language-server",
+      },
+    };
+    const backend = createBackend({
+      children,
+      workspaceSettings: settings,
+      unansweredInitializeSpawnIndexes: [1],
+      setTimer: ((callback: () => void, delay?: number) => {
+        if (delay === 1_000) setImmediate(callback);
+        return callback as unknown as ReturnType<typeof setTimeout>;
+      }) as typeof setTimeout,
+      clearTimer: (() => undefined) as typeof clearTimeout,
+    });
+    const running = await backend.resolveForPath(
+      "package.json",
+      roots,
+      LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR
+    );
+    const initializing = await backend.resolveForPath(
+      "src/app.ts",
+      roots,
+      LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR
+    );
+    assert.ok("descriptor" in running);
+    assert.ok("descriptor" in initializing);
+    await backend.getConnection(
+      running.descriptor,
+      LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR
+    );
+    const starting = backend.getConnection(
+      initializing.descriptor,
+      LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR
+    );
+    await waitForCondition(() => children.length === 2, "two language servers");
+
+    await backend.dispose();
+    await assert.rejects(starting);
+    assert.deepStrictEqual(
+      children.map(
+        (child) =>
+          (child as EventEmitter & { exitCode: number | null }).exitCode !== null
+      ),
+      [true, true],
+      "dispose sends exit or kills every child"
+    );
+  });
+
+  test("an unanswered initialize times out, reports a crash, and kills its child", async () => {
+    const children: EventEmitter[] = [];
+    const timers: Array<{ delay?: number; callback: () => void }> = [];
+    const backend = createBackend({
+      children,
+      ignoreExit: true,
+      unansweredInitializeSpawnIndexes: [0],
+      setTimer: ((callback: () => void, delay?: number) => {
+        timers.push({ callback, delay });
+        if (delay === 1_000) setImmediate(callback);
+        return callback as unknown as ReturnType<typeof setTimeout>;
+      }) as typeof setTimeout,
+      clearTimer: (() => undefined) as typeof clearTimeout,
+    });
+    const statuses: string[] = [];
+    backend.onStatusChanged((event) => statuses.push(event.status));
+    const result = await backend.resolveForPath(
+      "src/app.ts",
+      roots,
+      LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR
+    );
+    assert.ok("descriptor" in result);
+    const starting = backend.getConnection(
+      result.descriptor,
+      LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR
+    );
+    await waitForCondition(
+      () => timers.some((timer) => timer.delay === 60_000),
+      "initialize timeout timer"
+    );
+    timers.find((timer) => timer.delay === 60_000)?.callback();
+    await assert.rejects(starting, /did not answer initialize within 60s/);
+    assert.ok(statuses.includes("crashed"));
+    assert.strictEqual(statuses.at(-1), "crashed");
+    assert.strictEqual(
+      (children[0] as EventEmitter & { killCount: number }).killCount,
+      1
+    );
+    await backend.dispose();
+  });
+
   test("restarts a crashed server with a backoff while a document remains open", async () => {
     const timers: Array<() => void> = [];
     const children: EventEmitter[] = [];
@@ -1214,11 +1309,14 @@ function createBackend(
     ignoreShutdown?: boolean;
     ignoreExit?: boolean;
     initializeResponse?: Promise<unknown>;
+    unansweredInitializeSpawnIndexes?: readonly number[];
     installed?: boolean;
   } = {}
 ): ManagedLanguageServerBackend {
   const state = options.store ?? new Map<string, unknown>();
+  let spawnIndex = 0;
   const child = () => {
+    const currentSpawnIndex = spawnIndex++;
     const stdin = new PassThrough();
     const stdout = new PassThrough();
     const stderr = new PassThrough();
@@ -1261,10 +1359,13 @@ function createBackend(
     );
     server.onRequest(
       "initialize",
-      () =>
-        options.initializeResponse ?? {
+      () => {
+        if (options.unansweredInitializeSpawnIndexes?.includes(currentSpawnIndex))
+          return new Promise<never>(() => undefined);
+        return options.initializeResponse ?? {
           capabilities: { completionProvider: {}, hoverProvider: true },
-        }
+        };
+      }
     );
     server.onRequest("textDocument/hover", () => ({ contents: "hover" }));
     server.onRequest("shutdown", () =>

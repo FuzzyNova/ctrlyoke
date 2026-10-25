@@ -29,6 +29,7 @@ import {
   type SkillUpdateStatus,
 } from "../types/DashboardConstants";
 import { parseAgentFrontmatter } from "./AgentDiscovery";
+import { PATH_CONSTANTS } from "./ConfigurationUtils";
 import { getErrorMessage } from "./ErrorUtils";
 import { isSafePathSegment } from "./PathSecurity";
 import topSkillsSnapshotData from "./generated/skillsShTopSkills.json";
@@ -52,7 +53,10 @@ export const SKILLS_SEARCH_LIMIT = 50;
 export const SKILLS_SEARCH_MIN_QUERY_LENGTH = 2;
 
 /** SKILL.md files whose frontmatter may be read to match a slug. */
-const MAX_FRONTMATTER_PROBES = 20;
+/** Safety bound for unusually large repositories; the UI reports when reached. */
+const MAX_FRONTMATTER_PROBES = 200;
+/** Non-recursive GitHub tree requests used after a recursive tree is truncated. */
+const MAX_TRUNCATED_TREE_REQUESTS = 20;
 /** Bounds on what one install may download. */
 export const SKILL_INSTALL_LIMITS = {
   MAX_FILES: 200,
@@ -345,6 +349,19 @@ interface GitTreeEntry {
   sha?: string;
 }
 
+interface TruncatedTreeWalkState {
+  pending: Array<{ path: string; sha: string }>;
+  expanded: Set<string>;
+}
+
+interface CachedGitTree {
+  entries: GitTreeEntry[];
+  complete: boolean;
+  walk?: TruncatedTreeWalkState;
+  completeFolders: Set<string>;
+  rejectedSkillMdPaths: Set<string>;
+}
+
 /** Parse a GitHub `git/trees?recursive=1` body. */
 export function parseGitTreeResponse(data: unknown): GitTreeEntry[] {
   if (!isPlainObject(data) || !Array.isArray(data.tree)) {
@@ -387,7 +404,7 @@ function getFolderName(folderPath: string, source: string): string {
 
 /**
  * SKILL.md paths in a tree, most likely matches for `slug` first: those whose
- * folder name slugs to it, then shallower paths before deeper ones.
+ * folder path contains a segment that slugs to it, then shallower paths.
  */
 export function rankSkillMdCandidates(
   tree: readonly GitTreeEntry[],
@@ -406,10 +423,15 @@ export function rankSkillMdCandidates(
           .every((segment) => !EXCLUDED_DIR_NAMES.has(segment))
     )
     .map((entry) => entry.path);
-  const score = (skillMdPath: string): number =>
-    toSkillSlug(getFolderName(getFolderPath(skillMdPath), source)) === slug
+  const score = (skillMdPath: string): number => {
+    const folderPath = getFolderPath(skillMdPath);
+    const folderSegments = folderPath
+      ? folderPath.split("/")
+      : [source.split("/").pop() ?? source];
+    return folderSegments.some((segment) => toSkillSlug(segment) === slug)
       ? 0
       : 1;
+  };
   return candidates.sort(
     (a, b) =>
       score(a) - score(b) ||
@@ -558,7 +580,10 @@ export class SkillsShRegistryClient implements SkillsRegistry {
   private readonly topSkillsSnapshot: unknown;
   private topSkills: TopSkillsSnapshot | undefined;
   /** Trees by `source@commit`; a commit's tree never changes. */
-  private readonly treeCache = new Map<string, GitTreeEntry[]>();
+  private readonly treeCache = new Map<string, CachedGitTree>();
+  private readonly treeFetches = new Map<string, Promise<CachedGitTree>>();
+  private readonly treeWalks = new Map<string, Promise<void>>();
+  private readonly truncatedTreeKeys = new Set<string>();
   private readonly headCache = new Map<
     string,
     { sha: Promise<string>; fetchedAt: number }
@@ -620,21 +645,35 @@ export class SkillsShRegistryClient implements SkillsRegistry {
   ): Promise<RegistrySkillLocation> {
     this.assertSkillId(source, slug);
     const commitSha = await this.fetchHeadCommit(source);
-    const location = await this.findSkillAtCommit(source, slug, commitSha);
-    if (!location) {
+    const result = await this.findSkillAtCommit(source, slug, commitSha);
+    if (!result.location) {
+      if (!result.searchComplete) {
+        throw new SkillsRegistryError(
+          `Could not confirm whether the "${slug}" skill exists in ${GITHUB_HOST}/${source}; the truncated repository tree still has unsearched directories`
+        );
+      }
+      const searchSummary =
+        result.candidateCount > result.searchedCount
+          ? ` (searched ${result.searchedCount} of ${result.candidateCount} SKILL.md files)`
+          : "";
       throw new SkillsRegistryError(
-        `Could not find the "${slug}" skill in ${GITHUB_HOST}/${source}`
+        `Could not find the "${slug}" skill in ${GITHUB_HOST}/${source}${
+          this.truncatedTreeKeys.has(`${source}@${commitSha}`) &&
+          result.searchComplete &&
+          result.searchedCount === result.candidateCount
+            ? " after exhaustively searching the truncated repository tree"
+            : searchSummary
+        }`
       );
     }
-    return location;
+    return result.location;
   }
 
   /**
    * Compare an installed copy with the repository's current commit. The
    * folder's file SHAs are compared, so commits that touch only other parts
-   * of the repository are not an update. Costs at most two GitHub API calls
-   * per repository (HEAD and its tree), and none beyond HEAD when nothing
-   * was committed since the install.
+   * of the repository are not an update. The HEAD lookup is shared briefly;
+   * bounded tree walking and folder completion can use additional requests.
    */
   async checkForUpdate(
     installed: InstalledRegistrySkill
@@ -645,18 +684,48 @@ export class SkillsShRegistryClient implements SkillsRegistry {
     if (latestCommitSha === installed.commitSha) {
       return { status: SKILL_UPDATE_STATUSES.UP_TO_DATE, latestCommitSha };
     }
-    const tree = await this.fetchTree(source, latestCommitSha);
-    const skillMdPath = tree.some(
+    let tree = await this.fetchTree(
+      source,
+      latestCommitSha,
+      slug,
+      installed.skillMdPath
+    );
+    const existingPath = tree.some(
       (entry) =>
         entry.type === GIT_TREE_ENTRY_TYPES.BLOB &&
         entry.path === installed.skillMdPath
     )
       ? installed.skillMdPath
-      : (await this.findSkillAtCommit(source, slug, latestCommitSha))
-          ?.skillMdPath;
+      : undefined;
+    let skillMdPath = existingPath;
+    if (skillMdPath === undefined) {
+      const result = await this.findSkillAtCommit(
+        source,
+        slug,
+        latestCommitSha,
+        tree
+      );
+      skillMdPath = result.location?.skillMdPath;
+      if (
+        !skillMdPath &&
+        (!result.searchComplete || result.searchedCount < result.candidateCount)
+      ) {
+        throw new SkillsRegistryError(
+          !result.searchComplete
+            ? `Could not confirm whether the "${slug}" skill exists in ${GITHUB_HOST}/${source}; the truncated repository tree still has unsearched directories`
+            : `Could not confirm the "${slug}" skill in ${GITHUB_HOST}/${source} ` +
+                `(searched ${result.searchedCount} of ${result.candidateCount} SKILL.md files)`
+        );
+      }
+    }
     if (skillMdPath === undefined) {
       return { status: SKILL_UPDATE_STATUSES.NOT_FOUND, latestCommitSha };
     }
+    tree = await this.ensureSkillFolderComplete(
+      source,
+      latestCommitSha,
+      getFolderPath(skillMdPath)
+    );
     const latest = selectSkillFiles(tree, getFolderPath(skillMdPath));
     const unchanged =
       latest.length === Object.keys(installed.files).length &&
@@ -676,7 +745,12 @@ export class SkillsShRegistryClient implements SkillsRegistry {
     location: RegistrySkillLocation
   ): Promise<DownloadedSkillFile[]> {
     this.assertLocation(location);
-    const tree = await this.fetchTree(location.source, location.commitSha);
+    let tree = await this.fetchTree(
+      location.source,
+      location.commitSha,
+      location.slug,
+      location.skillMdPath
+    );
     const hasSkillMd = tree.some(
       (entry) =>
         entry.type === GIT_TREE_ENTRY_TYPES.BLOB &&
@@ -684,9 +758,16 @@ export class SkillsShRegistryClient implements SkillsRegistry {
     );
     if (!hasSkillMd) {
       throw new SkillsRegistryError(
-        `${location.skillMdPath} is not in ${location.source} at commit ${location.commitSha.slice(0, 7)}`
+        !this.isTreeComplete(location.source, location.commitSha)
+          ? `Could not confirm that ${location.skillMdPath} is in ${location.source} at commit ${location.commitSha.slice(0, 7)} because GitHub truncated the repository tree`
+          : `${location.skillMdPath} is not in ${location.source} at commit ${location.commitSha.slice(0, 7)}`
       );
     }
+    tree = await this.ensureSkillFolderComplete(
+      location.source,
+      location.commitSha,
+      location.folderPath
+    );
     const files = selectSkillFiles(tree, location.folderPath);
     let totalBytes = 0;
     return mapWithConcurrency(files, DOWNLOAD_CONCURRENCY, async (file) => {
@@ -789,34 +870,73 @@ export class SkillsShRegistryClient implements SkillsRegistry {
   private async findSkillAtCommit(
     source: string,
     slug: string,
-    commitSha: string
-  ): Promise<RegistrySkillLocation | undefined> {
-    const tree = await this.fetchTree(source, commitSha);
-    const candidates = rankSkillMdCandidates(tree, source, slug).slice(
-      0,
-      MAX_FRONTMATTER_PROBES
-    );
-    for (const skillMdPath of candidates) {
-      const content = await this.fetchRawText(source, commitSha, skillMdPath);
-      if (content === null) continue;
-      const frontmatter = parseAgentFrontmatter(content);
-      const folderPath = getFolderPath(skillMdPath);
-      const name = frontmatter.name ?? getFolderName(folderPath, source);
-      if (toSkillSlug(name) !== slug) continue;
-      const description = frontmatter.description
-        ? sanitizeRegistryText(frontmatter.description)
-        : undefined;
-      return {
-        source,
-        slug,
-        commitSha,
-        folderPath,
-        skillMdPath,
-        name: sanitizeRegistryText(name, MAX_NAME_LENGTH) || slug,
-        ...(description ? { description } : {}),
-      };
+    commitSha: string,
+    knownTree?: GitTreeEntry[]
+  ): Promise<{
+    location?: RegistrySkillLocation;
+    candidateCount: number;
+    searchedCount: number;
+    searchComplete: boolean;
+  }> {
+    const tree = knownTree ?? (await this.fetchTree(source, commitSha, slug));
+    const cache = this.treeCache.get(`${source}@${commitSha}`)!;
+    const ranked = rankSkillMdCandidates(tree, source, slug);
+    const previouslyRejected = ranked.filter((skillMdPath) =>
+      cache.rejectedSkillMdPaths.has(skillMdPath)
+    ).length;
+    const candidates = ranked
+      .filter((skillMdPath) => !cache.rejectedSkillMdPaths.has(skillMdPath))
+      .slice(0, MAX_FRONTMATTER_PROBES);
+    for (
+      let offset = 0;
+      offset < candidates.length;
+      offset += DOWNLOAD_CONCURRENCY
+    ) {
+      const batch = candidates.slice(offset, offset + DOWNLOAD_CONCURRENCY);
+      const contents = await Promise.all(
+        batch.map((skillMdPath) =>
+          this.fetchRawText(source, commitSha, skillMdPath)
+        )
+      );
+      // Probe concurrently, but inspect each batch in rank order so the
+      // selected match is deterministic and no lower-ranked batch is needed.
+      for (let index = 0; index < batch.length; index++) {
+        const skillMdPath = batch[index]!;
+        const content = contents[index];
+        // A failed download may be transient, so only a read whose name
+        // does not match is remembered as rejected.
+        if (content === null || content === undefined) continue;
+        const frontmatter = parseAgentFrontmatter(content);
+        const folderPath = getFolderPath(skillMdPath);
+        const name = frontmatter.name ?? getFolderName(folderPath, source);
+        if (toSkillSlug(name) !== slug) {
+          cache.rejectedSkillMdPaths.add(skillMdPath);
+          continue;
+        }
+        const description = frontmatter.description
+          ? sanitizeRegistryText(frontmatter.description)
+          : undefined;
+        return {
+          location: {
+            source,
+            slug,
+            commitSha,
+            folderPath,
+            skillMdPath,
+            name: sanitizeRegistryText(name, MAX_NAME_LENGTH) || slug,
+            ...(description ? { description } : {}),
+          },
+          candidateCount: ranked.length,
+          searchedCount: previouslyRejected + offset + index + 1,
+          searchComplete: this.isTreeComplete(source, commitSha),
+        };
+      }
     }
-    return undefined;
+    return {
+      candidateCount: ranked.length,
+      searchedCount: previouslyRejected + candidates.length,
+      searchComplete: this.isTreeComplete(source, commitSha),
+    };
   }
 
   /** {@link fetchHeadCommit}, shared for {@link HEAD_COMMIT_CACHE_MS}. */
@@ -850,22 +970,361 @@ export class SkillsShRegistryClient implements SkillsRegistry {
 
   private async fetchTree(
     source: string,
-    commitSha: string
+    commitSha: string,
+    preferredSlug?: string,
+    knownSkillMdPath?: string
   ): Promise<GitTreeEntry[]> {
     const key = `${source}@${commitSha}`;
-    const cached = this.treeCache.get(key);
-    if (cached) return cached;
+    let cached = this.treeCache.get(key);
+    let loadedByThisCall = false;
+    if (!cached) {
+      let fetch = this.treeFetches.get(key);
+      if (!fetch) {
+        fetch = this.loadTree(
+          source,
+          commitSha,
+          key,
+          preferredSlug,
+          knownSkillMdPath
+        );
+        this.treeFetches.set(key, fetch);
+        loadedByThisCall = true;
+      }
+      try {
+        cached = await fetch;
+      } finally {
+        if (this.treeFetches.get(key) === fetch) this.treeFetches.delete(key);
+      }
+    }
+    if (
+      !loadedByThisCall &&
+      cached.walk &&
+      !cached.complete &&
+      (!knownSkillMdPath ||
+        !cached.entries.some(
+          (entry) =>
+            entry.type === GIT_TREE_ENTRY_TYPES.BLOB &&
+            entry.path === knownSkillMdPath
+        )) &&
+      !(
+        preferredSlug &&
+        this.hasRankedSlugCandidate(cached, source, preferredSlug)
+      )
+    ) {
+      await this.continueTruncatedTreeWalk(
+        source,
+        commitSha,
+        key,
+        cached,
+        preferredSlug,
+        knownSkillMdPath
+      );
+    }
+    return cached.entries;
+  }
+
+  private async loadTree(
+    source: string,
+    commitSha: string,
+    key: string,
+    preferredSlug?: string,
+    knownSkillMdPath?: string
+  ): Promise<CachedGitTree> {
     const response = await this.request(
       REGISTRY_SERVICES.GITHUB,
       `${GITHUB_API_URL}/repos/${source}/git/trees/${commitSha}?recursive=1`,
       `tree of ${source}`,
       { accept: "application/vnd.github+json" }
     );
-    const tree = parseGitTreeResponse(
-      await this.readJson(response, REGISTRY_SERVICES.GITHUB)
+    const data = await this.readJson(response, REGISTRY_SERVICES.GITHUB);
+    if (isPlainObject(data) && data.truncated === true) {
+      this.truncatedTreeKeys.add(key);
+      const cache: CachedGitTree = {
+        entries: parseGitTreeResponse({ ...data, truncated: false }),
+        complete: false,
+        walk: { pending: [], expanded: new Set() },
+        completeFolders: new Set(),
+        rejectedSkillMdPaths: new Set(),
+      };
+      this.treeCache.set(key, cache);
+      await this.continueTruncatedTreeWalk(
+        source,
+        commitSha,
+        key,
+        cache,
+        preferredSlug,
+        knownSkillMdPath
+      );
+      return cache;
+    }
+    const cache: CachedGitTree = {
+      entries: parseGitTreeResponse(data),
+      complete: true,
+      completeFolders: new Set([""]),
+      rejectedSkillMdPaths: new Set(),
+    };
+    this.treeCache.set(key, cache);
+    return cache;
+  }
+
+  /**
+   * GitHub caps recursive trees. Walk a small number of likely directory
+   * trees, keeping paths rooted at the repository so existing ranking,
+   * probing, download, and update code can consume the result unchanged.
+   */
+  private async continueTruncatedTreeWalk(
+    source: string,
+    commitSha: string,
+    key: string,
+    cache: CachedGitTree,
+    preferredSlug?: string,
+    knownSkillMdPath?: string
+  ): Promise<void> {
+    const running = this.treeWalks.get(key);
+    if (running) {
+      await running;
+      if (
+        cache.complete ||
+        (knownSkillMdPath !== undefined &&
+          cache.entries.some(
+            (entry) =>
+              entry.type === GIT_TREE_ENTRY_TYPES.BLOB &&
+              entry.path === knownSkillMdPath
+          )) ||
+        (preferredSlug !== undefined &&
+          this.hasRankedSlugCandidate(cache, source, preferredSlug))
+      ) {
+        return;
+      }
+      return this.continueTruncatedTreeWalk(
+        source,
+        commitSha,
+        key,
+        cache,
+        preferredSlug,
+        knownSkillMdPath
+      );
+    }
+    if (cache.complete) return;
+    let finish!: () => void;
+    const walkPromise = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    this.treeWalks.set(key, walkPromise);
+    try {
+      await this.walkTruncatedTreeBudget(
+        source,
+        commitSha,
+        cache,
+        preferredSlug,
+        knownSkillMdPath
+      );
+    } finally {
+      finish();
+      if (this.treeWalks.get(key) === walkPromise) this.treeWalks.delete(key);
+    }
+  }
+
+  private async walkTruncatedTreeBudget(
+    source: string,
+    commitSha: string,
+    cache: CachedGitTree,
+    preferredSlug?: string,
+    knownSkillMdPath?: string
+  ): Promise<void> {
+    const state = cache.walk!;
+    const collectedPaths = new Set(cache.entries.map((entry) => entry.path));
+    let requests = 0;
+
+    const priority = (path: string): number => {
+      if (path === PATH_CONSTANTS.SKILLS_DIR) return 0;
+      if (path === ".claude/skills") return 0;
+      if (
+        preferredSlug &&
+        path
+          .split("/")
+          .some((segment) => toSkillSlug(segment) === preferredSlug)
+      ) {
+        return 1;
+      }
+      if (path === ".claude") return 1;
+      return 3;
+    };
+    const comparePending = (
+      a: { path: string; sha: string },
+      b: { path: string; sha: string }
+    ): number =>
+      priority(a.path) - priority(b.path) ||
+      a.path.split("/").length - b.path.split("/").length ||
+      a.path.localeCompare(b.path);
+    const enqueue = (path: string, sha: string): void => {
+      if (EXCLUDED_DIR_NAMES.has(path.split("/").pop() ?? "")) return;
+      if (
+        state.expanded.has(sha) ||
+        state.pending.some((entry) => entry.sha === sha)
+      )
+        return;
+      state.pending.push({ path, sha });
+      state.pending.sort(comparePending);
+    };
+    state.pending.sort(comparePending);
+    const appendEntries = (
+      entries: GitTreeEntry[],
+      parentPath: string
+    ): void => {
+      for (const entry of entries) {
+        const path = parentPath ? `${parentPath}/${entry.path}` : entry.path;
+        const rooted = { ...entry, path };
+        if (!collectedPaths.has(path)) {
+          cache.entries.push(rooted);
+          collectedPaths.add(path);
+        }
+        if (entry.type === GIT_TREE_ENTRY_TYPES.TREE && entry.sha) {
+          enqueue(path, entry.sha);
+        }
+      }
+    };
+    const targetFound = (): boolean =>
+      (knownSkillMdPath !== undefined &&
+        cache.entries.some(
+          (entry) =>
+            entry.type === GIT_TREE_ENTRY_TYPES.BLOB &&
+            entry.path === knownSkillMdPath
+        )) ||
+      (preferredSlug !== undefined &&
+        this.hasRankedSlugCandidate(cache, source, preferredSlug));
+
+    if (state.expanded.size === 0 && state.pending.length === 0) {
+      const root = await this.fetchNonRecursiveTree(source, commitSha);
+      requests++;
+      state.expanded.add(commitSha);
+      appendEntries(root, "");
+    }
+    while (
+      state.pending.length > 0 &&
+      requests < MAX_TRUNCATED_TREE_REQUESTS &&
+      !targetFound()
+    ) {
+      const next = state.pending.shift()!;
+      if (state.expanded.has(next.sha)) continue;
+      let entries: GitTreeEntry[];
+      try {
+        entries = await this.fetchNonRecursiveTree(source, next.sha);
+      } catch (error) {
+        state.pending.unshift(next);
+        throw error;
+      }
+      requests++;
+      state.expanded.add(next.sha);
+      appendEntries(entries, next.path);
+    }
+    cache.complete = state.pending.length === 0;
+  }
+
+  /**
+   * Whether the walked entries already hold a slug-named candidate. A
+   * candidate whose frontmatter was rejected doesn't count, so a retry keeps
+   * walking instead of stopping at the same mismatched folder.
+   */
+  private hasRankedSlugCandidate(
+    cache: CachedGitTree,
+    source: string,
+    slug: string
+  ): boolean {
+    return rankSkillMdCandidates(cache.entries, source, slug).some(
+      (skillMdPath) => {
+        if (cache.rejectedSkillMdPaths.has(skillMdPath)) return false;
+        const folderPath = getFolderPath(skillMdPath);
+        const segments = folderPath
+          ? folderPath.split("/")
+          : [source.split("/").pop() ?? source];
+        return segments.some((segment) => toSkillSlug(segment) === slug);
+      }
     );
-    this.treeCache.set(key, tree);
-    return tree;
+  }
+
+  private isTreeComplete(source: string, commitSha: string): boolean {
+    return this.treeCache.get(`${source}@${commitSha}`)?.complete ?? false;
+  }
+
+  private async ensureSkillFolderComplete(
+    source: string,
+    commitSha: string,
+    folderPath: string
+  ): Promise<GitTreeEntry[]> {
+    const key = `${source}@${commitSha}`;
+    const cache = this.treeCache.get(key);
+    if (!cache) {
+      throw new SkillsRegistryError(`Could not load the tree for ${source}`);
+    }
+    if (cache.complete) return cache.entries;
+    if (cache.completeFolders.has(folderPath)) return cache.entries;
+    if (!folderPath) {
+      throw new SkillsRegistryError(
+        `Could not confirm that the root skill folder in ${source} is complete after GitHub truncated the repository tree`
+      );
+    }
+    const folder = cache.entries.find(
+      (entry) =>
+        entry.path === folderPath &&
+        entry.type === GIT_TREE_ENTRY_TYPES.TREE &&
+        typeof entry.sha === "string"
+    );
+    if (!folder?.sha) {
+      throw new SkillsRegistryError(
+        `Could not confirm that the skill folder ${folderPath} is complete in ${source}`
+      );
+    }
+    const response = await this.request(
+      REGISTRY_SERVICES.GITHUB,
+      `${GITHUB_API_URL}/repos/${source}/git/trees/${folder.sha}?recursive=1`,
+      `complete skill folder tree ${folderPath}`,
+      { accept: "application/vnd.github+json" }
+    );
+    const data = await this.readJson(response, REGISTRY_SERVICES.GITHUB);
+    if (isPlainObject(data) && data.truncated === true) {
+      throw new SkillsRegistryError(
+        `Could not complete the skill folder ${folderPath} in ${source}; GitHub truncated its recursive tree`
+      );
+    }
+    const relativeEntries = parseGitTreeResponse(data);
+    if (
+      !relativeEntries.some(
+        (entry) =>
+          entry.type === GIT_TREE_ENTRY_TYPES.BLOB &&
+          entry.path.toLowerCase() === SKILL_FILE_NAME
+      )
+    ) {
+      throw new SkillsRegistryError(
+        `Could not confirm ${folderPath} contains its skill file in ${source}`
+      );
+    }
+    const existingPaths = new Set(cache.entries.map((entry) => entry.path));
+    for (const entry of relativeEntries) {
+      const rooted = { ...entry, path: `${folderPath}/${entry.path}` };
+      if (!existingPaths.has(rooted.path)) {
+        cache.entries.push(rooted);
+        existingPaths.add(rooted.path);
+      }
+    }
+    cache.completeFolders.add(folderPath);
+    return cache.entries;
+  }
+
+  private async fetchNonRecursiveTree(
+    source: string,
+    treeSha: string
+  ): Promise<GitTreeEntry[]> {
+    const response = await this.request(
+      REGISTRY_SERVICES.GITHUB,
+      `${GITHUB_API_URL}/repos/${source}/git/trees/${treeSha}`,
+      `tree of ${source}`,
+      { accept: "application/vnd.github+json" }
+    );
+    const data = await this.readJson(response, REGISTRY_SERVICES.GITHUB);
+    return parseGitTreeResponse(
+      isPlainObject(data) ? { ...data, truncated: false } : data
+    );
   }
 
   private rawUrl(source: string, commitSha: string, repoPath: string): string {

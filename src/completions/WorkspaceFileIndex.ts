@@ -9,7 +9,11 @@ import {
   walkSearchFiles,
   type SearchWalkResult,
 } from "../utils/WorkspaceSearchFileWalker";
-import { getGitIgnoredPaths, getGitTrackedFiles } from "../utils/GitUtils";
+import {
+  getGitIgnoredPaths,
+  getGitFilesIncludingNestedRepos,
+  isGitUnavailableError,
+} from "../utils/GitUtils";
 import {
   USER_FEEDBACK_SEVERITY,
   WORKSPACE_ENTRY_KINDS,
@@ -73,7 +77,9 @@ export interface WorkspaceFileChange {
 }
 
 export interface WorkspaceFileIndexDependencies {
-  readonly getGitTrackedFiles: (root: string) => Promise<string[]>;
+  readonly getGitFilesIncludingNestedRepos: (
+    root: string
+  ) => AsyncIterable<string[]>;
   readonly getGitIgnoredPaths: (
     root: string,
     absolutePaths: readonly string[]
@@ -100,7 +106,7 @@ export interface WorkspaceFileIndexDependencies {
 }
 
 const DEFAULT_DEPENDENCIES: WorkspaceFileIndexDependencies = {
-  getGitTrackedFiles,
+  getGitFilesIncludingNestedRepos,
   getGitIgnoredPaths,
   walkSearchFiles,
   stat: (absolutePath) => fs.stat(absolutePath),
@@ -371,12 +377,20 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
     const gitByRoot = await Promise.all(
       roots.map(async (root) => {
         try {
-          return this.prefix(
-            root,
-            await this.dependencies.getGitTrackedFiles(root.path),
-            roots
-          );
-        } catch {
+          const files: string[] = [];
+          for await (const chunk of this.dependencies.getGitFilesIncludingNestedRepos(
+            root.path
+          )) {
+            files.push(...chunk.filter((file) => !file.endsWith("/")));
+          }
+          return this.prefix(root, files, roots);
+        } catch (error) {
+          const reason = isGitUnavailableError(error)
+            ? "root is not a Git repository"
+            : `Git file listing failed: ${String(error)}`;
+          const message = `[WorkspaceFileIndex] ${reason} for ${root.path}; using degraded filesystem walk.`;
+          Log.warn(message);
+          this.options.onWarning?.(message);
           gitSucceeded = false;
           return [];
         }

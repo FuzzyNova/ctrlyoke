@@ -230,10 +230,6 @@ type ContextReferenceToValidate = Omit<
  */
 export class PromptEditorSupportService {
   private readonly workflowTextValidator = new PromptFileParser();
-  private readonly activeFileCompletionRequests = new Map<
-    string,
-    AbortController
-  >();
   constructor(
     private readonly getWorkspaceRoot: () => string,
     private readonly getOrchestrator: () => WorkflowOrchestrator | undefined,
@@ -307,7 +303,8 @@ export class PromptEditorSupportService {
     position: number,
     seq?: number
   ): Promise<void> {
-    this.activeFileCompletionRequests.get(ctx.clientId)?.abort();
+    const signal = ctx.completionAbortSignal;
+    const isCurrent = () => !signal?.aborted;
     try {
       // Progressive `#` completion: emit the current editor selection(s)
       // immediately so the dropdown populates instantly, then follow up with
@@ -315,6 +312,7 @@ export class PromptEditorSupportService {
       // workspace-symbol query resolves. Marked `partial` so the editor knows
       // a second, authoritative response is still coming.
       if (trigger === "#") {
+        if (!isCurrent()) return;
         const selectionItems =
           this.completionCore?.getHashSelectionCompletions() ?? [];
         if (selectionItems.length > 0) {
@@ -328,93 +326,82 @@ export class PromptEditorSupportService {
         }
         const fullItems =
           (await this.completionCore?.getHashCompletions(
-            prefix.substring(1)
+            prefix.substring(1),
+            signal
           )) ?? [];
+        if (!isCurrent()) return;
         this.emitCompletionsResponse(ctx, fullItems, position, seq, false);
         return;
       }
 
       if (trigger === "@") {
-        const controller = new AbortController();
-        this.activeFileCompletionRequests.set(ctx.clientId, controller);
         const query = prefix.substring(1);
-        const isCurrent = () =>
-          this.activeFileCompletionRequests.get(ctx.clientId) === controller &&
-          !controller.signal.aborted;
-        try {
-          while (isCurrent()) {
-            const pollStartedAt = Date.now();
-            // No budget: the scan streams snapshots as partials and its
-            // complete result is what may be sent as final. Only a build in
-            // progress re-runs the query (D20).
-            const items = await this.completionCore?.getFileCompletions(query, {
-              signal: controller.signal,
-              onPartial: (partialItems) => {
-                if (!isCurrent()) return;
-                const status = this.completionCore?.getFileIndexStatus();
-                this.emitCompletionsResponse(
-                  ctx,
-                  this.withIndexingStatus(partialItems, status),
-                  position,
-                  seq,
-                  true
-                );
-              },
-            });
-            if (!isCurrent()) return;
-            const status = this.completionCore?.getFileIndexStatus();
-            if (status?.state !== WORKSPACE_FILE_INDEX_STATES.BUILDING) {
+        while (isCurrent()) {
+          const pollStartedAt = Date.now();
+          // No budget: the scan streams snapshots as partials and its
+          // complete result is what may be sent as final. Only a build in
+          // progress re-runs the query (D20).
+          const items = await this.completionCore?.getFileCompletions(query, {
+            signal,
+            onPartial: (partialItems) => {
+              if (!isCurrent()) return;
+              const status = this.completionCore?.getFileIndexStatus();
               this.emitCompletionsResponse(
                 ctx,
-                items ?? [],
+                this.withIndexingStatus(partialItems, status),
                 position,
                 seq,
-                false
+                true
               );
-              return;
-            }
+            },
+          });
+          if (!isCurrent()) return;
+          const status = this.completionCore?.getFileIndexStatus();
+          if (status?.state !== WORKSPACE_FILE_INDEX_STATES.BUILDING) {
             this.emitCompletionsResponse(
               ctx,
-              this.withIndexingStatus(items ?? [], status),
+              items ?? [],
               position,
               seq,
-              true
+              false
             );
-            await new Promise<void>((resolve) => {
-              const timer = setTimeout(
-                resolve,
-                Math.max(0, 500 - (Date.now() - pollStartedAt))
-              );
-              controller.signal.addEventListener(
-                "abort",
-                () => {
-                  clearTimeout(timer);
-                  resolve();
-                },
-                { once: true }
-              );
-            });
+            return;
           }
-        } finally {
-          if (
-            this.activeFileCompletionRequests.get(ctx.clientId) === controller
-          ) {
-            this.activeFileCompletionRequests.delete(ctx.clientId);
-          }
+          this.emitCompletionsResponse(
+            ctx,
+            this.withIndexingStatus(items ?? [], status),
+            position,
+            seq,
+            true
+          );
+          await new Promise<void>((resolve) => {
+            if (signal?.aborted) {
+              resolve();
+              return;
+            }
+            const timer = setTimeout(
+              resolve,
+              Math.max(0, 500 - (Date.now() - pollStartedAt))
+            );
+            signal?.addEventListener(
+              "abort",
+              () => {
+                clearTimeout(timer);
+                resolve();
+              },
+              { once: true }
+            );
+          });
         }
         return;
       }
 
       const items = await this.getCompletionItems(trigger, prefix);
+      if (!isCurrent()) return;
       this.emitCompletionsResponse(ctx, items, position, seq, false);
     } catch (error) {
       Log.trace("[Dashboard] Failed to get completions:", error);
-      if (
-        trigger === "@" &&
-        this.activeFileCompletionRequests.has(ctx.clientId)
-      ) {
-        return;
-      }
+      if (!isCurrent()) return;
       this.emitCompletionsResponse(ctx, [], position, seq, false);
     }
   }

@@ -24,6 +24,7 @@ import {
   type HistorySearchIndexSearchOptions,
   type IndexRebuildProgressCallback,
   type PartialSearchResultsCallback,
+  type RefreshOutcome,
 } from "./HistorySearchIndexService";
 import { getSharedHistorySearchIndexService } from "./HistorySearchIndexServiceRegistry";
 import { HistoryRunDocumentBuilder } from "./HistoryRunDocumentBuilder";
@@ -70,6 +71,20 @@ export class HistorySearchService {
   private readonly runDocumentBuilder = new HistoryRunDocumentBuilder(
     MAX_INDEXED_TEXT_LENGTH
   );
+
+  enqueueWorkspaceRefresh(
+    workspaceFolderPath: string
+  ): Promise<RefreshOutcome> {
+    return getSharedHistorySearchIndexService(
+      workspaceFolderPath
+    ).enqueueWorkspaceRefresh(workspaceFolderPath);
+  }
+
+  waitForActiveRefresh(workspaceFolderPath: string): Promise<RefreshOutcome> {
+    return getSharedHistorySearchIndexService(
+      workspaceFolderPath
+    ).waitForActiveRefresh();
+  }
 
   async search(
     query: string | HistorySearchQuery,
@@ -135,7 +150,7 @@ export class HistorySearchService {
       }
       const reason =
         error instanceof FileLockTimeoutError
-          ? `lock still contended after its extended timeout (${getErrorMessage(error)})`
+          ? `lock remained contended through its acquisition limit (${getErrorMessage(error)})`
           : getErrorMessage(error);
       Log.warn(
         `[HistorySearchService] Indexed search failed after ${Date.now() - indexAttemptStart}ms, falling back to disk scan: ${reason}`

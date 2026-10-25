@@ -1412,6 +1412,7 @@ export async function searchHistoryCommand(
       undefined,
       {
         allowRebuild: options.rebuild !== false,
+        waitForLiveLock: options.rebuild !== false,
         allowLegacyFallback: options.fallback !== false,
         snippetChars,
       }

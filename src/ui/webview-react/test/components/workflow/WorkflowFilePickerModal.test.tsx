@@ -49,7 +49,9 @@ describe("WorkflowFilePickerModal", () => {
     );
 
     await waitFor(() =>
-      expect(hostedFetchMock).toHaveBeenCalledWith("/api/workflow-files")
+      expect(hostedFetchMock).toHaveBeenCalledWith(
+        "/api/workflow-files?includeGitIgnored=true"
+      )
     );
     expect(
       await screen.findByText("flows/example.ctrlyoke.yaml")
@@ -87,7 +89,7 @@ describe("WorkflowFilePickerModal", () => {
     useSettingsStore.setState((state) => ({
       globalSettings: { ...state.globalSettings, hideGitIgnoredFiles: true },
     }));
-    hostedFetchMock.mockResolvedValueOnce({
+    hostedFetchMock.mockResolvedValue({
       files: [
         {
           path: ".scratch/a.ctrlyoke.yaml",
@@ -113,6 +115,9 @@ describe("WorkflowFilePickerModal", () => {
       />
     );
 
+    await waitFor(() =>
+      expect(hostedFetchMock).toHaveBeenCalledWith("/api/workflow-files")
+    );
     expect(await screen.findByText("workflows/b.ctrlyoke.yaml")).toBeVisible();
     expect(
       screen.queryByText(".scratch/a.ctrlyoke.yaml")

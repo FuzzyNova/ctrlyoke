@@ -1,12 +1,18 @@
-import * as fs from "fs";
+import * as fs from "fs/promises";
 import * as path from "path";
 import { getCtrlYokeFileKind } from "../completions/CtrlYokeFileKind";
+import {
+  getGitFilesIncludingNestedRepos,
+  getGitIgnoredEntries,
+  isGitUnavailableError,
+} from "./GitUtils";
+import { iterateSearchFiles } from "./WorkspaceSearchFileWalker";
 import { BUNDLE_MANIFEST_FILE_NAME } from "../types/DashboardConstants";
 
 export interface WorkflowFileEntry {
   path: string;
   relativePath: string;
-  /** True if this file is ignored by .gitignore. Only set by hosted-server callers. */
+  /** True if Git reports the file as ignored; available for Git-backed discovery. */
   gitIgnored?: boolean;
 }
 
@@ -18,49 +24,136 @@ const IGNORED_WORKFLOW_SCAN_DIRS = new Set([
   "coverage",
 ]);
 
+export interface WorkflowFileDiscoveryOptions {
+  /** Include ignored workflow files for the picker's opt-in display mode. */
+  includeGitIgnored?: boolean;
+  /** Dependency seam for callers that need to control Git availability. */
+  dependencies?: Partial<WorkflowFileDiscoveryDependencies>;
+}
+
+export interface WorkflowFileDiscoveryDependencies {
+  getGitFilesIncludingNestedRepos: (root: string) => AsyncIterable<string[]>;
+  getGitIgnoredEntries: (root: string) => Promise<string[]>;
+}
+
+const DEFAULT_DEPENDENCIES: WorkflowFileDiscoveryDependencies = {
+  getGitFilesIncludingNestedRepos,
+  getGitIgnoredEntries,
+};
+
 function toPortablePath(filePath: string): string {
   return filePath.replace(/\\/g, "/");
 }
 
-export function findWorkflowFilesInWorkspace(
-  workspaceRoot: string
-): WorkflowFileEntry[] {
-  const results: WorkflowFileEntry[] = [];
-
-  const visit = (dir: string): void => {
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
+async function isManifestedBundleAsset(
+  workspaceRoot: string,
+  relativePath: string,
+  cache: Map<string, Promise<boolean>>
+): Promise<boolean> {
+  const segments = relativePath.split(/[\\/]/);
+  let directory = workspaceRoot;
+  for (const segment of segments.slice(0, -1)) {
+    directory = path.join(directory, segment);
+    if (!segment.endsWith(".assets")) continue;
+    let manifested = cache.get(directory);
+    if (!manifested) {
+      manifested = fs
+        .access(path.join(directory, BUNDLE_MANIFEST_FILE_NAME))
+        .then(() => true, () => false);
+      cache.set(directory, manifested);
     }
+    if (await manifested) return true;
+  }
+  return false;
+}
 
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        const isBundleAssetsDirectory =
-          entry.name.endsWith(".assets") &&
-          fs.existsSync(path.join(fullPath, BUNDLE_MANIFEST_FILE_NAME));
-        if (
-          !IGNORED_WORKFLOW_SCAN_DIRS.has(entry.name) &&
-          !isBundleAssetsDirectory
-        ) {
-          visit(fullPath);
+/**
+ * Find workflow files without synchronously walking a workspace. Git checkouts
+ * use Git's tracked and non-ignored untracked paths (including nested repos);
+ * non-repository folders use a yielding filesystem walk.
+ */
+export async function findWorkflowFilesInWorkspace(
+  workspaceRoot: string,
+  options: WorkflowFileDiscoveryOptions = {}
+): Promise<WorkflowFileEntry[]> {
+  const root = path.resolve(workspaceRoot);
+  const dependencies = { ...DEFAULT_DEPENDENCIES, ...options.dependencies };
+  const entries: Array<{ relativePath: string; gitIgnored?: boolean }> = [];
+
+  try {
+    for await (const chunk of dependencies.getGitFilesIncludingNestedRepos(root)) {
+      for (const gitPath of chunk) {
+        const relativePath = toPortablePath(gitPath);
+        if (getCtrlYokeFileKind(path.basename(relativePath)) === null) continue;
+        entries.push({ relativePath, gitIgnored: false });
+      }
+    }
+    if (options.includeGitIgnored) {
+      const ignored = await dependencies.getGitIgnoredEntries(root);
+      const ignoredFiles = ignored.filter((entry) => !entry.endsWith("/"));
+      const ignoredDirectories = ignored
+        .filter((entry) => entry.endsWith("/"))
+        .map((entry) => entry.slice(0, -1));
+      for (const entry of ignoredFiles) {
+        const relativePath = toPortablePath(entry);
+        if (getCtrlYokeFileKind(path.basename(relativePath)) !== null) {
+          entries.push({ relativePath, gitIgnored: true });
         }
-        continue;
       }
-
-      if (getCtrlYokeFileKind(entry.name) === null) {
-        continue;
+      for await (const files of iterateSearchFiles(
+        root,
+        ignoredDirectories,
+        IGNORED_WORKFLOW_SCAN_DIRS,
+        false
+      )) {
+        for (const file of files) {
+          const relativePath = toPortablePath(file);
+          if (getCtrlYokeFileKind(path.basename(relativePath)) !== null) {
+            entries.push({ relativePath, gitIgnored: true });
+          }
+        }
       }
-
-      results.push({
-        path: toPortablePath(fullPath),
-        relativePath: toPortablePath(path.relative(workspaceRoot, fullPath)),
-      });
     }
-  };
+  } catch (error) {
+    if (!isGitUnavailableError(error)) throw error;
+    for await (const files of iterateSearchFiles(
+      root,
+      [""],
+      IGNORED_WORKFLOW_SCAN_DIRS,
+      false
+    )) {
+      for (const file of files) {
+        const relativePath = toPortablePath(file);
+        if (getCtrlYokeFileKind(path.basename(relativePath)) !== null) {
+          entries.push({ relativePath });
+        }
+      }
+    }
+  }
 
-  visit(workspaceRoot);
-  return results.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+  const manifestedDirectories = new Map<string, Promise<boolean>>();
+  const files: WorkflowFileEntry[] = [];
+  for (const entry of entries) {
+    if (
+      await isManifestedBundleAsset(
+        root,
+        entry.relativePath,
+        manifestedDirectories
+      )
+    ) {
+      continue;
+    }
+    files.push({
+      path: toPortablePath(path.resolve(root, entry.relativePath)),
+      relativePath: entry.relativePath,
+      ...(entry.gitIgnored === undefined
+        ? {}
+        : { gitIgnored: entry.gitIgnored }),
+    });
+  }
+
+  const unique = new Map(files.map((file) => [file.relativePath, file]));
+  return Array.from(unique.values()).sort((a, b) =>
+    a.relativePath.localeCompare(b.relativePath)
+  );
 }

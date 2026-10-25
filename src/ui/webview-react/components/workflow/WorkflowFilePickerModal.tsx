@@ -57,7 +57,10 @@ export const WorkflowFilePickerModal: React.FC<
     setIsLoading(true);
     setError(null);
 
-    hostedFetch<WorkflowFilesResponse>("/api/workflow-files")
+    const includeGitIgnored = !hideGitIgnoredFiles;
+    hostedFetch<WorkflowFilesResponse>(
+      `/api/workflow-files${includeGitIgnored ? "?includeGitIgnored=true" : ""}`
+    )
       .then((data) => {
         if (cancelled) {
           return;
@@ -89,7 +92,7 @@ export const WorkflowFilePickerModal: React.FC<
     return () => {
       cancelled = true;
     };
-  }, [isOpen]);
+  }, [isOpen, hideGitIgnoredFiles]);
 
   const filteredFiles = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();

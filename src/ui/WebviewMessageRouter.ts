@@ -19,12 +19,16 @@ import {
   isRerunConfirmationMode,
   END_CONDITION_SCRIPT_TYPES,
   HISTORY_SEARCH_COUNT_STATES,
+  HISTORY_SEARCH_INDEX_STATES,
   SEARCH_HISTORY_ERROR_CODES,
   type EndConditionScriptType,
   type UserFeedbackSeverity,
   type WebviewLogLevel,
   VSCODE_COMMANDS,
   WORKTREE_MANAGEMENT_ACTIONS,
+  COMPLETION_TRIGGERS,
+  COMPLETION_SOURCES,
+  type CompletionSource,
   type WorktreeManagementAction,
   WORKFLOW_VIEW_ADDRESS_KIND,
   DASHBOARD_ACTION_RESULT_STATUSES,
@@ -173,6 +177,10 @@ interface WorkflowVariantRequestCacheEntry {
   completedAt?: number;
 }
 
+interface LoadRunViewRouteEntry {
+  promise: Promise<void>;
+}
+
 const WORKFLOW_VARIANT_REQUEST_CACHE_TTL_MS = 10 * 60 * 1000;
 const WORKFLOW_VARIANT_REQUEST_CACHE_MAX_ENTRIES = 256;
 
@@ -191,6 +199,13 @@ const SLOW_ROUTE_WAIT_MS = 1000;
  * client that is connected when it finishes.
  */
 const OFF_QUEUE_MESSAGE_TYPES: ReadonlySet<string> = new Set([
+  MESSAGE_TYPES.REQUEST_COMPLETIONS,
+  // These handlers only create/read standalone files or resolve a preview URI;
+  // they do not touch state that other serialized handlers depend on.
+  MESSAGE_TYPES.CONVERT_PROMPT_TO_FILE,
+  MESSAGE_TYPES.SAVE_PASTED_IMAGE,
+  MESSAGE_TYPES.SAVE_OUTPUT_SNAPSHOT,
+  MESSAGE_TYPES.REQUEST_FILE_PREVIEW_URI,
   MESSAGE_TYPES.REQUEST_SECRET_REGISTRY,
   MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_SEARCH,
   MESSAGE_TYPES.REQUEST_SKILLS_REGISTRY_AUDITS,
@@ -300,6 +315,12 @@ function describeWorktreeActionSuccess(
  */
 export class WebviewMessageRouter {
   private routeQueue: Promise<void> = Promise.resolve();
+  private readonly loadRunViewRoutes = new Map<string, LoadRunViewRouteEntry>();
+  private readonly loadRunViewConnectionIds = new WeakMap<
+    PostMessageFn,
+    number
+  >();
+  private nextLoadRunViewConnectionId = 1;
   private readonly clientInteractionPorts = new Map<
     string,
     WebviewUserInteractionPort
@@ -328,6 +349,10 @@ export class WebviewMessageRouter {
   private readonly historySearchAbortControllers = new Map<
     string,
     HistorySearchClientRegistration
+  >();
+  private readonly completionAbortControllers = new Map<
+    string,
+    Map<CompletionSource, AbortController>
   >();
 
   constructor(
@@ -417,15 +442,45 @@ export class WebviewMessageRouter {
    */
   async route(message: any, options?: WebviewRouteOptions): Promise<void> {
     const clientId = options?.clientTag ?? PANEL_CLIENT_ID;
+    const postMessage = options?.postMessage ?? this.defaultPostMessage;
+    const loadRunViewKey =
+      message?.type === MESSAGE_TYPES.LOAD_RUN_VIEW &&
+      typeof message.requestId === "string"
+        ? `${clientId}\0${this.getLoadRunViewConnectionId(postMessage)}\0${message.requestId}`
+        : undefined;
+    if (loadRunViewKey) {
+      const existing = this.loadRunViewRoutes.get(loadRunViewKey);
+      if (existing) {
+        await existing.promise;
+        return;
+      }
+    }
     const interactionPort = this.getClientInteractionPort(
       clientId,
-      options?.postMessage ?? this.defaultPostMessage
+      postMessage
     );
     let ctx = createWebviewClientContext(
       clientId,
-      options?.postMessage ?? this.defaultPostMessage,
+      postMessage,
       interactionPort
     );
+    let completionController: AbortController | undefined;
+    let completionSource: CompletionSource | undefined;
+    if (message?.type === MESSAGE_TYPES.REQUEST_COMPLETIONS) {
+      completionSource =
+        message.trigger === COMPLETION_TRIGGERS.PATH
+          ? COMPLETION_SOURCES.PATH
+          : COMPLETION_SOURCES.CUSTOM;
+      let clientControllers = this.completionAbortControllers.get(clientId);
+      if (!clientControllers) {
+        clientControllers = new Map<CompletionSource, AbortController>();
+        this.completionAbortControllers.set(clientId, clientControllers);
+      }
+      clientControllers.get(completionSource)?.abort();
+      completionController = new AbortController();
+      clientControllers.set(completionSource, completionController);
+      ctx = { ...ctx, completionAbortSignal: completionController.signal };
+    }
     if (OFF_QUEUE_MESSAGE_TYPES.has(message?.type)) {
       // These can take seconds (credential-store reads on Windows, requests to
       // skills.sh and GitHub). Keep them outside the shared routeQueue, and
@@ -440,10 +495,37 @@ export class WebviewMessageRouter {
           }
         },
       };
-      await this.routeSingleMessage(message, ctx);
+      try {
+        await this.routeSingleMessage(message, ctx);
+      } finally {
+        if (completionController?.signal.aborted) {
+          ctx.emit({
+            type: MESSAGE_TYPES.COMPLETIONS_RESPONSE,
+            items: [],
+            from: message.position,
+            seq: message.seq,
+            partial: false,
+          });
+        }
+        if (
+          completionController &&
+          completionSource &&
+          this.completionAbortControllers
+            .get(clientId)
+            ?.get(completionSource) === completionController
+        ) {
+          const clientControllers =
+            this.completionAbortControllers.get(clientId);
+          clientControllers?.delete(completionSource);
+          if (clientControllers?.size === 0) {
+            this.completionAbortControllers.delete(clientId);
+          }
+        }
+      }
       return;
     }
     let releaseHistorySearch: (() => void) | undefined;
+    let deferHistorySearchRelease = false;
     if (message?.type === MESSAGE_TYPES.SEARCH_HISTORY) {
       // Called synchronously, before this message is queued behind whatever
       // is already routing: every message shares `routeQueue`, so a search
@@ -454,7 +536,14 @@ export class WebviewMessageRouter {
         clientId,
         getHistorySearchListingKey(message)
       );
-      ctx = { ...ctx, historySearchAbortSignal: registration.signal };
+      ctx = {
+        ...ctx,
+        historySearchAbortSignal: registration.signal,
+        deferHistorySearchRelease: () => {
+          deferHistorySearchRelease = true;
+          return registration.release;
+        },
+      };
       releaseHistorySearch = registration.release;
     }
     if (
@@ -470,12 +559,27 @@ export class WebviewMessageRouter {
       try {
         await this.routeSingleMessage(message, ctx);
       } finally {
-        releaseHistorySearch?.();
+        if (!deferHistorySearchRelease) releaseHistorySearch?.();
         logSlowRoute(message?.type, clientId, enqueuedAt, startedAt);
       }
     });
 
-    await this.routeQueue;
+    const queuedRoute = this.routeQueue;
+    if (loadRunViewKey) {
+      this.loadRunViewRoutes.set(loadRunViewKey, {
+        promise: queuedRoute,
+      });
+    }
+    try {
+      await queuedRoute;
+    } finally {
+      if (
+        loadRunViewKey &&
+        this.loadRunViewRoutes.get(loadRunViewKey)?.promise === queuedRoute
+      ) {
+        this.loadRunViewRoutes.delete(loadRunViewKey);
+      }
+    }
   }
 
   /**
@@ -525,6 +629,12 @@ export class WebviewMessageRouter {
       (this.clientRouteEpochs.get(clientId) ?? 0) + 1
     );
     this.languageServerManager.disposeClient(clientId);
+    for (const controller of this.completionAbortControllers
+      .get(clientId)
+      ?.values() ?? []) {
+      controller.abort();
+    }
+    this.completionAbortControllers.delete(clientId);
     this.clientInteractionPorts.get(clientId)?.disposeAllPending();
     this.clientInteractionPorts.delete(clientId);
     for (const controller of this.historySearchAbortControllers.get(clientId)
@@ -532,6 +642,19 @@ export class WebviewMessageRouter {
       controller.abort();
     }
     this.historySearchAbortControllers.delete(clientId);
+  }
+
+  /**
+   * Hosted routes receive one stable send function per WebSocket. Include that
+   * identity in LOAD_RUN_VIEW de-duplication so a reconnect gets its own load
+   * and can replace the per-client view sink with its live transport.
+   */
+  private getLoadRunViewConnectionId(postMessage: PostMessageFn): number {
+    const existingId = this.loadRunViewConnectionIds.get(postMessage);
+    if (existingId !== undefined) return existingId;
+    const connectionId = this.nextLoadRunViewConnectionId++;
+    this.loadRunViewConnectionIds.set(postMessage, connectionId);
+    return connectionId;
   }
 
   private getClientInteractionPort(
@@ -1919,27 +2042,28 @@ export class WebviewMessageRouter {
           totalCount: 0,
           countState: HISTORY_SEARCH_COUNT_STATES.EXACT,
           hasMore: false,
-          indexState: "fallback",
+          indexState: HISTORY_SEARCH_INDEX_STATES.FALLBACK,
         });
         return;
       }
 
       try {
+        const searchRequest = {
+          query,
+          limit,
+          offset:
+            typeof message.offset === "number" && message.offset > 0
+              ? Math.floor(message.offset)
+              : undefined,
+          filters:
+            message.filters && typeof message.filters === "object"
+              ? message.filters
+              : undefined,
+          deep: message.deep === true,
+          regex: message.regex === true,
+        };
         const response = await this.historySearchService.search(
-          {
-            query,
-            limit,
-            offset:
-              typeof message.offset === "number" && message.offset > 0
-                ? Math.floor(message.offset)
-                : undefined,
-            filters:
-              message.filters && typeof message.filters === "object"
-                ? message.filters
-                : undefined,
-            deep: message.deep === true,
-            regex: message.regex === true,
-          },
+          searchRequest,
           workspacePath,
           (processedRuns, totalRuns) => {
             ctx.emit({
@@ -1955,13 +2079,53 @@ export class WebviewMessageRouter {
               ...listingScope,
               ...partialResponse,
             });
-          }
+          },
+          { allowRebuild: false, rebuildInBackground: true }
         );
         ctx.emit({
           type: MESSAGE_TYPES.SEARCH_HISTORY_RESULTS,
           ...listingScope,
           ...response,
         });
+        if (response.indexState === "building") {
+          const releaseFollowUp = ctx.deferHistorySearchRelease?.();
+          void this.historySearchService
+            .waitForActiveRefresh(workspacePath)
+            .then(async (outcome) => {
+              if (ctx.historySearchAbortSignal?.aborted) return;
+              if (outcome.failed) {
+                ctx.emit({
+                  type: MESSAGE_TYPES.SEARCH_HISTORY_RESULTS,
+                  ...listingScope,
+                  ...response,
+                  indexState: HISTORY_SEARCH_INDEX_STATES.FALLBACK,
+                });
+                return;
+              }
+              if (ctx.historySearchAbortSignal?.aborted) return;
+              const refreshedResponse = await this.historySearchService.search(
+                searchRequest,
+                workspacePath,
+                undefined,
+                ctx.historySearchAbortSignal,
+                undefined,
+                { allowRebuild: false }
+              );
+              if (ctx.historySearchAbortSignal?.aborted) return;
+              ctx.emit({
+                type: MESSAGE_TYPES.SEARCH_HISTORY_RESULTS,
+                ...listingScope,
+                ...refreshedResponse,
+              });
+            })
+            .catch((error: unknown) => {
+              if (error instanceof HistorySearchCancelledError) return;
+              Log.warn(
+                `[WebviewMessageRouter] history search refresh failed: query="${query}" error=${getErrorMessage(error)}`
+              );
+            })
+            .finally(() => releaseFollowUp?.());
+        }
       } catch (error) {
         if (error instanceof HistorySearchCancelledError) {
           // A newer search for this client already superseded this one; a

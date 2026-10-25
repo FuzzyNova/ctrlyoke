@@ -9,6 +9,8 @@ import type { WorkspaceFileHistoryEntry } from "@root/types/HostedWorkspaceViewe
 export interface PagedFileHistoryPageRequest {
   path: string;
   offset: number;
+  nextOffset?: number;
+  nextCursor?: string;
   pageSize: number;
   historyId?: string;
   repo?: string;
@@ -76,6 +78,7 @@ interface FileHistoryState {
   repo?: string;
   listingId: string | null;
   totalCount: number;
+  hasMore: boolean;
   pageSize: number;
   pages: Map<number, readonly WorkspaceFileHistoryEntry[]>;
   inFlightOffsets: Set<number>;
@@ -93,6 +96,7 @@ const EMPTY_STATE = (
   ...(repo === undefined ? {} : { repo }),
   listingId: null,
   totalCount: 0,
+  hasMore: false,
   pageSize,
   pages: new Map(),
   inFlightOffsets: new Set(),
@@ -118,6 +122,15 @@ function pageOffset(index: number, pageSize: number): number {
   return Math.floor(Math.max(0, index) / pageSize) * pageSize;
 }
 
+function loadedRowCount(
+  pages: ReadonlyMap<number, readonly WorkspaceFileHistoryEntry[]>,
+  minimum = 0
+): number {
+  let count = 0;
+  for (const entries of pages.values()) count += entries.length;
+  return Math.max(minimum, count);
+}
+
 function errorFrom(value: unknown): Error {
   return value instanceof Error ? value : new Error(String(value));
 }
@@ -141,8 +154,15 @@ function responseIsUsable(
       response.pageSize === expectedPageSize) &&
     Number.isSafeInteger(response.totalEntries) &&
     response.totalEntries >= 0 &&
-    response.offset <= response.totalEntries &&
-    response.entries.length <= response.totalEntries - response.offset &&
+    response.totalEntries >= response.offset + response.entries.length &&
+    (response.nextOffset === undefined ||
+      (Number.isSafeInteger(response.nextOffset) &&
+        response.nextOffset >= 0)) &&
+    (response.nextCursor === undefined ||
+      (typeof response.nextCursor === "string" &&
+        response.nextCursor.length > 0)) &&
+    response.entries.length <= response.pageSize &&
+    typeof response.hasMore === "boolean" &&
     (expectedListingId === undefined ||
       response.historyId === expectedListingId)
   );
@@ -157,7 +177,9 @@ function defaultFetcher(
     request.offset,
     request.pageSize,
     request.historyId,
-    request.repo
+    request.repo,
+    request.nextOffset,
+    request.nextCursor
   );
 }
 
@@ -204,9 +226,14 @@ export function usePagedFileHistory(
   const generationRef = useRef(0);
   const stateRef = useRef<FileHistoryState | null>(null);
   const controllersRef = useRef(new Map<number, AbortController>());
+  const rangeRequestRef = useRef<(offset: number) => void>(() => undefined);
   const initialControllerRef = useRef<AbortController | null>(null);
   const pendingOffsetsRef = useRef(new Set<number>());
+  const virtualLengthRef = useRef(0);
+  const rawCursorRef = useRef<number | undefined>(undefined);
+  const nextCursorRef = useRef<string | undefined>(undefined);
   const lastVisibleStartRef = useRef<number | null>(null);
+  const lastRangeRef = useRef<VirtualizedListRange | null>(null);
   const skipOptionStartRef = useRef<string | null>(null);
 
   const [state, setState] = useState<FileHistoryState>(() =>
@@ -268,7 +295,11 @@ export function usePagedFileHistory(
       currentKeyRef.current = listingKey(normalizedPath, normalizedRepo);
       currentPathRef.current = normalizedPath;
       currentRepoRef.current = normalizedRepo;
+      virtualLengthRef.current = 0;
+      rawCursorRef.current = undefined;
+      nextCursorRef.current = undefined;
       lastVisibleStartRef.current = null;
+      lastRangeRef.current = null;
 
       const pageSize = configRef.current.pageSize;
       updateState(() => ({
@@ -297,7 +328,10 @@ export function usePagedFileHistory(
           updateState((current) => ({
             ...current,
             listingId: response.historyId,
-            totalCount: response.totalEntries,
+            totalCount: response.hasMore
+              ? Math.max(response.totalEntries, response.pageSize * 2)
+              : response.totalEntries,
+            hasMore: response.hasMore,
             pageSize: response.pageSize,
             pages: new Map([[0, response.entries]]),
             inFlightOffsets: new Set(),
@@ -305,6 +339,17 @@ export function usePagedFileHistory(
             initialLoading: false,
             error: null,
           }));
+          virtualLengthRef.current = response.entries.length;
+          rawCursorRef.current = response.nextOffset;
+          nextCursorRef.current = response.nextCursor;
+          if (
+            response.entries.length === 0 &&
+            response.hasMore &&
+            (response.nextCursor !== undefined ||
+              (response.nextOffset !== undefined && response.nextOffset > 0))
+          ) {
+            setTimeout(() => rangeRequestRef.current(0), 0);
+          }
         })
         .catch((value: unknown) => {
           if (
@@ -335,19 +380,24 @@ export function usePagedFileHistory(
   const requestRange = useCallback(
     (requestedOffset: number): void => {
       const current = stateRef.current;
-      const offset = pageOffset(
-        requestedOffset,
-        current?.pageSize ?? configRef.current.pageSize
-      );
+      const targetOffset = Math.max(0, requestedOffset);
       if (!current?.listingId || current.initialLoading) {
-        pendingOffsetsRef.current.add(offset);
+        pendingOffsetsRef.current.add(targetOffset);
         return;
       }
-      if (
-        offset >= current.totalCount ||
-        current.pages.has(offset) ||
-        controllersRef.current.has(offset)
-      ) {
+      const loadedCount = loadedRowCount(
+        current.pages,
+        virtualLengthRef.current
+      );
+      const offset = loadedCount;
+      if (targetOffset < loadedCount || targetOffset >= current.totalCount) {
+        return;
+      }
+      if (controllersRef.current.size > 0) {
+        pendingOffsetsRef.current.add(targetOffset);
+        return;
+      }
+      if (!current.hasMore) {
         return;
       }
 
@@ -355,6 +405,8 @@ export function usePagedFileHistory(
       const path = current.path;
       const repo = current.repo;
       const listingId = current.listingId;
+      const requestCursor = rawCursorRef.current;
+      const requestNextCursor = nextCursorRef.current;
       const controller = new AbortController();
       controllersRef.current.set(offset, controller);
       updateState((previous) => {
@@ -372,6 +424,8 @@ export function usePagedFileHistory(
           {
             path,
             offset,
+            nextOffset: requestCursor,
+            nextCursor: requestNextCursor,
             pageSize: current.pageSize,
             historyId: listingId,
             ...(repo === undefined ? {} : { repo }),
@@ -388,8 +442,47 @@ export function usePagedFileHistory(
           updateState((previous) => {
             const pages = new Map(previous.pages);
             pages.set(offset, response.entries);
-            return { ...previous, pages, error: null };
+            const loadedCount = loadedRowCount(pages);
+            return {
+              ...previous,
+              pages,
+              hasMore: response.hasMore,
+              totalCount: response.hasMore
+                ? Math.max(previous.totalCount, loadedCount + response.pageSize)
+                : response.totalEntries,
+              error: null,
+            };
           });
+          virtualLengthRef.current = Math.max(
+            virtualLengthRef.current,
+            response.offset + response.entries.length
+          );
+          rawCursorRef.current = response.nextOffset;
+          nextCursorRef.current = response.nextCursor;
+          const cursorAdvanced =
+            response.nextCursor !== undefined
+              ? response.nextCursor !== requestNextCursor
+              : response.nextOffset !== undefined
+                ? response.nextOffset > (requestCursor ?? offset)
+                : response.entries.length > 0;
+          const lastRange = lastRangeRef.current;
+          const loadedLength = virtualLengthRef.current;
+          if (
+            response.hasMore &&
+            cursorAdvanced &&
+            (response.entries.length === 0 ||
+              (response.entries.length < response.pageSize &&
+                lastRange !== null &&
+                loadedLength >= lastRange.overscanStartIndex &&
+                loadedLength <= lastRange.overscanEndIndex))
+          ) {
+            setTimeout(() => {
+              // A navigate/refresh inside this tick starts a new listing that
+              // must not inherit the old listing's continuation offset.
+              if (generationRef.current !== generation) return;
+              rangeRequestRef.current(loadedLength);
+            }, 0);
+          }
         })
         .catch((value: unknown) => {
           if (
@@ -420,17 +513,34 @@ export function usePagedFileHistory(
             inFlightOffsets.delete(offset);
             return { ...previous, inFlightOffsets };
           });
+          const pending = [...pendingOffsetsRef.current];
+          pendingOffsetsRef.current.clear();
+          if (pending.length > 0) {
+            setTimeout(() => rangeRequestRef.current(Math.max(...pending)), 0);
+          }
         });
     },
     [isCurrent, updateState]
   );
+  rangeRequestRef.current = requestRange;
 
   useEffect(() => {
-    if (!state.listingId || state.initialLoading) return;
+    if (
+      !state.listingId ||
+      state.initialLoading ||
+      controllersRef.current.size > 0
+    )
+      return;
     const pending = [...pendingOffsetsRef.current];
     pendingOffsetsRef.current.clear();
-    for (const offset of pending) requestRange(offset);
-  }, [requestRange, state.initialLoading, state.listingId]);
+    if (pending.length > 0) requestRange(Math.max(...pending));
+  }, [
+    requestRange,
+    state.initialLoading,
+    state.listingId,
+    state.pages,
+    state.inFlightOffsets,
+  ]);
 
   const navigate = useCallback(
     (path: string, repo?: string): void => {
@@ -471,6 +581,7 @@ export function usePagedFileHistory(
   const onRangeChange = useCallback(
     (range: VirtualizedListRange): void => {
       const current = stateRef.current;
+      lastRangeRef.current = range;
       const pageSize = current?.pageSize ?? configRef.current.pageSize;
       const previousStart = lastVisibleStartRef.current;
       const direction =
@@ -494,6 +605,17 @@ export function usePagedFileHistory(
       for (let offset = firstOffset; offset <= lastOffset; offset += pageSize) {
         requestRange(offset);
       }
+      const loadedCount = current
+        ? loadedRowCount(current.pages, virtualLengthRef.current)
+        : 0;
+      if (
+        current?.hasMore &&
+        loadedCount > 0 &&
+        loadedCount >= range.overscanStartIndex &&
+        loadedCount <= range.overscanEndIndex
+      ) {
+        requestRange(loadedCount);
+      }
       if (direction > 0) requestRange(lastOffset + pageSize);
       else if (direction < 0 && firstOffset >= pageSize) {
         requestRange(firstOffset - pageSize);
@@ -506,8 +628,12 @@ export function usePagedFileHistory(
     if (!Number.isSafeInteger(index) || index < 0) return undefined;
     const current = stateRef.current;
     if (!current) return undefined;
-    const offset = pageOffset(index, current.pageSize);
-    return current.pages.get(offset)?.[index - offset];
+    for (const [offset, entries] of current.pages) {
+      if (index >= offset && index < offset + entries.length) {
+        return entries[index - offset];
+      }
+    }
+    return undefined;
   }, []);
 
   useEffect(() => {
@@ -558,9 +684,7 @@ export function usePagedFileHistory(
     [state.failedRanges]
   );
   const uniqueLoadedCount = useMemo(() => {
-    let count = 0;
-    for (const entries of state.pages.values()) count += entries.length;
-    return count;
+    return loadedRowCount(state.pages);
   }, [state.pages]);
 
   return {

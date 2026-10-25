@@ -7,6 +7,8 @@ import * as vscode from "vscode";
 import {
   EndConditionEvaluator,
   EvaluationResult,
+  resetEndConditionInterpreterCacheForTests,
+  setEndConditionInterpreterProbeForTests,
 } from "../core/EndConditionEvaluator";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
@@ -17,11 +19,11 @@ import { buildCmdExeVerbatimArgs } from "../core/harness/shared/WindowsCmdEscapi
 const childProcess = require("child_process") as typeof import("child_process");
 
 class TestableEndConditionEvaluator extends EndConditionEvaluator {
-  commandFor(scriptPath: string): {
+  commandFor(scriptPath: string): Promise<{
     executable: string;
     args: string[];
     windowsVerbatimArguments?: boolean;
-  } | null {
+  } | null> {
     return this.getScriptCommand(scriptPath);
   }
 
@@ -39,6 +41,7 @@ suite("EndConditionEvaluator Tests", () => {
   const originalPlatform = process.platform;
 
   setup(() => {
+    resetEndConditionInterpreterCacheForTests();
     // Create a minimal mock PlatformAdapter for testing
     workspaceRoot = makeTempDir("ctrlyoke-evaluator-");
     const mockPlatform: PlatformAdapter = {
@@ -198,116 +201,86 @@ suite("EndConditionEvaluator Tests", () => {
       }
     });
 
-    test("caches Python resolution per platform", () => {
-      const originalExecSyncDescriptor = Object.getOwnPropertyDescriptor(
-        childProcess,
-        "execSync"
-      );
-      const probes: string[] = [];
-      Object.defineProperty(childProcess, "execSync", {
-        configurable: true,
-        enumerable: true,
-        writable: true,
-        value: (command: string) => {
-          probes.push(command);
-          return Buffer.from("");
-        },
-      });
-
-      try {
-        setPlatform("linux");
-        assert.strictEqual(
-          evaluator.commandFor(`${scriptPath}.py`)?.executable,
-          "python3"
-        );
-        assert.strictEqual(
-          evaluator.commandFor(`${scriptPath}.py`)?.executable,
-          "python3"
-        );
-
-        setPlatform("win32");
-        assert.strictEqual(
-          evaluator.commandFor(`${scriptPath}.py`)?.executable,
-          "python"
-        );
-        assert.strictEqual(
-          evaluator.commandFor(`${scriptPath}.py`)?.executable,
-          "python"
-        );
-
-        setPlatform("linux");
-        assert.strictEqual(
-          evaluator.commandFor(`${scriptPath}.py`)?.executable,
-          "python3"
-        );
-        assert.deepStrictEqual(probes, ["python3 --version"]);
-      } finally {
-        if (originalExecSyncDescriptor) {
-          Object.defineProperty(
-            childProcess,
-            "execSync",
-            originalExecSyncDescriptor
-          );
+    test("retries a timed-out PowerShell probe on the next resolution", async () => {
+      setPlatform("win32");
+      let calls = 0;
+      const restore = setEndConditionInterpreterProbeForTests(async () => {
+        calls++;
+        if (calls === 1) {
+          const error = Object.assign(new Error("timed out"), {
+            killed: true,
+            signal: "SIGTERM",
+            code: null,
+          });
+          throw error;
         }
+      });
+      try {
+        assert.strictEqual(
+          (await evaluator.commandFor(`${scriptPath}.ps1`))?.executable,
+          "powershell.exe"
+        );
+        assert.strictEqual(
+          (await evaluator.commandFor(`${scriptPath}.ps1`))?.executable,
+          "pwsh"
+        );
+        assert.strictEqual(calls, 2);
+      } finally {
+        restore();
       }
     });
 
-    test("caches PowerShell resolution per platform", () => {
-      const originalExecSyncDescriptor = Object.getOwnPropertyDescriptor(
-        childProcess,
-        "execSync"
-      );
-      const probes: string[] = [];
-      Object.defineProperty(childProcess, "execSync", {
-        configurable: true,
-        enumerable: true,
-        writable: true,
-        value: (command: string) => {
-          probes.push(command);
-          return Buffer.from("");
-        },
+    test("caches a Python ENOENT fallback", async () => {
+      setPlatform("linux");
+      let calls = 0;
+      const restore = setEndConditionInterpreterProbeForTests(async () => {
+        calls++;
+        throw Object.assign(new Error("not found"), { code: "ENOENT" });
       });
-
       try {
-        setPlatform("win32");
         assert.strictEqual(
-          evaluator.commandFor(`${scriptPath}.ps1`)?.executable,
-          "pwsh"
+          (await evaluator.commandFor(`${scriptPath}.py`))?.executable,
+          "python"
         );
         assert.strictEqual(
-          evaluator.commandFor(`${scriptPath}.ps1`)?.executable,
-          "pwsh"
+          (await evaluator.commandFor(`${scriptPath}.py`))?.executable,
+          "python"
         );
-
-        setPlatform("linux");
-        assert.strictEqual(
-          evaluator.commandFor(`${scriptPath}.ps1`)?.executable,
-          "pwsh"
-        );
-
-        setPlatform("win32");
-        assert.strictEqual(
-          evaluator.commandFor(`${scriptPath}.ps1`)?.executable,
-          "pwsh"
-        );
-        assert.deepStrictEqual(probes, ["pwsh -Version"]);
+        assert.strictEqual(calls, 1);
       } finally {
-        if (originalExecSyncDescriptor) {
-          Object.defineProperty(
-            childProcess,
-            "execSync",
-            originalExecSyncDescriptor
-          );
+        restore();
+      }
+    });
+
+    test("shares an in-flight Python probe", async () => {
+      setPlatform("linux");
+      let calls = 0;
+      let finishProbe!: () => void;
+      const restore = setEndConditionInterpreterProbeForTests(
+        () => {
+          calls++;
+          return new Promise<void>((resolve) => (finishProbe = resolve));
         }
+      );
+      try {
+        const first = evaluator.commandFor(`${scriptPath}.py`);
+        const second = evaluator.commandFor(`${scriptPath}.py`);
+        await Promise.resolve();
+        assert.strictEqual(calls, 1);
+        finishProbe();
+        assert.strictEqual((await first)?.executable, "python3");
+        assert.strictEqual((await second)?.executable, "python3");
+      } finally {
+        restore();
       }
     });
 
     for (const platform of ["win32", "linux"] as const) {
-      test(`routes every supported extension on ${platform}`, () => {
+      test(`routes every supported extension on ${platform}`, async () => {
         setPlatform(platform);
 
         for (const extension of extensions) {
-          const command = evaluator.commandFor(`${scriptPath}${extension}`);
+          const command = await evaluator.commandFor(`${scriptPath}${extension}`);
 
           if (extension === ".bat" || extension === ".cmd") {
             if (platform === "win32") {
@@ -379,25 +352,25 @@ suite("EndConditionEvaluator Tests", () => {
       });
     }
 
-    test("executes an executable file directly", () => {
+    test("executes an executable file directly", async () => {
       setPlatform("win32");
       const executablePath = path.join(workspaceRoot, "tool.exe");
       fs.writeFileSync(executablePath, "not a real executable", "utf8");
 
-      const command = evaluator.commandFor(executablePath);
+      const command = await evaluator.commandFor(executablePath);
       assert.deepStrictEqual(command, {
         executable: executablePath,
         args: [],
       });
     });
 
-    test("rejects unsupported non-executable files on every platform", () => {
+    test("rejects unsupported non-executable files on every platform", async () => {
       const unsupportedPath = path.join(workspaceRoot, "data.txt");
       fs.writeFileSync(unsupportedPath, "not executable", "utf8");
 
       for (const platform of ["win32", "linux"] as const) {
         setPlatform(platform);
-        assert.strictEqual(evaluator.commandFor(unsupportedPath), null);
+        assert.strictEqual(await evaluator.commandFor(unsupportedPath), null);
       }
     });
 
@@ -467,7 +440,7 @@ suite("EndConditionEvaluator Tests", () => {
 
     for (const platform of ["win32", "linux"] as const) {
       for (const shebangCase of shebangCases) {
-        test(`resolves ${shebangCase.name} shebang on ${platform}`, () => {
+        test(`resolves ${shebangCase.name} shebang on ${platform}`, async () => {
           setPlatform(platform);
           const scriptPath = path.join(
             workspaceRoot,
@@ -481,7 +454,7 @@ suite("EndConditionEvaluator Tests", () => {
             );
           }
 
-          const command = evaluator.commandFor(scriptPath);
+          const command = await evaluator.commandFor(scriptPath);
           const isNullCase =
             shebangCase.expectedExecutable === null &&
             !shebangCase.expectedExecutableChoices;
@@ -504,10 +477,10 @@ suite("EndConditionEvaluator Tests", () => {
         });
       }
 
-      test(`does not read mapped extension files on ${platform}`, () => {
+      test(`does not read mapped extension files on ${platform}`, async () => {
         setPlatform(platform);
         for (const extension of [".py", ".ps1", ".sh"] as const) {
-          const command = evaluator.commandFor(
+          const command = await evaluator.commandFor(
             path.join(workspaceRoot, `does-not-exist${extension}`)
           );
           assert.ok(command, extension);

@@ -148,6 +148,94 @@ suite("FileLockUtils", () => {
       assert.deepStrictEqual(order, ["holder-start", "holder-end", "waiter"]);
     });
 
+    test("waits past timeout while a holder heartbeat stays fresh", async () => {
+      const target = tempTarget();
+      let releaseHolder!: () => void;
+      const holderGate = new Promise<void>((resolve) => {
+        releaseHolder = resolve;
+      });
+      const holder = withFileLock(
+        target,
+        async () => holderGate,
+        { staleMs: 120 }
+      );
+      const lockPath = `${target}.lock`;
+      while (!(await fs.stat(lockPath).catch(() => undefined))) {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+      }
+
+      let waiterEntered = false;
+      const waiter = withFileLock(
+        target,
+        async () => {
+          waiterEntered = true;
+        },
+        {
+          staleMs: 120,
+          timeoutMs: 80,
+          waitWhileHolderAlive: true,
+          maxWaitMs: 2_000,
+        }
+      );
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      assert.strictEqual(waiterEntered, false);
+      releaseHolder();
+      await Promise.all([holder, waiter]);
+      assert.strictEqual(waiterEntered, true);
+    });
+
+    test("wait mode still reclaims a stale lock", async () => {
+      const target = tempTarget();
+      const lockPath = `${target}.lock`;
+      await fs.writeFile(lockPath, "99999 stale-lock", "utf8");
+      const past = new Date(Date.now() - 1_000);
+      await fs.utimes(lockPath, past, past);
+
+      let acquired = false;
+      await withFileLock(
+        target,
+        async () => {
+          acquired = true;
+        },
+        {
+          timeoutMs: 1_000,
+          staleMs: 120,
+          waitWhileHolderAlive: true,
+          maxWaitMs: 2_000,
+        }
+      );
+      assert.strictEqual(acquired, true);
+    });
+
+    test("default timeout still expires while a fresh holder is active", async () => {
+      const target = tempTarget();
+      let releaseHolder!: () => void;
+      const holderGate = new Promise<void>((resolve) => {
+        releaseHolder = resolve;
+      });
+      const holder = withFileLock(
+        target,
+        async () => holderGate,
+        { staleMs: 120 }
+      );
+      while (!(await fs.stat(`${target}.lock`).catch(() => undefined))) {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+      }
+
+      try {
+        await assert.rejects(
+          withFileLock(target, async () => undefined, {
+            staleMs: 120,
+            timeoutMs: 80,
+          }),
+          FileLockTimeoutError
+        );
+      } finally {
+        releaseHolder();
+        await holder;
+      }
+    });
+
     test("withFileLock returns the action's resolved value for async actions", async () => {
       const target = tempTarget();
       const value = await withFileLock(target, async () => {

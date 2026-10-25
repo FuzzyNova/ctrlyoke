@@ -40,6 +40,7 @@ import { hashPathForCompare } from "../../utils/PathCasing";
 import { getFrozenRunHistoryLocation } from "../../utils/RunHistoryStoragePolicy";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { lockFilePath, withFileLock } from "../../utils/FileLockUtils";
 import {
   getSearchIndexDir,
   INDEX_SCHEMA_VERSION,
@@ -1732,6 +1733,240 @@ suite("HistorySearchIndexService", () => {
     assert.strictEqual(existingResponse.totalCount, 1);
   });
 
+  test("serves the existing index promptly while a foreign rebuild lock is live", async () => {
+    await createRun("foreign-lock-existing-2026-06-09T23-32-00", 1, 22000, [
+      createStatusDraft(22100, "foreign-lock-existing-term"),
+    ]);
+    const index = new HistorySearchIndexService();
+    const initial = await index.search(
+      { query: "foreign-lock-existing-term", limit: 10 },
+      workspaceRoot
+    );
+    assert.strictEqual(initial.totalCount, 1);
+
+    await createRun("foreign-lock-new-2026-06-09T23-33-00", 1, 23000, [
+      createStatusDraft(23100, "foreign-lock-new-term"),
+    ]);
+
+    const manifestPath = path.join(
+      getSearchIndexDir(workspaceRoot, getFrozenRunHistoryLocation()),
+      "manifest.json"
+    );
+    await fs.mkdir(path.dirname(manifestPath), { recursive: true });
+    let releaseHolder!: () => void;
+    const holderGate = new Promise<void>((resolve) => {
+      releaseHolder = resolve;
+    });
+    const holder = withFileLock(manifestPath, () => holderGate);
+    const lockPath = lockFilePath(manifestPath);
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+
+    try {
+      while (!(await fs.stat(lockPath).catch(() => undefined))) {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+      }
+
+      const response = await Promise.race([
+        index.search(
+          { query: "foreign-lock-existing-term", limit: 10 },
+          workspaceRoot,
+          undefined,
+          undefined,
+          undefined,
+          { allowRebuild: false, rebuildInBackground: true }
+        ),
+        new Promise<never>((_, reject) =>
+          (timeout = setTimeout(
+            () => reject(new Error("Interactive search waited on rebuild lock")),
+            5_000
+          ))
+        ),
+      ]);
+
+      assert.strictEqual(response.indexState, "building");
+      assert.strictEqual(response.totalCount, 1);
+      assert.ok(
+        (
+          index as unknown as { rebuildPromise?: Promise<void> }
+        ).rebuildPromise,
+        "the search should start a background rebuild that encounters the lock"
+      );
+      assert.ok(
+        response.results[0]?.matchSnippet.includes("foreign-lock-existing-term")
+      );
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      releaseHolder();
+      await holder;
+      await index.enqueueWorkspaceRefresh(workspaceRoot);
+    }
+  });
+
+  test("rebuilds a missing index in the background after returning building", async () => {
+    await createRun("background-missing-index-2026-10-25T00-00-00", 1, 80000, [
+      createStatusDraft(80100, "background-missing-index-term"),
+    ]);
+    const index = new HistorySearchIndexService();
+    const initial = await index.search(
+      { query: "background-missing-index-term", limit: 10 },
+      workspaceRoot,
+      undefined,
+      undefined,
+      undefined,
+      { allowRebuild: false, rebuildInBackground: true }
+    );
+
+    assert.strictEqual(initial.indexState, "building");
+    assert.strictEqual(initial.totalCount, 0);
+    assert.ok(
+      (index as unknown as { rebuildPromise?: Promise<void> }).rebuildPromise,
+      "search must start its own background rebuild"
+    );
+
+    await index.enqueueWorkspaceRefresh(workspaceRoot);
+    const ready = await index.search(
+      { query: "background-missing-index-term", limit: 10 },
+      workspaceRoot,
+      undefined,
+      undefined,
+      undefined,
+      { allowRebuild: false }
+    );
+    assert.strictEqual(ready.indexState, "ready");
+    assert.strictEqual(ready.totalCount, 1);
+  });
+
+  test("a second BUILDING search joins the active pass without queueing another", async () => {
+    const index = new HistorySearchIndexService();
+    let releaseRebuild!: () => void;
+    const rebuildGate = new Promise<void>((resolve) => {
+      releaseRebuild = resolve;
+    });
+    let rebuildPasses = 0;
+    (index as any).rebuild = async () => {
+      rebuildPasses += 1;
+      await rebuildGate;
+    };
+
+    try {
+      const first = await index.search(
+        { query: "missing-index-first", limit: 10 },
+        workspaceRoot,
+        undefined,
+        undefined,
+        undefined,
+        { allowRebuild: false, rebuildInBackground: true }
+      );
+      const second = await index.search(
+        { query: "missing-index-second", limit: 10 },
+        workspaceRoot,
+        undefined,
+        undefined,
+        undefined,
+        { allowRebuild: false, rebuildInBackground: true }
+      );
+
+      assert.strictEqual(first.indexState, "building");
+      assert.strictEqual(second.indexState, "building");
+      assert.strictEqual(rebuildPasses, 1);
+      assert.strictEqual(
+        (index as any).rebuildQueued,
+        false,
+        "a search joining the active build must not request another pass"
+      );
+    } finally {
+      releaseRebuild();
+      await index.waitForActiveRefresh();
+    }
+  });
+
+  test("background refresh waits past its lock timeout for a live foreign rebuild lock", async function () {
+    // Prove the background path waits beyond the worker's ordinary 60-second
+    // acquisition timeout instead of abandoning the refresh.
+    this.timeout(75_000);
+    await createRun("background-lock-wait-2026-10-25T00-00-00", 1, 81000, [
+      createStatusDraft(81100, "background-lock-wait-term"),
+    ]);
+    const manifestPath = path.join(
+      getSearchIndexDir(workspaceRoot, getFrozenRunHistoryLocation()),
+      "manifest.json"
+    );
+    await fs.mkdir(path.dirname(manifestPath), { recursive: true });
+    let releaseHolder!: () => void;
+    const holderGate = new Promise<void>((resolve) => {
+      releaseHolder = resolve;
+    });
+    const holder = withFileLock(manifestPath, () => holderGate);
+    const lockPath = lockFilePath(manifestPath);
+    const index = new HistorySearchIndexService();
+
+    try {
+      while (!(await fs.stat(lockPath).catch(() => undefined))) {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+      }
+      const refresh = index.enqueueWorkspaceRefresh(workspaceRoot);
+      await new Promise((resolve) => setTimeout(resolve, 61_000));
+      releaseHolder();
+      await holder;
+      await refresh;
+
+      const ready = await index.search(
+        { query: "background-lock-wait-term", limit: 10 },
+        workspaceRoot,
+        undefined,
+        undefined,
+        undefined,
+        { allowRebuild: false }
+      );
+      assert.strictEqual(ready.totalCount, 1);
+    } finally {
+      releaseHolder();
+      await holder;
+    }
+  });
+
+  test("cancels a search that is waiting for a live rebuild lock", async () => {
+    await createRun("cancelled-lock-wait-2026-06-09T23-34-00", 1, 24000, [
+      createStatusDraft(24100, "cancelled-lock-wait-term"),
+    ]);
+    const manifestPath = path.join(
+      getSearchIndexDir(workspaceRoot, getFrozenRunHistoryLocation()),
+      "manifest.json"
+    );
+    await fs.mkdir(path.dirname(manifestPath), { recursive: true });
+    let releaseHolder!: () => void;
+    const holderGate = new Promise<void>((resolve) => {
+      releaseHolder = resolve;
+    });
+    const holder = withFileLock(manifestPath, () => holderGate);
+    const lockPath = lockFilePath(manifestPath);
+    const controller = new AbortController();
+    const index = new HistorySearchIndexService();
+
+    try {
+      while (!(await fs.stat(lockPath).catch(() => undefined))) {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+      }
+
+      const search = index.search(
+        { query: "cancelled-lock-wait-term", limit: 10 },
+        workspaceRoot,
+        undefined,
+        controller.signal,
+        undefined,
+        { allowRebuild: true, waitForLiveLock: true }
+      );
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      controller.abort();
+
+      await assert.rejects(search, HistorySearchCancelledError);
+    } finally {
+      controller.abort();
+      releaseHolder();
+      await holder;
+    }
+  });
+
   test("skips a redundant rebuild after waiting for a sibling and returns results", async () => {
     const workflowId = "fresh-index-race-2026-06-09T22-40-00";
     await createRun(workflowId, 1, 5000, [
@@ -1807,7 +2042,7 @@ suite("HistorySearchIndexService", () => {
     const firstRebuildStarted = new Promise<void>((resolve) => {
       resolveFirstRebuildStarted = resolve;
     });
-    let secondRefresh: Promise<void> | undefined;
+    let secondRefresh: Promise<unknown> | undefined;
     let firstRebuildStartObserved = false;
 
     Log.debug = (message: string) => {

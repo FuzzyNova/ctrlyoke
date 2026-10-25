@@ -38,7 +38,9 @@ Unlike everything else on this page, this is a lasting change, not a per-run one
 - It is installed the first time ctrlyoke runs that harness, and it stays in place between runs.
 - If you already had a status line command, ctrlyoke saves it in its own settings
   (`statusLine.byHarness.<harness>.customCommand`) and runs it underneath, so your status line
-  keeps working.
+  keeps working. The last non-empty output is cached per harness in
+  `~/.ctrlyoke/cache/statusline-forwarded/<harness>.txt` and is shown if a later invocation times
+  out.
 - If your existing status line is not a command, ctrlyoke leaves it alone and turns its own off
   for that harness.
 - To undo it, turn the harness off in **Settings → Status Line** (or set

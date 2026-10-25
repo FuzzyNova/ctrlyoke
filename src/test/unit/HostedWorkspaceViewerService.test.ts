@@ -1,5 +1,7 @@
 import * as assert from "assert";
 import { execFileSync } from "child_process";
+import { EventEmitter } from "events";
+import { PassThrough } from "stream";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -27,9 +29,14 @@ import {
   GIT_REF_LABEL_TYPES,
   WORKSPACE_ENTRY_KINDS,
 } from "../../types/DashboardConstants";
-import { setGitTimeoutOverridesForTests } from "../../utils/GitUtils";
+import {
+  setGitCommandObserverForTests,
+  setGitTimeoutOverridesForTests,
+  setFileHistorySpawnForTests,
+} from "../../utils/GitUtils";
 import { configService } from "../../config/CtrlYokeConfigService";
 import { USER_SETTINGS_VIEWER_SENTINEL_PATH } from "../../types/DashboardConstants";
+import { Log } from "../../utils/Log";
 
 /**
  * Small enough that "budget exceeded" is a handful of files rather than the
@@ -44,6 +51,29 @@ class BudgetedWorkspaceViewerService extends HostedWorkspaceViewerService {
 
 class DiffCappedWorkspaceViewerService extends HostedWorkspaceViewerService {
   protected override readonly diffSideMaxBytes = 8;
+}
+
+class UnavailableGitWorkspaceViewerService extends HostedWorkspaceViewerService {
+  protected override async *getGitFilesIncludingNestedRepos(): AsyncIterable<
+    string[]
+  > {
+    const error = new Error("spawn git ENOENT") as NodeJS.ErrnoException;
+    error.code = "ENOENT";
+    throw error;
+  }
+}
+
+class CountFailureWorkspaceViewerService extends HostedWorkspaceViewerService {
+  protected override async readCommitCount(): Promise<{
+    stdout: string;
+    stderr: string;
+  }> {
+    throw new Error("rev-list count timed out");
+  }
+}
+
+class ShortDeadlineWorkspaceViewerService extends HostedWorkspaceViewerService {
+  protected override readonly fileHistoryPageTimeoutMs = 25;
 }
 
 suite("HostedWorkspaceViewerService", function () {
@@ -76,6 +106,26 @@ suite("HostedWorkspaceViewerService", function () {
     fs.writeFileSync(path.join(cwd, fileName), content);
     runGit(cwd, "add", fileName);
     runGit(cwd, "commit", "-m", message);
+  }
+
+  function commitFileAt(
+    cwd: string,
+    fileName: string,
+    content: string,
+    message: string,
+    date: string
+  ): void {
+    fs.writeFileSync(path.join(cwd, fileName), content);
+    runGit(cwd, "add", fileName);
+    execFileSync("git", ["-C", cwd, "commit", "-m", message], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        GIT_AUTHOR_DATE: date,
+        GIT_COMMITTER_DATE: date,
+      },
+    });
   }
 
   suite("checkoutBranch", () => {
@@ -596,6 +646,33 @@ suite("HostedWorkspaceViewerService", function () {
       assert.strictEqual(byName.get(".git")?.gitIgnored, true);
     });
 
+    test("marks children of a wholly ignored directory as gitignored", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      fs.writeFileSync(path.join(root, ".gitignore"), "ignored_dir/\n");
+      fs.mkdirSync(path.join(root, "ignored_dir", "nested"), {
+        recursive: true,
+      });
+      fs.writeFileSync(
+        path.join(root, "ignored_dir", "visible-looking.txt"),
+        "x"
+      );
+      fs.writeFileSync(
+        path.join(root, "ignored_dir", "nested", "child.txt"),
+        "x"
+      );
+
+      const result = await new HostedWorkspaceViewerService(root).listDirectory(
+        {
+          path: "ignored_dir",
+          includeGitIgnored: true,
+        }
+      );
+
+      assert.ok(result.entries.length > 0);
+      assert.ok(result.entries.every((entry) => entry.gitIgnored));
+    });
+
     test("makes every entry beyond the old 1,000-entry cutoff reachable", async () => {
       const root = createWorkspace();
       for (let index = 0; index < 1_005; index++) {
@@ -859,7 +936,7 @@ suite("HostedWorkspaceViewerService", function () {
   // ── getFileHistory ────────────────────────────────────────────────────────
 
   suite("getFileHistory", () => {
-    test("freezes the complete history at the initial HEAD", async () => {
+    test("freezes file history at the initial HEAD", async () => {
       const root = createWorkspace();
       runGit(root, "init");
       configureGitIdentity(root);
@@ -890,6 +967,447 @@ suite("HostedWorkspaceViewerService", function () {
       const refreshed = await svc.getFileHistory("history.txt", 0, 10);
       assert.strictEqual(refreshed.totalEntries, 4);
       assert.notStrictEqual(refreshed.historyId, first.historyId);
+    });
+
+    test("ends file history at a root commit", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "history.txt", "one\n", "Root history commit");
+
+      const page = await new HostedWorkspaceViewerService(root).getFileHistory(
+        "history.txt",
+        0,
+        1
+      );
+      assert.deepStrictEqual(
+        page.entries.map((entry) => entry.subject),
+        ["Root history commit"]
+      );
+      assert.strictEqual(page.hasMore, false);
+      assert.strictEqual(page.nextCursor, undefined);
+    });
+
+    test("follows a rename across a bounded page boundary", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "old-name.txt", "one\n", "Before rename");
+      runGit(root, "mv", "old-name.txt", "new-name.txt");
+      runGit(root, "commit", "-m", "Rename file");
+      commitFile(root, "new-name.txt", "three\n", "After rename");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const first = await svc.getFileHistory("new-name.txt", 0, 1);
+      const second = await svc.getFileHistory(
+        "new-name.txt",
+        1,
+        undefined,
+        first.historyId,
+        undefined,
+        undefined,
+        first.nextCursor
+      );
+
+      assert.deepStrictEqual(
+        first.entries.map((entry) => entry.subject),
+        ["After rename"]
+      );
+      assert.match(first.nextCursor ?? "", /^[0-9a-f-]{36}$/i);
+      assert.ok(!first.nextCursor?.includes("new-name.txt"));
+      assert.deepStrictEqual(
+        second.entries.map((entry) => entry.subject),
+        ["Rename file"]
+      );
+      assert.strictEqual(second.entries[0]?.oldPath, "old-name.txt");
+      assert.strictEqual(second.hasMore, true);
+      assert.ok(second.nextCursor);
+      const third = await svc.getFileHistory(
+        "new-name.txt",
+        2,
+        undefined,
+        first.historyId,
+        undefined,
+        undefined,
+        second.nextCursor
+      );
+      assert.deepStrictEqual(
+        third.entries.map((entry) => entry.subject),
+        ["Before rename"]
+      );
+      assert.strictEqual(third.entries[0]?.path, "old-name.txt");
+      assert.strictEqual(third.hasMore, false);
+    });
+
+    test("pages interleaved merged-branch commits exactly in Git order", async () => {
+      const root = createWorkspace();
+      runGit(root, "init", "-b", "main");
+      configureGitIdentity(root);
+      const baseContent = [
+        "base",
+        "",
+        "main-slot",
+        "",
+        "side-slot",
+        "",
+        "main-slot-2",
+        "",
+        "side-slot-2",
+        "",
+      ].join("\n");
+      commitFileAt(
+        root,
+        "history.txt",
+        baseContent,
+        "Base",
+        "2020-01-01T00:00:00Z"
+      );
+      runGit(root, "branch", "side");
+      runGit(root, "checkout", "side");
+      commitFileAt(
+        root,
+        "history.txt",
+        baseContent.replace("side-slot", "side change"),
+        "Side 1",
+        "2020-01-03T00:00:00Z"
+      );
+      runGit(root, "checkout", "main");
+      commitFileAt(
+        root,
+        "history.txt",
+        baseContent.replace("main-slot", "main change"),
+        "Main 1",
+        "2020-01-02T00:00:00Z"
+      );
+      commitFileAt(
+        root,
+        "history.txt",
+        fs.readFileSync(path.join(root, "history.txt"), "utf8").replace(
+          "main-slot-2", "main change 2"
+        ),
+        "Main 2",
+        "2020-01-04T00:00:00Z"
+      );
+      runGit(root, "checkout", "side");
+      commitFileAt(
+        root,
+        "history.txt",
+        fs.readFileSync(path.join(root, "history.txt"), "utf8").replace(
+          "side-slot-2", "side change 2"
+        ),
+        "Side 2",
+        "2020-01-05T00:00:00Z"
+      );
+      runGit(root, "checkout", "main");
+      runGit(root, "merge", "--no-ff", "side", "-m", "Merge side");
+      for (let index = 0; index < 10; index++) {
+        commitFileAt(
+          root,
+          "other.txt",
+          `unrelated-${index}\n`,
+          `Unrelated ${index}`,
+          `2020-01-${String(7 + index).padStart(2, "0")}T00:00:00Z`
+        );
+      }
+
+      const expected = runGit(
+        root,
+        "log",
+        "--follow",
+        "--format=%H",
+        "--",
+        "history.txt"
+      )
+        .split("\n")
+        .filter(Boolean);
+      const svc = new HostedWorkspaceViewerService(root);
+      const actual: string[] = [];
+      let page = await svc.getFileHistory("history.txt", 0, 1);
+      actual.push(...page.entries.map((entry) => entry.hash));
+      while (page.hasMore) {
+        page = await svc.getFileHistory(
+          "history.txt",
+          actual.length,
+          undefined,
+          page.historyId,
+          undefined,
+          undefined,
+          page.nextCursor
+        );
+        actual.push(...page.entries.map((entry) => entry.hash));
+      }
+
+      assert.deepStrictEqual(actual, expected);
+      assert.strictEqual(new Set(actual).size, actual.length);
+    });
+
+    test("keeps one Git walk while paging a long linear history", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      for (let index = 0; index < 12; index++) {
+        commitFile(root, "history.txt", `${index}\n`, `History ${index}`);
+      }
+      const logCommands: string[][] = [];
+      const restoreObserver = setGitCommandObserverForTests((_file, args) => {
+        if (args.includes("log") && args.includes("--follow")) logCommands.push([...args]);
+      });
+      try {
+        const svc = new HostedWorkspaceViewerService(root);
+        const subjects: string[] = [];
+        let page = await svc.getFileHistory("history.txt", 0, 2);
+        subjects.push(...page.entries.map((entry) => entry.subject));
+        while (page.hasMore) {
+          page = await svc.getFileHistory(
+            "history.txt", subjects.length, undefined, page.historyId,
+            undefined, undefined, page.nextCursor
+          );
+          subjects.push(...page.entries.map((entry) => entry.subject));
+        }
+        assert.strictEqual(subjects.length, 12);
+        assert.strictEqual(logCommands.length, 1);
+      } finally {
+        restoreObserver();
+      }
+    });
+
+    test("rejects a cursor issued for a different history snapshot", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "history.txt", "one\n", "First");
+      commitFile(root, "history.txt", "two\n", "Second");
+      const svc = new HostedWorkspaceViewerService(root);
+      const first = await svc.getFileHistory("history.txt", 0, 1);
+      const other = await svc.getFileHistory("history.txt", 0, 1);
+      assert.ok(first.nextCursor);
+      assert.ok(other.nextCursor);
+      await assert.rejects(
+        svc.getFileHistory(
+          "history.txt",
+          1,
+          undefined,
+          other.historyId,
+          undefined,
+          undefined,
+          first.nextCursor
+        ),
+        (error: unknown) => error instanceof WorkspaceTreeBadRequestError
+      );
+    });
+
+    test("continues trusted-root filtering across several raw batches", async () => {
+      const repo = createWorkspace();
+      const trustedRoot = path.join(repo, "trusted");
+      fs.mkdirSync(trustedRoot);
+      runGit(repo, "init");
+      configureGitIdentity(repo);
+      commitFile(repo, "trusted/history.txt", "current\n", "Current history");
+      const hashes = ["1", "2", "3", "4", "5", "6"].map((digit) =>
+        digit.repeat(40)
+      );
+      const rows = [
+        [hashes[0], hashes[1], "Outside one", "outside.txt"],
+        [hashes[1], hashes[2], "Outside two", "outside.txt"],
+        [hashes[2], hashes[3], "Outside three", "outside.txt"],
+        [hashes[3], hashes[4], "Outside four", "outside.txt"],
+        [hashes[4], hashes[5], "Trusted history", "trusted/history.txt"],
+        [hashes[5], "", "Trusted older", "trusted/history.txt"],
+      ];
+      let spawnCount = 0;
+      const restoreSpawn = setFileHistorySpawnForTests(() => {
+        const child = new EventEmitter() as EventEmitter & {
+          stdout: PassThrough;
+          stderr: PassThrough;
+          kill: () => boolean;
+        };
+        child.stdout = new PassThrough();
+        child.stderr = new PassThrough();
+        child.kill = () => true;
+        spawnCount++;
+        const output = rows
+          .map(
+            ([hash, parent, subject, filePath]) =>
+              `\0${hash}\0${hash.slice(0, 7)}\0${subject}\0ctrlyoke Test\0today\0${parent}\0\0\0M\0${filePath}\0`
+          )
+          .join("");
+        setImmediate(() => {
+          child.stdout.write(output);
+          child.emit("close", 0);
+        });
+        return child as never;
+      });
+      try {
+        const page = await new HostedWorkspaceViewerService(
+          trustedRoot
+        ).getFileHistory("history.txt", 0, 1);
+        assert.deepStrictEqual(
+          page.entries.map((entry) => entry.subject),
+          ["Trusted history"]
+        );
+        assert.strictEqual(page.hasMore, true);
+        assert.ok(page.nextCursor);
+        assert.strictEqual(spawnCount, 1);
+      } finally {
+        restoreSpawn();
+      }
+    });
+
+    test("retries a timed-out page instead of serving it from cache", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "history.txt", "one\n", "Initial");
+      const row = (hash: string, parent: string, subject: string) =>
+        `\0${hash}\0${hash.slice(0, 7)}\0${subject}\0ctrlyoke Test\0today\0${parent}\0\0\0M\0history.txt\0`;
+      const output = row("a".repeat(40), "b".repeat(40), "History 0") +
+        row("b".repeat(40), "", "History 1");
+      let spawnCount = 0;
+      const restoreSpawn = setFileHistorySpawnForTests(() => {
+        const child = new EventEmitter() as EventEmitter & {
+          stdout: PassThrough; stderr: PassThrough; kill: () => boolean;
+        };
+        child.stdout = new PassThrough();
+        child.stderr = new PassThrough();
+        child.kill = () => true;
+        spawnCount++;
+        const emit = () => { child.stdout.write(output); child.emit("close", 0); };
+        if (spawnCount === 1) setTimeout(emit, 100);
+        else setImmediate(emit);
+        return child as never;
+      });
+      try {
+        const svc = new ShortDeadlineWorkspaceViewerService(root);
+        await assert.rejects(svc.getFileHistory("history.txt", 0, 1), /timed out/);
+        const retry = await svc.getFileHistory("history.txt", 0, 1);
+        assert.deepStrictEqual(retry.entries.map((entry) => entry.subject), ["History 0"]);
+        assert.strictEqual(spawnCount, 2);
+      } finally {
+        restoreSpawn();
+      }
+    });
+
+    test("returns timed-out rows as a partial page and continues without gaps", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "history.txt", "one\n", "Initial");
+      const row = (hash: string, parent: string, subject: string) =>
+        `\0${hash}\0${hash.slice(0, 7)}\0${subject}\0ctrlyoke Test\0today\0${parent}\0\0\0M\0history.txt\0`;
+      let spawnCount = 0;
+      let walkChild: (EventEmitter & { stdout: PassThrough; stderr: PassThrough; kill: () => boolean }) | undefined;
+      const restoreSpawn = setFileHistorySpawnForTests(() => {
+        const child = new EventEmitter() as EventEmitter & {
+          stdout: PassThrough;
+          stderr: PassThrough;
+          kill: () => boolean;
+        };
+        child.stdout = new PassThrough();
+        child.stderr = new PassThrough();
+        child.kill = () => true;
+        spawnCount++;
+        walkChild = child;
+        setImmediate(() => child.stdout.write(row("a".repeat(40), "b".repeat(40), "History 0")));
+        return child as never;
+      });
+      try {
+        const svc = new ShortDeadlineWorkspaceViewerService(root);
+        const first = await svc.getFileHistory("history.txt", 0, 1);
+        assert.deepStrictEqual(first.entries.map((entry) => entry.subject), ["History 0"]);
+        assert.strictEqual(first.hasMore, true);
+        assert.ok(first.nextCursor);
+        walkChild?.stdout.write(row("b".repeat(40), "", "History 1"));
+        setImmediate(() => walkChild?.emit("close", 0));
+
+        const continued = await svc.getFileHistory(
+          "history.txt",
+          1,
+          undefined,
+          first.historyId,
+          undefined,
+          undefined,
+          first.nextCursor
+        );
+        assert.deepStrictEqual(continued.entries.map((entry) => entry.subject), ["History 1"]);
+        assert.strictEqual(continued.hasMore, false);
+        assert.strictEqual(spawnCount, 1);
+      } finally {
+        restoreSpawn();
+      }
+    });
+
+    test("disposes and drops a first-page snapshot when it times out without rows", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "history.txt", "one\n", "Initial");
+      let spawnCount = 0;
+      let firstChild: (EventEmitter & { stdout: PassThrough; stderr: PassThrough; kill: () => boolean }) | undefined;
+      const restoreSpawn = setFileHistorySpawnForTests(() => {
+        const child = new EventEmitter() as EventEmitter & {
+          stdout: PassThrough;
+          stderr: PassThrough;
+          kill: () => boolean;
+        };
+        child.stdout = new PassThrough();
+        child.stderr = new PassThrough();
+        child.kill = () => true;
+        if (++spawnCount === 1) {
+          firstChild = child;
+        } else {
+          setImmediate(() => {
+            child.stdout.write(
+              `\0${"a".repeat(40)}\0aaaaaaa\0Retry history\0ctrlyoke Test\0today\0\0\0\0M\0history.txt\0`
+            );
+            child.emit("close", 0);
+          });
+        }
+        return child as never;
+      });
+      try {
+        const svc = new ShortDeadlineWorkspaceViewerService(root);
+        await assert.rejects(svc.getFileHistory("history.txt", 0, 1), /timed out/);
+        assert.strictEqual(firstChild?.stdout.destroyed, true);
+        assert.strictEqual(firstChild?.stderr.destroyed, true);
+        const retry = await svc.getFileHistory("history.txt", 0, 1);
+        assert.deepStrictEqual(retry.entries.map((entry) => entry.subject), ["Retry history"]);
+        assert.strictEqual(spawnCount, 2);
+      } finally {
+        restoreSpawn();
+      }
+    });
+
+    test("preserves Git failures instead of reporting them as page deadlines", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "history.txt", "one\n", "History entry");
+      const restoreSpawn = setFileHistorySpawnForTests(() => {
+        const child = new EventEmitter() as EventEmitter & {
+          stdout: PassThrough;
+          stderr: PassThrough;
+          kill: () => boolean;
+        };
+        child.stdout = new PassThrough();
+        child.stderr = new PassThrough();
+        child.kill = () => true;
+        setImmediate(() => {
+          child.stderr.write("fatal: synthetic Git failure");
+          child.emit("close", 2);
+        });
+        return child as never;
+      });
+      try {
+        await assert.rejects(
+          new HostedWorkspaceViewerService(root).getFileHistory("history.txt"),
+          (error: unknown) =>
+            error instanceof Error &&
+            error.message.includes("synthetic Git failure") &&
+            !error.message.includes("timed out")
+        );
+      } finally {
+        restoreSpawn();
+      }
     });
 
     test("scopes a multi-repo path through its owning repository", async () => {
@@ -926,7 +1444,7 @@ suite("HostedWorkspaceViewerService", function () {
           error instanceof Error && error.message === "Path not allowed"
       );
       await assert.rejects(
-        svc.getFileHistory("history.txt", 1, undefined, page.historyId),
+        svc.getFileHistory("history.txt", -1, undefined, page.historyId),
         (error: unknown) => error instanceof WorkspaceTreeBadRequestError
       );
       await assert.rejects(
@@ -1203,6 +1721,149 @@ suite("HostedWorkspaceViewerService", function () {
   });
 
   suite("searchWorkspace", () => {
+    test("searches nested repositories and never returns their directories as files", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      const inner = path.join(root, "inner");
+      fs.mkdirSync(inner);
+      runGit(inner, "init");
+      configureGitIdentity(inner);
+      commitFile(inner, "b.txt", "nestedneedle in nested repo\n", "nested");
+
+      const submoduleSource = createWorkspace();
+      runGit(submoduleSource, "init");
+      configureGitIdentity(submoduleSource);
+      commitFile(
+        submoduleSource,
+        "c.txt",
+        "nestedneedle in submodule\n",
+        "submodule"
+      );
+      runGit(
+        root,
+        "-c",
+        "protocol.file.allow=always",
+        "submodule",
+        "add",
+        submoduleSource,
+        "submodule"
+      );
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const content = await svc.searchWorkspace({
+        query: "nestedneedle",
+        scope: "content",
+      });
+      assert.deepStrictEqual(
+        content.results.map((result) => result.path).sort(),
+        ["inner/b.txt", "submodule/c.txt"]
+      );
+
+      const directoryName = await svc.searchWorkspace({
+        query: "inner",
+        scope: "files",
+      });
+      assert.deepStrictEqual(directoryName.results, []);
+      assert.ok(
+        content.results.every(
+          (result) => result.kind === WORKSPACE_ENTRY_KINDS.CONTENT
+        )
+      );
+    });
+
+    test("skips a broken submodule while retaining outer repository results once", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "outer.txt", "outerneedle in outer repo\n", "outer");
+
+      const source = createWorkspace();
+      runGit(source, "init");
+      configureGitIdentity(source);
+      commitFile(source, "inner.txt", "nested content\n", "inner");
+      const broken = path.join(root, "broken");
+      fs.mkdirSync(broken);
+      fs.writeFileSync(
+        path.join(broken, ".git"),
+        "gitdir: ../.git/modules/missing\n"
+      );
+      runGit(
+        root,
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        `160000,${runGit(source, "rev-parse", "HEAD")},broken`
+      );
+      fs.writeFileSync(path.join(root, ".gitignore"), "ignored.txt\n");
+      fs.writeFileSync(path.join(root, "ignored.txt"), "outerneedle ignored\n");
+      runGit(root, "add", ".gitignore");
+      runGit(root, "commit", "-m", "ignore a matching file");
+
+      const warnings: string[] = [];
+      const originalWarn = Log.warn;
+      Log.warn = (message: string) => warnings.push(message);
+      try {
+        const result = await new HostedWorkspaceViewerService(
+          root
+        ).searchWorkspace({
+          query: "outerneedle",
+          scope: "content",
+        });
+        assert.deepStrictEqual(
+          result.results.map((entry) => entry.path),
+          ["outer.txt"]
+        );
+        assert.ok(warnings.some((message) => message.includes("skipping it")));
+      } finally {
+        Log.warn = originalWarn;
+      }
+    });
+
+    test("does not recurse into an unpopulated submodule", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "outer.txt", "outerneedle in outer repo\n", "outer");
+
+      const source = createWorkspace();
+      runGit(source, "init");
+      configureGitIdentity(source);
+      commitFile(source, "inner.txt", "nested content\n", "inner");
+      // A clone without --recurse-submodules leaves an empty gitlink directory.
+      fs.mkdirSync(path.join(root, "unpopulated"));
+      runGit(
+        root,
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        `160000,${runGit(source, "rev-parse", "HEAD")},unpopulated`
+      );
+      runGit(root, "commit", "-m", "add unpopulated submodule");
+
+      const result = await new HostedWorkspaceViewerService(
+        root
+      ).searchWorkspace({
+        query: "outerneedle",
+        scope: "content",
+      });
+      assert.deepStrictEqual(
+        result.results.map((entry) => entry.path),
+        ["outer.txt"]
+      );
+    });
+
+    test("falls back to the workspace walk when Git cannot spawn", async () => {
+      const root = createWorkspace();
+      fs.writeFileSync(path.join(root, "walk-target.txt"), "walkneedle\n");
+      const result = await new UnavailableGitWorkspaceViewerService(
+        root
+      ).searchWorkspace({ query: "walkneedle", scope: "content" });
+      assert.deepStrictEqual(
+        result.results.map((entry) => entry.path),
+        ["walk-target.txt"]
+      );
+    });
+
     test("returns filename and content matches with 1-based line numbers", async () => {
       const root = createWorkspace();
       runGit(root, "init");
@@ -2174,7 +2835,57 @@ suite("HostedWorkspaceViewerService", function () {
   // ── getCommitLog ──────────────────────────────────────────────────────────
 
   suite("getCommitLog", () => {
-    test("freezes the complete history for subsequent pages", async () => {
+    test("continues the file-history git log walk across pages", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "history.txt", "one\n", "First");
+      commitFile(root, "history.txt", "two\n", "Second");
+      const observedLogs: string[][] = [];
+      const restoreObserver = setGitCommandObserverForTests((_file, args) => {
+        if (args.includes("log")) {
+          observedLogs.push([...args]);
+        }
+      });
+
+      try {
+        const svc = new HostedWorkspaceViewerService(root);
+        const commitPage = await svc.getCommitLog(0, 1);
+        await svc.getCommitLog(
+          1,
+          1,
+          undefined,
+          undefined,
+          commitPage.historyId
+        );
+        const filePage = await svc.getFileHistory("history.txt", 0, 1);
+        await svc.getFileHistory(
+          "history.txt",
+          1,
+          undefined,
+          filePage.historyId,
+          undefined,
+          undefined,
+          filePage.nextCursor
+        );
+      } finally {
+        restoreObserver();
+      }
+
+      assert.strictEqual(observedLogs.length, 3);
+      for (const args of observedLogs.slice(0, 2)) {
+        assert.ok(args.includes("-n"), `expected bounded git log: ${args}`);
+        assert.ok(
+          args.some((arg) => arg.startsWith("--skip=")),
+          `expected explicit page offset: ${args}`
+        );
+        assert.ok(args.includes("2"), `expected page size plus one: ${args}`);
+      }
+      assert.ok(observedLogs[2]?.includes("--follow"));
+      assert.ok(!observedLogs[2]?.some((arg) => arg.startsWith("--skip=")));
+    });
+
+    test("freezes commit history for subsequent pages", async () => {
       const root = createWorkspace();
       runGit(root, "init");
       configureGitIdentity(root);
@@ -2213,6 +2924,23 @@ suite("HostedWorkspaceViewerService", function () {
       const refreshed = await svc.getCommitLog(0, 2);
       assert.strictEqual(refreshed.totalEntries, 4);
       assert.notStrictEqual(refreshed.historyId, first.historyId);
+    });
+
+    test("returns the first commit page when rev-list count fails", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "a.txt", "one\n", "First commit");
+
+      const result = await new CountFailureWorkspaceViewerService(
+        root
+      ).getCommitLog(0, 1);
+      assert.deepStrictEqual(
+        result.commits.map((commit) => commit.subject),
+        ["First commit"]
+      );
+      assert.strictEqual(result.totalEntries, undefined);
+      assert.strictEqual(result.hasMore, false);
     });
 
     test("rejects invalid, expired, and mismatched history ids", async () => {
@@ -2780,73 +3508,134 @@ suite("HostedWorkspaceViewerService", function () {
     });
   });
 
-  // ── getWorktreeDiff ─────────────────────────────────────────────────────────
+  // ── getWorktreeDiffPage ──────────────────────────────────────────────────────
 
-  suite("getWorktreeDiff", () => {
-    test("diffs a recorded worktree branch against its recorded base commit", async () => {
+  suite("getWorktreeDiffPage", () => {
+    test("pages a worktree diff larger than GitUtils' default maxBuffer", async function () {
+      this.timeout(60_000);
       const root = createWorkspace();
       runGit(root, "init");
       configureGitIdentity(root);
-      commitFile(root, "base.txt", "base\n", "base commit");
+      commitFile(root, "baseline.txt", "baseline\n", "Baseline");
       const baseCommit = runGit(root, "rev-parse", "HEAD");
-      runGit(root, "checkout", "-b", "feature/worktree-test");
-      commitFile(root, "feature.txt", "feature\n", "feature commit");
+      runGit(root, "checkout", "-b", "feature/large-worktree");
+      const content = "0123456789abcdef".repeat(7000) + "\n";
+      for (let index = 0; index < 520; index++) {
+        const fileName = `large-${String(index).padStart(3, "0")}.txt`;
+        fs.writeFileSync(path.join(root, fileName), content);
+      }
+      runGit(root, "add", ".");
+      runGit(root, "commit", "-m", "Large worktree change");
 
       const svc = new HostedWorkspaceViewerService(root);
-      const result = await svc.getWorktreeDiff(
+      const first = await svc.getWorktreeDiffPage(
         root,
         baseCommit,
-        "feature/worktree-test"
+        "feature/large-worktree",
+        0,
+        1
       );
+      assert.strictEqual(first.totalEntries, 520);
+      assert.strictEqual(first.entries.length, 1);
+      assert.strictEqual(
+        first.entries[0]?.payloadKind,
+        DIFF_PAYLOAD_KINDS.TEXT
+      );
+      assert.strictEqual(first.entries[0]?.newContent, content);
 
-      assert.ok(result.unifiedDiff.includes("feature.txt"));
+      commitFile(root, "later.txt", "after snapshot\n", "Move branch tip");
+      const second = await svc.getWorktreeDiffPage(
+        root,
+        baseCommit,
+        "feature/large-worktree",
+        1,
+        undefined,
+        first.diffId
+      );
+      assert.strictEqual(second.diffId, first.diffId);
+      assert.strictEqual(second.totalEntries, 520);
+      assert.strictEqual(second.offset, 1);
+      assert.ok(!second.entries.some((entry) => entry.path === "later.txt"));
     });
+  });
 
-    test("scopes a nested workspace diff to its trusted root", async () => {
+  suite("git ref diff downloads", () => {
+    test("includes untracked file names in the working-tree stream", async () => {
       const root = createWorkspace();
       runGit(root, "init");
       configureGitIdentity(root);
-      fs.mkdirSync(path.join(root, "app"));
-      fs.mkdirSync(path.join(root, "private"));
-      fs.writeFileSync(path.join(root, "app", "a.txt"), "base app\n");
-      fs.writeFileSync(
-        path.join(root, "private", "notes.txt"),
-        "base private\n"
-      );
-      runGit(root, "add", ".");
-      runGit(root, "commit", "-m", "base");
-      const baseCommit = runGit(root, "rev-parse", "HEAD");
-      runGit(root, "checkout", "-b", "feature/scoped");
-      fs.writeFileSync(path.join(root, "app", "a.txt"), "feature app\n");
-      fs.writeFileSync(
-        path.join(root, "private", "notes.txt"),
-        "feature private\n"
-      );
-      runGit(root, "add", ".");
-      runGit(root, "commit", "-m", "feature");
+      commitFile(root, "tracked.txt", "committed\n", "base");
+      fs.writeFileSync(path.join(root, "untracked.txt"), "new file\n");
 
-      const result = await new HostedWorkspaceViewerService(
-        path.join(root, "app")
-      ).getWorktreeDiff(root, baseCommit, "feature/scoped");
+      const download = await new HostedWorkspaceViewerService(
+        root
+      ).spawnGitRefDiffDownload("~diff");
+      assert.ok(download, "expected a git diff process");
+      const chunks: Buffer[] = [];
+      download.stdout.on("data", (chunk: Buffer | string) => {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      });
+      const [exitCode] = await Promise.all([
+        new Promise<number | null>((resolve, reject) => {
+          download.process.once("error", reject);
+          download.process.once("close", resolve);
+        }),
+        new Promise<void>((resolve) => download.stdout.once("end", resolve)),
+      ]);
 
-      assert.ok(result.unifiedDiff.includes("a.txt"));
-      assert.ok(!result.unifiedDiff.includes("private/"));
+      assert.strictEqual(exitCode, 0);
+      assert.ok(
+        Buffer.concat(chunks)
+          .toString("utf8")
+          .includes("\nUntracked files:\n  untracked.txt"),
+        "expected the streamed diff to use the buffered untracked-file format"
+      );
     });
 
-    test("rejects a sourceCheckoutRoot outside every discovered repo", async () => {
+    test("streams the diff when listing untracked files fails", async () => {
       const root = createWorkspace();
       runGit(root, "init");
       configureGitIdentity(root);
-      commitFile(root, "base.txt", "base\n", "base commit");
-      const baseCommit = runGit(root, "rev-parse", "HEAD");
-      const outside = createWorkspace();
+      commitFile(root, "tracked.txt", "committed\n", "base");
+      fs.writeFileSync(path.join(root, "tracked.txt"), "working change\n");
+      fs.writeFileSync(path.join(root, "untracked.txt"), "new file\n");
 
-      const svc = new HostedWorkspaceViewerService(root);
+      const warnings: string[] = [];
+      const originalWarn = Log.warn;
+      Log.warn = (message: string) => warnings.push(message);
+      const restoreObserver = setGitCommandObserverForTests((_file, args) => {
+        if (args.includes("status") && args.includes("--porcelain=v1")) {
+          throw new Error("status listing failed");
+        }
+      });
+      try {
+        const download = await new HostedWorkspaceViewerService(
+          root
+        ).spawnGitRefDiffDownload("~diff");
+        assert.ok(download, "expected a git diff process");
+        const chunks: Buffer[] = [];
+        download.stdout.on("data", (chunk: Buffer | string) => {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        });
+        const [exitCode] = await Promise.all([
+          new Promise<number | null>((resolve, reject) => {
+            download.process.once("error", reject);
+            download.process.once("close", resolve);
+          }),
+          new Promise<void>((resolve) => download.stdout.once("end", resolve)),
+        ]);
 
-      await assert.rejects(
-        () => svc.getWorktreeDiff(outside, baseCommit, "main"),
-        /not inside a git repository/
-      );
+        assert.strictEqual(exitCode, 0);
+        const diff = Buffer.concat(chunks).toString("utf8");
+        assert.ok(diff.includes("working change"));
+        assert.ok(!diff.includes("Untracked files:"));
+        assert.ok(
+          warnings.some((message) => message.includes("status listing failed"))
+        );
+      } finally {
+        restoreObserver();
+        Log.warn = originalWarn;
+      }
     });
   });
 
@@ -2961,6 +3750,50 @@ suite("HostedWorkspaceViewerService", function () {
 
       assert.ok(result.unifiedDiff?.includes("app.txt"));
       assert.ok(result.unifiedDiff?.includes("private-notes.txt"));
+    });
+
+    test("computes non-text diff entries with at most eight concurrent reads", async () => {
+      const root = createWorkspace();
+      const service = new HostedWorkspaceViewerService(root) as unknown as {
+        buildNonTextDiffEntries: (
+          repoRoot: string,
+          files: Array<{
+            path: string;
+            status: string;
+            isBinary: boolean;
+          }>,
+          sources: {
+            baseRef: string;
+            targetRef: string;
+            targetIsWorkingTree: boolean;
+          }
+        ) => Promise<unknown[]>;
+        readGitDiffBytes: () => Promise<Buffer>;
+      };
+      let activeReads = 0;
+      let maxActiveReads = 0;
+      service.readGitDiffBytes = async () => {
+        activeReads++;
+        maxActiveReads = Math.max(maxActiveReads, activeReads);
+        await new Promise((resolve) => setTimeout(resolve, 2));
+        activeReads--;
+        return Buffer.from([0, 1, 2]);
+      };
+      const files = Array.from({ length: 20 }, (_unused, index) => ({
+        path: `asset-${index}.bin`,
+        status: "M",
+        isBinary: true,
+      }));
+
+      const entries = await service.buildNonTextDiffEntries(root, files, {
+        baseRef: "HEAD^",
+        targetRef: "HEAD",
+        targetIsWorkingTree: false,
+      });
+
+      assert.strictEqual(entries.length, files.length);
+      assert.ok(maxActiveReads > 1);
+      assert.ok(maxActiveReads <= 8);
     });
   });
 });

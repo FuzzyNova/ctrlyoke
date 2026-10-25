@@ -266,6 +266,201 @@ describe("usePagedCommitHistory", () => {
     expect(result.current.failedRanges).toEqual([]);
   });
 
+  it("keeps out-of-order page requests aligned and does not retain an unaligned failure", async () => {
+    const fetchPage = vi.fn<PagedCommitHistoryFetcher>((request) => {
+      if (request.offset === 0) {
+        return Promise.resolve({
+          ...response(
+            HISTORY_A,
+            0,
+            Array.from({ length: 30 }, (_, i) => commit(i)),
+            false,
+            1007
+          ),
+          pageSize: 30,
+        });
+      }
+      if (request.offset === 960) {
+        return Promise.resolve({
+          ...response(
+            HISTORY_A,
+            960,
+            Array.from({ length: 30 }, (_, i) => commit(960 + i)),
+            false,
+            1007
+          ),
+          pageSize: 30,
+        });
+      }
+      if (request.offset === 990) {
+        return Promise.resolve({
+          ...response(
+            HISTORY_A,
+            990,
+            Array.from({ length: 17 }, (_, i) => commit(990 + i)),
+            false,
+            1007
+          ),
+          pageSize: 30,
+        });
+      }
+      if (request.offset === 60) {
+        return Promise.resolve({
+          ...response(
+            HISTORY_A,
+            60,
+            Array.from({ length: 30 }, (_, i) => commit(60 + i)),
+            false,
+            1007
+          ),
+          pageSize: 30,
+        });
+      }
+      return Promise.reject(new Error(`unexpected offset ${request.offset}`));
+    });
+    const { result } = renderHook(() =>
+      usePagedCommitHistory({
+        repo: "repo-a",
+        branchHint: "main",
+        detached: false,
+        pageSize: 30,
+        fetchPage,
+      })
+    );
+
+    await waitFor(() => expect(result.current.loadedCount).toBe(30));
+    act(() => result.current.requestRange(990));
+    await waitFor(() =>
+      expect(result.current.getCommit(990)?.hash).toBe("hash-990")
+    );
+    act(() => result.current.requestRange(960));
+    await waitFor(() =>
+      expect(result.current.getCommit(960)?.hash).toBe("hash-960")
+    );
+    act(() =>
+      result.current.onRangeChange({
+        visibleStartIndex: 77,
+        visibleEndIndex: 77,
+        overscanStartIndex: 77,
+        overscanEndIndex: 77,
+        startIndex: 77,
+        endIndex: 77,
+      })
+    );
+
+    await waitFor(() => expect(result.current.inFlightOffsets).toEqual([]));
+    expect(fetchPage.mock.calls.map(([request]) => request.offset)).toEqual([
+      0, 990, 960, 60,
+    ]);
+    expect(
+      fetchPage.mock.calls.every(([request]) => request.offset % 30 === 0)
+    ).toBe(true);
+    expect(result.current.failedRanges).toEqual([]);
+  });
+
+  it("does not duplicate an aligned page request while it is in flight", async () => {
+    const continuation = deferred<WorkspaceCommitLogResponse>();
+    const fetchPage = vi
+      .fn<PagedCommitHistoryFetcher>()
+      .mockResolvedValueOnce({
+        ...response(
+          HISTORY_A,
+          0,
+          Array.from({ length: 10 }, (_, i) => commit(i)),
+          false,
+          30
+        ),
+        pageSize: 10,
+        hasMore: true,
+      })
+      .mockReturnValueOnce(continuation.promise);
+    const { result } = renderHook(() =>
+      usePagedCommitHistory({
+        repo: "repo-a",
+        branchHint: "main",
+        detached: false,
+        pageSize: 10,
+        fetchPage,
+      })
+    );
+    await waitFor(() => expect(result.current.loadedCount).toBe(10));
+
+    const range = {
+      visibleStartIndex: 10,
+      visibleEndIndex: 12,
+      overscanStartIndex: 10,
+      overscanEndIndex: 12,
+      startIndex: 10,
+      endIndex: 12,
+    };
+    act(() => result.current.onRangeChange(range));
+    act(() => result.current.onRangeChange(range));
+
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      continuation.resolve({
+        ...response(
+          HISTORY_A,
+          10,
+          Array.from({ length: 10 }, (_, i) => commit(10 + i)),
+          false,
+          30
+        ),
+        pageSize: 10,
+        hasMore: true,
+      });
+      await continuation.promise;
+    });
+  });
+
+  it("does not repeat an empty page that still reports more history", async () => {
+    const fetchPage = vi.fn<PagedCommitHistoryFetcher>().mockResolvedValue({
+      ...response(HISTORY_A, 0, [], false, 10),
+      hasMore: true,
+    });
+    const { result } = renderHistory(fetchPage);
+    await waitFor(() => expect(result.current.listingId).toBe(HISTORY_A));
+    act(() =>
+      result.current.onRangeChange({
+        visibleStartIndex: 0,
+        visibleEndIndex: 2,
+        overscanStartIndex: 0,
+        overscanEndIndex: 2,
+        startIndex: 0,
+        endIndex: 2,
+      })
+    );
+
+    await waitFor(() => expect(fetchPage).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fetchPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("continues paging by hasMore when the server omits a total", async () => {
+    const fetchPage = vi
+      .fn<PagedCommitHistoryFetcher>()
+      .mockResolvedValueOnce({
+        ...response(HISTORY_A, 0, [commit(0), commit(1), commit(2)]),
+        totalEntries: undefined as unknown as number,
+        hasMore: true,
+      })
+      .mockResolvedValueOnce({
+        ...response(HISTORY_A, 3, [commit(3)]),
+        totalEntries: undefined as unknown as number,
+        hasMore: false,
+      });
+    const { result } = renderHistory(fetchPage);
+
+    await waitFor(() =>
+      expect(result.current.getCommit(0)?.hash).toBe("hash-0")
+    );
+    act(() => result.current.requestRange(3));
+    await waitFor(() =>
+      expect(result.current.getCommit(3)?.hash).toBe("hash-3")
+    );
+    expect(fetchPage.mock.calls[1]?.[0].offset).toBe(3);
+  });
+
   it("refreshes the current context as a new frozen listing", async () => {
     const fetchPage = vi
       .fn<PagedCommitHistoryFetcher>()

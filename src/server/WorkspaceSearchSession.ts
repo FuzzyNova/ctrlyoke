@@ -198,6 +198,7 @@ export class WorkspaceSearchSession {
     candidate: WorkspaceSearchCandidate,
     capacity: number
   ): Promise<WorkspaceSearchResult[]> {
+    if (candidate.viewerPath.endsWith("/")) return [];
     if (this.params.scope !== WORKSPACE_SEARCH_SCOPES.CONTENT) {
       const name = path.basename(candidate.absolutePath);
       if (name.toLowerCase().includes(this.queryLower)) {

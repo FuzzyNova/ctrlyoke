@@ -197,6 +197,56 @@ suite("WorkspacePathQuery", () => {
     );
   });
 
+  test("budgeted extensions resume a narrowed scan and keep full-scan ranking", async () => {
+    const files = [
+      ...Array.from({ length: 699 }, (_, i) => `generated/noise-${i}.ts`),
+      "generated/targetfile.ts",
+    ];
+    const { query } = create(files);
+    await query.queryFiles("t", { limit: 500 });
+    const budget = { resumeOnAbort: true, maxScanEntries: 200, limit: 500 };
+    let results = await query.queryFiles("ta", budget);
+    assert.ok(!results.some((entry) => entry.relativePath === files[699]));
+    results = await query.queryFiles("tar", budget);
+    assert.ok(!results.some((entry) => entry.relativePath === files[699]));
+    results = await query.queryFiles("targ", budget);
+    assert.ok(!results.some((entry) => entry.relativePath === files[699]));
+    results = await query.queryFiles("targe", budget);
+    assert.ok(results.some((entry) => entry.relativePath === files[699]));
+
+    const complete = await query.queryFiles("targetfile", {
+      resumeOnAbort: true,
+      limit: 500,
+    });
+    assert.deepStrictEqual(
+      complete,
+      await create(files).query.queryFiles("targetfile", { limit: 500 })
+    );
+  });
+
+  test("store mutation invalidates a partial narrowing", async () => {
+    const { store, query } = create([
+      "target-old.ts",
+      ...Array.from({ length: 99 }, (_, i) => `generated/noise-${i}.ts`),
+    ]);
+    await query.queryFiles("target", {
+      resumeOnAbort: true,
+      maxScanEntries: 20,
+    });
+    const changedFiles = Array.from(
+      { length: 100 },
+      (_, i) => `new/noise-${i}.ts`
+    );
+    changedFiles[0] = "renamed.ts";
+    changedFiles[15] = "target.ts";
+    store.replaceAll(changedFiles);
+    const result = await query.queryFiles("target", {
+      resumeOnAbort: true,
+      maxScanEntries: 20,
+    });
+    assert.ok(result.some((entry) => entry.relativePath === "target.ts"));
+  });
+
   test("reports progress on a large scan and aborts at a chunk boundary", async () => {
     const { query } = create(
       Array.from({ length: 100_000 }, (_, i) => `generated/file-${i}.ts`)

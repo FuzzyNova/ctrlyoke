@@ -35,6 +35,12 @@ export interface WebviewClientContext {
    * wants — see `WebviewMessageRouter.route`.
    */
   readonly historySearchAbortSignal?: AbortSignal;
+  readonly deferHistorySearchRelease?: () => () => void;
+  /**
+   * Set only for REQUEST_COMPLETIONS. Aborted by the next request from the
+   * same client and completion source.
+   */
+  readonly completionAbortSignal?: AbortSignal;
 }
 
 export function createWebviewClientContext(

@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Editor `@` completions resume budgeted scans across narrowed file results, so later files can appear as a query is extended.
+- Workspace viewer file history continues one snapshot-owned Git walk across
+  opaque server-side cursors, pages densely across trusted-root filtering without
+  dropping merged-branch commits or re-walking earlier history, and returns
+  partial pages at the deadline so slow first pages can still load and continue.
+- Workspace viewer file history continues through consecutive short pages while
+  the loaded rows remain inside the current viewport range.
+- VS Code workflow pickers now show Git-ignored workflow files when
+  `hideGitIgnoredFiles` is disabled.
+- Git-backed file listings now skip broken nested repositories and fall back to
+  filesystem walks when Git is unavailable or refuses the repository.
+- Editor paste and output-capture placeholders are removed after five minutes if no
+  reply arrives; late successful replies insert their references only when that
+  timeout removed the placeholder. Preview reply resolvers expire after five minutes.
+- Pending editor attachment placeholders now survive prompt switches, bulk mode,
+  and step reordering when the step has a stable runtime identity; identical
+  placeholders reattach in document order, and detached replies or timeouts are
+  applied when their prompt returns.
+- Dashboard history searches use the available index while another process rebuilds; complete CLI searches can wait for a live rebuild.
+- Dashboard history searches now rebuild missing or stale indexes in the background and show the active query's results when the rebuild finishes.
+- Dashboard history searches join one active rebuild, cancel superseded follow-ups, and report rebuild failures.
+- Workspace viewer diff downloads stream Git output without a size cap and
+  report failures to the user, including the working tree's untracked file list.
+- Workspace viewer working-tree diff downloads keep streaming when Git cannot
+  list untracked paths, and include those paths when root scoping uses only
+  exclusions.
+- Workspace viewer worktree diffs page from frozen branch snapshots and show
+  retryable errors when a page fails to load.
+- Workspace viewer commit and file history now page from frozen Git tip hashes,
+  keeping snapshots small and each Git history request bounded to one page.
+- Skills registry resolution ranks slug matches across folder paths and probes
+  candidates with bounded concurrency, reporting when its safety bound applies.
+- Skills registry resolution and update checks resume bounded walks of truncated
+  repository trees, stop when the requested skill is found, and keep unmatched
+  lookups within one walk budget. Later lookups skip candidates whose name did
+  not match, so a retry searches further. They verify skill-folder completeness before installing files or
+  comparing updates, and root-level skills fail loudly when a truncated
+  repository walk cannot confirm their full folder tree.
+- Run bundle loading streams `events.jsonl` and limits individual event lines,
+  so exported bundles can exceed the small JSON file size cap.
+- Dashboard completion requests from separate sources no longer cancel each
+  other, and hosted run-view reconnects reload on the new connection so later
+  output and replay continue reaching it.
+- Copilot model discovery retries in the background up to two times after a
+  subprocess timeout, while its fallback models remain available for validation.
+- Timed-out statusline commands keep any output already produced, and failures
+  to spawn Windows `taskkill` remain non-fatal.
+- Subprocess timeouts are recognized consistently across interpreter probes,
+  Git operations, and CLI model discovery; Codex probes do not spawn after the
+  launcher resolution outlives their timeout.
+
+### Fixed
+
+- Managed language-server disposal stops servers before awaiting in-flight starts,
+  and an unanswered initialize request now times out after 60 seconds and is reported as a crash.
+
 ### Added
 
 - **Exit Terminal and Exit All Idle Terminals** in the workflow list's right-click menu. They send the harness Ctrl+C so its TUI quits, then end the process. Running and paused workflows are left alone, and the session stays resumable.
@@ -60,6 +118,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stopped run with steps left to execute showed only **Re-run** below 380px
   wide, hiding **Resume**. Narrow layouts now hide only the buttons that would
   be disabled at full width.
+
+- **Workflow file discovery uses Git candidates in checkouts and an asynchronous walk elsewhere.** Ignored workflow files are loaded on demand when the hosted picker is configured to show them.
+
+- **Workspace search and `@` completions include files inside nested Git repositories and initialized submodules.** Directory entries are excluded from search file results and the completion index.
+
+- **Large Git file listings use the long Git timeout.** Git listing failures are no longer mistaken for non-repositories; recovery paths log when they use a degraded filesystem walk, and the hosted workspace explorer marks children of wholly ignored directories as ignored.
+- **Editor `@` completions resume budgeted scans across keystrokes.** Extending a query continues from the last scanned index position, so files later in large workspaces can appear without sacrificing fuzzy ranking.
+- **Run-view loads no longer retry or roll back because of slow responses.** The panel waits for its reliable message transport; hosted clients retry after reconnect, duplicate requests join in-flight work, and a late snapshot can still complete the latest navigation.
+- **Editor file operations stay responsive and complete after slow replies.** Prompt conversion, pasted images, output snapshots and image preview lookups bypass the shared route queue; client deadlines report that work is still pending, and late replies are applied or surfaced without caching preview timeouts.
+- **Dashboard completion requests no longer block other clients and are superseded immediately by newer keystrokes.** Slow workspace symbol lookups and file-index polling stop emitting results after cancellation.
+- **Statusline forwarding preserves the last good custom output when a command times out.** The wrapper allows 1.5 seconds, skips unused forwarding in ctrlyoke-style mode, and kills Windows command process trees on timeout.
+- **Python and PowerShell interpreter probes no longer block the extension host.** Timed-out or failed probes fall back for one script and retry on the next resolution.
+- **Codex quota refresh works with Windows npm installs.** The app-server probe now resolves the Codex launcher before spawning it.
+- **`ctrlyoke commit` handles large commits.** Git add and commit output no longer hits Node's default 1 MiB buffer limit.
+
+- **Copilot and OpenCode model discovery handles slow and large CLI output.** Discovery waits up to the shared 30-second CLI check limit, retries Copilot in the background after a timeout, and no longer accepts truncated OpenCode output as a complete model list.
 
 - **Failed push, pull and commit in the workspace viewer show git's own
   error.** When a push is rejected, a pull would overwrite local changes, or a

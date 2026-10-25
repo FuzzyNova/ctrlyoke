@@ -5,8 +5,7 @@
  * code blocks exercise the real refractor rendering path.
  */
 import { describe, it, expect, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
-import { MESSAGE_TYPES } from "@/types/messages";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // Mock openFile so clicking file links doesn't try to post to vscode
@@ -17,8 +16,121 @@ vi.mock("@hooks/useMessageHandler", async (importOriginal) => {
 });
 
 import { MarkdownText } from "@components/output/MarkdownText";
+import { MESSAGE_TYPES } from "@/types/messages";
 
 describe("MarkdownText", () => {
+  it("re-requests an image preview after a timeout instead of caching null", async () => {
+    vi.useFakeTimers();
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+    const markdown = "See src/timeout-preview-unique.png";
+    const first = render(<MarkdownText>{markdown}</MarkdownText>);
+    const requestCount = () =>
+      postMessage.mock.calls.filter(
+        ([message]) =>
+          (message as { type?: string }).type ===
+          MESSAGE_TYPES.REQUEST_FILE_PREVIEW_URI
+      ).length;
+    expect(requestCount()).toBe(1);
+    act(() => vi.advanceTimersByTime(15_000));
+    first.unmount();
+    const second = render(<MarkdownText>{markdown}</MarkdownText>);
+    expect(requestCount()).toBe(2);
+    const secondRequest = postMessage.mock.calls.filter(
+      ([message]) =>
+        (message as { type?: string }).type ===
+        MESSAGE_TYPES.REQUEST_FILE_PREVIEW_URI
+    )[1]?.[0] as { seq: number };
+    act(() =>
+      fireEvent(
+        window,
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.FILE_PREVIEW_URI_RESPONSE,
+            seq: secondRequest.seq,
+            uri: null,
+          },
+        })
+      )
+    );
+    second.unmount();
+    vi.useRealTimers();
+  });
+
+  it("caches a late definitive preview answer after the render timed out", async () => {
+    vi.useFakeTimers();
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+    const markdown = "See src/late-preview-unique.png";
+    const first = render(<MarkdownText>{markdown}</MarkdownText>);
+    const request = postMessage.mock.calls.find(
+      ([message]) =>
+        (message as { type?: string }).type ===
+        MESSAGE_TYPES.REQUEST_FILE_PREVIEW_URI
+    )?.[0] as { seq: number };
+    act(() => vi.advanceTimersByTime(15_000));
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        data: {
+          type: MESSAGE_TYPES.FILE_PREVIEW_URI_RESPONSE,
+          seq: request.seq,
+          uri: "data:image/png;base64,AAAA",
+        },
+      })
+    );
+    first.unmount();
+    const second = render(<MarkdownText>{markdown}</MarkdownText>);
+    expect(
+      screen.getByRole("img", { name: "src/late-preview-unique.png" })
+    ).toHaveAttribute("src", "data:image/png;base64,AAAA");
+    expect(
+      postMessage.mock.calls.filter(
+        ([message]) =>
+          (message as { type?: string }).type ===
+          MESSAGE_TYPES.REQUEST_FILE_PREVIEW_URI
+      )
+    ).toHaveLength(1);
+    second.unmount();
+    vi.useRealTimers();
+  });
+
+  it("evicts a preview resolver after its TTL so stale replies are ignored", () => {
+    vi.useFakeTimers();
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+    const markdown = "See src/expired-preview-unique.png";
+    const first = render(<MarkdownText>{markdown}</MarkdownText>);
+    const previewRequests = () =>
+      postMessage.mock.calls
+        .map(([message]) => message as { type?: string; seq?: number })
+        .filter(
+          (message) => message.type === MESSAGE_TYPES.REQUEST_FILE_PREVIEW_URI
+        );
+    const firstRequest = previewRequests()[0];
+    expect(firstRequest?.seq).toBeDefined();
+
+    act(() => vi.advanceTimersByTime(10 * 60_000));
+    first.unmount();
+    act(() =>
+      fireEvent(
+        window,
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.FILE_PREVIEW_URI_RESPONSE,
+            seq: firstRequest!.seq,
+            uri: "data:image/png;base64,STALE",
+          },
+        })
+      )
+    );
+
+    const second = render(<MarkdownText>{markdown}</MarkdownText>);
+    expect(previewRequests()).toHaveLength(2);
+    second.unmount();
+    vi.useRealTimers();
+  });
+
   it("renders plain text content", async () => {
     render(<MarkdownText>Hello world</MarkdownText>);
     expect(await screen.findByText("Hello world")).toBeInTheDocument();

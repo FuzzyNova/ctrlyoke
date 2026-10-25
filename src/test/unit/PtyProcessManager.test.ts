@@ -221,10 +221,12 @@ class FakePty implements IPty {
 
 class FakePtyProcessManager extends PtyProcessManager {
   readonly ptys: FakePty[] = [];
+  readonly spawnCwds: Array<string | undefined> = [];
 
   protected override loadNodePty(): Pick<typeof import("node-pty"), "spawn"> {
     return {
-      spawn: () => {
+      spawn: (_command, _args, options) => {
+        this.spawnCwds.push(options?.cwd);
         const pty = new FakePty();
         this.ptys.push(pty);
         return pty;
@@ -304,5 +306,26 @@ suite("PtyProcessManager intentional kills", () => {
     session.markEnding(TERMINAL_END_REASONS.STOPPED);
     session.markEnding(TERMINAL_END_REASONS.STEP_COMPLETE);
     assert.strictEqual(session.endReason, TERMINAL_END_REASONS.STOPPED);
+  });
+
+  test("restarts a shell in its original canonicalized cwd", () => {
+    const manager = new FakePtyProcessManager();
+    const originalCwd = process.cwd();
+    const session = manager.spawnShell({
+      workflowId: "wf-restart",
+      cwd: originalCwd,
+      onData: () => {},
+      onExit: () => {},
+    });
+
+    const restarted = manager.restartShellSession(session.id, {
+      onData: () => {},
+      onExit: () => {},
+    });
+
+    assert.ok(restarted);
+    assert.strictEqual(manager.spawnCwds.length, 2);
+    assert.strictEqual(manager.spawnCwds[1], manager.spawnCwds[0]);
+    assert.strictEqual(restarted?.cwd, manager.spawnCwds[0]);
   });
 });

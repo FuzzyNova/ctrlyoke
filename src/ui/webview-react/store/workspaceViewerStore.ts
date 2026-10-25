@@ -19,8 +19,6 @@ import {
   type DiffPayloadKind,
 } from "@root/types/DashboardConstants";
 import type { ParsedDiffFile } from "@utils/rdvAdapter";
-import { workspaceWorktreeDiff } from "@utils/hostedApi";
-import { parseUnifiedDiffToFiles } from "@utils/rdvAdapter";
 
 // ============================================================================
 // Types
@@ -119,6 +117,12 @@ interface CachedFileDraft {
   content: string;
 }
 
+export interface WorktreeDiffRequest {
+  sourceCheckoutRoot: string;
+  baseCommit: string;
+  branchName: string;
+}
+
 interface WorkspaceViewerState {
   isOpen: boolean;
   activeTab: "explorer" | "sourceControl" | "search";
@@ -206,6 +210,8 @@ interface WorkspaceViewerState {
    * `~diff`/`~staged`/`~stash:N`). Drives navigation URLs for commit/ref views.
    */
   diffRef: string | null;
+  /** Worktree snapshot parameters used by the paged diff fetcher. */
+  worktreeDiffRequest: WorktreeDiffRequest | null;
 
   // Pending navigation (set externally, consumed by WorkspaceExplorerPane)
   pendingNavigation: PendingNavigation | null;
@@ -321,7 +327,7 @@ interface WorkspaceViewerActions {
     sourceCheckoutRoot: string,
     baseCommit: string,
     branchName: string
-  ): Promise<void>;
+  ): void;
 
   // Pending navigation
   openToFile(filePath: string, startLine?: number, endLine?: number): void;
@@ -404,6 +410,7 @@ const INITIAL_STATE: WorkspaceViewerState = {
   diffRefLoading: false,
   diffCommitInfo: null,
   diffRef: null,
+  worktreeDiffRequest: null,
 
   pendingNavigation: null,
   pendingDiff: null,
@@ -419,8 +426,6 @@ const INITIAL_STATE: WorkspaceViewerState = {
 // ============================================================================
 // Store
 // ============================================================================
-
-let worktreeDiffRequestSeq = 0;
 
 export const useWorkspaceViewerStore = create<
   WorkspaceViewerState & WorkspaceViewerActions
@@ -756,7 +761,6 @@ export const useWorkspaceViewerStore = create<
       },
 
       selectDiff(path) {
-        worktreeDiffRequestSeq += 1;
         set({
           selectedDiffPath: path,
           fileHistoryPath: null,
@@ -775,11 +779,11 @@ export const useWorkspaceViewerStore = create<
           diffRefLoading: false,
           diffCommitInfo: null,
           diffRef: null,
+          worktreeDiffRequest: null,
         });
       },
 
       clearDiff() {
-        worktreeDiffRequestSeq += 1;
         set({
           selectedDiffPath: null,
           diffOldContent: "",
@@ -795,6 +799,7 @@ export const useWorkspaceViewerStore = create<
           diffRefLoading: false,
           diffCommitInfo: null,
           diffRef: null,
+          worktreeDiffRequest: null,
           pendingDiff: null,
           fileHistoryPath: null,
           fileHistoryRepoId: null,
@@ -946,13 +951,13 @@ export const useWorkspaceViewerStore = create<
       // --- Git-ref diff (browser multi-file) ---
 
       openToGitRef(ref) {
-        worktreeDiffRequestSeq += 1;
         set({
           isOpen: true,
           activeTab: "sourceControl",
           // Clear single-file diff so the pane switches to ref mode
           selectedDiffPath: null,
           diffRef: ref,
+          worktreeDiffRequest: null,
           pendingDiff: null,
           pendingFileHistory: null,
           fileHistoryActive: false,
@@ -961,41 +966,28 @@ export const useWorkspaceViewerStore = create<
         });
       },
 
-      async openToWorktreeDiff(sourceCheckoutRoot, baseCommit, branchName) {
-        const requestSeq = ++worktreeDiffRequestSeq;
+      openToWorktreeDiff(sourceCheckoutRoot, baseCommit, branchName) {
         set({
           isOpen: true,
           activeTab: "sourceControl",
           selectedDiffPath: null,
           diffFiles: null,
           diffNonTextEntries: [],
-          diffRefLabel: null,
-          diffRefLoading: true,
+          diffRefLoading: false,
           diffCommitInfo: null,
           diffRef: null,
+          worktreeDiffRequest: {
+            sourceCheckoutRoot,
+            baseCommit,
+            branchName,
+          },
+          diffRefLabel: `Branch ${branchName}`,
           pendingDiff: null,
           pendingFileHistory: null,
           fileHistoryActive: false,
           fileHistoryPath: null,
           fileHistoryRepoId: null,
         });
-        try {
-          const { unifiedDiff, nonTextEntries } = await workspaceWorktreeDiff(
-            sourceCheckoutRoot,
-            baseCommit,
-            branchName
-          );
-          if (requestSeq !== worktreeDiffRequestSeq) return;
-          set({
-            diffFiles: parseUnifiedDiffToFiles(unifiedDiff),
-            diffNonTextEntries: nonTextEntries ?? [],
-            diffRefLabel: `Branch ${branchName}`,
-            diffRefLoading: false,
-          });
-        } catch {
-          if (requestSeq !== worktreeDiffRequestSeq) return;
-          set({ diffRefLoading: false });
-        }
       },
 
       // --- Pending navigation ---
@@ -1049,6 +1041,7 @@ export const useWorkspaceViewerStore = create<
           diffRefLoading: false,
           diffCommitInfo: null,
           diffRef: null,
+          worktreeDiffRequest: null,
         });
       },
 
@@ -1081,6 +1074,7 @@ export const useWorkspaceViewerStore = create<
           diffRefLoading: false,
           diffCommitInfo: null,
           diffRef: null,
+          worktreeDiffRequest: null,
         });
       },
 

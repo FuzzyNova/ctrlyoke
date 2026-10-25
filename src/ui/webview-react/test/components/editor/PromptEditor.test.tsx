@@ -8,7 +8,13 @@
  * run when an older run was selected.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EditorView } from "@codemirror/view";
 
@@ -120,6 +126,75 @@ describe("PromptEditor accessibility names", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Queue$/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Run$/ })).toBeInTheDocument();
+  });
+});
+
+describe("PromptEditor pending editor documents", () => {
+  it("keeps the same pending placeholder document when a step moves indexes", () => {
+    vi.stubGlobal(
+      "FileReader",
+      class {
+        result: string | ArrayBuffer | null = "data:image/png;base64,AQ==";
+        onload: ((event: ProgressEvent<FileReader>) => unknown) | null = null;
+        readAsDataURL() {
+          this.onload?.(new ProgressEvent("load") as ProgressEvent<FileReader>);
+        }
+      }
+    );
+    const stepA = { prompt: "step A", _runtime: { stepId: "step-a" } };
+    const stepB = { prompt: "step B", _runtime: { stepId: "step-b" } };
+    useWorkflowStore.setState({ steps: [stepA, stepB] });
+    useEditorStore
+      .getState()
+      .selectPrompt({ kind: FINAL_STEP_PHASES.QUEUE, index: 0 }, stepA);
+    const { container } = render(<PromptEditor />);
+    fireEvent.paste(container.querySelector(".cm-content") as HTMLElement, {
+      clipboardData: {
+        items: [
+          {
+            type: "image/png",
+            getAsFile: () =>
+              new File(["image"], "paste.png", { type: "image/png" }),
+          },
+        ],
+      },
+    });
+    expect(useEditorStore.getState().promptText).toBe("[Pasting image…]step A");
+    const request = postMessageSpy.mock.calls
+      .map(([message]) => message as { type?: string; seq?: number })
+      .find((message) => message.type === MESSAGE_TYPES.SAVE_PASTED_IMAGE);
+    expect(request?.seq).toBeDefined();
+
+    act(() => {
+      const stepAWithPlaceholder = {
+        ...stepA,
+        prompt: "[Pasting image…]step A",
+      };
+      useWorkflowStore.setState({ steps: [stepB, stepAWithPlaceholder] });
+      useEditorStore
+        .getState()
+        .selectPrompt(
+          { kind: FINAL_STEP_PHASES.QUEUE, index: 1 },
+          stepAWithPlaceholder
+        );
+    });
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        data: {
+          type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
+          seq: request!.seq,
+          relativePath: "./.ctrlyoke/attachments/reordered.png",
+        },
+      })
+    );
+
+    const view = EditorView.findFromDOM(
+      container.querySelector(".cm-editor") as HTMLElement
+    )!;
+    expect(view.state.doc.toString()).toBe(
+      "@./.ctrlyoke/attachments/reordered.png step A"
+    );
   });
 });
 
@@ -951,6 +1026,42 @@ describe("PromptEditor — prompt-file action", () => {
       })
     );
     expect(useEditorStore.getState().promptText).toBe("keep this text");
+  });
+
+  it("applies a successful conversion reply after the waiting deadline", async () => {
+    useEditorStore.getState().setPromptText("convert me");
+    const getAction = renderWithAction();
+    await waitFor(() =>
+      expect(getAction()?.tooltip).toBe("Convert to prompt file")
+    );
+    vi.useFakeTimers();
+    getAction()?.onClick();
+    const request = postMessageSpy.mock.calls.find(
+      ([message]) =>
+        (message as { type?: string }).type ===
+        MESSAGE_TYPES.CONVERT_PROMPT_TO_FILE
+    )?.[0] as { seq: number };
+
+    act(() => vi.advanceTimersByTime(30_000));
+    expect(useEditorStore.getState().promptText).toBe("convert me");
+
+    act(() =>
+      fireEvent(
+        window,
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.PROMPT_FILE_CREATED,
+            seq: request.seq,
+            reference: "./.ctrlyoke/prompts/convert-me.prompt.md",
+            resolvedPath: "C:/workspace/.ctrlyoke/prompts/convert-me.prompt.md",
+          },
+        })
+      )
+    );
+    expect(useEditorStore.getState().promptText).toBe(
+      "./.ctrlyoke/prompts/convert-me.prompt.md"
+    );
+    vi.useRealTimers();
   });
 
   it("reports a resolved prompt file's content and refreshes it on window focus", async () => {

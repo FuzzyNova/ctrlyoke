@@ -7,12 +7,17 @@ import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { stubElementLayoutForFile } from "../../fixtures/elementLayout";
 import type { ParsedDiffFile } from "@utils/rdvAdapter";
-import { workspaceGitRefDiff, workspaceGitRefDiffPage } from "@utils/hostedApi";
+import {
+  workspaceGitRefDiff,
+  workspaceGitRefDiffDownload,
+  workspaceGitRefDiffPage,
+  workspaceWorktreeDiffPage,
+} from "@utils/hostedApi";
 import type {
   WorkspaceCommitInfo,
   WorkspaceGitRefDiffEntry,
 } from "@root/types/HostedWorkspaceViewerTypes";
-import { downloadTextFile } from "@utils/download";
+import { downloadBlob } from "@utils/download";
 import { MESSAGE_TYPES } from "@/types/messages";
 import { DIFF_PAYLOAD_KINDS } from "@root/types/DashboardConstants";
 
@@ -23,8 +28,12 @@ vi.mock("@components/output/DiffView", () => ({
 }));
 
 vi.mock("@utils/hostedApi", () => ({
+  hostedErrorMessage: (error: unknown) =>
+    error instanceof Error ? error.message : String(error),
   workspaceGitRefDiff: vi.fn(),
+  workspaceGitRefDiffDownload: vi.fn(),
   workspaceGitRefDiffPage: vi.fn(),
+  workspaceWorktreeDiffPage: vi.fn(),
 }));
 
 vi.mock("@components/shared", async (importOriginal) => {
@@ -36,8 +45,30 @@ vi.mock("@components/shared", async (importOriginal) => {
       getItem: (index: number) => WorkspaceGitRefDiffEntry | undefined;
       renderItem: (item: WorkspaceGitRefDiffEntry, index: number) => ReactNode;
       renderPlaceholder: (index: number) => ReactNode;
+      onRangeChange?: (range: {
+        visibleStartIndex: number;
+        visibleEndIndex: number;
+        overscanStartIndex: number;
+        overscanEndIndex: number;
+        startIndex: number;
+        endIndex: number;
+      }) => void;
     }) => (
       <div data-testid="virtualized-paged-list">
+        <button
+          type="button"
+          aria-label="Load next diff page"
+          onClick={() =>
+            props.onRangeChange?.({
+              visibleStartIndex: 20,
+              visibleEndIndex: 20,
+              overscanStartIndex: 20,
+              overscanEndIndex: 20,
+              startIndex: 20,
+              endIndex: 20,
+            })
+          }
+        />
         {Array.from(
           { length: Math.min(props.totalCount, 3) },
           (_unused, index) => {
@@ -57,8 +88,14 @@ vi.mock("@components/shared", async (importOriginal) => {
 });
 
 vi.mock("@utils/download", () => ({
-  downloadTextFile: vi.fn(),
+  downloadBlob: vi.fn(),
 }));
+
+vi.mock("@utils/notifyUser", () => ({
+  notifyUser: vi.fn(),
+}));
+
+import { notifyUser } from "@utils/notifyUser";
 
 stubElementLayoutForFile({
   height: (element) => (element.classList.contains("flex-1") ? 600 : 40),
@@ -131,19 +168,88 @@ beforeEach(() => {
   useWorkspaceViewerStore.getState().reset();
   useUiStore.getState().resetLayoutState();
   vi.mocked(workspaceGitRefDiff).mockReset();
+  vi.mocked(workspaceGitRefDiffDownload).mockReset();
   vi.mocked(workspaceGitRefDiffPage).mockReset();
-  vi.mocked(downloadTextFile).mockReset();
+  vi.mocked(workspaceWorktreeDiffPage).mockReset();
+  vi.mocked(downloadBlob).mockReset();
+  vi.mocked(notifyUser).mockReset();
   vi.mocked(workspaceGitRefDiffPage).mockResolvedValue(
     pageResponse([textEntry("src/file.ts")])
   );
+  vi.mocked(workspaceWorktreeDiffPage).mockResolvedValue(
+    pageResponse([textEntry("src/file.ts")])
+  );
+});
+
+describe("WorkspaceDiffPane worktree diff paging", () => {
+  it("loads worktree diff pages with the frozen snapshot id", async () => {
+    vi.mocked(workspaceWorktreeDiffPage)
+      .mockResolvedValueOnce(pageResponse([textEntry("src/file.ts")], 21))
+      .mockResolvedValueOnce(pageResponse([], 21, 20, undefined));
+    useWorkspaceViewerStore.getState().openToWorktreeDiff(
+      "/repo",
+      "base-hash",
+      "feature/worktree"
+    );
+    render(<WorkspaceDiffPane />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Open src/file.ts" })
+      ).toBeInTheDocument()
+    );
+    expect(workspaceWorktreeDiffPage).toHaveBeenCalledWith(
+      "/repo",
+      "base-hash",
+      "feature/worktree",
+      0,
+      20,
+      undefined
+    );
+    expect(screen.getByText("Branch feature/worktree")).toBeInTheDocument();
+    await userEvent.setup().click(
+      screen.getByRole("button", { name: "Load next diff page" })
+    );
+    await waitFor(() =>
+      expect(workspaceWorktreeDiffPage).toHaveBeenCalledTimes(2)
+    );
+    expect(workspaceWorktreeDiffPage).toHaveBeenLastCalledWith(
+      "/repo",
+      "base-hash",
+      "feature/worktree",
+      20,
+      20,
+      "diff-1"
+    );
+  });
+
+  it("shows a retryable error when the first worktree page fails", async () => {
+    const user = userEvent.setup();
+    vi.mocked(workspaceWorktreeDiffPage).mockRejectedValueOnce(
+      new Error("worktree page unavailable")
+    );
+    useWorkspaceViewerStore.getState().openToWorktreeDiff(
+      "/repo",
+      "base-hash",
+      "feature/worktree"
+    );
+    render(<WorkspaceDiffPane />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Unable to load diff."
+    );
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() =>
+      expect(workspaceWorktreeDiffPage).toHaveBeenCalledTimes(2)
+    );
+  });
 });
 
 describe("WorkspaceDiffPane commit diff controls", () => {
   it("downloads a commit diff using its full response hash", async () => {
     const user = userEvent.setup();
-    vi.mocked(workspaceGitRefDiff).mockResolvedValue({
-      unifiedDiff: "complete unified diff",
-    });
+    const diffBlob = new Blob(["complete unified diff"]);
+    vi.mocked(workspaceGitRefDiffDownload).mockResolvedValue(diffBlob);
     vi.mocked(workspaceGitRefDiffPage).mockResolvedValue(
       pageResponse([textEntry("src/file.ts")])
     );
@@ -161,14 +267,41 @@ describe("WorkspaceDiffPane commit diff controls", () => {
     await user.click(screen.getByRole("button", { name: "Download" }));
 
     await waitFor(() =>
-      expect(workspaceGitRefDiff).toHaveBeenCalledWith(
+      expect(workspaceGitRefDiffDownload).toHaveBeenCalledWith(
         "~abc1234567890abcdef",
         undefined
       )
     );
-    expect(downloadTextFile).toHaveBeenCalledWith(
+    expect(downloadBlob).toHaveBeenCalledWith(
       "ctrlyoke-commit-abc1234.diff",
-      "complete unified diff"
+      diffBlob
+    );
+  });
+
+  it("shows an error when the diff download fails", async () => {
+    const user = userEvent.setup();
+    vi.mocked(workspaceGitRefDiffDownload).mockRejectedValue(
+      new Error("network unavailable")
+    );
+    useWorkspaceViewerStore.setState({
+      diffRef: "~abc1234567890abcdef",
+      diffRefLoading: false,
+    });
+
+    render(<WorkspaceDiffPane />);
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Open src/file.ts" })
+      ).toBeInTheDocument()
+    );
+    await user.click(screen.getByRole("button", { name: "Download" }));
+
+    await waitFor(() =>
+      expect(notifyUser).toHaveBeenCalledWith(
+        "Failed to download diff",
+        "error",
+        "network unavailable"
+      )
     );
   });
 

@@ -4,6 +4,7 @@ import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
 import { HARNESS_USAGE_STATUS_CODES } from "../../../types/DashboardConstants";
 import { normalizeCodexAppServerQuota } from "./CodexUsageNormalization";
 import { CTRLYOKE_VERSION } from "../../../utils/BuildConfig";
+import { resolveCliCommand } from "../shared/CliLauncherResolver";
 
 export const CODEX_APP_SERVER_PROBE_TIMEOUT_MS = 5_000;
 
@@ -32,8 +33,10 @@ export interface CodexAppServerProbeResult {
 export interface CodexAppServerClientOptions {
   spawnProcess?: (
     command: string,
-    args: readonly string[]
+    args: readonly string[],
+    windowsVerbatimArguments?: boolean
   ) => CodexAppServerProcess;
+  resolveCommand?: typeof resolveCliCommand;
   timeoutMs?: number;
   now?: () => number;
 }
@@ -50,10 +53,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function defaultSpawnProcess(
   command: string,
-  args: readonly string[]
+  args: readonly string[],
+  windowsVerbatimArguments?: boolean
 ): CodexAppServerProcess {
   return spawn(command, [...args], {
     stdio: ["pipe", "pipe", "ignore"],
+    windowsHide: true,
+    windowsVerbatimArguments,
   }) as unknown as CodexAppServerProcess;
 }
 
@@ -68,13 +74,16 @@ function abortError(): Error {
 export class CodexAppServerClient {
   private readonly spawnProcess: (
     command: string,
-    args: readonly string[]
+    args: readonly string[],
+    windowsVerbatimArguments?: boolean
   ) => CodexAppServerProcess;
   private readonly timeoutMs: number;
   private readonly now: () => number;
+  private readonly resolveCommand: typeof resolveCliCommand;
 
   constructor(options: CodexAppServerClientOptions = {}) {
     this.spawnProcess = options.spawnProcess ?? defaultSpawnProcess;
+    this.resolveCommand = options.resolveCommand ?? resolveCliCommand;
     this.timeoutMs = options.timeoutMs ?? CODEX_APP_SERVER_PROBE_TIMEOUT_MS;
     this.now = options.now ?? Date.now;
   }
@@ -85,13 +94,20 @@ export class CodexAppServerClient {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     let abortListener: (() => void) | undefined;
     let process: CodexAppServerProcess | undefined;
+    let probeSettled = false;
 
-    const operation = this.performProbe(() => {
-      process = this.spawnProcess("codex", [
+    const operation = this.performProbe(async () => {
+      const resolved = await this.resolveCommand("codex", [
         "app-server",
         "--listen",
         "stdio://",
       ]);
+      if (probeSettled || signal?.aborted) throw abortError();
+      process = this.spawnProcess(
+        resolved.command,
+        resolved.args,
+        resolved.requiresShellVerbatimArgs
+      );
       return process;
     });
 
@@ -112,6 +128,7 @@ export class CodexAppServerClient {
     try {
       return await Promise.race([operation, interruption]);
     } finally {
+      probeSettled = true;
       if (timeoutId) clearTimeout(timeoutId);
       if (signal && abortListener) {
         signal.removeEventListener("abort", abortListener);
@@ -121,9 +138,9 @@ export class CodexAppServerClient {
   }
 
   private async performProbe(
-    createProcess: () => CodexAppServerProcess
+    createProcess: () => Promise<CodexAppServerProcess>
   ): Promise<CodexAppServerProbeResult> {
-    const process = createProcess();
+    const process = await createProcess();
     const input = readline.createInterface({ input: process.stdout });
     try {
       await this.request(process, input, 1, "initialize", {

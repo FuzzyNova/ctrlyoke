@@ -595,11 +595,20 @@ function FileRefButton({
 // window listener regardless of how many thumbnails are on screen.
 
 const PREVIEW_URI_TIMEOUT_MS = 15_000;
+const PREVIEW_RESOLVER_TTL_MS = 5 * 60_000;
 /** path → resolved URI (string) or null when it should fall back to a file-ref. */
 const imagePreviewUriCache = new Map<string, string | null>();
 /** path → in-flight request, so concurrent thumbnails for one path share it. */
 const inFlightPreviewRequests = new Map<string, Promise<string | null>>();
-const pendingPreviewResolvers = new Map<number, (uri: string | null) => void>();
+const pendingPreviewResolvers = new Map<
+  number,
+  {
+    resolve: (uri: string | null) => void;
+    timeoutId: ReturnType<typeof setTimeout>;
+    evictionTimeoutId: ReturnType<typeof setTimeout>;
+    path: string;
+  }
+>();
 let previewSeqCounter = 0;
 let previewListenerInstalled = false;
 
@@ -609,10 +618,14 @@ function ensurePreviewListener(): void {
   window.addEventListener("message", (event: MessageEvent) => {
     const message = event.data;
     if (message?.type !== MESSAGE_TYPES.FILE_PREVIEW_URI_RESPONSE) return;
-    const resolve = pendingPreviewResolvers.get(message.seq);
-    if (!resolve) return;
+    const pending = pendingPreviewResolvers.get(message.seq);
+    if (!pending) return;
+    clearTimeout(pending.timeoutId);
+    clearTimeout(pending.evictionTimeoutId);
     pendingPreviewResolvers.delete(message.seq);
-    resolve(typeof message.uri === "string" ? message.uri : null);
+    const uri = typeof message.uri === "string" ? message.uri : null;
+    imagePreviewUriCache.set(pending.path, uri);
+    pending.resolve(uri);
   });
 }
 
@@ -624,23 +637,32 @@ function requestImagePreviewUri(relativePath: string): Promise<string | null> {
 
   ensurePreviewListener();
   const seq = ++previewSeqCounter;
-  const request = new Promise<string | null>((resolve) => {
-    const finish = (uri: string | null) => {
+  let request: Promise<string | null>;
+  request = new Promise<string | null>((resolve) => {
+    const timeoutId = setTimeout(() => {
+      // Settle this render, but retain the resolver for a late definitive host
+      // answer. A timeout is transport uncertainty, not a cacheable no-preview.
+      inFlightPreviewRequests.delete(relativePath);
+      resolve(null);
+    }, PREVIEW_URI_TIMEOUT_MS);
+    const evictionTimeoutId = setTimeout(() => {
       pendingPreviewResolvers.delete(seq);
-      resolve(uri);
-    };
-    pendingPreviewResolvers.set(seq, finish);
-    // Fall back if the host never answers, so the thumbnail never hangs.
-    setTimeout(() => finish(null), PREVIEW_URI_TIMEOUT_MS);
+    }, PREVIEW_RESOLVER_TTL_MS);
+    pendingPreviewResolvers.set(seq, {
+      resolve,
+      timeoutId,
+      evictionTimeoutId,
+      path: relativePath,
+    });
     getVsCodeApi().postMessage({
       type: MESSAGE_TYPES.REQUEST_FILE_PREVIEW_URI,
       seq,
       relativePath,
     });
-  }).then((uri) => {
-    imagePreviewUriCache.set(relativePath, uri);
-    inFlightPreviewRequests.delete(relativePath);
-    return uri;
+  }).finally(() => {
+    if (inFlightPreviewRequests.get(relativePath) === request) {
+      inFlightPreviewRequests.delete(relativePath);
+    }
   });
 
   inFlightPreviewRequests.set(relativePath, request);

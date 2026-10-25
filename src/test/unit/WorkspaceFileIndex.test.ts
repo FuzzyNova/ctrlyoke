@@ -1,4 +1,7 @@
 import * as assert from "assert";
+import { execFileSync } from "child_process";
+import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
 import { Worker } from "worker_threads";
@@ -11,6 +14,7 @@ import {
   type WorkspaceFileIndexRoot,
 } from "../../completions/WorkspaceFileIndex";
 import { WorkspacePathStore } from "../../completions/WorkspacePathStore";
+import { getGitFilesIncludingNestedRepos } from "../../utils/GitUtils";
 import type { SearchWalkResult } from "../../utils/WorkspaceSearchFileWalker";
 import {
   WORKSPACE_FILE_CHANGE_KINDS,
@@ -30,7 +34,12 @@ function makeHarness(overrides: Partial<WorkspaceFileIndexDependencies> = {}) {
   ];
   const calls: string[] = [];
   const dependencies: WorkspaceFileIndexDependencies = {
-    getGitTrackedFiles: async () => ["src/tracked file.ts"],
+    getGitFilesIncludingNestedRepos: async function* () {
+      const files = ["src/tracked file.ts"];
+      for (let offset = 0; offset < files.length; offset += 256) {
+        yield files.slice(offset, offset + 256);
+      }
+    },
     getGitIgnoredPaths: async (_root, files) =>
       new Set(files.filter((file) => file.includes("ignored"))),
     walkSearchFiles: async (
@@ -77,6 +86,33 @@ function makeHarness(overrides: Partial<WorkspaceFileIndexDependencies> = {}) {
 const root = "/workspace";
 
 suite("WorkspaceFileIndex", () => {
+  test("does not lstat ordinary Git file entries", async () => {
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cy-index-probe-"));
+    try {
+      execFileSync("git", ["init", "--quiet"], { cwd: repo });
+      fs.writeFileSync(path.join(repo, "file.ts"), "content");
+      let lstatCalls = 0;
+      const chunks: string[][] = [];
+      for await (const chunk of getGitFilesIncludingNestedRepos(
+        repo,
+        256,
+        {
+          lstat: async (absolutePath) => {
+            lstatCalls++;
+            return fs.promises.lstat(absolutePath);
+          },
+          access: (absolutePath) => fs.promises.access(absolutePath),
+        }
+      )) {
+        chunks.push(chunk);
+      }
+      assert.deepStrictEqual(chunks.flat(), ["file.ts"]);
+      assert.equal(lstatCalls, 0);
+    } finally {
+      fs.rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
   test("makes Git paths queryable before an uncapped walk adds deep ignored files", async () => {
     let releaseWalk!: (result: SearchWalkResult) => void;
     const files = Array.from(
@@ -138,8 +174,10 @@ suite("WorkspaceFileIndex", () => {
     multi.dispose();
 
     const fallbackHarness = makeHarness({
-      getGitTrackedFiles: async () => {
-        throw new Error("git unavailable");
+      getGitFilesIncludingNestedRepos: async function* () {
+        const error = new Error("spawn git ENOENT") as NodeJS.ErrnoException;
+        error.code = "ENOENT";
+        throw error;
       },
     });
     const fallback = new WorkspaceFileIndex(
@@ -154,12 +192,35 @@ suite("WorkspaceFileIndex", () => {
     fallback.dispose();
   });
 
+  test("treats a Git listing timeout as a degraded build and logs the fallback", async () => {
+    const warnings: string[] = [];
+    const harness = makeHarness({
+      getGitFilesIncludingNestedRepos: async function* () {
+        const error = new Error("git ls-files timed out") as NodeJS.ErrnoException;
+        error.code = "ETIMEDOUT";
+        throw error;
+      },
+    });
+    const pipeline = new WorkspaceFileIndexPipeline(
+      harness.roots,
+      true,
+      harness.dependencies,
+      { onWarning: (message) => warnings.push(message) }
+    );
+    await pipeline.build();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(pipeline.getStatus().state, "degraded");
+    assert.ok(warnings.some((message) => message.includes("Git file listing failed")));
+    assert.ok((await pipeline.queryFiles("ignored target")).length > 0);
+    pipeline.dispose();
+  });
+
   test("batches create, delete, and directory-create changes without rebuilding", async () => {
     let rebuilds = 0;
     const harness = makeHarness({
-      getGitTrackedFiles: async () => {
+      getGitFilesIncludingNestedRepos: async function* () {
         rebuilds++;
-        return ["src/original.ts"];
+        yield ["src/original.ts"];
       },
       stat: async (file) => ({
         isFile: () => !/[\\/]new-dir$/.test(file),
@@ -200,9 +261,9 @@ suite("WorkspaceFileIndex", () => {
   test("drops ignored creates and rebuilds on ignore changes and stale queries", async () => {
     let gitCalls = 0;
     const harness = makeHarness({
-      getGitTrackedFiles: async () => {
+      getGitFilesIncludingNestedRepos: async function* () {
         gitCalls++;
-        return ["kept.ts"];
+        yield ["kept.ts"];
       },
       getGitIgnoredPaths: async (_root, files) =>
         new Set(files.filter((file) => file.includes("ignored"))),
@@ -242,7 +303,9 @@ suite("WorkspaceFileIndex", () => {
     let walks = 0;
     let walkCalls = 0;
     const harness = makeHarness({
-      getGitTrackedFiles: async () => [walks++ === 0 ? "old.ts" : "new.ts"],
+      getGitFilesIncludingNestedRepos: async function* () {
+        yield [walks++ === 0 ? "old.ts" : "new.ts"];
+      },
       walkSearchFiles: async () => {
         if (++walkCalls === 2)
           return new Promise((resolve) => {
@@ -372,7 +435,9 @@ suite("WorkspaceFileIndex", () => {
 
   test("the Git-only fallback pipeline never walks, even when rebuilding", async () => {
     const harness = makeHarness({
-      getGitTrackedFiles: async () => ["visible.ts"],
+      getGitFilesIncludingNestedRepos: async function* () {
+        yield ["visible.ts"];
+      },
     });
     const pipeline = new WorkspaceFileIndexPipeline(
       harness.roots,
@@ -402,6 +467,41 @@ suite("WorkspaceFileIndex", () => {
     pipeline.dispose();
   });
 
+  test("indexes files from an untracked nested repository without its directory entry", async () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "cy-file-index-"));
+    const runGit = (cwd: string, ...args: string[]): void => {
+      execFileSync("git", ["-C", cwd, ...args], { stdio: "ignore" });
+    };
+    try {
+      runGit(workspace, "init");
+      const inner = path.join(workspace, "inner");
+      fs.mkdirSync(inner);
+      runGit(inner, "init");
+      fs.writeFileSync(path.join(inner, "b.txt"), "nested file\n");
+
+      const harness = makeHarness();
+      const dependencies: WorkspaceFileIndexDependencies = {
+        ...harness.dependencies,
+        getGitFilesIncludingNestedRepos: (repoRoot) =>
+          getGitFilesIncludingNestedRepos(repoRoot),
+      };
+      const pipeline = new WorkspaceFileIndexPipeline(
+        [{ path: workspace, name: "workspace" }],
+        true,
+        dependencies
+      );
+      await pipeline.build();
+      const paths = (await pipeline.queryFiles("b.txt")).map(
+        (item) => item.relativePath
+      );
+      assert.ok(paths.includes("inner/b.txt"));
+      assert.ok(!paths.includes("inner/"));
+      pipeline.dispose();
+    } finally {
+      fs.rmSync(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("stops walking ignored trees at the memory budget but keeps every Git path", async () => {
     const walkedDirectories: number[] = [];
     const budgetReached: number[] = [];
@@ -409,7 +509,9 @@ suite("WorkspaceFileIndex", () => {
     const directory = (n: number) =>
       Array.from({ length: 100 }, (_, i) => `ignored/d${n}/file-${i}.ts`);
     const harness = makeHarness({
-      getGitTrackedFiles: async () => ["visible/tracked.ts"],
+      getGitFilesIncludingNestedRepos: async function* () {
+        yield ["visible/tracked.ts"];
+      },
       walkSearchFiles: async (
         _root,
         _startedAt,

@@ -26,6 +26,7 @@ import {
   clearFreshPageReadySent,
 } from "./reconnectWatchdog";
 import { autoFocusOutputOnExecution } from "@utils/executionOutputFocus";
+import { reissueRunViewLoadAfterHostedReconnect } from "./useRunViewLoadWatchdog";
 
 const pendingAutoClaims = new Set<string>();
 
@@ -113,6 +114,7 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
       clearFreshPageReadySent();
       clearPanelReconnectWatchdog();
       useUiStore.getState().setMyClientId(clientId as string);
+      reissueRunViewLoadAfterHostedReconnect();
     }
   };
   // --------------------------------------------------------------------------

@@ -32,6 +32,7 @@ import { TypedEmitter } from "./TypedEmitter";
 import { retryWithBackoff, stopRetrying } from "./RetryUtils";
 import { attachStreamTextDecoder } from "./StreamTextDecoder";
 import { CLI_VERSION_CHECK_TIMEOUT_MS } from "../core/harness/shared/interfaces/ICliProvider";
+import { isSubprocessTimeoutError } from "./SubprocessUtils";
 
 const execAsync = promisify(exec);
 
@@ -42,12 +43,17 @@ const execAsync = promisify(exec);
  * folder, so no workspace ever informed discovery anyway.
  */
 const DISCOVERY_CWD = os.homedir();
+const MODEL_DISCOVERY_MAX_BUFFER_BYTES = 32 * 1024 * 1024;
 
 function execDiscoveryCommand(
   command: string,
   timeout: number
 ): Promise<{ stdout: string; stderr: string }> {
-  return execAsync(command, { timeout, cwd: DISCOVERY_CWD });
+  return execAsync(command, {
+    timeout,
+    cwd: DISCOVERY_CWD,
+    maxBuffer: MODEL_DISCOVERY_MAX_BUFFER_BYTES,
+  });
 }
 
 // Event emitter for model registry changes
@@ -72,6 +78,11 @@ const cachedOpenCodeContextWindows = new Map<string, number>();
 const cachedAntigravityModelLabels = new Map<string, string>();
 let isInitialized = false;
 let initializationPromise: Promise<void> | null = null;
+let copilotDiscoveryTimedOut = false;
+let copilotTimeoutRetryCount = 0;
+let copilotRetryTimer: NodeJS.Timeout | null = null;
+const COPILOT_TIMEOUT_RETRY_DELAY_MS = 30_000;
+const COPILOT_TIMEOUT_RETRY_LIMIT = 2;
 
 // Fallback model list - imported from ModelConstants (single source of truth)
 const FALLBACK_COPILOT_CLI_MODELS = [...COPILOT_CLI_MODEL_IDS];
@@ -89,15 +100,18 @@ export async function initializeModelRegistry(): Promise<void> {
   }
 
   // Already initialized
-  if (isInitialized) {
+  if (isInitialized && !copilotDiscoveryTimedOut) {
     return;
   }
 
+  copilotDiscoveryTimedOut = false;
   initializationPromise = (async () => {
     await queryCopilotCliModels();
     await queryOpenCodeModels();
     await queryQwenModels();
     await queryAntigravityModels();
+    // The fallback list is usable for validation while a bounded background
+    // retry gives a cold CLI another chance to answer.
     isInitialized = true;
     // Notify subscribers that models are now available
     modelsLoadedEmitter.fire();
@@ -130,7 +144,10 @@ async function queryCopilotCliModels(): Promise<void> {
     const result = await retryWithBackoff(
       async () => {
         try {
-          return await execDiscoveryCommand("copilot help config", 5000);
+          return await execDiscoveryCommand(
+            "copilot help config",
+            CLI_VERSION_CHECK_TIMEOUT_MS
+          );
         } catch (error) {
           // On Windows, copilot.ps1 can be temporarily locked by a concurrent process.
           // Retry transient file-lock errors; let other errors fall through.
@@ -178,6 +195,10 @@ async function queryCopilotCliModels(): Promise<void> {
     );
     cachedCopilotCliModelIds = [...FALLBACK_COPILOT_CLI_MODELS];
   } catch (error) {
+    if (isCliTimeoutError(error)) {
+      copilotDiscoveryTimedOut = true;
+      scheduleCopilotTimeoutRetry();
+    }
     Log.warn(`[ModelRegistry] Failed to query Copilot CLI models: ${error}`);
     cachedCopilotCliModelIds = [...FALLBACK_COPILOT_CLI_MODELS];
   }
@@ -213,13 +234,20 @@ async function queryOpenCodeModels(): Promise<void> {
     try {
       ({ stdout } = await execDiscoveryCommand(
         "opencode models --verbose",
-        10000
+        CLI_VERSION_CHECK_TIMEOUT_MS
       ));
     } catch (execError) {
       // opencode sometimes exits non-zero (e.g. internal "JSON Parse error") but
       // still writes the full model list to stdout before failing. Recover it.
-      stdout =
-        (execError as NodeJS.ErrnoException & { stdout?: string }).stdout ?? "";
+      if (!isRecoverableNonZeroExit(execError)) {
+        if (isCliTimeoutError(execError) || isMaxBufferError(execError)) {
+          Log.warn(
+            `[ModelRegistry] OpenCode model discovery output was ${isCliTimeoutError(execError) ? "timed out" : "truncated"}; discarding partial output`
+          );
+        }
+        throw execError;
+      }
+      stdout = (execError as NodeJS.ErrnoException & { stdout?: string }).stdout ?? "";
       if (!stdout.trim()) {
         throw execError;
       }
@@ -243,6 +271,50 @@ async function queryOpenCodeModels(): Promise<void> {
     Log.warn(`[ModelRegistry] Failed to query opencode models: ${error}`);
     cachedOpenCodeModelIds = [...OPENCODE_CLI_FALLBACK_MODELS];
   }
+}
+
+function isCliTimeoutError(error: unknown): boolean {
+  return isSubprocessTimeoutError(error);
+}
+
+function scheduleCopilotTimeoutRetry(): void {
+  if (
+    copilotRetryTimer ||
+    copilotTimeoutRetryCount >= COPILOT_TIMEOUT_RETRY_LIMIT
+  ) {
+    return;
+  }
+  copilotTimeoutRetryCount++;
+  copilotRetryTimer = setTimeout(() => {
+    copilotRetryTimer = null;
+    void initializeModelRegistry().catch((error: unknown) => {
+      Log.warn(`[ModelRegistry] Background model retry failed: ${String(error)}`);
+    });
+  }, COPILOT_TIMEOUT_RETRY_DELAY_MS);
+  copilotRetryTimer.unref();
+}
+
+function isMaxBufferError(error: unknown): boolean {
+  return (
+    !!error &&
+    typeof error === "object" &&
+    (error as NodeJS.ErrnoException).code ===
+      "ERR_CHILD_PROCESS_STDIO_MAXBUFFER"
+  );
+}
+
+function isRecoverableNonZeroExit(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  const execError = error as NodeJS.ErrnoException & {
+    killed?: boolean;
+  };
+  return (
+    typeof execError.code === "number" &&
+    execError.killed !== true &&
+    !isMaxBufferError(execError)
+  );
 }
 
 /**

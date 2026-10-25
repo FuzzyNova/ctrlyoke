@@ -116,6 +116,8 @@ export class CtrlYokeWebviewProvider
   private readonly router: WebviewMessageRouter;
   private readonly secretRegistry: SecretRegistryService;
   private readonly interactionPort: WebviewUserInteractionPort;
+  private readonly routeMessagePost: PostMessageFn = (reply) =>
+    this.postMessage(reply);
   // IDashboardSink message shapes are single-sourced here. Pure sink methods
   // delegate to it; methods with extra VS Code logic call it then do more work.
   private readonly sink = new PostMessageDashboardSink((msg) =>
@@ -966,8 +968,9 @@ export class CtrlYokeWebviewProvider
 
   public async routeMessage(message: any): Promise<void> {
     if (this.dashboardApplication) {
-      await this.dashboardApplication.routeClientMessage(message, (reply) =>
-        this.postMessage(reply)
+      await this.dashboardApplication.routeClientMessage(
+        message,
+        this.routeMessagePost
       );
       return;
     }

@@ -80,6 +80,7 @@ interface CommitHistoryState extends PagedCommitHistoryContext {
   currentBranch: string | null;
   listingId: string | null;
   totalCount: number;
+  hasMore: boolean;
   pageSize: number;
   pages: Map<number, readonly WorkspaceCommitLogEntry[]>;
   inFlightOffsets: Set<number>;
@@ -100,6 +101,7 @@ const EMPTY_STATE = (
   currentBranch: null,
   listingId: null,
   totalCount: 0,
+  hasMore: false,
   pageSize,
   pages: new Map(),
   inFlightOffsets: new Set(),
@@ -140,6 +142,14 @@ function pageOffset(index: number, pageSize: number): number {
   return Math.floor(Math.max(0, index) / pageSize) * pageSize;
 }
 
+function loadedRowCount(
+  pages: ReadonlyMap<number, readonly WorkspaceCommitLogEntry[]>
+): number {
+  let count = 0;
+  for (const commits of pages.values()) count += commits.length;
+  return count;
+}
+
 function errorFrom(value: unknown): Error {
   return value instanceof Error ? value : new Error(String(value));
 }
@@ -164,10 +174,11 @@ function responseIsUsable(
     response.pageSize > 0 &&
     (expectedPageSize === undefined ||
       response.pageSize === expectedPageSize) &&
-    Number.isSafeInteger(response.totalEntries) &&
-    response.totalEntries >= 0 &&
-    response.offset <= response.totalEntries &&
-    response.commits.length <= response.totalEntries - response.offset &&
+    (response.totalEntries === undefined ||
+      (Number.isSafeInteger(response.totalEntries) &&
+        response.totalEntries >= 0 &&
+        response.offset <= response.totalEntries &&
+        response.commits.length <= response.totalEntries - response.offset)) &&
     typeof response.detached === "boolean" &&
     (response.currentBranch === null ||
       typeof response.currentBranch === "string") &&
@@ -330,7 +341,12 @@ export function usePagedCommitHistory(
             currentBranch: response.currentBranch,
             detached: response.detached,
             listingId: response.historyId,
-            totalCount: response.totalEntries,
+            totalCount:
+              response.totalEntries ??
+              (response.hasMore
+                ? response.pageSize * 2
+                : response.commits.length),
+            hasMore: response.hasMore,
             pageSize: response.pageSize,
             pages: new Map([[0, response.commits]]),
             inFlightOffsets: new Set(),
@@ -365,16 +381,26 @@ export function usePagedCommitHistory(
   const requestRange = useCallback(
     (requestedOffset: number): void => {
       const current = stateRef.current;
-      const offset = pageOffset(
+      const targetOffset = pageOffset(
         requestedOffset,
         current?.pageSize ?? configRef.current.pageSize
       );
+      const offset = targetOffset;
       if (!current?.listingId || current.initialLoading) {
-        pendingOffsetsRef.current.add(offset);
+        pendingOffsetsRef.current.add(requestedOffset);
         return;
       }
       if (
-        offset >= current.totalCount ||
+        [...current.pages].some(
+          ([pageStart, commits]) =>
+            requestedOffset >= pageStart &&
+            requestedOffset < pageStart + commits.length
+        )
+      ) {
+        return;
+      }
+      if (
+        (!current.hasMore && offset >= current.totalCount) ||
         current.pages.has(offset) ||
         controllersRef.current.has(offset)
       ) {
@@ -428,7 +454,20 @@ export function usePagedCommitHistory(
           updateState((previous) => {
             const pages = new Map(previous.pages);
             pages.set(offset, response.commits);
-            return { ...previous, pages, error: null };
+            return {
+              ...previous,
+              pages,
+              hasMore: response.hasMore,
+              totalCount:
+                response.totalEntries ??
+                (response.hasMore
+                  ? Math.max(
+                      previous.totalCount,
+                      offset + response.pageSize * 2
+                    )
+                  : offset + response.commits.length),
+              error: null,
+            };
           });
         })
         .catch((value: unknown) => {
@@ -544,8 +583,12 @@ export function usePagedCommitHistory(
     if (!Number.isSafeInteger(index) || index < 0) return undefined;
     const current = stateRef.current;
     if (!current) return undefined;
-    const offset = pageOffset(index, current.pageSize);
-    return current.pages.get(offset)?.[index - offset];
+    for (const [offset, commits] of current.pages) {
+      if (index >= offset && index < offset + commits.length) {
+        return commits[index - offset];
+      }
+    }
+    return undefined;
   }, []);
 
   useEffect(() => {
@@ -592,9 +635,7 @@ export function usePagedCommitHistory(
     [state.failedRanges]
   );
   const uniqueLoadedCount = useMemo(() => {
-    let count = 0;
-    for (const commits of state.pages.values()) count += commits.length;
-    return count;
+    return loadedRowCount(state.pages);
   }, [state.pages]);
 
   return {

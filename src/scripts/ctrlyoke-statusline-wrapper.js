@@ -24,19 +24,13 @@ const {
   PERSISTED_STORES,
 } = require("./ctrlyoke-format-migrations.js");
 
-// Supported harnesses refresh their statusline frequently. Keep forwarding below
-// the documented ~300 ms Antigravity poll cadence for a consistent contract.
-const DEFAULT_FORWARD_TIMEOUT_MS = 200;
+const DEFAULT_FORWARD_TIMEOUT_MS = 1500;
 
 /**
  * The forward budget, overridable through the environment.
  *
- * 200 ms is the right production contract but it is not a safe assumption for a
- * *test* whose "user command" is a cold `node -e` start: that alone can exceed
- * 200 ms on a loaded Windows machine, which made the wrapper tests pass on an
- * idle box and fail whenever the rest of the suite was running beside them.
- * Tests raise this so they are asserting the forwarding behaviour rather than
- * the host's process-spawn latency.
+ * The environment override lets tests exercise timeout behavior without
+ * waiting for the production budget.
  */
 const FORWARD_TIMEOUT_MS = (() => {
   const override = Number.parseInt(
@@ -317,51 +311,64 @@ function writeSnapshotAtomic(directory, filePrefix, token, payload, writtenAt) {
 /**
  * Forward stdin bytes to a user's statusline command.
  *
- * Forwarding is best-effort. Captured stdout is returned even when the command
- * exits unsuccessfully; spawn, write, and timeout failures resolve with
- * whatever stdout was available instead of rejecting. The wrappers pass the
- * shared FORWARD_TIMEOUT_MS (200 ms unless overridden) by default.
+ * Forwarding is best-effort. The result distinguishes a timeout from a command
+ * that completed with empty output, while preserving any stdout received.
+ * Wrappers pass FORWARD_TIMEOUT_MS (1500 ms unless overridden) by default.
  */
-function forwardToCommand(command, inputBytes, timeoutMs = FORWARD_TIMEOUT_MS) {
+function forwardToCommand(
+  command,
+  inputBytes,
+  timeoutMs = FORWARD_TIMEOUT_MS,
+  options = {}
+) {
   if (typeof command !== "string" || command.trim().length === 0) {
-    return Promise.resolve(Buffer.alloc(0));
+    return Promise.resolve({ output: Buffer.alloc(0), timedOut: false });
   }
 
   return new Promise((resolve) => {
     let child;
     try {
-      child = spawn(command, {
+      child = (options.spawnImpl ?? spawn)(command, {
         shell: true,
         windowsHide: true,
         stdio: ["pipe", "pipe", "ignore"],
       });
     } catch {
-      resolve(Buffer.alloc(0));
+      resolve({ output: Buffer.alloc(0), timedOut: false });
       return;
     }
 
     const output = [];
     let settled = false;
     let timer;
-    const settle = () => {
+    const settle = (timedOut = false) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve(Buffer.concat(output));
+      resolve({ output: Buffer.concat(output), timedOut });
     };
     timer = setTimeout(() => {
       try {
-        child.kill();
+        if ((options.platform ?? process.platform) === "win32" && child.pid) {
+          const killer = (options.spawnImpl ?? spawn)(
+            "taskkill",
+            ["/T", "/F", "/PID", String(child.pid)],
+            { windowsHide: true, stdio: "ignore" }
+          );
+          killer.once("error", () => {});
+        } else {
+          child.kill();
+        }
       } catch {
         // The wrapper remains non-fatal if the child cannot be killed.
       }
-      settle();
+      settle(true);
     }, timeoutMs);
 
     child.stdout.on("data", (chunk) => output.push(Buffer.from(chunk)));
-    child.once("error", settle);
-    child.once("close", settle);
-    child.stdin.on("error", settle);
+    child.once("error", () => settle());
+    child.once("close", () => settle());
+    child.stdin.on("error", () => settle());
     try {
       child.stdin.end(
         Buffer.isBuffer(inputBytes) ? inputBytes : Buffer.from(inputBytes)
@@ -370,6 +377,56 @@ function forwardToCommand(command, inputBytes, timeoutMs = FORWARD_TIMEOUT_MS) {
       settle();
     }
   });
+}
+
+function getForwardedOutputCachePath(harnessId, homeDirectory = os.homedir()) {
+  if (typeof harnessId !== "string" || !/^[a-z0-9-]+$/.test(harnessId)) {
+    return undefined;
+  }
+  return path.join(
+    homeDirectory,
+    ".ctrlyoke",
+    "cache",
+    "statusline-forwarded",
+    `${harnessId}.txt`
+  );
+}
+
+function readForwardedOutputCache(harnessId) {
+  const cachePath = getForwardedOutputCachePath(harnessId);
+  if (!cachePath) return Buffer.alloc(0);
+  try {
+    return fs.readFileSync(cachePath);
+  } catch {
+    return Buffer.alloc(0);
+  }
+}
+
+async function forwardStatuslineCommand(
+  command,
+  inputBytes,
+  harnessId,
+  timeoutMs = FORWARD_TIMEOUT_MS,
+  options = {}
+) {
+  const result = await forwardToCommand(command, inputBytes, timeoutMs, options);
+  const cachePath = getForwardedOutputCachePath(harnessId);
+  if (result.timedOut) {
+    return result.output.length > 0
+      ? result.output
+      : readForwardedOutputCache(harnessId);
+  }
+  if (result.output.length > 0 && cachePath) {
+    try {
+      fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+      const tempPath = `${cachePath}.tmp-${process.pid}`;
+      fs.writeFileSync(tempPath, result.output);
+      fs.renameSync(tempPath, cachePath);
+    } catch {
+      // Forwarding remains best-effort when the cache cannot be written.
+    }
+  }
+  return result.output;
 }
 
 function formatCompactTokenCount(value) {
@@ -565,6 +622,7 @@ module.exports = {
   formatCompactTokenCount,
   formatUsagePercentForDisplay,
   forwardToCommand,
+  forwardStatuslineCommand,
   getContextBand,
   getContextValues,
   getQuotaPercentage,

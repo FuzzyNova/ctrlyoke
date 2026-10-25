@@ -85,6 +85,8 @@ interface RunningServer {
   restartCount: number;
 }
 const APPROVAL_KEY = "languageServers.workspaceDefinitionApprovals";
+const INITIALIZE_TIMEOUT_MS = 60_000;
+const INITIALIZE_TIMEOUT_SECONDS = INITIALIZE_TIMEOUT_MS / 1_000;
 
 /** Spawns and supervises stdio language servers for a single workspace host. */
 export class ManagedLanguageServerBackend implements LanguageServerBackend {
@@ -380,6 +382,8 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
       return Promise.reject(error);
     }
     const starting = Promise.resolve().then(async () => {
+      if (this.disposed)
+        throw new Error("Language server backend is disposed.");
       if (this.userStoppedServers.has(resolved.id))
         throw new Error(`Language server ${resolved.id} is stopped.`);
       const connection = await this.startServer(
@@ -548,34 +552,16 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
 
   async dispose(): Promise<void> {
     this.disposed = true;
-    await Promise.allSettled([...this.starting.values()]);
     for (const timer of this.restartTimers.values())
       (this.options.clearTimer ?? clearTimeout)(timer);
     this.restartTimers.clear();
     const running = [...this.servers.values()];
     await Promise.all(
-      running.map(async (server) => {
-        this.clearIdle(server);
-        server.intentionalStop = true;
-        try {
-          await this.withTimeout(
-            server.connection.sendRequest(LSP_METHODS.SHUTDOWN),
-            1_000
-          );
-        } catch {
-          /* process may be gone or ignoring shutdown */
-        }
-        try {
-          await server.connection.sendNotification(LSP_METHODS.EXIT);
-        } catch {
-          /* already closed */
-        }
-        await this.waitForExit(server.child);
-        if (server.child.exitCode === null) server.child.kill();
-        server.connection.dispose();
-      })
+      running.map((server) =>
+        this.stopServer(server, LANGUAGE_SERVER_STATUSES.STOPPED)
+      )
     );
-    this.servers.clear();
+    await Promise.allSettled([...this.starting.values()]);
     this.statuses.removeAllListeners();
   }
 
@@ -981,19 +967,23 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
     connection.onRequest("client/unregisterCapability", () => null);
     connection.listen();
     try {
-      const initialized = await connection.sendRequest(LSP_METHODS.INITIALIZE, {
-        processId: process.pid,
-        rootUri: pathToFileURL(descriptor.rootPath).toString(),
-        capabilities: {
-          workspace: { configuration: true },
-          textDocument: {
-            completion: { completionItem: { snippetSupport: true } },
-            hover: {},
-            publishDiagnostics: {},
+      const initialized = await this.withTimeout(
+        connection.sendRequest(LSP_METHODS.INITIALIZE, {
+          processId: process.pid,
+          rootUri: pathToFileURL(descriptor.rootPath).toString(),
+          capabilities: {
+            workspace: { configuration: true },
+            textDocument: {
+              completion: { completionItem: { snippetSupport: true } },
+              hover: {},
+              publishDiagnostics: {},
+            },
           },
-        },
-        initializationOptions: resolved.settings,
-      });
+          initializationOptions: resolved.settings,
+        }),
+        INITIALIZE_TIMEOUT_MS,
+        `Language server ${resolved.id} did not answer initialize within ${INITIALIZE_TIMEOUT_SECONDS}s.`
+      );
       const caps =
         (initialized as { capabilities?: Record<string, unknown> })
           .capabilities ?? {};
@@ -1250,7 +1240,8 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
   }
   private async withTimeout<T>(
     promise: Promise<T>,
-    timeoutMs: number
+    timeoutMs: number,
+    timeoutMessage = "Language server shutdown timed out."
   ): Promise<T> {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -1258,7 +1249,7 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
         promise,
         new Promise<T>((_, reject) => {
           timer = (this.options.setTimer ?? setTimeout)(
-            () => reject(new Error("Language server shutdown timed out.")),
+            () => reject(new Error(timeoutMessage)),
             timeoutMs
           );
         }),

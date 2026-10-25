@@ -15,6 +15,7 @@ import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
 import {
   LICENSE_ACTIONS,
   MESSAGE_TYPES,
+  COMPLETION_TRIGGERS,
   SETTING_SCOPES,
   FINAL_STEP_PHASES,
   HARNESS_IDS,
@@ -53,7 +54,8 @@ function buildRouter(
   actions: DashboardHostActions = {
     openWorkspaceTarget: async () => ({ status: "unsupported" }),
   },
-  getNamedRoots: () => NamedRoot[] = getVsCodeNamedWorkspaceRoots
+  getNamedRoots: () => NamedRoot[] = getVsCodeNamedWorkspaceRoots,
+  completionCore?: import("../../completions/CompletionCore").CompletionCore
 ): WebviewMessageRouter {
   const settingsSync = {
     sendWorkflowPropertiesToSettings: async () => {},
@@ -67,9 +69,244 @@ function buildRouter(
     { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} },
     undefined,
     licenseService,
-    { actions, getNamedRoots }
+    { actions, getNamedRoots, completionCore }
   );
 }
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => (resolve = done));
+  return { promise, resolve };
+}
+
+suite("WebviewMessageRouter — completion routing", () => {
+  test("routes completions while a queued handler is still running", async () => {
+    const slow = deferred<unknown>();
+    const completion = deferred<unknown[]>();
+    const emitted: unknown[] = [];
+    const router = buildRouter(
+      {
+        getWorkspaceStatsService: () => ({ getSnapshot: () => slow.promise }),
+        refreshWorkspaceStats: async () => undefined,
+      },
+      () => undefined,
+      undefined,
+      undefined,
+      () => [],
+      {
+        getHashSelectionCompletions: () => [],
+        getHashCompletions: () => completion.promise,
+      } as any
+    );
+    const queued = router.route({
+      type: MESSAGE_TYPES.REQUEST_WORKSPACE_STATS,
+    });
+    let completionFinished = false;
+    const request = router
+      .route(
+        {
+          type: MESSAGE_TYPES.REQUEST_COMPLETIONS,
+          trigger: "#",
+          prefix: "#W",
+          position: 2,
+        },
+        {
+          clientTag: "browser:completion",
+          postMessage: (message) => emitted.push(message),
+        }
+      )
+      .then(() => {
+        completionFinished = true;
+      });
+    await Promise.resolve();
+    assert.strictEqual(
+      completionFinished,
+      false,
+      "completion awaits its own lookup"
+    );
+    completion.resolve([]);
+    await request;
+    assert.strictEqual(
+      completionFinished,
+      true,
+      "completion did not wait behind the queued handler"
+    );
+    slow.resolve({});
+    await queued;
+    router.disposeClient("browser:completion");
+  });
+
+  test("a newer same-source completion aborts the first with an empty final reply", async () => {
+    const first = deferred<unknown[]>();
+    const emitted: unknown[] = [];
+    let calls = 0;
+    const router = buildRouter(
+      undefined,
+      () => undefined,
+      undefined,
+      undefined,
+      () => [],
+      {
+        getHashSelectionCompletions: () => [],
+        getHashCompletions: () =>
+          ++calls === 1 ? first.promise : Promise.resolve([]),
+      } as any
+    );
+    const postMessage = (message: unknown) => emitted.push(message);
+    const stale = router.route(
+      {
+        type: MESSAGE_TYPES.REQUEST_COMPLETIONS,
+        trigger: "#",
+        prefix: "#W",
+        position: 2,
+        seq: 1,
+      },
+      { clientTag: "browser:completion", postMessage }
+    );
+    await Promise.resolve();
+    await router.route(
+      {
+        type: MESSAGE_TYPES.REQUEST_COMPLETIONS,
+        trigger: "#",
+        prefix: "#Wi",
+        position: 3,
+        seq: 2,
+      },
+      { clientTag: "browser:completion", postMessage }
+    );
+    first.resolve([{ label: "Widget", insertText: "sym" }]);
+    await stale;
+    const replies = emitted.filter(
+      (message) =>
+        (message as { type?: string }).type ===
+        MESSAGE_TYPES.COMPLETIONS_RESPONSE
+    ) as Array<{ seq?: number; items?: unknown[]; partial?: boolean }>;
+    assert.deepStrictEqual(
+      replies.map((message) => message.seq).sort(),
+      [1, 2]
+    );
+    assert.deepStrictEqual(
+      replies.find((message) => message.seq === 1),
+      {
+        type: MESSAGE_TYPES.COMPLETIONS_RESPONSE,
+        items: [],
+        from: 2,
+        seq: 1,
+        partial: false,
+      }
+    );
+    router.disposeClient("browser:completion");
+  });
+
+  test("path and custom completion requests from one client both receive replies", async () => {
+    const path = deferred<unknown[]>();
+    const custom = deferred<unknown[]>();
+    const emitted: unknown[] = [];
+    const router = buildRouter(
+      undefined,
+      () => undefined,
+      undefined,
+      undefined,
+      () => [],
+      {
+        getPromptFileCompletions: () => path.promise,
+        getHashSelectionCompletions: () => [],
+        getHashCompletions: () => custom.promise,
+      } as any
+    );
+    const postMessage = (message: unknown) => emitted.push(message);
+    const pathRequest = router.route(
+      {
+        type: MESSAGE_TYPES.REQUEST_COMPLETIONS,
+        trigger: COMPLETION_TRIGGERS.PATH,
+        prefix: "./",
+        position: 2,
+        seq: 3,
+      },
+      { clientTag: "browser:completion", postMessage }
+    );
+    const customRequest = router.route(
+      {
+        type: MESSAGE_TYPES.REQUEST_COMPLETIONS,
+        trigger: COMPLETION_TRIGGERS.HASH,
+        prefix: "#W",
+        position: 2,
+        seq: 4,
+      },
+      { clientTag: "browser:completion", postMessage }
+    );
+
+    path.resolve([{ label: "workflow.md" }]);
+    custom.resolve([{ label: "Widget" }]);
+    await Promise.all([pathRequest, customRequest]);
+
+    assert.deepStrictEqual(
+      emitted
+        .filter(
+          (message) =>
+            (message as { type?: string }).type ===
+            MESSAGE_TYPES.COMPLETIONS_RESPONSE
+        )
+        .map((message) => (message as { seq?: number }).seq)
+        .sort(),
+      [3, 4]
+    );
+    router.disposeClient("browser:completion");
+  });
+});
+
+suite("WebviewMessageRouter — standalone editor file routing", () => {
+  test("routes conversion, attachment, and preview requests while the queue is blocked", async () => {
+    const slow = deferred<unknown>();
+    const router = buildRouter(
+      {
+        getWorkspaceStatsService: () => ({ getSnapshot: () => slow.promise }),
+        refreshWorkspaceStats: async () => undefined,
+      },
+      () => undefined,
+      undefined,
+      undefined,
+      () => []
+    );
+    const queued = router.route({
+      type: MESSAGE_TYPES.REQUEST_WORKSPACE_STATS,
+    });
+    const requests: Array<Record<string, unknown>> = [
+      { type: MESSAGE_TYPES.CONVERT_PROMPT_TO_FILE, seq: 1, text: "prompt" },
+      {
+        type: MESSAGE_TYPES.SAVE_PASTED_IMAGE,
+        seq: 2,
+        mimeType: "image/png",
+        dataBase64: "AQ==",
+      },
+      {
+        type: MESSAGE_TYPES.SAVE_OUTPUT_SNAPSHOT,
+        seq: 3,
+        captureId: "missing",
+      },
+      {
+        type: MESSAGE_TYPES.REQUEST_FILE_PREVIEW_URI,
+        seq: 4,
+        relativePath: "image.png",
+      },
+    ];
+
+    for (const message of requests) {
+      let completed = false;
+      await router.route(message, { clientTag: "panel" }).then(() => {
+        completed = true;
+      });
+      assert.strictEqual(
+        completed,
+        true,
+        `${String(message.type)} waited on routeQueue`
+      );
+    }
+
+    slow.resolve({});
+    await queued;
+  });
+});
 
 class FakeLicenseActionService implements LicenseActionService {
   readonly calls: string[] = [];
@@ -1127,6 +1364,116 @@ suite("WebviewMessageRouter — workflow variant delivery", () => {
 suite(
   "WebviewMessageRouter — LOAD_RUN_VIEW always answers its requestId",
   () => {
+    test("joins a duplicate in-flight requestId for the same client", async () => {
+      let resolveLoad!: () => void;
+      const loadGate = new Promise<void>((resolve) => {
+        resolveLoad = resolve;
+      });
+      let loadCount = 0;
+      const router = new WebviewMessageRouter(
+        () => {},
+        { sendWorkflowPropertiesToSettings: async () => {} } as any,
+        {} as any,
+        () =>
+          ({
+            loadRunViewForClient: async () => {
+              loadCount++;
+              await loadGate;
+            },
+            publishViewIdentityToViewers: async () => undefined,
+          }) as any,
+        {} as any,
+        { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+      );
+      const message = {
+        type: MESSAGE_TYPES.LOAD_RUN_VIEW,
+        address: {
+          workflowKey: "workflow-a",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "run-2026-01-01T00-00-00-000Z",
+        },
+        requestId: "run-view-duplicate",
+      };
+
+      const first = router.route(message, { clientTag: "browser:1" });
+      const duplicate = router.route(message, { clientTag: "browser:1" });
+      await Promise.resolve();
+      assert.strictEqual(loadCount, 1);
+      resolveLoad();
+      await Promise.all([first, duplicate]);
+      assert.strictEqual(loadCount, 1);
+    });
+
+    test("loads again after reconnect so later output uses the new connection", async () => {
+      const loadGates = [deferred<void>(), deferred<void>()];
+      let loadCount = 0;
+      let viewSink: ((message: unknown) => void) | undefined;
+      const firstReplies: unknown[] = [];
+      const reconnectedReplies: unknown[] = [];
+      const snapshot = {
+        type: MESSAGE_TYPES.RUN_VIEW_LOADED,
+        requestId: "run-view-reconnect",
+      };
+      const router = new WebviewMessageRouter(
+        () => {},
+        { sendWorkflowPropertiesToSettings: async () => {} } as any,
+        {} as any,
+        () =>
+          ({
+            loadRunViewForClient: async (
+              _address: unknown,
+              send: (message: unknown) => void
+            ) => {
+              const call = loadCount++;
+              await loadGates[call].promise;
+              // RunViewPublisher binds its per-client view sink before it
+              // sends the snapshot. A later run-view push uses this sink.
+              viewSink = send;
+              send(snapshot);
+            },
+            publishViewIdentityToViewers: async () => undefined,
+          }) as any,
+        {} as any,
+        { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+      );
+      const message = {
+        type: MESSAGE_TYPES.LOAD_RUN_VIEW,
+        address: {
+          workflowKey: "workflow-a",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "run-2026-01-01T00-00-00-000Z",
+        },
+        requestId: "run-view-reconnect",
+      };
+
+      const first = router.route(message, {
+        clientTag: "browser:1",
+        postMessage: (reply) => firstReplies.push(reply),
+      });
+      const reconnected = router.route(message, {
+        clientTag: "browser:1",
+        postMessage: (reply) => reconnectedReplies.push(reply),
+      });
+      await Promise.resolve();
+      assert.strictEqual(loadCount, 1);
+
+      loadGates[0].resolve();
+      await first;
+      await Promise.resolve();
+      assert.strictEqual(loadCount, 2);
+      loadGates[1].resolve();
+      await reconnected;
+
+      const liveOutput = {
+        type: MESSAGE_TYPES.CLI_WATCH_OUTPUT,
+        output: "later",
+      };
+      viewSink?.(liveOutput);
+
+      assert.deepStrictEqual(firstReplies, [snapshot]);
+      assert.deepStrictEqual(reconnectedReplies, [snapshot, liveOutput]);
+    });
+
     test("replies with a failure when the orchestrator is not available yet", async () => {
       const emitted: any[] = [];
       const router = new WebviewMessageRouter(
@@ -1532,6 +1879,9 @@ suite("WebviewMessageRouter — license actions", () => {
       deep?: boolean;
       regex?: boolean;
       signal?: AbortSignal;
+      allowRebuild?: boolean;
+      rebuildInBackground?: boolean;
+      indexState?: "ready" | "building";
       resolve: () => void;
     }
 
@@ -1559,7 +1909,12 @@ suite("WebviewMessageRouter — license actions", () => {
           },
           _workspacePath: string,
           _onProgress: unknown,
-          signal?: AbortSignal
+          signal?: AbortSignal,
+          _onPartialResults?: unknown,
+          options?: {
+            allowRebuild?: boolean;
+            rebuildInBackground?: boolean;
+          }
         ) =>
           new Promise((resolve) => {
             recorded.push({
@@ -1568,6 +1923,8 @@ suite("WebviewMessageRouter — license actions", () => {
               deep: request.deep,
               regex: request.regex,
               signal,
+              allowRebuild: options?.allowRebuild,
+              rebuildInBackground: options?.rebuildInBackground,
               resolve: () =>
                 resolve({
                   query: request.query,
@@ -1576,10 +1933,12 @@ suite("WebviewMessageRouter — license actions", () => {
                   totalCount: 0,
                   countState: "exact",
                   hasMore: false,
-                  indexState: "ready",
+                  indexState: recorded.at(-1)?.indexState ?? "ready",
                 }),
             });
           }),
+        enqueueWorkspaceRefresh: () => Promise.resolve(),
+        waitForActiveRefresh: () => Promise.resolve({ failed: false }),
       };
       const router = new WebviewMessageRouter(
         (message) => emitted.push(message),
@@ -1622,6 +1981,8 @@ suite("WebviewMessageRouter — license actions", () => {
         });
         await settle();
         assert.strictEqual(recorded.length, 1);
+        assert.strictEqual(recorded[0].allowRebuild, false);
+        assert.strictEqual(recorded[0].rebuildInBackground, true);
 
         const second = router.route({
           type: MESSAGE_TYPES.SEARCH_HISTORY,
@@ -1675,6 +2036,152 @@ suite("WebviewMessageRouter — license actions", () => {
         await settle();
         recorded[1].resolve();
         await second;
+      } finally {
+        restore();
+      }
+    });
+
+    test("repeats the active search after its background rebuild finishes", async () => {
+      const recorded: RecordedSearch[] = [];
+      const rebuild = deferred<void>();
+      const { router, restore, emitted } = buildSearchRouter(recorded);
+      try {
+        const service = (router as any).historySearchService;
+        let joins = 0;
+        let enqueues = 0;
+        service.enqueueWorkspaceRefresh = () => {
+          enqueues += 1;
+          return Promise.resolve({ failed: false });
+        };
+        service.waitForActiveRefresh = () => {
+          joins += 1;
+          return rebuild.promise.then(() => ({ failed: false }));
+        };
+        const first = router.route({
+          type: MESSAGE_TYPES.SEARCH_HISTORY,
+          query: "background-ready-term",
+          listingId: "listing-ready",
+          limit: 10,
+        });
+        await settle();
+        assert.strictEqual(recorded.length, 1);
+        assert.strictEqual(joins, 0);
+        assert.strictEqual(enqueues, 0);
+        recorded[0].indexState = "building";
+        recorded[0].resolve();
+        await first;
+        assert.strictEqual(recorded.length, 1);
+        assert.strictEqual(joins, 1);
+        assert.strictEqual(enqueues, 0);
+
+        rebuild.resolve();
+        await settle();
+        assert.strictEqual(recorded.length, 2);
+        recorded[1].resolve();
+        await settle();
+        assert.strictEqual(recorded[1].query, "background-ready-term");
+        assert.strictEqual(recorded[1].offset, undefined);
+        assert.ok(
+          emitted.filter(
+            (message) =>
+              message.type === MESSAGE_TYPES.SEARCH_HISTORY_RESULTS &&
+              message.listingId === "listing-ready"
+          ).length >= 2,
+          "the building reply and refreshed active-listing results should both be emitted"
+        );
+      } finally {
+        restore();
+      }
+    });
+
+    test("does not run a superseded search after the rebuild", async () => {
+      const recorded: RecordedSearch[] = [];
+      const rebuild = deferred<void>();
+      const { router, restore } = buildSearchRouter(recorded);
+      try {
+        const service = (router as any).historySearchService;
+        service.waitForActiveRefresh = () =>
+          rebuild.promise.then(() => ({ failed: false }));
+        const first = router.route({
+          type: MESSAGE_TYPES.SEARCH_HISTORY,
+          query: "old-term",
+          limit: 10,
+        });
+        await settle();
+        recorded[0].indexState = "building";
+        recorded[0].resolve();
+        await first;
+        const second = router.route({
+          type: MESSAGE_TYPES.SEARCH_HISTORY,
+          query: "new-term",
+          limit: 10,
+        });
+        await settle();
+        assert.strictEqual(recorded[0].signal?.aborted, true);
+        rebuild.resolve();
+        await settle();
+        assert.strictEqual(recorded.length, 2, "old follow-up must not search");
+        recorded[1].resolve();
+        await second;
+      } finally {
+        restore();
+      }
+    });
+
+    test("disposal aborts the detached follow-up search", async () => {
+      const recorded: RecordedSearch[] = [];
+      const rebuild = deferred<void>();
+      const { router, restore } = buildSearchRouter(recorded);
+      try {
+        const service = (router as any).historySearchService;
+        service.waitForActiveRefresh = () =>
+          rebuild.promise.then(() => ({ failed: false }));
+        const first = router.route(
+          {
+            type: MESSAGE_TYPES.SEARCH_HISTORY,
+            query: "disposed-term",
+            limit: 10,
+          },
+          { clientTag: "browser:dispose" }
+        );
+        await settle();
+        recorded[0].indexState = "building";
+        recorded[0].resolve();
+        await first;
+        router.disposeClient("browser:dispose");
+        assert.strictEqual(recorded[0].signal?.aborted, true);
+        rebuild.resolve();
+        await settle();
+        assert.strictEqual(recorded.length, 1);
+      } finally {
+        restore();
+      }
+    });
+
+    test("reports a failed rebuild with the fallback index state", async () => {
+      const recorded: RecordedSearch[] = [];
+      const { router, restore, emitted } = buildSearchRouter(recorded);
+      try {
+        const service = (router as any).historySearchService;
+        service.waitForActiveRefresh = () =>
+          Promise.resolve({ failed: true, error: new Error("disk full") });
+        const first = router.route({
+          type: MESSAGE_TYPES.SEARCH_HISTORY,
+          query: "failed-term",
+          listingId: "listing-failed",
+          limit: 10,
+        });
+        await settle();
+        recorded[0].indexState = "building";
+        recorded[0].resolve();
+        await first;
+        await settle();
+        const failure = emitted.find(
+          (message) =>
+            message.type === MESSAGE_TYPES.SEARCH_HISTORY_RESULTS &&
+            message.indexState === "fallback"
+        );
+        assert.ok(failure, "failed rebuild should end the building state");
       } finally {
         restore();
       }

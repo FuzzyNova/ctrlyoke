@@ -69,7 +69,7 @@ import {
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
 import { findWorkflowFilesInWorkspace } from "../utils/WorkflowFileDiscovery";
-import { getGitTrackedFiles } from "../utils/GitUtils";
+import { repoToplevel } from "../utils/GitUtils";
 import { Log } from "../utils/Log";
 import { configService } from "../config/CtrlYokeConfigService";
 import { createHostedHarnessStatusUpdate } from "./HostedServerMessageFactory";
@@ -1466,21 +1466,26 @@ export class CtrlYokeHostedServer
       },
       express.static(webviewDist, { index: false })
     );
-    this.app.get("/api/workflow-files", requireToken, async (_req, res) => {
-      const files = findWorkflowFilesInWorkspace(this.workspaceRoot);
-      const trackedFiles = await getGitTrackedFiles(this.workspaceRoot).catch(
-        () => null
-      );
-      const isGitRepo = trackedFiles !== null;
-      const trackedSet = trackedFiles ? new Set(trackedFiles) : null;
-      res.json({
-        workspaceRoot: this.workspaceRoot,
-        isGitRepo,
-        files: files.map((file) => ({
-          ...file,
-          gitIgnored: trackedSet ? !trackedSet.has(file.relativePath) : false,
-        })),
-      });
+    this.app.get("/api/workflow-files", requireToken, async (req, res) => {
+      try {
+        const [files, gitRoot] = await Promise.all([
+          findWorkflowFilesInWorkspace(this.workspaceRoot, {
+            includeGitIgnored:
+              req.query.includeGitIgnored === BOOLEAN_STRING_VALUES.TRUE,
+          }),
+          repoToplevel(this.workspaceRoot),
+        ]);
+        res.json({
+          workspaceRoot: this.workspaceRoot,
+          isGitRepo: gitRoot !== null,
+          files,
+        });
+      } catch (error) {
+        Log.warn(
+          `[CtrlYokeHostedServer] Workflow file listing failed for ${this.workspaceRoot}: ${String(error)}`
+        );
+        res.status(500).json({ error: "Workflow file listing failed" });
+      }
     });
 
     // ── Workspace Viewer API ────────────────────────────────────────────────
@@ -1864,6 +1869,14 @@ export class CtrlYokeHostedServer
             ? req.query.pageSize
             : undefined;
         const offset = Number.parseInt(rawOffset, 10);
+        const rawNextOffset =
+          typeof req.query.nextOffset === "string"
+            ? Number.parseInt(req.query.nextOffset, 10)
+            : undefined;
+        const nextCursor =
+          typeof req.query.nextCursor === "string"
+            ? req.query.nextCursor
+            : undefined;
         const pageSize =
           rawPageSize === undefined
             ? undefined
@@ -1883,7 +1896,9 @@ export class CtrlYokeHostedServer
               offset,
               pageSize,
               historyId,
-              repo
+              repo,
+              rawNextOffset,
+              nextCursor
             )
           );
         } catch (err) {
@@ -2177,6 +2192,87 @@ export class CtrlYokeHostedServer
     );
 
     this.app.get(
+      "/api/workspace-viewer/git-ref-diff-download",
+      requireToken,
+      async (req, res) => {
+        const ref = req.query.ref;
+        if (typeof ref !== "string" || !ref) {
+          res.status(400).json({ error: "ref is required" });
+          return;
+        }
+        const repo =
+          typeof req.query.repo === "string" && req.query.repo.trim()
+            ? req.query.repo.trim()
+            : undefined;
+        try {
+          const download = await this.viewerService.spawnGitRefDiffDownload(
+            ref,
+            repo
+          );
+          if (download && (req.aborted || res.destroyed)) {
+            download.process.kill();
+            return;
+          }
+          const safeRef = ref.replace(/[^a-z0-9_-]/gi, "-").toLowerCase();
+          res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="ctrlyoke-${safeRef}.diff"`
+          );
+          if (!download) {
+            res.end();
+            return;
+          }
+
+          let stderr = "";
+          download.stderr.setEncoding("utf8");
+          download.stderr.on("data", (chunk: string) => {
+            stderr = `${stderr}${chunk}`.slice(-8_000);
+          });
+          res.on("close", () => {
+            if (!res.writableEnded) download.process.kill();
+          });
+          download.process.once("error", (err) => {
+            Log.error(
+              `[CtrlYokeHostedServer] workspace-viewer /git-ref-diff-download spawn error: ${String(err)}`
+            );
+            if (!res.headersSent) {
+              res.status(500).json({ error: "Unable to download diff" });
+            } else {
+              res.destroy(err);
+            }
+          });
+          download.process.once("close", (code) => {
+            if (res.writableEnded || res.destroyed) return;
+            if (code !== 0) {
+              Log.error(
+                `[CtrlYokeHostedServer] workspace-viewer /git-ref-diff-download git exited ${code}: ${stderr.trim()}`
+              );
+              if (!res.headersSent) {
+                res.status(500).json({ error: "Unable to download diff" });
+              } else {
+                res.destroy(new Error("Git diff download failed"));
+              }
+              return;
+            }
+          });
+          download.stdout.once("end", () => {
+            if (!res.writableEnded && !res.destroyed) res.end();
+          });
+          download.stdout.pipe(res, { end: false });
+        } catch (err) {
+          if (err instanceof WorkspaceTreeHttpError) {
+            res.status(err.statusCode).json({ error: err.message });
+            return;
+          }
+          Log.error(
+            `[CtrlYokeHostedServer] workspace-viewer /git-ref-diff-download error: ${String(err)}`
+          );
+          res.status(500).json({ error: "Unable to download diff" });
+        }
+      }
+    );
+
+    this.app.get(
       "/api/workspace-viewer/git-ref-diff",
       requireToken,
       async (req, res) => {
@@ -2202,12 +2298,22 @@ export class CtrlYokeHostedServer
     );
 
     this.app.get(
-      "/api/workspace-viewer/worktree-diff",
+      "/api/workspace-viewer/worktree-diff-page",
       requireToken,
       async (req, res) => {
         const sourceCheckoutRoot = req.query.sourceCheckoutRoot;
         const baseCommit = req.query.baseCommit;
         const branchName = req.query.branchName;
+        const offset =
+          typeof req.query.offset === "string"
+            ? Number(req.query.offset)
+            : 0;
+        const pageSize =
+          typeof req.query.pageSize === "string"
+            ? Number(req.query.pageSize)
+            : undefined;
+        const diffId =
+          typeof req.query.diffId === "string" ? req.query.diffId : undefined;
         if (
           typeof sourceCheckoutRoot !== "string" ||
           !sourceCheckoutRoot ||
@@ -2223,15 +2329,22 @@ export class CtrlYokeHostedServer
           return;
         }
         try {
-          const result = await this.viewerService.getWorktreeDiff(
+          const result = await this.viewerService.getWorktreeDiffPage(
             sourceCheckoutRoot,
             baseCommit,
-            branchName
+            branchName,
+            offset,
+            pageSize,
+            diffId
           );
-          res.json(result satisfies WorkspaceGitRefDiffResponse);
+          res.json(result satisfies WorkspaceGitRefDiffPageResponse);
         } catch (err) {
+          if (err instanceof WorkspaceTreeHttpError) {
+            res.status(err.statusCode).json({ error: err.message });
+            return;
+          }
           Log.error(
-            `[CtrlYokeHostedServer] workspace-viewer /worktree-diff error: ${String(err)}`
+            `[CtrlYokeHostedServer] workspace-viewer /worktree-diff-page error: ${String(err)}`
           );
           res.status(500).json({ error: "Internal server error" });
         }

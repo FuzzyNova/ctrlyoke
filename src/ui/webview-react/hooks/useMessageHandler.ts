@@ -2638,6 +2638,10 @@ export function createMessageHandlers(
     // A late response from a previous selector click must not overwrite the
     // most recently requested address.
     const uiStore = useUiStore.getState();
+    const isRetiredLateRequest =
+      uiStore.pendingRunViewRequestId === null &&
+      !!message.requestId &&
+      message.requestId === uiStore.retiredRunViewRequestId;
     // Client-initiated run switches carry a request ID, so only the latest
     // requested snapshot may update the optimistic view. Replays caused by a
     // newly loaded workflow have no request ID and must replace the prior
@@ -2645,7 +2649,9 @@ export function createMessageHandlers(
     if (
       (uiStore.pendingRunViewRequestId !== null &&
         message.requestId !== uiStore.pendingRunViewRequestId) ||
-      (uiStore.pendingRunViewRequestId === null && message.requestId)
+      (uiStore.pendingRunViewRequestId === null &&
+        message.requestId &&
+        !isRetiredLateRequest)
     ) {
       return;
     }
@@ -2886,6 +2892,9 @@ export function createMessageHandlers(
         : null
     );
     ui.clearPendingRunViewLoad();
+    if (isRetiredLateRequest) {
+      useUiStore.setState({ retiredRunViewRequestId: null });
+    }
     // A rewind starts a new, suffix-only editing epoch. Re-baselining here
     // prevents zundo from crossing into the full-runtime pre-rewind state.
     if (pendingRewind ?? runtime?.pendingRewind) {

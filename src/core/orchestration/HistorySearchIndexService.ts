@@ -141,6 +141,9 @@ interface ProjectedHistorySearchMatch {
 
 export interface HistorySearchIndexSearchOptions {
   allowRebuild?: boolean;
+  /** Start or join a rebuild without waiting for it in the search request. */
+  rebuildInBackground?: boolean;
+  waitForLiveLock?: boolean;
   snippetChars?: number;
 }
 
@@ -170,6 +173,11 @@ export type PartialSearchResultsCallback = (
   partialResponse: HistorySearchResponse
 ) => void;
 
+export interface RefreshOutcome {
+  failed: boolean;
+  error?: unknown;
+}
+
 export class HistorySearchIndexService {
   protected get maxSnapshotResults(): number {
     return MAX_SNAPSHOT_RESULTS;
@@ -184,7 +192,8 @@ export class HistorySearchIndexService {
     HistorySearchMatchSnapshot
   >();
   private matchSnapshotResultTotal = 0;
-  private rebuildPromise?: Promise<void>;
+  private rebuildPromise?: Promise<RefreshOutcome>;
+  private lastRefreshOutcome?: RefreshOutcome;
   private rebuildQueued = false;
   private readonly lineageRepository = new WorkflowLineageRepository();
   private readonly documentCache = new HistorySearchDocumentCache(
@@ -349,7 +358,10 @@ export class HistorySearchIndexService {
       indexState = await this.ensureReady(
         workspaceFolderPath,
         onRebuildProgress,
-        options?.allowRebuild !== false
+        options?.allowRebuild !== false,
+        signal,
+        options?.waitForLiveLock === true,
+        options?.rebuildInBackground === true
       );
     } else {
       await this.loadIfPossible(workspaceFolderPath);
@@ -941,7 +953,9 @@ export class HistorySearchIndexService {
     };
   }
 
-  enqueueWorkspaceRefresh(workspaceFolderPath: string): Promise<void> {
+  enqueueWorkspaceRefresh(
+    workspaceFolderPath: string
+  ): Promise<RefreshOutcome> {
     // A workflow completing appends many history events in quick succession.
     // Without coalescing, each append would kick off (and we would previously
     // even await) a full index rebuild. Instead, if a rebuild is already
@@ -955,6 +969,7 @@ export class HistorySearchIndexService {
     }
 
     const refreshStart = Date.now();
+    this.lastRefreshOutcome = undefined;
     let passCount = 0;
     this.rebuildPromise = (async () => {
       try {
@@ -962,7 +977,9 @@ export class HistorySearchIndexService {
           this.rebuildQueued = false;
           passCount += 1;
           const passStart = Date.now();
-          await this.rebuild(workspaceFolderPath, {});
+          await this.rebuild(workspaceFolderPath, {
+            waitForLiveLock: true,
+          });
           Log.debug(
             `[HistorySearchIndexService] refresh pass ${passCount} complete: durationMs=${Date.now() - passStart} requeued=${this.rebuildQueued}`
           );
@@ -974,19 +991,43 @@ export class HistorySearchIndexService {
         Log.warn(
           `[HistorySearchIndexService] Failed to refresh index after ${passCount} pass(es), ${Date.now() - refreshStart}ms: ${getErrorMessage(error)}`
         );
+        return { failed: true, error };
       } finally {
         this.rebuildPromise = undefined;
       }
+      return { failed: false };
     })();
+    // Retain the result for a dashboard search that joins just after a
+    // very short refresh has already settled.
+    void this.rebuildPromise.then((outcome) => {
+      this.lastRefreshOutcome = outcome;
+    });
     return this.rebuildPromise;
+  }
+
+  /** Join the current refresh without marking another pass as queued. */
+  waitForActiveRefresh(): Promise<RefreshOutcome> {
+    return (
+      this.rebuildPromise ??
+      Promise.resolve(this.lastRefreshOutcome ?? { failed: false })
+    );
   }
 
   private async ensureReady(
     workspaceFolderPath: string,
     onRebuildProgress?: IndexRebuildProgressCallback,
-    allowRebuild = true
+    allowRebuild = true,
+    signal?: AbortSignal,
+    waitForLiveLock = false,
+    rebuildInBackground = false
   ): Promise<HistorySearchResponse["indexState"]> {
+    if (signal?.aborted) {
+      throw new HistorySearchCancelledError();
+    }
     await this.loadIfPossible(workspaceFolderPath);
+    if (signal?.aborted) {
+      throw new HistorySearchCancelledError();
+    }
     if (
       this.loadedWorkspacePath === workspaceFolderPath &&
       this.loadedManifest
@@ -996,6 +1037,9 @@ export class HistorySearchIndexService {
         workspaceFolderPath,
         this.loadedManifest
       );
+      if (signal?.aborted) {
+        throw new HistorySearchCancelledError();
+      }
       Log.debug(
         `[HistorySearchIndexService] freshness check: fresh=${fresh} durationMs=${Date.now() - freshnessStart}`
       );
@@ -1008,6 +1052,11 @@ export class HistorySearchIndexService {
       Log.info(
         "[HistorySearchIndexService] index missing or stale; searching without synchronous rebuild"
       );
+      if (rebuildInBackground) {
+        if (!this.rebuildPromise) {
+          void this.enqueueWorkspaceRefresh(workspaceFolderPath);
+        }
+      }
       return HISTORY_SEARCH_INDEX_STATES.BUILDING;
     }
 
@@ -1015,7 +1064,11 @@ export class HistorySearchIndexService {
       "[HistorySearchIndexService] index missing or stale; triggering synchronous rebuild before search"
     );
     const rebuildStart = Date.now();
-    await this.rebuild(workspaceFolderPath, { onProgress: onRebuildProgress });
+    await this.rebuild(workspaceFolderPath, {
+      onProgress: onRebuildProgress,
+      signal,
+      waitForLiveLock,
+    });
     Log.info(
       `[HistorySearchIndexService] synchronous rebuild for search complete: durationMs=${Date.now() - rebuildStart}`
     );
@@ -1070,6 +1123,8 @@ export class HistorySearchIndexService {
     workspaceFolderPath: string,
     options: {
       onProgress?: IndexRebuildProgressCallback;
+      signal?: AbortSignal;
+      waitForLiveLock?: boolean;
     }
   ): Promise<void> {
     const previousManifest = this.loadedManifest;
@@ -1080,6 +1135,7 @@ export class HistorySearchIndexService {
       workspaceFolderPath,
       runHistoryLocation: getFrozenRunHistoryLocation(),
       logFilePath: Log.getLogFilePath(),
+      waitForLiveLock: options.waitForLiveLock,
     };
     const worker = new Worker(this.getWorkerScriptPath(), {
       workerData: data,
@@ -1088,7 +1144,11 @@ export class HistorySearchIndexService {
       },
     });
     try {
-      const result = await this.waitForWorker(worker, options.onProgress);
+      const result = await this.waitForWorker(
+        worker,
+        options.onProgress,
+        options.signal
+      );
       if (result.freshnessReason) {
         Log.debug(
           `[HistorySearchIndexService] freshness check stale: ${result.freshnessReason}`
@@ -1170,7 +1230,8 @@ export class HistorySearchIndexService {
 
   private async waitForWorker(
     worker: Worker,
-    onProgress?: IndexRebuildProgressCallback
+    onProgress?: IndexRebuildProgressCallback,
+    signal?: AbortSignal
   ): Promise<
     Extract<
       HistorySearchRebuildWorkerMessage,
@@ -1180,12 +1241,24 @@ export class HistorySearchIndexService {
     return new Promise((resolve, reject) => {
       let settled = false;
       let startLogged = false;
+      const removeAbortListener = (): void => {
+        signal?.removeEventListener("abort", onAbort);
+      };
+      const onAbort = (): void => {
+        fail(new HistorySearchCancelledError());
+      };
       const fail = (error: unknown): void => {
         if (!settled) {
           settled = true;
+          removeAbortListener();
           reject(error);
         }
       };
+      if (signal?.aborted) {
+        onAbort();
+        return;
+      }
+      signal?.addEventListener("abort", onAbort, { once: true });
 
       worker.on("message", (message: HistorySearchRebuildWorkerMessage) => {
         if (settled) {
@@ -1207,6 +1280,7 @@ export class HistorySearchIndexService {
           message.type === HISTORY_SEARCH_REBUILD_MESSAGE_TYPES.SUCCESS
         ) {
           settled = true;
+          removeAbortListener();
           resolve(message);
         } else {
           const error = new Error(message.message);
