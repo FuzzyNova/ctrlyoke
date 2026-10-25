@@ -76,14 +76,6 @@ class ShortDeadlineWorkspaceViewerService extends HostedWorkspaceViewerService {
   protected override readonly fileHistoryPageTimeoutMs = 25;
 }
 
-/** Real-git pages need the normal deadline; only faked walks get a short one. */
-class AdjustableDeadlineWorkspaceViewerService extends HostedWorkspaceViewerService {
-  protected override fileHistoryPageTimeoutMs = 10_000;
-  shortenFileHistoryDeadline(): void {
-    this.fileHistoryPageTimeoutMs = 25;
-  }
-}
-
 suite("HostedWorkspaceViewerService", function () {
   const tempRoots: string[] = [];
 
@@ -1052,9 +1044,15 @@ suite("HostedWorkspaceViewerService", function () {
       runGit(root, "init", "-b", "main");
       configureGitIdentity(root);
       const baseContent = [
+        "base",
+        "",
         "main-slot",
-        ...Array.from({ length: 20 }, (_unused, index) => `middle-${index}`),
+        "",
         "side-slot",
+        "",
+        "main-slot-2",
+        "",
+        "side-slot-2",
         "",
       ].join("\n");
       commitFileAt(
@@ -1070,7 +1068,7 @@ suite("HostedWorkspaceViewerService", function () {
         root,
         "history.txt",
         baseContent.replace("side-slot", "side change"),
-        "Side commit",
+        "Side 1",
         "2020-01-03T00:00:00Z"
       );
       runGit(root, "checkout", "main");
@@ -1078,10 +1076,39 @@ suite("HostedWorkspaceViewerService", function () {
         root,
         "history.txt",
         baseContent.replace("main-slot", "main change"),
-        "Main commit",
+        "Main 1",
         "2020-01-02T00:00:00Z"
       );
+      commitFileAt(
+        root,
+        "history.txt",
+        fs.readFileSync(path.join(root, "history.txt"), "utf8").replace(
+          "main-slot-2", "main change 2"
+        ),
+        "Main 2",
+        "2020-01-04T00:00:00Z"
+      );
+      runGit(root, "checkout", "side");
+      commitFileAt(
+        root,
+        "history.txt",
+        fs.readFileSync(path.join(root, "history.txt"), "utf8").replace(
+          "side-slot-2", "side change 2"
+        ),
+        "Side 2",
+        "2020-01-05T00:00:00Z"
+      );
+      runGit(root, "checkout", "main");
       runGit(root, "merge", "--no-ff", "side", "-m", "Merge side");
+      for (let index = 0; index < 10; index++) {
+        commitFileAt(
+          root,
+          "other.txt",
+          `unrelated-${index}\n`,
+          `Unrelated ${index}`,
+          `2020-01-${String(7 + index).padStart(2, "0")}T00:00:00Z`
+        );
+      }
 
       const expected = runGit(
         root,
@@ -1114,6 +1141,36 @@ suite("HostedWorkspaceViewerService", function () {
       assert.strictEqual(new Set(actual).size, actual.length);
     });
 
+    test("keeps one Git walk while paging a long linear history", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      for (let index = 0; index < 12; index++) {
+        commitFile(root, "history.txt", `${index}\n`, `History ${index}`);
+      }
+      const logCommands: string[][] = [];
+      const restoreObserver = setGitCommandObserverForTests((_file, args) => {
+        if (args.includes("log") && args.includes("--follow")) logCommands.push([...args]);
+      });
+      try {
+        const svc = new HostedWorkspaceViewerService(root);
+        const subjects: string[] = [];
+        let page = await svc.getFileHistory("history.txt", 0, 2);
+        subjects.push(...page.entries.map((entry) => entry.subject));
+        while (page.hasMore) {
+          page = await svc.getFileHistory(
+            "history.txt", subjects.length, undefined, page.historyId,
+            undefined, undefined, page.nextCursor
+          );
+          subjects.push(...page.entries.map((entry) => entry.subject));
+        }
+        assert.strictEqual(subjects.length, 12);
+        assert.strictEqual(logCommands.length, 1);
+      } finally {
+        restoreObserver();
+      }
+    });
+
     test("rejects a cursor issued for a different history snapshot", async () => {
       const root = createWorkspace();
       runGit(root, "init");
@@ -1137,164 +1194,6 @@ suite("HostedWorkspaceViewerService", function () {
         ),
         (error: unknown) => error instanceof WorkspaceTreeBadRequestError
       );
-    });
-
-    test("resumes a renamed file walk at its last commit and parent path", async () => {
-      const root = createWorkspace();
-      runGit(root, "init");
-      configureGitIdentity(root);
-      commitFile(root, "old-name.txt", "one\n", "Before rename");
-      const beforeRenameHash = runGit(root, "rev-parse", "HEAD");
-      runGit(root, "mv", "old-name.txt", "new-name.txt");
-      runGit(root, "commit", "-m", "Rename file");
-      const renameHash = runGit(root, "rev-parse", "HEAD");
-      commitFile(root, "new-name.txt", "three\n", "After rename");
-      const latestHash = runGit(root, "rev-parse", "HEAD");
-      const observedArgs: string[][] = [];
-      let spawnCount = 0;
-      const restoreObserver = setGitCommandObserverForTests((_file, args) => {
-        observedArgs.push([...args]);
-      });
-      const restoreSpawn = setFileHistorySpawnForTests((_file, args) => {
-        observedArgs.push([...args]);
-        const child = new EventEmitter() as EventEmitter & {
-          stdout: PassThrough;
-          stderr: PassThrough;
-          kill: () => boolean;
-        };
-        child.stdout = new PassThrough();
-        child.stderr = new PassThrough();
-        child.kill = () => {
-          setImmediate(() => child.emit("close", 1));
-          return true;
-        };
-        spawnCount++;
-        const formattedRow = (
-          hash: string,
-          parent: string,
-          subject: string,
-          status: string,
-          ...paths: string[]
-        ): string =>
-          `\0${hash}\0${hash.slice(0, 7)}\0${subject}\0ctrlyoke Test\0today\0${parent}\0\0\0${status}\0${paths.join("\0")}\0`;
-        if (spawnCount === 1) {
-          setImmediate(() => {
-            child.stdout.write(
-              formattedRow(
-                latestHash,
-                renameHash,
-                "After rename",
-                "M",
-                "new-name.txt"
-              ) +
-                formattedRow(
-                  renameHash,
-                  beforeRenameHash,
-                  "Rename file",
-                  "R100",
-                  "old-name.txt",
-                  "new-name.txt"
-                )
-            );
-            child.emit("close", 0);
-          });
-        } else if (spawnCount === 2) {
-          setImmediate(() => {
-            child.stdout.write(
-              formattedRow(
-                renameHash,
-                beforeRenameHash,
-                "Rename file",
-                "R100",
-                "old-name.txt",
-                "new-name.txt"
-              ) +
-                formattedRow(
-                  beforeRenameHash,
-                  "",
-                  "Before rename",
-                  "M",
-                  "old-name.txt"
-                )
-            );
-            child.emit("close", 0);
-          });
-        } else {
-          setImmediate(() => {
-            child.stdout.write(
-              formattedRow(
-                beforeRenameHash,
-                "",
-                "Before rename",
-                "M",
-                "old-name.txt"
-              )
-            );
-            child.emit("close", 0);
-          });
-        }
-        return child as never;
-      });
-      try {
-        const svc = new HostedWorkspaceViewerService(root);
-        const page = await svc.getFileHistory("new-name.txt", 0, 1);
-        assert.deepStrictEqual(
-          page.entries.map((entry) => entry.subject),
-          ["After rename"]
-        );
-        assert.strictEqual(page.hasMore, true);
-        assert.strictEqual(page.nextOffset, 1);
-        assert.ok(page.nextCursor);
-        const second = await svc.getFileHistory(
-          "new-name.txt",
-          1,
-          undefined,
-          page.historyId,
-          undefined,
-          undefined,
-          page.nextCursor
-        );
-        assert.deepStrictEqual(
-          second.entries.map((entry) => entry.subject),
-          ["Rename file"]
-        );
-        assert.ok(second.nextCursor);
-        const third = await svc.getFileHistory(
-          "new-name.txt",
-          2,
-          undefined,
-          page.historyId,
-          undefined,
-          undefined,
-          second.nextCursor
-        );
-        assert.deepStrictEqual(
-          third.entries.map((entry) => entry.subject),
-          ["Before rename"]
-        );
-        assert.strictEqual(spawnCount, 3);
-        assert.ok(
-          observedArgs.some(
-            (args) =>
-              args.includes(`${latestHash}^`) &&
-              args.at(-1) === "new-name.txt" &&
-              !args.some((arg) => arg.startsWith("--skip="))
-          ),
-          "first continuation should resume at the latest commit's parent"
-        );
-        assert.ok(
-          observedArgs.some(
-            (args) =>
-              args.includes(`${renameHash}^`) &&
-              args.at(-1) === "old-name.txt" &&
-              !args.some((arg) => arg.startsWith("--skip="))
-          ),
-          "rename continuation should follow the old path"
-        );
-      } finally {
-        restoreSpawn();
-        restoreObserver();
-      }
     });
 
     test("continues trusted-root filtering across several raw batches", async () => {
@@ -1325,9 +1224,8 @@ suite("HostedWorkspaceViewerService", function () {
         child.stdout = new PassThrough();
         child.stderr = new PassThrough();
         child.kill = () => true;
-        const batch = rows.slice(spawnCount * 2, spawnCount * 2 + 2);
         spawnCount++;
-        const output = batch
+        const output = rows
           .map(
             ([hash, parent, subject, filePath]) =>
               `\0${hash}\0${hash.slice(0, 7)}\0${subject}\0ctrlyoke Test\0today\0${parent}\0\0\0M\0${filePath}\0`
@@ -1349,105 +1247,41 @@ suite("HostedWorkspaceViewerService", function () {
         );
         assert.strictEqual(page.hasMore, true);
         assert.ok(page.nextCursor);
-        assert.strictEqual(spawnCount, 3);
+        assert.strictEqual(spawnCount, 1);
       } finally {
         restoreSpawn();
       }
     });
 
-    test("returns an empty timed-out page when filtered rows advanced the cursor", async () => {
-      const repo = createWorkspace();
-      const trustedRoot = path.join(repo, "trusted");
-      fs.mkdirSync(trustedRoot);
-      runGit(repo, "init");
-      configureGitIdentity(repo);
-      commitFile(repo, "trusted/history.txt", "current\n", "Current history");
-      const hash = "a".repeat(40);
-      const parent = "b".repeat(40);
-      const restoreSpawn = setFileHistorySpawnForTests(() => {
-        const child = new EventEmitter() as EventEmitter & {
-          stdout: PassThrough;
-          stderr: PassThrough;
-          kill: () => boolean;
-        };
-        child.stdout = new PassThrough();
-        child.stderr = new PassThrough();
-        child.kill = () => {
-          setImmediate(() => child.emit("close", 1));
-          return true;
-        };
-        setImmediate(() => {
-          child.stdout.write(
-            `\0${hash}\0${hash.slice(0, 7)}\0Outside history\0ctrlyoke Test\0today\0${parent}\0\0\0M\0outside.txt\0`
-          );
-        });
-        return child as never;
-      });
-      try {
-        const page = await new ShortDeadlineWorkspaceViewerService(
-          trustedRoot
-        ).getFileHistory("history.txt", 0, 1);
-        assert.deepStrictEqual(page.entries, []);
-        assert.strictEqual(page.hasMore, true);
-        assert.strictEqual(page.nextOffset, 1);
-        assert.ok(page.nextCursor);
-      } finally {
-        restoreSpawn();
-      }
-    });
-
-    test("rejects malformed and non-progressing continuation cursors", async () => {
+    test("retries a timed-out page instead of serving it from cache", async () => {
       const root = createWorkspace();
       runGit(root, "init");
       configureGitIdentity(root);
-      commitFile(root, "history.txt", "one\n", "First history entry");
-      commitFile(root, "history.txt", "two\n", "Second history entry");
-      const svc = new AdjustableDeadlineWorkspaceViewerService(root);
-      await assert.rejects(
-        svc.getFileHistory(
-          "history.txt",
-          0,
-          1,
-          undefined,
-          undefined,
-          undefined,
-          "not-a-cursor"
-        ),
-        (error: unknown) => error instanceof WorkspaceTreeBadRequestError
-      );
-
-      const page = await svc.getFileHistory("history.txt", 0, 1);
-      assert.ok(page.nextCursor);
-      svc.shortenFileHistoryDeadline();
+      commitFile(root, "history.txt", "one\n", "Initial");
+      const row = (hash: string, parent: string, subject: string) =>
+        `\0${hash}\0${hash.slice(0, 7)}\0${subject}\0ctrlyoke Test\0today\0${parent}\0\0\0M\0history.txt\0`;
+      const output = row("a".repeat(40), "b".repeat(40), "History 0") +
+        row("b".repeat(40), "", "History 1");
+      let spawnCount = 0;
       const restoreSpawn = setFileHistorySpawnForTests(() => {
         const child = new EventEmitter() as EventEmitter & {
-          stdout: PassThrough;
-          stderr: PassThrough;
-          kill: () => boolean;
+          stdout: PassThrough; stderr: PassThrough; kill: () => boolean;
         };
         child.stdout = new PassThrough();
         child.stderr = new PassThrough();
-        child.kill = () => {
-          setImmediate(() => child.emit("close", 1));
-          return true;
-        };
+        child.kill = () => true;
+        spawnCount++;
+        const emit = () => { child.stdout.write(output); child.emit("close", 0); };
+        if (spawnCount === 1) setTimeout(emit, 100);
+        else setImmediate(emit);
         return child as never;
       });
       try {
-        await assert.rejects(
-          svc.getFileHistory(
-            "history.txt",
-            1,
-            undefined,
-            page.historyId,
-            undefined,
-            undefined,
-            page.nextCursor
-          ),
-          (error: unknown) =>
-            error instanceof Error &&
-            error.message.includes("timed out without making progress")
-        );
+        const svc = new ShortDeadlineWorkspaceViewerService(root);
+        await assert.rejects(svc.getFileHistory("history.txt", 0, 1), /timed out/);
+        const retry = await svc.getFileHistory("history.txt", 0, 1);
+        assert.deepStrictEqual(retry.entries.map((entry) => entry.subject), ["History 0"]);
+        assert.strictEqual(spawnCount, 2);
       } finally {
         restoreSpawn();
       }
@@ -2911,7 +2745,7 @@ suite("HostedWorkspaceViewerService", function () {
   // ── getCommitLog ──────────────────────────────────────────────────────────
 
   suite("getCommitLog", () => {
-    test("bounds each commit and file-history git log request to a page", async () => {
+    test("continues the file-history git log walk across pages", async () => {
       const root = createWorkspace();
       runGit(root, "init");
       configureGitIdentity(root);
@@ -2948,7 +2782,7 @@ suite("HostedWorkspaceViewerService", function () {
         restoreObserver();
       }
 
-      assert.strictEqual(observedLogs.length, 4);
+      assert.strictEqual(observedLogs.length, 3);
       for (const args of observedLogs.slice(0, 2)) {
         assert.ok(args.includes("-n"), `expected bounded git log: ${args}`);
         assert.ok(
@@ -2957,13 +2791,8 @@ suite("HostedWorkspaceViewerService", function () {
         );
         assert.ok(args.includes("2"), `expected page size plus one: ${args}`);
       }
-      for (const args of observedLogs.slice(2)) {
-        assert.ok(args.includes("-n"), `expected bounded git log: ${args}`);
-        assert.ok(
-          !args.some((arg) => arg.startsWith("--skip=")),
-          `file-history cursor should resume without --skip: ${args}`
-        );
-      }
+      assert.ok(observedLogs[2]?.includes("--follow"));
+      assert.ok(!observedLogs[2]?.some((arg) => arg.startsWith("--skip=")));
     });
 
     test("freezes commit history for subsequent pages", async () => {

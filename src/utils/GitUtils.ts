@@ -593,6 +593,114 @@ export interface BoundedFileHistoryResult {
   complete: boolean;
 }
 
+export interface FileHistoryCommitWalk {
+  readAt(
+    index: number,
+    timeoutMs: number
+  ): Promise<FileHistoryCommitInfo | undefined>;
+  dispose(): void;
+}
+
+/** Keep one Git traversal alive so callers can continue at its exact output position. */
+export function createFileHistoryCommitWalk(
+  workspaceRoot: string,
+  gitPath: string,
+  ref: string,
+  fullRefNames: boolean
+): FileHistoryCommitWalk {
+  const args = [
+    "-C",
+    workspaceRoot,
+    "log",
+    "--follow",
+    "-z",
+    "--name-status",
+    "--format=%x00%H%x00%h%x00%s%x00%an%x00%ar%x00%P%x00%D%x00",
+  ];
+  if (fullRefNames) args.push("--decorate=full");
+  if (ref.trim()) args.push("--end-of-options", ref.trim());
+  args.push("--", gitPath);
+  gitCommandObserverForTests?.("git", args);
+  const child = (
+    fileHistorySpawnForTests ??
+    ((file, spawnArgs) =>
+      spawn(file, [...spawnArgs], { stdio: ["ignore", "pipe", "pipe"] }))
+  )("git", args);
+  const chunks: Buffer[] = [];
+  let rows: FileHistoryCommitInfo[] = [];
+  let closed = false;
+  let failure: Error | undefined;
+  let stderr = "";
+  let waiter: (() => void) | undefined;
+  child.stdout?.on("data", (chunk: Buffer | string) => {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    rows = parseFileHistoryCommitOutput(Buffer.concat(chunks).toString("utf8"));
+    child.stdout?.pause();
+    waiter?.();
+  });
+  child.stderr?.on("data", (chunk) => {
+    stderr += String(chunk);
+  });
+  child.once("error", (error) => {
+    failure = error;
+    closed = true;
+    waiter?.();
+  });
+  child.once("close", (code) => {
+    // Real child processes close after their output streams drain. Test child
+    // fakes may emit close synchronously after write(), before data is read.
+    setImmediate(() => {
+      rows = parseFileHistoryCommitOutput(Buffer.concat(chunks).toString("utf8"));
+      closed = true;
+      if (code !== 0) {
+        failure = new Error(
+          stderr.trim() || `git log --follow exited with code ${code}`
+        );
+      }
+      waiter?.();
+    });
+  });
+  let readChain = Promise.resolve();
+  const readAt = async (
+    index: number,
+    timeoutMs: number
+  ): Promise<FileHistoryCommitInfo | undefined> => {
+    if (!Number.isSafeInteger(index) || index < 0) {
+      throw new Error("Invalid file history position");
+    }
+    while (rows.length <= index && !closed) {
+      child.stdout?.resume();
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          waiter = undefined;
+          child.stdout?.pause();
+          reject(new Error("Git file history timed out; retry the request"));
+        }, timeoutMs);
+        waiter = () => {
+          clearTimeout(timer);
+          waiter = undefined;
+          resolve();
+        };
+      });
+    }
+    if (failure) throw failure;
+    return rows[index];
+  };
+  return {
+    readAt(index, timeoutMs) {
+      const queued = readChain.then(() => readAt(index, timeoutMs));
+      readChain = queued.then(
+        () => undefined,
+        () => undefined
+      );
+      return queued;
+    },
+    dispose() {
+      child.kill();
+    },
+  };
+}
+
 /** Stream a bounded --follow walk, preserving complete rows received at deadline. */
 export async function getFileHistoryCommitsBounded(
   workspaceRoot: string,

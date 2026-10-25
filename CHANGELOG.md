@@ -10,11 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Editor `@` completions resume budgeted scans across narrowed file results, so later files can appear as a query is extended.
-- Workspace viewer file history now returns bounded partial `--follow` results,
-  uses opaque server-side continuation cursors when the walk can resume safely,
-  and falls back to snapshot-head paging across merges. It pages densely across
-  trusted-root filtering, fills short visible pages, and keeps commit history
-  available when Git cannot count the full history.
+- Workspace viewer file history continues one snapshot-owned Git walk across
+  opaque server-side cursors, pages densely across trusted-root filtering without
+  dropping merged-branch commits or re-walking earlier history, and leaves timed
+  out pages retryable without caching partial results.
 - VS Code workflow pickers now show Git-ignored workflow files when
   `hideGitIgnoredFiles` is disabled.
 - Git-backed file listings now skip broken nested repositories and fall back to

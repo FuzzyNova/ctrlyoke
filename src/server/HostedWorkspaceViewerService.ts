@@ -85,7 +85,8 @@ import { runtimeTrustedRootRegistry } from "../utils/RuntimeTrustedRootRegistry"
 import { writeFileAtomic } from "../utils/AtomicFileUtils";
 import {
   getRecentCommits,
-  getFileHistoryCommitsBounded,
+  createFileHistoryCommitWalk,
+  type FileHistoryCommitWalk,
   type FileHistoryCommitInfo,
   resolveCommit,
   parseGitPorcelainV1Z,
@@ -178,8 +179,8 @@ const SEARCH_DEFAULT_LIMIT = 100;
 const SEARCH_MAX_LIMIT = 500;
 const SEARCH_SNIPPET_MAX_LENGTH = 200;
 const FILE_HISTORY_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
-const FILE_HISTORY_CURSOR_CHECK_MINIMUM_MS = 1000;
 const FILE_HISTORY_SNAPSHOT_MAX_COUNT = 32;
+const FILE_HISTORY_MAX_LIVE_WALKS = 8;
 const COMMIT_LOG_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
 const COMMIT_LOG_SNAPSHOT_MAX_COUNT = 32;
 const GIT_REF_DIFF_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
@@ -230,14 +231,11 @@ interface FileHistorySnapshot {
   pageSize: number;
   lastAccessedAt: number;
   cursors: Map<string, FileHistoryCursor>;
-  seenHashes: Set<string>;
   pageCache: Map<string, WorkspaceFileHistoryPageResponse>;
+  walk?: FileHistoryCommitWalk;
 }
 
 interface FileHistoryCursor {
-  hash: string;
-  path: string;
-  parentHashes: string[];
   rawOffset: number;
 }
 
@@ -2246,7 +2244,6 @@ export class HostedWorkspaceViewerService {
       pageSize: resolvedPageSize,
       lastAccessedAt: Date.now(),
       cursors: new Map(),
-      seenHashes: new Set(),
       pageCache: new Map(),
     };
     this.fileHistorySnapshots.set(snapshot.historyId, snapshot);
@@ -2350,21 +2347,23 @@ export class HostedWorkspaceViewerService {
     const now = Date.now();
     for (const [id, snapshot] of this.fileHistorySnapshots) {
       if (now - snapshot.lastAccessedAt >= FILE_HISTORY_SNAPSHOT_TTL_MS) {
+        snapshot.walk?.dispose();
         this.fileHistorySnapshots.delete(id);
       }
     }
     const snapshot = this.fileHistorySnapshots.get(historyId);
     if (!snapshot) return undefined;
-    const refreshed = { ...snapshot, lastAccessedAt: now };
+    snapshot.lastAccessedAt = now;
     this.fileHistorySnapshots.delete(historyId);
-    this.fileHistorySnapshots.set(historyId, refreshed);
-    return refreshed;
+    this.fileHistorySnapshots.set(historyId, snapshot);
+    return snapshot;
   }
 
   private trimFileHistorySnapshots(): void {
     while (this.fileHistorySnapshots.size > FILE_HISTORY_SNAPSHOT_MAX_COUNT) {
       const oldest = this.fileHistorySnapshots.keys().next().value;
       if (oldest === undefined) return;
+      this.fileHistorySnapshots.get(oldest)?.walk?.dispose();
       this.fileHistorySnapshots.delete(oldest);
     }
   }
@@ -2377,11 +2376,7 @@ export class HostedWorkspaceViewerService {
   ): Promise<WorkspaceFileHistoryPageResponse> {
     const deadline = Date.now() + this.fileHistoryPageTimeoutMs;
     const rawOffset = requestedNextOffset ?? offset;
-    let cursor = rawOffset;
-    let walkPath = snapshot.gitPath;
-    let walkRef = snapshot.headHash;
-    let walkSkip = rawOffset;
-    let continuationCursor: string | undefined;
+    let position = rawOffset;
     let pageCacheKey = `offset:${rawOffset}`;
     if (requestedNextCursor !== undefined) {
       const cursorState = snapshot.cursors.get(requestedNextCursor);
@@ -2391,108 +2386,46 @@ export class HostedWorkspaceViewerService {
       pageCacheKey = `cursor:${requestedNextCursor}`;
       const cachedPage = snapshot.pageCache.get(pageCacheKey);
       if (cachedPage) return cachedPage;
-      cursor = cursorState.rawOffset;
-      walkSkip = cursorState.rawOffset;
-      if (
-        cursorState.parentHashes.length > 0 &&
-        (await this.canResumeFileHistoryCursor(snapshot, deadline))
-      ) {
-        walkPath = cursorState.path;
-        walkRef = `${cursorState.hash}^`;
-        walkSkip = 0;
-      }
-      continuationCursor = requestedNextCursor;
+      position = cursorState.rawOffset;
     } else {
       const cachedPage = snapshot.pageCache.get(pageCacheKey);
       if (cachedPage) return cachedPage;
     }
     let hasMore = false;
-    let timedOut = false;
-    let foundExtraEntry = false;
     const entryRows: FileHistoryCommitInfo[] = [];
     while (entryRows.length <= snapshot.pageSize) {
       const remainingMs = deadline - Date.now();
       if (remainingMs <= 0) {
-        timedOut = true;
+        throw new Error("Git file history timed out; retry the request");
+      }
+      if (!snapshot.walk) {
+        const liveWalks = [...this.fileHistorySnapshots.values()].filter(
+          (candidate) => candidate.walk
+        );
+        if (liveWalks.length >= FILE_HISTORY_MAX_LIVE_WALKS) {
+          const evictedWalk = liveWalks.find((candidate) => candidate !== snapshot);
+          if (evictedWalk) {
+            evictedWalk.walk?.dispose();
+            evictedWalk.walk = undefined;
+          }
+        }
+        snapshot.walk = createFileHistoryCommitWalk(
+          snapshot.repoRoot, snapshot.gitPath, snapshot.headHash, true
+        );
+      }
+      const row = await snapshot.walk.readAt(position, remainingMs);
+      if (!row) break;
+      const oldAbsolute = path.resolve(snapshot.repoRoot, row.oldPath);
+      const newAbsolute = path.resolve(snapshot.repoRoot, row.path);
+      const isTrusted =
+        isPathWithinAnyDirectory(oldAbsolute, this.trustedRoots) &&
+        isPathWithinAnyDirectory(newAbsolute, this.trustedRoots);
+      if (isTrusted && entryRows.length === snapshot.pageSize) {
         hasMore = true;
         break;
       }
-      const batchSize = snapshot.pageSize + 1;
-      const result = await getFileHistoryCommitsBounded(
-        snapshot.repoRoot,
-        walkPath,
-        batchSize,
-        walkSkip,
-        walkRef,
-        true,
-        remainingMs
-      );
-      for (const row of result.commits) {
-        const alreadySeen = snapshot.seenHashes.has(row.hash);
-        const oldAbsolute = path.resolve(snapshot.repoRoot, row.oldPath);
-        const newAbsolute = path.resolve(snapshot.repoRoot, row.path);
-        const isTrusted =
-          isPathWithinAnyDirectory(oldAbsolute, this.trustedRoots) &&
-          isPathWithinAnyDirectory(newAbsolute, this.trustedRoots);
-        if (
-          !alreadySeen &&
-          isTrusted &&
-          entryRows.length === snapshot.pageSize
-        ) {
-          hasMore = true;
-          foundExtraEntry = true;
-          break;
-        }
-        snapshot.seenHashes.add(row.hash);
-        cursor++;
-        if (row.parentHashes.length === 0) {
-          continuationCursor = undefined;
-          walkPath = snapshot.gitPath;
-          walkRef = snapshot.headHash;
-          walkSkip = cursor;
-        } else {
-          continuationCursor = randomUUID();
-          snapshot.cursors.set(continuationCursor, {
-            hash: row.hash,
-            path: row.oldPath,
-            parentHashes: row.parentHashes,
-            rawOffset: cursor,
-          });
-          walkPath = row.oldPath;
-          walkRef = `${row.hash}^`;
-          walkSkip = 0;
-        }
-        if (isTrusted && !alreadySeen) entryRows.push(row);
-      }
-      if (foundExtraEntry) {
-        break;
-      }
-      if (result.timedOut) {
-        if (!continuationCursor && result.commits.length === 0) {
-          throw new Error(
-            "Git file history timed out without making progress; retry the request"
-          );
-        }
-        timedOut = true;
-        hasMore = true;
-        break;
-      }
-      if (result.commits.length < batchSize) {
-        hasMore = false;
-        break;
-      }
-      // A full raw batch may contain only untrusted rows; continue the walk
-      // from the raw cursor while keeping the same per-page deadline.
-    }
-    if (timedOut) hasMore = true;
-    if (
-      requestedNextCursor &&
-      continuationCursor === requestedNextCursor &&
-      timedOut
-    ) {
-      throw new Error(
-        "Git file history timed out without making progress; retry the request"
-      );
+      position++;
+      if (isTrusted) entryRows.push(row);
     }
     const pageRows = entryRows.slice(0, snapshot.pageSize);
     const entries: WorkspaceFileHistoryEntry[] = pageRows.map((row) => {
@@ -2524,39 +2457,17 @@ export class HostedWorkspaceViewerService {
       totalEntries: offset + entries.length,
       hasMore,
       offset,
-      nextOffset: cursor,
-      ...(hasMore && continuationCursor
-        ? { nextCursor: continuationCursor }
-        : {}),
+      nextOffset: position,
+      ...(hasMore ? { nextCursor: randomUUID() } : {}),
       entries,
     };
+    if (response.nextCursor) {
+      snapshot.cursors.set(response.nextCursor, {
+        rawOffset: position,
+      });
+    }
     snapshot.pageCache.set(pageCacheKey, response);
     return response;
-  }
-
-  private async canResumeFileHistoryCursor(
-    snapshot: FileHistorySnapshot,
-    deadline: number
-  ): Promise<boolean> {
-    // Disable the fast path if the frozen history contains any merge. This is
-    // conservative: Git's --follow traversal can interleave branch commits
-    // that are absent from the cursor commit's first-parent chain.
-    const remainingMs = deadline - Date.now();
-    if (remainingMs < FILE_HISTORY_CURSOR_CHECK_MINIMUM_MS) return false;
-    const { stdout } = await execFileAsync(
-      "git",
-      [
-        "-C",
-        snapshot.repoRoot,
-        "rev-list",
-        "--merges",
-        "-n",
-        "1",
-        snapshot.headHash,
-      ],
-      { timeout: remainingMs }
-    );
-    return stdout.trim().length === 0;
   }
 
   private createGitRefDiffId(): string {
@@ -3517,6 +3428,7 @@ export class HostedWorkspaceViewerService {
 
   dispose(): void {
     this.listingSnapshotCache.dispose();
+    for (const snapshot of this.fileHistorySnapshots.values()) snapshot.walk?.dispose();
     this.fileHistorySnapshots.clear();
     this.commitLogSnapshots.clear();
     this.gitRefDiffSnapshots.clear();

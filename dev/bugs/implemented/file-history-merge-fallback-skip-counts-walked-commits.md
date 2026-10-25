@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-25 by bug-drain review of 6ba75fc62
 - **Area:** `src/server/HostedWorkspaceViewerService.ts` (`materializeFileHistoryPage` cursor fallback, `canResumeFileHistoryCursor`)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -69,3 +69,16 @@ Tests (real Git, in `src/test/unit/HostedWorkspaceViewerService.test.ts`): the r
 above with unrelated commits above the merge (must fail before the fix), a long linear
 history of a rarely changed file paged to the end without per-page re-walks from HEAD, and a
 rename across a page boundary.
+
+## Fix Applied
+
+- Each file-history snapshot owns one incremental `git log --follow` child and continues
+  by raw output position. This preserves Git's complete merge and rename traversal and
+  avoids re-walking older rows on each page.
+- Pages only advance their cursor and enter the cache after successful materialization;
+  a timeout rejects the request so retry starts the uncached page again.
+- Live walks are capped at eight per service. Snapshot TTL, count eviction, and service
+  disposal kill their child; a later cursor recreates the walk and replays from its head
+  to the opaque server-side position. Trusted-root filtering remains on every row.
+- Real-Git coverage includes the interleaved merge with unrelated commits above it, a
+  rename across pages, and a long linear history. A timed-out page is verified to retry.
