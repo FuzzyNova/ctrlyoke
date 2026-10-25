@@ -218,6 +218,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A model pricing override now applies even when the harness reports its own cost.** OpenCode
   steps, and Claude Code steps run headless, used the harness's figure and ignored your
   override.
+- **Security updates for bundled dependencies.** body-parser 2.4.0 fixes a denial of service
+  in the hosted dashboard server caused by trailing bytes after a compressed request body
+  ([GHSA-27r3-jxmh-p828](https://github.com/advisories/GHSA-27r3-jxmh-p828)), and fast-uri 3.1.9
+  fixes four URI parsing flaws in schema validation.
 
 ## [0.2.1] - 2026-10-22
 
