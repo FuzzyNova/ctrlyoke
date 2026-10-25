@@ -104,7 +104,7 @@ import {
   getIgnoredEntryNames,
   getGitFilesIncludingNestedRepos,
   getGitIgnoredEntries,
-  isNotGitRepositoryError,
+  isGitUnavailableError,
   getDiffBetweenRefs,
   GIT_COMMAND_TIMEOUT_MS,
   describeGitFailure,
@@ -512,6 +512,13 @@ export class HostedWorkspaceViewerService {
   /** Shared cap for blob and working-tree diff sides. */
   protected readonly diffSideMaxBytes: number = MAX_FILE_SIZE;
 
+  protected getGitFilesIncludingNestedRepos(
+    root: string,
+    chunkSize: number
+  ): AsyncIterable<string[]> {
+    return getGitFilesIncludingNestedRepos(root, chunkSize);
+  }
+
   // ── Multi-root helpers ───────────────────────────────────────────────────
   //
   // A multi-root `.code-workspace` is presented to viewer clients as a virtual
@@ -895,16 +902,21 @@ export class HostedWorkspaceViewerService {
     includeGitIgnored: boolean
   ): AsyncGenerator<string[]> {
     const trackedFiles = new Set<string>();
+    const trackedChunks: string[][] = [];
+    let ignoredEntries: string[] = [];
     try {
-      for await (const files of getGitFilesIncludingNestedRepos(
+      for await (const files of this.getGitFilesIncludingNestedRepos(
         root,
         SEARCH_CANDIDATE_CHUNK
       )) {
+        trackedChunks.push(files);
         for (const file of files) trackedFiles.add(file);
-        yield files;
+      }
+      if (includeGitIgnored) {
+        ignoredEntries = await getGitIgnoredEntries(root);
       }
     } catch (error) {
-      if (isNotGitRepositoryError(error)) {
+      if (isGitUnavailableError(error)) {
         // Not a Git checkout: walk it, skipping dependency and build output.
         yield* iterateSearchFiles(root);
         return;
@@ -914,17 +926,8 @@ export class HostedWorkspaceViewerService {
       );
       throw error;
     }
+    yield* trackedChunks;
     if (!includeGitIgnored) return;
-
-    let ignoredEntries: string[];
-    try {
-      ignoredEntries = await getGitIgnoredEntries(root);
-    } catch (error) {
-      Log.warn(
-        `[HostedWorkspaceViewerService] git ignored-file listing failed for ${root}: ${String(error)}`
-      );
-      throw error;
-    }
     const ignoredDirectories = new Set(
       ignoredEntries.filter((entry) => entry.endsWith("/"))
     );

@@ -1,4 +1,4 @@
-import { getGitTrackedFiles, isNotGitRepositoryError } from "./GitUtils";
+import { getGitTrackedFiles, isGitUnavailableError } from "./GitUtils";
 import { Log } from "./Log";
 import {
   DEFAULT_SKIP_DIRECTORIES,
@@ -13,7 +13,7 @@ export async function getSourceFiles(rootPath: string): Promise<string[]> {
   try {
     return await getGitTrackedFiles(rootPath);
   } catch (error) {
-    if (!isNotGitRepositoryError(error)) {
+    if (!isGitUnavailableError(error)) {
       Log.warn(
         `[Completions] Git file listing failed for ${rootPath}; using degraded workspace walk:`,
         error

@@ -11,9 +11,8 @@ import {
 } from "../utils/WorkspaceSearchFileWalker";
 import {
   getGitIgnoredPaths,
-  getGitTrackedFiles,
   getGitFilesIncludingNestedRepos,
-  isNotGitRepositoryError,
+  isGitUnavailableError,
 } from "../utils/GitUtils";
 import {
   USER_FEEDBACK_SEVERITY,
@@ -78,7 +77,6 @@ export interface WorkspaceFileChange {
 }
 
 export interface WorkspaceFileIndexDependencies {
-  readonly getGitTrackedFiles: (root: string) => Promise<string[]>;
   readonly getGitFilesIncludingNestedRepos: (
     root: string
   ) => AsyncIterable<string[]>;
@@ -108,7 +106,6 @@ export interface WorkspaceFileIndexDependencies {
 }
 
 const DEFAULT_DEPENDENCIES: WorkspaceFileIndexDependencies = {
-  getGitTrackedFiles,
   getGitFilesIncludingNestedRepos,
   getGitIgnoredPaths,
   walkSearchFiles,
@@ -388,7 +385,7 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
           }
           return this.prefix(root, files, roots);
         } catch (error) {
-          const reason = isNotGitRepositoryError(error)
+          const reason = isGitUnavailableError(error)
             ? "root is not a Git repository"
             : `Git file listing failed: ${String(error)}`;
           const message = `[WorkspaceFileIndex] ${reason} for ${root.path}; using degraded filesystem walk.`;

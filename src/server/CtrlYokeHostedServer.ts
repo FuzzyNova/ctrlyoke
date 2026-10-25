@@ -1470,7 +1470,8 @@ export class CtrlYokeHostedServer
       try {
         const [files, gitRoot] = await Promise.all([
           findWorkflowFilesInWorkspace(this.workspaceRoot, {
-            includeGitIgnored: req.query.includeGitIgnored === "true",
+            includeGitIgnored:
+              req.query.includeGitIgnored === BOOLEAN_STRING_VALUES.TRUE,
           }),
           repoToplevel(this.workspaceRoot),
         ]);

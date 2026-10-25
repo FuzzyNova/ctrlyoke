@@ -4,7 +4,7 @@ import { getCtrlYokeFileKind } from "../completions/CtrlYokeFileKind";
 import {
   getGitFilesIncludingNestedRepos,
   getGitIgnoredEntries,
-  isNotGitRepositoryError,
+  isGitUnavailableError,
 } from "./GitUtils";
 import { iterateSearchFiles } from "./WorkspaceSearchFileWalker";
 import { BUNDLE_MANIFEST_FILE_NAME } from "../types/DashboardConstants";
@@ -27,7 +27,19 @@ const IGNORED_WORKFLOW_SCAN_DIRS = new Set([
 export interface WorkflowFileDiscoveryOptions {
   /** Include ignored workflow files for the picker's opt-in display mode. */
   includeGitIgnored?: boolean;
+  /** Dependency seam for callers that need to control Git availability. */
+  dependencies?: Partial<WorkflowFileDiscoveryDependencies>;
 }
+
+export interface WorkflowFileDiscoveryDependencies {
+  getGitFilesIncludingNestedRepos: (root: string) => AsyncIterable<string[]>;
+  getGitIgnoredEntries: (root: string) => Promise<string[]>;
+}
+
+const DEFAULT_DEPENDENCIES: WorkflowFileDiscoveryDependencies = {
+  getGitFilesIncludingNestedRepos,
+  getGitIgnoredEntries,
+};
 
 function toPortablePath(filePath: string): string {
   return filePath.replace(/\\/g, "/");
@@ -65,10 +77,11 @@ export async function findWorkflowFilesInWorkspace(
   options: WorkflowFileDiscoveryOptions = {}
 ): Promise<WorkflowFileEntry[]> {
   const root = path.resolve(workspaceRoot);
+  const dependencies = { ...DEFAULT_DEPENDENCIES, ...options.dependencies };
   const entries: Array<{ relativePath: string; gitIgnored?: boolean }> = [];
 
   try {
-    for await (const chunk of getGitFilesIncludingNestedRepos(root)) {
+    for await (const chunk of dependencies.getGitFilesIncludingNestedRepos(root)) {
       for (const gitPath of chunk) {
         const relativePath = toPortablePath(gitPath);
         if (getCtrlYokeFileKind(path.basename(relativePath)) === null) continue;
@@ -76,7 +89,7 @@ export async function findWorkflowFilesInWorkspace(
       }
     }
     if (options.includeGitIgnored) {
-      const ignored = await getGitIgnoredEntries(root);
+      const ignored = await dependencies.getGitIgnoredEntries(root);
       const ignoredFiles = ignored.filter((entry) => !entry.endsWith("/"));
       const ignoredDirectories = ignored
         .filter((entry) => entry.endsWith("/"))
@@ -102,7 +115,7 @@ export async function findWorkflowFilesInWorkspace(
       }
     }
   } catch (error) {
-    if (!isNotGitRepositoryError(error)) throw error;
+    if (!isGitUnavailableError(error)) throw error;
     for await (const files of iterateSearchFiles(
       root,
       [""],

@@ -33,6 +33,7 @@ import {
 } from "../../utils/GitUtils";
 import { configService } from "../../config/CtrlYokeConfigService";
 import { USER_SETTINGS_VIEWER_SENTINEL_PATH } from "../../types/DashboardConstants";
+import { Log } from "../../utils/Log";
 
 /**
  * Small enough that "budget exceeded" is a handful of files rather than the
@@ -47,6 +48,16 @@ class BudgetedWorkspaceViewerService extends HostedWorkspaceViewerService {
 
 class DiffCappedWorkspaceViewerService extends HostedWorkspaceViewerService {
   protected override readonly diffSideMaxBytes = 8;
+}
+
+class UnavailableGitWorkspaceViewerService extends HostedWorkspaceViewerService {
+  protected override async *getGitFilesIncludingNestedRepos(): AsyncIterable<
+    string[]
+  > {
+    const error = new Error("spawn git ENOENT") as NodeJS.ErrnoException;
+    error.code = "ENOENT";
+    throw error;
+  }
 }
 
 suite("HostedWorkspaceViewerService", function () {
@@ -1303,6 +1314,64 @@ suite("HostedWorkspaceViewerService", function () {
         content.results.every(
           (result) => result.kind === WORKSPACE_ENTRY_KINDS.CONTENT
         )
+      );
+    });
+
+    test("skips a broken submodule while retaining outer repository results once", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "outer.txt", "outerneedle in outer repo\n", "outer");
+
+      const source = createWorkspace();
+      runGit(source, "init");
+      configureGitIdentity(source);
+      commitFile(source, "inner.txt", "nested content\n", "inner");
+      const broken = path.join(root, "broken");
+      fs.mkdirSync(broken);
+      fs.writeFileSync(
+        path.join(broken, ".git"),
+        "gitdir: ../.git/modules/missing\n"
+      );
+      runGit(
+        root,
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        `160000,${runGit(source, "rev-parse", "HEAD")},broken`
+      );
+      fs.writeFileSync(path.join(root, ".gitignore"), "ignored.txt\n");
+      fs.writeFileSync(path.join(root, "ignored.txt"), "outerneedle ignored\n");
+      runGit(root, "add", ".gitignore");
+      runGit(root, "commit", "-m", "ignore a matching file");
+
+      const warnings: string[] = [];
+      const originalWarn = Log.warn;
+      Log.warn = (message: string) => warnings.push(message);
+      try {
+        const result = await new HostedWorkspaceViewerService(root).searchWorkspace({
+          query: "outerneedle",
+          scope: "content",
+        });
+        assert.deepStrictEqual(
+          result.results.map((entry) => entry.path),
+          ["outer.txt"]
+        );
+        assert.ok(warnings.some((message) => message.includes("skipping it")));
+      } finally {
+        Log.warn = originalWarn;
+      }
+    });
+
+    test("falls back to the workspace walk when Git cannot spawn", async () => {
+      const root = createWorkspace();
+      fs.writeFileSync(path.join(root, "walk-target.txt"), "walkneedle\n");
+      const result = await new UnavailableGitWorkspaceViewerService(
+        root
+      ).searchWorkspace({ query: "walkneedle", scope: "content" });
+      assert.deepStrictEqual(
+        result.results.map((entry) => entry.path),
+        ["walk-target.txt"]
       );
     });
 

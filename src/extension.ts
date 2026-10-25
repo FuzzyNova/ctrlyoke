@@ -478,7 +478,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Register React webview provider (Phase 4 - unified provider)
     const vscodeUserFeedbackSink = new VsCodeUserFeedbackSink();
-    const dashboardHostActions = new VsCodeDashboardHostActions();
+    const dashboardHostActions = new VsCodeDashboardHostActions(
+      vscodeUserFeedbackSink
+    );
     const fileWatcherFactory = new VsCodeFileWatcherFactory();
     const settingsFilePaths = [
       userConfigBackend.filePath,
@@ -1188,7 +1190,20 @@ function registerCommands(
       return undefined;
     }
 
-    const promptFiles = await findWorkflowFilesInWorkspace(workspaceRoot);
+    let promptFiles: Awaited<ReturnType<typeof findWorkflowFilesInWorkspace>>;
+    try {
+      promptFiles = await findWorkflowFilesInWorkspace(workspaceRoot, {
+        includeGitIgnored:
+          ConfigurationUtils.shouldIncludeGitIgnoredWorkflowFiles(),
+      });
+    } catch (error) {
+      notifyUserFeedback(
+        workflowOrchestrator.getUserFeedbackSink(),
+        USER_FEEDBACK_SEVERITY.ERROR,
+        `Failed to list workflow files: ${error instanceof Error ? error.message : String(error)}`
+      );
+      return undefined;
+    }
 
     if (promptFiles.length === 0) {
       vscode.window.showWarningMessage("No prompt files found in workspace");

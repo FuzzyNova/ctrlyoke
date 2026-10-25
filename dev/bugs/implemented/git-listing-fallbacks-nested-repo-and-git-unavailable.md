@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-24 by bug-drain review of f12f06347, 82957401f and 9e2691cf2
 - **Area:** `src/utils/GitUtils.ts`, `src/server/HostedWorkspaceViewerService.ts`, `src/completions/WorkspaceFileIndex.ts`, `src/utils/WorkflowFileDiscovery.ts`, `src/server/CtrlYokeHostedServer.ts`, `src/extension.ts`, `src/platform/VsCodeDashboardHostActions.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-24 by bug-drain review of 9e2691cf2
 - **Area:** `src/utils/WorkflowFileDiscovery.ts`, `src/extension.ts`, `src/platform/VsCodeDashboardHostActions.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

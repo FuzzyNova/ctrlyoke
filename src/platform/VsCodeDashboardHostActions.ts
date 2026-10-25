@@ -13,15 +13,23 @@ import {
   DASHBOARD_ACTION_RESULT_STATUSES,
   PATH_SELECTION_KINDS,
   PATH_SELECTION_TITLES,
+  USER_FEEDBACK_SEVERITY,
   VSCODE_COMMANDS,
   WORKSPACE_FOLDER_PICKERS,
   type WorkspaceFolderPicker,
 } from "../types/DashboardConstants";
 import { findWorkflowFilesInWorkspace } from "../utils/WorkflowFileDiscovery";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { getVsCodeWorkspaceRoot } from "./VsCodeWorkspaceRoot";
+import {
+  notifyUserFeedback,
+  type UserFeedbackSink,
+} from "../core/UserFeedbackSink";
 
 /** VS Code implementations of the dashboard's host-native actions. */
 export class VsCodeDashboardHostActions implements DashboardHostActions {
+  constructor(private readonly feedbackSink?: UserFeedbackSink) {}
+
   async openWorkspaceTarget(
     target: WorkspaceOpenTarget
   ): Promise<ActionResult> {
@@ -64,7 +72,20 @@ export class VsCodeDashboardHostActions implements DashboardHostActions {
         );
         return undefined;
       }
-      const files = await findWorkflowFilesInWorkspace(workspaceRoot);
+      let files: Awaited<ReturnType<typeof findWorkflowFilesInWorkspace>>;
+      try {
+        files = await findWorkflowFilesInWorkspace(workspaceRoot, {
+          includeGitIgnored:
+            ConfigurationUtils.shouldIncludeGitIgnoredWorkflowFiles(),
+        });
+      } catch (error) {
+        notifyUserFeedback(
+          this.feedbackSink,
+          USER_FEEDBACK_SEVERITY.ERROR,
+          `Failed to list workflow files: ${error instanceof Error ? error.message : String(error)}`
+        );
+        return undefined;
+      }
       if (files.length === 0) {
         await vscode.commands.executeCommand(
           VSCODE_COMMANDS.SELECT_PROMPT_FILE

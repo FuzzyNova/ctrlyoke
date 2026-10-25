@@ -7,6 +7,9 @@ import { promisify } from "util";
 import { afterEach, suite, test } from "mocha";
 import { findWorkflowFilesInWorkspace } from "../../utils/WorkflowFileDiscovery";
 import { BUNDLE_MANIFEST_FILE_NAME } from "../../types/DashboardConstants";
+import { configService } from "../../config/CtrlYokeConfigService";
+import type { ConfigBackend } from "../../config/CtrlYokeConfigService";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
 const execFileAsync = promisify(execFile);
 
@@ -83,9 +86,23 @@ suite("WorkflowFileDiscovery", () => {
     );
     assert.ok(visibleFiles.every((file) => file.gitIgnored === false));
 
-    const allFiles = await findWorkflowFilesInWorkspace(workspaceRoot, {
-      includeGitIgnored: true,
-    });
+    const settings: ConfigBackend = {
+      getAll: () => ({ ui: { hideGitIgnoredFiles: false } }),
+      set: async () => ({ ui: { hideGitIgnoredFiles: false } }),
+    };
+    configService.setUserBackend(settings);
+    let allFiles: Awaited<ReturnType<typeof findWorkflowFilesInWorkspace>>;
+    try {
+      allFiles = await findWorkflowFilesInWorkspace(workspaceRoot, {
+        includeGitIgnored:
+          ConfigurationUtils.shouldIncludeGitIgnoredWorkflowFiles(),
+      });
+    } finally {
+      configService.setUserBackend({
+        getAll: () => ({}),
+        set: async () => ({}),
+      });
+    }
     assert.deepStrictEqual(
       allFiles.map((file) => [file.relativePath, file.gitIgnored]),
       [
@@ -110,6 +127,29 @@ suite("WorkflowFileDiscovery", () => {
     assert.deepStrictEqual(
       files.map((file) => file.relativePath),
       ["nested/workflow.prompt.md"]
+    );
+  });
+
+  test("falls back to the filesystem walk when Git cannot spawn", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-workflow-discovery-no-git-")
+    );
+    tempDirs.push(workspaceRoot);
+    await fs.writeFile(path.join(workspaceRoot, "workflow.prompt.md"), "workflow");
+
+    const files = await findWorkflowFilesInWorkspace(workspaceRoot, {
+      dependencies: {
+        getGitFilesIncludingNestedRepos: async function* () {
+          const error = new Error("spawn git ENOENT") as NodeJS.ErrnoException;
+          error.code = "ENOENT";
+          throw error;
+        },
+      },
+    });
+
+    assert.deepStrictEqual(
+      files.map((file) => file.relativePath),
+      ["workflow.prompt.md"]
     );
   });
 });

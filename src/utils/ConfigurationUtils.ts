@@ -1499,6 +1499,10 @@ export const ConfigurationUtils = {
     return configService.get(CONFIG_KEYS.UI).hideGitIgnoredFiles;
   },
 
+  shouldIncludeGitIgnoredWorkflowFiles(): boolean {
+    return !ConfigurationUtils.shouldHideGitIgnoredFiles();
+  },
+
   shouldWrapCodeLines(): boolean {
     return configService.get(CONFIG_KEYS.UI).wordWrap;
   },

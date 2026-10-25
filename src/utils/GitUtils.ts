@@ -7,12 +7,15 @@ import { GIT_CHANGE_KINDS } from "../types/DashboardConstants";
 import { foldPathForCompare } from "./PathCasing";
 import { sanitizeTerminalOutput } from "./TerminalOutputSanitizer";
 import { isSubprocessTimeoutError } from "./SubprocessUtils";
+import { Log } from "./Log";
 
 export const GIT_DIFF_NO_EXT_DIFF_OPTION = "--no-ext-diff";
 
 const GIT_TIMEOUT_MS = 10_000;
 const GIT_MUTATION_TIMEOUT_MS = 5 * 60_000;
 const GIT_MAX_BUFFER = 50 * 1024 * 1024;
+const GIT_SUBMODULE_MODE = "160000";
+const GIT_UNAVAILABLE_ERRNO = "ENOENT";
 const execFilePromisified = promisify(execFile);
 
 interface GitTimeoutOverrides {
@@ -324,6 +327,17 @@ export function isNotGitRepositoryError(error: unknown): boolean {
     if (value === undefined || value === null) return false;
     return /fatal:\s*not a git repository\b/i.test(String(value));
   });
+}
+
+/** Git cannot provide a repository listing, so filesystem discovery should take over. */
+export function isGitUnavailableError(error: unknown): boolean {
+  if (isNotGitRepositoryError(error)) return true;
+  if (!error || typeof error !== "object") return false;
+  const gitError = error as { code?: unknown; message?: unknown; stderr?: unknown };
+  if (gitError.code === GIT_UNAVAILABLE_ERRNO) return true;
+  return [gitError.stderr, gitError.message].some((value) =>
+    /detected dubious ownership/i.test(String(value ?? ""))
+  );
 }
 
 /**
@@ -1200,9 +1214,11 @@ export async function getGitTrackedFiles(repoRoot: string): Promise<string[]> {
  */
 export async function* getGitFilesIncludingNestedRepos(
   repoRoot: string,
-  chunkSize = 256
+  chunkSize = 256,
+  probeDependencies: GitNestedRepoProbeDependencies = DEFAULT_NESTED_REPO_PROBE_DEPENDENCIES
 ): AsyncGenerator<string[]> {
   const entries = await getGitTrackedFiles(repoRoot);
+  const gitlinks = await getGitlinkPaths(repoRoot);
   let chunk: string[] = [];
   const flush = (): string[] => {
     const result = chunk;
@@ -1213,27 +1229,36 @@ export async function* getGitFilesIncludingNestedRepos(
   for (const entry of entries) {
     const relative = entry.replace(/\\/g, "/");
     const absolute = path.resolve(repoRoot, relative);
-    const gitMarker = path.join(absolute, ".git");
-    let nestedRepository = false;
-    try {
-      const entryStat = await fs.lstat(absolute);
-      if (entryStat.isDirectory() && !entryStat.isSymbolicLink()) {
-        await fs.access(gitMarker);
-        nestedRepository = true;
+    let nestedRepository = gitlinks.has(relative);
+    if (!nestedRepository && entry.endsWith("/")) {
+      const gitMarker = path.join(absolute, ".git");
+      try {
+        const entryStat = await probeDependencies.lstat(absolute);
+        if (entryStat.isDirectory() && !entryStat.isSymbolicLink()) {
+          await probeDependencies.access(gitMarker);
+          nestedRepository = true;
+        }
+      } catch {
+        // Missing entries and uninitialized nested repositories have nothing to expand.
       }
-    } catch {
-      // Missing entries and uninitialized submodules have nothing to expand.
     }
 
     if (entry.endsWith("/") || nestedRepository) {
       if (chunk.length > 0) yield flush();
       if (!nestedRepository) continue;
-      for await (const nestedChunk of getGitFilesIncludingNestedRepos(
-        absolute,
-        chunkSize
-      )) {
-        const prefix = relative.endsWith("/") ? relative : `${relative}/`;
-        yield nestedChunk.map((file) => `${prefix}${file}`);
+      try {
+        for await (const nestedChunk of getGitFilesIncludingNestedRepos(
+          absolute,
+          chunkSize,
+          probeDependencies
+        )) {
+          const prefix = relative.endsWith("/") ? relative : `${relative}/`;
+          yield nestedChunk.map((file) => `${prefix}${file}`);
+        }
+      } catch (error) {
+        Log.warn(
+          `[GitUtils] Could not list nested repository ${absolute}; skipping it: ${String(error)}`
+        );
       }
       continue;
     }
@@ -1243,6 +1268,36 @@ export async function* getGitFilesIncludingNestedRepos(
   }
 
   if (chunk.length > 0) yield chunk;
+}
+
+export interface GitNestedRepoProbeDependencies {
+  lstat(absolutePath: string): Promise<{
+    isDirectory(): boolean;
+    isSymbolicLink(): boolean;
+  }>;
+  access(absolutePath: string): Promise<void>;
+}
+
+const DEFAULT_NESTED_REPO_PROBE_DEPENDENCIES: GitNestedRepoProbeDependencies = {
+  lstat: (absolutePath) => fs.lstat(absolutePath),
+  access: (absolutePath) => fs.access(absolutePath),
+};
+
+async function getGitlinkPaths(repoRoot: string): Promise<Set<string>> {
+  const { stdout } = await execGit(
+    ["-C", repoRoot, "ls-files", "-s", "-z"],
+    { timeout: getGitWholeRepoTimeoutMs(), maxBuffer: GIT_MAX_BUFFER }
+  );
+  const paths = new Set<string>();
+  for (const record of parseGitNulSeparatedPaths(stdout)) {
+    const tab = record.indexOf("\t");
+    if (tab < 0) continue;
+    const [mode] = record.slice(0, tab).split(" ");
+    if (mode === GIT_SUBMODULE_MODE) {
+      paths.add(record.slice(tab + 1).replace(/\\/g, "/"));
+    }
+  }
+  return paths;
 }
 
 /** Return tracked and non-ignored untracked paths, preserving Git's NUL-safe output. */
