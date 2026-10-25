@@ -993,12 +993,12 @@ export class HistorySearchIndexService {
         );
         return { failed: true, error };
       } finally {
-        // Retain the result for a dashboard search that joins just after a
-        // very short refresh has already settled.
         this.rebuildPromise = undefined;
       }
       return { failed: false };
     })();
+    // Retain the result for a dashboard search that joins just after a
+    // very short refresh has already settled.
     void this.rebuildPromise.then((outcome) => {
       this.lastRefreshOutcome = outcome;
     });

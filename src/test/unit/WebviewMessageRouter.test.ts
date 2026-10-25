@@ -1409,7 +1409,10 @@ suite(
       loadGates[1].resolve();
       await reconnected;
 
-      const liveOutput = { type: MESSAGE_TYPES.CLI_WATCH_OUTPUT, output: "later" };
+      const liveOutput = {
+        type: MESSAGE_TYPES.CLI_WATCH_OUTPUT,
+        output: "later",
+      };
       viewSink?.(liveOutput);
 
       assert.deepStrictEqual(firstReplies, [snapshot]);
@@ -1880,7 +1883,7 @@ suite("WebviewMessageRouter — license actions", () => {
             });
           }),
         enqueueWorkspaceRefresh: () => Promise.resolve(),
-      waitForActiveRefresh: () => Promise.resolve({ failed: false }),
+        waitForActiveRefresh: () => Promise.resolve({ failed: false }),
       };
       const router = new WebviewMessageRouter(
         (message) => emitted.push(message),

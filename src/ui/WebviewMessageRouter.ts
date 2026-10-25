@@ -18,6 +18,7 @@ import {
   isStatusLineHarnessId,
   END_CONDITION_SCRIPT_TYPES,
   HISTORY_SEARCH_COUNT_STATES,
+  HISTORY_SEARCH_INDEX_STATES,
   SEARCH_HISTORY_ERROR_CODES,
   type EndConditionScriptType,
   type UserFeedbackSeverity,
@@ -313,7 +314,10 @@ function describeWorktreeActionSuccess(
 export class WebviewMessageRouter {
   private routeQueue: Promise<void> = Promise.resolve();
   private readonly loadRunViewRoutes = new Map<string, LoadRunViewRouteEntry>();
-  private readonly loadRunViewConnectionIds = new WeakMap<PostMessageFn, number>();
+  private readonly loadRunViewConnectionIds = new WeakMap<
+    PostMessageFn,
+    number
+  >();
   private nextLoadRunViewConnectionId = 1;
   private readonly clientInteractionPorts = new Map<
     string,
@@ -2036,7 +2040,7 @@ export class WebviewMessageRouter {
           totalCount: 0,
           countState: HISTORY_SEARCH_COUNT_STATES.EXACT,
           hasMore: false,
-          indexState: "fallback",
+          indexState: HISTORY_SEARCH_INDEX_STATES.FALLBACK,
         });
         return;
       }
@@ -2092,7 +2096,7 @@ export class WebviewMessageRouter {
                   type: MESSAGE_TYPES.SEARCH_HISTORY_RESULTS,
                   ...listingScope,
                   ...response,
-                  indexState: "fallback",
+                  indexState: HISTORY_SEARCH_INDEX_STATES.FALLBACK,
                 });
                 return;
               }
