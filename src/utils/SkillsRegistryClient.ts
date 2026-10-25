@@ -29,6 +29,7 @@ import {
   type SkillUpdateStatus,
 } from "../types/DashboardConstants";
 import { parseAgentFrontmatter } from "./AgentDiscovery";
+import { PATH_CONSTANTS } from "./ConfigurationUtils";
 import { getErrorMessage } from "./ErrorUtils";
 import { isSafePathSegment } from "./PathSecurity";
 import topSkillsSnapshotData from "./generated/skillsShTopSkills.json";
@@ -54,6 +55,8 @@ export const SKILLS_SEARCH_MIN_QUERY_LENGTH = 2;
 /** SKILL.md files whose frontmatter may be read to match a slug. */
 /** Safety bound for unusually large repositories; the UI reports when reached. */
 const MAX_FRONTMATTER_PROBES = 200;
+/** Non-recursive GitHub tree requests used after a recursive tree is truncated. */
+const MAX_TRUNCATED_TREE_REQUESTS = 20;
 /** Bounds on what one install may download. */
 export const SKILL_INSTALL_LIMITS = {
   MAX_FILES: 200,
@@ -565,6 +568,7 @@ export class SkillsShRegistryClient implements SkillsRegistry {
   private topSkills: TopSkillsSnapshot | undefined;
   /** Trees by `source@commit`; a commit's tree never changes. */
   private readonly treeCache = new Map<string, GitTreeEntry[]>();
+  private readonly truncatedTreeKeys = new Set<string>();
   private readonly headCache = new Map<
     string,
     { sha: Promise<string>; fetchedAt: number }
@@ -633,7 +637,11 @@ export class SkillsShRegistryClient implements SkillsRegistry {
           ? ` (searched ${result.searchedCount} of ${result.candidateCount} SKILL.md files)`
           : "";
       throw new SkillsRegistryError(
-        `Could not find the "${slug}" skill in ${GITHUB_HOST}/${source}${searchSummary}`
+        `Could not find the "${slug}" skill in ${GITHUB_HOST}/${source}${
+          this.truncatedTreeKeys.has(`${source}@${commitSha}`)
+            ? " after searching likely locations in the truncated repository tree"
+            : searchSummary
+        }`
       );
     }
     return result.location;
@@ -655,7 +663,7 @@ export class SkillsShRegistryClient implements SkillsRegistry {
     if (latestCommitSha === installed.commitSha) {
       return { status: SKILL_UPDATE_STATUSES.UP_TO_DATE, latestCommitSha };
     }
-    const tree = await this.fetchTree(source, latestCommitSha);
+    const tree = await this.fetchTree(source, latestCommitSha, slug);
     const existingPath = tree.some(
       (entry) =>
         entry.type === GIT_TREE_ENTRY_TYPES.BLOB &&
@@ -700,7 +708,11 @@ export class SkillsShRegistryClient implements SkillsRegistry {
     location: RegistrySkillLocation
   ): Promise<DownloadedSkillFile[]> {
     this.assertLocation(location);
-    const tree = await this.fetchTree(location.source, location.commitSha);
+    const tree = await this.fetchTree(
+      location.source,
+      location.commitSha,
+      location.slug
+    );
     const hasSkillMd = tree.some(
       (entry) =>
         entry.type === GIT_TREE_ENTRY_TYPES.BLOB &&
@@ -819,7 +831,7 @@ export class SkillsShRegistryClient implements SkillsRegistry {
     candidateCount: number;
     searchedCount: number;
   }> {
-    const tree = await this.fetchTree(source, commitSha);
+    const tree = await this.fetchTree(source, commitSha, slug);
     const ranked = rankSkillMdCandidates(tree, source, slug);
     const candidates = ranked.slice(0, MAX_FRONTMATTER_PROBES);
     for (
@@ -898,7 +910,8 @@ export class SkillsShRegistryClient implements SkillsRegistry {
 
   private async fetchTree(
     source: string,
-    commitSha: string
+    commitSha: string,
+    preferredSlug?: string
   ): Promise<GitTreeEntry[]> {
     const key = `${source}@${commitSha}`;
     const cached = this.treeCache.get(key);
@@ -909,11 +922,106 @@ export class SkillsShRegistryClient implements SkillsRegistry {
       `tree of ${source}`,
       { accept: "application/vnd.github+json" }
     );
-    const tree = parseGitTreeResponse(
-      await this.readJson(response, REGISTRY_SERVICES.GITHUB)
-    );
+    const data = await this.readJson(response, REGISTRY_SERVICES.GITHUB);
+    const tree = isPlainObject(data) && data.truncated === true
+      ? await this.walkTruncatedTree(source, commitSha, data, preferredSlug)
+      : parseGitTreeResponse(data);
     this.treeCache.set(key, tree);
     return tree;
+  }
+
+  /**
+   * GitHub caps recursive trees. Walk a small number of likely directory
+   * trees, keeping paths rooted at the repository so existing ranking,
+   * probing, download, and update code can consume the result unchanged.
+   */
+  private async walkTruncatedTree(
+    source: string,
+    commitSha: string,
+    truncatedData: JsonRecord,
+    preferredSlug?: string
+  ): Promise<GitTreeEntry[]> {
+    const key = `${source}@${commitSha}`;
+    this.truncatedTreeKeys.add(key);
+    const collected = parseGitTreeResponse({
+      ...truncatedData,
+      truncated: false,
+    });
+    const collectedPaths = new Set(collected.map((entry) => entry.path));
+    const queue: Array<{ path: string; sha: string }> = [];
+    const visited = new Set<string>();
+    let requests = 0;
+
+    const priority = (path: string): number => {
+      if (path === PATH_CONSTANTS.SKILLS_DIR) return 0;
+      if (path === ".claude/skills") return 0;
+      if (
+        preferredSlug &&
+        path
+          .split("/")
+          .some((segment) => toSkillSlug(segment) === preferredSlug)
+      ) {
+        return 1;
+      }
+      if (path === ".claude") return 1;
+      return 3;
+    };
+    const enqueue = (path: string, sha: string): void => {
+      if (EXCLUDED_DIR_NAMES.has(path.split("/").pop() ?? "")) return;
+      if (visited.has(sha) || queue.some((entry) => entry.sha === sha)) return;
+      queue.push({ path, sha });
+      queue.sort(
+        (a, b) =>
+          priority(a.path) - priority(b.path) ||
+          a.path.split("/").length - b.path.split("/").length ||
+          a.path.localeCompare(b.path)
+      );
+    };
+    const appendEntries = (
+      entries: GitTreeEntry[],
+      parentPath: string
+    ): void => {
+      for (const entry of entries) {
+        const path = parentPath ? `${parentPath}/${entry.path}` : entry.path;
+        const rooted = { ...entry, path };
+        if (!collectedPaths.has(path)) {
+          collected.push(rooted);
+          collectedPaths.add(path);
+        }
+        if (entry.type === GIT_TREE_ENTRY_TYPES.TREE && entry.sha) {
+          enqueue(path, entry.sha);
+        }
+      }
+    };
+
+    const root = await this.fetchNonRecursiveTree(source, commitSha);
+    requests++;
+    appendEntries(root, "");
+    while (queue.length > 0 && requests < MAX_TRUNCATED_TREE_REQUESTS) {
+      const next = queue.shift()!;
+      if (visited.has(next.sha)) continue;
+      visited.add(next.sha);
+      const entries = await this.fetchNonRecursiveTree(source, next.sha);
+      requests++;
+      appendEntries(entries, next.path);
+    }
+    return collected;
+  }
+
+  private async fetchNonRecursiveTree(
+    source: string,
+    treeSha: string
+  ): Promise<GitTreeEntry[]> {
+    const response = await this.request(
+      REGISTRY_SERVICES.GITHUB,
+      `${GITHUB_API_URL}/repos/${source}/git/trees/${treeSha}`,
+      `tree of ${source}`,
+      { accept: "application/vnd.github+json" }
+    );
+    const data = await this.readJson(response, REGISTRY_SERVICES.GITHUB);
+    return parseGitTreeResponse(
+      isPlainObject(data) ? { ...data, truncated: false } : data
+    );
   }
 
   private rawUrl(source: string, commitSha: string, repoPath: string): string {

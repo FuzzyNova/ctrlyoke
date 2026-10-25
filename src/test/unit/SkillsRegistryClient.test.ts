@@ -109,6 +109,51 @@ function githubRoutes(
   };
 }
 
+function truncatedTreeRoutes(
+  treeCommit: string,
+  skillMdPath?: string,
+  headCommit = treeCommit
+): Record<string, Route> {
+  const entries: Record<string, unknown> = {
+    [treeCommit]: {
+      tree: [
+        { path: "skills", type: "tree", sha: "skills-sha" },
+        { path: ".claude", type: "tree", sha: "claude-sha" },
+        { path: "docs", type: "tree", sha: "docs-sha" },
+      ],
+    },
+    "skills-sha": {
+      tree: [
+        ...(skillMdPath === "skills/pdf/SKILL.md"
+          ? [{ path: "pdf", type: "tree", sha: "pdf-sha" }]
+          : []),
+      ],
+    },
+    "pdf-sha": {
+      tree: [{ path: "SKILL.md", type: "blob", sha: "skill-file" }],
+    },
+    "claude-sha": { tree: [] },
+    "docs-sha": { tree: [] },
+  };
+  return {
+    "https://api.github.com/repos/anthropics/skills/commits/HEAD": () =>
+      new Response(`${headCommit}\n`),
+    "https://api.github.com/repos/anthropics/skills/git/trees/": (url) => {
+      const treeKey = url.split("/git/trees/")[1]?.split("?")[0] ?? "";
+      if (url.endsWith("?recursive=1")) {
+        return json({ tree: [], truncated: true });
+      }
+      return json(entries[treeKey] ?? { tree: [] });
+    },
+    "https://raw.githubusercontent.com/anthropics/skills/": (url) => {
+      const path = decodeURIComponent(url.split(`/${treeCommit}/`)[1] ?? "");
+      return path === skillMdPath
+        ? new Response("---\nname: pdf\n---\n")
+        : new Response("missing", { status: 404 });
+    },
+  };
+}
+
 suite("SkillsRegistryClient", () => {
   suite("pure helpers", () => {
     test("toSkillSlug matches the skills.sh server algorithm", () => {
@@ -560,13 +605,25 @@ suite("SkillsRegistryClient", () => {
       );
     });
 
-    test("a truncated tree error explains that the repository was too large", async () => {
-      const { registry } = client(
-        githubRoutes({ ...PDF_TREE, truncated: true })
+    test("finds a skill under skills/ when the recursive tree is truncated", async () => {
+      const { registry, urls } = client(
+        truncatedTreeRoutes(COMMIT, "skills/pdf/SKILL.md")
       );
+      const location = await registry.resolveSkill("anthropics/skills", "pdf");
+      assert.strictEqual(location.skillMdPath, "skills/pdf/SKILL.md");
+      assert.ok(urls.some((url) => url.endsWith("/git/trees/skills-sha")));
+      assert.ok(urls.some((url) => url.includes("raw.githubusercontent.com")));
+      assert.ok(
+        urls.length < 10,
+        `expected a small bounded walk, got ${urls.length} requests`
+      );
+    });
+
+    test("reports not found after a bounded walk of a truncated tree", async () => {
+      const { registry } = client(truncatedTreeRoutes(COMMIT));
       await assert.rejects(
-        registry.resolveSkill("anthropics/skills", "pdf"),
-        /GitHub truncated the repository tree because the repository is too large/
+        registry.resolveSkill("anthropics/skills", "missing"),
+        /Could not find the "missing" skill in github\.com\/anthropics\/skills after searching likely locations in the truncated repository tree/
       );
     });
 
@@ -741,6 +798,19 @@ suite("SkillsRegistryClient", () => {
         SKILL_UPDATE_STATUSES.UPDATE_AVAILABLE
       );
     });
+
+    test(
+      "finds an installed skill during update check when the recursive tree is truncated",
+      async () => {
+        const { registry } = client(
+          truncatedTreeRoutes(NEWER, "skills/pdf/SKILL.md")
+        );
+        assert.strictEqual(
+          (await registry.checkForUpdate(installed)).status,
+          SKILL_UPDATE_STATUSES.UPDATE_AVAILABLE
+        );
+      }
+    );
 
     test("a skill gone from its repository is reported as not found", async () => {
       const { registry } = client(
