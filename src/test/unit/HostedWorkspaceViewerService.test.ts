@@ -1287,6 +1287,96 @@ suite("HostedWorkspaceViewerService", function () {
       }
     });
 
+    test("returns timed-out rows as a partial page and continues without gaps", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "history.txt", "one\n", "Initial");
+      const row = (hash: string, parent: string, subject: string) =>
+        `\0${hash}\0${hash.slice(0, 7)}\0${subject}\0ctrlyoke Test\0today\0${parent}\0\0\0M\0history.txt\0`;
+      let spawnCount = 0;
+      let walkChild: (EventEmitter & { stdout: PassThrough; stderr: PassThrough; kill: () => boolean }) | undefined;
+      const restoreSpawn = setFileHistorySpawnForTests(() => {
+        const child = new EventEmitter() as EventEmitter & {
+          stdout: PassThrough;
+          stderr: PassThrough;
+          kill: () => boolean;
+        };
+        child.stdout = new PassThrough();
+        child.stderr = new PassThrough();
+        child.kill = () => true;
+        spawnCount++;
+        walkChild = child;
+        setImmediate(() => child.stdout.write(row("a".repeat(40), "b".repeat(40), "History 0")));
+        return child as never;
+      });
+      try {
+        const svc = new ShortDeadlineWorkspaceViewerService(root);
+        const first = await svc.getFileHistory("history.txt", 0, 1);
+        assert.deepStrictEqual(first.entries.map((entry) => entry.subject), ["History 0"]);
+        assert.strictEqual(first.hasMore, true);
+        assert.ok(first.nextCursor);
+        walkChild?.stdout.write(row("b".repeat(40), "", "History 1"));
+        setImmediate(() => walkChild?.emit("close", 0));
+
+        const continued = await svc.getFileHistory(
+          "history.txt",
+          1,
+          undefined,
+          first.historyId,
+          undefined,
+          undefined,
+          first.nextCursor
+        );
+        assert.deepStrictEqual(continued.entries.map((entry) => entry.subject), ["History 1"]);
+        assert.strictEqual(continued.hasMore, false);
+        assert.strictEqual(spawnCount, 1);
+      } finally {
+        restoreSpawn();
+      }
+    });
+
+    test("disposes and drops a first-page snapshot when it times out without rows", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "history.txt", "one\n", "Initial");
+      let spawnCount = 0;
+      let firstChild: (EventEmitter & { stdout: PassThrough; stderr: PassThrough; kill: () => boolean }) | undefined;
+      const restoreSpawn = setFileHistorySpawnForTests(() => {
+        const child = new EventEmitter() as EventEmitter & {
+          stdout: PassThrough;
+          stderr: PassThrough;
+          kill: () => boolean;
+        };
+        child.stdout = new PassThrough();
+        child.stderr = new PassThrough();
+        child.kill = () => true;
+        if (++spawnCount === 1) {
+          firstChild = child;
+        } else {
+          setImmediate(() => {
+            child.stdout.write(
+              `\0${"a".repeat(40)}\0aaaaaaa\0Retry history\0ctrlyoke Test\0today\0\0\0\0M\0history.txt\0`
+            );
+            child.emit("close", 0);
+          });
+        }
+        return child as never;
+      });
+      try {
+        const svc = new ShortDeadlineWorkspaceViewerService(root);
+        await assert.rejects(svc.getFileHistory("history.txt", 0, 1), /timed out/);
+        assert.strictEqual(firstChild?.stdout.destroyed, true);
+        assert.strictEqual(firstChild?.stderr.destroyed, true);
+        const retry = await svc.getFileHistory("history.txt", 0, 1);
+        assert.deepStrictEqual(retry.entries.map((entry) => entry.subject), ["Retry history"]);
+        assert.strictEqual(spawnCount, 2);
+      } finally {
+        restoreSpawn();
+      }
+    });
+
     test("preserves Git failures instead of reporting them as page deadlines", async () => {
       const root = createWorkspace();
       runGit(root, "init");

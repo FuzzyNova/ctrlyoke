@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-25 by bug-drain review of 13ec967d2
 - **Area:** `src/server/HostedWorkspaceViewerService.ts` (`materializeFileHistoryPage`), `src/utils/GitUtils.ts` (the streaming `git log --follow` walk added in 13ec967d2)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

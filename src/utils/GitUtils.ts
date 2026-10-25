@@ -2,6 +2,7 @@ import { execFile, spawn, type ChildProcess } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
 import * as fs from "fs/promises";
+import { StringDecoder } from "string_decoder";
 import type { ExecFileOptions } from "child_process";
 import { GIT_CHANGE_KINDS } from "../types/DashboardConstants";
 import { foldPathForCompare } from "./PathCasing";
@@ -626,15 +627,26 @@ export function createFileHistoryCommitWalk(
     ((file, spawnArgs) =>
       spawn(file, [...spawnArgs], { stdio: ["ignore", "pipe", "pipe"] }))
   )("git", args);
-  const chunks: Buffer[] = [];
   let rows: FileHistoryCommitInfo[] = [];
   let closed = false;
+  let disposed = false;
   let failure: Error | undefined;
   let stderr = "";
   let waiter: (() => void) | undefined;
+  let pendingOutput = "";
+  const decoder = new StringDecoder("utf8");
+  const parseAvailableRows = (text: string) => {
+    pendingOutput += text;
+    const parsed = parseCompleteFileHistoryCommitOutput(pendingOutput);
+    if (parsed.consumedLength > 0) {
+      rows.push(...parsed.commits);
+      pendingOutput = pendingOutput.slice(parsed.consumedLength);
+    }
+  };
   child.stdout?.on("data", (chunk: Buffer | string) => {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    rows = parseFileHistoryCommitOutput(Buffer.concat(chunks).toString("utf8"));
+    parseAvailableRows(
+      typeof chunk === "string" ? chunk : decoder.write(chunk)
+    );
     child.stdout?.pause();
     waiter?.();
   });
@@ -642,6 +654,7 @@ export function createFileHistoryCommitWalk(
     stderr += String(chunk);
   });
   child.once("error", (error) => {
+    if (closed) return;
     failure = error;
     closed = true;
     waiter?.();
@@ -650,7 +663,8 @@ export function createFileHistoryCommitWalk(
     // Real child processes close after their output streams drain. Test child
     // fakes may emit close synchronously after write(), before data is read.
     setImmediate(() => {
-      rows = parseFileHistoryCommitOutput(Buffer.concat(chunks).toString("utf8"));
+      if (closed) return;
+      parseAvailableRows(decoder.end());
       closed = true;
       if (code !== 0) {
         failure = new Error(
@@ -696,7 +710,16 @@ export function createFileHistoryCommitWalk(
       return queued;
     },
     dispose() {
+      if (disposed) return;
+      disposed = true;
+      closed = true;
+      failure = new Error("Git file history walk was disposed");
+      pendingOutput = "";
+      rows = [];
+      child.stdout?.destroy();
+      child.stderr?.destroy();
       child.kill();
+      waiter?.();
     },
   };
 }
@@ -768,8 +791,22 @@ export async function getFileHistoryCommitsBounded(
 }
 
 function parseFileHistoryCommitOutput(stdout: string): FileHistoryCommitInfo[] {
+  return parseCompleteFileHistoryCommitOutput(stdout).commits;
+}
+
+function parseCompleteFileHistoryCommitOutput(stdout: string): {
+  commits: FileHistoryCommitInfo[];
+  consumedLength: number;
+} {
   const tokens = stdout.split("\0");
+  const tokenOffsets: number[] = [];
+  let tokenOffset = 0;
+  for (const token of tokens) {
+    tokenOffsets.push(tokenOffset);
+    tokenOffset += token.length + 1;
+  }
   const commits: FileHistoryCommitInfo[] = [];
+  let consumedLength = 0;
 
   for (let index = 0; index < tokens.length; index++) {
     const hash = tokens[index] ?? "";
@@ -813,13 +850,17 @@ function parseFileHistoryCommitOutput(stdout: string): FileHistoryCommitInfo[] {
       path: commitPath,
       oldPath: secondPath ? (firstPath ?? commitPath) : commitPath,
     });
+    consumedLength =
+      (tokenOffsets[pathTerminatorIndex] ?? 0) +
+      (tokens[pathTerminatorIndex]?.length ?? 0) +
+      1;
 
     // Avoid mistaking a path that happens to look like a hash for the next
     // commit header; the next real header is the following empty token.
     index = statusIndex + (isRename ? 2 : 1);
   }
 
-  return commits;
+  return { commits, consumedLength };
 }
 
 /**

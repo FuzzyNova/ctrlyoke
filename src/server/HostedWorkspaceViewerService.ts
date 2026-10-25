@@ -2249,12 +2249,18 @@ export class HostedWorkspaceViewerService {
     this.fileHistorySnapshots.set(snapshot.historyId, snapshot);
     this.trimFileHistorySnapshots();
 
-    return this.materializeFileHistoryPage(
-      snapshot,
-      offset,
-      nextOffset,
-      nextCursor
-    );
+    try {
+      return await this.materializeFileHistoryPage(
+        snapshot,
+        offset,
+        nextOffset,
+        nextCursor
+      );
+    } catch (error) {
+      snapshot.walk?.dispose();
+      this.fileHistorySnapshots.delete(snapshot.historyId);
+      throw error;
+    }
   }
 
   async getFileHistoryDiff(
@@ -2396,7 +2402,11 @@ export class HostedWorkspaceViewerService {
     while (entryRows.length <= snapshot.pageSize) {
       const remainingMs = deadline - Date.now();
       if (remainingMs <= 0) {
-        throw new Error("Git file history timed out; retry the request");
+        if (entryRows.length === 0) {
+          throw new Error("Git file history timed out; retry the request");
+        }
+        hasMore = true;
+        break;
       }
       if (!snapshot.walk) {
         const liveWalks = [...this.fileHistorySnapshots.values()].filter(
@@ -2413,7 +2423,20 @@ export class HostedWorkspaceViewerService {
           snapshot.repoRoot, snapshot.gitPath, snapshot.headHash, true
         );
       }
-      const row = await snapshot.walk.readAt(position, remainingMs);
+      let row: FileHistoryCommitInfo | undefined;
+      try {
+        row = await snapshot.walk.readAt(position, remainingMs);
+      } catch (error) {
+        if (
+          entryRows.length === 0 ||
+          !(error instanceof Error) ||
+          !error.message.includes("timed out")
+        ) {
+          throw error;
+        }
+        hasMore = true;
+        break;
+      }
       if (!row) break;
       const oldAbsolute = path.resolve(snapshot.repoRoot, row.oldPath);
       const newAbsolute = path.resolve(snapshot.repoRoot, row.path);

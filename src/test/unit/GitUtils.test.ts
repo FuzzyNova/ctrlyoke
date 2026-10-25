@@ -3,6 +3,8 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { execFileSync } from "child_process";
+import { EventEmitter } from "events";
+import { PassThrough } from "stream";
 import { suite, test, setup, teardown } from "mocha";
 import {
   gitRefExists,
@@ -28,6 +30,8 @@ import {
   getBlobBytes,
   GitBlobTooLargeError,
   getFileHistoryCommits,
+  createFileHistoryCommitWalk,
+  setFileHistorySpawnForTests,
   getStashFiles,
   getWorkingTreeDiff,
   getStagedDiff,
@@ -67,6 +71,69 @@ suite("GitUtils.countGitWorkingTreeChanges", function () {
         conflicted: 3,
       }
     );
+  });
+});
+
+suite("GitUtils.createFileHistoryCommitWalk", function () {
+  test("parses records split across stdout chunks, including split UTF-8", async () => {
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: PassThrough;
+      stderr: PassThrough;
+      kill: () => boolean;
+    };
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.kill = () => true;
+    const restoreSpawn = setFileHistorySpawnForTests(() => child as never);
+    const output = Buffer.from(
+      `\0${"a".repeat(40)}\0aaaaaaa\0First 🌒\0Author\0today\0${"b".repeat(40)}\0\0\0M\0first.txt\0\0${"b".repeat(40)}\0bbbbbbb\0Second\0Author\0today\0\0\0\0M\0second.txt\0`,
+      "utf8"
+    );
+    try {
+      const walk = createFileHistoryCommitWalk("/repo", "file.txt", "HEAD", true);
+      for (let index = 0; index < output.length; index++) {
+        child.stdout.write(output.subarray(index, index + 1));
+      }
+      const first = await walk.readAt(0, 1000);
+      const second = await walk.readAt(1, 1000);
+      assert.deepStrictEqual(
+        [first?.subject, first?.path, second?.subject, second?.path],
+        ["First 🌒", "first.txt", "Second", "second.txt"]
+      );
+      walk.dispose();
+    } finally {
+      restoreSpawn();
+    }
+  });
+
+  test("dispose closes both streams and promptly rejects a pending read", async () => {
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: PassThrough;
+      stderr: PassThrough;
+      kill: () => boolean;
+    };
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    let killed = false;
+    child.kill = () => {
+      killed = true;
+      return true;
+    };
+    const restoreSpawn = setFileHistorySpawnForTests(() => child as never);
+    try {
+      const walk = createFileHistoryCommitWalk("/repo", "file.txt", "HEAD", true);
+      const pendingRead = walk.readAt(0, 10_000);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      const disposedAt = Date.now();
+      walk.dispose();
+      await assert.rejects(pendingRead, /disposed/);
+      assert.ok(Date.now() - disposedAt < 500);
+      assert.strictEqual(child.stdout.destroyed, true);
+      assert.strictEqual(child.stderr.destroyed, true);
+      assert.strictEqual(killed, true);
+    } finally {
+      restoreSpawn();
+    }
   });
 });
 
