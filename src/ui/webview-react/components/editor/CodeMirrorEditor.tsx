@@ -663,10 +663,15 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     ) => {
       const entry = pending.get(seq);
       if (!entry) return false;
-      if (replacement && readOnlyRef.current) return false;
       if (!entry.attached || entry.documentKey !== documentKeyRef.current) {
+        if (entry.timeoutId) clearTimeout(entry.timeoutId);
+        if (entry.removalTimeoutId) clearTimeout(entry.removalTimeoutId);
+        entry.timeoutId = null;
+        entry.removalTimeoutId = null;
+        pending.delete(seq);
         return false;
       }
+      if (replacement && readOnlyRef.current) return false;
       if (entry.timeoutId) clearTimeout(entry.timeoutId);
       if (entry.removalTimeoutId) clearTimeout(entry.removalTimeoutId);
       pending.delete(seq);
@@ -723,32 +728,49 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const attachPendingPlaceholders = useCallback(
     (view: EditorView, key: string | undefined) => {
       const document = view.state.doc.toString();
-      for (const pending of [
-        pendingPastesRef.current,
-        pendingCapturesRef.current,
-      ]) {
-        for (const entry of pending.values()) {
-          if (entry.documentKey !== key || entry.attached) continue;
-          let from = -1;
-          let nearestDistance = Number.POSITIVE_INFINITY;
-          for (
-            let candidate = document.indexOf(entry.text);
-            candidate !== -1;
-            candidate = document.indexOf(entry.text, candidate + 1)
-          ) {
-            const distance = Math.abs(candidate - entry.from);
-            if (distance < nearestDistance) {
-              from = candidate;
-              nearestDistance = distance;
-            }
-          }
-          entry.attached = true;
-          entry.placeholderPresent = from !== -1;
-          if (from !== -1) {
-            entry.from = from;
-            entry.to = from + entry.text.length;
-            if (entry.removalRequested) removePendingPlaceholder(entry);
-          }
+      const candidates = [
+        ...pendingPastesRef.current.values(),
+        ...pendingCapturesRef.current.values(),
+      ].filter((entry) => entry.documentKey === key && !entry.attached);
+      const matches: Array<{
+        entry: PendingPlaceholder;
+        from: number;
+        distance: number;
+      }> = [];
+      for (const entry of candidates) {
+        for (
+          let from = document.indexOf(entry.text);
+          from !== -1;
+          from = document.indexOf(entry.text, from + 1)
+        ) {
+          matches.push({ entry, from, distance: Math.abs(from - entry.from) });
+        }
+      }
+      matches.sort((left, right) => left.distance - right.distance);
+
+      const claimedEntries = new Set<PendingPlaceholder>();
+      const claimedPositions = new Set<number>();
+      const attachedAt = new Map<PendingPlaceholder, number>();
+      for (const match of matches) {
+        if (
+          claimedEntries.has(match.entry) ||
+          claimedPositions.has(match.from)
+        ) {
+          continue;
+        }
+        claimedEntries.add(match.entry);
+        claimedPositions.add(match.from);
+        attachedAt.set(match.entry, match.from);
+      }
+
+      for (const entry of candidates) {
+        const from = attachedAt.get(entry);
+        entry.attached = true;
+        entry.placeholderPresent = from !== undefined;
+        if (from !== undefined) {
+          entry.from = from;
+          entry.to = from + entry.text.length;
+          if (entry.removalRequested) removePendingPlaceholder(entry);
         }
       }
     },
@@ -764,6 +786,16 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       entry.removalTimeoutId = setTimeout(() => {
         const current = pending.get(seq);
         if (current !== entry) return;
+        if (!entry.attached || entry.documentKey !== documentKeyRef.current) {
+          if (entry.timeoutId) clearTimeout(entry.timeoutId);
+          entry.timeoutId = null;
+          entry.removalTimeoutId = null;
+          pending.delete(seq);
+          WebviewLog.warn(
+            "[CodeMirror] Removed an unresolved file-operation placeholder"
+          );
+          return;
+        }
         entry.removalRequested = true;
         removePendingPlaceholder(entry);
         entry.removalTimeoutId = null;

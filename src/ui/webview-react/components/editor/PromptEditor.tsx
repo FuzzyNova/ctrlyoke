@@ -317,6 +317,12 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
 
   const isEditMode = selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT;
   const isFinalStep = selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP;
+  const activeStepId =
+    selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
+      ? prompts[selectionTarget.index]?._runtime?.stepId
+      : isFinalStep
+        ? finalStep?._runtime?.stepId
+        : undefined;
   const isScriptMode = stepType === STEP_TYPES.SCRIPT;
   const inheritedScriptSecrets =
     workflowProperties.secrets !== undefined
@@ -1444,7 +1450,10 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             documentKey={
               isBulkMode
                 ? undefined
-                : JSON.stringify([activeWorkflowId, selectionTarget])
+                : JSON.stringify([
+                    activeWorkflowId,
+                    activeStepId ?? selectionTarget,
+                  ])
             }
             value={isBulkMode ? "" : promptText}
             onChange={isBulkMode ? ignoreBulkEditorChange : handleTextChange}

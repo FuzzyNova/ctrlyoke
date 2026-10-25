@@ -129,6 +129,75 @@ describe("PromptEditor accessibility names", () => {
   });
 });
 
+describe("PromptEditor pending editor documents", () => {
+  it("keeps the same pending placeholder document when a step moves indexes", () => {
+    vi.stubGlobal(
+      "FileReader",
+      class {
+        result: string | ArrayBuffer | null = "data:image/png;base64,AQ==";
+        onload: ((event: ProgressEvent<FileReader>) => unknown) | null = null;
+        readAsDataURL() {
+          this.onload?.(new ProgressEvent("load") as ProgressEvent<FileReader>);
+        }
+      }
+    );
+    const stepA = { prompt: "step A", _runtime: { stepId: "step-a" } };
+    const stepB = { prompt: "step B", _runtime: { stepId: "step-b" } };
+    useWorkflowStore.setState({ steps: [stepA, stepB] });
+    useEditorStore
+      .getState()
+      .selectPrompt({ kind: FINAL_STEP_PHASES.QUEUE, index: 0 }, stepA);
+    const { container } = render(<PromptEditor />);
+    fireEvent.paste(container.querySelector(".cm-content") as HTMLElement, {
+      clipboardData: {
+        items: [
+          {
+            type: "image/png",
+            getAsFile: () =>
+              new File(["image"], "paste.png", { type: "image/png" }),
+          },
+        ],
+      },
+    });
+    expect(useEditorStore.getState().promptText).toBe("[Pasting image…]step A");
+    const request = postMessageSpy.mock.calls
+      .map(([message]) => message as { type?: string; seq?: number })
+      .find((message) => message.type === MESSAGE_TYPES.SAVE_PASTED_IMAGE);
+    expect(request?.seq).toBeDefined();
+
+    act(() => {
+      const stepAWithPlaceholder = {
+        ...stepA,
+        prompt: "[Pasting image…]step A",
+      };
+      useWorkflowStore.setState({ steps: [stepB, stepAWithPlaceholder] });
+      useEditorStore
+        .getState()
+        .selectPrompt(
+          { kind: FINAL_STEP_PHASES.QUEUE, index: 1 },
+          stepAWithPlaceholder
+        );
+    });
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        data: {
+          type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
+          seq: request!.seq,
+          relativePath: "./.ctrlyoke/attachments/reordered.png",
+        },
+      })
+    );
+
+    const view = EditorView.findFromDOM(
+      container.querySelector(".cm-editor") as HTMLElement
+    )!;
+    expect(view.state.doc.toString()).toBe(
+      "@./.ctrlyoke/attachments/reordered.png step A"
+    );
+  });
+});
+
 describe("PromptEditor bulk mode draft isolation", () => {
   it("shows an empty editor without changing prompt text or pending step drafts", async () => {
     const steps = [{ prompt: "one" }, { prompt: "two" }];
