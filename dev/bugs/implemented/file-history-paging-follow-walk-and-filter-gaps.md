@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-24 by bug-drain review of f23835182
 - **Area:** `src/server/HostedWorkspaceViewerService.ts`, `src/ui/webview-react/hooks/usePagedFileHistory.ts`, `src/ui/webview-react/hooks/usePagedCommitHistory.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

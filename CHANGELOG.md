@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Workspace viewer file history now returns bounded partial `--follow` results,
+  pages densely across trusted-root filtering, and keeps commit history available
+  when Git cannot count the full history.
 - VS Code workflow pickers now show Git-ignored workflow files when
   `hideGitIgnoredFiles` is disabled.
 - Git-backed file listings now skip broken nested repositories and fall back to

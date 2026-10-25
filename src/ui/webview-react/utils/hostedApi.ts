@@ -385,7 +385,8 @@ export async function workspaceFileHistory(
   offset = 0,
   pageSize = WORKSPACE_FILE_HISTORY_DEFAULT_PAGE_SIZE,
   historyId?: string,
-  repo?: string
+  repo?: string,
+  nextOffset?: number
 ): Promise<WorkspaceFileHistoryPageResponse> {
   const params = new URLSearchParams({
     path: filePath,
@@ -397,6 +398,7 @@ export async function workspaceFileHistory(
     params.set("pageSize", String(pageSize));
   }
   if (repo) params.set("repo", repo);
+  if (nextOffset !== undefined) params.set("nextOffset", String(nextOffset));
   return hostedFetch<WorkspaceFileHistoryPageResponse>(
     `/api/workspace-viewer/file-history?${params.toString()}`
   );

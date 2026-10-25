@@ -91,39 +91,26 @@ describe("usePagedFileHistory", () => {
       })
     );
 
+    await waitFor(() => expect(fetchPage).toHaveBeenCalledTimes(2));
     expect(fetchPage.mock.calls.map(([request]) => request.offset)).toEqual([
-      0, 3, 6,
+      0, 3,
     ]);
   });
 
-  it("requests older pages when scrolling upward", async () => {
+  it("fetches continuation pages sequentially when the viewport skips ahead", async () => {
     const fetchPage = vi
       .fn<PagedFileHistoryFetcher>()
       .mockResolvedValueOnce(
         response(HISTORY_A, 0, [entry(0), entry(1), entry(2)])
       )
       .mockResolvedValueOnce(
-        response(HISTORY_A, 6, [entry(6), entry(7), entry(8)])
+        response(HISTORY_A, 3, [entry(3), entry(4), entry(5)])
       )
       .mockResolvedValueOnce(
-        response(HISTORY_A, 3, [entry(3), entry(4), entry(5)])
+        response(HISTORY_A, 6, [entry(6), entry(7), entry(8)])
       );
     const { result } = renderHistory(fetchPage);
     await waitFor(() => expect(result.current.listingId).toBe(HISTORY_A));
-
-    act(() =>
-      result.current.onRangeChange({
-        visibleStartIndex: 6,
-        visibleEndIndex: 8,
-        overscanStartIndex: 6,
-        overscanEndIndex: 8,
-        startIndex: 6,
-        endIndex: 8,
-      })
-    );
-    await waitFor(() =>
-      expect(result.current.getEntry(6)?.hash).toBe("hash-6")
-    );
 
     act(() =>
       result.current.onRangeChange({
@@ -138,8 +125,12 @@ describe("usePagedFileHistory", () => {
     await waitFor(() =>
       expect(result.current.getEntry(3)?.hash).toBe("hash-3")
     );
+    act(() => result.current.requestRange(6));
+    await waitFor(() =>
+      expect(result.current.getEntry(6)?.hash).toBe("hash-6")
+    );
     expect(fetchPage.mock.calls.map(([request]) => request.offset)).toEqual([
-      0, 6, 3,
+      0, 3, 6,
     ]);
   });
 
@@ -190,5 +181,64 @@ describe("usePagedFileHistory", () => {
       expect(result.current.getEntry(4)?.hash).toBe("hash-4")
     );
     expect(result.current.failedRanges).toEqual([]);
+  });
+
+  it("continues from the raw Git cursor while packing filtered pages densely", async () => {
+    const fetchPage = vi
+      .fn<PagedFileHistoryFetcher>()
+      .mockResolvedValueOnce({
+        ...response(HISTORY_A, 0, [entry(0)]),
+        totalEntries: 1,
+        hasMore: true,
+        nextOffset: 5,
+      })
+      .mockResolvedValueOnce({
+        ...response(HISTORY_A, 1, [entry(5)]),
+        totalEntries: 2,
+        hasMore: false,
+        nextOffset: 6,
+      });
+    const { result } = renderHistory(fetchPage);
+
+    await waitFor(() =>
+      expect(result.current.getEntry(0)?.hash).toBe("hash-0")
+    );
+    act(() => result.current.requestRange(3));
+    await waitFor(() =>
+      expect(result.current.getEntry(1)?.hash).toBe("hash-5")
+    );
+
+    expect(fetchPage.mock.calls[1]?.[0]).toMatchObject({
+      offset: 1,
+      nextOffset: 5,
+    });
+    expect(result.current.getEntry(2)).toBeUndefined();
+  });
+
+  it("automatically advances past a fully filtered page without leaving placeholders", async () => {
+    const fetchPage = vi
+      .fn<PagedFileHistoryFetcher>()
+      .mockResolvedValueOnce({
+        ...response(HISTORY_A, 0, []),
+        totalEntries: 0,
+        hasMore: true,
+        nextOffset: 4,
+      })
+      .mockResolvedValueOnce({
+        ...response(HISTORY_A, 0, [entry(4)]),
+        totalEntries: 1,
+        hasMore: false,
+        nextOffset: 5,
+      });
+    const { result } = renderHistory(fetchPage);
+
+    await waitFor(() =>
+      expect(result.current.getEntry(0)?.hash).toBe("hash-4")
+    );
+    expect(fetchPage.mock.calls[1]?.[0]).toMatchObject({
+      offset: 0,
+      nextOffset: 4,
+    });
+    expect(result.current.getEntry(1)).toBeUndefined();
   });
 });

@@ -1,5 +1,7 @@
 import * as assert from "assert";
 import { execFileSync } from "child_process";
+import { EventEmitter } from "events";
+import { PassThrough } from "stream";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -30,6 +32,7 @@ import {
 import {
   setGitCommandObserverForTests,
   setGitTimeoutOverridesForTests,
+  setFileHistorySpawnForTests,
 } from "../../utils/GitUtils";
 import { configService } from "../../config/CtrlYokeConfigService";
 import { USER_SETTINGS_VIEWER_SENTINEL_PATH } from "../../types/DashboardConstants";
@@ -58,6 +61,19 @@ class UnavailableGitWorkspaceViewerService extends HostedWorkspaceViewerService 
     error.code = "ENOENT";
     throw error;
   }
+}
+
+class CountFailureWorkspaceViewerService extends HostedWorkspaceViewerService {
+  protected override async readCommitCount(): Promise<{
+    stdout: string;
+    stderr: string;
+  }> {
+    throw new Error("rev-list count timed out");
+  }
+}
+
+class ShortDeadlineWorkspaceViewerService extends HostedWorkspaceViewerService {
+  protected override readonly fileHistoryPageTimeoutMs = 25;
 }
 
 suite("HostedWorkspaceViewerService", function () {
@@ -617,16 +633,21 @@ suite("HostedWorkspaceViewerService", function () {
       fs.mkdirSync(path.join(root, "ignored_dir", "nested"), {
         recursive: true,
       });
-      fs.writeFileSync(path.join(root, "ignored_dir", "visible-looking.txt"), "x");
+      fs.writeFileSync(
+        path.join(root, "ignored_dir", "visible-looking.txt"),
+        "x"
+      );
       fs.writeFileSync(
         path.join(root, "ignored_dir", "nested", "child.txt"),
         "x"
       );
 
-      const result = await new HostedWorkspaceViewerService(root).listDirectory({
-        path: "ignored_dir",
-        includeGitIgnored: true,
-      });
+      const result = await new HostedWorkspaceViewerService(root).listDirectory(
+        {
+          path: "ignored_dir",
+          includeGitIgnored: true,
+        }
+      );
 
       assert.ok(result.entries.length > 0);
       assert.ok(result.entries.every((entry) => entry.gitIgnored));
@@ -946,14 +967,59 @@ suite("HostedWorkspaceViewerService", function () {
         first.historyId
       );
 
-      assert.deepStrictEqual(first.entries.map((entry) => entry.subject), [
-        "After rename",
-      ]);
-      assert.deepStrictEqual(second.entries.map((entry) => entry.subject), [
-        "Rename file",
-      ]);
+      assert.deepStrictEqual(
+        first.entries.map((entry) => entry.subject),
+        ["After rename"]
+      );
+      assert.deepStrictEqual(
+        second.entries.map((entry) => entry.subject),
+        ["Rename file"]
+      );
       assert.strictEqual(second.entries[0]?.oldPath, "old-name.txt");
       assert.strictEqual(second.hasMore, true);
+    });
+
+    test("returns rows received before the --follow deadline with a raw continuation cursor", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "history.txt", "one\n", "History entry");
+      const hash = runGit(root, "rev-parse", "HEAD");
+      let spawnCount = 0;
+      const restoreSpawn = setFileHistorySpawnForTests(() => {
+        const child = new EventEmitter() as EventEmitter & {
+          stdout: PassThrough;
+          stderr: PassThrough;
+          kill: () => boolean;
+        };
+        child.stdout = new PassThrough();
+        child.stderr = new PassThrough();
+        child.kill = () => {
+          setImmediate(() => child.emit("close", null));
+          return true;
+        };
+        spawnCount++;
+        if (spawnCount === 1)
+          setImmediate(() => {
+            child.stdout.write(
+              `\0${hash}\0${hash.slice(0, 7)}\0History entry\0ctrlyoke Test\0today\0\0\0\0M\0history.txt\0`
+            );
+          });
+        return child as never;
+      });
+      try {
+        const page = await new ShortDeadlineWorkspaceViewerService(
+          root
+        ).getFileHistory("history.txt", 0, 1);
+        assert.deepStrictEqual(
+          page.entries.map((entry) => entry.subject),
+          ["History entry"]
+        );
+        assert.strictEqual(page.hasMore, true);
+        assert.strictEqual(page.nextOffset, 1);
+      } finally {
+        restoreSpawn();
+      }
     });
 
     test("scopes a multi-repo path through its owning repository", async () => {
@@ -990,7 +1056,7 @@ suite("HostedWorkspaceViewerService", function () {
           error instanceof Error && error.message === "Path not allowed"
       );
       await assert.rejects(
-        svc.getFileHistory("history.txt", 1, undefined, page.historyId),
+        svc.getFileHistory("history.txt", -1, undefined, page.historyId),
         (error: unknown) => error instanceof WorkspaceTreeBadRequestError
       );
       await assert.rejects(
@@ -1349,7 +1415,9 @@ suite("HostedWorkspaceViewerService", function () {
       const originalWarn = Log.warn;
       Log.warn = (message: string) => warnings.push(message);
       try {
-        const result = await new HostedWorkspaceViewerService(root).searchWorkspace({
+        const result = await new HostedWorkspaceViewerService(
+          root
+        ).searchWorkspace({
           query: "outerneedle",
           scope: "content",
         });
@@ -2362,7 +2430,13 @@ suite("HostedWorkspaceViewerService", function () {
       try {
         const svc = new HostedWorkspaceViewerService(root);
         const commitPage = await svc.getCommitLog(0, 1);
-        await svc.getCommitLog(1, 1, undefined, undefined, commitPage.historyId);
+        await svc.getCommitLog(
+          1,
+          1,
+          undefined,
+          undefined,
+          commitPage.historyId
+        );
         const filePage = await svc.getFileHistory("history.txt", 0, 1);
         await svc.getFileHistory(
           "history.txt",
@@ -2381,10 +2455,7 @@ suite("HostedWorkspaceViewerService", function () {
           args.some((arg) => arg.startsWith("--skip=")),
           `expected explicit page offset: ${args}`
         );
-        assert.ok(
-          args.includes("2"),
-          `expected page size plus one: ${args}`
-        );
+        assert.ok(args.includes("2"), `expected page size plus one: ${args}`);
       }
     });
 
@@ -2427,6 +2498,23 @@ suite("HostedWorkspaceViewerService", function () {
       const refreshed = await svc.getCommitLog(0, 2);
       assert.strictEqual(refreshed.totalEntries, 4);
       assert.notStrictEqual(refreshed.historyId, first.historyId);
+    });
+
+    test("returns the first commit page when rev-list count fails", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "a.txt", "one\n", "First commit");
+
+      const result = await new CountFailureWorkspaceViewerService(
+        root
+      ).getCommitLog(0, 1);
+      assert.deepStrictEqual(
+        result.commits.map((commit) => commit.subject),
+        ["First commit"]
+      );
+      assert.strictEqual(result.totalEntries, undefined);
+      assert.strictEqual(result.hasMore, false);
     });
 
     test("rejects invalid, expired, and mismatched history ids", async () => {
@@ -3042,7 +3130,10 @@ suite("HostedWorkspaceViewerService", function () {
       );
       assert.strictEqual(first.totalEntries, 520);
       assert.strictEqual(first.entries.length, 1);
-      assert.strictEqual(first.entries[0]?.payloadKind, DIFF_PAYLOAD_KINDS.TEXT);
+      assert.strictEqual(
+        first.entries[0]?.payloadKind,
+        DIFF_PAYLOAD_KINDS.TEXT
+      );
       assert.strictEqual(first.entries[0]?.newContent, content);
 
       commitFile(root, "later.txt", "after snapshot\n", "Move branch tip");

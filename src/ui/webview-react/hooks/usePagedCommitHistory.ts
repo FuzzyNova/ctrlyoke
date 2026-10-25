@@ -80,6 +80,7 @@ interface CommitHistoryState extends PagedCommitHistoryContext {
   currentBranch: string | null;
   listingId: string | null;
   totalCount: number;
+  hasMore: boolean;
   pageSize: number;
   pages: Map<number, readonly WorkspaceCommitLogEntry[]>;
   inFlightOffsets: Set<number>;
@@ -100,6 +101,7 @@ const EMPTY_STATE = (
   currentBranch: null,
   listingId: null,
   totalCount: 0,
+  hasMore: false,
   pageSize,
   pages: new Map(),
   inFlightOffsets: new Set(),
@@ -164,10 +166,11 @@ function responseIsUsable(
     response.pageSize > 0 &&
     (expectedPageSize === undefined ||
       response.pageSize === expectedPageSize) &&
-    Number.isSafeInteger(response.totalEntries) &&
-    response.totalEntries >= 0 &&
-    response.offset <= response.totalEntries &&
-    response.commits.length <= response.totalEntries - response.offset &&
+    (response.totalEntries === undefined ||
+      (Number.isSafeInteger(response.totalEntries) &&
+        response.totalEntries >= 0 &&
+        response.offset <= response.totalEntries &&
+        response.commits.length <= response.totalEntries - response.offset)) &&
     typeof response.detached === "boolean" &&
     (response.currentBranch === null ||
       typeof response.currentBranch === "string") &&
@@ -330,7 +333,12 @@ export function usePagedCommitHistory(
             currentBranch: response.currentBranch,
             detached: response.detached,
             listingId: response.historyId,
-            totalCount: response.totalEntries,
+            totalCount:
+              response.totalEntries ??
+              (response.hasMore
+                ? response.pageSize * 2
+                : response.commits.length),
+            hasMore: response.hasMore,
             pageSize: response.pageSize,
             pages: new Map([[0, response.commits]]),
             inFlightOffsets: new Set(),
@@ -374,7 +382,7 @@ export function usePagedCommitHistory(
         return;
       }
       if (
-        offset >= current.totalCount ||
+        (!current.hasMore && offset >= current.totalCount) ||
         current.pages.has(offset) ||
         controllersRef.current.has(offset)
       ) {
@@ -428,7 +436,20 @@ export function usePagedCommitHistory(
           updateState((previous) => {
             const pages = new Map(previous.pages);
             pages.set(offset, response.commits);
-            return { ...previous, pages, error: null };
+            return {
+              ...previous,
+              pages,
+              hasMore: response.hasMore,
+              totalCount:
+                response.totalEntries ??
+                (response.hasMore
+                  ? Math.max(
+                      previous.totalCount,
+                      offset + response.pageSize * 2
+                    )
+                  : offset + response.commits.length),
+              error: null,
+            };
           });
         })
         .catch((value: unknown) => {

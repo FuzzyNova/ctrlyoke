@@ -1,11 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { randomUUID } from "crypto";
-import {
-  execFile,
-  spawn,
-  type ChildProcessByStdio,
-} from "child_process";
+import { execFile, spawn, type ChildProcessByStdio } from "child_process";
 import type { Readable } from "stream";
 import { promisify } from "util";
 import { Log } from "../utils/Log";
@@ -89,7 +85,8 @@ import { runtimeTrustedRootRegistry } from "../utils/RuntimeTrustedRootRegistry"
 import { writeFileAtomic } from "../utils/AtomicFileUtils";
 import {
   getRecentCommits,
-  getFileHistoryCommits,
+  getFileHistoryCommitsBounded,
+  type FileHistoryCommitInfo,
   resolveCommit,
   parseGitPorcelainV1Z,
   getWorkingTreeDiff,
@@ -231,7 +228,7 @@ interface CommitLogSnapshot {
   detached: boolean;
   currentBranch: string | null;
   pageSize: number;
-  totalEntries: number;
+  totalEntries: number | undefined;
   lastAccessedAt: number;
 }
 
@@ -511,6 +508,7 @@ export class HostedWorkspaceViewerService {
 
   /** Shared cap for blob and working-tree diff sides. */
   protected readonly diffSideMaxBytes: number = MAX_FILE_SIZE;
+  protected readonly fileHistoryPageTimeoutMs: number = GIT_COMMAND_TIMEOUT_MS;
 
   protected getGitFilesIncludingNestedRepos(
     root: string,
@@ -2154,11 +2152,20 @@ export class HostedWorkspaceViewerService {
     offset = 0,
     pageSize?: number,
     historyId?: string,
-    repoId?: string
+    repoId?: string,
+    nextOffset?: number
   ): Promise<WorkspaceFileHistoryPageResponse> {
     if (!Number.isSafeInteger(offset) || offset < 0) {
       throw new WorkspaceTreeBadRequestError(
         "offset must be a non-negative integer"
+      );
+    }
+    if (
+      nextOffset !== undefined &&
+      (!Number.isSafeInteger(nextOffset) || nextOffset < 0)
+    ) {
+      throw new WorkspaceTreeBadRequestError(
+        "nextOffset must be a non-negative integer"
       );
     }
 
@@ -2182,12 +2189,7 @@ export class HostedWorkspaceViewerService {
           "path does not match the history snapshot"
         );
       }
-      if (offset % snapshot.pageSize !== 0) {
-        throw new WorkspaceTreeBadRequestError(
-          "offset must be aligned to pageSize"
-        );
-      }
-      return this.materializeFileHistoryPage(snapshot, offset);
+      return this.materializeFileHistoryPage(snapshot, offset, nextOffset);
     }
 
     const resolvedPageSize = this.resolveFileHistoryPageSize(pageSize);
@@ -2216,12 +2218,7 @@ export class HostedWorkspaceViewerService {
     this.fileHistorySnapshots.set(snapshot.historyId, snapshot);
     this.trimFileHistorySnapshots();
 
-    if (offset % snapshot.pageSize !== 0) {
-      throw new WorkspaceTreeBadRequestError(
-        "offset must be aligned to pageSize"
-      );
-    }
-    return this.materializeFileHistoryPage(snapshot, offset);
+    return this.materializeFileHistoryPage(snapshot, offset, nextOffset);
   }
 
   async getFileHistoryDiff(
@@ -2335,53 +2332,102 @@ export class HostedWorkspaceViewerService {
 
   private async materializeFileHistoryPage(
     snapshot: FileHistorySnapshot,
-    offset: number
+    offset: number,
+    requestedNextOffset?: number
   ): Promise<WorkspaceFileHistoryPageResponse> {
-    const [rows, unpushedHashes] = await Promise.all([
-      getFileHistoryCommits(
-        snapshot.repoRoot,
-        snapshot.gitPath,
-        snapshot.pageSize + 1,
-        offset,
-        snapshot.headHash,
-        true
-      ),
-      this.getUnpushedHistoryHashes(snapshot.repoRoot, snapshot.headHash),
-    ]);
-    const pageRows = rows.slice(0, snapshot.pageSize);
-    const entries = pageRows
-      .filter((row) => {
+    const deadline = Date.now() + this.fileHistoryPageTimeoutMs;
+    const rawOffset = requestedNextOffset ?? offset;
+    let cursor = rawOffset;
+    let hasMore = false;
+    let timedOut = false;
+    const entryRows: FileHistoryCommitInfo[] = [];
+    while (entryRows.length <= snapshot.pageSize) {
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) {
+        timedOut = true;
+        hasMore = true;
+        break;
+      }
+      const batchSize = snapshot.pageSize + 1;
+      let result;
+      try {
+        result = await getFileHistoryCommitsBounded(
+          snapshot.repoRoot,
+          snapshot.gitPath,
+          batchSize,
+          cursor,
+          snapshot.headHash,
+          true,
+          remainingMs
+        );
+      } catch (error) {
+        if (entryRows.length === 0) throw error;
+        timedOut = true;
+        hasMore = true;
+        break;
+      }
+      for (const row of result.commits) {
         const oldAbsolute = path.resolve(snapshot.repoRoot, row.oldPath);
         const newAbsolute = path.resolve(snapshot.repoRoot, row.path);
-        return (
+        cursor++;
+        if (
           isPathWithinAnyDirectory(oldAbsolute, this.trustedRoots) &&
           isPathWithinAnyDirectory(newAbsolute, this.trustedRoots)
-        );
-      })
-      .map((row) => ({
+        )
+          entryRows.push(row);
+        if (entryRows.length > snapshot.pageSize) {
+          cursor--;
+          break;
+        }
+      }
+      if (entryRows.length > snapshot.pageSize) {
+        hasMore = true;
+        break;
+      }
+      if (result.timedOut) {
+        timedOut = true;
+        hasMore = true;
+        break;
+      }
+      if (result.commits.length < batchSize) {
+        hasMore = false;
+        break;
+      }
+      // A full raw batch may contain only untrusted rows; continue the walk
+      // from the raw cursor while keeping the same per-page deadline.
+    }
+    if (timedOut) hasMore = true;
+    const pageRows = entryRows.slice(0, snapshot.pageSize);
+    const entries: WorkspaceFileHistoryEntry[] = pageRows.map((row) => {
+      const oldAbsolute = path.resolve(snapshot.repoRoot, row.oldPath);
+      const newAbsolute = path.resolve(snapshot.repoRoot, row.path);
+      return {
         hash: row.hash,
         shortHash: row.shortHash,
         subject: row.subject,
         author: row.author,
         relativeDate: row.relativeDate,
         isHead: row.hash === snapshot.headHash,
-        pushed: !unpushedHashes.has(row.hash),
+        pushed: true,
         refs: classifyRefNames(row.refNames),
         isMerge: row.parentHashes.length > 1,
         parentHashes: row.parentHashes,
-        path: normalizeViewerPath(
-          this.relativePath(path.resolve(snapshot.repoRoot, row.path))
-        ),
-        oldPath: normalizeViewerPath(
-          this.relativePath(path.resolve(snapshot.repoRoot, row.oldPath))
-        ),
-      }) satisfies WorkspaceFileHistoryEntry);
+        path: normalizeViewerPath(this.relativePath(newAbsolute)),
+        oldPath: normalizeViewerPath(this.relativePath(oldAbsolute)),
+      } satisfies WorkspaceFileHistoryEntry;
+    });
+    const unpushedHashes = await this.getUnpushedHistoryHashes(
+      snapshot.repoRoot,
+      snapshot.headHash
+    );
+    for (const entry of entries) entry.pushed = !unpushedHashes.has(entry.hash);
     return {
       historyId: snapshot.historyId,
       pageSize: snapshot.pageSize,
       totalEntries: offset + entries.length,
-      hasMore: rows.length > snapshot.pageSize,
+      hasMore,
       offset,
+      nextOffset: cursor,
       entries,
     };
   }
@@ -2556,7 +2602,7 @@ export class HostedWorkspaceViewerService {
           "skip must be aligned to pageSize"
         );
       }
-      if (skip > snapshot.totalEntries) {
+      if (snapshot.totalEntries !== undefined && skip > snapshot.totalEntries) {
         throw new WorkspaceTreeBadRequestError(
           "skip is outside the commit history"
         );
@@ -2572,16 +2618,7 @@ export class HostedWorkspaceViewerService {
       // An unborn repository has no history to page through.
     }
     const totalEntries = tipHash
-      ? Number.parseInt(
-          (
-            await execFileAsync(
-              "git",
-              ["-C", repoRoot, "rev-list", "--count", tipHash],
-              { timeout: GIT_COMMAND_TIMEOUT_MS }
-            )
-          ).stdout.trim(),
-          10
-        ) || 0
+      ? await this.countCommitHistory(repoRoot, tipHash)
       : 0;
 
     const snapshot: CommitLogSnapshot = {
@@ -2604,12 +2641,37 @@ export class HostedWorkspaceViewerService {
         "skip must be aligned to pageSize"
       );
     }
-    if (skip > snapshot.totalEntries) {
+    if (snapshot.totalEntries !== undefined && skip > snapshot.totalEntries) {
       throw new WorkspaceTreeBadRequestError(
         "skip is outside the commit history"
       );
     }
     return this.materializeCommitLogPage(snapshot, skip);
+  }
+
+  protected async countCommitHistory(
+    repoRoot: string,
+    tipHash: string
+  ): Promise<number | undefined> {
+    try {
+      const { stdout } = await this.readCommitCount(repoRoot, tipHash);
+      const count = Number.parseInt(stdout.trim(), 10);
+      return Number.isSafeInteger(count) && count >= 0 ? count : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  protected async readCommitCount(
+    repoRoot: string,
+    tipHash: string
+  ): Promise<{ stdout: string; stderr: string }> {
+    const { stdout, stderr } = await execFileAsync(
+      "git",
+      ["-C", repoRoot, "rev-list", "--count", tipHash],
+      { timeout: GIT_COMMAND_TIMEOUT_MS }
+    );
+    return { stdout, stderr };
   }
 
   private async getCommitLogMetadata(repoRoot: string): Promise<{
@@ -2845,11 +2907,7 @@ export class HostedWorkspaceViewerService {
           oldGitPath
         );
         const newBytes = sources.targetIsWorkingTree
-          ? await this.readWorkingTreeDiffBytes(
-              repoRoot,
-              file.path,
-              changeType
-            )
+          ? await this.readWorkingTreeDiffBytes(repoRoot, file.path, changeType)
           : await this.readGitDiffBytes(
               repoRoot,
               sources.targetRef ?? "HEAD",
@@ -3208,9 +3266,7 @@ export class HostedWorkspaceViewerService {
         "--stat",
         "-p",
         "--no-ext-diff",
-        ...(workingTreePathspecs.length
-          ? ["--", ...workingTreePathspecs]
-          : []),
+        ...(workingTreePathspecs.length ? ["--", ...workingTreePathspecs] : []),
       ];
     } else if (resolution.kind === GIT_CHANGE_KINDS.STAGED) {
       command = [

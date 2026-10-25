@@ -1,4 +1,4 @@
-import { execFile } from "child_process";
+import { execFile, spawn, type ChildProcess } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
 import * as fs from "fs/promises";
@@ -25,8 +25,20 @@ interface GitTimeoutOverrides {
 
 let gitTimeoutOverrides: GitTimeoutOverrides = {};
 let gitCommandObserverForTests:
-  | ((file: string, args: readonly string[]) => void)
-  | undefined;
+  ((file: string, args: readonly string[]) => void) | undefined;
+let fileHistorySpawnForTests:
+  ((file: string, args: readonly string[]) => ChildProcess) | undefined;
+
+export function setFileHistorySpawnForTests(
+  spawnProcess:
+    ((file: string, args: readonly string[]) => ChildProcess) | undefined
+): () => void {
+  const previous = fileHistorySpawnForTests;
+  fileHistorySpawnForTests = spawnProcess;
+  return () => {
+    fileHistorySpawnForTests = previous;
+  };
+}
 
 /** Override Git command timeouts for isolated tests. */
 export function setGitTimeoutOverridesForTests(
@@ -536,6 +548,85 @@ export async function getFileHistoryCommits(
   args.push("--", gitPath);
 
   const { stdout } = await execFileAsync("git", args);
+  return parseFileHistoryCommitOutput(stdout);
+}
+
+export interface BoundedFileHistoryResult {
+  commits: FileHistoryCommitInfo[];
+  timedOut: boolean;
+  complete: boolean;
+}
+
+/** Stream a bounded --follow walk, preserving complete rows received at deadline. */
+export async function getFileHistoryCommitsBounded(
+  workspaceRoot: string,
+  gitPath: string,
+  limit: number,
+  skip: number,
+  ref: string,
+  fullRefNames: boolean,
+  timeoutMs: number
+): Promise<BoundedFileHistoryResult> {
+  const args = [
+    "-C",
+    workspaceRoot,
+    "log",
+    "--follow",
+    "-z",
+    "--name-status",
+    "--format=%x00%H%x00%h%x00%s%x00%an%x00%ar%x00%P%x00%D%x00",
+  ];
+  if (fullRefNames) args.push("--decorate=full");
+  args.push(`--skip=${skip}`, "-n", String(limit));
+  if (ref.trim()) args.push("--end-of-options", ref.trim());
+  args.push("--", gitPath);
+  gitCommandObserverForTests?.("git", args);
+
+  const chunks: Buffer[] = [];
+  const child = (
+    fileHistorySpawnForTests ??
+    ((file, spawnArgs) =>
+      spawn(file, [...spawnArgs], { stdio: ["ignore", "pipe", "pipe"] }))
+  )("git", args);
+  let timedOut = false;
+  return new Promise<BoundedFileHistoryResult>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill();
+    }, timeoutMs);
+    child.stdout?.on("data", (chunk: Buffer | string) => {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    });
+    let stderr = "";
+    child.stderr?.on("data", (chunk: Buffer | string) => {
+      stderr += String(chunk);
+    });
+    child.once("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.once("close", (code) => {
+      clearTimeout(timer);
+      const stdout = Buffer.concat(chunks).toString("utf8");
+      const commits = parseFileHistoryCommitOutput(stdout);
+      if (timedOut && commits.length === 0) {
+        reject(new Error(`git log --follow timed out after ${timeoutMs}ms`));
+        return;
+      }
+      if (!timedOut && code !== 0) {
+        reject(
+          new Error(
+            stderr.trim() || `git log --follow exited with code ${code}`
+          )
+        );
+        return;
+      }
+      resolve({ commits, timedOut, complete: !timedOut });
+    });
+  });
+}
+
+function parseFileHistoryCommitOutput(stdout: string): FileHistoryCommitInfo[] {
   const tokens = stdout.split("\0");
   const commits: FileHistoryCommitInfo[] = [];
 
@@ -567,7 +658,8 @@ export async function getFileHistoryCommits(
     const firstPath = tokens[statusIndex + 1];
     const secondPath = isRename ? tokens[statusIndex + 2] : undefined;
     const commitPath = secondPath ?? firstPath;
-    if (!commitPath) continue;
+    const pathTerminatorIndex = statusIndex + (isRename ? 3 : 2);
+    if (!commitPath || tokens[pathTerminatorIndex] === undefined) continue;
 
     commits.push({
       hash,

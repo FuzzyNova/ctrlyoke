@@ -1869,6 +1869,10 @@ export class CtrlYokeHostedServer
             ? req.query.pageSize
             : undefined;
         const offset = Number.parseInt(rawOffset, 10);
+        const rawNextOffset =
+          typeof req.query.nextOffset === "string"
+            ? Number.parseInt(req.query.nextOffset, 10)
+            : undefined;
         const pageSize =
           rawPageSize === undefined
             ? undefined
@@ -1888,7 +1892,8 @@ export class CtrlYokeHostedServer
               offset,
               pageSize,
               historyId,
-              repo
+              repo,
+              rawNextOffset
             )
           );
         } catch (err) {

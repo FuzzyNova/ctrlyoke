@@ -402,8 +402,8 @@ export interface WorkspaceCommitLogResponse {
   historyId: string;
   /** Page size fixed when the commit log snapshot was created. */
   pageSize: number;
-  /** Number of commits in the frozen commit log snapshot. */
-  totalEntries: number;
+  /** Number of commits in the frozen snapshot, when Git could count it. */
+  totalEntries?: number;
   /** Virtual index of the first commit in this page. */
   offset: number;
 }
@@ -437,6 +437,8 @@ export interface WorkspaceFileHistoryPageResponse {
   hasMore: boolean;
   /** Virtual index of the first entry in `entries`. */
   offset: number;
+  /** Raw `git log --follow` cursor for the next request. Omitted by older servers. */
+  nextOffset?: number;
   entries: WorkspaceFileHistoryEntry[];
 }
 
