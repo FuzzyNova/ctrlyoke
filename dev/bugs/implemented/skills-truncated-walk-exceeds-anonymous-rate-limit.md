@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-25 by bug-drain review of 4df794676
 - **Area:** `src/utils/SkillsRegistryClient.ts` (`fetchTree`, `loadTree`, `continueTruncatedTreeWalk`, `downloadSkill`, `checkForUpdate`)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

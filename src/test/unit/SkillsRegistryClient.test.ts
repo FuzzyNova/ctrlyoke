@@ -112,7 +112,8 @@ function githubRoutes(
 function truncatedTreeRoutes(
   treeCommit: string,
   skillMdPath?: string,
-  headCommit = treeCommit
+  headCommit = treeCommit,
+  folderTreeTruncated = false
 ): Record<string, Route> {
   const entries: Record<string, unknown> = {
     [treeCommit]: {
@@ -120,6 +121,13 @@ function truncatedTreeRoutes(
         { path: "skills", type: "tree", sha: "skills-sha" },
         { path: ".claude", type: "tree", sha: "claude-sha" },
         { path: "docs", type: "tree", sha: "docs-sha" },
+        ...(folderTreeTruncated
+          ? Array.from({ length: 25 }, (_, index) => ({
+              path: `filler-${index}`,
+              type: "tree",
+              sha: `filler-${index}`,
+            }))
+          : []),
       ],
     },
     "skills-sha": {
@@ -142,11 +150,20 @@ function truncatedTreeRoutes(
       const treeKey = url.split("/git/trees/")[1]?.split("?")[0] ?? "";
       if (url.endsWith("?recursive=1")) {
         if (treeKey === "pdf-sha") {
+          if (folderTreeTruncated) {
+            return json({ tree: [], truncated: true });
+          }
           return json({
             tree: [{ path: "SKILL.md", type: "blob", sha: "skill-file" }],
           });
         }
-        return json({ tree: [], truncated: true });
+        return json({
+          tree:
+            skillMdPath === "SKILL.md"
+              ? [{ path: "SKILL.md", type: "blob", sha: "skill-file" }]
+              : [],
+          truncated: true,
+        });
       }
       return json(entries[treeKey] ?? { tree: [] });
     },
@@ -638,7 +655,7 @@ suite("SkillsRegistryClient", () => {
         skills: {
           tree: [
             { path: "alpha", type: "tree", sha: "alpha" },
-            ...Array.from({ length: 26 }, (_, index) => ({
+            ...Array.from({ length: 45 }, (_, index) => ({
               path: `a-filler-${String(index).padStart(2, "0")}`,
               type: "tree",
               sha: `filler-${index}`,
@@ -649,7 +666,7 @@ suite("SkillsRegistryClient", () => {
         alpha: { tree: [{ path: "SKILL.md", type: "blob" }] },
         beta: { tree: [{ path: "SKILL.md", type: "blob" }] },
       };
-      for (let index = 0; index < 26; index++) {
+      for (let index = 0; index < 45; index++) {
         entries[`filler-${index}`] = { tree: [] };
       }
       const routes: Record<string, Route> = {
@@ -676,6 +693,82 @@ suite("SkillsRegistryClient", () => {
       assert.strictEqual(
         (await registry.resolveSkill("anthropics/skills", "beta")).skillMdPath,
         "skills/beta/SKILL.md"
+      );
+    });
+
+    test("resolve and download use at most one truncated-tree walk budget", async () => {
+      const entries: Record<string, unknown> = {
+        [COMMIT]: {
+          tree: [{ path: "skills", type: "tree", sha: "skills" }],
+        },
+        skills: {
+          tree: [
+            { path: "pdf", type: "tree", sha: "pdf" },
+            ...Array.from({ length: 45 }, (_, index) => ({
+              path: `other-${index}`,
+              type: "tree",
+              sha: `other-${index}`,
+            })),
+          ],
+        },
+        pdf: { tree: [{ path: "SKILL.md", type: "blob", sha: "skill" }] },
+      };
+      const routes: Record<string, Route> = {
+        "https://api.github.com/repos/anthropics/skills/commits/HEAD": () =>
+          new Response(`${COMMIT}\n`),
+        "https://api.github.com/repos/anthropics/skills/git/trees/": (url) => {
+          const treeKey = url.split("/git/trees/")[1]?.split("?")[0] ?? "";
+          if (url.endsWith("/pdf?recursive=1")) {
+            return json({
+              tree: [{ path: "SKILL.md", type: "blob", sha: "skill" }],
+            });
+          }
+          return url.endsWith("?recursive=1")
+            ? json({ tree: [], truncated: true })
+            : json(entries[treeKey] ?? { tree: [] });
+        },
+        "https://raw.githubusercontent.com/anthropics/skills/": (url) =>
+          new Response(
+            url.endsWith("/skills/pdf/SKILL.md")
+              ? "---\nname: pdf\n---\n"
+              : "file"
+          ),
+      };
+      const { registry, urls } = client(routes);
+      const location = await registry.resolveSkill("anthropics/skills", "pdf");
+      await registry.downloadSkill(location);
+      const treeRequests = urls.filter((url) => url.includes("/git/trees/"));
+      assert.ok(
+        treeRequests.length <= 25,
+        `expected at most one walk budget plus folder completion, got ${treeRequests.length}`
+      );
+    });
+
+    test("rejects a truncated skill-folder completion tree", async () => {
+      const { registry } = client(
+        truncatedTreeRoutes(COMMIT, "skills/pdf/SKILL.md", COMMIT, true)
+      );
+      const location = await registry.resolveSkill("anthropics/skills", "pdf");
+      await assert.rejects(
+        registry.downloadSkill(location),
+        /Could not complete the skill folder skills\/pdf in anthropics\/skills; GitHub truncated its recursive tree/
+      );
+    });
+
+    test("root skill folder in a truncated repo fails loudly on download", async () => {
+      const { registry } = client(
+        truncatedTreeRoutes(COMMIT, "SKILL.md", COMMIT, true)
+      );
+      await assert.rejects(
+        registry.downloadSkill({
+          source: "anthropics/skills",
+          slug: "pdf",
+          commitSha: COMMIT,
+          folderPath: "",
+          skillMdPath: "SKILL.md",
+          name: "pdf",
+        }),
+        /Could not confirm that the root skill folder in anthropics\/skills is complete after GitHub truncated the repository tree/
       );
     });
 
@@ -910,6 +1003,16 @@ suite("SkillsRegistryClient", () => {
       assert.strictEqual(
         (await registry.checkForUpdate(installed)).status,
         SKILL_UPDATE_STATUSES.UPDATE_AVAILABLE
+      );
+    });
+
+    test("a root skill in a truncated repo fails loudly during update check", async () => {
+      const { registry } = client(
+        truncatedTreeRoutes(NEWER, "SKILL.md", NEWER, true)
+      );
+      await assert.rejects(
+        registry.checkForUpdate(installed),
+        /Could not confirm that the root skill folder in anthropics\/skills is complete after GitHub truncated the repository tree/
       );
     });
 
