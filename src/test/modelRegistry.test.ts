@@ -5,7 +5,7 @@ const childProcess = require("child_process") as {
 };
 
 type ExecCallback = (
-  error: (Error & { code?: number | string; killed?: boolean; stdout?: string }) | null,
+  error: (Error & { code?: number | string | null; killed?: boolean; stdout?: string }) | null,
   stdout: string,
   stderr: string
 ) => void;
@@ -43,13 +43,17 @@ suite("ModelRegistry discovery", () => {
     return require(registryPath) as typeof import("../utils/ModelRegistry");
   }
 
-  test("retries Copilot discovery after a timeout on the next initialization", async () => {
+  test("background-retries Copilot discovery after one initialization times out", async () => {
     let copilotCalls = 0;
     const registry = loadRegistry((command, callback) => {
       if (command.includes("copilot help config")) {
         copilotCalls++;
         if (copilotCalls === 1) {
-          const timeout = Object.assign(new Error("timed out"), { killed: true });
+          const timeout = Object.assign(new Error("timed out"), {
+            killed: true,
+            signal: "SIGTERM",
+            code: null,
+          });
           callback(timeout, "", "");
         } else {
           callback(
@@ -67,9 +71,29 @@ suite("ModelRegistry discovery", () => {
       callback(Object.assign(new Error("absent"), { code: "ENOENT" }), "", "");
     });
 
-    await registry.initializeModelRegistry();
+    const originalSetTimeout = global.setTimeout;
+    let retryCallback: (() => void) | undefined;
+    let retryWasUnrefed = false;
+    global.setTimeout = ((callback: () => void) => {
+      retryCallback = callback;
+      return {
+        unref: () => {
+          retryWasUnrefed = true;
+        },
+      } as unknown as NodeJS.Timeout;
+    }) as typeof setTimeout;
+    try {
+      await registry.initializeModelRegistry();
+    } finally {
+      global.setTimeout = originalSetTimeout;
+    }
+    assert.strictEqual(registry.isRegistryInitialized(), true);
+    assert.strictEqual(retryWasUnrefed, true);
+    assert.ok(registry.getCliSupportedModelIdsSync().length > 0);
     assert.strictEqual(registry.getCliSupportedModelIdsSync().includes("copilot-new-model"), false);
-    await registry.initializeModelRegistry();
+    assert.ok(retryCallback);
+    retryCallback();
+    await new Promise<void>((resolve) => setImmediate(resolve));
     assert.strictEqual(copilotCalls, 2);
     assert.strictEqual(
       registry.getCliSupportedModelIdsSync().includes("copilot-new-model"),
@@ -79,7 +103,12 @@ suite("ModelRegistry discovery", () => {
 
   test("does not parse OpenCode output after timeout or maxBuffer overflow", async () => {
     for (const failure of [
-      Object.assign(new Error("timed out"), { killed: true, stdout: "partial/timeout-model" }),
+      Object.assign(new Error("timed out"), {
+        killed: true,
+        signal: "SIGTERM",
+        code: null,
+        stdout: "partial/timeout-model",
+      }),
       Object.assign(new Error("buffer exceeded"), {
         code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER",
         stdout: "partial/buffer-model",

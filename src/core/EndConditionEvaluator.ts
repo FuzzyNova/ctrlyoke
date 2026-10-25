@@ -55,6 +55,7 @@ import {
   escapePowerShellArgument,
 } from "../types/CommandDisplayFormatter";
 import { buildCmdExeVerbatimArgs } from "./harness/shared/WindowsCmdEscaping";
+import { isSubprocessTimeoutError } from "../utils/SubprocessUtils";
 
 export type InterpreterProbe = (
   executable: string,
@@ -1096,7 +1097,7 @@ export class EndConditionEvaluator {
                 ? (error as NodeJS.ErrnoException).code
                 : undefined;
             const isNotFound = errorCode === "ENOENT";
-            const isTimeout = errorCode === "ETIMEDOUT";
+            const isTimeout = isSubprocessTimeoutError(error);
             const reason = isTimeout
               ? "probe timed out"
               : isNotFound

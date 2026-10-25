@@ -43,7 +43,11 @@ type SharedWrapper = {
     command: string | undefined,
     input: string | Buffer,
     harnessId: string,
-    timeoutMs?: number
+    timeoutMs?: number,
+    options?: {
+      spawnImpl?: (command: string, argsOrOptions?: unknown, options?: unknown) => any;
+      platform?: string;
+    }
   ): Promise<Buffer>;
   parsePayload(input: string): Record<string, unknown>;
   getQuotaPercentage(
@@ -1218,6 +1222,30 @@ suite("Shared statusline wrappers", function () {
     assert.ok(Date.now() - startedAt < 30_000);
   });
 
+  test("returns partial custom output when the command times out", async () => {
+    const stdout = new EventEmitter();
+    const stdin = new EventEmitter() as EventEmitter & {
+      end: (input: Buffer) => void;
+    };
+    stdin.end = () => stdout.emit("data", Buffer.from("partial-line"));
+    const child = new EventEmitter() as EventEmitter & {
+      stdin: typeof stdin;
+      stdout: typeof stdout;
+      kill: () => boolean;
+    };
+    child.stdin = stdin;
+    child.stdout = stdout;
+    child.kill = () => true;
+    const result = await shared.forwardStatuslineCommand(
+      "user command",
+      "input",
+      "claude-cli",
+      10,
+      { spawnImpl: () => child, platform: "linux" }
+    );
+    assert.strictEqual(result.toString("utf8"), "partial-line");
+  });
+
   test("kills the Windows forwarded process tree on timeout", async () => {
     const calls: Array<{ command: string; args?: unknown; options?: unknown }> = [];
     const stdout = new EventEmitter();
@@ -1243,6 +1271,11 @@ suite("Shared statusline wrappers", function () {
       platform: "win32",
       spawnImpl: (command, args, options) => {
         calls.push({ command, args, options });
+        if (command === "taskkill") {
+          process.nextTick(() =>
+            child.emit("error", new Error("taskkill unavailable"))
+          );
+        }
         return child;
       },
     });

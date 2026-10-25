@@ -350,11 +350,12 @@ function forwardToCommand(
     timer = setTimeout(() => {
       try {
         if ((options.platform ?? process.platform) === "win32" && child.pid) {
-          (options.spawnImpl ?? spawn)(
+          const killer = (options.spawnImpl ?? spawn)(
             "taskkill",
             ["/T", "/F", "/PID", String(child.pid)],
             { windowsHide: true, stdio: "ignore" }
           );
+          killer.once("error", () => {});
         } else {
           child.kill();
         }
@@ -405,11 +406,16 @@ async function forwardStatuslineCommand(
   command,
   inputBytes,
   harnessId,
-  timeoutMs = FORWARD_TIMEOUT_MS
+  timeoutMs = FORWARD_TIMEOUT_MS,
+  options = {}
 ) {
-  const result = await forwardToCommand(command, inputBytes, timeoutMs);
+  const result = await forwardToCommand(command, inputBytes, timeoutMs, options);
   const cachePath = getForwardedOutputCachePath(harnessId);
-  if (result.timedOut) return readForwardedOutputCache(harnessId);
+  if (result.timedOut) {
+    return result.output.length > 0
+      ? result.output
+      : readForwardedOutputCache(harnessId);
+  }
   if (result.output.length > 0 && cachePath) {
     try {
       fs.mkdirSync(path.dirname(cachePath), { recursive: true });

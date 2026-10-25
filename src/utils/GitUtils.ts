@@ -6,6 +6,7 @@ import type { ExecFileOptions } from "child_process";
 import { GIT_CHANGE_KINDS } from "../types/DashboardConstants";
 import { foldPathForCompare } from "./PathCasing";
 import { sanitizeTerminalOutput } from "./TerminalOutputSanitizer";
+import { isSubprocessTimeoutError } from "./SubprocessUtils";
 
 export const GIT_DIFF_NO_EXT_DIFF_OPTION = "--no-ext-diff";
 
@@ -80,9 +81,7 @@ function gitCommandName(args: readonly string[]): string {
 }
 
 function isTimeoutError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const execError = error as NodeJS.ErrnoException;
-  return execError.code === "ETIMEDOUT";
+  return isSubprocessTimeoutError(error);
 }
 
 function exceededTimeout(startedAt: number, timeoutMs: number): boolean {

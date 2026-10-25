@@ -32,6 +32,7 @@ import { TypedEmitter } from "./TypedEmitter";
 import { retryWithBackoff, stopRetrying } from "./RetryUtils";
 import { attachStreamTextDecoder } from "./StreamTextDecoder";
 import { CLI_VERSION_CHECK_TIMEOUT_MS } from "../core/harness/shared/interfaces/ICliProvider";
+import { isSubprocessTimeoutError } from "./SubprocessUtils";
 
 const execAsync = promisify(exec);
 
@@ -78,6 +79,10 @@ const cachedAntigravityModelLabels = new Map<string, string>();
 let isInitialized = false;
 let initializationPromise: Promise<void> | null = null;
 let copilotDiscoveryTimedOut = false;
+let copilotTimeoutRetryCount = 0;
+let copilotRetryTimer: NodeJS.Timeout | null = null;
+const COPILOT_TIMEOUT_RETRY_DELAY_MS = 30_000;
+const COPILOT_TIMEOUT_RETRY_LIMIT = 2;
 
 // Fallback model list - imported from ModelConstants (single source of truth)
 const FALLBACK_COPILOT_CLI_MODELS = [...COPILOT_CLI_MODEL_IDS];
@@ -105,7 +110,9 @@ export async function initializeModelRegistry(): Promise<void> {
     await queryOpenCodeModels();
     await queryQwenModels();
     await queryAntigravityModels();
-    isInitialized = !copilotDiscoveryTimedOut;
+    // The fallback list is usable for validation while a bounded background
+    // retry gives a cold CLI another chance to answer.
+    isInitialized = true;
     // Notify subscribers that models are now available
     modelsLoadedEmitter.fire();
   })();
@@ -189,8 +196,8 @@ async function queryCopilotCliModels(): Promise<void> {
     cachedCopilotCliModelIds = [...FALLBACK_COPILOT_CLI_MODELS];
   } catch (error) {
     if (isCliTimeoutError(error)) {
-      // A later initializeModelRegistry call can retry once the CLI has warmed up.
       copilotDiscoveryTimedOut = true;
+      scheduleCopilotTimeoutRetry();
     }
     Log.warn(`[ModelRegistry] Failed to query Copilot CLI models: ${error}`);
     cachedCopilotCliModelIds = [...FALLBACK_COPILOT_CLI_MODELS];
@@ -267,17 +274,24 @@ async function queryOpenCodeModels(): Promise<void> {
 }
 
 function isCliTimeoutError(error: unknown): boolean {
-  if (!error || typeof error !== "object") {
-    return false;
+  return isSubprocessTimeoutError(error);
+}
+
+function scheduleCopilotTimeoutRetry(): void {
+  if (
+    copilotRetryTimer ||
+    copilotTimeoutRetryCount >= COPILOT_TIMEOUT_RETRY_LIMIT
+  ) {
+    return;
   }
-  const execError = error as NodeJS.ErrnoException & {
-    killed?: boolean;
-    originalError?: unknown;
-  };
-  if (execError.originalError !== undefined) {
-    return isCliTimeoutError(execError.originalError);
-  }
-  return execError.killed === true || execError.code === "ETIMEDOUT";
+  copilotTimeoutRetryCount++;
+  copilotRetryTimer = setTimeout(() => {
+    copilotRetryTimer = null;
+    void initializeModelRegistry().catch((error: unknown) => {
+      Log.warn(`[ModelRegistry] Background model retry failed: ${String(error)}`);
+    });
+  }, COPILOT_TIMEOUT_RETRY_DELAY_MS);
+  copilotRetryTimer.unref();
 }
 
 function isMaxBufferError(error: unknown): boolean {

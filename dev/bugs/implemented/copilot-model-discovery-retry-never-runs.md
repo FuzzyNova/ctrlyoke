@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-24 by bug-drain review of ddaf7d973
 - **Area:** `src/utils/ModelRegistry.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

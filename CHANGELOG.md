@@ -23,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so exported bundles can exceed the small JSON file size cap.
 - Dashboard completion requests from separate sources no longer cancel each
   other, and a run-view load reply reaches a reconnecting client.
+- Copilot model discovery retries in the background up to two times after a
+  subprocess timeout, while its fallback models remain available for validation.
+- Timed-out statusline commands keep any output already produced, and failures
+  to spawn Windows `taskkill` remain non-fatal.
+- Subprocess timeouts are recognized consistently across interpreter probes,
+  Git operations, and CLI model discovery; Codex probes do not spawn after the
+  launcher resolution outlives their timeout.
 
 ### Fixed
 
@@ -74,7 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Codex quota refresh works with Windows npm installs.** The app-server probe now resolves the Codex launcher before spawning it.
 - **`ctrlyoke commit` handles large commits.** Git add and commit output no longer hits Node's default 1 MiB buffer limit.
 
-- **Copilot and OpenCode model discovery handles slow and large CLI output.** Discovery waits up to the shared 30-second CLI check limit, retries Copilot after a timeout on a later registry initialization, and no longer accepts truncated OpenCode output as a complete model list.
+- **Copilot and OpenCode model discovery handles slow and large CLI output.** Discovery waits up to the shared 30-second CLI check limit, retries Copilot in the background after a timeout, and no longer accepts truncated OpenCode output as a complete model list.
 
 - **Failed push, pull and commit in the workspace viewer show git's own
   error.** When a push is rejected, a pull would overwrite local changes, or a

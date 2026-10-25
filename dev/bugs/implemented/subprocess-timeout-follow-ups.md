@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-24 by bug-drain review of 177222317, 7964b4103 and a6c3d4b98
 - **Area:** `src/core/harness/codex/CodexAppServerClient.ts`, `src/scripts/ctrlyoke-statusline-wrapper.js`, `src/core/EndConditionEvaluator.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -94,6 +94,7 @@ export class CodexAppServerClient {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     let abortListener: (() => void) | undefined;
     let process: CodexAppServerProcess | undefined;
+    let probeSettled = false;
 
     const operation = this.performProbe(async () => {
       const resolved = await this.resolveCommand("codex", [
@@ -101,7 +102,7 @@ export class CodexAppServerClient {
         "--listen",
         "stdio://",
       ]);
-      if (signal?.aborted) throw abortError();
+      if (probeSettled || signal?.aborted) throw abortError();
       process = this.spawnProcess(
         resolved.command,
         resolved.args,
@@ -127,6 +128,7 @@ export class CodexAppServerClient {
     try {
       return await Promise.race([operation, interruption]);
     } finally {
+      probeSettled = true;
       if (timeoutId) clearTimeout(timeoutId);
       if (signal && abortListener) {
         signal.removeEventListener("abort", abortListener);

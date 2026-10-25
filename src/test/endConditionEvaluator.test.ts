@@ -208,7 +208,9 @@ suite("EndConditionEvaluator Tests", () => {
         calls++;
         if (calls === 1) {
           const error = Object.assign(new Error("timed out"), {
-            code: "ETIMEDOUT",
+            killed: true,
+            signal: "SIGTERM",
+            code: null,
           });
           throw error;
         }

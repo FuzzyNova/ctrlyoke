@@ -280,6 +280,39 @@ suite("Codex usage tracking", () => {
     });
   });
 
+  test("does not spawn app-server when launcher resolution outlives the probe", async () => {
+    let finishResolution!: (value: {
+      command: string;
+      args: string[];
+      displayCommand: string;
+      launcherKind: "direct";
+      requiresShellVerbatimArgs: false;
+    }) => void;
+    let spawnCount = 0;
+    const client = new CodexAppServerClient({
+      timeoutMs: 10,
+      resolveCommand: () =>
+        new Promise((resolve) => {
+          finishResolution = resolve;
+        }),
+      spawnProcess: () => {
+        spawnCount++;
+        return new FakeAppServerProcess();
+      },
+    });
+
+    await assert.rejects(client.readRateLimits(), /timed out/);
+    finishResolution({
+      command: "codex",
+      args: ["app-server", "--listen", "stdio://"],
+      displayCommand: "codex",
+      launcherKind: "direct",
+      requiresShellVerbatimArgs: false,
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.strictEqual(spawnCount, 0);
+  });
+
   test("aborts and tears down a hung app-server probe", async () => {
     let process: FakeAppServerProcess | undefined;
     const client = new CodexAppServerClient({
