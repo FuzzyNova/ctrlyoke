@@ -2200,12 +2200,12 @@ export class CtrlYokeHostedServer
             ? req.query.repo.trim()
             : undefined;
         try {
-          const child = await this.viewerService.spawnGitRefDiffDownload(
+          const download = await this.viewerService.spawnGitRefDiffDownload(
             ref,
             repo
           );
-          if (child && (req.aborted || res.destroyed)) {
-            child.kill();
+          if (download && (req.aborted || res.destroyed)) {
+            download.process.kill();
             return;
           }
           const safeRef = ref.replace(/[^a-z0-9_-]/gi, "-").toLowerCase();
@@ -2213,20 +2213,20 @@ export class CtrlYokeHostedServer
             "Content-Disposition",
             `attachment; filename="ctrlyoke-${safeRef}.diff"`
           );
-          if (!child) {
+          if (!download) {
             res.end();
             return;
           }
 
           let stderr = "";
-          child.stderr.setEncoding("utf8");
-          child.stderr.on("data", (chunk: string) => {
+          download.stderr.setEncoding("utf8");
+          download.stderr.on("data", (chunk: string) => {
             stderr = `${stderr}${chunk}`.slice(-8_000);
           });
           res.on("close", () => {
-            if (!res.writableEnded) child.kill();
+            if (!res.writableEnded) download.process.kill();
           });
-          child.once("error", (err) => {
+          download.process.once("error", (err) => {
             Log.error(
               `[CtrlYokeHostedServer] workspace-viewer /git-ref-diff-download spawn error: ${String(err)}`
             );
@@ -2236,7 +2236,7 @@ export class CtrlYokeHostedServer
               res.destroy(err);
             }
           });
-          child.once("close", (code) => {
+          download.process.once("close", (code) => {
             if (res.writableEnded || res.destroyed) return;
             if (code !== 0) {
               Log.error(
@@ -2249,9 +2249,11 @@ export class CtrlYokeHostedServer
               }
               return;
             }
-            res.end();
           });
-          child.stdout.pipe(res, { end: false });
+          download.stdout.once("end", () => {
+            if (!res.writableEnded && !res.destroyed) res.end();
+          });
+          download.stdout.pipe(res, { end: false });
         } catch (err) {
           if (err instanceof WorkspaceTreeHttpError) {
             res.status(err.statusCode).json({ error: err.message });
@@ -2284,43 +2286,6 @@ export class CtrlYokeHostedServer
         } catch (err) {
           Log.error(
             `[CtrlYokeHostedServer] workspace-viewer /git-ref-diff error: ${String(err)}`
-          );
-          res.status(500).json({ error: "Internal server error" });
-        }
-      }
-    );
-
-    this.app.get(
-      "/api/workspace-viewer/worktree-diff",
-      requireToken,
-      async (req, res) => {
-        const sourceCheckoutRoot = req.query.sourceCheckoutRoot;
-        const baseCommit = req.query.baseCommit;
-        const branchName = req.query.branchName;
-        if (
-          typeof sourceCheckoutRoot !== "string" ||
-          !sourceCheckoutRoot ||
-          typeof baseCommit !== "string" ||
-          !baseCommit ||
-          typeof branchName !== "string" ||
-          !branchName
-        ) {
-          res.status(400).json({
-            error:
-              "sourceCheckoutRoot, baseCommit, and branchName are required",
-          });
-          return;
-        }
-        try {
-          const result = await this.viewerService.getWorktreeDiff(
-            sourceCheckoutRoot,
-            baseCommit,
-            branchName
-          );
-          res.json(result satisfies WorkspaceGitRefDiffResponse);
-        } catch (err) {
-          Log.error(
-            `[CtrlYokeHostedServer] workspace-viewer /worktree-diff error: ${String(err)}`
           );
           res.status(500).json({ error: "Internal server error" });
         }

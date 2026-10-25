@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { randomUUID } from "crypto";
 import { execFile, spawn, type ChildProcessByStdio } from "child_process";
-import type { Readable } from "stream";
+import { PassThrough, type Readable } from "stream";
 import { promisify } from "util";
 import { Log } from "../utils/Log";
 import {
@@ -102,7 +102,13 @@ import {
   getGitFilesIncludingNestedRepos,
   getGitIgnoredEntries,
   isGitUnavailableError,
-  getDiffBetweenRefs,
+  buildWorkingTreeDiffArgs,
+  buildWorkingTreeStatusArgs,
+  buildStagedDiffArgs,
+  buildStashDiffArgs,
+  buildCommitDiffArgs,
+  parseUntrackedFiles,
+  formatUntrackedFilesSection,
   GIT_COMMAND_TIMEOUT_MS,
   describeGitFailure,
   execGit,
@@ -146,6 +152,12 @@ import {
 } from "./WorkspaceTreeErrors";
 
 const execFileAsync = promisify(execFile);
+
+export interface GitRefDiffDownload {
+  process: ChildProcessByStdio<null, Readable, Readable>;
+  stdout: Readable;
+  stderr: Readable;
+}
 export const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
 const DIFF_SIDE_TOO_LARGE = Symbol("diff-side-too-large");
 const BINARY_CHECK_BYTES = 8192;
@@ -3236,13 +3248,14 @@ export class HostedWorkspaceViewerService {
   async spawnGitRefDiffDownload(
     ref: string,
     repoId?: string
-  ): Promise<ChildProcessByStdio<null, Readable, Readable> | null> {
+  ): Promise<GitRefDiffDownload | null> {
     const repoRoot = await this.resolveRepoRoot(repoId);
     const resolution = this.resolveGitRefDiff(ref);
     const pathspecs = this.getVisibleRepoPathspecs(repoRoot);
     if (pathspecs?.length === 0) return null;
 
     let command: string[];
+    let untrackedSection = "";
     if (resolution.kind === GIT_REF_DIFF_KINDS.WORKING_TREE) {
       const changedFiles = await getChangedFilesWithBinaryStatus(
         repoRoot,
@@ -3259,85 +3272,40 @@ export class HostedWorkspaceViewerService {
         ...(pathspecs ?? []),
         ...unsafeWorkingTreePathspecs,
       ];
-      command = [
-        "-C",
-        repoRoot,
-        "diff",
-        "--stat",
-        "-p",
-        "--no-ext-diff",
-        ...(workingTreePathspecs.length ? ["--", ...workingTreePathspecs] : []),
-      ];
+      const scopedPathspecs = workingTreePathspecs.length
+        ? workingTreePathspecs
+        : undefined;
+      command = buildWorkingTreeDiffArgs(repoRoot, scopedPathspecs);
+      const { stdout } = await execFileAsync(
+        "git",
+        buildWorkingTreeStatusArgs(repoRoot, scopedPathspecs),
+        { timeout: GIT_COMMAND_TIMEOUT_MS }
+      );
+      untrackedSection = formatUntrackedFilesSection(
+        parseUntrackedFiles(stdout, scopedPathspecs)
+      );
     } else if (resolution.kind === GIT_CHANGE_KINDS.STAGED) {
-      command = [
-        "-C",
-        repoRoot,
-        "diff",
-        "--cached",
-        "--stat",
-        "-p",
-        "--no-ext-diff",
-        ...(pathspecs?.length ? ["--", ...pathspecs] : []),
-      ];
+      command = buildStagedDiffArgs(repoRoot, pathspecs);
     } else if (resolution.kind === GIT_REF_DIFF_KINDS.STASH) {
-      const stashRef = `stash@{${resolution.stashIndex ?? 0}}`;
-      command = pathspecs?.length
-        ? [
-            "-C",
-            repoRoot,
-            "diff",
-            "--stat",
-            "-p",
-            "--no-ext-diff",
-            "--end-of-options",
-            `${stashRef}^1`,
-            stashRef,
-            "--",
-            ...pathspecs,
-          ]
-        : ["-C", repoRoot, "stash", "show", "-p", stashRef];
+      command = buildStashDiffArgs(
+        repoRoot,
+        resolution.stashIndex ?? 0,
+        pathspecs
+      );
     } else {
       const hash = resolution.commitHash ?? "";
-      command = [
-        "-C",
-        repoRoot,
-        "show",
-        "--stat",
-        "-p",
-        "--end-of-options",
-        hash,
-        ...(pathspecs?.length ? ["--", ...pathspecs] : []),
-      ];
+      command = buildCommitDiffArgs(repoRoot, hash, pathspecs);
     }
 
-    return spawn("git", command, { stdio: ["ignore", "pipe", "pipe"] });
-  }
-
-  /**
-   * Diff a recorded worktree run's branch against its recorded base commit —
-   * the browser equivalent of the VS Code `ctrlyoke.viewWorktreeDiff` command.
-   * `sourceCheckoutRoot` is server-recorded `_runtime.worktree` data echoed
-   * back by the client, not a viewer-relative path, so it is validated the
-   * same way other path-carrying ops are: it must resolve inside a discovered
-   * repo (`requireRepoRootForPath`) rather than being trusted directly.
-   */
-  async getWorktreeDiff(
-    sourceCheckoutRoot: string,
-    baseCommit: string,
-    branchName: string
-  ): Promise<WorkspaceGitRefDiffResponse> {
-    const repoRoot = await this.requireRepoRootForPath(
-      path.resolve(sourceCheckoutRoot)
-    );
-    const pathspecs = this.getVisibleRepoPathspecs(repoRoot);
-    if (pathspecs?.length === 0) return { unifiedDiff: "" };
-    const unifiedDiff = await getDiffBetweenRefs(
-      repoRoot,
-      baseCommit,
-      `refs/heads/${branchName}`,
-      pathspecs?.length ? pathspecs : undefined
-    );
-    return { unifiedDiff };
+    const process = spawn("git", command, {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const stdout = new PassThrough();
+    process.stdout.pipe(stdout, { end: false });
+    process.once("close", (code) => {
+      stdout.end(code === 0 ? untrackedSection : undefined);
+    });
+    return { process, stdout, stderr: process.stderr };
   }
 
   /** Return one page from a recorded worktree run's frozen branch diff. */

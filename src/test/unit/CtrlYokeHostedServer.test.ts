@@ -1282,8 +1282,6 @@ suite("CtrlYokeHostedServer file history route", () => {
       const stdout = new PassThrough();
       const stderr = new PassThrough();
       const child = Object.assign(new EventEmitter(), {
-        stdout,
-        stderr,
         kill: () => true,
       });
       stdout.once("end", () => child.emit("close", 0));
@@ -1296,7 +1294,7 @@ suite("CtrlYokeHostedServer file history route", () => {
         }
         stdout.end();
       });
-      return child;
+      return { process: child, stdout, stderr };
     };
 
     try {

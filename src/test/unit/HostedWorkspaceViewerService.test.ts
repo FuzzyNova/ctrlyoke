@@ -3082,28 +3082,9 @@ suite("HostedWorkspaceViewerService", function () {
     });
   });
 
-  // ── getWorktreeDiff ─────────────────────────────────────────────────────────
+  // ── getWorktreeDiffPage ──────────────────────────────────────────────────────
 
-  suite("getWorktreeDiff", () => {
-    test("diffs a recorded worktree branch against its recorded base commit", async () => {
-      const root = createWorkspace();
-      runGit(root, "init");
-      configureGitIdentity(root);
-      commitFile(root, "base.txt", "base\n", "base commit");
-      const baseCommit = runGit(root, "rev-parse", "HEAD");
-      runGit(root, "checkout", "-b", "feature/worktree-test");
-      commitFile(root, "feature.txt", "feature\n", "feature commit");
-
-      const svc = new HostedWorkspaceViewerService(root);
-      const result = await svc.getWorktreeDiff(
-        root,
-        baseCommit,
-        "feature/worktree-test"
-      );
-
-      assert.ok(result.unifiedDiff.includes("feature.txt"));
-    });
-
+  suite("getWorktreeDiffPage", () => {
     test("pages a worktree diff larger than GitUtils' default maxBuffer", async function () {
       this.timeout(60_000);
       const root = createWorkspace();
@@ -3151,50 +3132,38 @@ suite("HostedWorkspaceViewerService", function () {
       assert.ok(!second.entries.some((entry) => entry.path === "later.txt"));
     });
 
-    test("scopes a nested workspace diff to its trusted root", async () => {
+  });
+
+  suite("git ref diff downloads", () => {
+    test("includes untracked file names in the working-tree stream", async () => {
       const root = createWorkspace();
       runGit(root, "init");
       configureGitIdentity(root);
-      fs.mkdirSync(path.join(root, "app"));
-      fs.mkdirSync(path.join(root, "private"));
-      fs.writeFileSync(path.join(root, "app", "a.txt"), "base app\n");
-      fs.writeFileSync(
-        path.join(root, "private", "notes.txt"),
-        "base private\n"
-      );
-      runGit(root, "add", ".");
-      runGit(root, "commit", "-m", "base");
-      const baseCommit = runGit(root, "rev-parse", "HEAD");
-      runGit(root, "checkout", "-b", "feature/scoped");
-      fs.writeFileSync(path.join(root, "app", "a.txt"), "feature app\n");
-      fs.writeFileSync(
-        path.join(root, "private", "notes.txt"),
-        "feature private\n"
-      );
-      runGit(root, "add", ".");
-      runGit(root, "commit", "-m", "feature");
+      commitFile(root, "tracked.txt", "committed\n", "base");
+      fs.writeFileSync(path.join(root, "untracked.txt"), "new file\n");
 
-      const result = await new HostedWorkspaceViewerService(
-        path.join(root, "app")
-      ).getWorktreeDiff(root, baseCommit, "feature/scoped");
+      const download = await new HostedWorkspaceViewerService(
+        root
+      ).spawnGitRefDiffDownload("~diff");
+      assert.ok(download, "expected a git diff process");
+      const chunks: Buffer[] = [];
+      download.stdout.on("data", (chunk: Buffer | string) => {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      });
+      const [exitCode] = await Promise.all([
+        new Promise<number | null>((resolve, reject) => {
+          download.process.once("error", reject);
+          download.process.once("close", resolve);
+        }),
+        new Promise<void>((resolve) => download.stdout.once("end", resolve)),
+      ]);
 
-      assert.ok(result.unifiedDiff.includes("a.txt"));
-      assert.ok(!result.unifiedDiff.includes("private/"));
-    });
-
-    test("rejects a sourceCheckoutRoot outside every discovered repo", async () => {
-      const root = createWorkspace();
-      runGit(root, "init");
-      configureGitIdentity(root);
-      commitFile(root, "base.txt", "base\n", "base commit");
-      const baseCommit = runGit(root, "rev-parse", "HEAD");
-      const outside = createWorkspace();
-
-      const svc = new HostedWorkspaceViewerService(root);
-
-      await assert.rejects(
-        () => svc.getWorktreeDiff(outside, baseCommit, "main"),
-        /not inside a git repository/
+      assert.strictEqual(exitCode, 0);
+      assert.ok(
+        Buffer.concat(chunks)
+          .toString("utf8")
+          .includes("\nUntracked files:\n  untracked.txt"),
+        "expected the streamed diff to use the buffered untracked-file format"
       );
     });
   });

@@ -103,10 +103,7 @@ export function languageIntelligenceSocketUrl(serverId: string): string {
   return `${protocol}//${window.location.host}/ws/lsp?${params.toString()}`;
 }
 
-export async function hostedFetch<T>(
-  path: string,
-  options?: RequestInit
-): Promise<T> {
+function buildHostedHeaders(options?: Pick<RequestInit, "method" | "headers">) {
   const method = options?.method?.toUpperCase();
   const headers: Record<string, string> = {};
   const clientId = (window as Window & { __CTRLYOKE_CLIENT_ID__?: string })
@@ -132,7 +129,14 @@ export async function hostedFetch<T>(
   if (method === "PUT" || method === "POST") {
     headers["Content-Type"] = "application/json";
   }
+  return headers;
+}
 
+export async function hostedFetch<T>(
+  path: string,
+  options?: RequestInit
+): Promise<T> {
+  const headers = buildHostedHeaders(options);
   const response = await fetch(path, { ...options, headers });
   if (!response.ok) {
     const text = await response.text();
@@ -150,12 +154,7 @@ export async function hostedFetch<T>(
 }
 
 export async function hostedFetchBlob(path: string): Promise<Blob> {
-  const headers: Record<string, string> = {};
-  const clientId = (window as Window & { __CTRLYOKE_CLIENT_ID__?: string })
-    .__CTRLYOKE_CLIENT_ID__;
-  if (clientId) headers["x-ctrlyoke-client-id"] = clientId;
-  if (token) headers["x-ctrlyoke-token"] = token;
-
+  const headers = buildHostedHeaders();
   const response = await fetch(path, { headers });
   if (!response.ok) {
     const text = await response.text();
@@ -459,22 +458,6 @@ export async function workspaceGitRefDiffDownload(
   if (repo) params.set("repo", repo);
   return hostedFetchBlob(
     `/api/workspace-viewer/git-ref-diff-download?${params.toString()}`
-  );
-}
-
-/** Diff a recorded worktree run's branch against its recorded base commit. */
-export async function workspaceWorktreeDiff(
-  sourceCheckoutRoot: string,
-  baseCommit: string,
-  branchName: string
-): Promise<WorkspaceGitRefDiffResponse> {
-  const params = new URLSearchParams({
-    sourceCheckoutRoot,
-    baseCommit,
-    branchName,
-  });
-  return hostedFetch<WorkspaceGitRefDiffResponse>(
-    `/api/workspace-viewer/worktree-diff?${params.toString()}`
   );
 }
 

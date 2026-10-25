@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-24 by bug-drain review of 44cb1ea2d
 - **Area:** `src/server/HostedWorkspaceViewerService.ts`, `src/utils/GitUtils.ts`, `src/ui/webview-react/utils/hostedApi.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
