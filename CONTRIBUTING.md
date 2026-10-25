@@ -45,6 +45,17 @@ Small, focused PRs are easier to review than large ones — if you're planning s
 
 Files under `schemas/archive/` stay published forever so old `$schema` links keep resolving; never edit them. The full policy is in `dev/implemented/SCHEMA_RELEASE_READINESS_PLAN.md` §2.6–2.7. Since the first public release (`0.2.0`), every breaking change needs the bump and its migration; there is no unreleased exemption.
 
+## Deprecations
+
+When a CLI flag, `--json` envelope field, exit code, MCP tool or tool input, command ID or setting key has to go, deprecate it first rather than removing it outright. Keep the old form working, or make it fail with an error that says why, and note the deprecation under **Changed** in `CHANGELOG.md`. Workflow and settings schema fields follow [Changing the schemas](#changing-the-schemas) instead.
+
+A deprecated item can be removed once both of these hold:
+
+1. It has shipped as deprecated in at least one tagged release, with its changelog entry. A deprecation still under `## [Unreleased]` hasn't started its clock.
+2. At least six months have passed since that release. The removal then lands in the next minor release (`0.x`) or major release (`1.0` onward), never in a patch.
+
+Record the removal in `CHANGELOG.md` too. When you deprecate something, add a removal plan under `dev/backlog/` whose filename ends with the earliest removal date (for example `REMOVE_ADDITIONAL_ARGS_4-24-27.md`), so overdue removals are easy to spot. If removing an input would let a call silently succeed with the field ignored, keep the explicit rejection after the removal.
+
 ## Versions on `main`
 
 `package.json#version` on `main` is the **next** release, not the last one. Right after a release publishes, `main` is bumped to the next patch version (step 7 below), so a build from `main` never reports a version that is already on the Marketplace or npm.
