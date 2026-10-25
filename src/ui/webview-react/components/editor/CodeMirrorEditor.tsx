@@ -664,10 +664,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       const entry = pending.get(seq);
       if (!entry) return false;
       if (replacement && readOnlyRef.current) return false;
-      if (
-        !entry.attached ||
-        entry.documentKey !== documentKeyRef.current
-      ) {
+      if (!entry.attached || entry.documentKey !== documentKeyRef.current) {
         return false;
       }
       if (entry.timeoutId) clearTimeout(entry.timeoutId);
@@ -1403,6 +1400,9 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         ) {
           entry.attached = false;
           entry.placeholderPresent = false;
+          // The timed-out offset belongs to the old text; honouring it after
+          // reattach would insert the reply into whatever prompt is shown now.
+          entry.removedByTimeout = false;
         }
       }
     }
