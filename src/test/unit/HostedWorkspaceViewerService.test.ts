@@ -27,7 +27,10 @@ import {
   GIT_REF_LABEL_TYPES,
   WORKSPACE_ENTRY_KINDS,
 } from "../../types/DashboardConstants";
-import { setGitTimeoutOverridesForTests } from "../../utils/GitUtils";
+import {
+  setGitCommandObserverForTests,
+  setGitTimeoutOverridesForTests,
+} from "../../utils/GitUtils";
 import { configService } from "../../config/CtrlYokeConfigService";
 import { USER_SETTINGS_VIEWER_SENTINEL_PATH } from "../../types/DashboardConstants";
 
@@ -881,7 +884,7 @@ suite("HostedWorkspaceViewerService", function () {
   // ── getFileHistory ────────────────────────────────────────────────────────
 
   suite("getFileHistory", () => {
-    test("freezes the complete history at the initial HEAD", async () => {
+    test("freezes file history at the initial HEAD", async () => {
       const root = createWorkspace();
       runGit(root, "init");
       configureGitIdentity(root);
@@ -912,6 +915,34 @@ suite("HostedWorkspaceViewerService", function () {
       const refreshed = await svc.getFileHistory("history.txt", 0, 10);
       assert.strictEqual(refreshed.totalEntries, 4);
       assert.notStrictEqual(refreshed.historyId, first.historyId);
+    });
+
+    test("follows a rename across a bounded page boundary", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "old-name.txt", "one\n", "Before rename");
+      runGit(root, "mv", "old-name.txt", "new-name.txt");
+      runGit(root, "commit", "-m", "Rename file");
+      commitFile(root, "new-name.txt", "three\n", "After rename");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const first = await svc.getFileHistory("new-name.txt", 0, 1);
+      const second = await svc.getFileHistory(
+        "new-name.txt",
+        1,
+        undefined,
+        first.historyId
+      );
+
+      assert.deepStrictEqual(first.entries.map((entry) => entry.subject), [
+        "After rename",
+      ]);
+      assert.deepStrictEqual(second.entries.map((entry) => entry.subject), [
+        "Rename file",
+      ]);
+      assert.strictEqual(second.entries[0]?.oldPath, "old-name.txt");
+      assert.strictEqual(second.hasMore, true);
     });
 
     test("scopes a multi-repo path through its owning repository", async () => {
@@ -2246,7 +2277,49 @@ suite("HostedWorkspaceViewerService", function () {
   // ── getCommitLog ──────────────────────────────────────────────────────────
 
   suite("getCommitLog", () => {
-    test("freezes the complete history for subsequent pages", async () => {
+    test("bounds each commit and file-history git log request to a page", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "history.txt", "one\n", "First");
+      commitFile(root, "history.txt", "two\n", "Second");
+      const observedLogs: string[][] = [];
+      const restoreObserver = setGitCommandObserverForTests((_file, args) => {
+        if (args.includes("log")) {
+          observedLogs.push([...args]);
+        }
+      });
+
+      try {
+        const svc = new HostedWorkspaceViewerService(root);
+        const commitPage = await svc.getCommitLog(0, 1);
+        await svc.getCommitLog(1, 1, undefined, undefined, commitPage.historyId);
+        const filePage = await svc.getFileHistory("history.txt", 0, 1);
+        await svc.getFileHistory(
+          "history.txt",
+          1,
+          undefined,
+          filePage.historyId
+        );
+      } finally {
+        restoreObserver();
+      }
+
+      assert.strictEqual(observedLogs.length, 4);
+      for (const args of observedLogs) {
+        assert.ok(args.includes("-n"), `expected bounded git log: ${args}`);
+        assert.ok(
+          args.some((arg) => arg.startsWith("--skip=")),
+          `expected explicit page offset: ${args}`
+        );
+        assert.ok(
+          args.includes("2"),
+          `expected page size plus one: ${args}`
+        );
+      }
+    });
+
+    test("freezes commit history for subsequent pages", async () => {
       const root = createWorkspace();
       runGit(root, "init");
       configureGitIdentity(root);

@@ -20,6 +20,9 @@ interface GitTimeoutOverrides {
 }
 
 let gitTimeoutOverrides: GitTimeoutOverrides = {};
+let gitCommandObserverForTests:
+  | ((file: string, args: readonly string[]) => void)
+  | undefined;
 
 /** Override Git command timeouts for isolated tests. */
 export function setGitTimeoutOverridesForTests(
@@ -29,6 +32,17 @@ export function setGitTimeoutOverridesForTests(
   gitTimeoutOverrides = overrides;
   return () => {
     gitTimeoutOverrides = previousOverrides;
+  };
+}
+
+/** Observe subprocess arguments in isolated tests. */
+export function setGitCommandObserverForTests(
+  observer: ((file: string, args: readonly string[]) => void) | undefined
+): () => void {
+  const previousObserver = gitCommandObserverForTests;
+  gitCommandObserverForTests = observer;
+  return () => {
+    gitCommandObserverForTests = previousObserver;
   };
 }
 
@@ -243,6 +257,7 @@ const execFileAsync = async (
   args: readonly string[],
   options: ExecFileOptions = {}
 ): Promise<{ stdout: string; stderr: string }> => {
+  gitCommandObserverForTests?.(file, args);
   const timeoutMs = options.timeout ?? getGitTimeoutMs();
   const startedAt = Date.now();
   let result;
@@ -421,9 +436,7 @@ export async function getRecentCommits(
   if (limit !== undefined) {
     args.push("-n", String(limit));
   }
-  if (skip > 0) {
-    args.splice(args.indexOf("log") + 1, 0, `--skip=${skip}`);
-  }
+  args.splice(args.indexOf("log") + 1, 0, `--skip=${skip}`);
   // Explicit ref must come after all options so git treats it as a revision.
   if (ref && ref.trim()) {
     args.push("--end-of-options", ref.trim());
@@ -500,7 +513,7 @@ export async function getFileHistoryCommits(
     "--format=%x00%H%x00%h%x00%s%x00%an%x00%ar%x00%P%x00%D%x00",
   ];
   if (fullRefNames) args.push("--decorate=full");
-  if (skip > 0) args.push(`--skip=${skip}`);
+  args.push(`--skip=${skip}`);
   if (limit !== undefined) {
     args.push("-n", String(limit));
   }

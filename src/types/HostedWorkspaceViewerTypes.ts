@@ -431,8 +431,10 @@ export interface WorkspaceFileHistoryPageResponse {
   historyId: string;
   /** Server-clamped size fixed when the history snapshot was created. */
   pageSize: number;
-  /** Number of commits in the frozen history snapshot. */
+  /** Lower bound on the number of commits discovered so far. */
   totalEntries: number;
+  /** Whether another page exists after this one. */
+  hasMore: boolean;
   /** Virtual index of the first entry in `entries`. */
   offset: number;
   entries: WorkspaceFileHistoryEntry[];

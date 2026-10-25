@@ -76,6 +76,7 @@ interface FileHistoryState {
   repo?: string;
   listingId: string | null;
   totalCount: number;
+  hasMore: boolean;
   pageSize: number;
   pages: Map<number, readonly WorkspaceFileHistoryEntry[]>;
   inFlightOffsets: Set<number>;
@@ -93,6 +94,7 @@ const EMPTY_STATE = (
   ...(repo === undefined ? {} : { repo }),
   listingId: null,
   totalCount: 0,
+  hasMore: false,
   pageSize,
   pages: new Map(),
   inFlightOffsets: new Set(),
@@ -141,8 +143,9 @@ function responseIsUsable(
       response.pageSize === expectedPageSize) &&
     Number.isSafeInteger(response.totalEntries) &&
     response.totalEntries >= 0 &&
-    response.offset <= response.totalEntries &&
-    response.entries.length <= response.totalEntries - response.offset &&
+    response.totalEntries >= response.offset + response.entries.length &&
+    response.entries.length <= response.pageSize &&
+    typeof response.hasMore === "boolean" &&
     (expectedListingId === undefined ||
       response.historyId === expectedListingId)
   );
@@ -297,7 +300,10 @@ export function usePagedFileHistory(
           updateState((current) => ({
             ...current,
             listingId: response.historyId,
-            totalCount: response.totalEntries,
+            totalCount: response.hasMore
+              ? Math.max(response.totalEntries, response.pageSize * 2)
+              : response.totalEntries,
+            hasMore: response.hasMore,
             pageSize: response.pageSize,
             pages: new Map([[0, response.entries]]),
             inFlightOffsets: new Set(),
@@ -388,7 +394,18 @@ export function usePagedFileHistory(
           updateState((previous) => {
             const pages = new Map(previous.pages);
             pages.set(offset, response.entries);
-            return { ...previous, pages, error: null };
+            return {
+              ...previous,
+              pages,
+              hasMore: response.hasMore,
+              totalCount: response.hasMore
+                ? Math.max(
+                    previous.totalCount,
+                    response.totalEntries + response.pageSize
+                  )
+                : response.totalEntries,
+              error: null,
+            };
           });
         })
         .catch((value: unknown) => {

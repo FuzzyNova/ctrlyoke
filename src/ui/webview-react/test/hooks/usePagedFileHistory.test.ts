@@ -39,6 +39,7 @@ function response(
     historyId,
     pageSize: 3,
     totalEntries,
+    hasMore: offset + entries.length < totalEntries,
     offset,
     entries,
   };

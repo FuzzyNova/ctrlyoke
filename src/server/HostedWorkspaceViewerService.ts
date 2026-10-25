@@ -202,10 +202,10 @@ interface GitRefDiffResolution {
 interface FileHistorySnapshot {
   historyId: string;
   requestedPath: string;
+  gitPath: string;
   repoRoot: string;
   headHash: string;
   pageSize: number;
-  entries: readonly WorkspaceFileHistoryEntry[];
   lastAccessedAt: number;
 }
 
@@ -213,10 +213,12 @@ interface CommitLogSnapshot {
   historyId: string;
   repoRoot: string;
   branchHint?: string;
+  tipHash: string;
+  headHash: string | null;
   detached: boolean;
   currentBranch: string | null;
   pageSize: number;
-  commits: readonly WorkspaceCommitLogEntry[];
+  totalEntries: number;
   lastAccessedAt: number;
 }
 
@@ -2169,9 +2171,6 @@ export class HostedWorkspaceViewerService {
           "offset must be aligned to pageSize"
         );
       }
-      if (offset > snapshot.entries.length) {
-        throw new WorkspaceTreeBadRequestError("offset is outside the history");
-      }
       return this.materializeFileHistoryPage(snapshot, offset);
     }
 
@@ -2189,50 +2188,13 @@ export class HostedWorkspaceViewerService {
 
     const gitPath = toGitPath(this.relativeToRepo(resolved, repoRoot));
     const headHash = await resolveCommit(repoRoot, "HEAD");
-    const [historyRows, unpushedHashes] = await Promise.all([
-      // Omitting max-count is intentional: the complete result is the frozen
-      // snapshot from which all later pages are served.
-      getFileHistoryCommits(repoRoot, gitPath, undefined, 0, headHash, true),
-      this.getUnpushedHistoryHashes(repoRoot, headHash),
-    ]);
-    const entries = historyRows
-      .filter((row) => {
-        const oldAbsolute = path.resolve(repoRoot, row.oldPath);
-        const newAbsolute = path.resolve(repoRoot, row.path);
-        return (
-          isPathWithinAnyDirectory(oldAbsolute, this.trustedRoots) &&
-          isPathWithinAnyDirectory(newAbsolute, this.trustedRoots)
-        );
-      })
-      .map(
-        (row) =>
-          ({
-            hash: row.hash,
-            shortHash: row.shortHash,
-            subject: row.subject,
-            author: row.author,
-            relativeDate: row.relativeDate,
-            isHead: row.hash === headHash,
-            pushed: !unpushedHashes.has(row.hash),
-            refs: classifyRefNames(row.refNames),
-            isMerge: row.parentHashes.length > 1,
-            parentHashes: row.parentHashes,
-            path: normalizeViewerPath(
-              this.relativePath(path.resolve(repoRoot, row.path))
-            ),
-            oldPath: normalizeViewerPath(
-              this.relativePath(path.resolve(repoRoot, row.oldPath))
-            ),
-          }) satisfies WorkspaceFileHistoryEntry
-      );
-
     const snapshot: FileHistorySnapshot = {
       historyId: this.createFileHistoryId(),
       requestedPath: viewerPath,
+      gitPath,
       repoRoot,
       headHash,
       pageSize: resolvedPageSize,
-      entries: Object.freeze(entries),
       lastAccessedAt: Date.now(),
     };
     this.fileHistorySnapshots.set(snapshot.historyId, snapshot);
@@ -2242,9 +2204,6 @@ export class HostedWorkspaceViewerService {
       throw new WorkspaceTreeBadRequestError(
         "offset must be aligned to pageSize"
       );
-    }
-    if (offset > snapshot.entries.length) {
-      throw new WorkspaceTreeBadRequestError("offset is outside the history");
     }
     return this.materializeFileHistoryPage(snapshot, offset);
   }
@@ -2358,16 +2317,56 @@ export class HostedWorkspaceViewerService {
     }
   }
 
-  private materializeFileHistoryPage(
+  private async materializeFileHistoryPage(
     snapshot: FileHistorySnapshot,
     offset: number
-  ): WorkspaceFileHistoryPageResponse {
+  ): Promise<WorkspaceFileHistoryPageResponse> {
+    const [rows, unpushedHashes] = await Promise.all([
+      getFileHistoryCommits(
+        snapshot.repoRoot,
+        snapshot.gitPath,
+        snapshot.pageSize + 1,
+        offset,
+        snapshot.headHash,
+        true
+      ),
+      this.getUnpushedHistoryHashes(snapshot.repoRoot, snapshot.headHash),
+    ]);
+    const pageRows = rows.slice(0, snapshot.pageSize);
+    const entries = pageRows
+      .filter((row) => {
+        const oldAbsolute = path.resolve(snapshot.repoRoot, row.oldPath);
+        const newAbsolute = path.resolve(snapshot.repoRoot, row.path);
+        return (
+          isPathWithinAnyDirectory(oldAbsolute, this.trustedRoots) &&
+          isPathWithinAnyDirectory(newAbsolute, this.trustedRoots)
+        );
+      })
+      .map((row) => ({
+        hash: row.hash,
+        shortHash: row.shortHash,
+        subject: row.subject,
+        author: row.author,
+        relativeDate: row.relativeDate,
+        isHead: row.hash === snapshot.headHash,
+        pushed: !unpushedHashes.has(row.hash),
+        refs: classifyRefNames(row.refNames),
+        isMerge: row.parentHashes.length > 1,
+        parentHashes: row.parentHashes,
+        path: normalizeViewerPath(
+          this.relativePath(path.resolve(snapshot.repoRoot, row.path))
+        ),
+        oldPath: normalizeViewerPath(
+          this.relativePath(path.resolve(snapshot.repoRoot, row.oldPath))
+        ),
+      }) satisfies WorkspaceFileHistoryEntry);
     return {
       historyId: snapshot.historyId,
       pageSize: snapshot.pageSize,
-      totalEntries: snapshot.entries.length,
+      totalEntries: offset + entries.length,
+      hasMore: rows.length > snapshot.pageSize,
       offset,
-      entries: snapshot.entries.slice(offset, offset + snapshot.pageSize),
+      entries,
     };
   }
 
@@ -2437,17 +2436,42 @@ export class HostedWorkspaceViewerService {
     }
   }
 
-  private materializeCommitLogPage(
+  private async materializeCommitLogPage(
     snapshot: CommitLogSnapshot,
     offset: number
-  ): WorkspaceCommitLogResponse {
+  ): Promise<WorkspaceCommitLogResponse> {
+    const rows = snapshot.tipHash
+      ? await getRecentCommits(
+          snapshot.repoRoot,
+          snapshot.pageSize + 1,
+          offset,
+          snapshot.tipHash,
+          true
+        )
+      : [];
+    const pageRows = rows.slice(0, snapshot.pageSize);
+    const unpushedHashes = snapshot.tipHash
+      ? await this.getUnpushedHistoryHashes(snapshot.repoRoot, snapshot.tipHash)
+      : new Set<string>();
+    const commits: WorkspaceCommitLogEntry[] = pageRows.map((commit) => ({
+      hash: commit.hash,
+      shortHash: commit.shortHash,
+      subject: commit.subject,
+      author: commit.author,
+      relativeDate: commit.relativeDate,
+      isHead: snapshot.headHash !== null && commit.hash === snapshot.headHash,
+      pushed: !unpushedHashes.has(commit.hash),
+      isMerge: commit.parentHashes.length > 1,
+      parentHashes: commit.parentHashes,
+      refs: classifyRefNames(commit.refNames),
+    }));
     return {
       historyId: snapshot.historyId,
       pageSize: snapshot.pageSize,
-      totalEntries: snapshot.commits.length,
+      totalEntries: snapshot.totalEntries,
       offset,
-      commits: snapshot.commits.slice(offset, offset + snapshot.pageSize),
-      hasMore: offset + snapshot.pageSize < snapshot.commits.length,
+      commits,
+      hasMore: rows.length > snapshot.pageSize,
       currentBranch: snapshot.currentBranch,
       detached: snapshot.detached,
     };
@@ -2516,7 +2540,7 @@ export class HostedWorkspaceViewerService {
           "skip must be aligned to pageSize"
         );
       }
-      if (skip > snapshot.commits.length) {
+      if (skip > snapshot.totalEntries) {
         throw new WorkspaceTreeBadRequestError(
           "skip is outside the commit history"
         );
@@ -2525,36 +2549,35 @@ export class HostedWorkspaceViewerService {
     }
 
     const metadata = await this.getCommitLogMetadata(repoRoot);
-    // Omitting max-count is intentional: the complete result is the frozen
-    // snapshot from which all later pages are served.
-    const rows = await getRecentCommits(
-      repoRoot,
-      undefined,
-      0,
-      safeBranch,
-      true
-    );
-    const commits: WorkspaceCommitLogEntry[] = rows.map((c) => ({
-      hash: c.hash,
-      shortHash: c.shortHash,
-      subject: c.subject,
-      author: c.author,
-      relativeDate: c.relativeDate,
-      isHead: metadata.headHash !== null && c.hash === metadata.headHash,
-      pushed: !metadata.unpushedHashes.has(c.hash),
-      isMerge: c.parentHashes.length > 1,
-      parentHashes: c.parentHashes,
-      refs: classifyRefNames(c.refNames),
-    }));
+    let tipHash = "";
+    try {
+      tipHash = await resolveCommit(repoRoot, safeBranch ?? "HEAD");
+    } catch {
+      // An unborn repository has no history to page through.
+    }
+    const totalEntries = tipHash
+      ? Number.parseInt(
+          (
+            await execFileAsync(
+              "git",
+              ["-C", repoRoot, "rev-list", "--count", tipHash],
+              { timeout: GIT_COMMAND_TIMEOUT_MS }
+            )
+          ).stdout.trim(),
+          10
+        ) || 0
+      : 0;
 
     const snapshot: CommitLogSnapshot = {
       historyId: this.createCommitLogId(),
       repoRoot,
       branchHint: safeBranch,
+      tipHash,
+      headHash: metadata.headHash,
       detached: metadata.detached,
       currentBranch: metadata.currentBranch,
       pageSize: limit,
-      commits: Object.freeze(commits),
+      totalEntries,
       lastAccessedAt: Date.now(),
     };
     this.commitLogSnapshots.set(snapshot.historyId, snapshot);
@@ -2565,7 +2588,7 @@ export class HostedWorkspaceViewerService {
         "skip must be aligned to pageSize"
       );
     }
-    if (skip > snapshot.commits.length) {
+    if (skip > snapshot.totalEntries) {
       throw new WorkspaceTreeBadRequestError(
         "skip is outside the commit history"
       );
@@ -2577,22 +2600,15 @@ export class HostedWorkspaceViewerService {
     detached: boolean;
     currentBranch: string | null;
     headHash: string | null;
-    unpushedHashes: Set<string>;
   }> {
-    const [branchName, headHashResult, upstreamCommitsResult] =
-      await Promise.allSettled([
-        execFileAsync("git", ["-C", repoRoot, "branch", "--show-current"], {
-          timeout: GIT_COMMAND_TIMEOUT_MS,
-        }),
-        execFileAsync("git", ["-C", repoRoot, "rev-parse", "HEAD"], {
-          timeout: GIT_COMMAND_TIMEOUT_MS,
-        }),
-        execFileAsync(
-          "git",
-          ["-C", repoRoot, "rev-list", "--no-walk", "@{upstream}..HEAD"],
-          { timeout: GIT_COMMAND_TIMEOUT_MS }
-        ),
-      ]);
+    const [branchName, headHashResult] = await Promise.allSettled([
+      execFileAsync("git", ["-C", repoRoot, "branch", "--show-current"], {
+        timeout: GIT_COMMAND_TIMEOUT_MS,
+      }),
+      execFileAsync("git", ["-C", repoRoot, "rev-parse", "HEAD"], {
+        timeout: GIT_COMMAND_TIMEOUT_MS,
+      }),
+    ]);
 
     const rawBranch =
       branchName.status === PROMISE_SETTLED_STATUSES.FULFILLED
@@ -2605,17 +2621,7 @@ export class HostedWorkspaceViewerService {
         ? headHashResult.value.stdout.trim()
         : null;
 
-    const unpushedHashes = new Set<string>();
-    if (upstreamCommitsResult.status === PROMISE_SETTLED_STATUSES.FULFILLED) {
-      for (const line of upstreamCommitsResult.value.stdout
-        .trim()
-        .split("\n")
-        .filter(Boolean)) {
-        unpushedHashes.add(line.trim());
-      }
-    }
-    // If no upstream is configured, upstreamCommitsResult fails — treat all as pushed.
-    return { detached, currentBranch, headHash, unpushedHashes };
+    return { detached, currentBranch, headHash };
   }
 
   /**
