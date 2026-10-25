@@ -183,6 +183,68 @@ describe("usePagedFileHistory", () => {
     expect(result.current.failedRanges).toEqual([]);
   });
 
+  it("fills a short first page when a requested row is inside its page window", async () => {
+    const fetchPage = vi
+      .fn<PagedFileHistoryFetcher>()
+      .mockResolvedValueOnce({
+        ...response(HISTORY_A, 0, [entry(0)]),
+        hasMore: true,
+        nextOffset: 5,
+        nextCursor: "cursor-5",
+      })
+      .mockResolvedValueOnce({
+        ...response(HISTORY_A, 1, [entry(5)]),
+        totalEntries: 2,
+        hasMore: false,
+        nextOffset: 6,
+        nextCursor: "cursor-6",
+      });
+    const { result } = renderHistory(fetchPage);
+
+    await waitFor(() => expect(result.current.getEntry(0)?.hash).toBe("hash-0"));
+    act(() => result.current.requestRange(1));
+    await waitFor(() => expect(result.current.getEntry(1)?.hash).toBe("hash-5"));
+
+    expect(fetchPage.mock.calls[1]?.[0]).toMatchObject({
+      offset: 1,
+      nextOffset: 5,
+      nextCursor: "cursor-5",
+    });
+  });
+
+  it("retries a failed continuation from its unaligned offset", async () => {
+    const fetchPage = vi
+      .fn<PagedFileHistoryFetcher>()
+      .mockResolvedValueOnce({
+        ...response(HISTORY_A, 0, [entry(0)]),
+        hasMore: true,
+        nextOffset: 5,
+        nextCursor: "cursor-5",
+      })
+      .mockRejectedValueOnce(new Error("page failed"))
+      .mockResolvedValueOnce({
+        ...response(HISTORY_A, 1, [entry(5)]),
+        totalEntries: 2,
+        hasMore: false,
+        nextOffset: 6,
+        nextCursor: "cursor-6",
+      });
+    const { result } = renderHistory(fetchPage);
+
+    await waitFor(() => expect(result.current.getEntry(0)?.hash).toBe("hash-0"));
+    act(() => result.current.requestRange(1));
+    await waitFor(() => expect(result.current.failedRanges).toHaveLength(1));
+
+    act(() => result.current.retryPage(1));
+    await waitFor(() => expect(result.current.getEntry(1)?.hash).toBe("hash-5"));
+
+    expect(fetchPage.mock.calls.map(([request]) => request.offset)).toEqual([
+      0, 1, 1,
+    ]);
+    expect(fetchPage.mock.calls[1]?.[0].nextCursor).toBe("cursor-5");
+    expect(fetchPage.mock.calls[2]?.[0].nextCursor).toBe("cursor-5");
+  });
+
   it("continues from the raw Git cursor while packing filtered pages densely", async () => {
     const fetchPage = vi
       .fn<PagedFileHistoryFetcher>()
@@ -223,12 +285,14 @@ describe("usePagedFileHistory", () => {
         totalEntries: 0,
         hasMore: true,
         nextOffset: 4,
+        nextCursor: "cursor-4",
       })
       .mockResolvedValueOnce({
         ...response(HISTORY_A, 0, [entry(4)]),
         totalEntries: 1,
         hasMore: false,
         nextOffset: 5,
+        nextCursor: "cursor-5",
       });
     const { result } = renderHistory(fetchPage);
 
@@ -238,7 +302,41 @@ describe("usePagedFileHistory", () => {
     expect(fetchPage.mock.calls[1]?.[0]).toMatchObject({
       offset: 0,
       nextOffset: 4,
+      nextCursor: "cursor-4",
     });
     expect(result.current.getEntry(1)).toBeUndefined();
+  });
+
+  it("does not repeat an empty continuation when the cursor stops advancing", async () => {
+    const fetchPage = vi
+      .fn<PagedFileHistoryFetcher>()
+      .mockResolvedValueOnce({
+        ...response(HISTORY_A, 0, []),
+        totalEntries: 0,
+        hasMore: true,
+        nextOffset: 4,
+        nextCursor: "cursor-4",
+      })
+      .mockResolvedValueOnce({
+        ...response(HISTORY_A, 0, []),
+        totalEntries: 0,
+        hasMore: true,
+        nextOffset: 4,
+        nextCursor: "cursor-4",
+      });
+    renderHistory(fetchPage);
+
+    await waitFor(() => expect(fetchPage).toHaveBeenCalledTimes(2));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+    expect(fetchPage.mock.calls.map(([request]) => request.nextOffset)).toEqual([
+      undefined,
+      4,
+    ]);
+    expect(fetchPage.mock.calls.map(([request]) => request.nextCursor)).toEqual([
+      undefined,
+      "cursor-4",
+    ]);
   });
 });

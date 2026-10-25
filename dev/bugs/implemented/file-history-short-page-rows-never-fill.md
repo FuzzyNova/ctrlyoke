@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-25 by bug-drain review of cd7749ebc
 - **Area:** `src/ui/webview-react/hooks/usePagedFileHistory.ts`, `src/ui/webview-react/components/workspace-viewer/DiffFileHistoryList.tsx`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

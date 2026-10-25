@@ -10,6 +10,7 @@ export interface PagedFileHistoryPageRequest {
   path: string;
   offset: number;
   nextOffset?: number;
+  nextCursor?: string;
   pageSize: number;
   historyId?: string;
   repo?: string;
@@ -78,7 +79,6 @@ interface FileHistoryState {
   listingId: string | null;
   totalCount: number;
   hasMore: boolean;
-  nextOffset?: number;
   pageSize: number;
   pages: Map<number, readonly WorkspaceFileHistoryEntry[]>;
   inFlightOffsets: Set<number>;
@@ -149,6 +149,9 @@ function responseIsUsable(
     (response.nextOffset === undefined ||
       (Number.isSafeInteger(response.nextOffset) &&
         response.nextOffset >= 0)) &&
+    (response.nextCursor === undefined ||
+      (typeof response.nextCursor === "string" &&
+        response.nextCursor.length > 0)) &&
     response.entries.length <= response.pageSize &&
     typeof response.hasMore === "boolean" &&
     (expectedListingId === undefined ||
@@ -166,7 +169,8 @@ function defaultFetcher(
     request.pageSize,
     request.historyId,
     request.repo,
-    request.nextOffset
+    request.nextOffset,
+    request.nextCursor
   );
 }
 
@@ -218,6 +222,7 @@ export function usePagedFileHistory(
   const pendingOffsetsRef = useRef(new Set<number>());
   const virtualLengthRef = useRef(0);
   const rawCursorRef = useRef<number | undefined>(undefined);
+  const nextCursorRef = useRef<string | undefined>(undefined);
   const lastVisibleStartRef = useRef<number | null>(null);
   const skipOptionStartRef = useRef<string | null>(null);
 
@@ -282,6 +287,7 @@ export function usePagedFileHistory(
       currentRepoRef.current = normalizedRepo;
       virtualLengthRef.current = 0;
       rawCursorRef.current = undefined;
+      nextCursorRef.current = undefined;
       lastVisibleStartRef.current = null;
 
       const pageSize = configRef.current.pageSize;
@@ -315,7 +321,6 @@ export function usePagedFileHistory(
               ? Math.max(response.totalEntries, response.pageSize * 2)
               : response.totalEntries,
             hasMore: response.hasMore,
-            nextOffset: response.nextOffset,
             pageSize: response.pageSize,
             pages: new Map([[0, response.entries]]),
             inFlightOffsets: new Set(),
@@ -325,7 +330,14 @@ export function usePagedFileHistory(
           }));
           virtualLengthRef.current = response.entries.length;
           rawCursorRef.current = response.nextOffset;
-          if (response.entries.length === 0 && response.hasMore) {
+          nextCursorRef.current = response.nextCursor;
+          if (
+            response.entries.length === 0 &&
+            response.hasMore &&
+            (response.nextCursor !== undefined ||
+              (response.nextOffset !== undefined &&
+                response.nextOffset > 0))
+          ) {
             setTimeout(() => rangeRequestRef.current(0), 0);
           }
         })
@@ -358,10 +370,7 @@ export function usePagedFileHistory(
   const requestRange = useCallback(
     (requestedOffset: number): void => {
       const current = stateRef.current;
-      const targetOffset = pageOffset(
-        requestedOffset,
-        current?.pageSize ?? configRef.current.pageSize
-      );
+      const targetOffset = Math.max(0, requestedOffset);
       if (!current?.listingId || current.initialLoading) {
         pendingOffsetsRef.current.add(targetOffset);
         return;
@@ -371,7 +380,9 @@ export function usePagedFileHistory(
         [...current.pages.values()].reduce((n, page) => n + page.length, 0)
       );
       const offset = loadedCount;
-      if (targetOffset < loadedCount) return;
+      if (targetOffset < loadedCount || targetOffset >= current.totalCount) {
+        return;
+      }
       if (controllersRef.current.size > 0) {
         pendingOffsetsRef.current.add(targetOffset);
         return;
@@ -384,6 +395,8 @@ export function usePagedFileHistory(
       const path = current.path;
       const repo = current.repo;
       const listingId = current.listingId;
+      const requestCursor = rawCursorRef.current;
+      const requestNextCursor = nextCursorRef.current;
       const controller = new AbortController();
       controllersRef.current.set(offset, controller);
       updateState((previous) => {
@@ -401,7 +414,8 @@ export function usePagedFileHistory(
           {
             path,
             offset,
-            nextOffset: rawCursorRef.current ?? current.nextOffset,
+            nextOffset: requestCursor,
+            nextCursor: requestNextCursor,
             pageSize: current.pageSize,
             historyId: listingId,
             ...(repo === undefined ? {} : { repo }),
@@ -425,7 +439,6 @@ export function usePagedFileHistory(
             return {
               ...previous,
               pages,
-              nextOffset: response.nextOffset,
               hasMore: response.hasMore,
               totalCount: response.hasMore
                 ? Math.max(previous.totalCount, loadedCount + response.pageSize)
@@ -438,7 +451,15 @@ export function usePagedFileHistory(
             response.offset + response.entries.length
           );
           rawCursorRef.current = response.nextOffset;
-          if (response.entries.length === 0 && response.hasMore) {
+          nextCursorRef.current = response.nextCursor;
+          if (
+            response.entries.length === 0 &&
+            response.hasMore &&
+            (response.nextCursor !== undefined
+              ? response.nextCursor !== requestNextCursor
+              : response.nextOffset !== undefined &&
+                response.nextOffset > (requestCursor ?? offset))
+          ) {
             setTimeout(
               () => rangeRequestRef.current(virtualLengthRef.current),
               0

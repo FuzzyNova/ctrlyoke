@@ -373,12 +373,28 @@ export function usePagedCommitHistory(
   const requestRange = useCallback(
     (requestedOffset: number): void => {
       const current = stateRef.current;
-      const offset = pageOffset(
+      const targetOffset = pageOffset(
         requestedOffset,
         current?.pageSize ?? configRef.current.pageSize
       );
+      const targetPage = current?.pages.get(targetOffset);
+      const offset =
+        current?.hasMore &&
+        targetPage !== undefined &&
+        requestedOffset >= targetOffset + targetPage.length
+          ? targetOffset + targetPage.length
+          : targetOffset;
       if (!current?.listingId || current.initialLoading) {
-        pendingOffsetsRef.current.add(offset);
+        pendingOffsetsRef.current.add(requestedOffset);
+        return;
+      }
+      if (
+        [...current.pages].some(
+          ([pageStart, commits]) =>
+            requestedOffset >= pageStart &&
+            requestedOffset < pageStart + commits.length
+        )
+      ) {
         return;
       }
       if (
@@ -565,8 +581,12 @@ export function usePagedCommitHistory(
     if (!Number.isSafeInteger(index) || index < 0) return undefined;
     const current = stateRef.current;
     if (!current) return undefined;
-    const offset = pageOffset(index, current.pageSize);
-    return current.pages.get(offset)?.[index - offset];
+    for (const [offset, commits] of current.pages) {
+      if (index >= offset && index < offset + commits.length) {
+        return commits[index - offset];
+      }
+    }
+    return undefined;
   }, []);
 
   useEffect(() => {

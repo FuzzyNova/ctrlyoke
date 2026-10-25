@@ -266,6 +266,27 @@ describe("usePagedCommitHistory", () => {
     expect(result.current.failedRanges).toEqual([]);
   });
 
+  it("fills a short first page when a requested row is inside its page window", async () => {
+    const fetchPage = vi
+      .fn<PagedCommitHistoryFetcher>()
+      .mockResolvedValueOnce({
+        ...response(HISTORY_A, 0, [commit(0)]),
+        hasMore: true,
+      })
+      .mockResolvedValueOnce(response(HISTORY_A, 1, [commit(1)]));
+    const { result } = renderHistory(fetchPage);
+
+    await waitFor(() =>
+      expect(result.current.getCommit(0)?.hash).toBe("hash-0")
+    );
+    act(() => result.current.requestRange(1));
+    await waitFor(() =>
+      expect(result.current.getCommit(1)?.hash).toBe("hash-1")
+    );
+
+    expect(fetchPage.mock.calls[1]?.[0].offset).toBe(1);
+  });
+
   it("continues paging by hasMore when the server omits a total", async () => {
     const fetchPage = vi
       .fn<PagedCommitHistoryFetcher>()
