@@ -69,8 +69,10 @@ suite("SubagentSourceFollower", () => {
       isComplete: () => false,
     };
     follower.register(source);
-    const drain = await follower.drainToEof(50);
-    assert.strictEqual(calls, 1);
+    // The deadline must outlast one poll interval so the second read always
+    // happens; a 50ms deadline raced it and asserted on whichever won.
+    const drain = await follower.drainToEof();
+    assert.strictEqual(calls, 2);
     assert.strictEqual(drain.events.length, 1);
     assert.strictEqual(drain.events[0].subagent?.parentToolCallId, "spawn");
   });
