@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-25 by bug-drain review of 34eff11a4
 - **Area:** `src/utils/SkillsRegistryClient.ts` (`fetchTree`, `walkTruncatedTreeBudget`, `findSkillAtCommit`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -24,7 +24,7 @@ bounds one resolve + download to about 23 GitHub API calls. Two common flows sti
 ## Root Cause
 
 - `walkTruncatedTreeBudget` loops `while (state.pending.length > 0 && requests <
-  MAX_TRUNCATED_TREE_REQUESTS)` (around line 1141) with no early exit once the requested
+MAX_TRUNCATED_TREE_REQUESTS)` (around line 1141) with no early exit once the requested
   slug's `SKILL.md` is in `cache.entries`.
 - `findSkillAtCommit` (around line 877) calls `fetchTree(source, commitSha, slug)` with no
   `knownSkillMdPath`, so `fetchTree`'s skip condition (around lines 978–987) never applies to
@@ -40,8 +40,6 @@ bounds one resolve + download to about 23 GitHub API calls. Two common flows sti
   of several skills in one truncated repo stays under the limit, and update-check followed by
   resolve + download of the same skill does not start a second walk.
 
-Related low-severity items seen in the same review (fix if cheap, otherwise leave):
-`downloadSkill` (around line 757) says "`<path>` is not in `<source>`" when the tree is merely
-incomplete (should use the "could not confirm" wording when `!cache.complete`); and a lookup
-waiting on another lookup's in-flight walk (`continueTruncatedTreeWalk`, around line 1052)
-never walks for its own slug, so a concurrent update check can report FAILED.
+The related low-severity issues were fixed as well: downloads now report when an
+incomplete tree cannot confirm a path, and a lookup waiting on another lookup's
+walk resumes when the first walk did not find its target.

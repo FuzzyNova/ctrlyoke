@@ -709,10 +709,11 @@ export class SkillsShRegistryClient implements SkillsRegistry {
         !skillMdPath &&
         (!result.searchComplete || result.searchedCount < result.candidateCount)
       ) {
-        throw new SkillsRegistryError(!result.searchComplete
-          ? `Could not confirm whether the "${slug}" skill exists in ${GITHUB_HOST}/${source}; the truncated repository tree still has unsearched directories`
-          : `Could not confirm the "${slug}" skill in ${GITHUB_HOST}/${source} ` +
-              `(searched ${result.searchedCount} of ${result.candidateCount} SKILL.md files)`
+        throw new SkillsRegistryError(
+          !result.searchComplete
+            ? `Could not confirm whether the "${slug}" skill exists in ${GITHUB_HOST}/${source}; the truncated repository tree still has unsearched directories`
+            : `Could not confirm the "${slug}" skill in ${GITHUB_HOST}/${source} ` +
+                `(searched ${result.searchedCount} of ${result.candidateCount} SKILL.md files)`
         );
       }
     }
@@ -756,7 +757,9 @@ export class SkillsShRegistryClient implements SkillsRegistry {
     );
     if (!hasSkillMd) {
       throw new SkillsRegistryError(
-        `${location.skillMdPath} is not in ${location.source} at commit ${location.commitSha.slice(0, 7)}`
+        !this.isTreeComplete(location.source, location.commitSha)
+          ? `Could not confirm that ${location.skillMdPath} is in ${location.source} at commit ${location.commitSha.slice(0, 7)} because GitHub truncated the repository tree`
+          : `${location.skillMdPath} is not in ${location.source} at commit ${location.commitSha.slice(0, 7)}`
       );
     }
     tree = await this.ensureSkillFolderComplete(
@@ -917,6 +920,16 @@ export class SkillsShRegistryClient implements SkillsRegistry {
         };
       }
     }
+    if (!this.isTreeComplete(source, commitSha)) {
+      await this.continueTruncatedTreeWalk(
+        source,
+        commitSha,
+        `${source}@${commitSha}`,
+        this.treeCache.get(`${source}@${commitSha}`)!,
+        undefined
+      );
+      return this.findSkillAtCommit(source, slug, commitSha, tree);
+    }
     return {
       candidateCount: ranked.length,
       searchedCount: candidates.length,
@@ -965,7 +978,13 @@ export class SkillsShRegistryClient implements SkillsRegistry {
     if (!cached) {
       let fetch = this.treeFetches.get(key);
       if (!fetch) {
-        fetch = this.loadTree(source, commitSha, key, preferredSlug);
+        fetch = this.loadTree(
+          source,
+          commitSha,
+          key,
+          preferredSlug,
+          knownSkillMdPath
+        );
         this.treeFetches.set(key, fetch);
         loadedByThisCall = true;
       }
@@ -984,14 +1003,19 @@ export class SkillsShRegistryClient implements SkillsRegistry {
           (entry) =>
             entry.type === GIT_TREE_ENTRY_TYPES.BLOB &&
             entry.path === knownSkillMdPath
-        ))
+        )) &&
+      !(
+        preferredSlug &&
+        this.hasRankedSlugCandidate(cached.entries, source, preferredSlug)
+      )
     ) {
       await this.continueTruncatedTreeWalk(
         source,
         commitSha,
         key,
         cached,
-        preferredSlug
+        preferredSlug,
+        knownSkillMdPath
       );
     }
     return cached.entries;
@@ -1001,7 +1025,8 @@ export class SkillsShRegistryClient implements SkillsRegistry {
     source: string,
     commitSha: string,
     key: string,
-    preferredSlug?: string
+    preferredSlug?: string,
+    knownSkillMdPath?: string
   ): Promise<CachedGitTree> {
     const response = await this.request(
       REGISTRY_SERVICES.GITHUB,
@@ -1024,7 +1049,8 @@ export class SkillsShRegistryClient implements SkillsRegistry {
         commitSha,
         key,
         cache,
-        preferredSlug
+        preferredSlug,
+        knownSkillMdPath
       );
       return cache;
     }
@@ -1047,12 +1073,33 @@ export class SkillsShRegistryClient implements SkillsRegistry {
     commitSha: string,
     key: string,
     cache: CachedGitTree,
-    preferredSlug?: string
+    preferredSlug?: string,
+    knownSkillMdPath?: string
   ): Promise<void> {
     const running = this.treeWalks.get(key);
     if (running) {
       await running;
-      return;
+      if (
+        cache.complete ||
+        (knownSkillMdPath !== undefined &&
+          cache.entries.some(
+            (entry) =>
+              entry.type === GIT_TREE_ENTRY_TYPES.BLOB &&
+              entry.path === knownSkillMdPath
+          )) ||
+        (preferredSlug !== undefined &&
+          this.hasRankedSlugCandidate(cache.entries, source, preferredSlug))
+      ) {
+        return;
+      }
+      return this.continueTruncatedTreeWalk(
+        source,
+        commitSha,
+        key,
+        cache,
+        preferredSlug,
+        knownSkillMdPath
+      );
     }
     if (cache.complete) return;
     let finish!: () => void;
@@ -1065,7 +1112,8 @@ export class SkillsShRegistryClient implements SkillsRegistry {
         source,
         commitSha,
         cache,
-        preferredSlug
+        preferredSlug,
+        knownSkillMdPath
       );
     } finally {
       finish();
@@ -1077,7 +1125,8 @@ export class SkillsShRegistryClient implements SkillsRegistry {
     source: string,
     commitSha: string,
     cache: CachedGitTree,
-    preferredSlug?: string
+    preferredSlug?: string,
+    knownSkillMdPath?: string
   ): Promise<void> {
     const state = cache.walk!;
     const collectedPaths = new Set(cache.entries.map((entry) => entry.path));
@@ -1131,6 +1180,15 @@ export class SkillsShRegistryClient implements SkillsRegistry {
         }
       }
     };
+    const targetFound = (): boolean =>
+      (knownSkillMdPath !== undefined &&
+        cache.entries.some(
+          (entry) =>
+            entry.type === GIT_TREE_ENTRY_TYPES.BLOB &&
+            entry.path === knownSkillMdPath
+        )) ||
+      (preferredSlug !== undefined &&
+        this.hasRankedSlugCandidate(cache.entries, source, preferredSlug));
 
     if (state.expanded.size === 0 && state.pending.length === 0) {
       const root = await this.fetchNonRecursiveTree(source, commitSha);
@@ -1138,7 +1196,11 @@ export class SkillsShRegistryClient implements SkillsRegistry {
       state.expanded.add(commitSha);
       appendEntries(root, "");
     }
-    while (state.pending.length > 0 && requests < MAX_TRUNCATED_TREE_REQUESTS) {
+    while (
+      state.pending.length > 0 &&
+      requests < MAX_TRUNCATED_TREE_REQUESTS &&
+      !targetFound()
+    ) {
       const next = state.pending.shift()!;
       if (state.expanded.has(next.sha)) continue;
       let entries: GitTreeEntry[];
@@ -1153,6 +1215,20 @@ export class SkillsShRegistryClient implements SkillsRegistry {
       appendEntries(entries, next.path);
     }
     cache.complete = state.pending.length === 0;
+  }
+
+  private hasRankedSlugCandidate(
+    entries: readonly GitTreeEntry[],
+    source: string,
+    slug: string
+  ): boolean {
+    return rankSkillMdCandidates(entries, source, slug).some((skillMdPath) => {
+      const folderPath = getFolderPath(skillMdPath);
+      const segments = folderPath
+        ? folderPath.split("/")
+        : [source.split("/").pop() ?? source];
+      return segments.some((segment) => toSkillSlug(segment) === slug);
+    });
   }
 
   private isTreeComplete(source: string, commitSha: string): boolean {
