@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-25 by Claude (session log review, user report of an unresponsive Pause button)
 - **Area:** `src/core/OutputCaptureBuffer.ts`, `src/ui/webview-react/hooks/useOutputRowsModel.ts`, `src/ui/webview-react/hooks/useMessageHandler.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit (suggested fixes 1, 3 and 4; Pause feedback lands in the following commit). Fixes 2, 5 and 6 remain possible further optimizations.
 
 ## Symptom
 

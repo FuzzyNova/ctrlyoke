@@ -9,6 +9,7 @@ Hooks are the integration layer between the React tree and the runtime: extensio
 <messageFlow>
 - `useMessageHandler.ts` is the single inbound message router. Add new extension messages there (or `terminalMessageHandlers.ts` for terminal-only traffic) instead of scattering `window.addEventListener("message")`.
 - Handler code intentionally uses store `getState()` so messages can mutate state outside React render timing. Do not refactor that into component-local callbacks unless the message is truly UI-local.
+- **A burst of inbound messages must cost one render, not one each.** Every `MessageEvent` is its own task, and React renders once per task that wrote a store; the output pane rebuilds its whole row model on each `workflowStore` write (seconds on a large run), so a run replay of ~50 messages once held `EXECUTION_STATE_CHANGED` back for 108 s. Two layers handle this: the extension sends multi-message replays as one `MESSAGE_BATCH` (`src/ui/MessageBatchSender.ts`), and `inboundMessageDispatcher.ts` routes a batch's members in one task and coalesces back-to-back events onto one macrotask tick. Do not reach for `unstable_batchedUpdates` here: in React 19 it is a no-op passthrough, and the single render comes from automatic batching within one task. The tick must not use `requestAnimationFrame`, which stops while the webview is hidden.
 - `applyWorkflowChange()` is the guarded workflow-switch reset: it clears history view and workflow-local edit caches but preserves the user's in-progress new-step draft.
 </messageFlow>
 

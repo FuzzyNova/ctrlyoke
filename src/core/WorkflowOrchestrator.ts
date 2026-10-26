@@ -67,6 +67,7 @@ import {
 } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
+import { sendAsMessageBatch } from "../ui/MessageBatchSender";
 import type {
   DashboardHostActions,
   DisposableRegistry,
@@ -1094,10 +1095,13 @@ export class WorkflowOrchestrator {
         );
       } else {
         // A brand-new workflow has no lineage/address to publish, so its full
-        // state replay replaces whatever the client was displaying.
-        instance.replayFullStateTo(sink, {
-          asReplacement: true,
-        });
+        // state replay replaces whatever the client was displaying. It goes
+        // out as one batch so the dashboard applies it in a single render.
+        sendAsMessageBatch(send, (batchSend) =>
+          instance.replayFullStateTo(new PostMessageDashboardSink(batchSend), {
+            asReplacement: true,
+          })
+        );
       }
       // Replay against the instance the client ended up bound to: the lineage
       // bind can move it to the lineage's executing owner.

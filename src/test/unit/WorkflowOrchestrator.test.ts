@@ -23,6 +23,8 @@ import type {
   WorkingFile,
 } from "../../types/CtrlYokeTypes";
 import type { RunnerHostIdentity } from "../../types/CtrlYokeTypes";
+import type { IDashboardSink } from "../../types/IDashboardSink";
+import type { MessageBatchMessage } from "../../types/WebviewMessageTypes";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
 import { PromptQueue } from "../../core/PromptQueue";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
@@ -871,6 +873,52 @@ suite("WorkflowOrchestrator SESSION_RESTORED revision forwarding", () => {
     });
 
     assert.deepStrictEqual(replayCalls, [{ asReplacement: true }]);
+  });
+
+  test("sends a lineage-less full-state replay as one ordered batch", async () => {
+    const orchestrator = createTestOrchestrator();
+    const internal = orchestrator as any;
+    const instance = {
+      getSummary: () => ({ workingFilePath: null }),
+      getQueueState: () => ({ workflowKey: undefined, runRef: undefined }),
+      replayFullStateTo: (sink: IDashboardSink) => {
+        void sink.updateSessionRestored("wf.yaml", [], [], "running", 0);
+        sink.updateCliOutput(0, { text: "a" });
+        sink.updateCliOutput(1, { text: "b" });
+      },
+    };
+    internal.instances = new Map([["inst-new", instance]]);
+    internal.retiredInstances = new Map();
+    internal.externalRunWatchCoordinator =
+      createEmptyExternalRunWatchCoordinator();
+    internal.getActiveTerminalWorkflowRefs = () => [];
+    internal.setViewedWorkflowId = () => {};
+
+    const sent: Array<{ type: string; [key: string]: unknown }> = [];
+    await orchestrator.replayWorkflowStateTo(
+      "inst-new",
+      (message) => sent.push(message as (typeof sent)[number]),
+      "panel",
+      { skipTerminalReplay: true }
+    );
+
+    assert.deepStrictEqual(
+      sent.map((message) => message.type),
+      [
+        MESSAGE_TYPES.ACTIVE_TERMINAL_WORKFLOWS,
+        MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
+        MESSAGE_TYPES.MESSAGE_BATCH,
+      ]
+    );
+    const batch = sent[2] as unknown as MessageBatchMessage;
+    assert.deepStrictEqual(
+      batch.messages.map((message) => [message.type, message.stepIndex]),
+      [
+        [MESSAGE_TYPES.SESSION_RESTORED, undefined],
+        [MESSAGE_TYPES.CLI_OUTPUT, 0],
+        [MESSAGE_TYPES.CLI_OUTPUT, 1],
+      ]
+    );
   });
 });
 

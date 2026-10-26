@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The dashboard stays responsive on large running workflows. Opening one no
+  longer rebuilds the output pane once per completed step, bursts of updates
+  are applied together, and a running step's output no longer slows every
+  update down as it grows.
 - Editor `@` completions resume budgeted scans across narrowed file results, so later files can appear as a query is extended.
 - Workspace viewer file history continues one snapshot-owned Git walk across
   opaque server-side cursors, pages densely across trusted-root filtering without

@@ -545,6 +545,10 @@ export const SEARCH_HISTORY_ERROR_CODES = {
 export const MESSAGE_TYPES = {
   WORKSPACE_FILE_CHANGED: "WORKSPACE_FILE_CHANGED",
   // Extension -> Webview
+  // Ordered envelope of ordinary extension → webview messages, sent so a burst
+  // (e.g. a live output replay) costs the dashboard one render instead of one
+  // per message. Internal transport only; members are dispatched in order.
+  MESSAGE_BATCH: "messageBatch",
   INIT: "init",
   FILE_SELECTED: "fileSelected",
   SESSION_RESTORED: "sessionRestored", // Restore previous session with runtime state preserved

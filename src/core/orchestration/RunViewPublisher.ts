@@ -29,6 +29,7 @@ import type {
   WorkspaceSnapshot,
 } from "../../types/OutputHistoryTypes";
 import { PostMessageDashboardSink } from "../../ui/PostMessageDashboardSink";
+import { sendAsMessageBatch } from "../../ui/MessageBatchSender";
 import { WorkflowTaggedSink } from "../WorkflowTaggedSink";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import {
@@ -560,11 +561,15 @@ export class RunViewPublisher implements RunLifecycleViewPort {
     Log.debug(
       `[deliverRunView] client=${clientId.slice(0, 12)} address=${address.workflowKey}/${address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN ? address.runRef : "draft"} snapshot sent`
     );
-    if (runtimeWorkflowId && isLiveAddress) {
-      boundInstance?.replayBufferedOutputTo(
-        new WorkflowTaggedSink(
-          new PostMessageDashboardSink(send),
-          runtimeWorkflowId
+    if (runtimeWorkflowId && isLiveAddress && boundInstance) {
+      // One message per completed attempt would cost the dashboard one full
+      // output-row rebuild each; batching makes the whole replay one render.
+      sendAsMessageBatch(send, (batchSend) =>
+        boundInstance.replayBufferedOutputTo(
+          new WorkflowTaggedSink(
+            new PostMessageDashboardSink(batchSend),
+            runtimeWorkflowId
+          )
         )
       );
     }

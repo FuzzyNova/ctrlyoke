@@ -75,6 +75,7 @@ import { useChoiceStore } from "../store/choiceStore";
 import { terminalRegistry } from "../terminalRegistry";
 import { registerTerminalHandlers } from "./terminalMessageHandlers";
 import { drainPanelInboundBuffer } from "./panelInboundBuffer";
+import { createInboundMessageDispatcher } from "./inboundMessageDispatcher";
 import { rememberUndoRedoRuntime } from "@hooks/useUndoRedoKeyHandler";
 import {
   clearPanelReconnectWatchdog,
@@ -91,7 +92,6 @@ import {
   THEME_KIND_CSS_VAR,
   USER_FEEDBACK_SEVERITY,
   UX_SNAPSHOT_STATUSES,
-  WINDOW_LISTENER_REPLY_TYPES,
   type UserFeedbackSeverity,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
@@ -99,6 +99,7 @@ import { themeKindFromBodyClasses } from "@utils/themeKind";
 import type {
   CompletionNotificationEventPayload,
   UserFeedbackMessage,
+  BatchedDashboardMessage,
 } from "@root/types/WebviewMessageTypes";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import { deriveStepStatusesFromRuntime } from "@root/utils/StepStatusDerivation";
@@ -3512,8 +3513,10 @@ export function useMessageHandler(): UseMessageHandlerReturn {
 
   // Set up message listener
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      const message = event.data;
+    // Routes one ordinary message. Batching, burst coalescing, and
+    // request-scoped replies (WINDOW_LISTENER_REPLY_TYPES) are handled by the
+    // dispatcher before a message reaches this function.
+    const routeMessage = (message: BatchedDashboardMessage) => {
       notePanelMessage(message);
       if (message?.type === MESSAGE_TYPES.WORKSPACE_FILE_CHANGED) {
         window.dispatchEvent(
@@ -3536,7 +3539,6 @@ export function useMessageHandler(): UseMessageHandlerReturn {
       ) {
         return;
       }
-      if (WINDOW_LISTENER_REPLY_TYPES.has(message?.type)) return;
       const handler = handlers[message.type];
 
       if (handler) {
@@ -3548,20 +3550,18 @@ export function useMessageHandler(): UseMessageHandlerReturn {
       }
     };
 
-    window.addEventListener("message", handleMessage);
+    const dispatcher = createInboundMessageDispatcher(routeMessage);
+    window.addEventListener("message", dispatcher.handleEvent);
     // Replay what arrived before this listener existed (see panelInboundBuffer).
     // Each is isolated like a live dispatch, so one failing handler cannot
     // drop the rest of the startup messages.
     for (const event of drainPanelInboundBuffer()) {
-      try {
-        handleMessage(event);
-      } catch (error) {
-        WebviewLog.error(
-          `[MessageHandler] Buffered ${String(event.data?.type)} failed: ${error instanceof Error ? error.message : String(error)}`
-        );
-      }
+      dispatcher.dispatchIsolated(event.data);
     }
-    return () => window.removeEventListener("message", handleMessage);
+    return () => {
+      window.removeEventListener("message", dispatcher.handleEvent);
+      dispatcher.dispose();
+    };
   }, [handlers]);
 
   // Memoize sendMessage to maintain stable reference

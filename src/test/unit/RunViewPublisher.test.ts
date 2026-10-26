@@ -23,6 +23,7 @@ import type {
   RunRef,
 } from "../../types/CtrlYokeTypes";
 import type { IDashboardSink } from "../../types/IDashboardSink";
+import type { MessageBatchMessage } from "../../types/WebviewMessageTypes";
 import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
 import { FINAL_STEP_PHASES } from "../../types/DashboardConstants";
 
@@ -68,6 +69,17 @@ class FakeInstance implements RunViewPublisherInstance {
       workflowProperties: {},
       schemaWarnings: [],
     };
+  }
+}
+
+/** Replays a few buffered outputs the way OutputCaptureBuffer.replayTo does. */
+class ReplayingFakeInstance extends FakeInstance {
+  override replayBufferedOutputTo(sink: IDashboardSink): void {
+    super.replayBufferedOutputTo(sink);
+    sink.updateRetryAttempt(0, 1, 3);
+    sink.updateCliOutput(0, { text: "first" }, undefined, "one");
+    sink.updateCliOutput(0, { text: "second" }, undefined, "one");
+    sink.updateFinalStepOutput(0, { text: "final" }, undefined, "final");
   }
 }
 
@@ -236,6 +248,58 @@ suite("RunViewPublisher", () => {
       assert.strictEqual(
         events.filter((event) => event === "buffer").length,
         1
+      );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("delivers the buffered live-output replay as one ordered batch after the snapshot", async () => {
+    const { root, publisher, registry, events } = await createPublisher();
+    try {
+      const workflowKey = "lineage-batch" as WorkflowKey;
+      const address: WorkflowViewAddress = {
+        workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      };
+      await writeAddressedFile(root, address, 2);
+      registry.addInstance(
+        workflowKey,
+        new ReplayingFakeInstance("instance-batch", "draft", [], events)
+      );
+
+      const sent: Array<{ type: string; [key: string]: unknown }> = [];
+      await publisher.loadRunViewForClient(
+        address,
+        (message) => sent.push(message as (typeof sent)[number]),
+        "client-batch"
+      );
+
+      const types = sent.map((message) => message.type);
+      assert.strictEqual(
+        types.filter((type) => type === MESSAGE_TYPES.CLI_OUTPUT).length,
+        0,
+        "replayed outputs must not be sent as separate messages"
+      );
+      const batchIndex = types.indexOf(MESSAGE_TYPES.MESSAGE_BATCH);
+      assert.ok(batchIndex > types.indexOf(MESSAGE_TYPES.RUN_VIEW_LOADED));
+      assert.strictEqual(
+        types.filter((type) => type === MESSAGE_TYPES.MESSAGE_BATCH).length,
+        1
+      );
+      const batch = sent[batchIndex] as unknown as MessageBatchMessage;
+      assert.deepStrictEqual(
+        batch.messages.map((message) => [
+          message.type,
+          message.workflowId,
+          (message.output as { text?: string } | undefined)?.text,
+        ]),
+        [
+          [MESSAGE_TYPES.RETRY_ATTEMPT_CHANGED, "instance-batch", undefined],
+          [MESSAGE_TYPES.CLI_OUTPUT, "instance-batch", "first"],
+          [MESSAGE_TYPES.CLI_OUTPUT, "instance-batch", "second"],
+          [MESSAGE_TYPES.FINAL_PROMPT_OUTPUT, "instance-batch", "final"],
+        ]
       );
     } finally {
       await fs.rm(root, { recursive: true, force: true });

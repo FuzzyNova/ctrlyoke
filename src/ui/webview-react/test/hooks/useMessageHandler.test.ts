@@ -5010,6 +5010,56 @@ describe("TERMINAL_STARTED", () => {
     ]);
   });
 
+  it("filters each MESSAGE_BATCH member as if it had arrived alone", () => {
+    renderHook(() => useMessageHandler());
+
+    useUiStore.getState().setActiveWorkflowId("workflow-1");
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "commit" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: "run-2026-06-08T21-27-08-408Z" as never,
+      },
+      executionRunRef: "run-2026-07-24T04-29-37-398Z" as never,
+    });
+    const executionStateBefore = useWorkflowStore.getState().executionState;
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.MESSAGE_BATCH, {
+        messages: [
+          // Instance-scoped output while browsing history: dropped.
+          {
+            type: MESSAGE_TYPES.EXECUTION_STATE_CHANGED,
+            workflowId: "workflow-1",
+            state: EXECUTION_STATES.PAUSING,
+          },
+          // Execution-owned terminal transport: still applied.
+          {
+            type: MESSAGE_TYPES.TERMINAL_STARTED,
+            workflowId: "workflow-1",
+            sessionId: "shell-session-1",
+            stepName: "Shell",
+            kind: SESSION_KINDS.SHELL,
+            controllerClientId: "controller-1",
+          },
+          { type: "notARealMessageType" },
+          { type: MESSAGE_TYPES.SERVER_STARTED, url: "http://127.0.0.1:1" },
+        ],
+      });
+    });
+
+    expect(useWorkflowStore.getState().executionState).toBe(
+      executionStateBefore
+    );
+    expect(useTerminalStore.getState().sessions["workflow-1"]).toMatchObject([
+      { id: "shell-session-1" },
+    ]);
+    expect(webviewWarnMock).toHaveBeenCalledWith(
+      "[MessageHandler] Unknown message type: notARealMessageType"
+    );
+    expect(useSettingsStore.getState().serverUrl).toBe("http://127.0.0.1:1");
+  });
+
   it("expands the output section and shows terminal when auto-focus is enabled", () => {
     renderHook(() => useMessageHandler());
 

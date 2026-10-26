@@ -2729,6 +2729,22 @@ export interface UndoPromptResultMessage {
   };
 }
 
+/** One ordinary extension → webview message, as carried inside a batch. */
+export interface BatchedDashboardMessage {
+  type: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Extension → Webview: an ordered burst of ordinary messages delivered as one
+ * event, so the dashboard applies them in one render. The webview dispatches
+ * each member exactly as if it had arrived alone, in array order.
+ */
+export interface MessageBatchMessage {
+  type: typeof MESSAGE_TYPES.MESSAGE_BATCH;
+  messages: BatchedDashboardMessage[];
+}
+
 /** Extension → Webview: undo record updated (after undo/redo applied or on history load) */
 export interface UndoRecordUpdatedMessage {
   type: typeof MESSAGE_TYPES.UNDO_RECORD_UPDATED;
