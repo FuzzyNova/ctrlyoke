@@ -101,6 +101,43 @@ describe("extractCliOutputText", () => {
     };
     expect(extractCliOutputText(output)).toBe("base\n\n+resumed");
   });
+
+  it("never serves cached text after events are appended in place", () => {
+    const events = [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "first" } }];
+    const output = {
+      isStreaming: false,
+      elapsed: 0,
+      structured: { events, metadata: {} },
+    };
+    expect(extractCliOutputText(output)).toBe("first");
+    expect(extractCliOutputText(output)).toBe("first");
+
+    events.push({ type: CLI_EVENT_TYPES.TEXT, data: { text: "second" } });
+    expect(extractCliOutputText(output)).toBe("first\n\nsecond");
+
+    output.structured = {
+      events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "replaced" } }],
+      metadata: {},
+    };
+    expect(extractCliOutputText(output)).toBe("replaced");
+  });
+
+  it("does not cache a streaming output's text", () => {
+    const output = {
+      isStreaming: true,
+      elapsed: 0,
+      structured: {
+        events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "partial" } }],
+        metadata: {},
+      },
+    };
+    expect(extractCliOutputText(output)).toBe("partial");
+
+    // A streaming delta may grow the last TEXT event in place, which the
+    // event-count check alone could not detect.
+    output.structured.events[0].data.text = "partial and more";
+    expect(extractCliOutputText(output)).toBe("partial and more");
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

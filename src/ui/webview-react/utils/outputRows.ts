@@ -2599,7 +2599,6 @@ export function buildOutputRows(
       !message.isActivity ||
       lastActivityMessageIndexByAttempt.get(attemptRowKeyBase) === messageIndex;
     if (message.isActivity) attemptsWithLeadingChrome.add(attemptRowKeyBase);
-    const outputText = getCliTextForCopy(output);
     const { workspaceSnapshot, undoRecord } = getStepOutputArtifacts(
       input,
       target
@@ -3025,6 +3024,14 @@ export function buildOutputRows(
       });
     }
 
+    // Only the stats row's Copy button reads this, and only once streaming has
+    // ended. Every activity slice of an attempt shares `aggregateOutput`, so
+    // computing it per slice re-normalized the attempt's whole event list
+    // once per slice — quadratic in a running step's size.
+    const outputText =
+      emitsTrailingChrome && !aggregateOutput.isStreaming
+        ? getCliTextForCopy(aggregateOutput)
+        : undefined;
     const hasStatsRow = isScriptOutput(aggregateOutput)
       ? !aggregateOutput.isStreaming &&
         (aggregateOutput.exitCode !== undefined ||

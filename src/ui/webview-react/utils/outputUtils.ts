@@ -99,14 +99,38 @@ export function buildDiffAnchorPrefix(
 }
 
 /**
+ * Normalizing a step's events to extract its text is costly for long steps,
+ * and the output rows and step chips ask for the same finished output on every
+ * render. A finished output is not mutated, so its text is cached by identity;
+ * the event array and count are checked too so an in-place append can never
+ * serve stale text.
+ */
+interface CachedCopyText {
+  events: NonNullable<CliOutputType["structured"]>["events"] | undefined;
+  eventCount: number;
+  text: string | undefined;
+}
+const copyTextCache = new WeakMap<CliOutputType, CachedCopyText>();
+
+/**
  * Extracts assistant-authored text from a CLI output's structured events.
  * Returns undefined when there is no text content.
  */
 export function getStepAssistantTextForCopy(
   output: CliOutputType
 ): string | undefined {
-  const text = getStepOutputText({ output }, StepOutputTextMode.ASSISTANT);
-  return text || undefined;
+  const events = output.structured?.events;
+  const eventCount = events?.length ?? 0;
+  const cached = copyTextCache.get(output);
+  if (cached && cached.events === events && cached.eventCount === eventCount) {
+    return cached.text;
+  }
+  const text =
+    getStepOutputText({ output }, StepOutputTextMode.ASSISTANT) || undefined;
+  if (!output.isStreaming) {
+    copyTextCache.set(output, { events, eventCount, text });
+  }
+  return text;
 }
 
 /** @deprecated Use getStepAssistantTextForCopy. */

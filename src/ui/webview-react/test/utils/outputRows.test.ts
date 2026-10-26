@@ -343,35 +343,97 @@ describe("outputRows", () => {
   // The prompt now travels on the attempt's history entry, so these tests
   // drive the real projection (`mapOrderedHistoryEntriesToMessages`) rather
   // than hand-built messages.
+  const queueTarget = {
+    kind: FINAL_STEP_PHASES.QUEUE,
+    stepIndex: 0,
+  } as const;
+
+  const buildRowsFor = (
+    allMessages: OutputMessage[],
+    finalStep: WorkflowStep | null = null
+  ) =>
+    buildOutputRows({
+      allMessages,
+      steps,
+      finalStep,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+    }).rows;
+
+  describe("stats row copy text", () => {
+    // One attempt streamed as several activity slices, all sharing the same
+    // aggregate output — the shape a long running step takes.
+    const slicedAttempt = (isStreaming: boolean) =>
+      mapOrderedHistoryEntriesToMessages(
+        [
+          {
+            kind: "cli",
+            target: queueTarget,
+            runIndex: 0,
+            attemptIndex: 0,
+            cliOutput: {
+              cliCommand: "claude -p",
+              structured: {
+                events: [
+                  { type: CLI_EVENT_TYPES.TEXT, data: { text: "All done" } },
+                ],
+                metadata: {},
+              },
+              elapsed: 2,
+              isStreaming,
+            },
+            timestampMs: 1000,
+            sequence: 1,
+          },
+        ],
+        [1001, 1002, 1003].map((timestampMs, index) => ({
+          timestampMs,
+          sequence: index + 2,
+          target: queueTarget,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.STRUCTURED,
+          events: [
+            {
+              type: CLI_EVENT_TYPES.BASH_COMMAND,
+              data: { command: `echo ${index}`, output: `${index}` },
+            },
+          ],
+        }))
+      );
+
+    const statsRows = (rows: ReturnType<typeof buildRowsFor>) =>
+      rows.filter((row) => row.rowKind === OUTPUT_ROW_KINDS.STATS);
+
+    it("gives a finished sliced attempt one stats row carrying its text", () => {
+      const stats = statsRows(buildRowsFor(slicedAttempt(false)));
+
+      expect(stats).toHaveLength(1);
+      expect(stats[0]).toMatchObject({ outputText: "All done" });
+    });
+
+    it("leaves the text off while the attempt is still streaming", () => {
+      const stats = statsRows(buildRowsFor(slicedAttempt(true)));
+
+      // The elapsed time still earns a stats row, but its Copy button is hidden
+      // while streaming, so the costly text is never computed.
+      expect(stats).toHaveLength(1);
+      expect(stats[0]).toMatchObject({ outputText: undefined });
+    });
+  });
+
   describe("prompt row", () => {
-    const queueTarget = {
-      kind: FINAL_STEP_PHASES.QUEUE,
-      stepIndex: 0,
-    } as const;
-
-    const buildRowsFor = (
-      allMessages: OutputMessage[],
-      finalStep: WorkflowStep | null = null
-    ) =>
-      buildOutputRows({
-        allMessages,
-        steps,
-        finalStep,
-        streamingChunks: {},
-        finalStepStreamingChunks: {},
-        isExecutionActive: false,
-        allowUndoActions: false,
-        isViewingHistory: false,
-        historyOutputs: null,
-        workspaceSnapshots: {},
-        finalStepWorkspaceSnapshots: {},
-        undoRecords: {},
-        diffCollapseState: new Map(),
-        diffExpansionState: new Map(),
-        toolCallExpansionState: new Map(),
-        defaultDiffCollapsed: false,
-      }).rows;
-
     const leadingChrome = (rows: ReturnType<typeof buildRowsFor>) =>
       rows
         .filter(
