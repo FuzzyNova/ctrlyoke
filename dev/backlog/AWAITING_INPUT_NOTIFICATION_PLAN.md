@@ -1,6 +1,6 @@
 # "Waiting for Input" Notification Plan
 
-**Status:** Not started.
+**Status:** In progress — staged as a ctrlyoke workflow on 2026-10-26 (see "Orchestrator review").
 
 > **2026-10-10 audit:** Not implemented — no `awaitingInput` setting, constant, or env var exists.
 > The problem statement still matches the code (the per-harness table agrees with the `HookEvent`
@@ -12,6 +12,33 @@
 > location of `buildHookEnvVars` (`src/core/harness/shared/CliExecutionRunner.ts`) and
 > `HookArtifact` (`src/ui/notifications/CompletionNotificationFactory.ts`; the OpenCode plugin
 > keeps its own copy).
+
+## Orchestrator review (2026-10-26) — corrections before building
+
+Staged as four workflow steps: (1) verify the mapping and finalize this plan, (2) settings +
+types + `HookNotificationPlan` resolver wiring, (3) hook-script / OpenCode-plugin emission,
+(4) notification factory, dashboard toggle, docs and changelog. Corrections made while staging:
+
+- **Copilot `notification` is noisy, so it needs a filter too.** The workspace
+  `ctrlyoke-copilot-hook-debug.log` shows Copilot `notification` payloads with
+  `notification_type` `agent_idle` and `shell_completed`. Neither means "waiting on you". The
+  Copilot row must list its permission/elicitation types explicitly. An unfiltered
+  `{ event: "notification" }` would fire on every idle and every finished shell.
+- **The Claude filter is confirmed necessary.** The Claude hook-debug log has ~170
+  `idle_prompt` notifications against 1 `permission_prompt`.
+- **No schema bump.** `notifications.events.awaitingInput` is an optional field with a default,
+  which is the "No bump" case in `CONTRIBUTING.md` ("Changing the schemas"). Run
+  `npm run schema:update` only.
+- **Default decided: `true`.** It is the notification users want, and it now costs only one native
+  hook per harness. It changes what users see, so it needs a `CHANGELOG.md` entry under
+  `## [Unreleased]`.
+- **Missing from the touch list:** `src/ui/webview-react/components/settings/settingsCatalog.ts`
+  (each setting key is catalogued there and checked by `settingsSchemaUiParity`),
+  `docs/guide/notifications.md` (the hand-written page), and `CHANGELOG.md`.
+- **Keep the `hooks: null` behaviour.** `ExecutionPlanBuilder` installs no notification hooks when
+  a step sets `hooks: null`, and the resolver's `installEvents` must stay empty in that case.
+  Headless runs install no ctrlyoke notification hooks (see `buildHeadlessUserHookArgs`), so
+  item 4 under "Verification" already holds for Codex. Step 1 confirms it for the other harnesses.
 
 ## Problem
 
@@ -81,7 +108,7 @@ interface AwaitingInputSource {
   notificationTypes?: string[];     // filter on hookInput.notification_type, when event === "notification"
 }
 const AWAITING_INPUT_SOURCES: Record<HarnessId, AwaitingInputSource | null> = {
-  "copilot-cli":     { event: "notification" },  // verify: filter by notification_type?
+  "copilot-cli":     { event: "notification", notificationTypes: [...] },  // MUST filter: agent_idle/shell_completed observed
   "claude-cli":      { event: "notification", notificationTypes: ["permission_prompt", "elicitation_dialog"] },
   "qwen-cli":        { event: "notification", notificationTypes: [...] },  // verify
   "codex-cli":       { event: "permissionRequest" },
