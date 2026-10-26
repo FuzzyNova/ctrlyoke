@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Each rebuild of a large run's output pane and minimap reuses the undo
   details of finished steps instead of recomputing them, and opening run
   history no longer runs `git` to find the repository on every load.
+- `.ctrlyoke/.gitignore` now also ignores `coordination/` and
+  `execution-leases/`. ctrlyoke keeps these there only in a folder that is not
+  a Git repository, so running `git init` later no longer shows them as
+  untracked files. An existing generated `.ctrlyoke/.gitignore` gains the two
+  entries the next time ctrlyoke opens the workspace.
 - A finished workflow no longer keeps refreshing its runner lock in the
   background. Workflows that were paused and resumed, or ran in a named
   worktree, used to leave these refreshes running after they completed, which

@@ -113,7 +113,9 @@ export async function resolveExecutionRootScope(
  *    leak that {@link sweepOrphanedScopeStorage} cleans up.
  *
  * The non-Git fallback accepts (1) and (2) being unavailable because there is
- * no repository to dirty and nowhere else scoped to put it.
+ * nowhere else scoped to put it. A later `git init` still turns that folder
+ * into a repository, so `WorkspaceInitializer` ignores every category under
+ * `.ctrlyoke/`.
  */
 export function scopeStorageRoot(
   scope: ExecutionRootScope,
