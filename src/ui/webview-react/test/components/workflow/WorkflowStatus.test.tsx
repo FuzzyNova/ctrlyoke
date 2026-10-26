@@ -21,6 +21,7 @@ import { useEditorStore } from "@store/editorStore";
 import { useUiStore, type RecentWorkflow } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useTerminalStore } from "@store/terminalStore";
+import { usePauseRequestStore } from "@store/pauseRequestStore";
 import {
   HARNESS_IDS,
   MESSAGE_TYPES,
@@ -983,6 +984,50 @@ describe("WorkflowStatus — loaded state", () => {
           screen.getByRole("list", { name: "Recent workflows" })
         ).queryAllByRole("listitem", { name: /Paused Workflow/ })
       ).toHaveLength(0);
+    });
+
+    it("shows a row's Pause as pausing at once and sends it only once", async () => {
+      usePauseRequestStore.getState().reset();
+      act(() => {
+        useUiStore.getState().addLoadedWorkflow(pausedSummary("running"));
+      });
+      await openDropdown();
+      const row = () =>
+        within(
+          screen.getByRole("region", { name: "Running workflows" })
+        ).getByRole("listitem", { name: /Paused Workflow/ });
+      const address = {
+        workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: "run-2",
+      };
+      const pauseCalls = () =>
+        postMessageSpy.mock.calls.filter(
+          ([message]) => message?.type === MESSAGE_TYPES.PAUSE_RUN
+        );
+
+      fireEvent.click(within(row()).getByRole("button", { name: "Pause" }));
+
+      expect(pauseCalls()).toEqual([
+        [{ type: MESSAGE_TYPES.PAUSE_RUN, address }],
+      ]);
+      expect(
+        within(row()).queryByRole("button", { name: "Pause" })
+      ).not.toBeInTheDocument();
+      expect(row()).toHaveAccessibleName(/pausing/i);
+
+      fireEvent.click(
+        within(row()).getByRole("button", { name: "Cancel pause" })
+      );
+      expect(postMessageSpy).toHaveBeenLastCalledWith({
+        type: MESSAGE_TYPES.CANCEL_PAUSE_RUN,
+        address,
+      });
+      expect(
+        within(row()).getByRole("button", { name: "Pause" })
+      ).toBeInTheDocument();
+      expect(pauseCalls()).toHaveLength(1);
+      usePauseRequestStore.getState().reset();
     });
 
     it("releases the pinned row when a stale external-owner summary reaches a terminal state", async () => {

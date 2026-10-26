@@ -9,6 +9,8 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RunningWorkflowItem } from "@components/workflow/RunningWorkflowItem";
 import { EXECUTION_STATES, RUNNER_IDS } from "@/types/messages";
+import { usePauseRequestStore } from "@store/pauseRequestStore";
+import { workflowRunAddress, workflowViewAddressKey } from "@utils/viewAddress";
 
 const callbacks = {
   onClick: vi.fn(),
@@ -23,6 +25,50 @@ describe("RunningWorkflowItem", () => {
     cleanup();
     vi.useRealTimers();
     vi.clearAllMocks();
+  });
+
+  it("renders an unanswered pause request exactly like the pausing state", () => {
+    const workflow = {
+      id: "pause-requested",
+      workflowKey: "workflow-a" as never,
+      runRef: "run-1" as never,
+      workflowName: "Busy workflow",
+      filePath: "busy.ctrlyoke.yaml",
+      executionState: EXECUTION_STATES.RUNNING,
+      currentStep: 0,
+      totalSteps: 2,
+    };
+    render(
+      <RunningWorkflowItem
+        workflow={workflow}
+        isCurrent
+        hasActiveTerminal={false}
+        {...callbacks}
+      />
+    );
+    expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
+
+    act(() => {
+      usePauseRequestStore.setState({
+        pending: {
+          [workflowViewAddressKey(workflowRunAddress(workflow)!)]: {
+            address: workflowRunAddress(workflow)!,
+            observedState: "running|",
+          },
+        },
+      });
+    });
+
+    const row = screen.getByRole("listitem");
+    expect(row).toHaveAccessibleName(/pausing/i);
+    expect(
+      screen.queryByRole("button", { name: "Pause" })
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel pause" }));
+    expect(callbacks.onCancelPause).toHaveBeenCalledTimes(1);
+    act(() => {
+      usePauseRequestStore.setState({ pending: {} });
+    });
   });
 
   it("shows Final step for a final-step-only workflow with an empty queue", () => {

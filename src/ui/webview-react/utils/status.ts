@@ -399,6 +399,26 @@ export interface WorkflowExecutionControlsInput {
    * definition has not arrived yet keeps the safe Re-run affordance.
    */
   viewedRunUnstarted?: boolean;
+  /**
+   * The user clicked Pause for the executing run and the authoritative state
+   * update has not been applied yet (`pauseRequestStore`). A running run then
+   * renders as PAUSING so the control answers the click immediately.
+   */
+  pauseRequested?: boolean;
+}
+
+/**
+ * The execution state to render for a run, given an unanswered optimistic
+ * pause request. Only RUNNING is overridden: every other state is either
+ * already the answer or one a pause request cannot apply to.
+ */
+export function applyPauseRequest(
+  state: ExecutionState,
+  pauseRequested: boolean | undefined
+): ExecutionState {
+  return pauseRequested && state === EXECUTION_STATES.RUNNING
+    ? EXECUTION_STATES.PAUSING
+    : state;
 }
 
 /**
@@ -416,6 +436,7 @@ export function getWorkflowExecutionControls({
   executionRunState,
   executionRunLabel,
   viewedRunUnstarted,
+  pauseRequested,
 }: WorkflowExecutionControlsInput): WorkflowExecutionControlsState {
   // The executing run's state only wins while it is genuinely active. Callers
   // can only supply it from summaries, and the addressed `runSummaries`
@@ -423,10 +444,12 @@ export function getWorkflowExecutionControls({
   // in one gesture leaves a summary reading "idle" for the entire run. Letting
   // that stale value win reported "nothing is executing" (disabled Pause/Stop)
   // over live PAUSING/PAUSED and suppressed the pausing banner outright.
-  const executionState =
+  const executionState = applyPauseRequest(
     executionRunState && isWorkflowActive(executionRunState)
       ? executionRunState
-      : viewedExecutionState;
+      : viewedExecutionState,
+    pauseRequested
+  );
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
   const isPausing = executionState === EXECUTION_STATES.PAUSING;
   const isPaused = executionState === EXECUTION_STATES.PAUSED;

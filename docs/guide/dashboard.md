@@ -83,8 +83,9 @@ workflow you're viewing.
   three choices with your current one selected, so you can change it there.
 - **Pause** lets the current step finish, then stops before the next one. A
   banner reads "Workflow will pause after the current step completes", with a
-  **Cancel** button. While paused you can edit, add, reorder or delete the
-  remaining steps.
+  **Cancel** button. The button changes to **Cancel pause** as soon as you
+  click it, even if the dashboard is still catching up. While paused you can
+  edit, add, reorder or delete the remaining steps.
 - **Resume** continues a paused, stopped or failed run from where it left off.
 - **Stop** ends the current step immediately and stops the workflow.
 

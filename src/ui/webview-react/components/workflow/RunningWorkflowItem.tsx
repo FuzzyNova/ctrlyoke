@@ -28,6 +28,9 @@ import type { RecentWorkflow } from "../../store/uiStore";
 import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
 import { getContextMenuOpener, useLongPress } from "@hooks/useLongPress";
 import { Icon } from "../shared/Icon";
+import { workflowRunAddress } from "@utils/viewAddress";
+import { applyPauseRequest } from "@utils/status";
+import { useIsPauseRequested } from "@store/pauseRequestStore";
 import {
   getExternalOwnerBadgeLabel,
   getExternalReadOnlyLabel,
@@ -88,13 +91,20 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
   onResume,
   onStop,
 }) => {
-  const isRunning = workflow.executionState === EXECUTION_STATES.RUNNING;
-  const isPausing = workflow.executionState === EXECUTION_STATES.PAUSING;
-  const isPaused = workflow.executionState === EXECUTION_STATES.PAUSED;
+  const runAddress = workflowRunAddress(workflow);
+  // A clicked Pause shows as PAUSING until the extension's state update lands.
+  const pauseRequested = useIsPauseRequested(runAddress);
+  const executionState = applyPauseRequest(
+    workflow.executionState,
+    pauseRequested
+  );
+  const isRunning = executionState === EXECUTION_STATES.RUNNING;
+  const isPausing = executionState === EXECUTION_STATES.PAUSING;
+  const isPaused = executionState === EXECUTION_STATES.PAUSED;
   const showStepProgress = hasWorkflowStepProgress(workflow);
   const accessibleName = composeRowAccessibleName([
     workflow.workflowName,
-    workflow.executionState,
+    executionState,
     showStepProgress && workflowStepProgressAccessibleLabel(workflow),
     workflowTokenTotalsAccessibleLabel(workflow.tokenTotals),
     hasActiveTerminal && "terminal session is still running",
@@ -105,15 +115,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
     y: number,
     opener: HTMLElement | null = null
   ) => {
-    const address =
-      lineage?.address ??
-      (workflow.workflowKey && workflow.runRef
-        ? {
-            workflowKey: workflow.workflowKey,
-            kind: "run" as const,
-            runRef: workflow.runRef,
-          }
-        : undefined);
+    const address = lineage?.address ?? runAddress;
     if (!address) return;
     onOpenContextMenu?.(
       x,
@@ -194,7 +196,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
         }
         badge={
           <ExecutionStateBadge
-            state={workflow.executionState}
+            state={executionState}
             isNarrow={isCompactRow(tier)}
           />
         }

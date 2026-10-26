@@ -17,6 +17,10 @@ import { useIsViewedRunUnstarted } from "@hooks/useIsViewedRunUnstarted";
 import { getExternalRunnerLabel } from "@utils/externalRunner";
 import { formatShortcut } from "@utils/platform";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
+import {
+  useIsPauseRequested,
+  usePauseRequestStore,
+} from "@store/pauseRequestStore";
 import { WorkflowControls } from "../workflow/WorkflowControls";
 import { WorkflowStatus } from "../workflow/WorkflowStatus";
 import { HeaderStatusBanner } from "./HeaderStatusBanner";
@@ -235,6 +239,9 @@ export const Header: React.FC<{
       >["runRef"],
     };
   }, [activeWorkflow, displayedViewAddress, executionRunRef]);
+  // A clicked Pause renders as PAUSING until the extension's state update is
+  // applied, which can trail the click badly on a busy dashboard.
+  const pauseRequested = useIsPauseRequested(executionRunAddress);
   const { isRunning, isPausing, isPaused, isCancelling, slot1, slot2, slot3 } =
     getWorkflowExecutionControls({
       viewedExecutionState: executionState,
@@ -257,6 +264,7 @@ export const Header: React.FC<{
       // can legitimately sit here having executed nothing at all. Offer Run for
       // it rather than Re-run, which would fork yet another empty run.
       viewedRunUnstarted,
+      pauseRequested,
     });
   const dryRunScope = useExecutionPreviewStore((state) => state.scope);
 
@@ -378,15 +386,13 @@ export const Header: React.FC<{
           postViewedRunAction(MESSAGE_TYPES.CONTINUE_RUN);
         }
       } else if (executionRunAddress) {
-        const type =
-          action === "pause"
-            ? MESSAGE_TYPES.PAUSE_RUN
-            : action === "cancel-pause"
-              ? MESSAGE_TYPES.CANCEL_PAUSE_RUN
-              : action === WORKFLOW_EXECUTION_CONTROL_ACTIONS.STOP
-                ? MESSAGE_TYPES.STOP_RUN
-                : null;
-        if (type) sendMessage(type, { address: executionRunAddress });
+        if (action === WORKFLOW_EXECUTION_CONTROL_ACTIONS.PAUSE) {
+          usePauseRequestStore.getState().requestPause(executionRunAddress);
+        } else if (action === WORKFLOW_EXECUTION_CONTROL_ACTIONS.CANCEL_PAUSE) {
+          usePauseRequestStore.getState().cancelPause(executionRunAddress);
+        } else if (action === WORKFLOW_EXECUTION_CONTROL_ACTIONS.STOP) {
+          sendMessage(MESSAGE_TYPES.STOP_RUN, { address: executionRunAddress });
+        }
       }
     },
     [

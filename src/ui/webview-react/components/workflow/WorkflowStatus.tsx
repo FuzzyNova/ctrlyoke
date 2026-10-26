@@ -38,7 +38,14 @@ import { WORKTREE_MODE_OPTIONS_META } from "@root/types/SchemaUiMetadata";
 import { RunIdentityBadge } from "./RunIdentityBadge";
 import type { RunPanelRow } from "./RunSummaryRow";
 import { useRunSummaryCacheStore } from "../../store/runSummaryCacheStore";
-import { areWorkflowAddressesEqual } from "@utils/viewAddress";
+import {
+  areWorkflowAddressesEqual,
+  workflowRunAddress,
+} from "@utils/viewAddress";
+import {
+  useIsPauseRequested,
+  usePauseRequestStore,
+} from "@store/pauseRequestStore";
 import {
   navigateToWorkflowAddress,
   isDisplayedLineageDrillable,
@@ -52,7 +59,11 @@ import type {
 } from "@root/types/CtrlYokeTypes";
 import { DateRangeFilterControls, MultiCheckboxDropdown } from "../shared";
 import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
-import { isWorkflowActive, isWorkflowRunning } from "../../utils/status";
+import {
+  applyPauseRequest,
+  isWorkflowActive,
+  isWorkflowRunning,
+} from "../../utils/status";
 import { ExecutionStateBadge } from "../shared/ExecutionStateBadge";
 import { useElementNarrow, useElementTier } from "../../hooks/useElementNarrow";
 import { useIsMobile } from "@hooks/useMediaQuery";
@@ -147,6 +158,12 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     (s) => s.activeWorkflowWorkingFilePath
   );
   const displayedViewAddress = useUiStore((s) => s.displayedViewAddress);
+  // The header badge mirrors the Pause control's optimistic PAUSING state.
+  const displayedRunPauseRequested = useIsPauseRequested(
+    displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
+      ? displayedViewAddress
+      : null
+  );
   const displayedRunDirectory = useUiStore((s) => s.displayedRunDirectory);
   const pendingRunViewSwitch = useUiStore((s) => s.pendingRunViewSwitch);
   const recentWorkflows = useUiStore((s) => s.recentWorkflows);
@@ -1299,56 +1316,32 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // Runtime actions target the stable run address, never an instance UUID.
   const handlePauseWorkflow = useCallback(
     (workflow: (typeof loadedWorkflows)[number]) => {
-      if (!workflow.workflowKey || !workflow.runRef) return;
-      sendMessage(MESSAGE_TYPES.PAUSE_RUN, {
-        address: {
-          workflowKey: workflow.workflowKey,
-          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-          runRef: workflow.runRef,
-        },
-      });
+      const address = workflowRunAddress(workflow);
+      if (address) usePauseRequestStore.getState().requestPause(address);
     },
     []
   );
 
   const handleCancelPauseWorkflow = useCallback(
     (workflow: (typeof loadedWorkflows)[number]) => {
-      if (!workflow.workflowKey || !workflow.runRef) return;
-      sendMessage(MESSAGE_TYPES.CANCEL_PAUSE_RUN, {
-        address: {
-          workflowKey: workflow.workflowKey,
-          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-          runRef: workflow.runRef,
-        },
-      });
+      const address = workflowRunAddress(workflow);
+      if (address) usePauseRequestStore.getState().cancelPause(address);
     },
     []
   );
 
   const handleResumeWorkflow = useCallback(
     (workflow: (typeof loadedWorkflows)[number]) => {
-      if (!workflow.workflowKey || !workflow.runRef) return;
-      sendMessage(MESSAGE_TYPES.RESUME_RUN, {
-        address: {
-          workflowKey: workflow.workflowKey,
-          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-          runRef: workflow.runRef,
-        },
-      });
+      const address = workflowRunAddress(workflow);
+      if (address) sendMessage(MESSAGE_TYPES.RESUME_RUN, { address });
     },
     []
   );
 
   const handleStopWorkflow = useCallback(
     (workflow: (typeof loadedWorkflows)[number]) => {
-      if (!workflow.workflowKey || !workflow.runRef) return;
-      sendMessage(MESSAGE_TYPES.STOP_RUN, {
-        address: {
-          workflowKey: workflow.workflowKey,
-          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-          runRef: workflow.runRef,
-        },
-      });
+      const address = workflowRunAddress(workflow);
+      if (address) sendMessage(MESSAGE_TYPES.STOP_RUN, { address });
     },
     []
   );
@@ -1681,7 +1674,10 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               {/* Execution State */}
               {showExecutionBadge && (
                 <ExecutionStateBadge
-                  state={executionState}
+                  state={applyPauseRequest(
+                    executionState,
+                    displayedRunPauseRequested
+                  )}
                   isNarrow={isNarrow}
                   unstarted={viewedRunUnstarted}
                   className="shrink-0"

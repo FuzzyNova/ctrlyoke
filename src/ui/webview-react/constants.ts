@@ -61,6 +61,13 @@ export const TOAST_QUEUE_LIMIT = 10;
 export const TOAST_MAX_VISIBLE_COUNT = 3;
 export const TOAST_INFO_SUCCESS_TIMEOUT_MS = 5_000;
 export const TOAST_WARNING_ERROR_TIMEOUT_MS = 12_000;
+/**
+ * How long a clicked Pause keeps showing as "pausing" while the extension's
+ * authoritative state update has not been applied. Long enough to cover a busy
+ * dashboard's message backlog in normal use; short enough that a request lost
+ * in a reconnect gap does not pin the control in the pausing state.
+ */
+export const PAUSE_REQUEST_FEEDBACK_TIMEOUT_MS = 15_000;
 export const TOAST_VIEWPORT_BOTTOM_OFFSET =
   "calc(var(--safe-area-bottom) + 3rem)";
 

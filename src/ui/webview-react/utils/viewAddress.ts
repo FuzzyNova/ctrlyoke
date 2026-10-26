@@ -7,7 +7,10 @@
  * that decides whether an in-flight run-view switch owns the address. Keeping
  * one implementation here prevents those copies from drifting apart.
  */
-import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
+import type {
+  WorkflowSummary,
+  WorkflowViewAddress,
+} from "@root/types/CtrlYokeTypes";
 import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 export function areWorkflowAddressesEqual(
@@ -23,6 +26,24 @@ export function areWorkflowAddressesEqual(
       right.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN ||
       left.runRef === right.runRef)
   );
+}
+
+export type RunViewAddress = Extract<WorkflowViewAddress, { kind: "run" }>;
+
+/**
+ * The run address of a live workflow summary, or null while the summary has
+ * no run identity yet. Runtime actions target this, never an instance UUID.
+ */
+export function workflowRunAddress(
+  workflow: Pick<WorkflowSummary, "workflowKey" | "runRef">
+): RunViewAddress | null {
+  return workflow.workflowKey && workflow.runRef
+    ? {
+        workflowKey: workflow.workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: workflow.runRef,
+      }
+    : null;
 }
 
 /** Return the stable record key for a client's addressed workflow view. */

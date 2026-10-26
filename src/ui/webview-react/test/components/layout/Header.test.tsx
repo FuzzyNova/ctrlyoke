@@ -12,7 +12,14 @@ import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { useSettingsStore } from "@store/settingsStore";
-import { EXECUTION_STATES, MESSAGE_TYPES, RUNNER_IDS } from "@/types/messages";
+import { usePauseRequestStore } from "@store/pauseRequestStore";
+import { PAUSE_REQUEST_FEEDBACK_TIMEOUT_MS } from "@/constants";
+import {
+  EXECUTION_STATES,
+  MESSAGE_TYPES,
+  RUNNER_IDS,
+  type ExecutionState,
+} from "@/types/messages";
 import {
   RERUN_CONFIRMATION_MODES,
   WORKFLOW_VIEW_ADDRESS_KIND,
@@ -809,6 +816,211 @@ describe("Header execution controls", () => {
         kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef,
       },
+    });
+  });
+
+  describe("optimistic pause feedback", () => {
+    const runAddress = {
+      workflowKey: "workflow-a",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+      runRef,
+    };
+    const pauseRunCalls = () =>
+      postMessage.mock.calls.filter(
+        ([message]) => message?.type === MESSAGE_TYPES.PAUSE_RUN
+      );
+    const executionControls = () =>
+      screen.getByRole("group", { name: "Workflow execution controls" });
+    const liveRun = (executionState: ExecutionState) => ({
+      id: "workflow-instance",
+      workflowKey: "workflow-a" as never,
+      runRef,
+      workflowName: "Run view",
+      filePath: "workflow.ctrlyoke.json",
+      executionState,
+      currentStep: 1,
+      totalSteps: 2,
+    });
+
+    beforeEach(() => {
+      usePauseRequestStore.getState().reset();
+      useUiStore.setState({
+        activeWorkflowId: "workflow-instance",
+        executionRunRef: runRef,
+        pendingRewind: null,
+        loadedWorkflows: [liveRun(EXECUTION_STATES.RUNNING)],
+      });
+      useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.RUNNING);
+    });
+
+    afterEach(() => {
+      usePauseRequestStore.getState().reset();
+      vi.useRealTimers();
+    });
+
+    it("shows the pausing state the instant Pause is clicked", () => {
+      render(<Header />);
+
+      fireEvent.click(
+        within(executionControls()).getByRole("button", { name: "Pause" })
+      );
+
+      expect(pauseRunCalls()).toEqual([
+        [{ type: MESSAGE_TYPES.PAUSE_RUN, address: runAddress }],
+      ]);
+      expect(
+        within(executionControls()).getByRole("button", {
+          name: "Cancel pause",
+        })
+      ).toBeEnabled();
+      expect(
+        screen.getByText("Workflow will pause after the current step completes")
+      ).toBeInTheDocument();
+    });
+
+    it("never sends a second PAUSE_RUN while the first is unanswered", () => {
+      render(<Header />);
+
+      fireEvent.click(
+        within(executionControls()).getByRole("button", { name: "Pause" })
+      );
+      // Any other Pause entry point for the same run is a no-op too.
+      act(() => {
+        expect(
+          usePauseRequestStore.getState().requestPause(runAddress as never)
+        ).toBe(false);
+      });
+
+      expect(pauseRunCalls()).toHaveLength(1);
+      expect(
+        within(executionControls()).queryByRole("button", { name: "Pause" })
+      ).not.toBeInTheDocument();
+    });
+
+    it("hands over to the authoritative state once it is applied", () => {
+      render(<Header />);
+      fireEvent.click(
+        within(executionControls()).getByRole("button", { name: "Pause" })
+      );
+
+      act(() => {
+        useUiStore.setState({
+          loadedWorkflows: [liveRun(EXECUTION_STATES.PAUSED)],
+        });
+        useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.PAUSED);
+      });
+
+      expect(usePauseRequestStore.getState().pending).toEqual({});
+      expect(
+        within(executionControls()).getByRole("button", { name: "Resume" })
+      ).toBeEnabled();
+    });
+
+    it("drops the request on any state update, even back to running", () => {
+      render(<Header />);
+      fireEvent.click(
+        within(executionControls()).getByRole("button", { name: "Pause" })
+      );
+
+      // e.g. another client cancelled the pause before this one caught up.
+      act(() => {
+        useUiStore.setState({
+          loadedWorkflows: [liveRun(EXECUTION_STATES.PAUSING)],
+        });
+      });
+      act(() => {
+        useUiStore.setState({
+          loadedWorkflows: [liveRun(EXECUTION_STATES.RUNNING)],
+        });
+      });
+
+      expect(
+        within(executionControls()).getByRole("button", { name: "Pause" })
+      ).toBeEnabled();
+    });
+
+    it("keeps the pausing state through same-state summary updates", () => {
+      render(<Header />);
+      fireEvent.click(
+        within(executionControls()).getByRole("button", { name: "Pause" })
+      );
+
+      act(() => {
+        useUiStore.setState({
+          loadedWorkflows: [
+            { ...liveRun(EXECUTION_STATES.RUNNING), currentStep: 2 },
+          ],
+        });
+      });
+
+      expect(
+        within(executionControls()).getByRole("button", {
+          name: "Cancel pause",
+        })
+      ).toBeEnabled();
+    });
+
+    it("falls back to the real state after the safety timeout", () => {
+      vi.useFakeTimers();
+      render(<Header />);
+      fireEvent.click(
+        within(executionControls()).getByRole("button", { name: "Pause" })
+      );
+
+      act(() => {
+        vi.advanceTimersByTime(PAUSE_REQUEST_FEEDBACK_TIMEOUT_MS - 1);
+      });
+      expect(
+        within(executionControls()).getByRole("button", {
+          name: "Cancel pause",
+        })
+      ).toBeEnabled();
+
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(
+        within(executionControls()).getByRole("button", { name: "Pause" })
+      ).toBeEnabled();
+    });
+
+    it("cancels an unanswered pause and restores Pause", () => {
+      render(<Header />);
+      fireEvent.click(
+        within(executionControls()).getByRole("button", { name: "Pause" })
+      );
+      fireEvent.click(
+        within(executionControls()).getByRole("button", {
+          name: "Cancel pause",
+        })
+      );
+
+      expect(postMessage).toHaveBeenLastCalledWith({
+        type: MESSAGE_TYPES.CANCEL_PAUSE_RUN,
+        address: runAddress,
+      });
+      expect(usePauseRequestStore.getState().pending).toEqual({});
+      expect(
+        within(executionControls()).getByRole("button", { name: "Pause" })
+      ).toBeEnabled();
+    });
+
+    it("drops the request when the viewed workflow changes", () => {
+      render(<Header />);
+      fireEvent.click(
+        within(executionControls()).getByRole("button", { name: "Pause" })
+      );
+
+      act(() => {
+        useUiStore.setState({
+          displayedViewAddress: {
+            workflowKey: "workflow-b" as never,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+          },
+        });
+      });
+
+      expect(usePauseRequestStore.getState().pending).toEqual({});
     });
   });
 

@@ -9,6 +9,7 @@ import {
   getExecutionStateLabel,
   getExecutionStateBadgeClass,
   getWorkflowExecutionControls,
+  applyPauseRequest,
   isExecutionBusy,
   executionOwnsCurrentStep,
   canStartExecution,
@@ -263,6 +264,7 @@ describe("getWorkflowExecutionControls", () => {
       executionRunState?: (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES];
       executionRunLabel?: string;
       viewedRunUnstarted?: boolean;
+      pauseRequested?: boolean;
     } = {}
   ) =>
     getWorkflowExecutionControls({
@@ -274,7 +276,37 @@ describe("getWorkflowExecutionControls", () => {
       executionRunState: overrides.executionRunState,
       executionRunLabel: overrides.executionRunLabel,
       viewedRunUnstarted: overrides.viewedRunUnstarted,
+      pauseRequested: overrides.pauseRequested,
     });
+
+  it("renders an unanswered pause request on a running run as pausing", () => {
+    const controls = getControls(EXECUTION_STATES.RUNNING, {
+      pauseRequested: true,
+    });
+    expect(controls.isPausing).toBe(true);
+    expect(controls.isRunning).toBe(false);
+    expect(controls.slot2).toMatchObject({
+      action: "cancel-pause",
+      label: "Cancel pause",
+      enabled: true,
+    });
+    expect(controls.slot3).toMatchObject({ action: "stop", enabled: true });
+  });
+
+  it("ignores a pause request once the run is no longer running", () => {
+    expect(applyPauseRequest(EXECUTION_STATES.PAUSED, true)).toBe(
+      EXECUTION_STATES.PAUSED
+    );
+    expect(applyPauseRequest(EXECUTION_STATES.COMPLETED, true)).toBe(
+      EXECUTION_STATES.COMPLETED
+    );
+    expect(applyPauseRequest(EXECUTION_STATES.RUNNING, false)).toBe(
+      EXECUTION_STATES.RUNNING
+    );
+    expect(
+      getControls(EXECUTION_STATES.PAUSED, { pauseRequested: true }).slot2
+    ).toMatchObject({ action: "resume" });
+  });
 
   it("uses slot 1 Run for a draft", () => {
     const controls = getControls(EXECUTION_STATES.IDLE, {
