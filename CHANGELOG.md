@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Each rebuild of a large run's output pane and minimap reuses the undo
   details of finished steps instead of recomputing them, and opening run
   history no longer runs `git` to find the repository on every load.
+- `.ctrlyoke/.gitignore` now also ignores `coordination/` and
+  `execution-leases/`. ctrlyoke keeps these there only in a folder that is not
+  a Git repository, so running `git init` later no longer shows them as
+  untracked files. An existing generated `.ctrlyoke/.gitignore` gains the two
+  entries the next time ctrlyoke opens the workspace.
 - Editor `@` completions resume budgeted scans across narrowed file results, so later files can appear as a query is extended.
 - Workspace viewer file history continues one snapshot-owned Git walk across
   opaque server-side cursors, pages densely across trusted-root filtering without

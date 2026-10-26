@@ -55,9 +55,36 @@ suite("WorkspaceInitializer", () => {
     assert.match(gitignoreContent, /^attachments\/$/m);
     assert.match(gitignoreContent, /^prompts\/$/m);
     assert.match(gitignoreContent, /^capabilities\.json$/m);
+    assert.match(gitignoreContent, /^coordination\/$/m);
+    assert.match(gitignoreContent, /^execution-leases\/$/m);
     assert.strictEqual(
       gitignoreContent.trimEnd().split("\n").at(-1),
       ".gitignore"
+    );
+  });
+
+  test("adds the non-Git scope storage entries to a .gitignore generated before them", async () => {
+    // A folder that was not a repository keeps leases and the coordination
+    // board under `.ctrlyoke/`; a later `git init` must not see them.
+    const workspaceRoot = createWorkspace();
+    const gitignorePath = path.join(
+      workspaceRoot,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
+      ".gitignore"
+    );
+    await WorkspaceInitializer.initializeIfNeeded(workspaceRoot);
+    const olderContent = (await fs.promises.readFile(gitignorePath, "utf8"))
+      .replace("coordination/\n", "")
+      .replace("execution-leases/\n", "");
+    await fs.promises.writeFile(gitignorePath, olderContent, "utf8");
+
+    await WorkspaceInitializer.initializeIfNeeded(workspaceRoot);
+
+    assert.strictEqual(
+      (await fs.promises.readFile(gitignorePath, "utf8")).slice(
+        olderContent.length
+      ),
+      "coordination/\nexecution-leases/\n"
     );
   });
 

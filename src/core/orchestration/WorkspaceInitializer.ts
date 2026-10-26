@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { Log } from "../../utils/Log";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
+import { SCOPE_STORAGE_CATEGORIES } from "./ExecutionRootScope";
 
 const GITIGNORE_HEADER = [
   "# ctrlyoke generated runtime entries are machine-local. Authored files in",
@@ -43,6 +44,10 @@ interface WorkspaceRuntimeEntryRule {
  * - `snapshots/` is deliberately *not* here: only the dev-build `UxSnapshotButton`
  *   creates it, so users never produce the directory. This repo ignores it from
  *   the root `.gitignore` because ctrlyoke develops itself. Do not "fix" that.
+ * - The {@link SCOPE_STORAGE_CATEGORIES} directories normally live in Git's
+ *   common directory and only land here through the non-Git fallback of
+ *   `scopeStorageRoot`. They are still listed because a later `git init`
+ *   turns that folder into a repository, with the fallback state in it.
  *
  * While the generated self-ignore marker remains, `ensureGitignore` appends
  * missing entries but never prunes. Removing that marker transfers ownership
@@ -60,6 +65,10 @@ const WORKSPACE_RUNTIME_ENTRY_RULES: readonly WorkspaceRuntimeEntryRule[] = [
   { entry: `${PATH_CONSTANTS.ATTACHMENTS_DIR}/`, blockWhenTracked: false },
   { entry: `${PATH_CONSTANTS.PROMPTS_DIR}/`, blockWhenTracked: false },
   { entry: `${PATH_CONSTANTS.USAGE_DIR}/`, blockWhenTracked: false },
+  ...Object.values(SCOPE_STORAGE_CATEGORIES).map((category) => ({
+    entry: `${category}/`,
+    blockWhenTracked: false,
+  })),
 ];
 
 export const WORKSPACE_INITIALIZER_RUNTIME_ENTRIES =
