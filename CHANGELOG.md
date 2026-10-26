@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Each rebuild of a large run's output pane and minimap reuses the undo
   details of finished steps instead of recomputing them, and opening run
   history no longer runs `git` to find the repository on every load.
+- A finished workflow no longer keeps refreshing its runner lock in the
+  background. Workflows that were paused and resumed, or ran in a named
+  worktree, used to leave these refreshes running after they completed, which
+  added file-system load and logged `updateHeartbeat: failed` warnings naming
+  workflows that were no longer running.
 - Editor `@` completions resume budgeted scans across narrowed file results, so later files can appear as a query is extended.
 - Workspace viewer file history continues one snapshot-owned Git walk across
   opaque server-side cursors, pages densely across trusted-root filtering without

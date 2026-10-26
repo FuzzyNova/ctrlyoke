@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-25 by Claude (session log review)
 - **Area:** `src/core/orchestration/RunnerLockCoordinator.ts`, `src/core/WorkflowInstance.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

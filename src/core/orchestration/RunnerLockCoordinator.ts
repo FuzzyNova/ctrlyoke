@@ -162,6 +162,9 @@ export class RunnerLockCoordinator {
     if (!lockWorkspaceRoot || !state.workflowKey || !ownerToken) return;
     this.currentLockOwnerToken = undefined;
     this.stopStopRequestPolling();
+    // The interval captured the owner token, so it would otherwise keep
+    // heartbeating a lock this coordinator no longer holds.
+    this.stopHeartbeat();
     await WorkflowLockManager.releaseLock(
       lockWorkspaceRoot,
       state.workflowKey,
@@ -170,6 +173,9 @@ export class RunnerLockCoordinator {
   }
 
   startHeartbeat(workspaceRoot: string, workflowKey: WorkflowKey): void {
+    // A resume after a preserved worktree reservation starts again without a
+    // stop; an overwritten interval could never be cleared.
+    this.stopHeartbeat();
     const ownerToken = this.currentLockOwnerToken;
     if (!ownerToken && !this.port.getExecutionLease()) {
       return;

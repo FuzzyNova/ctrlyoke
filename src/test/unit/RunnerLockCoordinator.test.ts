@@ -2,7 +2,7 @@ import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
-import { suite, test } from "mocha";
+import { setup, suite, teardown, test } from "mocha";
 import { EXECUTION_STATES, RUNNER_IDS } from "../../types/DashboardConstants";
 import type {
   QueueState,
@@ -15,6 +15,8 @@ import {
   type RunnerLockCoordinatorPort,
 } from "../../core/orchestration/RunnerLockCoordinator";
 import { Log } from "../../utils/Log";
+import { HEARTBEAT_INTERVAL_MS } from "../../utils/LockSafetyPrimitives";
+import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { readWorkflowLock } from "../../utils/WorkflowLockInspector";
 
@@ -116,6 +118,102 @@ suite("RunnerLockCoordinator", () => {
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
+  });
+
+  suite("heartbeat interval lifecycle", () => {
+    interface FakeInterval {
+      readonly callback: () => void;
+      cleared: boolean;
+    }
+
+    const originalSetInterval = globalThis.setInterval;
+    const originalClearInterval = globalThis.clearInterval;
+    const originalUpdateHeartbeat = WorkflowLockManager.updateHeartbeat;
+    let intervals: FakeInterval[] = [];
+    let heartbeatCalls: string[] = [];
+    let workspaceRoot = "";
+    let coordinator: RunnerLockCoordinator;
+    let workflowKey: QueueState["workflowKey"];
+
+    const tickHeartbeats = () => {
+      for (const interval of intervals) {
+        if (!interval.cleared) interval.callback();
+      }
+    };
+
+    setup(async () => {
+      intervals = [];
+      heartbeatCalls = [];
+      // Only heartbeat intervals are faked; the file lock's own keep-alive
+      // and stop-request polling still need real timers.
+      globalThis.setInterval = ((callback: () => void, delay?: number) => {
+        if (delay !== HEARTBEAT_INTERVAL_MS) {
+          return originalSetInterval(callback, delay);
+        }
+        const interval: FakeInterval = { callback, cleared: false };
+        intervals.push(interval);
+        return interval;
+      }) as unknown as typeof setInterval;
+      globalThis.clearInterval = ((
+        handle: FakeInterval | NodeJS.Timeout | undefined
+      ) => {
+        const fake = intervals.find((interval) => interval === handle);
+        if (fake) {
+          fake.cleared = true;
+        } else {
+          originalClearInterval(handle as NodeJS.Timeout | undefined);
+        }
+      }) as unknown as typeof clearInterval;
+      WorkflowLockManager.updateHeartbeat = async (_root, _key, ownerToken) => {
+        heartbeatCalls.push(ownerToken);
+      };
+
+      workspaceRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "cy-runner-lock-heartbeat-")
+      );
+      workflowKey = await WorkflowPaths.allocateWorkflowKey(
+        workspaceRoot,
+        "heartbeat"
+      );
+      const host = new TestRunnerLockHost(
+        workspaceRoot,
+        workflowKey,
+        WorkflowPaths.formatRunRef(Date.now())
+      );
+      coordinator = new RunnerLockCoordinator(host);
+      await coordinator.ensureRunnerLock("working-file.json");
+    });
+
+    teardown(async () => {
+      globalThis.setInterval = originalSetInterval;
+      globalThis.clearInterval = originalClearInterval;
+      WorkflowLockManager.updateHeartbeat = originalUpdateHeartbeat;
+      await coordinator.releaseRunnerLock();
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    });
+
+    test("a second start replaces the running interval instead of leaking it", () => {
+      coordinator.startHeartbeat(workspaceRoot, workflowKey!);
+      coordinator.startHeartbeat(workspaceRoot, workflowKey!);
+      tickHeartbeats();
+      assert.strictEqual(heartbeatCalls.length, 1);
+
+      coordinator.stopHeartbeat();
+      heartbeatCalls = [];
+      tickHeartbeats();
+      assert.deepStrictEqual(heartbeatCalls, []);
+    });
+
+    test("releasing the runner lock stops its heartbeat", async () => {
+      coordinator.startHeartbeat(workspaceRoot, workflowKey!);
+      tickHeartbeats();
+      assert.strictEqual(heartbeatCalls.length, 1);
+
+      await coordinator.releaseRunnerLock();
+      heartbeatCalls = [];
+      tickHeartbeats();
+      assert.deepStrictEqual(heartbeatCalls, []);
+    });
   });
 
   test("heartbeat failures are logged once per failure streak, not swallowed", async () => {
