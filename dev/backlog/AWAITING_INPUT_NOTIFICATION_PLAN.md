@@ -37,8 +37,12 @@ types + `HookNotificationPlan` resolver wiring, (3) hook-script / OpenCode-plugi
   `docs/guide/notifications.md` (the hand-written page), and `CHANGELOG.md`.
 - **Keep the `hooks: null` behaviour.** `ExecutionPlanBuilder` installs no notification hooks when
   a step sets `hooks: null`, and the resolver's `installEvents` must stay empty in that case.
-  Headless runs install no ctrlyoke notification hooks (see `buildHeadlessUserHookArgs`), so
-  item 4 under "Verification" already holds for Codex. Step 1 confirms it for the other harnesses.
+- **Headless hook setup is not disabled.** `ExecutionPlanBuilder` passes enabled notification
+  events to each provider's `planHeadlessUserHookArgs`; Codex, Claude, Copilot and Qwen install
+  their notification hook configuration there. OpenCode's headless path serializes user hooks for
+  its plugin, while the enabled native notification event list is currently ignored. Do not claim
+  headless runs install no ctrlyoke notification hooks. Decide separately during implementation
+  whether awaiting-input hooks should be installed headless; preserve existing raw-event behavior.
 
 ## Problem
 
@@ -108,14 +112,27 @@ interface AwaitingInputSource {
   notificationTypes?: string[];     // filter on hookInput.notification_type, when event === "notification"
 }
 const AWAITING_INPUT_SOURCES: Record<HarnessId, AwaitingInputSource | null> = {
-  "copilot-cli":     { event: "notification", notificationTypes: [...] },  // MUST filter: agent_idle/shell_completed observed
+  "copilot-cli":     { event: "notification", notificationTypes: ["permission_prompt", "elicitation_dialog"] },
   "claude-cli":      { event: "notification", notificationTypes: ["permission_prompt", "elicitation_dialog"] },
-  "qwen-cli":        { event: "notification", notificationTypes: [...] },  // verify
+  "qwen-cli":        { event: "notification", notificationTypes: ["permission_prompt"] },
   "codex-cli":       { event: "permissionRequest" },
   "opencode-cli":    { event: "permissionRequest" },
   "antigravity-cli": null,
 };
 ```
+
+Evidence for the finalized mapping (checked 2026-10-26):
+
+| Harness | Source and allow-list | Evidence |
+| --- | --- | --- |
+| Copilot CLI | `notification`: `permission_prompt`, `elicitation_dialog` | [GitHub Copilot hooks reference](https://docs.github.com/en/copilot/reference/hooks-reference) lists both types and says `permissionRequest` runs before rule checks, auto-allow/auto-deny and user prompting. Existing `.ctrlyoke/logs/ctrlyoke-copilot-hook-debug.log` payloads show noisy `agent_idle` and `shell_completed`, so exclude them. A `permission_prompt` represents an actual permission prompt and is absent when yolo auto-approves; `elicitation_dialog` remains eligible. The installed npm JS bundle (`@github/copilot` 0.0.384, `index.js`) did not contain these event type strings, so the official hook reference is the source for the type list. |
+| Claude CLI | `notification`: `permission_prompt`, `elicitation_dialog` | Installed native bundle `~/.local/share/claude/versions/2.1.311` contains the Notification type schema and enum values `permission_prompt`, `elicitation_dialog`, `idle_prompt`, and `auth_success` (among others). `.ctrlyoke/logs/ctrlyoke-claude-hook-debug.log` has repeated `idle_prompt` payloads (for example lines 5644–5666); allow-list only the two prompt types. [Claude Code hooks reference](https://code.claude.com/docs/en/hooks) documents `Notification`. |
+| Qwen CLI | `notification`: `permission_prompt` | Installed `@qwen-code/qwen-code` bundle under `%APPDATA%/npm/node_modules/@qwen-code/qwen-code/chunks/chunk-YGSOH3UK.js` emits Notification payloads with `notification_type` and uses `permission_prompt` for permission prompts. `chunks/startInteractiveUI-H643FQJ2.js` emits `idle_prompt`; the first bundle also emits `auth_success`. No `elicitation_dialog` emission was found, so use the conservative single-type filter. |
+| Codex CLI | `permissionRequest` | [Codex hooks reference](https://developers.openai.com/codex/hooks/) says `PermissionRequest` runs when Codex is about to request approval and does not run for commands that need no approval. `CodexToolPermissionMapper.ts` maps `allowAll` to workspace-write plus `on-request`, and dangerously allow-all to `--dangerously-bypass-approvals-and-sandbox`; already auto-approved calls do not invoke this request hook. |
+| OpenCode CLI | `permissionRequest` | [OpenCode plugins reference](https://opencode.ai/docs/plugins/) lists `permission.asked`. [OpenCode permissions reference](https://opencode.ai/docs/agents/) defines `allow` as permitting operations without approval and `ask` as prompting. `OpenCodeToolPermissionMapper.ts` sets the allow-all catch-all to `allow` and emits no permission slice for dangerously allow-all; auto-approved calls therefore do not raise `permission.asked`. |
+| Antigravity CLI | `null` | `DashboardConstants.ts`'s native hook mapping marks `notification` and `permissionRequest` as n/a for Antigravity (`src/types/DashboardConstants.ts`, lines 2516–2519); `AntigravityNotificationMonitor.ts` marks `notification` unsupported. |
+
+Codex `allowAll` is the Auto preset (`on-request`), not a blanket no-approval mode: operations Codex escalates can still trigger `PermissionRequest`. The claim above is that already auto-approved calls do not.
 
 Then one resolver replaces the two places that currently compute "enabled hook
 events" separately: `CliIntegration.getEnabledHookNotificationEvents()` (line ~1906)
@@ -183,16 +200,12 @@ around it. It is a separate change because user hooks go through each provider's
 
 ## Verification before building
 
-These rows in the mapping table are assumptions. Confirm each against a real session
-and the `ctrlyoke-<harness>-hook-debug.log`:
+Verification before building (completed 2026-10-26; static evidence used, no interactive probes):
 
-1. Copilot `notification`: which `notification_type` values appear (`elicitation_dialog`,
-   permission prompts, anything noisy such as idle)? Does it fire in yolo mode?
-2. Claude/Qwen: are `permission_prompt` + `elicitation_dialog` the right filter?
-   Exclude `idle_prompt`, because `stop` already covers "turn finished".
-3. Codex `PermissionRequest` and OpenCode `permission.asked`: confirm they never fire
-   for auto-approved calls under `allowAll`/`dangerouslyAllowAll`.
-4. Headless runs can't prompt, so confirm nothing is installed or fired there.
+1. [x] Copilot `notification`: GitHub's hook reference enumerates `permission_prompt` and `elicitation_dialog`; existing debug log payloads show noisy `agent_idle` and `shell_completed`, which the allow-list excludes. A permission notification represents an actual prompt and is absent when yolo auto-approves; elicitation dialogs remain eligible in yolo. The installed JS bundle did not include these event strings, so this relies on the official reference and event semantics.
+2. [x] Claude: installed bundle and existing log confirm Notification `notification_type` payloads and frequent `idle_prompt`. Use only `permission_prompt` and `elicitation_dialog`; exclude `idle_prompt`, `auth_success`, and all other types. Qwen's installed bundle emits `permission_prompt`, `idle_prompt`, and `auth_success`; it does not show an `elicitation_dialog` emission, so its conservative allow-list is only `permission_prompt`.
+3. [x] Codex `PermissionRequest` and OpenCode `permission.asked`: official event documentation defines these as request/ask events; provider permission mapping sets allow-all policies to auto-allow and dangerously allow-all to bypass/allow. Codex `allowAll` remains `on-request`, so only operations Codex escalates can still prompt.
+4. [x] Headless assumption corrected: `ExecutionPlanBuilder.ts` passes enabled notification events to `planHeadlessUserHookArgs`. Codex, Claude, Copilot and Qwen use those events to configure native hooks; OpenCode ignores the event list in headless but can serialize user hooks into its plugin. Headless does not inherently disable ctrlyoke notification hooks. Decide whether the new awaiting-input hook is installed headless during implementation; do not rely on the earlier false claim.
 
 ## Touch list
 
