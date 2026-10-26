@@ -24,12 +24,13 @@ interface NotificationCase {
 const scriptPath = (name: string): string =>
   path.resolve(__dirname, `../../scripts/${name}`);
 
-type HookScriptHarness = NotificationCase["harness"] | "antigravity";
+type HookScriptHarness = NotificationCase["harness"] | "antigravity" | "codex";
 
 const HOOK_SCRIPTS: Record<HookScriptHarness, string> = {
   claude: scriptPath("ctrlyoke-claude-hook.js"),
   copilot: scriptPath("ctrlyoke-copilot-hook.js"),
   qwen: scriptPath("ctrlyoke-qwen-hook.js"),
+  codex: scriptPath("ctrlyoke-codex-notify.js"),
   antigravity: scriptPath("ctrlyoke-antigravity-hook.js"),
 };
 
@@ -91,7 +92,8 @@ async function readArtifact(
 
 function hookEnvironment(
   runId: string,
-  enabledEvents: string
+  enabledEvents: string,
+  awaitingInputRule?: string
 ): NodeJS.ProcessEnv {
   return {
     CTRLYOKE_RUN_ID: runId,
@@ -101,6 +103,9 @@ function hookEnvironment(
     CTRLYOKE_PROMPT_NAME: "notification prompt",
     CTRLYOKE_HARNESS_ID: "test-harness",
     CTRLYOKE_NOTIFY_HOOK_EVENTS: enabledEvents,
+    ...(awaitingInputRule
+      ? { CTRLYOKE_NOTIFY_AWAITING_INPUT: awaitingInputRule }
+      : {}),
   };
 }
 
@@ -268,6 +273,142 @@ suite("notification hook scripts", () => {
       assert.strictEqual(result.code, 0, result.stderr);
       assert.deepStrictEqual(await readJsonFiles(notifyDir), []);
     }
+  });
+
+  test("writes awaiting-input artifacts for matching notification types only", async () => {
+    const cases = [
+      {
+        harness: "claude" as const,
+        hookArgs: [],
+        type: "permission_prompt",
+        rule: "notification:permission_prompt,elicitation_dialog",
+      },
+      {
+        harness: "copilot" as const,
+        hookArgs: ["notification"],
+        type: "elicitation_dialog",
+        rule: "notification:permission_prompt,elicitation_dialog",
+      },
+      {
+        harness: "qwen" as const,
+        hookArgs: [],
+        type: "permission_prompt",
+        rule: "notification:permission_prompt",
+      },
+    ];
+
+    for (const [index, notificationCase] of cases.entries()) {
+      const runId = `run-awaiting-input-${index}`;
+      const notifyDir = path.join(tempDirectory, `awaiting-input-${index}`);
+      const payload = {
+        hook_event_name: "Notification",
+        session_id: "awaiting-session",
+        notification_type: notificationCase.type,
+        title: "Approval needed",
+        message: "Please approve this action",
+      };
+      const result = await runHook(
+        notificationCase.harness,
+        notifyDir,
+        notificationCase.hookArgs,
+        payload,
+        hookEnvironment(runId, "", notificationCase.rule)
+      );
+
+      assert.strictEqual(result.code, 0, result.stderr);
+      const files = await readJsonFiles(notifyDir);
+      assert.strictEqual(files.length, 1);
+      const artifact = await readArtifact(notifyDir, files[0]);
+      assert.strictEqual(artifact.hookEvent, "awaitingInput");
+      assert.strictEqual(artifact.nativeHookEvent, "Notification");
+      assert.strictEqual(artifact.notificationTitle, "Approval needed");
+      assert.strictEqual(
+        artifact.notificationMessage,
+        "Please approve this action"
+      );
+      assert.strictEqual(artifact.notificationType, notificationCase.type);
+      assert.deepStrictEqual(artifact.rawHookData, payload);
+    }
+  });
+
+  test("filters non-prompt notifications and deduplicates raw event artifacts", async () => {
+    const filteredCases = [
+      {
+        harness: "claude" as const,
+        hookArgs: [],
+        type: "idle_prompt",
+        rule: "notification:permission_prompt,elicitation_dialog",
+      },
+      {
+        harness: "copilot" as const,
+        hookArgs: ["notification"],
+        type: "agent_idle",
+        rule: "notification:permission_prompt,elicitation_dialog",
+      },
+    ];
+    for (const [index, notificationCase] of filteredCases.entries()) {
+      const result = await runHook(
+        notificationCase.harness,
+        path.join(tempDirectory, `filtered-${index}`),
+        notificationCase.hookArgs,
+        {
+          hook_event_name: "Notification",
+          notification_type: notificationCase.type,
+        },
+        hookEnvironment(`run-filtered-${index}`, "", notificationCase.rule)
+      );
+      assert.strictEqual(result.code, 0, result.stderr);
+      assert.deepStrictEqual(
+        await readJsonFiles(path.join(tempDirectory, `filtered-${index}`)),
+        []
+      );
+    }
+
+    const notifyDir = path.join(tempDirectory, "deduplicated");
+    const result = await runHook(
+      "claude",
+      notifyDir,
+      [],
+      {
+        hook_event_name: "Notification",
+        notification_type: "permission_prompt",
+      },
+      hookEnvironment(
+        "run-deduplicated",
+        "notification",
+        "notification:permission_prompt,elicitation_dialog"
+      )
+    );
+    assert.strictEqual(result.code, 0, result.stderr);
+    const files = await readJsonFiles(notifyDir);
+    assert.strictEqual(files.length, 1);
+    assert.strictEqual(
+      (await readArtifact(notifyDir, files[0])).hookEvent,
+      "awaitingInput"
+    );
+  });
+
+  test("writes Codex permissionRequest when only awaiting input is enabled", async () => {
+    const notifyDir = path.join(tempDirectory, "codex-awaiting-input");
+    const result = await runHook(
+      "codex",
+      notifyDir,
+      [],
+      {
+        hook_event_name: "PermissionRequest",
+        session_id: "codex-permission-session",
+        tool_name: "shell",
+      },
+      hookEnvironment("run-codex-awaiting-input", "", "permissionRequest")
+    );
+
+    assert.strictEqual(result.code, 0, result.stderr);
+    const files = await readJsonFiles(notifyDir);
+    assert.strictEqual(files.length, 1);
+    const artifact = await readArtifact(notifyDir, files[0]);
+    assert.strictEqual(artifact.hookEvent, "awaitingInput");
+    assert.strictEqual(artifact.nativeHookEvent, "PermissionRequest");
+    assert.strictEqual(artifact.toolName, "shell");
   });
 
   test("preserves lifecycle files and permission decision stdout", async () => {

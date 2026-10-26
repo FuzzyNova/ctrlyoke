@@ -61,6 +61,37 @@ const ENABLED_HOOK_EVENTS = new Set(
     .map((value) => value.trim())
     .filter(Boolean)
 );
+const AWAITING_INPUT_RULE = process.env.CTRLYOKE_NOTIFY_AWAITING_INPUT;
+
+function matchesAwaitingInputRule(
+  logicalEvent: string,
+  hookInput: unknown
+): boolean {
+  if (!AWAITING_INPUT_RULE) {
+    return false;
+  }
+  const separatorIndex = AWAITING_INPUT_RULE.indexOf(":");
+  const ruleEvent =
+    separatorIndex === -1
+      ? AWAITING_INPUT_RULE
+      : AWAITING_INPUT_RULE.slice(0, separatorIndex);
+  if (ruleEvent !== logicalEvent) {
+    return false;
+  }
+  if (separatorIndex === -1) {
+    return true;
+  }
+  const notificationTypes = AWAITING_INPUT_RULE.slice(separatorIndex + 1)
+    .split(",")
+    .filter(Boolean);
+  return (
+    notificationTypes.length > 0 &&
+    typeof hookInput === "object" &&
+    hookInput !== null &&
+    "notification_type" in hookInput &&
+    notificationTypes.includes(String(hookInput.notification_type))
+  );
+}
 
 interface HookArtifact {
   runId: string;
@@ -69,6 +100,7 @@ interface HookArtifact {
   workflowName: string;
   promptIndex: number;
   promptName: string;
+  /** Raw logical hook event or the derived "awaitingInput" event. */
   hookEvent: string;
   nativeHookEvent: string;
   harnessId: string;
@@ -519,7 +551,11 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
       toolName?: string;
     } = {}
   ): void {
-    if (!ENABLED_HOOK_EVENTS.has(hookEvent) || !NOTIFY_DIR) {
+    const isAwaitingInput = matchesAwaitingInputRule(hookEvent, rawHookData);
+    if (
+      (!isAwaitingInput && !ENABLED_HOOK_EVENTS.has(hookEvent)) ||
+      !NOTIFY_DIR
+    ) {
       return;
     }
 
@@ -532,7 +568,7 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
       mkdirSync(NOTIFY_DIR, { recursive: true });
       const artifact: HookArtifact = {
         ...base,
-        hookEvent,
+        hookEvent: isAwaitingInput ? "awaitingInput" : hookEvent,
         nativeHookEvent,
         sessionId: extras.sessionId,
         toolName: extras.toolName,

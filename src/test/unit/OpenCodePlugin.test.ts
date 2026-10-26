@@ -21,6 +21,8 @@ async function loadPlugin(
     holdHookProcess?: boolean;
     notifyDir?: string;
     runId?: string;
+    enabledEvents?: string;
+    awaitingInputRule?: string;
   } = {}
 ): Promise<{
   plugin: Record<string, (...args: any[]) => unknown>;
@@ -95,6 +97,12 @@ async function loadPlugin(
         ? { CTRLYOKE_NOTIFY_DIR: pluginOptions.notifyDir }
         : {}),
       ...(pluginOptions.runId ? { CTRLYOKE_RUN_ID: pluginOptions.runId } : {}),
+      ...(pluginOptions.enabledEvents !== undefined
+        ? { CTRLYOKE_NOTIFY_HOOK_EVENTS: pluginOptions.enabledEvents }
+        : {}),
+      ...(pluginOptions.awaitingInputRule
+        ? { CTRLYOKE_NOTIFY_AWAITING_INPUT: pluginOptions.awaitingInputRule }
+        : {}),
     },
     pid: 123,
     platform: pluginOptions.platform ?? process.platform,
@@ -251,6 +259,53 @@ suite("OpenCode plugin user hooks", () => {
       Array.from(spawnCalls[0].options.stdio as string[]),
       ["pipe", "inherit", "inherit"]
     );
+  });
+
+  test("deduplicates permission.asked into awaitingInput when its rule matches", async () => {
+    for (const [index, enabledEvents] of ["", "permissionRequest"].entries()) {
+      const notifyDir = await fsPromises.mkdtemp(
+        path.join(os.tmpdir(), "opencode-awaiting-input-")
+      );
+      try {
+        const runId = `run-opencode-awaiting-input-${index}`;
+        const { plugin } = await loadPlugin([], {
+          notifyDir,
+          runId,
+          enabledEvents,
+          awaitingInputRule: "permissionRequest",
+        });
+        await plugin.event({
+          event: {
+            type: "permission.asked",
+            properties: {
+              sessionID: "session-awaiting-input",
+              type: "edit",
+              title: "write a file",
+              id: "permission-awaiting-input",
+            },
+          },
+        });
+
+        const files = (await fsPromises.readdir(notifyDir)).filter((file) =>
+          file.endsWith(".json")
+        );
+        assert.strictEqual(files.length, 1);
+        const artifact = JSON.parse(
+          await fsPromises.readFile(path.join(notifyDir, files[0]), "utf8")
+        ) as Record<string, unknown>;
+        assert.strictEqual(artifact.hookEvent, "awaitingInput");
+        assert.strictEqual(artifact.nativeHookEvent, "permission.asked");
+        assert.strictEqual(artifact.toolName, "edit");
+        assert.deepStrictEqual(artifact.rawHookData, {
+          sessionID: "session-awaiting-input",
+          type: "edit",
+          title: "write a file",
+          id: "permission-awaiting-input",
+        });
+      } finally {
+        await fsPromises.rm(notifyDir, { recursive: true, force: true });
+      }
+    }
   });
 
   test("sends payloads for sessionStart, userPromptSubmit, stop, error, and postToolUse", async () => {

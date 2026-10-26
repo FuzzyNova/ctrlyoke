@@ -251,6 +251,39 @@ function isHookEventEnabled(logicalEvent) {
 }
 
 /**
+ * Check whether a hook invocation matches the semantic awaiting-input rule.
+ * The rule is serialized as `event:type1,type2` or a bare `event` when no
+ * notification type filter is needed.
+ *
+ * @param {string} logicalEvent - Logical event name (e.g. "notification")
+ * @param {object} hookInput - Parsed native hook payload
+ * @returns {boolean} True if the invocation represents awaiting input
+ */
+function isAwaitingInputMatch(logicalEvent, hookInput) {
+  const rule = process.env.CTRLYOKE_NOTIFY_AWAITING_INPUT;
+  if (!rule) {
+    return false;
+  }
+  const separatorIndex = rule.indexOf(":");
+  const ruleEvent =
+    separatorIndex === -1 ? rule : rule.slice(0, separatorIndex);
+  if (ruleEvent !== logicalEvent) {
+    return false;
+  }
+  if (separatorIndex === -1) {
+    return true;
+  }
+  const notificationTypes = rule
+    .slice(separatorIndex + 1)
+    .split(",")
+    .filter(Boolean);
+  return (
+    notificationTypes.length > 0 &&
+    notificationTypes.includes(hookInput.notification_type)
+  );
+}
+
+/**
  * Write a hook artifact for a hook event if it is enabled.
  *
  * @param {string} logicalEvent - Logical event name (e.g. "preToolUse")
@@ -272,7 +305,8 @@ function maybeWriteHookArtifact(
   debugLog,
   artifactExtras
 ) {
-  if (!isHookEventEnabled(logicalEvent)) {
+  const isAwaitingInput = isAwaitingInputMatch(logicalEvent, hookInput);
+  if (!isAwaitingInput && !isHookEventEnabled(logicalEvent)) {
     return;
   }
   const base = buildArtifactBase();
@@ -283,7 +317,7 @@ function maybeWriteHookArtifact(
     {},
     base,
     {
-      hookEvent: logicalEvent,
+      hookEvent: isAwaitingInput ? "awaitingInput" : logicalEvent,
       nativeHookEvent,
       sessionId: sessionId || undefined,
       toolName: toolName || undefined,

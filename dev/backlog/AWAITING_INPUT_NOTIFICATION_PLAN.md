@@ -172,6 +172,14 @@ given). If it matches, it writes an artifact with `hookEvent: "awaitingInput"`.
 the `awaitingInput` artifact, so the user doesn't get two notifications for one prompt.
 The OpenCode plugin (`ctrlyoke-opencode-plugin.ts`) reads the same env var.
 
+**Step 3 implementation: complete.** Shared hook scripts emit a single
+`awaitingInput` artifact when the rule matches, retaining the native event,
+tool, normalized notification fields, and raw payload. Raw-only behavior is
+unchanged. Copilot's `notification`, Codex's `PermissionRequest`, and OpenCode's
+`permission.asked` handlers reach artifact writing when only the semantic rule
+is enabled. OpenCode uses the same rule interpretation. No deviation from this
+design; existing hook installation from step 2 covers the semantic source event.
+
 ### 3. Settings + types
 
 - `schemas/settings-schema.json`: `notifications.events.awaitingInput: boolean`, a
