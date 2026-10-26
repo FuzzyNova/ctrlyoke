@@ -1,5 +1,10 @@
 # Harness Session Import Plan
 
+> Last reviewed against code: 2026-10-26. Still nothing built. Refreshed line citations;
+> corrected the Copilot layout note (a private `CopilotLogParser.resolveLogPath` and a static
+> `getLogPath` **do** exist, and the minimum supported Copilot is `1.0.19`, well past the
+> v0.0.384 layout switch); `RUN_EXPORT_PLAN.md`'s materializer is now its phase 3.
+>
 > **2026-10-10 audit:** Still not implemented — `segmentSessionTurns`,
 > `isHumanPromptEvent`, `listNativeSessions`, `HarnessSessionImportService`,
 > `RunMaterializer`, and `importedFrom` appear nowhere in `src/` or `schemas/`. Changes
@@ -68,7 +73,7 @@ Two sibling plans share this one's machinery:
 | Structured per-event streaming                                           | `ILogParser.extractStructuredEventsFromEvent`                                                                                                                                                                                                                      | ✅ reuse per-turn                                                               |
 | Session-id extraction, completion detection, stats formatting            | `extractSessionId`, `isComplete`, `formatStatistics`                                                                                                                                                                                                               | ✅ reuse                                                                        |
 | Session-log discovery by prompt/sessionId                                | `discoverSessionLog`                                                                                                                                                                                                                                               | ➖ related, but keyed off a known prompt — not an enumerator                    |
-| Parser instance per harness                                              | `ICliProvider.logParser` (`src/core/harness/shared/interfaces/ICliProvider.ts:146`)                                                                                                                                                                                | ✅ the harness→parser map already exists                                        |
+| Parser instance per harness                                              | `ICliProvider.logParser` (`src/core/harness/shared/interfaces/ICliProvider.ts:149`)                                                                                                                                                                                | ✅ the harness→parser map already exists                                        |
 | Native log dir per harness (private)                                     | e.g. `ClaudeLogParser` `~/.claude/projects/<project>/<session>.jsonl` + `sessions-index.json`; Copilot `~/.copilot/session-state/<session>/events.jsonl`; Codex `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` (see `dev/research/CLI_LOG_FILES_INVESTIGATION.md`) | ➖ each parser knows its dir internally; there is no public "list sessions" API |
 | Run-history storage: `manifest.json` + `events.jsonl`                    | `TimelineRecorder`, `OutputHistoryManager`                                                                                                                                                                                                                         | ✅ reuse — write path is already public                                         |
 | History event holding a turn                                             | `TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED` → payload `{ cliOutput: CliOutput }` targeting an `OutputExecutionTarget` (`{ kind: queue, stepIndex }`)                                                                                                                | ✅ this is the import target shape                                              |
@@ -82,7 +87,7 @@ Two sibling plans share this one's machinery:
    (it assumes ctrlyoke sent one prompt). Import needs the log split into an **ordered
    list of turns**, each a `(userPrompt, assistantResponse)` pair. Assistant extraction
    is first-class; user-prompt _classification_ now is too (`classifyUserEvent` /
-   `extractUserSteerText` in every parser, e.g. `ClaudeLogParser.ts:617`), but only as a
+   `extractUserSteerText` in every parser, e.g. `ClaudeLogParser.ts:859`), but only as a
    per-event judgement for live steer emission — nothing groups events into turns.
 2. **Session enumeration.** Parsers can _discover_ a log matching a known prompt, but
    nothing _lists_ all sessions in a harness's native directory with display metadata.
@@ -117,8 +122,8 @@ interface ILogParser {
 ```
 
 - **No new per-harness `isHumanPromptEvent`.** (Updated 2026-10-10.) Every parser
-  already overrides `classifyUserEvent(event, ctx)` (Claude `:617`, Copilot `:1016`,
-  Codex `:742`, Qwen `:413`, OpenCode `:263`, Antigravity `:934`). Called with an
+  already overrides `classifyUserEvent(event, ctx)` (Claude `:859`, Copilot `:1243`,
+  Codex `:920`, Qwen `:632`, OpenCode `:365`, Antigravity `:1068`). Called with an
   empty `ctx` (no `dispatchedPromptText`), it cannot tell ctrlyoke-injected prompts
   from typed ones, so both come back `"human-steer"` — which is exactly the import
   semantics (see "Injected ctrlyoke prompts" below). A turn boundary is therefore
@@ -182,10 +187,11 @@ Implementation notes:
   `created`, `projectPath` per entry — see investigation doc) instead of opening every
   file. Fall back to `readFirstNJsonlEvents` when the index is stale/missing.
 - The harness log directory currently lives in private methods or inline code (e.g.
-  `ClaudeLogParser.getClaudeProjectDirectory()` ~line 1482; Copilot builds
-  `~/.copilot/session-state` inline inside `discoverSessionLog` ~line 1122). Promote a `protected getLogDirectory()` /
-  `resolveLogPath()` so `listNativeSessions` and `discoverSessionLog` share one source
-  of the path. (DRY — matches project single-source principle.)
+  `ClaudeLogParser.getClaudeProjectDirectory()` ~line 2190; Copilot builds
+  `~/.copilot/session-state` inline in both `discoverSessionLog` ~line 1367 and the static
+  `getLogPath` ~line 1895, with the layout probe in private `resolveLogPath` ~line 2167).
+  Promote a `protected getLogDirectory()` and make the layout probe shared, so
+  `listNativeSessions` and `discoverSessionLog` share one source of the path. (DRY — matches project single-source principle.)
 - Default `projectPath` filter = the current workspace folder, so the picker shows
   "sessions for this project" by default, with a toggle to show all.
 
@@ -222,7 +228,7 @@ A small backend service — `HarnessSessionImportService` (in `src/core/orchestr
    reason the import must be an editable file in the workspace.
 4. **Materialize one run.** Via `OutputHistoryManager`. Note the run **directory** is
    allocated first and history is seeded into it — `initializeRunAt` does not create the
-   run, it populates one (`OutputHistoryManager.ts:331`):
+   run, it populates one (`OutputHistoryManager.ts:384`):
    - Allocate the lineage and run through the normal path
      (`WorkflowLineageRepository.allocateRun` via `WorkingFileManager.promoteToNewRun`),
      yielding `{ workflowKey, runRef, runDir, runId }`.
@@ -244,10 +250,15 @@ summary.projectPath`, `runIndex: 0`, `attemptIndex: 0`). Reuse the **same**
    The `runRef` must be derived from the same timestamp or the directory name and the
    manifest disagree.
 6. **Close the run.** `finalizeRun(historyFilePath, EXECUTION_STATES.COMPLETED,
-turns.length)` (`OutputHistoryManager.ts:1007`); pass `activeExecutionMs` when the
+turns.length)` (`OutputHistoryManager.ts:1084`); pass `activeExecutionMs` when the
    log gives enough information to compute it. Note `finalizeRun` stamps
    `completedAt = Date.now()` internally, so a faithful session end time needs a
    `completedAt` override parameter (small, additive).
+
+Write the run's working file through `WorkingFileManager` (which records a definition anchor
+via `writeAnchoredRunDefinition`, `src/utils/RunDefinitionAnchor.ts`), never with a raw
+write. Since `aa2f6117d`, a run file with no anchor is treated as unrecorded and loads
+read-only.
 
 No new storage format: an imported run is byte-compatible with a ctrlyoke-run one, so
 `OutputPane`, the minimap, search indexing, and undo/redo work with zero UI changes.
@@ -265,21 +276,21 @@ one of them needs a snapshot:
 
 | Undo tier                                                                                 | Data source                                                                                       | Works for imports?         |
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------- |
-| **Per-file / per-event** (`buildUndoDialogInputForSpecificEvent`, `promptUndo.ts:1053`)   | The structured CLI event itself                                                                   | ✅ mostly — see below      |
-| **Prompt-level "undo all changes"** (`buildUndoCandidatesForOutputs:295`, gate at `:383`) | `instruction = snapEntry ? resolveSnapshotUndoInstruction(snapEntry) : null` — **snapshot-gated** | ❌ null without a snapshot |
+| **Per-file / per-event** (`buildUndoDialogInputForSpecificEvent`, `promptUndo.ts:1221`)   | The structured CLI event itself                                                                   | ✅ mostly — see below      |
+| **Prompt-level "undo all changes"** (`buildUndoCandidatesForOutputs:406`, gate at `:535`) | `instruction = snapEntry ? resolveSnapshotUndoInstruction(snapEntry) : null` — **snapshot-gated** | ❌ null without a snapshot |
 
 Per-event undo derives its instruction directly from the event:
 
 - `FILE_EDIT` → `REVERSE_PATCH` built from `editData.structuredPatch`
-  (`promptUndo.ts:~1096-1112`) — **no snapshot needed**. The extension reads the current
-  file and reverse-applies the patch (`WorkspaceSnapshotService.ts:~1189`).
+  (`promptUndo.ts:~1262-1280`) — **no snapshot needed**. The extension reads the current
+  file and reverse-applies the patch (`WorkspaceSnapshotService.ts:~1269`).
 - `FILE_WRITE` → `DELETE` the created file (`resolveEventUndoInstruction`,
-  `promptUndo.ts:128`) — **no snapshot needed**.
+  `promptUndo.ts:132`) — **no snapshot needed**.
 - `FILE_DELETE` → needs `contentToRestore`, which only a snapshot carries today
-  (`promptUndo.ts:~139-155`) — **degrades** unless the source log recorded the deleted
+  (`promptUndo.ts:~150-165`) — **degrades** unless the source log recorded the deleted
   file's prior content.
 - **Redo** works regardless: `redoInstructions` are captured at undo-apply time by
-  reading current content just before overwriting (`WorkspaceSnapshotService.undoFiles`, `:1089`),
+  reading current content just before overwriting (`WorkspaceSnapshotService.undoFiles`, `:1169`),
   so redo is generated live, not at import time.
 
 Because import reuses the **same** `extractResponse` / structured events as the live run,
@@ -302,7 +313,7 @@ diffs. Do NOT globally disable undo.** Two follow-on decisions:
 ### Undo target must clamp to the _open_ workspace (security) — already enforced
 
 The apply-undo guard is `WorkspaceSnapshotService.undoFiles(files, workspacePath,
-namedRoots?)` (`WorkspaceSnapshotService.ts:1089`). It resolves each instruction with
+namedRoots?)` (`WorkspaceSnapshotService.ts:1169`). It resolves each instruction with
 `resolveNamedRelativePath` and rejects anything not inside its trusted-root set —
 `workspacePath` plus every named root — as "Path traversal detected — skipping", using
 the shared `isPathWithinDirectory` helper (`src/utils/PathSecurity.ts`).
@@ -402,7 +413,7 @@ still unbuilt, and this plan is now their only consumer.** Two consequences:
 - The old "build it once, and doing import first de-risks the live tracker" framing is
   obsolete. There is no second consumer waiting; phase 1 is justified by import alone.
 - The nearest existing work is **user-steer classification**, which the shipped pump
-  already owns (`CliLogEventPump.ts:32` — "user-steer classification/emission";
+  already owns (`CliLogEventPump.ts:36` — "user-steer classification/emission";
   `SessionActivityWatcher.ts:12` forwards user-steer events). That classifier is now a
   first-class `ILogParser.classifyUserEvent` overridden by all six parsers, so the
   "is this user-role event a real human turn?" judgement is **reused directly** (see
@@ -431,11 +442,11 @@ ctrlyoke-dispatched ones. Design that badge once, for three origins.
 - **Huge sessions.** Some logs are large. Read incrementally; cap imported turns
   (configurable) and warn. `events.jsonl` append is streaming, so memory is bounded by
   the largest single turn's `extractResponse`.
-- **Copilot format split** (flat file vs `session-id/events.jsonl`, v0.0.384+). Handled
-  inline in `CopilotLogParser.discoverSessionLog` (there is no `resolveLogPath`
-  helper) — extract that layout probe into a shared method and have enumeration call it,
-  not assume a layout. Check `versionPolicy.minimum` first: if every supported Copilot
-  writes the directory format, drop the flat-file branch instead of extending it.
+- **Copilot format split** (flat file vs `session-id/events.jsonl`, v0.0.384+). Probed by
+  the private `CopilotLogParser.resolveLogPath` and duplicated in the static `getLogPath`.
+  `versionPolicy.minimum` is now `1.0.19` (`CopilotCliProvider.ts:126`), so every supported
+  Copilot writes the directory format: enumeration should assume it, and the flat-file
+  branches can be dropped rather than extended.
 - **Missing model/tokens.** Older logs may lack usage; map to `undefined` and let
   `formatStatistics` omit them (it already guards on non-zero usage).
 - **Duplicate imports.** Key the generated workflow name on `sessionId`; if a workflow
@@ -482,7 +493,7 @@ ctrlyoke-dispatched ones. Design that badge once, for three origins.
 
 Phases 1–2 are this plan's own foundation, not a shared one — the follow-up tracker
 shipped without them (see Relationship). What _is_ shared is phase 3's materializer, which
-`RUN_EXPORT_PLAN.md` phase 2 also consumes; whichever plan reaches it first should extract
+`RUN_EXPORT_PLAN.md` phase 3 also consumes; whichever plan reaches it first should extract
 it rather than inline it.
 
 ---

@@ -1,6 +1,15 @@
 # Codex and Antigravity Permission Rules Plan
 
-**Status:** backlog, not started. Proposed 2026-10-19, after the release-defaults review.
+**Status:** backlog, mostly not started. Proposed 2026-10-19, after the release-defaults review.
+
+## Status (2026-10-26)
+
+- **Shipped:** the noisy Codex log line ("does not support granular tool patterns" on every
+  run with a tool list) was removed from `CodexToolPermissionMapper.buildCodexSpecificArgs()`
+  in `5c255d3b0`. The runtime mapper's `prepare()` already reports only the deny entries that
+  `foldMcpToolDenialsIntoServers` could not fold (`.unfolded`).
+- **Remaining:** everything else: the harness tests for the "needs a test" questions, the
+  per-entry dashboard check for Codex, Codex shell rules, and Antigravity rules.
 
 ## Goal
 
@@ -128,14 +137,12 @@ Wait for one of these:
 ## Also to fix
 
 - **The dashboard is less precise than the runtime for Codex.** Codex declares its deny-list
-  support as "partial", and the dashboard works from that declaration. So a deny list made
+  support as "partial" (`CodexToolPermissionMapper`'s capabilities), and the dashboard works
+  from that declaration (`CompatibilityAnalyzer`'s `permissionFields`). So a deny list made
   only of MCP entries Codex enforces still gets a "partially translated" warning in the editor,
   while the run itself reports nothing. To match, the analyzer would call
-  `foldMcpToolDenialsIntoServers` with each step's attached servers, the way the Codex mapper
-  does at runtime.
-- **A noisy Codex log line.** `CodexToolPermissionMapper.buildCodexSpecificArgs()` logs "does
-  not support granular tool patterns" on every run that has any list, including the shipped
-  defaults. Drop it, or limit it to entries Codex can't enforce.
+  `foldMcpToolDenialsIntoServers` (with `CODEX_FOLD_EXCLUDED_SERVER_IDS`) on each step's
+  attached servers, the way `CodexToolPermissionMapper.prepare()` does at runtime.
 
 ## Phases
 

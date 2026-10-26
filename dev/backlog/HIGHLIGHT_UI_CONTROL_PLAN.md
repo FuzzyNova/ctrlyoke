@@ -2,6 +2,8 @@
 
 **Status:** Proposed 2026-10-24. Not started.
 
+Last reviewed against code: 2026-10-26.
+
 **Goal:** a single "take me to this control" action: open the surface that holds the control, scroll
 it into view, and highlight it until the user acts on it or looks away. Start with Global Settings
 rows, so every confirmation dialog and compatibility warning can offer **Show setting**. Build it

@@ -12,6 +12,12 @@
 > - **Stale model list:** the Copilot model-family table is from March 2026. Select models through `selectChatModels` at runtime. Don't hardcode families.
 > - **`copilot-chat` boundary:** these are authoring aids that make bounded, user-initiated `vscode.lm` requests. That is the "public API" direction named in `dev/implemented/COPILOT_CHAT_ARCHIVAL_REMOVAL_PLAN.md`. Any design that runs workflow steps through `vscode.lm`, or treats it as a seventh harness, would recreate the removed `copilot-chat` harness and is out of scope. Option B's `CtrlYokeManager.runHeadless` never existed. A headless harness path for authoring aids would need a new one-shot API.
 > - **Canonical plan:** prompt suggestions and Improve Prompt are owned by [`PROMPT_AUTHORING_SUGGESTIONS_PLAN.md`](PROMPT_AUTHORING_SUGGESTIONS_PLAN.md).
+>
+> Last reviewed against code: 2026-10-26. Still no `vscode.lm` usage in `src/`. Any
+> `vscode.lm` feature must meet the reconsideration conditions in
+> `COPILOT_CHAT_ARCHIVAL_REMOVAL_PLAN.md` (explicit user initiation, the API's consent
+> flow, rate-limit handling, stop controls). The focused precedent for a prompt-editor
+> handler is `src/ui/PromptEditorSupportService.ts`, routed by `WebviewMessageRouter`.
 
 ---
 
@@ -85,7 +91,7 @@ Call `vscode.lm` directly from the extension host using whichever free Copilot m
 ```
 User clicks "Improve Prompt"
   → webview postMessage({ type: 'IMPROVE_PROMPT_REQUEST', prompt: currentText })
-  → CtrlYokeWebviewProvider receives message
+  → WebviewMessageRouter dispatches to the prompt-editor handler
   → selectChatModels({ vendor: 'copilot', family: 'gpt-4o-mini' })
   → sendRequest([system context, user prompt], {}, token)
   → stream chunks back: postMessage({ type: 'IMPROVE_PROMPT_CHUNK', chunk })

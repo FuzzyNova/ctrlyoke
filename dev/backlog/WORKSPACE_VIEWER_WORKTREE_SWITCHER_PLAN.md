@@ -4,6 +4,8 @@
 held until after 0.2.1.
 **Priority:** P2
 
+Last reviewed against code: 2026-10-26.
+
 ## Problem
 
 The workspace viewer only shows the checkout the dashboard was started from.
@@ -96,7 +98,8 @@ How to enforce it:
   worktrees eligible under the rule above:
   `{ id, label, branchName, isCurrent, workingTree, sourceComparison }`. The
   status fields come from the same `getWorkingTreeCounts`/`getAheadBehind`
-  calls `WorktreeManager.getManagementState` makes, so the dropdown can render
+  calls `WorktreeManager.getManagementState`
+  (`src/core/orchestration/WorktreeManager.ts`) makes, so the dropdown can render
   `WorktreeGitStatus`. Factor that per-entry status into one helper instead of
   calling git twice in two places.
 - **Every viewer endpoint accepts an optional `worktree=<id>`**, the way SCM
@@ -105,8 +108,12 @@ How to enforce it:
   a desktop tab must be able to view different worktrees at once.
 - **Per-request root context.** `viewerContext`, `trustedRoots`,
   `primaryRootName`, `resolveRepoRoot`, `getReposInternal` and `searchRoots`
-  are getters over constructor fields today. They become a `ViewerRootContext`
-  resolved from the request's worktree id and passed down. This is the bulk of
+  are getters over constructor fields today. They become one per-request root
+  context resolved from the request's worktree id and passed down. Note that
+  `ViewerRootContext` already exists (`src/platform/WorkspaceViewerPath.ts`,
+  just `{ primaryRoot, namedRoots }` for viewer-path conversion); give the
+  per-request object its own name (e.g. `ViewerRequestRoots`) that contains a
+  `ViewerRootContext` rather than overloading that type. This is the bulk of
   the change: it touches nearly every method in a 3,000-line service, so do it
   as a mechanical refactor commit first, with no behavior change.
 - **Mapping roots into a worktree.** A workspace root at `<repo>/packages/a`

@@ -14,6 +14,14 @@
 > `WorkflowList.tsx`; the standalone `ctrlyoke server` has shipped. Added the synced-state-home
 > double-fire hazard and fixed the Phase 1 "missed-run catch-up" contradiction.
 
+> Last reviewed against code: 2026-10-26. Still not started (no `schedule`/`WorkflowScheduler`
+> in `src/`). Updated in place: the lineage enumeration now lives in
+> `RecentWorkflowCatalog` (`src/core/orchestration/`, called by `handleGetRecentWorkflows`);
+> the fire path is the orchestrator's `seedAndExecuteAtRun` / `executeDraftAtAddress`
+> (the `SEED_NEW_RUN` / `EXECUTE_DRAFT` handlers in `src/ui/WorkflowStepHandlers.ts` are thin
+> wrappers); bookkeeping writes go through `updateDescriptorMetadata`; and descriptor
+> compatibility is spelled out against the persisted-schema rules.
+
 ## TL;DR
 
 - **Substrate decided (per product owner):** a schedule fires **only while a
@@ -31,9 +39,10 @@
   it correctly does **not** activate for the transient one-shot `ctrlyoke run`
   (which never constructs a `WorkflowOrchestrator`).
 - **Storage:** the `schedule` block lives on the **lineage descriptor**
-  (`.runs/<workflowKey>/workflow.json`, like `isFavorite`), so the scheduler loads
+  (`<runsRoot>/<workflowKey>/workflow.json`, like `isFavorite`), so the scheduler loads
   it from the same `WorkflowLineageRepository.listLineageKeys` + `readDescriptor`
-  enumeration the recent-workflows list already uses — no separate discovery pass.
+  enumeration the recent-workflows list already uses (`RecentWorkflowCatalog`) — no
+  separate discovery pass.
 - **Grammar:** 5-field cron for recurrence + a one-shot `at`. RRULE and the
   "Wait until time/date" step idea are both **scrapped**.
 - **Timezone:** interpret times in the **host machine's local timezone**; no
@@ -181,15 +190,23 @@ because:
   (`draft/workflow.ctrlyoke.json`), so anything in the recent-workflows list can
   carry a schedule.
 - **The scheduler bootstraps off work the host already does.**
-  `WorkflowSerializer.handleGetRecentWorkflows` already enumerates
-  `lineageRepository.listLineageKeys()` and reads each descriptor. The scheduler
-  uses the same repository pass: **any descriptor whose `schedule` is present and
-  `enabled` gets armed.** No separate discovery glob.
-- The descriptor carries `schemaVersion`, so an optional `schedule` field is an
-  additive change.
+  `RecentWorkflowCatalog.list` (behind `WorkflowSerializer.handleGetRecentWorkflows`)
+  enumerates `lineageRepository.listLineageKeys()` and reads each descriptor. The
+  scheduler uses the same repository pass once at startup: **any descriptor whose
+  `schedule` is present and `enabled` gets armed.** No separate discovery glob. That
+  full pass takes seconds on a project with thousands of lineages, so after startup
+  the scheduler re-reads only the lineage whose schedule was just set or cleared,
+  never the whole list per tick.
+- The descriptor carries `schemaVersion` (`PERSISTED_STORES.LINEAGE_DESCRIPTOR`, read
+  through `migrateToCurrent` in `PersistedSchemaGuard`), so an optional `schedule`
+  field is additive: no version bump. `updateDescriptor`/`updateDescriptorMetadata`
+  spread the existing descriptor, so a `0.2.x` host that rewrites the descriptor keeps
+  the field (it just never fires it).
 
 `nextRunAt`/`lastRunAt` live on the same descriptor so the dashboard can show
-them without recomputation.
+them without recomputation. The scheduler writes them with
+`updateDescriptorMetadata`, which leaves `revision` alone; `updateDescriptor` bumps it,
+and that would invalidate every open client's `expectedDescriptorRevision` on each fire.
 
 > **Synced state home — double-fire hazard.** In the default user mode the runs
 > root lives under the ctrlyoke state home, which may sit in OneDrive/Dropbox.
@@ -253,9 +270,15 @@ optional field with the machine zone as the default, so no migration.
   ("rerun") for a lineage with a prior run, `EXECUTE_DRAFT` for a draft-only
   lineage. Each fire therefore allocates a **new `run-<timestamp>/`** under the
   same lineage (new `RunRef`, `nextRunId` incremented), so run identity and history
-  grouping match a manual re-run. Call the orchestrator/service method directly
-  rather than posting a webview message, and pass the descriptor/definition
-  revision checks those handlers require.
+  grouping match a manual re-run. Call the orchestrator methods those handlers wrap
+  (`WorkflowOrchestrator.seedAndExecuteAtRun` / `executeDraftAtAddress`, reached today
+  through `WorkflowStepHandlers.handleSeedNewRun` / `handleExecuteDraft`) rather than
+  posting a webview message. Read the current definition and descriptor revisions
+  just before firing and pass them as the expected revisions. `clientId` defaults to
+  the panel's; decide whether a scheduled fire should get its own ID so the
+  revision-reconciliation ledger doesn't attribute it to the panel.
+  The UI-side `canStartRun` gate in `handleSeedNewRun` doesn't apply, so the scheduler
+  needs its own start check (the overlap rule below).
 - **Missed runs — always skip (v1).** A "missed" run is one whose scheduled time
   passed while no ctrlyoke host was running (VS Code closed, machine asleep). v1
   **does not run these** — no catch-up, ever. Opening VS Code after several days
@@ -309,8 +332,8 @@ fires yet; you can author, validate, and persist a schedule.
 A `WorkflowScheduler` owned by / constructed alongside `WorkflowOrchestrator`:
 loads schedules from the lineage descriptors the host **already enumerates**
 (`WorkflowLineageRepository.listLineageKeys` + `readDescriptor`, the same pass
-`handleGetRecentWorkflows` uses), arms a timer for each `enabled` one, fires via
-the existing orchestrator new-run path, and on startup re-arms each schedule for
+`RecentWorkflowCatalog` uses), arms a timer for each `enabled` one, fires via
+the existing orchestrator new-run path (`seedAndExecuteAtRun` / `executeDraftAtAddress`), and on startup re-arms each schedule for
 its next _future_ occurrence (missed runs are skipped, never caught up). Plus the UI: row schedule icon + editor popover, the
 "Scheduled" dropdown section, message types + serializer handlers to get/set
 schedules, and Zustand wiring. This is the whole feature for the extension host —
@@ -338,19 +361,21 @@ ripples across:
   validate the block in `WorkflowLineageRepository`'s descriptor read path instead
   (ill-formed → ignore the schedule, keep the lineage).
 - `src/core/orchestration/WorkflowLineageRepository.ts` — read/validate and
-  write `schedule`/`nextRunAt`/`lastRunAt` via `updateDescriptor`; a tz-aware
+  write `schedule` via `updateDescriptor` and `nextRunAt`/`lastRunAt` via
+  `updateDescriptorMetadata`; a tz-aware
   **next-run util** (new, in `src/utils/`).
 - `src/core/WorkflowOrchestrator.ts` — **owns** the `WorkflowScheduler`
   (new, `src/core/` or `src/core/orchestration/`) so both the extension and the
   standalone server inherit it; wire startup schedule-load + next-occurrence
   re-arming into the orchestrator's init/dispose lifecycle, and have the scheduler
   fire through the **same new-run entrypoint the dashboard's Run/re-run controls
-  hit** (`SEED_NEW_RUN` / `EXECUTE_DRAFT` handlers). **Do not** wire
+  hit** (`seedAndExecuteAtRun` / `executeDraftAtAddress`, behind the `SEED_NEW_RUN` /
+  `EXECUTE_DRAFT` handlers). **Do not** wire
   the scheduler in `extension.ts` or the hosted/standalone servers individually —
   that would defeat the single-source point.
 - `src/ui/WorkflowSerializer.ts` — get/set-schedule handlers (mirror the
-  favorite/`handleToggleFavorite` pattern) + include `schedule`/`nextRunAt` in
-  `handleGetRecentWorkflows` payload.
+  favorite/`handleToggleFavorite` pattern); include `schedule`/`nextRunAt` in the
+  rows `RecentWorkflowCatalog` builds (`RecentWorkflowEntry`).
 - `src/types/WebviewMessageTypes.ts` + `DashboardConstants` `MESSAGE_TYPES` —
   `GET_SCHEDULE` / `SET_SCHEDULE` / `CLEAR_SCHEDULE` message pair (works over
   both the VS Code webview and the hosted-server WebSocket transport unchanged).

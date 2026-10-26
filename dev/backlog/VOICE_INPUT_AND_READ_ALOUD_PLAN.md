@@ -14,6 +14,9 @@ Facts marked _(verify)_ could not be confirmed and need to be checked in the Pha
 >
 > Note that `package.json` pins `@codemirror/view` `^6.39.12`. The 6.43.13 below is the
 > installed version.
+>
+> Last reviewed against code: 2026-10-26. Still not started; the hosted CSP and `/ws/lsp`
+> precedent are unchanged.
 
 ## Goal
 

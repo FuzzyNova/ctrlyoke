@@ -14,6 +14,10 @@
 > (`dev/implemented/COPILOT_CHAT_ARCHIVAL_REMOVAL_PLAN.md`) names the public VS Code
 > Language Model API as the acceptable direction; this plan stays within it
 > (no Copilot Chat commands or private storage).
+>
+> Last reviewed against code: 2026-10-26 (still not started; `/skill:` and `/mcp:`
+> slash-token completions now exist in `src/completions/SlashTokenCompletionHelpers.ts`,
+> so they are current structural completions, not future ones).
 
 ## Product fit
 
@@ -57,7 +61,7 @@ Automatic suggestions default to off.
 ## Non-goals
 
 - Source-code completion or inline code generation.
-- Replacing `@`, `#`, `~`, `$`, or future `/skill:` structural completions.
+- Replacing `@`, `#`, `~`, `$`, `/skill:`, or `/mcp:` structural completions.
 - Automatically rewriting the user's full prompt in the first release.
 - Making suggestions a dependency for editing or running workflows.
 - Guaranteeing identical model availability in extension, hosted, and

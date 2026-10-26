@@ -2,6 +2,9 @@
 
 **Status:** Not started (2026-10-23).
 
+Last reviewed against code: 2026-10-26. Every cited symbol and file still matches; see the
+copy-text cache note under "Copy All and export".
+
 Builds on `dev/implemented/OUTPUT_STEP_FILTER_PLAN.md` (step hide/solo, shipped)
 and `dev/implemented/SUBAGENT_OUTPUT_ATTRIBUTION_PLAN.md` (subagent attribution
 and indented rows, shipped). Replaces the rejected
@@ -285,7 +288,10 @@ The step plan's rules carry over unchanged, applied to the new dimensions:
   pre-fill and adds an **Apply output filters** checkbox, ticked by default when
   a kind or subagent filter is active. Check `generateMarkdownExport`'s input
   while implementing; if it only takes messages, filter structured events out of
-  a copy of each message rather than teaching the exporter about rows.
+  a copy of each message rather than teaching the exporter about rows. Since `bf0ed0557`,
+  `buildOutputRows` computes an attempt's copy text (`getCliTextForCopy`) once, on the stats
+  row, and caches it per finished output; a filtered copy must bypass or key that cache by the
+  filter, not reuse the unfiltered text.
 - **Minimap**: unchanged. It stays step-level. File-edit marks for filtered-out
   edits are dimmed, not removed, so the minimap still maps the whole run.
 - **Hosted dashboard**: all of this is webview-local state and reads, so the

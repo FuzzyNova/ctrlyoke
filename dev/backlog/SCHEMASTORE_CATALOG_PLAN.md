@@ -14,6 +14,9 @@
 > through `npm run schema:update`. Noted that the extension's own globs carry a `**/`
 > prefix.
 >
+> Last reviewed against code: 2026-10-26. Still not started; both schemas are still `/v1/`
+> (`$id` in `schemas/{workflow,settings}-schema.json`), and nothing mentions SchemaStore yet.
+>
 > **Problem in one line:** editors other than VS Code with the ctrlyoke extension only validate
 > ctrlyoke files when the file itself links a schema, and ctrlyoke deliberately no longer
 > writes that link.
@@ -109,7 +112,7 @@ Add two entries to `src/api/json/catalog.json` in `SchemaStore/schemastore`:
       partial should say that other editors pick the schema up automatically through
       SchemaStore, and drop the "set `$schema` by hand" advice where it is no longer needed.
       Today `settings/intro.md` tells other-editor users to set `$schema` by hand
-      (lines ~48–53). Regenerate with `npm run schema:update` (or
+      (lines ~54–58). Regenerate with `npm run schema:update` (or
       `npm run generate-schema-docs`).
 - [ ] Add "update the SchemaStore `versions` map" to the bump steps in `CONTRIBUTING.md`
       "Changing the schemas" (and/or the checklist `scripts/schema-bump.mjs` prints).

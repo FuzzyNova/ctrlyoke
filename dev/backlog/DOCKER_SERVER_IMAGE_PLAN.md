@@ -4,6 +4,11 @@
 [`headless-linux-has-no-persistent-secret-store.md`](../bugs/implemented/headless-linux-has-no-persistent-secret-store.md),
 is fixed.
 
+Last reviewed against code: 2026-10-26. Still not started (no Dockerfile, compose file or image
+CI). The cited code still holds: `CtrlYokeHostedServer.isClientAllowed`, `ctrlyoke server
+--bind`, default port 4747, `FileSecretStore` (`secrets.json`), and `ServerCommand.ts` still
+builds `LicenseService` without a `trialState`, so the CLI server has no remote-access trial.
+
 ## Goal
 
 Publish an official container image that runs `ctrlyoke server` always-on, for example on a
@@ -163,8 +168,8 @@ ctrlyoke@<version>` layer plus base-image security updates. A scheduled weekly r
 
 1. ~~Fix the headless secret-store bug (prerequisite).~~ Done.
 2. Dockerfile + entrypoint + compose example, tested by hand on a Linux home server with
-   two harnesses. This includes capturing the no-harness preflight state for D6 in
-   `DOCUMENTATION_GAPS_PLAN.md`, by starting with `CTRLYOKE_HARNESSES` empty.
+   two harnesses, including a start with `CTRLYOKE_HARNESSES` empty to check the no-harness
+   preflight. (D6's docs screenshot of that state was taken another way on 2026-10-15.)
 3. Verify headless login for all six harnesses; write `docs/guide/docker.md` (setup, networking
    modes, security posture, updating).
 4. CI multi-arch publish on release tags plus a weekly rebuild.

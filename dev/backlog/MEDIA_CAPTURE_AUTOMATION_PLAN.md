@@ -1,17 +1,28 @@
 # Media Capture Automation Plan
 
-**Status (2026-10-19):** Phase 1 done: `media/` exists and retakes #12's ten tab shots and the
-walkthrough's `verifyHarness` image (four themes) with `npm run media -- --all`. Phase 2 done
-2026-10-18: `ctrlyoke export` writes run bundles, a dev build replays one, and the hero and six
-rate-limiter runs are fixtures (`npm run media -- replay <run>`). Phase 3 done 2026-10-18: the
-video pipeline (2× take, beat timeline, Remotion edit, encode) and a new hero
-(`npm run media -- hero`). Phases 4 and 5 done 2026-10-19: the prompt editor clip (#9) and the
-"Build visually or edit as YAML" side-by-side (#14), both on the landing page since 2026-10-19.
-Also 2026-10-19: scripted stills of run history (#15) and the workspace viewer (#10 desktop),
-on a seeded run history and a demo-app with uncommitted changes (§7). Phases 6-7 (phone) are
-open. This is the "how"
-for [`SCREENSHOTS_AND_MEDIA_PLAN.md`](SCREENSHOTS_AND_MEDIA_PLAN.md), which stays the shot list and
-slotting plan. `media/README.md` covers using it and adding shots.
+## Status (2026-10-26)
+
+**Shipped (phases 1-5):** `media/` (own `package.json`, `cli.ts`, `lib/`, `shots/`,
+`compositions/`, `fixtures/`) with `npm run media -- <shot>`; the `media` mode of
+`scripts/dev-host.mjs`; dev-only run replay in `src/dev/replay/` (`RunReplay.ts`,
+`ReplayIntegration.ts`, `ReplayScript.ts`, `ReplayWorkspace.ts`) through
+`WorkflowOrchestrator.setExecutionOverride`; `ctrlyoke export` run bundles in
+`media/fixtures/runs/*.ctrlyokerun` with `fixtures.json`; the video pipeline (2× CDP recorder,
+beat timeline, Remotion edit, encode, colour check). Scripted shots: `properties-tabs`,
+`walkthrough-verify-harness`, `hero`, `prompt-editor`, `visual-or-yaml`, `history`,
+`workspace-viewer`, and (2026-10-20, `0c5942edb`) `license` for `docs/pro/index.md`, with the
+capture host's secrets and license isolated to a file in its fake home
+(`CTRLYOKE_DEV_ISOLATED_SECRETS`). `media/README.md` covers using it and adding shots.
+
+**Remaining:** phase 6 (the scripted phone pipeline, `npm run media -- phone`) and phase 7 (new
+phone media, #10's edit-and-commit clip and #7's prompt-editor GIF). Nothing for them exists in
+`media/` yet; the iOS and Android stills on the site were still made in Resolve. Smaller
+follow-ups: `media/README.md`'s first paragraph still lists replay and the hero clip as "to
+come", and #4/#5's settings pages and the 1× docs stills could move onto scripts like the rest.
+
+This is the "how" for [`SCREENSHOTS_AND_MEDIA_PLAN.md`](SCREENSHOTS_AND_MEDIA_PLAN.md), which
+stays the shot list and slotting plan. Sections 1-5 and 7 below now record the design as built;
+section 6 and phases 6-7 are the outstanding work.
 
 ## Goal
 
@@ -104,17 +115,17 @@ What phase 1 found out, which the code depends on:
   user settings, MCP servers, skills and agents from `os.homedir()` (`createUserConfigBackend`);
   `CTRLYOKE_HOME` only moves run state. Without the fake home, a capture showed the capturing
   user's default model, skills and permission mode. Harness detection only needs `PATH`.
-- **The VS Code panel has to open.** Hosted tabs only finish startup after the panel's READY
-  (`dev/bugs/backlog/hosted-tabs-wait-for-vscode-panel-to-open.md`), and a fresh profile never
-  shows it. `media/vscode-helper/`, a second `--extensionDevelopmentPath`, runs
+- **The VS Code panel has to open.** Hosted tabs only finished startup after the panel's READY
+  (`dev/bugs/implemented/hosted-tabs-wait-for-vscode-panel-to-open.md`, since fixed), and a
+  fresh profile never shows it. `media/vscode-helper/`, a second `--extensionDevelopmentPath`, runs
   `ctrlyoke.dashboard.focus` at startup. It is also the obvious place to add commands later for
   driving VS Code itself.
 - **Themes come from VS Code, not the browser.** The panel captures VS Code's theme colors and the
   server serves them. Rewriting `workbench.colorTheme` in the capture profile switches all four
   themes live, and the page's `<body>` class confirms the switch.
-- **New tabs are slow once workflows are loaded**, 10-30 s each
-  (`dev/bugs/backlog/hosted-tab-startup-stalls-with-loaded-workflows.md`). `--all` takes about
-  6 minutes, mostly that wait.
+- **New tabs were slow once workflows were loaded**, 10-30 s each
+  (`dev/bugs/implemented/hosted-tab-startup-stalls-with-loaded-workflows.md`, fixed 2026-10-19).
+  `--all` took about 6 minutes then, mostly that wait.
 - Two Playwright traps, both now guarded: clicking a drawer tab mid-slide scrolls the page body,
   and a mouse wheel at the end of a panel scrolls the page too. A capture fails if the body is
   scrolled.
@@ -345,17 +356,11 @@ The original order spiked the hero clip against a live run because no fixture ex
    no run (`run` is optional), and `lib/typing.ts` types and picks completions. As built: the
    Workflow Properties panel stays open so the editor wraps into a column the camera can zoom on;
    `!` lists the fixture-declared `CODECOV_TOKEN` set by the host's environment, so nothing is
-   written to the OS credential store; the first `!` list takes about 10 s
-   (`dev/bugs/backlog/secret-completion-first-list-takes-seconds.md`), which the edit cuts using
-   the `:typed`/`:listed` marks; `/syn` replaces the header's `/sk` (no skill name contains
-   "sk"); `@tes` picks the `tests/` folder. The plan as first written follows. Typed live by Playwright into the hosted dashboard with
-   `pressSequentially` and a per-key delay, so completions open as they would for a person. The
-   opening "Add Selection to ctrlyoke" beat moves from VS Code to the workspace viewer: open
-   `src/routes/notes.ts` in it, select lines 17-37 with the mouse (click the start of line 17,
-   shift-click the end of line 37: the editor's handle isn't reachable from the page), right-click, pick "Add Selection to ctrlyoke"
-   (`useWorkspaceEditorContextMenu`), close the viewer and continue typing the beats in
-   `prompt-editor-demo.ctrlyoke.yaml`. Prep the header asks for (`atomicContextReferences` on, a
-   dummy `CODECOV_TOKEN` secret) goes in the capture's fixtures, not by hand. Needs no replay.
+   written to the OS credential store; the first `!` list took about 10 s
+   (`dev/bugs/implemented/secret-completion-first-list-takes-seconds.md`, since fixed), which the
+   edit cuts using the `:typed`/`:listed` marks; `/syn` replaces the header's `/sk` (no skill
+   name contains "sk"); `@tes` picks the `tests/` folder. The take opens on "Add Selection to
+   ctrlyoke" in the workspace viewer (`useWorkspaceEditorContextMenu`) instead of VS Code.
 5. **"Build visually or edit as YAML" clip (#14). Done 2026-10-19** as
    `npm run media -- visual-or-yaml` (`visual-or-yaml-av1-2560x1600.mp4`, H.264 1280×800, WebP
    poster; 27 s). A `VideoShot` has `takes`; each take can install its own fixture under the same
@@ -363,17 +368,9 @@ The original order spiked the hero clip against a live run because no fixture ex
    (`compositions/SideBySide.tsx`); the YAML take records at 900 wide and its edit's `frame`
    crops it to the editor; the visual start fixture drops its `$step:` references, because moving
    a referenced step raises a warning toast over the list; YAML auto-indent is unreliable, so each
-   line is typed with its own indentation. The YAML half ends with Save. The plan as first
-   written follows. Two pages on the same host, recorded
-   separately and composed side by side; they show the same workflow but are not live-synced.
-   Left: the dashboard step list building `bug-sweep.ctrlyoke.yaml`, dragging a step into the
-   parallel group and reordering, then setting harness and model in the properties panel. Steps
-   drag with dnd-kit's pointer sensor, so the script drives `page.mouse` down, a multi-step move
-   past the 5 px activation distance, and up (Playwright's `dragTo` dispatches HTML5 drag events,
-   which dnd-kit ignores). Right: the same file open in the workspace viewer's
-   `WorkspaceFileEditor`, typing a step and accepting ctrlyoke's YAML completions (a `harness:`
-   value, an `@` path, `$step:`). Ships with the landing heading change in
-   `SCREENSHOTS_AND_MEDIA_PLAN.md` #14.
+   line is typed with its own indentation. The YAML half ends with Save. Steps drag with dnd-kit's
+   pointer sensor, so `Timeline.drag` drives `page.mouse` past the 5 px activation distance
+   (Playwright's `dragTo` dispatches HTML5 drag events, which dnd-kit ignores).
 6. **Phone pipeline.** Rebuild one existing iOS still set from its raw recording and compare it to
    the Resolve output. Deferred behind the two clips above because the phone stills already
    exist.

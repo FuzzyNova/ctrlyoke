@@ -19,6 +19,15 @@ remaining behaviour, which is working as designed and still unsatisfying.
 > `historySearchCacheMb` default 320). One correction: partial results are applied in
 > `hooks/useMessageHandler.ts`, which updates the `uiStore` search state.
 
+> Last reviewed against code: 2026-10-26. Still not started; every cited symbol still
+> matches. Two precedents landed since that the design can lean on: `STOP_RUN` now overtakes
+> `routeQueue` (`e4331059f`), and when the index is still building, the `SEARCH_HISTORY`
+> handler fires a detached re-search after `enqueueWorkspaceRefresh` that emits
+> `SEARCH_HISTORY_RESULTS` outside the queue, guarded only by the listing's abort signal
+> (`fdecf81a1`, `WebviewMessageRouter.ts`). That detached re-search is the first code path
+> that can scan a listing alongside a page request, so the scan session below should absorb
+> it (and the no-concurrent-scan test should cover it).
+
 ## The problem in one sentence
 
 A scan stops the moment the requested page is full, so a query's result count

@@ -13,6 +13,27 @@
 > (`sanitizeTerminalOutput` on stdout/stderr before `evaluateSuccess`). Phase 2's "keep comparisons
 > stripped" requirement is therefore "don't regress that function", plus a test for it.
 
+> **Last reviewed against code: 2026-10-26.** Still not implemented. The script-output pipeline
+> has changed shape since this was written, and the sections below are updated to match:
+>
+> - Completed script output is now structured: `CliOutput.scriptOutput` is a
+>   `ScriptRuntimeOutput` (`{ command, stdout, stderr, exitCode }`, `src/types/CtrlYokeTypes.ts`).
+>   Display text comes from `getScriptOutputText` (`src/utils/StepOutputText.ts`), which runs
+>   `sanitizeTerminalOutput`; `response` is a derived projection, not the source.
+> - The stdout/stderr the reporter receives are **already stripped**:
+>   `EndConditionEvaluator.evaluateCondition` returns `normalizeScriptOutput`'s sanitized
+>   `stdout`/`stderr` (`EndConditionEvaluator.ts` ~`:372-442`). Color for display therefore needs
+>   the raw text carried out of the evaluator separately; it cannot be recovered downstream.
+> - Streaming chunks go through a stateful `TerminalOutputSanitizer` class (`push`/`flush`,
+>   `TerminalOutputSanitizer.ts`) that buffers escape sequences split across chunks, after a
+>   secret redactor and a `StreamChunkCoalescer` (`ScriptExecutionReporter.ts` ~`:263-346`).
+> - The webview re-sanitizes at render time (`BashOutput.tsx` `:131-132`, `outputRows.ts`,
+>   `outputFind.ts`). That helps compatibility: older dashboards would strip SGR codes from newer
+>   records rather than render garbage.
+> - Since 0.2.0 shipped, `scriptOutput.stdout` is persisted run state (`_runtime`, `events.jsonl`)
+>   and surfaces through the CLI's `--json` and history commands, so changing what it contains is a contract change (see
+>   "Streaming and persistence" below).
+
 ## Problem
 
 Script step and condition output in the Output pane never shows color, even though a script
@@ -22,20 +43,20 @@ visible:
 
 ### 1. Most scripts never emit color in the first place
 
-`CliProcessManager.spawn` (`src/utils/CliProcessManager.ts:115-137`) launches the child with
+`CliProcessManager.spawn` (`src/utils/CliProcessManager.ts`, ~`:146`) launches the child with
 `stdio: [options.stdin ?? "ignore", "pipe", "pipe"]` — piped, non-TTY stdout/stderr. This is
 also the code path `EndConditionEvaluator` uses for script steps, pre-conditions, and
 end-conditions. Well-behaved CLIs (npm, eslint, jest, vitest, tsc, most Node tooling) detect
 `!process.stdout.isTTY` and disable their own color output. **No amount of preserving ANSI
 codes downstream helps if the child process never wrote any.** The one place ctrlyoke already
 runs scripts through a real PTY is _interactive_ script steps
-(`WorkflowExecutor.executeScriptStep`, ~`:2641-2676`, via `context.spawnScriptPty` →
-`WorkflowInstance.spawnScriptPty` (~`:3643`) → `node-pty`), and that raw, colored PTY output already reaches
+(`WorkflowExecutor.executeScriptStep`, ~`:2752`, via `context.spawnScriptPty` →
+`WorkflowInstance` (~`:2137`) → `node-pty`), and that raw, colored PTY output already reaches
 the webview live through a `TERMINAL_OUTPUT` postMessage rendered by a separate `@xterm/xterm`
 terminal view (`TerminalInstance.tsx`) — a different surface from the Output pane's `CliOutput`
 rows entirely. The same PTY chunks are also fed (raw) through `ScriptExecutionReporter.report`'s
 `onOutput`, which sanitizes them like every other script source before they become the
-dashboard's `CliOutput.response`, so even the one place color already exists today gets thrown
+dashboard's `CliOutput.scriptOutput`, so even the one place color already exists today gets thrown
 away before it reaches this pane.
 
 ### 2. The sanitizer strips all ANSI indiscriminately
@@ -44,16 +65,17 @@ away before it reaches this pane.
 `ANSI_ESCAPE_SEQUENCE_PATTERN` (`:1`) — that matches CSI, OSC,
 and single-char escapes alike and deletes all of them. It does not distinguish SGR color/style
 codes (`\x1B[31m`, `\x1B[38;5;208m`) from cursor-movement, clear-screen, or terminal-title
-sequences. `sanitizeTerminalOutput` (`:75`) is called at every boundary that currently
-matters for display: the streaming-chunk publisher (`src/core/orchestration/ScriptExecutionReporter.ts`,
-`publishChunk` ~`:302`) and the final aggregated response text (~`:351`); the interactive-PTY
-capture path goes through the same reporter.
+sequences. Stripping happens at three boundaries: the stateful `TerminalOutputSanitizer`
+class on streaming chunks (`ScriptExecutionReporter.ts`, `publishChunk` ~`:306`; the
+interactive-PTY capture path goes through the same reporter), `normalizeScriptOutput` in
+`EndConditionEvaluator` on the completed stdout/stderr (which is also what the reporter stores
+in `scriptOutput`), and `sanitizeTerminalOutput` (`:76`) again at render time in the webview.
 
 ### 3. Rendering is plain text, and comparisons must stay ANSI-free
 
-`OutputRow.tsx` renders `response` as plain React children inside `whitespace-pre-wrap`
-containers (e.g. `:385, :421, :516, :551, :1855`) — no `dangerouslySetInnerHTML`, no terminal
-emulator. Raw ANSI bytes would currently render as literal garbage glyphs, not color. Separately,
+Script output renders through `BashOutput.tsx` (and `OutputRow.tsx` for other rows) as plain
+React children inside `whitespace-pre-wrap` containers — no `dangerouslySetInnerHTML`, no
+terminal emulator. Raw ANSI bytes would currently render as literal garbage glyphs, not color. Separately,
 `highlightText`/`outputFind.ts` already slice the same
 string into highlighted-match spans for find-in-page; any color-span layer has to compose with
 that, not fight it. And critically: `EndConditionEvaluator.evaluateSuccess` compares
@@ -61,7 +83,7 @@ that, not fight it. And critically: `EndConditionEvaluator.evaluateSuccess` comp
 match rules. If a fix forces color into a script's stdout, gate comparisons on that same stdout
 must keep comparing the **color-stripped** text, or existing `compareSource: stdout` conditions
 silently break the day this ships. Today that holds because `evaluateResult` →
-`normalizeScriptOutput` (`src/core/EndConditionEvaluator.ts`, ~`:374-381`) runs
+`normalizeScriptOutput` (`src/core/EndConditionEvaluator.ts`, ~`:437-442`) runs
 `sanitizeTerminalOutput` on stdout/stderr first — keep it that way.
 
 ## Why this isn't a quick fix
@@ -95,7 +117,7 @@ backlog plan rather than a same-session patch.
 Non-goals: full terminal emulation (cursor addressing, alternate screens, interactive TUIs) —
 that already exists via the separate PTY/xterm terminal view for interactive script steps and is
 out of scope for the Output pane's `CliOutput` rows. Also non-goal: coloring AI-harness
-(Claude/Codex/etc.) CLI response text — `CliResponseCollector.ts` (~`:240-261`) sanitizes those for a
+(Claude/Codex/etc.) CLI response text — `CliResponseCollector.ts` (~`:268-287`) sanitizes those for a
 different reason (they're prose, not shell output) and are not part of this plan.
 
 ## Target model
@@ -121,8 +143,9 @@ always-on.
 ### A color-preserving sanitizer variant
 
 Add `stripAnsiCodesPreservingColor` (or similar) alongside `stripAnsiCodes` in
-`TerminalOutputSanitizer.ts`, and a `sanitizeTerminalOutputPreservingColor` alongside
-`sanitizeTerminalOutput`. The new pattern must classify CSI sequences instead of blanket-matching
+`TerminalOutputSanitizer.ts`, a `sanitizeTerminalOutputPreservingColor` alongside
+`sanitizeTerminalOutput`, and a color-preserving mode on the streaming `TerminalOutputSanitizer`
+class (its split-escape buffering must keep working for SGR sequences). The new pattern must classify CSI sequences instead of blanket-matching
 them: keep `\x1B[...m` (SGR — color/bold/underline/reset) and drop everything else (cursor
 movement `A-H`, erase `J`/`K`, OSC title/hyperlink sequences, alternate-screen-buffer toggles).
 The existing `CRLF_CR_OR_CONTROL_PATTERN` control-byte cleanup still applies unchanged — that
@@ -133,23 +156,37 @@ Keep the fully-stripped `sanitizeTerminalOutput` as the default and as what feed
 - `EvaluationResult`/verdict comparisons (`EndConditionEvaluator.ts` `normalizeScriptOutput` →
   `evaluateSuccess`) — **always** compare against fully color-stripped text, never the
   color-preserving variant, regardless of the `forceColor` setting.
-- `summarizeStatusError` (`ScriptExecutionReporter.ts:140`) — the one-line status summary has
+- `summarizeStatusError` (`ScriptExecutionReporter.ts:141`) — the one-line status summary has
   no use for color.
-- Row-height estimation and any other caller that only needs plain text.
+- `getScriptOutputText` (and so `response`, prior-context injection, markdown export and the CLI
+  formatter), row-height estimation and any other caller that only needs plain text.
 
-The color-preserving variant feeds only `CliOutput.response` and the streaming chunk pipeline
-when the color-output feature is enabled.
+The color-preserving variant feeds only the display copy of script stdout/stderr and the
+streaming chunk pipeline when the color-output feature is enabled. Because the evaluator
+currently returns only stripped text, it must also return the raw (SGR-preserved) stdout/stderr
+for the reporter to store, while `evaluateSuccess` keeps receiving the stripped copy.
 
 ### Streaming and persistence: keep it a string
 
-Do **not** bake parsed color spans into persisted JSON. `CliOutput.response` stays a plain
-`string`, just with SGR codes intact instead of stripped — this keeps `run-<timestamp>/` history
-files, `OutputHistoryManager`, and `StreamingHistoryBuffer` untouched, and keeps old runs
-(persisted before this feature existed) trivially compatible: no SGR codes in old data just means
-nothing to parse, which is the same as today's plain-text rendering. `StreamChunkCoalescer`
-(`ScriptExecutionReporter.ts:311`) already joins chunks before sanitizing specifically so a
-split escape sequence isn't corrupted at a packet boundary — that guarantee must hold for SGR
-sequences too, since terminal writers can flush mid-escape-code.
+Do **not** bake parsed color spans into persisted JSON. Script text stays a plain `string`, just
+with SGR codes intact instead of stripped, and old runs (persisted before this feature existed)
+stay trivially compatible: no SGR codes in old data just means nothing to parse.
+
+Decide where the colored text lives before Phase 2. `scriptOutput.stdout`/`stderr` are persisted
+run state and reach users through prior-context text and the CLI (`CliJsonResultBuilder.ts`,
+`HistoryInspectionCommands.ts`), so putting SGR codes into those existing fields changes a released contract. Prefer
+either (a) leaving `stdout`/`stderr` stripped and adding optional display-only fields (e.g.
+`styledStdout`/`styledStderr`, written only when the feature is on), or (b) storing raw text in
+the existing fields and guaranteeing every non-display consumer goes through
+`getScriptOutputText`/`sanitizeTerminalOutput`. Option (a) is the additive one under the project's
+compatibility rules; it costs duplicate storage only for runs that opted in. Either way, the
+webview already sanitizes at render time, so an older dashboard reading a newer record degrades
+to today's plain text.
+
+The streaming `TerminalOutputSanitizer` class already buffers an escape sequence split across
+`StreamChunkCoalescer` flushes (`ScriptExecutionReporter.ts` ~`:313-315`); that guarantee must
+hold for SGR sequences in the color-preserving mode too, since terminal writers can flush
+mid-escape-code.
 
 Parse ANSI → styled spans at **render time** in the webview, not at persistence time. This means
 every render of the same string re-parses it, so the parse needs to be cheap and should reuse the
@@ -163,8 +200,8 @@ type-checked structure over string-blob rendering, and stdout is attacker-adjace
 malicious/compromised script's output is untrusted content the user is viewing). Prefer a small
 ANSI→structured-segments parser (e.g. the `anser` package, which returns
 `{ content, fg, bg, decoration }[]` rather than an HTML string) and map segments to `<span
-style={...}>` in a new render helper, likely alongside `OutputRow.tsx`'s existing response
-rendering (`:385, :421, :516, :551, :1855`) or as a small new component next to `BashOutput.tsx`.
+style={...}>` in a new render helper used by `BashOutput.tsx` (which renders script
+stdout/stderr today, after its own `sanitizeTerminalOutput` call).
 `chalk` is already a dependency (`package.json`, `"chalk": "^6.0.1"`) but is a _generator_ of ANSI codes for the
 CLI's own console output, not a parser — it doesn't help here.
 
@@ -183,7 +220,7 @@ cleanly today.
 
 ### Virtualization
 
-The `estimateSize` row field (`outputRows.ts`, computed per row; see `:145` and `:2028`) must estimate off the _displayed_ character
+The `estimateSize` row field (`outputRows.ts`, computed per row; see `:155` and `:2076`) must estimate off the _displayed_ character
 count (post-ANSI-strip length), not the raw string length — a heavily-colored line has
 significantly more bytes than visible characters, and estimating off raw length would
 systematically over-estimate row height and cause scroll jump. This is the same class of risk the
@@ -202,16 +239,16 @@ If most real-world gates people write are simple non-Node shell commands that do
 yet — verify via raw log output that color bytes now exist in captured stdout when enabled.
 
 **Phase 2 — color-preserving sanitizer.** `stripAnsiCodesPreservingColor` /
-`sanitizeTerminalOutputPreservingColor`, wired into `ScriptExecutionReporter.ts` (`publishChunk`
-and the aggregated response, ~`:302/:351` — this also covers interactive PTY steps) behind the
-same setting. Verdict/gate
+`sanitizeTerminalOutputPreservingColor` and the streaming class's color mode, wired into
+`ScriptExecutionReporter.ts` (`publishChunk` and the completed `scriptOutput` — this also covers
+interactive PTY steps) and into the evaluator's raw-output return, behind the same setting, with
+the storage choice from "Streaming and persistence" settled first. Verdict/gate
 comparison paths explicitly re-verified to still use the fully-stripped variant — add a
 regression test asserting a `compareSource: stdout` / `substring` condition still matches
 correctly when `forceColor` is on and the compared text contains SGR codes.
 
 **Phase 3 — render-time parsing and display.** Add the ANSI→segments dependency, new render
-helper, wire into `OutputRow.tsx`/`BashOutput.tsx` response rendering, fix `estimateSize` to use
-display-length.
+helper, wire into `BashOutput.tsx` script rendering, fix `estimateSize` to use display-length.
 
 **Phase 4 — find-in-page composition.** Segment-aware highlight offset logic.
 

@@ -3,6 +3,8 @@
 **Status:** Proposed — not started. No `prompt` value exists in
 `TEMPLATE_VARIABLE_TYPES` or in the schema's `templateVariableMetadata.type` enum.
 
+Last reviewed against code: 2026-10-26
+
 **Related:** `TEMPLATE_AUTHORING_MODE_PLAN.md` (the dashboard template editor; its
 variable manager has to offer this type, and its `emitAs: var` option can keep a
 prompt variable as a runtime `{{var}}` after creation. Read its note on `{{x}}`
@@ -78,8 +80,11 @@ with no completion or validation.
   belongs in prompt-text fields. Run `npm run schema:update`.
 - `multiline` means nothing for a prompt variable, because it is always the editor.
   `TemplateManager.parseTemplateMeta` keeps accepting the key. The UI ignores it.
-- `TemplateManager.parseTemplateMeta` validates `type` against the enum, so check that
-  the enum list there comes from `TEMPLATE_VARIABLE_TYPES` and not from a local copy.
+- `TemplateManager.parseTemplateMeta` already validates `type` against
+  `Object.values(TEMPLATE_VARIABLE_TYPES)`, so the new constant is picked up there for free.
+- Inline token prefixes (`{text:x}`, `{file:x}`) cover only those two types; a `prompt`
+  variable is declared in `_templateMeta` and written as a plain `{name}` token, like
+  `select`/`harness`/`model`. No `{prompt:x}` prefix is proposed.
 
 ### 2. Editor context: computed by the extension, not guessed by the modal
 

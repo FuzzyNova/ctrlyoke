@@ -10,10 +10,11 @@ end condition, and no `ctrlyoke-ide` server exist.
 >   required, and `unevaluatedProperties: false` is set. Phase 1 must add `kind`
 >   as an optional field (defaulting to script) and make `script` conditionally
 >   required.
-> - Retry interpolation is `$endCondition:<field>` in
->   `EndConditionHandler.buildRetryPrompt` (`src/core/EndConditionHandler.ts`).
->   There is no `{stderr}`/`{stdout}` handling in `WorkflowExecutor`. Phase 2 is
->   now `$endCondition:diagnostics`.
+> - Retry interpolation is `$endCondition:<field>`. Phase 2 is now
+>   `$endCondition:diagnostics`. (2026-10-26: the substitution lives in
+>   `substituteConditionOutputRefs`, `src/core/ConditionOutputRefs.ts`, applied by
+>   `CliPromptPreparer`; `EndConditionHandler.buildRetryPrompt` only picks the
+>   template or the fallback text.)
 > - MCP injection is per harness, via `CliMcpConfigGenerator` and
 >   `CliProviderUtils`. `SettingsJsonMcpTracker` only serves Qwen and
 >   Antigravity. The `ctrlyoke` server is injected only when a workflow's
@@ -21,8 +22,12 @@ end condition, and no `ctrlyoke-ide` server exist.
 >   always present.
 > - "Seven harnesses" corrected to six.
 >
-> Pre-release impact: none. Every change here is additive: an optional `kind`,
-> a new `$endCondition:` field, and new MCP tools.
+> Compatibility (0.2.0 is released): every change here is additive within the
+> current workflow `schemaVersion` (an optional `kind`, a new `$endCondition:`
+> field, new MCP tools), so no `schema:bump` or migration is needed. Do note the
+> new end-condition kind under `CHANGELOG.md` and in the hand-written docs.
+>
+> Last reviewed against code: 2026-10-26.
 
 ## Summary
 
@@ -30,7 +35,9 @@ end condition, and no `ctrlyoke-ide` server exist.
 > source as a host-neutral `DiagnosticsSource` port with a VS Code
 > implementation (`vscode.languages.getDiagnostics()`). Once it exists, add the
 > Node implementation over the managed language-server backend
-> (`src/server/lsp/`, pull diagnostics) so `kind: "diagnostics"` works in
+> (`src/server/lsp/`; today it only consumes pushed `publishDiagnostics` in
+> `LanguageIntelligenceHost.ts` for open documents, so a workspace-wide gate needs
+> pull diagnostics or a diagnostics cache added there) so `kind: "diagnostics"` works in
 > `ctrlyoke server` and CLI runs. This was staging Stage 17b of
 > [`STANDALONE_STAGING_PLAN.md`](../implemented/STANDALONE_STAGING_PLAN.md);
 > see "Harness side" item 3 of
@@ -137,8 +144,8 @@ src/bar.ts:8:1 error TS2304: Cannot find name 'Foo'.
 
 **Implementation:**
 
-- `src/core/EndConditionHandler.ts` (`buildRetryPrompt`) — retry prompts already substitute `$endCondition:<field>` (stdout, stderr, exitCode, actual, expected, compareSource). Add a `diagnostics` field, populated when the kind is `diagnostics`. Also set `stdout` to the formatted list so the fallback retry prompt (no `retryPrompt`) includes it.
-- `src/utils/PromptDiagnosticRules.ts` — teach the `$endCondition:` ref validator the new field
+- `RETRY_PROMPT_PLACEHOLDERS` (`src/types/DashboardConstants.ts`) — add `diagnostics`. That constant feeds both the reference scanner (`CONDITION_OUTPUT_FIELDS` in `src/utils/PromptReferenceScanner.ts`, used by `PromptDiagnosticRules.ts`) and substitution (`substituteConditionOutputRefs` in `src/core/ConditionOutputRefs.ts`, which reads `ConditionEvaluationSummary`).
+- `ConditionEvaluationSummary` (`src/types/CtrlYokeTypes.ts`) — carry the formatted list, populated when the kind is `diagnostics`. Also set `stdout` to it so the fallback retry prompt in `EndConditionHandler.buildRetryPrompt` (no `retryPrompt`) includes it.
 - `schemas/workflow-schema.json` — mention the field in the `retryPrompt`/`passRetryPrompt` descriptions
 
 ### Phase 3: `ctrlyoke-ide` MCP Server (auto-injected)
@@ -181,7 +188,7 @@ After each prompt step completes, capture and store the diagnostic snapshot in t
 }
 ```
 
-This enables the dashboard to show diagnostic trend across a workflow run and gives `OutputHistoryManager` richer data for replay.
+This enables the dashboard to show diagnostic trend across a workflow run and gives `OutputHistoryManager` richer data for replay. (2026-10-26: consider recording the snapshot as a typed event in the run's `events.jsonl` timeline (`TIMELINE_EVENT_TYPES`) instead; it is now the durable per-run record, whereas a new `_runtime` field changes a persisted run-file format.)
 
 ---
 

@@ -15,6 +15,15 @@
 > `versionPolicy`; and `package.json` is not a settings surface. §5.2 Steps 6–9 were
 > replaced with the current registration checklist (taken from where `qwen-cli` is
 > wired today).
+>
+> Last reviewed against code: 2026-10-26. Still not started (P3 in `dev/active/ROADMAP.md`).
+> `dev/implemented/ADDING_NEW_CLI_HARNESS.md` is a superseded FlightPath-era guide that points
+> back to §5.2 Steps 6–9 here, so this plan *is* the current recipe. Re-diffed that checklist
+> against every file that wires `qwen-cli` and `antigravity-cli` today: `installHint` is now
+> `installCommand` (built with `installCommandFor` from `shared/HarnessInstallCommand.ts`), and
+> Step 9 gained the harness-test scripts, `AdvancedPermissionsSection.tsx`, the hand-written
+> docs/landing/template pages that enumerate harnesses, and a `CHANGELOG.md` entry (0.2.0 has
+> shipped; adding a harness ID is additive, no `schema:bump`).
 
 **Date:** March 19, 2026  
 **Status:** Not started (P3, deferred)  
@@ -335,7 +344,7 @@ export class ClineCliProvider implements ICliProvider {
     harnessId: HARNESS_IDS.CLINE_CLI,
     displayName: "Cline CLI",
     terminalName: "Cline",
-    installHint: installHintFor(/* per-OS hint, see HarnessInstallHint.ts */),
+    installCommand: installCommandFor({/* see shared/HarnessInstallCommand.ts */}),
     npmPackage: "cline",
     versionPolicy: {/* see dev/reference/HARNESS_VERSION_SUPPORT.md */},
     shouldStreamHeadlessOutput: true,
@@ -770,7 +779,14 @@ fan-out (follow every `antigravityCliIntegration` occurrence).
 harness-specific branch), `src/core/harness/shared/usage/providers/` +
 `index.ts` (usage provider, if Cline exposes quota/usage),
 `src/core/harness/shared/StatuslineManager.ts` (if applicable),
-`src/core/harness/shared/CliEventMapper.ts` (tool-name mappings).
+`src/core/harness/shared/CliEventMapper.ts` (tool-name mappings),
+`src/core/harness/shared/CliNotificationMonitor.ts` (`shouldQuoteNodeCommand`, if Cline's
+hook runner passes commands through without shell quote parsing, as Qwen and Antigravity do),
+and `src/extension.ts` (only if Cline needs a startup sweep of leftover global config, cf.
+`AntigravityCliProvider.sweepOrphanedGlobalHooks()`).
+
+**Hooks (if Cline exposes any):** `src/scripts/ctrlyoke-cline-hook.js` built on
+`ctrlyoke-hook-utils.js`, and the `NotificationHookScripts.test.ts` cases.
 
 ---
 
@@ -808,19 +824,30 @@ harness-specific branch), `src/core/harness/shared/usage/providers/` +
       timestamps, not UUIDs — add an explicit case
 - [ ] `src/utils/{HarnessDirectoryUtils,McpDiscoveryUtils,HarnessMcpExporter,TokenSemantics}.ts`
 - [ ] UI: `src/ui/WebviewSettingsSync.ts`, `src/ui/PromptEditorSupportService.ts`,
-      `src/ui/webview-react/store/settingsStore.ts`,
-      `components/shared/{HarnessIcon,ModelPricingEditor}.tsx`,
-      `components/settings/{settingsCatalog.ts,McpManagerSection.tsx,stats/StatusLineTrackingControls.tsx}`
+      `src/ui/webview-react/store/settingsStore.ts`, `components/shared/HarnessIcon.tsx`,
+      `components/settings/{settingsCatalog.ts,McpManagerSection.tsx,AdvancedPermissionsSection.tsx,stats/StatusLineTrackingControls.tsx}`
+      (`ModelPricingEditor.tsx` iterates `HARNESS_IDS` and needs no edit)
+- [ ] Harness tests: `src/test/harness/helpers/harnessRunner.ts` (per-harness test model),
+      `scripts/test-harness-minimum.mjs` (`NPM_PACKAGES`, plus `BACKED_UP_CONFIGS` if old
+      Cline versions rewrite a config file), and the capability evidence in
+      `src/test/harness/capabilityEvidence.ts`
 - [ ] Docs: `docs/harnesses/cline-cli.md` + `docs/harnesses/index.md`; regenerate
       `docs/harnesses/compatibility.md` (`scripts/generate-compatibility-docs.mjs`;
       update the harness list in `scripts/generate-compatibility-docs.test.mjs`);
-      `npm run check:docs` must pass
+      `npm run check:docs` must pass. Hand-written pages that enumerate or count the
+      harnesses: `docs/guide/{installation,concepts,dry-run}.md`,
+      `docs/workflows/{permissions,mcp-servers,properties-panel,agents-and-skills}.md`,
+      `docs/harnesses/files-ctrlyoke-writes.md`, `docs/troubleshooting/faq.md`,
+      `docs/cli/{ctrlyoke,ctrlyoke-mcp}.md`, `manual-test/README.md`,
+      `src/templates/agents/ctrlyoke-tech-support.agent.md`, and the landing site
+      (`landing/src/components/HarnessDeck.astro`, `landing/src/pages/index.astro`)
+- [ ] `CHANGELOG.md` under `## [Unreleased]`
 - [ ] `config.versionPolicy` entry and `dev/reference/HARNESS_VERSION_SUPPORT.md`;
       `scripts/chores.mjs` `update-clis`
 - [ ] Project instructions: add `src/core/harness/cline/**` to the `applyTo` of
       `.github/instructions/harness-cli-providers.instructions.md`, the routing table in
       `CLAUDE.md`, and the "exactly six" harness statements in
-      `.github/copilot-instructions.md`
+      `.github/copilot-instructions.md` (and `AGENTS.md` if it repeats them)
 
 ---
 

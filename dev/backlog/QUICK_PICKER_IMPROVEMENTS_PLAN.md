@@ -9,10 +9,13 @@
 > hidden-options toggle below the scrollable list. Marked steps 2 (heading part) and 3 done.
 > Still open: `target`/`onTargetChange`/`actions` on the shell, the
 > `useWorkflowPropertyUpdater` extraction (workflow writes still live inline in
-> `WorkflowPropertiesPanel.tsx`, ~10 `UPDATE_WORKFLOW_PROPERTY` posts plus
-> `setUndoWorkflowProperties` near `:774`/`:794`), target-aware pickers, and
-> workflow-override trigger styling. `PermissionsQuickPicker` and `ContextQuickPicker` were
-> added to the footer since this plan was written; they are out of v1 scope per Non-Goals.
+> `WorkflowPropertiesPanel.tsx`, ~20 `UPDATE_WORKFLOW_PROPERTY` posts plus
+> `setUndoWorkflowProperties` near `:811`/`:831`), target-aware pickers, and
+> workflow-override trigger styling. `PermissionsQuickPicker`, `ContextQuickPicker`,
+> `ExecutionModeQuickPicker` and `StepColorQuickPicker` were added to the footer since this
+> plan was written; they are out of v1 scope per Non-Goals.
+>
+> Last reviewed against code: 2026-10-26 (still accurate; no target-scope work has landed).
 
 ## Goal
 

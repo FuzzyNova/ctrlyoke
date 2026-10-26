@@ -3,6 +3,8 @@
 **Status:** Not started. Written 2026-10-19 against current code.
 **Priority:** P3
 
+Last reviewed against code: 2026-10-26.
+
 ## Problem
 
 The workspace viewer shows images inline: the explorer's file editor renders
@@ -116,8 +118,9 @@ CSP: same-origin URLs are already covered by `default-src 'self'`; add explicit
 
 ### 4. Diffs: generalize the image payload to media
 
-- Rename `DIFF_PAYLOAD_KINDS.IMAGE` → `MEDIA` (pre-release; no compatibility
-  shim) and `WorkspaceImageDiffSides` → `WorkspaceMediaDiffSides`:
+- Rename `DIFF_PAYLOAD_KINDS.IMAGE` → `MEDIA` (no compatibility shim: this is
+  a hosted-API payload consumed only by the bundle the same server serves, not
+  a persisted or scripted contract) and `WorkspaceImageDiffSides` → `WorkspaceMediaDiffSides`:
   `{ mediaKind; old?: WorkspaceMediaSide; new?: WorkspaceMediaSide }`, where a side
   is either `{ dataUri }` (images, until the optional follow-up above) or
   `{ path; ref; repo? }`, a reference the client turns into a raw URL. Video/PDF

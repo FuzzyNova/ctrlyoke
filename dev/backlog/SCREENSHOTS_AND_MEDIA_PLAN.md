@@ -1,55 +1,49 @@
 # Marketing & Docs Media Plan — Screenshots and GIFs
 
-**Captures done 2026-10-19:** #15 (run history, three stills) and #10's desktop set at 2×
-(two stills), both scripted (`npm run media -- history`, `npm run media -- workspace-viewer`)
-and slotted on landing as the tabbed sections "Every session, searchable" and "Your project,
-in any browser". They replace the `🔍` and `🗂` feature cards.
+## Status (2026-10-26)
 
-**Captures done 2026-10-14:** #8 as `template-yaml-snippet-1792x1594.png`. It is the demo
-project's custom Bug Fix template (`.ctrlyoke/templates/bug-fix.ctrlyoke.yaml`), drawn in the
-landing page's code-window style at 2× and transparent outside the rounded corners. It isn't
-slotted anywhere yet, because a picture of code doesn't belong in docs: `templates.md` has the
-same template as a real code block plus `template-modal-variable-types-840x965.png`. #12: the
-Context tab is retaken for the new Prior Context detail dropdown (Previous 2, Summary), and the
-MCP tab no longer has the `cclsp` row. **2026-10-18:** all ten tab shots are now retaken by
-`npm run media -- properties-tabs`, including the Permissions tab, since the false "Ignored by"
-warning is fixed.
+Partial. Everything release-blocking shipped with 0.2.0 (README/Marketplace media, the VS Code
+walkthrough, the mobile-setup docs); what is left is post-launch polish. Scripted retakes live in
+`media/` ([`MEDIA_CAPTURE_AUTOMATION_PLAN.md`](MEDIA_CAPTURE_AUTOMATION_PLAN.md) is the "how";
+this doc stays the shot list). All assets are in `images/screenshots/`.
 
-**Recaptures done 2026-10-12:** `secrets-tab-810x360` (the demo's `DEMO_API_KEY` has a
-dummy managed value again) and `template-modal-full-feature-840x1119` (default
-`planDocument`, a changed `testCommand` showing **Save as default**), both with updated alt
-text.
+**Shipped:**
 
-**README media done 2026-10-12:** `readme-demo-900x600.gif` (the first 10 s of the hero
-video, 6 fps, 1.7 MB; re-encoded 2026-10-15 from a 720×480, 64-colour cut that looked washed out
-because the small palette greyed every accent colour) plus `output-pane-find-diff-1600x1000.png` and
-`workspace-viewer-source-control-1600x1000.png`, linked from `README.md` as absolute
-`https://ctrlyoke.dev/docs/screenshots/` URLs. `scripts/sync-docs-screenshots.mjs` now scans
-`README.md`, so those files publish with the docs site. The full 23 s hero came out at 4–5 MB
-as a GIF at any legible size, which is why the README cut is shorter. The landing hero also has
-a poster frame (`hero-poster-2700x1800.webp` since the 2026-10-18 retake). Everything else below
-is post-launch polish.
+- **README:** `readme-demo-900x600.gif` (opening 10 s of the hero, written by
+  `npm run media -- hero`), `output-pane-find-diff-1600x1000.png`,
+  `workspace-viewer-source-control-1600x1000.png`, linked as absolute
+  `https://ctrlyoke.dev/docs/screenshots/` URLs; `scripts/sync-docs-screenshots.mjs` scans
+  `README.md`.
+- **Landing (`landing/src/pages/index.astro`):** hero video #6 (`hero-av1-2700x1800.mp4`, H.264
+  fallback, WebP poster); #1 as the `HarnessDeck.astro` card deck (`rate-limiter-*-1200x800.png`);
+  #7's take-control video (`ctrlyoke-take-control-1080p.mp4`, also covers #3 in motion); #9
+  (`prompt-editor-*`), #14 (`visual-or-yaml-*`), #15 (`history-*-2560x1600.png`) and #10's desktop
+  stills (`workspace-viewer-{references,commit}-2560x1600.png`) as their own sections.
+- **Docs:** #4/#5 in `docs/guide/usage-and-stats.md`; #7's iOS/Android stills, overview WebPs and
+  desktop server setup in `docs/pro/mobile-setup.md`; #10's 1× stills in
+  `docs/guide/workspace-viewer.md`/`source-control.md`; #11 in `docs/guide/file-changes.md`; #12's
+  ten tab shots in `docs/workflows/properties-panel.md`, `permissions.md`, `mcp-servers.md`; the
+  License still in `docs/pro/index.md` (`npm run media -- license`).
+- **Walkthrough #13:** all six steps use four-theme `image` media in `package.json`, completion
+  events (`onContext:ctrlyoke.harnessDetected`, `HARNESS_DETECTED` in `DashboardConstants.ts`;
+  `onLink`), `featuredFor`, and the `.vscodeignore` allowlist.
+- **Captured but not slotted:** #8 (`template-yaml-snippet-1792x1594.png`).
 
-**Status:** Partial. The release-blocking README media is complete; remaining captures and slotting
-are post-launch polish.
+**Remaining:**
 
-**Automation:** scripted capture, code-driven video editing and run replay for repeatable retakes
-are planned in [`MEDIA_CAPTURE_AUTOMATION_PLAN.md`](MEDIA_CAPTURE_AUTOMATION_PLAN.md). This doc
-stays the shot list.
-
-> **2026-10-17 audit:** `README.md` now has the 10-second hero GIF and two dashboard stills, linked
-> with absolute `https://ctrlyoke.dev/docs/screenshots/` URLs. The docs sync script scans README
-> references and copies those images into the docs build. The walkthrough has themed static captures
-> for its setup steps and a dark-only run-workflow GIF. The landing hero, rate-limiter stills,
-> take-control video, mobile/desktop setup sets, and properties-panel image remain captured and
-> slotted as described below. Other numbered captures and placements are still open; the
-> `demo-app` project referenced below lives outside the repo.
->
-> **Pre-release: done.** `RELEASE_CHECKLIST.md` Phase 8's README/Marketplace media gate is complete.
-> The README uses absolute site URLs, and `scripts/sync-docs-screenshots.mjs` publishes the
-> referenced files with the docs site. Verify the README images render during Phase 9's public
-> Marketplace check. Remaining walkthrough and marketing media is not release-blocking.
-> Everything else here (landing and docs polish) can ship any time after release.
+1. #2 theme composite (not captured).
+2. #7: annotate the iOS stills (box/arrow on the item to tap); the phone prompt-editor GIF.
+3. #10: the iPhone stills and the phone edit-and-commit clip (blocked on nothing but a phone
+   session; the scripted phone pipeline is phase 6 of the automation plan).
+4. #3 still composite, only if a page needs a still rather than the video.
+5. #12: add #13a (`walkthrough-open-panel-*`) to the top of `docs/workflows/properties-panel.md`.
+6. #13: D9's walkthrough-page capture (`<!-- SHOT D9 -->` marker in
+   `docs/guide/installation.md#walkthrough`); check whether `harness-preflight-missing-660x1270.png`
+   (captured 2026-10-15, before the 2026-10-16 High Contrast Light fix to
+   `HarnessPreflightPanel.tsx`) still matches.
+7. Slotting still open: #4/#5/#8/#11 on landing; #9 in `docs/workflows/context-files.md`; #14 in
+   `docs/workflows/yaml-format.md`; #15's 2× stills in `docs/guide/history.md` (still the 1×
+   `history-search-1180x813.png`).
 
 ## Goal
 
@@ -78,7 +72,8 @@ UI still in flux. Everything else is capture-ready today.
   now.
 - **Actually rewriting `landing/src/pages/index.astro` or `docs/**` content\*\* — this doc is the shot
   list and slotting plan only. Executing the swap is separate follow-up work once assets exist.
-- **Video/animated hero** — GIFs only, no produced video.
+- ~~**Video/animated hero** — GIFs only, no produced video.~~ Superseded: the hero, #9 and #14
+  ship as produced AV1/H.264 video from the `media/` pipeline; GIF is kept for the README only.
 - **Writing the Android + iOS PWA install instructions themselves** — a separate content task, now
   done (`docs/pro/mobile-setup.md`, ticked in `RELEASE_CHECKLIST.md` Phase 6). This doc only
   covers the supporting visual asset (#7's QR-scan/install/take-control recording, #10's mobile
@@ -513,9 +508,9 @@ auto-detected rather than Claude Code. The other walkthrough stills frame VS Cod
 rest of this section stays as the manual capture runbook for them.
 
 The walkthrough (`package.json` → `contributes.walkthroughs`, id `ctrlyoke.gettingStarted`) has six
-steps: `openPanel`, `verifyHarness`, `createWorkflow`, `runWorkflow`, `installCli`, `getHelp`. On
-`main` every step still uses `markdown` media (`walkthroughs/getting-started/*.md`): text plus a
-command link, with the large right-hand media pane mostly empty. The goal is one picture per step.
+steps: `openPanel`, `verifyHarness`, `createWorkflow`, `runWorkflow`, `installCli`, `getHelp`, each
+with `image` media. The rest of this section is kept as the runbook for retaking the stills that
+frame VS Code itself; "Wiring" steps 1-6 are done.
 
 #### Decisions
 
@@ -730,21 +725,10 @@ line, where it renders as a button. Descriptions support `code`, **bold** and li
 | ------------------------------------------------ | --------------------------------------- |
 | `ctrlyoke.gettingStarted` walkthrough, steps 1–6 | #13a–#13e (+ `installCli`, no shot yet) |
 
-## Execution order (suggested)
+## Execution order (remaining work)
 
-1. Pick and record the primary capture theme + demo project setup (one-time).
-2. Seed demo data: usage history (#4), status line format (#5), git changes + search hits (#10),
-   multi-file diff (#11), populated drawer tabs (#12).
-3. Author the demo multi-step, multi-harness workflow used by #6 (and reused as the "same workflow"
-   across #1/#2's per-layer captures, so those composites show one coherent example, not six unrelated
-   screenshots).
-4. Capture stills: #4, #5, #10, #11, #12, #13a–c and #13e (dark + light each), then the 6+ raw layers
-   for #1 and the 4–5 raw layers for #2.
-5. Composite #1 and #2.
-6. Capture GIFs: #6, #13d, #9, then #3/#7 (mobile, likely last since it needs the hosted server + a real or
-   emulated device).
-7. Produce the styled YAML snippet images (#8) — no app capture needed, can happen anytime.
-8. Only then: touch `landing/` and `docs/` content to slot everything in (separate follow-up, not part
-   of this checklist). In practice, slotting has happened per asset as each one landed (#1, #6, #7,
-   #12). **Add a `README.md` step ahead of the rest:** it is the only surface on the Phase 8
-   release blocker, and it has no media yet.
+See "Remaining" in the status at the top. Suggested order: the docs slotting of existing assets
+first (cheap, no capture), then #13a/D9, then #2 (scriptable: `media/lib/themes.ts` already
+switches the capture host between the four built-in themes; Marketplace themes such as
+Dracula would need installing into the capture profile), and the phone set (#7 GIF, #10 iPhone stills
+and clip) last, in one phone session.

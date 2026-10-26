@@ -2,6 +2,13 @@
 
 **Status:** Proposed — prerequisite done, Phases 1–2 not started
 
+Last reviewed against code: 2026-10-26. Still accurate: `ctrlyoke step` has only
+`edit`/`remove`/`reorder` (plus `accept-definition`/`restore-definition`);
+`ScriptProcessRunner` builds `cleanEnv` without `withCtrlyokeBinOnPath`; `CTRLYOKE_PROMPT_INDEX`
+is set only for harness steps (`CliExecutionRunner.ts`); MCP `append_step` and `ctrlyoke append`
+both call `RunContinuationService.appendStepsToRun`. Both phases are additive CLI/schema
+changes (no `schema:bump`).
+
 > **2026-10-10 audit:** The final-step merge prerequisite is fixed (`234708f1e`:
 > `PromptQueue.mergeDiskStepsUnderLock()` runs before `queueSizeAfter` is read);
 > the bug doc moved to `dev/bugs/implemented/`. The sections below are marked
@@ -53,7 +60,7 @@ script-callable _add_ and the `ctrlyoke` launcher on the script's PATH.
 ### Final-step merge (prerequisite) — done
 
 > **Fixed in `234708f1e`.** The final-step loop now calls
-> `PromptQueue.mergeDiskStepsUnderLock()` (`WorkflowExecutor.ts:795`) before
+> `PromptQueue.mergeDiskStepsUnderLock()` (`WorkflowExecutor.ts`, ~line 834 as of 2026-10-26) before
 > reading `queueSizeAfter`, sharing `mergeDiskStepsWhileLocked()` with
 > `commitStepOutcomeAndAdvance`. The analysis below is kept as the record of
 > why it was needed; `forEach` (Phase 2) must still append before that merge

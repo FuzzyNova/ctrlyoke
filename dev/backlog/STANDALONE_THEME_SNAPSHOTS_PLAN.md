@@ -22,6 +22,12 @@
 > applies on the next page load. Design 4's `server.themeLight`/`themeDark`
 > dropdowns belong next to it.
 
+Last reviewed against code: 2026-10-26. Still not started. Line references updated: the
+callback slot is `WebviewMessageRouter.setThemeVarsCapturedCallback` (~`:480`), now set
+through `CtrlYokeWebviewProvider.setThemeVarsCapturedCallback`, which forwards to both the
+panel router and the `DashboardApplication` router; `extension.ts` installs it at ~`:1877`
+and clears it at ~`:1913`, and posts `CAPTURE_THEME_VARS` on theme change at ~`:719`.
+
 ## Goal
 
 Let a VS Code user who moves to `ctrlyoke server` keep using their own VS Code

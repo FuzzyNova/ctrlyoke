@@ -5,6 +5,7 @@
 Depends on accounts and the workspace directory in
 [`CTRLYOKE_ACCOUNTS_PLAN.md`](CTRLYOKE_ACCOUNTS_PLAN.md).
 **Effort:** Large (separate project, App Store and Play Store distribution)
+**Last reviewed against code:** 2026-10-26 (nothing built; blocked on the accounts plan)
 
 ## Why it was rejected, and why it's back
 

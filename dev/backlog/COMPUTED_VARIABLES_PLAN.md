@@ -7,6 +7,12 @@ changes; see the audit below before scheduling this. What remains uncovered is
 narrow but real: inline substitution, composability into other syntax, and
 names that survive step reordering.
 
+Last reviewed against code: 2026-10-26. Still not started (no `setVar` or computed `vars` entry
+in the schema or code). Line references refreshed; the prior-context section now reflects the
+shipped script `<verdict/>` and `:summary` detail (`PRIOR_CONTEXT_DETAIL_PLAN.md`). Both phases
+are additive schema changes post-0.2.0 (`vars` values widening from `string` to
+`string | object` in Phase 2 is a widening, not a narrowing, so no `schema:bump`).
+
 > **2026-10-10 audit:** Not started; nothing from either phase exists in the schema or code.
 > Refreshed stale line references (RunOutputResolver, HarnessIntegration,
 > ScriptProcessRunner, ParallelGroupPreflight, WorkflowExecutor var read sites), noted that the
@@ -58,7 +64,7 @@ no new code**:
     script: node scripts/latest-log.mjs
 ```
 
-`CliPromptPreparer.planPrompt` (`src/core/harness/shared/CliPromptPreparer.ts:136`)
+`CliPromptPreparer.planPrompt` (`src/core/harness/shared/CliPromptPreparer.ts:152`)
 calls `substituteConditionOutputRefs` (`src/core/ConditionOutputRefs.ts`) against
 `workflowContext.preConditionResult` before the prompt is assembled, so the
 step's own pre-condition stdout is substituted into the prompt text that gets
@@ -94,9 +100,9 @@ be reinventing named variables inside a gate.
 ### 2. `$previous` / `$step:N` — script output **is** included; works today for the common case
 
 Prior context is not AI-responses-only. `RunOutputResolver.resolvePriorContextItems`
-has an explicit `isScriptStep(step)` branch (`:997-1011`) that builds the item's
-text from the script's `stdout`/`stderr`/`exitCode`, and
-`buildPriorContextXmlFromItems` (`src/core/HarnessIntegration.ts:111`)
+(`src/core/orchestration/RunOutputResolver.ts`) attaches the script step's
+`scriptOutput` (`stdout`/`stderr`/`exitCode`) and verdict to the item (`isScriptStep` branch,
+~`:1349`), and `buildPriorContextXmlFromItems` (`src/core/HarnessIntegration.ts:263`)
 emits a dedicated block for it:
 
 ```xml
@@ -105,13 +111,15 @@ emits a dedicated block for it:
     <command>node scripts/coverage-pct.mjs</command>
     <stdout>78.4</stdout>
     <exitCode>0</exitCode>
+    <verdict outcome="passed" compareSource="exitCode" operator="eq" expected="0" actual="0"/>
   </step>
 </priorContext>
 ```
 
 `$previous` has no type filter either — it takes the last resolved queue item
-among the candidates (`resolvedQueueItems.slice(-previousCount)`, `:1021-1025`), so when the previous step is a script step,
-`$previous` resolves to that script's output.
+among the candidates (`resolvedQueueItems.slice(-merged.previousCount)`, ~`:1303`), so when the
+previous step is a script step, `$previous` resolves to that script's output.
+`$step:summary:1` gives the same block with the command head and a combined stdout+stderr tail.
 
 **So this pattern works today, with no code changes:** put a script step at
 index 1 that prints the value, then reference `$step:1` from every later
@@ -128,7 +136,7 @@ polish:
   printed, and a computed value cannot flow into `model`, `additionalArgs`, a
   hook command, or a condition script the way `{{name}}` does.
 - **The payload is a block, not a value.** stdout _plus_ stderr _plus_ exit
-  code _plus_ the command text. A script that logs anything to stderr puts that
+  code _plus_ the verdict _plus_ the command text. A script that logs anything to stderr puts that
   noise in every prompt that references it.
 - **References are positional.** `$step:1` breaks the moment a step is inserted
   above it — across every prompt that used it. A name does not.
@@ -140,7 +148,7 @@ limitations above are exactly what named variables exist to fix.
 
 ### 3. `CTRLYOKE_VAR_*` — one-directional
 
-`ScriptProcessRunner.ts:112` exports every var into every script/condition
+`ScriptProcessRunner.ts:113-116` exports every var into every script/condition
 process as `CTRLYOKE_VAR_<KEY>`. Scripts can **read** variables; nothing writes
 back. That asymmetry is the whole feature request.
 
@@ -233,9 +241,9 @@ which is why it is second and conditional.
 ## Constraints found while scoping (read before implementing either phase)
 
 **Parallel groups freeze variables at preflight.**
-`ParallelGroupPreflight.ts:163` does `Object.freeze({ ...(workflow.vars ?? {}) })`
+`ParallelGroupPreflight.ts:169` does `Object.freeze({ ...(workflow.vars ?? {}) })`
 once per group and hands each member that frozen snapshot;
-`WorkflowExecutor.ts` (`:1976-1983` for pre-conditions, `:2137-2145` for the
+`WorkflowExecutor.ts` (~`:2055-2058` for pre-conditions, ~`:2226-2229` for the
 step) then deliberately skips the ordinary
 `VarSubstitutor.applyToResolvedProperties` call for preflight members because
 substitution already happened against that snapshot. So:
@@ -253,15 +261,16 @@ substitution already happened against that snapshot. So:
   race.
 
 **The var map is currently read-only and read from the prompt file.** Every
-read site takes `workflowFile.vars` directly (`WorkflowExecutor.ts:1978`,
-`:2139`, `:2544`, `:2684`, `:2730`, `:4435`, `:4936`;
-`ParallelGroupPreflight.ts:163`; worktree setup receives it as `options.vars`
-via `WorkflowInstance.ts:4249`). Phase 1 needs one run-scoped mutable overlay
+read site takes the workflow file's `vars` directly (as of 2026-10-26: `WorkflowExecutor.ts`
+~`:2057`, `:2131`, `:2229`, `:2648` (script step), `:2794`/`:2840` (end conditions), `:4633-4653`
+(retry prompt), `:5154`; `ParallelGroupPreflight.ts:169`; worktree setup receives it as
+`options.vars` via `WorkflowInstance.ts:4577`). Route them all through one accessor rather than
+patching each. Phase 1 needs one run-scoped mutable overlay
 layered over it, with captured values slotting between the two existing
 layers: **CLI `--var` > captured/computed > file `vars`** so an explicit
 `--var` still wins, which is what "override" means today. Note that the CLI
 does not keep `--var` as a separate layer at run time: `mergeCliVarsIntoWorkflow`
-(`cli.ts:1536-1548`) spreads the overrides into `workflow.vars` before
+(`cli.ts:1675`) spreads the overrides into `workflow.vars` before
 execution. The overlay therefore has to record which keys came from the CLI
 (or keep the overrides separately) and refuse to shadow them; a naive
 `{ ...workflow.vars, ...captured }` would silently let a script beat `--var`.

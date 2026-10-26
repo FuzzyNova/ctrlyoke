@@ -9,7 +9,13 @@
 > `components/settings/settingsTabs.ts`; `McpManagerService` now takes only a
 > `workspaceRoot` accessor). Noted that `_templateMeta` has
 > `additionalProperties: false` and no `tags` field, so `author`/`tags` both need
-> schema additions. `FuzzyNova/ctrlyoke` is still private as of this audit.
+> schema additions.
+>
+> **2026-10-26 review:** still not started. `FuzzyNova/ctrlyoke` went public on 2026-10-20
+> (`RELEASE_CHECKLIST.md` Phase 14), so Phase 2's fetch-source blocker is gone and the
+> private-repo fallbacks are dropped below. Refreshed line references.
+>
+> Last reviewed against code: 2026-10-26
 
 ## Goal
 
@@ -24,7 +30,7 @@ and remote-browse tabs.
 ## Why
 
 Built-in templates (`src/templates/workflows/*.ctrlyoke.yaml` +
-`manifest.json`) are the curated six (including `template-starter`) shown in the New Workflow picker. Custom
+`manifest.json`) are the curated nine (including `template-starter`) shown in the New Workflow picker. Custom
 templates already have a home — `.ctrlyoke/templates/` (workspace) and
 `~/.ctrlyoke/templates/` (user), both scanned by
 `TemplateManager.discoverCustomTemplates()` — but there is no way to get a
@@ -42,23 +48,13 @@ needs no new backend, and gets free moderation via normal PR review — the same
 trust model as adding a built-in template, just without requiring
 `BUILT_IN_TEMPLATE_IDS`/`manifest.json` edits gatekept to the maintainer.
 
-## The repo is private today, but that resolves itself
+## The repo is public
 
-`gh repo view FuzzyNova/ctrlyoke` confirms **`FuzzyNova/ctrlyoke` is
-currently private**. Public unauthenticated fetch (`raw.githubusercontent.com`,
-jsDelivr's GitHub mirror) — the zero-backend way to serve a
-`community-templates/` directory to every installed extension — does not work
-against a private repo. This only matters for Phase 2 (Discovery & Import);
-Phase 1 (accepting and validating submissions) is unaffected and can ship
-regardless.
-
-Per [`RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md) Phase 14, the
-repo-visibility flip has already cleared every pre-flip gate (secret scan,
-Issues/PRs/tags skim, MFA hardening) and is "ready to execute whenever Nathan
-chooses to trigger the actual toggle" — going public is an already-decided,
-near-term step of shipping v1, not a new decision this plan needs to force.
-So Phase 2's fetch-source question resolves itself once that toggle flips;
-no separate public repo is needed (see the revised Phase 2 ranking below).
+`FuzzyNova/ctrlyoke` was flipped to public on 2026-10-20
+([`RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md) Phase 14), so public
+unauthenticated fetch (`raw.githubusercontent.com`, jsDelivr's GitHub mirror) of a
+`community-templates/` directory works with no backend. Phases 1 and 2 can both ship
+whenever they are prioritized; no separate public repo or proxy is needed.
 
 ## Non-goals
 
@@ -75,7 +71,7 @@ no separate public repo is needed (see the revised Phase 2 ranking below).
 
 ## Phase 1 — `community-templates/` directory + CI validation
 
-Works today, independent of the repo-visibility decision. Useful even before
+Useful even before
 any in-extension discovery UI exists: contributors can already open PRs and
 maintainers get automatic validation instead of manually eyeballing YAML.
 
@@ -95,9 +91,9 @@ one maintainer, no collisions).
 
 Add optional `author?: string` and `tags?: string[]` to `_templateMeta`, parsed
 alongside `name`/`description` in `TemplateManager.parseTemplateMeta`
-(`src/core/TemplateManager.ts:148`, `ParsedTemplateMeta` at `:106`), so a
+(`src/core/TemplateManager.ts:211`, `ParsedTemplateMeta` at `:128`), so a
 shared template can credit its source and be filtered in the gallery. Purely
-cosmetic — not used by `createWorkflow` substitution (`:543`). Both must also be
+cosmetic — not used by `createWorkflow` substitution (`:630`). Both must also be
 added to `#/$defs/templateMetadata` in `schemas/workflow-schema.json` (it is
 `additionalProperties: false`, so a template using them fails strict
 validation and the CI gate below; the runtime loader's relaxed schema only
@@ -107,7 +103,7 @@ is a no-bump additive schema change per `CONTRIBUTING.md`. Built-in `tags` live 
 
 ### Generated index, not a hand-maintained manifest
 
-Unlike `src/templates/workflows/manifest.json` (hand-edited, fine for six
+Unlike `src/templates/workflows/manifest.json` (hand-edited, fine for nine
 maintainer-controlled files), a community directory with many independent PRs
 would fight over one shared JSON file. Instead: a new
 `scripts/generate-community-templates-index.mjs` (same pattern as
@@ -126,7 +122,7 @@ with `paths: [community-templates/**]`:
 2. Run a new `scripts/validate-community-templates.mjs` that, for each changed
    `.ctrlyoke.*` file, parses it and runs it through the same Ajv validation
    `PromptFileParser.validateAndNormalize` uses against
-   `schemas/workflow-schema.json` (`src/core/PromptFileParser.ts:288`) —
+   `schemas/workflow-schema.json` (`src/core/PromptFileParser.ts:311`) —
    rejects unknown top-level fields, bad `harness` enum values, malformed
    `_templateMeta`, etc. Also reject: missing `_templateMeta.name` or
    `description`, a filename that doesn't match
@@ -146,37 +142,17 @@ today.
 
 ---
 
-## Phase 2 — Discovery & Import (sequenced after the repo goes public)
+## Phase 2 — Discovery & Import
 
-**Recommended: wait for `RELEASE_CHECKLIST.md` Phase 14 (repo visibility
-flip) rather than standing up any workaround.** That flip is already an
-accepted, near-term part of shipping v1 — not a hypothetical this plan has to
-route around. Phase 1 (submissions + CI validation) ships now regardless; the
-Discover/Import UI in this phase simply waits for a repo that already exists
-to become fetchable. Two fallbacks, only worth considering if the visibility
-flip stalls significantly past this feature's own timeline:
-
-1. **A dedicated public repo — e.g. `ctrlyoke-templates`** — split off now
-   instead of waiting. Keeps zero backend and unblocks immediately, at the
-   cost of a repo to later fold back in (or keep permanently separate) once
-   `FuzzyNova/ctrlyoke` itself goes public.
-2. **A small serverless proxy** (e.g. a Cloudflare Worker, or something
-   hosted alongside `ctrlyoke.dev`) holding a GitHub token server-side,
-   re-exposing `index.json` and individual template files over plain HTTP.
-   Real backend surface area for what is otherwise a zero-backend feature —
-   only worth it if the repo needs to stay private indefinitely, which is not
-   the plan.
-
-The client-side shape in this phase is identical no matter which path is
-taken — only the base URL changes.
+The repo is public, so this phase has no external blocker. It depends only on
+Phase 1 producing `community-templates/index.json`.
 
 ### Fetch source
 
-Once a public repo exists, serve `index.json` and each template file from
-jsDelivr's GitHub mirror
-(`https://cdn.jsdelivr.net/gh/<owner>/<repo>@main/community-templates/...`)
+Serve `index.json` and each template file from jsDelivr's GitHub mirror
+(`https://cdn.jsdelivr.net/gh/FuzzyNova/ctrlyoke@main/community-templates/...`)
 rather than `api.github.com` — the same reasoning
-`McpDiscoveryUtils.fetchMcpRegistry` (`src/utils/McpDiscoveryUtils.ts:911`)
+`McpDiscoveryUtils.fetchMcpRegistry` (`src/utils/McpDiscoveryUtils.ts:1119`)
 gives for hitting a purpose-built endpoint directly: no auth, no per-IP rate
 limit shared with every other GitHub API consumer, and it's a cached CDN.
 Accept jsDelivr's ~12h cache latency for v1; a merge-triggered cache-purge
@@ -188,23 +164,23 @@ New `src/ui/CommunityTemplateService.ts`, constructed the same way
 `McpManagerService` is (a `workspaceRoot` accessor; the per-request
 `WebviewClientContext` is passed to each handler, not the constructor),
 wired into `WebviewMessageRouter.ts` next to `this.mcpManager`
-(`src/ui/WebviewMessageRouter.ts:268`, `:328`, dispatch near `:1395`).
+(`src/ui/WebviewMessageRouter.ts:386`, `:451`, dispatch near `:1686`).
 
 Responsibilities:
 
 - `handleRequestCommunityIndex` — fetch `index.json` (cache in-memory for the
-  session, mirroring how `hasLoadedRemoteRegistry` gates the MCP registry's
-  first fetch) → emit `COMMUNITY_TEMPLATE_INDEX_RESULT`.
+  session, mirroring how `hasLoadedRemoteRegistry` in `McpManagerSection.tsx` gates
+  the MCP registry's first fetch) → emit `COMMUNITY_TEMPLATE_INDEX_RESULT`.
 - `handleInstallCommunityTemplate` — fetch the one template file named by the
   index entry's `file` field, run it through `PromptFileParser`'s schema
   validation (never trust a network payload straight onto disk), then write
   it via a new `TemplateManager.installTemplateContent(name, scope, format,
 content)` that shares `prepareCustomTemplatePath`'s existing name/collision
-  checks (`src/core/TemplateManager.ts:616`) rather than duplicating them →
+  checks (`src/core/TemplateManager.ts:717`) rather than duplicating them →
   emit success/failure the way `McpManagerService.handleSaveRegistryServer`
   does.
 
-### New message types (`DashboardConstants.ts`, alongside the `MCP_*` ones near `:696`)
+### New message types (`DashboardConstants.ts`, alongside the MCP registry ones near `:887`)
 
 ```
 REQUEST_COMMUNITY_TEMPLATE_INDEX
@@ -237,11 +213,12 @@ scope)`.
 > variable values. Installing a template belongs next to them, and an installed
 > template is immediately available in that tab's **Defaults** page. The page
 > structure and scope rules are recorded there. The component below is the
-> page's body. Build the Templates tab first; this phase depends on it.
+> page's body. The Templates tab has shipped (`TemplatesSection.tsx`, which today renders
+> only `TemplateDefaultsPage`); the page bar is still to be added with this phase.
 
 New `src/ui/webview-react/components/settings/CommunityTemplatesPage.tsx`,
 modeled directly on `McpManagerSection.tsx`'s "Discover & import" registry tab
-(starts near `:1170`; registry search near `:1317`) — installing a community template is structurally the same
+(starts near `:1175`) — installing a community template is structurally the same
 action as importing a registry MCP server: search box, result list, a per-row
 "Install" button that disables once already present locally.
 
@@ -297,13 +274,8 @@ from the drawer's active scope.
 
 ## Open questions
 
-1. **Timing relative to Phase 14** — should Phase 2 work start before or
-   after the repo-visibility flip actually happens? Given the flip is
-   described as ready to execute on Nathan's call, the simplest path is to
-   build Phase 2 whenever it's prioritized and treat "is the repo public yet"
-   as a runtime fact the Discover tab checks (e.g. hide/disable it with a
-   "coming at launch" note if the fetch 404s), rather than gating engineering
-   work on the flip's exact date.
+1. **Empty index / offline** — the Discover page should show a friendly empty or
+   offline state if `index.json` 404s or the fetch fails.
 2. **Update handling** — if a maintainer edits a merged community template
    (typo fix, schema-compat fix), an already-installed local copy silently
    drifts out of sync. v1 answer: accept it, same as installing an MCP server

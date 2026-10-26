@@ -1,5 +1,11 @@
 # Run Export / Import
 
+> Last reviewed against code: 2026-10-26. The status below is accurate; every cited symbol
+> exists. Two gaps found in review, now written into §2.1 and §6: the exporter never maps a
+> worktree run's execution root to `${workspaceFolder}`, and an importer must write run files
+> through the definition anchor (`bcc6c74a1`, `aa2f6117d`), or the imported run loads
+> read-only.
+>
 > **Status:** Export half built 2026-10-18 and shipped in `0.2.0` (`ctrlyoke export`, bundle
 > schema 1). Not built: import, **continuing an imported run** (§5, added 2026-10-24), bundling
 > workspace changes and assets, and the dashboard UI. Originally written 2026-08-14.
@@ -99,6 +105,13 @@ legacy aggregates retained for read compatibility.
 
 **Absolute paths.** Built: `RunBundlePaths` tokenizes them, and `externalPaths` in `run.json`
 lists absolute paths the run touched outside the workspace and home.
+**Gap (2026-10-26):** `ctrlyoke export` (`src/cli/RunExportCommand.ts`) passes the source
+checkout as `workspaceRoot`. A run that executed in a managed or named worktree
+(`_runtime.worktree.executionRoot`, by default under `~/.ctrlyoke/worktrees/<identity>/`)
+therefore exports its file paths as `~/.ctrlyoke/worktrees/…` or as external absolute
+paths, not as `${workspaceFolder}/…`. The exporter should rewrite the run's
+`executionRoot` (and its `namedWorkspaceRoots`) to `${workspaceFolder}` as well. This needs
+fixing before import (phase 3), and §5.3 depends on it.
 
 **Identity.** `allocateWorkflowKey` guarantees uniqueness only within one runs root. Export
 demotes `workflowKey`/`runRef`/`runId` to `provenance`; import allocates fresh ones through the
@@ -430,6 +443,18 @@ Import steps: validate → allocate identity → resolve `${workspaceFolder}` on
 workspace (`readRunBundle`, built) → materialize history → **if continuable:** normalize
 `_runtime` (§5.1), place workspace changes (§5.3), write the run file, leave it `stopped` → record
 provenance → refresh the search index (already a side effect of the history writes).
+
+**Write through the definition anchor.** Since `bcc6c74a1`/`aa2f6117d`, every legitimate
+writer of a run's `workflow.ctrlyoke.json` records an anchor under the user state home
+(`writeAnchoredRunDefinition` in `src/utils/RunDefinitionAnchor.ts`). Once a run storage
+holds a baseline marker, a working file with no anchor counts as _unrecorded_: it loads
+read-only and its writes are refused. The materializer must create the imported run's
+working file through `writeAnchoredRunDefinition` (the normal `WorkingFileManager` write
+path), never with a plain `fs.writeFile`. Otherwise every import shows the "changed outside
+ctrlyoke" banner and cannot be continued.
+
+`readRunBundle` returns every event in memory (fine for media replay). The importer should
+stream `events.jsonl` into `TimelineRecorder.appendEvents` in batches instead.
 
 ### 6.1 Security: a bundle is untrusted input
 

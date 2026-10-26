@@ -2,6 +2,13 @@
 
 **Status:** Not started.
 
+Last reviewed against code: 2026-10-26. No `userInput` step kind exists; every cited symbol still
+exists. Depends on `WORKFLOW_STEP_PLAN.md`'s Phase 0 (`getStepType`/`isPromptStep`, not done
+yet), which whichever of the two step kinds lands first must do. Adding the step is an additive
+schema arm (no `schema:bump`). Open question 5 overlaps
+`AWAITING_INPUT_NOTIFICATION_PLAN.md`; share its "waiting for input" notification event rather
+than inventing a second one.
+
 > **2026-10-10 audit:** Still not implemented (no `userInput` step type in
 > `schemas/workflow-schema.json` or `src/types/`). Refreshed stale references: schema source is
 > `schemas/workflow-schema.json` (`$defs`, the `.yaml` is generated), `executeScriptStep` moved,
@@ -31,7 +38,7 @@ No existing backlog doc covers this — `dev/backlog/` was searched and nothing 
 `ScriptStep` (schema: `$defs/scriptStep` in `schemas/workflow-schema.json`) has an
 `executionMode` field. When resolved to `interactive` (step → workflow → global setting;
 see `PropertyResolver.resolveExecutionMode`), `WorkflowExecutor.executeScriptStep`
-(`src/core/WorkflowExecutor.ts`, ~line 2537) does **not** run the script through
+(`src/core/WorkflowExecutor.ts`, ~line 2641) does **not** run the script through
 `ScriptProcessRunner`/`CliProcessManager` at all — it calls `context.spawnScriptPty(...)`
 instead, which spawns the command inside a real PTY (`PtyProcessManager`) wired to an
 embedded xterm terminal (`TerminalInstance.tsx`) in the dashboard. The user can type into
@@ -71,7 +78,7 @@ end. What's missing is polish and reach, covered next.
   `hostCanProvidePty` is genuinely conditional is the standalone `ctrlyoke` CLI binary,
   which has no extension host at all — there it's only `true` when the CLI process itself
   has a real TTY on both stdin/stdout (`src/cli/CliExecutionMode.ts`, `resolveCliExecutionMode`), and the resolver
-  clamps `interactive` down to `headless` otherwise (`src/types/ExecutionPropertyResolver.ts`, ~line 407,
+  clamps `interactive` down to `headless` otherwise (`src/types/ExecutionPropertyResolver.ts`, ~line 470,
   surfaced via `cli.ts`'s `warnAboutClampedInteractiveSteps`). So the PTY/`read` approach
   already covers VS Code + hosted browser; only pure headless CLI runs (no TTY — e.g. CI)
   are the actual gap, not "browser vs desktop."

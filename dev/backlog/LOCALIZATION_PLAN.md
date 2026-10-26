@@ -13,6 +13,10 @@
 > every file that imports `vscode`), the `UserFeedback` example's location, and noted that
 > the standalone-graph `vscode` guard already exists (`scripts/node-bundle-vscode-guard.cjs`,
 > wired into `esbuild.js`).
+>
+> Last reviewed against code: 2026-10-26. Still nothing shipped. Refreshed counts
+> (41 commands, ~256 non-test `.tsx` files) and the `buildHtml()` line; the
+> boundary-file list below still matches a `from "vscode"` grep.
 
 **Related plans:** [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../implemented/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md),
 [`STANDALONE_SERVER_PLAN.md`](../implemented/STANDALONE_SERVER_PLAN.md),
@@ -25,10 +29,10 @@ decoupling and standalone-server plans" below before implementing Phase 2.
 
 ctrlyoke currently has zero localization infrastructure — no `vscode.l10n`, no
 `package.nls.json`, no i18n library in the React dashboard, no `l10n` field in
-`package.json`. All 39 command titles, the menu entries, and the single
+`package.json`. All 41 command titles, the menu entries, and the single
 configuration `markdownDescription` (`ctrlyoke.workspaceDirectory` — the only
 setting `package.json` still declares) are hardcoded English, and
-user-facing strings are inlined directly as JSX text across ~240 non-test `.tsx`
+user-facing strings are inlined directly as JSX text across ~256 non-test `.tsx`
 files under `src/ui/webview-react/`.
 
 This is **not** a single-`resx`-file problem the way the C# experience was.
@@ -109,7 +113,7 @@ authors covering exactly this "React inside a webview" scenario) is:
    - **Hosted dashboard**: `buildHtml()` in `CtrlYokeHostedServer.ts` already
      does exactly this kind of placeholder-substitution for the standalone
      bundle (theme vars, icon URIs, CSP, body class — see `buildHtml()` near
-     line ~2189).
+     line ~2413).
      The same pattern extends naturally to injecting a resolved locale
      (e.g. `Accept-Language` header, falling back to a user-configurable
      setting) as another `{{placeholder}}` substituted into `index.html`
@@ -121,7 +125,7 @@ authors covering exactly this "React inside a webview" scenario) is:
 
 This is genuinely a good amount of engineering effort — there is no
 "automatic extraction" shortcut for JSX. Every user-facing string in the
-~240 `.tsx` files needs to be pulled into a `t("key")` call by hand (or with
+~256 `.tsx` files needs to be pulled into a `t("key")` call by hand (or with
 heavy tool assistance — see Tooling below). This is the part of the C#
 `resx` experience that _doesn't_ have a magic equivalent in React: the payoff
 of `react-i18next` is runtime locale-switching and translator-friendly JSON,
@@ -341,7 +345,7 @@ Mirroring the old resx → translation-vendor → resx-back workflow:
 This is a multi-phase effort, not a single PR:
 
 1. **Phase 1 — Manifest** (`package.json` → `package.nls.json`): small,
-   mechanical, 39 command titles + menu entries + one config description
+   mechanical, 41 command titles + menu entries + one config description
    (`ctrlyoke.workspaceDirectory`). Good first PR to
    validate the toolchain works end-to-end for at least one non-English
    locale.

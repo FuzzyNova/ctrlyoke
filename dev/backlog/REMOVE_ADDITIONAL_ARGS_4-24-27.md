@@ -2,6 +2,8 @@
 
 **Status:** Waiting. Earliest removal: 2027-04-24 (see "When" below).
 
+Last reviewed against code: 2026-10-26
+
 ## Background
 
 `edit_step` used to let an MCP agent set or clear a pending step's `additionalArgs`, which go
@@ -17,10 +19,10 @@ it before touching the run. This plan removes the deprecated schema entry under 
 
 Not before **both**:
 
-1. The deprecation has shipped in a tagged release. At the time of writing it is under
-   `## [Unreleased]` in `CHANGELOG.md`, and `0.2.1` (2026-10-22) is the latest tag.
-2. Six months have passed since that release. The filename assumes it ships around 2026-10-24;
-   if it ships later, rename this file to the release date plus six months.
+1. The deprecation has shipped in a tagged release. Done: it shipped in `0.3.0` (tag `v0.3.0`,
+   2026-10-24), under **Changed** in `CHANGELOG.md`.
+2. Six months have passed since that release, so the earliest removal date is 2027-04-24, matching
+   the filename.
 
 Ship the removal in the next minor release after that date, not a patch.
 

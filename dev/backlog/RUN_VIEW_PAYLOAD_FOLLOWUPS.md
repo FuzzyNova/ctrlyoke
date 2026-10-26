@@ -19,6 +19,13 @@ Do not re-derive them here.
 > item 1's phone re-measurement still decides 1A. See
 > `DASHBOARD_CONNECT_THROUGHPUT_PLAN.md` for the connect-time measurements.
 
+> Last reviewed against code: 2026-10-26. All five items still open: `deliverRunView`
+> (`RunViewPublisher.ts`) still builds `RUN_VIEW_LOADED` per request with no
+> serialized-snapshot cache or overlapping-build coalescing. Adjacent fixes since the last
+> audit, none of which replace an item: the run-view load watchdog no longer reissues slow
+> loads (`45a330a96`), hosted reconnects reload the run view (`ad5da660b`), and multi-message
+> replays go out as one `MESSAGE_BATCH` (`be267f781`).
+
 ## Where the payload stands
 
 The `bug-backlog` run (`run-2026-09-30T13-41-01-546Z`) serialized to 42.7 MB

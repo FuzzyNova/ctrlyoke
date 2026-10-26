@@ -10,6 +10,12 @@ investigation, after its first four fixes landed:
 
 The two items below are what remains from that investigation.
 
+Last reviewed against code: 2026-10-26. Neither item has moved: `RecentWorkflowCatalog.listEntries`
+still fans out an unbounded `Promise.all` over every lineage and calls `getLineageLastModifiedAt`
+per row, and `LOG_MESSAGE` still goes through `routeQueue`. Since this was written the router
+gained an `OFF_QUEUE_MESSAGE_TYPES` set and `[RouteTiming]` slow-route logging
+(`WebviewMessageRouter.ts`); adding `LOG_MESSAGE` to that set is the natural shape for item 2.
+
 ## Evidence
 
 Measured from the session logs of an iPhone PWA connecting over cellular to a

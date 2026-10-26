@@ -18,10 +18,13 @@ are in `dev/implemented/`. The Phase 1 spike can run now.
 >   prints a human banner plus QR code), `--parent-pid`, a host-push theme channel,
 >   per-client capabilities, and removal of `isStandalone` (still about 84 references
 >   across 27 dashboard files).
-> - **Filed as [`standalone-server-interactive-steps-never-start.md`](../bugs/backlog/standalone-server-interactive-steps-never-start.md):** `initPtyProcessManager` is still called only from `src/extension.ts`.
->   `createNodeHostedServer` declares `embedded-pty`, but nothing creates a PTY manager on
->   the Node path. Confirm that interactive steps in `ctrlyoke server` reach a dashboard
->   terminal before running the spike.
+> - **Fixed since ([`standalone-server-interactive-steps-never-start.md`](../bugs/implemented/standalone-server-interactive-steps-never-start.md), e0ced15ce):**
+>   `createNodeHostedServer` now calls `initPtyProcessManager` (`src/platform/NodeHostServices.ts`),
+>   so interactive steps in `ctrlyoke server` launch in a dashboard terminal.
+>
+> Last reviewed against code: 2026-10-26. Still missing: the ready line, `--parent-pid`, a
+> host-push theme channel, per-client capabilities, and removal of `isStandalone` (about 88
+> references across 27 dashboard files).
 
 **Related plans:**
 
@@ -226,11 +229,9 @@ Audited against `src/` on 2026-09-28.
   `--port` (0 allowed), `--strict-port`, `--bind`, `--theme` and `--open`.
 - **Done: the PTY choice is an explicit capability.** `isVsCodeContext()` is gone.
   `PlatformAdapter.interactiveTerminal` (`embedded-pty` | `inherit-stdio`) drives
-  `CliExecutionRunner`, and the Node host declares `embedded-pty`. **Open:**
-  `initPtyProcessManager` is still called only from `extension.ts`, and
-  `CliTransportCoordinator` silently skips the spawn when `getPtyProcessManager()` is null.
-  Verify that interactive runs work under `ctrlyoke server`. The Visual Studio host depends
-  on this, because interactive harness terminals are the product.
+  `CliExecutionRunner`, and the Node host declares `embedded-pty`. **Done (e0ced15ce):**
+  `createNodeHostedServer` initializes the PTY manager, so interactive runs work under
+  `ctrlyoke server`.
 - **Done: `PlatformAdapter.isVsCode()` deleted** (decoupling staging Stage 2).
 
 ## Target Architecture
@@ -285,8 +286,7 @@ node sidecar = the standalone `ctrlyoke server`, unchanged except:
 
 - ~~Decoupling-plan stages 0–11: `ctrlyoke server` boots from Node host services and the
   shared router.~~ Done.
-- **PTY-backed interactive runs in the standalone server.** Capability done, PTY manager
-  initialization on the Node path still to verify (see above).
+- ~~PTY-backed interactive runs in the standalone server.~~ Done (e0ced15ce).
 - ~~A file-backed license trial state store.~~ Not needed: the trial is extension-only by
   design (`LicenseService` `trialState` is optional).
 - **Standalone CLI hooks** for any embedding host. `STANDALONE_SERVER_PLAN.md` is now
@@ -354,8 +354,8 @@ Build a minimal VSIX whose tool window is a WebView2 pointed at a manually start
   `DashboardHostActions` methods a host implements (`getDashboardHostCapabilities`). It is
   sent as `hostCapabilities` in the settings payload (`WebviewSettingsSync.ts`) and stored in
   `uiStore` (d0e62a32e).
-- **Remaining:** replace the boolean `isStandalone` (`useVsCodeApi.ts`; now about 84
-  references across 27 dashboard files) with those capabilities, and add any missing ones
+- **Remaining:** replace the boolean `isStandalone` (`useVsCodeApi.ts`; about 88
+  references across 27 dashboard files as of 2026-10-26) with those capabilities, and add any missing ones
   (for example native open-file and native notifications). For reference, the original
   proposal was `nativeOpenFile`, `nativeFolderPicker`, `nativeNotifications`,
   `serverSettingsSection` and `vsCodeCommands`.

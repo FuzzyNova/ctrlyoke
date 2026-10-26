@@ -3,6 +3,8 @@
 **Status:** Proposed — not started. Today the only way to declare template variables
 is to hand-edit `_templateMeta` in YAML or JSON.
 
+Last reviewed against code: 2026-10-26
+
 **Related:** `TEMPLATE_PROMPT_VARIABLE_PLAN.md` (the `prompt` variable type; the
 variable manager here must offer it), `COMMUNITY_TEMPLATES_PLAN.md` (more templates
 make an authoring UI more valuable), `COMPUTED_VARIABLES_PLAN.md` (the `{{vars}}`

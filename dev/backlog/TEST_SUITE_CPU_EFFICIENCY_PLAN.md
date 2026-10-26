@@ -14,6 +14,19 @@ still open.
 > traced to a Windows git fixture problem and fixed in 540ffa9a2/f17ce6373 (see
 > `dev/bugs/implemented/hosted-viewer-git-tests-fail-on-windows.md`).
 
+## Status (2026-10-26)
+
+Re-checked against the code; nothing new has landed since the 2026-10-10 audit.
+
+- **Shipped:** below-normal priority (`lowerOwnPriority` in `scripts/run-test-suites.mjs`),
+  Vitest `isolate: false` with `src/ui/webview-react/test/fileIsolation.ts`, and the per-operation
+  `GitLocationMemo`/`RepositoryContext` in `src/core/orchestration/WorktreeManager.ts`.
+- **Remaining:** split `WorkflowPropertiesPanelUndoRedo.test.tsx` (still one file); re-tune
+  `uiWorkers` (still `cpus - extensionShards - 2` in `planParallelism`); the cross-run registry of
+  section 2 (none exists); the flake list in section 3; the remaining `worktree list` /
+  `rev-parse --verify` spawns in section 4. CI's split into parallel jobs (23c9a2d52) does not
+  address local concurrent runs.
+
 `npm test` is used from several worktrees at once, often by concurrent
 ctrlyoke workflows. One run already oversubscribes the machine on purpose (see
 `planParallelism` in `scripts/run-test-suites.mjs`), and two runs double that.

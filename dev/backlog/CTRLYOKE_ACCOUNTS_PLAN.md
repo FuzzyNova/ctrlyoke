@@ -6,6 +6,10 @@ Sign-In" sketch in [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md), 
 supersedes as the place to design accounts. The mobile client half lives in
 [`NATIVE_MOBILE_APP.md`](NATIVE_MOBILE_APP.md).
 
+Last reviewed against code: 2026-10-26. Nothing built yet. The only hook in code is the
+optional `LicenseService.activateWithSignIn()` (`src/license/LicenseService.ts`), which still
+throws "not implemented".
+
 ## Problem
 
 Two separate pains have the same missing piece: ctrlyoke has no idea who a user is.

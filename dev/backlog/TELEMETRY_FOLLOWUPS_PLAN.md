@@ -11,6 +11,11 @@
 > corrected item 2's description of the catch blocks. Token counts already fit
 > PRIVACY.md §3.1's "counts and durations" bullet, so item 1 doesn't need a
 > privacy-policy change.
+>
+> Last reviewed against code: 2026-10-26. Still none landed (`reportPromptCompleted` call
+> site is now `PromptQueue.ts` ~line 1409; `registerCommands()`'s `reportCommandError` helper
+> shows feedback only). Item 4's "next release" was 0.2.0 (2026-10-20); whether that manual
+> check was done is not recorded in the repo, so it now applies to the next release.
 
 The telemetry foundation is fully implemented and verified against the code.
 This doc tracks the deliberately-deferred remainder so it doesn't get lost.

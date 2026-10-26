@@ -6,6 +6,10 @@
 > All cited symbols and files verified current (~475 `title=` attributes; 25 UI test files use
 > `getByTitle`/`title` assertions). `TokenFormatting` lives in `src/utils/TokenFormatting.ts`.
 > §5.2 interim work landed in `abb1e8626` / `093597f1c`.
+>
+> Last reviewed against code: 2026-10-26. Still not started; counts are now about 500 `title=`
+> attributes and 28 UI test files asserting on `title`. The `schemaTitle` callers listed in §3 also
+> now include `LimitSelect`, `KeyValueRowsEditor`, `StepColorField` and `ParallelGroupPanel`.
 
 **Goal:** replace the dashboard's native `title` tooltips with a themed tooltip component that can
 show a bold heading, cap its width, and keep long help text easy to read. Start with the
