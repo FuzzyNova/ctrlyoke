@@ -215,6 +215,53 @@ const OFF_QUEUE_MESSAGE_TYPES: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Messages that can start or resume execution. A STOP_RUN skips `routeQueue`
+ * unless one of these that could start the run it targets is still waiting,
+ * because overtaking it would stop nothing and then let the run start. The
+ * addressed ones block only their own run; the rest act on whatever the
+ * client is viewing, so they block every STOP_RUN.
+ */
+const ADDRESSED_RUN_START_MESSAGE_TYPES: ReadonlySet<string> = new Set([
+  MESSAGE_TYPES.RESUME_RUN,
+  MESSAGE_TYPES.CONTINUE_RUN,
+  MESSAGE_TYPES.APPEND_AND_CONTINUE_RUN,
+]);
+const UNADDRESSED_RUN_START_MESSAGE_TYPES: ReadonlySet<string> = new Set([
+  MESSAGE_TYPES.RUN,
+  MESSAGE_TYPES.RESUME,
+  MESSAGE_TYPES.EXECUTE_PROMPT,
+]);
+const ANY_RUN_KEY = "*";
+
+/**
+ * The run a waiting message could start, as a `pendingRunStarts` key, or
+ * `undefined` when the message cannot start one.
+ */
+function getRunStartKey(message: any): string | undefined {
+  const type = message?.type;
+  if (UNADDRESSED_RUN_START_MESSAGE_TYPES.has(type)) return ANY_RUN_KEY;
+  if (!ADDRESSED_RUN_START_MESSAGE_TYPES.has(type)) return undefined;
+  return getRunAddressKey(message.address) ?? ANY_RUN_KEY;
+}
+
+function getRunAddressKey(address: unknown): string | undefined {
+  if (!address || typeof address !== "object") return undefined;
+  const run = address as {
+    kind?: unknown;
+    workflowKey?: unknown;
+    runRef?: unknown;
+  };
+  if (
+    run.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN ||
+    typeof run.workflowKey !== "string" ||
+    typeof run.runRef !== "string"
+  ) {
+    return undefined;
+  }
+  return `${run.workflowKey}\0${run.runRef}`;
+}
+
+/**
  * The history searches one client currently has in flight, all of them for
  * the same `listingKey`. See `WebviewMessageRouter.beginHistorySearch`.
  */
@@ -315,6 +362,9 @@ function describeWorktreeActionSuccess(
  */
 export class WebviewMessageRouter {
   private routeQueue: Promise<void> = Promise.resolve();
+  // Run-start messages waiting in `routeQueue`, counted per run key (see
+  // `getRunStartKey`). A STOP_RUN skips the queue only while its run has none.
+  private readonly pendingRunStarts = new Map<string, number>();
   private readonly loadRunViewRoutes = new Map<string, LoadRunViewRouteEntry>();
   private readonly loadRunViewConnectionIds = new WeakMap<
     PostMessageFn,
@@ -553,12 +603,21 @@ export class WebviewMessageRouter {
       await this.routeSingleMessage(message, ctx);
       return;
     }
+    if (this.canStopSkipQueue(message)) {
+      // Stop is what the user reaches for while a slow handler holds the
+      // queue, so it must not wait behind one. See `getRunStartKey`.
+      await this.routeSingleMessage(message, ctx);
+      return;
+    }
+    const runStartKey = getRunStartKey(message);
+    if (runStartKey) this.adjustPendingRunStarts(runStartKey, 1);
     const enqueuedAt = performance.now();
     this.routeQueue = this.routeQueue.then(async () => {
       const startedAt = performance.now();
       try {
         await this.routeSingleMessage(message, ctx);
       } finally {
+        if (runStartKey) this.adjustPendingRunStarts(runStartKey, -1);
         if (!deferHistorySearchRelease) releaseHistorySearch?.();
         logSlowRoute(message?.type, clientId, enqueuedAt, startedAt);
       }
@@ -579,6 +638,25 @@ export class WebviewMessageRouter {
       ) {
         this.loadRunViewRoutes.delete(loadRunViewKey);
       }
+    }
+  }
+
+  private canStopSkipQueue(message: any): boolean {
+    if (message?.type !== MESSAGE_TYPES.STOP_RUN) return false;
+    const runKey = getRunAddressKey(message.address);
+    return (
+      runKey !== undefined &&
+      !this.pendingRunStarts.has(runKey) &&
+      !this.pendingRunStarts.has(ANY_RUN_KEY)
+    );
+  }
+
+  private adjustPendingRunStarts(runKey: string, delta: 1 | -1): void {
+    const count = (this.pendingRunStarts.get(runKey) ?? 0) + delta;
+    if (count > 0) {
+      this.pendingRunStarts.set(runKey, count);
+    } else {
+      this.pendingRunStarts.delete(runKey);
     }
   }
 

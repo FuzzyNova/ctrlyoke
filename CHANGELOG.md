@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   update down as it grows.
 - Pause shows the pausing state as soon as you click it, so a busy dashboard
   no longer makes the click look ignored.
+- Stop takes effect right away even while the extension is busy with another
+  dashboard request. It still waits behind a Run or Resume of the same run
+  that was sent first.
 - Editor `@` completions resume budgeted scans across narrowed file results, so later files can appear as a query is extended.
 - Workspace viewer file history continues one snapshot-owned Git walk across
   opaque server-side cursors, pages densely across trusted-root filtering without

@@ -308,6 +308,105 @@ suite("WebviewMessageRouter — standalone editor file routing", () => {
   });
 });
 
+suite("WebviewMessageRouter — Stop skips the route queue", () => {
+  const runA = {
+    kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+    workflowKey: "wf",
+    runRef: "run-a",
+  };
+  const runB = { ...runA, runRef: "run-b" };
+
+  function buildControlRouter(calls: string[]) {
+    let slow = deferred<unknown>();
+    const router = buildRouter(
+      {
+        isInitialized: () => true,
+        getWorkspaceStatsService: () => ({ getSnapshot: () => slow.promise }),
+        refreshWorkspaceStats: async () => undefined,
+        executeLoadedPromptFile: async () => void calls.push("run"),
+        resumeAtRun: async (address: { runRef: string }) =>
+          void calls.push(`resume:${address.runRef}`),
+        stopAtRun: async (address: { runRef: string }) =>
+          void calls.push(`stop:${address.runRef}`),
+      },
+      () => undefined,
+      undefined,
+      undefined,
+      () => []
+    );
+    // Holds routeQueue until the test releases it.
+    let blocker: Promise<void>;
+    const block = () => {
+      slow = deferred<unknown>();
+      blocker = router.route({ type: MESSAGE_TYPES.REQUEST_WORKSPACE_STATS });
+    };
+    block();
+    return {
+      router,
+      block,
+      release: async () => {
+        slow.resolve({});
+        await blocker;
+      },
+    };
+  }
+
+  test("routes Stop while a slow handler holds the queue", async () => {
+    const calls: string[] = [];
+    const { router, release } = buildControlRouter(calls);
+    await router.route({ type: MESSAGE_TYPES.STOP_RUN, address: runA });
+    assert.deepStrictEqual(calls, ["stop:run-a"]);
+    await release();
+  });
+
+  test("waits behind a queued Resume of the same run", async () => {
+    const calls: string[] = [];
+    const { router, release } = buildControlRouter(calls);
+    const resume = router.route({
+      type: MESSAGE_TYPES.RESUME_RUN,
+      address: runA,
+    });
+    const stop = router.route({ type: MESSAGE_TYPES.STOP_RUN, address: runA });
+    await Promise.resolve();
+    assert.deepStrictEqual(calls, []);
+    await release();
+    await Promise.all([resume, stop]);
+    assert.deepStrictEqual(calls, ["resume:run-a", "stop:run-a"]);
+  });
+
+  test("a Resume queued for another run does not hold Stop back", async () => {
+    const calls: string[] = [];
+    const { router, release } = buildControlRouter(calls);
+    const resume = router.route({
+      type: MESSAGE_TYPES.RESUME_RUN,
+      address: runB,
+    });
+    await router.route({ type: MESSAGE_TYPES.STOP_RUN, address: runA });
+    assert.deepStrictEqual(calls, ["stop:run-a"]);
+    await release();
+    await resume;
+    assert.deepStrictEqual(calls, ["stop:run-a", "resume:run-b"]);
+  });
+
+  test("an unaddressed Run holds back every Stop until it has routed", async () => {
+    const calls: string[] = [];
+    const { router, block, release } = buildControlRouter(calls);
+    const run = router.route({ type: MESSAGE_TYPES.RUN });
+    const stop = router.route({ type: MESSAGE_TYPES.STOP_RUN, address: runA });
+    await Promise.resolve();
+    assert.deepStrictEqual(calls, []);
+    await release();
+    await Promise.all([run, stop]);
+    assert.deepStrictEqual(calls, ["run", "stop:run-a"]);
+
+    // Once the Run has routed, Stop skips the queue again.
+    block();
+    await router.route({ type: MESSAGE_TYPES.STOP_RUN, address: runB });
+    assert.deepStrictEqual(calls.at(-1), "stop:run-b");
+    await release();
+  });
+});
+
 class FakeLicenseActionService implements LicenseActionService {
   readonly calls: string[] = [];
   readonly machines: LicenseMachineSummary[] = [
