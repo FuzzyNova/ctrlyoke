@@ -93,17 +93,13 @@ suite("WorkspaceFileIndex", () => {
       fs.writeFileSync(path.join(repo, "file.ts"), "content");
       let lstatCalls = 0;
       const chunks: string[][] = [];
-      for await (const chunk of getGitFilesIncludingNestedRepos(
-        repo,
-        256,
-        {
-          lstat: async (absolutePath) => {
-            lstatCalls++;
-            return fs.promises.lstat(absolutePath);
-          },
-          access: (absolutePath) => fs.promises.access(absolutePath),
-        }
-      )) {
+      for await (const chunk of getGitFilesIncludingNestedRepos(repo, 256, {
+        lstat: async (absolutePath) => {
+          lstatCalls++;
+          return fs.promises.lstat(absolutePath);
+        },
+        access: (absolutePath) => fs.promises.access(absolutePath),
+      })) {
         chunks.push(chunk);
       }
       assert.deepStrictEqual(chunks.flat(), ["file.ts"]);
@@ -196,7 +192,9 @@ suite("WorkspaceFileIndex", () => {
     const warnings: string[] = [];
     const harness = makeHarness({
       getGitFilesIncludingNestedRepos: async function* () {
-        const error = new Error("git ls-files timed out") as NodeJS.ErrnoException;
+        const error = new Error(
+          "git ls-files timed out"
+        ) as NodeJS.ErrnoException;
         error.code = "ETIMEDOUT";
         throw error;
       },
@@ -210,7 +208,9 @@ suite("WorkspaceFileIndex", () => {
     await pipeline.build();
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(pipeline.getStatus().state, "degraded");
-    assert.ok(warnings.some((message) => message.includes("Git file listing failed")));
+    assert.ok(
+      warnings.some((message) => message.includes("Git file listing failed"))
+    );
     assert.ok((await pipeline.queryFiles("ignored target")).length > 0);
     pipeline.dispose();
   });

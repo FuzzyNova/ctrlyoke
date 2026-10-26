@@ -42,7 +42,10 @@ export function useRunViewLoadWatchdog(): void {
       }
       const now = Date.now();
       disconnectedSinceRef.current ??= now;
-      if (now - disconnectedSinceRef.current < RUN_VIEW_DISCONNECTED_GIVE_UP_MS) {
+      if (
+        now - disconnectedSinceRef.current <
+        RUN_VIEW_DISCONNECTED_GIVE_UP_MS
+      ) {
         return;
       }
       WebviewLog.warn(

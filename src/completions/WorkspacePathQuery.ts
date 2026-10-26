@@ -283,9 +283,7 @@ export class WorkspacePathQuery {
   }
 
   /** Return the saved partial survivors when this query extends its checkpoint. */
-  private partialNarrowing(
-    query: string
-  ): NarrowingCheckpoint | undefined {
+  private partialNarrowing(query: string): NarrowingCheckpoint | undefined {
     const checkpoint = this.partialCheckpoint;
     if (
       checkpoint?.version === this.store.version &&
@@ -410,9 +408,9 @@ export class WorkspacePathQuery {
         if (options.signal?.aborted) break;
         scanned++;
         const position = resume
-          ? (resume.basePositions
-              ? resume.basePositions[scanStart + i]
-              : scanStart + i)
+          ? resume.basePositions
+            ? resume.basePositions[scanStart + i]
+            : scanStart + i
           : candidates
             ? candidates[i]
             : i;

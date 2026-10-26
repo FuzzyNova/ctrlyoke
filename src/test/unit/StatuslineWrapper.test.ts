@@ -35,7 +35,11 @@ type SharedWrapper = {
     input: string | Buffer,
     timeoutMs?: number,
     options?: {
-      spawnImpl?: (command: string, argsOrOptions?: unknown, options?: unknown) => any;
+      spawnImpl?: (
+        command: string,
+        argsOrOptions?: unknown,
+        options?: unknown
+      ) => any;
       platform?: string;
     }
   ): Promise<{ output: Buffer; timedOut: boolean }>;
@@ -45,7 +49,11 @@ type SharedWrapper = {
     harnessId: string,
     timeoutMs?: number,
     options?: {
-      spawnImpl?: (command: string, argsOrOptions?: unknown, options?: unknown) => any;
+      spawnImpl?: (
+        command: string,
+        argsOrOptions?: unknown,
+        options?: unknown
+      ) => any;
       platform?: string;
     }
   ): Promise<Buffer>;
@@ -1247,7 +1255,8 @@ suite("Shared statusline wrappers", function () {
   });
 
   test("kills the Windows forwarded process tree on timeout", async () => {
-    const calls: Array<{ command: string; args?: unknown; options?: unknown }> = [];
+    const calls: Array<{ command: string; args?: unknown; options?: unknown }> =
+      [];
     const stdout = new EventEmitter();
     const stdin = new EventEmitter() as EventEmitter & {
       end: (input: Buffer) => void;

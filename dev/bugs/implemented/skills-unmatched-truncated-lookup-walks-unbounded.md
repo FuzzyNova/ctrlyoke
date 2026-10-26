@@ -12,7 +12,13 @@ stops a truncated-tree walk once the target skill is found. But it also added, a
 
 ```ts
 if (!this.isTreeComplete(source, commitSha)) {
-  await this.continueTruncatedTreeWalk(source, commitSha, key, cache, undefined);
+  await this.continueTruncatedTreeWalk(
+    source,
+    commitSha,
+    key,
+    cache,
+    undefined
+  );
   return this.findSkillAtCommit(source, slug, commitSha, tree);
 }
 ```

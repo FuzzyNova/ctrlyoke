@@ -186,11 +186,9 @@ describe("WorkspaceDiffPane worktree diff paging", () => {
     vi.mocked(workspaceWorktreeDiffPage)
       .mockResolvedValueOnce(pageResponse([textEntry("src/file.ts")], 21))
       .mockResolvedValueOnce(pageResponse([], 21, 20, undefined));
-    useWorkspaceViewerStore.getState().openToWorktreeDiff(
-      "/repo",
-      "base-hash",
-      "feature/worktree"
-    );
+    useWorkspaceViewerStore
+      .getState()
+      .openToWorktreeDiff("/repo", "base-hash", "feature/worktree");
     render(<WorkspaceDiffPane />);
 
     await waitFor(() =>
@@ -207,9 +205,9 @@ describe("WorkspaceDiffPane worktree diff paging", () => {
       undefined
     );
     expect(screen.getByText("Branch feature/worktree")).toBeInTheDocument();
-    await userEvent.setup().click(
-      screen.getByRole("button", { name: "Load next diff page" })
-    );
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "Load next diff page" }));
     await waitFor(() =>
       expect(workspaceWorktreeDiffPage).toHaveBeenCalledTimes(2)
     );
@@ -228,11 +226,9 @@ describe("WorkspaceDiffPane worktree diff paging", () => {
     vi.mocked(workspaceWorktreeDiffPage).mockRejectedValueOnce(
       new Error("worktree page unavailable")
     );
-    useWorkspaceViewerStore.getState().openToWorktreeDiff(
-      "/repo",
-      "base-hash",
-      "feature/worktree"
-    );
+    useWorkspaceViewerStore
+      .getState()
+      .openToWorktreeDiff("/repo", "base-hash", "feature/worktree");
     render(<WorkspaceDiffPane />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(

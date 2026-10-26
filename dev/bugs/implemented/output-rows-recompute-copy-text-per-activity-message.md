@@ -15,12 +15,12 @@ sending a prompt to a big workflow, or clicking Pause, seems to do nothing.
 Profile breakdown (`.ctrlyoke/logs/profiles/dashboard-2026-10-26T03-04-46-717Z.cpuprofile`
 and `.heapprofile`):
 
-| Frame (total time) | ms |
-| --- | --- |
-| `buildOutputRows` | 64,799 |
+| Frame (total time)                                                       | ms     |
+| ------------------------------------------------------------------------ | ------ |
+| `buildOutputRows`                                                        | 64,799 |
 | `getCliTextForCopy` → `getStepAssistantTextForCopy` → `getAssistantText` | 60,664 |
-| `normalizeCliEvents` → `append` | 59,443 |
-| `recognizeMcpSkillCommand` / `rewrite` | 24,358 |
+| `normalizeCliEvents` → `append`                                          | 59,443 |
+| `recognizeMcpSkillCommand` / `rewrite`                                   | 24,358 |
 
 That is **94% of the row build spent working out the Copy-output text**. The capture
 allocated **86.8 GB** in 112 s, 47 GB of it in `McpSkillCommandRecognizer.rewrite`, which
@@ -65,7 +65,7 @@ Every rebuild repeats all of this. The rebuild-per-message bug
    `getCliTextForCopy` call under `emitsTrailingChrome`, use `aggregateOutput`, and skip it
    while `isStreaming`. This alone removes the quadratic term.
 2. **Cache by output identity.** Use a module-level `WeakMap<CliOutputType, string |
-   undefined>` in `getStepAssistantTextForCopy`. A completed step's output object is
+undefined>` in `getStepAssistantTextForCopy`. A completed step's output object is
    stable across rebuilds, so it is normalized once for the life of the entry. The step
    chips (`WorkflowStepRow`, `PromptChipRail`, `WorkflowStepsPanel`) call the same helper
    on render and would benefit too.

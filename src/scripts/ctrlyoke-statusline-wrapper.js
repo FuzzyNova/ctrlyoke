@@ -409,7 +409,12 @@ async function forwardStatuslineCommand(
   timeoutMs = FORWARD_TIMEOUT_MS,
   options = {}
 ) {
-  const result = await forwardToCommand(command, inputBytes, timeoutMs, options);
+  const result = await forwardToCommand(
+    command,
+    inputBytes,
+    timeoutMs,
+    options
+  );
   const cachePath = getForwardedOutputCachePath(harnessId);
   if (result.timedOut) {
     return result.output.length > 0

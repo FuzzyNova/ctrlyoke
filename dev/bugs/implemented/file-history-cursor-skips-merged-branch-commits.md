@@ -24,9 +24,9 @@ Reproduced with real git by the reviewer:
 
 11dd6bf37 resumes each page from the last consumed commit's first parent
 (`walkRef = \`${decoded.hash}^\``, around line 2383, and the same reset between batches
-inside one page around line 2437). `git log` walks all branches in date order, so commits
-from other branches are still pending when a page ends; `<hash>^` contains only that
-commit's own first-parent ancestry. `reachedRoot` (around line 2428) also stops the walk at
+inside one page around line 2437). `git log`walks all branches in date order, so commits
+from other branches are still pending when a page ends;`<hash>^`contains only that
+commit's own first-parent ancestry.`reachedRoot` (around line 2428) also stops the walk at
 the first parentless commit, cutting off history in repos with several root commits
 (subtree merges, merged orphan branches).
 

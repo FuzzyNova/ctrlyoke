@@ -30,7 +30,7 @@
 
 1. `getGitFilesIncludingNestedRepos` (`GitUtils.ts`, around lines 1201-1245)
    lets a nested repo's listing error propagate. The message matches
-   `isNotGitRepositoryError`, so callers think the *outer* root is not a git
+   `isNotGitRepositoryError`, so callers think the _outer_ root is not a git
    repository. In `HostedWorkspaceViewerService` search (around line 907), the outer
    chunks were already yielded inside the `try`, so the fallback walk duplicates them.
 2. `isNotGitRepositoryError` only matches `fatal: not a git repository`. Since

@@ -90,7 +90,12 @@ suite("GitUtils.createFileHistoryCommitWalk", function () {
       "utf8"
     );
     try {
-      const walk = createFileHistoryCommitWalk("/repo", "file.txt", "HEAD", true);
+      const walk = createFileHistoryCommitWalk(
+        "/repo",
+        "file.txt",
+        "HEAD",
+        true
+      );
       for (let index = 0; index < output.length; index++) {
         child.stdout.write(output.subarray(index, index + 1));
       }
@@ -121,7 +126,12 @@ suite("GitUtils.createFileHistoryCommitWalk", function () {
     };
     const restoreSpawn = setFileHistorySpawnForTests(() => child as never);
     try {
-      const walk = createFileHistoryCommitWalk("/repo", "file.txt", "HEAD", true);
+      const walk = createFileHistoryCommitWalk(
+        "/repo",
+        "file.txt",
+        "HEAD",
+        true
+      );
       const pendingRead = walk.readAt(0, 10_000);
       await new Promise<void>((resolve) => setImmediate(resolve));
       const disposedAt = Date.now();

@@ -1082,9 +1082,9 @@ suite("HostedWorkspaceViewerService", function () {
       commitFileAt(
         root,
         "history.txt",
-        fs.readFileSync(path.join(root, "history.txt"), "utf8").replace(
-          "main-slot-2", "main change 2"
-        ),
+        fs
+          .readFileSync(path.join(root, "history.txt"), "utf8")
+          .replace("main-slot-2", "main change 2"),
         "Main 2",
         "2020-01-04T00:00:00Z"
       );
@@ -1092,9 +1092,9 @@ suite("HostedWorkspaceViewerService", function () {
       commitFileAt(
         root,
         "history.txt",
-        fs.readFileSync(path.join(root, "history.txt"), "utf8").replace(
-          "side-slot-2", "side change 2"
-        ),
+        fs
+          .readFileSync(path.join(root, "history.txt"), "utf8")
+          .replace("side-slot-2", "side change 2"),
         "Side 2",
         "2020-01-05T00:00:00Z"
       );
@@ -1150,7 +1150,8 @@ suite("HostedWorkspaceViewerService", function () {
       }
       const logCommands: string[][] = [];
       const restoreObserver = setGitCommandObserverForTests((_file, args) => {
-        if (args.includes("log") && args.includes("--follow")) logCommands.push([...args]);
+        if (args.includes("log") && args.includes("--follow"))
+          logCommands.push([...args]);
       });
       try {
         const svc = new HostedWorkspaceViewerService(root);
@@ -1159,8 +1160,13 @@ suite("HostedWorkspaceViewerService", function () {
         subjects.push(...page.entries.map((entry) => entry.subject));
         while (page.hasMore) {
           page = await svc.getFileHistory(
-            "history.txt", subjects.length, undefined, page.historyId,
-            undefined, undefined, page.nextCursor
+            "history.txt",
+            subjects.length,
+            undefined,
+            page.historyId,
+            undefined,
+            undefined,
+            page.nextCursor
           );
           subjects.push(...page.entries.map((entry) => entry.subject));
         }
@@ -1260,27 +1266,39 @@ suite("HostedWorkspaceViewerService", function () {
       commitFile(root, "history.txt", "one\n", "Initial");
       const row = (hash: string, parent: string, subject: string) =>
         `\0${hash}\0${hash.slice(0, 7)}\0${subject}\0ctrlyoke Test\0today\0${parent}\0\0\0M\0history.txt\0`;
-      const output = row("a".repeat(40), "b".repeat(40), "History 0") +
+      const output =
+        row("a".repeat(40), "b".repeat(40), "History 0") +
         row("b".repeat(40), "", "History 1");
       let spawnCount = 0;
       const restoreSpawn = setFileHistorySpawnForTests(() => {
         const child = new EventEmitter() as EventEmitter & {
-          stdout: PassThrough; stderr: PassThrough; kill: () => boolean;
+          stdout: PassThrough;
+          stderr: PassThrough;
+          kill: () => boolean;
         };
         child.stdout = new PassThrough();
         child.stderr = new PassThrough();
         child.kill = () => true;
         spawnCount++;
-        const emit = () => { child.stdout.write(output); child.emit("close", 0); };
+        const emit = () => {
+          child.stdout.write(output);
+          child.emit("close", 0);
+        };
         if (spawnCount === 1) setTimeout(emit, 100);
         else setImmediate(emit);
         return child as never;
       });
       try {
         const svc = new ShortDeadlineWorkspaceViewerService(root);
-        await assert.rejects(svc.getFileHistory("history.txt", 0, 1), /timed out/);
+        await assert.rejects(
+          svc.getFileHistory("history.txt", 0, 1),
+          /timed out/
+        );
         const retry = await svc.getFileHistory("history.txt", 0, 1);
-        assert.deepStrictEqual(retry.entries.map((entry) => entry.subject), ["History 0"]);
+        assert.deepStrictEqual(
+          retry.entries.map((entry) => entry.subject),
+          ["History 0"]
+        );
         assert.strictEqual(spawnCount, 2);
       } finally {
         restoreSpawn();
@@ -1295,7 +1313,13 @@ suite("HostedWorkspaceViewerService", function () {
       const row = (hash: string, parent: string, subject: string) =>
         `\0${hash}\0${hash.slice(0, 7)}\0${subject}\0ctrlyoke Test\0today\0${parent}\0\0\0M\0history.txt\0`;
       let spawnCount = 0;
-      let walkChild: (EventEmitter & { stdout: PassThrough; stderr: PassThrough; kill: () => boolean }) | undefined;
+      let walkChild:
+        | (EventEmitter & {
+            stdout: PassThrough;
+            stderr: PassThrough;
+            kill: () => boolean;
+          })
+        | undefined;
       const restoreSpawn = setFileHistorySpawnForTests(() => {
         const child = new EventEmitter() as EventEmitter & {
           stdout: PassThrough;
@@ -1307,13 +1331,18 @@ suite("HostedWorkspaceViewerService", function () {
         child.kill = () => true;
         spawnCount++;
         walkChild = child;
-        setImmediate(() => child.stdout.write(row("a".repeat(40), "b".repeat(40), "History 0")));
+        setImmediate(() =>
+          child.stdout.write(row("a".repeat(40), "b".repeat(40), "History 0"))
+        );
         return child as never;
       });
       try {
         const svc = new ShortDeadlineWorkspaceViewerService(root);
         const first = await svc.getFileHistory("history.txt", 0, 1);
-        assert.deepStrictEqual(first.entries.map((entry) => entry.subject), ["History 0"]);
+        assert.deepStrictEqual(
+          first.entries.map((entry) => entry.subject),
+          ["History 0"]
+        );
         assert.strictEqual(first.hasMore, true);
         assert.ok(first.nextCursor);
         walkChild?.stdout.write(row("b".repeat(40), "", "History 1"));
@@ -1328,7 +1357,10 @@ suite("HostedWorkspaceViewerService", function () {
           undefined,
           first.nextCursor
         );
-        assert.deepStrictEqual(continued.entries.map((entry) => entry.subject), ["History 1"]);
+        assert.deepStrictEqual(
+          continued.entries.map((entry) => entry.subject),
+          ["History 1"]
+        );
         assert.strictEqual(continued.hasMore, false);
         assert.strictEqual(spawnCount, 1);
       } finally {
@@ -1342,7 +1374,13 @@ suite("HostedWorkspaceViewerService", function () {
       configureGitIdentity(root);
       commitFile(root, "history.txt", "one\n", "Initial");
       let spawnCount = 0;
-      let firstChild: (EventEmitter & { stdout: PassThrough; stderr: PassThrough; kill: () => boolean }) | undefined;
+      let firstChild:
+        | (EventEmitter & {
+            stdout: PassThrough;
+            stderr: PassThrough;
+            kill: () => boolean;
+          })
+        | undefined;
       const restoreSpawn = setFileHistorySpawnForTests(() => {
         const child = new EventEmitter() as EventEmitter & {
           stdout: PassThrough;
@@ -1366,11 +1404,17 @@ suite("HostedWorkspaceViewerService", function () {
       });
       try {
         const svc = new ShortDeadlineWorkspaceViewerService(root);
-        await assert.rejects(svc.getFileHistory("history.txt", 0, 1), /timed out/);
+        await assert.rejects(
+          svc.getFileHistory("history.txt", 0, 1),
+          /timed out/
+        );
         assert.strictEqual(firstChild?.stdout.destroyed, true);
         assert.strictEqual(firstChild?.stderr.destroyed, true);
         const retry = await svc.getFileHistory("history.txt", 0, 1);
-        assert.deepStrictEqual(retry.entries.map((entry) => entry.subject), ["Retry history"]);
+        assert.deepStrictEqual(
+          retry.entries.map((entry) => entry.subject),
+          ["Retry history"]
+        );
         assert.strictEqual(spawnCount, 2);
       } finally {
         restoreSpawn();

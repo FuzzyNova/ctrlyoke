@@ -59,7 +59,10 @@ async function isManifestedBundleAsset(
     if (!manifested) {
       manifested = fs
         .access(path.join(directory, BUNDLE_MANIFEST_FILE_NAME))
-        .then(() => true, () => false);
+        .then(
+          () => true,
+          () => false
+        );
       cache.set(directory, manifested);
     }
     if (await manifested) return true;
@@ -81,7 +84,9 @@ export async function findWorkflowFilesInWorkspace(
   const entries: Array<{ relativePath: string; gitIgnored?: boolean }> = [];
 
   try {
-    for await (const chunk of dependencies.getGitFilesIncludingNestedRepos(root)) {
+    for await (const chunk of dependencies.getGitFilesIncludingNestedRepos(
+      root
+    )) {
       for (const gitPath of chunk) {
         const relativePath = toPortablePath(gitPath);
         if (getCtrlYokeFileKind(path.basename(relativePath)) === null) continue;

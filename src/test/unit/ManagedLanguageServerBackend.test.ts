@@ -964,7 +964,8 @@ suite("ManagedLanguageServerBackend", () => {
     assert.deepStrictEqual(
       children.map(
         (child) =>
-          (child as EventEmitter & { exitCode: number | null }).exitCode !== null
+          (child as EventEmitter & { exitCode: number | null }).exitCode !==
+          null
       ),
       [true, true],
       "dispose sends exit or kills every child"
@@ -1357,16 +1358,15 @@ function createBackend(
       new StreamMessageReader(stdin),
       new StreamMessageWriter(stdout)
     );
-    server.onRequest(
-      "initialize",
-      () => {
-        if (options.unansweredInitializeSpawnIndexes?.includes(currentSpawnIndex))
-          return new Promise<never>(() => undefined);
-        return options.initializeResponse ?? {
+    server.onRequest("initialize", () => {
+      if (options.unansweredInitializeSpawnIndexes?.includes(currentSpawnIndex))
+        return new Promise<never>(() => undefined);
+      return (
+        options.initializeResponse ?? {
           capabilities: { completionProvider: {}, hoverProvider: true },
-        };
-      }
-    );
+        }
+      );
+    });
     server.onRequest("textDocument/hover", () => ({ contents: "hover" }));
     server.onRequest("shutdown", () =>
       options.ignoreShutdown

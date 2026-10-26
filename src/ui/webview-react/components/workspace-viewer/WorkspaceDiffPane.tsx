@@ -120,10 +120,7 @@ export const WorkspaceDiffPane: React.FC = () => {
   );
 
   const fetchWorktreeDiffPage = useCallback(
-    (
-      request: PagedGitRefDiffPageRequest,
-      _signal?: AbortSignal
-    ) => {
+    (request: PagedGitRefDiffPageRequest, _signal?: AbortSignal) => {
       if (!worktreeDiffRequest) {
         throw new Error("Worktree diff request is no longer active");
       }

@@ -5,7 +5,13 @@ const childProcess = require("child_process") as {
 };
 
 type ExecCallback = (
-  error: (Error & { code?: number | string | null; killed?: boolean; stdout?: string }) | null,
+  error:
+    | (Error & {
+        code?: number | string | null;
+        killed?: boolean;
+        stdout?: string;
+      })
+    | null,
   stdout: string,
   stderr: string
 ) => void;
@@ -20,7 +26,11 @@ suite("ModelRegistry discovery", () => {
   function loadRegistry(
     run: (command: string, callback: ExecCallback) => void
   ): typeof import("../utils/ModelRegistry") {
-    const fakeExec = ((command: string, _options: unknown, callback: ExecCallback) => {
+    const fakeExec = ((
+      command: string,
+      _options: unknown,
+      callback: ExecCallback
+    ) => {
       run(command, callback);
       return {} as import("child_process").ChildProcess;
     }) as typeof childProcess.exec;
@@ -65,7 +75,11 @@ suite("ModelRegistry discovery", () => {
         return;
       }
       if (command === "opencode --version") {
-        callback(Object.assign(new Error("absent"), { code: "ENOENT" }), "", "");
+        callback(
+          Object.assign(new Error("absent"), { code: "ENOENT" }),
+          "",
+          ""
+        );
         return;
       }
       callback(Object.assign(new Error("absent"), { code: "ENOENT" }), "", "");
@@ -90,7 +104,10 @@ suite("ModelRegistry discovery", () => {
     assert.strictEqual(registry.isRegistryInitialized(), true);
     assert.strictEqual(retryWasUnrefed, true);
     assert.ok(registry.getCliSupportedModelIdsSync().length > 0);
-    assert.strictEqual(registry.getCliSupportedModelIdsSync().includes("copilot-new-model"), false);
+    assert.strictEqual(
+      registry.getCliSupportedModelIdsSync().includes("copilot-new-model"),
+      false
+    );
     assert.ok(retryCallback);
     retryCallback();
     await new Promise<void>((resolve) => setImmediate(resolve));
@@ -120,12 +137,18 @@ suite("ModelRegistry discovery", () => {
         } else if (command === "opencode models --verbose") {
           callback(failure, failure.stdout ?? "", "");
         } else {
-          callback(Object.assign(new Error("absent"), { code: "ENOENT" }), "", "");
+          callback(
+            Object.assign(new Error("absent"), { code: "ENOENT" }),
+            "",
+            ""
+          );
         }
       });
       await registry.initializeModelRegistry();
       assert.strictEqual(
-        registry.getOpenCodeModelIdsSync().includes(failure.stdout!.split("/")[1]),
+        registry
+          .getOpenCodeModelIdsSync()
+          .includes(failure.stdout!.split("/")[1]),
         false
       );
     }
@@ -138,15 +161,22 @@ suite("ModelRegistry discovery", () => {
       } else if (command === "opencode models --verbose") {
         const failure = Object.assign(new Error("exit 1"), {
           code: 1,
-          stdout: "opencode/recovered-model\n{\n  \"limit\": { \"context\": 8192 }\n}\n",
+          stdout:
+            'opencode/recovered-model\n{\n  "limit": { "context": 8192 }\n}\n',
         });
         callback(failure, failure.stdout, "");
       } else {
-        callback(Object.assign(new Error("absent"), { code: "ENOENT" }), "", "");
+        callback(
+          Object.assign(new Error("absent"), { code: "ENOENT" }),
+          "",
+          ""
+        );
       }
     });
 
     await registry.initializeModelRegistry();
-    assert.deepStrictEqual(registry.getOpenCodeModelIdsSync(), ["opencode/recovered-model"]);
+    assert.deepStrictEqual(registry.getOpenCodeModelIdsSync(), [
+      "opencode/recovered-model",
+    ]);
   });
 });

@@ -11,7 +11,7 @@ cf3acdf4a (dev/bugs/implemented/file-history-range-change-leaves-short-page-gap.
 
 1. **Commit history can send an offset the server rejects.** The workspace commit log pages
    by aligned `skip` (`HostedWorkspaceViewerService` throws `skip must be aligned to
-   pageSize`), and its pages are always full except the last. But commit pages can load out
+pageSize`), and its pages are always full except the last. But commit pages can load out
    of order, so `loadedCount` (the sum of loaded rows) is not where the loaded rows end.
    Example, pageSize 30, 1007 commits: drag to the bottom (loads page 990 with 17 rows and
    page 960, whose `hasMore: true` lands last), plus page 0 → `loadedCount` 77. Drag so the

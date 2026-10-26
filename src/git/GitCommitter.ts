@@ -6,7 +6,9 @@ const execFileAsync = promisify(execFile);
 const STDERR_TAIL_MAX_BYTES = 8 * 1024;
 
 interface GitMutationProcess {
-  stderr: { on(event: "data", listener: (chunk: Buffer | string) => void): void };
+  stderr: {
+    on(event: "data", listener: (chunk: Buffer | string) => void): void;
+  };
   once(event: "error", listener: (error: Error) => void): this;
   once(event: "close", listener: (code: number | null) => void): this;
 }
@@ -40,7 +42,9 @@ function runGitMutation(
     let stderrTail = Buffer.alloc(0);
     child.stderr.on("data", (chunk) => {
       const data = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-      stderrTail = Buffer.concat([stderrTail, data]).subarray(-STDERR_TAIL_MAX_BYTES);
+      stderrTail = Buffer.concat([stderrTail, data]).subarray(
+        -STDERR_TAIL_MAX_BYTES
+      );
     });
     child.once("error", reject);
     child.once("close", (code) => {
@@ -63,7 +67,9 @@ export interface CommitOptions {
 }
 
 export class GitCommitter {
-  private readonly spawnProcess: NonNullable<GitCommitterOptions["spawnProcess"]>;
+  private readonly spawnProcess: NonNullable<
+    GitCommitterOptions["spawnProcess"]
+  >;
 
   constructor(options: GitCommitterOptions = {}) {
     this.spawnProcess = options.spawnProcess ?? defaultSpawnProcess;

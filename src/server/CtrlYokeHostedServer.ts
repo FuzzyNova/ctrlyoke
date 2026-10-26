@@ -2305,9 +2305,7 @@ export class CtrlYokeHostedServer
         const baseCommit = req.query.baseCommit;
         const branchName = req.query.branchName;
         const offset =
-          typeof req.query.offset === "string"
-            ? Number(req.query.offset)
-            : 0;
+          typeof req.query.offset === "string" ? Number(req.query.offset) : 0;
         const pageSize =
           typeof req.query.pageSize === "string"
             ? Number(req.query.pageSize)

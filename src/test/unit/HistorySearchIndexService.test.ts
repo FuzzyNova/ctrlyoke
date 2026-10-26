@@ -1775,20 +1775,20 @@ suite("HistorySearchIndexService", () => {
           undefined,
           { allowRebuild: false, rebuildInBackground: true }
         ),
-        new Promise<never>((_, reject) =>
-          (timeout = setTimeout(
-            () => reject(new Error("Interactive search waited on rebuild lock")),
-            5_000
-          ))
+        new Promise<never>(
+          (_, reject) =>
+            (timeout = setTimeout(
+              () =>
+                reject(new Error("Interactive search waited on rebuild lock")),
+              5_000
+            ))
         ),
       ]);
 
       assert.strictEqual(response.indexState, "building");
       assert.strictEqual(response.totalCount, 1);
       assert.ok(
-        (
-          index as unknown as { rebuildPromise?: Promise<void> }
-        ).rebuildPromise,
+        (index as unknown as { rebuildPromise?: Promise<void> }).rebuildPromise,
         "the search should start a background rebuild that encounters the lock"
       );
       assert.ok(

@@ -40,7 +40,10 @@ suite("WorkflowFileDiscovery", () => {
       "utf8"
     );
 
-    assert.deepStrictEqual(await findWorkflowFilesInWorkspace(workspaceRoot), []);
+    assert.deepStrictEqual(
+      await findWorkflowFilesInWorkspace(workspaceRoot),
+      []
+    );
   });
 
   test("discovers prompt files inside an unmanifested assets directory", async () => {
@@ -72,9 +75,18 @@ suite("WorkflowFileDiscovery", () => {
     await execFileAsync("git", ["init", "--quiet"], { cwd: workspaceRoot });
     await fs.writeFile(path.join(workspaceRoot, ".gitignore"), "ignored/\n");
     await fs.mkdir(path.join(workspaceRoot, "ignored"));
-    await fs.writeFile(path.join(workspaceRoot, "ignored", "hidden.prompt.md"), "ignored");
-    await fs.writeFile(path.join(workspaceRoot, "tracked.ctrlyoke.yaml"), "tracked");
-    await fs.writeFile(path.join(workspaceRoot, "untracked.prompt.md"), "untracked");
+    await fs.writeFile(
+      path.join(workspaceRoot, "ignored", "hidden.prompt.md"),
+      "ignored"
+    );
+    await fs.writeFile(
+      path.join(workspaceRoot, "tracked.ctrlyoke.yaml"),
+      "tracked"
+    );
+    await fs.writeFile(
+      path.join(workspaceRoot, "untracked.prompt.md"),
+      "untracked"
+    );
     await execFileAsync("git", ["add", ".gitignore", "tracked.ctrlyoke.yaml"], {
       cwd: workspaceRoot,
     });
@@ -120,8 +132,14 @@ suite("WorkflowFileDiscovery", () => {
     tempDirs.push(workspaceRoot);
     await fs.mkdir(path.join(workspaceRoot, "nested"));
     await fs.mkdir(path.join(workspaceRoot, "node_modules"));
-    await fs.writeFile(path.join(workspaceRoot, "nested", "workflow.prompt.md"), "workflow");
-    await fs.writeFile(path.join(workspaceRoot, "node_modules", "hidden.prompt.md"), "hidden");
+    await fs.writeFile(
+      path.join(workspaceRoot, "nested", "workflow.prompt.md"),
+      "workflow"
+    );
+    await fs.writeFile(
+      path.join(workspaceRoot, "node_modules", "hidden.prompt.md"),
+      "hidden"
+    );
 
     const files = await findWorkflowFilesInWorkspace(workspaceRoot);
     assert.deepStrictEqual(
@@ -135,7 +153,10 @@ suite("WorkflowFileDiscovery", () => {
       path.join(os.tmpdir(), "ctrlyoke-workflow-discovery-no-git-")
     );
     tempDirs.push(workspaceRoot);
-    await fs.writeFile(path.join(workspaceRoot, "workflow.prompt.md"), "workflow");
+    await fs.writeFile(
+      path.join(workspaceRoot, "workflow.prompt.md"),
+      "workflow"
+    );
 
     const files = await findWorkflowFilesInWorkspace(workspaceRoot, {
       dependencies: {

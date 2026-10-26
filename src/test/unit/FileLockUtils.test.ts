@@ -154,11 +154,9 @@ suite("FileLockUtils", () => {
       const holderGate = new Promise<void>((resolve) => {
         releaseHolder = resolve;
       });
-      const holder = withFileLock(
-        target,
-        async () => holderGate,
-        { staleMs: 120 }
-      );
+      const holder = withFileLock(target, async () => holderGate, {
+        staleMs: 120,
+      });
       const lockPath = `${target}.lock`;
       while (!(await fs.stat(lockPath).catch(() => undefined))) {
         await new Promise((resolve) => setTimeout(resolve, 1));
@@ -213,11 +211,9 @@ suite("FileLockUtils", () => {
       const holderGate = new Promise<void>((resolve) => {
         releaseHolder = resolve;
       });
-      const holder = withFileLock(
-        target,
-        async () => holderGate,
-        { staleMs: 120 }
-      );
+      const holder = withFileLock(target, async () => holderGate, {
+        staleMs: 120,
+      });
       while (!(await fs.stat(`${target}.lock`).catch(() => undefined))) {
         await new Promise((resolve) => setTimeout(resolve, 1));
       }

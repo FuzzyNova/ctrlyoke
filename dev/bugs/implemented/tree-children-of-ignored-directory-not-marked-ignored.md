@@ -27,7 +27,7 @@ Confirmed: `cd node_modules && git ls-files --others --ignored --exclude-standar
   `ignoredNames` from `getIgnoredEntryNames(containingRoot, rootRelativeDir)` and marks
   each child by `ignoredNames.has(`${name}/`)` or `ignoredNames.has(name)`.
 - `src/utils/GitUtils.ts:1309-1335` runs `git ls-files --others --ignored
-  --exclude-standard --directory .` with `cwd` set to the listed directory. When that
+--exclude-standard --directory .` with `cwd` set to the listed directory. When that
   directory is itself wholly ignored, git collapses it to the single entry `./`, so no
   child name matches and every child gets `gitIgnored: false`.
 - `src/ui/webview-react/components/workspace-viewer/WorkspaceExplorerPane.tsx:89` colors

@@ -73,7 +73,9 @@ suite("CompletionFileDiscovery", () => {
     );
     try {
       await fs.writeFile(path.join(root, "workflow.prompt.md"), "prompt");
-      assert.deepStrictEqual(await getSourceFiles(root), ["workflow.prompt.md"]);
+      assert.deepStrictEqual(await getSourceFiles(root), [
+        "workflow.prompt.md",
+      ]);
     } finally {
       await fs.rm(root, {
         recursive: true,

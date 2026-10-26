@@ -32,7 +32,7 @@ Reproduced by the reviewer against the compiled service with real Git 2.47:
 ## Root Cause
 
 With `--follow`, Git disables path pruning, and `--skip=N` counts every commit the walk
-*visits*, not the rows that touch the file (verified: `git log --follow --skip=N -n1 -- f`
+_visits_, not the rows that touch the file (verified: `git log --follow --skip=N -n1 -- f`
 returns the same newest commit for N = 0, 1, 2 when unrelated commits sit above it).
 
 - The merge fallback sets `walkSkip = cursorState.rawOffset` (around line 2395, and again

@@ -251,7 +251,9 @@ suite("Codex usage tracking", () => {
 
   test("resolves the Codex launcher before spawning app-server", async () => {
     let resolverCalled = false;
-    let spawnArgs: { command: string; args: readonly string[]; verbatim?: boolean } | undefined;
+    let spawnArgs:
+      | { command: string; args: readonly string[]; verbatim?: boolean }
+      | undefined;
     const client = new CodexAppServerClient({
       resolveCommand: async (command, args) => {
         resolverCalled = true;

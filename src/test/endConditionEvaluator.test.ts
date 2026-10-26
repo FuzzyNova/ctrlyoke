@@ -256,12 +256,10 @@ suite("EndConditionEvaluator Tests", () => {
       setPlatform("linux");
       let calls = 0;
       let finishProbe!: () => void;
-      const restore = setEndConditionInterpreterProbeForTests(
-        () => {
-          calls++;
-          return new Promise<void>((resolve) => (finishProbe = resolve));
-        }
-      );
+      const restore = setEndConditionInterpreterProbeForTests(() => {
+        calls++;
+        return new Promise<void>((resolve) => (finishProbe = resolve));
+      });
       try {
         const first = evaluator.commandFor(`${scriptPath}.py`);
         const second = evaluator.commandFor(`${scriptPath}.py`);
@@ -280,7 +278,9 @@ suite("EndConditionEvaluator Tests", () => {
         setPlatform(platform);
 
         for (const extension of extensions) {
-          const command = await evaluator.commandFor(`${scriptPath}${extension}`);
+          const command = await evaluator.commandFor(
+            `${scriptPath}${extension}`
+          );
 
           if (extension === ".bat" || extension === ".cmd") {
             if (platform === "win32") {

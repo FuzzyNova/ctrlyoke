@@ -247,7 +247,8 @@ async function queryOpenCodeModels(): Promise<void> {
         }
         throw execError;
       }
-      stdout = (execError as NodeJS.ErrnoException & { stdout?: string }).stdout ?? "";
+      stdout =
+        (execError as NodeJS.ErrnoException & { stdout?: string }).stdout ?? "";
       if (!stdout.trim()) {
         throw execError;
       }
@@ -288,7 +289,9 @@ function scheduleCopilotTimeoutRetry(): void {
   copilotRetryTimer = setTimeout(() => {
     copilotRetryTimer = null;
     void initializeModelRegistry().catch((error: unknown) => {
-      Log.warn(`[ModelRegistry] Background model retry failed: ${String(error)}`);
+      Log.warn(
+        `[ModelRegistry] Background model retry failed: ${String(error)}`
+      );
     });
   }, COPILOT_TIMEOUT_RETRY_DELAY_MS);
   copilotRetryTimer.unref();

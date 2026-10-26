@@ -233,7 +233,8 @@ function matchesPathspecs(
   const excludes = pathspecs.filter(isExcludePathspec);
   const includes = pathspecs.filter((pathspec) => !isExcludePathspec(pathspec));
   return (
-    (includes.length === 0 || includes.some((pathspec) => matchesPathspec(filePath, pathspec))) &&
+    (includes.length === 0 ||
+      includes.some((pathspec) => matchesPathspec(filePath, pathspec))) &&
     !excludes.some((pathspec) => matchesPathspec(filePath, pathspec))
   );
 }

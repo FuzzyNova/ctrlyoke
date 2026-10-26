@@ -10,7 +10,8 @@ export function isSubprocessTimeoutError(error: unknown): boolean {
   };
   if (
     subprocessError.code === "ETIMEDOUT" ||
-    (subprocessError.killed === true && typeof subprocessError.signal === "string")
+    (subprocessError.killed === true &&
+      typeof subprocessError.signal === "string")
   ) {
     return true;
   }
