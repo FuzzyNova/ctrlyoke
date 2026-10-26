@@ -1,6 +1,10 @@
 import * as assert from "assert";
 import * as path from "path";
+import * as os from "os";
 import {
+  REPO_DISCOVERY_CACHE_TTL_MS,
+  clearRepoDiscoveryCache,
+  discoverReposCached,
   findRepoForPath,
   mapRootPrefixesToRepos,
 } from "../../utils/WorkspaceRepoDiscovery";
@@ -13,6 +17,41 @@ import type { WorkspaceRepo } from "../../types/HostedWorkspaceViewerTypes";
  * in `HostedWorkspaceViewerService.test.ts`; this covers the association logic
  * that used to be reverse-engineered on the client.
  */
+suite("WorkspaceRepoDiscovery.discoverReposCached Tests", () => {
+  const roots: ResolverWorkspaceFolder[] = [
+    { name: "tmp", fsPath: os.tmpdir() },
+  ];
+
+  setup(() => clearRepoDiscoveryCache());
+  teardown(() => clearRepoDiscoveryCache());
+
+  test("shares one discovery for the same roots within the TTL", async () => {
+    const now = 1_000_000;
+    const first = discoverReposCached(roots, now);
+    assert.strictEqual(
+      discoverReposCached(
+        roots.map((root) => ({ ...root })),
+        now + REPO_DISCOVERY_CACHE_TTL_MS - 1
+      ),
+      first
+    );
+    await first;
+  });
+
+  test("discovers again once the TTL has passed or the roots differ", async () => {
+    const now = 1_000_000;
+    const first = discoverReposCached(roots, now);
+    const renamed = discoverReposCached([{ ...roots[0], name: "other" }], now);
+    const expired = discoverReposCached(
+      roots,
+      now + REPO_DISCOVERY_CACHE_TTL_MS
+    );
+    assert.notStrictEqual(renamed, first);
+    assert.notStrictEqual(expired, first);
+    await Promise.all([first, renamed, expired]);
+  });
+});
+
 suite("WorkspaceRepoDiscovery.mapRootPrefixesToRepos Tests", () => {
   const root = (name: string, fsPath: string): ResolverWorkspaceFolder => ({
     name,

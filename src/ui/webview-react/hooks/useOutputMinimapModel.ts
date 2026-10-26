@@ -167,6 +167,30 @@ export function useOutputMinimapModel({
           }
         }
 
+        // One pass over the rows, not one per target: scanning every row for
+        // every target made this quadratic in a large run's size.
+        const diffBlocksByTarget = new Map<string, MinimapDiffBlock[]>();
+        for (const row of rows) {
+          if (row.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT || !row.diff) {
+            continue;
+          }
+          const key = getTargetKey(row.target);
+          const blocks = diffBlocksByTarget.get(key) ?? [];
+          blocks.push({
+            key: row.diff.key,
+            rowKey: row.key,
+            scrollFraction:
+              (rowLayout.rowStartsByKey.get(row.key) ?? 0) / totalSize,
+            heightFraction:
+              estimateOutputDiffBlockHeight(row, outputFontSize) / totalSize,
+            addedLines: row.diff.addedLines,
+            removedLines: row.diff.removedLines,
+            runs: row.diff.runs,
+            isCollapsed: row.diff.isCollapsed,
+          });
+          diffBlocksByTarget.set(key, blocks);
+        }
+
         return uniqueStepTargets.flatMap<MinimapStep>((msgTarget) => {
           const key = getTargetKey(msgTarget);
           const firstRowIndex = (
@@ -210,32 +234,7 @@ export function useOutputMinimapModel({
             hidden &&
             hiddenTimestamp !== undefined &&
             (newestTimestampByTarget.get(key) ?? 0) > hiddenTimestamp;
-          const diffBlocks: MinimapDiffBlock[] = rows.flatMap((row) => {
-            if (
-              row.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT ||
-              row.target.kind !== msgTarget.kind ||
-              row.target.index !== msgTarget.index ||
-              !row.diff
-            ) {
-              return [];
-            }
-
-            return [
-              {
-                key: row.diff.key,
-                rowKey: row.key,
-                scrollFraction:
-                  (rowLayout.rowStartsByKey.get(row.key) ?? 0) / totalSize,
-                heightFraction:
-                  estimateOutputDiffBlockHeight(row, outputFontSize) /
-                  totalSize,
-                addedLines: row.diff.addedLines,
-                removedLines: row.diff.removedLines,
-                runs: row.diff.runs,
-                isCollapsed: row.diff.isCollapsed,
-              },
-            ];
-          });
+          const diffBlocks = diffBlocksByTarget.get(key) ?? [];
 
           const noAction = null;
           const stepOutputs = stepOutputsMap.get(key) ?? [];

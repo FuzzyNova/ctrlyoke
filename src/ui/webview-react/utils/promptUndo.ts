@@ -346,6 +346,50 @@ function exceedsMaxContentSize(content: string): boolean {
 }
 
 /**
+ * Every rebuild of the output pane asks for the candidates of every step, from
+ * the output rows, the minimap and the workflow-level undo, and each answer
+ * walks all of the step's events and matches them against its snapshot. A
+ * finished step's outputs are not mutated, so its candidates are cached by
+ * the identity of its last output. Every output and its event array and count
+ * are checked too, so an in-place change can never serve stale candidates.
+ */
+interface CachedUndoCandidates {
+  outputs: CliOutput[];
+  events: Array<CliEvent[] | undefined>;
+  eventCounts: number[];
+  snapshot: WorkspaceSnapshot | undefined;
+  workspaceRoot: string | undefined;
+  candidates: UndoFileCandidate[];
+}
+
+// Callers ask with a few workspace-root spellings and snapshots per step.
+const MAX_CACHED_UNDO_CANDIDATES_PER_OUTPUT = 4;
+const undoCandidatesCache = new WeakMap<CliOutput, CachedUndoCandidates[]>();
+
+function isCachedUndoCandidatesFor(
+  entry: CachedUndoCandidates,
+  cliOutputs: CliOutput[],
+  snapshot: WorkspaceSnapshot | undefined,
+  workspaceRoot: string | undefined
+): boolean {
+  if (
+    entry.snapshot !== snapshot ||
+    entry.workspaceRoot !== workspaceRoot ||
+    entry.outputs.length !== cliOutputs.length
+  ) {
+    return false;
+  }
+  return cliOutputs.every((output, index) => {
+    const events = output.structured?.events;
+    return (
+      entry.outputs[index] === output &&
+      entry.events[index] === events &&
+      entry.eventCounts[index] === (events?.length ?? 0)
+    );
+  });
+}
+
+/**
  * Build the full list of undo candidates for a set of CliOutputs and an optional snapshot.
  *
  * Tier 1: derived from structured CLI events (high confidence).
@@ -356,11 +400,49 @@ function exceedsMaxContentSize(content: string): boolean {
  *     derived from the workspace before→after diff captured around the prompt.
  *     Works for all harnesses and bash/CLI tool changes that have no structured events.
  *  2. null — no undo available (no snapshot entry or no patch data for the path).
+ *
+ * The result is shared between callers for a finished step; do not mutate it.
  */
 export function buildUndoCandidatesForOutputs(
   cliOutputs: CliOutput[],
   snapshot: WorkspaceSnapshot | undefined,
   workspaceRoot = getOutputWorkspaceRoot(cliOutputs)
+): UndoFileCandidate[] {
+  const cacheKey = cliOutputs[cliOutputs.length - 1];
+  // A streaming output's events grow in place, possibly without changing count.
+  if (!cacheKey || cliOutputs.some((output) => output.isStreaming)) {
+    return computeUndoCandidatesForOutputs(cliOutputs, snapshot, workspaceRoot);
+  }
+  const cached = undoCandidatesCache.get(cacheKey) ?? [];
+  const hit = cached.find((entry) =>
+    isCachedUndoCandidatesFor(entry, cliOutputs, snapshot, workspaceRoot)
+  );
+  if (hit) return hit.candidates;
+
+  const candidates = computeUndoCandidatesForOutputs(
+    cliOutputs,
+    snapshot,
+    workspaceRoot
+  );
+  const events = cliOutputs.map((output) => output.structured?.events);
+  undoCandidatesCache.set(cacheKey, [
+    {
+      outputs: [...cliOutputs],
+      events,
+      eventCounts: events.map((list) => list?.length ?? 0),
+      snapshot,
+      workspaceRoot,
+      candidates,
+    },
+    ...cached.slice(0, MAX_CACHED_UNDO_CANDIDATES_PER_OUTPUT - 1),
+  ]);
+  return candidates;
+}
+
+function computeUndoCandidatesForOutputs(
+  cliOutputs: CliOutput[],
+  snapshot: WorkspaceSnapshot | undefined,
+  workspaceRoot: string | undefined
 ): UndoFileCandidate[] {
   const snapshotFiles: SnapshotFileChange[] = snapshot?.changedFiles ?? [];
 

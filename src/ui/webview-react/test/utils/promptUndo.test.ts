@@ -640,6 +640,66 @@ describe("buildUndoCandidatesForOutputs — Tier 2", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// buildUndoCandidatesForOutputs — reuse across rebuilds
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("buildUndoCandidatesForOutputs — reuse across rebuilds", () => {
+  it("returns the same candidates for a finished step's unchanged outputs", () => {
+    const output = makeCliOutput([makeFileEditEvent("src/a.ts")]);
+    const snapshot = makeSnapshot([makeModifiedSnap("src/a.ts")]);
+    const first = buildUndoCandidatesForOutputs([output], snapshot);
+
+    // Each rebuild passes a fresh array holding the same outputs.
+    expect(buildUndoCandidatesForOutputs([output], snapshot)).toBe(first);
+  });
+
+  it("recomputes when an event is appended in place", () => {
+    const events = [makeFileEditEvent("src/a.ts")];
+    const output = makeCliOutput(events);
+    const first = buildUndoCandidatesForOutputs([output], undefined);
+    expect(first.map((c) => c.path)).toEqual(["src/a.ts"]);
+
+    events.push(makeFileEditEvent("src/b.ts"));
+    expect(
+      buildUndoCandidatesForOutputs([output], undefined).map((c) => c.path)
+    ).toEqual(["src/a.ts", "src/b.ts"]);
+  });
+
+  it("recomputes for a different snapshot, workspace root or output list", () => {
+    const retry = makeCliOutput([makeFileEditEvent("src/b.ts")]);
+    const output = makeCliOutput([makeFileEditEvent("src/a.ts")]);
+    const snapshot = makeSnapshot([makeModifiedSnap("src/a.ts")]);
+    const first = buildUndoCandidatesForOutputs([retry, output], snapshot);
+
+    const otherSnapshot = makeSnapshot([makeModifiedSnap("src/a.ts")]);
+    expect(
+      buildUndoCandidatesForOutputs([retry, output], otherSnapshot)
+    ).not.toBe(first);
+    expect(
+      buildUndoCandidatesForOutputs([retry, output], snapshot, "C:/other")
+    ).not.toBe(first);
+    expect(
+      buildUndoCandidatesForOutputs([output], snapshot).map((c) => c.path)
+    ).toEqual(["src/a.ts"]);
+    // The earlier answers are still kept alongside the new ones.
+    expect(buildUndoCandidatesForOutputs([retry, output], snapshot)).toBe(
+      first
+    );
+  });
+
+  it("does not reuse a streaming output's candidates", () => {
+    const output = {
+      ...makeCliOutput([makeFileEditEvent("src/a.ts")]),
+      isStreaming: true,
+    } as CliOutput;
+    const first = buildUndoCandidatesForOutputs([output], undefined);
+
+    // A streaming event's data can change without the event count changing.
+    expect(buildUndoCandidatesForOutputs([output], undefined)).not.toBe(first);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // getPromptUndoSummary
 // ─────────────────────────────────────────────────────────────────────────────
 

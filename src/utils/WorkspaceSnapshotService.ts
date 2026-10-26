@@ -32,7 +32,7 @@ import {
   stripViewerPrefix,
   joinViewerPath,
 } from "../platform/WorkspaceViewerPath";
-import { discoverRepos } from "./WorkspaceRepoDiscovery";
+import { discoverRepos, discoverReposCached } from "./WorkspaceRepoDiscovery";
 import { isPathWithinDirectory } from "./PathSecurity";
 import {
   execGit,
@@ -119,6 +119,20 @@ export interface RawWorkspaceState {
 /** Convert OS-separator paths to POSIX for viewer paths and git pathspecs. */
 function toPosixPath(p: string): string {
   return p.split(path.sep).join("/");
+}
+
+/**
+ * A modified file that was clean at HEAD but too large to capture, so its
+ * `beforeContent` must be read from the stored HEAD commit. See
+ * `WorkspaceSnapshotService.enrichSnapshotBeforeContent`.
+ */
+function needsHeadBeforeContent(change: SnapshotFileChange): boolean {
+  return (
+    change.changeType === FILE_OPERATION_KINDS.MODIFIED &&
+    change.baseSource === SNAPSHOT_BASE_SOURCES.GIT_HEAD &&
+    change.beforeContent === undefined &&
+    !change.contentCaptureSkipped
+  );
 }
 
 interface SnapshotFileData {
@@ -1348,8 +1362,15 @@ export class WorkspaceSnapshotService {
       return snapshot;
     }
 
+    // Usually nothing needs hydrating; don't spawn git to find that out.
+    if (!snapshot.changedFiles.some(needsHeadBeforeContent)) {
+      return snapshot;
+    }
+
     const { headCommit } = snapshot.git;
-    const repos = await discoverRepos([
+    // Every history load and snapshot-file read lands here, so the repo
+    // lookup is cached rather than spawning git each time.
+    const repos = await discoverReposCached([
       { name: path.basename(workspaceFolderPath), fsPath: workspaceFolderPath },
     ]);
     const repoRoot = repos[0]?.rootPath ?? workspaceFolderPath;
@@ -1368,12 +1389,7 @@ export class WorkspaceSnapshotService {
 
     const enrichedFiles = await Promise.all(
       snapshot.changedFiles.map(async (change): Promise<SnapshotFileChange> => {
-        if (
-          change.changeType !== FILE_OPERATION_KINDS.MODIFIED ||
-          change.baseSource !== SNAPSHOT_BASE_SOURCES.GIT_HEAD ||
-          change.beforeContent !== undefined ||
-          change.contentCaptureSkipped
-        ) {
+        if (!needsHeadBeforeContent(change)) {
           return change;
         }
         try {
@@ -1434,12 +1450,7 @@ export class WorkspaceSnapshotService {
 
     const enrichedFiles = await Promise.all(
       snapshot.changedFiles.map(async (change): Promise<SnapshotFileChange> => {
-        if (
-          change.changeType !== FILE_OPERATION_KINDS.MODIFIED ||
-          change.baseSource !== SNAPSHOT_BASE_SOURCES.GIT_HEAD ||
-          change.beforeContent !== undefined ||
-          change.contentCaptureSkipped
-        ) {
+        if (!needsHeadBeforeContent(change)) {
           return change;
         }
         const info = byPrefix.get(change.repo ?? "");

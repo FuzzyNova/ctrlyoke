@@ -84,6 +84,56 @@ export async function discoverRepos(
 }
 
 /**
+ * How long {@link discoverReposCached} reuses a discovery. Short rather than
+ * forever: the roots stay fixed, but the repo set found under them does not —
+ * a user can `git init` (or delete `.git`) inside a root mid-session. The TTL
+ * keeps the `git` spawns off hot paths that ask in bursts (history loads, SCM
+ * calls) while still picking up such changes within a few seconds.
+ */
+export const REPO_DISCOVERY_CACHE_TTL_MS = 5_000;
+
+interface CachedRepoDiscovery {
+  at: number;
+  repos: Promise<WorkspaceRepo[]>;
+}
+
+const repoDiscoveryCache = new Map<string, CachedRepoDiscovery>();
+
+/**
+ * {@link discoverRepos}, reusing a result for the same roots for
+ * {@link REPO_DISCOVERY_CACHE_TTL_MS}. Concurrent callers share one probe.
+ * The returned array is shared between callers; do not mutate it.
+ */
+export function discoverReposCached(
+  executionRoots: readonly ResolverWorkspaceFolder[],
+  now = Date.now()
+): Promise<WorkspaceRepo[]> {
+  for (const [key, entry] of repoDiscoveryCache) {
+    if (now - entry.at >= REPO_DISCOVERY_CACHE_TTL_MS) {
+      repoDiscoveryCache.delete(key);
+    }
+  }
+  const key = JSON.stringify(
+    executionRoots.map((root) => [root.name, root.fsPath])
+  );
+  const cached = repoDiscoveryCache.get(key);
+  if (cached) return cached.repos;
+
+  const repos = discoverRepos(executionRoots);
+  const entry: CachedRepoDiscovery = { at: now, repos };
+  repoDiscoveryCache.set(key, entry);
+  repos.catch(() => {
+    if (repoDiscoveryCache.get(key) === entry) repoDiscoveryCache.delete(key);
+  });
+  return repos;
+}
+
+/** Forget every cached discovery. For tests. */
+export function clearRepoDiscoveryCache(): void {
+  repoDiscoveryCache.clear();
+}
+
+/**
  * The discovered repo whose git toplevel owns an absolute path — the path
  * equals the toplevel or sits within it. The single containment predicate for
  * every path→repo association: the client's prefix map

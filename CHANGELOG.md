@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stop takes effect right away even while the extension is busy with another
   dashboard request. It still waits behind a Run or Resume of the same run
   that was sent first.
+- Each rebuild of a large run's output pane and minimap reuses the undo
+  details of finished steps instead of recomputing them, and opening run
+  history no longer runs `git` to find the repository on every load.
 - Editor `@` completions resume budgeted scans across narrowed file results, so later files can appear as a query is extended.
 - Workspace viewer file history continues one snapshot-owned Git walk across
   opaque server-side cursors, pages densely across trusted-root filtering without

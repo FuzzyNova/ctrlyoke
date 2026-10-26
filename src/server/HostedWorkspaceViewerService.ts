@@ -73,7 +73,7 @@ import {
 } from "../platform/WorkspaceViewerPath";
 import { safeResolveWorkspacePath } from "./lsp/WorkspacePathContainment";
 import {
-  discoverRepos,
+  discoverReposCached,
   findRepoForPath,
   mapRootPrefixesToRepos,
 } from "../utils/WorkspaceRepoDiscovery";
@@ -610,33 +610,15 @@ export class HostedWorkspaceViewerService {
   // back to scope repo-specific SCM operations. Git commands run `-C <repo
   // toplevel>` so every repo — not just the primary root — supports status,
   // diff, stage, commit, history, etc. `discoverRepos` is the single source of
-  // repo identity shared with the snapshot/undo layer.
-  //
-  // The result is cached with a short TTL rather than forever: `namedRoots` is
-  // fixed for this instance's lifetime, but the *repo* set discovered from them
-  // is not — a user can `git init` (or delete `.git`) inside an existing root
-  // mid-session, which changes discovery without changing the roots, so no
-  // reconstruction fires. The TTL keeps discovery off the hot path for bursts
-  // of SCM calls while still picking up such changes within a few seconds.
+  // repo identity shared with the snapshot/undo layer, and `discoverReposCached`
+  // keeps it off the hot path for bursts of SCM calls (see its TTL for why the
+  // cache is short-lived).
 
-  private static readonly REPO_CACHE_TTL_MS = 5_000;
-  private repoCache: WorkspaceRepo[] | null = null;
-  private repoCacheAt = 0;
-
-  private async getReposInternal(): Promise<WorkspaceRepo[]> {
-    const now = Date.now();
-    if (
-      this.repoCache &&
-      now - this.repoCacheAt < HostedWorkspaceViewerService.REPO_CACHE_TTL_MS
-    ) {
-      return this.repoCache;
-    }
+  private getReposInternal(): Promise<WorkspaceRepo[]> {
     const roots: ResolverWorkspaceFolder[] = this.isMultiRoot
       ? this.namedRoots
       : [{ name: this.primaryRootName, fsPath: this.workspaceRoot }];
-    this.repoCache = await discoverRepos(roots);
-    this.repoCacheAt = now;
-    return this.repoCache;
+    return discoverReposCached(roots);
   }
 
   async getRepos(): Promise<WorkspaceReposResponse> {
@@ -965,7 +947,9 @@ export class HostedWorkspaceViewerService {
       COMPLETION_ALL_FILES_SKIP_DIRECTORIES,
       false
     )) {
-      const untracked = files.filter((file) => !trackedFiles.has(toGitPath(file)));
+      const untracked = files.filter(
+        (file) => !trackedFiles.has(toGitPath(file))
+      );
       if (untracked.length > 0) yield untracked;
     }
   }
@@ -2413,14 +2397,19 @@ export class HostedWorkspaceViewerService {
           (candidate) => candidate.walk
         );
         if (liveWalks.length >= FILE_HISTORY_MAX_LIVE_WALKS) {
-          const evictedWalk = liveWalks.find((candidate) => candidate !== snapshot);
+          const evictedWalk = liveWalks.find(
+            (candidate) => candidate !== snapshot
+          );
           if (evictedWalk) {
             evictedWalk.walk?.dispose();
             evictedWalk.walk = undefined;
           }
         }
         snapshot.walk = createFileHistoryCommitWalk(
-          snapshot.repoRoot, snapshot.gitPath, snapshot.headHash, true
+          snapshot.repoRoot,
+          snapshot.gitPath,
+          snapshot.headHash,
+          true
         );
       }
       let row: FileHistoryCommitInfo | undefined;
@@ -3451,7 +3440,8 @@ export class HostedWorkspaceViewerService {
 
   dispose(): void {
     this.listingSnapshotCache.dispose();
-    for (const snapshot of this.fileHistorySnapshots.values()) snapshot.walk?.dispose();
+    for (const snapshot of this.fileHistorySnapshots.values())
+      snapshot.walk?.dispose();
     this.fileHistorySnapshots.clear();
     this.commitLogSnapshots.clear();
     this.gitRefDiffSnapshots.clear();
