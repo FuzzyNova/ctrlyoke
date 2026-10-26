@@ -28,6 +28,10 @@ import type { ICliProvider } from "./interfaces/ICliProvider";
 import { HookEventMonitor } from "./HookEventMonitor";
 import type { CtrlYokeNotificationEvent } from "../../../ui/notifications/CompletionNotificationFactory";
 import { configService } from "../../../config/CtrlYokeConfigService";
+import {
+  resolveHookNotificationPlan,
+  serializeAwaitingInputRule,
+} from "./HookNotificationPlan";
 import type {
   CliExecutionTransportCoordinator,
   StandaloneInteractiveProcess,
@@ -558,16 +562,22 @@ export class CliExecutionRunner {
   private buildHookEnvVars(
     session: CliExecutionSession
   ): Record<string, string> {
-    const settings = configService.getAll().notifications;
-    const hookEvents = settings.events.hookEvents;
-    const enabledEvents = Object.entries(hookEvents)
-      .filter(([, enabled]) => enabled)
-      .map(([event]) => event);
-
     const ctx = session.workflowContext;
     const env: Record<string, string> = {};
-    if (enabledEvents.length > 0) {
-      env.CTRLYOKE_NOTIFY_HOOK_EVENTS = enabledEvents.join(",");
+    const harnessId = this.deps.provider.config.harnessId;
+    const notificationPlan = resolveHookNotificationPlan(
+      harnessId,
+      configService.getAll().notifications,
+      { hooksDisabled: ctx?.resolvedProperties?.hooks === null }
+    );
+    if (notificationPlan.emitRawEvents.length > 0) {
+      env.CTRLYOKE_NOTIFY_HOOK_EVENTS =
+        notificationPlan.emitRawEvents.join(",");
+    }
+    if (notificationPlan.awaitingInput) {
+      env[CTRLYOKE_ENV_VARS.NOTIFY_AWAITING_INPUT] = serializeAwaitingInputRule(
+        notificationPlan.awaitingInput
+      );
     }
 
     if (ctx?.instanceId) {
@@ -595,7 +605,6 @@ export class CliExecutionRunner {
     if (workspaceRoot) {
       env.CTRLYOKE_WORKSPACE_ROOT = workspaceRoot;
     }
-    const harnessId = this.deps.provider.config.harnessId;
     if (harnessId) {
       env.CTRLYOKE_HARNESS_ID = harnessId;
     }

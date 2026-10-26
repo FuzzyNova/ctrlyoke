@@ -492,6 +492,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "notifications.browser": "Browser notification settings.",
   "notifications.browser.mode": "When to send browser notifications. 'connectedOnly' fires while the hosted dashboard is open; 'push' enables background push notifications.",
   "notifications.events": "Which events trigger notifications.",
+  "notifications.events.awaitingInput": "Notify when the harness is waiting for your input. ctrlyoke chooses the native source per harness; Antigravity does not provide one.",
   "notifications.events.hookEvents": "Which hook events trigger notifications. All default to false (opt-in).",
   "notifications.events.hookEvents.error": "Notify when the harness reports a session-level error.",
   "notifications.events.hookEvents.notification": "Notify when the harness displays a notification, including prompts that may require user input.",

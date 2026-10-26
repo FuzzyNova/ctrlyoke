@@ -132,6 +132,13 @@ Evidence for the finalized mapping (checked 2026-10-26):
 | OpenCode CLI | `permissionRequest` | [OpenCode plugins reference](https://opencode.ai/docs/plugins/) lists `permission.asked`. [OpenCode permissions reference](https://opencode.ai/docs/agents/) defines `allow` as permitting operations without approval and `ask` as prompting. `OpenCodeToolPermissionMapper.ts` sets the allow-all catch-all to `allow` and emits no permission slice for dangerously allow-all; auto-approved calls therefore do not raise `permission.asked`. |
 | Antigravity CLI | `null` | `DashboardConstants.ts`'s native hook mapping marks `notification` and `permissionRequest` as n/a for Antigravity (`src/types/DashboardConstants.ts`, lines 2516–2519); `AntigravityNotificationMonitor.ts` marks `notification` unsupported. |
 
+**Step 2 implementation: complete.** Added this mapping to
+`src/core/harness/shared/HookNotificationPlan.ts`, with separate installation
+and raw-emission lists. `CliIntegration`, `ExecutionPlanBuilder`, and
+`CliExecutionRunner` now use the shared resolver. Resolver and execution-plan
+tests cover each harness, hook suppression, and Codex's installed-but-not-raw
+case.
+
 Codex `allowAll` is the Auto preset (`on-request`), not a blanket no-approval mode: operations Codex escalates can still trigger `PermissionRequest`. The claim above is that already auto-approved calls do not.
 
 Then one resolver replaces the two places that currently compute "enabled hook
@@ -182,6 +189,17 @@ The OpenCode plugin (`ctrlyoke-opencode-plugin.ts`) reads the same env var.
   `settings.events.hookEvents[artifact.hookEvent]` (line ~359). Branch so that
   `awaitingInput` gates on the new setting. Title: "ctrlyoke - Waiting for input".
   Body: workflow/prompt name, tool name, and the notification message when there is one.
+
+**Step 2 implementation: complete.** Added the optional `awaitingInput` setting
+with default `true`, regenerated schema-derived files, added the derived event
+and env-var constants, and widened `HookArtifact.hookEvent`. The notification
+factory continues to ignore the derived artifact until step 4 implements its
+notification behavior.
+
+**Deviation:** `settingsSchemaUiParity.integration.test.ts` requires every
+schema leaf to have a live dashboard control, so the minimal “Waiting for
+input” toggle and updated raw-hook-events blurb were added in step 2 instead
+of step 4. The schema generator also updated `docs/reference/settings.md`.
 
 ### 4. UI (`NotificationsSection.tsx`)
 

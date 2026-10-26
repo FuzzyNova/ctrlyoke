@@ -35,6 +35,7 @@ suite("Notification settings defaults", () => {
       notifications.events.promptComplete,
       NOTIFICATION_EVENT_MODES.NONE
     );
+    assert.strictEqual(notifications.events.awaitingInput, true);
     assert.strictEqual(notifications.events.hookEvents.notification, false);
     assert.strictEqual(notifications.toastLevel, TOAST_LEVEL_MODES.ALL);
     assert.strictEqual(notifications.includeWorkflowName, true);
@@ -132,5 +133,11 @@ suite("Notification settings defaults", () => {
       notificationSchema.default,
       CTRLYOKE_SETTINGS_DEFAULTS.notifications.events.hookEvents.notification
     );
+    const awaitingInputSchema = (
+      (schema.properties as Record<string, any>).notifications.properties.events
+        .properties as Record<string, any>
+    ).awaitingInput;
+    assert.strictEqual(awaitingInputSchema.type, "boolean");
+    assert.strictEqual(awaitingInputSchema.default, true);
   });
 });

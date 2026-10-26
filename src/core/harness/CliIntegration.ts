@@ -44,13 +44,13 @@ import {
   type ExecutionMode,
   type HarnessId,
   HARNESS_IDS,
-  HOOK_EVENT_ORDER,
   PRIOR_CONTEXT_KEYWORDS,
   TEMP_FILE_CATEGORIES,
   USER_FEEDBACK_SEVERITY,
   type TerminalEndReason,
 } from "../../types/DashboardConstants";
 import { configService } from "../../config/CtrlYokeConfigService";
+import { resolveHookNotificationPlan } from "./shared/HookNotificationPlan";
 import type {
   CliExecutionSidecar,
   ICliProvider,
@@ -1056,8 +1056,8 @@ export class CliIntegration extends HarnessIntegration {
       getStateRoot: () => this.getStateRoot(),
       getExtensionPath: () => this.platform.getExtensionPath(),
       getExecutionMode: () => this.getExecutionMode(),
-      getEnabledHookNotificationEvents: () =>
-        this.getEnabledHookNotificationEvents(),
+      getInstallHookNotificationEvents: (hooksDisabled) =>
+        this.getInstallHookNotificationEvents(hooksDisabled),
     });
 
     const executionRunner = new CliExecutionRunner({
@@ -1903,9 +1903,14 @@ export class CliIntegration extends HarnessIntegration {
     notifyUserFeedback(this.userFeedbackSink, "warning", message);
   }
 
-  private getEnabledHookNotificationEvents(): HookEvent[] {
-    const hookSettings = configService.getAll().notifications.events.hookEvents;
-    return HOOK_EVENT_ORDER.filter((event) => hookSettings[event]);
+  private getInstallHookNotificationEvents(
+    hooksDisabled: boolean
+  ): HookEvent[] {
+    return resolveHookNotificationPlan(
+      this.provider.config.harnessId as HarnessId,
+      configService.getAll().notifications,
+      { hooksDisabled }
+    ).installEvents;
   }
 
   // ============================================================

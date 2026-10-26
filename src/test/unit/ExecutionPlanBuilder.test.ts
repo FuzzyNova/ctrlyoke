@@ -10,6 +10,8 @@ import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProv
 import { QwenCliProvider } from "../../core/harness/qwen/QwenCliProvider";
 import { CliExecutionSession } from "../../core/harness/shared/CliExecutionSession";
 import { ExecutionPlanBuilder } from "../../core/harness/shared/ExecutionPlanBuilder";
+import { resolveHookNotificationPlan } from "../../core/harness/shared/HookNotificationPlan";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import { EXECUTION_MODES, HARNESS_IDS } from "../../types/DashboardConstants";
 import type { ResolvedProperties } from "../../utils/PropertyResolver";
 
@@ -65,7 +67,7 @@ function createBuilder(
     getWorkspaceRoots: () => (workspaceRoot ? [workspaceRoot] : []),
     getExtensionPath: () => "extension",
     getExecutionMode: () => "interactive",
-    getEnabledHookNotificationEvents: () => [],
+    getInstallHookNotificationEvents: () => [],
     resolveCliCommand: async (command, args) => ({
       command,
       args: [...args],
@@ -306,12 +308,71 @@ suite("ExecutionPlanBuilder", () => {
         getWorkspaceRoots: () => [workspaceRoot],
         getExtensionPath: () => "extension",
         getExecutionMode: () => "interactive",
-        getEnabledHookNotificationEvents: () => ["notification"],
+        getInstallHookNotificationEvents: (hooksDisabled) =>
+          hooksDisabled ? [] : ["notification"],
       }).plan(session);
 
       assert.ok(plan);
       assert.strictEqual(capturedUserHooks, undefined);
       assert.deepStrictEqual(capturedEvents, []);
+    } finally {
+      await fsPromises.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("forwards an install-only notification source to the provider", async () => {
+    const provider = new CodexCliProvider();
+    let capturedEvents: unknown;
+    Object.defineProperty(provider, "planNotificationHookArgs", {
+      value: async (
+        _extensionPath: string,
+        _workspaceRoot: string,
+        _promptIndex: number,
+        _workingFilePath: string | undefined,
+        _userHooks: unknown,
+        events: unknown
+      ) => {
+        capturedEvents = events;
+        return { cliArgs: [], mutations: [], diagnostics: [] };
+      },
+    });
+    const workspaceRoot = await fsPromises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-execution-plan-notification-source-")
+    );
+    const settings = {
+      ...CTRLYOKE_SETTINGS_DEFAULTS.notifications,
+      events: {
+        ...CTRLYOKE_SETTINGS_DEFAULTS.notifications.events,
+        hookEvents: {
+          ...CTRLYOKE_SETTINGS_DEFAULTS.notifications.events.hookEvents,
+          permissionRequest: false,
+        },
+      },
+    };
+    const plan = resolveHookNotificationPlan(HARNESS_IDS.CODEX_CLI, settings);
+
+    try {
+      await new ExecutionPlanBuilder({
+        provider,
+        getWorkspaceRoot: () => workspaceRoot,
+        getWorkspaceRoots: () => [workspaceRoot],
+        getExtensionPath: () => "extension",
+        getExecutionMode: () => "interactive",
+        getInstallHookNotificationEvents: (hooksDisabled) =>
+          resolveHookNotificationPlan(HARNESS_IDS.CODEX_CLI, settings, {
+            hooksDisabled,
+          }).installEvents,
+      }).plan(
+        createSession("interactive", {
+          ...resolvedProperties,
+          harness: HARNESS_IDS.CODEX_CLI,
+          hooks: [],
+        })
+      );
+
+      assert.deepStrictEqual(plan.emitRawEvents, []);
+      assert.deepStrictEqual(plan.installEvents, ["permissionRequest"]);
+      assert.deepStrictEqual(capturedEvents, plan.installEvents);
     } finally {
       await fsPromises.rm(workspaceRoot, { recursive: true, force: true });
     }

@@ -55,7 +55,7 @@ suite("UserHookEnvironment", () => {
         getWorkspaceRoots: () => [workspaceRoot],
         getExtensionPath: () => extensionPath,
         getExecutionMode: () => "interactive",
-        getEnabledHookNotificationEvents: () => [],
+        getInstallHookNotificationEvents: () => [],
         resolveCliCommand: async (command, args) => ({
           command,
           args,

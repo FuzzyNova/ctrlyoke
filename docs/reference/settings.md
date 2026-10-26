@@ -1275,7 +1275,7 @@ Minimum severity for operational toast/feedback popups, such as action results (
 
 ### `notifications.events` {#notifications-events}
 
-- **Type:** `{ workflowComplete?, promptComplete?, hookEvents? }`
+- **Type:** `{ workflowComplete?, promptComplete?, awaitingInput?, … }`
 
 Which events trigger notifications.
 
@@ -1292,6 +1292,13 @@ When to notify on workflow completion.
 - **Default:** `"none"`
 
 When to notify on individual prompt completion.
+
+### `notifications.events.awaitingInput` {#notifications-events-awaitinginput}
+
+- **Type:** `boolean`
+- **Default:** `true`
+
+Notify when the harness is waiting for your input. ctrlyoke chooses the native source per harness; Antigravity does not provide one.
 
 ### `notifications.events.hookEvents` {#notifications-events-hookevents}
 

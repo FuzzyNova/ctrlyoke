@@ -156,7 +156,7 @@ function createHarness(
       getWorkspaceRoots: () => (workspaceRoot ? [workspaceRoot] : []),
       getExtensionPath: () => "extension",
       getExecutionMode: () => "headless",
-      getEnabledHookNotificationEvents: () => [],
+      getInstallHookNotificationEvents: () => [],
       resolveCliCommand: async (command, args) => ({
         command,
         args: [...args],

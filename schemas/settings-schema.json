@@ -1041,6 +1041,11 @@
               "description": "When to notify on individual prompt completion.",
               "default": "none"
             },
+            "awaitingInput": {
+              "type": "boolean",
+              "description": "Notify when the harness is waiting for your input. ctrlyoke chooses the native source per harness; Antigravity does not provide one.",
+              "default": true
+            },
             "hookEvents": {
               "type": "object",
               "description": "Which hook events trigger notifications. All default to false (opt-in).",

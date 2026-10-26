@@ -54,7 +54,9 @@ export interface ExecutionPlanBuilderDeps {
   readonly getStateRoot?: () => string;
   readonly getExtensionPath: () => string;
   readonly getExecutionMode: () => ExecutionMode;
-  readonly getEnabledHookNotificationEvents: () => import("../../../types/CtrlYokeTypes").HookEvent[];
+  readonly getInstallHookNotificationEvents: (
+    hooksDisabled: boolean
+  ) => import("../../../types/CtrlYokeTypes").HookEvent[];
   readonly resolveCliCommand?: typeof resolveCliCommand;
 }
 
@@ -166,9 +168,8 @@ export class ExecutionPlanBuilder {
       const hooksExplicitlyDisabled = resolvedHooks === null;
       const originalUserHooks = resolvedHooks ?? undefined;
       const userHooks = originalUserHooks ? [...originalUserHooks] : undefined;
-      const enabledNotificationHookEvents = hooksExplicitlyDisabled
-        ? []
-        : this.deps.getEnabledHookNotificationEvents();
+      const enabledNotificationHookEvents =
+        this.deps.getInstallHookNotificationEvents(hooksExplicitlyDisabled);
       const promptIndex = session.workflowContext?.promptIndex ?? 0;
       const workingFilePath = session.workflowContext?.workingFilePath;
       let hookEnvironmentMutation: PreparedMutation | undefined;

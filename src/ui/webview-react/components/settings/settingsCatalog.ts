@@ -542,6 +542,14 @@ const STATIC_SETTINGS_CATALOG = {
     tab: GLOBAL_SETTINGS_TABS.NOTIFICATIONS,
     label: "Workflow complete",
   },
+  "notifications.events.awaitingInput": {
+    id: "notifications.events.awaitingInput",
+    path: "notifications.events.awaitingInput",
+    tab: GLOBAL_SETTINGS_TABS.NOTIFICATIONS,
+    label: "Waiting for input",
+    description:
+      "Notify when supported harnesses are waiting for your input. Antigravity does not provide this event.",
+  },
   "notifications.events.promptComplete": {
     id: "notifications.events.promptComplete",
     path: "notifications.events.promptComplete",
@@ -1184,6 +1192,7 @@ const notificationOrder = [
   "notifications.vscode.enabled",
   "notifications.browser.mode",
   "notifications.events.workflowComplete",
+  "notifications.events.awaitingInput",
   "notifications.events.promptComplete",
   ...hookEventCatalogIds,
   "notifications.includeWorkflowName",

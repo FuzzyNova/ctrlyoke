@@ -231,6 +231,7 @@ export type WorkflowFileFormat =
 /** Environment variable names shared by ctrlyoke-managed child processes. */
 export const CTRLYOKE_ENV_VARS = {
   WORKING_FILE: "CTRLYOKE_WORKING_FILE",
+  NOTIFY_AWAITING_INPUT: "CTRLYOKE_NOTIFY_AWAITING_INPUT",
 } as const;
 
 /** Completion trigger discriminants shared by the extension host and webview. */
@@ -2520,6 +2521,14 @@ export const NOTIFICATION_HOOK_EVENTS = {
  */
 export type HookEvent =
   (typeof HOOK_EVENT_NAMES)[keyof typeof HOOK_EVENT_NAMES];
+
+/** Semantic notification events derived from harness-specific native hooks. */
+export const DERIVED_NOTIFICATION_EVENTS = {
+  AWAITING_INPUT: "awaitingInput",
+} as const;
+
+export type DerivedNotificationEvent =
+  (typeof DERIVED_NOTIFICATION_EVENTS)[keyof typeof DERIVED_NOTIFICATION_EVENTS];
 
 export interface HookEventMetadata {
   event: HookEvent;

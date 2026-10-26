@@ -421,6 +421,7 @@ export interface CtrlYokeNotificationSettings {
   events: {
     workflowComplete: NotificationEventMode;
     promptComplete: NotificationEventMode;
+    awaitingInput: boolean;
     hookEvents: { [key in HookEvent]: boolean };
   };
   toastLevel: ToastLevelMode;
@@ -687,6 +688,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     events: {
       workflowComplete: NOTIFICATION_EVENT_MODES.ALL,
       promptComplete: NOTIFICATION_EVENT_MODES.NONE,
+      awaitingInput: true,
       hookEvents: {
         stop: false,
         sessionStart: false,

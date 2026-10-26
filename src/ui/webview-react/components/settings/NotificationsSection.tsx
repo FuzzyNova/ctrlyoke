@@ -362,6 +362,15 @@ export function NotificationsSection({
             )}
           />
         </SettingInputRow>
+
+        <SettingToggleRow
+          settingKey="notifications.events.awaitingInput"
+          checked={notif.events.awaitingInput}
+          onChange={(value) =>
+            onUpdate("notifications.events.awaitingInput", value)
+          }
+          {...rowProps}
+        />
       </div>
 
       <div className="space-y-3">
@@ -369,8 +378,8 @@ export function NotificationsSection({
           Hook Events
         </h4>
         <p className="text-xs text-description-fg">
-          Opt in to notifications for AI CLI hook events. Requires the
-          corresponding harness to support each event.
+          Most people want Waiting for input above; these are raw per-harness
+          events.
         </p>
         {HOOK_EVENT_ORDER.map((event) => {
           const meta = HOOK_EVENT_METADATA.find((m) => m.event === event);

@@ -5,10 +5,12 @@ import {
   IN_FLIGHT_EXECUTION_STATES,
   NOTIFICATION_EVENT_MODES,
   NOTIFICATION_KINDS,
+  DERIVED_NOTIFICATION_EVENTS,
   STEP_STATUS,
   type CompletionNotificationSeverity,
   type ExecutionState,
   type HookEvent,
+  type DerivedNotificationEvent,
   type NotificationKind,
   type StepStatus,
   HOOK_EVENT_NAMES,
@@ -55,7 +57,7 @@ export interface HookArtifact {
   workflowName: string;
   promptIndex: number;
   promptName: string;
-  hookEvent: HookEvent;
+  hookEvent: HookEvent | DerivedNotificationEvent;
   /** Raw CLI-specific event name (e.g. "PreToolUse", "agentStop"). */
   nativeHookEvent: string;
   harnessId: string;
@@ -356,7 +358,10 @@ export function buildHookNotificationEvent(
   settings: CtrlYokeNotificationSettings,
   url?: string
 ): CtrlYokeNotificationEvent | null {
-  if (!settings.events.hookEvents[artifact.hookEvent]) {
+  if (
+    artifact.hookEvent === DERIVED_NOTIFICATION_EVENTS.AWAITING_INPUT ||
+    !settings.events.hookEvents[artifact.hookEvent]
+  ) {
     return null;
   }
 
