@@ -548,7 +548,7 @@ const STATIC_SETTINGS_CATALOG = {
     tab: GLOBAL_SETTINGS_TABS.NOTIFICATIONS,
     label: "Waiting for input",
     description:
-      "Notify when supported harnesses are waiting for your input. Antigravity does not provide this event.",
+      "Notify when Copilot CLI, Claude Code, Codex CLI, OpenCode, or Qwen Code is waiting for your input. Antigravity is not supported.",
   },
   "notifications.events.promptComplete": {
     id: "notifications.events.promptComplete",
@@ -1192,8 +1192,8 @@ const notificationOrder = [
   "notifications.vscode.enabled",
   "notifications.browser.mode",
   "notifications.events.workflowComplete",
-  "notifications.events.awaitingInput",
   "notifications.events.promptComplete",
+  "notifications.events.awaitingInput",
   ...hookEventCatalogIds,
   "notifications.includeWorkflowName",
   "notifications.includePromptName",

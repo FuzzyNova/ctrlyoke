@@ -58,12 +58,29 @@ badge count of unread notifications.
 | Setting               | Options                          | Default  |
 | --------------------- | -------------------------------- | -------- |
 | **Workflow complete** | **All**, **Failures Only**, None | **All**  |
+| **Waiting for input** | On, Off                          | **On**   |
 | **Prompt complete**   | **All**, **Failures Only**, None | **None** |
 
 **Workflow complete** fires when a run finishes, either completed or failed
 with an error. A run you stop yourself doesn't notify. **Prompt complete** fires
 for each step that completes or fails. **Failures Only** keeps just the
 failures.
+
+**Waiting for input** fires once when a supported harness is blocked on a
+permission prompt or question. ctrlyoke picks the native hook for each harness:
+
+| Harness     | Native source                                                 |
+| ----------- | ------------------------------------------------------------- |
+| Copilot CLI | `notification` for permission prompts and elicitation dialogs |
+| Claude Code | `notification` for permission prompts and elicitation dialogs |
+| Qwen Code   | `notification` for permission prompts                         |
+| Codex CLI   | `permissionRequest`                                           |
+| OpenCode    | `permissionRequest` (`permission.asked`)                      |
+| Antigravity | Not supported                                                 |
+
+The setting is on by default. Turn it off to stop these alerts. **Raw hook
+events** below remain available as the power-user option when you want a
+specific harness event, including events that fire on every tool call.
 
 ### Hook events
 
@@ -86,8 +103,9 @@ Claude Code and Qwen Code only, and **Error** from Copilot, Claude Code and
 OpenCode. See the Hooks rows of the
 [compatibility matrix](/harnesses/compatibility) for the full picture.
 
-**Notification** is the useful one for interactive steps: it tells you when
-the harness is waiting for you. **Pre Tool Use** and **Post Tool Use** fire on
+For the normalized alert across harnesses, use **Waiting for input** above.
+Raw **Notification** and **Permission Request** events are useful when you
+want harness-specific behavior. **Pre Tool Use** and **Post Tool Use** fire on
 every tool call, so they are mostly useful for testing.
 
 ## Content

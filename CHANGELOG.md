@@ -89,6 +89,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Waiting for input** notifications are on by default and fire once when a
+  harness is blocked on a permission prompt or question. They work on every
+  harness except Antigravity.
 - **Exit Terminal and Exit All Idle Terminals** in the workflow list's right-click menu. They send the harness Ctrl+C so its TUI quits, then end the process. Running and paused workflows are left alone, and the session stays resumable.
 
 ### Changed

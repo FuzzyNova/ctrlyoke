@@ -378,8 +378,8 @@ export function NotificationsSection({
           Hook Events
         </h4>
         <p className="text-xs text-description-fg">
-          Most people want Waiting for input above; these are raw per-harness
-          events.
+          Most people want <em>Waiting for input</em> above; these are raw
+          per-harness events.
         </p>
         {HOOK_EVENT_ORDER.map((event) => {
           const meta = HOOK_EVENT_METADATA.find((m) => m.event === event);

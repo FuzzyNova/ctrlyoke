@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
+  DERIVED_NOTIFICATION_EVENTS,
   EXECUTION_STATES,
   NOTIFICATION_EVENT_MODES,
   STEP_STATUS,
@@ -117,6 +118,57 @@ suite("CompletionNotificationFactory", () => {
 
     assert.strictEqual(event?.body, "refactor - implement - Notification");
     assert.ok(!event?.body.includes("secret payload"));
+  });
+
+  test("builds awaiting-input notifications from the semantic setting", () => {
+    const event = buildHookNotificationEvent(
+      createHookArtifact({
+        hookEvent: DERIVED_NOTIFICATION_EVENTS.AWAITING_INPUT,
+        nativeHookEvent: "PermissionRequest",
+        toolName: "Bash",
+        notificationTitle: "Permission required",
+        notificationMessage: "Allow this command?",
+      }),
+      {
+        ...CTRLYOKE_SETTINGS_DEFAULTS.notifications,
+        events: {
+          ...CTRLYOKE_SETTINGS_DEFAULTS.notifications.events,
+          hookEvents: {
+            ...CTRLYOKE_SETTINGS_DEFAULTS.notifications.events.hookEvents,
+            permissionRequest: false,
+          },
+        },
+      }
+    );
+
+    assert.ok(event);
+    assert.strictEqual(event?.title, "ctrlyoke - Waiting for input");
+    assert.strictEqual(
+      event?.body,
+      "refactor - implement - Bash - Permission required - Allow this command?"
+    );
+    assert.strictEqual(event?.hookEvent, undefined);
+  });
+
+  test("gates awaiting-input artifacts on their own setting", () => {
+    const event = buildHookNotificationEvent(
+      createHookArtifact({
+        hookEvent: DERIVED_NOTIFICATION_EVENTS.AWAITING_INPUT,
+      }),
+      {
+        ...CTRLYOKE_SETTINGS_DEFAULTS.notifications,
+        events: {
+          ...CTRLYOKE_SETTINGS_DEFAULTS.notifications.events,
+          awaitingInput: false,
+          hookEvents: {
+            ...CTRLYOKE_SETTINGS_DEFAULTS.notifications.events.hookEvents,
+            permissionRequest: true,
+          },
+        },
+      }
+    );
+
+    assert.strictEqual(event, null);
   });
 
   test("builds workflow success notifications when workflow events are enabled", () => {

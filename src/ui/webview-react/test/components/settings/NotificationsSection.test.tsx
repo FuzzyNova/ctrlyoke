@@ -66,20 +66,43 @@ describe("NotificationsSection", () => {
     ) as HTMLInputElement;
     expect(notificationToggle).not.toBeChecked();
     expect(screen.getByText(notificationDescription!)).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Opt in to notifications for AI CLI hook events. Requires the corresponding harness to support each event."
-      )
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByText(/Codex|Antigravity|OpenCode/)
-    ).not.toBeInTheDocument();
+    expect(screen.getByText(/raw per-harness events/)).toBeInTheDocument();
 
     await user.click(notificationToggle);
 
     expect(onUpdate).toHaveBeenCalledWith(
       "notifications.events.hookEvents.notification",
       true
+    );
+  });
+
+  it("offers the default-on Waiting for input toggle", async () => {
+    const user = userEvent.setup();
+    const onUpdate = vi.fn();
+
+    render(
+      <NotificationsSection
+        settings={createSettings()}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={onUpdate}
+        onReset={() => {}}
+      />
+    );
+
+    const toggle = screen.getByLabelText(
+      "Waiting for input, property notifications.events.awaitingInput"
+    ) as HTMLInputElement;
+    expect(toggle).toBeChecked();
+    expect(
+      screen.getByText(
+        "Notify when Copilot CLI, Claude Code, Codex CLI, OpenCode, or Qwen Code is waiting for your input. Antigravity is not supported."
+      )
+    ).toBeInTheDocument();
+    await user.click(toggle);
+
+    expect(onUpdate).toHaveBeenCalledWith(
+      "notifications.events.awaitingInput",
+      false
     );
   });
 

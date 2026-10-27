@@ -358,15 +358,20 @@ export function buildHookNotificationEvent(
   settings: CtrlYokeNotificationSettings,
   url?: string
 ): CtrlYokeNotificationEvent | null {
+  const isAwaitingInput =
+    artifact.hookEvent === DERIVED_NOTIFICATION_EVENTS.AWAITING_INPUT;
   if (
-    artifact.hookEvent === DERIVED_NOTIFICATION_EVENTS.AWAITING_INPUT ||
-    !settings.events.hookEvents[artifact.hookEvent]
+    isAwaitingInput
+      ? !settings.events.awaitingInput
+      : !settings.events.hookEvents[artifact.hookEvent as HookEvent]
   ) {
     return null;
   }
 
-  const label =
-    HOOK_EVENT_OPTIONS_META[artifact.hookEvent]?.label ?? artifact.hookEvent;
+  const label = isAwaitingInput
+    ? "Waiting for input"
+    : (HOOK_EVENT_OPTIONS_META[artifact.hookEvent as HookEvent]?.label ??
+      artifact.hookEvent);
 
   const titleParts = ["ctrlyoke -", label];
   const bodyParts: string[] = [];
@@ -381,15 +386,8 @@ export function buildHookNotificationEvent(
     bodyParts.push(artifact.toolName);
   }
 
-  if (artifact.hookEvent === HOOK_EVENT_NAMES.NOTIFICATION) {
-    const notificationMessage = artifact.notificationMessage?.trim();
-    const notificationTitle = artifact.notificationTitle?.trim();
-    const notificationType = artifact.notificationType?.trim();
-
-    if (notificationTitle && notificationTitle !== notificationMessage) {
-      bodyParts.push(notificationTitle);
-    }
-    bodyParts.push(notificationMessage || notificationType || label);
+  if (isAwaitingInput || artifact.hookEvent === HOOK_EVENT_NAMES.NOTIFICATION) {
+    bodyParts.push(...buildNativeNotificationDetails(artifact, label));
   }
 
   const id = `${artifact.workflowId}:hook:${artifact.hookEvent}:${artifact.timestamp}`;
@@ -399,15 +397,32 @@ export function buildHookNotificationEvent(
     kind: NOTIFICATION_KINDS.HOOK,
     severity: COMPLETION_NOTIFICATION_SEVERITY.INFO,
     workflowId: artifact.workflowId,
-    title:
-      artifact.hookEvent === HOOK_EVENT_NAMES.NOTIFICATION
+    title: isAwaitingInput
+      ? "ctrlyoke - Waiting for input"
+      : artifact.hookEvent === HOOK_EVENT_NAMES.NOTIFICATION
         ? "ctrlyoke - Notification"
         : titleParts.join(" "),
     body: bodyParts.join(" - ") || label,
     tag: `ctrlyoke-hook-${artifact.workflowId}-${artifact.hookEvent}`,
     url,
-    hookEvent: artifact.hookEvent,
+    hookEvent: isAwaitingInput ? undefined : (artifact.hookEvent as HookEvent),
     harnessId: artifact.harnessId,
     toolName: artifact.toolName,
   };
+}
+
+function buildNativeNotificationDetails(
+  artifact: HookArtifact,
+  fallback: string
+): string[] {
+  const notificationMessage = artifact.notificationMessage?.trim();
+  const notificationTitle = artifact.notificationTitle?.trim();
+  const notificationType = artifact.notificationType?.trim();
+  const details: string[] = [];
+
+  if (notificationTitle && notificationTitle !== notificationMessage) {
+    details.push(notificationTitle);
+  }
+  details.push(notificationMessage || notificationType || fallback);
+  return details;
 }

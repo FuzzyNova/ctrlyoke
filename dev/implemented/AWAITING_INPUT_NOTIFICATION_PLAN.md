@@ -1,6 +1,6 @@
 # "Waiting for Input" Notification Plan
 
-**Status:** In progress — staged as a ctrlyoke workflow on 2026-10-26 (see "Orchestrator review").
+**Status:** Implemented — completed on 2026-10-26. Design §5 (`userHookConfig.event` support) remains deferred.
 
 > **2026-10-10 audit:** Not implemented — no `awaitingInput` setting, constant, or env var exists.
 > The problem statement still matches the code (the per-harness table agrees with the `HookEvent`
@@ -8,10 +8,7 @@
 > still duplicated). Refreshed line numbers and pointed the workflow-schema reference at
 > `schemas/workflow-schema.json`.
 >
-> Last reviewed against code: 2026-10-26. Still not started; refreshed line numbers and the
-> location of `buildHookEnvVars` (`src/core/harness/shared/CliExecutionRunner.ts`) and
-> `HookArtifact` (`src/ui/notifications/CompletionNotificationFactory.ts`; the OpenCode plugin
-> keeps its own copy).
+> Implementation completed 2026-10-26. Steps 1–4 are implemented; Design §5 remains deferred.
 
 ## Orchestrator review (2026-10-26) — corrections before building
 
