@@ -644,7 +644,8 @@ function getStreamingChunk(
  * OUTPUT_ROW_HORIZONTAL_PADDING there, not this.
  */
 const OUTPUT_ROW_HORIZONTAL_CHROME = 72;
-const HEADER_HORIZONTAL_CHROME = 140;
+// Includes the trailing pin (16) + gap-x-2 (8) added beside the hide button.
+const HEADER_HORIZONTAL_CHROME = 164;
 const STATS_HORIZONTAL_CHROME = 96;
 const OUTPUT_BLOCK_VERTICAL_CHROME = 32;
 const THINKING_LABEL_HEIGHT = 18;
@@ -1751,6 +1752,7 @@ const PARALLEL_GROUP_HEADER_CHIP_ROW_GAP = 4; // mt-1, and gap-y-1 between wrapp
 const PARALLEL_GROUP_HEADER_CHIP_HORIZONTAL_CHROME = 14; // px-1.5 (12) + border (2)
 const PARALLEL_GROUP_HEADER_SUMMARY_GAP = 8; // gap-x-2
 const PARALLEL_GROUP_HEADER_ACTION_ICON_WIDTH = 20; // codicon (16) + gap-1 (4)
+const PARALLEL_GROUP_HEADER_PIN_WIDTH = 16; // StepHeaderPinButton's codicon
 const PARALLEL_GROUP_HEADER_CHIP_GAP = 4; // gap-1
 // Proportional 12px UI text, measured against the same VS Code font stack the
 // rest of the chrome uses. Deliberately a touch wide: under-counting a wrap
@@ -1826,16 +1828,20 @@ function estimateParallelGroupHeaderHeight(
     outputContentWidth,
     PARALLEL_GROUP_HEADER_HORIZONTAL_CHROME
   );
+  // The trailing actions are one flex item: the sticky-header pin, then the
+  // change viewer when the group has changes.
+  const actionsWidth =
+    PARALLEL_GROUP_HEADER_PIN_WIDTH +
+    (row.promptUndo && row.promptUndo.summary.total > 0
+      ? PARALLEL_GROUP_HEADER_SUMMARY_GAP +
+        parallelGroupHeaderTextWidth(row.promptUndo.summary.label) +
+        PARALLEL_GROUP_HEADER_ACTION_ICON_WIDTH
+      : 0);
   const summaryItems = [
     ...[parallelGroupHeaderTitle(row), parallelGroupHeaderSummaryText(row)].map(
       parallelGroupHeaderTextWidth
     ),
-    ...(row.promptUndo && row.promptUndo.summary.total > 0
-      ? [
-          parallelGroupHeaderTextWidth(row.promptUndo.summary.label) +
-            PARALLEL_GROUP_HEADER_ACTION_ICON_WIDTH,
-        ]
-      : []),
+    actionsWidth,
   ];
   const chipItems = [
     PARALLEL_GROUP_HEADER_LABELS.ALL_CHIP,

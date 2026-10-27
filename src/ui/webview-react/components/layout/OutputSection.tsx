@@ -241,6 +241,7 @@ const OutputSectionInner: React.FC = () => {
     (s) => s.historyOutputs?.runMetadata
   );
   const runBannerPinned = useUiStore((s) => s.runBannerPinned);
+  const stepHeaderPinned = useUiStore((s) => s.stepHeaderPinned);
   const workspaceWorktreeOwnership = useUiStore(
     (s) => s.workspaceWorktreeOwnership
   );
@@ -1755,6 +1756,8 @@ const OutputSectionInner: React.FC = () => {
               }
               isRunBannerPinned={runBannerPinned}
               onToggleRunBannerPinned={toggleRunBannerPinned}
+              isStepHeaderPinned={stepHeaderPinned}
+              rowStarts={rowLayout.rowStartsByIndex}
               showBackToLive={isViewingHistory && isExecutionActive}
               onBackToLive={handleBackToLive}
               onBashExpansionChange={handleBashExpansionChange}

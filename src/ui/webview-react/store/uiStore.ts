@@ -809,6 +809,16 @@ interface UiState {
   // token/cost totals) stays fixed at the top while scrolling, or scrolls
   // away as the first row of content. Persisted so it survives reloads.
   runBannerPinned: boolean;
+  // Whether the header of the step being read sticks below the run banner
+  // while scrolling through that step's output. Global and persisted, like
+  // runBannerPinned; the header rows carry the toggle.
+  stepHeaderPinned: boolean;
+  /**
+   * `getTargetKey` of every step with output rows inside the output pane's
+   * viewport, so the steps panel can mark what is on screen. Transient: only
+   * written while the output tab is visible, and cleared when it is not.
+   */
+  outputInViewTargetKeys: readonly string[];
 
   // Terminal tab state (per workflow, defaults to 'output')
   activeOutputTabs: Record<string, OutputTab>;
@@ -1083,6 +1093,8 @@ interface UiActions {
 
   // Run summary banner pin state
   toggleRunBannerPinned: () => void;
+  toggleStepHeaderPinned: () => void;
+  setOutputInViewTargetKeys: (keys: readonly string[]) => void;
 
   // Loading state
   setLoading: (loading: boolean, message?: string) => void;
@@ -1321,6 +1333,8 @@ const initialState: UiState = {
   isLoading: false,
   loadingMessage: null,
   runBannerPinned: true,
+  stepHeaderPinned: true,
+  outputInViewTargetKeys: [],
   toastQueue: [],
   harnessDetectionRetryResult: null,
   contentPreviewModal: null,
@@ -1381,6 +1395,7 @@ const persistedFields = [
   "diffsCollapsed",
   "undoDialogDiffsCollapsed",
   "runBannerPinned",
+  "stepHeaderPinned",
   "terminalRailCollapsed",
   "terminalRailSizePx",
   "globalSettingsActiveTab",
@@ -2075,6 +2090,20 @@ export const useUiStore = create<UiState & UiActions>()(
       toggleRunBannerPinned: () =>
         set((state) => ({ runBannerPinned: !state.runBannerPinned })),
 
+      toggleStepHeaderPinned: () =>
+        set((state) => ({ stepHeaderPinned: !state.stepHeaderPinned })),
+
+      // Called on scroll; only a change in membership may notify subscribers.
+      setOutputInViewTargetKeys: (keys) =>
+        set((state) =>
+          state.outputInViewTargetKeys.length === keys.length &&
+          state.outputInViewTargetKeys.every(
+            (key, index) => key === keys[index]
+          )
+            ? state
+            : { outputInViewTargetKeys: keys }
+        ),
+
       // ============================================================================
       // LOADING STATE
       // ============================================================================
@@ -2704,6 +2733,7 @@ export const useUiStore = create<UiState & UiActions>()(
           diffsCollapsed: initialState.diffsCollapsed,
           undoDialogDiffsCollapsed: initialState.undoDialogDiffsCollapsed,
           runBannerPinned: initialState.runBannerPinned,
+          stepHeaderPinned: initialState.stepHeaderPinned,
           workspaceEntrySort: { ...initialState.workspaceEntrySort },
         });
       },

@@ -178,4 +178,30 @@ describe("ParallelGroupHeaderRowView", () => {
     );
     expect(onPromptView).toHaveBeenCalledWith(row);
   });
+
+  it("marks the members whose output is in the output viewport", () => {
+    useUiStore.setState({ outputInViewTargetKeys: ["queue:1"] });
+    try {
+      render(<OutputRow row={buildHeaderRow()} isExecutionActive={true} />);
+      expect(
+        screen.getByRole("button", { name: "2 database" }).className
+      ).toContain("underline");
+      expect(
+        screen.getByRole("button", { name: "1 auth" }).className
+      ).not.toContain("underline");
+    } finally {
+      useUiStore.setState({ outputInViewTargetKeys: [] });
+    }
+  });
+
+  it("toggles the global sticky step header pin", () => {
+    useUiStore.setState({ stepHeaderPinned: true });
+    render(<OutputRow row={buildHeaderRow()} isExecutionActive={true} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Unpin step headers" }));
+    expect(useUiStore.getState().stepHeaderPinned).toBe(false);
+    expect(
+      screen.getByRole("button", { name: "Pin step headers" })
+    ).toHaveAttribute("aria-pressed", "false");
+  });
 });

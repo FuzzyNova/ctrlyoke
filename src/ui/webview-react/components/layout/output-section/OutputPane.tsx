@@ -38,6 +38,17 @@ import {
 } from "./OutputScrollSeekPlaceholder";
 import { OUTPUT_STICKY_TOP_CSS_VAR } from "@components/output/outputStyles";
 import { Icon } from "../../shared/Icon";
+import { useOutputViewportSteps } from "@hooks/useOutputViewportSteps";
+
+/**
+ * Cuts the sticky header's prompt/command block down to its first two lines,
+ * fading the second: the block's top margin and padding plus two line boxes.
+ */
+const STICKY_PREVIEW_CLIP_STYLE: React.CSSProperties = {
+  maxHeight: "calc(2 * var(--spacing-sm) + 2lh)",
+  overflow: "hidden",
+  maskImage: "linear-gradient(to bottom, #000 calc(100% - 1lh), transparent)",
+};
 
 interface OutputPaneProps {
   activeOutputTab: OutputTab;
@@ -71,6 +82,10 @@ interface OutputPaneProps {
   workspaceWorktreeOwnership?: WorkspaceWorktreeOwnership;
   isRunBannerPinned: boolean;
   onToggleRunBannerPinned: () => void;
+  /** Whether the header of the step being read sticks below the run banner. */
+  isStepHeaderPinned: boolean;
+  /** Row offsets from the shared row layout, indexed like `rows`. */
+  rowStarts: readonly number[];
   /** True while browsing history and a different run is executing live. */
   showBackToLive: boolean;
   onBackToLive: () => void;
@@ -212,6 +227,8 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
     workspaceWorktreeOwnership,
     isRunBannerPinned,
     onToggleRunBannerPinned,
+    isStepHeaderPinned,
+    rowStarts,
     showBackToLive,
     onBackToLive,
     onContextMenuOpen,
@@ -251,6 +268,19 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
     observer.observe(banner);
     return () => observer.disconnect();
   }, [hasRunBanner, isRunBannerPinned, scrollContainerRef]);
+
+  const { stickySlotRef, stickyContentRef, stickyRows } =
+    useOutputViewportSteps({
+      isActive:
+        hasOutput &&
+        !isOutputCollapsed &&
+        activeOutputTab === OUTPUT_TABS.OUTPUT,
+      isStickyEnabled: isStepHeaderPinned,
+      rows,
+      rowStarts,
+      totalSize: contentHeight,
+      scrollContainerRef,
+    });
 
   const handleCopyCapture = (event: React.ClipboardEvent<HTMLDivElement>) => {
     const selection = window.getSelection();
@@ -352,88 +382,116 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
             Output will appear here during execution
           </p>
         ) : (
-          // The autoscroll glide clips this box while it translates the row
-          // container, so the translated overflow never reaches scrollHeight.
-          <div data-output-glide-clip>
-            <Profiler
-              id={isOutputVirtualized ? "OutputVirtualRows" : "OutputRows"}
-              onRender={onOutputProfilerRender}
+          <>
+            {/* Zero-height slot that sticks just below a pinned run banner. Its
+              on-screen top is the top of the readable area, which is what
+              useOutputViewportSteps measures against; the stuck header hangs
+              below it without taking any space in the row flow. */}
+            <div
+              ref={stickySlotRef}
+              className="sticky z-raised h-0"
+              style={{ top: `var(${OUTPUT_STICKY_TOP_CSS_VAR}, 0px)` }}
             >
-              {isOutputVirtualized ? (
+              {stickyRows && (
                 <div
-                  data-output-row-container
-                  style={{
-                    height: `${virtualizedTotalSize}px`,
-                    position: "relative",
-                    width: "100%",
-                  }}
+                  ref={stickyContentRef}
+                  data-testid="output-sticky-step"
+                  className="absolute inset-x-0 top-0 bg-(--bg-primary) border-b border-(--border-color) shadow-sm"
                 >
-                  {virtualRows.map((virtualRow) => {
-                    const row = rows[virtualRow.index];
-                    if (!row) return null;
-
-                    const renderScrollSeekPlaceholder =
-                      isOutputScrollSeeking &&
-                      !isNavigationTargetVirtualized &&
-                      !renderedScrollSeekIndices.has(virtualRow.index) &&
-                      shouldRenderScrollSeekPlaceholder(row);
-
-                    return (
-                      <div
-                        key={virtualRow.key}
-                        ref={
-                          renderScrollSeekPlaceholder
-                            ? undefined
-                            : measureRowElement
-                        }
-                        data-index={virtualRow.index}
-                        data-row-key={row.key}
-                        className="flow-root"
-                        // Positioned by `top`, not translateY: sticky offsets are
-                        // computed from layout and ignore ancestor transforms, so
-                        // a translated row pins an expanded section's sticky
-                        // "Hide full output" toggle to the section's bottom.
-                        style={{
-                          position: "absolute",
-                          top: virtualRow.start,
-                          width: "100%",
-                        }}
-                      >
-                        {renderScrollSeekPlaceholder ? (
-                          <OutputScrollSeekPlaceholder
-                            row={row}
-                            height={virtualRow.size}
-                          />
-                        ) : (
-                          renderOutputRow(row, props)
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div data-output-row-container>
-                  {nonVirtualRows.map((row, rowIndex) => (
-                    <div
-                      key={row.key}
-                      ref={measureStaticRowElement}
-                      data-index={rowIndex}
-                      data-row-key={row.key}
-                      className="flow-root"
-                    >
-                      {renderOutputRow(row, props)}
+                  {/* The same rows the stream renders, so the copy lines up
+                    exactly with the real header when it scrolls back in. */}
+                  {renderOutputRow(stickyRows.headerRow, props)}
+                  {stickyRows.previewRow && (
+                    <div style={STICKY_PREVIEW_CLIP_STYLE}>
+                      {renderOutputRow(stickyRows.previewRow, props)}
                     </div>
-                  ))}
-                  {nonVirtualSpacerHeight > 0 && (
-                    <div
-                      aria-hidden="true"
-                      style={{ height: `${nonVirtualSpacerHeight}px` }}
-                    />
                   )}
                 </div>
               )}
-            </Profiler>
-          </div>
+            </div>
+            {/* The autoscroll glide clips this box while it translates the row
+              container, so the translated overflow never reaches scrollHeight. */}
+            <div data-output-glide-clip>
+              <Profiler
+                id={isOutputVirtualized ? "OutputVirtualRows" : "OutputRows"}
+                onRender={onOutputProfilerRender}
+              >
+                {isOutputVirtualized ? (
+                  <div
+                    data-output-row-container
+                    style={{
+                      height: `${virtualizedTotalSize}px`,
+                      position: "relative",
+                      width: "100%",
+                    }}
+                  >
+                    {virtualRows.map((virtualRow) => {
+                      const row = rows[virtualRow.index];
+                      if (!row) return null;
+
+                      const renderScrollSeekPlaceholder =
+                        isOutputScrollSeeking &&
+                        !isNavigationTargetVirtualized &&
+                        !renderedScrollSeekIndices.has(virtualRow.index) &&
+                        shouldRenderScrollSeekPlaceholder(row);
+
+                      return (
+                        <div
+                          key={virtualRow.key}
+                          ref={
+                            renderScrollSeekPlaceholder
+                              ? undefined
+                              : measureRowElement
+                          }
+                          data-index={virtualRow.index}
+                          data-row-key={row.key}
+                          className="flow-root"
+                          // Positioned by `top`, not translateY: sticky offsets are
+                          // computed from layout and ignore ancestor transforms, so
+                          // a translated row pins an expanded section's sticky
+                          // "Hide full output" toggle to the section's bottom.
+                          style={{
+                            position: "absolute",
+                            top: virtualRow.start,
+                            width: "100%",
+                          }}
+                        >
+                          {renderScrollSeekPlaceholder ? (
+                            <OutputScrollSeekPlaceholder
+                              row={row}
+                              height={virtualRow.size}
+                            />
+                          ) : (
+                            renderOutputRow(row, props)
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div data-output-row-container>
+                    {nonVirtualRows.map((row, rowIndex) => (
+                      <div
+                        key={row.key}
+                        ref={measureStaticRowElement}
+                        data-index={rowIndex}
+                        data-row-key={row.key}
+                        className="flow-root"
+                      >
+                        {renderOutputRow(row, props)}
+                      </div>
+                    ))}
+                    {nonVirtualSpacerHeight > 0 && (
+                      <div
+                        aria-hidden="true"
+                        style={{ height: `${nonVirtualSpacerHeight}px` }}
+                      />
+                    )}
+                  </div>
+                )}
+              </Profiler>
+            </div>
+          </>
         )}
       </div>
 

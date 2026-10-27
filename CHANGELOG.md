@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- When one step fills the output pane, its header and the start of its prompt
+  or command stay at the top below the run banner while you scroll through its
+  output. A parallel group keeps its group header there instead. A pin on every
+  step header turns this on or off for all steps. The steps panel also marks
+  the steps whose output is currently on screen.
+
 - The dashboard stays responsive on large running workflows. Opening one no
   longer rebuilds the output pane once per completed step, bursts of updates
   are applied together, and a running step's output no longer slows every

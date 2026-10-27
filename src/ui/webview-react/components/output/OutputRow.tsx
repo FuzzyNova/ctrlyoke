@@ -40,6 +40,7 @@ import {
   StatusMessage,
   WebSearchOutput,
 } from ".";
+import { StepHeaderPinButton } from "./StepHeaderPinButton";
 import {
   DEFAULT_BASH_OUTPUT_EXPANSION_STATE,
   type BashOutputExpansionSection,
@@ -1454,6 +1455,7 @@ const CliHeaderRowView: React.FC<{
         </span>
         {streamingIndicator}
         <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-1 font-normal">
+          <StepHeaderPinButton />
           {hideButton}
         </div>
       </div>
@@ -1487,6 +1489,7 @@ const CliHeaderRowView: React.FC<{
       </span>
       {streamingIndicator}
       <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-1 font-normal">
+        <StepHeaderPinButton />
         {hideButton}
         {promptUndoSummary && promptUndoSummary.total > 0 && (
           <button

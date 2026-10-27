@@ -25,6 +25,9 @@ import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
 import { getStepAccentClass } from "@utils/status";
 import { type WorkflowStepDragHandleProps } from "@utils/dndKit";
 import { getStepAssistantTextForCopy } from "@utils/outputUtils";
+import { getTargetKey } from "@utils/outputProjection";
+import { useUiStore } from "@store/uiStore";
+import { FINAL_STEP_PHASES } from "../../types/messages";
 
 export type WorkflowStepComponentProps = React.ComponentProps<
   typeof WorkflowStepItem
@@ -276,6 +279,13 @@ export function WorkflowStepRowFrame({
   displacementStyle?: React.CSSProperties;
   children: React.ReactNode;
 }) {
+  // A primitive selector: only rows entering or leaving the output viewport
+  // re-render as the pane scrolls.
+  const isInOutputView = useUiStore((state) =>
+    state.outputInViewTargetKeys.includes(
+      getTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, index })
+    )
+  );
   return (
     <div
       className="relative flex items-stretch"
@@ -291,11 +301,25 @@ export function WorkflowStepRowFrame({
             : displacementStyle
         }
       />
+      {/* In-view rows draw a bar on the number column's edge. Adjacent rows'
+          bars join into one bracket: the output viewport mapped onto the
+          step list, which the minimap's thumb cannot show once its minimum
+          height spans several steps. */}
       <div
-        className="shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none"
+        className={`relative shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm select-none ${
+          isInOutputView ? "text-foreground" : "text-description-fg"
+        }`}
         style={displacementStyle}
+        data-in-output-view={isInOutputView ? "true" : undefined}
+        title={isInOutputView ? "Showing in the output pane" : undefined}
       >
         {slotNumber}
+        {isInOutputView && (
+          <span
+            className="pointer-events-none absolute inset-y-0 right-0 w-[3px] bg-minimap-thumb-active"
+            aria-hidden="true"
+          />
+        )}
       </div>
       {isCurrent && !hideExecutingHighlight && <ExecutingStepHighlight />}
       <div ref={bodyRef} style={bodyStyle} className="relative flex-1 min-w-0">

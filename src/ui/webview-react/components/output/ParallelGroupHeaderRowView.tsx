@@ -9,6 +9,7 @@ import {
   type ParallelGroupHeaderRow,
 } from "@utils/outputRows";
 import { Icon } from "../shared/Icon";
+import { StepHeaderPinButton } from "./StepHeaderPinButton";
 
 const SHELL_WORKFLOW_ID = "_shell";
 
@@ -19,8 +20,21 @@ const CHIP_CLASS = "rounded-sm border px-1.5 py-0.5";
 const CHIP_PRESSED_CLASS = "border-focus-border text-foreground";
 const CHIP_IDLE_CLASS = "border-panel-border text-description-fg";
 
-function chipClass(pressed: boolean): string {
-  return `${CHIP_CLASS} ${pressed ? CHIP_PRESSED_CLASS : CHIP_IDLE_CLASS}`;
+/**
+ * A member whose output is on screen. Underlined rather than recoloured so it
+ * reads independently of the chip's pressed (filter) state.
+ */
+const CHIP_IN_VIEW_CLASS =
+  "underline decoration-2 decoration-focus-border underline-offset-2";
+
+function chipClass(pressed: boolean, inView = false): string {
+  return [
+    CHIP_CLASS,
+    pressed ? CHIP_PRESSED_CLASS : CHIP_IDLE_CLASS,
+    inView ? CHIP_IN_VIEW_CLASS : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 export interface ParallelGroupHeaderRowViewProps {
@@ -50,6 +64,7 @@ export const ParallelGroupHeaderRowView: React.FC<
     (state) => state.displayedViewAddress
   );
   const soloOutputTargets = useUiStore((state) => state.soloOutputTargets);
+  const inViewTargetKeys = useUiStore((state) => state.outputInViewTargetKeys);
   const clearHiddenOutputTargets = useUiStore(
     (state) => state.clearHiddenOutputTargets
   );
@@ -81,6 +96,7 @@ export const ParallelGroupHeaderRowView: React.FC<
           {parallelGroupHeaderSummaryText(row)}
         </span>
         <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-1">
+          <StepHeaderPinButton />
           {promptUndoSummary && promptUndoSummary.total > 0 && onView && (
             <button
               type="button"
@@ -118,7 +134,10 @@ export const ParallelGroupHeaderRowView: React.FC<
           <button
             key={member.targetKey}
             type="button"
-            className={chipClass(member.isSoloed)}
+            className={chipClass(
+              member.isSoloed,
+              inViewTargetKeys.includes(member.targetKey)
+            )}
             onClick={() => handleSolo(member.targetKey)}
             aria-pressed={member.isSoloed}
           >
