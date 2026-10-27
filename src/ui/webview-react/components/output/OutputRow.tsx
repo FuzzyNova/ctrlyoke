@@ -1341,6 +1341,15 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
 
 StructuredEventContent.displayName = "StructuredEventContent";
 
+// The row never wraps: the title column and the actions column both start at
+// their single-line width (`flex-auto`, basis auto) and shrink in proportion,
+// so a narrow pane wraps the title and the actions together instead of pushing
+// the actions onto their own line. `estimateCliHeaderHeight` models this.
+const CLI_HEADER_ROW_CLASS =
+  "font-semibold mb-(--spacing-sm) text-(--fg-secondary) pb-(--spacing-xs) border-b border-(--border-color) text-(length:--cy-output-font-size-sm) flex min-w-0 items-start gap-x-(--spacing-sm)";
+const CLI_HEADER_TITLE_CLASS =
+  "inline-flex min-w-0 flex-auto flex-wrap items-center gap-x-1 gap-y-[2px]";
+
 const CliHeaderRowView: React.FC<{
   row: CliHeaderRow;
   isExecutionActive: boolean;
@@ -1387,6 +1396,19 @@ const CliHeaderRowView: React.FC<{
       <Icon name="eye-closed" className="shrink-0" />
     </button>
   );
+  // The pin always ends the row's first line. When the title column and the
+  // actions can't share one line, both shrink in proportion and the actions
+  // wrap in reverse, so hide + pin stay on top and the change viewer drops
+  // below them instead of squeezing the title.
+  const renderActions = (changesButton?: React.ReactNode) => (
+    <div className="flex flex-wrap-reverse items-center justify-end gap-x-2 gap-y-1 font-normal">
+      {changesButton}
+      <span className="inline-flex shrink-0 items-center gap-x-2">
+        {hideButton}
+        <StepHeaderPinButton />
+      </span>
+    </div>
+  );
   const structuredMetadata = output.structured?.metadata;
   const harnessId = structuredMetadata?.harness;
   const harnessShortName = harnessId
@@ -1427,8 +1449,8 @@ const CliHeaderRowView: React.FC<{
           ? "codicon-tools"
           : "codicon-checklist";
     return (
-      <div className="font-semibold mb-(--spacing-sm) text-(--fg-secondary) pb-(--spacing-xs) border-b border-(--border-color) text-(length:--cy-output-font-size-sm) flex min-w-0 flex-wrap items-start gap-x-(--spacing-sm) gap-y-(--spacing-xs)">
-        <span className="inline-flex min-w-0 flex-1 flex-wrap items-center gap-x-1 gap-y-[2px]">
+      <div className={CLI_HEADER_ROW_CLASS}>
+        <span className={CLI_HEADER_TITLE_CLASS}>
           {timestamp && <span className="output-timestamp">[{timestamp}]</span>}
           <span className="inline-flex min-w-0 items-center gap-1">
             <span>[</span>
@@ -1452,19 +1474,16 @@ const CliHeaderRowView: React.FC<{
           {executionBadge && (
             <span className="ml-1 text-description-fg">{executionBadge}</span>
           )}
+          {streamingIndicator}
         </span>
-        {streamingIndicator}
-        <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-1 font-normal">
-          <StepHeaderPinButton />
-          {hideButton}
-        </div>
+        {renderActions()}
       </div>
     );
   }
 
   return (
-    <div className="font-semibold mb-(--spacing-sm) text-(--fg-secondary) pb-(--spacing-xs) border-b border-(--border-color) text-(length:--cy-output-font-size-sm) flex min-w-0 flex-wrap items-start gap-x-(--spacing-sm) gap-y-(--spacing-xs)">
-      <span className="inline-flex min-w-0 flex-1 items-center flex-wrap gap-x-1 gap-y-[2px]">
+    <div className={CLI_HEADER_ROW_CLASS}>
+      <span className={CLI_HEADER_TITLE_CLASS}>
         {timestamp && <span className="output-timestamp">[{timestamp}]</span>}
         <span className="inline-flex min-w-0 items-center gap-1">
           <span>[</span>
@@ -1486,12 +1505,10 @@ const CliHeaderRowView: React.FC<{
         {executionBadge && (
           <span className="ml-1 text-description-fg">{executionBadge}</span>
         )}
+        {streamingIndicator}
       </span>
-      {streamingIndicator}
-      <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-1 font-normal">
-        <StepHeaderPinButton />
-        {hideButton}
-        {promptUndoSummary && promptUndoSummary.total > 0 && (
+      {renderActions(
+        promptUndoSummary && promptUndoSummary.total > 0 && (
           <button
             type="button"
             onClick={() => onPromptView?.(row)}
@@ -1510,8 +1527,8 @@ const CliHeaderRowView: React.FC<{
               )}
             </span>
           </button>
-        )}
-      </div>
+        )
+      )}
     </div>
   );
 };

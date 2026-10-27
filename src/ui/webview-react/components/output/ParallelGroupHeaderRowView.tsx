@@ -96,7 +96,6 @@ export const ParallelGroupHeaderRowView: React.FC<
           {parallelGroupHeaderSummaryText(row)}
         </span>
         <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-1">
-          <StepHeaderPinButton />
           {promptUndoSummary && promptUndoSummary.total > 0 && onView && (
             <button
               type="button"
@@ -115,6 +114,7 @@ export const ParallelGroupHeaderRowView: React.FC<
               </span>
             </button>
           )}
+          <StepHeaderPinButton />
         </div>
       </div>
       <div

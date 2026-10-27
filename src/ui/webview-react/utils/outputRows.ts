@@ -644,8 +644,13 @@ function getStreamingChunk(
  * OUTPUT_ROW_HORIZONTAL_PADDING there, not this.
  */
 const OUTPUT_ROW_HORIZONTAL_CHROME = 72;
-// Includes the trailing pin (16) + gap-x-2 (8) added beside the hide button.
-const HEADER_HORIZONTAL_CHROME = 164;
+// Row padding plus glyph slack; the actions column is modelled separately.
+const HEADER_HORIZONTAL_CHROME = 118;
+const HEADER_COLUMN_GAP = 6; // gap-x-(--spacing-sm) between title and actions
+const HEADER_ACTION_GAP = 8; // gap-x-2 between actions
+const HEADER_ACTION_ICON_WIDTH = 16; // hide and pin codicons
+const HEADER_CHANGES_ICON_WIDTH = 20; // diff codicon (16) + gap-1 (4)
+const HEADER_ACTION_ROW_GAP = 4; // gap-y-1 between wrapped action lines
 const STATS_HORIZONTAL_CHROME = 96;
 const OUTPUT_BLOCK_VERTICAL_CHROME = 32;
 const THINKING_LABEL_HEIGHT = 18;
@@ -1117,21 +1122,54 @@ function estimateCliHeaderHeight(
     .filter((value): value is string => Boolean(value && value.trim()))
     .join(" ");
   const smFontSize = Math.max(11, outputFontSize - 1);
+  const charWidthMultiplier = 0.58;
+  const charWidth = Math.max(5.5, smFontSize * charWidthMultiplier);
+
+  // Mirror CliHeaderRowView's flex layout: the title and actions columns start
+  // at their single-line widths and give up any overflow in proportion to
+  // them, the actions never narrower than their widest item. A narrowed
+  // actions column wraps the change viewer below hide + pin.
+  const iconsWidth = 2 * HEADER_ACTION_ICON_WIDTH + HEADER_ACTION_GAP;
+  const changesWidth =
+    row.promptUndo && row.promptUndo.summary.total > 0
+      ? HEADER_CHANGES_ICON_WIDTH +
+        row.promptUndo.summary.label.length * charWidth
+      : 0;
+  const actionsMaxWidth =
+    changesWidth > 0
+      ? changesWidth + HEADER_ACTION_GAP + iconsWidth
+      : iconsWidth;
+  const actionsMinWidth = Math.max(changesWidth, iconsWidth);
+  const titleWidth = headerText.length * charWidth;
+  const overflow =
+    titleWidth +
+    HEADER_COLUMN_GAP +
+    actionsMaxWidth -
+    resolveContentWidth(outputContentWidth, HEADER_HORIZONTAL_CHROME);
+  const actionsWidth =
+    overflow > 0
+      ? Math.max(
+          actionsMinWidth,
+          actionsMaxWidth -
+            (overflow * actionsMaxWidth) / (titleWidth + actionsMaxWidth)
+        )
+      : actionsMaxWidth;
+  const actionLines = actionsWidth < actionsMaxWidth ? 2 : 1;
+
   const lineCount = Math.max(
     1,
     estimateWrappedLineCount(headerText, outputContentWidth, smFontSize, {
-      chrome: HEADER_HORIZONTAL_CHROME,
-      charWidthMultiplier: 0.58,
+      chrome: HEADER_HORIZONTAL_CHROME + HEADER_COLUMN_GAP + actionsWidth,
+      charWidthMultiplier,
     })
   );
   const lineHeight = Math.max(16, smFontSize * 1.4);
-  const actionLines =
-    row.promptUndo && row.promptUndo.summary.total > 0 ? 1 : 0;
 
   return (
-    lineCount * lineHeight +
-    actionLines * Math.max(18, outputFontSize * 1.4) +
-    HEADER_VERTICAL_CHROME
+    Math.max(
+      lineCount * lineHeight,
+      actionLines * lineHeight + (actionLines - 1) * HEADER_ACTION_ROW_GAP
+    ) + HEADER_VERTICAL_CHROME
   );
 }
 
