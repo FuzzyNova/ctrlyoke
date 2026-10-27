@@ -1,8 +1,14 @@
 import { act, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { PromptChipRail } from "@components/prompts/PromptChipRail";
 import { WorkflowStepRowFrame } from "@components/prompts/WorkflowStepRow";
 import { useUiStore } from "@store/uiStore";
-import { FINAL_STEP_PHASES, STEP_STATUS } from "@/types/messages";
+import { useWorkflowStore } from "@store/workflowStore";
+import {
+  EXECUTION_STATES,
+  FINAL_STEP_PHASES,
+  STEP_STATUS,
+} from "@/types/messages";
 import { getTargetKey } from "@utils/outputProjection";
 
 function renderFrame(index: number) {
@@ -56,6 +62,36 @@ describe("WorkflowStepRowFrame in-output-view marker", () => {
     });
     renderFrame(0);
     expect(screen.getByText("1")).not.toHaveAttribute("data-in-output-view");
+  });
+});
+
+describe("PromptChipRail in-output-view marker", () => {
+  afterEach(() => {
+    useUiStore.setState({ outputInViewTargetKeys: [] });
+    useWorkflowStore.getState().resetWorkflow();
+  });
+
+  it("brightens the chip's number while its output is in the output viewport", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "First" }, { prompt: "Second" }],
+      executionState: EXECUTION_STATES.IDLE,
+    });
+    useUiStore.setState({
+      outputInViewTargetKeys: [
+        getTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, index: 1 }),
+      ],
+    });
+    render(<PromptChipRail onExpand={vi.fn()} />);
+
+    const numberOf = (index: number) =>
+      document.querySelector(
+        `[data-workflow-chip-index="${index}"] span.font-semibold`
+      );
+    expect(numberOf(0)).not.toHaveAttribute("data-in-output-view");
+    expect(numberOf(0)).toHaveClass("text-description-fg");
+    expect(numberOf(1)).toHaveAttribute("data-in-output-view", "true");
+    expect(numberOf(1)).toHaveClass("text-foreground");
   });
 });
 

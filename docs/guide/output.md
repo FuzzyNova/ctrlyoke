@@ -33,14 +33,17 @@ worktree and whether its changes were merged.
 When one step fills the pane and you scroll past its header, the header and
 the first two lines of its prompt (or a script's directory and command) stay at
 the top, under the banner. When you scroll back to the real header, the
-stuck copy is replaced by it. For a parallel group, the group's header stays
+stuck copy is replaced by it. Scrolling up from the next step, the header slides
+down into place as that step leaves the bottom of the pane. For a parallel group, the group's header stays
 instead, with the members whose output is on screen underlined. Click the pin on
 any step header to turn this off for every step, and click it again to turn it
 back on.
 
 The steps panel marks the steps whose output is on screen with a bar beside
 their step numbers, so you can see where you are in a long workflow even when
-the minimap's thumb covers several markers.
+the minimap's thumb covers several markers. When the panel is collapsed to its
+rail of chips, those chips get a brighter number and a bar inside their left
+edge.
 
 ## The toolbar
 

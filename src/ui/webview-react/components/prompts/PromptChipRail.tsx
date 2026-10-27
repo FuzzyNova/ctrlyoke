@@ -75,6 +75,7 @@ import { isStepExecutionLocked } from "@utils/stepCapabilities";
 import { Icon } from "../shared/Icon";
 import { ParallelStepsIcon } from "../shared/ParallelStepsIcon";
 import { getStepAssistantTextForCopy } from "@utils/outputUtils";
+import { InOutputViewBar, useIsStepInOutputView } from "./InOutputViewMarker";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -184,6 +185,7 @@ function ChipContent({
   onOpenContextMenu,
 }: ChipProps) {
   const isMultiSelected = useIsStepMultiSelected(stepIndex);
+  const isInOutputView = useIsStepInOutputView(stepIndex);
   const longPressHandlers = useLongPress(onOpenContextMenu);
   return (
     <button
@@ -213,6 +215,9 @@ function ChipContent({
         className={`absolute left-0 top-0 bottom-0 w-[2px] ${stepColor ? "" : getChipBorderClass(status)}`}
         style={stepColor ? { backgroundColor: stepColor } : undefined}
       />
+      {/* In view in the output pane: the same bar as the steps panel, just
+          inside the identity bar (the right edge holds the context fill). */}
+      {isInOutputView && <InOutputViewBar className="left-[2px] w-[2px]" />}
       {/* One centered row per piece of info, so nothing ever has to share
           horizontal space and crowd something else out:
           number, status icon, type icon. Numbers >= 1000 shrink to fit and
@@ -220,10 +225,11 @@ function ChipContent({
           Context % is conveyed by the right-edge fill bar below, not text. */}
       <div className="flex w-full flex-col items-center gap-y-0.5 overflow-hidden">
         <span
-          className={`truncate font-semibold text-description-fg leading-none select-none ${
-            slotNumber >= 1000 ? "text-xxs" : "text-sm"
-          }`}
+          className={`truncate font-semibold leading-none select-none ${
+            isInOutputView ? "text-foreground" : "text-description-fg"
+          } ${slotNumber >= 1000 ? "text-xxs" : "text-sm"}`}
           title={slotNumber >= 1000 ? String(slotNumber) : undefined}
+          data-in-output-view={isInOutputView ? "true" : undefined}
         >
           {slotNumber}
         </span>

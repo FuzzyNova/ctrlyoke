@@ -37,7 +37,8 @@ export interface OutputStickyStep {
   previewRow?: number;
   /**
    * Upward shift (<= 0) while the section's next header pushes this one out,
-   * so two headers never overlap.
+   * so two headers never overlap, or while the next step's output sits within
+   * one header height below the viewport, so the header slides in and out.
    */
   offsetPx: number;
 }
@@ -252,10 +253,19 @@ export function resolveOutputViewportSteps({
 
   const headerRow = section.headerRows[headerPosition];
   const nextHeaderRow = section.headerRows[headerPosition + 1];
-  const offsetPx =
+  const pushOffsetPx =
     nextHeaderRow === undefined
       ? 0
       : Math.min(0, rowStarts[nextHeaderRow] - viewportTop - stickyHeightPx);
+  // The next step's output is just below the bottom edge: tie the header to
+  // that distance, so scrolling up past a step boundary slides it in from the
+  // top over its own height instead of popping in the moment the lower step
+  // leaves, and scrolling down slides it back out before that step arrives.
+  const revealOffsetPx =
+    section.endRow < rows.length
+      ? Math.min(0, rowStarts[section.endRow] - viewportBottom - stickyHeightPx)
+      : 0;
+  const offsetPx = Math.min(pushOffsetPx, revealOffsetPx);
 
   return {
     inViewTargetKeys,

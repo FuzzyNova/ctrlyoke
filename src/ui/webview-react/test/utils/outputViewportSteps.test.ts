@@ -192,9 +192,32 @@ describe("resolveOutputViewportSteps", () => {
       offsetPx: -20,
     });
     // Past it, the retry header is the one stuck.
-    expect(resolveAt(401, 250).sticky).toEqual({
+    expect(resolveAt(401, 200).sticky).toEqual({
       headerRow: 4,
       previewRow: 5,
+      offsetPx: 0,
+    });
+  });
+
+  it("slides the header in from the top as the next step leaves the bottom", () => {
+    // The group after step 2 starts at 1100. Its first row has just left the
+    // bottom edge, so step 2's header is mounted but still fully above the
+    // top...
+    expect(resolveAt(900, 200).sticky).toEqual({
+      headerRow: 8,
+      previewRow: 9,
+      offsetPx: -60,
+    });
+    // ...comes down as the boundary moves further below...
+    expect(resolveAt(870, 200).sticky?.offsetPx).toBe(-30);
+    // ...and is fully in place one header height later.
+    expect(resolveAt(840, 200).sticky?.offsetPx).toBe(0);
+    expect(resolveAt(810, 200).sticky?.offsetPx).toBe(0);
+  });
+
+  it("never slides the last step's header, which has no step below it", () => {
+    expect(resolveAt(1601, 99).sticky).toEqual({
+      headerRow: 16,
       offsetPx: 0,
     });
   });
@@ -209,7 +232,7 @@ describe("resolveOutputViewportSteps", () => {
   });
 
   it("sticks a parallel group's header, never a member's, and reports every member in view", () => {
-    const result = resolveAt(1350, 250);
+    const result = resolveAt(1301, 200);
     expect(result.sticky).toEqual({ headerRow: 11, offsetPx: 0 });
     expect(result.inViewTargetKeys).toEqual([
       getTargetKey(target(3)),
