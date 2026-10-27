@@ -1907,7 +1907,7 @@ export class CliIntegration extends HarnessIntegration {
     hooksDisabled: boolean
   ): HookEvent[] {
     return resolveHookNotificationPlan(
-      this.provider.config.harnessId as HarnessId,
+      this.provider.config.harnessId,
       configService.getAll().notifications,
       { hooksDisabled }
     ).installEvents;
