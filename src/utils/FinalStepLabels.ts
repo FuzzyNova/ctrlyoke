@@ -27,3 +27,18 @@ export function formatFinalPassPhrase(passNumber: number): string {
 export function formatFinalPassBadge(passNumber: number): string {
   return `Pass ${passNumber}`;
 }
+
+/** Bare pass number or range for tight spaces, e.g. "2" or "1–3". */
+export function formatFinalPassRangeCompact(
+  first: number,
+  last: number
+): string {
+  return first === last ? String(first) : `${first}–${last}`;
+}
+
+/** Badge text for a span of passes, e.g. "Pass 2" or "Passes 1–3". */
+export function formatFinalPassRangeBadge(first: number, last: number): string {
+  return first === last
+    ? formatFinalPassBadge(first)
+    : `Passes ${formatFinalPassRangeCompact(first, last)}`;
+}

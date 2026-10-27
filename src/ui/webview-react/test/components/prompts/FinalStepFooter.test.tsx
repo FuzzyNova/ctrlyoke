@@ -75,7 +75,7 @@ describe("FinalStepFooter", () => {
     expect(toggle.querySelector(".codicon-check")).toBeInTheDocument();
   });
 
-  it("shows the disabled state once, with a warning-colored toggle", () => {
+  it("shows the disabled state by icon, toggle and tooltip, not a label", () => {
     render(
       <FinalStepFooter
         {...buildProps()}
@@ -85,8 +85,12 @@ describe("FinalStepFooter", () => {
       />
     );
 
-    expect(screen.getByText("disabled")).toHaveClass("text-warning-fg");
+    expect(screen.queryByText("disabled")).not.toBeInTheDocument();
     expect(screen.queryByText("Disabled")).not.toBeInTheDocument();
+    const row = screen
+      .getAllByRole("button", { name: "Final step" })
+      .find((el) => el.getAttribute("title"));
+    expect(row?.getAttribute("title")).toContain("Disabled");
     const toggle = screen.getByRole("button", { name: "Enable final step" });
     expect(toggle).toHaveAttribute("aria-pressed", "true");
     expect(toggle).toHaveClass("text-warning-fg");

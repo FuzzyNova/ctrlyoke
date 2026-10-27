@@ -43,7 +43,10 @@ The steps panel marks the steps whose output is on screen with a bar beside
 their step numbers, so you can see where you are in a long workflow even when
 the minimap's thumb covers several markers. When the panel is collapsed to its
 rail of chips, those chips get a brighter number and a bar inside their left
-edge.
+edge. The final step is marked the same way while any of its passes is on
+screen. Once it has run more than once, its row also names the pass you are
+reading (for example "Pass 1" beside the current "Pass 3"), and its chip shows
+that pass's number.
 
 ## The toolbar
 

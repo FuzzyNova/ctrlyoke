@@ -75,7 +75,13 @@ import { isStepExecutionLocked } from "@utils/stepCapabilities";
 import { Icon } from "../shared/Icon";
 import { ParallelStepsIcon } from "../shared/ParallelStepsIcon";
 import { getStepAssistantTextForCopy } from "@utils/outputUtils";
-import { InOutputViewBar, useIsStepInOutputView } from "./InOutputViewMarker";
+import {
+  describeFinalPassesInView,
+  InOutputViewBar,
+  useFinalStepPassesInOutputView,
+  useIsStepInOutputView,
+} from "./InOutputViewMarker";
+import { formatFinalPassRangeCompact } from "@root/utils/FinalStepLabels";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -266,6 +272,8 @@ function ChipContent({
 
 type FinalStepChipProps = {
   status: StepStatus;
+  /** Current pass index; passes 1..loopCount + 1 may have output. */
+  loopCount: number;
   stepColor?: string;
   hasFinalStep: boolean;
   isDisabled: boolean;
@@ -277,6 +285,7 @@ type FinalStepChipProps = {
 
 function FinalStepChip({
   status,
+  loopCount,
   stepColor,
   hasFinalStep,
   isDisabled,
@@ -287,10 +296,11 @@ function FinalStepChip({
 }: FinalStepChipProps) {
   const borderBarClass = stepColor ? "" : getChipBorderClass(status);
   const longPressHandlers = useLongPress(onOpenContextMenu);
+  const passesInView = useFinalStepPassesInOutputView(loopCount + 1);
   return (
     <button
       type="button"
-      className="relative flex h-10 appearance-none flex-col items-center justify-center overflow-hidden border-0 border-t-2 border-panel-border bg-transparent px-1 text-inherit transition-colors hover:bg-toolbar-hover-bg"
+      className="relative flex min-h-10 appearance-none flex-col items-center justify-center overflow-hidden border-0 border-t-2 border-panel-border bg-transparent px-1 py-1 text-inherit transition-colors hover:bg-toolbar-hover-bg"
       onClick={onChipClick}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -298,16 +308,21 @@ function FinalStepChip({
         onOpenContextMenu(e.clientX, e.clientY);
       }}
       {...longPressHandlers}
-      title="Final Step — right-click for options"
+      title={`Final Step — right-click for options${
+        passesInView ? `\n${describeFinalPassesInView(passesInView)}` : ""
+      }`}
       aria-label="Final step"
     >
       {showPauseBoundaryBefore && <PauseBoundary />}
-      {/* Left status border bar */}
+      {/* Left status border bar. "FINAL" spans nearly the whole rail, so
+          while in view the two bars share the identity bar's 2px instead of
+          widening into the "F". */}
       <div
         data-final-step-identity-bar
-        className={`absolute left-0 top-0 bottom-0 w-[2px] ${borderBarClass}`}
+        className={`absolute left-0 top-0 bottom-0 ${passesInView ? "w-px" : "w-[2px]"} ${borderBarClass}`}
         style={stepColor ? { backgroundColor: stepColor } : undefined}
       />
+      {passesInView && <InOutputViewBar className="left-px w-px" />}
       {/* Row 1: "FINAL" label */}
       <div className="flex justify-center w-full">
         <span
@@ -324,6 +339,15 @@ function FinalStepChip({
           className="text-base"
         />
       </div>
+      {/* Row 3, only with several passes: which one is on screen. */}
+      {loopCount > 0 && passesInView && (
+        <span
+          className="mt-0.5 max-w-full truncate text-xxs leading-none font-semibold text-foreground select-none"
+          data-testid="final-step-chip-passes-in-view"
+        >
+          {formatFinalPassRangeCompact(passesInView.first, passesInView.last)}
+        </span>
+      )}
       {contextPct !== undefined && (
         <div className="absolute right-0 top-0 bottom-0 w-[2px] overflow-hidden">
           <div
@@ -776,6 +800,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
       {/* Final step chip — pinned at bottom, always visible */}
       <FinalStepChip
         status={finalStepEffectiveStatus}
+        loopCount={finalStepLoopCount}
         stepColor={finalStepColor}
         hasFinalStep={hasFinalStep}
         isDisabled={finalStep?.enabled === false}

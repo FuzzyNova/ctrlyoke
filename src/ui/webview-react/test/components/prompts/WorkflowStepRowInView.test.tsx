@@ -1,6 +1,8 @@
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { FinalStepFooter } from "@components/prompts/FinalStepFooter";
 import { PromptChipRail } from "@components/prompts/PromptChipRail";
+import type { WorkflowStep } from "@store/workflowStore";
 import { WorkflowStepRowFrame } from "@components/prompts/WorkflowStepRow";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
@@ -92,6 +94,94 @@ describe("PromptChipRail in-output-view marker", () => {
     expect(numberOf(0)).toHaveClass("text-description-fg");
     expect(numberOf(1)).toHaveAttribute("data-in-output-view", "true");
     expect(numberOf(1)).toHaveClass("text-foreground");
+  });
+});
+
+describe("final step in-output-view marker", () => {
+  const finalKey = (loopIndex: number) =>
+    getTargetKey({ kind: FINAL_STEP_PHASES.FINAL_STEP, index: loopIndex });
+
+  function renderFooter(loopCount: number) {
+    return render(
+      <FinalStepFooter
+        finalStep={{ prompt: "Final prompt" } as WorkflowStep}
+        status={null}
+        loopCount={loopCount}
+        phase={FINAL_STEP_PHASES.FINAL_STEP}
+        isExpanded={false}
+        isSelected={false}
+        isReadOnly
+        isDisabled={false}
+        onSelect={vi.fn()}
+        onToggleExpanded={vi.fn()}
+        onToggleEnabled={vi.fn()}
+      />
+    );
+  }
+
+  afterEach(() => {
+    useUiStore.setState({ outputInViewTargetKeys: [] });
+    useWorkflowStore.getState().resetWorkflow();
+  });
+
+  it("names the pass on screen when the final step has run more than once", () => {
+    useUiStore.setState({ outputInViewTargetKeys: [finalKey(0)] });
+    renderFooter(2);
+    expect(screen.getByTestId("final-step-passes-in-view")).toHaveTextContent(
+      "Pass 1"
+    );
+    // The current pass badge is unchanged beside it.
+    expect(screen.getByText("Pass 3")).toBeInTheDocument();
+
+    act(() => {
+      useUiStore.setState({
+        outputInViewTargetKeys: [finalKey(1), finalKey(2)],
+      });
+    });
+    expect(screen.getByTestId("final-step-passes-in-view")).toHaveTextContent(
+      "Passes 2–3"
+    );
+
+    act(() => {
+      useUiStore.setState({
+        outputInViewTargetKeys: [
+          getTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, index: 0 }),
+        ],
+      });
+    });
+    expect(
+      screen.queryByTestId("final-step-passes-in-view")
+    ).not.toBeInTheDocument();
+  });
+
+  it("marks a single pass with the bar and tooltip only", () => {
+    useUiStore.setState({ outputInViewTargetKeys: [finalKey(0)] });
+    renderFooter(0);
+    expect(
+      screen.queryByTestId("final-step-passes-in-view")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Final step" }).getAttribute("title")
+    ).toContain("Showing pass 1 in the output pane");
+  });
+
+  it("shows the in-view pass on the chip rail's final chip", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "First" }],
+      finalStep: { prompt: "Final" },
+      finalStepLoopCount: 1,
+      executionState: EXECUTION_STATES.IDLE,
+    });
+    useUiStore.setState({ outputInViewTargetKeys: [finalKey(1)] });
+    render(<PromptChipRail onExpand={vi.fn()} />);
+
+    expect(
+      screen.getByTestId("final-step-chip-passes-in-view")
+    ).toHaveTextContent("2");
+    expect(
+      screen.getByRole("button", { name: "Final step" }).getAttribute("title")
+    ).toContain("Showing pass 2 in the output pane");
   });
 });
 

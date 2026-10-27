@@ -13,7 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or command stay at the top below the run banner while you scroll through its
   output. A parallel group keeps its group header there instead. A pin on every
   step header turns this on or off for all steps. The steps panel and its
-  collapsed chip rail also mark the steps whose output is currently on screen.
+  collapsed chip rail also mark the steps whose output is currently on screen,
+  including the final step and which of its passes you are reading.
+
+- A disabled final step's row in the steps panel no longer says "disabled";
+  its status icon and toggle show it, and its tooltip names it. The row no
+  longer overflows the panel and gives it a horizontal scrollbar.
 
 - The dashboard stays responsive on large running workflows. Opening one no
   longer rebuilds the output pane once per completed step, bursts of updates

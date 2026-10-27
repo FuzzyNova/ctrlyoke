@@ -16,7 +16,16 @@ import type { CliOutput, WorkflowStep } from "../../store/workflowStore";
 import { KEYBOARD_KEYS, STEP_TYPES } from "@root/types/DashboardConstants";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import { Icon } from "../shared/Icon";
-import { formatFinalPassBadge } from "@root/utils/FinalStepLabels";
+import {
+  formatFinalPassBadge,
+  formatFinalPassRangeBadge,
+  formatFinalPassRangeCompact,
+} from "@root/utils/FinalStepLabels";
+import {
+  describeFinalPassesInView,
+  InOutputViewBar,
+  useFinalStepPassesInOutputView,
+} from "./InOutputViewMarker";
 
 function isScriptStep(step: WorkflowStep): step is ScriptStep {
   return step.type === STEP_TYPES.SCRIPT;
@@ -113,10 +122,11 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
   const rowStateClass = isSelected
     ? "bg-list-active-bg text-list-active-fg"
     : "group-hover/final-step:bg-list-hover-bg text-foreground";
+  const passesInView = useFinalStepPassesInOutputView(loopCount + 1);
   const finalStepTooltip = hasFinalStep
     ? `Final Step — ${isDisabled ? "Disabled" : "Enabled"}${
         loopCount > 0 ? ` — ${formatFinalPassBadge(loopCount + 1)}` : ""
-      }`
+      }${passesInView ? `\n${describeFinalPassesInView(passesInView)}` : ""}`
     : "Final Step — Not set";
 
   return (
@@ -127,6 +137,9 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
         style={stepColor ? { backgroundColor: stepColor } : undefined}
         aria-hidden="true"
       />
+      {/* Just inside the identity bar: the footer has no number column for
+          the queue rows' bar to sit beside. */}
+      {passesInView && <InOutputViewBar className="left-[2px] w-[3px]" />}
       {hasFinalStep && isExpanded && finalStep && (
         <div
           className={`px-3 py-2 border-b border-panel-border ${rowStateClass} ${isSelectionReadOnly ? "" : "cursor-pointer"} ${isDisabled && !isSelected ? "opacity-85" : ""}`}
@@ -204,7 +217,9 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
       )}
 
       <div
-        className={`h-[39px] px-2 flex items-center gap-2 ${rowStateClass} ${isSelectionReadOnly ? "opacity-75" : "cursor-pointer"}`}
+        // Never wider than the panel: an overflowing row would give the
+        // whole steps panel a horizontal scrollbar.
+        className={`h-[39px] min-w-0 overflow-hidden px-2 flex items-center gap-2 ${rowStateClass} ${isSelectionReadOnly ? "opacity-75" : "cursor-pointer"}`}
         role="button"
         tabIndex={0}
         title={finalStepTooltip}
@@ -252,19 +267,37 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
             script
           </span>
         )}
-        {/* Enabled is the default and goes unlabeled, matching queue rows and
-            the editor header, which only call out the disabled state. */}
-        {!hasFinalStep ? (
+        {/* Disabled needs no label: the status icon and the warning-colored
+            toggle show it, and the tooltip names it. */}
+        {!hasFinalStep && (
           <span className="text-xs italic text-description-fg">not set</span>
-        ) : isDisabled ? (
-          <span className="text-xs italic text-warning-fg">disabled</span>
-        ) : null}
+        )}
         {loopCount > 0 && (
           <span className="ml-1 shrink-0 whitespace-nowrap rounded-sm bg-badge-bg px-1.5 py-px text-xxs text-badge-fg">
             {isNarrow ? loopCount + 1 : formatFinalPassBadge(loopCount + 1)}
           </span>
         )}
-        <div className="ml-auto flex items-center gap-1">
+        {/* With several passes, name the one being read: the bar alone can't
+            tell an earlier pass from the latest. */}
+        {loopCount > 0 && passesInView && (
+          <span
+            className="flex shrink-0 items-center gap-0.5 whitespace-nowrap text-xxs text-foreground"
+            data-testid="final-step-passes-in-view"
+            title={describeFinalPassesInView(passesInView)}
+          >
+            <Icon name="codicon-eye" className="text-xs" />
+            {isNarrow
+              ? formatFinalPassRangeCompact(
+                  passesInView.first,
+                  passesInView.last
+                )
+              : formatFinalPassRangeBadge(
+                  passesInView.first,
+                  passesInView.last
+                )}
+          </span>
+        )}
+        <div className="ml-auto flex shrink-0 items-center gap-1">
           {hasFinalStep && !isReadOnly && (
             <button
               type="button"
