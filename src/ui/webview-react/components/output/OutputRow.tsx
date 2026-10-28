@@ -111,6 +111,7 @@ import { formatClockDuration } from "@utils/time";
 import { describeRowTiming } from "@utils/outputRowTiming";
 import {
   OUTPUT_BLOCK_BASE,
+  OUTPUT_STEP_LEAD_BLOCK_BASE,
   TOOL_RESULT_LINE,
   TOOL_RESULT_STANDALONE_INDENT,
   getStepIdentityBarStyle,
@@ -137,7 +138,10 @@ import type {
   ScriptOutputRow,
   StructuredEventRow,
 } from "@utils/outputRows";
-import { SUBAGENT_ROW_INDENT_PX } from "@utils/outputRows";
+import {
+  CLI_HEADER_MAX_TITLE_LINES,
+  SUBAGENT_ROW_INDENT_PX,
+} from "@utils/outputRows";
 import {
   getDisplayStructuredPatch,
   getSnapshotBeforeContent,
@@ -1348,7 +1352,17 @@ StructuredEventContent.displayName = "StructuredEventContent";
 const CLI_HEADER_ROW_CLASS =
   "font-semibold mb-(--spacing-sm) text-(--fg-secondary) pb-(--spacing-xs) border-b border-(--border-color) text-(length:--cy-output-font-size-sm) flex min-w-0 items-start gap-x-(--spacing-sm)";
 const CLI_HEADER_TITLE_CLASS =
-  "inline-flex min-w-0 flex-auto flex-wrap items-center gap-x-1 gap-y-[2px]";
+  "inline-flex min-w-0 flex-auto flex-wrap items-center gap-x-1 gap-y-[2px] overflow-hidden";
+/** The `gap-y-[2px]` above. */
+const CLI_HEADER_TITLE_ROW_GAP_PX = 2;
+// Clips the title column at CLI_HEADER_MAX_TITLE_LINES of its own line height
+// plus the row gaps between them, so a narrow pane never grows the header (or
+// its pinned copy) past that many lines.
+const CLI_HEADER_TITLE_STYLE: React.CSSProperties = {
+  maxHeight: `calc(${CLI_HEADER_MAX_TITLE_LINES}lh + ${
+    (CLI_HEADER_MAX_TITLE_LINES - 1) * CLI_HEADER_TITLE_ROW_GAP_PX
+  }px)`,
+};
 
 const CliHeaderRowView: React.FC<{
   row: CliHeaderRow;
@@ -1366,7 +1380,7 @@ const CliHeaderRowView: React.FC<{
   const { output } = row;
   const promptUndoSummary = row.promptUndo?.summary;
   const promptUndoLabel = promptUndoSummary
-    ? getPromptChangeLabelParts(promptUndoSummary)
+    ? getPromptChangeLabelParts(promptUndoSummary, row.narrowLayout)
     : null;
   const timestamp = output.timestampMs ? formatTime(output.timestampMs) : "";
   const executionBadge = formatExecutionBadge(row.runIndex, row.attemptIndex);
@@ -1450,7 +1464,7 @@ const CliHeaderRowView: React.FC<{
           : "codicon-checklist";
     return (
       <div className={CLI_HEADER_ROW_CLASS}>
-        <span className={CLI_HEADER_TITLE_CLASS}>
+        <span className={CLI_HEADER_TITLE_CLASS} style={CLI_HEADER_TITLE_STYLE}>
           {timestamp && <span className="output-timestamp">[{timestamp}]</span>}
           <span className="inline-flex min-w-0 items-center gap-1">
             <span>[</span>
@@ -1483,7 +1497,7 @@ const CliHeaderRowView: React.FC<{
 
   return (
     <div className={CLI_HEADER_ROW_CLASS}>
-      <span className={CLI_HEADER_TITLE_CLASS}>
+      <span className={CLI_HEADER_TITLE_CLASS} style={CLI_HEADER_TITLE_STYLE}>
         {timestamp && <span className="output-timestamp">[{timestamp}]</span>}
         <span className="inline-flex min-w-0 items-center gap-1">
           <span>[</span>
@@ -1497,9 +1511,13 @@ const CliHeaderRowView: React.FC<{
             {stepNameContent ?? stepDisplayName}
           </span>
         )}
-        {/* One line at most: a long model name truncates (full name in the
-            tooltip) instead of wrapping the header taller, which matters
-            most when the header is pinned on a narrow pane. */}
+        {executionBadge && (
+          <span className="ml-1 text-description-fg">{executionBadge}</span>
+        )}
+        {streamingIndicator}
+        {/* Last, so it is what the title's line cap clips. One line at most: a
+            long model name truncates (full name in the tooltip) instead of
+            wrapping the header taller. */}
         {(harnessShortName || modelLabel) && (
           <span
             className="flex min-w-0 max-w-full items-center whitespace-nowrap text-description-fg font-normal text-(length:--cy-output-font-size-xs)"
@@ -1517,10 +1535,6 @@ const CliHeaderRowView: React.FC<{
             )}
           </span>
         )}
-        {executionBadge && (
-          <span className="ml-1 text-description-fg">{executionBadge}</span>
-        )}
-        {streamingIndicator}
       </span>
       {renderActions(
         promptUndoSummary && promptUndoSummary.total > 0 && (
@@ -1775,12 +1789,23 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
  * and with references cited in Markdown replies. Deliberately NOT Markdown: the
  * prompt uses ctrlyoke's own reference syntax, which Markdown would mangle.
  */
+function getStepLeadBlockBase(followsHeader: boolean | undefined): string {
+  return followsHeader ? OUTPUT_STEP_LEAD_BLOCK_BASE : OUTPUT_BLOCK_BASE;
+}
+
 const PromptReferenceText: React.FC<{
   text: string;
   matches: RowFindDecoration["matches"];
   atomicContextReferences: boolean;
   priorContextStepCount?: number;
-}> = ({ text, matches, atomicContextReferences, priorContextStepCount }) => {
+  blockClassName: string;
+}> = ({
+  text,
+  matches,
+  atomicContextReferences,
+  priorContextStepCount,
+  blockClassName,
+}) => {
   // Skip references inside ``` fenced blocks — they aren't expanded when the
   // prompt runs, so CodeMirror doesn't decorate them either; match that here.
   const refs = useMemo(() => findAtomicReferences(text), [text]);
@@ -1826,7 +1851,7 @@ const PromptReferenceText: React.FC<{
 
   return (
     <div
-      className={`${OUTPUT_BLOCK_BASE} border-l-output-prompt-border text-(--fg-primary)`}
+      className={`${blockClassName} border-l-output-prompt-border text-(--fg-primary)`}
     >
       {nodes}
     </div>
@@ -1929,6 +1954,7 @@ function OutputRowComponent({
           matches={getFieldMatches("prompt")}
           atomicContextReferences={atomicContextReferences}
           priorContextStepCount={priorContextStepCount}
+          blockClassName={getStepLeadBlockBase(row.followsHeader)}
         />
       );
       break;
@@ -1945,7 +1971,7 @@ function OutputRowComponent({
       );
       content = (
         <div
-          className={`${OUTPUT_BLOCK_BASE} ${borderClass} text-(--fg-primary) whitespace-pre-wrap wrap-anywhere`}
+          className={`${getStepLeadBlockBase(row.followsHeader)} ${borderClass} text-(--fg-primary) whitespace-pre-wrap wrap-anywhere`}
         >
           {header && (
             <div className="font-bold opacity-60 select-none">{header}</div>

@@ -23,9 +23,17 @@ export const TOOL_ERROR_LINE =
 /** Indent for a ⎿ line rendered standalone, outside a ToolCallBlock. */
 export const TOOL_RESULT_STANDALONE_INDENT = "pl-4 ml-2";
 
+const OUTPUT_BLOCK_CHROME =
+  "py-(--spacing-sm) px-(--spacing-sm) border-l-[3px] whitespace-pre-wrap wrap-anywhere font-mono text-(length:--cy-output-font-size-sm) bg-transparent";
+
 /** Shared output block base (prompt/response/command containers) */
-export const OUTPUT_BLOCK_BASE =
-  "py-(--spacing-sm) px-(--spacing-sm) my-(--spacing-sm) border-l-[3px] whitespace-pre-wrap wrap-anywhere font-mono text-(length:--cy-output-font-size-sm) bg-transparent";
+export const OUTPUT_BLOCK_BASE = `${OUTPUT_BLOCK_CHROME} my-(--spacing-sm)`;
+
+/**
+ * A prompt/command block sitting directly under its step header: only
+ * `--cy-output-step-lead-gap` above it, so the two read as one unit.
+ */
+export const OUTPUT_STEP_LEAD_BLOCK_BASE = `${OUTPUT_BLOCK_CHROME} mt-(--cy-output-step-lead-gap) mb-(--spacing-sm)`;
 
 /** Width of the per-row step identity bar painted by `getStepIdentityBarStyle`. */
 export const STEP_IDENTITY_BAR_WIDTH_PX = 2;

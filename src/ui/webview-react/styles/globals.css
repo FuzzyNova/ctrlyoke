@@ -672,6 +672,11 @@
   --cy-output-font-size-sm: calc(var(--cy-output-font-size) - 1px);
   --cy-output-font-size-xs: calc(var(--cy-output-font-size) - 2px);
 
+  /* Gap between a step header and the prompt/command block right under it.
+     Tighter than the usual block margin so the pair reads as one unit; the
+     pinned step header's preview clip is sized from it too. */
+  --cy-output-step-lead-gap: 2px;
+
   /* Output minimap rail — split into two vertical tracks side by side, styled
      after VS Code's own overview-ruler (pills) + minimap (diff) split: a
      transparent step-pills track (left) and an opaque diff-overview track
@@ -703,6 +708,11 @@
     0 0 0 1px var(--vscode-contrastBorder, transparent),
     0 12px 28px -12px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.45)),
     0 6px 16px -10px rgba(0, 0, 0, 0.35);
+
+  /* Pinned step header — a drop shadow cast below it onto the output, so the
+     header and its prompt read as raised above the scrolling rows. */
+  --cy-output-sticky-step-shadow: 0 6px 8px -4px
+    var(--vscode-widget-shadow, rgba(0, 0, 0, 0.45));
 
   /* Execution state badge backgrounds — used in Header.tsx.
      Chain through terminal ANSI colors as they are defined in virtually all themes. */

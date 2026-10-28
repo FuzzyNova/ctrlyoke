@@ -1391,6 +1391,13 @@ describe("outputRows", () => {
     expect(bashRow.collapsedToolOutputMaxCharacters).toBeLessThan(1200);
     expect(bashRow.showParamsLabel).toBe(false);
     expect(toolCallRow.showParamsLabel).toBe(false);
+    const headerRow = result.rows.find(
+      (row) => row.rowKind === OUTPUT_ROW_KINDS.CLI_HEADER
+    );
+    expect(
+      headerRow?.rowKind === OUTPUT_ROW_KINDS.CLI_HEADER &&
+        headerRow.narrowLayout
+    ).toBe(true);
     expect(toolCallRow.toolCall?.renderPlan.output.visibleLineCount).toBe(4);
     expect(toolCallRow.toolCall?.renderPlan.maxResultChars).toBeLessThan(1200);
   });

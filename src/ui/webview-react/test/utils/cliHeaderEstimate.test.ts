@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
 import { FINAL_STEP_PHASES } from "@/types/messages";
-import { estimateOutputRowHeight, type CliHeaderRow } from "@utils/outputRows";
+import {
+  CLI_HEADER_MAX_TITLE_LINES,
+  estimateOutputRowHeight,
+  type CliHeaderRow,
+} from "@utils/outputRows";
 
 const FONT_SIZE = 13;
 const LINE_HEIGHT = 12 * 1.4; // sm font (12) × body line-height
@@ -52,6 +56,35 @@ describe("CLI header height estimate", () => {
     expect(narrow - wide).toBeGreaterThanOrEqual(LINE_HEIGHT + 4);
     expect(narrow).toBeGreaterThanOrEqual(
       estimateOutputRowHeight(header(false), FONT_SIZE, 340)
+    );
+  });
+
+  it("never estimates the title past its line cap", () => {
+    const capped = (stepName: string) =>
+      estimateOutputRowHeight(
+        { ...header(true), stepName, narrowLayout: true },
+        FONT_SIZE,
+        240
+      );
+    const atCap = capped("Verify awaiting-input mapping ".repeat(8));
+    expect(capped("Verify awaiting-input mapping ".repeat(16))).toBe(atCap);
+    expect(atCap).toBeLessThan(
+      estimateOutputRowHeight(header(false), FONT_SIZE, 240) +
+        CLI_HEADER_MAX_TITLE_LINES * LINE_HEIGHT
+    );
+  });
+
+  it("sizes the change viewer from the compact label in a narrow layout", () => {
+    // The full label forces the actions column to wrap below hide + pin; the
+    // compact one fits beside them, so the narrow layout is no taller.
+    expect(
+      estimateOutputRowHeight(
+        { ...header(true), narrowLayout: true },
+        FONT_SIZE,
+        340
+      )
+    ).toBeLessThanOrEqual(
+      estimateOutputRowHeight(header(true), FONT_SIZE, 340)
     );
   });
 });

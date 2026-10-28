@@ -256,19 +256,34 @@ export interface CliHeaderRow extends OutputRowBase<
   attemptIndex: number;
   runIndex: number;
   promptUndo?: OutputRowPromptUndoMeta;
+  /**
+   * The pane is in the output section header's narrow tier: the header uses
+   * the compact change label, and a pinned copy previews one prompt line.
+   */
+  narrowLayout?: boolean;
 }
+
+/**
+ * Most lines a step header's title column shows; anything that wraps past it
+ * is clipped. The harness/model label renders last so it is what gives way.
+ */
+export const CLI_HEADER_MAX_TITLE_LINES = 3;
 
 export interface PromptRow extends OutputRowBase<
   typeof OUTPUT_ROW_KINDS.PROMPT
 > {
   target: OutputMessageTarget;
   text: string;
+  /** Sits directly under its step header (tightens the gap between them). */
+  followsHeader?: boolean;
 }
 
 interface CommandRowBase<
   TRowKind extends OutputRowKind,
 > extends OutputRowBase<TRowKind> {
   target: OutputMessageTarget;
+  /** Sits directly under its step header (no prompt row in between). */
+  followsHeader?: boolean;
   workingDirectory?: string;
   command: string;
   sentToRunningTerminal?: boolean;
@@ -1130,10 +1145,13 @@ function estimateCliHeaderHeight(
   // them, the actions never narrower than their widest item. A narrowed
   // actions column wraps the change viewer below hide + pin.
   const iconsWidth = 2 * HEADER_ACTION_ICON_WIDTH + HEADER_ACTION_GAP;
+  const changesSummary = row.promptUndo?.summary;
   const changesWidth =
-    row.promptUndo && row.promptUndo.summary.total > 0
+    changesSummary && changesSummary.total > 0
       ? HEADER_CHANGES_ICON_WIDTH +
-        row.promptUndo.summary.label.length * charWidth
+        (row.narrowLayout ? changesSummary.compactLabel : changesSummary.label)
+          .length *
+          charWidth
       : 0;
   const actionsMaxWidth =
     changesWidth > 0
@@ -1156,12 +1174,15 @@ function estimateCliHeaderHeight(
       : actionsMaxWidth;
   const actionLines = actionsWidth < actionsMaxWidth ? 2 : 1;
 
-  const lineCount = Math.max(
-    1,
-    estimateWrappedLineCount(headerText, outputContentWidth, smFontSize, {
-      chrome: HEADER_HORIZONTAL_CHROME + HEADER_COLUMN_GAP + actionsWidth,
-      charWidthMultiplier,
-    })
+  const lineCount = Math.min(
+    CLI_HEADER_MAX_TITLE_LINES,
+    Math.max(
+      1,
+      estimateWrappedLineCount(headerText, outputContentWidth, smFontSize, {
+        chrome: HEADER_HORIZONTAL_CHROME + HEADER_COLUMN_GAP + actionsWidth,
+        charWidthMultiplier,
+      })
+    )
   );
   const lineHeight = Math.max(16, smFontSize * 1.4);
 
@@ -2716,6 +2737,7 @@ export function buildOutputRows(
         attemptIndex,
         runIndex,
         promptUndo,
+        narrowLayout: !showParamsLabel,
         estimateSize: 44,
       });
     }
@@ -2759,12 +2781,15 @@ export function buildOutputRows(
       output = activityOutput;
     }
 
+    let emitsPromptRow = false;
     if (emitsLeadingChrome && message.prompt && !scriptish) {
+      emitsPromptRow = true;
       rows.push({
         key: `${attemptRowKeyBase}:prompt`,
         rowKind: OUTPUT_ROW_KINDS.PROMPT,
         target,
         text: message.prompt,
+        followsHeader: true,
         estimateSize: 36,
       });
     }
@@ -2779,6 +2804,7 @@ export function buildOutputRows(
         workingDirectory: output.workingDirectory,
         command: output.cliCommand,
         sentToRunningTerminal: output.cliCommandSentToRunningTerminal,
+        followsHeader: !emitsPromptRow,
         estimateSize: 32,
       });
     }

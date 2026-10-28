@@ -26,6 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   header's harness and model stay on one line; a long model name is shortened,
   with the full name in its tooltip.
 
+- A step header is at most three lines tall; in a narrow pane the harness and
+  model, now shown last, are what gets cut off. A narrow pane also shortens its
+  change link to "View N" and pins one line of the prompt instead of two. The
+  pinned header now casts a shadow over the output instead of fading out the
+  prompt's last line, and the prompt sits closer to its header.
+
 - The dashboard stays responsive on large running workflows. Opening one no
   longer rebuilds the output pane once per completed step, bursts of updates
   are applied together, and a running step's output no longer slows every
