@@ -28,17 +28,18 @@ export interface FinalPassRange {
 }
 
 /**
- * Pass number (1-based) of the first or last final-step pass in view, or 0.
+ * Pass number (1-based) of the first final-step pass in view (the last when
+ * `fromEnd`), or 0.
  * The viewport is one contiguous stretch of output, so first..last covers
  * every pass on screen.
  */
 function findFinalPassInView(
   inViewTargetKeys: readonly string[],
   passCount: number,
-  edge: keyof FinalPassRange
+  fromEnd: boolean
 ): number {
   for (let offset = 0; offset < passCount; offset++) {
-    const loopIndex = edge === "first" ? offset : passCount - 1 - offset;
+    const loopIndex = fromEnd ? passCount - 1 - offset : offset;
     if (
       inViewTargetKeys.includes(
         getTargetKey({ kind: FINAL_STEP_PHASES.FINAL_STEP, index: loopIndex })
@@ -58,10 +59,10 @@ export function useFinalStepPassesInOutputView(
   passCount: number
 ): FinalPassRange | null {
   const first = useUiStore((state) =>
-    findFinalPassInView(state.outputInViewTargetKeys, passCount, "first")
+    findFinalPassInView(state.outputInViewTargetKeys, passCount, false)
   );
   const last = useUiStore((state) =>
-    findFinalPassInView(state.outputInViewTargetKeys, passCount, "last")
+    findFinalPassInView(state.outputInViewTargetKeys, passCount, true)
   );
   return first > 0 ? { first, last } : null;
 }
