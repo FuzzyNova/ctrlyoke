@@ -1,11 +1,16 @@
 import { describe, it, expect } from "vitest";
 import {
   FINAL_STEP_PHASES,
+  HARNESS_IDS,
   OUTPUT_ROW_KINDS,
+  SCRIPT_OUTPUT_SOURCES,
 } from "@root/types/DashboardConstants";
 import type { CliEvent } from "@root/types/CliOutputTypes";
+import { getHarnessDisplayName } from "@/types/messages";
 import { describeRowTiming } from "@utils/outputRowTiming";
+import { formatTimestamp } from "@utils/time";
 import type {
+  CliHeaderRow,
   OutputRenderRow,
   PlainResponseRow,
   StructuredEventRow,
@@ -71,6 +76,81 @@ describe("describeRowTiming", () => {
     expect(
       describeRowTiming({ ...row, timestampMs: undefined })
     ).toBeUndefined();
+  });
+
+  describe("step headers", () => {
+    function headerRow(overrides: Partial<CliHeaderRow> = {}): CliHeaderRow {
+      return {
+        key: "h",
+        rowKind: OUTPUT_ROW_KINDS.CLI_HEADER,
+        target: { kind: FINAL_STEP_PHASES.FINAL_STEP, index: 6 },
+        estimateSize: 44,
+        output: {
+          elapsed: 0,
+          isStreaming: false,
+          timestampMs: 5_000,
+          structured: {
+            events: [],
+            metadata: {
+              harness: HARNESS_IDS.CLAUDE_CLI,
+              model: "unlisted-model",
+            },
+          },
+        },
+        stepIndex: 6,
+        isFinalStep: true,
+        stepLabel: "Final Step Pass 7",
+        stepName: "drain-backlog",
+        attemptIndex: 1,
+        runIndex: 0,
+        narrowLayout: true,
+        ...overrides,
+      };
+    }
+
+    it("names the start, step, attempt, harness, model and changes", () => {
+      const text = describeRowTiming(
+        headerRow({
+          promptUndo: {
+            workspacePath: "/repo",
+            allStepOutputs: [],
+            summary: {
+              total: 4,
+              undoable: 4,
+              undone: 0,
+              blocked: 0,
+              label: "View 4 changes",
+              compactLabel: "View 4",
+              title: "4 files changed",
+            },
+          },
+        })
+      );
+      expect(text?.split("\n")).toEqual([
+        `Started: ${formatTimestamp(5_000)}`,
+        "Final Step Pass 7 · drain-backlog",
+        "Retry 1",
+        `Harness: ${getHarnessDisplayName(HARNESS_IDS.CLAUDE_CLI)}`,
+        "Model: unlisted-model",
+        "4 files changed",
+      ]);
+    });
+
+    it("names a condition script by its condition", () => {
+      const row = headerRow({ attemptIndex: 0, runIndex: 0 });
+      const text = describeRowTiming({
+        ...row,
+        output: {
+          ...row.output,
+          structured: undefined,
+          source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
+        },
+      });
+      expect(text?.split("\n")).toEqual([
+        `Started: ${formatTimestamp(5_000)}`,
+        "Final Step Pass 7 · Pre-condition",
+      ]);
+    });
   });
 
   it("returns undefined without a start time or for other row kinds", () => {

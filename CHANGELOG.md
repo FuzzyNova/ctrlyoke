@@ -27,8 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the full name in its tooltip.
 
 - A step header is at most three lines tall; in a narrow pane the harness and
-  model, now shown last, are what gets cut off. A narrow pane also shortens its
-  change link to "View N" and pins one line of the prompt instead of two. The
+  model, now shown last, are what gets cut off. A narrow pane also drops the
+  header's timestamp, shortens its change link to "View N" and pins one line
+  of the prompt instead of two. Hovering a step header always shows its start
+  time, step, retry or re-run, harness, model and changed files. The
   pinned header now casts a shadow over the output instead of fading out the
   prompt's last line, and the prompt sits closer to its header.
 

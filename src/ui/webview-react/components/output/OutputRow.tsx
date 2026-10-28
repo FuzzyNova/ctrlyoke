@@ -84,6 +84,7 @@ import {
 } from "../../types/messages";
 import {
   formatExecutionBadge,
+  formatScriptConditionLabel,
   formatTime,
   getFirstWords,
   isUserStoppedMessage,
@@ -1382,7 +1383,11 @@ const CliHeaderRowView: React.FC<{
   const promptUndoLabel = promptUndoSummary
     ? getPromptChangeLabelParts(promptUndoSummary, row.narrowLayout)
     : null;
-  const timestamp = output.timestampMs ? formatTime(output.timestampMs) : "";
+  // A narrow pane leaves the start time to the row's tooltip.
+  const timestamp =
+    output.timestampMs && !row.narrowLayout
+      ? formatTime(output.timestampMs)
+      : "";
   const executionBadge = formatExecutionBadge(row.runIndex, row.attemptIndex);
   const stepDisplayName = row.stepName?.trim() ?? "";
   const displayedViewAddress = useUiStore(
@@ -1445,16 +1450,8 @@ const CliHeaderRowView: React.FC<{
       output.source !== SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP;
     const isWorktreeSetup =
       output.source === SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP;
-    const conditionLabel =
-      output.source === SCRIPT_OUTPUT_SOURCES.PRE_CONDITION
-        ? "Pre-condition"
-        : output.source === SCRIPT_OUTPUT_SOURCES.END_CONDITION
-          ? `End condition${row.attemptIndex > 0 ? ` retry ${row.attemptIndex + 1}` : ""}`
-          : isWorktreeSetup
-            ? "Worktree setup"
-            : undefined;
     const headerLabel = isConditionOutput
-      ? conditionLabel
+      ? formatScriptConditionLabel(output.source, row.attemptIndex)
       : (stepLabelContent ?? row.stepLabel);
     const headerIcon =
       output.source === SCRIPT_OUTPUT_SOURCES.PRE_CONDITION

@@ -257,8 +257,9 @@ export interface CliHeaderRow extends OutputRowBase<
   runIndex: number;
   promptUndo?: OutputRowPromptUndoMeta;
   /**
-   * The pane is in the output section header's narrow tier: the header uses
-   * the compact change label, and a pinned copy previews one prompt line.
+   * The pane is in the output section header's narrow tier: the header drops
+   * its timestamp and uses the compact change label, and a pinned copy
+   * previews one prompt line. The row's tooltip keeps all of it.
    */
   narrowLayout?: boolean;
 }
@@ -1124,9 +1125,10 @@ function estimateCliHeaderHeight(
   // Include timestamp so flex-wrap behavior matches actual rendering.
   // Use sm font size (FS-1) with body line-height (1.4) to match the header's
   // text-[cy-output-font-size-sm] class and inherited body line-height.
-  const timestamp = row.output.timestampMs
-    ? `[${new Date(row.output.timestampMs).toLocaleTimeString()}]`
-    : "";
+  const timestamp =
+    row.output.timestampMs && !row.narrowLayout
+      ? `[${new Date(row.output.timestampMs).toLocaleTimeString()}]`
+      : "";
   const headerText = [
     timestamp,
     row.stepLabel,

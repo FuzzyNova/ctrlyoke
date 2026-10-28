@@ -6,7 +6,11 @@
  */
 import { truncate } from "./string";
 import type { CliOutput as CliOutputType } from "../types/cliEvents";
-import { OUTPUT_TOOL_BADGE_LABELS } from "@root/types/DashboardConstants";
+import {
+  OUTPUT_TOOL_BADGE_LABELS,
+  SCRIPT_OUTPUT_SOURCES,
+  type ScriptOutputSource,
+} from "@root/types/DashboardConstants";
 import { getStepOutputText } from "@root/utils/StepOutputText";
 import { StepOutputTextMode } from "@root/types/DashboardConstants";
 
@@ -87,6 +91,27 @@ export function formatExecutionBadge(
   ]
     .filter((label) => label.length > 0)
     .join(" · ");
+}
+
+/**
+ * What a condition or setup script's step header calls it, e.g.
+ * "End condition retry 2"; undefined for a script step, which uses its step
+ * label.
+ */
+export function formatScriptConditionLabel(
+  source: ScriptOutputSource | undefined,
+  attemptIndex: number
+): string | undefined {
+  switch (source) {
+    case SCRIPT_OUTPUT_SOURCES.PRE_CONDITION:
+      return "Pre-condition";
+    case SCRIPT_OUTPUT_SOURCES.END_CONDITION:
+      return `End condition${attemptIndex > 0 ? ` retry ${attemptIndex + 1}` : ""}`;
+    case SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP:
+      return "Worktree setup";
+    default:
+      return undefined;
+  }
 }
 
 export function buildDiffAnchorPrefix(
