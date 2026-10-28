@@ -24,8 +24,8 @@ name, and its harness and model. Below it, in the order they happened:
 | Stats                     | Context window use, tokens, an estimated cost, the session ID, the duration, and **Copy output**. See [Reading a step's token counts](/guide/usage-and-stats#token-counts). |
 
 A banner at the top names the run, when it started, how long it has run, its
-state and its token total. Click the pin to keep it at the top of the pane while you scroll, or
-unpin it to let it scroll away with the output. While you look at an earlier
+state and its token total. It scrolls away with the output; click its pin to
+keep it at the top of the pane instead, and click again to unpin it. While you look at an earlier
 run of a workflow that is running now, the banner has a **Back to Live** link.
 For a run in a [worktree](/workflows/worktrees), the banner also shows the
 worktree and whether its changes were merged.

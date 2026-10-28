@@ -1332,7 +1332,9 @@ const initialState: UiState = {
   workspaceWorktreeOwnership: null,
   isLoading: false,
   loadingMessage: null,
-  runBannerPinned: true,
+  // Off by default: with the step header also pinned, the two together can
+  // fill most of a phone-sized output pane. Users who pinned it keep it.
+  runBannerPinned: false,
   stepHeaderPinned: true,
   outputInViewTargetKeys: [],
   toastQueue: [],

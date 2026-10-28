@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its status icon and toggle show it, and its tooltip names it. The row no
   longer overflows the panel and gives it a horizontal scrollbar.
 
+- The run summary banner at the top of the output pane is no longer pinned by
+  default, so on a phone the banner and the pinned step header don't fill the
+  pane. Dashboards that already saved a layout keep their setting. A step
+  header's harness and model stay on one line; a long model name is shortened,
+  with the full name in its tooltip.
+
 - The dashboard stays responsive on large running workflows. Opening one no
   longer rebuilds the output pane once per completed step, bursts of updates
   are applied together, and a running step's output no longer slows every

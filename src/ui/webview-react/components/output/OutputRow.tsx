@@ -1497,9 +1497,24 @@ const CliHeaderRowView: React.FC<{
             {stepNameContent ?? stepDisplayName}
           </span>
         )}
+        {/* One line at most: a long model name truncates (full name in the
+            tooltip) instead of wrapping the header taller, which matters
+            most when the header is pinned on a narrow pane. */}
         {(harnessShortName || modelLabel) && (
-          <span className="min-w-0 text-description-fg font-normal text-(length:--cy-output-font-size-xs) wrap-anywhere">
-            {[harnessShortName, modelLabel].filter(Boolean).join(" · ")}
+          <span
+            className="flex min-w-0 max-w-full items-center whitespace-nowrap text-description-fg font-normal text-(length:--cy-output-font-size-xs)"
+            title={[harnessShortName, modelLabel].filter(Boolean).join(" · ")}
+            data-testid="cli-header-harness-model"
+          >
+            {harnessShortName && (
+              <span className="shrink-0">{harnessShortName}</span>
+            )}
+            {harnessShortName && modelLabel && (
+              <span className="shrink-0 whitespace-pre"> · </span>
+            )}
+            {modelLabel && (
+              <span className="min-w-0 truncate">{modelLabel}</span>
+            )}
           </span>
         )}
         {executionBadge && (

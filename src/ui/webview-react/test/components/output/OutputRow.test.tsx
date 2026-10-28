@@ -1031,6 +1031,36 @@ describe("OutputRow auto-expand on hidden active match", () => {
     expect(container).toHaveTextContent(label);
   });
 
+  it("keeps harness and model on one line, truncating the model", () => {
+    const row: OutputRenderRow = {
+      key: "header-harness-model",
+      target: TARGET,
+      estimateSize: 44,
+      rowKind: OUTPUT_ROW_KINDS.CLI_HEADER,
+      output: {
+        structured: {
+          events: [],
+          metadata: { harness: "claude-cli", model: "claude-opus-5-5" },
+        },
+        elapsed: 0,
+        isStreaming: false,
+      },
+      stepIndex: 0,
+      isFinalStep: false,
+      stepLabel: "Step 1",
+      attemptIndex: 0,
+      runIndex: 0,
+    };
+
+    render(<OutputRow row={row} isExecutionActive={false} />);
+
+    const line = screen.getByTestId("cli-header-harness-model");
+    expect(line).toHaveClass("whitespace-nowrap");
+    expect(line.getAttribute("title")).toBe(line.textContent);
+    expect(line.textContent).toContain(" · ");
+    expect(line.lastElementChild).toHaveClass("truncate");
+  });
+
   it("renders one neutral change viewer for mixed step state", () => {
     const onPromptView = vi.fn();
     const row: OutputRenderRow = {
