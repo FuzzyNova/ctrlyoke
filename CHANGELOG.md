@@ -103,6 +103,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Managed language-server disposal stops servers before awaiting in-flight starts,
   and an unanswered initialize request now times out after 60 seconds and is reported as a crash.
+- Scrolling up a little from the bottom of a finished run's output no longer snaps back to the
+  bottom. The output pane still needs a longer scroll to stop following a running workflow.
 
 ### Added
 

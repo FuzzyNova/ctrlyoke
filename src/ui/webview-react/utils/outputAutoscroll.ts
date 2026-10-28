@@ -35,6 +35,12 @@ export interface AutoscrollLatchInput {
    * scroll-target writes or a virtualizer size correction.
    */
   isUserDriven: boolean;
+  /**
+   * Whether the displayed output can still grow. Without incoming output there
+   * is no growth for the release hysteresis to protect against, so any
+   * user-driven upward scroll out of the re-arm band releases the pin.
+   */
+  isLive: boolean;
 }
 
 /** Gap from the bottom of a scroll container's content, floored at 0. */
@@ -232,6 +238,7 @@ export function nextAutoscrollArmed({
   isArmed,
   movedUp,
   isUserDriven,
+  isLive,
 }: AutoscrollLatchInput): boolean {
   if (isWithinAutoscrollRearmThreshold(distanceFromBottomPx)) {
     return true;
@@ -244,6 +251,11 @@ export function nextAutoscrollArmed({
   // releases it.
   if (!movedUp || !isUserDriven) {
     return true;
+  }
+  // A finished run never grows, so the pin only re-asserts the bottom against
+  // the user: a 100px wheel notch would snap straight back to it.
+  if (!isLive) {
+    return false;
   }
   return (
     distanceFromBottomPx <= getAutoscrollReleaseThresholdPx(viewportHeightPx)

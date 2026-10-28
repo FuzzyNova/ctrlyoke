@@ -29,6 +29,7 @@ function latch(overrides: Partial<AutoscrollLatchInput> = {}): boolean {
     isArmed: true,
     movedUp: false,
     isUserDriven: true,
+    isLive: true,
     ...overrides,
   });
 }
@@ -134,6 +135,39 @@ describe("outputAutoscroll", () => {
           movedUp: true,
         })
       ).toBe(false);
+    });
+
+    // A finished run has no growth to guard against, so holding the pin inside
+    // the release distance only snapped a 100px wheel notch back to the bottom.
+    it("releases on a small upward user scroll when output is not live", () => {
+      expect(
+        latch({
+          distanceFromBottomPx: OUTPUT_AUTOSCROLL_REARM_THRESHOLD_PX + 1,
+          movedUp: true,
+          isLive: false,
+        })
+      ).toBe(false);
+    });
+
+    it("stays armed within the re-arm band when output is not live", () => {
+      expect(
+        latch({
+          distanceFromBottomPx: OUTPUT_AUTOSCROLL_REARM_THRESHOLD_PX,
+          movedUp: true,
+          isLive: false,
+        })
+      ).toBe(true);
+    });
+
+    it("stays armed on an unattributed upward move when output is not live", () => {
+      expect(
+        latch({
+          distanceFromBottomPx: 100,
+          movedUp: true,
+          isUserDriven: false,
+          isLive: false,
+        })
+      ).toBe(true);
     });
 
     it("stays released until the viewport returns near the bottom", () => {

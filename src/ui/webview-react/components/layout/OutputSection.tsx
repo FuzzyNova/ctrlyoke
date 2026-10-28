@@ -474,6 +474,8 @@ const OutputSectionInner: React.FC = () => {
   const isExecutionActive =
     executionState === EXECUTION_STATES.RUNNING ||
     executionState === EXECUTION_STATES.CANCELLING;
+  // A history view never grows, even while another run executes.
+  const isOutputLive = isExecutionActive && !isViewingHistory;
   const isLatestActivityFollowEnabled =
     !isViewingHistory &&
     isExecutionActive &&
@@ -993,6 +995,7 @@ const OutputSectionInner: React.FC = () => {
             lastScrollTopRef.current != null &&
             el.scrollTop < lastScrollTopRef.current,
           isUserDriven: hasRecentUserScrollInput,
+          isLive: isOutputLive,
         });
       }
       return;
@@ -1058,6 +1061,7 @@ const OutputSectionInner: React.FC = () => {
         isArmed: autoscrollEnabled.current,
         movedUp: previousScrollTop != null && el.scrollTop < previousScrollTop,
         isUserDriven: true,
+        isLive: isOutputLive,
       });
     }
 
@@ -1130,6 +1134,7 @@ const OutputSectionInner: React.FC = () => {
     }
   }, [
     hasPendingMeasurements,
+    isOutputLive,
     outputOverscanRef,
     rowVirtualizer,
     rowsRef,
