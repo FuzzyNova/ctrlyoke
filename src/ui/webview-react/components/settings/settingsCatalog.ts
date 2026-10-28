@@ -548,7 +548,7 @@ const STATIC_SETTINGS_CATALOG = {
     tab: GLOBAL_SETTINGS_TABS.NOTIFICATIONS,
     label: "Waiting for input",
     description:
-      "Notify when Copilot CLI, Claude Code, Codex CLI, OpenCode, or Qwen Code is waiting for your input. Antigravity is not supported.",
+      "Notify when the harness stops to ask you something: a permission prompt or a question. ctrlyoke picks the matching hook for each harness, so tool calls approved automatically don't notify. Not available on Antigravity.",
   },
   "notifications.events.promptComplete": {
     id: "notifications.events.promptComplete",

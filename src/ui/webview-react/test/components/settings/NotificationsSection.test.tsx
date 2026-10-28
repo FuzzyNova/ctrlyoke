@@ -95,7 +95,7 @@ describe("NotificationsSection", () => {
     expect(toggle).toBeChecked();
     expect(
       screen.getByText(
-        "Notify when Copilot CLI, Claude Code, Codex CLI, OpenCode, or Qwen Code is waiting for your input. Antigravity is not supported."
+        "Notify when the harness stops to ask you something: a permission prompt or a question. ctrlyoke picks the matching hook for each harness, so tool calls approved automatically don't notify. Not available on Antigravity."
       )
     ).toBeInTheDocument();
     await user.click(toggle);

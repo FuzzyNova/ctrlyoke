@@ -66,21 +66,33 @@ with an error. A run you stop yourself doesn't notify. **Prompt complete** fires
 for each step that completes or fails. **Failures Only** keeps just the
 failures.
 
-**Waiting for input** fires once when a supported harness is blocked on a
-permission prompt or question. ctrlyoke picks the native hook for each harness:
+**Waiting for input** fires once each time a harness stops to ask you
+something: a permission prompt or a question. Each harness signals this
+through a different hook, and some of those hooks also fire when nothing is
+waiting on you. ctrlyoke listens to exactly one source per harness and filters
+it down to real prompts:
 
-| Harness     | Native source                                                 |
-| ----------- | ------------------------------------------------------------- |
-| Copilot CLI | `notification` for permission prompts and elicitation dialogs |
-| Claude Code | `notification` for permission prompts and elicitation dialogs |
-| Qwen Code   | `notification` for permission prompts                         |
-| Codex CLI   | `permissionRequest`                                           |
-| OpenCode    | `permissionRequest` (`permission.asked`)                      |
-| Antigravity | Not supported                                                 |
+| Harness     | Hook ctrlyoke listens to | Notifies for                         | Ignored                      |
+| ----------- | ------------------------ | ------------------------------------ | ---------------------------- |
+| Copilot CLI | Notification             | Permission prompts, questions to you | Idle and other notifications |
+| Claude Code | Notification             | Permission prompts, questions to you | Idle and other notifications |
+| Qwen Code   | Notification             | Permission prompts                   | Idle and other notifications |
+| Codex CLI   | Permission Request       | Any approval request                 | —                            |
+| OpenCode    | Permission Request       | Any `ask` permission                 | —                            |
+| Antigravity | Not supported            | —                                    | —                            |
 
-The setting is on by default. Turn it off to stop these alerts. **Raw hook
-events** below remain available as the power-user option when you want a
-specific harness event, including events that fire on every tool call.
+Tool calls a harness approves on its own, for example under the
+[permission modes](/workflows/permissions) **Allow All** and **Dangerously Allow
+All**, never reach these hooks, so they don't notify. Copilot's **Permission Request** hook
+is not used because it runs before Copilot checks its own rules, so it fires
+on every tool call. Claude Code and Qwen Code report a permission prompt through
+both **Notification** and **Permission Request**; ctrlyoke uses only
+Notification so one prompt gives one alert.
+
+The setting is on by default. Turn it off to stop these alerts. The raw
+**Hook events** below remain available when you want a specific harness event,
+including events that fire on every tool call. If you turn on a raw event that
+**Waiting for input** also uses, a prompt still sends only one notification.
 
 ### Hook events
 

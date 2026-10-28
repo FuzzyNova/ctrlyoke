@@ -1298,7 +1298,7 @@ When to notify on individual prompt completion.
 - **Type:** `boolean`
 - **Default:** `true`
 
-Notify when the harness is waiting for your input. ctrlyoke chooses the native source per harness; Antigravity does not provide one.
+Notify once each time the harness stops to ask you something: a permission prompt or a question. ctrlyoke listens to the one native hook that means this on each harness: permission and question notifications on Copilot CLI, Claude Code and Qwen Code, and permission requests on Codex CLI and OpenCode. Idle notifications and tool calls the harness approves on its own don't notify. Antigravity provides no such hook.
 
 ### `notifications.events.hookEvents` {#notifications-events-hookevents}
 
