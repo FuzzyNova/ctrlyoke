@@ -122,6 +122,15 @@ runs and saved usage move with this setting.
 
 For the files inside each run, see [Run files](/reference/run-files).
 
+### Exporting a run {#export}
+
+To keep a finished run outside your history or attach it to a bug report,
+export it as a portable run bundle with
+[`ctrlyoke export`](/cli/ctrlyoke#ctrlyoke-export). The bundle holds the
+workflow as authored, its step summary and its timeline, with workspace and
+home-folder paths and secret values redacted. The dashboard has no export
+command yet, and a bundle can't be imported back into history.
+
 ### Changes made outside ctrlyoke {#changes-made-outside-ctrlyoke}
 
 In `workspace` mode, a run's definition sits where any agent that can write to

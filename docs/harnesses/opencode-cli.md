@@ -81,6 +81,7 @@ default, with a warning in the log.
 - The workflow surface is the same as the other CLI harnesses.
 - Tool permissions (`mode`, `allowedTools`, `deniedTools`), MCP servers, and ctrlyoke's completion plugin are delivered per process through `OPENCODE_CONFIG_CONTENT`; ctrlyoke does not write a workspace `opencode.json`. OpenCode's own categories are coarser than tool patterns (for example, `write` and `edit` both map to OpenCode's `edit` permission). See [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#opencode-cli).
 - `permissions.trustedExternalRoots` is not passed to OpenCode; it has no `--add-dir` equivalent.
+- When a step resumes an OpenCode session in a newly launched terminal, OpenCode opens the session and ignores a prompt passed on its command line ([opencode#21829](https://github.com/anomalyco/opencode/issues/21829)). ctrlyoke therefore hands the prompt to its completion plugin in an environment variable, and the plugin submits it once OpenCode has started, so the session appears a moment before the prompt does. If the plugin can't submit it, the step fails with an error instead of waiting for its timeout. Steps that reuse an open terminal are not affected.
 
 ## Usage and rate limits
 

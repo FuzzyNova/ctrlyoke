@@ -44,6 +44,25 @@ this doc stays the shot list). All assets are in `images/screenshots/`.
 7. Slotting still open: #4/#5/#8/#11 on landing; #9 in `docs/workflows/context-files.md`; #14 in
    `docs/workflows/yaml-format.md`; #15's 2× stills in `docs/guide/history.md` (still the 1×
    `history-search-1180x813.png`).
+8. **Docs shots handed over from
+   [`DOCUMENTATION_GAPS_PLAN.md`](../implemented/DOCUMENTATION_GAPS_PLAN.md) (2026-10-28).**
+   That plan is closed; its §5.2 table has each shot's prep notes. Pages with a `<!-- SHOT -->`
+   marker get the image in place of the marker; the others need a new image line.
+   - D9's walkthrough half: see item 6.
+   - D10: paste GIF, `docs/guide/prompt-editor.md` marker (the `@pasted-image-<hash>` reference
+     appearing, plus one footer quick picker open).
+   - D14: mobile terminal control bar and its layout editor, `docs/guide/terminal.md` marker.
+     Real phone, so do it in the phone session with #7 and #10.
+   - D17: the SCM title-bar Generate Commit Message button mid-generation,
+     `docs/guide/commit-messages.md` marker.
+   - D19: footer usage chip plus the pre-run near-limit warning, `docs/guide/usage-and-stats.md`.
+     Its blocker is fixed; the demo project's `docs-quota-warmup` then `docs-quota` workflows
+     reproduce the warning.
+   - D20: the editor context menu with **Run with ctrlyoke** / **Add … to ctrlyoke**, under the
+     context-menu paragraph in `docs/guide/concepts.md#context-references`.
+   - D28: the License tab's Activated machines list and trial end date in `docs/pro/index.md`
+     (only `license-activate` is there). Needs a key-activated license (`dev/test_keys.md`); blur
+     the key.
 
 ## Goal
 
@@ -68,7 +87,7 @@ UI still in flux. Everything else is capture-ready today.
 
 - **Licensing/Pro UI** (license status surface, activation dialogs, upsell prompts) — when this was
   written, `LicenseService` (Phase 6 of the release checklist) wasn't built yet. It is done now, and
-  the D28 License-tab shot in `DOCUMENTATION_GAPS_PLAN.md` §5.2 covers it. Skip these here. The Pro marketing section on the landing page keeps its current text-only treatment for
+  the D28 License-tab shot (item 8 of "Remaining") covers it. Skip these here. The Pro marketing section on the landing page keeps its current text-only treatment for
   now.
 - **Actually rewriting `landing/src/pages/index.astro` or `docs/**` content\*\* — this doc is the shot
   list and slotting plan only. Executing the swap is separate follow-up work once assets exist.
@@ -637,7 +656,7 @@ npx -y gifsicle@7.0.1 -O3 --lossy=20 -o out.gif raw.gif
    promotes it in workspaces that already use ctrlyoke.
 6. **Check the package**, not just the dev host: `npm run package`, then confirm the VSIX lists the
    walkthrough images and open the walkthrough from the installed VSIX.
-7. **Then capture D9's walkthrough-page half** (`DOCUMENTATION_GAPS_PLAN.md` D9;
+7. **Then capture D9's walkthrough-page half** (D9 in `../implemented/DOCUMENTATION_GAPS_PLAN.md`;
    marker in `docs/guide/installation.md#walkthrough`). It shows the walkthrough with the new media.
 
 #### Step descriptions

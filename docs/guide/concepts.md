@@ -125,6 +125,13 @@ which values count as paths and where ctrlyoke looks for them. Saving a workflow
 prompt file's body, while inline context references may be copied into the sibling assets
 directory.
 
+You don't have to type references by hand. In VS Code, right-click a file, folder, selection,
+symbol, commit or Output panel text and choose **Add … to ctrlyoke** to insert the matching
+reference into the prompt editor, or right-click a workflow file and use the **Run with ctrlyoke**
+submenu to load, run or queue it. See
+[Adding context to the prompt editor](/reference/commands#adding-context-to-the-prompt-editor) and
+[Run with ctrlyoke submenu](/reference/commands#run-with-ctrlyoke-submenu).
+
 ## End conditions and pre-conditions
 
 These are script-based gates:

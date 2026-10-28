@@ -55,6 +55,10 @@ a sibling `<workflow>.assets/` folder holding its pasted images and other
 attachments. Keep the two together. See
 [Durable workflows and generated files](/guide/concepts#durable-workflows-and-generated-files).
 
+Sharing the workflow file shares the definition, not its runs. To share what a
+run did, export it with [`ctrlyoke export`](/cli/ctrlyoke#ctrlyoke-export); see
+[Exporting a run](/guide/history#export).
+
 ### Paths relative to the workflow file {#workflow-relative-paths}
 
 How a path in a workflow resolves depends on where it appears:
