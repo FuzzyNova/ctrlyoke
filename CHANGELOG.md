@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The **Dry Run** button is gone from the dashboard header. Open a whole-workflow
+  Dry Run from the workflow menu instead (right-click the workflow name in the
+  header, or the displayed workflow's row in the list), or by right-clicking
+  the first run button as before.
+
 - When one step fills the output pane, its header and the start of its prompt
   or command stay at the top below the run banner while you scroll through its
   output. A parallel group keeps its group header there instead. A pin on every

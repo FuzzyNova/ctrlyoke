@@ -37,8 +37,6 @@ From left to right:
   Workflow…**.
 - **Save workflow**: save the workflow as a `.ctrlyoke.yaml` or `.ctrlyoke.json`
   file, or as a template.
-- **Dry Run**: preview exactly what each step would send to its harness, without
-  running anything. See [Dry Run](/guide/dry-run).
 - **Undo** and **Redo**: undo edits to the workflow definition. The chevron shows
   the undo history. To undo the files a step changed, see
   [File changes and undo](/guide/file-changes).
@@ -228,6 +226,9 @@ Right-click a workflow or run for:
 
 - **New Run (Don't Start)**: create the next run from these steps and settings
   without running it, so you can edit it first.
+- **Dry Run**: preview exactly what each step would send to its harness,
+  without running anything. Offered only for the workflow you're viewing. See
+  [Dry Run](/guide/dry-run).
 - **Duplicate Workflow…**: copy the workflow's steps and settings into a new,
   independent workflow. You can pick a different **Workflow Harness** and
   **Workflow Model** for the copy, which makes it easy to run the same workflow

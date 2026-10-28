@@ -12,8 +12,10 @@ import {
 } from "@hooks/useWorkflowContextMenu";
 import { useUiStore } from "@store/uiStore";
 import { useTerminalStore } from "@store/terminalStore";
+import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import {
   MESSAGE_TYPES,
+  PREVIEW_SCOPES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 
@@ -74,6 +76,7 @@ function TestHarness({
 describe("useWorkflowContextMenu", () => {
   beforeEach(() => {
     useUiStore.getState().resetUi();
+    useExecutionPreviewStore.getState().reset();
     useTerminalStore.getState().setActiveTerminalWorkflows([]);
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -314,6 +317,57 @@ describe("useWorkflowContextMenu", () => {
           }),
         ])
       )
+    );
+  });
+
+  it("offers Dry Run only on the displayed workflow and previews it", () => {
+    const postMessage = vi.fn();
+    Object.defineProperty(window, "vscodeApi", {
+      configurable: true,
+      value: { postMessage, getState: vi.fn(), setState: vi.fn() },
+    });
+    const { unmount } = render(<TestHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    expect(
+      screen.queryByRole("menuitem", { name: "Dry Run" })
+    ).not.toBeInTheDocument();
+    unmount();
+
+    useUiStore.setState({ displayedViewAddress: target.address });
+    render(<TestHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    expect(
+      screen
+        .getAllByRole("menuitem")
+        .slice(0, 3)
+        .map((button) => button.textContent?.trim())
+    ).toEqual(["New Run (Don't Start)", "Dry Run", "Duplicate Workflow…"]);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Dry Run" }));
+
+    expect(useExecutionPreviewStore.getState().scope).toEqual({
+      kind: PREVIEW_SCOPES.WORKFLOW,
+    });
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.REQUEST_EXECUTION_PREVIEW,
+        scope: { kind: PREVIEW_SCOPES.WORKFLOW },
+      })
+    );
+  });
+
+  it("disables Dry Run for a system-generated workflow", () => {
+    useUiStore.setState({
+      displayedViewAddress: target.address,
+      viewedLineageIsSystemGenerated: true,
+    });
+    render(<TestHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    const dryRun = screen.getByRole("menuitem", { name: "Dry Run" });
+    expect(dryRun).toBeDisabled();
+    expect(dryRun).toHaveAttribute(
+      "title",
+      "Managed automatically by commit message generation"
     );
   });
 

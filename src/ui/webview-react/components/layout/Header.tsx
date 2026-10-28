@@ -12,7 +12,7 @@ import { useIsSystemGeneratedWorkflow } from "@hooks/useIsSystemGeneratedWorkflo
 import { useIsDisplayedWorkflowFavorite } from "@hooks/useIsDisplayedWorkflowFavorite";
 import { sendMessage } from "@hooks/useMessageHandler";
 import { WebviewLog } from "@utils/logger";
-import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
+import { openWorkflowDryRun } from "@utils/executionPreview";
 import { useIsViewedRunUnstarted } from "@hooks/useIsViewedRunUnstarted";
 import { getExternalRunnerLabel } from "@utils/externalRunner";
 import { formatShortcut } from "@utils/platform";
@@ -44,7 +44,6 @@ import {
 } from "@utils/status";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import {
-  PREVIEW_SCOPES,
   WORKFLOW_EXECUTION_CONTROL_ACTIONS,
   WORKFLOW_VIEW_ADDRESS_KIND,
   shouldConfirmRerun,
@@ -56,32 +55,6 @@ let saveRequestSequence = 0;
 function nextSaveRequestId(): string {
   saveRequestSequence += 1;
   return `save-${Date.now()}-${saveRequestSequence}`;
-}
-
-function DryRunButton({
-  btnSize,
-  onClick,
-  disabled,
-}: {
-  btnSize: (typeof HEADER_BUTTON_SIZES)[keyof typeof HEADER_BUTTON_SIZES];
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
-        disabled
-          ? "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
-          : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-      }`}
-      onClick={onClick}
-      disabled={disabled}
-      title="Dry Run"
-      aria-label="Dry Run"
-    >
-      <Icon name="telescope" className={`${btnSize.icon}`} />
-    </button>
-  );
 }
 
 /**
@@ -278,7 +251,6 @@ export const Header: React.FC<{
     );
   }, [activeWorkflowId, externalOwner]);
 
-  const dryRunDisabled = !displayedViewAddress || isLineageReadOnly;
   const canSave = hasFile && !isLineageReadOnly;
   const saveTitle = isViewingDeletedWorkflow
     ? "This workflow has been deleted"
@@ -297,34 +269,22 @@ export const Header: React.FC<{
     });
   }, [vscode, canSave, displayedViewAddress]);
 
-  const openDryRunWorkflow = useCallback(() => {
-    useExecutionPreviewStore
-      .getState()
-      .open(
-        { kind: PREVIEW_SCOPES.WORKFLOW },
-        getExecutionPreviewEditorSnapshot()
-      );
-  }, []);
-
   const [runContextMenu, setRunContextMenu] =
     React.useState<StepContextMenuState | null>(null);
-  const openRunDryRunMenu = useCallback(
-    (x: number, y: number) => {
-      setRunContextMenu({
-        x,
-        y,
-        items: [
-          {
-            label: "Dry Run",
-            icon: "codicon-telescope",
-            disabled: false,
-            onClick: openDryRunWorkflow,
-          },
-        ],
-      });
-    },
-    [openDryRunWorkflow]
-  );
+  const openRunDryRunMenu = useCallback((x: number, y: number) => {
+    setRunContextMenu({
+      x,
+      y,
+      items: [
+        {
+          label: "Dry Run",
+          icon: "codicon-telescope",
+          disabled: false,
+          onClick: openWorkflowDryRun,
+        },
+      ],
+    });
+  }, []);
   const runSlotLongPressHandlers = useLongPress(openRunDryRunMenu);
 
   // Handlers
@@ -501,14 +461,6 @@ export const Header: React.FC<{
       >
         <Icon name="save" className={`${btnSize.icon}`} />
       </button>
-
-      <div className="cy-button-group-divider" />
-
-      <DryRunButton
-        btnSize={btnSize}
-        onClick={openDryRunWorkflow}
-        disabled={dryRunDisabled}
-      />
 
       <div className="cy-button-group-divider" />
 
@@ -707,12 +659,6 @@ export const Header: React.FC<{
             >
               <Icon name="save" className={`${btnSize.icon}`} />
             </button>
-            <div className="cy-button-group-divider" />
-            <DryRunButton
-              btnSize={btnSize}
-              onClick={openDryRunWorkflow}
-              disabled={dryRunDisabled}
-            />
             <div className="cy-button-group-divider" />
             {/* Undo / Redo / History */}
             <UndoRedoControl

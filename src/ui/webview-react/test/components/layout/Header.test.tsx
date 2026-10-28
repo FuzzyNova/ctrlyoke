@@ -73,22 +73,24 @@ describe("Header execution controls", () => {
 
   afterEach(cleanup);
 
-  it("opens the workflow-scoped Dry Run from the action controls", () => {
+  it("opens the workflow-scoped Dry Run from the Run button's menu, not the action controls", () => {
     render(<Header />);
 
     const actionGroup = screen.getByRole("group", {
       name: "Workflow action controls",
     });
-    const labels = Array.from(actionGroup.querySelectorAll("button")).map(
-      (button) => button.getAttribute("aria-label")
-    );
-    expect(labels.indexOf("Dry Run")).toBeGreaterThan(
-      labels.indexOf("Save workflow")
-    );
-    expect(labels.indexOf("Dry Run")).toBeLessThan(labels.indexOf("Undo"));
+    expect(
+      within(actionGroup).queryByRole("button", { name: "Dry Run" })
+    ).not.toBeInTheDocument();
 
+    const firstRunSlot = screen
+      .getByRole("group", { name: "Workflow execution controls" })
+      .querySelector("button")!;
+    fireEvent.contextMenu(firstRunSlot, { clientX: 120, clientY: 80 });
     fireEvent.click(
-      within(actionGroup).getByRole("button", { name: "Dry Run" })
+      within(screen.getByRole("menu")).getByRole("menuitem", {
+        name: "Dry Run",
+      })
     );
 
     expect(useExecutionPreviewStore.getState().scope).toEqual({
@@ -1220,7 +1222,7 @@ describe("Header deleted-workflow banner", () => {
 
   afterEach(cleanup);
 
-  it("locks Save/Dry Run/run controls for a deleted workflow", () => {
+  it("locks Save/run controls for a deleted workflow", () => {
     render(<Header />);
 
     const actionGroup = screen.getByRole("group", {
@@ -1228,9 +1230,6 @@ describe("Header deleted-workflow banner", () => {
     });
     expect(
       within(actionGroup).getByRole("button", { name: "Save workflow" })
-    ).toBeDisabled();
-    expect(
-      within(actionGroup).getByRole("button", { name: "Dry Run" })
     ).toBeDisabled();
     const executionControls = screen.getByRole("group", {
       name: "Workflow execution controls",
@@ -1254,7 +1253,7 @@ describe("Header deleted-workflow banner", () => {
       name: "Workflow action controls",
     });
     expect(
-      within(actionGroup).getByRole("button", { name: "Dry Run" })
+      within(actionGroup).getByRole("button", { name: "Save workflow" })
     ).toBeEnabled();
   });
 });
