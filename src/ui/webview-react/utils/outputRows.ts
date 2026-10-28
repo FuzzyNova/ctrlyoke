@@ -1,6 +1,7 @@
 import type { WorkflowStep } from "@store/workflowStore";
 import {
   CLI_EVENT_TYPES,
+  EXECUTION_PHASES,
   FINAL_STEP_PHASES,
   OUTPUT_ACTIVITY_KINDS,
   getStreamingChunkKey,
@@ -487,13 +488,22 @@ export function getConcurrentGroupForStep(
   return groupSnapshot?.parallelGroupId === group.id ? group : undefined;
 }
 
-/** Identity of one attempt's row block: `<target>:run<n>:attempt<n>`. */
+/**
+ * Identity of one attempt's row block: `<target>:run<n>:attempt<n>`, plus
+ * `:<phase>` for a condition script. A step's pre-condition and its prompt
+ * share run and attempt indices, so without the phase they claimed one
+ * block: the prompt's first activity slice found the block's leading chrome
+ * already emitted (no header, prompt or command row), and the pre-condition
+ * was not the block's last slice (no verdict row).
+ */
 function getAttemptRowKeyBase(
   targetKey: string,
   runIndex: number,
-  attemptIndex: number
+  attemptIndex: number,
+  phase: ExecutionPhase | undefined
 ): string {
-  return `${targetKey}:run${runIndex}:attempt${attemptIndex}`;
+  const base = `${targetKey}:run${runIndex}:attempt${attemptIndex}`;
+  return phase && phase !== EXECUTION_PHASES.PROMPT ? `${base}:${phase}` : base;
 }
 
 /**
@@ -2429,7 +2439,8 @@ export function buildOutputRows(
       getAttemptRowKeyBase(
         getTargetKey(message.target),
         message.runIndex ?? output.runIndex ?? 0,
-        message.attemptIndex ?? 0
+        message.attemptIndex ?? 0,
+        message.phase
       ),
       messageIndex
     );
@@ -2470,13 +2481,15 @@ export function buildOutputRows(
       lastCliIndexPerStep.set(targetKey, messageIndex);
       // Keyed by attempt (not raw message index) so a multi-activity attempt's
       // *header* — emitted at the attempt's first message, not its last — can
-      // still recognize itself as the step's latest attempt below.
+      // still recognize itself as the step's latest attempt below. Phase is
+      // left out: an attempt's condition scripts belong to it, so a trailing
+      // end-condition must not take the undo away from the prompt.
       const cliOutput = (message.aggregate ?? message.data) as CliOutputType;
       const runIndex = message.runIndex ?? cliOutput.runIndex ?? 0;
       const attemptIndex = message.attemptIndex ?? 0;
       lastAttemptRowKeyBasePerStep.set(
         targetKey,
-        getAttemptRowKeyBase(targetKey, runIndex, attemptIndex)
+        getAttemptRowKeyBase(targetKey, runIndex, attemptIndex, undefined)
       );
     }
   }
@@ -2656,7 +2669,8 @@ export function buildOutputRows(
     const attemptRowKeyBase = getAttemptRowKeyBase(
       targetKey,
       runIndex,
-      attemptIndex
+      attemptIndex,
+      message.phase
     );
     const rowKeyBase = getRowKeyBase(attemptRowKeyBase, message);
     const emitsLeadingChrome =
@@ -2677,7 +2691,8 @@ export function buildOutputRows(
     // last message usually belongs to a later activity slice of this same
     // attempt (see lastAttemptRowKeyBasePerStep above).
     const isLastAttemptForStep =
-      lastAttemptRowKeyBasePerStep.get(targetKey) === attemptRowKeyBase;
+      lastAttemptRowKeyBasePerStep.get(targetKey) ===
+      getAttemptRowKeyBase(targetKey, runIndex, attemptIndex, undefined);
     const canUndoAttempt =
       input.allowUndoActions && isLastAttemptForStep && !output.isStreaming;
     // A concurrently executed group shares one workspace snapshot — stored

@@ -586,6 +586,112 @@ describe("outputRows", () => {
         rows.filter((row) => row.rowKind === OUTPUT_ROW_KINDS.PROMPT)
       ).toEqual([]);
     });
+
+    it("keeps a streamed pre-condition and the prompt it continued into as separate attempts", () => {
+      // Both run as run 0 / attempt 0 of the step; only the phase tells them
+      // apart. Sharing one row block hid the prompt's header, prompt and
+      // command rows and the pre-condition's verdict row.
+      const rows = buildRowsFor(
+        mapOrderedHistoryEntriesToMessages(
+          [
+            {
+              kind: "cli",
+              target: queueTarget,
+              runIndex: 0,
+              attemptIndex: 0,
+              phase: EXECUTION_PHASES.PRE_CONDITION,
+              prompt: "npm test",
+              cliOutput: {
+                cliCommand: "npm test",
+                source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
+                exitCode: 1,
+                elapsed: 1,
+                isStreaming: false,
+                timestampMs: 1000,
+                scriptVerdict: {
+                  compareSource: "exitCode",
+                  operator: "eq",
+                  actual: "1",
+                  exitCode: 1,
+                  outcome: "failed",
+                  action: "continue",
+                  durationMs: 1000,
+                },
+              },
+              timestampMs: 1000,
+              sequence: 1,
+            },
+            {
+              kind: "cli",
+              target: queueTarget,
+              runIndex: 0,
+              attemptIndex: 0,
+              prompt: "Fix the failing tests",
+              cliOutput: {
+                cliCommand: "claude -p",
+                elapsed: 0,
+                isStreaming: true,
+                timestampMs: 3000,
+              },
+              timestampMs: 3000,
+              sequence: 3,
+            },
+          ],
+          [
+            {
+              timestampMs: 1001,
+              sequence: 2,
+              target: queueTarget,
+              runIndex: 0,
+              attemptIndex: 0,
+              phase: EXECUTION_PHASES.PRE_CONDITION,
+              kind: OUTPUT_ACTIVITY_KINDS.SCRIPT,
+              text: "1 failing\n",
+            },
+            ...[3001, 3002].map((timestampMs, index) => ({
+              timestampMs,
+              sequence: index + 4,
+              target: queueTarget,
+              runIndex: 0,
+              attemptIndex: 0,
+              kind: OUTPUT_ACTIVITY_KINDS.STRUCTURED,
+              events: [
+                {
+                  type: CLI_EVENT_TYPES.BASH_COMMAND,
+                  data: { command: `echo ${index}`, output: `${index}` },
+                },
+              ],
+            })),
+          ]
+        )
+      );
+
+      expect(
+        rows
+          .filter(
+            (row) =>
+              row.rowKind === OUTPUT_ROW_KINDS.CLI_HEADER ||
+              row.rowKind === OUTPUT_ROW_KINDS.PROMPT ||
+              row.rowKind === OUTPUT_ROW_KINDS.SCRIPT_COMMAND ||
+              row.rowKind === OUTPUT_ROW_KINDS.SCRIPT_VERDICT ||
+              row.rowKind === OUTPUT_ROW_KINDS.CLI_COMMAND
+          )
+          .map((row) =>
+            row.rowKind === OUTPUT_ROW_KINDS.PROMPT
+              ? `${row.rowKind}:${row.text}`
+              : row.rowKind
+          )
+      ).toEqual([
+        OUTPUT_ROW_KINDS.CLI_HEADER,
+        OUTPUT_ROW_KINDS.SCRIPT_COMMAND,
+        OUTPUT_ROW_KINDS.SCRIPT_VERDICT,
+        OUTPUT_ROW_KINDS.CLI_HEADER,
+        `${OUTPUT_ROW_KINDS.PROMPT}:Fix the failing tests`,
+        OUTPUT_ROW_KINDS.CLI_COMMAND,
+      ]);
+      const keys = rows.map((row) => row.key);
+      expect(new Set(keys).size).toBe(keys.length);
+    });
   });
 
   it("collapses retry attempts into an explicitly labelled aggregate", () => {

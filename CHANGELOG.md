@@ -118,6 +118,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and an unanswered initialize request now times out after 60 seconds and is reported as a crash.
 - Scrolling up a little from the bottom of a finished run's output no longer snaps back to the
   bottom. The output pane still needs a longer scroll to stop following a running workflow.
+- When a failed pre-condition continues into its step, the output pane shows the pre-condition's
+  verdict row and the step's header, prompt and command rows again.
 
 ### Added
 
