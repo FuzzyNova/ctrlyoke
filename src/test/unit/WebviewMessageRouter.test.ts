@@ -29,7 +29,9 @@ import {
   PATH_SELECTION_KINDS,
   PATH_SELECTION_TITLES,
   WORKSPACE_FOLDER_PICKERS,
+  LOG_LEVELS,
 } from "../../types/DashboardConstants";
+import { Log } from "../../utils/Log";
 import type { DashboardHostActions, NamedRoot } from "../../core/HostPorts";
 import { getVsCodeNamedWorkspaceRoots } from "../../platform/VsCodeWorkspaceRoot";
 import { WorkflowVariantService } from "../../core/orchestration/WorkflowVariantService";
@@ -305,6 +307,41 @@ suite("WebviewMessageRouter — standalone editor file routing", () => {
 
     slow.resolve({});
     await queued;
+  });
+
+  test("logs a forwarded client log line while the queue is blocked", async () => {
+    const slow = deferred<unknown>();
+    const router = buildRouter(
+      {
+        getWorkspaceStatsService: () => ({ getSnapshot: () => slow.promise }),
+        refreshWorkspaceStats: async () => undefined,
+      },
+      () => undefined,
+      undefined,
+      undefined,
+      () => []
+    );
+    const restoreInfo = snapshotProperty(Log, "info");
+    const logged: string[] = [];
+    Log.info = (message: string) => void logged.push(message);
+    try {
+      const queued = router.route({
+        type: MESSAGE_TYPES.REQUEST_WORKSPACE_STATS,
+      });
+      await router.route(
+        {
+          type: MESSAGE_TYPES.LOG_MESSAGE,
+          level: LOG_LEVELS.INFO,
+          message: "socket opened",
+        },
+        { clientTag: "browser:log" }
+      );
+      assert.deepStrictEqual(logged, ["[browser:log] socket opened"]);
+      slow.resolve({});
+      await queued;
+    } finally {
+      restoreInfo();
+    }
   });
 });
 

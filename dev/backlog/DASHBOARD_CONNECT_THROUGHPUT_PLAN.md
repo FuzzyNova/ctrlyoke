@@ -10,11 +10,9 @@ investigation, after its first four fixes landed:
 
 The two items below are what remains from that investigation.
 
-Last reviewed against code: 2026-10-26. Neither item has moved: `RecentWorkflowCatalog.listEntries`
+Last reviewed against code: 2026-10-28. Item 1 has not moved: `RecentWorkflowCatalog.listEntries`
 still fans out an unbounded `Promise.all` over every lineage and calls `getLineageLastModifiedAt`
-per row, and `LOG_MESSAGE` still goes through `routeQueue`. Since this was written the router
-gained an `OFF_QUEUE_MESSAGE_TYPES` set and `[RouteTiming]` slow-route logging
-(`WebviewMessageRouter.ts`); adding `LOG_MESSAGE` to that set is the natural shape for item 2.
+per row. Item 2's main fix landed on 2026-10-28; only its open questions remain.
 
 ## Evidence
 
@@ -95,7 +93,15 @@ whatever path still reads the working file. A cached entry must not bypass it.
 
 ## 2. Keep browser log forwarding out of the shared route queue
 
-Every message from every client, the panel included, goes through
+**Mostly done (2026-10-28).** `LOG_MESSAGE` is in the router's
+`OFF_QUEUE_MESSAGE_TYPES`, so a forwarded line is logged when it arrives and
+no longer waits behind, or delays, any other client's messages. Still open:
+client-side timestamps and the per-client queue question (both below).
+Client timestamps were left out because a phone's clock is not the host's, so
+they only help when the two are known to agree; with the queue delay gone,
+receipt time is off only by network transit.
+
+The original analysis follows. Every message from every client, the panel included, goes through
 `WebviewMessageRouter`'s single serialized `routeQueue`. That includes
 `LOG_MESSAGE`, which the browser sends for every `WebviewLog` line. So:
 

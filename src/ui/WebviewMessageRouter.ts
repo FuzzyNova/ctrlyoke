@@ -186,7 +186,7 @@ const WORKFLOW_VARIANT_REQUEST_CACHE_MAX_ENTRIES = 256;
 
 /**
  * Every client shares one `routeQueue`, so a slow handler delays every later
- * message from every client, forwarded logs included. A message that runs or
+ * queued message from every client. A message that runs or
  * waits longer than these is logged with its type and client so a stall can be
  * pinned on the handler that caused it.
  */
@@ -194,11 +194,15 @@ const SLOW_ROUTE_RUN_MS = 250;
 const SLOW_ROUTE_WAIT_MS = 1000;
 
 /**
- * Messages routed outside `routeQueue` because they wait on slow I/O and
- * mutate no state other handlers depend on. Each still replies only to a
- * client that is connected when it finishes.
+ * Messages routed outside `routeQueue` because they wait on slow I/O, or are
+ * too frequent to queue, and mutate no state other handlers depend on. Each
+ * still replies only to a client that is connected when it finishes.
  */
 const OFF_QUEUE_MESSAGE_TYPES: ReadonlySet<string> = new Set([
+  // Forwarded client log lines. Queued, they were timestamped when the queue
+  // reached them (seconds late behind a slow handler) and a chatty client
+  // delayed every other client's commands.
+  MESSAGE_TYPES.LOG_MESSAGE,
   MESSAGE_TYPES.REQUEST_COMPLETIONS,
   // These handlers only create/read standalone files or resolve a preview URI;
   // they do not touch state that other serialized handlers depend on.
