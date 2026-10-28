@@ -502,10 +502,26 @@ Why not a toggle on Save:
 
 How they work together instead:
 
-- **Placement.** In the run view's file menu (`useWorkflowFileMenuItems.ts`): _Save Workflow…_,
-  then _Export Run…_. In the Load area of `WorkflowControls.tsx`: _Load Workflow…_, then
-  _Import Run…_ (beside the harness-session import entry once that plan adds it). The history
-  list's per-run menu gets _Export Run…_ too.
+- **Placement (revised 2026-10-28). Neither action gets a header button.** The header is
+  already crowded (the narrow-mobile row 2 repeats Save · Undo/Redo · Search · Settings), and
+  both actions are rare. The slot the Dry Run button gave up stays empty: Dry Run moved into the
+  workflow context menu (below) and is still on the Run button's right-click menu.
+  - _Export Run…_ goes in the **workflow context menu** (`useWorkflowContextMenu.tsx`). That one
+    menu opens from the header's workflow name (`WorkflowStatus`), the history list rows, the
+    run panel rows and the running items, so a single entry covers the header and the per-run
+    history menu. Gate it on the target being a `run` address (not a draft) that isn't executing.
+    It can export any listed run, not only the displayed one, because export reads the run from
+    disk by address. Dry Run can't do that: it previews the client's displayed workflow plus the
+    unsaved editor. (An earlier draft named `useWorkflowFileMenuItems.ts`, but that builds the
+    Run/Load/Queue entries for workflow _files_ in the workspace explorer and editor menus, not
+    a run menu.)
+  - _Import Run…_ goes in the **New** split button's dropdown (`WorkflowControls.tsx`), right
+    after _Load from File…_. Like Load, it creates a new lineage, so it belongs with Load. The
+    harness-session import entry goes beside it once that plan adds one. In the hosted browser it
+    goes through `WorkflowFilePickerModal` the way Load does (a directory picker mode).
+  - If testing shows Export is hard to find, make the header **Save** button a split button
+    (_Save Workflow…_ / _Export Run…_) instead of adding a button. That keeps the two side by
+    side without using more header width.
 - **Load routes bundles.** When Load Workflow is pointed at a `.ctrlyokerun` directory, it offers
   "Import this run (continue where it stopped)" or "Load its workflow only (start over)". The
   second is just a Load of the bundle's `workflow.ctrlyoke.json`. Users who reach for Load still

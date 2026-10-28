@@ -1,4 +1,5 @@
 import { useEditorStore } from "@store/editorStore";
+import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import {
   useWorkflowStore,
   type WorkflowStep as WebviewWorkflowStep,
@@ -6,11 +7,25 @@ import {
 import {
   EDITOR_TARGET_KINDS,
   FINAL_STEP_PHASES,
+  PREVIEW_SCOPES,
   STEP_TYPES,
 } from "@root/types/DashboardConstants";
 import type { PromptStep, ScriptStep } from "@root/types/CtrlYokeTypes";
 import type { ExecutionPreviewEditorSnapshot } from "@root/types/WebviewMessageTypes";
 import { getScriptStepPropertyUpdate } from "@utils/scriptStepProperties";
+
+/**
+ * Open a whole-workflow Dry Run. The extension previews this client's
+ * displayed workflow, so callers must only offer it for that workflow.
+ */
+export function openWorkflowDryRun(): void {
+  useExecutionPreviewStore
+    .getState()
+    .open(
+      { kind: PREVIEW_SCOPES.WORKFLOW },
+      getExecutionPreviewEditorSnapshot()
+    );
+}
 
 /**
  * Capture the editor's current step without changing editor or workflow state.

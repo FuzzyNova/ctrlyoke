@@ -1245,7 +1245,7 @@ later version at no compatibility cost.
       Full Output.
     - Phase 3: `$summary:` and `priorContextDetail`.
 - [x] **Docs: move content between pages before the URLs are indexed** —
-      [`DOCUMENTATION_GAPS_PLAN.md`](../backlog/DOCUMENTATION_GAPS_PLAN.md).
+      [`DOCUMENTATION_GAPS_PLAN.md`](../implemented/DOCUMENTATION_GAPS_PLAN.md).
   - **Done 2026-10-10.** Script steps, comparisons and script resolution moved to
     `workflows/script-steps.md`, and parallel groups to `workflows/parallel-steps.md`. The old
     headings stay behind as stubs with explicit IDs (`{#script-steps}`, `{#parallel-steps}`,

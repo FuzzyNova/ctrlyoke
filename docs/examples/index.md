@@ -48,6 +48,100 @@ steps:
   - prompt: Update the docs after the formatting check passes.
 ```
 
+## Skip a step when there's nothing to do
+
+Use a pre-condition to decide whether a prompt needs to run at all. Here the
+lint check runs first: if it passes, the step is skipped without calling the
+harness; if it fails, the prompt runs with the lint output inserted. See
+[pre-conditions](/workflows/end-conditions#pre-condition) and
+[condition output references](/workflows/end-conditions#condition-output-references).
+
+```yaml
+harness: claude-cli
+model: sonnet
+steps:
+  - name: Fix lint errors
+    preCondition:
+      script: npm run lint
+      onPass: skipPrompt
+      onFail: continue
+    prompt: |
+      Fix these lint errors without changing behavior:
+
+      $preCondition:stdout
+```
+
+## Pass one step's output to the next
+
+Every step starts from the files on disk, so a later step only knows what an
+earlier step said if you pass it along. `$previous` inserts the output of the
+step before it, and `priorContext` does the same as a step property. Use
+`priorContextDetail: summary` when a short excerpt is enough. See
+[prior output references](/workflows/context-files#prior-output-references).
+
+```yaml
+harness: claude-cli
+model: sonnet
+steps:
+  - name: Plan
+    prompt: Propose a plan to split @src/server.ts into smaller modules. Do not change any files.
+  - name: Implement
+    prompt: |
+      Implement this plan:
+
+      $previous
+  - name: Changelog
+    priorContext: all
+    priorContextDetail: summary
+    prompt: Write a CHANGELOG entry describing the changes made by the earlier steps.
+```
+
+To pull in a completed run of a different workflow instead, set
+`priorContext: { workflow: <name> }`; see
+[Output from another workflow](/workflows/context-files#output-from-another-workflow).
+
+## A one-step Markdown prompt
+
+A `.prompt.md` file is a single prompt with no workflow structure. It runs with
+your default harness and model, and is the quickest way to save a prompt you
+reuse. See [Prompt Markdown format](/workflows/prompt-md-format).
+
+```md
+---
+description: Review the current diff before committing
+---
+
+Review ~staged for bugs, missing tests and unclear names.
+List each problem with its file and line.
+```
+
+A YAML or JSON workflow can reuse the same file as one of its steps with
+`prompt: ./review-staged.prompt.md`.
+
+## Reusable workflow with variables
+
+Use `vars` for the values that change from run to run, and override them with
+`--var` from the CLI. Variables are substituted in prompts, scripts and the
+worktree setup command. See [variables](/workflows/variables).
+
+```yaml
+vars:
+  module: src/parser
+  issue: "482"
+harness: claude-cli
+model: sonnet
+steps:
+  - name: Fix
+    prompt: Fix issue {{issue}}. Keep the change inside @{{module}}/ and add a regression test.
+  - type: script
+    name: Test module
+    script: npm test -- {{module}}
+```
+
+```sh
+ctrlyoke run fix-issue.ctrlyoke.yaml --var issue=517 --var module=src/lexer
+```
+
 ## Final-step review loop
 
 Use `finalStep` to review completed work or append follow-up tasks after the

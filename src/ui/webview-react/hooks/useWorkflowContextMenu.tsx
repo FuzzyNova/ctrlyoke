@@ -13,8 +13,13 @@ import {
 } from "@root/types/DashboardConstants";
 import { writeClipboardText } from "@utils/stepClipboard";
 import { notifyUser } from "@utils/notifyUser";
+import { openWorkflowDryRun } from "@utils/executionPreview";
+import { workflowViewAddressKey } from "@utils/viewAddress";
 import { sendMessage } from "@hooks/useMessageHandler";
+import { useIsViewingDeletedWorkflow } from "@hooks/useIsViewingDeletedWorkflow";
+import { useIsSystemGeneratedWorkflow } from "@hooks/useIsSystemGeneratedWorkflow";
 import { useTerminalStore } from "@store/terminalStore";
+import { useUiStore } from "@store/uiStore";
 
 export interface WorkflowContextMenuTarget {
   address: WorkflowViewAddress;
@@ -81,6 +86,11 @@ export function useWorkflowContextMenu({
   const activeTerminalWorkflows = useTerminalStore(
     (state) => state.activeTerminalWorkflows
   );
+  const displayedViewAddress = useUiStore(
+    (state) => state.displayedViewAddress
+  );
+  const isViewingDeletedWorkflow = useIsViewingDeletedWorkflow();
+  const isSystemGeneratedWorkflow = useIsSystemGeneratedWorkflow();
 
   const openContextMenu = useCallback(
     (
@@ -116,6 +126,17 @@ export function useWorkflowContextMenu({
         target.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
           ? target.address
           : null;
+      // A Dry Run previews this client's displayed workflow (with the unsaved
+      // editor overlaid), so it is offered only on the row that addresses it.
+      const isDisplayedTarget =
+        displayedViewAddress !== null &&
+        workflowViewAddressKey(displayedViewAddress) ===
+          workflowViewAddressKey(target.address);
+      const dryRunDisabledTitle = isViewingDeletedWorkflow
+        ? "This workflow has been deleted"
+        : isSystemGeneratedWorkflow
+          ? "Managed automatically by commit message generation"
+          : undefined;
 
       setContextMenu({
         x,
@@ -140,6 +161,22 @@ export function useWorkflowContextMenu({
                     sendMessage(MESSAGE_TYPES.PREPARE_NEW_RUN, {
                       address: runAddress,
                     });
+                  },
+                },
+              ]
+            : []),
+          ...(isDisplayedTarget
+            ? [
+                {
+                  label: "Dry Run",
+                  icon: "codicon-telescope",
+                  disabled: dryRunDisabledTitle !== undefined,
+                  title:
+                    "Preview what each step would send to its harness, without running anything",
+                  disabledTitle: dryRunDisabledTitle,
+                  onClick: () => {
+                    onCloseDropdown();
+                    openWorkflowDryRun();
                   },
                 },
               ]
@@ -227,6 +264,9 @@ export function useWorkflowContextMenu({
     },
     [
       activeTerminalWorkflows,
+      displayedViewAddress,
+      isSystemGeneratedWorkflow,
+      isViewingDeletedWorkflow,
       onCloseDropdown,
       onDelete,
       onDuplicate,

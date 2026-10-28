@@ -1,6 +1,6 @@
 # ctrlyoke Documentation Strategy Plan
 
-> **Status:** Partial — infrastructure and core content implemented; the remaining content backlog lives in [`../backlog/DOCUMENTATION_GAPS_PLAN.md`](../backlog/DOCUMENTATION_GAPS_PLAN.md)  
+> **Status:** Partial — infrastructure and core content implemented; the content backlog in [`../implemented/DOCUMENTATION_GAPS_PLAN.md`](../implemented/DOCUMENTATION_GAPS_PLAN.md) is closed, and its remaining screenshots are in [`../backlog/SCREENSHOTS_AND_MEDIA_PLAN.md`](../backlog/SCREENSHOTS_AND_MEDIA_PLAN.md)  
 > **Date:** March 2026  
 > **Updated:** March 2026 — `docs/` cleaned and empty; `dev/` folder convention established  
 > **Scope:**
