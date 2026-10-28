@@ -44,7 +44,10 @@ export interface OutputStickyStep {
 }
 
 export interface OutputViewportStepsResult {
-  /** `getTargetKey` of every step with a row in the viewport, in row order. */
+  /**
+   * `getTargetKey` of every step showing in the viewport, in row order. A step
+   * cut off by an edge needs `MIN_IN_VIEW_STEP_PX` on screen to count.
+   */
   inViewTargetKeys: string[];
   sticky: OutputStickyStep | null;
 }
@@ -70,6 +73,15 @@ const PREVIEW_ROW_KINDS: ReadonlySet<OutputRenderRow["rowKind"]> = new Set([
 
 /** Rows a header's prompt/command may sit behind before it is not "its" row. */
 const PREVIEW_ROW_SEARCH_LIMIT = 3;
+
+/**
+ * How much of a step, cut off by a viewport edge, must be on screen for it to
+ * count as in view: about one output line. Navigating to a step settles its
+ * first row within a couple of pixels of the top (and scroll offsets are
+ * fractional), so the step above often keeps a sliver that nobody would call
+ * "showing".
+ */
+export const MIN_IN_VIEW_STEP_PX = 16;
 
 function findPreviewRow(
   rows: readonly OutputRenderRow[],
@@ -226,14 +238,37 @@ export function resolveOutputViewportSteps({
     findRowAt(rowStarts, Math.max(viewportTop, viewportBottom - 1))
   );
 
-  const inViewTargetKeys: string[] = [];
-  const seen = new Set<string>();
+  // A step counts once enough of it shows, or when all of it that is in the
+  // viewport fits inside it (a short step, or a hidden step's 1px anchor).
+  const visibilityByKey = new Map<
+    string,
+    { visiblePx: number; clipped: boolean }
+  >();
   for (let index = firstRow; index <= lastRow; index++) {
     const key = getTargetKey(rows[index].target);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    inViewTargetKeys.push(key);
+    const start = rowStarts[index];
+    const end = rowEnd(index);
+    const visibility = visibilityByKey.get(key) ?? {
+      visiblePx: 0,
+      clipped: false,
+    };
+    visibility.visiblePx += Math.max(
+      0,
+      Math.min(end, viewportBottom) - Math.max(start, viewportTop)
+    );
+    visibility.clipped ||= start < viewportTop || end > viewportBottom;
+    visibilityByKey.set(key, visibility);
   }
+  const minVisiblePx = Math.min(
+    MIN_IN_VIEW_STEP_PX,
+    viewportBottom - viewportTop
+  );
+  const inViewTargetKeys = [...visibilityByKey]
+    .filter(
+      ([, { visiblePx, clipped }]) =>
+        visiblePx >= minVisiblePx || (!clipped && visiblePx > 0)
+    )
+    .map(([key]) => key);
 
   const section = findSectionContaining(model.sections, firstRow);
   if (!section || lastRow >= section.endRow) {

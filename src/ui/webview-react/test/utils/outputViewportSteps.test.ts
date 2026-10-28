@@ -13,6 +13,7 @@ import type {
 } from "@utils/outputRows";
 import {
   buildOutputStepSections,
+  MIN_IN_VIEW_STEP_PX,
   resolveOutputViewportSteps,
 } from "@utils/outputViewportSteps";
 
@@ -228,6 +229,44 @@ describe("resolveOutputViewportSteps", () => {
     expect(result.inViewTargetKeys).toEqual([
       getTargetKey(target(0)),
       getTargetKey(target(1)),
+    ]);
+  });
+
+  it("ignores a sliver of the step above after navigating to a step", () => {
+    // Step 2's anchor starts at 700; the landing is a pixel short, leaving
+    // step 1's last row 1px on screen.
+    expect(resolveAt(699).inViewTargetKeys).toEqual([getTargetKey(target(1))]);
+    expect(resolveAt(700 - MIN_IN_VIEW_STEP_PX).inViewTargetKeys).toEqual([
+      getTargetKey(target(0)),
+      getTargetKey(target(1)),
+    ]);
+  });
+
+  it("ignores a sliver of the next step at the bottom edge", () => {
+    expect(resolveAt(401).inViewTargetKeys).toEqual([getTargetKey(target(0))]);
+  });
+
+  it("counts a short step that is entirely on screen", () => {
+    const rows = [response("r0", 0), response("r1", 1), response("r2", 2)];
+    const result = resolveOutputViewportSteps({
+      rows,
+      model: buildOutputStepSections(rows),
+      rowStarts: [0, 100, 110],
+      totalSize: 300,
+      viewportTop: 50,
+      viewportBottom: 200,
+      stickyHeightPx: 0,
+    });
+    expect(result.inViewTargetKeys).toEqual([
+      getTargetKey(target(0)),
+      getTargetKey(target(1)),
+      getTargetKey(target(2)),
+    ]);
+  });
+
+  it("still reports the step filling a viewport shorter than the threshold", () => {
+    expect(resolveAt(150, 10).inViewTargetKeys).toEqual([
+      getTargetKey(target(0)),
     ]);
   });
 
