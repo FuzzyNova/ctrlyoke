@@ -18,7 +18,7 @@
 >
 > Last reviewed against code: 2026-10-26. Still not started (P3 in `dev/active/ROADMAP.md`).
 > `dev/implemented/ADDING_NEW_CLI_HARNESS.md` is a superseded FlightPath-era guide that points
-> back to §5.2 Steps 6–9 here, so this plan *is* the current recipe. Re-diffed that checklist
+> back to §5.2 Steps 6–9 here, so this plan _is_ the current recipe. Re-diffed that checklist
 > against every file that wires `qwen-cli` and `antigravity-cli` today: `installHint` is now
 > `installCommand` (built with `installCommandFor` from `shared/HarnessInstallCommand.ts`), and
 > Step 9 gained the harness-test scripts, `AdvancedPermissionsSection.tsx`, the hand-written
@@ -344,7 +344,9 @@ export class ClineCliProvider implements ICliProvider {
     harnessId: HARNESS_IDS.CLINE_CLI,
     displayName: "Cline CLI",
     terminalName: "Cline",
-    installCommand: installCommandFor({/* see shared/HarnessInstallCommand.ts */}),
+    installCommand: installCommandFor({
+      /* see shared/HarnessInstallCommand.ts */
+    }),
     npmPackage: "cline",
     versionPolicy: {/* see dev/reference/HARNESS_VERSION_SUPPORT.md */},
     shouldStreamHeadlessOutput: true,

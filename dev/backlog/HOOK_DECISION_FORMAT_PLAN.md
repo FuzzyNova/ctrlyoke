@@ -10,7 +10,7 @@ Shipped:
   `CTRLYOKE_WORKFLOW_NAME`, `CTRLYOKE_PROMPT_NAME`, `CTRLYOKE_PROMPT_INDEX`,
   `CTRLYOKE_PARALLEL_GROUP_ID`, `CTRLYOKE_HARNESS_ID`, `CTRLYOKE_WORKSPACE_ROOT` and
   `CTRLYOKE_WORKING_FILE`, with an example script that reads `CTRLYOKE_HARNESS_ID` (Phase 1
-  item 3, apart from a per-harness *branching* example).
+  item 3, apart from a per-harness _branching_ example).
 - **Compatibility no longer overstates OpenCode.** `OpenCodeNotificationMonitor` declares
   `preToolUse` partial with `HOOK_CAVEAT_CODES.CANNOT_BLOCK` (`75eb666c3`) and
   `permissionRequest` partial with `HOOK_CAVEAT_CODES.DECISION_UNSUPPORTED` (OpenCode 1.19.4

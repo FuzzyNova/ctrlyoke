@@ -502,8 +502,8 @@ truncation markers shipped with
 [`PRIOR_CONTEXT_DETAIL_PLAN.md`](../implemented/PRIOR_CONTEXT_DETAIL_PLAN.md). What this plan
 still adds is the **workflow** row of the summary table:
 
-| Step kind | Summary                                                                                                                                              |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Step kind | Summary                                                                                                                                                                                                             |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Workflow  | Metadata in full; each child step's summary by the existing rules, within a **24 KB budget per workflow step** (`PRIOR_CONTEXT_LIMITS.WORKFLOW_BUDGET_BYTES`, already defined); the earliest steps are elided first |
 
 - **Workflow budget.** Render the metadata and every child step's summary. While the total is
