@@ -28,6 +28,8 @@ import {
   STEP_COLOR_MODES,
   TOAST_LEVEL_MODES,
   RERUN_CONFIRMATION_MODES,
+  OUTPUT_ANNOUNCEMENT_MODES,
+  type OutputAnnouncementMode,
   type RerunConfirmationMode,
   type StepColorMode,
   type StatusLineHarnessId,
@@ -101,6 +103,14 @@ export interface StatusLineHarnessSettings {
   /** Whether ctrlyoke's own branded line wins over custom command output. */
   useCtrlyokeStyle: boolean;
   format: StatusLineSegment[];
+}
+
+/** Dashboard screen-reader support (`ui.accessibility`). */
+export interface UiAccessibilitySettings {
+  /** What the output live region announces while a run streams. */
+  outputAnnouncements: OutputAnnouncementMode;
+  /** Turn on xterm's screen-reader mode in the dashboard's terminal tab. */
+  terminalScreenReaderMode: boolean;
 }
 
 /** Dashboard-only per-harness identity colors for correlating workflow steps across panes. */
@@ -363,6 +373,7 @@ export interface CtrlYokeGlobalSettings {
     stepColorMode: StepColorMode;
     /** Dashboard-only per-harness identity color controls. */
     harnessColors: HarnessColorSettings;
+    accessibility: UiAccessibilitySettings;
   };
 
   diagnostics: {
@@ -661,6 +672,10 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     harnessColors: {
       byHarness: {},
       script: "#808080",
+    },
+    accessibility: {
+      outputAnnouncements: OUTPUT_ANNOUNCEMENT_MODES.COMPLETIONS,
+      terminalScreenReaderMode: false,
     },
   },
   server: {

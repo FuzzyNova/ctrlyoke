@@ -247,19 +247,20 @@ Right-click a workflow or run for:
 These work while the dashboard has focus. On macOS, use `Cmd` for `Ctrl` and
 `Option` for `Alt`, except Run and Queue, which use `Ctrl` on every platform.
 
-| Shortcut           | Action                                                      |
-| ------------------ | ----------------------------------------------------------- |
-| `Ctrl+N`           | New blank workflow, with the cursor in its name             |
-| `Ctrl+Shift+N`     | New workflow from a template                                |
-| `Ctrl+Enter`       | Run the prompt in the editor                                |
-| `Ctrl+Shift+Enter` | Queue the prompt in the editor                              |
-| `Ctrl+Shift+F`     | Search history                                              |
-| `Alt+H`            | Pick the workflow harness                                   |
-| `Alt+M`            | Pick the workflow model                                     |
-| `Alt+R`            | Pick the workflow's resume session setting                  |
-| `Alt+Shift+H`      | Pick the harness for the step you're editing                |
-| `Alt+Shift+M`      | Pick the model for the step you're editing                  |
-| `Alt+Shift+R`      | Pick the resume session setting for the step you're editing |
+| Shortcut           | Action                                                                                 |
+| ------------------ | -------------------------------------------------------------------------------------- |
+| `Ctrl+N`           | New blank workflow, with the cursor in its name                                        |
+| `Ctrl+Shift+N`     | New workflow from a template                                                           |
+| `Ctrl+Enter`       | Run the prompt in the editor                                                           |
+| `Ctrl+Shift+Enter` | Queue the prompt in the editor                                                         |
+| `Ctrl+Shift+F`     | Search history                                                                         |
+| `Alt+H`            | Pick the workflow harness                                                              |
+| `Alt+M`            | Pick the workflow model                                                                |
+| `Alt+R`            | Pick the workflow's resume session setting                                             |
+| `Alt+Shift+H`      | Pick the harness for the step you're editing                                           |
+| `Alt+Shift+M`      | Pick the model for the step you're editing                                             |
+| `Alt+Shift+R`      | Pick the resume session setting for the step you're editing                            |
+| `Alt+L`            | [Read the last response](/guide/accessibility#read-last-response) with a screen reader |
 
 A new workflow takes no mouse at all: press `Ctrl+N`, type its name, press
 `Tab` (or `Enter`) to move to the prompt editor, type the prompt and press

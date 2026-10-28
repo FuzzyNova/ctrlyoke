@@ -958,6 +958,10 @@ export class WebviewSettingsSync {
       showCostEstimates: ConfigurationUtils.shouldShowCostEstimates(),
       stepColorMode: ConfigurationUtils.getStepColorMode(),
       harnessColors: ConfigurationUtils.getHarnessColorSettings(),
+      // Mirrored so screen-reader announcements and the terminal's
+      // screen-reader mode apply from panel load, not only after the
+      // settings drawer has been opened (see `fullGlobalSettings`).
+      accessibility: ConfigurationUtils.getUiAccessibilitySettings(),
       isMultiRoot: this.host.getNamedRoots().length > 1,
       priorContext: ConfigurationUtils.getPriorContext(),
       defaultEndCondition: ConfigurationUtils.getDefaultEndCondition() ?? null,

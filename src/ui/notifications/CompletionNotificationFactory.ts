@@ -37,6 +37,11 @@ export interface CtrlYokeNotificationEvent {
   url?: string;
   /** Set for hook-kind events. */
   hookEvent?: HookEvent;
+  /**
+   * Set instead of `hookEvent` for a hook event ctrlyoke derived, such as
+   * waiting-for-input, so clients can react to it without matching its title.
+   */
+  derivedEvent?: DerivedNotificationEvent;
   /** Harness that fired the hook event. */
   harnessId?: string;
   /** Tool name for preToolUse / postToolUse hook events. */
@@ -406,6 +411,9 @@ export function buildHookNotificationEvent(
     tag: `ctrlyoke-hook-${artifact.workflowId}-${artifact.hookEvent}`,
     url,
     hookEvent: isAwaitingInput ? undefined : (artifact.hookEvent as HookEvent),
+    ...(isAwaitingInput
+      ? { derivedEvent: DERIVED_NOTIFICATION_EVENTS.AWAITING_INPUT }
+      : {}),
     harnessId: artifact.harnessId,
     toolName: artifact.toolName,
   };

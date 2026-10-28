@@ -119,6 +119,13 @@ let currentTerminalSettings: TerminalSettings = {
   mobileCustomShortcuts: [],
 };
 
+/**
+ * xterm's screen-reader mode (`ui.accessibility.terminalScreenReaderMode`).
+ * Kept apart from `TerminalSettings`, which mirrors the `terminal.*` settings,
+ * and never applied to the hidden viewport-measurement terminal.
+ */
+let currentScreenReaderMode = false;
+
 function makeKey(workflowId: string, sessionId: string): string {
   return `${workflowId}:${sessionId}`;
 }
@@ -370,7 +377,10 @@ export const terminalRegistry = {
     // await — concurrent callers can't interleave, hence no pending-create dedup.
     const theme = readVsCodeTheme();
     const settings = this.getTerminalSettings();
-    const term = new Terminal(createTerminalOptions(theme, settings));
+    const term = new Terminal({
+      ...createTerminalOptions(theme, settings),
+      screenReaderMode: currentScreenReaderMode,
+    });
 
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
@@ -543,6 +553,14 @@ export const terminalRegistry = {
       applyTerminalSettings(viewportMeasurementEntry.term, settings);
     }
     refitAfterMetricsChange();
+  },
+
+  /** Turn xterm's screen-reader mode on or off for every session terminal. */
+  setScreenReaderMode(enabled: boolean): void {
+    currentScreenReaderMode = enabled;
+    for (const entry of registry.values()) {
+      entry.term.options.screenReaderMode = enabled;
+    }
   },
 
   /**

@@ -23,6 +23,7 @@ import {
   NONE_OPTION,
   PROPERTY_EDITOR_MODES,
   RERUN_CONFIRMATION_MODES,
+  OUTPUT_ANNOUNCEMENT_MODES,
   RESUME_SESSION_SELECTIONS,
   RUN_HISTORY_LOCATIONS,
   SESSION_ID_SENTINELS,
@@ -47,6 +48,7 @@ import {
   type NotificationEventMode,
   type PermissionMode,
   type RerunConfirmationMode,
+  type OutputAnnouncementMode,
   type ServerThemeMode,
   type StepColorMode,
   type TerminalCursorStyle,
@@ -728,6 +730,32 @@ export const RERUN_CONFIRMATION_MODE_OPTIONS_META: Record<
   [RERUN_CONFIRMATION_MODES.NEVER]: {
     value: RERUN_CONFIRMATION_MODES.NEVER,
     label: "Never",
+  },
+};
+
+export const OUTPUT_ANNOUNCEMENT_MODE_OPTIONS_META: Record<
+  OutputAnnouncementMode,
+  SchemaOptionMeta<OutputAnnouncementMode>
+> = {
+  [OUTPUT_ANNOUNCEMENT_MODES.NONE]: {
+    value: OUTPUT_ANNOUNCEMENT_MODES.NONE,
+    label: "None",
+  },
+  [OUTPUT_ANNOUNCEMENT_MODES.COMPLETIONS]: {
+    value: OUTPUT_ANNOUNCEMENT_MODES.COMPLETIONS,
+    label: "Step changes and finished responses",
+    alias: {
+      reason:
+        "Names what is announced; 'completions' alone does not say that step starts and questions are included.",
+    },
+  },
+  [OUTPUT_ANNOUNCEMENT_MODES.STREAMING]: {
+    value: OUTPUT_ANNOUNCEMENT_MODES.STREAMING,
+    label: "Also read responses as they stream",
+    alias: {
+      reason:
+        "Says this mode adds to the completions mode rather than replacing it.",
+    },
   },
 };
 

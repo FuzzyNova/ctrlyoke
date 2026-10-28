@@ -954,6 +954,9 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "trustedExternalRoots": "Restricts, extends, or disables this workflow's external-root access relative to the user/workspace defaults. Omit this field entirely to inherit the live union of approved user + workspace permissions.trustedExternalRoots (today's behavior, unchanged). When set, the array REPLACES that inherited union rather than adding to it — it may contain brand-new roots this workflow alone needs (widening, without growing the user/workspace list for every other workflow) and/or a deliberately narrowed subset of already-trusted roots (restricting a risky workflow to less than the everyday default); either way every root in the array still needs its own one-time approval unless already approved at a broader scope.",
   "type": "Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible).",
   "ui": "UI display settings.",
+  "ui.accessibility": "Screen-reader support in the dashboard.",
+  "ui.accessibility.outputAnnouncements": "What a screen reader is told about a run while you work elsewhere in the dashboard. 'completions' (the default) announces when a step starts, finishes or fails, when the AI asks a question or is waiting for input, and the final text of each response once it finishes. 'streaming' also reads the response a paragraph at a time while it arrives, at most one announcement every few seconds. 'none' announces nothing. Tool calls, thinking and diffs are only summarized (\"edited 3 files\"), never read out. Alt+L reads the last response on demand in every mode.",
+  "ui.accessibility.terminalScreenReaderMode": "Turn on screen-reader mode in the dashboard's Terminal tab, so a screen reader can read the terminal's text and follow new output. Browsers can't detect a screen reader, so this is off until you turn it on.",
   "ui.atomicContextReferences": "In the prompt editor, treat @file/#symbol/~git/$context references as single units: arrow keys skip over them and Backspace/Delete removes the whole reference at once. In output, format clickable local references as compact chips. Clicking or tapping a chip opens it, and right-clicking or long-pressing it offers Go to Reference, Copy Reference, and Send as Plain Text; when off, editor references edit character by character and output uses ordinary text links.",
   "ui.autoExpandEditorWhenTyping": "Automatically grow the editor panel as you type past its current height, up to 60% of the available area. Shrinks back when text is deleted or the prompt is submitted.",
   "ui.autoFocusOutputOnExecution": "Automatically expand the output section and switch to the relevant output view when a prompt starts. Headless runs show Output; interactive and terminal-reuse runs show Terminal.",
@@ -2630,6 +2633,11 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
   "type": [
     "prompt",
     "script"
+  ],
+  "ui.accessibility.outputAnnouncements": [
+    "none",
+    "completions",
+    "streaming"
   ],
   "ui.confirmRerunOperations": [
     "always",

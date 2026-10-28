@@ -2386,6 +2386,21 @@ export const STEP_COLOR_MODES = {
 export type StepColorMode =
   (typeof STEP_COLOR_MODES)[keyof typeof STEP_COLOR_MODES];
 
+/**
+ * `ui.accessibility.outputAnnouncements`: what the dashboard's screen-reader
+ * live region says about a run. `completions` covers step transitions,
+ * questions, waiting-for-input and each turn's final text; `streaming` also
+ * reads paragraphs of the response as they arrive.
+ */
+export const OUTPUT_ANNOUNCEMENT_MODES = {
+  NONE: "none",
+  COMPLETIONS: "completions",
+  STREAMING: "streaming",
+} as const;
+
+export type OutputAnnouncementMode =
+  (typeof OUTPUT_ANNOUNCEMENT_MODES)[keyof typeof OUTPUT_ANNOUNCEMENT_MODES];
+
 /** `ui.confirmRerunOperations`: which workflows ask before Re-run starts a new run. */
 export const RERUN_CONFIRMATION_MODES = {
   ALWAYS: "always",

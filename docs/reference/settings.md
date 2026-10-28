@@ -1145,6 +1145,26 @@ Fields:
 
 Hex color used for script steps.
 
+### `ui.accessibility` {#ui-accessibility}
+
+- **Type:** `{ outputAnnouncements?, terminalScreenReaderMode? }`
+
+Screen-reader support in the dashboard.
+
+### `ui.accessibility.outputAnnouncements` {#ui-accessibility-outputannouncements}
+
+- **Type:** `"none" | "completions" | "streaming"`
+- **Default:** `"completions"`
+
+What a screen reader is told about a run while you work elsewhere in the dashboard. 'completions' (the default) announces when a step starts, finishes or fails, when the AI asks a question or is waiting for input, and the final text of each response once it finishes. 'streaming' also reads the response a paragraph at a time while it arrives, at most one announcement every few seconds. 'none' announces nothing. Tool calls, thinking and diffs are only summarized ("edited 3 files"), never read out. Alt+L reads the last response on demand in every mode.
+
+### `ui.accessibility.terminalScreenReaderMode` {#ui-accessibility-terminalscreenreadermode}
+
+- **Type:** `boolean`
+- **Default:** `false`
+
+Turn on screen-reader mode in the dashboard's Terminal tab, so a screen reader can read the terminal's text and follow new output. Browsers can't detect a screen reader, so this is off until you turn it on.
+
 ## `server` {#server}
 
 ctrlyoke hosted server settings.

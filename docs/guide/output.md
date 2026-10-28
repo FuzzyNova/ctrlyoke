@@ -207,6 +207,8 @@ no identity colours are shown at all.
 ## Related
 
 - [The dashboard](/guide/dashboard)
+- [Screen readers and dictation](/guide/accessibility): what a screen reader
+  announces during a run, and how to move through the output by step
 - [File changes and undo](/guide/file-changes)
 - [Dry Run](/guide/dry-run)
 - [Settings reference: `ui`](/reference/settings#ui-stepcolormode)

@@ -323,3 +323,26 @@ describe("terminalRegistry viewport measurement", () => {
     expect(container.children).toHaveLength(0);
   });
 });
+
+describe("terminalRegistry screen-reader mode", () => {
+  afterEach(() => {
+    vi.resetModules();
+    terminalConstructCount = 0;
+  });
+
+  it("applies to existing terminals and to terminals created later", async () => {
+    const { terminalRegistry } = await import("../terminalRegistry");
+    const before = await terminalRegistry.create("wf-sr", "sess-before");
+    expect(before.term.options.screenReaderMode).toBe(false);
+
+    terminalRegistry.setScreenReaderMode(true);
+    expect(before.term.options.screenReaderMode).toBe(true);
+
+    const after = await terminalRegistry.create("wf-sr", "sess-after");
+    expect(after.term.options.screenReaderMode).toBe(true);
+
+    terminalRegistry.setScreenReaderMode(false);
+    expect(before.term.options.screenReaderMode).toBe(false);
+    expect(after.term.options.screenReaderMode).toBe(false);
+  });
+});

@@ -94,6 +94,10 @@ export default defineConfig({
             { text: "Dry Run", link: "/guide/dry-run" },
             { text: "Run history and search", link: "/guide/history" },
             { text: "Notifications", link: "/guide/notifications" },
+            {
+              text: "Screen readers and dictation",
+              link: "/guide/accessibility",
+            },
             { text: "Usage and stats", link: "/guide/usage-and-stats" },
             { text: "Commit messages", link: "/guide/commit-messages" },
             { text: "Settings", link: "/guide/settings" },

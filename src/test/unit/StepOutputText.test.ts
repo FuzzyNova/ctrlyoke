@@ -11,6 +11,7 @@ import {
 import { sanitizeTerminalOutput } from "../../utils/TerminalOutputSanitizer";
 import {
   getAssistantText,
+  getFinalAssistantText,
   getScriptOutputText,
   getStepOutputText,
 } from "../../utils/StepOutputText";
@@ -26,6 +27,36 @@ suite("StepOutputText", () => {
       },
     ];
     assert.strictEqual(getAssistantText(events), "answer");
+  });
+
+  test("final assistant text is the message after the last action", () => {
+    const events: CliEvent[] = [
+      { type: CLI_EVENT_TYPES.TEXT, data: { text: "Let me look." } },
+      {
+        type: CLI_EVENT_TYPES.BASH_COMMAND,
+        data: { command: "npm test", exitCode: 0 },
+      },
+      { type: CLI_EVENT_TYPES.THINKING, data: { text: "they pass" } },
+      { type: CLI_EVENT_TYPES.TEXT, data: { text: "All tests pass." } },
+    ];
+    assert.strictEqual(getFinalAssistantText(events), "All tests pass.");
+  });
+
+  test("final assistant text skips subagent text and falls back past a trailing action", () => {
+    const events: CliEvent[] = [
+      { type: CLI_EVENT_TYPES.TEXT, data: { text: "Summary so far." } },
+      {
+        type: CLI_EVENT_TYPES.TEXT,
+        data: { text: "subagent chatter" },
+        subagent: { parentToolCallId: "task-1" },
+      },
+      {
+        type: CLI_EVENT_TYPES.FILE_READ,
+        data: { path: "src/a.ts" },
+      } as CliEvent,
+    ];
+    assert.strictEqual(getFinalAssistantText(events), "Summary so far.");
+    assert.strictEqual(getFinalAssistantText([]), "");
   });
 
   test("script text matches the historical reporter response projection", () => {

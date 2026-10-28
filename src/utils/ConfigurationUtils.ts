@@ -14,6 +14,7 @@ import type {
   RunHistoryLocation,
   StatusLineHarnessSettings,
   TerminalSettings,
+  UiAccessibilitySettings,
 } from "../types/CtrlYokeSettings";
 import {
   CTRLYOKE_SETTINGS_DEFAULTS,
@@ -345,6 +346,11 @@ export const ConfigurationUtils = {
   /** Get the dashboard step identity color mode. */
   getStepColorMode(): StepColorMode {
     return configService.get(CONFIG_KEYS.UI).stepColorMode;
+  },
+
+  /** Get the dashboard's screen-reader settings (`ui.accessibility`). */
+  getUiAccessibilitySettings(): UiAccessibilitySettings {
+    return configService.get(CONFIG_KEYS.UI).accessibility;
   },
 
   /**

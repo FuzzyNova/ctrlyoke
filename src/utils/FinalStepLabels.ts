@@ -18,6 +18,18 @@ export function formatFinalPassLabel(passNumber: number): string {
   return `Final Step Pass ${passNumber}`;
 }
 
+/**
+ * Caption for the step an output belongs to: "Step 3" for a queue step,
+ * "Final Step Pass 2" for a final-step pass. Both indexes are 0-based
+ * (`stepIndex` / `loopIndex`).
+ */
+export function formatStepTargetLabel(
+  isFinalStep: boolean,
+  index: number
+): string {
+  return isFinalStep ? formatFinalPassLabel(index + 1) : `Step ${index + 1}`;
+}
+
 /** The same label for use mid-sentence, e.g. "final step pass 2". */
 export function formatFinalPassPhrase(passNumber: number): string {
   return formatFinalPassLabel(passNumber).toLowerCase();

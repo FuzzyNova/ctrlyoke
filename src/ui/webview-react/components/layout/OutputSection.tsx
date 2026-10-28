@@ -17,6 +17,7 @@ import {
   useElementTier,
 } from "@hooks/useElementNarrow";
 import { useOutputExport } from "@hooks/useOutputExport";
+import { announceLastResponse } from "@hooks/useOutputAnnouncer";
 import { useOutputMinimapModel } from "@hooks/useOutputMinimapModel";
 import {
   useOutputNavigation,
@@ -1693,6 +1694,7 @@ const OutputSectionInner: React.FC = () => {
           onCollapseAllDiffs={collapseAllDiffs}
           onExpandAllDiffs={expandAllDiffs}
           onExport={outputExport.openModal}
+          onReadLastResponse={announceLastResponse}
           onToggleFind={handleToggleFind}
           onClearHiddenOutputTargets={handleClearHiddenOutputTargets}
           onNewTerminal={handleSpawnTerminal}

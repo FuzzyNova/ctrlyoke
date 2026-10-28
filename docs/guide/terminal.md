@@ -170,7 +170,9 @@ Customise it under **Settings → Terminal → Mobile Control Bar**:
 The **Terminal** tab of Settings also sets the font size, line height,
 scrollback, cursor style, the shell, and whether macOS **Option** acts as
 **Meta**. See the [settings reference](/reference/settings#terminal) for each
-one.
+one. To have a screen reader read the terminal, turn on
+[**Terminal screen reader mode**](/guide/accessibility#terminal) in
+**Settings → General**.
 
 ## Related
 

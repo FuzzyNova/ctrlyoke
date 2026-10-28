@@ -17,6 +17,7 @@ import {
   DEFAULT_FORMAT_OPTIONS_META,
   STEP_COLOR_MODE_OPTIONS_META,
   RERUN_CONFIRMATION_MODE_OPTIONS_META,
+  OUTPUT_ANNOUNCEMENT_MODE_OPTIONS_META,
   CTRLYOKE_MCP_MODE_OPTIONS_META,
   SERVER_THEME_OPTIONS_META,
   toSelectOptions,
@@ -310,6 +311,37 @@ export function GeneralSection({
           settingKey="ui.hideGitIgnoredFiles"
           checked={ui.hideGitIgnoredFiles}
           onChange={(v) => onUpdate("ui.hideGitIgnoredFiles", v)}
+          {...rowProps}
+        />
+      </div>
+      <div className="pt-3 border-t border-panel-border mt-3">
+        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
+          Accessibility
+        </h3>
+        <SettingInputRow
+          settingKey="ui.accessibility.outputAnnouncements"
+          id="ui-accessibility-output-announcements"
+          {...rowProps}
+        >
+          <CustomSelect
+            id="ui-accessibility-output-announcements"
+            value={ui.accessibility.outputAnnouncements}
+            onChange={(v) =>
+              onUpdate("ui.accessibility.outputAnnouncements", v)
+            }
+            schemaPath="ui.accessibility.outputAnnouncements"
+            options={toSelectOptions(
+              OUTPUT_ANNOUNCEMENT_MODE_OPTIONS_META,
+              "ui.accessibility.outputAnnouncements"
+            )}
+          />
+        </SettingInputRow>
+        <SettingToggleRow
+          settingKey="ui.accessibility.terminalScreenReaderMode"
+          checked={ui.accessibility.terminalScreenReaderMode}
+          onChange={(v) =>
+            onUpdate("ui.accessibility.terminalScreenReaderMode", v)
+          }
           {...rowProps}
         />
       </div>

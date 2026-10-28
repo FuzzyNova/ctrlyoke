@@ -111,6 +111,13 @@ import { workflowViewAddressKey } from "@utils/viewAddress";
 import { formatClockDuration } from "@utils/time";
 import { describeRowTiming } from "@utils/outputRowTiming";
 import {
+  OUTPUT_STEP_HEADING_LEVEL,
+  STEP_HEADING_STATES,
+  describeResponseArticle,
+  describeStepHeading,
+  type StepHeadingState,
+} from "@utils/outputAccessibility";
+import {
   OUTPUT_BLOCK_BASE,
   OUTPUT_STEP_LEAD_BLOCK_BASE,
   TOOL_RESULT_LINE,
@@ -263,6 +270,12 @@ interface OutputRowProps {
   ) => void;
   onAttemptGroupToggle?: (groupKey: string) => void;
   hasHiddenActivity?: boolean;
+  /**
+   * The pinned copy of a step header above the stream. It repeats a row that
+   * is also in the stream, so it carries no heading or article semantics, or
+   * screen-reader heading navigation would list that step twice.
+   */
+  isStickyCopy?: boolean;
 }
 
 const SHELL_WORKFLOW_ID = "_shell";
@@ -1371,12 +1384,14 @@ const CliHeaderRowView: React.FC<{
   stepLabelContent?: React.ReactNode;
   stepNameContent?: React.ReactNode;
   onPromptView?: (row: CliHeaderRow) => void;
+  isStickyCopy?: boolean;
 }> = ({
   row,
   isExecutionActive,
   stepLabelContent,
   stepNameContent,
   onPromptView,
+  isStickyCopy,
 }) => {
   const { output } = row;
   const promptUndoSummary = row.promptUndo?.summary;
@@ -1444,6 +1459,32 @@ const CliHeaderRowView: React.FC<{
         ⬤ Streaming...
       </span>
     ) : null;
+  // The title is the step's heading for screen-reader navigation; its visible
+  // text (brackets, timestamp, icons) reads poorly, so it gets a plain name.
+  const headingState: StepHeadingState = output.isStreaming
+    ? isExecutionActive
+      ? STEP_HEADING_STATES.RUNNING
+      : STEP_HEADING_STATES.STOPPED
+    : output.errorMessage || (output.exitCode ?? 0) !== 0
+      ? STEP_HEADING_STATES.FAILED
+      : STEP_HEADING_STATES.FINISHED;
+  const headingProps = (
+    label: string,
+    name: string | undefined
+  ): React.HTMLAttributes<HTMLSpanElement> =>
+    isStickyCopy
+      ? {}
+      : {
+          role: "heading",
+          "aria-level": OUTPUT_STEP_HEADING_LEVEL,
+          "aria-label": describeStepHeading({
+            label,
+            name,
+            executionBadge,
+            harness: harnessId ? getHarnessDisplayName(harnessId) : undefined,
+            state: headingState,
+          }),
+        };
 
   if (isScriptOutput(output)) {
     const isConditionOutput =
@@ -1459,9 +1500,20 @@ const CliHeaderRowView: React.FC<{
         : isWorktreeSetup
           ? "codicon-tools"
           : "codicon-checklist";
+    const scriptHeadingLabel = isConditionOutput
+      ? (formatScriptConditionLabel(output.source, row.attemptIndex) ??
+        row.stepLabel)
+      : row.stepLabel;
     return (
       <div className={CLI_HEADER_ROW_CLASS}>
-        <span className={CLI_HEADER_TITLE_CLASS} style={CLI_HEADER_TITLE_STYLE}>
+        <span
+          className={CLI_HEADER_TITLE_CLASS}
+          style={CLI_HEADER_TITLE_STYLE}
+          {...headingProps(
+            scriptHeadingLabel,
+            row.stepName?.trim() || getFirstWords(output.cliCommand, 3)
+          )}
+        >
           {timestamp && <span className="output-timestamp">[{timestamp}]</span>}
           <span className="inline-flex min-w-0 items-center gap-1">
             <span>[</span>
@@ -1494,7 +1546,11 @@ const CliHeaderRowView: React.FC<{
 
   return (
     <div className={CLI_HEADER_ROW_CLASS}>
-      <span className={CLI_HEADER_TITLE_CLASS} style={CLI_HEADER_TITLE_STYLE}>
+      <span
+        className={CLI_HEADER_TITLE_CLASS}
+        style={CLI_HEADER_TITLE_STYLE}
+        {...headingProps(row.stepLabel, stepDisplayName)}
+      >
         {timestamp && <span className="output-timestamp">[{timestamp}]</span>}
         <span className="inline-flex min-w-0 items-center gap-1">
           <span>[</span>
@@ -1874,6 +1930,7 @@ function OutputRowComponent({
   onScriptOutputExpansionChange,
   onAttemptGroupToggle,
   hasHiddenActivity,
+  isStickyCopy,
 }: OutputRowProps) {
   const priorContextStepCount = useWorkflowStore((state) => {
     const { kind, index } = row.target;
@@ -1941,6 +1998,7 @@ function OutputRowComponent({
               : undefined
           }
           onPromptView={onPromptView}
+          isStickyCopy={isStickyCopy}
         />
       );
       break;
@@ -2112,6 +2170,20 @@ function OutputRowComponent({
       );
       break;
     }
+  }
+
+  // Each assistant message is an article, so browse mode can step from one
+  // message to the next past the tool calls between them.
+  const isAssistantMessage =
+    row.rowKind === OUTPUT_ROW_KINDS.PLAIN_RESPONSE ||
+    (row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
+      row.event.type === CLI_EVENT_TYPES.TEXT);
+  if (isAssistantMessage && !isStickyCopy) {
+    content = (
+      <div role="article" aria-label={describeResponseArticle(row.target)}>
+        {content}
+      </div>
+    );
   }
 
   const isCliGroupRow =

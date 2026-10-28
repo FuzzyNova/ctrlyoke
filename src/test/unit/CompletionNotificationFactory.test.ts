@@ -148,6 +148,10 @@ suite("CompletionNotificationFactory", () => {
       "refactor - implement - Bash - Permission required - Allow this command?"
     );
     assert.strictEqual(event?.hookEvent, undefined);
+    assert.strictEqual(
+      event?.derivedEvent,
+      DERIVED_NOTIFICATION_EVENTS.AWAITING_INPUT
+    );
   });
 
   test("gates awaiting-input artifacts on their own setting", () => {

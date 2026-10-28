@@ -177,11 +177,13 @@ function renderOutputRow(
     | "onToolCallExpansionChange"
     | "activeMatch"
     | "hiddenActivityTargetKeys"
-  >
+  >,
+  isStickyCopy = false
 ): React.ReactNode {
   return (
     <OutputRow
       row={row}
+      isStickyCopy={isStickyCopy}
       findDecorations={props.findDecorations?.get(row.key)}
       findQuery={props.findQuery}
       findCaseSensitive={props.findCaseSensitive}
@@ -344,11 +346,15 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
       {/* Focusable so a press on output text takes focus. VS Code's webview
           host runs Ctrl/Cmd+C as execCommand("copy") and, when focus is on
           <body>, first refocuses the last focused element (a prompt editor or
-          button), which moves the selection away and copies nothing. */}
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+          button), which moves the selection away and copies nothing. It is a
+          named region so screen readers can jump to it; its handlers only
+          track scrolling, touch and copy. */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
         ref={outputRef}
         id="output-content"
+        role="region"
+        aria-label="Workflow output"
         tabIndex={-1}
         {...{ [SELECT_ALL_SCOPE_ATTRIBUTE]: SELECT_ALL_SCOPES.CONTENTS }}
         className="font-mono text-(length:--cy-output-font-size-sm) min-h-0 p-0 flex-1 overflow-y-auto scrollbar-hide outline-none"
@@ -409,7 +415,7 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
                 >
                   {/* The same rows the stream renders, so the copy lines up
                     exactly with the real header when it scrolls back in. */}
-                  {renderOutputRow(stickyRows.headerRow, props)}
+                  {renderOutputRow(stickyRows.headerRow, props, true)}
                   {stickyRows.previewRow && (
                     <div
                       style={
@@ -420,7 +426,7 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
                           : STICKY_PREVIEW_CLIP_STYLE
                       }
                     >
-                      {renderOutputRow(stickyRows.previewRow, props)}
+                      {renderOutputRow(stickyRows.previewRow, props, true)}
                     </div>
                   )}
                 </div>

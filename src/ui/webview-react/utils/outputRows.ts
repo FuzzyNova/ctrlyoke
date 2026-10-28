@@ -109,7 +109,10 @@ import type { DiffRenderPlan } from "./rdvAdapter";
 import { resolveStepColor } from "./stepColor";
 import type { HarnessColorSettings } from "@root/types/CtrlYokeSettings";
 import type { StepColorMode } from "@root/types/DashboardConstants";
-import { formatFinalPassLabel } from "@root/utils/FinalStepLabels";
+import {
+  formatFinalPassLabel,
+  formatStepTargetLabel,
+} from "@root/utils/FinalStepLabels";
 import { subagentGroupKey } from "@root/utils/SubagentAttribution";
 
 export interface OutputRowPromptUndoMeta {
@@ -2533,9 +2536,7 @@ export function buildOutputRows(
           key: `${targetKey}:hidden`,
           rowKind: OUTPUT_ROW_KINDS.STEP_HIDDEN,
           target,
-          stepLabel: isFinalStep
-            ? formatFinalPassLabel(target.index + 1)
-            : `Step ${target.index + 1}`,
+          stepLabel: formatStepTargetLabel(isFinalStep, target.index),
           stepName: isFinalStep
             ? getStepName(workflowStep, formatFinalPassLabel(target.index + 1))
             : workflowStep?.name?.trim() || undefined,
@@ -2649,9 +2650,7 @@ export function buildOutputRows(
     const stepName = isFinalStep
       ? getStepName(workflowStep, formatFinalPassLabel(target.index + 1))
       : workflowStep?.name?.trim() || undefined;
-    const stepLabel = isFinalStep
-      ? formatFinalPassLabel(target.index + 1)
-      : `Step ${target.index + 1}`;
+    const stepLabel = formatStepTargetLabel(isFinalStep, target.index);
     const attemptIndex = message.attemptIndex ?? 0;
     const runIndex = message.runIndex ?? output.runIndex ?? 0;
     const attemptRowKeyBase = getAttemptRowKeyBase(

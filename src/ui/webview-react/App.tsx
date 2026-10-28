@@ -14,6 +14,8 @@ import { useNewWorkflowKeyHandler } from "@hooks/useNewWorkflowKeyHandler";
 import { useHistorySearchKeyHandler } from "@hooks/useHistorySearchKeyHandler";
 import { useScopedSelectAll } from "@hooks/useScopedSelectAll";
 import { usePickerShortcutKeyHandler } from "@hooks/usePickerShortcutKeyHandler";
+import { useReadLastResponseKeyHandler } from "@hooks/useReadLastResponseKeyHandler";
+import { useTerminalScreenReaderModeSync } from "@hooks/useTerminalScreenReaderModeSync";
 import { useRunViewLoadWatchdog } from "@hooks/useRunViewLoadWatchdog";
 import { useDuplicateWorkflowWatchdog } from "@hooks/useDuplicateWorkflowWatchdog";
 import {
@@ -81,6 +83,7 @@ import { useNavigationSync } from "./navigation/useNavigationSync";
 import { getReadyPreferredViewAddress } from "./navigation/readyRoute";
 import { HistorySearchDrawer } from "@components/search";
 import { ToastViewport } from "@components/shared/ToastViewport";
+import { ScreenReaderAnnouncer } from "@components/shared/ScreenReaderAnnouncer";
 import { BatchApprovalModal } from "@components/shared/BatchApprovalModal";
 import { ChoiceModal } from "@components/shared/ChoiceModal";
 import { startPanelMemorySampler } from "@utils/memorySampler";
@@ -410,6 +413,8 @@ function App() {
   useHistorySearchKeyHandler();
   useScopedSelectAll();
   usePickerShortcutKeyHandler();
+  useReadLastResponseKeyHandler();
+  useTerminalScreenReaderModeSync();
   // Bounds how long a run-view request may stay outstanding — a lost one
   // suppresses every server-initiated view update until it is retired.
   useRunViewLoadWatchdog();
@@ -816,6 +821,7 @@ function App() {
         <UxSnapshotButton />
 
         <ToastViewport />
+        <ScreenReaderAnnouncer />
 
         <BatchApprovalModal />
         <ChoiceModal />
@@ -1078,6 +1084,7 @@ function App() {
       <UxSnapshotButton />
 
       <ToastViewport />
+      <ScreenReaderAnnouncer />
 
       <BatchApprovalModal />
       <ChoiceModal />

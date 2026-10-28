@@ -119,6 +119,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Waiting for input** notifications are on by default and fire once when a
   harness is blocked on a permission prompt or question. They work on every
   harness except Antigravity.
+- **Screen reader support in the dashboard.** A screen reader now hears when
+  a step starts, finishes or fails, when the AI asks a question or is waiting
+  for input, and each response once it finishes, read as a summary of what the
+  step did and the AI's last message. **Settings → General → Accessibility**
+  can also read responses as they stream, or turn announcements off.
+  `Alt+L` reads the last response again. In the output pane every step header
+  is a heading and every AI message an article, so heading and article
+  navigation jump between steps and messages. **Terminal screen reader mode**
+  makes the Terminal tab readable. See
+  [Screen readers and dictation](https://ctrlyoke.dev/docs/guide/accessibility).
 - **Exit Terminal and Exit All Idle Terminals** in the workflow list's right-click menu. They send the harness Ctrl+C so its TUI quits, then end the process. Running and paused workflows are left alone, and the session stays resumable.
 
 ### Changed

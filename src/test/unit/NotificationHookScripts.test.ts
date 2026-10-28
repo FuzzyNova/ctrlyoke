@@ -34,6 +34,16 @@ const HOOK_SCRIPTS: Record<HookScriptHarness, string> = {
   antigravity: scriptPath("ctrlyoke-antigravity-hook.js"),
 };
 
+function withoutCtrlyokeEnvironment(
+  environment: NodeJS.ProcessEnv
+): NodeJS.ProcessEnv {
+  return Object.fromEntries(
+    Object.entries(environment).filter(
+      ([name]) => !name.startsWith("CTRLYOKE_")
+    )
+  );
+}
+
 function runHook(
   harness: HookScriptHarness,
   notifyDir: string,
@@ -46,7 +56,10 @@ function runHook(
       process.execPath,
       [HOOK_SCRIPTS[harness], notifyDir, ...hookArgs],
       {
-        env: { ...process.env, ...env },
+        // Drop inherited CTRLYOKE_* variables: when the suite itself runs in
+        // a ctrlyoke-launched harness, the parent's CTRLYOKE_NOTIFY_AWAITING_INPUT
+        // turned every expected `notification` artifact into `awaitingInput`.
+        env: { ...withoutCtrlyokeEnvironment(process.env), ...env },
         stdio: ["pipe", "pipe", "pipe"],
         windowsHide: true,
       }

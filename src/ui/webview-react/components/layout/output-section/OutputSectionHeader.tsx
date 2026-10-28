@@ -9,6 +9,7 @@ import {
 } from "@utils/promptUndo";
 import type { TerminalSession } from "@store/terminalStore";
 import { Icon } from "../../shared/Icon";
+import { READ_LAST_RESPONSE_SHORTCUT } from "@hooks/useReadLastResponseKeyHandler";
 
 export interface OutputSectionHeaderProps {
   activeOutputTab: OutputTab;
@@ -34,6 +35,7 @@ export interface OutputSectionHeaderProps {
   onCollapseAllDiffs: () => void;
   onExpandAllDiffs: () => void;
   onExport: () => void;
+  onReadLastResponse: () => void;
   onToggleFind: () => void;
   onClearHiddenOutputTargets: () => void;
   onNewTerminal: () => void;
@@ -71,6 +73,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
   onCollapseAllDiffs,
   onExpandAllDiffs,
   onExport,
+  onReadLastResponse,
   onToggleFind,
   onClearHiddenOutputTargets,
   onNewTerminal,
@@ -293,6 +296,18 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
                 </span>
               </button>
             )}
+            {/* For screen-reader and keyboard users, so it stays out of sight
+                until focused; Alt+L does the same from anywhere. */}
+            <button
+              type="button"
+              className="icon-btn py-1 px-1 sr-only focus:not-sr-only"
+              title={`Read last response (${READ_LAST_RESPONSE_SHORTCUT.label})`}
+              aria-keyshortcuts={READ_LAST_RESPONSE_SHORTCUT.label}
+              onClick={onReadLastResponse}
+            >
+              <Icon name="unmute" className="codicon-lg" />
+              <span className="sr-only">Read last response</span>
+            </button>
             <button
               type="button"
               className={`icon-btn py-1 px-1 ${

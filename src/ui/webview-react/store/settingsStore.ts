@@ -56,6 +56,7 @@ import {
   CTRLYOKE_SETTINGS_DEFAULTS,
   DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT,
   type HarnessColorSettings,
+  type UiAccessibilitySettings,
   type WorktreeDefaultConfig,
 } from "@root/types/CtrlYokeSettings";
 import type { WorktreeObjectConfig } from "@root/types/CtrlYokeTypes";
@@ -138,6 +139,8 @@ export interface GlobalSettings {
   collapsedToolOutputLineCount: number;
   stepColorMode?: StepColorMode;
   harnessColors?: HarnessColorSettings;
+  /** Mirrored `ui.accessibility`; read it through `selectUiAccessibility`. */
+  accessibility?: UiAccessibilitySettings;
   confirmDeleteOperations: boolean;
   confirmResetOperations: boolean;
   confirmContinuationDiscardOperations: boolean;
@@ -912,6 +915,21 @@ export function selectSettingWriteScope(
  * Falls back to `ALL` (fail open) so toasts are never silently swallowed
  * before any settings have arrived.
  */
+/**
+ * Resolve the dashboard's screen-reader settings (`ui.accessibility`) with
+ * the same precedence as `selectToastLevel`. Usable as a store selector: every
+ * branch returns a stored or constant reference.
+ */
+export function selectUiAccessibility(
+  state: Pick<SettingsState, "fullGlobalSettings" | "globalSettings">
+): UiAccessibilitySettings {
+  return (
+    state.fullGlobalSettings?.settings.ui.accessibility ??
+    state.globalSettings.accessibility ??
+    CTRLYOKE_SETTINGS_DEFAULTS.ui.accessibility
+  );
+}
+
 export function selectToastLevel(): ToastLevelMode {
   const state = useSettingsStore.getState();
   return (

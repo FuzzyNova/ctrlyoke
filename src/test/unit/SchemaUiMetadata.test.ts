@@ -21,6 +21,7 @@ import {
   RUN_HISTORY_LOCATION_OPTIONS_META,
   SCRIPT_OPERATOR_OPTIONS_META,
   STEP_COLOR_MODE_OPTIONS_META,
+  OUTPUT_ANNOUNCEMENT_MODE_OPTIONS_META,
   TERMINAL_CURSOR_STYLE_OPTIONS_META,
   TERMINAL_MOBILE_CONTROL_BAR_OPTIONS_META,
   TOAST_LEVEL_OPTIONS_META,
@@ -165,6 +166,11 @@ const META_BINDINGS: Array<{
     name: "step color modes",
     rows: Object.values(STEP_COLOR_MODE_OPTIONS_META),
     paths: ["ui.stepColorMode"],
+  },
+  {
+    name: "output announcement modes",
+    rows: Object.values(OUTPUT_ANNOUNCEMENT_MODE_OPTIONS_META),
+    paths: ["ui.accessibility.outputAnnouncements"],
   },
   {
     name: "context resolution failure modes",

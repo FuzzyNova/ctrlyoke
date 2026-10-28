@@ -39,6 +39,7 @@ import {
   type DashboardHostAction,
   type DashboardHostCapability,
   type EndConditionScriptType,
+  type DerivedNotificationEvent,
   type HookEvent,
   type McpTransport,
   type NotificationKind,
@@ -108,6 +109,7 @@ import type {
   CtrlYokeGlobalSettings,
   HarnessColorSettings,
   TerminalSettings,
+  UiAccessibilitySettings,
 } from "./CtrlYokeSettings";
 import type {
   CliEvent as CliOutputEvent,
@@ -588,6 +590,7 @@ export interface InitMessageData {
     editorFontSize?: EditorFontSize;
     stepColorMode?: StepColorMode;
     harnessColors?: HarnessColorSettings;
+    accessibility?: UiAccessibilitySettings;
     externalFileRootsByScope?: ExternalFileRootsByScope;
     /** Whether standalone prompt paths use folder-qualified multi-root syntax. */
     isMultiRoot: boolean;
@@ -1834,6 +1837,7 @@ export interface GlobalSettingsUpdatedMessage {
     editorFontSize?: EditorFontSize;
     stepColorMode?: StepColorMode;
     harnessColors?: HarnessColorSettings;
+    accessibility?: UiAccessibilitySettings;
     worktree?: CtrlYokeGlobalSettings["defaults"]["worktree"];
     worktrees?: CtrlYokeGlobalSettings["worktrees"];
     externalFileRootsByScope?: ExternalFileRootsByScope;
@@ -1983,6 +1987,8 @@ export interface CompletionNotificationEventPayload {
   tag: string;
   url?: string;
   hookEvent?: HookEvent;
+  /** See `CtrlYokeNotificationEvent.derivedEvent`. */
+  derivedEvent?: DerivedNotificationEvent;
   harnessId?: string;
   toolName?: string;
 }

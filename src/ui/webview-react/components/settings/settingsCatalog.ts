@@ -240,6 +240,26 @@ const STATIC_SETTINGS_CATALOG = {
     description:
       "Hide files and directories ignored by .gitignore in the workspace file explorer and workflow file picker.",
   },
+  "ui.accessibility.outputAnnouncements": {
+    id: "ui.accessibility.outputAnnouncements",
+    path: "ui.accessibility.outputAnnouncements",
+    tab: GLOBAL_SETTINGS_TABS.GENERAL,
+    label: "Screen reader announcements",
+    keywords: [
+      "accessibility",
+      "screen reader",
+      "aria-live",
+      "nvda",
+      "voiceover",
+    ],
+  },
+  "ui.accessibility.terminalScreenReaderMode": {
+    id: "ui.accessibility.terminalScreenReaderMode",
+    path: "ui.accessibility.terminalScreenReaderMode",
+    tab: GLOBAL_SETTINGS_TABS.GENERAL,
+    label: "Terminal screen reader mode",
+    keywords: ["accessibility", "screen reader", "xterm"],
+  },
   "execution.autoDeleteTempFiles": {
     id: "execution.autoDeleteTempFiles",
     path: "execution.autoDeleteTempFiles",

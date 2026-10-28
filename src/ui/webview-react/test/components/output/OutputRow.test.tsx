@@ -1054,6 +1054,14 @@ describe("OutputRow auto-expand on hidden active match", () => {
 
     render(<OutputRow row={row} isExecutionActive={false} />);
 
+    // The step title is a level-3 heading with a plain spoken name.
+    expect(
+      screen.getByRole("heading", {
+        level: 3,
+        name: "Step 1, Claude Code, finished",
+      })
+    ).toBeInTheDocument();
+
     const line = screen.getByTestId("cli-header-harness-model");
     expect(line).toHaveClass("whitespace-nowrap");
     expect(line.getAttribute("title")).toBe(line.textContent);
@@ -1778,6 +1786,48 @@ describe("OutputRow auto-expand on hidden active match", () => {
         parallelGroups: originalState.parallelGroups,
       });
     }
+  });
+
+  it("marks each assistant message as an article named for its step", () => {
+    const row: OutputRenderRow = {
+      key: "row-final-response",
+      target: { kind: FINAL_STEP_PHASES.FINAL_STEP, index: 1 },
+      estimateSize: 0,
+      rowKind: OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
+      text: "All done.",
+      rawTextOutput: true,
+      animated: false,
+    };
+    render(<OutputRow row={row} isExecutionActive={false} />);
+
+    expect(
+      screen.getByRole("article", { name: "Response, Final Step Pass 2" })
+    ).toHaveTextContent("All done.");
+  });
+
+  it("gives the pinned copy of a step header no heading", () => {
+    const row: OutputRenderRow = {
+      key: "header-sticky",
+      target: TARGET,
+      estimateSize: 44,
+      rowKind: OUTPUT_ROW_KINDS.CLI_HEADER,
+      output: { elapsed: 0, isStreaming: true },
+      stepIndex: 0,
+      isFinalStep: false,
+      stepLabel: "Step 1",
+      stepName: "Plan",
+      attemptIndex: 0,
+      runIndex: 0,
+    };
+    const { rerender } = render(
+      <OutputRow row={row} isExecutionActive={true} />
+    );
+    expect(
+      screen.getByRole("heading", { name: "Step 1, Plan, running" })
+    ).toBeInTheDocument();
+
+    rerender(<OutputRow row={row} isExecutionActive={true} isStickyCopy />);
+    expect(screen.queryByRole("heading")).not.toBeInTheDocument();
   });
 
   it("passes the row boundary through Markdown reply references", () => {

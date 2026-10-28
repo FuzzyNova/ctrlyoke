@@ -1,7 +1,9 @@
 # Voice Input & Read-Aloud Plan
 
-**Status:** backlog, not started. Research was verified against current sources on 2026-10-05.
-Facts marked _(verify)_ could not be confirmed and need to be checked in the Phase 1 spike.
+**Status:** Phase 0.2 (screen-reader output) implemented 2026-10-28. Phase 0.1's manual
+dictation matrix has not been run yet (see 0.1). Phases 1–3 not started. Research was
+verified against current sources on 2026-10-05. Facts marked _(verify)_ could not be
+confirmed and need to be checked in the Phase 1 spike.
 
 > **2026-10-10 audit:** Still not started. There is no speech code, the output pane has no
 > live region, and xterm `screenReaderMode` is never set. Two updates:
@@ -17,6 +19,10 @@ Facts marked _(verify)_ could not be confirmed and need to be checked in the Pha
 >
 > Last reviewed against code: 2026-10-26. Still not started; the hosted CSP and `/ws/lsp`
 > precedent are unchanged.
+>
+> 2026-10-28: Phase 0.2 shipped, so the output-pane and terminal rows of "Current state"
+> below are out of date: there is now a live region, step headings, response articles and a
+> `screenReaderMode` setting.
 
 ## Goal
 
@@ -102,14 +108,48 @@ Ship this first, independent of everything below.
 - Check that dictated text fires the existing `updateListener`, so the draft saves and autosize
   works. Check that spell-check decorations don't fight in-progress dictation composition.
 
+**Status (2026-10-28): not run.** It needs a person at each device with each OS tool, so it
+could not be done by an agent. `EditorView.EDIT_CONTEXT` stays at CodeMirror's default (on)
+until a cell fails. Record results here:
+
+| OS tool                     | Host                      | EditContext on | EditContext off |
+| --------------------------- | ------------------------- | -------------- | --------------- |
+| Win+H Voice Typing          | VS Code webview           |                |                 |
+| Win+H Voice Typing          | Chrome / Edge             |                |                 |
+| Windows Voice Access        | VS Code webview           |                |                 |
+| Windows Voice Access        | Chrome / Edge             |                |                 |
+| macOS Dictation             | VS Code / Safari / Chrome |                |                 |
+| iOS keyboard mic            | Safari (hosted dashboard) |                |                 |
+| Android Gboard voice typing | Chrome (hosted dashboard) |                |                 |
+
 ### 0.2 Screen-reader output
+
+**Implemented 2026-10-28**, as designed below, with these specifics:
+
+- The announcer is `utils/outputAnnouncements.ts` (`OutputAnnouncementTracker`, pure and
+  unit-tested), driven by `hooks/useOutputAnnouncer.ts`, which subscribes to `workflowStore`
+  and `uiStore` and compares snapshots 250 ms after a change. `ScreenReaderAnnouncer`
+  renders two polite live regions that alternate, so a repeated sentence is spoken again.
+  The first snapshot, and the first after the applied view address changes, is a silent
+  baseline.
+- Waiting-for-input comes from the existing notification event, now tagged with
+  `derivedEvent: awaitingInput`, so it follows `notifications.events.awaitingInput`.
+- "Read last response" is `Alt+L` plus a visually hidden, focusable button in the output
+  toolbar. It speaks in every mode, including `none`.
+- The shared text helpers landed early: `src/utils/speechText.ts` (`toSpeechText`,
+  `findSettledSpeechBoundary`, `describeActivityForSpeech`) and `getFinalAssistantText` in
+  `StepOutputText.ts`. Phase 2's read-aloud should reuse them rather than add new ones; its
+  sentence splitter is still to be written.
+- Step headers carry `role="heading" aria-level=3` with a plain name, rather than a literal
+  `h3`, to leave their layout alone. The pinned sticky copy of a header carries no heading.
+- The Playwright accessibility-tree check below was not run.
 
 - **One announcer, separate from the visual stream.** Add a visually hidden
   `aria-live="polite"` region, created empty at mount, owned by a small `useOutputAnnouncer`
   hook. It is fed from store events, **not** from rendered rows. This means virtualization and
   scroll position can never cause or suppress announcements.
 - What it announces, chosen by a setting (see "Settings"):
-  - `off`.
+  - `none`.
   - `completions` (default): step started/finished/failed, AskUserQuestion prompts, awaiting
     input, and the final `TEXT` message of each turn once it settles.
   - `streaming`: also announces paragraph-sized chunks of `TEXT`, throttled to about one
@@ -285,7 +325,7 @@ Run `npm run schema:update` after the change.
 - `voice.readAloud.provider`: `"system" | "neural"`
 - `voice.readAloud.voice`, `voice.readAloud.rate`
 - `voice.models.stt`, `voice.models.tts`
-- `ui.accessibility.outputAnnouncements`: `"off" | "completions" | "streaming"`
+- `ui.accessibility.outputAnnouncements`: `"none" | "completions" | "streaming"` (implemented; `none` rather than `off`, matching the settings vocabulary)
 - `ui.accessibility.terminalScreenReaderMode`: boolean
 
 Per-client state is persisted client-side, like other per-device UI state, and is **not** stored

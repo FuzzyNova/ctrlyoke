@@ -85,8 +85,10 @@ import {
   getNotificationSeverityColor,
   handleCompletionNotificationEvent,
 } from "@utils/browserNotifications";
+import { announceAwaitingInput } from "../store/announcerStore";
 import {
   COMPLETION_NOTIFICATION_SEVERITY,
+  DERIVED_NOTIFICATION_EVENTS,
   NOTIFICATION_KINDS,
   THEME_KINDS,
   THEME_KIND_CSS_VAR,
@@ -1517,6 +1519,12 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.NOTIFICATION_EVENT] = (message) => {
     if (!isCompletionNotificationEvent(message?.event)) {
       return;
+    }
+
+    if (
+      message.event.derivedEvent === DERIVED_NOTIFICATION_EVENTS.AWAITING_INPUT
+    ) {
+      announceAwaitingInput(message.event.body);
     }
 
     if (standalone) {

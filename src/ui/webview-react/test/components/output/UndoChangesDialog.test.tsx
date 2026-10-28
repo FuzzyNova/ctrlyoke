@@ -426,6 +426,7 @@ describe("UndoChangesDialog", () => {
           onCollapseAllDiffs={vi.fn()}
           onExpandAllDiffs={vi.fn()}
           onExport={vi.fn()}
+          onReadLastResponse={vi.fn()}
           onToggleFind={vi.fn()}
           onClearHiddenOutputTargets={vi.fn()}
           onNewTerminal={vi.fn()}
