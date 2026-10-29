@@ -75,6 +75,23 @@ describe("deferred DiffFileCard", () => {
     expect(screen.getByText(/Add history detail/)).toBeInTheDocument();
   });
 
+  it("loads when its list mounts it already expanded", async () => {
+    const fetchDetail = vi.fn().mockResolvedValue(detail());
+    render(
+      <DiffFileCard
+        path="src/file.ts"
+        changeType="modified"
+        source={deferredSource(fetchDetail)}
+        collapsed={false}
+      />
+    );
+
+    expect(fetchDetail).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(screen.getByTestId("loaded-diff")).toBeInTheDocument()
+    );
+  });
+
   it("shows an error and retries only that card", async () => {
     const fetchDetail = vi
       .fn()

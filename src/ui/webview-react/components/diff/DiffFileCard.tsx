@@ -63,12 +63,43 @@ const fileHistoryDetailRequests = new Map<
   Promise<WorkspaceFileHistoryDiffResponse>
 >();
 
+function fileHistoryDetailKey(
+  path: string,
+  commit: string,
+  repo: string | undefined
+): string {
+  return `${repo ?? ""}\u0000${path}\u0000${commit}`;
+}
+
+/**
+ * A virtualized card remounts each time it scrolls back into view. Starting it
+ * from an already-fetched detail keeps it from flashing "Loading" and changing
+ * height under the user while an expanded history list scrolls.
+ */
+function withCachedFileHistoryDetail(
+  source: DeferredDiffFileSource,
+  path: string
+): DeferredDiffFileSource {
+  if (
+    source.state !== DEFERRED_DIFF_STATES.NOT_LOADED ||
+    source.fetchDetail !== undefined
+  ) {
+    return source;
+  }
+  const detail = fileHistoryDetailCache.get(
+    fileHistoryDetailKey(path, source.commit, source.repo)
+  );
+  return detail
+    ? { ...source, state: DEFERRED_DIFF_STATES.LOADED, detail }
+    : source;
+}
+
 function fetchCachedFileHistoryDetail(
   path: string,
   commit: string,
   repo: string | undefined
 ): Promise<WorkspaceFileHistoryDiffResponse> {
-  const key = `${repo ?? ""}\u0000${path}\u0000${commit}`;
+  const key = fileHistoryDetailKey(path, commit, repo);
   const cached = fileHistoryDetailCache.get(key);
   if (cached) return Promise.resolve(cached);
   const existing = fileHistoryDetailRequests.get(key);
@@ -190,7 +221,9 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
   );
   const [deferredState, setDeferredState] =
     useState<DeferredDiffFileSource | null>(() =>
-      source.kind === DIFF_FILE_SOURCE_KINDS.DEFERRED ? source : null
+      source.kind === DIFF_FILE_SOURCE_KINDS.DEFERRED
+        ? withCachedFileHistoryDetail(source, path)
+        : null
     );
 
   useEffect(() => {
@@ -204,7 +237,7 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
         current.commit !== source.commit ||
         current.repo !== source.repo
       ) {
-        return source;
+        return withCachedFileHistoryDetail(source, path);
       }
       if (
         source.state === DEFERRED_DIFF_STATES.LOADED &&
@@ -214,7 +247,7 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
       }
       return current;
     });
-  }, [source]);
+  }, [path, source]);
 
   const isCollapsed = collapsed ?? uncontrolledCollapsed;
   const requestDeferredDetail = useCallback(
@@ -267,19 +300,18 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
     [deferredState, path]
   );
 
+  // Load on expansion, whichever way it happens: the user's toggle, or the
+  // containing list's Expand all reaching a card that mounted later.
+  useEffect(() => {
+    if (!isCollapsed) requestDeferredDetail();
+  }, [isCollapsed, requestDeferredDetail]);
+
   const handleCollapsedChange = useCallback(
     (nextCollapsed: boolean): void => {
       onCollapsedChange?.(nextCollapsed);
       if (collapsed === undefined) setUncontrolledCollapsed(nextCollapsed);
-      if (
-        !nextCollapsed &&
-        deferredState &&
-        deferredState.state === DEFERRED_DIFF_STATES.NOT_LOADED
-      ) {
-        requestDeferredDetail();
-      }
     },
-    [collapsed, deferredState, onCollapsedChange, requestDeferredDetail]
+    [collapsed, onCollapsedChange]
   );
 
   const renderedSource =

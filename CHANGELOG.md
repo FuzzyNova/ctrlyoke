@@ -134,6 +134,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **File History** in the workspace viewer has an **Expand all diffs** /
+  **Collapse all diffs** button. After you expand all, commits that load as you
+  scroll arrive expanded too.
 - **Waiting for input** notifications are on by default and fire once when a
   harness is blocked on a permission prompt or question. They work on every
   harness except Antigravity.
