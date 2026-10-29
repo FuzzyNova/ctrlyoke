@@ -28,7 +28,7 @@ Once a step stops running, links to its changes appear in the output:
 | A step marker in the output minimap                          | **Step changes** for that step.                                  |
 | **Undo** on an edited, written or deleted file in the output | **File changes**: that one operation.                            |
 
-![The output pane with View 8 changes in the toolbar, and an "Edited notes-tagging-search.md" block with Show diff and its own Undo button](/screenshots/file-changes-output-undo-1000x510.png)
+![The output pane with View 6 changes in the toolbar and View 3 changes on the review step's header, and an "Edited notesStore.ts" block with its diff expanded and its own Undo button](/screenshots/file-changes-output-pane-1596x1148.png)
 
 The link counts the files, and adds "(K undone)" in green when you've undone
 some of them. In a narrow output pane the toolbar link shortens to **View N**.
@@ -44,7 +44,7 @@ ctrlyoke can't tell which member changed which file. A parallel group has one
 
 ## The changes dialog
 
-![The Workflow changes dialog for a six-step run: one row per file with the steps that changed it, two files selected, a side-by-side diff of notes.ts expanded, and Close and Undo 2 files buttons](/screenshots/file-changes-workflow-1600x1000.png)
+![The Workflow changes dialog for a six-step run: notesStore.ts and notes.ts selected, each listing the steps that changed it, a side-by-side diff of notes.ts expanded, and Close and Undo 2 files buttons](/screenshots/file-changes-workflow-2560x1600.png)
 
 The dialog's title says what it covers (**Step changes**, **Workflow changes**
 or **File changes**), and the line under it names the step or workflow, the

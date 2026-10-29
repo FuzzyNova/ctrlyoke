@@ -25,6 +25,7 @@ npm run media -- visual-or-yaml         # "Build visually or edit as YAML", side
 npm run media -- history                # workflow list, history search, a reopened run (#15)
 npm run media -- workspace-viewer       # the workspace viewer's editor and Source Control (#10)
 npm run media -- license                # Settings → License, ready to activate (docs/pro)
+npm run media -- file-changes           # an edit with Undo, the Workflow changes dialog (#11)
 npm run media -- snapshot-history       # refresh fixtures/history/ from your demo-app history
 ```
 
@@ -95,6 +96,8 @@ which arms the dev build's replay (`src/dev/replay/`) through `CTRLYOKE_DEV_REPL
 variables. The host writes the run's workflow to `.ctrlyoke/workflows/`; loading and running it
 plays the recording through the real engine, file changes included. `--speed 0` jumps each step to
 its end state, and `--pause-at <seq>` holds playback before that event in `events.jsonl`.
+A still stage replays the same way through `host.replay` (`shots/file-changes.capture.ts` runs
+the hero at speed 0, then shoots its undo views).
 `--max-gap <ms>` plays any idle stretch longer than that as that (before `--speed`), so long
 thinking pauses shrink while the uneven rhythm of the rest survives. Replay
 makes no git commits.

@@ -12,7 +12,8 @@ beat timeline, Remotion edit, encode, colour check). Scripted shots: `properties
 `walkthrough-verify-harness`, `hero`, `prompt-editor`, `visual-or-yaml`, `history`,
 `workspace-viewer`, and (2026-10-20, `0c5942edb`) `license` for `docs/pro/index.md`, with the
 capture host's secrets and license isolated to a file in its fake home
-(`CTRLYOKE_DEV_ISOLATED_SECRETS`). `media/README.md` covers using it and adding shots.
+(`CTRLYOKE_DEV_ISOLATED_SECRETS`). (2026-10-29) `file-changes`, the first still shot on a
+replayed run. `media/README.md` covers using it and adding shots.
 
 **Remaining:** phase 6 (the scripted phone pipeline, `npm run media -- phone`) and phase 7 (new
 phone media, #10's edit-and-commit clip and #7's prompt-editor GIF). Nothing for them exists in

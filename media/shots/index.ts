@@ -1,5 +1,6 @@
 import type { Shot } from "../lib/shot.ts";
 import type { VideoShot } from "../lib/video.ts";
+import { fileChanges } from "./file-changes.capture.ts";
 import { hero } from "./hero.capture.ts";
 import { history } from "./history.capture.ts";
 import { license } from "./license.capture.ts";
@@ -15,5 +16,6 @@ export const SHOTS: Shot[] = [
   history,
   workspaceViewer,
   license,
+  fileChanges,
 ];
 export const VIDEOS: VideoShot[] = [hero, promptEditor, visualOrYaml];

@@ -17,7 +17,7 @@ const STARTUP_TIMEOUT_MS = 120_000;
 /** The replayed run takes about three minutes at a 1.2 s idle-gap cap. */
 const RUN_TIMEOUT_MS = 10 * 60_000;
 
-async function loadHeroWorkflow(page: Page): Promise<void> {
+export async function loadHeroWorkflow(page: Page): Promise<void> {
   const menu = page.getByRole("button", { name: "Open workflow menu" });
   await menu.waitFor();
   await page
@@ -45,7 +45,7 @@ async function loadHeroWorkflow(page: Page): Promise<void> {
  * The steps panel header's counter: "6 steps" when idle, "Completed 2 of 6"
  * while running. The recent-workflows list repeats "6 steps", so scope to it.
  */
-function stepCount(page: Page) {
+export function stepCount(page: Page) {
   return page.getByRole("button", { name: "Collapse steps" });
 }
 

@@ -41,7 +41,7 @@ this doc stays the shot list). All assets are in `images/screenshots/`.
    `docs/guide/installation.md#walkthrough`); check whether `harness-preflight-missing-660x1270.png`
    (captured 2026-10-15, before the 2026-10-16 High Contrast Light fix to
    `HarnessPreflightPanel.tsx`) still matches.
-7. Slotting still open: #4/#5/#8/#11 on landing; #9 in `docs/workflows/context-files.md`; #14 in
+7. Slotting still open: #4/#5/#8 on landing; #9 in `docs/workflows/context-files.md`; #14 in
    `docs/workflows/yaml-format.md`; #15's 2× stills in `docs/guide/history.md` (still the 1×
    `history-search-1180x813.png`).
 8. **Docs shots handed over from
@@ -484,6 +484,16 @@ Each item: what to capture, what prep it needs, where it's used.
 - **Status:** done 2026-10-11 as `file-changes-workflow-1600x1000.png` and
   `file-changes-output-undo-1000x510.png` on `docs/guide/file-changes.md` (the older
   `undo-changes-dialog` capture showed a since-renamed title and was removed).
+- **Scripted 2026-10-29** as `npm run media -- file-changes`, for landing ("Every result, with
+  undo"): `file-changes-output-undo-2560x1600.png` (Antigravity's review edit to notesStore.ts,
+  diff open, with its Undo) and `file-changes-workflow-2560x1600.png` (the dialog with notes.ts
+  and notesStore.ts ticked and notes.ts's diff open). It replays the hero run at speed 0 with
+  its snapshots, so every edit has its original content; the 1× docs stills came from a live
+  run that didn't and read "Cannot undo… original content unavailable". The dialog still shows
+  absolute directories (`c:/dev/ctrlyoke/media/.work/demo-app/src/…`), because harnesses
+  record absolute paths and the dialog prints whatever the event holds. The same shot retook
+  the docs stills: `file-changes-output-pane-1596x1148.png` (the output pane alone, which the
+  prose column can show legibly) and the landing dialog still; the 1× originals are deleted.
 
 ### 12. `WorkflowPropertiesPanel` — all six drawer tabs, plus key settings pages
 
@@ -721,7 +731,7 @@ line, where it renders as a button. Descriptions support `code`, **bold** and li
 | Features grid — `⚡` One interface, six harnesses                  | #1                                                            |
 | "A prompt language for your whole project" section (was `📎` card) | #9 (done)                                                     |
 | "Build visually, or edit as YAML" (was the YAML block)             | #14 (done)                                                    |
-| Features grid — `⬛` One reversible view of every result           | #11                                                           |
+| "Every result, with undo" (was the `⬛` card)                      | #11 (done)                                                    |
 | New: Statistics/telemetry section                                  | #4, #5                                                        |
 | "Your project, in any browser" (was the `🗂` card)                  | #10 (done)                                                    |
 | "Every session, searchable" (was the `🔍` card)                    | #15 (done)                                                    |
