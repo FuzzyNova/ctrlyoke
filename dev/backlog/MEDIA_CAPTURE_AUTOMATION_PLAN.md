@@ -15,11 +15,17 @@ capture host's secrets and license isolated to a file in its fake home
 (`CTRLYOKE_DEV_ISOLATED_SECRETS`). (2026-10-29) `file-changes`, the first still shot on a
 replayed run. `media/README.md` covers using it and adding shots.
 
-**Remaining:** phase 6 (the scripted phone pipeline, `npm run media -- phone`) and phase 7 (new
-phone media, #10's edit-and-commit clip and #7's prompt-editor GIF). Nothing for them exists in
-`media/` yet; the iOS and Android stills on the site were still made in Resolve. Smaller
-follow-ups: `media/README.md`'s first paragraph still lists replay and the hero clip as "to
-come", and #4/#5's settings pages and the 1× docs stills could move onto scripts like the rest.
+**Phase 6 built (2026-10-29), not yet used on a real session:** `npm run media -- phone <shot>
+<recording>` (`lib/phone.ts`, `lib/phoneFrame.ts`, specs in `media/phone/*.json`) frames a raw
+iPhone recording in the iPhone 13 mockup and writes stills, an animated WebP with alpha and,
+for the landing take-control clip, desktop-beside-phone video. It was checked on the September
+take-control recording. `media/phone/SHOOTING_SCRIPT.md` is the beat-by-beat script for the
+phone session that phase 7 needs.
+
+**Remaining:** phase 7: shoot that session, pick the times, render, slot. The existing iOS and
+Android setup stills stay as made in Resolve; rebuilding them is unnecessary now that the
+pipeline exists for new shots. Smaller follow-up: #4/#5's settings pages and the 1× docs stills
+could move onto scripts like the rest.
 
 This is the "how" for [`SCREENSHOTS_AND_MEDIA_PLAN.md`](SCREENSHOTS_AND_MEDIA_PLAN.md), which
 stays the shot list and slotting plan. Sections 1-5 and 7 below now record the design as built;
@@ -280,7 +286,12 @@ between the two repos (see 7).
 ### 6. Phone recordings
 
 The capture stays manual (real device, see `SCREENSHOTS_AND_MEDIA_PLAN.md` #7). The edit becomes
-`npm run media -- phone <recording.MOV> <shot>`:
+`npm run media -- phone <shot> <recording.MOV>`. **As built (2026-10-29):** all in ffmpeg, no
+Remotion: the mockup's screen opening is found from its alpha (`lib/phoneFrame.ts`), the
+recording is converted to 30 fps and scaled to cover it, and the output takes the mockup's
+alpha. The session runs in Nathan's own VS Code on a throwaway demo-app clone rather than the
+`media` capture host, whose isolated home has neither the Pro license that LAN serving needs nor
+the certificate the phone trusts. The original outline was:
 
 1. HEVC variable frame rate → H.264 at a constant 30 fps (ffmpeg).
 2. Trim to the shot's in/out points, kept in a small per-shot JSON next to the composition.

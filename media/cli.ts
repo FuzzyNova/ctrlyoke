@@ -34,6 +34,10 @@ commands:
   snapshot-history [<project dir>]
                  copy demo-app's run history from ~/.ctrlyoke/projects into
                  fixtures/history/, tokenized (review before committing)
+  phone <shot> <recording>
+                 frame an iPhone screen recording in the phone mockup and cut
+                 the stills, overview and video listed in phone/<shot>.json
+                 (see phone/SHOOTING_SCRIPT.md)
 
 options:
   --only <file>     capture only this still
@@ -41,7 +45,12 @@ options:
   --edit-only       videos: re-render and re-encode the last take, don't record
   --speed <n>       replay speed (default 1; 0 jumps to each step's end state)
   --max-gap <ms>    play any recorded idle gap longer than this as this
-  --pause-at <seq>  pause the replay before this event sequence number`;
+  --pause-at <seq>  pause the replay before this event sequence number
+  --sheet           phone: write a contact sheet of the whole recording to pick
+                    times from, instead of the outputs
+  --sheet-fps <n>   phone: contact sheet frames a second (default 1)
+  --desktop <file>  phone: the desktop recording a side-by-side video plays beside
+  --frame <png>     phone: the mockup (default media/.work/phone/frame.png)`;
 
 function setup(): void {
   run("npm", ["install"], MEDIA_DIR);
@@ -150,6 +159,10 @@ async function main(): Promise<void> {
       speed: { type: "string" },
       "max-gap": { type: "string" },
       "pause-at": { type: "string" },
+      sheet: { type: "boolean" },
+      "sheet-fps": { type: "string" },
+      desktop: { type: "string" },
+      frame: { type: "string" },
       help: { type: "boolean" },
     },
   });
@@ -186,6 +199,23 @@ async function main(): Promise<void> {
       );
       console.log(await startHost(stage?.host));
       return;
+    }
+    case "phone": {
+      const [shot, recording] = rest;
+      if (!shot || !recording) {
+        throw new Error("usage: npm run media -- phone <shot> <recording>");
+      }
+      const { capturePhoneShot } = await import("./lib/phone.ts");
+      return capturePhoneShot(shot, {
+        recording: path.resolve(recording),
+        outDir: options.outDir,
+        only: options.only,
+        frame: values.frame ? path.resolve(values.frame) : undefined,
+        desktop: values.desktop ? path.resolve(values.desktop) : undefined,
+        sheetFps: values.sheet
+          ? (parseCount("sheet-fps", values["sheet-fps"]) ?? 1)
+          : undefined,
+      });
     }
     case "snapshot-history": {
       const { snapshotHistory } = await import("./lib/history.ts");

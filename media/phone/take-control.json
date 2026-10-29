@@ -1,0 +1,22 @@
+{
+  "description": "Recording 1: scan the QR code, take control of Claude Code waiting for approval, approve with the control bar (landing \"Code from your phone\"; D14 stills)",
+  "clip": { "from": null, "to": null },
+  "stills": [
+    { "file": "phone-terminal-control-bar-750x1520.png", "at": null },
+    { "file": "phone-terminal-more-shortcuts-750x1520.png", "at": null }
+  ],
+  "video": {
+    "width": 2560,
+    "height": 1440,
+    "background": "#03151e",
+    "outputs": {
+      "av1": "take-control-av1-2560x1440.mp4",
+      "h264": { "file": "take-control-h264-1280x720.mp4", "width": 1280 },
+      "poster": {
+        "file": "take-control-poster-2560x1440.webp",
+        "atSeconds": -1
+      }
+    },
+    "sync": { "phone": null, "desktop": null }
+  }
+}

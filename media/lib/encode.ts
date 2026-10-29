@@ -18,21 +18,29 @@ const FFMPEG_QUIET = ["-hide_banner", "-loglevel", "error", "-y"];
 export function webVideoColorArgs(filters: readonly string[] = []): string[] {
   return [
     "-vf",
-    [
-      ...filters,
-      "scale=out_color_matrix=bt709:out_range=tv",
-      "format=yuv420p",
-    ].join(","),
-    "-colorspace",
-    "bt709",
-    "-color_primaries",
-    "bt709",
-    "-color_trc",
-    "bt709",
-    "-color_range",
-    "tv",
+    [...filters, WEB_VIDEO_COLOR_FILTER].join(","),
+    ...WEB_VIDEO_COLOR_TAGS,
   ];
 }
+
+/**
+ * The conversion half of `webVideoColorArgs`, to end a `-filter_complex`
+ * chain with (ffmpeg takes `-vf` or `-filter_complex`, not both); add
+ * `WEB_VIDEO_COLOR_TAGS` to the output options.
+ */
+export const WEB_VIDEO_COLOR_FILTER =
+  "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p";
+
+export const WEB_VIDEO_COLOR_TAGS: readonly string[] = [
+  "-colorspace",
+  "bt709",
+  "-color_primaries",
+  "bt709",
+  "-color_trc",
+  "bt709",
+  "-color_range",
+  "tv",
+];
 
 /** The files a video shot ships, all from one edit. */
 export interface VideoOutputs {

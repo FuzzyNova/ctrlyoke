@@ -1,0 +1,34 @@
+# Media capture fixture for the phone session (media/phone/SHOOTING_SCRIPT.md, recording 1).
+#
+# Runs Claude Code interactively with only read tools and `npm test` allowed, so the first file
+# edit stops at Claude's own approval prompt. That prompt is what the phone takes control of and
+# answers with the control bar (↓ then Enter: "Yes, allow all edits during this session").
+# The run leaves GET /tags as uncommitted changes, which recording 4 reviews and commits.
+#
+# Run it in the phone worktree only, never in a checkout you care about. Reset between takes:
+#   git reset --hard phone-start && git clean -fd -e .ctrlyoke/workflows/
+harness: claude-cli
+model: haiku
+executionMode: interactive
+toolPermissions:
+  mode: custom
+  allowedTools:
+    - read
+    - glob
+    - grep
+    - shell(npm test)
+steps:
+  - name: tags endpoint
+    prompt: |
+      Add a `GET /tags` endpoint to this Notes API that returns every tag in use with the number
+      of notes carrying it, sorted by count descending and then by tag name:
+      `[{ "tag": "work", "count": 3 }, ...]`. Put the aggregation in @src/store/notesStore.ts and
+      mount the route in @src/server.ts. Add tests to @tests/notes.test.ts and a row to the
+      endpoint table in @README.md.
+    endCondition:
+      script: npm test
+      maxRetries: 1
+      retryPrompt: |
+        npm test is failing. Fix it:
+
+        $endCondition:stdout

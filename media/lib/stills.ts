@@ -16,7 +16,7 @@ function pngSize(file: string): { width: number; height: number } {
   return { width: header.readUInt32BE(0), height: header.readUInt32BE(4) };
 }
 
-function checkSize(name: string, file: string): void {
+export function checkSize(name: string, file: string): void {
   const match = /-(\d+)x(\d+)\.png$/.exec(name);
   if (!match) return;
   const { width, height } = pngSize(file);
