@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Commit**, **Push** and **Pull** in the dashboard's Source Control pane no
+  longer give up after 5 minutes. They now wait however long your Git hooks
+  take, so a pre-push hook that runs a long test suite no longer fails with
+  "timed out after 300 seconds".
 - The **Dry Run** button is gone from the dashboard header. Open a whole-workflow
   Dry Run from the workflow menu instead (right-click the workflow name in the
   header, or the displayed workflow's row in the list), or by right-clicking

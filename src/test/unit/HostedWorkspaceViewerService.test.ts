@@ -152,7 +152,7 @@ suite("HostedWorkspaceViewerService", function () {
   });
 
   suite("git mutation timeouts", () => {
-    test("uses the shared mutation timeout override for commits", async () => {
+    test("lets a commit outlast the shared mutation timeout", async () => {
       const root = createWorkspace();
       runGit(root, "init");
       configureGitIdentity(root);
@@ -169,14 +169,10 @@ suite("HostedWorkspaceViewerService", function () {
         mutationTimeoutMs: 50,
       });
       try {
-        await assert.rejects(
-          new HostedWorkspaceViewerService(root).commit("Timed commit"),
-          /git commit timed out/
-        );
-        assert.strictEqual(runGit(root, "log", "-1", "--format=%s"), "Initial");
+        await new HostedWorkspaceViewerService(root).commit("Slow hook commit");
         assert.strictEqual(
-          runGit(root, "status", "--porcelain"),
-          "M  file.txt"
+          runGit(root, "log", "-1", "--format=%s"),
+          "Slow hook commit"
         );
       } finally {
         restoreTimeouts();

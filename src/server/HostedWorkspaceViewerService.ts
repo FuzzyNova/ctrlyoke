@@ -112,6 +112,7 @@ import {
   GIT_COMMAND_TIMEOUT_MS,
   describeGitFailure,
   execGit,
+  GIT_NO_TIMEOUT,
   getGitMutationTimeoutMs,
   getGitWholeRepoTimeoutMs,
 } from "../utils/GitUtils";
@@ -2027,7 +2028,7 @@ export class HostedWorkspaceViewerService {
     const repoRoot = await this.resolveRepoRoot(repoId);
     await this.runGitAction(
       ["-C", repoRoot, "commit", "-m", message],
-      getGitMutationTimeoutMs()
+      GIT_NO_TIMEOUT
     );
   }
 
@@ -2039,10 +2040,7 @@ export class HostedWorkspaceViewerService {
       this.currentBranch(repoRoot),
       this.currentRemote(repoRoot),
     ]);
-    await this.runGitAction(
-      ["-C", repoRoot, "push"],
-      getGitMutationTimeoutMs()
-    );
+    await this.runGitAction(["-C", repoRoot, "push"], GIT_NO_TIMEOUT);
     return { branch, remote };
   }
 
@@ -2098,10 +2096,7 @@ export class HostedWorkspaceViewerService {
       this.currentBranch(repoRoot),
       this.currentRemote(repoRoot),
     ]);
-    await this.runGitAction(
-      ["-C", repoRoot, "pull"],
-      getGitMutationTimeoutMs()
-    );
+    await this.runGitAction(["-C", repoRoot, "pull"], GIT_NO_TIMEOUT);
     return { branch, remote };
   }
 
@@ -2111,6 +2106,10 @@ export class HostedWorkspaceViewerService {
    * Run a git command the user asked for from the SCM pane. A failure is
    * rethrown carrying git's own explanation (a rejected push, a failing hook,
    * a merge conflict) so the route can hand it to the browser verbatim.
+   *
+   * An action that runs the repository's hooks (commit, push, pull) passes
+   * `GIT_NO_TIMEOUT`: the hooks decide how long it takes, and a pre-push hook
+   * may legitimately run a CI-length test suite.
    */
   private async runGitAction(
     args: readonly string[],

@@ -71,6 +71,13 @@ function getGitTimeoutMs(mutation = false): number {
     : (gitTimeoutOverrides.shortTimeoutMs ?? GIT_TIMEOUT_MS);
 }
 
+/**
+ * `timeout` value for a Git command that must run to completion however long
+ * it takes: a commit, push or pull the user started runs the repository's own
+ * hooks, and a pre-push hook may run an hour-long test suite.
+ */
+export const GIT_NO_TIMEOUT = 0;
+
 /** Return the shared timeout for Git commands that mutate a repository. */
 export function getGitMutationTimeoutMs(): number {
   return getGitTimeoutMs(true);
@@ -318,6 +325,7 @@ const execFileAsync = async (
   } catch (error) {
     if (
       file === "git" &&
+      timeoutMs !== GIT_NO_TIMEOUT &&
       (isTimeoutError(error) || exceededTimeout(startedAt, timeoutMs))
     ) {
       throw timeoutError(args, timeoutMs);
