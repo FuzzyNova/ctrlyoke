@@ -1,0 +1,8 @@
+{
+  "description": "Recording 3: typing a prompt with the on-screen keyboard open, picking @ and $ completions (#7)",
+  "clip": { "from": null, "to": null },
+  "stills": [
+    { "file": "phone-prompt-editor-completions-750x1520.png", "at": null }
+  ],
+  "overview": { "file": "phone-prompt-editor-390x790.webp", "fps": 15 }
+}

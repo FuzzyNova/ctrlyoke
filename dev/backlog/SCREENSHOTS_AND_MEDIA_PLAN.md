@@ -34,7 +34,11 @@ this doc stays the shot list). All assets are in `images/screenshots/`.
 1. #2 theme composite (not captured).
 2. #7: annotate the iOS stills (box/arrow on the item to tap); the phone prompt-editor GIF.
 3. #10: the iPhone stills and the phone edit-and-commit clip (blocked on nothing but a phone
-   session; the scripted phone pipeline is phase 6 of the automation plan).
+   session). **2026-10-29:** one session now covers #7's editor clip, #10, D14 and a retake of
+   the landing take-control clip (`ctrlyoke-take-control-1080p.mp4`, from 2026-09-11, before
+   the October UI changes, and the only landing video without a poster or AV1 version). Follow
+   `media/phone/SHOOTING_SCRIPT.md`, then `npm run media -- phone` frames the recordings in
+   the iPhone 13 mockup.
 4. #3 still composite, only if a page needs a still rather than the video.
 5. #12: add #13a (`walkthrough-open-panel-*`) to the top of `docs/workflows/properties-panel.md`.
 6. #13: D9's walkthrough-page capture (`<!-- SHOT D9 -->` marker in

@@ -1,6 +1,8 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import path from "node:path";
 import { chromium } from "playwright";
+import type { VideoOutputs } from "./encode.ts";
 
 /**
  * Checks that a browser shows an encoded video with the colours ffmpeg
@@ -108,5 +110,26 @@ export async function checkBrowserColors(
     return mean;
   } finally {
     await browser.close();
+  }
+}
+
+/** Runs `checkBrowserColors` on a video shot's AV1 and H.264 files at the poster's time. */
+export async function checkShippedVideoColors(
+  outDir: string,
+  outputs: VideoOutputs,
+  atSeconds: number
+): Promise<void> {
+  for (const [file, mimeType] of [
+    [outputs.av1, 'video/mp4; codecs="av01.0.08M.08"'],
+    [outputs.h264.file, 'video/mp4; codecs="avc1.640028"'],
+  ]) {
+    const difference = await checkBrowserColors(
+      path.join(outDir, file),
+      mimeType,
+      atSeconds
+    );
+    console.log(
+      `colour check ${file}: browser and ffmpeg agree (mean difference ${difference.toFixed(1)}/255)`
+    );
   }
 }

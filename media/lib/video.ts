@@ -3,7 +3,7 @@ import path from "node:path";
 import { chromium, type Browser, type Page } from "playwright";
 import { installWorkflowFixture, prepareDemoApp } from "./demoApp.ts";
 import { startHost, stopHost, type ReplayOptions } from "./devHost.ts";
-import { checkBrowserColors } from "./colorCheck.ts";
+import { checkShippedVideoColors } from "./colorCheck.ts";
 import { encodeVideoOutputs, type VideoOutputs } from "./encode.ts";
 import { MEDIA_DIR, WORK_DIR } from "./paths.ts";
 import {
@@ -241,17 +241,5 @@ export async function captureVideo(
   const edit = await renderEdit(shot);
   mkdirSync(outDir, { recursive: true });
   const at = encodeVideoOutputs(edit, outDir, shot.outputs);
-  for (const [file, mimeType] of [
-    [shot.outputs.av1, 'video/mp4; codecs="av01.0.08M.08"'],
-    [shot.outputs.h264.file, 'video/mp4; codecs="avc1.640028"'],
-  ]) {
-    const difference = await checkBrowserColors(
-      path.join(outDir, file),
-      mimeType,
-      at
-    );
-    console.log(
-      `colour check ${file}: browser and ffmpeg agree (mean difference ${difference.toFixed(1)}/255)`
-    );
-  }
+  await checkShippedVideoColors(outDir, shot.outputs, at);
 }

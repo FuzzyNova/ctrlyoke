@@ -1,7 +1,7 @@
 # Media capture
 
-Rerunnable capture scripts for the screenshots in `images/screenshots/`. The plan and the phases
-still to come (run replay, the hero clip, the phone pipeline) are in
+Rerunnable capture scripts for the screenshots and videos in `images/screenshots/`, and the
+pipeline that frames iPhone screen recordings (see "Phone recordings"). The design is in
 `dev/backlog/MEDIA_CAPTURE_AUTOMATION_PLAN.md`. The shot list is
 `dev/backlog/SCREENSHOTS_AND_MEDIA_PLAN.md`.
 
@@ -26,6 +26,8 @@ npm run media -- history                # workflow list, history search, a reope
 npm run media -- workspace-viewer       # the workspace viewer's editor and Source Control (#10)
 npm run media -- license                # Settings → License, ready to activate (docs/pro)
 npm run media -- snapshot-history       # refresh fixtures/history/ from your demo-app history
+npm run media -- phone take-control rec1.MOV --sheet  # contact sheet to pick times from
+npm run media -- phone take-control rec1.MOV --desktop desktop.mp4  # framed stills and video
 ```
 
 Each capture compiles the extension, so it shows the current source. Stop any running dev host
@@ -131,6 +133,26 @@ A stage with `startTag` and `changesFrom` shows a project mid-review: demo-app o
 start tag, with every file the later tag changed as an uncommitted edit, no upstream, and its
 tags moved out of `refs/tags/`, so Source Control shows neither a detached HEAD nor the capture's
 tags. The capture's own settings edits are hidden from Git in every stage.
+
+## Phone recordings
+
+Phone media can't be scripted: it needs a real iPhone and your own VS Code (your license, and the
+server certificate the phone trusts), not the capture host. `phone/SHOOTING_SCRIPT.md` is the
+beat-by-beat script for a session. Everything after the raw recording is `npm run media -- phone
+<shot> <recording>` (`lib/phone.ts`):
+
+- `phone/<shot>.json` lists what to cut from one recording: the `clip` the overview and video
+  play, the `stills`, and their times in seconds into the recording, which stay `null` until
+  someone picks them. `--sheet` writes a contact sheet of the recording to read the times from.
+- `lib/phoneFrame.ts` measures the mockup PNG (`.work/phone/frame.png`, not committed;
+  `--frame` overrides it): the screen opening is the see-through region in the middle of the
+  device. The recording is scaled to cover it, the mockup is drawn over it, and the output keeps
+  the mockup's alpha, so the corners and the area around the phone stay transparent.
+- Stills are PNGs and the overview is an animated WebP with alpha (GIF's 1-bit alpha would leave
+  the rounded corners jagged). A `-<w>x<h>` suffix sets the width.
+- `video` puts the phone on a solid background, beside a desktop recording (`--desktop`) when
+  it has a `sync`: the same moment's time in each recording. It is encoded and colour-checked
+  like the other videos.
 
 ## Adding a shot
 
