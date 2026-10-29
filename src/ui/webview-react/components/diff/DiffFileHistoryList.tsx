@@ -5,6 +5,7 @@ import {
   type DeferredDiffDetailFetcher,
   type DiffFileCardProps,
 } from "./DiffFileCard";
+import type { DiffFileListCommand, DiffFileListHandle } from "./DiffFileList";
 import {
   VirtualizedPagedList,
   type VirtualizedListRange,
@@ -19,6 +20,10 @@ import {
   type PagedFileHistoryFetcher,
 } from "@hooks/usePagedFileHistory";
 import type { WorkspaceFileHistoryEntry } from "@root/types/HostedWorkspaceViewerTypes";
+import {
+  PAGED_DIFF_FILE_KEY_ATTRIBUTE,
+  usePagedDiffListState,
+} from "@hooks/usePagedDiffListState";
 import { DIFF_FILE_SOURCE_KINDS } from "@root/types/DashboardConstants";
 
 export interface DiffFileHistoryListProps {
@@ -31,6 +36,11 @@ export interface DiffFileHistoryListProps {
   fetchDetail?: DeferredDiffDetailFetcher;
   findQuery?: string;
   findCaseSensitive?: boolean;
+  /**
+   * Expand/Collapse all. Unloaded entries that mount while expanded fetch their
+   * diff, so pages loaded after an Expand all arrive expanded.
+   */
+  command: DiffFileListCommand;
   /** Primarily useful to host the list in a focused test or alternate pane. */
   controller?: PagedFileHistoryController;
 }
@@ -68,18 +78,25 @@ function cardProps(
 const PLACEHOLDER_CLASS =
   "h-16 rounded-sm border border-panel-border bg-editor-bg/40 px-2.5 py-2 text-xs text-description-fg";
 
-export function DiffFileHistoryList({
-  path,
-  repo,
-  scrollContainerRef,
-  pageSize,
-  enabled,
-  fetchPage,
-  fetchDetail,
-  findQuery,
-  findCaseSensitive,
-  controller: controllerOverride,
-}: DiffFileHistoryListProps): React.ReactElement {
+export const DiffFileHistoryList = React.forwardRef<
+  DiffFileListHandle,
+  DiffFileHistoryListProps
+>(function DiffFileHistoryList(
+  {
+    path,
+    repo,
+    scrollContainerRef,
+    pageSize,
+    enabled,
+    fetchPage,
+    fetchDetail,
+    findQuery,
+    findCaseSensitive,
+    command,
+    controller: controllerOverride,
+  },
+  ref
+): React.ReactElement {
   const hookController = usePagedFileHistory({
     path,
     repo,
@@ -88,6 +105,13 @@ export function DiffFileHistoryList({
     fetchPage,
   });
   const controller = controllerOverride ?? hookController;
+  const diffListState = usePagedDiffListState(
+    ref,
+    scrollContainerRef,
+    controller.listingId,
+    command
+  );
+  const { anchorRestore } = diffListState;
 
   const getItem = useCallback(
     (index: number) => controller.getEntry(index),
@@ -107,14 +131,24 @@ export function DiffFileHistoryList({
         findCaseSensitive
       );
       return (
-        <DiffFileCard
-          {...props}
-          ariaSetSize={controller.totalCount}
-          ariaPosInSet={index + 1}
-        />
+        <div {...{ [PAGED_DIFF_FILE_KEY_ATTRIBUTE]: entry.hash }}>
+          <DiffFileCard
+            {...props}
+            ariaSetSize={controller.totalCount}
+            ariaPosInSet={index + 1}
+            collapsed={diffListState.collapsedFor(entry.hash)}
+            onCollapsedChange={(collapsed) =>
+              diffListState.setCollapsed(entry.hash, collapsed)
+            }
+            expandedGaps={diffListState.expandedGapsFor(entry.hash)}
+            onExpandGap={(gapIndex, nextExpandedToLine) =>
+              diffListState.expandGap(entry.hash, gapIndex, nextExpandedToLine)
+            }
+          />
+        </div>
       );
     },
-    [controller, fetchDetail, findCaseSensitive, findQuery, repo]
+    [controller, diffListState, fetchDetail, findCaseSensitive, findQuery, repo]
   );
   const renderPlaceholder = useCallback(
     (index: number) => (
@@ -208,10 +242,15 @@ export function DiffFileHistoryList({
         scrollContainerRef={scrollContainerRef}
         estimateItemSize={estimateItemSize}
         onRangeChange={onRangeChange}
-        layoutResetKey={`${controller.listingId ?? "pending"}:${controller.pageSize}`}
+        layoutResetKey={`${controller.listingId ?? "pending"}:${controller.pageSize}:${command.version}:${command.collapsed}`}
+        scrollToIndex={anchorRestore?.index ?? null}
+        scrollToIndexOffset={anchorRestore?.viewportOffset}
+        scrollToIndexRequest={anchorRestore ? command.version : undefined}
       />
     </div>
   );
-}
+});
+
+DiffFileHistoryList.displayName = "DiffFileHistoryList";
 
 export const FileHistoryList = DiffFileHistoryList;

@@ -75,6 +75,9 @@ export const WorkspaceDiffPane: React.FC = () => {
   const [commitDiffsCollapsed, setCommitDiffsCollapsed] = useState(false);
   const [commitDiffResetVersion, setCommitDiffResetVersion] = useState(0);
   const [commitDetailsExpanded, setCommitDetailsExpanded] = useState(false);
+  // History diffs are fetched one commit at a time, so they start collapsed.
+  const [historyDiffsCollapsed, setHistoryDiffsCollapsed] = useState(true);
+  const [historyDiffResetVersion, setHistoryDiffResetVersion] = useState(0);
 
   const visibleFiles = useMemo(
     () => mergeNonTextDiffEntries(diffFiles ?? [], diffNonTextEntries),
@@ -202,6 +205,18 @@ export const WorkspaceDiffPane: React.FC = () => {
     setCommitDiffResetVersion((version) => version + 1);
   }, []);
 
+  const handleExpandAllHistoryDiffs = useCallback(() => {
+    diffFileListRef.current?.prepareGlobalLayoutChange();
+    setHistoryDiffsCollapsed(false);
+    setHistoryDiffResetVersion((version) => version + 1);
+  }, []);
+
+  const handleCollapseAllHistoryDiffs = useCallback(() => {
+    diffFileListRef.current?.prepareGlobalLayoutChange();
+    setHistoryDiffsCollapsed(true);
+    setHistoryDiffResetVersion((version) => version + 1);
+  }, []);
+
   const handleDownload = useCallback(async () => {
     const refLabel = diffRef ? pagedGitRefDiff.refLabel : diffRefLabel;
     const activeCommitInfo = diffRef
@@ -266,17 +281,27 @@ export const WorkspaceDiffPane: React.FC = () => {
             <Icon name="arrow-left" className="text-sm" />
             <span>Back</span>
           </button>
-          <span className="truncate text-xs font-semibold text-editor-fg">
+          <span className="min-w-0 flex-1 truncate text-xs font-semibold text-editor-fg">
             File History: {fileHistoryPath}
           </span>
+          <ExpandCollapseAllDiffsButton
+            anyDiffCollapsed={historyDiffsCollapsed}
+            onExpand={handleExpandAllHistoryDiffs}
+            onCollapse={handleCollapseAllHistoryDiffs}
+          />
         </div>
         <div
           ref={scrollContainerRef}
           className="flex-1 overflow-auto px-3 py-2"
         >
           <DiffFileHistoryList
+            ref={diffFileListRef}
             path={fileHistoryPath}
             repo={fileHistoryRepoId ?? undefined}
+            command={{
+              version: historyDiffResetVersion,
+              collapsed: historyDiffsCollapsed,
+            }}
             scrollContainerRef={scrollContainerRef}
           />
         </div>

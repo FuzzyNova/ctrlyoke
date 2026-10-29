@@ -1,4 +1,4 @@
-import React, { useCallback, useImperativeHandle, useState } from "react";
+import React, { useCallback } from "react";
 import type { RefObject } from "react";
 import { DIFF_PAYLOAD_KINDS } from "@root/types/DashboardConstants";
 import type { WorkspaceGitRefDiffEntry } from "@root/types/HostedWorkspaceViewerTypes";
@@ -21,7 +21,10 @@ import {
   type DiffFileListHandle,
 } from "./DiffFileList";
 import { OpenFileButton } from "./OpenFileButton";
-import type { DiffGapExpansionState } from "@utils/outputRenderUtils";
+import {
+  PAGED_DIFF_FILE_KEY_ATTRIBUTE,
+  usePagedDiffListState,
+} from "@hooks/usePagedDiffListState";
 
 export interface DiffRefDiffListProps {
   gitRef: string;
@@ -77,7 +80,6 @@ function cardProps(
 
 const PLACEHOLDER_CLASS =
   "h-16 rounded-sm border border-panel-border bg-editor-bg/40 px-2.5 py-2 text-xs text-description-fg";
-const EMPTY_EXPANDED_GAPS: DiffGapExpansionState = new Map();
 
 export const DiffRefDiffList = React.forwardRef<
   DiffFileListHandle,
@@ -105,59 +107,13 @@ export const DiffRefDiffList = React.forwardRef<
     fetchPage,
   });
   const controller = controllerOverride ?? hookController;
-  const [collapsedOverrides, setCollapsedOverrides] = useState(
-    new Map<
-      string,
-      { listingId: string | null; version: number; collapsed: boolean }
-    >()
-  );
-  const [expandedGapsOverrides, setExpandedGapsOverrides] = useState(
-    new Map<
-      string,
-      {
-        listingId: string | null;
-        version: number;
-        expandedGaps: DiffGapExpansionState;
-      }
-    >()
-  );
-  const [anchorRestore, setAnchorRestore] = useState<{
-    index: number;
-    viewportOffset: number;
-  } | null>(null);
-
-  useImperativeHandle(
+  const diffListState = usePagedDiffListState(
     ref,
-    () => ({
-      prepareGlobalLayoutChange: () => {
-        const container = scrollContainerRef.current;
-        if (!container) return;
-        const containerRect = container.getBoundingClientRect();
-        const visibleFiles = container.querySelectorAll<HTMLElement>(
-          "[data-diff-file-key]"
-        );
-        for (const file of visibleFiles) {
-          const fileRect = file.getBoundingClientRect();
-          if (
-            fileRect.bottom > containerRect.top &&
-            fileRect.top < containerRect.bottom
-          ) {
-            const row = file.closest<HTMLElement>("[data-index]");
-            const index = Number(row?.dataset.index);
-            if (Number.isSafeInteger(index)) {
-              setAnchorRestore({
-                index,
-                viewportOffset: fileRect.top - containerRect.top,
-              });
-            }
-            return;
-          }
-        }
-        setAnchorRestore(null);
-      },
-    }),
-    [scrollContainerRef]
+    scrollContainerRef,
+    controller.listingId,
+    command
   );
+  const { anchorRestore } = diffListState;
 
   const getItem = useCallback(
     (index: number) => controller.getEntry(index),
@@ -169,63 +125,25 @@ export const DiffRefDiffList = React.forwardRef<
   );
   const renderItem = useCallback(
     (entry: WorkspaceGitRefDiffEntry, index: number) => {
-      const collapsedOverride = collapsedOverrides.get(entry.path);
-      const expandedGapsOverride = expandedGapsOverrides.get(entry.path);
       return (
-        <div data-diff-file-key={entry.path}>
+        <div {...{ [PAGED_DIFF_FILE_KEY_ATTRIBUTE]: entry.path }}>
           <DiffFileCard
             {...cardProps(entry, findQuery, findCaseSensitive)}
             ariaSetSize={controller.totalCount}
             ariaPosInSet={index + 1}
-            collapsed={
-              collapsedOverride?.listingId === controller.listingId &&
-              collapsedOverride.version === command.version
-                ? collapsedOverride.collapsed
-                : command.collapsed
-            }
+            collapsed={diffListState.collapsedFor(entry.path)}
             onCollapsedChange={(collapsed) =>
-              setCollapsedOverrides((previous) => {
-                const next = new Map(previous);
-                next.set(entry.path, {
-                  listingId: controller.listingId,
-                  version: command.version,
-                  collapsed,
-                });
-                return next;
-              })
+              diffListState.setCollapsed(entry.path, collapsed)
             }
-            expandedGaps={
-              expandedGapsOverride?.listingId === controller.listingId &&
-              expandedGapsOverride.version === command.version
-                ? expandedGapsOverride.expandedGaps
-                : EMPTY_EXPANDED_GAPS
-            }
+            expandedGaps={diffListState.expandedGapsFor(entry.path)}
             onExpandGap={(gapIndex, nextExpandedToLine) =>
-              setExpandedGapsOverrides((previous) => {
-                const existing = previous.get(entry.path);
-                const expandedGaps = new Map(existing?.expandedGaps);
-                expandedGaps.set(gapIndex, nextExpandedToLine);
-                const next = new Map(previous);
-                next.set(entry.path, {
-                  listingId: controller.listingId,
-                  version: command.version,
-                  expandedGaps,
-                });
-                return next;
-              })
+              diffListState.expandGap(entry.path, gapIndex, nextExpandedToLine)
             }
           />
         </div>
       );
     },
-    [
-      collapsedOverrides,
-      command,
-      controller,
-      expandedGapsOverrides,
-      findCaseSensitive,
-      findQuery,
-    ]
+    [controller, diffListState, findCaseSensitive, findQuery]
   );
   const renderPlaceholder = useCallback(
     (index: number) => (

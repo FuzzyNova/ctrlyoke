@@ -97,7 +97,9 @@ section with its full message, author and date.
   files over 2 MB on either side, show a placeholder instead of a diff.
 
 **View File History** on a file's menu in the Explorer lists every commit that
-changed it; select one to see that commit's change to the file.
+changed it; select one to see that commit's change to the file. Each commit's
+diff loads when you expand it. **Expand all diffs** in the header expands every
+commit, including commits that load as you scroll further down the history.
 
 ## Related
 
