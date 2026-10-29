@@ -68,15 +68,16 @@ const viewerShots = [
   },
 ];
 
-// One per reference kind the prompt editor clip shows. Chip colours follow the
-// dashboard's own reference chips.
+// One per reference kind the prompt editor clip shows. Each accent is that kind's
+// SYMBOL_ICON_COLORS entry (src/ui/webview-react/utils/atomicReferences.ts),
+// resolved from VS Code's default dark theme (dev/reference/vscode-css-vars-defaultdark.json).
 const references = [
-  { token: "@src/routes/", body: "Files and folders", chip: "border-sky-400/40 text-sky-300" },
-  { token: "#sym:normalizeTag", body: "Symbols and line selections", chip: "border-violet-400/40 text-violet-300" },
-  { token: "~0f2072a", body: "Commits, staged and working-tree diffs", chip: "border-emerald-400/40 text-emerald-300" },
-  { token: "$previous", body: "Output from earlier steps", chip: "border-rose-400/40 text-rose-300" },
-  { token: "!API_TOKEN", body: "Secrets, granted without entering the prompt", chip: "border-amber-400/40 text-amber-300" },
-  { token: "/skill:commit", body: "Skills and MCP servers, per step", chip: "border-slate-400/40 text-slate-300" },
+  { token: "@src/routes/", body: "Files and folders", accent: "#e0b97f" }, // folder: charts-yellow
+  { token: "#sym:normalizeTag", body: "Symbols and line selections", accent: "#b180d7" }, // symbol-function
+  { token: "~0f2072a", body: "Commits, staged and working-tree diffs", accent: "#86cf86" }, // git-commit: charts-green
+  { token: "$previous", body: "Output from earlier steps", accent: "#ef8773" }, // book: charts-red
+  { token: "!API_TOKEN", body: "Secrets, passed as environment variables, never written into the prompt", accent: "#ad80d7" }, // key: charts-purple
+  { token: "/skill:commit", body: "Skills and MCP servers, per step", accent: "#cd861a" }, // tools: charts-orange
 ];
 
 const features = [
@@ -284,7 +285,7 @@ const steps = [
       <div class="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
         {references.map((r) => (
           <div class="flex flex-col items-start gap-2 rounded-xl border border-white/8 bg-brand-900/40 p-4">
-            <code class={`rounded-md border bg-brand-950/60 px-2 py-0.5 font-mono text-sm ${r.chip}`}>{r.token}</code>
+            <code class="reference-chip font-mono text-sm" style={`--reference-accent: ${r.accent}`}>{r.token}</code>
             <p class="text-sm text-slate-400">{r.body}</p>
           </div>
         ))}

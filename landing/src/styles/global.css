@@ -49,6 +49,25 @@
   transform: scaleX(0.82);
 }
 
+/* The dashboard's reference chip (.atomic-reference-chip in
+   src/ui/webview-react/styles/globals.css), with its VS Code theme variables
+   resolved from VS Code's default dark theme
+   (dev/reference/vscode-css-vars-defaultdark.json). Set --reference-accent to
+   the chip kind's SYMBOL_ICON_COLORS entry (src/ui/webview-react/utils/atomicReferences.ts). */
+.reference-chip {
+  display: inline-flex;
+  align-items: baseline;
+  padding: 0 5px;
+  border: 1px solid #333536; /* --vscode-input-border */
+  border-radius: 4px;
+  background: #202122; /* --vscode-editorActionList-background */
+  color: #bfbfbf; /* --vscode-editorActionList-foreground */
+  line-height: 1.35;
+  box-shadow:
+    inset 1px 0 0 var(--reference-accent, transparent),
+    inset 0 -1px 0 var(--reference-accent, transparent);
+}
+
 /* Anchors the squish to the left edge instead of the center, so the wordmark stays flush
    against an adjacent icon (header/footer) instead of drifting off true-center. */
 .wordmark--flush-left {
