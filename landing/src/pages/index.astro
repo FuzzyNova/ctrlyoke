@@ -24,6 +24,8 @@ import historySearch from "../../../images/screenshots/history-search-2560x1600.
 import historyReopenedRun from "../../../images/screenshots/history-reopened-run-2560x1600.png";
 import viewerReferences from "../../../images/screenshots/workspace-viewer-references-2560x1600.png";
 import viewerCommit from "../../../images/screenshots/workspace-viewer-commit-2560x1600.png";
+import undoOutput from "../../../images/screenshots/file-changes-output-undo-2560x1600.png";
+import undoWorkflow from "../../../images/screenshots/file-changes-workflow-2560x1600.png";
 
 // `npm run media -- history`, over demo-app's recorded run history.
 const historyShots = [
@@ -68,9 +70,27 @@ const viewerShots = [
   },
 ];
 
+// `npm run media -- file-changes`: the hero run replayed with its file snapshots.
+const undoShots = [
+  {
+    img: undoOutput,
+    tab: "Undo one edit",
+    caption:
+      "Every file edit in the output has its own diff and Undo button, whichever harness made it. Here, Antigravity's fix during review.",
+    alt: "The ctrlyoke dashboard after a six-step workflow: in the output, Antigravity's “Edited notesStore.ts” with its diff expanded and an Undo button",
+  },
+  {
+    img: undoWorkflow,
+    tab: "Review the whole run",
+    caption:
+      "See every file a workflow changed in one place, with the steps that touched each one, and undo just the files you pick.",
+    alt: "The Workflow changes dialog for a six-step run: notesStore.ts and notes.ts selected, each listing the steps that changed it, a side-by-side diff of notes.ts, and an Undo 2 files button",
+  },
+];
+
 // One per reference kind the prompt editor clip shows. Each accent is that kind's
 // SYMBOL_ICON_COLORS entry (src/ui/webview-react/utils/atomicReferences.ts),
-// resolved from VS Code's default dark theme (dev/reference/vscode-css-vars-defaultdark.json).
+// resolved from VS Code's default dark theme.
 const references = [
   { token: "@src/routes/", body: "Files and folders", accent: "#e0b97f" }, // folder: charts-yellow
   { token: "#sym:normalizeTag", body: "Symbols and line selections", accent: "#b180d7" }, // symbol-function
@@ -81,11 +101,6 @@ const references = [
 ];
 
 const features = [
-  {
-    title: "Every result, with undo",
-    body: "Normalized output, inline diffs, an output minimap, and undo/redo down to a single file, whichever harness ran it.",
-    icon: "⬛",
-  },
   {
     title: "Native terminal, structured control",
     body: "Watch and steer the real interactive CLI in an embedded terminal while ctrlyoke builds a searchable record beside it.",
@@ -202,6 +217,26 @@ const steps = [
     </div>
   </section>
 
+  <!-- How it works -->
+  <section class="border-b border-white/5 bg-brand-900/20 px-6 py-10">
+    <div class="mx-auto max-w-6xl">
+      <h2 class="mb-6 text-center text-xs font-semibold uppercase tracking-widest text-sky-400">How it works</h2>
+      <ol class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        {steps.map((s) => (
+          <li class="flex items-start gap-3">
+            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-sky-400/30 bg-sky-400/10 text-sm font-bold text-sky-400">
+              {s.number}
+            </span>
+            <div>
+              <h3 class="font-semibold text-white">{s.title}</h3>
+              <p class="mt-1 text-sm leading-relaxed text-slate-400">{s.body}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
   <!-- One dashboard, six harnesses -->
   <section class="border-b border-white/5 px-6 py-20">
     <div class="mx-auto max-w-4xl">
@@ -313,8 +348,25 @@ const steps = [
     </div>
   </section>
 
-  <!-- Workspace viewer -->
+  <!-- Undo -->
   <section class="border-b border-white/5 px-6 py-24">
+    <div class="mx-auto max-w-6xl">
+      <div class="mb-10 text-center">
+        <h2 class="mb-4 text-3xl font-bold text-white md:text-4xl">Every result, with undo</h2>
+        <p class="mx-auto max-w-2xl text-slate-400">
+          Whichever harness ran the step, its file edits show up the same way: a diff for each
+          one, and undo for a single edit, a single file, or everything a workflow changed.
+        </p>
+      </div>
+      <ScreenshotTabs id="undo" shots={undoShots} width={1280} height={800} />
+      <p class="mx-auto mt-6 max-w-2xl text-center text-sm text-slate-400">
+        <a href="/docs/guide/file-changes" class="text-sky-400 hover:text-sky-300 transition-colors">See how undo works.</a>
+      </p>
+    </div>
+  </section>
+
+  <!-- Workspace viewer -->
+  <section class="border-b border-white/5 bg-brand-900/30 px-6 py-24">
     <div class="mx-auto max-w-6xl">
       <div class="mb-10 text-center">
         <h2 class="mb-4 text-3xl font-bold text-white md:text-4xl">Your project, in any browser</h2>
@@ -339,11 +391,11 @@ const steps = [
           The same tools, whichever harness runs
         </h2>
         <p class="mx-auto max-w-xl text-slate-400">
-          Output, undo, validation and your agents, skills and MCP servers work the same way on
+          The terminal, validation and your agents, skills and MCP servers work the same way on
           all six harnesses.
         </p>
       </div>
-      <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+      <div class="grid grid-cols-1 gap-6 md:grid-cols-3">
         {features.map((f) => (
           <div class="rounded-xl border border-white/8 bg-brand-900/40 p-6 hover:border-sky-400/20 transition-colors">
             <div class="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-sky-400/10 font-mono text-sky-400">
@@ -357,67 +409,33 @@ const steps = [
     </div>
   </section>
 
-  <!-- How it works -->
-  <section class="border-b border-white/5 bg-brand-900/20 px-6 py-24">
-    <div class="mx-auto max-w-4xl">
-      <div class="mb-16 text-center">
-        <h2 class="text-3xl font-bold text-white md:text-4xl">How it works</h2>
-      </div>
-      <div class="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
-        {steps.map((s) => (
-          <div class="relative flex flex-col items-start">
-            <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-full border border-sky-400/30 bg-sky-400/10 text-lg font-bold text-sky-400">
-              {s.number}
-            </div>
-            <h3 class="mb-2 text-lg font-semibold text-white">{s.title}</h3>
-            <p class="text-sm leading-relaxed text-slate-400">{s.body}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  </section>
-
-  <!-- Take control from mobile -->
-  <section class="border-b border-white/5 bg-brand-900/20 px-6 py-24">
-    <div class="mx-auto max-w-4xl text-center">
-      <div class="mb-4 inline-flex items-center gap-2 rounded-full bg-sky-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-sky-400">
-        ctrlyoke Pro
-      </div>
-      <h2 class="mb-4 text-3xl font-bold text-white md:text-4xl">Code from your phone</h2>
-      <p class="mx-auto mb-10 max-w-xl text-slate-400">
-        Scan the QR code, open the dashboard in your phone's browser, and take control of a
-        workflow that's running on your PC, even mid-step.
-      </p>
-      <div class="overflow-hidden rounded-2xl border border-white/10 shadow-2xl shadow-black/50">
-        <video
-          src={takeControlVideo}
-          width={1920}
-          height={1080}
-          autoplay
-          muted
-          loop
-          playsinline
-          aria-label="Scanning a QR code on a phone, then taking control of a ctrlyoke workflow running in VS Code"
-          class="w-full"
-        />
-      </div>
-    </div>
-  </section>
-
-  <!-- Pro callout -->
+  <!-- Pro: code from your phone -->
   <section class="border-b border-white/5 px-6 py-24">
     <div class="mx-auto max-w-4xl">
-      <div class="overflow-hidden rounded-2xl border border-sky-400/15 bg-gradient-to-br from-brand-800 to-brand-900 p-10 md:p-14">
+      <div class="overflow-hidden rounded-2xl border border-sky-400/15 bg-gradient-to-br from-brand-800 to-brand-900 p-6 sm:p-10 md:p-14">
         <div class="mb-4 inline-flex items-center gap-2 rounded-full bg-sky-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-sky-400">
           ctrlyoke Pro
         </div>
-        <h2 class="mb-4 text-3xl font-bold text-white md:text-4xl">What Pro adds</h2>
-        <p class="mb-8 max-w-xl text-lg text-slate-300">
-          ctrlyoke Pro unlocks the remote dashboard — open the workflows running on your
-          computer from any browser or phone that can reach it: across your home or office
-          network, or from anywhere over your own VPN.{" "}
+        <h2 class="mb-4 text-3xl font-bold text-white md:text-4xl">Code from your phone</h2>
+        <p class="mb-8 max-w-2xl text-lg text-slate-300">
+          Pro unlocks the remote dashboard. Scan the QR code and take control of a workflow
+          running on your PC, even mid-step, from any browser or phone that can reach it: across
+          your home or office network, or from anywhere over your own VPN.{" "}
           <a href="/docs/pro/remote-access" class="text-sky-400 hover:text-sky-300 transition-colors">See how to connect from anywhere.</a>
         </p>
+        <div class="mb-10 overflow-hidden rounded-xl border border-white/10 shadow-2xl shadow-black/50">
+          <video
+            src={takeControlVideo}
+            width={1920}
+            height={1080}
+            autoplay
+            muted
+            loop
+            playsinline
+            aria-label="Scanning a QR code on a phone, then taking control of a ctrlyoke workflow running in VS Code"
+            class="w-full"
+          />
+        </div>
         <div class="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2">
           {[
             "Remote & LAN browser dashboard",

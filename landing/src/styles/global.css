@@ -51,8 +51,7 @@
 
 /* The dashboard's reference chip (.atomic-reference-chip in
    src/ui/webview-react/styles/globals.css), with its VS Code theme variables
-   resolved from VS Code's default dark theme
-   (dev/reference/vscode-css-vars-defaultdark.json). Set --reference-accent to
+   resolved from VS Code's default dark theme. Set --reference-accent to
    the chip kind's SYMBOL_ICON_COLORS entry (src/ui/webview-react/utils/atomicReferences.ts). */
 .reference-chip {
   display: inline-flex;
