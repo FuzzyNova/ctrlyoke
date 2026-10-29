@@ -8,6 +8,7 @@ import {
 } from "react";
 import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  KEYBOARD_KEYS,
   SETTING_SCOPES,
 } from "@root/types/DashboardConstants";
 import type { KeyValueKeyKind } from "@root/utils/KeyValueKeyKinds";
@@ -431,7 +432,10 @@ export function KeyValueRowsEditor({
             onChange={(event) => updateRow(row.id, "value", event.target.value)}
             onBlur={() => commitRows(rowsRef.current)}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && rowIndex === rows.length - 1) {
+              if (
+                event.key === KEYBOARD_KEYS.ENTER &&
+                rowIndex === rows.length - 1
+              ) {
                 event.preventDefault();
                 addRow();
               }

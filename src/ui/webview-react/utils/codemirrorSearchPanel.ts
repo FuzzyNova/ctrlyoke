@@ -21,6 +21,7 @@ import {
   EXIT_BUTTON_CLASS,
   EXIT_BUTTON_ICON_CLASS,
 } from "@components/shared/ExitButton";
+import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 
 /** Marker class on the panel root; styles nothing in globals.css. */
 const SEARCH_PANEL_CLASS = "cy-cm-find";
@@ -334,7 +335,7 @@ class FindWidgetPanel implements Panel {
       event.preventDefault();
       return;
     }
-    if (event.key !== "Enter") return;
+    if (event.key !== KEYBOARD_KEYS.ENTER) return;
     if (event.target === this.searchField) {
       event.preventDefault();
       if (event.altKey) selectMatches(this.view);
