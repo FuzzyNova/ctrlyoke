@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The find bar in the prompt editor and the workspace file editor (`Ctrl+F`)
+  now matches the output pane's: it floats in the editor's top-right corner,
+  shows the match count, and has icon toggles for match case, whole word and
+  regular expressions. The replace row is collapsed behind a chevron until
+  you open it. A pressed match-case toggle in the output pane's find bar is
+  now shaded the way VS Code shows it.
+
 - **Commit**, **Push** and **Pull** in the dashboard's Source Control pane no
   longer give up after 5 minutes. They now wait however long your Git hooks
   take, so a pre-push hook that runs a long test suite no longer fails with

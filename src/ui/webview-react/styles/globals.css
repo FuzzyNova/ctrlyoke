@@ -151,6 +151,19 @@
   --color-input-error-bg: var(--vscode-inputValidation-errorBackground);
   --color-input-error-fg: var(--vscode-inputValidation-errorForeground);
   --color-input-error-border: var(--vscode-inputValidation-errorBorder);
+  /* Pressed option toggles (match case, whole word, regex) in find widgets. */
+  --color-input-option-active-bg: var(
+    --vscode-inputOption-activeBackground,
+    color-mix(in srgb, var(--vscode-focusBorder) 40%, transparent)
+  );
+  --color-input-option-active-fg: var(
+    --vscode-inputOption-activeForeground,
+    var(--vscode-foreground)
+  );
+  --color-input-option-active-border: var(
+    --vscode-inputOption-activeBorder,
+    var(--vscode-focusBorder)
+  );
 
   /* Lists */
   --color-list-hover-bg: var(--vscode-list-hoverBackground);
@@ -1540,6 +1553,36 @@ button .cy-lucide-icon {
            text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg
            transition-colors duration-100
            disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-description-fg;
+  }
+
+  /* Floating find widget, shared by the output pane's find bar and the
+     CodeMirror search panel (utils/codemirrorSearchPanel.ts) so both read as
+     one control. Placement stays with each caller. */
+  .cy-find-widget {
+    @apply flex items-center gap-1.5 overflow-hidden rounded-sm border border-simple-find-sash-border bg-panel-sticky-bg/92 px-2 py-1 shadow-md backdrop-blur-md;
+  }
+
+  .cy-find-widget-input {
+    @apply h-7 min-w-0 flex-1 basis-32 rounded-sm border border-input-border bg-input-bg px-2 text-sm text-input-fg outline-hidden focus:border-focus-border;
+  }
+
+  .cy-find-widget-input[aria-invalid="true"] {
+    @apply border-input-error-border;
+  }
+
+  .cy-find-widget-count {
+    @apply shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-description-fg;
+  }
+
+  /* An option toggle (`icon-btn` + this class) shows its pressed state the way
+     VS Code's find widget does. The hover selector outranks the shared
+     `button.icon-btn:hover` outline reset above. */
+  button.cy-find-widget-toggle[aria-pressed="true"],
+  button.cy-find-widget-toggle[aria-pressed="true"]:hover:not(:disabled) {
+    color: var(--color-input-option-active-fg);
+    background-color: var(--color-input-option-active-bg);
+    outline: 1px solid var(--color-input-option-active-border);
+    outline-offset: -1px;
   }
 
   /* Shared elevated surface for custom dropdown popups rendered in portals. */

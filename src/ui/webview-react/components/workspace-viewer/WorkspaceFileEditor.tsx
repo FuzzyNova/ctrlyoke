@@ -29,6 +29,7 @@ import {
   createAtomicReferenceWidgetTheme,
   createThemeExtension,
 } from "@utils/codemirrorTheme";
+import { createSearchPanelExtension } from "@utils/codemirrorSearchPanel";
 import {
   getLanguageExtension,
   createWorkspaceEditorHighlightExtension,
@@ -497,6 +498,7 @@ export const WorkspaceFileEditor = forwardRef<
       return [
         basicSetup,
         createThemeExtension("editor"),
+        createSearchPanelExtension(),
         createAtomicReferenceWidgetTheme(),
         createWorkspaceEditorHighlightExtension(),
         createWorkspaceEditorLinkThemeExtension(),

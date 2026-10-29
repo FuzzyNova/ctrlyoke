@@ -97,7 +97,7 @@ export function OutputFindBar({
     <div
       ref={containerDivRef}
       role="search"
-      className={`absolute right-[calc(var(--cy-output-minimap-width)+0.5rem)] top-0 z-content-floating flex items-center gap-1.5 overflow-hidden rounded-sm border border-simple-find-sash-border bg-panel-sticky-bg/92 px-2 py-1 shadow-md backdrop-blur-md ${
+      className={`cy-find-widget absolute right-[calc(var(--cy-output-minimap-width)+0.5rem)] top-0 z-content-floating ${
         isNarrow ? "left-2" : ""
       } ${closing ? "animate-output-find-exit" : "animate-output-find-enter"}`}
       onKeyDown={onKeyDown}
@@ -110,13 +110,9 @@ export function OutputFindBar({
         onChange={(event) => onQueryChange(event.target.value)}
         placeholder="Find in output"
         aria-label="Find in output"
-        className="h-7 min-w-0 flex-1 basis-32 rounded-sm border border-input-border bg-input-bg px-2 text-sm text-input-fg outline-hidden focus:border-focus-border"
+        className="cy-find-widget-input"
       />
-      <span
-        className={`shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-description-fg ${
-          isNarrow ? "w-8" : "w-16"
-        }`}
-      >
+      <span className={`cy-find-widget-count ${isNarrow ? "w-8" : "w-16"}`}>
         {counterLabel}
       </span>
       <button
@@ -139,11 +135,7 @@ export function OutputFindBar({
       </button>
       <button
         type="button"
-        className={`icon-btn shrink-0 px-1.5 py-1 ${
-          state.caseSensitive
-            ? "text-foreground"
-            : "text-description-fg hover:text-foreground"
-        }`}
+        className="icon-btn cy-find-widget-toggle shrink-0 px-1.5 py-1"
         onClick={onToggleCaseSensitive}
         title="Match case"
         aria-label="Match case"

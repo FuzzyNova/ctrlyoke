@@ -117,6 +117,22 @@ See the [compatibility matrix](/harnesses/compatibility).
 See [Adding steps: Queue and Run](/guide/dashboard#adding-steps-queue-and-run)
 for what **Run** and **Queue** do in each workflow state.
 
+### Find and replace {#find-and-replace}
+
+`Ctrl+F` (`Cmd+F` on macOS) opens a find bar in the editor's top-right corner,
+styled like the output pane's. It shows the match count and has buttons for
+**Match case**, **Match whole word** and **Use regular expression**. Click the
+chevron on its left to show the replace row. The workspace file editor uses the
+same find bar.
+
+| Key                     | Action                       |
+| ----------------------- | ---------------------------- |
+| `Enter` / `Shift+Enter` | Next / previous match        |
+| `Alt+Enter`             | Select every match           |
+| `Enter` in **Replace**  | Replace the current match    |
+| `Ctrl+Alt+Enter`        | Replace all (in **Replace**) |
+| `Esc`                   | Close the find bar           |
+
 ## The footer quick pickers {#quick-pickers}
 
 The footer under the editor holds quick pickers for the step's most-used

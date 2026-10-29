@@ -21,6 +21,7 @@ import {
   createThemeExtension,
 } from "@utils/codemirrorTheme";
 import { createPromptMarkdownExtension } from "@utils/codemirrorLanguage";
+import { createSearchPanelExtension } from "@utils/codemirrorSearchPanel";
 import {
   DEFAULT_COMPLETION_ICON,
   findAtomicReferences,
@@ -1242,6 +1243,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         createLinterThemeExtension(),
         createActiveLineHighlightExtension(),
         highlightSelectionMatches({ minSelectionLength: 2 }),
+        createSearchPanelExtension(),
         createSpellCheckExtension(typoCheckerRef, isMultiRootWorkspace),
         createWorkflowVariableExtension({
           getVars: () => workflowCompletionContextRef.current?.vars,
