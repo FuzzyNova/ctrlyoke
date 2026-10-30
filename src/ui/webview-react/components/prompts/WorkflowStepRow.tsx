@@ -297,7 +297,8 @@ export function WorkflowStepRowFrame({
             : displacementStyle
         }
       />
-      {/* In-view rows draw a bar on the number column's edge. */}
+      {/* In-view rows draw a bar on the number column's left edge, flush
+          against the identity rail (as the chip rail and final step footer do). */}
       <div
         className={`relative shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm select-none ${
           isInOutputView ? "text-foreground" : "text-description-fg"
@@ -307,7 +308,7 @@ export function WorkflowStepRowFrame({
         title={isInOutputView ? IN_OUTPUT_VIEW_TITLE : undefined}
       >
         {slotNumber}
-        {isInOutputView && <InOutputViewBar className="right-0 w-[3px]" />}
+        {isInOutputView && <InOutputViewBar className="left-0 w-[3px]" />}
       </div>
       {isCurrent && !hideExecutingHighlight && <ExecutingStepHighlight />}
       <div ref={bodyRef} style={bodyStyle} className="relative flex-1 min-w-0">
