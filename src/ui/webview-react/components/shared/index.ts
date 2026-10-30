@@ -116,6 +116,11 @@ export {
   type TrustedRootsListEditorProps,
 } from "./TrustedRootsListEditor";
 export { PortListEditor, type PortListEditorProps } from "./PortListEditor";
+export {
+  ChipListEditor,
+  type ChipListEditorProps,
+  type ChipListParseResult,
+} from "./ChipListEditor";
 export { NumberField, type NumberFieldProps } from "./NumberField";
 export { LocalTextInput, LocalNumberInput, LocalTextarea } from "./LocalInputs";
 export {

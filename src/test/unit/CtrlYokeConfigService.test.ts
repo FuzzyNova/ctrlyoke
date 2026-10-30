@@ -438,6 +438,41 @@ suite("CtrlYokeConfigService", () => {
     });
   });
 
+  test("unions workspace spelling words onto the user list instead of replacing it", () => {
+    service.setUserBackend(
+      makeBackend({ spelling: { words: ["ctrlyoke", "GitHub"] } })
+    );
+    service.setWorkspaceBackend(
+      makeBackend({ spelling: { words: ["GitHub", "frobnicate"] } })
+    );
+
+    assert.deepStrictEqual(service.getAll().spelling.words, [
+      "ctrlyoke",
+      "GitHub",
+      "frobnicate",
+    ]);
+  });
+
+  test("unions workspace spelling words onto the default while the user never set a list", () => {
+    service.setUserBackend(makeBackend({}));
+    service.setWorkspaceBackend(
+      makeBackend({ spelling: { words: ["frobnicate"] } })
+    );
+
+    assert.deepStrictEqual(service.getAll().spelling.words, [
+      ...CTRLYOKE_SETTINGS_DEFAULTS.spelling.words,
+      "frobnicate",
+    ]);
+  });
+
+  test("a user spelling list without the default word keeps it removed", () => {
+    service.setUserBackend(makeBackend({ spelling: { words: [] } }));
+    service.setWorkspaceBackend(makeBackend({}));
+
+    assert.deepStrictEqual(service.getAll().spelling.words, []);
+    assert.strictEqual(service.getAll().spelling.enabled, true);
+  });
+
   test("CLI overlay overrides workspace backend", () => {
     service.setUserBackend(
       makeBackend({ defaults: { harness: "claude-cli" } })

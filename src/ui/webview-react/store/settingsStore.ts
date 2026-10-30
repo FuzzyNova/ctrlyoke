@@ -56,6 +56,7 @@ import {
   CTRLYOKE_SETTINGS_DEFAULTS,
   DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT,
   type HarnessColorSettings,
+  type SpellingSettings,
   type UiAccessibilitySettings,
   type WorktreeDefaultConfig,
 } from "@root/types/CtrlYokeSettings";
@@ -141,6 +142,8 @@ export interface GlobalSettings {
   harnessColors?: HarnessColorSettings;
   /** Mirrored `ui.accessibility`; read it through `selectUiAccessibility`. */
   accessibility?: UiAccessibilitySettings;
+  /** Mirrored `spelling`; read it through `selectSpellingSettings`. */
+  spelling?: SpellingSettings;
   confirmDeleteOperations: boolean;
   confirmResetOperations: boolean;
   confirmContinuationDiscardOperations: boolean;
@@ -927,6 +930,21 @@ export function selectUiAccessibility(
     state.fullGlobalSettings?.settings.ui.accessibility ??
     state.globalSettings.accessibility ??
     CTRLYOKE_SETTINGS_DEFAULTS.ui.accessibility
+  );
+}
+
+/**
+ * Resolve the prompt editor's spell check settings (`spelling`) with the same
+ * precedence as `selectToastLevel`. Usable as a store selector: every branch
+ * returns a stored or constant reference.
+ */
+export function selectSpellingSettings(
+  state: Pick<SettingsState, "fullGlobalSettings" | "globalSettings">
+): SpellingSettings {
+  return (
+    state.fullGlobalSettings?.settings.spelling ??
+    state.globalSettings.spelling ??
+    CTRLYOKE_SETTINGS_DEFAULTS.spelling
   );
 }
 

@@ -87,10 +87,32 @@ work. Hover an underline to see why, and use its quick fix where there is one:
   or `$endCondition:` outside a retry prompt
 - a <code v-pre>{{name}}</code> placeholder the workflow doesn't define, with
   **Add "name" to workflow vars** (see [Variables](/workflows/variables))
-- a misspelled word, with spelling suggestions
+- a misspelled word, with spelling suggestions and **Add "word" to
+  dictionary** (see [Spelling](#spelling))
 
 A reference that fails at run time warns and the step runs anyway, unless
 `execution.contextResolutionFailure` is `fail`.
+
+### Spelling {#spelling}
+
+The editor spell checks prose in US English. References, placeholders, code,
+link targets and all-caps words are skipped, and a camelCase word is checked
+one part at a time.
+
+To stop a word being flagged, pick **Add "word" to dictionary** from its quick
+fixes. The word is saved to your user
+[`spelling.words`](/reference/settings#spelling-words) and the underline
+clears in every open editor. **Add "word" to workspace dictionary** saves it to
+the workspace's `.ctrlyoke/settings.json` instead, so everyone who opens the
+project shares it. Both lists apply together.
+
+A word saved in lowercase matches any capitalization, so `ctrlyoke` also
+accepts `Ctrlyoke`. A word with a capital letter matches only exactly:
+`GitHub` does not accept `github`.
+
+**Settings → General → Spelling** lists the words for each scope, where you can
+add or remove them, and turns spell check off with
+[`spelling.enabled`](/reference/settings#spelling-enabled).
 
 ## Pasting images {#images}
 

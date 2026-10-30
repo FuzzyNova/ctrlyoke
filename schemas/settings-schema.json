@@ -925,6 +925,30 @@
         }
       }
     },
+    "spelling": {
+      "type": "object",
+      "description": "Spell checking in the prompt editor.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Underline misspelled words in the prompt editor and offer spelling fixes. When off, the dictionary is not loaded at all.",
+          "default": true
+        },
+        "words": {
+          "type": "array",
+          "description": "Custom words the spell checker always accepts, added from the editor with **Add to dictionary**. User and workspace lists are combined, so a team can share project terms in the workspace file while each person keeps a personal list. A word saved in lowercase matches any capitalization (`ctrlyoke` also accepts `Ctrlyoke` and `CTRLYOKE`); a word with a capital letter must match exactly (`GitHub` does not accept `github`).",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^\\S+$"
+          },
+          "uniqueItems": true,
+          "default": ["ctrlyoke"]
+        }
+      }
+    },
     "server": {
       "type": "object",
       "description": "ctrlyoke hosted server settings.",

@@ -89,6 +89,30 @@ const STATIC_SETTINGS_CATALOG = {
     label: "Editor font size",
     keywords: ["text size", "zoom", "prompt editor", "retry prompt"],
   },
+  "spelling.enabled": {
+    id: "spelling.enabled",
+    path: "spelling.enabled",
+    tab: GLOBAL_SETTINGS_TABS.GENERAL,
+    label: "Check spelling in the prompt editor",
+    description:
+      "Underline misspelled words in the prompt editor and offer spelling fixes.",
+    keywords: ["spell check", "spellcheck", "dictionary", "squiggle"],
+  },
+  "spelling.words": {
+    id: "spelling.words",
+    path: "spelling.words",
+    tab: GLOBAL_SETTINGS_TABS.GENERAL,
+    label: "Custom words",
+    description:
+      "Words the spell checker always accepts. Add one from the editor with Add to dictionary. User and workspace lists are combined.",
+    keywords: [
+      "spell check",
+      "spellcheck",
+      "dictionary",
+      "ignore word",
+      "add to dictionary",
+    ],
+  },
   "server.theme": {
     id: "server.theme",
     path: "server.theme",

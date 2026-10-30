@@ -1,6 +1,4 @@
-import { useState, type FormEvent } from "react";
-import { Button } from "./Button";
-import { Icon } from "./Icon";
+import { ChipListEditor, type ChipListParseResult } from "./ChipListEditor";
 
 export interface PortListEditorProps {
   ports: number[];
@@ -13,109 +11,36 @@ const MIN_PORT = 1;
 const MAX_PORT = 65535;
 const PORT_REQUIREMENT_TEXT = `Enter a port number between ${MIN_PORT} and ${MAX_PORT}.`;
 
-function parsePort(raw: string): number | null {
-  const trimmed = raw.trim();
-  if (!/^\d+$/.test(trimmed)) return null;
+function parsePort(trimmed: string): ChipListParseResult<number> {
+  if (!/^\d+$/.test(trimmed)) return { error: PORT_REQUIREMENT_TEXT };
   const value = Number(trimmed);
-  return value >= MIN_PORT && value <= MAX_PORT ? value : null;
+  return value >= MIN_PORT && value <= MAX_PORT
+    ? { value }
+    : { error: PORT_REQUIREMENT_TEXT };
 }
 
-/**
- * Ordered chip list for a short set of port numbers (ctrlyoke server
- * fallback ports). Validation happens on submit — an invalid or duplicate
- * entry leaves the input in place with an inline error, mirroring
- * TrustedRootsListEditor's path validation rather than a live-typing
- * warning border.
- */
+/** Ordered chip list for the ctrlyoke server's fallback ports. */
 export function PortListEditor({
   ports,
   onAdd,
   onRemove,
   inputId = "port-list-input",
 }: PortListEditorProps) {
-  const [portInput, setPortInput] = useState("");
-  const [portError, setPortError] = useState<string | null>(null);
-
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const port = parsePort(portInput);
-    if (port === null) {
-      setPortError(
-        portInput.trim() ? PORT_REQUIREMENT_TEXT : "Port cannot be empty."
-      );
-      return;
-    }
-    if (ports.includes(port)) {
-      setPortError(`Port ${port} is already in the list.`);
-      return;
-    }
-
-    setPortInput("");
-    setPortError(null);
-    onAdd(port);
-  };
-
   return (
-    <div className="space-y-2">
-      <form onSubmit={handleSubmit} className="flex items-start gap-2">
-        <div className="min-w-0 flex-1">
-          <label htmlFor={inputId} className="sr-only">
-            Fallback port
-          </label>
-          <input
-            id={inputId}
-            type="text"
-            inputMode="numeric"
-            value={portInput}
-            onChange={(event) => {
-              setPortInput(event.target.value);
-              setPortError(null);
-            }}
-            placeholder="e.g. 4749"
-            className="w-full rounded-sm border border-input-border bg-input-bg px-2 py-1.5 font-mono text-sm text-input-fg focus:border-focus-border focus:outline-hidden"
-            aria-invalid={portError ? "true" : undefined}
-            aria-describedby={portError ? `${inputId}-error` : undefined}
-          />
-          {portError && (
-            <p
-              id={`${inputId}-error`}
-              role="alert"
-              className="mt-1 text-xs text-error-fg"
-            >
-              {portError}
-            </p>
-          )}
-        </div>
-        <Button type="submit" size="sm">
-          Add
-        </Button>
-      </form>
-
-      {ports.length === 0 ? (
-        <p className="rounded-sm border border-panel-border px-3 py-2 text-xs text-description-fg">
-          No fallback ports configured.
-        </p>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {ports.map((port) => (
-            <span
-              key={port}
-              className="flex items-center gap-1.5 rounded-sm border border-panel-border bg-input-bg px-2 py-1 font-mono text-xs text-foreground"
-              data-testid={`port-list-entry-${port}`}
-            >
-              {port}
-              <button
-                type="button"
-                onClick={() => onRemove(port)}
-                aria-label={`Remove port ${port}`}
-                className="text-description-fg hover:text-error-fg"
-              >
-                <Icon name="close" />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
+    <ChipListEditor
+      items={ports}
+      onAdd={onAdd}
+      onRemove={onRemove}
+      parse={parsePort}
+      inputId={inputId}
+      inputLabel="Fallback port"
+      placeholder="e.g. 4749"
+      emptyText="No fallback ports configured."
+      emptyInputError="Port cannot be empty."
+      duplicateError={(port) => `Port ${port} is already in the list.`}
+      removeLabel={(port) => `Remove port ${port}`}
+      testIdPrefix="port-list-entry"
+      inputMode="numeric"
+    />
   );
 }

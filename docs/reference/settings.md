@@ -100,6 +100,7 @@ fields.
 | [`runs`](#runs) | Execution run retention settings. |
 | [`terminal`](#terminal) | Embedded terminal settings. |
 | [`ui`](#ui) | UI display settings. |
+| [`spelling`](#spelling) | Spell checking in the prompt editor. |
 | [`server`](#server) | ctrlyoke hosted server settings. |
 | [`notifications`](#notifications) | Notification settings. |
 | [`commit`](#commit) | Commit message generation settings. |
@@ -1164,6 +1165,24 @@ What a screen reader is told about a run while you work elsewhere in the dashboa
 - **Default:** `false`
 
 Turn on screen-reader mode in the dashboard's Terminal tab, so a screen reader can read the terminal's text and follow new output. Browsers can't detect a screen reader, so this is off until you turn it on.
+
+## `spelling` {#spelling}
+
+Spell checking in the prompt editor.
+
+### `spelling.enabled` {#spelling-enabled}
+
+- **Type:** `boolean`
+- **Default:** `true`
+
+Underline misspelled words in the prompt editor and offer spelling fixes. When off, the dictionary is not loaded at all.
+
+### `spelling.words` {#spelling-words}
+
+- **Type:** `string[]`
+- **Default:** `["ctrlyoke"]`
+
+Custom words the spell checker always accepts, added from the editor with \*\*Add to dictionary\*\*. User and workspace lists are combined, so a team can share project terms in the workspace file while each person keeps a personal list. A word saved in lowercase matches any capitalization (`ctrlyoke` also accepts `Ctrlyoke` and `CTRLYOKE`); a word with a capital letter must match exactly (`GitHub` does not accept `github`).
 
 ## `server` {#server}
 

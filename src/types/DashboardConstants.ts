@@ -667,6 +667,7 @@ export const MESSAGE_TYPES = {
   CONFIG_VALUE: "configValue", // Extension -> Webview: Send config value
   BROWSE_AND_ADD_EXTERNAL_ROOT: "browseAndAddExternalRoot", // Webview -> Extension: { scope } OS folder picker, appends result to permissions.trustedExternalRoots for that scope
   UPDATE_EXTERNAL_ROOT_DECISION: "updateExternalRootDecision", // Webview -> Extension: change a workspace-scope external-root trust decision
+  SPELLING_ADD_WORD: "spellingAddWord", // Webview -> Extension: { word, scope } append one word to that scope's spelling.words if missing
   DISABLE_STATUS_LINE_TRACKING: "disableStatusLineTracking", // Webview -> Extension: disable one harness's global statusline tracking
   SET_STATUS_LINE_FORMAT_MODE: "setStatusLineFormatMode", // Webview -> Extension: set shared/per-harness statusline format mode
 
@@ -2230,6 +2231,9 @@ export const SETTING_PATHS = {
   PERMISSIONS_TRUSTED_EXTERNAL_ROOTS: "permissions.trustedExternalRoots",
   EXECUTION_CONTEXT_RESOLUTION_FAILURE: "execution.contextResolutionFailure",
   UI_SHOW_COST_ESTIMATES: "ui.showCostEstimates",
+  SPELLING: "spelling",
+  SPELLING_ENABLED: "spelling.enabled",
+  SPELLING_WORDS: "spelling.words",
   SERVER_AUTO_START: "server.autoStart",
   SERVER_THEME: "server.theme",
   SERVER_PUBLIC_HOSTNAME: "server.publicHostname",

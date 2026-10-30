@@ -26,6 +26,7 @@ import { STEP_COLOR_MODES } from "@root/types/DashboardConstants";
 import { RunHistorySection } from "./RunHistorySection";
 import { FontSizeStepper } from "./FontSizeStepper";
 import { EditorFontSizeSetting } from "./EditorFontSizeSetting";
+import { SpellingSection } from "./SpellingSection";
 import { settingLabel } from "./settingsCatalog";
 
 interface Props {
@@ -118,6 +119,12 @@ export function GeneralSection({
           {...rowProps}
         />
       </div>
+      <SpellingSection
+        settings={settings}
+        activeScope={activeScope}
+        onUpdate={onUpdate}
+        onReset={onReset}
+      />
       <div className="pt-3 border-t border-panel-border mt-3">
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
           UI Preferences

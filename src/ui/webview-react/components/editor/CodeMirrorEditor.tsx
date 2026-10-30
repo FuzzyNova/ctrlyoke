@@ -44,12 +44,7 @@ import {
   highlightSelectionMatches,
   openSearchPanel,
 } from "@codemirror/search";
-import {
-  linter,
-  lintKeymap,
-  forceLinting,
-  type Diagnostic,
-} from "@codemirror/lint";
+import { linter, lintKeymap, type Diagnostic } from "@codemirror/lint";
 import {
   Prec,
   RangeSetBuilder,
@@ -85,8 +80,17 @@ import {
   type PromptEditorInsertRequest,
 } from "../../types/messages";
 import { WebviewLog } from "../../utils/logger";
-import { useSettingsStore } from "../../store/settingsStore";
+import {
+  selectSpellingSettings,
+  useSettingsStore,
+} from "../../store/settingsStore";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
+import { spellChecker } from "@utils/spellChecker";
+import { createSpellCheckExtension } from "@utils/codemirrorSpellCheck";
+import {
+  isLintRefreshUpdate,
+  relintForContextChange,
+} from "@utils/codemirrorRelint";
 import {
   checkPriorContextRefs,
   diagnoseResolvedReferences,
@@ -99,8 +103,6 @@ import {
 } from "@root/utils/PromptDiagnosticRules";
 import { formatInlinePriorContextBody } from "@root/utils/FileReferenceParser";
 import { scanCtrlYokeSlashTokens } from "@root/utils/CtrlYokeSlashTokens";
-import { createGitChangeReferencePattern } from "@root/utils/ReferencePatterns";
-import { findVariablePlaceholders } from "@root/utils/VariablePlaceholders";
 import { createWorkflowVariableExtension } from "@utils/codemirrorWorkflowVariables";
 import { isReferenceBoundaryBefore } from "@root/utils/ReferenceBoundary";
 import { notifyUser } from "@utils/notifyUser";
@@ -138,28 +140,12 @@ import {
 } from "@utils/editorAutoExpand";
 
 export { keyboardTooltipSpace } from "@utils/keyboardTooltipSpace";
+export { relintForContextChange } from "@utils/codemirrorRelint";
 export {
   buildCodeMirrorCompletionResult,
   findCustomCompletionContext,
   findSlashCompletionContext,
 };
-
-// Typo.js spell checker (will be loaded from window.Typo)
-declare global {
-  interface Window {
-    Typo: new (
-      lang: string,
-      aff: string,
-      dic: string,
-      options?: object
-    ) => TypoChecker;
-  }
-}
-
-interface TypoChecker {
-  check: (word: string) => boolean;
-  suggest: (word: string) => string[];
-}
 
 export type { CodeMirrorEditorMode } from "@root/types/DashboardConstants";
 type CodeMirrorEditorSurface = "editor" | "input";
@@ -366,7 +352,6 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   // fires before the setup effect in definition order, so viewRef is null on
   // first execution — viewReady causes a second run once the view exists).
   const [viewReady, setViewReady] = useState(false);
-  const typoCheckerRef = useRef<TypoChecker | null>(null);
   const onChangeRef = useRef(onChange);
   const onRunRef = useRef(onRun);
   const onQueueRef = useRef(onQueue);
@@ -412,6 +397,16 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const isMultiRootWorkspace = useSettingsStore(
     (state) => state.globalSettings.isMultiRoot
   );
+  const { enabled: spellingEnabled, words: spellingWords } = useSettingsStore(
+    selectSpellingSettings
+  );
+  const spellingEnabledRef = useRef(spellingEnabled);
+  spellingEnabledRef.current = spellingEnabled;
+  const hasWorkspace = useSettingsStore((state) =>
+    Boolean(state.globalSettings.workspaceRoot)
+  );
+  const hasWorkspaceRef = useRef(hasWorkspace);
+  hasWorkspaceRef.current = hasWorkspace;
   // `ui.wordWrap` governs code views only; a prompt is prose and always wraps.
   const wordWrapSetting = useSettingsStore(
     (state) => state.globalSettings.wordWrap
@@ -631,30 +626,26 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     };
   }, []);
 
-  // Initialize Typo.js spell checker
+  // Spell check: one dictionary and custom-word list shared by every editor.
+  // Skip loading the dictionary at all while spell check is off.
   useEffect(() => {
-    const initTypoChecker = async () => {
-      try {
-        const [affData, dicData] = await Promise.all([
-          fetch(affUri).then((r) => r.text()),
-          fetch(dicUri).then((r) => r.text()),
-        ]);
+    if (spellingEnabled) spellChecker.ensureLoaded(affUri, dicUri);
+  }, [affUri, dicUri, spellingEnabled]);
 
-        if (window.Typo) {
-          typoCheckerRef.current = new window.Typo("en_US", affData, dicData, {
-            platform: "any",
-          });
-        }
-      } catch (error) {
-        WebviewLog.error(
-          `[CodeMirror] Failed to load Typo.js dictionaries: ${error instanceof Error ? error.message : String(error)}`
-        );
-        typoCheckerRef.current = null;
-      }
+  useEffect(() => {
+    spellChecker.setCustomWords(spellingWords);
+  }, [spellingWords]);
+
+  // Re-lint when the dictionary finishes loading or a word is added, so the
+  // squiggles update without waiting for the next edit.
+  useEffect(() => {
+    if (!viewReady) return;
+    const relint = () => {
+      if (viewRef.current) relintForContextChange(viewRef.current);
     };
-
-    initTypoChecker();
-  }, [affUri, dicUri]);
+    relint();
+    return spellChecker.subscribe(relint);
+  }, [viewReady, spellingEnabled]);
 
   const scheduleDetachedPlaceholderExpiry = useCallback(
     (
@@ -1244,7 +1235,20 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         createActiveLineHighlightExtension(),
         highlightSelectionMatches({ minSelectionLength: 2 }),
         createSearchPanelExtension(),
-        createSpellCheckExtension(typoCheckerRef, isMultiRootWorkspace),
+        createSpellCheckExtension({
+          checker: spellChecker,
+          allowWorkspaceFolderPrefix: isMultiRootWorkspace,
+          isEnabled: () => spellingEnabledRef.current,
+          hasWorkspace: () => hasWorkspaceRef.current,
+          onAddWord: (word, scope) => {
+            spellChecker.addWordLocally(word);
+            vscode.postMessage({
+              type: MESSAGE_TYPES.SPELLING_ADD_WORD,
+              word,
+              scope,
+            });
+          },
+        }),
         createWorkflowVariableExtension({
           getVars: () => workflowCompletionContextRef.current?.vars,
           revealVariable: canRevealVariables
@@ -1732,29 +1736,6 @@ const symbolKindsUpdatedEffect = StateEffect.define<void>();
 // validity map counterpart to symbolKindsUpdatedEffect.
 const referenceValidityUpdatedEffect = StateEffect.define<void>();
 
-// Dispatched when non-document lint inputs (stepCount, hasFinalStep,
-// hasPreCondition, mode) change. forceLinting alone is a no-op unless a lint is
-// already pending, so without this effect a prompt first linted before the
-// workflow's steps loaded keeps its stale "steps do not exist" warnings until
-// the user edits the text. The ref-driven linters' needsRefresh watches it.
-const lintContextChangedEffect = StateEffect.define<void>();
-
-function isLintRefreshUpdate(update: ViewUpdate): boolean {
-  return (
-    update.docChanged ||
-    update.viewportChanged ||
-    update.transactions.some((tr) =>
-      tr.effects.some((effect) => effect.is(lintContextChangedEffect))
-    )
-  );
-}
-
-/** Re-run linting after a non-document lint input changed (see lintContextChangedEffect). */
-export function relintForContextChange(view: EditorView): void {
-  view.dispatch({ effects: lintContextChangedEffect.of(undefined) });
-  forceLinting(view);
-}
-
 // Atomic mode: replace each reference's text with a compact chip widget and
 // mark the range atomic via the atomicRanges facet, so arrow keys skip over the
 // whole reference and Backspace/Delete removes it in one press — the caret can
@@ -2035,113 +2016,6 @@ function createActiveLineHighlightExtension() {
   );
 }
 
-// Spell checking with Typo.js
-function createSpellCheckExtension(
-  typoCheckerRef: React.RefObject<TypoChecker | null>,
-  allowWorkspaceFolderPrefix: boolean
-) {
-  return linter(
-    (view) => {
-      if (!typoCheckerRef.current) return [];
-
-      // Skip spellcheck entirely when the document is a lone file-path reference
-      if (
-        looksLikeFilePath(view.state.doc.toString().trim(), {
-          allowWorkspaceFolderPrefix,
-        })
-      ) {
-        return [];
-      }
-
-      const diagnostics: any[] = [];
-
-      // Only check visible ranges for performance
-      for (const { from, to } of view.visibleRanges) {
-        const text = view.state.doc.sliceString(from, to);
-
-        // Get ranges to exclude from spell checking (@ and # references)
-        const excludedRanges = [
-          ...getCompletionRanges(text),
-          ...getMarkdownNonProseRanges(view.state, from, to),
-        ];
-
-        // Match words and contractions. Hyphens and underscores act as
-        // separators — the regex stops at them, so "step-by-step" is matched
-        // as three separate tokens. CamelCase words are further split by
-        // splitCamelCaseWord().
-        const wordRegex = /[a-zA-Z]+(?:'[a-zA-Z]+)*/g;
-        let match;
-
-        while ((match = wordRegex.exec(text)) !== null) {
-          const word = match[0];
-
-          // Skip if word is within a completion range
-          if (
-            isInExcludedRange(
-              match.index,
-              match.index + word.length,
-              excludedRanges
-            )
-          ) {
-            continue;
-          }
-
-          // Skip all-caps words (likely acronyms)
-          if (word === word.toUpperCase() && word.length > 1) {
-            continue;
-          }
-
-          // Split camelCase / PascalCase words into component parts and check
-          // each individually with its correct document position.
-          const parts = splitCamelCaseWord(word);
-          for (const part of parts) {
-            if (part.text.length <= 1) continue;
-            // Skip all-caps parts (e.g. "XML" within "XMLParser")
-            if (part.text === part.text.toUpperCase()) continue;
-
-            if (!typoCheckerRef.current.check(part.text)) {
-              const checker = typoCheckerRef.current;
-              const partFrom = from + match.index + part.offset;
-              const partTo = partFrom + part.text.length;
-              const diagnostic = {
-                from: partFrom,
-                to: partTo,
-                severity: "error" as const,
-                message: `Spelling: "${part.text}"`,
-                get actions() {
-                  if (!(this as any)._cachedActions) {
-                    const suggestions = checker.suggest((this as any)._word);
-                    (this as any)._cachedActions = suggestions
-                      .slice(0, 5)
-                      .map((suggestion: string) => ({
-                        name: `Change to "${suggestion}"`,
-                        apply: (view: EditorView, from: number, to: number) => {
-                          view.dispatch({
-                            changes: { from, to, insert: suggestion },
-                          });
-                        },
-                      }));
-                  }
-                  return (this as any)._cachedActions;
-                },
-                _word: part.text,
-                _cachedActions: null,
-              };
-              diagnostics.push(diagnostic);
-            }
-          }
-        }
-      }
-
-      return diagnostics;
-    },
-    {
-      delay: 200,
-      needsRefresh: (update) => update.docChanged || update.viewportChanged,
-    }
-  );
-}
-
 const toCodeMirrorDiagnostic = (diagnostic: PromptDiagnostic): Diagnostic =>
   toCodeMirrorPromptDiagnostic(diagnostic);
 
@@ -2224,108 +2098,6 @@ export function createContextReferenceLintExtension(
       needsRefresh: (update) => update.docChanged || update.viewportChanged,
     }
   );
-}
-
-// Get ranges of @/#/~ references and {{var}} placeholders to exclude from
-// spell checking — a variable name is an identifier, not prose.
-function getCompletionRanges(
-  text: string
-): Array<{ from: number; to: number }> {
-  const ranges: Array<{ from: number; to: number }> = [];
-
-  // Match both plain paths (@src/file.ts) and quoted paths (@"path with spaces/file.ts"),
-  // as well as ~ git change references (~diff, ~staged, ~stash:N, ~<hash>).
-  const patterns = [
-    /@"[^"]*"|@[^\s@#~]+/g,
-    /#"[^"]*"|#[^\s@#~]+/g,
-    createGitChangeReferencePattern(),
-  ];
-
-  for (const pattern of patterns) {
-    let match;
-    const regex = new RegExp(pattern.source, pattern.flags);
-    while ((match = regex.exec(text)) !== null) {
-      ranges.push({
-        from: match.index,
-        to: match.index + match[0].length,
-      });
-    }
-  }
-
-  for (const { from, to } of findVariablePlaceholders(text)) {
-    ranges.push({ from, to });
-  }
-
-  return ranges;
-}
-
-/**
- * Fence info strings (`typescript`, `ts title=a.ts`) and link/image
- * destinations are not prose, so spellcheck skips them. Offsets are relative to
- * `from`, matching the text slice the caller checks.
- */
-function getMarkdownNonProseRanges(
-  state: EditorState,
-  from: number,
-  to: number
-): Array<{ from: number; to: number }> {
-  const ranges: Array<{ from: number; to: number }> = [];
-  syntaxTree(state).iterate({
-    from,
-    to,
-    enter: (node) => {
-      if (node.name === "CodeInfo" || node.name === "URL") {
-        ranges.push({ from: node.from - from, to: node.to - from });
-      }
-    },
-  });
-  return ranges;
-}
-
-// Check if a range overlaps with any excluded range
-function isInExcludedRange(
-  from: number,
-  to: number,
-  excludedRanges: Array<{ from: number; to: number }>
-): boolean {
-  for (const range of excludedRanges) {
-    if (from < range.to && to > range.from) {
-      return true;
-    }
-  }
-  return false;
-}
-
-// Split a camelCase or PascalCase word into component parts with their offsets.
-// Returns the original word as a single entry when no camelCase splitting applies
-// (i.e. the word has no uppercase letter after position 0).
-//
-// Examples:
-//   "camelCase"   → [{ text: "camel", offset: 0 }, { text: "Case", offset: 5 }]
-//   "XMLParser"   → [{ text: "XML",   offset: 0 }, { text: "Parser", offset: 3 }]
-//   "hello"       → [{ text: "hello", offset: 0 }]
-//   "don't"       → [{ text: "don't", offset: 0 }]
-function splitCamelCaseWord(
-  word: string
-): Array<{ text: string; offset: number }> {
-  // Only split if there's an uppercase letter after position 0
-  if (!/[A-Z]/.test(word.slice(1))) {
-    return [{ text: word, offset: 0 }];
-  }
-
-  const parts: Array<{ text: string; offset: number }> = [];
-  // Three alternations (tried in order):
-  //   1. Uppercase run before an UpperLower transition ("XML" in "XMLParser")
-  //   2. Uppercase letter followed by zero-or-more lowercase ("Parser", "Case")
-  //   3. Pure lowercase run ("camel", "my")
-  const camelRegex = /[A-Z]+(?=[A-Z][a-z])|[A-Z][a-z]*|[a-z]+/g;
-  let m;
-  while ((m = camelRegex.exec(word)) !== null) {
-    if (m[0].length > 1) {
-      parts.push({ text: m[0], offset: m.index });
-    }
-  }
-  return parts.length > 0 ? parts : [{ text: word, offset: 0 }];
 }
 
 // Mark fenced blocks and inline code spans as literal (`.cm-code-range`)

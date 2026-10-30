@@ -113,6 +113,13 @@ export interface UiAccessibilitySettings {
   terminalScreenReaderMode: boolean;
 }
 
+/** Prompt-editor spell check (`spelling`). */
+export interface SpellingSettings {
+  enabled: boolean;
+  /** Custom words; user and workspace lists are unioned, not replaced. */
+  words: string[];
+}
+
 /** Dashboard-only per-harness identity colors for correlating workflow steps across panes. */
 export interface HarnessColorSettings {
   byHarness: Partial<Record<HarnessId, string>>;
@@ -375,6 +382,9 @@ export interface CtrlYokeGlobalSettings {
     harnessColors: HarnessColorSettings;
     accessibility: UiAccessibilitySettings;
   };
+
+  // Prompt-editor spell check
+  spelling: SpellingSettings;
 
   diagnostics: {
     verboseLogging: boolean;
@@ -677,6 +687,10 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
       outputAnnouncements: OUTPUT_ANNOUNCEMENT_MODES.COMPLETIONS,
       terminalScreenReaderMode: false,
     },
+  },
+  spelling: {
+    enabled: true,
+    words: ["ctrlyoke"],
   },
   server: {
     autoStart: false,

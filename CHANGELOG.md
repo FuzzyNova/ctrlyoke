@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The prompt editor loads its spelling dictionary once and shares it between
+  editors, instead of loading it again for each one. Misspellings are now
+  underlined as soon as the dictionary loads rather than after your first edit,
+  and words with accented letters such as "café" are checked whole instead of
+  being split at the accent.
+
 - The find bar in the prompt editor and the workspace file editor (`Ctrl+F`)
   now matches the output pane's: it sits in a strip above the text, so it
   never covers the first line, shows the match count, and has icon toggles
@@ -135,6 +141,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The prompt editor's spell check can learn your words. A flagged word's quick
+  fixes now include **Add "word" to dictionary** and, with a workspace open,
+  **Add "word" to workspace dictionary**, even when there are no spelling
+  suggestions. The words are saved to the new `spelling.words` setting, which
+  starts out containing `ctrlyoke`; user and workspace lists are combined.
+  **Settings → General → Spelling** lists the words for editing and has a new
+  `spelling.enabled` switch that turns spell check off.
 - **File History** in the workspace viewer has an **Expand all diffs** /
   **Collapse all diffs** button. After you expand all, commits that load as you
   scroll arrive expanded too.

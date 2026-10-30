@@ -1,6 +1,7 @@
 # Spell Check Dictionary Plan
 
-**Status:** Proposed 2026-10-30. Not started.
+**Status:** Proposed 2026-10-30. Phase 1 (custom words, shared spell checker, Unicode tokenizer)
+implemented 2026-10-30; Phase 2 (languages) not started. §2 describes the code before Phase 1.
 
 **Goal:** let users teach the prompt editor's spell checker their own words, starting with
 `ctrlyoke`, and let them change the spelling language by downloading or importing Hunspell
@@ -82,13 +83,13 @@ to regenerate the descriptions and the reference docs.
 ### 4.3 `spelling.words`
 
 - Type: array of strings, each 1–64 characters with no whitespace. Default: `["ctrlyoke"]`.
-- **User and workspace values are merged as a union**, not replaced. Today `deepMerge` in
-  `src/config/CtrlYokeConfigService.ts` replaces arrays, so this needs a special case like the
-  existing `modelPricing` one. With the union, a team can commit project terms to
-  `.ctrlyoke/settings.json` while each user keeps a personal list.
-- The default applies only while neither scope sets the key. Once a user edits their list, the UI
-  writes the whole list, so `ctrlyoke` stays unless they remove it on purpose. Do not also union in
-  the default: that would make `ctrlyoke` impossible to remove.
+- **User and workspace values are merged as a union**, not replaced. `deepMerge` replaces arrays,
+  so `getAll()` applies `withUnionedSpellingWords` after the workspace layer. With the union, a
+  team can commit project terms to `.ctrlyoke/settings.json` while each user keeps a personal list.
+- The base of the union is the user list, or the default while the user has never set one, so a
+  workspace list adds to `ctrlyoke` rather than dropping it. Once a user edits their list, the UI
+  writes the whole list, so `ctrlyoke` stays unless they remove it on purpose. Do not union the
+  default in on top of a user list: that would make `ctrlyoke` impossible to remove.
 - **Matching rules** (the same as Code Spell Checker):
   - A word saved in all lowercase matches any capitalization: `ctrlyoke` also accepts `Ctrlyoke`
     and `CTRLYOKE`.
@@ -106,6 +107,7 @@ In `createSpellCheckExtension`:
 
    Both appear even when Typo.js has no suggestions, which fixes the `ctrlyoke` case in the
    screenshot.
+
 2. Saving a word must be an **append-unique done on the host**. Add a message
    `SPELLING_ADD_WORD { word, scope }` to `src/types/WebviewMessageTypes.ts` that reads the current
    list, appends the word if it is missing, and writes the list back through
@@ -204,6 +206,7 @@ Do this before adding languages, because extra dictionaries multiply the cost of
     npm module, so the `window.Typo` global and the `{{typoUri}}` script tag would go away.
 
   Record the measurements in this doc before choosing.
+
 - **Tokenizer:** replace `/[a-zA-Z]+(?:'[a-zA-Z]+)*/g` with a Unicode-aware pattern using the `u`
   flag, e.g. `/\p{L}+(?:['’]\p{L}+)*/gu`. Update `splitCamelCaseWord` and the all-caps checks to use
   locale-independent `\p{Lu}` / `\p{Ll}` tests. Without this, words like "über" or "café" are split
@@ -236,7 +239,20 @@ change.
 
 ## 9. Delivery
 
-### Phase 1: custom words (ships alone)
+### Phase 1: custom words (ships alone) — implemented
+
+Shipped as planned, with these notes for Phase 2:
+
+- `utils/spellChecker.ts` (`SpellCheckService`) owns the Typo instance, the custom words and a
+  memoized `check`; `utils/codemirrorSpellCheck.ts` is the linter. Re-linting on a dictionary load
+  or a word change goes through `relintForContextChange` (`utils/codemirrorRelint.ts`), because
+  `forceLinting` alone does nothing unless a lint is already pending.
+- The service still holds one dictionary. Phase 2 turns it into one instance per language ID.
+- The Settings custom-words editor writes the active scope's whole list through
+  `UPDATE_GLOBAL_SETTING` (from `spellingWordsByScope` in `GLOBAL_SETTINGS_LOADED`), like the
+  other list editors; only the quick fix uses `SPELLING_ADD_WORD`. `ChipListEditor` is the shared
+  list editor, and `PortListEditor` now wraps it.
+- The §7 spike was not run; no Web Worker yet.
 
 - `spelling.enabled` and `spelling.words`: schema, types, union merge, `schema:update`.
 - The shared `SpellChecker` service and the Unicode tokenizer.

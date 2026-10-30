@@ -9,7 +9,7 @@ Platform-agnostic settings resolution for shared core code. `src/config/` owns t
 <architecture>
 - `CtrlYokeConfigService` is the singleton merge layer. Priority order is: defaults → user file → workspace file → CLI overlay.
 - `FileConfigBackend` is the current persistence backend. `ConfigBackend` intentionally stays tiny (`getAll` + `set`) so other storage backends can plug in without changing merge logic.
-- Merge semantics are recursive for plain objects; arrays and primitives replace lower-priority values wholesale.
+- Merge semantics are recursive for plain objects; arrays and primitives replace lower-priority values wholesale. The one exception is `spelling.words`: `getAll()` unions the workspace list onto the user list (or the default, while the user never set one), so the merged value is not any single file's list — a settings editor for it must edit `getSpellingWordsByScope()` / `spellingWordsByScope`, never write the merged array back to one scope.
 </architecture>
 
 <nonObviousBehavior>

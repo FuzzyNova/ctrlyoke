@@ -108,6 +108,7 @@ import type { WorkflowDocumentIssueSeverity } from "./DashboardConstants";
 import type {
   CtrlYokeGlobalSettings,
   HarnessColorSettings,
+  SpellingSettings,
   TerminalSettings,
   UiAccessibilitySettings,
 } from "./CtrlYokeSettings";
@@ -591,6 +592,7 @@ export interface InitMessageData {
     stepColorMode?: StepColorMode;
     harnessColors?: HarnessColorSettings;
     accessibility?: UiAccessibilitySettings;
+    spelling?: SpellingSettings;
     externalFileRootsByScope?: ExternalFileRootsByScope;
     /** Whether standalone prompt paths use folder-qualified multi-root syntax. */
     isMultiRoot: boolean;
@@ -1838,6 +1840,7 @@ export interface GlobalSettingsUpdatedMessage {
     stepColorMode?: StepColorMode;
     harnessColors?: HarnessColorSettings;
     accessibility?: UiAccessibilitySettings;
+    spelling?: SpellingSettings;
     worktree?: CtrlYokeGlobalSettings["defaults"]["worktree"];
     worktrees?: CtrlYokeGlobalSettings["worktrees"];
     externalFileRootsByScope?: ExternalFileRootsByScope;
@@ -1877,6 +1880,8 @@ export interface FullGlobalSettings {
     Record<string, Record<string, string>>
   >;
   externalFileRootsByScope?: ExternalFileRootsByScope;
+  /** Each scope's own `spelling.words` list (the merged value is their union). */
+  spellingWordsByScope?: Record<SettingWriteScope, string[]>;
   licenseAccess?: LicenseAccessState;
   /** Canonical absolute `.runs` directory for the current workspace. */
   runHistoryPath?: string | null;
@@ -1914,6 +1919,17 @@ export interface UpdateGlobalSettingMessage {
   type: typeof MESSAGE_TYPES.UPDATE_GLOBAL_SETTING;
   path: string;
   value: unknown;
+  scope: SettingWriteScope;
+}
+
+/**
+ * Webview -> Extension: add one word to a scope's `spelling.words`. The host
+ * appends it to the list it reads itself, so two dashboards adding words at
+ * once cannot overwrite each other's additions.
+ */
+export interface SpellingAddWordMessage {
+  type: typeof MESSAGE_TYPES.SPELLING_ADD_WORD;
+  word: string;
   scope: SettingWriteScope;
 }
 

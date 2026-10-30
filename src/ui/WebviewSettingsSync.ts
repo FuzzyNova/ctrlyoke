@@ -79,6 +79,10 @@ import type { StatusLineHarnessSettings } from "../types/CtrlYokeSettings";
 import { isDefaultStatusLineFormat } from "../utils/StatuslineFormat";
 import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
 import { isLoopbackBindAddress } from "../utils/NetworkUtils";
+import {
+  appendSpellingWord,
+  getSpellingWordError,
+} from "../utils/SpellingWords";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import {
   StatuslineManager,
@@ -148,6 +152,8 @@ const REMOTE_TLS_SETTING_KEYS = [
  */
 export class WebviewSettingsSync {
   private capabilitiesWriteQueue: Promise<void> = Promise.resolve();
+  /** Serializes SPELLING_ADD_WORD read-append-write cycles. */
+  private spellingAddWordQueue: Promise<void> = Promise.resolve();
   // Discovered agents
   private availableAgents: AgentInfo[] = [];
 
@@ -962,6 +968,9 @@ export class WebviewSettingsSync {
       // screen-reader mode apply from panel load, not only after the
       // settings drawer has been opened (see `fullGlobalSettings`).
       accessibility: ConfigurationUtils.getUiAccessibilitySettings(),
+      // Mirrored so the prompt editor's spell check honors custom words from
+      // panel load, not only after the settings drawer has been opened.
+      spelling: ConfigurationUtils.getSpellingSettings(),
       isMultiRoot: this.host.getNamedRoots().length > 1,
       priorContext: ConfigurationUtils.getPriorContext(),
       defaultEndCondition: ConfigurationUtils.getDefaultEndCondition() ?? null,
@@ -1123,6 +1132,7 @@ export class WebviewSettingsSync {
                 ?.variableDefaults ?? {},
           },
           externalFileRootsByScope: this.buildExternalFileRootsByScope(),
+          spellingWordsByScope: ConfigurationUtils.getSpellingWordsByScope(),
           runHistoryPath: this.getResolvedRunHistoryPath(),
           isMultiRoot: this.host.getNamedRoots().length > 1,
           licenseAccess: this.licenseAccess,
@@ -1472,6 +1482,50 @@ export class WebviewSettingsSync {
         postMessage
       );
     }
+  }
+
+  /**
+   * Handle SPELLING_ADD_WORD: append one word to that scope's own list. The
+   * list is read here rather than sent by the client, and each add waits for
+   * the previous one's write, so concurrent adds from the panel and a hosted
+   * tab both survive.
+   */
+  handleSpellingAddWord(
+    word: string,
+    scope: SettingWriteScope,
+    postMessage: PostMessageFn
+  ): Promise<void> {
+    const run = this.spellingAddWordQueue.then(() =>
+      this.appendSpellingWord(word, scope, postMessage)
+    );
+    this.spellingAddWordQueue = run.catch(() => undefined);
+    return run;
+  }
+
+  private async appendSpellingWord(
+    word: string,
+    scope: SettingWriteScope,
+    postMessage: PostMessageFn
+  ): Promise<void> {
+    const trimmed = typeof word === "string" ? word.trim() : "";
+    const error = getSpellingWordError(trimmed);
+    if (error) {
+      Log.warn(`[WebviewSettingsSync] Not adding spelling word: ${error}`);
+      return;
+    }
+    if (scope !== CONFIG_SCOPE.USER && scope !== CONFIG_SCOPE.WORKSPACE) {
+      return;
+    }
+    const current = ConfigurationUtils.getSpellingWordsByScope()[scope];
+    if (current.includes(trimmed)) {
+      return;
+    }
+    await this.handleUpdateGlobalSetting(
+      CONFIG_KEYS.SPELLING_WORDS,
+      appendSpellingWord(current, trimmed),
+      scope,
+      postMessage
+    );
   }
 
   async handleUpdateExternalRootDecision(

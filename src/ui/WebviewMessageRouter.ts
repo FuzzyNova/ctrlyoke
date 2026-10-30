@@ -80,6 +80,7 @@ import type {
   DisableStatusLineTrackingMessage,
   SetStatusLineFormatModeMessage,
   UpdateExternalRootDecisionMessage,
+  SpellingAddWordMessage,
   CreateEndConditionScriptMessage,
   RetryHarnessDetectionMessage,
   ClearWorkflowHistoryMessage,
@@ -3051,6 +3052,15 @@ export class WebviewMessageRouter {
         request.scope,
         request.path,
         request.decision,
+        ctx.postMessage
+      );
+    });
+
+    table.set(MESSAGE_TYPES.SPELLING_ADD_WORD, (message, ctx) => {
+      const request = message as SpellingAddWordMessage;
+      return this.settingsSync.handleSpellingAddWord(
+        request.word,
+        request.scope,
         ctx.postMessage
       );
     });

@@ -12,6 +12,7 @@ import type {
   HarnessColorSettings,
   ModelPricingOverride,
   RunHistoryLocation,
+  SpellingSettings,
   StatusLineHarnessSettings,
   TerminalSettings,
   UiAccessibilitySettings,
@@ -129,8 +130,10 @@ export const CONFIG_KEYS = {
   NOTIFICATIONS: "notifications",
   DIAGNOSTICS: "diagnostics",
   COMMIT: "commit",
+  SPELLING: SETTING_PATHS.SPELLING,
 
   // Dot-notation paths (used with configService.set())
+  SPELLING_WORDS: SETTING_PATHS.SPELLING_WORDS,
   DEFAULTS_HARNESS: "defaults.harness",
   DEFAULTS_MODELS: "defaults.models",
   DEFAULTS_ADDITIONAL_ARGS: "defaults.additionalArgs",
@@ -351,6 +354,36 @@ export const ConfigurationUtils = {
   /** Get the dashboard's screen-reader settings (`ui.accessibility`). */
   getUiAccessibilitySettings(): UiAccessibilitySettings {
     return configService.get(CONFIG_KEYS.UI).accessibility;
+  },
+
+  /** Get the prompt-editor spell check settings, with `words` unioned across scopes. */
+  getSpellingSettings(): SpellingSettings {
+    return configService.get(CONFIG_KEYS.SPELLING);
+  },
+
+  /**
+   * The custom spelling words each scope's own file holds, for editing one
+   * scope's list. The user list falls back to the default while the user has
+   * never set one, matching what the merged value starts from; the workspace
+   * list falls back to empty.
+   */
+  getSpellingWordsByScope(): { user: string[]; workspace: string[] } {
+    const toWordArray = (
+      value: readonly (string | undefined)[] | undefined
+    ): string[] | undefined =>
+      Array.isArray(value)
+        ? value.filter((v): v is string => typeof v === "string")
+        : undefined;
+    return {
+      user: toWordArray(
+        configService.getScoped(CONFIG_KEYS.SPELLING, CONFIG_SCOPE.USER)?.words
+      ) ?? [...CTRLYOKE_SETTINGS_DEFAULTS.spelling.words],
+      workspace:
+        toWordArray(
+          configService.getScoped(CONFIG_KEYS.SPELLING, CONFIG_SCOPE.WORKSPACE)
+            ?.words
+        ) ?? [],
+    };
   },
 
   /**

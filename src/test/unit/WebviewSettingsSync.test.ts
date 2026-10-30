@@ -2553,6 +2553,76 @@ suite("WebviewSettingsSync bind-address licensing gate", () => {
   });
 });
 
+suite("WebviewSettingsSync SPELLING_ADD_WORD", () => {
+  /** Route configService reads and writes of spelling.words through a fake store. */
+  async function withSpellingStore(
+    initial: Partial<Record<SettingWriteScope, string[]>>,
+    run: (
+      sync: WebviewSettingsSync,
+      store: Partial<Record<SettingWriteScope, string[]>>
+    ) => Promise<void>
+  ): Promise<void> {
+    const store = { ...initial };
+    const originalSet = configService.set;
+    const originalGetScoped = configService.getScoped;
+    try {
+      configService.getScoped = ((key: string, scope: SettingWriteScope) =>
+        key === CONFIG_KEYS.SPELLING && store[scope]
+          ? { words: [...store[scope]!] }
+          : undefined) as typeof configService.getScoped;
+      configService.set = (async (
+        key: string,
+        value: unknown,
+        scope: SettingWriteScope
+      ) => {
+        assert.strictEqual(key, CONFIG_KEYS.SPELLING_WORDS);
+        // Yield so overlapping adds would interleave without the queue.
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        store[scope] = value as string[];
+      }) as typeof configService.set;
+      const sync = new WebviewSettingsSync(
+        () => {},
+        () => undefined
+      );
+      sync.handleGlobalSettingsLoadRequest = async () => {};
+      await run(sync, store);
+    } finally {
+      configService.set = originalSet;
+      configService.getScoped = originalGetScoped;
+    }
+  }
+
+  test("appends to the user list, starting from the default when it was never set", async () => {
+    await withSpellingStore({}, async (sync, store) => {
+      await sync.handleSpellingAddWord("frobnicate", "user", () => {});
+      assert.deepStrictEqual(store.user, [
+        ...CTRLYOKE_SETTINGS_DEFAULTS.spelling.words,
+        "frobnicate",
+      ]);
+      assert.strictEqual(store.workspace, undefined);
+    });
+  });
+
+  test("keeps both words when two adds arrive at once", async () => {
+    await withSpellingStore({ workspace: ["alpha"] }, async (sync, store) => {
+      await Promise.all([
+        sync.handleSpellingAddWord("beta", "workspace", () => {}),
+        sync.handleSpellingAddWord("gamma", "workspace", () => {}),
+      ]);
+      assert.deepStrictEqual(store.workspace, ["alpha", "beta", "gamma"]);
+    });
+  });
+
+  test("ignores a word already listed and rejects invalid words", async () => {
+    await withSpellingStore({ user: ["alpha"] }, async (sync, store) => {
+      await sync.handleSpellingAddWord("alpha", "user", () => {});
+      await sync.handleSpellingAddWord("two words", "user", () => {});
+      await sync.handleSpellingAddWord("   ", "user", () => {});
+      assert.deepStrictEqual(store.user, ["alpha"]);
+    });
+  });
+});
+
 suite("WebviewSettingsSync global setting write failures", () => {
   test("notifies the user and reloads settings when the write rejects", async () => {
     const originalSet = configService.set;

@@ -279,6 +279,31 @@ function deepMerge<T extends Record<string, unknown>>(
   return result;
 }
 
+/**
+ * `spelling.words` is the one array setting whose scopes add up instead of
+ * replacing each other: a team commits project terms to the workspace file
+ * while each user keeps a personal list. The user value (or the default when
+ * the user never set one) is the base, so removing a default word from the
+ * user list sticks.
+ */
+function withUnionedSpellingWords(
+  merged: CtrlYokeGlobalSettings,
+  userLayerWords: readonly string[],
+  workspaceWords: readonly (string | undefined)[] | undefined
+): CtrlYokeGlobalSettings {
+  if (!Array.isArray(workspaceWords) || !Array.isArray(userLayerWords)) {
+    return merged;
+  }
+  const words = [
+    ...new Set(
+      [...userLayerWords, ...workspaceWords].filter(
+        (word): word is string => typeof word === "string"
+      )
+    ),
+  ];
+  return { ...merged, spelling: { ...merged.spelling, words } };
+}
+
 /** Copy of `obj` without the value at `pathParts`, pruning parents it empties. */
 function withoutPath(
   obj: Record<string, unknown>,
@@ -503,10 +528,17 @@ export class CtrlYokeConfigService {
     }
 
     if (this.workspaceBackend) {
+      const userLayerSpellingWords = result.spelling.words;
+      const scopedWorkspaceSettings = this.getWorkspaceSettings();
       result = deepMerge(
         result as unknown as Record<string, unknown>,
-        this.getWorkspaceSettings() as unknown as Record<string, unknown>
+        scopedWorkspaceSettings as unknown as Record<string, unknown>
       ) as unknown as CtrlYokeGlobalSettings;
+      result = withUnionedSpellingWords(
+        result,
+        userLayerSpellingWords,
+        scopedWorkspaceSettings.spelling?.words
+      );
     }
 
     if (this.cliOverlay) {
