@@ -119,7 +119,7 @@ for what **Run** and **Queue** do in each workflow state.
 
 ### Find and replace {#find-and-replace}
 
-`Ctrl+F` (`Cmd+F` on macOS) opens a find bar in the editor's top-right corner,
+`Ctrl+F` (`Cmd+F` on macOS) opens a find bar in a strip above the text,
 styled like the output pane's. It shows the match count and has buttons for
 **Match case**, **Match whole word** and **Use regular expression**. Click the
 chevron on its left to show the replace row. The workspace file editor uses the

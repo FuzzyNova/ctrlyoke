@@ -10,10 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The find bar in the prompt editor and the workspace file editor (`Ctrl+F`)
-  now matches the output pane's: it floats in the editor's top-right corner,
-  shows the match count, and has icon toggles for match case, whole word and
-  regular expressions. The replace row is collapsed behind a chevron until
-  you open it. A pressed match-case toggle in the output pane's find bar is
+  now matches the output pane's: it sits in a strip above the text, so it
+  never covers the first line, shows the match count, and has icon toggles
+  for match case, whole word and regular expressions. The replace row is
+  collapsed behind a chevron until you open it. In a narrow editor the
+  buttons wrap onto a second line instead of squeezing the search box. A pressed match-case toggle in the output pane's find bar is
   now shaded the way VS Code shows it.
 
 - **Commit**, **Push** and **Pull** in the dashboard's Source Control pane no

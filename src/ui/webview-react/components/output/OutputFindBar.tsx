@@ -117,7 +117,7 @@ export function OutputFindBar({
       </span>
       <button
         type="button"
-        className="icon-btn shrink-0 px-1.5 py-1 text-description-fg hover:text-foreground"
+        className="icon-btn cy-find-widget-button"
         onClick={() => onNavigate(-1)}
         title="Previous match"
         aria-label="Previous match"
@@ -126,7 +126,7 @@ export function OutputFindBar({
       </button>
       <button
         type="button"
-        className="icon-btn shrink-0 px-1.5 py-1 text-description-fg hover:text-foreground"
+        className="icon-btn cy-find-widget-button"
         onClick={() => onNavigate(1)}
         title="Next match"
         aria-label="Next match"
@@ -135,7 +135,7 @@ export function OutputFindBar({
       </button>
       <button
         type="button"
-        className="icon-btn cy-find-widget-toggle shrink-0 px-1.5 py-1"
+        className="icon-btn cy-find-widget-button cy-find-widget-toggle"
         onClick={onToggleCaseSensitive}
         title="Match case"
         aria-label="Match case"

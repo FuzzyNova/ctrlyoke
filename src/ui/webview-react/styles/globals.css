@@ -1555,11 +1555,11 @@ button .cy-lucide-icon {
            disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-description-fg;
   }
 
-  /* Floating find widget, shared by the output pane's find bar and the
+  /* Find widget, shared by the output pane's floating find bar and the
      CodeMirror search panel (utils/codemirrorSearchPanel.ts) so both read as
      one control. Placement stays with each caller. */
   .cy-find-widget {
-    @apply flex items-center gap-1.5 overflow-hidden rounded-sm border border-simple-find-sash-border bg-panel-sticky-bg/92 px-2 py-1 shadow-md backdrop-blur-md;
+    @apply flex items-center gap-1 overflow-hidden rounded-sm border border-simple-find-sash-border bg-panel-sticky-bg/92 px-2 py-1 shadow-md backdrop-blur-md;
   }
 
   .cy-find-widget-input {
@@ -1572,6 +1572,12 @@ button .cy-lucide-icon {
 
   .cy-find-widget-count {
     @apply shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-description-fg;
+  }
+
+  /* Compact square icon button (`icon-btn` + this class), the same 24px as
+     the widget's ExitButton, packed tightly the way VS Code's are. */
+  .cy-find-widget-button {
+    @apply h-6 w-6 shrink-0 p-0;
   }
 
   /* An option toggle (`icon-btn` + this class) shows its pressed state the way

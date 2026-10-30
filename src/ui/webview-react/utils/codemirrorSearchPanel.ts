@@ -29,16 +29,14 @@ const SEARCH_PANEL_CLASS = "cy-cm-find";
 /** Counting stops here so a one-character query in a huge file stays cheap. */
 export const SEARCH_MATCH_COUNT_LIMIT = 9999;
 
-// The panel floats over the text instead of pushing it down, so CodeMirror's
-// scroll margins never account for it. Keep a revealed match clear of the
-// widget's two rows instead.
-const MATCH_SCROLL_MARGIN_PX = 72;
-
 // Whether the replace row is expanded, remembered per editor across closes the
 // way VS Code remembers it per editor group.
 const replaceExpandedByView = new WeakMap<EditorView, boolean>();
 
-const ICON_BUTTON_CLASS = "icon-btn shrink-0 px-1.5 py-1";
+const ICON_BUTTON_CLASS = "icon-btn cy-find-widget-button";
+
+// Wraps onto a second line in a narrow editor rather than squeezing the input.
+const CONTROLS_CLASS = "flex flex-wrap items-center justify-end gap-0.5";
 
 export interface SearchMatchCount {
   /** Number of matches found, at most SEARCH_MATCH_COUNT_LIMIT. */
@@ -115,10 +113,11 @@ function iconButton(
 
 /**
  * VS Code-style replacement for @codemirror/search's default panel: the same
- * floating `.cy-find-widget` surface as the output pane's find bar, pinned to
- * the editor's top-right corner, with icon toggles for case, whole word and
- * regex and a collapsible replace row. Commands, keymap and highlighting are
- * still @codemirror/search's own; only the panel DOM is ours.
+ * `.cy-find-widget` controls as the output pane's find bar, docked above the
+ * text as a CodeMirror top panel so it pushes the document down instead of
+ * covering its first lines, with icon toggles for case, whole word and regex
+ * and a collapsible replace row. Commands, keymap and highlighting are still
+ * @codemirror/search's own; only the panel DOM is ours.
  */
 class FindWidgetPanel implements Panel {
   readonly dom: HTMLElement;
@@ -160,7 +159,7 @@ class FindWidgetPanel implements Panel {
       this.commit({ replace: this.replaceField.value })
     );
 
-    this.countLabel = element("span", "cy-find-widget-count min-w-16", {
+    this.countLabel = element("span", "cy-find-widget-count px-1", {
       "aria-live": "polite",
     });
 
@@ -176,7 +175,7 @@ class FindWidgetPanel implements Panel {
       () => this.commit({ regexp: !this.query.regexp })
     );
 
-    const findControls = element("div", "flex items-center gap-1.5");
+    const findControls = element("div", CONTROLS_CLASS);
     findControls.append(
       this.countLabel,
       iconButton("arrow-up", "Previous match (Shift+Enter)", () =>
@@ -195,7 +194,7 @@ class FindWidgetPanel implements Panel {
       )
     );
 
-    const replaceControls = element("div", "flex items-center gap-1.5");
+    const replaceControls = element("div", CONTROLS_CLASS);
     replaceControls.append(
       iconButton("replace", "Replace (Enter)", () => replaceNext(view)),
       iconButton("replace-all", "Replace all (Ctrl+Alt+Enter)", () =>
@@ -204,9 +203,11 @@ class FindWidgetPanel implements Panel {
     );
 
     // One grid for both rows so the find and replace inputs share a width.
+    // The controls column takes what it needs first; the input keeps at
+    // least 8rem and gets the rest, up to the grid's cap on wide editors.
     const rows = element(
       "div",
-      "grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1.5 gap-y-1"
+      "grid min-w-0 max-w-[40rem] flex-1 grid-cols-[minmax(8rem,1fr)_minmax(0,auto)] items-center gap-x-1 gap-y-1"
     );
     rows.append(this.searchField, findControls);
     this.replaceRow = canReplace ? [this.replaceField, replaceControls] : [];
@@ -218,11 +219,9 @@ class FindWidgetPanel implements Panel {
         )
       : null;
 
-    this.dom = element(
-      "div",
-      `cy-find-widget animate-output-find-enter ${SEARCH_PANEL_CLASS}`,
-      { role: "search" }
-    );
+    this.dom = element("div", `cy-find-widget ${SEARCH_PANEL_CLASS}`, {
+      role: "search",
+    });
     this.dom.append(...(this.replaceToggle ? [this.replaceToggle] : []), rows);
     this.dom.addEventListener("keydown", (event) => this.keydown(event));
 
@@ -352,34 +351,32 @@ class FindWidgetPanel implements Panel {
   }
 }
 
-// CodeMirror sizes `.cm-panels-top` to its panels and reserves that height
-// above the text. Collapsing it to zero lets the widget float over the
-// top-right corner instead, as VS Code's find widget does; `.cm-panels` is
-// sticky, so it is the widget's containing block and stays pinned while the
-// editor scrolls. The `:has()` keeps any other top panel laid out as usual.
+// The widget is docked: CodeMirror reserves the top panel's height above the
+// text, so the first line stays visible below it and scrollIntoView already
+// keeps a revealed match clear of it. Docked, it drops the floating card's
+// corners and shadow for a single divider, and `.cm-panels` loses its own
+// default background and silver border so only the widget's surface shows.
+// The `:has()` keeps any other top panel styled as usual.
 const searchPanelTheme = EditorView.baseTheme({
   ".cm-panels.cm-panels-top:has(> .cy-cm-find)": {
-    height: "0",
     border: "none",
     backgroundColor: "transparent",
   },
   [`.cm-panel.${SEARCH_PANEL_CLASS}`]: {
-    position: "absolute",
-    top: "4px",
-    right: "12px",
-    width: "min(28rem, calc(100% - 24px))",
-    boxSizing: "border-box",
+    borderRadius: "0",
+    borderTopWidth: "0",
+    borderLeftWidth: "0",
+    borderRightWidth: "0",
+    boxShadow: "none",
   },
 });
 
-/** CodeMirror search configured with ctrlyoke's floating find widget. */
+/** CodeMirror search configured with ctrlyoke's docked find widget. */
 export function createSearchPanelExtension() {
   return [
     search({
       top: true,
       createPanel: (view) => new FindWidgetPanel(view),
-      scrollToMatch: (range) =>
-        EditorView.scrollIntoView(range, { yMargin: MATCH_SCROLL_MARGIN_PX }),
     }),
     searchPanelTheme,
   ];
