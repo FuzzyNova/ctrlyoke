@@ -36,7 +36,8 @@ const replaceExpandedByView = new WeakMap<EditorView, boolean>();
 const ICON_BUTTON_CLASS = "icon-btn cy-find-widget-button";
 
 // Wraps onto a second line in a narrow editor rather than squeezing the input.
-const CONTROLS_CLASS = "flex flex-wrap items-center justify-end gap-0.5";
+// Start-aligned so the shorter replace row sits right beside its input.
+const CONTROLS_CLASS = "flex flex-wrap items-center gap-0.5";
 
 export interface SearchMatchCount {
   /** Number of matches found, at most SEARCH_MATCH_COUNT_LIMIT. */
