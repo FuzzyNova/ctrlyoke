@@ -1,0 +1,48 @@
+# Dependabot version and security updates.
+#
+# Minor and patch bumps across every npm project arrive as one grouped PR per
+# week (security fixes are grouped the same way, in their own PR). Major bumps
+# are deliberately left out of the groups, so each one arrives as its own PR
+# and can be reviewed and tested on its own.
+#
+# `cooldown` waits a few days after a release before proposing it, so a
+# compromised or broken publish usually gets yanked before it reaches a PR.
+# Security updates ignore the cooldown.
+#
+# CI's required `fast-checks` job gates every merge. `deploy-preview` fails on
+# Dependabot PRs because they get no NETLIFY_AUTH_TOKEN; that check is not
+# required.
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directories: ["/", "/landing", "/media"]
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types: [minor, patch]
+      security:
+        applies-to: security-updates
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      actions:
+        update-types: [minor, patch]
