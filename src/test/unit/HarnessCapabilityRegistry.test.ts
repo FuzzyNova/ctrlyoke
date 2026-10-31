@@ -271,8 +271,14 @@ suite("HarnessCapabilityRegistry", () => {
       "translated-cli"
     );
     for (const key of ["allowedTools", "deniedTools"] as const) {
-      assert.strictEqual(atFloor.descriptor.permissions?.[key].fidelity, "partial");
-      assert.strictEqual(atFloor.effective?.permissions?.[key].verification, "verified");
+      assert.strictEqual(
+        atFloor.descriptor.permissions?.[key].fidelity,
+        "partial"
+      );
+      assert.strictEqual(
+        atFloor.effective?.permissions?.[key].verification,
+        "verified"
+      );
     }
   });
 
