@@ -123,8 +123,8 @@ The production dependency tree contains **417 packages**. Each package is listed
 | `@peculiar/x509`                            | `1.14.3`        | `MIT`                     | Copyright (c) Peculiar Ventures. All rights reserved.                                                                                                                       |
 | `@pushforge/builder`                        | `2.0.5`         | `MIT`                     | Copyright (c) 2025 David Raphi                                                                                                                                              |
 | `@resvg/resvg-wasm`                         | `2.6.2`         | `MPL-2.0`                 | resvg-js contributors                                                                                                                                                       |
-| `@tanstack/react-virtual`                   | `3.14.22`       | `MIT`                     | Copyright (c) 2021-present Tanner Linsley                                                                                                                                   |
-| `@tanstack/virtual-core`                    | `3.19.7`        | `MIT`                     | Copyright (c) 2021-present Tanner Linsley                                                                                                                                   |
+| `@tanstack/react-virtual`                   | `3.14.24`       | `MIT`                     | Copyright (c) 2021-present Tanner Linsley                                                                                                                                   |
+| `@tanstack/virtual-core`                    | `3.19.9`        | `MIT`                     | Copyright (c) 2021-present Tanner Linsley                                                                                                                                   |
 | `@types/body-parser`                        | `1.19.6`        | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
 | `@types/connect`                            | `3.4.38`        | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
 | `@types/d3`                                 | `7.4.3`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
@@ -166,7 +166,7 @@ The production dependency tree contains **417 packages**. Each package is listed
 | `@types/hast`                               | `3.0.5`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
 | `@types/http-errors`                        | `2.0.5`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
 | `@types/mdast`                              | `4.0.4`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/node`                               | `26.6.5`        | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/node`                               | `26.6.6`        | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
 | `@types/prismjs`                            | `1.26.6`        | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
 | `@types/qs`                                 | `6.15.1`        | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
 | `@types/range-parser`                       | `1.2.7`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
@@ -280,7 +280,7 @@ The production dependency tree contains **417 packages**. Each package is listed
 | `fuzzysort`                                 | `4.0.2`         | `MIT`                     | Copyright (c) 2018 Stephen Kamenar                                                                                                                                          |
 | `get-caller-file`                           | `2.0.5`         | `ISC`                     | Copyright 2018 Stefan Penner                                                                                                                                                |
 | `gitdiff-parser`                            | `0.3.1`         | `MIT`                     | Copyright (c) 2020 Baidu EFE                                                                                                                                                |
-| `glob`                                      | `13.0.6`        | `BlueOak-1.0.0`           | Isaac Z. Schlueter <i@izs.me> (https://blog.izs.me/)                                                                                                                        |
+| `glob`                                      | `14.0.3`        | `BlueOak-1.0.0`           | Isaac Z. Schlueter <i@izs.me> (https://blog.izs.me/)                                                                                                                        |
 | `gpt-tokenizer`                             | `4.1.0`         | `MIT`                     | Copyright (c) 2023-2024 Bazyli Brzoska                                                                                                                                      |
 | `hachure-fill`                              | `0.5.2`         | `MIT`                     | Copyright (c) 2023 Preet Shihn                                                                                                                                              |
 | `hast-util-from-parse5`                     | `8.0.3`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
@@ -322,7 +322,7 @@ The production dependency tree contains **417 packages**. Each package is listed
 | `longest-streak`                            | `3.1.0`         | `MIT`                     | Copyright (c) 2015 Titus Wormer <mailto:tituswormer@gmail.com>                                                                                                              |
 | `loose-envify`                              | `1.4.0`         | `MIT`                     | Copyright (c) 2015 Andres Suarez <zertosh@gmail.com>                                                                                                                        |
 | `lru-cache`                                 | `11.5.3`        | `BlueOak-1.0.0`           | Isaac Z. Schlueter <i@izs.me>                                                                                                                                               |
-| `lucide-react`                              | `1.61.0`        | `ISC`                     | Copyright (c) 2026 Lucide Icons and Contributors                                                                                                                            |
+| `lucide-react`                              | `1.66.0`        | `ISC`                     | Copyright (c) 2026 Lucide Icons and Contributors                                                                                                                            |
 | `markdown-table`                            | `3.0.4`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `marked`                                    | `15.0.12`       | `MIT`                     | Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/)                                                                                                                |
 | `marked`                                    | `16.4.2`        | `MIT`                     | Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/)                                                                                                                |
@@ -369,7 +369,7 @@ The production dependency tree contains **417 packages**. Each package is listed
 | `micromark-util-subtokenize`                | `2.1.0`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `micromark-util-symbol`                     | `2.0.1`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `micromark-util-types`                      | `2.0.3`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `minimatch`                                 | `10.2.6`        | `BlueOak-1.0.0`           | Isaac Z. Schlueter <i@izs.me> (http://blog.izs.me)                                                                                                                          |
+| `minimatch`                                 | `11.0.3`        | `BlueOak-1.0.0`           | Isaac Z. Schlueter <i@izs.me> (http://blog.izs.me)                                                                                                                          |
 | `minipass`                                  | `7.1.3`         | `BlueOak-1.0.0`           | Isaac Z. Schlueter <i@izs.me> (http://blog.izs.me/)                                                                                                                         |
 | `node-addon-api`                            | `7.1.1`         | `MIT`                     | Copyright (c) 2017 [Node.js API collaborators](https://github.com/nodejs/node-addon-api#collaborators)                                                                      |
 | `node-pty`                                  | `1.2.0-beta.15` | `MIT`                     | Copyright (c) 2012-2015, Christopher Jeffrey (https://github.com/chjj/)                                                                                                     |
@@ -383,7 +383,7 @@ The production dependency tree contains **417 packages**. Each package is listed
 | `path-data-parser`                          | `0.1.0`         | `MIT`                     | Copyright (c) 2020 Preet Shihn                                                                                                                                              |
 | `path-exists`                               | `4.0.0`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
 | `path-key`                                  | `3.1.1`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
-| `path-scurry`                               | `2.0.2`         | `BlueOak-1.0.0`           | Isaac Z. Schlueter <i@izs.me> (https://blog.izs.me)                                                                                                                         |
+| `path-scurry`                               | `3.0.0`         | `BlueOak-1.0.0`           | Isaac Z. Schlueter <i@izs.me> (https://blog.izs.me)                                                                                                                         |
 | `pdfjs-dist`                                | `6.4.299`       | `Apache-2.0`              | Not stated in package metadata or license file                                                                                                                              |
 | `pkce-challenge`                            | `5.0.1`         | `MIT`                     | Copyright (c) 2019                                                                                                                                                          |
 | `pkijs`                                     | `3.4.1`         | `BSD-3-Clause`            | Copyright (c) 2014, GlobalSign                                                                                                                                              |
@@ -398,7 +398,7 @@ The production dependency tree contains **417 packages**. Each package is listed
 | `react`                                     | `19.3.1`        | `MIT`                     | Copyright (c) Meta Platforms, Inc. and affiliates.                                                                                                                          |
 | `react-diff-view`                           | `3.3.3`         | `MIT`                     | Copyright (c) 2017 Gray Zhang                                                                                                                                               |
 | `react-dom`                                 | `19.3.1`        | `MIT`                     | Copyright (c) Meta Platforms, Inc. and affiliates.                                                                                                                          |
-| `react-resizable-panels`                    | `4.15.0`        | `MIT`                     | Copyright (c) 2018 Brian Vaughn                                                                                                                                             |
+| `react-resizable-panels`                    | `4.16.0`        | `MIT`                     | Copyright (c) 2018 Brian Vaughn                                                                                                                                             |
 | `readdirp`                                  | `5.1.1`         | `MIT`                     | Copyright (c) 2012-2019 Thorsten Lorenz, Paul Miller (https://paulmillr.com)                                                                                                |
 | `reflect-metadata`                          | `0.2.2`         | `Apache-2.0`              | Ron Buckton                                                                                                                                                                 |
 | `refractor`                                 | `5.0.0`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
@@ -457,7 +457,7 @@ The production dependency tree contains **417 packages**. Each package is listed
 | `which`                                     | `2.0.2`         | `ISC`                     | Copyright (c) Isaac Z. Schlueter and Contributors                                                                                                                           |
 | `which-module`                              | `2.0.1`         | `ISC`                     | Copyright (c) 2016, Contributors                                                                                                                                            |
 | `wrap-ansi`                                 | `6.2.0`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
-| `ws`                                        | `8.22.0`        | `MIT`                     | Copyright (c) 2011 Einar Otto Stangvik <einaros@gmail.com>                                                                                                                  |
+| `ws`                                        | `8.22.1`        | `MIT`                     | Copyright (c) 2011 Einar Otto Stangvik <einaros@gmail.com>                                                                                                                  |
 | `y18n`                                      | `4.0.3`         | `ISC`                     | Copyright (c) 2015, Contributors                                                                                                                                            |
 | `yaml`                                      | `2.9.1`         | `ISC`                     | Eemeli Aro <eemeli@gmail.com>                                                                                                                                               |
 | `yargs`                                     | `15.4.1`        | `MIT`                     | Copyright 2010 James Halliday (mail@substack.net); Modified work Copyright 2014 Contributors (ben@npmjs.com)                                                                |
@@ -1379,7 +1379,7 @@ No license text file was present in the package. Declared license: `MPL-2.0`.
 
 ### License text 26: MIT
 
-Packages: @tanstack/react-virtual@3.14.22, @tanstack/virtual-core@3.19.7
+Packages: @tanstack/react-virtual@3.14.24, @tanstack/virtual-core@3.19.9
 
 ```text
 MIT License
@@ -1407,7 +1407,7 @@ SOFTWARE.
 
 ### License text 27: MIT
 
-Packages: @types/body-parser@1.19.6, @types/connect@3.4.38, @types/d3@7.4.3, @types/d3-array@3.2.2, @types/d3-axis@3.0.6, @types/d3-brush@3.0.6, @types/d3-chord@3.0.6, @types/d3-color@3.1.3, @types/d3-contour@3.0.6, @types/d3-delaunay@6.0.4, @types/d3-dispatch@3.0.7, @types/d3-drag@3.0.7, @types/d3-dsv@3.0.7, @types/d3-ease@3.0.2, @types/d3-fetch@3.0.7, @types/d3-force@3.0.10, @types/d3-format@3.0.4, @types/d3-geo@3.1.1, @types/d3-hierarchy@3.1.7, @types/d3-interpolate@3.0.4, @types/d3-path@3.1.1, @types/d3-polygon@3.0.2, @types/d3-quadtree@3.0.6, @types/d3-random@3.0.4, @types/d3-scale@4.0.9, @types/d3-scale-chromatic@3.1.0, @types/d3-selection@3.0.12, @types/d3-shape@3.2.0, @types/d3-time@3.0.4, @types/d3-time-format@4.0.3, @types/d3-timer@3.0.2, @types/d3-transition@3.0.9, @types/d3-zoom@3.0.9, @types/estree@1.0.9, @types/estree-jsx@1.0.5, @types/express@5.0.6, @types/express-serve-static-core@5.1.3, @types/geojson@7946.0.16, @types/hast@3.0.5, @types/http-errors@2.0.5, @types/mdast@4.0.4, @types/node@26.6.5, @types/prismjs@1.26.6, @types/qs@6.15.1, @types/range-parser@1.2.7, @types/react@19.3.0, @types/send@1.2.1, @types/serve-static@2.2.0, @types/trusted-types@2.0.7, @types/unist@2.0.11, @types/unist@3.0.3, @types/ws@8.18.2
+Packages: @types/body-parser@1.19.6, @types/connect@3.4.38, @types/d3@7.4.3, @types/d3-array@3.2.2, @types/d3-axis@3.0.6, @types/d3-brush@3.0.6, @types/d3-chord@3.0.6, @types/d3-color@3.1.3, @types/d3-contour@3.0.6, @types/d3-delaunay@6.0.4, @types/d3-dispatch@3.0.7, @types/d3-drag@3.0.7, @types/d3-dsv@3.0.7, @types/d3-ease@3.0.2, @types/d3-fetch@3.0.7, @types/d3-force@3.0.10, @types/d3-format@3.0.4, @types/d3-geo@3.1.1, @types/d3-hierarchy@3.1.7, @types/d3-interpolate@3.0.4, @types/d3-path@3.1.1, @types/d3-polygon@3.0.2, @types/d3-quadtree@3.0.6, @types/d3-random@3.0.4, @types/d3-scale@4.0.9, @types/d3-scale-chromatic@3.1.0, @types/d3-selection@3.0.12, @types/d3-shape@3.2.0, @types/d3-time@3.0.4, @types/d3-time-format@4.0.3, @types/d3-timer@3.0.2, @types/d3-transition@3.0.9, @types/d3-zoom@3.0.9, @types/estree@1.0.9, @types/estree-jsx@1.0.5, @types/express@5.0.6, @types/express-serve-static-core@5.1.3, @types/geojson@7946.0.16, @types/hast@3.0.5, @types/http-errors@2.0.5, @types/mdast@4.0.4, @types/node@26.6.6, @types/prismjs@1.26.6, @types/qs@6.15.1, @types/range-parser@1.2.7, @types/react@19.3.0, @types/send@1.2.1, @types/serve-static@2.2.0, @types/trusted-types@2.0.7, @types/unist@2.0.11, @types/unist@3.0.3, @types/ws@8.18.2
 
 ```text
     MIT License
@@ -3976,7 +3976,7 @@ SOFTWARE.
 
 ### License text 98: BlueOak-1.0.0
 
-Packages: glob@13.0.6
+Packages: glob@14.0.3
 
 ```text
 All packages under `src/` are licensed according to the terms in
@@ -4750,7 +4750,7 @@ THE SOFTWARE.
 
 ### License text 121: BlueOak-1.0.0
 
-Packages: lru-cache@11.5.3, minipass@7.1.3, path-scurry@2.0.2
+Packages: lru-cache@11.5.3, minipass@7.1.3, path-scurry@3.0.0
 
 ```text
 # Blue Oak Model License
@@ -4812,7 +4812,7 @@ software or this license, under any kind of legal claim.***
 
 ### License text 122: ISC
 
-Packages: lucide-react@1.61.0
+Packages: lucide-react@1.66.0
 
 ```text
 ISC License
@@ -5000,7 +5000,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### License text 127: BlueOak-1.0.0
 
-Packages: minimatch@10.2.6
+Packages: minimatch@11.0.3
 
 ```text
 # Blue Oak Model License
@@ -5728,7 +5728,7 @@ SOFTWARE.
 
 ### License text 145: MIT
 
-Packages: react-resizable-panels@4.15.0
+Packages: react-resizable-panels@4.16.0
 
 ```text
 The MIT License (MIT)
@@ -6671,7 +6671,7 @@ THIS SOFTWARE.
 
 ### License text 179: MIT
 
-Packages: ws@8.22.0
+Packages: ws@8.22.1
 
 ```text
 Copyright (c) 2011 Einar Otto Stangvik <einaros@gmail.com>
