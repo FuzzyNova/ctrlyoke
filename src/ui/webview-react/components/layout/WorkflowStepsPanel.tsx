@@ -80,6 +80,7 @@ import { WebviewLog } from "@utils/logger";
 import { ExitButton } from "../shared";
 import {
   executionOwnsCurrentStep,
+  isFinalStepExecuting,
   isStepExecuting,
   isWorkflowRunning,
 } from "../../utils/status";
@@ -2215,6 +2216,11 @@ const WorkflowStepsPanelInner: React.FC<{
         status={finalStepStatus}
         loopCount={finalStepLoopCount}
         phase={finalStepPhase}
+        isExecuting={isFinalStepExecuting(
+          executionState,
+          finalStepStatus,
+          finalStepPhase
+        )}
         isExpanded={finalStepFooterExpanded}
         isSelected={selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP}
         isReadOnly={finalStepIsReadOnly}

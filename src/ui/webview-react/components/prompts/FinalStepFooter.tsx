@@ -1,6 +1,7 @@
 import React from "react";
 import { useLongPress } from "../../hooks/useLongPress";
 import { StatusIcon } from "./StatusIcon";
+import { ExecutingStepHighlight } from "./ExecutingStepHighlight";
 import { PromptStepDetails } from "./PromptStepDetails";
 import { ContextWindowBar } from "./ContextWindowBar";
 import { resolveEffectiveContextWindow } from "@utils/tokenUtils";
@@ -42,6 +43,13 @@ interface FinalStepFooterProps {
   status: StepStatus | null;
   loopCount: number;
   phase: FinalStepPhase | null;
+  /**
+   * Whether a final-step pass is executing right now (`isFinalStepExecuting`).
+   * Draws the same running outline as the queue rows, around the whole footer
+   * (expanded details included) — the footer sits apart from the queue, so
+   * without it a running final step reads as a finished workflow.
+   */
+  isExecuting?: boolean;
   isExpanded: boolean;
   isSelected: boolean;
   /** Whether selecting this final step in the editor is unavailable. */
@@ -87,6 +95,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
   status,
   loopCount,
   phase,
+  isExecuting = false,
   isExpanded,
   isSelected,
   isReadOnly,
@@ -140,6 +149,10 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
       {/* Just inside the identity bar: the footer has no number column for
           the queue rows' bar to sit beside. */}
       {passesInView && <InOutputViewBar className="left-[2px] w-[3px]" />}
+      {/* Sized from this root, so it wraps the expanded details too. */}
+      {hasFinalStep && isExecuting && (
+        <ExecutingStepHighlight testId="final-step-executing-highlight" />
+      )}
       {hasFinalStep && isExpanded && finalStep && (
         <div
           className={`px-3 py-2 border-b border-panel-border ${rowStateClass} ${isSelectionReadOnly ? "" : "cursor-pointer"} ${isDisabled && !isSelected ? "opacity-85" : ""}`}

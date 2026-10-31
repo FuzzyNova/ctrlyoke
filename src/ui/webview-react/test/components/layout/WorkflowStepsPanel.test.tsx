@@ -483,6 +483,61 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
     ).toBeInTheDocument();
   });
 
+  it("outlines the running final step instead of the step after the queue", () => {
+    resetStores();
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "Queued step" }],
+      executionState: EXECUTION_STATES.RUNNING,
+      currentStep: 1,
+      results: [{ status: STEP_STATUS.COMPLETED }],
+      finalStep: { prompt: "Running final step" },
+      finalStepStatus: STEP_STATUS.RUNNING,
+      finalStepPhase: FINAL_STEP_PHASES.FINAL_STEP,
+    });
+
+    const { unmount } = render(<WorkflowStepsPanel />);
+
+    expect(screen.getByTestId("final-step-executing-highlight")).toHaveClass(
+      "border-2",
+      "border-status-idle",
+      "animate-pulse-custom"
+    );
+    expect(
+      screen.queryByTestId("executing-step-highlight")
+    ).not.toBeInTheDocument();
+    unmount();
+
+    useUiStore.setState({ stepsCollapsed: true });
+    render(<WorkflowStepsPanel />);
+
+    expect(
+      screen.getByTestId("final-step-chip-executing-highlight")
+    ).toHaveClass("border", "animate-pulse-custom");
+    expect(
+      screen.queryByTestId("executing-chip-highlight")
+    ).not.toBeInTheDocument();
+  });
+
+  it("drops the final step's running outline while paused", () => {
+    resetStores();
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "Queued step" }],
+      executionState: EXECUTION_STATES.PAUSED,
+      currentStep: 1,
+      finalStep: { prompt: "Final step" },
+      finalStepStatus: STEP_STATUS.RUNNING,
+      finalStepPhase: FINAL_STEP_PHASES.FINAL_STEP,
+    });
+
+    render(<WorkflowStepsPanel />);
+
+    expect(
+      screen.queryByTestId("final-step-executing-highlight")
+    ).not.toBeInTheDocument();
+  });
+
   it("renders a yellow pause boundary before the next full-size step", () => {
     resetStores();
     useWorkflowStore.getState().loadWorkflow({

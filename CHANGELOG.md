@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A running final step now gets the same pulsing outline as a running queue
+  step, in both the steps panel (around the whole footer, expanded details
+  included) and the collapsed chip rail.
 - Antigravity CLI 1.4.10 is now the minimum supported version because it adds
   `--settings`, which ctrlyoke uses to deliver per-run permission rules.
 - Antigravity now enforces supported `allowedTools` and `deniedTools` patterns.

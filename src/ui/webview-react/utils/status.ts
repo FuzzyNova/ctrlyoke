@@ -288,6 +288,24 @@ export function isStepExecuting(
 }
 
 /**
+ * The final step's counterpart to `isStepExecuting`: whether a pass of the
+ * final step is being executed right now. Every surface that paints the final
+ * step's running affordance (the steps-panel footer, the collapsed chip rail's
+ * final chip) must share this rule so they never disagree with the queue rows.
+ */
+export function isFinalStepExecuting(
+  state: ExecutionState,
+  finalStepStatus: StepStatus | null,
+  finalStepPhase: FinalStepPhase | null
+): boolean {
+  return (
+    isWorkflowRunning(state) &&
+    finalStepPhase === FINAL_STEP_PHASES.FINAL_STEP &&
+    finalStepStatus === STEP_STATUS.RUNNING
+  );
+}
+
+/**
  * Check if a workflow is in an active/in-progress state.
  * Returns true for RUNNING, PAUSING, or PAUSED.
  * Use for: active-workflow dropdown, prompt counters, message routing guards.

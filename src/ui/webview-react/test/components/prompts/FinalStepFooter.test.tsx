@@ -166,6 +166,35 @@ describe("FinalStepFooter", () => {
     expect(screen.getByText("75%")).toBeInTheDocument();
   });
 
+  it("outlines the whole footer, expanded details included, while executing", () => {
+    const { rerender } = render(
+      <FinalStepFooter {...buildProps()} isExpanded isExecuting />
+    );
+
+    const highlight = screen.getByTestId("final-step-executing-highlight");
+    // Positioned against the footer root, which holds both the expanded
+    // details and the bar, so the outline spans both.
+    const [details, bar] = screen.getAllByRole("button", {
+      name: "Final step",
+    });
+    expect(highlight.parentElement).toContainElement(details);
+    expect(highlight.parentElement).toContainElement(bar);
+    expect(highlight).toHaveClass("absolute", "inset-0");
+
+    rerender(<FinalStepFooter {...buildProps()} isExpanded />);
+    expect(
+      screen.queryByTestId("final-step-executing-highlight")
+    ).not.toBeInTheDocument();
+  });
+
+  it("draws no running outline when no final step is set", () => {
+    render(<FinalStepFooter {...buildProps()} finalStep={null} isExecuting />);
+
+    expect(
+      screen.queryByTestId("final-step-executing-highlight")
+    ).not.toBeInTheDocument();
+  });
+
   it("omits the context window bar without context data", () => {
     const { container } = render(
       <FinalStepFooter {...buildProps()} isExpanded />

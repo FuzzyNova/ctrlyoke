@@ -48,6 +48,7 @@ import {
   getStepAccentClass,
   getStepKindIconClass,
   executionOwnsCurrentStep,
+  isFinalStepExecuting,
   isStepExecuting,
   isWorkflowRunning,
 } from "../../utils/status";
@@ -278,6 +279,8 @@ type FinalStepChipProps = {
   hasFinalStep: boolean;
   isDisabled: boolean;
   contextPct?: number;
+  /** Whether a final-step pass is executing right now (`isFinalStepExecuting`). */
+  isExecuting: boolean;
   showPauseBoundaryBefore: boolean;
   onChipClick: () => void;
   onOpenContextMenu: (x: number, y: number) => void;
@@ -290,6 +293,7 @@ function FinalStepChip({
   hasFinalStep,
   isDisabled,
   contextPct,
+  isExecuting,
   showPauseBoundaryBefore,
   onChipClick,
   onOpenContextMenu,
@@ -314,6 +318,12 @@ function FinalStepChip({
       aria-label="Final step"
     >
       {showPauseBoundaryBefore && <PauseBoundary />}
+      {isExecuting && (
+        <ExecutingStepHighlight
+          borderClassName="border"
+          testId="final-step-chip-executing-highlight"
+        />
+      )}
       {/* Left status border bar. "FINAL" spans nearly the whole rail, so
           while in view the two bars share the identity bar's 2px instead of
           widening into the "F". */}
@@ -705,12 +715,14 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
     });
   }, [isExternallyManaged, isLineageReadOnly, finalStep]);
 
+  const finalStepIsExecuting = isFinalStepExecuting(
+    executionState,
+    finalStepStatus,
+    finalStepPhase
+  );
   const finalStepLatestOutput = useFinalStepLatestOutput();
   const finalStepContextWindow = resolveEffectiveContextWindow({
-    isCurrent:
-      isRunning &&
-      finalStepPhase === FINAL_STEP_PHASES.FINAL_STEP &&
-      finalStepStatus === STEP_STATUS.RUNNING,
+    isCurrent: finalStepIsExecuting,
     liveContextWindow: liveFinalStepContextWindow[finalStepLoopCount],
     latestOutputTokens: finalStepLatestOutput?.tokens,
     runtimeContextWindow:
@@ -808,6 +820,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
           finalStepContextWindow?.used,
           finalStepContextWindow?.size
         )}
+        isExecuting={hasFinalStep && finalStepIsExecuting}
         showPauseBoundaryBefore={
           isPaused &&
           currentStep === prompts.length &&
