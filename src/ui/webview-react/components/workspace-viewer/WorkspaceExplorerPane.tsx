@@ -40,6 +40,7 @@ import {
   workspaceFileWatch,
   workspaceSaveFile,
   workspaceStatus,
+  workspaceRawUrl,
 } from "@utils/hostedApi";
 import { VirtualizedPagedList } from "@components/shared";
 import {
@@ -138,7 +139,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const fileReadOnlyContentAvailable = useWorkspaceViewerStore(
     (s) => s.fileReadOnlyContentAvailable
   );
-  const fileImageDataUri = useWorkspaceViewerStore((s) => s.fileImageDataUri);
+  const fileMedia = useWorkspaceViewerStore((s) => s.fileMedia);
   const mobileEditorVisible = useWorkspaceViewerStore(
     (s) => s.mobileEditorVisible
   );
@@ -150,7 +151,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const setLoadedReadOnlyFileContent = useWorkspaceViewerStore(
     (s) => s.setLoadedReadOnlyFileContent
   );
-  const setLoadedImage = useWorkspaceViewerStore((s) => s.setLoadedImage);
+  const setLoadedMedia = useWorkspaceViewerStore((s) => s.setLoadedMedia);
   const discardFileDraft = useWorkspaceViewerStore((s) => s.discardFileDraft);
   const markFileSaved = useWorkspaceViewerStore((s) => s.markFileSaved);
   const setFileLoading = useWorkspaceViewerStore((s) => s.setFileLoading);
@@ -361,8 +362,14 @@ export const WorkspaceExplorerPane: React.FC = () => {
             : (savedModifiedAt ?? result.modifiedAt);
         savedModifiedAtByPathRef.current.delete(canonicalPath);
         setExternalChange(undefined);
-        if (result.imageDataUri) {
-          setLoadedImage(canonicalPath, result.imageDataUri);
+        if (result.media) {
+          setLoadedMedia(canonicalPath, {
+            ...result.media,
+            rawUrl: workspaceRawUrl({
+              path: canonicalPath,
+              version: result.modifiedAt,
+            }),
+          });
         } else if (result.readOnly) {
           if (typeof result.content === "string") {
             setLoadedReadOnlyFileContent(
@@ -392,7 +399,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
       setFileLoading,
       setLoadedFileContent,
       setLoadedReadOnlyFileContent,
-      setLoadedImage,
+      setLoadedMedia,
       setFileReadOnly,
       setMobileEditorVisible,
       setError,
@@ -1139,7 +1146,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                   ref={editorRef}
                   filePath={selectedFilePath}
                   content={fileContent}
-                  imageDataUri={fileImageDataUri ?? undefined}
+                  media={fileMedia ?? undefined}
                   readOnly={fileReadOnly}
                   onChange={(newContent) => setFileContent(newContent)}
                   onSave={handleSave}

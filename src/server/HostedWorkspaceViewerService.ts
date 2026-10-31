@@ -39,6 +39,7 @@ import type {
   WorkspaceSearchResponse,
   WorkspaceSearchContentMatch,
   WorkspaceTreeEntry,
+  WorkspaceMediaDiffSides,
 } from "../types/HostedWorkspaceViewerTypes";
 import {
   WORKSPACE_SEARCH_SCOPES,
@@ -123,8 +124,6 @@ import {
   DIFF_CHANGE_TYPES,
   DIFF_PAYLOAD_KINDS,
   type DiffChangeType,
-  isImageRefPath,
-  imageExtensionToMimeType,
 } from "../types/DashboardConstants";
 import { pathsEqual } from "../utils/PathCasing";
 import { streamFileLines } from "../utils/TextLines";
@@ -1512,28 +1511,25 @@ export class HostedWorkspaceViewerService {
       return this.rejectedFileResponse(requestedPath, "File not found");
     }
 
-    if (stat.size > MAX_FILE_SIZE) {
-      return this.rejectedFileResponse(requestedPath, "File too large");
+    const mediaInfo = workspaceMediaInfoForPath(resolved);
+    if (mediaInfo) {
+      if (stat.size > MAX_MEDIA_FILE_SIZE) {
+        return this.rejectedFileResponse(requestedPath, "File too large");
+      }
+      return {
+        path: this.relativePath(resolved),
+        name: path.basename(resolved),
+        size: stat.size,
+        eol: "lf",
+        content: "",
+        modifiedAt: stat.mtimeMs,
+        readOnly: true,
+        media: { kind: mediaInfo.mediaKind, mimeType: mediaInfo.mimeType },
+      };
     }
 
-    // Known image types: serve as a data URI the client renders inline as an
-    // <img>, rather than falling through to the binary-file rejection below.
-    if (isImageRefPath(resolved)) {
-      const extension = path.extname(resolved).replace(/^\./, "");
-      const mimeType = imageExtensionToMimeType(extension);
-      if (mimeType) {
-        const bytes = await fs.promises.readFile(resolved);
-        return {
-          path: this.relativePath(resolved),
-          name: path.basename(resolved),
-          size: stat.size,
-          eol: "lf",
-          content: "",
-          modifiedAt: stat.mtimeMs,
-          readOnly: true,
-          imageDataUri: `data:${mimeType};base64,${bytes.toString("base64")}`,
-        };
-      }
+    if (stat.size > MAX_FILE_SIZE) {
+      return this.rejectedFileResponse(requestedPath, "File too large");
     }
 
     if (await this.isBinaryFile(resolved)) {
@@ -1948,6 +1944,100 @@ export class HostedWorkspaceViewerService {
 
   // ── Git diff ─────────────────────────────────────────────────────────────
 
+  private async resolveMediaCommitRef(
+    repoRoot: string,
+    ref: string
+  ): Promise<string> {
+    if (/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(ref)) return ref;
+    const { stdout } = await execFileAsync(
+      "git",
+      ["-C", repoRoot, "rev-parse", "--verify", `${ref}^{commit}`],
+      { encoding: "utf8", timeout: GIT_COMMAND_TIMEOUT_MS, maxBuffer: 1024 * 1024 }
+    );
+    return stdout.trim();
+  }
+
+  protected async getMediaBlobSize(
+    repoRoot: string,
+    ref: string,
+    gitPath: string
+  ): Promise<number | null> {
+    try {
+      const { stdout } = await execFileAsync(
+        "git",
+        [
+          "-C",
+          repoRoot,
+          "cat-file",
+          "-s",
+          ref === WORKSPACE_MEDIA_GIT_INDEX_REF
+            ? `:${toGitPath(gitPath)}`
+            : `${ref}:${toGitPath(gitPath)}`,
+        ],
+        { encoding: "utf8", timeout: GIT_COMMAND_TIMEOUT_MS, maxBuffer: 1024 * 1024 }
+      );
+      const size = Number(stdout.trim());
+      return Number.isSafeInteger(size) && size >= 0 ? size : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async buildMediaDiffSides(
+    repoRoot: string,
+    mediaInfo: WorkspaceMediaInfo,
+    newPath: string,
+    oldPath: string,
+    oldRef: string,
+    newRef: string | undefined,
+    oldExists: boolean,
+    newExists: boolean,
+    workingTreeNew: boolean
+  ): Promise<{ media?: WorkspaceMediaDiffSides; tooLarge: boolean }> {
+    const resolvedOldRef = !oldExists || oldRef === WORKSPACE_MEDIA_GIT_INDEX_REF
+      ? oldRef
+      : await this.resolveMediaCommitRef(repoRoot, oldRef);
+    const resolvedNewRef = !newExists || newRef === undefined || newRef === WORKSPACE_MEDIA_GIT_INDEX_REF
+      ? newRef
+      : await this.resolveMediaCommitRef(repoRoot, newRef);
+    const [oldSize, workingStat, newSize] = await Promise.all([
+      oldExists ? this.getMediaBlobSize(repoRoot, resolvedOldRef, oldPath) : Promise.resolve(null),
+      workingTreeNew && newExists
+        ? fs.promises.stat(path.resolve(repoRoot, newPath)).catch(() => undefined)
+        : Promise.resolve(undefined),
+      !workingTreeNew && newExists && resolvedNewRef
+        ? this.getMediaBlobSize(repoRoot, resolvedNewRef, newPath)
+        : Promise.resolve(null),
+    ]);
+    const workingSize = workingStat?.size;
+    const isTooLarge =
+      (oldSize !== null && oldSize > MAX_MEDIA_BLOB_SIZE) ||
+      (workingSize !== undefined && workingSize > MAX_MEDIA_FILE_SIZE) ||
+      (newSize !== null && newSize > MAX_MEDIA_BLOB_SIZE);
+    if (isTooLarge) return { tooLarge: true };
+    const old = oldExists && oldSize !== null
+      ? {
+          path: this.relativePath(path.resolve(repoRoot, oldPath)),
+          ref: resolvedOldRef,
+        }
+      : undefined;
+    const next = workingTreeNew && workingStat
+      ? {
+          path: this.relativePath(path.resolve(repoRoot, newPath)),
+          version: workingStat.mtimeMs,
+        }
+      : newExists && newSize !== null && resolvedNewRef
+        ? {
+            path: this.relativePath(path.resolve(repoRoot, newPath)),
+            ref: resolvedNewRef,
+          }
+        : undefined;
+    return {
+      tooLarge: false,
+      media: { mediaKind: mediaInfo.mediaKind, old, new: next },
+    };
+  }
+
   async getDiff(requestedPath: string): Promise<WorkspaceScmDiffResponse> {
     const resolved = this.safeResolve(requestedPath);
     if (!resolved) {
@@ -1967,6 +2057,34 @@ export class HostedWorkspaceViewerService {
     );
     const kind: DiffKind = fileStatus?.kind ?? "modified";
 
+    const mediaInfo = workspaceMediaInfoForPath(resolved);
+    if (mediaInfo) {
+      const renamedFile = kind === SCM_FILE_KINDS.RENAMED
+        ? (await getChangedFilesWithBinaryStatus(repoRoot, ["diff", "HEAD"]))
+            .find((file) => file.path === gitPath && file.oldPath)
+        : undefined;
+      const oldGitPath = renamedFile?.oldPath ?? gitPath;
+      const media = await this.buildMediaDiffSides(
+        repoRoot,
+        mediaInfo,
+        gitPath,
+        oldGitPath,
+        "HEAD",
+        undefined,
+        kind !== SCM_FILE_KINDS.ADDED,
+        kind !== SCM_FILE_KINDS.DELETED,
+        kind !== SCM_FILE_KINDS.DELETED
+      );
+      return {
+        path: fileStatus?.path ?? normalizedRelPath,
+        kind,
+        payloadKind: media.tooLarge
+          ? DIFF_PAYLOAD_KINDS.TOO_LARGE
+          : DIFF_PAYLOAD_KINDS.MEDIA,
+        ...(!media.tooLarge && media.media ? { media: media.media } : {}),
+      } as WorkspaceScmDiffResponse;
+    }
+
     const oldBytes = await this.readGitDiffBytes(repoRoot, "HEAD", gitPath);
     let newBytes: Buffer | null | typeof DIFF_SIDE_TOO_LARGE = null;
 
@@ -1982,23 +2100,6 @@ export class HostedWorkspaceViewerService {
         payloadKind: DIFF_PAYLOAD_KINDS.TOO_LARGE,
       };
     }
-    if (isImageRefPath(resolved)) {
-      const image = this.buildImageDiffSides(
-        oldBytes,
-        newBytes,
-        resolved,
-        gitPath
-      );
-      if (image) {
-        return {
-          path: responsePath,
-          kind,
-          payloadKind: DIFF_PAYLOAD_KINDS.IMAGE,
-          image,
-        } as WorkspaceScmDiffResponse;
-      }
-    }
-
     if (this.isBinaryBuffer(oldBytes) || this.isBinaryBuffer(newBytes)) {
       return {
         path: responsePath,
@@ -2026,41 +2127,18 @@ export class HostedWorkspaceViewerService {
     return false;
   }
 
-  private buildImageDiffSides(
-    oldBytes: Buffer | null,
-    newBytes: Buffer | null,
-    newPath: string,
-    oldPath: string
-  ): { oldImageDataUri?: string; newImageDataUri?: string } | null {
-    const oldExtension = path.extname(oldPath).replace(/^\./, "");
-    const newExtension = path.extname(newPath).replace(/^\./, "");
-    const oldMimeType = imageExtensionToMimeType(oldExtension);
-    const newMimeType = imageExtensionToMimeType(newExtension);
-    if ((oldBytes && !oldMimeType) || (newBytes && !newMimeType)) {
-      return null;
-    }
-
-    return {
-      oldImageDataUri:
-        oldBytes && oldMimeType
-          ? `data:${oldMimeType};base64,${oldBytes.toString("base64")}`
-          : undefined,
-      newImageDataUri:
-        newBytes && newMimeType
-          ? `data:${newMimeType};base64,${newBytes.toString("base64")}`
-          : undefined,
-    };
-  }
-
-  private buildGitRefDiffEntry(
+  private async buildGitRefDiffEntry(
     repoRoot: string,
     newGitPath: string,
     oldGitPath: string,
     oldBytes: Buffer | null | typeof DIFF_SIDE_TOO_LARGE,
     newBytes: Buffer | null | typeof DIFF_SIDE_TOO_LARGE,
     changeType: DiffChangeType,
-    includeOldPath: boolean
-  ): WorkspaceGitRefDiffEntry | null {
+    includeOldPath: boolean,
+    oldRef: string,
+    newRef: string | undefined,
+    newIsWorkingTree: boolean
+  ): Promise<WorkspaceGitRefDiffEntry | null> {
     const absolutePath = path.resolve(repoRoot, newGitPath);
     const oldAbsolutePath = path.resolve(repoRoot, oldGitPath);
     if (
@@ -2080,24 +2158,26 @@ export class HostedWorkspaceViewerService {
       changeType,
     };
 
-    if (oldBytes === DIFF_SIDE_TOO_LARGE || newBytes === DIFF_SIDE_TOO_LARGE) {
-      return { ...entry, payloadKind: DIFF_PAYLOAD_KINDS.TOO_LARGE };
+    const mediaInfo = workspaceMediaInfoForPath(newGitPath) ?? workspaceMediaInfoForPath(oldGitPath);
+    if (mediaInfo) {
+      const media = await this.buildMediaDiffSides(
+        repoRoot,
+        mediaInfo,
+        newGitPath,
+        oldGitPath,
+        oldRef,
+        newRef,
+        oldBytes !== null,
+        newBytes !== null,
+        newIsWorkingTree
+      );
+      return media.tooLarge
+        ? { ...entry, payloadKind: DIFF_PAYLOAD_KINDS.TOO_LARGE }
+        : { ...entry, payloadKind: DIFF_PAYLOAD_KINDS.MEDIA, media: media.media! };
     }
 
-    if (isImageRefPath(newGitPath)) {
-      const image = this.buildImageDiffSides(
-        oldBytes,
-        newBytes,
-        newGitPath,
-        oldGitPath
-      );
-      if (image) {
-        return {
-          ...entry,
-          payloadKind: DIFF_PAYLOAD_KINDS.IMAGE,
-          image,
-        };
-      }
+    if (oldBytes === DIFF_SIDE_TOO_LARGE || newBytes === DIFF_SIDE_TOO_LARGE) {
+      return { ...entry, payloadKind: DIFF_PAYLOAD_KINDS.TOO_LARGE };
     }
 
     if (this.isBinaryBuffer(oldBytes) || this.isBinaryBuffer(newBytes)) {
@@ -2442,20 +2522,58 @@ export class HostedWorkspaceViewerService {
       throw new Error("Path not allowed");
     }
 
+    const changeType = this.diffChangeType(changedFile.status);
+    const mediaInfo = workspaceMediaInfoForPath(commitPath) ?? workspaceMediaInfoForPath(parentPath);
+    if (mediaInfo) {
+      const media = await this.buildMediaDiffSides(
+        repoRoot,
+        mediaInfo,
+        commitPath,
+        parentPath,
+        `${resolvedCommit}^`,
+        resolvedCommit,
+        changedFile.status !== "A",
+        changedFile.status !== "D",
+        false
+      );
+      const commitInfo = await getCommitInfo(repoRoot, resolvedCommit);
+      const entry: WorkspaceGitRefDiffEntry = media.tooLarge
+        ? {
+            path: normalizeViewerPath(this.relativePath(commitAbsolutePath)),
+            oldPath: normalizeViewerPath(this.relativePath(parentAbsolutePath)),
+            changeType,
+            payloadKind: DIFF_PAYLOAD_KINDS.TOO_LARGE,
+          }
+        : {
+            path: normalizeViewerPath(this.relativePath(commitAbsolutePath)),
+            oldPath: normalizeViewerPath(this.relativePath(parentAbsolutePath)),
+            changeType,
+            payloadKind: DIFF_PAYLOAD_KINDS.MEDIA,
+            media: media.media!,
+          };
+      return {
+        ...commitInfo,
+        ...entry,
+        oldPath: normalizeViewerPath(this.relativePath(parentAbsolutePath)),
+      };
+    }
+
     const [oldBytes, newBytes, commitInfo] = await Promise.all([
       this.readGitDiffBytes(repoRoot, `${resolvedCommit}^`, parentPath),
       this.readGitDiffBytes(repoRoot, resolvedCommit, commitPath),
       getCommitInfo(repoRoot, resolvedCommit),
     ]);
-    const changeType = this.diffChangeType(changedFile.status);
-    const entry = this.buildGitRefDiffEntry(
+    const entry = await this.buildGitRefDiffEntry(
       repoRoot,
       commitPath,
       parentPath,
       oldBytes,
       newBytes,
       changeType,
-      true
+      true,
+      `${resolvedCommit}^`,
+      resolvedCommit,
+      false
     );
     if (!entry) throw new Error("Path not allowed");
     return {
@@ -3094,6 +3212,25 @@ export class HostedWorkspaceViewerService {
     sources: NonTextDiffSources
   ): Promise<WorkspaceGitRefDiffResponse["nonTextEntries"]> {
     const binaryFiles = changedFiles.filter((file) => file.isBinary);
+    const hasMedia = binaryFiles.some(
+      (file) => workspaceMediaInfoForPath(file.path) || workspaceMediaInfoForPath(file.oldPath ?? file.path)
+    );
+    const resolvedSources: NonTextDiffSources = hasMedia
+      ? {
+          ...sources,
+          baseRef:
+            sources.baseRef === WORKSPACE_MEDIA_GIT_INDEX_REF ||
+            binaryFiles.every((file) => file.status === "A")
+              ? sources.baseRef
+              : await this.resolveMediaCommitRef(repoRoot, sources.baseRef),
+          targetRef:
+            sources.targetRef === undefined ||
+            sources.targetRef === WORKSPACE_MEDIA_GIT_INDEX_REF ||
+            binaryFiles.every((file) => file.status === "D")
+              ? sources.targetRef
+              : await this.resolveMediaCommitRef(repoRoot, sources.targetRef),
+        }
+      : sources;
     const entries = await mapWithBoundedConcurrency(
       binaryFiles,
       8,
@@ -3105,6 +3242,38 @@ export class HostedWorkspaceViewerService {
 
         const changeType = this.diffChangeType(file.status);
         const oldGitPath = file.oldPath ?? file.path;
+        const mediaInfo = workspaceMediaInfoForPath(file.path) ?? workspaceMediaInfoForPath(oldGitPath);
+        if (mediaInfo) {
+          const media = await this.buildMediaDiffSides(
+            repoRoot,
+            mediaInfo,
+            file.path,
+            oldGitPath,
+            resolvedSources.baseRef,
+            sources.targetIsWorkingTree ? undefined : resolvedSources.targetRef ?? "HEAD",
+            file.status !== "A",
+            file.status !== "D",
+            sources.targetIsWorkingTree
+          );
+          const viewerPath = this.relativePath(absolutePath);
+          const viewerOldPath = file.oldPath
+            ? this.relativePath(path.resolve(repoRoot, file.oldPath))
+            : undefined;
+          return media.tooLarge
+            ? {
+                path: viewerPath,
+                oldPath: viewerOldPath,
+                changeType,
+                payloadKind: DIFF_PAYLOAD_KINDS.TOO_LARGE,
+              }
+            : {
+                path: viewerPath,
+                oldPath: viewerOldPath,
+                changeType,
+                payloadKind: DIFF_PAYLOAD_KINDS.MEDIA,
+                media: media.media!,
+              };
+        }
         const oldBytes = await this.readGitDiffBytes(
           repoRoot,
           sources.baseRef,
@@ -3132,24 +3301,6 @@ export class HostedWorkspaceViewerService {
             changeType,
             payloadKind: DIFF_PAYLOAD_KINDS.TOO_LARGE,
           };
-        }
-
-        if (isImageRefPath(file.path)) {
-          const image = this.buildImageDiffSides(
-            oldBytes,
-            newBytes,
-            file.path,
-            oldGitPath
-          );
-          if (image) {
-            return {
-              path: viewerPath,
-              oldPath: viewerOldPath,
-              changeType,
-              payloadKind: DIFF_PAYLOAD_KINDS.IMAGE,
-              image,
-            };
-          }
         }
 
         return {
@@ -3217,6 +3368,33 @@ export class HostedWorkspaceViewerService {
     sources: NonTextDiffSources
   ): Promise<WorkspaceGitRefDiffEntry | null> {
     const oldGitPath = file.oldPath ?? file.path;
+    const mediaInfo = workspaceMediaInfoForPath(file.path) ?? workspaceMediaInfoForPath(oldGitPath);
+    const changeType = this.diffChangeType(file.status);
+    if (mediaInfo) {
+      const media = await this.buildMediaDiffSides(
+        repoRoot,
+        mediaInfo,
+        file.path,
+        oldGitPath,
+        sources.baseRef,
+        sources.targetIsWorkingTree ? undefined : sources.targetRef ?? "HEAD",
+        file.status !== "A",
+        file.status !== "D",
+        sources.targetIsWorkingTree
+      );
+      const absolutePath = path.resolve(repoRoot, file.path);
+      const oldAbsolutePath = path.resolve(repoRoot, oldGitPath);
+      const entryBase = {
+        path: normalizeViewerPath(this.relativePath(absolutePath)),
+        ...(file.oldPath !== undefined
+          ? { oldPath: normalizeViewerPath(this.relativePath(oldAbsolutePath)) }
+          : {}),
+        changeType,
+      };
+      return media.tooLarge
+        ? { ...entryBase, payloadKind: DIFF_PAYLOAD_KINDS.TOO_LARGE }
+        : { ...entryBase, payloadKind: DIFF_PAYLOAD_KINDS.MEDIA, media: media.media! };
+    }
     const [oldBytes, newBytes] = await Promise.all([
       this.readGitDiffBytes(repoRoot, sources.baseRef, oldGitPath),
       sources.targetIsWorkingTree
@@ -3238,7 +3416,10 @@ export class HostedWorkspaceViewerService {
       oldBytes,
       newBytes,
       this.diffChangeType(file.status),
-      file.oldPath !== undefined
+      file.oldPath !== undefined,
+      sources.baseRef,
+      sources.targetIsWorkingTree ? undefined : sources.targetRef ?? "HEAD",
+      sources.targetIsWorkingTree
     );
   }
 
@@ -3318,13 +3499,32 @@ export class HostedWorkspaceViewerService {
       offset,
       offset + snapshot.pageSize
     );
+    const mediaFiles = files.filter(
+      (file) => workspaceMediaInfoForPath(file.path) || workspaceMediaInfoForPath(file.oldPath ?? file.path)
+    );
+    const sources: NonTextDiffSources = mediaFiles.length > 0
+      ? {
+          ...snapshot.sources,
+          baseRef:
+            snapshot.sources.baseRef === WORKSPACE_MEDIA_GIT_INDEX_REF ||
+            mediaFiles.every((file) => file.status === "A")
+              ? snapshot.sources.baseRef
+              : await this.resolveMediaCommitRef(snapshot.repoRoot, snapshot.sources.baseRef),
+          targetRef:
+            snapshot.sources.targetRef === undefined ||
+            snapshot.sources.targetRef === WORKSPACE_MEDIA_GIT_INDEX_REF ||
+            mediaFiles.every((file) => file.status === "D")
+              ? snapshot.sources.targetRef
+              : await this.resolveMediaCommitRef(snapshot.repoRoot, snapshot.sources.targetRef),
+        }
+      : snapshot.sources;
     const entries = (
       await Promise.all(
         files.map((file) =>
           this.buildGitRefDiffPageEntry(
             snapshot.repoRoot,
             file,
-            snapshot.sources
+            sources
           )
         )
       )

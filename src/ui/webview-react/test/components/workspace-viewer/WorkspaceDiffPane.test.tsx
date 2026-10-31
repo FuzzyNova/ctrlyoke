@@ -34,6 +34,8 @@ vi.mock("@utils/hostedApi", () => ({
   workspaceGitRefDiffDownload: vi.fn(),
   workspaceGitRefDiffPage: vi.fn(),
   workspaceWorktreeDiffPage: vi.fn(),
+  workspaceRawUrl: (side: { path: string; ref?: string }) =>
+    `/raw?path=${encodeURIComponent(side.path)}&ref=${side.ref ?? ""}`,
 }));
 
 vi.mock("@components/shared", async (importOriginal) => {
@@ -308,8 +310,8 @@ describe("WorkspaceDiffPane commit diff controls", () => {
           {
             path: "assets/deleted.png",
             changeType: "deleted",
-            payloadKind: DIFF_PAYLOAD_KINDS.IMAGE,
-            image: { oldImageDataUri: "data:image/png;base64,old" },
+            payloadKind: DIFF_PAYLOAD_KINDS.MEDIA,
+            media: { mediaKind: "image", old: { path: "image.png", ref: "oldhash" } },
           },
           {
             path: "assets/data.bin",
@@ -493,10 +495,11 @@ describe("WorkspaceDiffPane single-file mode", () => {
   it("renders an image response instead of garbled text", () => {
     useWorkspaceViewerStore.setState({
       selectedDiffPath: "assets/logo.png",
-      diffPayloadKind: DIFF_PAYLOAD_KINDS.IMAGE,
-      diffImage: {
-        oldImageDataUri: "data:image/png;base64,old",
-        newImageDataUri: "data:image/png;base64,new",
+      diffPayloadKind: DIFF_PAYLOAD_KINDS.MEDIA,
+      diffMedia: {
+        mediaKind: "image",
+        old: { path: "image.png", ref: "oldhash" },
+        new: { path: "image.png", ref: "newhash" },
       },
       diffKind: "modified",
       diffLoading: false,

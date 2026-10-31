@@ -49,8 +49,8 @@ function sourceForEntry(
         oldContent: entry.oldContent,
         newContent: entry.newContent,
       };
-    case DIFF_PAYLOAD_KINDS.IMAGE:
-      return { kind: DIFF_PAYLOAD_KINDS.IMAGE, image: entry.image };
+    case DIFF_PAYLOAD_KINDS.MEDIA:
+      return { kind: DIFF_PAYLOAD_KINDS.MEDIA, media: entry.media };
     case DIFF_PAYLOAD_KINDS.BINARY:
       return { kind: DIFF_PAYLOAD_KINDS.BINARY };
     case DIFF_PAYLOAD_KINDS.TOO_LARGE:

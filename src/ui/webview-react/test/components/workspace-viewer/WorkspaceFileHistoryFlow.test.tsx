@@ -19,6 +19,8 @@ vi.mock("@hooks/usePagedFileHistory", () => ({ usePagedFileHistory }));
 vi.mock("@utils/hostedApi", () => ({
   workspaceFileHistoryDiff,
   workspaceGitRefDiff: vi.fn(),
+  workspaceRawUrl: (side: { path: string; ref?: string }) =>
+    `/raw?path=${encodeURIComponent(side.path)}&ref=${side.ref ?? ""}`,
 }));
 vi.mock("@components/shared", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@components/shared")>();
@@ -65,10 +67,11 @@ const imageDetail: WorkspaceFileHistoryDiffResponse = {
   path: historyEntry.path,
   oldPath: historyEntry.oldPath,
   changeType: "modified",
-  payloadKind: "image",
-  image: {
-    oldImageDataUri: "data:image/png;base64,old",
-    newImageDataUri: "data:image/png;base64,new",
+  payloadKind: "media",
+  media: {
+    mediaKind: "image",
+    old: { path: historyEntry.oldPath, ref: "oldhash" },
+    new: { path: historyEntry.path, ref: "newhash" },
   },
 };
 

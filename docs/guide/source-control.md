@@ -93,8 +93,9 @@ section with its full message, author and date.
 - The header button expands or collapses every file.
 - **Download** saves the whole diff as a `.diff` file.
 - Large diffs load more files as you scroll.
-- Images show **Before** and **After** side by side. Other binary files, and
-  files over 2 MB on either side, show a placeholder instead of a diff.
+- Images show **Before** and **After** side by side. Other binary files, text
+  files over 2 MB, Git-backed media sides over 50 MB, and worktree media files
+  over 512 MB show a placeholder.
 
 **View File History** on a file's menu in the Explorer lists every commit that
 changed it; select one to see that commit's change to the file. Each commit's

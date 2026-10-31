@@ -345,12 +345,12 @@ Each stage is one commit; tick it in the commit that lands it.
       extension table, `workspaceMediaInfoForPath`; the pure range parser; the
       service method and `GET /api/workspace-viewer/raw`; CSP `media-src`/`frame-src`.
       Additive only: no payload changes yet. No deviations from the plan.
-- [ ] **B. Payload switch, images on the raw route** (§3 descriptor, §5 types and
+- [x] **B. Payload switch, images on the raw route** (§3 descriptor, §5 types and
       builders, client wiring for images): `readFile()` descriptor, `MEDIA` payload
       and `WorkspaceMediaDiffSides`, `buildMediaDiffSides` in all three builders,
       `hostedApi.workspaceRawUrl`, store/editor `media` prop, `ImageDiffView` →
       `MediaDiffView` (image sides only render; other kinds show a placeholder with
-      "Open in new tab"), `DiffFileCard`/`rdvAdapter`/`diffFileRows`.
+      "Open in new tab"), `DiffFileCard`/`rdvAdapter`/`diffFileRows`. No implementation deviations.
 - [ ] **C. Video and audio rendering** (§3, §5): `<video>`/`<audio>` in the editor and
       diff sides, the playback-error fallback (also on `<img>`), mount-only-when-expanded.
 - [ ] **D. PDF via pdf.js** (§4): `pdfjs-dist`, static data copy, `WorkspacePdfViewer`,

@@ -3768,7 +3768,7 @@ export type ApplyPatchFileEditKind =
 // ============================================================================
 export const DIFF_PAYLOAD_KINDS = {
   TEXT: "text",
-  IMAGE: "image",
+  MEDIA: "media",
   BINARY: "binary",
   TOO_LARGE: "tooLarge",
 } as const;

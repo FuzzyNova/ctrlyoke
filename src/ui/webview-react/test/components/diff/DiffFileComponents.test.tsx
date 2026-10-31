@@ -3,7 +3,7 @@ import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { DiffFileCard } from "@components/diff/DiffFileCard";
 import { DiffFileList } from "@components/diff/DiffFileList";
-import { ImageDiffView } from "@components/diff/ImageDiffView";
+import { MediaDiffView } from "@components/diff/MediaDiffView";
 
 const { diffViewRenderCount } = vi.hoisted(() => ({
   diffViewRenderCount: { value: 0 },
@@ -86,11 +86,12 @@ function listProps(command: { version: number; collapsed: boolean }) {
 describe("DiffFileCard", () => {
   it("renders before and after image sides with accessible labels", () => {
     render(
-      <ImageDiffView
+      <MediaDiffView
         path="assets/logo.png"
         sides={{
-          oldImageDataUri: "data:image/png;base64,old",
-          newImageDataUri: "data:image/png;base64,new",
+          mediaKind: "image",
+          old: { path: "assets/logo.png", ref: "oldhash" },
+          new: { path: "assets/logo.png", ref: "newhash" },
         }}
       />
     );
@@ -99,30 +100,44 @@ describe("DiffFileCard", () => {
     expect(screen.getByText("After")).toBeInTheDocument();
     expect(screen.getByAltText("assets/logo.png before")).toHaveAttribute(
       "src",
-      "data:image/png;base64,old"
+      "/api/workspace-viewer/raw?path=assets%2Flogo.png&ref=oldhash"
     );
     expect(screen.getByAltText("assets/logo.png after")).toHaveAttribute(
       "src",
-      "data:image/png;base64,new"
+      "/api/workspace-viewer/raw?path=assets%2Flogo.png&ref=newhash"
     );
   });
 
   it("renders explicit placeholders for deleted and created image sides", () => {
     const { rerender } = render(
-      <ImageDiffView
+      <MediaDiffView
         path="assets/deleted.png"
-        sides={{ oldImageDataUri: "old" }}
+        sides={{ mediaKind: "image", old: { path: "assets/deleted.png", ref: "oldhash" } }}
       />
     );
 
     expect(screen.getByText("No new image")).toBeInTheDocument();
     rerender(
-      <ImageDiffView
+      <MediaDiffView
         path="assets/created.png"
-        sides={{ newImageDataUri: "new" }}
+        sides={{ mediaKind: "image", new: { path: "assets/created.png", ref: "newhash" } }}
       />
     );
     expect(screen.getByText("No previous image")).toBeInTheDocument();
+  });
+
+  it("does not mount media elements while the diff card is collapsed", () => {
+    const { container } = render(
+      <MediaDiffView
+        path="assets/logo.png"
+        collapsed
+        sides={{
+          mediaKind: "image",
+          new: { path: "assets/logo.png", ref: "newhash" },
+        }}
+      />
+    );
+    expect(container.querySelector("img")).toBeNull();
   });
 
   it("renders a compact binary fallback without DiffView props", () => {

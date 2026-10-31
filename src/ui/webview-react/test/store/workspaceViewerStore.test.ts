@@ -484,22 +484,28 @@ describe("diffRef tracking", () => {
 });
 
 // ---------------------------------------------------------------------------
-// setLoadedImage
+// setLoadedMedia
 // ---------------------------------------------------------------------------
 
-describe("setLoadedImage", () => {
-  it("loads an image data URI as a read-only, non-dirty selection", () => {
-    store().setLoadedImage("images/logo.png", "data:image/png;base64,AAAA");
+describe("setLoadedMedia", () => {
+  it("loads a media descriptor and raw URL as a read-only, non-dirty selection", () => {
+    const media = { kind: "image" as const, mimeType: "image/png", rawUrl: "/raw" };
+    store().setLoadedMedia("images/logo.png", media);
     expect(store().selectedFilePath).toBe("images/logo.png");
-    expect(store().fileImageDataUri).toBe("data:image/png;base64,AAAA");
+    expect(store().fileMedia).toEqual(media);
+    expect(store().fileReadOnly).toBe(true);
     expect(store().fileContent).toBe("");
     expect(store().fileDirty).toBe(false);
   });
 
   it("is cleared when a normal text file is loaded afterwards", () => {
-    store().setLoadedImage("images/logo.png", "data:image/png;base64,AAAA");
+    store().setLoadedMedia("images/logo.png", {
+      kind: "image",
+      mimeType: "image/png",
+      rawUrl: "/raw",
+    });
     store().setLoadedFileContent("src/app.ts", "export const x = 1;");
-    expect(store().fileImageDataUri).toBeNull();
+    expect(store().fileMedia).toBeNull();
     expect(store().fileContent).toBe("export const x = 1;");
   });
 });

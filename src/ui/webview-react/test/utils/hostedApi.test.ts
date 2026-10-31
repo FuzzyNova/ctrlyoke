@@ -5,6 +5,7 @@ import {
   workspaceGitRefDiffPage,
   workspaceWorktreeDiffPage,
   workspaceTree,
+  workspaceRawUrl,
 } from "@utils/hostedApi";
 import {
   WORKSPACE_ENTRY_SORT_DIRECTIONS,
@@ -78,6 +79,24 @@ describe("hostedApi workspaceTree", () => {
       expect(error).toBeInstanceOf(HostedHttpError);
       expect((error as HostedHttpError).status).toBe(410);
     }
+  });
+});
+
+describe("hostedApi workspaceRawUrl", () => {
+  it("encodes the side fields and appends the page token", () => {
+    const originalUrl = window.location.href;
+    window.history.replaceState({}, "", "/?token=secret-token");
+    expect(
+      workspaceRawUrl({
+        path: "root one/assets/my image.png",
+        repo: "repo/a",
+        ref: "abc123^",
+        version: 42,
+      })
+    ).toBe(
+      "/api/workspace-viewer/raw?path=root+one%2Fassets%2Fmy+image.png&repo=repo%2Fa&ref=abc123%5E&v=42&token=secret-token"
+    );
+    window.history.replaceState({}, "", originalUrl);
   });
 });
 

@@ -207,13 +207,13 @@ describe("WorkspaceFileEditor link navigation", () => {
   it("renders an <img> instead of the editor for a known image type", () => {
     const onChange = vi.fn();
     const onSave = vi.fn();
-    const dataUri = "data:image/png;base64,AAAA";
+    const rawUrl = "/api/workspace-viewer/raw?path=image.png&token=test";
 
     const { container } = render(
       <WorkspaceFileEditor
         filePath=".ctrlyoke/attachments/pasted-image-abc.png"
         content=""
-        imageDataUri={dataUri}
+        media={{ kind: "image", rawUrl }}
         onChange={onChange}
         onSave={onSave}
       />
@@ -221,7 +221,7 @@ describe("WorkspaceFileEditor link navigation", () => {
 
     const img = container.querySelector("img");
     expect(img).not.toBeNull();
-    expect(img).toHaveAttribute("src", dataUri);
+    expect(img).toHaveAttribute("src", rawUrl);
     // No CodeMirror editor is created for an image.
     expect(container.querySelector(".cm-editor")).toBeNull();
   });

@@ -142,13 +142,15 @@ describe("projectDiffFileListRows", () => {
 });
 
 describe("diff file estimates", () => {
-  it("uses bounded O(1) estimates for image and binary sources", () => {
+  it("uses bounded per-kind O(1) estimates without reading media sides", () => {
     const imageSource: DiffFileCardProps["source"] = {
-      kind: DIFF_PAYLOAD_KINDS.IMAGE,
-      get image(): { oldImageDataUri?: string; newImageDataUri?: string } {
-        throw new Error("image bytes must not be inspected by the estimator");
-      },
+      kind: DIFF_PAYLOAD_KINDS.MEDIA,
+      media: { mediaKind: "image", new: { path: "assets/logo.png", ref: "abc" } },
     };
+    const audio = file("assets/audio.mp3", {
+      kind: DIFF_PAYLOAD_KINDS.MEDIA,
+      media: { mediaKind: "audio", new: { path: "assets/audio.mp3", ref: "abc" } },
+    });
     const image = file("assets/logo.png", imageSource);
     const binary = file("assets/data.bin", {
       kind: DIFF_PAYLOAD_KINDS.BINARY,
@@ -160,10 +162,12 @@ describe("diff file estimates", () => {
     const binaryCollapsed = estimateDiffFileCardSize(binary, {
       collapsed: true,
     });
+    const audioExpanded = estimateDiffFileCardSize(audio);
 
     expect(imageExpanded).toBeGreaterThan(imageCollapsed);
     expect(binaryExpanded).toBeGreaterThan(binaryCollapsed);
     expect(binaryExpanded).toBeLessThan(imageExpanded);
+    expect(audioExpanded).toBeLessThan(imageExpanded);
   });
 
   it("estimates deferred history cards from collapsed chrome only", () => {

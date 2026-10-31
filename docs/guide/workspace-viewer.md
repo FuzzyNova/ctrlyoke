@@ -114,8 +114,9 @@ rather than overwriting a change you haven't seen.
 
 These open read-only, with a banner giving the reason:
 
-- files larger than 2 MB
-- images (PNG, JPEG, GIF and WebP), which are shown as a picture
+- text files larger than 2 MB
+- images (PNG, JPEG, GIF and WebP) up to the 512 MB media-file limit, which are
+  shown as a picture
 - other binary files, which don't open
 - files that contain a stored [secret](/workflows/secrets): the viewer shows them
   with the secret's value masked, and never lets you save over them

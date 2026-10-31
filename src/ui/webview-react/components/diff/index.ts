@@ -1,7 +1,7 @@
 export { DiffFileCard } from "./DiffFileCard";
 export type { DiffFileCardProps } from "./DiffFileCard";
-export { ImageDiffView } from "./ImageDiffView";
-export type { ImageDiffViewProps } from "./ImageDiffView";
+export { MediaDiffView } from "./MediaDiffView";
+export type { MediaDiffViewProps } from "./MediaDiffView";
 export { OpenFileButton } from "./OpenFileButton";
 export type { OpenFileButtonProps } from "./OpenFileButton";
 export { DiffFileList } from "./DiffFileList";

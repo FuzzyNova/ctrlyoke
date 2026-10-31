@@ -11,6 +11,7 @@ import {
   WorkspaceFileConflictError,
   WorkspaceMediaError,
   MAX_MEDIA_BLOB_SIZE,
+  MAX_MEDIA_FILE_SIZE,
 } from "../../server/HostedWorkspaceViewerService";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import {
@@ -54,6 +55,12 @@ class BudgetedWorkspaceViewerService extends HostedWorkspaceViewerService {
 
 class DiffCappedWorkspaceViewerService extends HostedWorkspaceViewerService {
   protected override readonly diffSideMaxBytes = 8;
+}
+
+class MediaBlobCappedWorkspaceViewerService extends HostedWorkspaceViewerService {
+  protected override async getMediaBlobSize(): Promise<number> {
+    return MAX_MEDIA_BLOB_SIZE + 1;
+  }
 }
 
 class UnavailableGitWorkspaceViewerService extends HostedWorkspaceViewerService {
@@ -1630,7 +1637,7 @@ suite("HostedWorkspaceViewerService", function () {
       assert.strictEqual(result.newContent, "root content\n");
     });
 
-    test("returns real image bytes for an image-file commit", async () => {
+    test("returns resolved media sides for an image-file commit", async () => {
       const root = createWorkspace();
       runGit(root, "init");
       configureGitIdentity(root);
@@ -1648,16 +1655,33 @@ suite("HostedWorkspaceViewerService", function () {
         root
       ).getFileHistoryDiff("history.png", commit);
 
-      assert.strictEqual(result.payloadKind, DIFF_PAYLOAD_KINDS.IMAGE);
-      if (result.payloadKind !== DIFF_PAYLOAD_KINDS.IMAGE) return;
-      assert.strictEqual(
-        result.image.oldImageDataUri,
-        `data:image/png;base64,${oldBytes.toString("base64")}`
+      assert.strictEqual(result.payloadKind, DIFF_PAYLOAD_KINDS.MEDIA);
+      if (result.payloadKind !== DIFF_PAYLOAD_KINDS.MEDIA) return;
+      assert.deepStrictEqual(result.media.old, {
+        path: "history.png",
+        ref: runGit(root, "rev-parse", "HEAD^")
+      });
+      assert.deepStrictEqual(result.media.new, { path: "history.png", ref: commit });
+    });
+
+    test("uses the first-parent path for a renamed media file in history detail", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "before.png", "same-image-bytes", "Initial image");
+      const parent = runGit(root, "rev-parse", "HEAD");
+      runGit(root, "mv", "before.png", "after.png");
+      runGit(root, "commit", "-m", "Rename image");
+      const commit = runGit(root, "rev-parse", "HEAD");
+
+      const result = await new HostedWorkspaceViewerService(root).getFileHistoryDiff(
+        "after.png",
+        commit
       );
-      assert.strictEqual(
-        result.image.newImageDataUri,
-        `data:image/png;base64,${newBytes.toString("base64")}`
-      );
+      assert.strictEqual(result.payloadKind, DIFF_PAYLOAD_KINDS.MEDIA);
+      if (result.payloadKind !== DIFF_PAYLOAD_KINDS.MEDIA) return;
+      assert.deepStrictEqual(result.media.old, { path: "before.png", ref: parent });
+      assert.deepStrictEqual(result.media.new, { path: "after.png", ref: commit });
     });
 
     test("returns a binary payload for a non-image binary commit", async () => {
@@ -1766,12 +1790,10 @@ suite("HostedWorkspaceViewerService", function () {
       assert.strictEqual(result.reason, "Binary file");
     });
 
-    test("returns a data URI for a known image type instead of rejecting it", async () => {
+    test("returns a media descriptor for a known image type instead of rejecting it", async () => {
       const root = createWorkspace();
       // PNG magic bytes; readFile doesn't validate the format, only base64-encodes.
-      const pngBytes = Buffer.from([
-        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-      ]);
+      const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
       fs.writeFileSync(path.join(root, "pic.png"), pngBytes);
 
       const svc = new HostedWorkspaceViewerService(root);
@@ -1779,10 +1801,38 @@ suite("HostedWorkspaceViewerService", function () {
 
       assert.strictEqual(result.readOnly, true);
       assert.strictEqual(result.content, "");
-      assert.strictEqual(
-        result.imageDataUri,
-        `data:image/png;base64,${pngBytes.toString("base64")}`
-      );
+      assert.deepStrictEqual(result.media, { kind: "image", mimeType: "image/png" });
+    });
+
+    test("returns descriptors for video, audio, and PDF without reading bytes into the response", async () => {
+      const root = createWorkspace();
+      const fixtures = [
+        ["clip.mp4", "video", "video/mp4"],
+        ["track.mp3", "audio", "audio/mpeg"],
+        ["paper.pdf", "pdf", "application/pdf"],
+      ] as const;
+      for (const [name, kind, mimeType] of fixtures) {
+        fs.writeFileSync(path.join(root, name), Buffer.from([0, 1, 2, 3]));
+        const result = await new HostedWorkspaceViewerService(root).readFile(name);
+        assert.deepStrictEqual(result.media, { kind, mimeType });
+        assert.strictEqual(result.content, "");
+        assert.strictEqual(result.readOnly, true);
+      }
+    });
+
+    test("allows images above the text cap and rejects media above the media cap", async () => {
+      const root = createWorkspace();
+      const imagePath = path.join(root, "large.png");
+      fs.writeFileSync(imagePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+      fs.truncateSync(imagePath, 2 * 1024 * 1024 + 1);
+      const service = new HostedWorkspaceViewerService(root);
+      const image = await service.readFile("large.png");
+      assert.strictEqual(image.media?.kind, "image");
+      assert.strictEqual(image.reason, undefined);
+
+      fs.truncateSync(imagePath, MAX_MEDIA_FILE_SIZE + 1);
+      const tooLarge = await service.readFile("large.png");
+      assert.strictEqual(tooLarge.reason, "File too large");
     });
 
     test("maps TypeScript extension to language ID", async () => {
@@ -2678,7 +2728,7 @@ suite("HostedWorkspaceViewerService", function () {
       }
     });
 
-    test("returns image bytes as data URIs for a working-tree image diff", async () => {
+    test("returns media side references for a working-tree image diff", async () => {
       const root = createWorkspace();
       runGit(root, "init");
       configureGitIdentity(root);
@@ -2693,16 +2743,49 @@ suite("HostedWorkspaceViewerService", function () {
         "image.png"
       );
 
-      assert.strictEqual(result.payloadKind, DIFF_PAYLOAD_KINDS.IMAGE);
-      if (result.payloadKind !== DIFF_PAYLOAD_KINDS.IMAGE) return;
-      assert.strictEqual(
-        result.image.oldImageDataUri,
-        `data:image/png;base64,${oldBytes.toString("base64")}`
-      );
-      assert.strictEqual(
-        result.image.newImageDataUri,
-        `data:image/png;base64,${newBytes.toString("base64")}`
-      );
+      assert.strictEqual(result.payloadKind, DIFF_PAYLOAD_KINDS.MEDIA);
+      if (result.payloadKind !== DIFF_PAYLOAD_KINDS.MEDIA) return;
+      assert.deepStrictEqual(result.media.old, {
+        path: "image.png",
+        ref: runGit(root, "rev-parse", "HEAD"),
+      });
+      assert.strictEqual(result.media.new?.path, "image.png");
+      assert.ok(result.media.new?.version);
+    });
+
+    test("keeps only existing sides for added, deleted, and renamed media files", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      fs.writeFileSync(path.join(root, "deleted.png"), "deleted-image");
+      fs.writeFileSync(path.join(root, "rename-old.png"), "same-image-content");
+      runGit(root, "add", "deleted.png", "rename-old.png");
+      runGit(root, "commit", "-m", "Initial media");
+      const head = runGit(root, "rev-parse", "HEAD");
+      fs.unlinkSync(path.join(root, "deleted.png"));
+      runGit(root, "mv", "rename-old.png", "rename-new.png");
+      fs.writeFileSync(path.join(root, "added.png"), "new-image");
+
+      const service = new HostedWorkspaceViewerService(root);
+      const added = await service.getDiff("added.png");
+      const deleted = await service.getDiff("deleted.png");
+      const renamed = await service.getDiff("rename-new.png");
+      assert.strictEqual(added.payloadKind, DIFF_PAYLOAD_KINDS.MEDIA);
+      if (added.payloadKind !== DIFF_PAYLOAD_KINDS.MEDIA) return;
+      assert.strictEqual(added.media.old, undefined);
+      assert.strictEqual(added.media.new?.path, "added.png");
+      assert.strictEqual(added.media.new?.version !== undefined, true);
+      assert.strictEqual(deleted.payloadKind, DIFF_PAYLOAD_KINDS.MEDIA);
+      if (deleted.payloadKind !== DIFF_PAYLOAD_KINDS.MEDIA) return;
+      assert.deepStrictEqual(deleted.media.old, { path: "deleted.png", ref: head });
+      assert.strictEqual(deleted.media.new, undefined);
+      assert.strictEqual(renamed.payloadKind, DIFF_PAYLOAD_KINDS.MEDIA);
+      if (renamed.payloadKind !== DIFF_PAYLOAD_KINDS.MEDIA) return;
+      assert.deepStrictEqual(renamed.media.old, {
+        path: "rename-old.png",
+        ref: head,
+      });
+      assert.strictEqual(renamed.media.new?.path, "rename-new.png");
     });
 
     test("returns a binary payload instead of decoding binary bytes as text", async () => {
@@ -2741,13 +2824,36 @@ suite("HostedWorkspaceViewerService", function () {
       const binaryEntry = entries.find((entry) => entry.path === "data.bin");
 
       assert.ok(imageEntry);
-      assert.strictEqual(imageEntry?.payloadKind, DIFF_PAYLOAD_KINDS.IMAGE);
+      assert.strictEqual(imageEntry?.payloadKind, DIFF_PAYLOAD_KINDS.MEDIA);
       assert.strictEqual(
-        imageEntry?.image?.newImageDataUri,
-        `data:image/png;base64,${imageBytes.toString("base64")}`
+        imageEntry?.media?.new?.ref,
+        commit
       );
       assert.ok(binaryEntry);
       assert.strictEqual(binaryEntry?.payloadKind, DIFF_PAYLOAD_KINDS.BINARY);
+    });
+
+    test("uses the index ref for staged media sides and enforces the blob cap", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "staged.png", "old-image-bytes", "Initial image");
+      fs.writeFileSync(path.join(root, "staged.png"), "new-image-bytes");
+      runGit(root, "add", "staged.png");
+
+      const staged = await new HostedWorkspaceViewerService(root).getGitRefDiffPage(
+        "~staged"
+      );
+      const stagedEntry = staged.entries.find((entry) => entry.path === "staged.png");
+      assert.strictEqual(stagedEntry?.payloadKind, DIFF_PAYLOAD_KINDS.MEDIA);
+      if (stagedEntry?.payloadKind !== DIFF_PAYLOAD_KINDS.MEDIA) return;
+      assert.strictEqual(stagedEntry.media.old?.ref, runGit(root, "rev-parse", "HEAD"));
+      assert.strictEqual(stagedEntry.media.new?.ref, ":");
+
+      const tooLarge = await new MediaBlobCappedWorkspaceViewerService(root).getDiff(
+        "staged.png"
+      );
+      assert.strictEqual(tooLarge.payloadKind, DIFF_PAYLOAD_KINDS.TOO_LARGE);
     });
   });
 
@@ -3618,6 +3724,32 @@ suite("HostedWorkspaceViewerService", function () {
   // ── getWorktreeDiffPage ──────────────────────────────────────────────────────
 
   suite("getWorktreeDiffPage", () => {
+    test("resolves symbolic worktree diff refs for media sides", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      runGit(root, "branch", "-M", "main");
+      commitFile(root, "chart.png", "base-image", "Base image");
+      const baseHash = runGit(root, "rev-parse", "HEAD");
+      runGit(root, "branch", "feature");
+      runGit(root, "checkout", "feature");
+      fs.writeFileSync(path.join(root, "chart.png"), "feature-image");
+      runGit(root, "add", "chart.png");
+      runGit(root, "commit", "-m", "Update image");
+      const featureHash = runGit(root, "rev-parse", "HEAD");
+
+      const result = await new HostedWorkspaceViewerService(root).getWorktreeDiffPage(
+        root,
+        "main",
+        "feature"
+      );
+      const entry = result.entries.find((candidate) => candidate.path === "chart.png");
+      assert.strictEqual(entry?.payloadKind, DIFF_PAYLOAD_KINDS.MEDIA);
+      if (entry?.payloadKind !== DIFF_PAYLOAD_KINDS.MEDIA) return;
+      assert.strictEqual(entry.media.old?.ref, baseHash);
+      assert.strictEqual(entry.media.new?.ref, featureHash);
+    });
+
     test("pages a worktree diff larger than GitUtils' default maxBuffer", async function () {
       this.timeout(60_000);
       const root = createWorkspace();

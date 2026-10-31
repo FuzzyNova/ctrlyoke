@@ -1,10 +1,12 @@
 import React from "react";
-import type { WorkspaceImageDiffSides } from "@root/types/HostedWorkspaceViewerTypes";
+import type { WorkspaceMediaDiffSides } from "@root/types/HostedWorkspaceViewerTypes";
+import { WORKSPACE_MEDIA_KINDS } from "@root/types/DashboardConstants";
+import { workspaceRawUrl } from "@utils/hostedApi";
 import { Icon } from "../shared/Icon";
 
-export interface ImageDiffViewProps {
+export interface MediaDiffViewProps {
   path?: string;
-  sides: WorkspaceImageDiffSides;
+  sides: WorkspaceMediaDiffSides;
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
 }
@@ -16,13 +18,15 @@ const checkerboardStyle: React.CSSProperties = {
   backgroundSize: "16px 16px",
 };
 
-function ImageSide({
+function MediaSide({
   label,
-  dataUri,
+  side,
+  mediaKind,
   path,
 }: {
   label: "Before" | "After";
-  dataUri?: string;
+  side?: WorkspaceMediaDiffSides["old"];
+  mediaKind: WorkspaceMediaDiffSides["mediaKind"];
   path?: string;
 }) {
   const sideName = path
@@ -35,19 +39,24 @@ function ImageSide({
         className="flex h-64 min-w-72 items-center justify-center overflow-hidden rounded-sm border border-panel-border bg-editor-bg"
         style={checkerboardStyle}
       >
-        {dataUri ? (
+        {side && mediaKind === WORKSPACE_MEDIA_KINDS.IMAGE ? (
           <img
-            src={dataUri}
+            src={workspaceRawUrl(side)}
             alt={sideName}
             className="max-h-full max-w-full object-contain"
           />
         ) : (
           <div
             role="img"
-            aria-label={`${sideName} image unavailable`}
+            aria-label={`${sideName} ${mediaKind} unavailable`}
             className="px-4 text-center text-xs italic text-description-fg"
           >
-            {label === "Before" ? "No previous image" : "No new image"}
+            {side ? `${mediaKind} preview` : label === "Before" ? `No previous ${mediaKind}` : `No new ${mediaKind}`}
+            {side && (
+              <a href={workspaceRawUrl(side)} target="_blank" rel="noreferrer" className="ml-2 text-link-fg underline">
+                Open in new tab
+              </a>
+            )}
           </div>
         )}
       </div>
@@ -55,8 +64,8 @@ function ImageSide({
   );
 }
 
-/** Direct before/after image comparison; this intentionally does not use DiffView. */
-export const ImageDiffView: React.FC<ImageDiffViewProps> = ({
+/** Direct before/after media comparison; this intentionally does not use DiffView. */
+export const MediaDiffView: React.FC<MediaDiffViewProps> = ({
   path,
   sides,
   collapsed = false,
@@ -66,7 +75,7 @@ export const ImageDiffView: React.FC<ImageDiffViewProps> = ({
     <button
       type="button"
       className="flex items-center gap-1.5 text-xs text-description-fg"
-      aria-label="Toggle image diff"
+      aria-label="Toggle media diff"
       aria-expanded={!collapsed}
       onClick={() => onCollapsedChange?.(!collapsed)}
     >
@@ -74,19 +83,21 @@ export const ImageDiffView: React.FC<ImageDiffViewProps> = ({
         name="chevron-right"
         className={`text-xxs transition-transform ${collapsed ? "" : "rotate-90"}`}
       />
-      <span>{collapsed ? "Show image diff" : "Hide image diff"}</span>
+      <span>{collapsed ? "Show media diff" : "Hide media diff"}</span>
     </button>
     {!collapsed && (
       <div className="mt-2 max-w-full overflow-x-auto">
         <div className="grid min-w-xl grid-cols-2 gap-3">
-          <ImageSide
+          <MediaSide
             label="Before"
-            dataUri={sides.oldImageDataUri}
+            side={sides.old}
+            mediaKind={sides.mediaKind}
             path={path}
           />
-          <ImageSide
+          <MediaSide
             label="After"
-            dataUri={sides.newImageDataUri}
+            side={sides.new}
+            mediaKind={sides.mediaKind}
             path={path}
           />
         </div>

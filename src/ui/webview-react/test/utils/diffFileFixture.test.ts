@@ -74,7 +74,7 @@ function realizedDiffBody(file: DiffFileCardProps): number {
         file.source.newContent
       ).hunks;
       break;
-    case DIFF_PAYLOAD_KINDS.IMAGE:
+    case DIFF_PAYLOAD_KINDS.MEDIA:
     case DIFF_PAYLOAD_KINDS.BINARY:
     case DIFF_PAYLOAD_KINDS.TOO_LARGE:
     case DIFF_FILE_SOURCE_KINDS.DEFERRED:

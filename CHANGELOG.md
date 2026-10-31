@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Workspace viewer images now load through the raw media route instead of JSON.
+  The 2 MB text limit no longer applies: workspace images up to 512 MB open, and
+  Git diff images up to 50 MB can be compared.
 - Antigravity CLI 1.4.10 is now the minimum supported version because it adds
   `--settings`, which ctrlyoke uses to deliver per-run permission rules.
 - Antigravity now enforces supported `allowedTools` and `deniedTools` patterns.
