@@ -228,6 +228,21 @@ export abstract class ToolPermissionMapperBase implements IToolPermissionMapper 
   }
 
   /**
+   * Split a Claude-format MCP pattern into its server and tool.
+   *
+   * @example
+   * parseMcpPattern("mcp__ctrlyoke__append_step") → { serverId: "ctrlyoke", toolName: "append_step" }
+   * parseMcpPattern("mcp__ctrlyoke") → { serverId: "ctrlyoke" }
+   * parseMcpPattern("shell(git:*)") → null
+   */
+  protected parseMcpPattern(
+    pattern: string
+  ): { serverId: string; toolName?: string } | null {
+    const match = pattern.match(/^mcp__(.+?)(?:__(.+))?$/);
+    return match ? { serverId: match[1], toolName: match[2] } : null;
+  }
+
+  /**
    * Convert and deduplicate a list of tool patterns using the given converter.
    *
    * When converter returns null the original pattern is skipped (filtered out).

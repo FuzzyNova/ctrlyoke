@@ -127,6 +127,12 @@ export interface WorkflowContext {
   workingFilePath?: string;
   /** Concrete addresses for generated built-in MCP skill instructions. */
   mcpToolSkillContext?: McpToolSkillRunContext;
+  /**
+   * Skip the headless limited-permissions warning. Set by ctrlyoke's own
+   * one-shot feature runs (commit message generation), whose narrow tool
+   * permissions are deliberate rather than authored by the user.
+   */
+  suppressHeadlessPermissionWarning?: boolean;
   resolvedProperties?: ResolvedProperties;
   workflowFile?: PromptFile;
   /** Whether the current host can provide a PTY for this execution. */

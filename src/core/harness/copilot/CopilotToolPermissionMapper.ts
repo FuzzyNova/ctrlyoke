@@ -214,16 +214,11 @@ export class CopilotToolPermissionMapper
    * Returns null if the pattern is not in Claude MCP format.
    */
   private convertMcpPattern(pattern: string): string | null {
-    if (!pattern.startsWith("mcp__")) return null;
-    const rest = pattern.slice(5); // Remove "mcp__" prefix
-    const sepIdx = rest.indexOf("__");
-    if (sepIdx < 1) return null; // Need at least one char for serverId
-    const serverId = rest.slice(0, sepIdx);
-    const toolName = rest.slice(sepIdx + 2);
-    if (!serverId || !toolName) return null;
+    const mcp = this.parseMcpPattern(pattern);
+    if (!mcp?.toolName) return null;
     return CopilotToolPermissionMapper.toCopilotMcpToolPattern(
-      serverId,
-      toolName
+      mcp.serverId,
+      mcp.toolName
     );
   }
 }

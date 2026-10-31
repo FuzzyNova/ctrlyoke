@@ -368,6 +368,8 @@ export class WorkflowInstance
   private activeHistoryFilePath: string = "";
   /** Optional per-run override used by commit-message skill capture. */
   private mcpToolSkillContext?: Partial<McpToolSkillRunContext>;
+  /** Set by ctrlyoke feature runs whose narrow tool permissions are deliberate. */
+  private suppressHeadlessPermissionWarning = false;
   private activeRunRedactor?: RunSecretRedactor;
   private releaseActiveRunRedactor?: () => void;
   private pendingRuntimeTransitionHistoryWrite: Promise<void> =
@@ -1648,6 +1650,11 @@ export class WorkflowInstance
     this.mcpToolSkillContext = context;
   }
 
+  /** Skip the headless limited-permissions warning for this instance's runs. */
+  setSuppressHeadlessPermissionWarning(suppress: boolean): void {
+    this.suppressHeadlessPermissionWarning = suppress;
+  }
+
   /**
    * Restore a workflow from a working file.
    * Shared helper used by resumeWorkflow and loadWorkingFile.
@@ -2064,6 +2071,9 @@ export class WorkflowInstance
         ),
       get shouldShowCliCommand() {
         return instance.shouldShowCliCommand();
+      },
+      get suppressHeadlessPermissionWarning() {
+        return instance.suppressHeadlessPermissionWarning;
       },
       get dynamicQueueConfig() {
         return instance.getDynamicQueueConfig();

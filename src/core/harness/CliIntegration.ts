@@ -1346,10 +1346,12 @@ export class CliIntegration extends HarnessIntegration {
             executionPlan.resolvedCommand
           )
         : await (() => {
-            this.warnIfHeadlessWithoutPermissions(
-              executionPlan.effectiveToolPermissions,
-              mode
-            );
+            if (!session.workflowContext?.suppressHeadlessPermissionWarning) {
+              this.warnIfHeadlessWithoutPermissions(
+                executionPlan.effectiveToolPermissions,
+                mode
+              );
+            }
             return this.executionRunner.executeHeadless(
               session,
               executionPlan.cliArgs,

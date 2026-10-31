@@ -132,6 +132,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Commit message generation with opencode can submit its message again. `mcp__<server>__<tool>`
+  entries in `allowedTools` and `deniedTools` are now translated to opencode's `<server>_<tool>`
+  tool names, so opencode no longer rejects tools a workflow allows.
+- Commit message generation no longer shows the "Headless mode with limited tool permissions"
+  warning; its narrow permissions are intentional.
 - Managed language-server disposal stops servers before awaiting in-flight starts,
   and an unanswered initialize request now times out after 60 seconds and is reported as a crash.
 - Scrolling up a little from the bottom of a finished run's output no longer snaps back to the

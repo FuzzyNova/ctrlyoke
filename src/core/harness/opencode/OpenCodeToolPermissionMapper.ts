@@ -235,6 +235,27 @@ export class OpenCodeToolPermissionMapper
         );
         continue;
       }
+      // OpenCode names MCP tools `<server>_<tool>`, so a Claude-format
+      // `mcp__<server>__<tool>` key would never match and the tool would fall
+      // through to the `"*"` rule (auto-rejected when headless).
+      const mcp = this.parseMcpPattern(sourcePattern);
+      if (mcp) {
+        const tool =
+          !mcp.toolName || mcp.toolName === "*"
+            ? `${formatOpenCodeMcpToolName(mcp.serverId, "")}*`
+            : formatOpenCodeMcpToolName(mcp.serverId, mcp.toolName);
+        this.appendRule(
+          policy,
+          tool,
+          undefined,
+          decision,
+          collisionContext,
+          emittedTopLevelKeys,
+          emittedToolKeys,
+          emittedNestedKeys
+        );
+        continue;
+      }
       const parsed = this.parsePattern(sourcePattern);
       if (!parsed) {
         Log.warn(

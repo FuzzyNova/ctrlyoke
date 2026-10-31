@@ -604,6 +604,9 @@ export class CommitMessageGenerator {
       workspaceRoot: roots.stateRoot,
       commitOutputPath,
     });
+    // The read-only + submit-tool allow-list is deliberate, so the generic
+    // "headless with limited permissions" warning would fire on every run.
+    instance.setSuppressHeadlessPermissionWarning(true);
 
     // Force headless execution at the workflow tier and suppress VS Code globals
     // that could bleed into this one-shot call. PropertyResolver materializes
@@ -799,6 +802,7 @@ export class CommitMessageGenerator {
       );
     } finally {
       instance.setMcpToolSkillContext(undefined);
+      instance.setSuppressHeadlessPermissionWarning(false);
       streamingChunkDisposable?.dispose();
       streamingEventsDisposable?.dispose();
       if (token && abortListener) {

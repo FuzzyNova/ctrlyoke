@@ -707,6 +707,59 @@ suite("CliIntegration", () => {
     }
   });
 
+  test("skips the headless limited-permissions warning when the run suppresses it", async () => {
+    const runWithContext = async (
+      suppressHeadlessPermissionWarning: boolean
+    ): Promise<string[]> => {
+      const feedback: string[] = [];
+      const integration = new CliIntegration(
+        createProvider({
+          prepareToolPermissions: async () => ({
+            cliArgs: [],
+            diagnostics: [],
+          }),
+          toolPermissionMapper: {
+            hasFullPermissions: () => false,
+          } as Partial<
+            ICliProvider["toolPermissionMapper"]
+          > as ICliProvider["toolPermissionMapper"],
+        }),
+        new MockVsCodePlatform(),
+        false,
+        { notify: ({ message }) => feedback.push(message) }
+      );
+      (integration as any).sessionResolverAdapter.resolve = () => ({
+        resolvedProperties: createResolvedProperties({
+          executionMode: EXECUTION_MODES.HEADLESS,
+          toolPermissions: {
+            mode: PERMISSION_MODES.CUSTOM,
+            allowedTools: ["read"],
+            deniedTools: [],
+          },
+        }),
+        resolvedSessionId: undefined,
+      });
+      (integration as any).executionRunner.executeHeadless = async () => true;
+      try {
+        await integration.sendPrompt({ prompt: "run" }, true, {
+          promptIndex: 0,
+          allPrompts: [{ prompt: "run" }],
+          suppressHeadlessPermissionWarning,
+        });
+      } finally {
+        integration.dispose();
+      }
+      return feedback;
+    };
+
+    assert.ok(
+      (await runWithContext(false)).some((message) =>
+        /limited tool permissions/u.test(message)
+      )
+    );
+    assert.deepStrictEqual(await runWithContext(true), []);
+  });
+
   test("blocks resolution diagnostics before preparing the CLI session in fail mode", async () => {
     const cases = [
       {

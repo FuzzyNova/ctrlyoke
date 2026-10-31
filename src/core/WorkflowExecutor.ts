@@ -267,6 +267,7 @@ export interface WorkflowExecutionContext {
   workingFilePath?: string;
   /** Runtime addresses for generated built-in MCP skill instructions. */
   mcpToolSkillContext?: WorkflowContext["mcpToolSkillContext"];
+  suppressHeadlessPermissionWarning?: WorkflowContext["suppressHeadlessPermissionWarning"];
   instanceTag?: string;
   /** Workflow instance UUID — used as the PTY workflowId so terminal sessions
    *  are keyed by the same ID the webview uses for activeWorkflowId. */
@@ -2386,6 +2387,8 @@ export class WorkflowExecutor {
             sendPromptIndex,
             workflowFile
           ),
+          suppressHeadlessPermissionWarning:
+            context.suppressHeadlessPermissionWarning,
           resolvedProperties: attemptProperties,
           workflowFile,
           hostCanProvidePty: context.hostCanProvidePty,
@@ -4766,6 +4769,8 @@ export class WorkflowExecutor {
               currentIndex,
               workflowFile
             ),
+            suppressHeadlessPermissionWarning:
+              context.suppressHeadlessPermissionWarning,
             resolvedProperties: retryAttemptProperties,
             workflowFile,
             workingFilePersistence: this.promptQueue,

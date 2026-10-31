@@ -440,6 +440,60 @@ suite("Inline harness configuration regression tests", function () {
       assertNoWorkspaceConfig(tmpDir, ["opencode.json", ".opencode"]);
     });
 
+    // Commit message generation's shape: custom mode allows only its submit
+    // tool, written in Claude's `mcp__<server>__<tool>` form. Headless OpenCode
+    // auto-rejects anything that falls through to the `"*": "ask"` rule.
+    for (const allowCase of [
+      {
+        name: "exact tool",
+        allowedTool: "mcp__opencode.probe-server__allowed.probe",
+      },
+      { name: "whole server", allowedTool: "mcp__opencode.probe-server" },
+    ]) {
+      test(`calls an MCP tool allowed by a Claude-format ${allowCase.name} pattern in custom mode`, function () {
+        const markerPath = path.join(tmpDir, "opencode-allowed-mcp.calls");
+        const label = `opencode-allowed-mcp-${allowCase.name.replace(/ /g, "-")}`;
+        const result = runWorkflowFile(
+          {
+            harness: OPENCODE,
+            model: HARNESS_MODELS[OPENCODE],
+            executionMode: EXECUTION_MODES.HEADLESS,
+            toolPermissions: {
+              mode: "custom",
+              allowedTools: [allowCase.allowedTool],
+              deniedTools: ["shell"],
+            },
+            mcpServers: [
+              makeUserMcpServer(
+                "opencode.probe-server",
+                "allowed.probe",
+                mcpServerScript,
+                markerPath
+              ),
+            ],
+            steps: [
+              {
+                name: label,
+                prompt: [
+                  "Call the MCP tool opencode_probe-server_allowed_probe exactly once.",
+                  "Do not call any other tool or try another way to cause the same effect.",
+                ].join(" "),
+              },
+            ],
+          },
+          tmpDir,
+          label
+        );
+        if (logAndMaybeSkip(`opencode-cli (${label})`, result)) return;
+        assertSuccessfulRun(`opencode-cli (${label})`, result);
+        assert.ok(
+          fs.existsSync(markerPath),
+          `OpenCode did not call the allowed MCP tool\nstdout: ${result.stdout}`
+        );
+        assertNoWorkspaceConfig(tmpDir, ["opencode.json", ".opencode"]);
+      });
+    }
+
     for (const mode of ["headless", "interactive"] as const) {
       test(`completion plugin loads from an external file URL in ${mode} mode`, async function () {
         const outputPath = path.join(tmpDir, `opencode-${mode}-hooks.jsonl`);

@@ -1241,6 +1241,28 @@ suite("HarnessToolPermissionMappers", () => {
         // baseline allow in insertion order.
         assert.deepStrictEqual(Object.keys(policy ?? {}).slice(-1), ["read"]);
       });
+
+      test("translates Claude-format MCP patterns to OpenCode MCP tool names", () => {
+        // Commit message generation allows exactly its submit tool; an
+        // untranslated `mcp__…` key never matches and headless auto-rejects it.
+        const policy = mapper.buildPermissionPolicy(
+          cfg(
+            PERMISSION_MODES.CUSTOM,
+            ["mcp__ctrlyoke-commit__submit_commit_message", "mcp__my.server"],
+            ["mcp__other__*"]
+          )
+        );
+        assert.deepStrictEqual(policy, {
+          "*": "ask",
+          read: "allow",
+          glob: "allow",
+          grep: "allow",
+          lsp: "allow",
+          "ctrlyoke-commit_submit_commit_message": "allow",
+          "my_server_*": "allow",
+          "other_*": "deny",
+        });
+      });
     });
 
     suite("hasFullPermissions", () => {
