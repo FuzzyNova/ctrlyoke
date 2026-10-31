@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The settings drawer's tab rail no longer shows a scrollbar when it is too
+  short for every tab, so the scrollbar no longer squeezes the tab icons.
+  A fade with a chevron at the top or bottom shows that more tabs are out of
+  view; click it to scroll. Selecting a tab that is out of view scrolls it
+  into view.
+
 - The prompt editor loads its spelling dictionary once and shares it between
   editors, instead of loading it again for each one. Misspellings are now
   underlined as soon as the dictionary loads rather than after your first edit,

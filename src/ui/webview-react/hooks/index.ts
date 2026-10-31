@@ -20,6 +20,10 @@ export {
   useElementResizeActivity,
   useElementTier,
 } from "./useElementNarrow";
+export {
+  useScrollOverflowEdges,
+  type ScrollOverflowEdges,
+} from "./useScrollOverflowEdges";
 export { useUndoRedoKeyHandler } from "./useUndoRedoKeyHandler";
 export { useNewWorkflowKeyHandler } from "./useNewWorkflowKeyHandler";
 export { useHistorySearchKeyHandler } from "./useHistorySearchKeyHandler";
