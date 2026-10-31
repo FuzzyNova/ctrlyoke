@@ -60,21 +60,9 @@ function MediaSide({
             aria-label={`${sideName} ${mediaKind} unavailable`}
             className="px-4 text-center text-xs italic text-description-fg"
           >
-            {side
-              ? `${mediaKind} preview`
-              : label === "Before"
-                ? `No previous ${mediaKind}`
-                : `No new ${mediaKind}`}
-            {side && (
-              <a
-                href={workspaceRawUrl(side)}
-                target="_blank"
-                rel="noreferrer"
-                className="ml-2 text-link-fg underline"
-              >
-                Open in new tab
-              </a>
-            )}
+            {label === "Before"
+              ? `No previous ${mediaKind}`
+              : `No new ${mediaKind}`}
           </div>
         )}
       </div>

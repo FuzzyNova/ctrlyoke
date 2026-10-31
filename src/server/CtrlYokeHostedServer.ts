@@ -1653,25 +1653,36 @@ export class CtrlYokeHostedServer
       WORKSPACE_RAW_MEDIA_ROUTE_PATH,
       requireToken,
       async (req, res) => {
-        const filePath = typeof req.query.path === "string" ? req.query.path : "";
+        const filePath =
+          typeof req.query.path === "string" ? req.query.path : "";
         if (
-          (req.query.repo !== undefined && typeof req.query.repo !== "string") ||
+          (req.query.repo !== undefined &&
+            typeof req.query.repo !== "string") ||
           (req.query.ref !== undefined && typeof req.query.ref !== "string")
         ) {
           res.status(400).json({ error: "repo and ref must be single values" });
           return;
         }
-        const repoId = typeof req.query.repo === "string" ? req.query.repo : undefined;
-        const ref = typeof req.query.ref === "string" ? req.query.ref : undefined;
+        const repoId =
+          typeof req.query.repo === "string" ? req.query.repo : undefined;
+        const ref =
+          typeof req.query.ref === "string" ? req.query.ref : undefined;
         if (!filePath) {
           res.status(400).json({ error: "path is required" });
           return;
         }
         try {
-          const media = await this.viewerService.getRawMedia(filePath, repoId, ref);
+          const media = await this.viewerService.getRawMedia(
+            filePath,
+            repoId,
+            ref
+          );
           res.setHeader(HTTP_HEADERS.CONTENT_TYPE, media.mediaInfo.mimeType);
           res.setHeader(HTTP_HEADERS.CONTENT_TYPE_OPTIONS, RAW_MEDIA_NOSNIFF);
-          res.setHeader(HTTP_HEADERS.CONTENT_DISPOSITION, RAW_MEDIA_INLINE_DISPOSITION);
+          res.setHeader(
+            HTTP_HEADERS.CONTENT_DISPOSITION,
+            RAW_MEDIA_INLINE_DISPOSITION
+          );
           if (media.mediaInfo.mediaKind !== WORKSPACE_MEDIA_KINDS.PDF) {
             res.setHeader(
               HTTP_HEADERS.CONTENT_SECURITY_POLICY,

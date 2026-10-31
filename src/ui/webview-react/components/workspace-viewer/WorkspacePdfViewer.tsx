@@ -9,6 +9,7 @@ import {
   loadWorkspacePdfSupport,
   PDFJS_ASSET_PATH,
 } from "@utils/workspacePdfSupport/loadWorkspacePdfSupport";
+import { WORKSPACE_MEDIA_LABELS } from "@components/shared/WorkspaceMediaElement";
 
 export interface WorkspacePdfViewerProps {
   rawUrl: string;
@@ -187,7 +188,7 @@ export const WorkspacePdfViewer: React.FC<WorkspacePdfViewerProps> = ({
       rel="noreferrer"
       className="text-link-fg underline"
     >
-      Open in new tab
+      {WORKSPACE_MEDIA_LABELS.OPEN_IN_NEW_TAB}
     </a>
   );
 

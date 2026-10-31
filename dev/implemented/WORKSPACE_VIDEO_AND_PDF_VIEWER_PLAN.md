@@ -357,6 +357,11 @@ Each stage is one commit; tick it in the commit that lands it.
       wired into the editor and the diff sides. No implementation deviations.
 - [x] **E. Docs and changelog** (§6).
 
+Review fix: `workspaceMediaInfoForPath` now checks own keys only, so an
+inherited `Object.prototype` name (`file.constructor`) can no longer pass the raw
+route's allowlist. The manual checks in "Testing plan" (phones, Safari seeking,
+`sandbox` on PDF in each browser) still need a person on real devices.
+
 ## Acceptance criteria
 
 - Opening an mp4/webm/mov, an mp3/m4a/wav/flac/ogg, or a PDF in the explorer shows a

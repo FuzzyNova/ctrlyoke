@@ -1,5 +1,8 @@
 import { useState } from "react";
-import { WORKSPACE_MEDIA_KINDS, type WorkspaceMediaKind } from "@root/types/DashboardConstants";
+import {
+  WORKSPACE_MEDIA_KINDS,
+  type WorkspaceMediaKind,
+} from "@root/types/DashboardConstants";
 
 /* eslint-disable jsx-a11y/media-has-caption -- Workspace files may not include caption tracks. */
 /* eslint-disable jsx-a11y/no-noninteractive-element-interactions -- Native load failures need an inline fallback. */

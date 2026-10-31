@@ -315,7 +315,9 @@ function getMediaEstimate(file: DiffFileCardProps, collapsed: boolean): number {
   if (file.source.kind !== DIFF_PAYLOAD_KINDS.MEDIA) return 0;
   return (
     DIFF_FILE_NON_TEXT_TOGGLE_HEIGHT +
-    (collapsed ? 0 : DIFF_FILE_MEDIA_PREVIEW_HEIGHT[file.source.media.mediaKind])
+    (collapsed
+      ? 0
+      : DIFF_FILE_MEDIA_PREVIEW_HEIGHT[file.source.media.mediaKind])
   );
 }
 

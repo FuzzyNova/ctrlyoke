@@ -145,11 +145,17 @@ describe("diff file estimates", () => {
   it("uses bounded per-kind O(1) estimates without reading media sides", () => {
     const imageSource: DiffFileCardProps["source"] = {
       kind: DIFF_PAYLOAD_KINDS.MEDIA,
-      media: { mediaKind: "image", new: { path: "assets/logo.png", ref: "abc" } },
+      media: {
+        mediaKind: "image",
+        new: { path: "assets/logo.png", ref: "abc" },
+      },
     };
     const audio = file("assets/audio.mp3", {
       kind: DIFF_PAYLOAD_KINDS.MEDIA,
-      media: { mediaKind: "audio", new: { path: "assets/audio.mp3", ref: "abc" } },
+      media: {
+        mediaKind: "audio",
+        new: { path: "assets/audio.mp3", ref: "abc" },
+      },
     });
     const image = file("assets/logo.png", imageSource);
     const binary = file("assets/data.bin", {

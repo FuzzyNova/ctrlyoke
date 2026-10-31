@@ -64,7 +64,10 @@ function controller(): PagedGitRefDiffController {
         path: "assets/image.png",
         changeType: "created",
         payloadKind: "media",
-        media: { mediaKind: "image", new: { path: "assets/image.png", ref: "abcdef0" } },
+        media: {
+          mediaKind: "image",
+          new: { path: "assets/image.png", ref: "abcdef0" },
+        },
       },
     ],
     [

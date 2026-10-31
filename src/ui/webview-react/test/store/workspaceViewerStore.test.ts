@@ -489,7 +489,11 @@ describe("diffRef tracking", () => {
 
 describe("setLoadedMedia", () => {
   it("loads a media descriptor and raw URL as a read-only, non-dirty selection", () => {
-    const media = { kind: "image" as const, mimeType: "image/png", rawUrl: "/raw" };
+    const media = {
+      kind: "image" as const,
+      mimeType: "image/png",
+      rawUrl: "/raw",
+    };
     store().setLoadedMedia("images/logo.png", media);
     expect(store().selectedFilePath).toBe("images/logo.png");
     expect(store().fileMedia).toEqual(media);

@@ -26,7 +26,8 @@ export function parseHttpByteRange(
   if (!match) return { kind: HTTP_BYTE_RANGE_RESULT_KINDS.NONE };
 
   const [, startText, endText] = match;
-  if (!startText && !endText) return { kind: HTTP_BYTE_RANGE_RESULT_KINDS.NONE };
+  if (!startText && !endText)
+    return { kind: HTTP_BYTE_RANGE_RESULT_KINDS.NONE };
 
   if (!startText) {
     const suffixLength = Number(endText);
@@ -52,7 +53,8 @@ export function parseHttpByteRange(
   ) {
     return { kind: HTTP_BYTE_RANGE_RESULT_KINDS.NONE };
   }
-  if (start >= size) return { kind: HTTP_BYTE_RANGE_RESULT_KINDS.UNSATISFIABLE };
+  if (start >= size)
+    return { kind: HTTP_BYTE_RANGE_RESULT_KINDS.UNSATISFIABLE };
   if (requestedEnd < start) return { kind: HTTP_BYTE_RANGE_RESULT_KINDS.NONE };
   return {
     kind: HTTP_BYTE_RANGE_RESULT_KINDS.RANGE,

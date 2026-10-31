@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   act,
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -102,6 +103,9 @@ describe("WorkspacePdfViewer", () => {
   });
 
   afterEach(() => {
+    // Unmount first: the viewer's async load can still be mounting pages, and
+    // jsdom has no IntersectionObserver once the mock is restored below.
+    cleanup();
     Object.defineProperty(window, "IntersectionObserver", {
       configurable: true,
       value: originalIntersectionObserver,
@@ -125,6 +129,7 @@ describe("WorkspacePdfViewer", () => {
       disableStream: true,
       enableXfa: false,
     });
+    await waitFor(() => expect(observers).toHaveLength(1));
   });
 
   it("renders only pages intersecting the viewport observer", async () => {

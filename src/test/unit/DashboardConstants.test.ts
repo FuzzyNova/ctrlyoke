@@ -47,7 +47,10 @@ suite("workspace media classification", () => {
       m4v: { mediaKind: WORKSPACE_MEDIA_KINDS.VIDEO, mimeType: "video/mp4" },
       webm: { mediaKind: WORKSPACE_MEDIA_KINDS.VIDEO, mimeType: "video/webm" },
       ogv: { mediaKind: WORKSPACE_MEDIA_KINDS.VIDEO, mimeType: "video/ogg" },
-      mov: { mediaKind: WORKSPACE_MEDIA_KINDS.VIDEO, mimeType: "video/quicktime" },
+      mov: {
+        mediaKind: WORKSPACE_MEDIA_KINDS.VIDEO,
+        mimeType: "video/quicktime",
+      },
       mp3: { mediaKind: WORKSPACE_MEDIA_KINDS.AUDIO, mimeType: "audio/mpeg" },
       m4a: { mediaKind: WORKSPACE_MEDIA_KINDS.AUDIO, mimeType: "audio/mp4" },
       aac: { mediaKind: WORKSPACE_MEDIA_KINDS.AUDIO, mimeType: "audio/aac" },
@@ -56,11 +59,20 @@ suite("workspace media classification", () => {
       ogg: { mediaKind: WORKSPACE_MEDIA_KINDS.AUDIO, mimeType: "audio/ogg" },
       oga: { mediaKind: WORKSPACE_MEDIA_KINDS.AUDIO, mimeType: "audio/ogg" },
       opus: { mediaKind: WORKSPACE_MEDIA_KINDS.AUDIO, mimeType: "audio/ogg" },
-      pdf: { mediaKind: WORKSPACE_MEDIA_KINDS.PDF, mimeType: "application/pdf" },
+      pdf: {
+        mediaKind: WORKSPACE_MEDIA_KINDS.PDF,
+        mimeType: "application/pdf",
+      },
     };
     for (const [extension, info] of Object.entries(expected)) {
-      assert.deepStrictEqual(workspaceMediaInfoForPath(`asset.${extension}`), info);
-      assert.deepStrictEqual(WORKSPACE_MEDIA_INFO_BY_EXTENSION[extension], info);
+      assert.deepStrictEqual(
+        workspaceMediaInfoForPath(`asset.${extension}`),
+        info
+      );
+      assert.deepStrictEqual(
+        WORKSPACE_MEDIA_INFO_BY_EXTENSION[extension],
+        info
+      );
     }
     for (const extension of IMAGE_REF_EXTENSIONS) {
       const mimeType = imageExtensionToMimeType(extension);
@@ -71,14 +83,35 @@ suite("workspace media classification", () => {
         mimeType,
       });
     }
-    assert.strictEqual(Object.keys(WORKSPACE_MEDIA_INFO_BY_EXTENSION).length,
-      Object.keys(expected).length + IMAGE_REF_EXTENSIONS.length);
+    assert.strictEqual(
+      Object.keys(WORKSPACE_MEDIA_INFO_BY_EXTENSION).length,
+      Object.keys(expected).length + IMAGE_REF_EXTENSIONS.length
+    );
+  });
+
+  test("does not treat Object.prototype member names as media extensions", () => {
+    for (const extension of [
+      "constructor",
+      "toString",
+      "valueOf",
+      "hasOwnProperty",
+      "isPrototypeOf",
+    ]) {
+      assert.strictEqual(
+        workspaceMediaInfoForPath(`payload.${extension}`),
+        undefined,
+        extension
+      );
+    }
   });
 
   test("leaves isImageRefPath behavior intact", () => {
     for (const extension of IMAGE_REF_EXTENSIONS) {
       assert.strictEqual(isImageRefPath(`asset.${extension}`), true);
-      assert.strictEqual(isImageRefPath(`asset.${extension.toUpperCase()}`), true);
+      assert.strictEqual(
+        isImageRefPath(`asset.${extension.toUpperCase()}`),
+        true
+      );
     }
     for (const path of ["asset.svg", "asset.mp4", "asset", "asset.jpg.txt"]) {
       assert.strictEqual(isImageRefPath(path), false);

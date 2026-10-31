@@ -145,7 +145,8 @@ interface WorkspaceViewerState {
   fileReadOnlyReason: string | undefined;
   fileReadOnlyContentAvailable: boolean;
   /** Known media descriptor and raw URL. Null while a text file is selected. */
-  fileMedia: (NonNullable<WorkspaceFileResponse["media"]> & { rawUrl: string }) | null;
+  fileMedia:
+    (NonNullable<WorkspaceFileResponse["media"]> & { rawUrl: string }) | null;
   fileDrafts: Record<string, CachedFileDraft>;
 
   // Mobile: in explorer tab, whether the file editor is shown (vs directory list)

@@ -3208,8 +3208,15 @@ export function workspaceMediaInfoForPath(
   filePath: string
 ): WorkspaceMediaInfo | undefined {
   const match = /\.([a-z0-9]+)$/i.exec(filePath);
-  return match
-    ? WORKSPACE_MEDIA_INFO_BY_EXTENSION[match[1].toLowerCase()]
+  if (!match) return undefined;
+  const extension = match[1].toLowerCase();
+  // Own keys only: an inherited member such as `constructor` must never pass
+  // the raw route's allowlist.
+  return Object.prototype.hasOwnProperty.call(
+    WORKSPACE_MEDIA_INFO_BY_EXTENSION,
+    extension
+  )
+    ? WORKSPACE_MEDIA_INFO_BY_EXTENSION[extension]
     : undefined;
 }
 

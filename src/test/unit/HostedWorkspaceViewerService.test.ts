@@ -120,7 +120,10 @@ suite("HostedWorkspaceViewerService", function () {
 
   class BlobTooLargeWorkspaceViewerService extends HostedWorkspaceViewerService {
     protected override async readRawMediaBlob(): Promise<Buffer> {
-      throw new GitBlobTooLargeError(MAX_MEDIA_BLOB_SIZE + 1, MAX_MEDIA_BLOB_SIZE);
+      throw new GitBlobTooLargeError(
+        MAX_MEDIA_BLOB_SIZE + 1,
+        MAX_MEDIA_BLOB_SIZE
+      );
     }
   }
 
@@ -1659,9 +1662,12 @@ suite("HostedWorkspaceViewerService", function () {
       if (result.payloadKind !== DIFF_PAYLOAD_KINDS.MEDIA) return;
       assert.deepStrictEqual(result.media.old, {
         path: "history.png",
-        ref: runGit(root, "rev-parse", "HEAD^")
+        ref: runGit(root, "rev-parse", "HEAD^"),
       });
-      assert.deepStrictEqual(result.media.new, { path: "history.png", ref: commit });
+      assert.deepStrictEqual(result.media.new, {
+        path: "history.png",
+        ref: commit,
+      });
     });
 
     test("uses the first-parent path for a renamed media file in history detail", async () => {
@@ -1674,14 +1680,19 @@ suite("HostedWorkspaceViewerService", function () {
       runGit(root, "commit", "-m", "Rename image");
       const commit = runGit(root, "rev-parse", "HEAD");
 
-      const result = await new HostedWorkspaceViewerService(root).getFileHistoryDiff(
-        "after.png",
-        commit
-      );
+      const result = await new HostedWorkspaceViewerService(
+        root
+      ).getFileHistoryDiff("after.png", commit);
       assert.strictEqual(result.payloadKind, DIFF_PAYLOAD_KINDS.MEDIA);
       if (result.payloadKind !== DIFF_PAYLOAD_KINDS.MEDIA) return;
-      assert.deepStrictEqual(result.media.old, { path: "before.png", ref: parent });
-      assert.deepStrictEqual(result.media.new, { path: "after.png", ref: commit });
+      assert.deepStrictEqual(result.media.old, {
+        path: "before.png",
+        ref: parent,
+      });
+      assert.deepStrictEqual(result.media.new, {
+        path: "after.png",
+        ref: commit,
+      });
     });
 
     test("returns a binary payload for a non-image binary commit", async () => {
@@ -1793,7 +1804,9 @@ suite("HostedWorkspaceViewerService", function () {
     test("returns a media descriptor for a known image type instead of rejecting it", async () => {
       const root = createWorkspace();
       // PNG magic bytes; readFile doesn't validate the format, only base64-encodes.
-      const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+      const pngBytes = Buffer.from([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+      ]);
       fs.writeFileSync(path.join(root, "pic.png"), pngBytes);
 
       const svc = new HostedWorkspaceViewerService(root);
@@ -1801,7 +1814,10 @@ suite("HostedWorkspaceViewerService", function () {
 
       assert.strictEqual(result.readOnly, true);
       assert.strictEqual(result.content, "");
-      assert.deepStrictEqual(result.media, { kind: "image", mimeType: "image/png" });
+      assert.deepStrictEqual(result.media, {
+        kind: "image",
+        mimeType: "image/png",
+      });
     });
 
     test("returns descriptors for video, audio, and PDF without reading bytes into the response", async () => {
@@ -1813,7 +1829,9 @@ suite("HostedWorkspaceViewerService", function () {
       ] as const;
       for (const [name, kind, mimeType] of fixtures) {
         fs.writeFileSync(path.join(root, name), Buffer.from([0, 1, 2, 3]));
-        const result = await new HostedWorkspaceViewerService(root).readFile(name);
+        const result = await new HostedWorkspaceViewerService(root).readFile(
+          name
+        );
         assert.deepStrictEqual(result.media, { kind, mimeType });
         assert.strictEqual(result.content, "");
         assert.strictEqual(result.readOnly, true);
@@ -2777,7 +2795,10 @@ suite("HostedWorkspaceViewerService", function () {
       assert.strictEqual(added.media.new?.version !== undefined, true);
       assert.strictEqual(deleted.payloadKind, DIFF_PAYLOAD_KINDS.MEDIA);
       if (deleted.payloadKind !== DIFF_PAYLOAD_KINDS.MEDIA) return;
-      assert.deepStrictEqual(deleted.media.old, { path: "deleted.png", ref: head });
+      assert.deepStrictEqual(deleted.media.old, {
+        path: "deleted.png",
+        ref: head,
+      });
       assert.strictEqual(deleted.media.new, undefined);
       assert.strictEqual(renamed.payloadKind, DIFF_PAYLOAD_KINDS.MEDIA);
       if (renamed.payloadKind !== DIFF_PAYLOAD_KINDS.MEDIA) return;
@@ -2825,10 +2846,7 @@ suite("HostedWorkspaceViewerService", function () {
 
       assert.ok(imageEntry);
       assert.strictEqual(imageEntry?.payloadKind, DIFF_PAYLOAD_KINDS.MEDIA);
-      assert.strictEqual(
-        imageEntry?.media?.new?.ref,
-        commit
-      );
+      assert.strictEqual(imageEntry?.media?.new?.ref, commit);
       assert.ok(binaryEntry);
       assert.strictEqual(binaryEntry?.payloadKind, DIFF_PAYLOAD_KINDS.BINARY);
     });
@@ -2841,18 +2859,23 @@ suite("HostedWorkspaceViewerService", function () {
       fs.writeFileSync(path.join(root, "staged.png"), "new-image-bytes");
       runGit(root, "add", "staged.png");
 
-      const staged = await new HostedWorkspaceViewerService(root).getGitRefDiffPage(
-        "~staged"
+      const staged = await new HostedWorkspaceViewerService(
+        root
+      ).getGitRefDiffPage("~staged");
+      const stagedEntry = staged.entries.find(
+        (entry) => entry.path === "staged.png"
       );
-      const stagedEntry = staged.entries.find((entry) => entry.path === "staged.png");
       assert.strictEqual(stagedEntry?.payloadKind, DIFF_PAYLOAD_KINDS.MEDIA);
       if (stagedEntry?.payloadKind !== DIFF_PAYLOAD_KINDS.MEDIA) return;
-      assert.strictEqual(stagedEntry.media.old?.ref, runGit(root, "rev-parse", "HEAD"));
+      assert.strictEqual(
+        stagedEntry.media.old?.ref,
+        runGit(root, "rev-parse", "HEAD")
+      );
       assert.strictEqual(stagedEntry.media.new?.ref, ":");
 
-      const tooLarge = await new MediaBlobCappedWorkspaceViewerService(root).getDiff(
-        "staged.png"
-      );
+      const tooLarge = await new MediaBlobCappedWorkspaceViewerService(
+        root
+      ).getDiff("staged.png");
       assert.strictEqual(tooLarge.payloadKind, DIFF_PAYLOAD_KINDS.TOO_LARGE);
     });
   });
@@ -3738,12 +3761,12 @@ suite("HostedWorkspaceViewerService", function () {
       runGit(root, "commit", "-m", "Update image");
       const featureHash = runGit(root, "rev-parse", "HEAD");
 
-      const result = await new HostedWorkspaceViewerService(root).getWorktreeDiffPage(
-        root,
-        "main",
-        "feature"
+      const result = await new HostedWorkspaceViewerService(
+        root
+      ).getWorktreeDiffPage(root, "main", "feature");
+      const entry = result.entries.find(
+        (candidate) => candidate.path === "chart.png"
       );
-      const entry = result.entries.find((candidate) => candidate.path === "chart.png");
       assert.strictEqual(entry?.payloadKind, DIFF_PAYLOAD_KINDS.MEDIA);
       if (entry?.payloadKind !== DIFF_PAYLOAD_KINDS.MEDIA) return;
       assert.strictEqual(entry.media.old?.ref, baseHash);

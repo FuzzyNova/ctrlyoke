@@ -280,7 +280,11 @@ function sendGetRequest(
           responseBody += chunk;
         });
         res.on("end", () =>
-          resolve({ statusCode: res.statusCode, body: responseBody, headers: res.headers })
+          resolve({
+            statusCode: res.statusCode,
+            body: responseBody,
+            headers: res.headers,
+          })
         );
       }
     );
@@ -306,11 +310,7 @@ suite("CtrlYokeHostedServer raw media route", () => {
     }
   }
 
-  function mediaUrl(
-    pathName: string,
-    token: string,
-    ref?: string
-  ): string {
+  function mediaUrl(pathName: string, token: string, ref?: string): string {
     const query = new URLSearchParams({ path: pathName, token });
     if (ref !== undefined) query.set("ref", ref);
     return `/api/workspace-viewer/raw?${query.toString()}`;
@@ -318,7 +318,10 @@ suite("CtrlYokeHostedServer raw media route", () => {
 
   test("requires the token and rejects non-media extensions", async () => {
     await withServer(async (root, port, token) => {
-      const page = await sendGetRequest(port, `/?token=${encodeURIComponent(token)}`);
+      const page = await sendGetRequest(
+        port,
+        `/?token=${encodeURIComponent(token)}`
+      );
       assert.strictEqual(page.statusCode, 200);
       assert.match(page.body, /media-src 'self'/);
       assert.match(page.body, /frame-src 'self'/);
@@ -328,7 +331,10 @@ suite("CtrlYokeHostedServer raw media route", () => {
         401
       );
       for (const disallowed of ["page.html", "image.svg", "script.js"]) {
-        const response = await sendGetRequest(port, mediaUrl(disallowed, token));
+        const response = await sendGetRequest(
+          port,
+          mediaUrl(disallowed, token)
+        );
         assert.strictEqual(response.statusCode, 415, disallowed);
       }
     });
@@ -349,7 +355,10 @@ suite("CtrlYokeHostedServer raw media route", () => {
       assert.strictEqual(response.headers["content-type"], "video/mp4");
       assert.strictEqual(response.headers["x-content-type-options"], "nosniff");
       assert.strictEqual(response.headers["content-disposition"], "inline");
-      assert.strictEqual(response.headers["content-security-policy"], "sandbox");
+      assert.strictEqual(
+        response.headers["content-security-policy"],
+        "sandbox"
+      );
 
       const unsatisfiable = await sendGetRequest(
         port,
@@ -396,8 +405,14 @@ suite("CtrlYokeHostedServer raw media route", () => {
         response.headers["cache-control"],
         "private, max-age=31536000, immutable"
       );
-      assert.strictEqual(response.headers.etag, `"${runGit("rev-parse", `${commit}:movie.mp4`)}"`);
-      assert.strictEqual(response.headers["content-security-policy"], "sandbox");
+      assert.strictEqual(
+        response.headers.etag,
+        `"${runGit("rev-parse", `${commit}:movie.mp4`)}"`
+      );
+      assert.strictEqual(
+        response.headers["content-security-policy"],
+        "sandbox"
+      );
 
       const cached = await sendGetRequest(
         port,
@@ -405,7 +420,10 @@ suite("CtrlYokeHostedServer raw media route", () => {
         { "If-None-Match": response.headers.etag ?? "" }
       );
       assert.strictEqual(cached.statusCode, 304);
-      assert.strictEqual(cached.headers["cache-control"], response.headers["cache-control"]);
+      assert.strictEqual(
+        cached.headers["cache-control"],
+        response.headers["cache-control"]
+      );
 
       const unsatisfiable = await sendGetRequest(
         port,

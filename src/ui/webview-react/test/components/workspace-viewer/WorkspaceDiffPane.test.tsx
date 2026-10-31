@@ -311,7 +311,10 @@ describe("WorkspaceDiffPane commit diff controls", () => {
             path: "assets/deleted.png",
             changeType: "deleted",
             payloadKind: DIFF_PAYLOAD_KINDS.MEDIA,
-            media: { mediaKind: "image", old: { path: "image.png", ref: "oldhash" } },
+            media: {
+              mediaKind: "image",
+              old: { path: "image.png", ref: "oldhash" },
+            },
           },
           {
             path: "assets/data.bin",
