@@ -92,7 +92,7 @@ suite("MCP Dynamic Queue Extension Harness Tests", function () {
       steps: [
         {
           name: "initial",
-          prompt: `Run the bash command exactly as written: \`echo FP_INITIAL > "${initialPath}"\`. Do not explain — just run it.`,
+          prompt: `Run the shell command exactly as written: \`echo FP_INITIAL > "${initialPath}"\`. Do not explain — just run it.`,
         },
       ],
       finalStep: {
@@ -180,7 +180,7 @@ suite("MCP Dynamic Queue Extension Harness Tests", function () {
           prompt: [
             "You have access to an MCP tool called `append_step`.",
             "Call it now with a single step whose prompt is exactly:",
-            `"Run the bash command: echo MCP_STEP_DONE > \\"${escapedPath}\\". Do not explain — just run it."`,
+            `"Run the shell command: echo MCP_STEP_DONE > \\"${escapedPath}\\". Do not explain — just run it."`,
             "After calling the tool, say: 'Queue extended.'",
             "Do not run any bash commands yourself in this step.",
           ].join(" "),

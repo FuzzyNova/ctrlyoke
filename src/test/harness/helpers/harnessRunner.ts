@@ -51,7 +51,9 @@ export type { HarnessId };
  *   workflow.harness.test.ts / mcp.harness.test.ts headers) because
  *   opencode-cli currently does not reliably scope to the spawn's cwd in this
  *   environment.
- * - opencode-cli uses its free big-pickle tier; claude-cli uses the haiku alias.
+ * - opencode-cli uses Claude Haiku through OpenCode Zen, a paid model: the free
+ *   big-pickle tier has a usage cap that a full suite run can exhaust, after
+ *   which every OpenCode case times out. claude-cli uses the haiku alias.
  *
  * Every file under src/test/harness/ reads this map — change models here only.
  */
@@ -59,7 +61,7 @@ export const HARNESS_MODELS: Record<HarnessId, string | undefined> = {
   "copilot-cli": "gpt-6-luna",
   "claude-cli": "haiku",
   "codex-cli": "gpt-6-luna",
-  "opencode-cli": "opencode/big-pickle",
+  "opencode-cli": "opencode/claude-haiku-5-5",
   "qwen-cli": "qwen3.5-plus",
   "antigravity-cli": "gemini-3.8-flash-low",
 };

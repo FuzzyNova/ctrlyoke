@@ -83,13 +83,21 @@ suite("Foreground subagent attribution harness tests", function () {
         `${harness}: expected two foreground subagent spawn cards, but the model may have skipped the requested subagents. Recorded ${spawnEvents.length}.`
       );
 
+      // A subagent's shell command is usually recorded as a BASH_COMMAND event,
+      // not a TOOL_CALL. The spawn call quotes the marker in its own prompt, so
+      // it never counts as the command that ran it.
+      const commandEventTypes: readonly string[] = [
+        CLI_EVENT_TYPES.TOOL_CALL,
+        CLI_EVENT_TYPES.BASH_COMMAND,
+      ];
       const markerEvents = markers.map((marker) => {
         const found = events.filter(
           (event) =>
-            event.type === CLI_EVENT_TYPES.TOOL_CALL &&
+            commandEventTypes.includes(event.type) &&
+            !("subagentSpawn" in event.data) &&
             JSON.stringify(event.data).includes(marker)
         );
-        assert.ok(found.length > 0, `${harness}: no tool call ran ${marker}`);
+        assert.ok(found.length > 0, `${harness}: no command ran ${marker}`);
         const attributed = found.find((event) => event.subagent);
         assert.ok(
           attributed?.subagent?.parentToolCallId,

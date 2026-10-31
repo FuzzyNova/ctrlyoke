@@ -20,7 +20,7 @@
  * retry test is copilot-cli only because retry runs are slow and the retry
  * path is harness-agnostic.
  *
- * opencode-cli (big-pickle, free) was tried as the default here but is not
+ * opencode-cli was tried as the default here but is not
  * currently usable for this suite: the `opencode` binary appears to keep a
  * global session/project database (~/.local/share/opencode/opencode.db) and
  * reattaches to a recently-active project instead of strictly scoping to the
@@ -107,11 +107,11 @@ suite("Workflow Feature Harness Tests", function () {
         steps: [
           {
             name: "step-one",
-            prompt: `Run the bash command exactly as written: \`echo step1_done > "${step1File}"\`. Do not explain — just run it.`,
+            prompt: `Run the shell command exactly as written: \`echo step1_done > "${step1File}"\`. Do not explain — just run it.`,
           },
           {
             name: "step-two",
-            prompt: `Run the bash command exactly as written: \`echo step2_done > "${step2File}"\`. Do not explain — just run it.`,
+            prompt: `Run the shell command exactly as written: \`echo step2_done > "${step2File}"\`. Do not explain — just run it.`,
           },
         ],
       };
@@ -174,7 +174,7 @@ suite("Workflow Feature Harness Tests", function () {
         steps: [
           {
             name: "write-success",
-            prompt: `Run the bash command exactly as written: \`echo SUCCESS > "${outputFile}"\`. Do not explain — just run it.`,
+            prompt: `Run the shell command exactly as written: \`echo SUCCESS > "${outputFile}"\`. Do not explain — just run it.`,
             endCondition: {
               script: endCondScript,
               compareSource: "stdout",
@@ -197,7 +197,7 @@ suite("Workflow Feature Harness Tests", function () {
 
       assert.ok(
         fs.existsSync(outputFile),
-        `${h}: output file was not created — AI may not have run the bash command`
+        `${h}: output file was not created — AI may not have run the shell command`
       );
 
       const content = fs.readFileSync(outputFile, "utf8").trim();
@@ -236,11 +236,11 @@ suite("Workflow Feature Harness Tests", function () {
       steps: [
         {
           name: "initial-attempt",
-          prompt: `Run the bash command exactly as written: \`echo ATTEMPT1 > "${retryMarker}"\`. Do not explain — just run it.`,
+          prompt: `Run the shell command exactly as written: \`echo ATTEMPT1 > "${retryMarker}"\`. Do not explain — just run it.`,
           endCondition: {
             script: endCondScript,
             maxRetries: 1,
-            retryPrompt: `Run the bash command exactly as written: \`echo ATTEMPT2 > "${retryMarker}"\`. Do not explain — just run it.`,
+            retryPrompt: `Run the shell command exactly as written: \`echo ATTEMPT2 > "${retryMarker}"\`. Do not explain — just run it.`,
           },
         },
       ],
