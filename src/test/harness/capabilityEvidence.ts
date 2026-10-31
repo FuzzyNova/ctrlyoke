@@ -51,7 +51,7 @@ export const UNPROVEN_CLAIMS: Partial<
 > = {
   "antigravity-cli": {
     "mcp.perServerToolFiltering":
-      "dev/backlog/ANTIGRAVITY_PERMISSION_RULES_PLAN.md#translating-patterns",
+      "dev/implemented/ANTIGRAVITY_PERMISSION_RULES_PLAN.md#translating-patterns",
   },
   "copilot-cli": {
     "hooks.error":

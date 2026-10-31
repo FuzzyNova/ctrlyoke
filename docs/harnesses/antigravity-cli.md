@@ -76,13 +76,25 @@ its default, so the step fails.
 
 ## Notes
 
-- Permissions are coarse modes only: `dangerouslyAllowAll` passes `--dangerously-skip-permissions`, `custom` passes `--sandbox`, and `allowAll` passes nothing, so `agy` applies its own approval behavior. `allowedTools` / `deniedTools` are not enforced, and MCP servers cannot be filtered per tool.
+- Antigravity 1.4.10 is the minimum supported version because it added `--settings`, which ctrlyoke uses to pass per-run permission rules.
+- `custom` passes `--sandbox` and a per-run `--settings` file containing translated allow and deny rules. `allowAll` passes `always-proceed` and the deny rules, so tools are auto-approved except for denied actions. `dangerouslyAllowAll` still passes `--dangerously-skip-permissions` and ignores both workflow lists. The injected file unions the translated rules with your global `permissions.allow` and `permissions.deny`; project and shared rules remain in force.
+- Shell allow rules match the entire raw command line. A chain containing an allowed command and anything else is not allowed piecemeal. `custom` still uses `--sandbox`, so allowed commands run under agy's sandbox. A workflow `additionalArgs` value containing `--settings` disables ctrlyoke's permission translation because agy uses only the last settings argument.
+- `web_search` is ungated by agy's rules, so a web-search deny cannot be enforced. Antigravity has no separate list/search tools, so denies for `glob`, `grep`, `ls`, `list`, `list_directory` and `lsp` cannot be enforced. An allowed `write` also allows reads because agy's `write_file` permission implies `read_file`.
+- MCP server ids containing characters outside `[A-Za-z0-9_-]` are rewritten by replacing each such character with `_`. Permission rules use that rewritten id.
 - Only the `preToolUse`, `postToolUse`, `sessionStart`, and `stop` hook events fire; `userPromptSubmit`, `permissionRequest`, `notification`, and `error` do not.
 - A `preToolUse` hook can block the tool call. If it prints JSON, include `"decision": "allow"` to let the call go ahead; agy blocks the call on JSON without a `decision`, even `{}`. A hook that prints nothing does not block it.
 - MCP servers are written to the workspace `.agents/mcp_config.json`, which `agy` discovers on its own. There is no per-prompt server scoping, so parallel workflows in one workspace share that file's servers.
 - ctrlyoke's hooks go in `~/.gemini/config/hooks.json` and are removed when the run ends. Its status line command goes in `~/.gemini/antigravity-cli/settings.json` and stays there between runs. See [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#antigravity-cli).
 - For manual test runs, prefer a Gemini Flash tier to avoid exhausting the much smaller Claude quota.
 - Antigravity stores some user-level config under `~/.gemini/`; those paths are expected and are not Gemini CLI support.
+
+## Permissions {#permissions}
+
+See [Tool permissions](/workflows/permissions#how-each-harness-applies-them) for the
+cross-harness mode table and pattern details. Antigravity's command rules inspect
+the whole unsplit command line: allow rules refuse a chain that includes an
+unlisted command, while deny rules can match commands within a chain or across
+lines. Rules for web search and list/search tools cannot be enforced.
 
 ## Usage and rate limits
 

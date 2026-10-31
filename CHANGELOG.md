@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Antigravity CLI 1.4.10 is now the minimum supported version because it adds
   `--settings`, which ctrlyoke uses to deliver per-run permission rules.
+- Antigravity now enforces supported `allowedTools` and `deniedTools` patterns.
+  `allowAll` auto-approves tools while honoring the deny list.
 
 - In the Agent & Skills Manager, the **skills.sh** toggle under **Discover &
   import** is now a **Browse skills.sh** button. Once clicked, it fades out and
@@ -146,6 +148,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   launcher resolution outlives their timeout.
 
 ### Fixed
+
+- Dotted Antigravity MCP server ids now work; ctrlyoke rewrites unsupported
+  characters in server ids to underscores and uses the rewritten id in rules.
 
 - In a workspace folder that is not a Git repository, a file added after the workspace opens now
   appears in `@` completions straight away. It used to stay missing until the file list was

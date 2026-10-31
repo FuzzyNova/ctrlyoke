@@ -86,7 +86,7 @@ const ANTIGRAVITY_MCP_FILTERING_CAPABILITY = {
   verification: {
     kind: "manual",
     reference:
-      "dev/backlog/ANTIGRAVITY_PERMISSION_RULES_PLAN.md#translating-patterns",
+      "dev/implemented/ANTIGRAVITY_PERMISSION_RULES_PLAN.md#translating-patterns",
     basis: "cli-version",
     verifiedVersions: [">=1.4.10"],
   },

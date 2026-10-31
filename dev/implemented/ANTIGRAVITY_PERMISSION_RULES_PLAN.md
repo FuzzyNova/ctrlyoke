@@ -1,8 +1,6 @@
 # Antigravity Permission Rules (Full Translation)
 
-**Status:** Ready to implement. Phase 0 research finished 2026-10-31 against agy 1.4.10 and
-1.4.12 on Windows 11 (26200). Results are under "Phase 0 findings".
-**Priority:** P1. Commit message generation is broken on Antigravity until phase 1 lands.
+**Status:** Complete 2026-10-31. Phases 0–5 are done.
 
 Supersedes the Antigravity half of `CODEX_ANTIGRAVITY_PERMISSION_RULES_PLAN.md`. That plan
 was blocked on "no per-run delivery" for rules. agy's `--settings` flag removes the blocker.
@@ -435,18 +433,14 @@ Gaps between the proposal and the current code, to settle during implementation:
        from `custom` is the sandbox plan's phase 3 (see "Sandbox is a separate axis"), and
        the `custom` shell cases judge "permitted" by output the probe prints, not by a file
        write. The `allowAll` cases (no sandbox) also check the file.
-4. **Docs and changelog.**
-   - `docs/workflows/permissions.md`: the per-harness table, and the paragraphs saying
-     Antigravity ignores both lists. Add the whole-line allow caveat and the unenforceable
-     web-search deny.
-   - `docs/harnesses/antigravity-cli.md`.
-   - `CHANGELOG.md` under **Changed**: lists are now enforced on Antigravity, `allowAll`
-     auto-approves, and the new minimum version.
+4. **Docs and changelog.** Done 2026-10-31. Updated the workflow permissions and Antigravity
+   CLI pages with shipped behavior, limitations, and the `--settings` collision; recorded the
+   enforcement change under **Changed** and the dotted MCP id fix under **Fixed** in the
+   Unreleased changelog. The minimum-version entry was already added in phase 2.
+   `npm run check:docs` and formatting checks passed.
 
-   Run `npm run check:docs`.
-
-5. **Clean up the older plan.** Remove the Antigravity sections from
-   `CODEX_ANTIGRAVITY_PERMISSION_RULES_PLAN.md`, leaving Codex only.
+5. **Clean up the older plan.** Done 2026-10-31. Removed its Antigravity research and proposal,
+   leaving the Codex plan, and moved this completed plan to `dev/implemented/`.
 
 After phase 1, consider adding the `CLI settings initialized: permissions=…` log line and
 the "regex rules see the raw unsplit line" gotcha to

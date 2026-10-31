@@ -106,8 +106,8 @@ A deny list catches an agent's usual command. It is not a security boundary,
 because an agent can reach the same result another way. If you need a hard
 boundary, run the harness in a container or sandbox. Inside one,
 `dangerouslyAllowAll` is a reasonable choice. Copilot CLI, Claude Code,
-OpenCode and Qwen Code enforce the deny list. Codex enforces only its MCP tool
-entries, and Antigravity doesn't enforce it (see
+OpenCode, Qwen Code and Antigravity enforce supported deny entries. Codex
+enforces only its MCP tool entries (see
 [How each harness applies them](#how-each-harness-applies-them)). Because
 nobody chose the default list, a harness that can't enforce it shows an
 information note rather than a compatibility warning. Once you change the list,
@@ -159,22 +159,36 @@ Each mode reads only some of the lists, whatever harness runs the step:
 | `none`                | ignored       | ignored      |
 
 A list the mode ignores is not passed to the harness and never produces a
-compatibility warning. Not every harness can enforce individual tool patterns
-either. Antigravity only has coarse modes, so it ignores both lists in every
-mode. Codex ignores the allow list. From the deny list it enforces only
-`mcp__<server>__<tool>` entries for MCP servers the workflow attaches, which it
-receives as that server's `disabled_tools`. It can't enforce an entry for a
-server configured only in Codex's own `config.toml`, a wildcard tool name, or
-a shell pattern.
+compatibility warning. Not every harness can enforce every individual pattern.
+Antigravity translates supported patterns for `custom` and `allowAll`; in
+`allowAll`, it auto-approves tools while enforcing the deny list. Its web-search
+deny cannot be enforced because agy's `search_web` tool is ungated. It has no
+separate list/search tools, so denies for `glob`, `grep`, `ls`, `list`,
+`list_directory` and `lsp` cannot be enforced either. An allowed `write` also
+allows reads because agy's `write_file` permission implies `read_file`. Its
+`custom` mode still adds `--sandbox`. A workflow `additionalArgs` value that
+contains `--settings` takes precedence over ctrlyoke's settings and disables
+the permission translation. Codex ignores the allow list. From the deny list
+it enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow
+attaches, which it receives as that server's `disabled_tools`. It can't enforce
+an entry for a server configured only in Codex's own `config.toml`, a wildcard
+tool name, or a shell pattern.
 
-| Harness                                   | `dangerouslyAllowAll`                         | `allowAll`                                                                          | `custom`                                                                                                                           |
-| ----------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| [Copilot CLI](/harnesses/copilot-cli)     | `--yolo`                                      | `--allow-all-tools` plus `--deny-tool`                                              | `--allow-tool` plus `--deny-tool`                                                                                                  |
-| [Claude Code](/harnesses/claude-cli)      | `--dangerously-skip-permissions`              | `--permission-mode bypassPermissions --tools default` plus `--disallowedTools`      | Headless: `--permission-mode dontAsk`; interactive: `--permission-mode default`; both use `--allowedTools` and `--disallowedTools` |
-| [Codex](/harnesses/codex-cli)             | `--dangerously-bypass-approvals-and-sandbox`  | `--sandbox workspace-write --ask-for-approval on-request` plus MCP `disabled_tools` | `-s` and `-a` from the `permissions.codex*` settings, plus MCP `disabled_tools`; allow list ignored                                |
-| [OpenCode](/harnesses/opencode-cli)       | no permission block (OpenCode's own defaults) | allow everything, plus the deny list                                                | ask for everything, allow the allow list, deny the deny list                                                                       |
-| [Qwen Code](/harnesses/qwen-cli)          | `-y`                                          | `--approval-mode auto-edit` plus `--exclude-tools`                                  | `--approval-mode default` with `--allowed-tools` and `--exclude-tools`                                                             |
-| [Antigravity](/harnesses/antigravity-cli) | `--dangerously-skip-permissions`              | no flag (agy's own approvals); lists ignored                                        | `--sandbox`; lists ignored                                                                                                         |
+| Harness                                   | `dangerouslyAllowAll`                            | `allowAll`                                                                          | `custom`                                                                                                                           |
+| ----------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| [Copilot CLI](/harnesses/copilot-cli)     | `--yolo`                                         | `--allow-all-tools` plus `--deny-tool`                                              | `--allow-tool` plus `--deny-tool`                                                                                                  |
+| [Claude Code](/harnesses/claude-cli)      | `--dangerously-skip-permissions`                 | `--permission-mode bypassPermissions --tools default` plus `--disallowedTools`      | Headless: `--permission-mode dontAsk`; interactive: `--permission-mode default`; both use `--allowedTools` and `--disallowedTools` |
+| [Codex](/harnesses/codex-cli)             | `--dangerously-bypass-approvals-and-sandbox`     | `--sandbox workspace-write --ask-for-approval on-request` plus MCP `disabled_tools` | `-s` and `-a` from the `permissions.codex*` settings, plus MCP `disabled_tools`; allow list ignored                                |
+| [OpenCode](/harnesses/opencode-cli)       | no permission block (OpenCode's own defaults)    | allow everything, plus the deny list                                                | ask for everything, allow the allow list, deny the deny list                                                                       |
+| [Qwen Code](/harnesses/qwen-cli)          | `-y`                                             | `--approval-mode auto-edit` plus `--exclude-tools`                                  | `--approval-mode default` with `--allowed-tools` and `--exclude-tools`                                                             |
+| [Antigravity](/harnesses/antigravity-cli) | `--dangerously-skip-permissions` (lists ignored) | `--settings` with `always-proceed` and the deny list                                | `--sandbox` and `--settings` with allow and deny lists; allowed command rules match the whole command line                         |
+
+Antigravity command allow rules match the entire raw command line. A command
+chain containing an allowed command plus anything else is not allowed piecemeal.
+In `custom`, an unlisted command is left for agy to review, so headless runs
+soft-deny it. Its `--settings` file also includes the user's global allow/deny
+rules; project and shared rules remain in force. See
+[Antigravity CLI permissions](/harnesses/antigravity-cli#permissions).
 
 For example, `allowAll` with [the default lists](#the-default-lists) starts
 Claude Code with:

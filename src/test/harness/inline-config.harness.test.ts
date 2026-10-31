@@ -1125,7 +1125,7 @@ suite("Inline harness configuration regression tests", function () {
 
   // ctrlyoke's tool lists reach agy as a per-run `--settings` file of
   // `command(regex:…)`, `mcp(server/tool)` and file rules
-  // (dev/backlog/ANTIGRAVITY_PERMISSION_RULES_PLAN.md). agy matches a command
+  // (dev/implemented/ANTIGRAVITY_PERMISSION_RULES_PLAN.md). agy matches a command
   // rule against the raw, unsplit command line, so the chain and multi-line
   // cases prove the generated allow/deny regexes, not just agy's matching.
   suite(ANTIGRAVITY, function () {

@@ -40,7 +40,7 @@ purpose. Antigravity has no such allowance and doesn't warn about the rejected t
 Sanitize the server key ctrlyoke writes for Antigravity: replace characters outside
 `[A-Za-z0-9_-]` with `_` and keep the mapping stable. Then use the **same sanitized id** in
 the `mcp(<server>/<tool>)` permission rules that
-`dev/backlog/ANTIGRAVITY_PERMISSION_RULES_PLAN.md` emits. Report a compatibility
+`dev/implemented/ANTIGRAVITY_PERMISSION_RULES_PLAN.md` emits. Report a compatibility
 diagnostic when a sanitized id collides with another server, or when
 `mcp_<id>_<tool>` would exceed 64 characters. Tool names belong to the server, so ctrlyoke
 can't rename them. A tool name with a dot can only be diagnosed, not fixed.
