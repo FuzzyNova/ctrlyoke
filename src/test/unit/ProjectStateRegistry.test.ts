@@ -94,6 +94,41 @@ suite("ProjectStateRegistry", () => {
     );
   });
 
+  // Two VS Code windows restored together: the first took the registry lock,
+  // then its extension host blocked for 7 s, and the second window's startup
+  // registration timed out after 5 s and its activation failed for good.
+  test("waits for a live registry holder that outlasts the default lock timeout", async function () {
+    this.timeout(20_000);
+    const registry = new ProjectStateRegistry(RUN_HISTORY_LOCATIONS.USER);
+    let holderReleased = false;
+    let releaseHolder!: () => void;
+    const holder = withUserProjectRegistryLock(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseHolder = () => {
+            holderReleased = true;
+            resolve();
+          };
+        })
+    );
+    const lockPath = path.join(
+      path.dirname(projectStateRoot(stateRoot, RUN_HISTORY_LOCATIONS.USER)),
+      ".registry.lock"
+    );
+    while (!(await fs.stat(lockPath).catch(() => undefined))) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+
+    const registration = registry
+      .initialize(stateRoot)
+      .then(() => holderReleased);
+    await new Promise((resolve) => setTimeout(resolve, 5_500));
+    releaseHolder();
+    await holder;
+
+    assert.strictEqual(await registration, true);
+  });
+
   test("rejects a newer metadata schema", async () => {
     const registry = new ProjectStateRegistry(RUN_HISTORY_LOCATIONS.USER);
     const projectRoot = projectStateRoot(stateRoot, RUN_HISTORY_LOCATIONS.USER);

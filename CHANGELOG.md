@@ -152,6 +152,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bottom. The output pane still needs a longer scroll to stop following a running workflow.
 - When a failed pre-condition continues into its step, the output pane shows the pre-condition's
   verdict row and the step's header, prompt and command rows again.
+- When several VS Code windows open at once, ctrlyoke now loads in all of them. A window could fail
+  to activate with "Timed out waiting for lock: …\projects\.registry.lock" when another window took
+  more than 5 seconds to register its project; it now waits for as long as that window is alive.
+  The CLI, the MCP server and `ctrlyoke history prune`/`relink` wait the same way.
 
 ### Added
 

@@ -1,6 +1,6 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { withFileLock } from "./FileLockUtils";
+import { type FileLockOptions, withFileLock } from "./FileLockUtils";
 import { renameWithTransientRetry } from "./AtomicFileUtils";
 import { pathsEqual } from "./PathCasing";
 import {
@@ -22,6 +22,20 @@ export const PROJECT_METADATA_FILE_NAME = "project.json";
 const PRIVATE_DIRECTORY_MODE = 0o700;
 const PRIVATE_FILE_MODE = 0o600;
 const REGISTRY_LOCK_NAME = ".registry";
+
+/**
+ * Every window, CLI and MCP server registers its project on startup, and a
+ * failed registration aborts that startup. A holder whose event loop is
+ * blocked (a busy extension host can stall for many seconds while activating)
+ * keeps the lock well past the default 5 s timeout without being dead, so wait
+ * while its heartbeat is fresh: a dead holder's lock still goes stale and is
+ * reclaimed after 30 s. The ceiling only bounds a live holder stuck in its
+ * action, such as a `history prune` deleting a large backlog.
+ */
+const REGISTRY_LOCK_OPTIONS: FileLockOptions = {
+  waitWhileHolderAlive: true,
+  maxWaitMs: 5 * 60_000,
+};
 
 export interface ProjectStateMetadata {
   schemaVersion: (typeof CURRENT_SCHEMA_VERSIONS)[typeof PERSISTED_STORES.PROJECT_METADATA];
@@ -90,45 +104,49 @@ async function registerUserProject(
   // before the directory exists. It is still inside the private projects
   // root and is removed by withFileLock after the transaction completes.
   return withUserProjectRegistryLock(async () => {
-    return withFileLock(projectRoot, async () => {
-      await assertContainedByRealRoot(projectsRoot, projectRoot);
-      await rejectSymlinkProjectDirectory(projectRoot);
+    return withFileLock(
+      projectRoot,
+      async () => {
+        await assertContainedByRealRoot(projectsRoot, projectRoot);
+        await rejectSymlinkProjectDirectory(projectRoot);
 
-      const projectExists = await pathExists(projectRoot);
-      if (!projectExists) {
-        await fs.mkdir(projectRoot, {
-          recursive: false,
-          mode: PRIVATE_DIRECTORY_MODE,
-        });
-      } else {
-        const stats = await fs.lstat(projectRoot);
-        if (!stats.isDirectory()) {
-          throw new Error(
-            `Project state path is not a directory: ${projectRoot}`
-          );
+        const projectExists = await pathExists(projectRoot);
+        if (!projectExists) {
+          await fs.mkdir(projectRoot, {
+            recursive: false,
+            mode: PRIVATE_DIRECTORY_MODE,
+          });
+        } else {
+          const stats = await fs.lstat(projectRoot);
+          if (!stats.isDirectory()) {
+            throw new Error(
+              `Project state path is not a directory: ${projectRoot}`
+            );
+          }
         }
-      }
-      await fs.chmod(projectRoot, PRIVATE_DIRECTORY_MODE);
+        await fs.chmod(projectRoot, PRIVATE_DIRECTORY_MODE);
 
-      await assertContainedByRealRoot(projectsRoot, projectRoot);
-      await rejectSymlinkProjectDirectory(projectRoot);
+        await assertContainedByRealRoot(projectsRoot, projectRoot);
+        await rejectSymlinkProjectDirectory(projectRoot);
 
-      const metadataPath = path.join(projectRoot, PROJECT_METADATA_FILE_NAME);
-      const metadata = await readOrCreateMetadata(
-        projectRoot,
-        metadataPath,
-        resolvedStateRoot,
-        gitToplevel
-      );
-      await writeMetadataAtomically(
-        projectsRoot,
-        projectRoot,
-        metadataPath,
-        metadata
-      );
+        const metadataPath = path.join(projectRoot, PROJECT_METADATA_FILE_NAME);
+        const metadata = await readOrCreateMetadata(
+          projectRoot,
+          metadataPath,
+          resolvedStateRoot,
+          gitToplevel
+        );
+        await writeMetadataAtomically(
+          projectsRoot,
+          projectRoot,
+          metadataPath,
+          metadata
+        );
 
-      return { projectRoot, metadataPath, metadata };
-    });
+        return { projectRoot, metadataPath, metadata };
+      },
+      REGISTRY_LOCK_OPTIONS
+    );
   });
 }
 
@@ -145,10 +163,14 @@ export async function withUserProjectRegistryLock<T>(
   await ensurePrivateDirectory(ctrlyokeStateHome());
   await ensurePrivateDirectory(projectsRoot);
 
-  return withFileLock(path.join(projectsRoot, REGISTRY_LOCK_NAME), async () => {
-    await assertContainedByRealRoot(projectsRoot, projectsRoot);
-    return action(projectsRoot);
-  });
+  return withFileLock(
+    path.join(projectsRoot, REGISTRY_LOCK_NAME),
+    async () => {
+      await assertContainedByRealRoot(projectsRoot, projectsRoot);
+      return action(projectsRoot);
+    },
+    REGISTRY_LOCK_OPTIONS
+  );
 }
 
 /** Re-check a project path against the real projects root immediately before mutation. */
