@@ -1,3 +1,4 @@
+import type { ReactElement } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { GlobalSettingsVerticalTabBar } from "@components/layout/GlobalSettingsVerticalTabBar";
@@ -29,7 +30,7 @@ function setScrollGeometry(element: HTMLElement, geometry: ScrollGeometry) {
   fireEvent.scroll(element);
 }
 
-function renderRail(activeTab = ALL_TABS[0].id) {
+function renderRail(activeTab: string = ALL_TABS[0].id) {
   return render(
     <GlobalSettingsVerticalTabBar
       tabs={TABS}
@@ -98,30 +99,82 @@ describe("GlobalSettingsVerticalTabBar", () => {
     expect(scrollBy).toHaveBeenCalledWith({ top: 300, behavior: "smooth" });
   });
 
-  it("scrolls the active tab into view when it changes", () => {
+  function setRect(element: HTMLElement, top: number, bottom: number) {
+    element.getBoundingClientRect = () =>
+      ({ top, bottom, left: 0, right: 40, height: bottom - top }) as DOMRect;
+  }
+
+  function rerenderWithActiveTab(
+    rerender: (ui: ReactElement) => void,
+    activeTab: string
+  ) {
+    rerender(
+      <GlobalSettingsVerticalTabBar
+        tabs={TABS}
+        activeTab={activeTab}
+        onTabChange={vi.fn()}
+        iconOnly
+      />
+    );
+  }
+
+  it("scrolls only the rail to reveal a newly active tab below it", () => {
     const scrollIntoView = vi.fn();
     const original = HTMLElement.prototype.scrollIntoView;
     HTMLElement.prototype.scrollIntoView = scrollIntoView;
     try {
       const { rerender } = renderRail(ALL_TABS[0].id);
-      scrollIntoView.mockClear();
+      const scroller = screen.getByTestId("settings-tab-rail-scroller");
+      setScrollGeometry(scroller, {
+        scrollTop: 0,
+        clientHeight: 300,
+        scrollHeight: 600,
+      });
+      setRect(scroller, 100, 400);
       const lastTab = ALL_TABS[ALL_TABS.length - 1];
+      setRect(screen.getByRole("button", { name: lastTab.label }), 450, 486);
 
-      rerender(
-        <GlobalSettingsVerticalTabBar
-          tabs={TABS}
-          activeTab={lastTab.id}
-          onTabChange={vi.fn()}
-          iconOnly
-        />
-      );
+      rerenderWithActiveTab(rerender, lastTab.id);
 
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
-      expect(scrollIntoView.mock.contexts[0]).toBe(
-        screen.getByRole("button", { name: lastTab.label })
-      );
+      expect(scroller.scrollTop).toBe(86);
+      // scrollIntoView would also scroll the drawer's overflow-hidden
+      // ancestors while the drawer is still parked off-screen on mount.
+      expect(scrollIntoView).not.toHaveBeenCalled();
     } finally {
       HTMLElement.prototype.scrollIntoView = original;
     }
+  });
+
+  it("scrolls the rail up to reveal a newly active tab above it", () => {
+    const lastTab = ALL_TABS[ALL_TABS.length - 1];
+    const { rerender } = renderRail(lastTab.id);
+    const scroller = screen.getByTestId("settings-tab-rail-scroller");
+    setScrollGeometry(scroller, {
+      scrollTop: 200,
+      clientHeight: 300,
+      scrollHeight: 600,
+    });
+    setRect(scroller, 100, 400);
+    setRect(screen.getByRole("button", { name: ALL_TABS[0].label }), 40, 76);
+
+    rerenderWithActiveTab(rerender, ALL_TABS[0].id);
+
+    expect(scroller.scrollTop).toBe(140);
+  });
+
+  it("leaves the rail alone when the active tab is already visible", () => {
+    const { rerender } = renderRail(ALL_TABS[0].id);
+    const scroller = screen.getByTestId("settings-tab-rail-scroller");
+    setScrollGeometry(scroller, {
+      scrollTop: 50,
+      clientHeight: 300,
+      scrollHeight: 600,
+    });
+    setRect(scroller, 100, 400);
+    setRect(screen.getByRole("button", { name: ALL_TABS[1].label }), 150, 186);
+
+    rerenderWithActiveTab(rerender, ALL_TABS[1].id);
+
+    expect(scroller.scrollTop).toBe(50);
   });
 });

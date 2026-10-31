@@ -66,12 +66,25 @@ export function GlobalSettingsVerticalTabBar({
 
   // Selecting a tab from search results or the keyboard can pick one that is
   // scrolled out of view; bring it back so the selection is visible.
+  // Only the rail's own scroller moves. `scrollIntoView` would also scroll
+  // every ancestor, and on mount the drawer is still parked off-screen at
+  // translate-y-full, so it scrolled the dashboard's overflow-hidden
+  // container to "reveal" the tab. That scroll outlived the slide-in and left
+  // the whole drawer shifted up, its title bar cut off and a gap below.
   useEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
-    Array.from(scroller.querySelectorAll<HTMLElement>("[data-tab-id]"))
-      .find((element) => element.dataset.tabId === activeTab)
-      ?.scrollIntoView?.({ block: "nearest" });
+    const tab = Array.from(
+      scroller.querySelectorAll<HTMLElement>("[data-tab-id]")
+    ).find((element) => element.dataset.tabId === activeTab);
+    if (!tab) return;
+    const scrollerRect = scroller.getBoundingClientRect();
+    const tabRect = tab.getBoundingClientRect();
+    if (tabRect.top < scrollerRect.top) {
+      scroller.scrollTop -= scrollerRect.top - tabRect.top;
+    } else if (tabRect.bottom > scrollerRect.bottom) {
+      scroller.scrollTop += tabRect.bottom - scrollerRect.bottom;
+    }
   }, [activeTab]);
 
   const scrollByPage = (direction: ScrollDirection) => {
