@@ -365,6 +365,9 @@ Options:
    workflow and differs by harness.
 3. **Status quo:** keep `custom` → `--sandbox`.
 
+**Decided 2026-10-30: option 1**, planned in `HARNESS_SANDBOX_PLAN.md`. Its phase 3 moves
+agy's `--sandbox` off the permission mode. The reasoning below is kept for context.
+
 Recommendation: option 1. Semantics would be one level to start (`sandbox: true` means
 "terminal commands may write only the workspace and temp dirs, with no network unless
 allowed"), mapped to Codex `workspace-write`, agy `--sandbox`, and whatever Copilot's sandbox

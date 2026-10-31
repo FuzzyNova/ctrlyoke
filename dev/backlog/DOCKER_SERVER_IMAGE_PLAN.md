@@ -4,6 +4,10 @@
 [`headless-linux-has-no-persistent-secret-store.md`](../bugs/implemented/headless-linux-has-no-persistent-secret-store.md),
 is fixed.
 
+Security posture revised 2026-10-30 to follow `HARNESS_SANDBOX_PLAN.md`'s containment
+principle (approvals off, but keep a short deny list for irreversible external actions, plus
+network policy).
+
 Last reviewed against code: 2026-10-26. Still not started (no Dockerfile, compose file or image
 CI). The cited code still holds: `CtrlYokeHostedServer.isClientAllowed`, `ctrlyoke server
 --bind`, default port 4747, `FileSecretStore` (`secrets.json`), and `ServerCommand.ts` still
@@ -127,19 +131,50 @@ sensitive: anyone who can read it can use the user's harness accounts.
 
 ### Security posture to document
 
-- The container limits what files agents can change: only the bind-mounted repos and the home
-  volume. It does **not** limit network access. Agents can reach the LAN, the internet, and
-  anything the harness credentials and any mounted git credentials allow.
-- Recommend a deploy key or fine-grained token scoped to the mounted repos, not the user's main
-  SSH key.
-- **Default to `dangerouslyAllowAll` inside the image.** The container is the boundary, so
-  a deny list adds approvals and blocked commands without adding safety, and an always-on
-  server mostly runs unattended loops. Ship it as the image's `defaults.toolPermissions.mode`
-  in the user settings on the home volume, so a user can still change it. Outside a
-  container, ctrlyoke's default stays `allowAll` with the deny list; yolo there is opt-in
-  only. `docs/guide/docker.md` should say this is why the image differs.
-- Never mount the Docker socket or the host home directory. Mounting the home directory would
-  also expose host-installed CLIs, e.g. a native Claude install in `~/.local/bin`.
+The image applies the principle in `HARNESS_SANDBOX_PLAN.md` ("contain the agent, don't
+interrogate it"): containment, scoped credentials, network policy, and a short deny list for
+irreversible actions outside the box. The container provides only the first of the four, so
+the image must not be presented as a complete sandbox on its own.
+
+- **Containment:** the container limits which files agents can change to the bind-mounted
+  repos and the home volume. Never mount the Docker socket or the host home directory.
+  Mounting the home directory would also expose host-installed CLIs, e.g. a native Claude
+  install in `~/.local/bin`.
+- **Scoped credentials:** recommend a deploy key or fine-grained token scoped to the mounted
+  repos, not the user's main SSH key. The harness logins on the home volume are full
+  account credentials. Say so plainly.
+- **Network:** the container does **not** limit network access by default. Agents can reach
+  the LAN, the internet, and anything the harness and git credentials allow. Document an
+  egress-restricted setup:
+  - an internal Docker network plus an allowlisting proxy for the harness APIs, git host and
+    package registries; or
+  - at minimum, a firewall rule blocking the LAN ranges, so a home server's other services
+    aren't reachable from agent commands.
+
+  Decide whether the compose example ships one of these by default.
+
+- **Approvals: turn them off, but keep a short deny list.** An always-on server mostly runs
+  unattended loops, and inside the container a broad deny list adds blocked commands without
+  adding safety. But containment can't undo actions that leave the box. So ship
+  `defaults.toolPermissions` as `allowAll` with a **minimal deny list of irreversible
+  external actions**, not `dangerouslyAllowAll` (which ignores every deny list):
+  - `shell(git push:*)` (unless the workflow's job is to push: the user opts in per workflow);
+  - package publishes (`npm publish`, `cargo publish`, …);
+  - destructive cloud CLI verbs, if any cloud CLI is installed.
+
+  Write it into the user settings on the home volume, so a user can still change it. Outside
+  a container, ctrlyoke's default stays `allowAll` with the full default deny list.
+  `docs/guide/docker.md` should explain why the image differs.
+  - This depends on deny lists being enforced. Antigravity enforces them only after
+    `ANTIGRAVITY_PERMISSION_RULES_PLAN.md`. Codex enforces only MCP denials; its shell
+    containment comes from its sandbox (see the next item).
+
+- **Native sandboxes inside the container:** the container already is the boundary, so set
+  `defaults.sandbox: false` once `HARNESS_SANDBOX_PLAN.md` exists. Some harness sandboxes
+  can't run in an unprivileged container anyway (agy silently skips its sandbox; Copilot needs
+  `bwrap`, user namespaces and `/dev/net/tun`). Check that Codex's `allowAll` →
+  `workspace-write` mapping works inside the container. If its Linux sandbox fails there, the
+  image needs `sandbox: false` explicitly for Codex.
 
 ## Release process
 
@@ -161,6 +196,9 @@ ctrlyoke@<version>` layer plus base-image security updates. A scheduled weekly r
 - **The Windows-PC update notice.** The npm CLI warns when it is older than the extension that
   shares its state. The container has its own state home, so this shouldn't trigger, but
   confirm.
+- **Egress default.** Should the compose example restrict egress by default (proxy allowlist),
+  or only document it? Restricting is safer, but every harness API, git host and registry
+  must be listed, and a missing entry fails runs confusingly.
 - **Multiple repos.** One server per repo (one service per repo in compose), or one server with
   named workspace roots? Pick whichever the hosted workspace picker supports best.
 
