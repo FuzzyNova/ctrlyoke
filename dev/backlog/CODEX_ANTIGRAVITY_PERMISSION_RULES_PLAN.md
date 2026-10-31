@@ -2,6 +2,11 @@
 
 **Status:** backlog, mostly not started. Proposed 2026-10-19, after the release-defaults review.
 
+> **Antigravity is superseded (2026-10-30)** by `ANTIGRAVITY_PERMISSION_RULES_PLAN.md`. agy
+> now has a `--settings` flag that delivers rules per run, and its rules are enforced on
+> Windows. The Antigravity research and "Wait for one of these" below are kept only until
+> that plan's last phase removes them.
+
 ## Status (2026-10-26)
 
 - **Shipped:** the noisy Codex log line ("does not support granular tool patterns" on every

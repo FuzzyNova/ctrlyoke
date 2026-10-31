@@ -440,9 +440,10 @@ suite("Inline harness configuration regression tests", function () {
       assertNoWorkspaceConfig(tmpDir, ["opencode.json", ".opencode"]);
     });
 
-    // Commit message generation's shape: custom mode allows only its submit
-    // tool, written in Claude's `mcp__<server>__<tool>` form. Headless OpenCode
-    // auto-rejects anything that falls through to the `"*": "ask"` rule.
+    // Claude-format `mcp__<server>__<tool>` allow patterns must become OpenCode's
+    // sanitized `<server>_<tool>` names (and `<server>_*` for a whole server);
+    // headless OpenCode auto-rejects anything that falls through to `"*": "ask"`.
+    // commit-permissions.harness.test.ts covers the commit-generation shape.
     for (const allowCase of [
       {
         name: "exact tool",
