@@ -359,7 +359,8 @@ Gaps between the proposal and the current code, to settle during implementation:
 
 ## Phases
 
-0. **Research.** Done 2026-10-31; see "Phase 0 findings". Not covered, and left to phase 3:
+0. **Research.** Done 2026-10-31; see "Phase 0 findings". Not covered, and left to phase 3
+   (resolved there, except `read_url` and literal prefixes on macOS/Linux):
    - literal-prefix behavior on macOS/Linux (the translation doesn't rely on it);
    - `mcp(server/*)`;
    - `read_url`;
@@ -408,6 +409,32 @@ Gaps between the proposal and the current code, to settle during implementation:
      first.
 
    - `allowAll` runs a shell command without asking and still refuses a denied one.
+   - **Done 2026-10-31** against agy 1.4.12 on Windows 11 (26200).
+     `commit-permissions.harness.test.ts` passed for `antigravity-cli` with no code change.
+     `inline-config.harness.test.ts` gained an `antigravity-cli` suite of 14 cases, all
+     passing: allow proceeds, deny blocks, deny wins over allow, an `&&` chain and a two-line
+     command with a denied `node` are refused, `echo` allowed does not allow
+     `echo … && node …`, a deny survives an isolated user `settings.json` that allows
+     `command(*)` (and the user's lists are left unchanged), MCP tools allowed by exact,
+     whole-server (`mcp__server`) and `mcp__server__*` patterns, and a dotted server id whose
+     allowed tool is callable and whose server-`deniedTools` tool is refused under `allowAll`.
+     Each deny case also asserts that agy actually attempted the call; the transcripts showed
+     the chained and two-line command lines arriving verbatim. Phase-0 leftovers:
+     - `mcp(server/*)` works (whole-server and wildcard cases).
+     - The deny boundary regex `(?is)(?:.*[^\w.-])?W(?:[^\w.-].*)?` caught the denied
+       command at the start of the line, after `&& `, and after a newline. The allow tail
+       refused the `&&` chain. `xgit push`/`git pushx` boundaries remain unit-tested only.
+     - `read_url`: still unverified. agy doesn't offer `read_url_content` to the model
+       headless, so no cheap live case exists.
+     - **Contradiction found: under `--sandbox`, a rule-allowed command still runs _inside_ the
+       sandbox** (agy 1.4.12, Windows). The command executed, but PowerShell failed to
+       initialize its drives and `node` got `EPERM` writing a file in the workspace, in
+       `%TEMP%` and under the user profile alike. The identical settings without
+       `--sandbox` wrote the file. So `custom` on Antigravity permits the allowed commands
+       but leaves them unable to write. The translation is unchanged: removing `--sandbox`
+       from `custom` is the sandbox plan's phase 3 (see "Sandbox is a separate axis"), and
+       the `custom` shell cases judge "permitted" by output the probe prints, not by a file
+       write. The `allowAll` cases (no sandbox) also check the file.
 4. **Docs and changelog.**
    - `docs/workflows/permissions.md`: the per-harness table, and the paragraphs saying
      Antigravity ignores both lists. Add the whole-line allow caveat and the unenforceable
@@ -459,9 +486,12 @@ Probed facts that affect the interim:
 - Deny rules still hold under `--sandbox`.
 - An unlisted command is still soft-denied headless under `--sandbox` with
   `request-review`.
-- Per the docs, a `command` allow rule lets the matching command run **outside** the
-  sandbox. So `custom` + `--sandbox` contains only the commands that weren't explicitly
-  allowed.
+- ~~Per the docs, a `command` allow rule lets the matching command run **outside** the
+  sandbox.~~ **Contradicted by phase 3 (agy 1.4.12, Windows):** an allowed command runs
+  inside the sandbox and can't write the workspace (`EPERM`). So today's `custom` +
+  `--sandbox` lets allowed commands run but breaks any that write files. That strengthens
+  the case for moving `--sandbox` off `custom` in the sandbox plan, or here if that plan is
+  rejected.
 - An allowed command that needs the network fails inside the sandbox unless `read_url`
   rules allow the domain, and ctrlyoke's lists can't express those today.
 - On machines without sandbox support (Windows before 11 24H2, some Linux containers),
