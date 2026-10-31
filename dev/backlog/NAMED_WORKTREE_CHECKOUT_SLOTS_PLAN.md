@@ -35,12 +35,12 @@ everything merges to local `main`. That flow must keep working unchanged.
      checkout itself is refused.
   2. Otherwise create a directory under the resolved worktree root, named by
      `createWorktreeDirectoryName(branch, commonDirectory, { kind: "named",
-     branchRef })` (`src/utils/WorktreeUtils.ts`). The name is the slug plus a
+branchRef })` (`src/utils/WorktreeUtils.ts`). The name is the slug plus a
      12-character hash, and the directory is created with `addWorktree`, using
      the existing branch or creating it from `base`/`HEAD`.
 - **Pieces that already fit the slot model:**
   - The named setup record is keyed by **checkout path** (`recordPath(...,
-    executionCheckoutRoot, "named-worktrees")`), not by branch. A slot that has
+executionCheckoutRoot, "named-worktrees")`), not by branch. A slot that has
     run setup once does not run it again when its branch changes.
   - The lease is `exclusive-worktree` on the execution root, so two runs (or a
     run and a terminal kept open by Reuse Running Terminal) cannot use the same
@@ -66,10 +66,10 @@ everything merges to local `main`. That flow must keep working unchanged.
 ```yaml
 worktree:
   mode: named
-  checkout: bug-fix          # the long-lived slot
+  checkout: bug-fix # the long-lived slot
   branch: fix-race-condition # the branch for this run
-  base: origin/main          # used only when the branch does not exist yet
-  setup: npm ci              # runs once per slot, as today
+  base: origin/main # used only when the branch does not exist yet
+  setup: npm ci # runs once per slot, as today
 ```
 
 - `checkout` is an optional, non-empty string. It is either an absolute or
@@ -116,7 +116,7 @@ On this machine, `checkout: bug-fix` resolves to
 
 1. **Branch already checked out somewhere.** If that worktree is the resolved
    slot, attach as today. If it is a different worktree, fail: `Branch
-   "fix-race-condition" is checked out in "<path>", not in checkout "bug-fix".`
+"fix-race-condition" is checked out in "<path>", not in checkout "bug-fix".`
    Never silently use another slot. (Git would refuse the switch anyway.)
 2. **Slot exists, holds another branch (or is detached).**
    - Acquire the slot's lease **before** touching it. Today an attach persists
@@ -179,7 +179,7 @@ step, not in `setup`. The schema description for `setup` should say so when
 ### Settings → Worktrees: the PR flow
 
 1. **Upstream comparison.** Add `upstreamComparison?: { label: string; ahead:
-   number; behind: number }` to `WorktreeManagementEntry`, computed in
+number; behind: number }` to `WorktreeManagementEntry`, computed in
    `getManagementState` from `getBranchUpstream` and `getAheadBehind` (the same
    informational, failure-tolerant pattern as `sourceComparison`). Render it in
    `WorktreeGitStatus.tsx` next to the existing comparison, for example
