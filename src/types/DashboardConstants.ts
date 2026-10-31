@@ -4873,6 +4873,8 @@ export const TOOL_CALL_EXPANSION_SECTIONS = {
   RAW: "raw",
   APPEND_STEP_PROMPTS: "appendStepPrompts",
   LIST_HARNESS_MODELS: "listHarnessModels",
+  /** A subagent spawn card's prompt; its response uses OUTPUT / ERROR. */
+  SUBAGENT_PROMPT: "subagentPrompt",
 } as const;
 
 export type ToolCallExpansionSection =

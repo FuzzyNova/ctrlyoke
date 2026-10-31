@@ -836,9 +836,31 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       const sectionExpanded = toolContentIsError
         ? expansion.errorExpanded
         : expansion.outputExpanded;
+      const isSubagentSpawn =
+        event.type === CLI_EVENT_TYPES.TOOL_CALL &&
+        !!(event.data as ToolCall).subagentSpawn;
+      if (isSubagentSpawn) {
+        // The spawn card's prompt and response are fully absent from the DOM
+        // while collapsed, so any active match in them opens the section.
+        if (
+          activeFindMatch?.field === "prompt" &&
+          !expansion.subagentPromptExpanded &&
+          getFieldMatches("prompt").some((match) => match.active)
+        ) {
+          pendingToolCallExpand = TOOL_CALL_EXPANSION_SECTIONS.SUBAGENT_PROMPT;
+        } else if (
+          activeFindMatch?.field === OUTPUT_FIND_TOOL_CONTENT_FIELD &&
+          !sectionExpanded &&
+          getFieldMatches("toolContent").some((match) => match.active)
+        ) {
+          pendingToolCallExpand = toolContentIsError
+            ? TOOL_CALL_EXPANSION_SECTIONS.ERROR
+            : TOOL_CALL_EXPANSION_SECTIONS.OUTPUT;
+        }
+      }
       // Params are fully absent from the DOM while collapsed (not merely
       // truncated), so any active match there means the toggle must open.
-      if (
+      else if (
         activeFindMatch?.field === "params" &&
         !expansion.paramsExpanded &&
         getFieldMatches("params").some((match) => match.active)
@@ -1245,6 +1267,13 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
               descriptionFindMatches={getFieldMatches("header")}
               statusFindMatches={getFieldMatches("status")}
               promptFindMatches={getFieldMatches("prompt")}
+              resultFindMatches={getFieldMatches(
+                OUTPUT_FIND_TOOL_CONTENT_FIELD
+              )}
+              expansion={row.toolCall?.expansion}
+              onExpansionChange={(section, expanded) =>
+                onToolCallExpansionChange?.(row.key, section, expanded)
+              }
             />
           );
         }

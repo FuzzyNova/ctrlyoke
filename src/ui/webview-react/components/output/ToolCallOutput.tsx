@@ -63,7 +63,7 @@ function resultDotStatus(result?: ToolResult): ToolResultStatus {
  * Expansion state for a tool call that may be controlled by the output pane
  * (`expansion` given) or self-managed (standalone renders).
  */
-function useToolCallExpansion(
+export function useToolCallExpansion(
   expansion: ToolCallExpansionState | undefined,
   onExpansionChange:
     ((section: ToolCallExpansionSection, expanded: boolean) => void) | undefined

@@ -163,10 +163,12 @@ the harness reported. Codex's web tool can also open a page (**Open page:**) or
 search within one (**Find in page:**); Codex does not record what those
 returned, so their rows show only the heading.
 
-Each subagent call has a dedicated **Subagent:** card showing the agent, its
-live progress, the prompt it was given (click **Hide prompt** to collapse it),
-and the final result. A background agent's report appears with its own activity
-instead of on the card. Child activity is indented under its spawn card, and
+Each subagent call has a dedicated **Subagent:** card showing the agent and its
+live progress. The prompt it was given and the response it handed back start
+collapsed, because the agent's own activity below the card already shows the
+work; click **Show prompt** or **Show response** to read them. Find opens either
+section when a match is inside it. A background agent's report appears with its
+own activity instead of on the card. Child activity is indented under its spawn card, and
 each run of it is labelled **Subagent:** with the agent's description, so
 parallel agents remain distinguishable.
 
