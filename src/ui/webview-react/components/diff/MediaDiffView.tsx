@@ -3,6 +3,7 @@ import type { WorkspaceMediaDiffSides } from "@root/types/HostedWorkspaceViewerT
 import { WORKSPACE_MEDIA_KINDS } from "@root/types/DashboardConstants";
 import { workspaceRawUrl } from "@utils/hostedApi";
 import { WorkspaceMediaElement } from "@components/shared/WorkspaceMediaElement";
+import { WorkspacePdfViewer } from "@components/workspace-viewer/WorkspacePdfViewer";
 import { Icon } from "../shared/Icon";
 
 export interface MediaDiffViewProps {
@@ -40,7 +41,13 @@ function MediaSide({
         className="flex h-64 min-w-72 items-center justify-center overflow-hidden rounded-sm border border-panel-border bg-editor-bg"
         style={checkerboardStyle}
       >
-        {side && mediaKind !== WORKSPACE_MEDIA_KINDS.PDF ? (
+        {side && mediaKind === WORKSPACE_MEDIA_KINDS.PDF ? (
+          <WorkspacePdfViewer
+            rawUrl={workspaceRawUrl(side)}
+            label={sideName}
+            compact
+          />
+        ) : side ? (
           <WorkspaceMediaElement
             kind={mediaKind}
             rawUrl={workspaceRawUrl(side)}
@@ -53,9 +60,18 @@ function MediaSide({
             aria-label={`${sideName} ${mediaKind} unavailable`}
             className="px-4 text-center text-xs italic text-description-fg"
           >
-            {side ? `${mediaKind} preview` : label === "Before" ? `No previous ${mediaKind}` : `No new ${mediaKind}`}
+            {side
+              ? `${mediaKind} preview`
+              : label === "Before"
+                ? `No previous ${mediaKind}`
+                : `No new ${mediaKind}`}
             {side && (
-              <a href={workspaceRawUrl(side)} target="_blank" rel="noreferrer" className="ml-2 text-link-fg underline">
+              <a
+                href={workspaceRawUrl(side)}
+                target="_blank"
+                rel="noreferrer"
+                className="ml-2 text-link-fg underline"
+              >
                 Open in new tab
               </a>
             )}

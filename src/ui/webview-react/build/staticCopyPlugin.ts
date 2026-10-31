@@ -8,6 +8,8 @@ export interface StaticCopyTarget {
   readonly src: string;
   /** Destination directory, relative to the build `outDir`. */
   readonly dest: string;
+  /** Optional predicate for excluding files from a directory target. */
+  readonly filter?: (relativePath: string) => boolean;
 }
 
 /** One concrete file to copy, with its forward-slash path inside the output directory. */
@@ -24,6 +26,10 @@ const DEV_SERVER_CONTENT_TYPES: Readonly<Record<string, string>> = {
   ".png": "image/png",
   ".svg": "image/svg+xml",
   ".ttf": "font/ttf",
+  ".wasm": "application/wasm",
+  ".bcmap": "application/octet-stream",
+  ".pfb": "application/octet-stream",
+  ".icc": "application/octet-stream",
 };
 const DEFAULT_CONTENT_TYPE = "application/octet-stream";
 
@@ -54,12 +60,14 @@ export function resolveStaticCopyFiles(
       .filter((entry) => entry.isFile())
       .map((entry) => {
         const filePath = path.join(entry.parentPath, entry.name);
+        const relativePath = path.relative(sourcePath, filePath);
+        return { filePath, relativePath };
+      })
+      .filter(({ relativePath }) => target.filter?.(relativePath) ?? true)
+      .map(({ filePath, relativePath }) => {
         return {
           sourcePath: filePath,
-          outputPath: toOutputPath(
-            target.dest,
-            path.relative(sourcePath, filePath)
-          ),
+          outputPath: toOutputPath(target.dest, relativePath),
         };
       });
   });

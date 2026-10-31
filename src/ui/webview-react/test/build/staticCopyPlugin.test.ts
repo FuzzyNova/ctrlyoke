@@ -53,6 +53,24 @@ describe("resolveStaticCopyFiles", () => {
     ]);
   });
 
+  it("filters directory files by their relative path", () => {
+    const wasm = writeFile("pdfjs/wasm/openjpeg.wasm");
+    writeFile("pdfjs/wasm/quickjs-eval.wasm");
+
+    expect(
+      resolveStaticCopyFiles(
+        [
+          {
+            src: "pdfjs/wasm",
+            dest: "pdfjs/wasm",
+            filter: (relativePath) => !relativePath.startsWith("quickjs-eval."),
+          },
+        ],
+        root
+      )
+    ).toEqual([{ sourcePath: wasm, outputPath: "pdfjs/wasm/openjpeg.wasm" }]);
+  });
+
   it("throws when a source is missing instead of silently skipping it", () => {
     expect(() =>
       resolveStaticCopyFiles([{ src: "missing.svg", dest: "." }], root)

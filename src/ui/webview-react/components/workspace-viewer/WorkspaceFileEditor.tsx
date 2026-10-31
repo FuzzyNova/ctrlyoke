@@ -77,6 +77,7 @@ import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 import { createReferencePatterns } from "@root/utils/ReferencePatterns";
 import { getInclusiveEndLine } from "@root/utils/InclusiveLineRange";
 import { WorkspaceMediaElement } from "@components/shared/WorkspaceMediaElement";
+import { WorkspacePdfViewer } from "./WorkspacePdfViewer";
 import {
   createAtomicReferenceExtension,
   createReferenceLinkHandlerExtension,
@@ -715,10 +716,7 @@ export const WorkspaceFileEditor = forwardRef<
       return (
         <div className="flex h-full min-h-0 w-full items-center justify-center overflow-auto bg-editor-bg p-4">
           {media.kind === WORKSPACE_MEDIA_KINDS.PDF ? (
-            <div className="flex flex-col items-center gap-2 text-sm text-description-fg">
-              <span>PDF preview</span>
-              <a href={media.rawUrl} target="_blank" rel="noreferrer" className="text-link-fg underline">Open in new tab</a>
-            </div>
+            <WorkspacePdfViewer rawUrl={media.rawUrl} label={filePath} />
           ) : (
             <WorkspaceMediaElement
               kind={media.kind}

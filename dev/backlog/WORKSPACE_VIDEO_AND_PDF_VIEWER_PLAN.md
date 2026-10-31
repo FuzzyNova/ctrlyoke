@@ -353,8 +353,8 @@ Each stage is one commit; tick it in the commit that lands it.
       "Open in new tab"), `DiffFileCard`/`rdvAdapter`/`diffFileRows`. No implementation deviations.
 - [x] **C. Video and audio rendering** (§3, §5): `<video>`/`<audio>` in the editor and
       diff sides, the playback-error fallback (also on `<img>`), mount-only-when-expanded.
-- [ ] **D. PDF via pdf.js** (§4): `pdfjs-dist`, static data copy, `WorkspacePdfViewer`,
-      wired into the editor and the diff sides.
+- [x] **D. PDF via pdf.js** (§4): `pdfjs-dist`, static data copy, `WorkspacePdfViewer`,
+      wired into the editor and the diff sides. No implementation deviations.
 - [ ] **E. Docs and changelog** (§6).
 
 ## Acceptance criteria
