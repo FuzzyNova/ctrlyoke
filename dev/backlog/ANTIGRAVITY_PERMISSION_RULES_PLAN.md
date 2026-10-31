@@ -336,6 +336,24 @@ honor it (verified). `CliIntegration`'s terminal-reuse compatibility check alrea
 reusing a terminal started with old rules. That includes a change to the user's global lists
 picked up by the union. Keep the file alive for the life of the PTY.
 
+## Implementation notes (orchestrator review, 2026-10-31)
+
+Gaps between the proposal and the current code, to settle during implementation:
+
+- **The dotted-id bug lands first.** The `mcp(<server>/<tool>)` rules must use the id that
+  `planMcpConfigArgs` writes, so sanitize it before the mapper emits MCP rules. Export the
+  sanitizer (e.g. `normalizeAntigravityMcpServerId` beside `normalizeClaudeMcpServerId` in
+  `src/types/ToolPermissionUtils.ts`) so both sides share one implementation.
+- **`ExecutionPlanBuilder` hardcodes the server-id normalizer to Claude.** The
+  `mergeServerDeniedTools` call passes `normalizeClaudeMcpServerId` only when the harness is
+  `claude-cli`. Server `deniedTools` on Antigravity need the Antigravity sanitizer there too.
+  Replace the harness check with a mapper/provider-supplied normalizer rather than adding a
+  second `harnessId ===` branch.
+- **`PermissionContext` carries no `additionalArgs`.** The `--settings` collision check needs
+  them. Add an optional field (or pass the resolved string) from `ExecutionPlanBuilder`.
+- **`allowAll` emits `--settings` only to carry `toolPermission: "always-proceed"`** (plus the
+  deny union). It is never "empty", so it always emits a file.
+
 ## Phases
 
 0. **Research.** Done 2026-10-31; see "Phase 0 findings". Not covered, and left to phase 3:
