@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import { staticCopyPlugin } from "./build/staticCopyPlugin";
+import { PDFJS_STATIC_DIRS } from "./build/pdfjsStaticAssets";
 import { BUILD_MODES, HOSTED_ICON_FILES } from "../../types/DashboardConstants";
 
 export default defineConfig(({ mode }) => ({
@@ -15,24 +16,13 @@ export default defineConfig(({ mode }) => ({
     staticCopyPlugin([
       // Dictionaries for Typo.js spell checking (keeps the en_US/ locale subfolder)
       { src: "static/dictionaries", dest: "dictionaries" },
-      // pdf.js data files needed by its worker. QuickJS is PDF scripting support.
-      {
-        src: "../../../node_modules/pdfjs-dist/cmaps",
-        dest: "pdfjs/cmaps",
-      },
-      {
-        src: "../../../node_modules/pdfjs-dist/standard_fonts",
-        dest: "pdfjs/standard_fonts",
-      },
-      {
-        src: "../../../node_modules/pdfjs-dist/iccs",
-        dest: "pdfjs/iccs",
-      },
-      {
-        src: "../../../node_modules/pdfjs-dist/wasm",
-        dest: "pdfjs/wasm",
-        filter: (relativePath) => !/^quickjs-eval\./i.test(relativePath),
-      },
+      // pdf.js data files needed by its worker; see pdfjsStaticAssets.ts for
+      // which files ship and why.
+      ...PDFJS_STATIC_DIRS.map(({ dir, ships }) => ({
+        src: `../../../node_modules/pdfjs-dist/${dir}`,
+        dest: `pdfjs/${dir}`,
+        filter: ships,
+      })),
       // typo.js for spell checking from npm package (typo-js)
       { src: "../../../node_modules/typo-js/typo.js", dest: "." },
       // Codicon CSS and font from @vscode/codicons package

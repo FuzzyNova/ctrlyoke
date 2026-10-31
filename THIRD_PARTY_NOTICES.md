@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-This product includes third-party software and assets. This inventory was audited on **2026-10-17** from the production dependency tree and the extension and webview bundles shipped in the VSIX.
+This product includes third-party software and assets. This inventory was audited on **2026-10-31** from the production dependency tree and the extension and webview bundles shipped in the VSIX.
 
 ## Commercial Distribution
 
@@ -9,6 +9,7 @@ Commercial distribution is subject to the terms of each component license. The p
 - `elkjs` is licensed under EPL-2.0 and is included in the Mermaid ELK layout chunk in the webview bundle. See [Special Attention](#special-attention).
 - `@resvg/resvg-wasm` is licensed under MPL-2.0; source: <https://github.com/yisibl/resvg-js/tree/main/packages/resvg-wasm>. It is shipped in `out/runtime-deps/` as an isolated runtime package.
 - `dompurify` is dual-licensed `(MPL-2.0 OR Apache-2.0)`; this distribution relies on the Apache-2.0 option.
+- `pdfjs-dist` (pdf.js) is licensed under Apache-2.0 and renders PDFs in the hosted workspace viewer. pdf.js does not ship a `NOTICE` file. Its worker keeps its license header, and the full Apache-2.0 text is reproduced in [License Texts](#license-texts). Its fonts, CMaps, ICC profile and image decoders are separately licensed; see [Bundled Components](#bundled-components). The GPL-2.0 Liberation Sans fonts in the `pdfjs-dist` package are not shipped.
 
 ## Attribution
 
@@ -27,6 +28,14 @@ Commercial distribution is subject to the terms of each component license. The p
 - Source: <https://github.com/yisibl/resvg-js/tree/main/packages/resvg-wasm>
 - License text: <https://www.mozilla.org/en-US/MPL/2.0/>
 
+### pdfjs-dist (pdf.js)
+
+- Version: `6.4.299`
+- License: `Apache-2.0`
+- Copyright: Mozilla Foundation
+- Source: <https://github.com/mozilla/pdf.js>
+- License text: <https://www.apache.org/licenses/LICENSE-2.0>
+
 ## Special Attention
 
 | Package | Version | License   | Copyright | Source                            |
@@ -37,7 +46,7 @@ EPL-2.0 license: <https://www.eclipse.org/legal/epl-2.0/>
 
 ## Production Dependency Inventory
 
-The production dependency tree contains **415 packages**. Each package is listed with its installed version, declared license, and copyright line. Full license texts are grouped below only when the package files contain identical text.
+The production dependency tree contains **417 packages**. Each package is listed with its installed version, declared license, and copyright line. Full license texts are grouped below only when the package files contain identical text.
 
 | Package                                     | Version         | License                   | Copyright                                                                                                                                                                   |
 | ------------------------------------------- | --------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -48,7 +57,7 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `@chevrotain/regexp-to-ast`                 | `13.2.0`        | `Apache-2.0`              | Not stated in package metadata or license file                                                                                                                              |
 | `@chevrotain/types`                         | `13.2.0`        | `Apache-2.0`              | Shahar Soel                                                                                                                                                                 |
 | `@chevrotain/utils`                         | `13.2.0`        | `Apache-2.0`              | Shahar Soel                                                                                                                                                                 |
-| `@codemirror/autocomplete`                  | `6.20.3`        | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
+| `@codemirror/autocomplete`                  | `6.20.4`        | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
 | `@codemirror/commands`                      | `6.11.1`        | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
 | `@codemirror/lang-cpp`                      | `6.0.3`         | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
 | `@codemirror/lang-css`                      | `6.3.1`         | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
@@ -66,7 +75,7 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `@codemirror/lsp-client`                    | `6.3.0`         | `MIT`                     | Copyright (C) 2025 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
 | `@codemirror/search`                        | `6.7.2`         | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
 | `@codemirror/state`                         | `6.7.6`         | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
-| `@codemirror/view`                          | `6.43.14`       | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
+| `@codemirror/view`                          | `6.43.15`       | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
 | `@dnd-kit/accessibility`                    | `3.1.1`         | `MIT`                     | Copyright (c) 2021, Claudéric Demers                                                                                                                                        |
 | `@dnd-kit/core`                             | `6.3.1`         | `MIT`                     | Copyright (c) 2021, Claudéric Demers                                                                                                                                        |
 | `@dnd-kit/sortable`                         | `10.0.0`        | `MIT`                     | Copyright (c) 2021, Claudéric Demers                                                                                                                                        |
@@ -96,7 +105,8 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `@microsoft/applicationinsights-shims`      | `3.0.1`         | `MIT`                     | Copyright (c) Microsoft Corporation                                                                                                                                         |
 | `@microsoft/applicationinsights-web-basic`  | `3.4.5`         | `MIT`                     | Copyright (c) Microsoft Corporation                                                                                                                                         |
 | `@microsoft/dynamicproto-js`                | `2.0.5`         | `MIT`                     | Microsoft Application Insights Team                                                                                                                                         |
-| `@modelcontextprotocol/sdk`                 | `1.32.1`        | `MIT`                     | Copyright (c) 2024 Anthropic, PBC                                                                                                                                           |
+| `@modelcontextprotocol/sdk`                 | `1.32.2`        | `MIT`                     | Copyright (c) 2024 Anthropic, PBC                                                                                                                                           |
+| `@napi-rs/canvas`                           | `1.1.0`         | `MIT`                     | Copyright (c) 2020 lynweklm@gmail.com                                                                                                                                       |
 | `@nevware21/ts-async`                       | `0.5.5`         | `MIT`                     | Copyright (c) 2022 NevWare21 Solutions LLC                                                                                                                                  |
 | `@nevware21/ts-utils`                       | `0.16.0`        | `MIT`                     | Copyright (c) 2022 NevWare21 Solutions LLC                                                                                                                                  |
 | `@noble/hashes`                             | `1.8.0`         | `MIT`                     | Copyright (c) 2022 Paul Miller (https://paulmillr.com)                                                                                                                      |
@@ -113,8 +123,8 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `@peculiar/x509`                            | `1.14.3`        | `MIT`                     | Copyright (c) Peculiar Ventures. All rights reserved.                                                                                                                       |
 | `@pushforge/builder`                        | `2.0.5`         | `MIT`                     | Copyright (c) 2025 David Raphi                                                                                                                                              |
 | `@resvg/resvg-wasm`                         | `2.6.2`         | `MPL-2.0`                 | resvg-js contributors                                                                                                                                                       |
-| `@tanstack/react-virtual`                   | `3.14.18`       | `MIT`                     | Copyright (c) 2021-present Tanner Linsley                                                                                                                                   |
-| `@tanstack/virtual-core`                    | `3.19.3`        | `MIT`                     | Copyright (c) 2021-present Tanner Linsley                                                                                                                                   |
+| `@tanstack/react-virtual`                   | `3.14.22`       | `MIT`                     | Copyright (c) 2021-present Tanner Linsley                                                                                                                                   |
+| `@tanstack/virtual-core`                    | `3.19.7`        | `MIT`                     | Copyright (c) 2021-present Tanner Linsley                                                                                                                                   |
 | `@types/body-parser`                        | `1.19.6`        | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
 | `@types/connect`                            | `3.4.38`        | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
 | `@types/d3`                                 | `7.4.3`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
@@ -169,7 +179,7 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `@types/ws`                                 | `8.18.2`        | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
 | `@ungap/structured-clone`                   | `1.4.0`         | `ISC`                     | Copyright (c) 2021, Andrea Giammarchi, @WebReflection                                                                                                                       |
 | `@upsetjs/venn.js`                          | `2.0.0`         | `MIT`                     | Copyright (c) 2013 Ben Frederickson                                                                                                                                         |
-| `@vscode/codicons`                          | `0.0.46-24`     | `CC-BY-4.0`               | Microsoft Corporation                                                                                                                                                       |
+| `@vscode/codicons`                          | `0.0.46-24`     | `CC-BY-4.0`               | Copyright (c) Microsoft Corporation.                                                                                                                                        |
 | `@vscode/extension-telemetry`               | `1.5.2`         | `MIT`                     | Copyright (c) Microsoft Corporation                                                                                                                                         |
 | `@xterm/addon-fit`                          | `0.11.0`        | `MIT`                     | Copyright (c) 2019, The xterm.js authors (https://github.com/xtermjs/xterm.js)                                                                                              |
 | `@xterm/addon-webgl`                        | `0.19.0`        | `MIT`                     | Copyright (c) 2018, The xterm.js authors (https://github.com/xtermjs/xterm.js)                                                                                              |
@@ -178,7 +188,7 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `ajv-formats`                               | `3.0.1`         | `MIT`                     | Copyright (c) 2020 Evgeny Poberezkin                                                                                                                                        |
 | `ansi-regex`                                | `5.0.1`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
 | `ansi-styles`                               | `4.3.0`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
-| `argparse`                                  | `2.0.1`         | `Python-2.0`              | Copyright (c) 1991 - 1995, Stichting Mathematisch Centrum Amsterdam,                                                                                                        |
+| `argparse`                                  | `3.0.3`         | `PSF-2.0`                 | Not stated in package metadata or license file                                                                                                                              |
 | `asn1js`                                    | `3.0.10`        | `BSD-3-Clause`            | Copyright (c) 2014, GMO GlobalSign                                                                                                                                          |
 | `bytes`                                     | `3.1.2`         | `MIT`                     | Copyright (c) 2012-2014 TJ Holowaychuk <tj@vision-media.ca>                                                                                                                 |
 | `bytestreamjs`                              | `2.0.1`         | `BSD-3-Clause`            | Copyright (c) 2016-2022, Peculiar Ventures                                                                                                                                  |
@@ -271,7 +281,7 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `get-caller-file`                           | `2.0.5`         | `ISC`                     | Copyright 2018 Stefan Penner                                                                                                                                                |
 | `gitdiff-parser`                            | `0.3.1`         | `MIT`                     | Copyright (c) 2020 Baidu EFE                                                                                                                                                |
 | `glob`                                      | `13.0.6`        | `BlueOak-1.0.0`           | Isaac Z. Schlueter <i@izs.me> (https://blog.izs.me/)                                                                                                                        |
-| `gpt-tokenizer`                             | `4.0.0`         | `MIT`                     | Copyright (c) 2023-2024 Bazyli Brzoska                                                                                                                                      |
+| `gpt-tokenizer`                             | `4.1.0`         | `MIT`                     | Copyright (c) 2023-2024 Bazyli Brzoska                                                                                                                                      |
 | `hachure-fill`                              | `0.5.2`         | `MIT`                     | Copyright (c) 2023 Preet Shihn                                                                                                                                              |
 | `hast-util-from-parse5`                     | `8.0.3`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `hast-util-parse-selector`                  | `4.0.0`         | `MIT`                     | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
@@ -299,7 +309,7 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `isexe`                                     | `2.0.0`         | `ISC`                     | Copyright (c) Isaac Z. Schlueter and Contributors                                                                                                                           |
 | `jose`                                      | `6.2.12`        | `MIT`                     | Copyright (c) 2018 Filip Skokan                                                                                                                                             |
 | `js-tokens`                                 | `4.0.0`         | `MIT`                     | Copyright (c) 2014, 2015, 2016, 2017, 2018 Simon Lydell                                                                                                                     |
-| `js-yaml`                                   | `5.4.3`         | `MIT`                     | Copyright (C) 2011-2015 by Vitaly Puzrin                                                                                                                                    |
+| `js-yaml`                                   | `5.5.0`         | `MIT`                     | Copyright (C) 2011-2015 by Vitaly Puzrin                                                                                                                                    |
 | `json-schema-typed`                         | `8.0.2`         | `BSD-2-Clause`            | Remy Rylan                                                                                                                                                                  |
 | `jsonc-parser`                              | `3.3.1`         | `MIT`                     | Copyright (c) Microsoft                                                                                                                                                     |
 | `katex`                                     | `0.18.10`       | `MIT`                     | Copyright (c) 2013-2020 Khan Academy and other contributors                                                                                                                 |
@@ -312,12 +322,12 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `longest-streak`                            | `3.1.0`         | `MIT`                     | Copyright (c) 2015 Titus Wormer <mailto:tituswormer@gmail.com>                                                                                                              |
 | `loose-envify`                              | `1.4.0`         | `MIT`                     | Copyright (c) 2015 Andres Suarez <zertosh@gmail.com>                                                                                                                        |
 | `lru-cache`                                 | `11.5.3`        | `BlueOak-1.0.0`           | Isaac Z. Schlueter <i@izs.me>                                                                                                                                               |
-| `lucide-react`                              | `1.56.0`        | `ISC`                     | Copyright (c) 2026 Lucide Icons and Contributors                                                                                                                            |
+| `lucide-react`                              | `1.61.0`        | `ISC`                     | Copyright (c) 2026 Lucide Icons and Contributors                                                                                                                            |
 | `markdown-table`                            | `3.0.4`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `marked`                                    | `15.0.12`       | `MIT`                     | Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/)                                                                                                                |
 | `marked`                                    | `16.4.2`        | `MIT`                     | Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/)                                                                                                                |
 | `marked`                                    | `18.1.1`        | `MIT`                     | Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/)                                                                                                                |
-| `mdast-util-find-and-replace`               | `3.0.3`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `mdast-util-find-and-replace`               | `3.0.4`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `mdast-util-from-markdown`                  | `2.1.0`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `mdast-util-gfm`                            | `3.1.0`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `mdast-util-gfm-autolink-literal`           | `2.0.1`         | `MIT`                     | Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
@@ -374,6 +384,7 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `path-exists`                               | `4.0.0`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
 | `path-key`                                  | `3.1.1`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
 | `path-scurry`                               | `2.0.2`         | `BlueOak-1.0.0`           | Isaac Z. Schlueter <i@izs.me> (https://blog.izs.me)                                                                                                                         |
+| `pdfjs-dist`                                | `6.4.299`       | `Apache-2.0`              | Not stated in package metadata or license file                                                                                                                              |
 | `pkce-challenge`                            | `5.0.1`         | `MIT`                     | Copyright (c) 2019                                                                                                                                                          |
 | `pkijs`                                     | `3.4.1`         | `BSD-3-Clause`            | Copyright (c) 2014, GlobalSign                                                                                                                                              |
 | `pngjs`                                     | `5.0.0`         | `MIT`                     | Alexandre Paré, Gaurav Mali, Gusts Kaksis, Kuba Niegowski, Luke Page, Pietajan De Potter, Steven Sojka, liangzeng, Michael Vogt, Xin-Xin Wang, toriningen, Eugene Kulabuhov |
@@ -384,10 +395,10 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `pvutils`                                   | `1.2.0`         | `MIT`                     | Copyright (c) 2016-2019, Peculiar Ventures                                                                                                                                  |
 | `qrcode`                                    | `1.5.4`         | `MIT`                     | Copyright (c) 2012 Ryan Day                                                                                                                                                 |
 | `raw-body`                                  | `3.0.2`         | `MIT`                     | Copyright (c) 2013-2014 Jonathan Ong <me@jongleberry.com>                                                                                                                   |
-| `react`                                     | `19.3.0`        | `MIT`                     | Copyright (c) Meta Platforms, Inc. and affiliates.                                                                                                                          |
+| `react`                                     | `19.3.1`        | `MIT`                     | Copyright (c) Meta Platforms, Inc. and affiliates.                                                                                                                          |
 | `react-diff-view`                           | `3.3.3`         | `MIT`                     | Copyright (c) 2017 Gray Zhang                                                                                                                                               |
-| `react-dom`                                 | `19.3.0`        | `MIT`                     | Copyright (c) Meta Platforms, Inc. and affiliates.                                                                                                                          |
-| `react-resizable-panels`                    | `4.14.5`        | `MIT`                     | Copyright (c) 2018 Brian Vaughn                                                                                                                                             |
+| `react-dom`                                 | `19.3.1`        | `MIT`                     | Copyright (c) Meta Platforms, Inc. and affiliates.                                                                                                                          |
+| `react-resizable-panels`                    | `4.15.0`        | `MIT`                     | Copyright (c) 2018 Brian Vaughn                                                                                                                                             |
 | `readdirp`                                  | `5.1.1`         | `MIT`                     | Copyright (c) 2012-2019 Thorsten Lorenz, Paul Miller (https://paulmillr.com)                                                                                                |
 | `reflect-metadata`                          | `0.2.2`         | `Apache-2.0`              | Ron Buckton                                                                                                                                                                 |
 | `refractor`                                 | `5.0.0`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
@@ -405,13 +416,13 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `roughjs`                                   | `4.6.6`         | `MIT`                     | Copyright (c) 2019 Preet Shihn                                                                                                                                              |
 | `rw`                                        | `1.3.3`         | `BSD-3-Clause`            | Copyright (c) 2014-2016, Michael Bostock                                                                                                                                    |
 | `safer-buffer`                              | `2.1.2`         | `MIT`                     | Copyright (c) 2018 Nikita Skovoroda <chalkerx@gmail.com>                                                                                                                    |
-| `selfsigned`                                | `5.5.0`         | `MIT`                     | Copyright (c) 2013 José F. Romaniello                                                                                                                                       |
+| `selfsigned`                                | `5.5.0`         | `MIT`                     | Copyright (c) 2013 José F. Romaniello                                                                                                                                       |
 | `set-blocking`                              | `2.0.0`         | `ISC`                     | Copyright (c) 2016, Contributors                                                                                                                                            |
 | `shallow-equal`                             | `3.1.0`         | `MIT`                     | Copyright © 2023 Misha Moroshko and Philip Su                                                                                                                               |
 | `shebang-command`                           | `2.0.0`         | `MIT`                     | Copyright (c) Kevin Mårtensson <kevinmartensson@gmail.com> (github.com/kevva)                                                                                               |
 | `shebang-regex`                             | `3.0.0`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
 | `space-separated-tokens`                    | `2.0.2`         | `MIT`                     | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `streamdown`                                | `2.7.0`         | `Apache-2.0`              | Copyright 2023 Vercel, Inc.                                                                                                                                                 |
+| `streamdown`                                | `2.7.1`         | `Apache-2.0`              | Copyright 2023 Vercel, Inc.                                                                                                                                                 |
 | `string-width`                              | `4.2.3`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
 | `stringify-entities`                        | `4.0.4`         | `MIT`                     | Copyright (c) 2015 Titus Wormer <mailto:tituswormer@gmail.com>                                                                                                              |
 | `strip-ansi`                                | `6.0.1`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
@@ -425,13 +436,13 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `tslib`                                     | `1.14.1`        | `0BSD`                    | Copyright (c) Microsoft Corporation.                                                                                                                                        |
 | `tslib`                                     | `2.8.1`         | `0BSD`                    | Copyright (c) Microsoft Corporation.                                                                                                                                        |
 | `tsyringe`                                  | `4.10.0`        | `MIT`                     | Copyright (c) Microsoft Corporation. All rights reserved.                                                                                                                   |
-| `typo-js`                                   | `1.3.2`         | `BSD-3-Clause`            | Christopher Finke <cfinke@gmail.com> (http://www.chrisfinke.com/)                                                                                                           |
+| `typo-js`                                   | `1.4.0`         | `BSD-3-Clause`            | Christopher Finke <cfinke@gmail.com> (http://www.chrisfinke.com/)                                                                                                           |
 | `unified`                                   | `11.0.5`        | `MIT`                     | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
 | `unist-util-is`                             | `6.0.1`         | `MIT`                     | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
 | `unist-util-position`                       | `5.0.0`         | `MIT`                     | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
 | `unist-util-stringify-position`             | `4.0.0`         | `MIT`                     | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `unist-util-visit`                          | `5.1.0`         | `MIT`                     | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `unist-util-visit-parents`                  | `6.0.2`         | `MIT`                     | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `unist-util-visit`                          | `5.2.0`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `unist-util-visit-parents`                  | `6.1.0`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
 | `unpipe`                                    | `1.0.0`         | `MIT`                     | Copyright (c) 2015 Douglas Christopher Wilson <doug@somethingdoug.com>                                                                                                      |
 | `uuid`                                      | `14.0.3`        | `MIT`                     | Copyright (c) 2010-2020 Robert Kieffer and other contributors                                                                                                               |
 | `vary`                                      | `1.1.2`         | `MIT`                     | Copyright (c) 2014-2017 Douglas Christopher Wilson                                                                                                                          |
@@ -454,8 +465,21 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `zod`                                       | `4.6.7`         | `MIT`                     | Copyright (c) 2025 Colin McDonnell                                                                                                                                          |
 | `zod-to-json-schema`                        | `3.25.2`        | `ISC`                     | Copyright (c) 2020, Stefan Terdell                                                                                                                                          |
 | `zundo`                                     | `2.3.0`         | `MIT`                     | Copyright (c) 2021 Charles Kornoelje                                                                                                                                        |
-| `zustand`                                   | `5.0.15`        | `MIT`                     | Copyright (c) 2019 Paul Henschel                                                                                                                                            |
+| `zustand`                                   | `5.0.16`        | `MIT`                     | Copyright (c) 2019 Paul Henschel                                                                                                                                            |
 | `zwitch`                                    | `2.0.4`         | `MIT`                     | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+
+## Bundled Components
+
+`pdfjs-dist` ships these components under their own licenses. The webview build copies them, with their license files, to `out/ui/webview-react/pdfjs/`.
+
+| Component                       | Shipped as                                                                       | License                       | Copyright                                                                                                                          | Source                                                 |
+| ------------------------------- | -------------------------------------------------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Adobe CMaps                     | `pdfjs/cmaps/*.bcmap`                                                            | `BSD-3-Clause`                | Copyright 1990-2009 Adobe Systems Incorporated                                                                                     | <https://github.com/adobe-type-tools/cmap-resources>   |
+| Foxit Symbol and Dingbats fonts | `pdfjs/standard_fonts/FoxitSymbol.pfb`, `pdfjs/standard_fonts/FoxitDingbats.pfb` | `BSD-3-Clause`                | Copyright 2014 PDFium Authors                                                                                                      | <https://pdfium.googlesource.com/pdfium/>              |
+| CGATS001Compat ICC profile      | `pdfjs/iccs/CGATS001Compat-v2-micro.icc`                                         | `CC0-1.0`                     | Dedicated to the public domain                                                                                                     | <https://github.com/saucecontrol/Compact-ICC-Profiles> |
+| OpenJPEG decoder                | `pdfjs/wasm/openjpeg.wasm`, `pdfjs/wasm/openjpeg_nowasm_fallback.js`             | `BSD-2-Clause`                | Copyright (c) 2002-2014, Universite catholique de Louvain (UCL), Belgium, and contributors; Copyright (c) 2024, Mozilla Foundation | <https://github.com/uclouvain/openjpeg>                |
+| PDFium JBIG2 decoder            | `pdfjs/wasm/jbig2.wasm`, `pdfjs/wasm/jbig2_nowasm_fallback.js`                   | `BSD-3-Clause AND Apache-2.0` | Copyright 2014 The PDFium Authors; Copyright 2026 Mozilla Foundation                                                               | <https://pdfium.googlesource.com/pdfium/>              |
+| qcms color management           | `pdfjs/wasm/qcms_bg.wasm`                                                        | `MIT`                         | Copyright (C) 2009-2024 Mozilla Corporation; Copyright (C) 1998-2007 Marti Maria                                                   | <https://github.com/FirefoxGraphics/qcms>              |
 
 ## License Texts
 
@@ -522,7 +546,7 @@ SOFTWARE.
 Packages: @chevrotain/cst-dts-gen@13.2.0, @chevrotain/gast@13.2.0, @chevrotain/regexp-to-ast@13.2.0, @chevrotain/types@13.2.0, @chevrotain/utils@13.2.0, chevrotain@13.2.0, diff-match-patch@1.0.5, dompurify@3.4.17
 
 ```text
-Apache License
+                                 Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
 
@@ -727,7 +751,7 @@ Apache License
 
 ### License text 4: MIT
 
-Packages: @codemirror/autocomplete@6.20.3, @codemirror/commands@6.11.1, @codemirror/lang-cpp@6.0.3, @codemirror/lang-css@6.3.1, @codemirror/lang-html@6.4.12, @codemirror/lang-java@6.0.2, @codemirror/lang-javascript@6.2.5, @codemirror/lang-json@6.0.2, @codemirror/lang-markdown@6.5.2, @codemirror/lang-php@6.0.2, @codemirror/lang-python@6.2.1, @codemirror/lang-rust@6.0.2, @codemirror/language@6.13.1, @codemirror/lint@6.9.7, @codemirror/search@6.7.2, @codemirror/state@6.7.6, @codemirror/view@6.43.14, codemirror@6.0.2
+Packages: @codemirror/autocomplete@6.20.4, @codemirror/commands@6.11.1, @codemirror/lang-cpp@6.0.3, @codemirror/lang-css@6.3.1, @codemirror/lang-html@6.4.12, @codemirror/lang-java@6.0.2, @codemirror/lang-javascript@6.2.5, @codemirror/lang-json@6.0.2, @codemirror/lang-markdown@6.5.2, @codemirror/lang-php@6.0.2, @codemirror/lang-python@6.2.1, @codemirror/lang-rust@6.0.2, @codemirror/language@6.13.1, @codemirror/lint@6.9.7, @codemirror/search@6.7.2, @codemirror/state@6.7.6, @codemirror/view@6.43.15, codemirror@6.0.2
 
 ```text
 MIT License
@@ -1119,7 +1143,7 @@ SOFTWARE.
 
 ### License text 18: MIT
 
-Packages: @modelcontextprotocol/sdk@1.32.1
+Packages: @modelcontextprotocol/sdk@1.32.2
 
 ```text
 MIT License
@@ -1147,6 +1171,68 @@ SOFTWARE.
 
 ### License text 19: MIT
 
+Packages: @napi-rs/canvas@1.1.0
+
+```text
+MIT License
+
+Copyright (c) 2020 lynweklm@gmail.com
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+src/svg_doc/broken_image.png is Chromium's broken-image icon
+(third_party/blink/public/default_100_percent/blink/broken_image.png),
+used under the Chromium license:
+
+Copyright 2015 The Chromium Authors
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google LLC nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+### License text 20: MIT
+
 Packages: @nevware21/ts-async@0.5.5, @nevware21/ts-utils@0.16.0
 
 ```text
@@ -1173,7 +1259,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 20: MIT
+### License text 21: MIT
 
 Packages: @noble/hashes@1.8.0
 
@@ -1201,37 +1287,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 21: MIT
-
-Packages: @peculiar/asn1-cms@2.11.0, @peculiar/asn1-csr@2.11.0, @peculiar/asn1-ecc@2.11.0, @peculiar/asn1-pfx@2.11.0, @peculiar/asn1-pkcs8@2.11.0, @peculiar/asn1-rsa@2.11.0, @peculiar/asn1-schema@2.11.0, @peculiar/asn1-x509@2.11.0, @peculiar/asn1-x509-attr@2.11.0
-
-```text
-MIT License
-
-Copyright (c) 2020
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
-
 ### License text 22: MIT
 
-Packages: @peculiar/asn1-pkcs9@2.11.0
+Packages: @peculiar/asn1-cms@2.11.0, @peculiar/asn1-csr@2.11.0, @peculiar/asn1-ecc@2.11.0, @peculiar/asn1-pfx@2.11.0, @peculiar/asn1-pkcs8@2.11.0, @peculiar/asn1-pkcs9@2.11.0, @peculiar/asn1-rsa@2.11.0, @peculiar/asn1-schema@2.11.0, @peculiar/asn1-x509@2.11.0, @peculiar/asn1-x509-attr@2.11.0
 
 ```text
 MIT License
@@ -1321,7 +1379,7 @@ No license text file was present in the package. Declared license: `MPL-2.0`.
 
 ### License text 26: MIT
 
-Packages: @tanstack/react-virtual@3.14.18, @tanstack/virtual-core@3.19.3
+Packages: @tanstack/react-virtual@3.14.22, @tanstack/virtual-core@3.19.7
 
 ```text
 MIT License
@@ -1352,7 +1410,7 @@ SOFTWARE.
 Packages: @types/body-parser@1.19.6, @types/connect@3.4.38, @types/d3@7.4.3, @types/d3-array@3.2.2, @types/d3-axis@3.0.6, @types/d3-brush@3.0.6, @types/d3-chord@3.0.6, @types/d3-color@3.1.3, @types/d3-contour@3.0.6, @types/d3-delaunay@6.0.4, @types/d3-dispatch@3.0.7, @types/d3-drag@3.0.7, @types/d3-dsv@3.0.7, @types/d3-ease@3.0.2, @types/d3-fetch@3.0.7, @types/d3-force@3.0.10, @types/d3-format@3.0.4, @types/d3-geo@3.1.1, @types/d3-hierarchy@3.1.7, @types/d3-interpolate@3.0.4, @types/d3-path@3.1.1, @types/d3-polygon@3.0.2, @types/d3-quadtree@3.0.6, @types/d3-random@3.0.4, @types/d3-scale@4.0.9, @types/d3-scale-chromatic@3.1.0, @types/d3-selection@3.0.12, @types/d3-shape@3.2.0, @types/d3-time@3.0.4, @types/d3-time-format@4.0.3, @types/d3-timer@3.0.2, @types/d3-transition@3.0.9, @types/d3-zoom@3.0.9, @types/estree@1.0.9, @types/estree-jsx@1.0.5, @types/express@5.0.6, @types/express-serve-static-core@5.1.3, @types/geojson@7946.0.16, @types/hast@3.0.5, @types/http-errors@2.0.5, @types/mdast@4.0.4, @types/node@26.6.5, @types/prismjs@1.26.6, @types/qs@6.15.1, @types/range-parser@1.2.7, @types/react@19.3.0, @types/send@1.2.1, @types/serve-static@2.2.0, @types/trusted-types@2.0.7, @types/unist@2.0.11, @types/unist@3.0.3, @types/ws@8.18.2
 
 ```text
-MIT License
+    MIT License
 
     Copyright (c) Microsoft Corporation.
 
@@ -1830,6 +1888,28 @@ Creative Commons may be contacted at creativecommons.org.
 ---
 
 Git Logo by [Jason Long](https://bsky.app/profile/jasonlong.me) is licensed under the [Creative Commons Attribution 3.0 Unported License](https://creativecommons.org/licenses/by/3.0/).
+
+    MIT License
+
+    Copyright (c) Microsoft Corporation.
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE
 ```
 
 ### License text 31: MIT
@@ -2014,74 +2094,12 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 38: Python-2.0
+### License text 38: PSF-2.0
 
-Packages: argparse@2.0.1
+Packages: argparse@3.0.3
 
 ```text
-A. HISTORY OF THE SOFTWARE
-==========================
-
-Python was created in the early 1990s by Guido van Rossum at Stichting
-Mathematisch Centrum (CWI, see http://www.cwi.nl) in the Netherlands
-as a successor of a language called ABC.  Guido remains Python's
-principal author, although it includes many contributions from others.
-
-In 1995, Guido continued his work on Python at the Corporation for
-National Research Initiatives (CNRI, see http://www.cnri.reston.va.us)
-in Reston, Virginia where he released several versions of the
-software.
-
-In May 2000, Guido and the Python core development team moved to
-BeOpen.com to form the BeOpen PythonLabs team.  In October of the same
-year, the PythonLabs team moved to Digital Creations, which became
-Zope Corporation.  In 2001, the Python Software Foundation (PSF, see
-https://www.python.org/psf/) was formed, a non-profit organization
-created specifically to own Python-related Intellectual Property.
-Zope Corporation was a sponsoring member of the PSF.
-
-All Python releases are Open Source (see http://www.opensource.org for
-the Open Source Definition).  Historically, most, but not all, Python
-releases have also been GPL-compatible; the table below summarizes
-the various releases.
-
-    Release         Derived     Year        Owner       GPL-
-                    from                                compatible? (1)
-
-    0.9.0 thru 1.2              1991-1995   CWI         yes
-    1.3 thru 1.5.2  1.2         1995-1999   CNRI        yes
-    1.6             1.5.2       2000        CNRI        no
-    2.0             1.6         2000        BeOpen.com  no
-    1.6.1           1.6         2001        CNRI        yes (2)
-    2.1             2.0+1.6.1   2001        PSF         no
-    2.0.1           2.0+1.6.1   2001        PSF         yes
-    2.1.1           2.1+2.0.1   2001        PSF         yes
-    2.1.2           2.1.1       2002        PSF         yes
-    2.1.3           2.1.2       2002        PSF         yes
-    2.2 and above   2.1.1       2001-now    PSF         yes
-
-Footnotes:
-
-(1) GPL-compatible doesn't mean that we're distributing Python under
-    the GPL.  All Python licenses, unlike the GPL, let you distribute
-    a modified version without making your changes open source.  The
-    GPL-compatible licenses make it possible to combine Python with
-    other software that is released under the GPL; the others don't.
-
-(2) According to Richard Stallman, 1.6.1 is not GPL-compatible,
-    because its license has a choice of law clause.  According to
-    CNRI, however, Stallman's lawyer has told CNRI's lawyer that 1.6.1
-    is "not incompatible" with the GPL.
-
-Thanks to the many outside volunteers who have worked under Guido's
-direction to make these releases possible.
-
-
-B. TERMS AND CONDITIONS FOR ACCESSING OR OTHERWISE USING PYTHON
-===============================================================
-
 PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2
---------------------------------------------
 
 1. This LICENSE AGREEMENT is between the Python Software Foundation
 ("PSF"), and the Individual or Organization ("Licensee") accessing and
@@ -2094,7 +2112,7 @@ analyze, test, perform and/or display publicly, prepare derivative works,
 distribute, and otherwise use Python alone or in any derivative version,
 provided, however, that PSF's License Agreement and PSF's notice of copyright,
 i.e., "Copyright (c) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
-2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020 Python Software Foundation;
+2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019 Python Software Foundation;
 All Rights Reserved" are retained in Python alone or in any derivative version
 prepared by Licensee.
 
@@ -2128,151 +2146,6 @@ products or services of Licensee, or any third party.
 8. By copying, installing or otherwise using Python, Licensee
 agrees to be bound by the terms and conditions of this License
 Agreement.
-
-
-BEOPEN.COM LICENSE AGREEMENT FOR PYTHON 2.0
--------------------------------------------
-
-BEOPEN PYTHON OPEN SOURCE LICENSE AGREEMENT VERSION 1
-
-1. This LICENSE AGREEMENT is between BeOpen.com ("BeOpen"), having an
-office at 160 Saratoga Avenue, Santa Clara, CA 95051, and the
-Individual or Organization ("Licensee") accessing and otherwise using
-this software in source or binary form and its associated
-documentation ("the Software").
-
-2. Subject to the terms and conditions of this BeOpen Python License
-Agreement, BeOpen hereby grants Licensee a non-exclusive,
-royalty-free, world-wide license to reproduce, analyze, test, perform
-and/or display publicly, prepare derivative works, distribute, and
-otherwise use the Software alone or in any derivative version,
-provided, however, that the BeOpen Python License is retained in the
-Software, alone or in any derivative version prepared by Licensee.
-
-3. BeOpen is making the Software available to Licensee on an "AS IS"
-basis.  BEOPEN MAKES NO REPRESENTATIONS OR WARRANTIES, EXPRESS OR
-IMPLIED.  BY WAY OF EXAMPLE, BUT NOT LIMITATION, BEOPEN MAKES NO AND
-DISCLAIMS ANY REPRESENTATION OR WARRANTY OF MERCHANTABILITY OR FITNESS
-FOR ANY PARTICULAR PURPOSE OR THAT THE USE OF THE SOFTWARE WILL NOT
-INFRINGE ANY THIRD PARTY RIGHTS.
-
-4. BEOPEN SHALL NOT BE LIABLE TO LICENSEE OR ANY OTHER USERS OF THE
-SOFTWARE FOR ANY INCIDENTAL, SPECIAL, OR CONSEQUENTIAL DAMAGES OR LOSS
-AS A RESULT OF USING, MODIFYING OR DISTRIBUTING THE SOFTWARE, OR ANY
-DERIVATIVE THEREOF, EVEN IF ADVISED OF THE POSSIBILITY THEREOF.
-
-5. This License Agreement will automatically terminate upon a material
-breach of its terms and conditions.
-
-6. This License Agreement shall be governed by and interpreted in all
-respects by the law of the State of California, excluding conflict of
-law provisions.  Nothing in this License Agreement shall be deemed to
-create any relationship of agency, partnership, or joint venture
-between BeOpen and Licensee.  This License Agreement does not grant
-permission to use BeOpen trademarks or trade names in a trademark
-sense to endorse or promote products or services of Licensee, or any
-third party.  As an exception, the "BeOpen Python" logos available at
-http://www.pythonlabs.com/logos.html may be used according to the
-permissions granted on that web page.
-
-7. By copying, installing or otherwise using the software, Licensee
-agrees to be bound by the terms and conditions of this License
-Agreement.
-
-
-CNRI LICENSE AGREEMENT FOR PYTHON 1.6.1
----------------------------------------
-
-1. This LICENSE AGREEMENT is between the Corporation for National
-Research Initiatives, having an office at 1895 Preston White Drive,
-Reston, VA 20191 ("CNRI"), and the Individual or Organization
-("Licensee") accessing and otherwise using Python 1.6.1 software in
-source or binary form and its associated documentation.
-
-2. Subject to the terms and conditions of this License Agreement, CNRI
-hereby grants Licensee a nonexclusive, royalty-free, world-wide
-license to reproduce, analyze, test, perform and/or display publicly,
-prepare derivative works, distribute, and otherwise use Python 1.6.1
-alone or in any derivative version, provided, however, that CNRI's
-License Agreement and CNRI's notice of copyright, i.e., "Copyright (c)
-1995-2001 Corporation for National Research Initiatives; All Rights
-Reserved" are retained in Python 1.6.1 alone or in any derivative
-version prepared by Licensee.  Alternately, in lieu of CNRI's License
-Agreement, Licensee may substitute the following text (omitting the
-quotes): "Python 1.6.1 is made available subject to the terms and
-conditions in CNRI's License Agreement.  This Agreement together with
-Python 1.6.1 may be located on the Internet using the following
-unique, persistent identifier (known as a handle): 1895.22/1013.  This
-Agreement may also be obtained from a proxy server on the Internet
-using the following URL: http://hdl.handle.net/1895.22/1013".
-
-3. In the event Licensee prepares a derivative work that is based on
-or incorporates Python 1.6.1 or any part thereof, and wants to make
-the derivative work available to others as provided herein, then
-Licensee hereby agrees to include in any such work a brief summary of
-the changes made to Python 1.6.1.
-
-4. CNRI is making Python 1.6.1 available to Licensee on an "AS IS"
-basis.  CNRI MAKES NO REPRESENTATIONS OR WARRANTIES, EXPRESS OR
-IMPLIED.  BY WAY OF EXAMPLE, BUT NOT LIMITATION, CNRI MAKES NO AND
-DISCLAIMS ANY REPRESENTATION OR WARRANTY OF MERCHANTABILITY OR FITNESS
-FOR ANY PARTICULAR PURPOSE OR THAT THE USE OF PYTHON 1.6.1 WILL NOT
-INFRINGE ANY THIRD PARTY RIGHTS.
-
-5. CNRI SHALL NOT BE LIABLE TO LICENSEE OR ANY OTHER USERS OF PYTHON
-1.6.1 FOR ANY INCIDENTAL, SPECIAL, OR CONSEQUENTIAL DAMAGES OR LOSS AS
-A RESULT OF MODIFYING, DISTRIBUTING, OR OTHERWISE USING PYTHON 1.6.1,
-OR ANY DERIVATIVE THEREOF, EVEN IF ADVISED OF THE POSSIBILITY THEREOF.
-
-6. This License Agreement will automatically terminate upon a material
-breach of its terms and conditions.
-
-7. This License Agreement shall be governed by the federal
-intellectual property law of the United States, including without
-limitation the federal copyright law, and, to the extent such
-U.S. federal law does not apply, by the law of the Commonwealth of
-Virginia, excluding Virginia's conflict of law provisions.
-Notwithstanding the foregoing, with regard to derivative works based
-on Python 1.6.1 that incorporate non-separable material that was
-previously distributed under the GNU General Public License (GPL), the
-law of the Commonwealth of Virginia shall govern this License
-Agreement only as to issues arising under or with respect to
-Paragraphs 4, 5, and 7 of this License Agreement.  Nothing in this
-License Agreement shall be deemed to create any relationship of
-agency, partnership, or joint venture between CNRI and Licensee.  This
-License Agreement does not grant permission to use CNRI trademarks or
-trade name in a trademark sense to endorse or promote products or
-services of Licensee, or any third party.
-
-8. By clicking on the "ACCEPT" button where indicated, or by copying,
-installing or otherwise using Python 1.6.1, Licensee agrees to be
-bound by the terms and conditions of this License Agreement.
-
-        ACCEPT
-
-
-CWI LICENSE AGREEMENT FOR PYTHON 0.9.0 THROUGH 1.2
---------------------------------------------------
-
-Copyright (c) 1991 - 1995, Stichting Mathematisch Centrum Amsterdam,
-The Netherlands.  All rights reserved.
-
-Permission to use, copy, modify, and distribute this software and its
-documentation for any purpose and without fee is hereby granted,
-provided that the above copyright notice appear in all copies and that
-both that copyright notice and this permission notice appear in
-supporting documentation, and that the name of Stichting Mathematisch
-Centrum or CWI not be used in advertising or publicity pertaining to
-distribution of the software without specific, written prior
-permission.
-
-STICHTING MATHEMATISCH CENTRUM DISCLAIMS ALL WARRANTIES WITH REGARD TO
-THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
-FITNESS, IN NO EVENT SHALL STICHTING MATHEMATISCH CENTRUM BE LIABLE
-FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
-OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
 ### License text 39: BSD-3-Clause
@@ -2380,7 +2253,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ### License text 42: MIT
 
-Packages: ccount@2.0.1, character-entities@2.0.2, character-entities-html4@2.1.0, character-entities-legacy@3.0.0, character-reference-invalid@2.0.1, mdast-util-to-string@4.0.0, unist-util-position@5.0.0, unist-util-visit@5.1.0
+Packages: ccount@2.0.1, character-entities@2.0.2, character-entities-html4@2.1.0, character-entities-legacy@3.0.0, character-reference-invalid@2.0.1, mdast-util-to-string@4.0.0, unist-util-position@5.0.0
 
 ```text
 (The MIT License)
@@ -2560,7 +2433,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### License text 50: MIT
 
-Packages: comma-separated-tokens@2.0.3, hast-util-parse-selector@4.0.0, hast-util-whitespace@3.0.0, html-void-elements@3.0.0, is-alphabetical@2.0.1, is-alphanumerical@2.0.1, is-decimal@2.0.1, is-hexadecimal@2.0.1, mdast-util-to-hast@13.2.1, rehype-raw@7.0.0, rehype-sanitize@6.0.0, space-separated-tokens@2.0.2, unist-util-stringify-position@4.0.0, unist-util-visit-parents@6.0.2, vfile-location@5.0.3, web-namespaces@2.0.1, zwitch@2.0.4
+Packages: comma-separated-tokens@2.0.3, hast-util-parse-selector@4.0.0, hast-util-whitespace@3.0.0, html-void-elements@3.0.0, is-alphabetical@2.0.1, is-alphanumerical@2.0.1, is-decimal@2.0.1, is-hexadecimal@2.0.1, mdast-util-to-hast@13.2.1, rehype-raw@7.0.0, rehype-sanitize@6.0.0, space-separated-tokens@2.0.2, unist-util-stringify-position@4.0.0, vfile-location@5.0.3, web-namespaces@2.0.1, zwitch@2.0.4
 
 ```text
 (The MIT License)
@@ -3402,7 +3275,7 @@ THE SOFTWARE.
 
 ### License text 81: MIT
 
-Packages: decode-named-character-reference@1.3.0, hast-util-from-parse5@8.0.3, hast-util-raw@9.1.0, hast-util-sanitize@5.0.2, hast-util-to-jsx-runtime@2.3.6, hast-util-to-parse5@8.0.1, hastscript@9.0.1, markdown-table@3.0.4, mdast-util-find-and-replace@3.0.3, mdast-util-from-markdown@2.1.0, mdast-util-gfm@3.1.0, mdast-util-gfm-footnote@2.1.0, mdast-util-gfm-strikethrough@2.0.1, mdast-util-to-markdown@2.2.0, micromark-core-commonmark@2.0.4, micromark-extension-gfm-table@2.1.2, micromark-factory-destination@2.0.1, micromark-factory-label@2.0.1, micromark-factory-space@2.1.0, micromark-factory-title@2.0.1, micromark-factory-whitespace@2.0.1, micromark-util-character@2.1.1, micromark-util-chunked@2.0.1, micromark-util-classify-character@2.0.1, micromark-util-combine-extensions@2.0.1, micromark-util-decode-string@2.0.1, micromark-util-edit-map@1.0.0, micromark-util-html-tag-name@2.0.1, micromark-util-normalize-identifier@2.0.1, micromark-util-resolve-all@2.0.1, micromark-util-sanitize-uri@2.0.1, micromark-util-subtokenize@2.1.0, micromark-util-symbol@2.0.1, micromark-util-types@2.0.3, remark-gfm@4.0.1, remark-rehype@11.1.2, vfile-message@4.0.3
+Packages: decode-named-character-reference@1.3.0, hast-util-from-parse5@8.0.3, hast-util-raw@9.1.0, hast-util-sanitize@5.0.2, hast-util-to-jsx-runtime@2.3.6, hast-util-to-parse5@8.0.1, hastscript@9.0.1, markdown-table@3.0.4, mdast-util-find-and-replace@3.0.4, mdast-util-from-markdown@2.1.0, mdast-util-gfm@3.1.0, mdast-util-gfm-footnote@2.1.0, mdast-util-gfm-strikethrough@2.0.1, mdast-util-to-markdown@2.2.0, micromark-core-commonmark@2.0.4, micromark-extension-gfm-table@2.1.2, micromark-factory-destination@2.0.1, micromark-factory-label@2.0.1, micromark-factory-space@2.1.0, micromark-factory-title@2.0.1, micromark-factory-whitespace@2.0.1, micromark-util-character@2.1.1, micromark-util-chunked@2.0.1, micromark-util-classify-character@2.0.1, micromark-util-combine-extensions@2.0.1, micromark-util-decode-string@2.0.1, micromark-util-edit-map@1.0.0, micromark-util-html-tag-name@2.0.1, micromark-util-normalize-identifier@2.0.1, micromark-util-resolve-all@2.0.1, micromark-util-sanitize-uri@2.0.1, micromark-util-subtokenize@2.1.0, micromark-util-symbol@2.0.1, micromark-util-types@2.0.3, remark-gfm@4.0.1, remark-rehype@11.1.2, unist-util-visit@5.2.0, unist-util-visit-parents@6.1.0, vfile-message@4.0.3
 
 ```text
 (The MIT License)
@@ -3548,19 +3421,17 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Packages: dijkstrajs@1.0.3
 
-```text
-
+````text
 ```
-
 Dijkstra path-finding functions. Adapted from the Dijkstar Python project.
 
 Copyright (C) 2008
-Wyatt Baldwin <self@wyattbaldwin.com>
-All rights reserved
+  Wyatt Baldwin <self@wyattbaldwin.com>
+  All rights reserved
 
 Licensed under the MIT license.
 
-http://www.opensource.org/licenses/mit-license.php
+  http://www.opensource.org/licenses/mit-license.php
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -3569,10 +3440,8 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
-
 ```
-
-```
+````
 
 ### License text 87: EPL-2.0
 
@@ -4177,7 +4046,7 @@ software or this license, under any kind of legal claim.***
 
 ### License text 99: MIT
 
-Packages: gpt-tokenizer@4.0.0
+Packages: gpt-tokenizer@4.1.0
 
 ```text
 MIT License
@@ -4566,7 +4435,7 @@ THE SOFTWARE.
 
 ### License text 112: MIT
 
-Packages: js-yaml@5.4.3
+Packages: js-yaml@5.5.0
 
 ```text
 (The MIT License)
@@ -4943,7 +4812,7 @@ software or this license, under any kind of legal claim.***
 
 ### License text 122: ISC
 
-Packages: lucide-react@1.56.0
+Packages: lucide-react@1.61.0
 
 ```text
 ISC License
@@ -5394,7 +5263,190 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 134: MIT
+### License text 134: Apache-2.0
+
+Packages: pdfjs-dist@6.4.299
+
+```text
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+   1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+   END OF TERMS AND CONDITIONS
+```
+
+### License text 135: MIT
 
 Packages: pkce-challenge@5.0.1
 
@@ -5422,7 +5474,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 135: BSD-3-Clause
+### License text 136: BSD-3-Clause
 
 Packages: pkijs@3.4.1
 
@@ -5459,7 +5511,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 136: MIT
+### License text 137: MIT
 
 Packages: pngjs@5.0.0
 
@@ -5486,7 +5538,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 137: MIT
+### License text 138: MIT
 
 Packages: points-on-path@0.2.1
 
@@ -5514,7 +5566,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 138: MIT
+### License text 139: MIT
 
 Packages: pvtsutils@1.3.6
 
@@ -5542,7 +5594,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 139: MIT
+### License text 140: MIT
 
 Packages: pvutils@1.2.0
 
@@ -5573,7 +5625,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 140: MIT
+### License text 141: MIT
 
 Packages: qrcode@1.5.4
 
@@ -5589,7 +5641,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 141: MIT
+### License text 142: MIT
 
 Packages: raw-body@3.0.2
 
@@ -5618,9 +5670,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 142: MIT
+### License text 143: MIT
 
-Packages: react@19.3.0, react-dom@19.3.0
+Packages: react@19.3.1, react-dom@19.3.1
 
 ```text
 MIT License
@@ -5646,7 +5698,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 143: MIT
+### License text 144: MIT
 
 Packages: react-diff-view@3.3.3
 
@@ -5674,9 +5726,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 144: MIT
+### License text 145: MIT
 
-Packages: react-resizable-panels@4.14.5
+Packages: react-resizable-panels@4.15.0
 
 ```text
 The MIT License (MIT)
@@ -5702,7 +5754,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 145: MIT
+### License text 146: MIT
 
 Packages: readdirp@5.1.1
 
@@ -5730,7 +5782,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 146: Apache-2.0
+### License text 147: Apache-2.0
 
 Packages: reflect-metadata@0.2.2
 
@@ -5792,7 +5844,7 @@ If the Work includes a "NOTICE" text file as part of its distribution, then any 
 END OF TERMS AND CONDITIONS
 ```
 
-### License text 147: MIT
+### License text 148: MIT
 
 Packages: refractor@5.0.0
 
@@ -5822,7 +5874,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 148: MIT
+### License text 149: MIT
 
 Packages: rehype-harden@1.1.8
 
@@ -5850,7 +5902,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 149: MIT
+### License text 150: MIT
 
 Packages: remark-parse@11.0.0, remark-stringify@11.0.0
 
@@ -5878,9 +5930,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 150: Apache-2.0
+### License text 151: Apache-2.0
 
-Packages: remend@1.4.0, streamdown@2.7.0
+Packages: remend@1.4.0, streamdown@2.7.1
 
 ```text
 Copyright 2023 Vercel, Inc.
@@ -5898,7 +5950,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### License text 151: MIT
+### License text 152: MIT
 
 Packages: require-directory@2.1.1
 
@@ -5927,7 +5979,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 152: ISC
+### License text 153: ISC
 
 Packages: require-main-filename@2.0.0, set-blocking@2.0.0, yargs-parser@18.1.3
 
@@ -5948,7 +6000,7 @@ WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
 ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### License text 153: Unlicense
+### License text 154: Unlicense
 
 Packages: robust-predicates@3.0.3
 
@@ -5979,7 +6031,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 For more information, please refer to <http://unlicense.org>
 ```
 
-### License text 154: MIT
+### License text 155: MIT
 
 Packages: roughjs@4.6.6
 
@@ -6007,7 +6059,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 155: BSD-3-Clause
+### License text 156: BSD-3-Clause
 
 Packages: rw@1.3.3
 
@@ -6040,7 +6092,7 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
 EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 156: MIT
+### License text 157: MIT
 
 Packages: safer-buffer@2.1.2
 
@@ -6068,7 +6120,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 157: MIT
+### License text 158: MIT
 
 Packages: selfsigned@5.5.0
 
@@ -6096,7 +6148,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 158: MIT
+### License text 159: MIT
 
 Packages: shallow-equal@3.1.0
 
@@ -6124,7 +6176,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 159: MIT
+### License text 160: MIT
 
 Packages: shebang-command@2.0.0
 
@@ -6140,7 +6192,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 160: MIT
+### License text 161: MIT
 
 Packages: style-to-js@1.1.21
 
@@ -6169,7 +6221,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 161: MIT
+### License text 162: MIT
 
 Packages: style-to-object@1.0.14
 
@@ -6198,7 +6250,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 162: MIT
+### License text 163: MIT
 
 Packages: stylis@4.4.0
 
@@ -6226,7 +6278,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 163: MIT
+### License text 164: MIT
 
 Packages: tailwind-merge@3.7.0
 
@@ -6254,7 +6306,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 164: MIT
+### License text 165: MIT
 
 Packages: tinyexec@1.3.1
 
@@ -6282,7 +6334,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 165: MIT
+### License text 166: MIT
 
 Packages: tree-kill@1.2.2
 
@@ -6310,7 +6362,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 166: MIT
+### License text 167: MIT
 
 Packages: ts-dedent@2.3.0
 
@@ -6338,7 +6390,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 167: 0BSD
+### License text 168: 0BSD
 
 Packages: tslib@1.14.1, tslib@2.8.1
 
@@ -6357,12 +6409,12 @@ OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### License text 168: MIT
+### License text 169: MIT
 
 Packages: tsyringe@4.10.0
 
 ```text
-MIT License
+    MIT License
 
     Copyright (c) Microsoft Corporation. All rights reserved.
 
@@ -6385,9 +6437,9 @@ MIT License
     SOFTWARE
 ```
 
-### License text 169: BSD-3-Clause
+### License text 170: BSD-3-Clause
 
-Packages: typo-js@1.3.2
+Packages: typo-js@1.4.0
 
 ```text
 BSD 3-Clause License
@@ -6420,7 +6472,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 170: MIT
+### License text 171: MIT
 
 Packages: unified@11.0.5, vfile@6.0.3
 
@@ -6448,7 +6500,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 171: MIT
+### License text 172: MIT
 
 Packages: unist-util-is@6.0.1
 
@@ -6477,7 +6529,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 172: MIT
+### License text 173: MIT
 
 Packages: unpipe@1.0.0
 
@@ -6506,7 +6558,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 173: MIT
+### License text 174: MIT
 
 Packages: uuid@14.0.3
 
@@ -6522,7 +6574,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 174: MIT
+### License text 175: MIT
 
 Packages: vary@1.1.2
 
@@ -6551,7 +6603,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 175: MIT
+### License text 176: MIT
 
 Packages: vscode-jsonrpc@9.0.3, vscode-languageserver-protocol@3.18.4, vscode-languageserver-types@3.18.4
 
@@ -6569,7 +6621,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED *AS IS*, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 176: MIT
+### License text 177: MIT
 
 Packages: warning@4.0.3
 
@@ -6597,7 +6649,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 177: ISC
+### License text 178: ISC
 
 Packages: which-module@2.0.1
 
@@ -6617,7 +6669,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### License text 178: MIT
+### License text 179: MIT
 
 Packages: ws@8.22.0
 
@@ -6644,7 +6696,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 179: ISC
+### License text 180: ISC
 
 Packages: y18n@4.0.3
 
@@ -6664,7 +6716,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### License text 180: ISC
+### License text 181: ISC
 
 Packages: yaml@2.9.1
 
@@ -6684,7 +6736,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### License text 181: MIT
+### License text 182: MIT
 
 Packages: yargs@15.4.1
 
@@ -6712,7 +6764,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 182: MIT
+### License text 183: MIT
 
 Packages: zod@4.6.7
 
@@ -6740,7 +6792,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 183: ISC
+### License text 184: ISC
 
 Packages: zod-to-json-schema@3.25.2
 
@@ -6762,7 +6814,7 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### License text 184: MIT
+### License text 185: MIT
 
 Packages: zundo@2.3.0
 
@@ -6790,9 +6842,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 185: MIT
+### License text 186: MIT
 
-Packages: zustand@5.0.15
+Packages: zustand@5.0.16
 
 ```text
 MIT License
@@ -6818,7 +6870,541 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+### License text 187: BSD-3-Clause
+
+Packages: pdfjs-dist: Adobe CMaps
+
+```text
+%%Copyright: -----------------------------------------------------------
+%%Copyright: Copyright 1990-2009 Adobe Systems Incorporated.
+%%Copyright: All rights reserved.
+%%Copyright:
+%%Copyright: Redistribution and use in source and binary forms, with or
+%%Copyright: without modification, are permitted provided that the
+%%Copyright: following conditions are met:
+%%Copyright:
+%%Copyright: Redistributions of source code must retain the above
+%%Copyright: copyright notice, this list of conditions and the following
+%%Copyright: disclaimer.
+%%Copyright:
+%%Copyright: Redistributions in binary form must reproduce the above
+%%Copyright: copyright notice, this list of conditions and the following
+%%Copyright: disclaimer in the documentation and/or other materials
+%%Copyright: provided with the distribution.
+%%Copyright:
+%%Copyright: Neither the name of Adobe Systems Incorporated nor the names
+%%Copyright: of its contributors may be used to endorse or promote
+%%Copyright: products derived from this software without specific prior
+%%Copyright: written permission.
+%%Copyright:
+%%Copyright: THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+%%Copyright: CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+%%Copyright: INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+%%Copyright: MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+%%Copyright: DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+%%Copyright: CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+%%Copyright: SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+%%Copyright: NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+%%Copyright: LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+%%Copyright: HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+%%Copyright: CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+%%Copyright: OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+%%Copyright: SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+%%Copyright: -----------------------------------------------------------
+```
+
+### License text 188: BSD-3-Clause
+
+Packages: pdfjs-dist: Foxit Symbol and Dingbats fonts
+
+```text
+// Copyright 2014 PDFium Authors. All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met:
+//
+//    * Redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer.
+//    * Redistributions in binary form must reproduce the above
+// copyright notice, this list of conditions and the following disclaimer
+// in the documentation and/or other materials provided with the
+// distribution.
+//    * Neither the name of Google Inc. nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+### License text 189: CC0-1.0
+
+Packages: pdfjs-dist: CGATS001Compat ICC profile
+
+```text
+CC0 1.0 Universal
+
+Statement of Purpose
+
+The laws of most jurisdictions throughout the world automatically confer
+exclusive Copyright and Related Rights (defined below) upon the creator and
+subsequent owner(s) (each and all, an "owner") of an original work of
+authorship and/or a database (each, a "Work").
+
+Certain owners wish to permanently relinquish those rights to a Work for the
+purpose of contributing to a commons of creative, cultural and scientific
+works ("Commons") that the public can reliably and without fear of later
+claims of infringement build upon, modify, incorporate in other works, reuse
+and redistribute as freely as possible in any form whatsoever and for any
+purposes, including without limitation commercial purposes. These owners may
+contribute to the Commons to promote the ideal of a free culture and the
+further production of creative, cultural and scientific works, or to gain
+reputation or greater distribution for their Work in part through the use and
+efforts of others.
+
+For these and/or other purposes and motivations, and without any expectation
+of additional consideration or compensation, the person associating CC0 with a
+Work (the "Affirmer"), to the extent that he or she is an owner of Copyright
+and Related Rights in the Work, voluntarily elects to apply CC0 to the Work
+and publicly distribute the Work under its terms, with knowledge of his or her
+Copyright and Related Rights in the Work and the meaning and intended legal
+effect of CC0 on those rights.
+
+1. Copyright and Related Rights. A Work made available under CC0 may be
+protected by copyright and related or neighboring rights ("Copyright and
+Related Rights"). Copyright and Related Rights include, but are not limited
+to, the following:
+
+  i. the right to reproduce, adapt, distribute, perform, display, communicate,
+  and translate a Work;
+
+  ii. moral rights retained by the original author(s) and/or performer(s);
+
+  iii. publicity and privacy rights pertaining to a person's image or likeness
+  depicted in a Work;
+
+  iv. rights protecting against unfair competition in regards to a Work,
+  subject to the limitations in paragraph 4(a), below;
+
+  v. rights protecting the extraction, dissemination, use and reuse of data in
+  a Work;
+
+  vi. database rights (such as those arising under Directive 96/9/EC of the
+  European Parliament and of the Council of 11 March 1996 on the legal
+  protection of databases, and under any national implementation thereof,
+  including any amended or successor version of such directive); and
+
+  vii. other similar, equivalent or corresponding rights throughout the world
+  based on applicable law or treaty, and any national implementations thereof.
+
+2. Waiver. To the greatest extent permitted by, but not in contravention of,
+applicable law, Affirmer hereby overtly, fully, permanently, irrevocably and
+unconditionally waives, abandons, and surrenders all of Affirmer's Copyright
+and Related Rights and associated claims and causes of action, whether now
+known or unknown (including existing as well as future claims and causes of
+action), in the Work (i) in all territories worldwide, (ii) for the maximum
+duration provided by applicable law or treaty (including future time
+extensions), (iii) in any current or future medium and for any number of
+copies, and (iv) for any purpose whatsoever, including without limitation
+commercial, advertising or promotional purposes (the "Waiver"). Affirmer makes
+the Waiver for the benefit of each member of the public at large and to the
+detriment of Affirmer's heirs and successors, fully intending that such Waiver
+shall not be subject to revocation, rescission, cancellation, termination, or
+any other legal or equitable action to disrupt the quiet enjoyment of the Work
+by the public as contemplated by Affirmer's express Statement of Purpose.
+
+3. Public License Fallback. Should any part of the Waiver for any reason be
+judged legally invalid or ineffective under applicable law, then the Waiver
+shall be preserved to the maximum extent permitted taking into account
+Affirmer's express Statement of Purpose. In addition, to the extent the Waiver
+is so judged Affirmer hereby grants to each affected person a royalty-free,
+non transferable, non sublicensable, non exclusive, irrevocable and
+unconditional license to exercise Affirmer's Copyright and Related Rights in
+the Work (i) in all territories worldwide, (ii) for the maximum duration
+provided by applicable law or treaty (including future time extensions), (iii)
+in any current or future medium and for any number of copies, and (iv) for any
+purpose whatsoever, including without limitation commercial, advertising or
+promotional purposes (the "License"). The License shall be deemed effective as
+of the date CC0 was applied by Affirmer to the Work. Should any part of the
+License for any reason be judged legally invalid or ineffective under
+applicable law, such partial invalidity or ineffectiveness shall not
+invalidate the remainder of the License, and in such case Affirmer hereby
+affirms that he or she will not (i) exercise any of his or her remaining
+Copyright and Related Rights in the Work or (ii) assert any associated claims
+and causes of action with respect to the Work, in either case contrary to
+Affirmer's express Statement of Purpose.
+
+4. Limitations and Disclaimers.
+
+  a. No trademark or patent rights held by Affirmer are waived, abandoned,
+  surrendered, licensed or otherwise affected by this document.
+
+  b. Affirmer offers the Work as-is and makes no representations or warranties
+  of any kind concerning the Work, express, implied, statutory or otherwise,
+  including without limitation warranties of title, merchantability, fitness
+  for a particular purpose, non infringement, or the absence of latent or
+  other defects, accuracy, or the present or absence of errors, whether or not
+  discoverable, all to the greatest extent permissible under applicable law.
+
+  c. Affirmer disclaims responsibility for clearing rights of other persons
+  that may apply to the Work or any use thereof, including without limitation
+  any person's Copyright and Related Rights in the Work. Further, Affirmer
+  disclaims responsibility for obtaining any necessary consents, permissions
+  or other rights required for any use of the Work.
+
+  d. Affirmer understands and acknowledges that Creative Commons is not a
+  party to this document and has no duty or obligation with respect to this
+  CC0 or use of the Work.
+
+For more information, please see
+http://creativecommons.org/publicdomain/zero/1.0/
+```
+
+### License text 190: BSD-2-Clause
+
+Packages: pdfjs-dist: OpenJPEG decoder
+
+```text
+/*
+ * The copyright in this software is being made available under the 2-clauses
+ * BSD License, included below. This software may be subject to other third
+ * party and contributor rights, including patent rights, and no such rights
+ * are granted under this license.
+ *
+ * Copyright (c) 2002-2014, Universite catholique de Louvain (UCL), Belgium
+ * Copyright (c) 2002-2014, Professor Benoit Macq
+ * Copyright (c) 2003-2014, Antonin Descampe
+ * Copyright (c) 2003-2009, Francois-Olivier Devaux
+ * Copyright (c) 2005, Herve Drolon, FreeImage Team
+ * Copyright (c) 2002-2003, Yannick Verschueren
+ * Copyright (c) 2001-2003, David Janssens
+ * Copyright (c) 2011-2012, Centre National d'Etudes Spatiales (CNES), France
+ * Copyright (c) 2012, CS Systemes d'Information, France
+ *
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS `AS IS'
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+
+Copyright (c) 2024, Mozilla Foundation
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+### License text 191: BSD-3-Clause AND Apache-2.0
+
+Packages: pdfjs-dist: PDFium JBIG2 decoder
+
+```text
+// Copyright 2014 The PDFium Authors
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met:
+//
+//    * Redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer.
+//    * Redistributions in binary form must reproduce the above
+// copyright notice, this list of conditions and the following disclaimer
+// in the documentation and/or other materials provided with the
+// distribution.
+//    * Neither the name of Google Inc. nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+                                 Apache License
+                           Version 2.0, January 2004
+                        https://www.apache.org/licenses/
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+   1. Definitions.
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+   END OF TERMS AND CONDITIONS
+   APPENDIX: How to apply the Apache License to your work.
+      To apply the Apache License to your work, attach the following
+      boilerplate notice, with the fields enclosed by brackets "[]"
+      replaced with your own identifying information. (Don't include
+      the brackets!)  The text should be enclosed in the appropriate
+      comment syntax for the file format. We also recommend that a
+      file or class name and description of purpose be included on the
+      same "printed page" as the copyright notice for easier
+      identification within third-party archives.
+   Copyright [yyyy] [name of copyright owner]
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+       https://www.apache.org/licenses/LICENSE-2.0
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+
+Copyright 2026 Mozilla Foundation
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+```
+
+### License text 192: MIT
+
+Packages: pdfjs-dist: qcms color management
+
+```text
+qcms
+Copyright (C) 2009-2024 Mozilla Corporation
+Copyright (C) 1998-2007 Marti Maria
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ## Notes
 
 - This file is a dependency audit and notice record, not legal advice.
-- Regenerate and review this file before every release when production dependencies or shipped bundles change.
+- This file is generated by `npm run notices:generate`. Regenerate and review it before every release when production dependencies or shipped bundles change; `npm run check:notices` fails when it is out of date.

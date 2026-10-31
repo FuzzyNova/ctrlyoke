@@ -66,6 +66,10 @@
 !out/ui/webview-react/ctrlyoke-icon-color.png
 !out/ui/webview-react/assets/*.css
 !out/ui/webview-react/assets/*.js
+# pdf.js worker (emitted as .mjs) and its CMaps, fonts, ICC profile and WASM
+# decoders, each directory with the license files THIRD_PARTY_NOTICES.md cites.
+!out/ui/webview-react/assets/*.mjs
+!out/ui/webview-react/pdfjs/**
 !out/ui/webview-react/codicons/**
 !out/ui/webview-react/dictionaries/**/*.aff
 !out/ui/webview-react/dictionaries/**/*.dic
