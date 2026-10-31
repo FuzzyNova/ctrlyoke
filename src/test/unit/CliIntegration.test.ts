@@ -213,13 +213,15 @@ function getTerminalReuseIncompatibilityReason(
   ctx: RunningTerminalContext,
   curr: ResolvedProperties | undefined,
   currSessionId: string | undefined,
-  parallelGroupId?: string
+  parallelGroupId?: string,
+  externalPermissionIdentity?: string
 ): string | null {
   return (CliIntegration as any).getTerminalReuseIncompatibilityReason(
     ctx,
     curr,
     currSessionId,
-    parallelGroupId
+    parallelGroupId,
+    externalPermissionIdentity
   );
 }
 
@@ -283,6 +285,23 @@ suite("CliIntegration", () => {
           "session-existing"
         ),
         null
+      );
+    });
+
+    test("restarts when external permission rules changed after spawn", () => {
+      const properties = createResolvedProperties();
+      assert.strictEqual(
+        getTerminalReuseIncompatibilityReason(
+          {
+            ...createRunningTerminalContext(properties),
+            externalPermissionIdentity: "before",
+          },
+          properties,
+          "session-existing",
+          undefined,
+          "after"
+        ),
+        "external permission rules changed"
       );
     });
 

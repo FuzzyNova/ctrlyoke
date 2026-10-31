@@ -183,28 +183,31 @@ suite("ToolPermissionMappers", () => {
         assert.deepStrictEqual(args, []);
       });
 
-      test("allowAll with a deny list → no permission flag", async () => {
+      test("allowAll with a deny list → session settings", async () => {
         const args = await mapperArgs(
           mapper,
-          cfg(PERMISSION_MODES.ALLOW_ALL, [], ["shell"])
+          cfg(PERMISSION_MODES.ALLOW_ALL, [], ["shell"]),
+          { workspaceRoot: process.cwd() }
         );
-        assert.deepStrictEqual(args, []);
+        assert.deepStrictEqual(args, ["--settings", args[1]]);
       });
 
-      test("custom mode → ['--sandbox']", async () => {
+      test("custom mode → session settings only, no sandbox", async () => {
         const args = await mapperArgs(
           mapper,
-          cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"])
+          cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"]),
+          { workspaceRoot: process.cwd() }
         );
-        assert.deepStrictEqual(args, ["--sandbox"]);
+        assert.deepStrictEqual(args, ["--settings", args[1]]);
       });
 
-      test("custom mode ignores allow and deny patterns", async () => {
+      test("custom mode with an untranslatable allow pattern still writes settings", async () => {
         const args = await mapperArgs(
           mapper,
-          cfg(PERMISSION_MODES.CUSTOM, ["github(search)"], ["shell"])
+          cfg(PERMISSION_MODES.CUSTOM, ["github(search)"], ["shell"]),
+          { workspaceRoot: process.cwd() }
         );
-        assert.deepStrictEqual(args, ["--sandbox"]);
+        assert.deepStrictEqual(args, ["--settings", args[1]]);
       });
     });
 
@@ -218,19 +221,19 @@ suite("ToolPermissionMappers", () => {
         );
       });
 
-      test("allowAll → false", async () => {
+      test("allowAll → true", async () => {
         assert.strictEqual(
           mapper.hasFullPermissions(cfg(PERMISSION_MODES.ALLOW_ALL)),
-          false
+          true
         );
       });
 
-      test("allowAll with a deny list → false", async () => {
+      test("allowAll with a deny list → true", async () => {
         assert.strictEqual(
           mapper.hasFullPermissions(
             cfg(PERMISSION_MODES.ALLOW_ALL, [], ["shell"])
           ),
-          false
+          true
         );
       });
 

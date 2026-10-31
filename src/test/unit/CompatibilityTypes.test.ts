@@ -78,17 +78,17 @@ suite("Compatibility shared vocabulary", () => {
 });
 
 suite("Compatibility caveat codes", () => {
-  test("mode-only harnesses declare a caveat that resolves to shared prose", () => {
+  test("partially translated permission lists declare a caveat with shared prose", () => {
     // The reason a harness cannot fully enforce a list is a harness-owned
     // fact. If these declarations lose their caveatCode, a consumer is forced
     // back into a hardcoded harness switch to explain the limitation. Codex
     // enforces MCP tool denials only, so its deny list is partial.
-    const modeOnly = [
+    const limitedLists = [
       CODEX_PERMISSION_CAPABILITIES,
       ANTIGRAVITY_PERMISSION_CAPABILITIES,
     ];
 
-    for (const descriptor of modeOnly) {
+    for (const descriptor of limitedLists) {
       for (const key of [
         PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS,
         PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS,
@@ -96,8 +96,9 @@ suite("Compatibility caveat codes", () => {
         const declaration = descriptor[key];
         assert.strictEqual(
           declaration.fidelity,
-          descriptor === CODEX_PERMISSION_CAPABILITIES &&
-            key === PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
+          descriptor === ANTIGRAVITY_PERMISSION_CAPABILITIES ||
+            (descriptor === CODEX_PERMISSION_CAPABILITIES &&
+              key === PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS)
             ? CAPABILITY_FIDELITIES.PARTIAL
             : CAPABILITY_FIDELITIES.UNSUPPORTED
         );

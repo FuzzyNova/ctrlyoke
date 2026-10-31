@@ -1,4 +1,7 @@
 import * as assert from "assert";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
 import { suite, test } from "mocha";
 import { CopilotToolPermissionMapper } from "../../core/harness/copilot/CopilotToolPermissionMapper";
 import { ClaudeToolPermissionMapper } from "../../core/harness/claude/ClaudeToolPermissionMapper";
@@ -8,7 +11,10 @@ import {
   OpenCodeToolPermissionMapper,
 } from "../../core/harness/opencode/OpenCodeToolPermissionMapper";
 import { QwenToolPermissionMapper } from "../../core/harness/qwen/QwenToolPermissionMapper";
-import { AntigravityToolPermissionMapper } from "../../core/harness/antigravity/AntigravityToolPermissionMapper";
+import {
+  AntigravityToolPermissionMapper,
+  parseAntigravityUserPermissionRules,
+} from "../../core/harness/antigravity/AntigravityToolPermissionMapper";
 import type {
   IToolPermissionMapper,
   PermissionContext,
@@ -247,6 +253,127 @@ suite("HarnessToolPermissionMappers", () => {
   suite("AntigravityToolPermissionMapper", () => {
     const mapper = new AntigravityToolPermissionMapper();
 
+    suite("user settings parsing", () => {
+      test("reads string allow/deny rules and drops everything else", () => {
+        assert.deepStrictEqual(
+          parseAntigravityUserPermissionRules(
+            JSON.stringify({
+              permissions: { allow: ["command(*)", 3], deny: ["read_file(*)"] },
+            })
+          ),
+          { allow: ["command(*)"], deny: ["read_file(*)"] }
+        );
+      });
+
+      test("treats malformed or permission-less settings as empty", () => {
+        for (const content of ["{", "null", "[]", '{"permissions":"x"}']) {
+          assert.deepStrictEqual(
+            parseAntigravityUserPermissionRules(content),
+            { allow: [], deny: [] },
+            content
+          );
+        }
+      });
+    });
+
+    suite("pattern translation", () => {
+      const rows: [string, string, string][] = [
+        ["shell", "command(*)", "command(*)"],
+        ["bash", "command(*)", "command(*)"],
+        ["run_shell_command", "command(*)", "command(*)"],
+        ["shell(*)", "command(*)", "command(*)"],
+        ["shell(*:*)", "command(*)", "command(*)"],
+        [
+          "shell(git push:*)",
+          "command(regex:git\\s+push(?:\\s[^;&|`$()<>\\r\\n]*)?)",
+          "command(regex:(?is)(?:.*[^\\w.-])?git\\s+push(?:[^\\w.-].*)?)",
+        ],
+        [
+          "shell(npm run test)",
+          "command(regex:npm\\s+run\\s+test)",
+          "command(regex:(?is)(?:.*[^\\w.-])?npm\\s+run\\s+test(?:[^\\w.-].*)?)",
+        ],
+        [
+          "shell(git * main:*)",
+          "command(regex:git\\s+[^\\s;&|`$()<>\\r\\n]+\\s+main(?:\\s[^;&|`$()<>\\r\\n]*)?)",
+          "command(regex:(?is)(?:.*[^\\w.-])?git\\s+\\S+\\s+main(?:[^\\w.-].*)?)",
+        ],
+        ["read", "read_file(*)", "read_file(*)"],
+        ["write", "write_file(*)", "write_file(*)"],
+        [
+          "web_fetch(example.com)",
+          "read_url(example.com)",
+          "read_url(example.com)",
+        ],
+        ["mcp__my.server__tool", "mcp(my_server/tool)", "mcp(my_server/tool)"],
+        ["mcp__my.server", "mcp(my_server/*)", "mcp(my_server/*)"],
+      ];
+
+      for (const [pattern, allow, deny] of rows) {
+        test(`${pattern} translates exactly for allow and deny`, () => {
+          assert.deepStrictEqual(
+            mapper.convertToAntigravityRules([pattern], "allow"),
+            { rules: [allow], lossy: [] }
+          );
+          assert.deepStrictEqual(
+            mapper.convertToAntigravityRules([pattern], "deny"),
+            { rules: [deny], lossy: [] }
+          );
+        });
+      }
+
+      test("reports unsupported tools as lossy and deduplicates rules", () => {
+        assert.deepStrictEqual(
+          mapper.convertToAntigravityRules(
+            ["web_search", "task", "unknown", "read", "read"],
+            "allow"
+          ),
+          {
+            rules: ["read_file(*)"],
+            lossy: ["task", "unknown"],
+          }
+        );
+        assert.deepStrictEqual(
+          mapper.convertToAntigravityRules(["web_search", "glob"], "deny"),
+          {
+            rules: [],
+            lossy: ["web_search", "glob"],
+          }
+        );
+      });
+
+      test("allow regex rejects chains and newline while deny catches chained command", () => {
+        const allow = mapper.convertToAntigravityRules(
+          ["shell(git push:*)"],
+          "allow"
+        ).rules[0];
+        const deny = mapper.convertToAntigravityRules(
+          ["shell(git push:*)"],
+          "deny"
+        ).rules[0];
+        const asRegex = (rule: string) => {
+          const source = rule.slice("command(regex:".length, -1);
+          const flags = source.startsWith("(?is)") ? "is" : "";
+          return new RegExp(`^(?:${flags ? source.slice(5) : source})$`, flags);
+        };
+        const allowRegex = asRegex(allow);
+        const denyRegex = asRegex(deny);
+        assert.ok(allowRegex.test("git push origin"));
+        for (const command of [
+          "echo a && git push",
+          "echo a; git push",
+          "echo a | git push",
+          "echo a\ngit push",
+          "GIT PUSH origin",
+        ]) {
+          assert.strictEqual(allowRegex.test(command), false, command);
+          assert.strictEqual(denyRegex.test(command), true, command);
+        }
+        assert.strictEqual(denyRegex.test("git pushx"), false);
+        assert.strictEqual(denyRegex.test("xgit push"), false);
+      });
+    });
+
     suite("prepare", () => {
       test("dangerouslyAllowAll returns the Antigravity bypass flag", async () => {
         const args = await mapperArgs(
@@ -256,25 +383,117 @@ suite("HarnessToolPermissionMappers", () => {
         assert.deepStrictEqual(args, ["--dangerously-skip-permissions"]);
       });
 
-      test("allowAll returns no flag because agy has no safe auto-approve flag", async () => {
-        const args = await mapperArgs(mapper, cfg(PERMISSION_MODES.ALLOW_ALL));
-        assert.deepStrictEqual(args, []);
+      const workspaceRoot = path.join(
+        os.tmpdir(),
+        "ctrlyoke-antigravity-permissions"
+      );
+      const environment = { HOME: os.tmpdir(), USERPROFILE: os.tmpdir() };
+
+      test("allowAll writes always-proceed settings and translated denials", async () => {
+        const application = await mapper.prepare(
+          cfg(PERMISSION_MODES.ALLOW_ALL, [], ["shell(git push:*)"]),
+          { workspaceRoot, environment }
+        );
+        assert.deepStrictEqual(application.cliArgs.slice(0, 1), ["--settings"]);
+        const settings = JSON.parse(
+          application.mutations![0].intendedContent!
+        ) as Record<string, any>;
+        assert.strictEqual(settings.toolPermission, "always-proceed");
+        assert.deepStrictEqual(settings.permissions.deny, [
+          "command(regex:(?is)(?:.*[^\\w.-])?git\\s+push(?:[^\\w.-].*)?)",
+        ]);
+        assert.strictEqual("allow" in settings.permissions, false);
       });
 
-      test("allowAll does not bypass a deny list", async () => {
-        const args = await mapperArgs(
-          mapper,
-          cfg(PERMISSION_MODES.ALLOW_ALL, [], ["shell"])
+      test("custom writes request-review allow and deny rules without a sandbox", async () => {
+        const application = await mapper.prepare(
+          cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"]),
+          { workspaceRoot, environment }
         );
-        assert.deepStrictEqual(args, []);
+        assert.deepStrictEqual(application.cliArgs, [
+          "--settings",
+          application.cliArgs[1],
+        ]);
+        const settings = JSON.parse(
+          application.mutations![0].intendedContent!
+        ) as Record<string, any>;
+        assert.strictEqual(settings.toolPermission, "request-review");
+        assert.deepStrictEqual(settings.permissions.allow, ["write_file(*)"]);
+        assert.deepStrictEqual(settings.permissions.deny, ["command(*)"]);
       });
 
-      test("custom mode uses Antigravity sandbox and ignores allow and deny lists", async () => {
-        const args = await mapperArgs(
-          mapper,
-          cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"])
+      test("unions global user rules and omits empty lists", async () => {
+        const home = await fs.mkdtemp(
+          path.join(os.tmpdir(), "agy-user-rules-")
         );
-        assert.deepStrictEqual(args, ["--sandbox"]);
+        const userSettingsPath = path.join(
+          home,
+          ".gemini",
+          "antigravity-cli",
+          "settings.json"
+        );
+        await fs.mkdir(path.dirname(userSettingsPath), { recursive: true });
+        await fs.writeFile(
+          userSettingsPath,
+          JSON.stringify({
+            permissions: { allow: ["read_file(*)"], deny: ["command(*)"] },
+          })
+        );
+        try {
+          const application = await mapper.prepare(
+            cfg(PERMISSION_MODES.ALLOW_ALL),
+            { workspaceRoot, environment: { HOME: home } }
+          );
+          const settings = JSON.parse(
+            application.mutations![0].intendedContent!
+          ) as Record<string, any>;
+          assert.deepStrictEqual(settings.permissions.deny, ["command(*)"]);
+          assert.strictEqual("allow" in settings.permissions, false);
+        } finally {
+          await fs.rm(home, { recursive: true, force: true });
+        }
+      });
+
+      test("malformed user settings are treated as empty", async () => {
+        const home = await fs.mkdtemp(
+          path.join(os.tmpdir(), "agy-user-rules-")
+        );
+        const userSettingsPath = path.join(
+          home,
+          ".gemini",
+          "antigravity-cli",
+          "settings.json"
+        );
+        await fs.mkdir(path.dirname(userSettingsPath), { recursive: true });
+        await fs.writeFile(userSettingsPath, "{");
+        try {
+          const application = await mapper.prepare(
+            cfg(PERMISSION_MODES.CUSTOM),
+            { workspaceRoot, environment: { HOME: home } }
+          );
+          const settings = JSON.parse(
+            application.mutations![0].intendedContent!
+          ) as Record<string, any>;
+          assert.strictEqual("permissions" in settings, false);
+        } finally {
+          await fs.rm(home, { recursive: true, force: true });
+        }
+      });
+
+      test("skips its settings file when workflow arguments supply --settings", async () => {
+        const application = await mapper.prepare(
+          cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"]),
+          {
+            workspaceRoot,
+            additionalArgs: "--other value --settings=custom.json",
+          }
+        );
+        assert.deepStrictEqual(application.cliArgs, []);
+        assert.strictEqual(application.mutations, undefined);
+        assert.match(
+          application.diagnostics.at(-1)!.message,
+          /workflow additionalArgs supplies its own --settings/
+        );
       });
 
       test("none mode returns no permission flags", async () => {
@@ -293,19 +512,19 @@ suite("HarnessToolPermissionMappers", () => {
         );
       });
 
-      test("allowAll → false without a deny list", async () => {
+      test("allowAll → true", async () => {
         assert.strictEqual(
           mapper.hasFullPermissions(cfg(PERMISSION_MODES.ALLOW_ALL)),
-          false
+          true
         );
       });
 
-      test("allowAll → false with a deny list", async () => {
+      test("allowAll → true with a deny list", async () => {
         assert.strictEqual(
           mapper.hasFullPermissions(
             cfg(PERMISSION_MODES.ALLOW_ALL, [], ["shell"])
           ),
-          false
+          true
         );
       });
 
@@ -1410,6 +1629,18 @@ suite("HarnessToolPermissionMappers", () => {
       assert.strictEqual(
         qwen.diagnostics[0].code,
         COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_TRANSLATION_LOSSY
+      );
+
+      const antigravity = await new AntigravityToolPermissionMapper().prepare(
+        cfg(PERMISSION_MODES.CUSTOM, ["web_search"], ["glob"]),
+        {}
+      );
+      assert.deepStrictEqual(
+        antigravity.diagnostics.map(({ code }) => code),
+        [
+          COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_PARTIAL,
+          COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL,
+        ]
       );
     });
 

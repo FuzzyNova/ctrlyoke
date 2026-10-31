@@ -1,8 +1,6 @@
 # Antigravity Permission Rules (Full Translation)
 
-**Status:** Ready to implement. Phase 0 research finished 2026-10-31 against agy 1.4.10 and
-1.4.12 on Windows 11 (26200). Results are under "Phase 0 findings".
-**Priority:** P1. Commit message generation is broken on Antigravity until phase 1 lands.
+**Status:** Complete 2026-10-31. Phases 0–5 are done.
 
 Supersedes the Antigravity half of `CODEX_ANTIGRAVITY_PERMISSION_RULES_PLAN.md`. That plan
 was blocked on "no per-run delivery" for rules. agy's `--settings` flag removes the blocker.
@@ -171,7 +169,10 @@ agy doesn't normalize server ids. It builds the tool name `mcp_<serverId>_<toolN
 drops any tool that fails `^[a-zA-Z0-9_-]{1,64}$` (`encountered invalid tool …` in agy's
 log). So a server id or tool name containing a dot or a space loses **all** its tools
 before permissions are even checked. This is a separate, existing bug, filed as
-`dev/bugs/backlog/antigravity-mcp-dotted-server-id-drops-tools.md`. Hyphenated ids work:
+`dev/bugs/implemented/antigravity-mcp-dotted-server-id-drops-tools.md`. The bug is fixed:
+`normalizeAntigravityMcpServerId` in `src/types/ToolPermissionUtils.ts` replaces characters
+outside `[A-Za-z0-9_-]` with underscores, and Antigravity writes each user MCP server under
+that normalized id. Later permission rules must use the same normalized id. Hyphenated ids work:
 `mcp(ctrlyoke-commit/submit_commit_message)` let the commit tool run on 1.4.10 and 1.4.12.
 
 ## Proposal
@@ -198,12 +199,12 @@ before permissions are even checked. This is a separate, existing bug, filed as
 
 ### Mode mapping
 
-| ctrlyoke mode         | agy flags / settings                                                                                                           |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `dangerouslyAllowAll` | `--dangerously-skip-permissions` (unchanged). Lists ignored, matching every other harness.                                     |
-| `allowAll`            | `toolPermission: "always-proceed"` plus `permissions.deny` from `deniedTools`.                                                 |
-| `custom`              | `toolPermission: "request-review"`, `permissions.allow` and `permissions.deny`. `--sandbox`: see "Sandbox is a separate axis". |
-| `none`                | nothing                                                                                                                        |
+| ctrlyoke mode         | agy flags / settings                                                                                                               |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `dangerouslyAllowAll` | `--dangerously-skip-permissions` (unchanged). Lists ignored, matching every other harness.                                         |
+| `allowAll`            | `toolPermission: "always-proceed"` plus `permissions.deny` from `deniedTools`.                                                     |
+| `custom`              | `toolPermission: "request-review"`, `permissions.allow` and `permissions.deny`. No `--sandbox` (see "Sandbox is a separate axis"). |
+| `none`                | nothing                                                                                                                            |
 
 - `allowAll` finally means what the schema says ("auto-grants all but respects deny list"):
   deny rules hold under `always-proceed` (verified). This fixes Gap 2 of
@@ -336,9 +337,28 @@ honor it (verified). `CliIntegration`'s terminal-reuse compatibility check alrea
 reusing a terminal started with old rules. That includes a change to the user's global lists
 picked up by the union. Keep the file alive for the life of the PTY.
 
+## Implementation notes (orchestrator review, 2026-10-31)
+
+Gaps between the proposal and the current code, to settle during implementation:
+
+- **The dotted-id bug lands first.** The `mcp(<server>/<tool>)` rules must use the id that
+  `planMcpConfigArgs` writes, so sanitize it before the mapper emits MCP rules. Export the
+  sanitizer (e.g. `normalizeAntigravityMcpServerId` beside `normalizeClaudeMcpServerId` in
+  `src/types/ToolPermissionUtils.ts`) so both sides share one implementation.
+- **`ExecutionPlanBuilder` hardcodes the server-id normalizer to Claude.** The
+  `mergeServerDeniedTools` call passes `normalizeClaudeMcpServerId` only when the harness is
+  `claude-cli`. Server `deniedTools` on Antigravity need the Antigravity sanitizer there too.
+  Replace the harness check with a mapper/provider-supplied normalizer rather than adding a
+  second `harnessId ===` branch.
+- **`PermissionContext` carries no `additionalArgs`.** The `--settings` collision check needs
+  them. Add an optional field (or pass the resolved string) from `ExecutionPlanBuilder`.
+- **`allowAll` emits `--settings` only to carry `toolPermission: "always-proceed"`** (plus the
+  deny union). It is never "empty", so it always emits a file.
+
 ## Phases
 
-0. **Research.** Done 2026-10-31; see "Phase 0 findings". Not covered, and left to phase 3:
+0. **Research.** Done 2026-10-31; see "Phase 0 findings". Not covered, and left to phase 3
+   (resolved there, except `read_url` and literal prefixes on macOS/Linux):
    - literal-prefix behavior on macOS/Linux (the translation doesn't rely on it);
    - `mcp(server/*)`;
    - `read_url`;
@@ -352,8 +372,18 @@ picked up by the union. Keep the file alive for the life of the PTY.
      `git pushx`/`xgit push`;
    - the merge rules, including the user's file being missing or malformed;
    - the `additionalArgs` `--settings` collision.
-2. **Version floor and capabilities.** Bump `minimum`/`testedWith`, flip the declarations,
-   regenerate the compatibility docs, update the capability registry tests.
+   - **Done 2026-10-31.** Implemented the per-list pure pattern conversion, lossy entry
+     reporting, MCP server-id normalization/formatter, mode mapping, `--settings` delivery,
+     user-global rule union, settings collision diagnostics, cleanup registration, server
+     `deniedTools` merging, `hasFullPermissions`, and terminal-reuse identity for global rule
+     changes. Permission capability declarations and the version floor remain for phase 2.
+     Deviation: terminal reuse compares a hash of only the user's global allow/deny lists,
+     alongside the existing workflow `toolPermissions` comparison; unrelated settings edits
+     do not retire the PTY. The legacy `ToolPermissionMappers.test.ts` assertions were also
+     updated because the targeted test grep includes that suite.
+2. **Version floor and capabilities.** Done 2026-10-31. Bumped `minimum`/`testedWith`,
+   declared exact mode and partially translated tool lists with a shared caveat, regenerated
+   the compatibility docs, and updated capability registry tests.
 3. **Harness tests** (opt-in, `npm run test:harness`). Run only the new cases while
    developing. The probe shape that worked: a fresh workspace with `.agents/mcp_config.json`
    and the `buildMcpProbeServerScript()` server, headless `--output-format stream-json`, and
@@ -372,23 +402,43 @@ picked up by the union. Keep the file alive for the life of the PTY.
        the real one);
      - an MCP tool allowed by exact and by whole-server patterns.
 
-     Skip the dotted-server-id case until the bug in
-     `dev/bugs/backlog/antigravity-mcp-dotted-server-id-drops-tools.md` is fixed, or fix it
-     first.
+     The dotted-server-id case is covered too: the bug in
+     `dev/bugs/implemented/antigravity-mcp-dotted-server-id-drops-tools.md` was fixed first
+     (7c3ec2396).
 
    - `allowAll` runs a shell command without asking and still refuses a denied one.
-4. **Docs and changelog.**
-   - `docs/workflows/permissions.md`: the per-harness table, and the paragraphs saying
-     Antigravity ignores both lists. Add the whole-line allow caveat and the unenforceable
-     web-search deny.
-   - `docs/harnesses/antigravity-cli.md`.
-   - `CHANGELOG.md` under **Changed**: lists are now enforced on Antigravity, `allowAll`
-     auto-approves, and the new minimum version.
+   - **Done 2026-10-31** against agy 1.4.12 on Windows 11 (26200).
+     `commit-permissions.harness.test.ts` passed for `antigravity-cli` with no code change.
+     `inline-config.harness.test.ts` gained an `antigravity-cli` suite of 14 cases, all
+     passing: allow proceeds, deny blocks, deny wins over allow, an `&&` chain and a two-line
+     command with a denied `node` are refused, `echo` allowed does not allow
+     `echo … && node …`, a deny survives an isolated user `settings.json` that allows
+     `command(*)` (and the user's lists are left unchanged), MCP tools allowed by exact,
+     whole-server (`mcp__server`) and `mcp__server__*` patterns, and a dotted server id whose
+     allowed tool is callable and whose server-`deniedTools` tool is refused under `allowAll`.
+     Each deny case also asserts that agy actually attempted the call; the transcripts showed
+     the chained and two-line command lines arriving verbatim. Phase-0 leftovers:
+     - `mcp(server/*)` works (whole-server and wildcard cases).
+     - The deny boundary regex `(?is)(?:.*[^\w.-])?W(?:[^\w.-].*)?` caught the denied
+       command at the start of the line, after `&& `, and after a newline. The allow tail
+       refused the `&&` chain. `xgit push`/`git pushx` boundaries remain unit-tested only.
+     - `read_url`: still unverified. agy doesn't offer `read_url_content` to the model
+       headless, so no cheap live case exists.
+     - **Contradiction found: under `--sandbox`, a rule-allowed command still runs _inside_ the
+       sandbox** (agy 1.4.12, Windows). The command executed, but PowerShell failed to
+       initialize its drives and `node` got `EPERM` writing a file in the workspace, in
+       `%TEMP%` and under the user profile alike. The identical settings without
+       `--sandbox` wrote the file. So `custom` on Antigravity permits the allowed commands
+       but leaves them unable to write. `--sandbox` was then removed from `custom` (see "Sandbox is a
+       separate axis"), and every shell case now also checks the file write.
+4. **Docs and changelog.** Done 2026-10-31. Updated the workflow permissions and Antigravity
+   CLI pages with shipped behavior, limitations, and the `--settings` collision; recorded the
+   enforcement change under **Changed** and the dotted MCP id fix under **Fixed** in the
+   Unreleased changelog. The minimum-version entry was already added in phase 2.
+   `npm run check:docs` and formatting checks passed.
 
-   Run `npm run check:docs`.
-
-5. **Clean up the older plan.** Remove the Antigravity sections from
-   `CODEX_ANTIGRAVITY_PERMISSION_RULES_PLAN.md`, leaving Codex only.
+5. **Clean up the older plan.** Done 2026-10-31. Removed its Antigravity research and proposal,
+   leaving the Codex plan, and moved this completed plan to `dev/implemented/`.
 
 After phase 1, consider adding the `CLI settings initialized: permissions=…` log line and
 the "regex rules see the raw unsplit line" gotcha to
@@ -418,19 +468,22 @@ a `custom` run is OS-sandboxed on Antigravity, sandboxed by `codexSandboxMode` o
 not sandboxed anywhere else. The decision and the per-harness sandbox survey live in
 `HARNESS_SANDBOX_PLAN.md`.
 
-**Interim for this plan:** don't change agy's sandbox behavior as a side effect of
-translating rules. Keep `custom` → `--sandbox` until the sandbox plan lands, then move it in
-that plan's commit, under **Changed**. If the sandbox plan is rejected, remove `--sandbox`
-from `custom` here instead, so Antigravity's `custom` means the same as on other harnesses.
+**Superseded 2026-10-31:** the interim was to keep `custom` → `--sandbox` until the sandbox
+plan landed. After phase 3 showed allowed commands can't write under the sandbox, Nathan
+chose to remove it now. `custom` no longer adds `--sandbox` (noted under **Changed**), and
+the sandbox plan's phase 3 now only adds `--sandbox` from the `sandbox` property.
+A user who wants agy's sandbox can pass `--sandbox` in `additionalArgs`.
 
 Probed facts that affect the interim:
 
 - Deny rules still hold under `--sandbox`.
 - An unlisted command is still soft-denied headless under `--sandbox` with
   `request-review`.
-- Per the docs, a `command` allow rule lets the matching command run **outside** the
-  sandbox. So `custom` + `--sandbox` contains only the commands that weren't explicitly
-  allowed.
+- ~~Per the docs, a `command` allow rule lets the matching command run **outside** the
+  sandbox.~~ **Contradicted by phase 3 (agy 1.4.12, Windows):** an allowed command runs
+  inside the sandbox and can't write the workspace (`EPERM`). So today's `custom` +
+  `--sandbox` lets allowed commands run but breaks any that write files. This is why
+  `--sandbox` was moved off `custom`.
 - An allowed command that needs the network fails inside the sandbox unless `read_url`
   rules allow the domain, and ctrlyoke's lists can't express those today.
 - On machines without sandbox support (Windows before 11 24H2, some Linux containers),

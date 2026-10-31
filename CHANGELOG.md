@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Antigravity CLI 1.4.10 is now the minimum supported version because it adds
+  `--settings`, which ctrlyoke uses to deliver per-run permission rules.
+- Antigravity now enforces supported `allowedTools` and `deniedTools` patterns.
+  `allowAll` auto-approves tools while honoring the deny list.
+- Antigravity's `custom` permission mode no longer adds `--sandbox`, so it
+  means the same as on the other harnesses. Under agy's sandbox, even an
+  allowed command could not write the workspace on Windows. Add `--sandbox` to
+  the workflow's `additionalArgs` to keep the old containment.
+
 - In the Agent & Skills Manager, the **skills.sh** toggle under **Discover &
   import** is now a **Browse skills.sh** button. Once clicked, it fades out and
   the browser fades in, and the browser stays open until the window reloads, so the skills list and the
@@ -143,6 +152,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   launcher resolution outlives their timeout.
 
 ### Fixed
+
+- Dotted Antigravity MCP server ids now work; ctrlyoke rewrites unsupported
+  characters in server ids to underscores and uses the rewritten id in rules.
 
 - In a workspace folder that is not a Git repository, a file added after the workspace opens now
   appears in `@` completions straight away. It used to stay missing until the file list was

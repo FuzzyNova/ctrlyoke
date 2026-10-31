@@ -21,24 +21,34 @@ import type {
   ToolPermissionsOverride,
   UserHookConfig,
 } from "../../types/CtrlYokeTypes";
-import { EXECUTION_MODES } from "../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  EXECUTION_MODES,
+} from "../../types/DashboardConstants";
+import { normalizeAntigravityMcpServerId } from "../../types/ToolPermissionUtils";
+import { getAntigravitySettingsPath } from "../../core/harness/shared/StatuslineManager";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import {
   HARNESS_MODELS,
   HARNESS_TIMEOUT_MS,
   buildHookRecorderScript,
   buildMcpProbeServerScript,
+  findRunFiles,
+  isolateRunState,
   logAndMaybeSkip,
+  readRecordedCliEvents,
   readRecordedHookEvents,
   runInteractiveWorkflowFile,
   runWorkflowFile,
   runWorkflowFileAsync,
+  runsRootFor,
   withIsolatedCodexHome,
 } from "./helpers/harnessRunner";
 
 const OPENCODE = "opencode-cli" as const;
 const CODEX = "codex-cli" as const;
 const QWEN = "qwen-cli" as const;
+const ANTIGRAVITY = "antigravity-cli" as const;
 
 function normalizedPath(value: string): string {
   return value.replace(/\\/g, "/");
@@ -263,6 +273,148 @@ function qwenPermissionWorkflow(
       },
     ],
   };
+}
+
+/** Printed by `MARKER_SCRIPT`; never appears in a prompt or command line. */
+const AGY_PROBE_RAN = "AGY_PROBE_EXECUTED";
+
+/**
+ * Source for a script that prints `AGY_PROBE_RAN`, then tries to write the
+ * file named by argv[2]. Antigravity's translated shell allow rule refuses
+ * parentheses, quotes and `$` in a command line, so the probe command must be
+ * a plain `node <script> <file>` rather than an inline `node -e "…"`.
+ *
+ * The printed token proves the command was permitted to start; the marker file
+ * proves it ran unsandboxed. ctrlyoke used to add `--sandbox` in `custom`, and
+ * on Windows (agy 1.4.12) agy ran even a rule-allowed command inside it, where
+ * the write failed with `EPERM`.
+ */
+const MARKER_SCRIPT = `"use strict";
+process.stdout.write(${JSON.stringify(AGY_PROBE_RAN)} + "\\n");
+try {
+  require("fs").writeFileSync(process.argv[2], "permission-allowed");
+} catch (error) {
+  process.stdout.write("marker write failed: " + error.code + "\\n");
+}
+`;
+
+/**
+ * Every Antigravity shell case also denies `write`, so a model that falls
+ * back to agy's `write_file` after a refused command cannot create the marker
+ * and turn a correct denial into a false failure.
+ */
+const ANTIGRAVITY_NO_WRITE_FALLBACK = ["write"];
+
+interface AntigravityProbeResult {
+  result: ReturnType<typeof runWorkflowFile>;
+  /** Recorded non-text CLI events, serialized, as proof of an attempt. */
+  toolEvents: string;
+}
+
+/**
+ * Runs an Antigravity workflow with isolated run state, so the case can read
+ * back the tool events agy reported. A deny case asserts on these: a missing
+ * marker only proves a denial if the model actually tried the call.
+ */
+function runAntigravityProbe(
+  workflow: PromptFile,
+  tmpDir: string,
+  label: string
+): AntigravityProbeResult {
+  const restore = isolateRunState(tmpDir);
+  try {
+    const result = runWorkflowFile(workflow, tmpDir, label);
+    const toolEvents = findRunFiles(runsRootFor(tmpDir), "events.jsonl")
+      .flatMap(readRecordedCliEvents)
+      .filter((event) => event.type !== CLI_EVENT_TYPES.TEXT)
+      .map((event) => JSON.stringify(event))
+      .join("\n");
+    return { result, toolEvents };
+  } finally {
+    restore();
+  }
+}
+
+function antigravityShellWorkflow(
+  name: string,
+  permissions: ToolPermissionsOverride,
+  commandLines: readonly string[]
+): PromptFile {
+  return {
+    harness: ANTIGRAVITY,
+    model: HARNESS_MODELS[ANTIGRAVITY],
+    toolPermissions: permissions,
+    steps: [
+      {
+        name,
+        prompt: [
+          "Call the run_command tool exactly once, with exactly this command line" +
+            (commandLines.length > 1
+              ? ` (${commandLines.length} lines; keep the line breaks):`
+              : ":"),
+          "",
+          ...commandLines,
+          "",
+          "Do not change, split, or reformat the command.",
+          "If the tool call is denied, do not retry and do not try any other tool or another way to cause the same effect.",
+        ].join("\n"),
+      },
+    ],
+  };
+}
+
+function antigravityMcpWorkflow(
+  name: string,
+  permissions: ToolPermissionsOverride,
+  server: McpServerConfig,
+  toolName: string
+): PromptFile {
+  return {
+    harness: ANTIGRAVITY,
+    model: HARNESS_MODELS[ANTIGRAVITY],
+    toolPermissions: permissions,
+    mcpServers: [server],
+    steps: [
+      {
+        name,
+        prompt: [
+          `Use the call_mcp_tool tool exactly once to call the tool ${toolName} on the MCP server ${normalizeAntigravityMcpServerId(server.id)}.`,
+          "Do not call any other tool or try another way to cause the same effect.",
+        ].join(" "),
+      },
+    ],
+  };
+}
+
+/**
+ * Runs `fn` with `USERPROFILE`/`HOME` pointing at a throwaway home whose
+ * `~/.gemini/antigravity-cli/settings.json` holds `settings`. agy keeps its
+ * sign-in outside `~/.gemini`, so an empty home still authenticates, and the
+ * developer's real `~/.gemini` is never read or written.
+ */
+async function withIsolatedAntigravityHome<T>(
+  settings: Record<string, unknown>,
+  fn: (settingsPath: string) => T | Promise<T>
+): Promise<T> {
+  const home = makeTempDir("ctrlyoke-agy-home-");
+  const settingsPath = getAntigravitySettingsPath(home);
+  fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+  const previous = {
+    USERPROFILE: process.env.USERPROFILE,
+    HOME: process.env.HOME,
+  };
+  process.env.USERPROFILE = home;
+  process.env.HOME = home;
+  try {
+    return await fn(settingsPath);
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    removeTempDir(home);
+  }
 }
 
 suite("Inline harness configuration regression tests", function () {
@@ -967,6 +1119,290 @@ suite("Inline harness configuration regression tests", function () {
       assert.ok(
         fs.existsSync(markerPath),
         "the permissionRequest hook's allow decision did not let the command run"
+      );
+    });
+  });
+
+  // ctrlyoke's tool lists reach agy as a per-run `--settings` file of
+  // `command(regex:…)`, `mcp(server/tool)` and file rules
+  // (dev/implemented/ANTIGRAVITY_PERMISSION_RULES_PLAN.md). agy matches a command
+  // rule against the raw, unsplit command line, so the chain and multi-line
+  // cases prove the generated allow/deny regexes, not just agy's matching.
+  suite(ANTIGRAVITY, function () {
+    let markerScript: string;
+
+    setup(function () {
+      markerScript = path.join(tmpDir, "agy-marker.js");
+      fs.writeFileSync(markerScript, MARKER_SCRIPT);
+    });
+
+    const plain = (script: string, marker: string) => [
+      `node ${script} ${marker}`,
+    ];
+    const chained = (script: string, marker: string) => [
+      `echo agy-chain && node ${script} ${marker}`,
+    ];
+    const twoLines = (script: string, marker: string) => [
+      "echo agy-first-line",
+      `node ${script} ${marker}`,
+    ];
+
+    for (const shellCase of [
+      {
+        name: "allow proceeds",
+        permissions: {
+          mode: "custom",
+          allowedTools: ["shell(node:*)"],
+          deniedTools: ANTIGRAVITY_NO_WRITE_FALLBACK,
+        } satisfies ToolPermissionsOverride,
+        command: plain,
+        shouldCreate: true,
+      },
+      {
+        name: "deny blocks a command a broad allow would run",
+        permissions: {
+          mode: "custom",
+          allowedTools: ["shell"],
+          deniedTools: ["shell(node:*)", ...ANTIGRAVITY_NO_WRITE_FALLBACK],
+        } satisfies ToolPermissionsOverride,
+        command: plain,
+        shouldCreate: false,
+      },
+      {
+        name: "deny wins over allow",
+        permissions: {
+          mode: "custom",
+          allowedTools: ["shell(node:*)"],
+          deniedTools: ["shell(node:*)", ...ANTIGRAVITY_NO_WRITE_FALLBACK],
+        } satisfies ToolPermissionsOverride,
+        command: plain,
+        shouldCreate: false,
+      },
+      {
+        name: "deny blocks a denied command chained after echo",
+        permissions: {
+          mode: "custom",
+          allowedTools: ["shell"],
+          deniedTools: ["shell(node:*)", ...ANTIGRAVITY_NO_WRITE_FALLBACK],
+        } satisfies ToolPermissionsOverride,
+        command: chained,
+        shouldCreate: false,
+      },
+      {
+        name: "deny blocks a denied command on the second line",
+        permissions: {
+          mode: "custom",
+          allowedTools: ["shell"],
+          deniedTools: ["shell(node:*)", ...ANTIGRAVITY_NO_WRITE_FALLBACK],
+        } satisfies ToolPermissionsOverride,
+        command: twoLines,
+        shouldCreate: false,
+      },
+      {
+        name: "an allowed command does not allow an unlisted one chained to it",
+        permissions: {
+          mode: "custom",
+          allowedTools: ["shell(echo:*)"],
+          deniedTools: ANTIGRAVITY_NO_WRITE_FALLBACK,
+        } satisfies ToolPermissionsOverride,
+        command: chained,
+        shouldCreate: false,
+      },
+      {
+        name: "allowAll runs a shell command without asking",
+        permissions: {
+          mode: "allowAll",
+          deniedTools: ANTIGRAVITY_NO_WRITE_FALLBACK,
+        } satisfies ToolPermissionsOverride,
+        command: plain,
+        shouldCreate: true,
+      },
+      {
+        name: "allowAll still refuses a denied command",
+        permissions: {
+          mode: "allowAll",
+          deniedTools: ["shell(node:*)", ...ANTIGRAVITY_NO_WRITE_FALLBACK],
+        } satisfies ToolPermissionsOverride,
+        command: plain,
+        shouldCreate: false,
+      },
+    ]) {
+      test(`${ANTIGRAVITY}: ${shellCase.name}`, function () {
+        const slug = shellCase.name.replace(/[^a-z]+/gi, "-").toLowerCase();
+        const markerName = `agy-${slug}.txt`;
+        const markerPath = path.join(tmpDir, markerName);
+        const { result, toolEvents } = runAntigravityProbe(
+          antigravityShellWorkflow(
+            `agy-${slug}`,
+            shellCase.permissions,
+            shellCase.command(
+              normalizedPath(markerScript),
+              normalizedPath(markerPath)
+            )
+          ),
+          tmpDir,
+          `agy-${slug}`
+        );
+        if (logAndMaybeSkip(`${ANTIGRAVITY} (${shellCase.name})`, result))
+          return;
+        assertSuccessfulRun(`${ANTIGRAVITY} (${shellCase.name})`, result);
+        assert.ok(
+          toolEvents.includes(markerName),
+          `agy never attempted the command, so the case proves nothing\nstdout: ${result.stdout}`
+        );
+        assert.strictEqual(
+          toolEvents.includes(AGY_PROBE_RAN),
+          shellCase.shouldCreate,
+          `command ${shellCase.shouldCreate ? "was refused" : "ran"}\ntool events: ${toolEvents}`
+        );
+        // No mode sandboxes the command, so an allowed one can write the
+        // workspace; this also guards against `custom` regaining --sandbox.
+        assert.strictEqual(
+          fs.existsSync(markerPath),
+          shellCase.shouldCreate,
+          `marker ${shellCase.shouldCreate ? "missing" : "created"}\ntool events: ${toolEvents}`
+        );
+      });
+    }
+
+    test(`${ANTIGRAVITY}: deny survives a conflicting user settings.json allow`, async function () {
+      const markerName = "agy-user-conflict.txt";
+      const markerPath = path.join(tmpDir, markerName);
+      const userSettings = { permissions: { allow: ["command(*)"] } };
+      await withIsolatedAntigravityHome(userSettings, (settingsPath) => {
+        const { result, toolEvents } = runAntigravityProbe(
+          antigravityShellWorkflow(
+            "agy-user-conflict",
+            {
+              mode: "custom",
+              allowedTools: [],
+              deniedTools: ["shell(node:*)", ...ANTIGRAVITY_NO_WRITE_FALLBACK],
+            },
+            plain(normalizedPath(markerScript), normalizedPath(markerPath))
+          ),
+          tmpDir,
+          "agy-user-conflict"
+        );
+        if (logAndMaybeSkip(`${ANTIGRAVITY} (user conflict)`, result)) return;
+        assertSuccessfulRun(`${ANTIGRAVITY} (user conflict)`, result);
+        assert.ok(
+          toolEvents.includes(markerName),
+          `agy never attempted the command\nstdout: ${result.stdout}`
+        );
+        assert.ok(
+          !toolEvents.includes(AGY_PROBE_RAN) && !fs.existsSync(markerPath),
+          `the user's allow overrode the workflow deny\ntool events: ${toolEvents}`
+        );
+        const after = JSON.parse(fs.readFileSync(settingsPath, "utf8")) as {
+          permissions?: unknown;
+        };
+        assert.deepStrictEqual(
+          after.permissions,
+          userSettings.permissions,
+          "the injected rules leaked into the user's settings.json"
+        );
+      });
+    });
+
+    for (const allowCase of [
+      { name: "exact tool", allowedTool: "mcp__agy-probe__probe_tool" },
+      { name: "whole server", allowedTool: "mcp__agy-probe" },
+      { name: "server wildcard", allowedTool: "mcp__agy-probe__*" },
+    ]) {
+      test(`${ANTIGRAVITY}: calls an MCP tool allowed by a ${allowCase.name} pattern`, function () {
+        const markerPath = path.join(tmpDir, "agy-allowed-mcp.calls");
+        const slug = `agy-mcp-${allowCase.name.replace(/ /g, "-")}`;
+        const { result, toolEvents } = runAntigravityProbe(
+          antigravityMcpWorkflow(
+            slug,
+            {
+              mode: "custom",
+              allowedTools: [allowCase.allowedTool],
+              deniedTools: ["shell", ...ANTIGRAVITY_NO_WRITE_FALLBACK],
+            },
+            makeUserMcpServer(
+              "agy-probe",
+              "probe_tool",
+              normalizedPath(mcpServerScript),
+              normalizedPath(markerPath)
+            ),
+            "probe_tool"
+          ),
+          tmpDir,
+          slug
+        );
+        if (logAndMaybeSkip(`${ANTIGRAVITY} (${slug})`, result)) return;
+        assertSuccessfulRun(`${ANTIGRAVITY} (${slug})`, result);
+        assert.ok(
+          fs.existsSync(markerPath),
+          `agy did not call the allowed MCP tool\ntool events: ${toolEvents}`
+        );
+      });
+    }
+
+    test(`${ANTIGRAVITY}: calls an allowed tool on a dotted MCP server id`, function () {
+      const markerPath = path.join(tmpDir, "agy-dotted-allowed.calls");
+      const { result, toolEvents } = runAntigravityProbe(
+        antigravityMcpWorkflow(
+          "agy-dotted-allowed",
+          {
+            mode: "custom",
+            allowedTools: ["mcp__agy.probe-server__allowed_probe"],
+            deniedTools: ["shell", ...ANTIGRAVITY_NO_WRITE_FALLBACK],
+          },
+          makeUserMcpServer(
+            "agy.probe-server",
+            "allowed_probe",
+            normalizedPath(mcpServerScript),
+            normalizedPath(markerPath)
+          ),
+          "allowed_probe"
+        ),
+        tmpDir,
+        "agy-dotted-allowed"
+      );
+      if (logAndMaybeSkip(`${ANTIGRAVITY} (dotted allowed)`, result)) return;
+      assertSuccessfulRun(`${ANTIGRAVITY} (dotted allowed)`, result);
+      assert.strictEqual(
+        fs.existsSync(markerPath)
+          ? fs.readFileSync(markerPath, "utf8").trim()
+          : "missing",
+        "allowed_probe",
+        `tool events: ${toolEvents}`
+      );
+    });
+
+    test(`${ANTIGRAVITY}: refuses a server-denied tool on a dotted MCP server id`, function () {
+      const markerPath = path.join(tmpDir, "agy-dotted-denied.calls");
+      const server = makeUserMcpServer(
+        "agy.probe-server",
+        "allowed_probe,blocked_probe",
+        normalizedPath(mcpServerScript),
+        normalizedPath(markerPath)
+      );
+      server.deniedTools = ["blocked_probe"];
+      const { result, toolEvents } = runAntigravityProbe(
+        antigravityMcpWorkflow(
+          "agy-dotted-denied",
+          {
+            mode: "allowAll",
+            deniedTools: ["shell", ...ANTIGRAVITY_NO_WRITE_FALLBACK],
+          },
+          server,
+          "blocked_probe"
+        ),
+        tmpDir,
+        "agy-dotted-denied"
+      );
+      if (logAndMaybeSkip(`${ANTIGRAVITY} (dotted denied)`, result)) return;
+      assertSuccessfulRun(`${ANTIGRAVITY} (dotted denied)`, result);
+      assert.ok(
+        !fs.existsSync(markerPath),
+        `agy called the server-denied MCP tool\ntool events: ${toolEvents}`
+      );
+      assert.ok(
+        toolEvents.includes("blocked_probe"),
+        `agy never attempted the denied MCP tool\nstdout: ${result.stdout}`
       );
     });
   });

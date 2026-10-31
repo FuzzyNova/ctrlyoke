@@ -1,6 +1,7 @@
 import * as path from "path";
 import * as os from "os";
 import * as fs from "fs/promises";
+import * as fsSync from "fs";
 import { createHash, randomUUID } from "crypto";
 import {
   ICliProvider,
@@ -24,6 +25,10 @@ import {
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
   STATUS_LINE_HARNESS_IDS,
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
+  CAPABILITY_VERIFICATION_STATUSES,
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   type HookEvent,
 } from "../../../types/DashboardConstants";
 import type {
@@ -35,10 +40,14 @@ import type {
 } from "../../../types/CtrlYokeTypes";
 import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import {
-  MCP_CAVEAT_CODES,
+  COMPATIBILITY_DIAGNOSTIC_CODES,
   capabilitySuiteVerification,
+  getCompatibilityDiagnosticMessage,
+  getCompatibilityDiagnosticRemediation,
+  type CompatibilityDiagnostic,
   type HarnessCapabilityFacts,
 } from "../../../types/CompatibilityTypes";
+import { normalizeAntigravityMcpServerId } from "../../../types/ToolPermissionUtils";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import {
   ConfigurationUtils,
@@ -61,7 +70,12 @@ import {
   isProcessAlive,
 } from "../../../utils/LockSafetyPrimitives";
 import { AntigravityNotificationMonitor } from "./AntigravityNotificationMonitor";
-import { AntigravityToolPermissionMapper } from "./AntigravityToolPermissionMapper";
+import {
+  AntigravityToolPermissionMapper,
+  getAntigravityUserSettingsPath,
+  parseAntigravityUserPermissionRules,
+  type AntigravityUserPermissionRules,
+} from "./AntigravityToolPermissionMapper";
 import { AntigravityLogParser } from "./AntigravityLogParser";
 import { AntigravityStatuslineSidecar } from "./AntigravityStatuslineSidecar";
 import { AntigravityStreamJsonUsageAccumulator } from "./AntigravityStreamJsonUsage";
@@ -71,15 +85,15 @@ import {
 } from "../shared/interfaces/PreparedMutation";
 
 const ANTIGRAVITY_MCP_FILTERING_CAPABILITY = {
-  fidelity: "unsupported",
-  mechanism: "none",
+  fidelity: "exact",
+  mechanism: "translated-cli",
   verification: {
     kind: "manual",
-    reference: "dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#antigravity",
+    reference:
+      "dev/implemented/ANTIGRAVITY_PERMISSION_RULES_PLAN.md#translating-patterns",
     basis: "cli-version",
-    verifiedVersions: [">=1.1.12"],
+    verifiedVersions: [">=1.4.10"],
   },
-  caveatCode: MCP_CAVEAT_CODES.NO_PER_SERVER_FILTERING,
 } as const;
 
 const ANTIGRAVITY_IMAGE_INPUT_CAPABILITY = {
@@ -155,12 +169,13 @@ export class AntigravityCliProvider implements ICliProvider {
     }),
     versionPolicy: {
       // agy is not on npm; `agy changelog` and the google-antigravity/
-      // antigravity-cli GitHub releases give its history. 1.2.6 removed the
-      // 5-minute default `--print` timeout (ctrlyoke passes none, so longer
+      // antigravity-cli GitHub releases give its history. 1.4.10 added
+      // `--settings`, which delivers per-run permission rules; 1.2.6 removed
+      // the 5-minute default `--print` timeout (ctrlyoke passes none, so longer
       // headless steps were cut short); 1.1.20 stopped benign tool errors
       // failing `-p` runs; 1.1.10 made `Stop` hooks and `--model` work.
-      minimum: "1.2.6",
-      testedWith: "1.4.5",
+      minimum: "1.4.10",
+      testedWith: "1.4.12",
       updateCommand: "agy update",
     },
     shouldStreamHeadlessOutput: true,
@@ -190,6 +205,8 @@ export class AntigravityCliProvider implements ICliProvider {
   private statusLineToken: string | undefined;
   /** Snapshot files created by every prompt in this workflow. */
   private readonly statusLineSnapshotPaths = new Set<string>();
+  /** Permission settings stay alive until their agy process or PTY exits. */
+  private readonly permissionSettingsPaths = new Set<string>();
   /** Workspace temp directory for the current statusline invocation. */
   private statusLineDirectory: string | undefined;
   /** Effective ctrlyoke root for workspace-scoped statusline settings. */
@@ -516,7 +533,14 @@ export class AntigravityCliProvider implements ICliProvider {
     if (config === null) {
       return { cliArgs: [], diagnostics: [] };
     }
-    return this.toolPermissionMapper.prepare(config, context);
+    const application = await this.toolPermissionMapper.prepare(
+      config,
+      context
+    );
+    for (const mutation of application.mutations ?? []) {
+      if (mutation.path) this.permissionSettingsPaths.add(mutation.path);
+    }
+    return application;
   }
 
   async buildNotificationHookArgs(
@@ -710,7 +734,23 @@ export class AntigravityCliProvider implements ICliProvider {
   }
 
   getAdditionalCleanupFilePaths(_workspaceRoot: string): string[] {
-    return [...this.statusLineSnapshotPaths];
+    return [...this.statusLineSnapshotPaths, ...this.permissionSettingsPaths];
+  }
+
+  getLiveProcessFilePaths(): string[] {
+    return [...this.permissionSettingsPaths];
+  }
+
+  getExternalPermissionIdentity(): string {
+    let rules: AntigravityUserPermissionRules = { allow: [], deny: [] };
+    try {
+      rules = parseAntigravityUserPermissionRules(
+        fsSync.readFileSync(getAntigravityUserSettingsPath(), "utf-8")
+      );
+    } catch {
+      // A missing file means no user rules, exactly as the mapper treats it.
+    }
+    return createHash("sha256").update(JSON.stringify(rules)).digest("hex");
   }
 
   /**
@@ -822,12 +862,20 @@ export class AntigravityCliProvider implements ICliProvider {
     }
 
     try {
+      const diagnostics = this.createMcpServerIdDiagnostics(
+        userServers ?? [],
+        Boolean(mcpServerPath)
+      );
+      const normalizedUserServers = (userServers ?? []).map((server) => ({
+        ...server,
+        id: normalizeAntigravityMcpServerId(server.id),
+      }));
       const mcpEntries = CliProviderUtils.buildSettingsJsonMcpEntries(
         mcpServerPath,
         workspaceRoot,
         workingFilePath,
         additionalEnv,
-        userServers,
+        normalizedUserServers,
         // agy's mcp_config.json uses serverUrl for remote servers and does not
         // recognize the type/trust fields.
         {
@@ -869,7 +917,7 @@ export class AntigravityCliProvider implements ICliProvider {
             },
           },
         ],
-        diagnostics: [],
+        diagnostics,
       };
     } catch (error) {
       Log.warn(
@@ -877,6 +925,90 @@ export class AntigravityCliProvider implements ICliProvider {
       );
       return { cliArgs: [], mutations: [], diagnostics: [] };
     }
+  }
+
+  private createMcpServerIdDiagnostics(
+    userServers: readonly McpServerConfig[],
+    includesCtrlyoke: boolean
+  ): CompatibilityDiagnostic[] {
+    const diagnostics: CompatibilityDiagnostic[] = [];
+    const serverIds = [
+      ...(includesCtrlyoke ? ["ctrlyoke"] : []),
+      ...userServers.map((server) => server.id),
+    ];
+    const normalizedIds = new Map<string, string[]>();
+    for (const id of serverIds) {
+      const normalizedId = normalizeAntigravityMcpServerId(id);
+      normalizedIds.set(normalizedId, [
+        ...(normalizedIds.get(normalizedId) ?? []),
+        id,
+      ]);
+      if (normalizedId !== id) {
+        diagnostics.push(
+          this.createMcpDiagnostic(
+            COMPATIBILITY_DIAGNOSTIC_CODES.MCP_SERVER_ID_SANITIZED,
+            COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO
+          )
+        );
+      }
+    }
+    for (const ids of normalizedIds.values()) {
+      if (ids.length > 1) {
+        diagnostics.push(
+          this.createMcpDiagnostic(
+            COMPATIBILITY_DIAGNOSTIC_CODES.MCP_SERVER_ID_COLLISION,
+            COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+          )
+        );
+      }
+    }
+    for (const server of userServers) {
+      const normalizedId = normalizeAntigravityMcpServerId(server.id);
+      const serverToolLists = server as McpServerConfig & {
+        allowedTools?: string[];
+      };
+      const listedToolNames = [
+        ...(serverToolLists.allowedTools ?? []),
+        ...(server.deniedTools ?? []),
+      ];
+      if (
+        listedToolNames.some(
+          (toolName) =>
+            !/^[A-Za-z0-9_-]+$/u.test(toolName) ||
+            `mcp_${normalizedId}_${toolName}`.length > 64
+        )
+      ) {
+        diagnostics.push(
+          this.createMcpDiagnostic(
+            COMPATIBILITY_DIAGNOSTIC_CODES.MCP_TOOL_NAME_INVALID,
+            COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+          )
+        );
+      }
+    }
+    return diagnostics;
+  }
+
+  private createMcpDiagnostic(
+    code: string,
+    severity: CompatibilityDiagnostic["severity"]
+  ): CompatibilityDiagnostic {
+    return {
+      code,
+      severity,
+      harnessId: HARNESS_IDS.ANTIGRAVITY_CLI,
+      capability: "mcpServers",
+      state: {
+        fidelity: CAPABILITY_FIDELITIES.PARTIAL,
+        mechanism: CAPABILITY_MECHANISMS.TRANSLATED_CLI,
+        verification: CAPABILITY_VERIFICATION_STATUSES.UNKNOWN,
+      },
+      message: getCompatibilityDiagnosticMessage(code, {
+        harnessId: HARNESS_IDS.ANTIGRAVITY_CLI,
+        capability: "mcpServers",
+      }),
+      remediation: getCompatibilityDiagnosticRemediation(code),
+    };
   }
 
   getMcpConfigFilePath(): null {

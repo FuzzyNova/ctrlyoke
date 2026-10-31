@@ -166,7 +166,7 @@ the image must not be presented as a complete sandbox on its own.
   a container, ctrlyoke's default stays `allowAll` with the full default deny list.
   `docs/guide/docker.md` should explain why the image differs.
   - This depends on deny lists being enforced. Antigravity enforces them only after
-    `ANTIGRAVITY_PERMISSION_RULES_PLAN.md`. Codex enforces only MCP denials; its shell
+    `dev/implemented/ANTIGRAVITY_PERMISSION_RULES_PLAN.md`. Codex enforces only MCP denials; its shell
     containment comes from its sandbox (see the next item).
 
 - **Native sandboxes inside the container:** the container already is the boundary, so set

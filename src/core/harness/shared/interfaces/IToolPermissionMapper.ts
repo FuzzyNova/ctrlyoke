@@ -35,6 +35,8 @@ export interface PermissionContext {
   readonly workingFilePath?: string;
   /** Environment snapshot used when resolving harness configuration paths. */
   readonly environment?: NodeJS.ProcessEnv;
+  /** Workflow-provided CLI arguments, used for provider flag collision checks. */
+  readonly additionalArgs?: string;
   /** Codex-only mode settings, supplied by the provider. */
   readonly sandboxMode?: string;
   readonly approvalPolicy?: string;
@@ -78,6 +80,8 @@ export interface IToolPermissionMapper {
    * Defaults to `mcp__<server>__<tool>` when omitted.
    */
   readonly formatMcpToolName?: (serverId: string, toolName: string) => string;
+  /** Normalize MCP server IDs to the spelling used by the harness config. */
+  readonly normalizeMcpServerId?: (serverId: string) => string;
 
   /**
    * Static permission facts owned by this harness mapper and referenced by the

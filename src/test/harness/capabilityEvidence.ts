@@ -49,6 +49,10 @@ export function collectClaims(
 export const UNPROVEN_CLAIMS: Partial<
   Record<HarnessId, Partial<Record<CapabilityPath, string>>>
 > = {
+  "antigravity-cli": {
+    "mcp.perServerToolFiltering":
+      "dev/implemented/ANTIGRAVITY_PERMISSION_RULES_PLAN.md#translating-patterns",
+  },
   "copilot-cli": {
     "hooks.error":
       "errorOccurred fires only for a model-call or tool-execution failure inside a session; an unknown model is rejected before the session starts, and a failing tool call is an ordinary tool result.",

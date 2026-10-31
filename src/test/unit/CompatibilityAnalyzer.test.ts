@@ -1166,7 +1166,7 @@ suite("CompatibilityAnalyzer", () => {
     const codex = installed(HARNESS_IDS.CODEX_CLI, true, "partial", "verified");
     codex.descriptor.permissions!.allowedTools = {
       ...codex.descriptor.permissions!.allowedTools,
-      caveatCode: "permissions.coarsePermissionModes",
+      caveatCode: "permissions.mcpToolDenialsOnly",
     };
     const nonAdvisoryDiagnostics = analyze(
       mixedWorkflow({

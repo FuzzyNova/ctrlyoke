@@ -253,6 +253,29 @@ suite("HarnessCapabilityRegistry", () => {
     );
   });
 
+  test("Antigravity permission claims use the settings-capable version floor", async () => {
+    const belowFloor = await makeRegistry({
+      [HARNESS_IDS.ANTIGRAVITY_CLI]: "1.4.9",
+    }).getInstalledCapabilities(HARNESS_IDS.ANTIGRAVITY_CLI);
+    const atFloor = await makeRegistry({
+      [HARNESS_IDS.ANTIGRAVITY_CLI]: "1.4.10",
+    }).getInstalledCapabilities(HARNESS_IDS.ANTIGRAVITY_CLI);
+
+    assert.strictEqual(
+      belowFloor.effective?.permissions?.mode.verification,
+      "unknown"
+    );
+    assert.strictEqual(atFloor.descriptor.permissions?.mode.fidelity, "exact");
+    assert.strictEqual(
+      atFloor.descriptor.permissions?.mode.mechanism,
+      "translated-cli"
+    );
+    for (const key of ["allowedTools", "deniedTools"] as const) {
+      assert.strictEqual(atFloor.descriptor.permissions?.[key].fidelity, "partial");
+      assert.strictEqual(atFloor.effective?.permissions?.[key].verification, "verified");
+    }
+  });
+
   test("resolves each capability independently for the installed version", async () => {
     const base = mapperFor(HARNESS_IDS.QWEN_CLI).capabilities!;
     const descriptor: PermissionCapabilityDescriptor = {

@@ -197,10 +197,11 @@ export function AdvancedPermissionsSection({
           Antigravity CLI
         </h3>
         <p className="text-xs text-description-fg">
-          Antigravity CLI uses permission modes only: Dangerously Allow All
-          passes --dangerously-skip-permissions, Allow All passes no flags,
-          Custom passes --sandbox, and individual allow/deny tool patterns are
-          ignored.
+          Antigravity CLI receives your allow/deny tool patterns as a per-run
+          settings file. Dangerously Allow All passes
+          --dangerously-skip-permissions and ignores both lists, Allow All
+          auto-approves everything except the deny list, and Custom allows only
+          the allow list and refuses the deny list.
         </p>
       </div>
     </div>

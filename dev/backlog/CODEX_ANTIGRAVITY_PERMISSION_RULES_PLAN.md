@@ -1,11 +1,8 @@
-# Codex and Antigravity Permission Rules Plan
+# Codex Permission Rules Plan
 
-**Status:** backlog, mostly not started. Proposed 2026-10-19, after the release-defaults review.
-
-> **Antigravity is superseded (2026-10-30)** by `ANTIGRAVITY_PERMISSION_RULES_PLAN.md`. agy
-> now has a `--settings` flag that delivers rules per run, and its rules are enforced on
-> Windows. The Antigravity research and "Wait for one of these" below are kept only until
-> that plan's last phase removes them.
+**Status:** Codex work remains in the backlog. Proposed 2026-10-19, after the
+release-defaults review. Antigravity work moved to
+`dev/implemented/ANTIGRAVITY_PERMISSION_RULES_PLAN.md`.
 
 ## Status (2026-10-26)
 
@@ -13,14 +10,13 @@
   run with a tool list) was removed from `CodexToolPermissionMapper.buildCodexSpecificArgs()`
   in `5c255d3b0`. The runtime mapper's `prepare()` already reports only the deny entries that
   `foldMcpToolDenialsIntoServers` could not fold (`.unfolded`).
-- **Remaining:** everything else: the harness tests for the "needs a test" questions, the
-  per-entry dashboard check for Codex, Codex shell rules, and Antigravity rules.
+- **Remaining:** Codex harness tests for the "needs a test" questions, the per-entry
+  dashboard check, and Codex shell rules.
 
 ## Goal
 
-Give Codex and Antigravity the same granular `allowedTools` / `deniedTools` support that
-Copilot, Claude, Qwen and OpenCode have, so a workflow's tool lists mean the same thing on
-every harness.
+Give Codex granular `allowedTools` / `deniedTools` support comparable to the other
+harnesses, so a workflow's tool lists behave more consistently across harnesses.
 
 ## Where things stand
 
@@ -28,21 +24,17 @@ every harness.
   servers the workflow attaches. `CodexCliProvider` folds them into that server's
   `disabled_tools` (`foldMcpToolDenialsIntoServers` in `src/types/ToolPermissionUtils.ts`). It
   enforces no shell or built-in tool patterns, and no allow list.
-- **Antigravity** enforces neither list. Its mode mapping is coarse: `allowAll` passes no
-  flag, and `custom` passes `--sandbox`.
-- A tool list that is still the shipped default shows an information note on these harnesses,
-  not a warning (`isShippedDefaultToolList`). This keeps new users from seeing warnings about
-  defaults they never chose. Any list they edit still warns.
+- A tool list that is still the shipped default shows an information note, not a warning
+  (`isShippedDefaultToolList`). This keeps new users from seeing warnings about defaults they
+  never chose. Any list they edit still warns.
 
-Both CLIs now have real rule engines. The problem is getting rules to them: **neither CLI
-accepts rules per run.** Rules load only from config files, unlike OpenCode, which reads its
-config from `OPENCODE_CONFIG_CONTENT`.
+Codex has a real rule engine, but no per-run rule delivery. Rules load only from config files,
+unlike OpenCode, which reads its config from `OPENCODE_CONFIG_CONTENT`.
 
 ## Research (2026-10-19)
 
-The findings below were checked against Codex 0.162.1 and agy 1.4.2 on Windows. "Verified" means
-confirmed in the docs, the CLI's help, or an offline CLI check. Nothing here started a model
-session.
+The findings below were checked against Codex 0.162.1 on Windows. "Verified" means confirmed
+in the docs, the CLI's help, or an offline CLI check. Nothing here started a model session.
 
 ### Codex
 
@@ -69,27 +61,6 @@ session.
 - **MCP tool filters.** Already used; see "Where things stand". An override that names a server
   Codex has no transport for makes Codex refuse to start ("invalid transport in
   `mcp_servers.<id>`", verified). That is why only servers the workflow attaches get filters.
-
-### Antigravity (agy)
-
-- **Flags.** `--dangerously-skip-permissions`, `--sandbox`, and `--mode accept-edits|plan`.
-  `--mode` is new and ctrlyoke doesn't use it yet.
-- **Rule syntax.** A `permissions: { allow, deny, ask }` block. Entries look like
-  `command(git push)` (a literal, word-by-word prefix; `command(regex:…)` and `command(*)` also
-  exist), `write_file(src/)`, and `mcp(server/tool)` or `mcp(server/*)`. Precedence is Deny >
-  Ask > Allow. Source: <https://antigravity.google/docs/permissions?tab=cli>.
-- **Where rules load from.** Only `~/.gemini/antigravity-cli/settings.json` is documented. The
-  `/permissions` panel in the terminal UI shows Project, Shared and Global scopes, but the docs
-  don't give the file paths for the first two
-  (<https://antigravity.google/docs/cli/commands/permissions>). There is no flag or env var for
-  rules (<https://antigravity.google/docs/cli/headless/>).
-- **Headless behaviour.** A tool that needs approval is soft-denied: the run continues, exits
-  0, and prints a notice to stderr. Shell commands default to Ask, so they are soft-denied
-  headless. How an explicit deny behaves headless isn't documented.
-- **Under `--dangerously-skip-permissions`.** Headless runs report `permission_mode`
-  `always-proceed`, so deny rules may be ignored. Needs a test.
-- **Windows.** The new rules engine is macOS/Linux only. Windows still uses the older
-  `toolPermission` setting, and its sandbox is in preview.
 
 ## How rules could reach the CLI
 
@@ -125,20 +96,6 @@ Translating ctrlyoke patterns into Codex rules:
 - Keep the read-only sandbox clamp that `custom` already applies when it denies a
   write-capable tool.
 
-### Antigravity
-
-There is no per-run delivery that doesn't touch the user's state:
-
-- Merging a ctrlyoke-tagged block into the global `settings.json` and restoring it afterwards
-  is invasive, and it races with other agy sessions.
-- Redirecting `HOME` breaks login, because `oauth_creds.json` lives under `~/.gemini`.
-
-Wait for one of these:
-
-- a flag or env var for rules;
-- documented project-scope rule paths;
-- the rules engine reaching Windows.
-
 ## Also to fix
 
 - **The dashboard is less precise than the runtime for Codex.** Codex declares its deny-list
@@ -151,12 +108,9 @@ Wait for one of these:
 
 ## Phases
 
-1. Write the two "needs a test" checks above as harness tests (`npm run test:harness`, opt-in
-   only): Codex `forbidden` under the bypass flag, and agy deny rules in headless runs and
-   under the bypass flag.
+1. Write the "needs a test" Codex `forbidden` check under the bypass flag as an opt-in harness
+   test (`npm run test:harness`).
 2. Make the dashboard's Codex check per-entry (see "Also to fix").
 3. Implement Codex shell rules (option A) once rules are no longer experimental. Then update the
    capability declaration, `docs/workflows/permissions.md` and `docs/harnesses/codex-cli.md`,
    and regenerate the compatibility docs.
-4. Revisit Antigravity when per-run or project-scope rules exist, or the rules engine reaches
-   Windows.
