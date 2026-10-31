@@ -236,7 +236,7 @@ export interface CompatibilityDiagnosticMessageContext {
  */
 export const PERMISSION_CAVEAT_CODES = {
   SANDBOX_APPROVAL_MODES: "permissions.sandboxApprovalModes",
-  COARSE_PERMISSION_MODES: "permissions.coarsePermissionModes",
+  ANTIGRAVITY_RULE_TRANSLATION: "permissions.antigravityRuleTranslation",
   CLAUDE_PREAPPROVED_SETTINGS: "permissions.claudePreapprovedSettings",
   MCP_TOOL_DENIALS_ONLY: "permissions.mcpToolDenialsOnly",
 } as const;
@@ -297,8 +297,8 @@ export function getCompatibilityCaveatMessage(
   switch (caveatCode) {
     case PERMISSION_CAVEAT_CODES.SANDBOX_APPROVAL_MODES:
       return "because this harness uses sandbox/approval modes instead of individual tool patterns";
-    case PERMISSION_CAVEAT_CODES.COARSE_PERMISSION_MODES:
-      return "because this harness uses coarse permission modes instead of individual tool patterns";
+    case PERMISSION_CAVEAT_CODES.ANTIGRAVITY_RULE_TRANSLATION:
+      return "because Antigravity cannot translate web search or subagent tools, list/search denials, or allow a command chain piecemeal";
     case PERMISSION_CAVEAT_CODES.CLAUDE_PREAPPROVED_SETTINGS:
       return "Claude's own settings allow rules can add to this list in headless mode";
     case PERMISSION_CAVEAT_CODES.MCP_TOOL_DENIALS_ONLY:

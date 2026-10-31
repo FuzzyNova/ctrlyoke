@@ -91,6 +91,8 @@ To move a minimum:
    the first npm release inside the window (suggested minimum). Antigravity is
    not on npm, so choose its minimum by hand.
 2. Edit each provider's `config.versionPolicy.minimum`.
+   Antigravity's floor is also the first release with `--settings` (1.4.10),
+   which ctrlyoke uses to deliver per-run permission rules.
 3. Delete code that only served versions below the new minimums. Version-
    specific fallbacks should say which versions they serve (for example
    `// legacy: Copilot < 1.0.30`) so this step is a search, not an

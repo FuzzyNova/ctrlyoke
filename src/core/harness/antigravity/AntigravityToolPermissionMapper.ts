@@ -90,28 +90,27 @@ function commandWords(
 }
 
 const ANTIGRAVITY_PERMISSION_VERIFICATION = capabilitySuiteVerification([
-  ">=1.1.12",
+  ">=1.4.10",
 ]);
 
 export const ANTIGRAVITY_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor =
   {
     mode: {
-      fidelity: "partial",
-      mechanism: "native",
+      fidelity: "exact",
+      mechanism: "translated-cli",
       verification: ANTIGRAVITY_PERMISSION_VERIFICATION,
-      caveatCode: PERMISSION_CAVEAT_CODES.COARSE_PERMISSION_MODES,
     },
     allowedTools: {
-      fidelity: "unsupported",
-      mechanism: "none",
+      fidelity: "partial",
+      mechanism: "translated-cli",
       verification: ANTIGRAVITY_PERMISSION_VERIFICATION,
-      caveatCode: PERMISSION_CAVEAT_CODES.COARSE_PERMISSION_MODES,
+      caveatCode: PERMISSION_CAVEAT_CODES.ANTIGRAVITY_RULE_TRANSLATION,
     },
     deniedTools: {
-      fidelity: "unsupported",
-      mechanism: "none",
+      fidelity: "partial",
+      mechanism: "translated-cli",
       verification: ANTIGRAVITY_PERMISSION_VERIFICATION,
-      caveatCode: PERMISSION_CAVEAT_CODES.COARSE_PERMISSION_MODES,
+      caveatCode: PERMISSION_CAVEAT_CODES.ANTIGRAVITY_RULE_TRANSLATION,
     },
   };
 

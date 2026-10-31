@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Antigravity CLI 1.4.10 is now the minimum supported version because it adds
+  `--settings`, which ctrlyoke uses to deliver per-run permission rules.
+
 - In the Agent & Skills Manager, the **skills.sh** toggle under **Discover &
   import** is now a **Browse skills.sh** button. Once clicked, it fades out and
   the browser fades in, and the browser stays open until the window reloads, so the skills list and the

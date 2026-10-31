@@ -165,12 +165,13 @@ export class AntigravityCliProvider implements ICliProvider {
     }),
     versionPolicy: {
       // agy is not on npm; `agy changelog` and the google-antigravity/
-      // antigravity-cli GitHub releases give its history. 1.2.6 removed the
-      // 5-minute default `--print` timeout (ctrlyoke passes none, so longer
+      // antigravity-cli GitHub releases give its history. 1.4.10 added
+      // `--settings`, which delivers per-run permission rules; 1.2.6 removed
+      // the 5-minute default `--print` timeout (ctrlyoke passes none, so longer
       // headless steps were cut short); 1.1.20 stopped benign tool errors
       // failing `-p` runs; 1.1.10 made `Stop` hooks and `--model` work.
-      minimum: "1.2.6",
-      testedWith: "1.4.5",
+      minimum: "1.4.10",
+      testedWith: "1.4.12",
       updateCommand: "agy update",
     },
     shouldStreamHeadlessOutput: true,

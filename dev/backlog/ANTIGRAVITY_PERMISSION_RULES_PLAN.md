@@ -382,8 +382,9 @@ Gaps between the proposal and the current code, to settle during implementation:
      alongside the existing workflow `toolPermissions` comparison; unrelated settings edits
      do not retire the PTY. The legacy `ToolPermissionMappers.test.ts` assertions were also
      updated because the targeted test grep includes that suite.
-2. **Version floor and capabilities.** Bump `minimum`/`testedWith`, flip the declarations,
-   regenerate the compatibility docs, update the capability registry tests.
+2. **Version floor and capabilities.** Done 2026-10-31. Bumped `minimum`/`testedWith`,
+   declared exact mode and partially translated tool lists with a shared caveat, regenerated
+   the compatibility docs, and updated capability registry tests.
 3. **Harness tests** (opt-in, `npm run test:harness`). Run only the new cases while
    developing. The probe shape that worked: a fresh workspace with `.agents/mcp_config.json`
    and the `buildMcpProbeServerScript()` server, headless `--output-format stream-json`, and

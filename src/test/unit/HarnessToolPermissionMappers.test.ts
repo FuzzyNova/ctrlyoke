@@ -1602,6 +1602,18 @@ suite("HarnessToolPermissionMappers", () => {
         qwen.diagnostics[0].code,
         COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_TRANSLATION_LOSSY
       );
+
+      const antigravity = await new AntigravityToolPermissionMapper().prepare(
+        cfg(PERMISSION_MODES.CUSTOM, ["web_search"], ["glob"]),
+        {}
+      );
+      assert.deepStrictEqual(
+        antigravity.diagnostics.map(({ code }) => code),
+        [
+          COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_PARTIAL,
+          COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL,
+        ]
+      );
     });
 
     test("prepare suppresses tool-list diagnostics for modes that ignore lists", async () => {
