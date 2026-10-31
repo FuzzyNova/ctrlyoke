@@ -1,6 +1,6 @@
 # Workspace Viewer Media Support (Video, Audio, PDF, and Images via a Raw Route)
 
-**Status:** Ready to implement. Written 2026-10-19; revised 2026-10-31 to add audio,
+**Status:** Implemented. Written 2026-10-19; revised 2026-10-31 to add audio,
 move images onto the same raw-bytes pipeline, and settle the pdf.js questions.
 **Priority:** P3
 
@@ -330,7 +330,7 @@ enableXfa: false })`. pdf.js issues its own `Range` requests against the raw rou
   open-in-new-tab link. `MediaDiffView` renders Before/After per kind with
   placeholders, and media elements are not mounted while a card is collapsed.
   `hostedApi.workspaceRawUrl` encodes path, repo and ref and appends the token.
-- **Manual:** a multi-page PDF on Android Chrome and iOS Safari through the hosted
+- **Manual (still needs a human on real devices):** a multi-page PDF on Android Chrome and iOS Safari through the hosted
   dashboard; a PDF with CJK text and one with JPEG 2000 images (cMaps and WASM
   decoders); a long PDF on a phone, watching the network panel for range requests
   only; "Open in new tab" for a PDF in Chrome, Firefox and Safari (settles the
@@ -355,7 +355,7 @@ Each stage is one commit; tick it in the commit that lands it.
       diff sides, the playback-error fallback (also on `<img>`), mount-only-when-expanded.
 - [x] **D. PDF via pdf.js** (§4): `pdfjs-dist`, static data copy, `WorkspacePdfViewer`,
       wired into the editor and the diff sides. No implementation deviations.
-- [ ] **E. Docs and changelog** (§6).
+- [x] **E. Docs and changelog** (§6).
 
 ## Acceptance criteria
 
