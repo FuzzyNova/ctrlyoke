@@ -134,10 +134,7 @@ suite("CliLauncherResolver", () => {
     );
   });
 
-  test("launches a native-executable npm shim's target directly", async function () {
-    // The shim's target path uses `\`, which only Windows' path module and
-    // file system resolve; faking process.platform cannot change that.
-    if (process.platform !== "win32") this.skip();
+  test("launches a native-executable npm shim's target directly", async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(
       process,
       "platform"

@@ -403,6 +403,18 @@ function readShimRelativePath(
     : undefined;
 }
 
+/**
+ * Join a shim's `%dp0%`-relative target to the shim's folder. The shim writes
+ * the path with `\`, which only Windows' path module treats as a separator;
+ * splitting on it keeps the result correct when tests run elsewhere.
+ */
+function resolveShimTargetPath(
+  batchPath: string,
+  relativePath: string
+): string {
+  return path.join(path.dirname(batchPath), ...relativePath.split("\\"));
+}
+
 async function resolveNativeCmdShimTarget(
   batchPath: string
 ): Promise<string | undefined> {
@@ -413,7 +425,7 @@ async function resolveNativeCmdShimTarget(
     if (!relativePath) {
       return undefined;
     }
-    const target = path.join(path.dirname(batchPath), relativePath);
+    const target = resolveShimTargetPath(batchPath, relativePath);
     return (await fileExists(target)) ? target : undefined;
   } catch {
     return undefined;
@@ -432,14 +444,13 @@ async function resolveNodeCliShimTarget(
       return undefined;
     }
 
-    const dp0 = path.dirname(batchPath) + path.sep;
-    const scriptPath = path.join(dp0, relativeScriptPath);
+    const scriptPath = resolveShimTargetPath(batchPath, relativeScriptPath);
     const scriptStat = await fs.promises.stat(scriptPath);
     if (!scriptStat.isFile()) {
       return undefined;
     }
 
-    const bundledNodeExe = path.join(dp0, "node.exe");
+    const bundledNodeExe = path.join(path.dirname(batchPath), "node.exe");
     const nodePath = (await fileExists(bundledNodeExe))
       ? bundledNodeExe
       : await resolveBareNodeExecutable(shell);
