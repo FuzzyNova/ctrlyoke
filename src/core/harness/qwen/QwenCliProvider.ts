@@ -158,7 +158,7 @@ export class QwenCliProvider implements ICliProvider {
       // 0.15.5 added `--mcp-config`, which every MCP-using step passes; hooks
       // have been on by default since 0.14.0.
       minimum: "0.15.5",
-      testedWith: "0.26.0",
+      testedWith: "0.26.4",
       updateCommand: "npm install -g @qwen-code/qwen-code@latest",
     },
     shouldStreamHeadlessOutput: true,
