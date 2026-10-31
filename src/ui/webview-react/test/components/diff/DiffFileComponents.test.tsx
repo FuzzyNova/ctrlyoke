@@ -108,6 +108,36 @@ describe("DiffFileCard", () => {
     );
   });
 
+  it.each([
+    ["video", "video"] as const,
+    ["audio", "audio"] as const,
+  ])("renders Before and After %s players, only when expanded", (kind, tagName) => {
+    const sides = {
+      mediaKind: kind,
+      old: { path: `assets/clip.${kind}`, ref: "oldhash" },
+      new: { path: `assets/clip.${kind}`, version: 42 },
+    } as const;
+    const { container, rerender } = render(
+      <MediaDiffView path={`assets/clip.${kind}`} collapsed sides={sides} />
+    );
+    expect(container.querySelector(tagName)).toBeNull();
+
+    rerender(<MediaDiffView path={`assets/clip.${kind}`} sides={sides} />);
+    expect(screen.getByText("Before")).toBeInTheDocument();
+    expect(screen.getByText("After")).toBeInTheDocument();
+    const players = container.querySelectorAll(tagName);
+    expect(players).toHaveLength(2);
+    expect(players[0]).toHaveAttribute(
+      "src",
+      `/api/workspace-viewer/raw?path=assets%2Fclip.${kind}&ref=oldhash`
+    );
+    expect(players[1]).toHaveAttribute(
+      "src",
+      `/api/workspace-viewer/raw?path=assets%2Fclip.${kind}&v=42`
+    );
+    expect(players[0]).toHaveAttribute("preload", "metadata");
+  });
+
   it("renders explicit placeholders for deleted and created image sides", () => {
     const { rerender } = render(
       <MediaDiffView

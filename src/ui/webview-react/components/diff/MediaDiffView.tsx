@@ -2,6 +2,7 @@ import React from "react";
 import type { WorkspaceMediaDiffSides } from "@root/types/HostedWorkspaceViewerTypes";
 import { WORKSPACE_MEDIA_KINDS } from "@root/types/DashboardConstants";
 import { workspaceRawUrl } from "@utils/hostedApi";
+import { WorkspaceMediaElement } from "@components/shared/WorkspaceMediaElement";
 import { Icon } from "../shared/Icon";
 
 export interface MediaDiffViewProps {
@@ -39,11 +40,12 @@ function MediaSide({
         className="flex h-64 min-w-72 items-center justify-center overflow-hidden rounded-sm border border-panel-border bg-editor-bg"
         style={checkerboardStyle}
       >
-        {side && mediaKind === WORKSPACE_MEDIA_KINDS.IMAGE ? (
-          <img
-            src={workspaceRawUrl(side)}
-            alt={sideName}
-            className="max-h-full max-w-full object-contain"
+        {side && mediaKind !== WORKSPACE_MEDIA_KINDS.PDF ? (
+          <WorkspaceMediaElement
+            kind={mediaKind}
+            rawUrl={workspaceRawUrl(side)}
+            label={sideName}
+            compact
           />
         ) : (
           <div

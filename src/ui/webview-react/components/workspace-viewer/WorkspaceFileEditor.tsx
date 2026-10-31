@@ -76,6 +76,7 @@ import { createStoreWorkflowValueDataSource } from "@utils/workflowFileSupport/w
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 import { createReferencePatterns } from "@root/utils/ReferencePatterns";
 import { getInclusiveEndLine } from "@root/utils/InclusiveLineRange";
+import { WorkspaceMediaElement } from "@components/shared/WorkspaceMediaElement";
 import {
   createAtomicReferenceExtension,
   createReferenceLinkHandlerExtension,
@@ -713,19 +714,17 @@ export const WorkspaceFileEditor = forwardRef<
     if (media) {
       return (
         <div className="flex h-full min-h-0 w-full items-center justify-center overflow-auto bg-editor-bg p-4">
-          {media.kind === WORKSPACE_MEDIA_KINDS.IMAGE ? (
-            <img src={media.rawUrl} alt={filePath} title={filePath} className="max-h-full max-w-full object-contain" />
-          ) : (
+          {media.kind === WORKSPACE_MEDIA_KINDS.PDF ? (
             <div className="flex flex-col items-center gap-2 text-sm text-description-fg">
-              <span>
-                {media.kind === WORKSPACE_MEDIA_KINDS.VIDEO
-                  ? "Video preview"
-                  : media.kind === WORKSPACE_MEDIA_KINDS.AUDIO
-                    ? "Audio preview"
-                    : "PDF preview"}
-              </span>
+              <span>PDF preview</span>
               <a href={media.rawUrl} target="_blank" rel="noreferrer" className="text-link-fg underline">Open in new tab</a>
             </div>
+          ) : (
+            <WorkspaceMediaElement
+              kind={media.kind}
+              rawUrl={media.rawUrl}
+              label={filePath}
+            />
           )}
         </div>
       );
