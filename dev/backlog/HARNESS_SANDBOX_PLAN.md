@@ -37,11 +37,11 @@ never shows it:
 | Harness                         | How containment is chosen today                                                                                                                                                                                                                                                     |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Codex                           | `CodexToolPermissionMapper`: `allowAll` → `--sandbox workspace-write`; `dangerouslyAllowAll` → `--dangerously-bypass-approvals-and-sandbox` (both controls off in one flag); `custom` → `permissions.codexSandboxMode`, clamped to `read-only` when a write-capable tool is denied. |
-| Antigravity                     | `custom` → `--sandbox`; nothing otherwise.                                                                                                                                                                                                                                          |
+| Antigravity                     | Never sandboxed since 2026-10-31: `custom` → `--sandbox` was removed early (see phase 3), so only a user `additionalArgs` `--sandbox` applies.                                                                                                                                      |
 | Copilot, Claude, Qwen, OpenCode | Never sandboxed.                                                                                                                                                                                                                                                                    |
 
-So the same workflow runs sandboxed on one harness and unsandboxed on the next, and `custom`
-means "OS sandbox" only on Antigravity. Users find this surprising.
+So the same workflow runs sandboxed on one harness and unsandboxed on the next. Until
+2026-10-31 `custom` also meant "OS sandbox" on Antigravity. Users find this surprising.
 
 ## Native sandbox support (checked 2026-10-30 from each CLI's `--help`)
 
@@ -93,7 +93,7 @@ toolPermissions:
 | Harness     | `sandbox: true`                                                                        | `sandbox: false`                                                      | absent (inherit)                 |
 | ----------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | -------------------------------- |
 | Codex       | `-s workspace-write`; `read-only` when a write-capable tool is denied (keep the clamp) | `-s danger-full-access`                                               | today's derivation from the mode |
-| Antigravity | `--sandbox`                                                                            | no flag                                                               | today's: `--sandbox` in `custom` |
+| Antigravity | `--sandbox`                                                                            | no flag                                                               | no flag                          |
 | Copilot     | `--sandbox`                                                                            | no flag (the user's `/sandbox` setting still applies; say so in docs) | no flag                          |
 | Qwen        | `-s true` (Qwen's automatic backend)                                                   | `-s false`                                                            | no flag                          |
 | Claude      | phase 0                                                                                | phase 0                                                               | no flag                          |
@@ -160,10 +160,12 @@ alone is right.
    sandboxed), the capability domain, compatibility diagnostics, and the fail-or-warn on
    unhonored requests. Unit tests per harness, including "absent keeps today's args"
    snapshots for every mode, so inherit really is unchanged.
-3. **Antigravity:** remove `custom` → `--sandbox` from `AntigravityToolPermissionMapper`, and
-   derive it from `sandbox` instead. `custom` with `sandbox` absent keeps `--sandbox` for
-   compatibility, so the derived behavior still matches today. Document that inherit carries
-   this legacy mapping, and that new workflows should state `sandbox`.
+3. **Antigravity:** emit `--sandbox` from the `sandbox` property. The old `custom` →
+   `--sandbox` mapping was already removed on 2026-10-31, ahead of this plan (Nathan's call):
+   under it, agy 1.4.12 on Windows ran even rule-allowed commands inside the sandbox, where
+   they could not write the workspace, so `custom` was unusable for any command that writes.
+   Inherit therefore means no flag on Antigravity, and there is no legacy mapping to keep.
+   Also warn when `sandbox` is set and `additionalArgs` already contains `--sandbox`.
 4. **Harness tests** (opt-in): for each supporting harness, `sandbox: true` blocks a write
    outside the workspace and a network fetch, `sandbox: false` allows them, and ctrlyoke's
    MCP server still works inside the sandbox.
@@ -177,8 +179,8 @@ alone is right.
 ## Open questions
 
 - **Should inherit ever change?** Long term, "absent" could mean "not sandboxed" everywhere,
-  so `custom` no longer implies a sandbox on agy and `allowAll` no longer implies one on
-  Codex. That is a behavior change for released workflows: **Changed**, plus a release where
+  so `allowAll` no longer implies a sandbox on Codex (Antigravity's `custom` already
+  doesn't). That is a behavior change for released workflows: **Changed**, plus a release where
   the dashboard flags workflows relying on the derived sandbox. Decide after the property has
   shipped for a release.
 - **Default for new users.** `defaults.sandbox: true` where the host supports it fits the

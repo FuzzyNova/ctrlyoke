@@ -192,24 +192,22 @@ suite("ToolPermissionMappers", () => {
         assert.deepStrictEqual(args, ["--settings", args[1]]);
       });
 
-      test("custom mode → sandbox and session settings", async () => {
+      test("custom mode → session settings only, no sandbox", async () => {
         const args = await mapperArgs(
           mapper,
           cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"]),
           { workspaceRoot: process.cwd() }
         );
-        assert.deepStrictEqual(args.slice(0, 1), ["--sandbox"]);
-        assert.deepStrictEqual(args.slice(1, 2), ["--settings"]);
+        assert.deepStrictEqual(args, ["--settings", args[1]]);
       });
 
-      test("custom mode ignores allow and deny patterns", async () => {
+      test("custom mode with an untranslatable allow pattern still writes settings", async () => {
         const args = await mapperArgs(
           mapper,
           cfg(PERMISSION_MODES.CUSTOM, ["github(search)"], ["shell"]),
           { workspaceRoot: process.cwd() }
         );
-        assert.deepStrictEqual(args.slice(0, 1), ["--sandbox"]);
-        assert.deepStrictEqual(args.slice(1, 2), ["--settings"]);
+        assert.deepStrictEqual(args, ["--settings", args[1]]);
       });
     });
 

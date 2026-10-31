@@ -405,13 +405,15 @@ suite("HarnessToolPermissionMappers", () => {
         assert.strictEqual("allow" in settings.permissions, false);
       });
 
-      test("custom keeps sandbox and writes request-review allow and deny rules", async () => {
+      test("custom writes request-review allow and deny rules without a sandbox", async () => {
         const application = await mapper.prepare(
           cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"]),
           { workspaceRoot, environment }
         );
-        assert.deepStrictEqual(application.cliArgs.slice(0, 1), ["--sandbox"]);
-        assert.strictEqual(application.cliArgs[1], "--settings");
+        assert.deepStrictEqual(application.cliArgs, [
+          "--settings",
+          application.cliArgs[1],
+        ]);
         const settings = JSON.parse(
           application.mutations![0].intendedContent!
         ) as Record<string, any>;
@@ -486,7 +488,7 @@ suite("HarnessToolPermissionMappers", () => {
             additionalArgs: "--other value --settings=custom.json",
           }
         );
-        assert.deepStrictEqual(application.cliArgs, ["--sandbox"]);
+        assert.deepStrictEqual(application.cliArgs, []);
         assert.strictEqual(application.mutations, undefined);
         assert.match(
           application.diagnostics.at(-1)!.message,

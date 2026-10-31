@@ -199,7 +199,9 @@ export class AntigravityToolPermissionMapper
         break;
       case PERMISSION_MODES.ALLOW_ALL:
       case PERMISSION_MODES.CUSTOM:
-        if (config.mode === PERMISSION_MODES.CUSTOM) cliArgs.push("--sandbox");
+        // No --sandbox: containment is not an approval-mode concern (see
+        // dev/backlog/HARNESS_SANDBOX_PLAN.md), and under agy's sandbox even a
+        // rule-allowed command could not write the workspace.
         if (context.additionalArgs && hasSettingsFlag(context.additionalArgs)) {
           diagnostics.push({
             code: COMPATIBILITY_DIAGNOSTIC_CODES.ANTIGRAVITY_SETTINGS_COLLISION,

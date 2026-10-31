@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--settings`, which ctrlyoke uses to deliver per-run permission rules.
 - Antigravity now enforces supported `allowedTools` and `deniedTools` patterns.
   `allowAll` auto-approves tools while honoring the deny list.
+- Antigravity's `custom` permission mode no longer adds `--sandbox`, so it
+  means the same as on the other harnesses. Under agy's sandbox, even an
+  allowed command could not write the workspace on Windows. Add `--sandbox` to
+  the workflow's `additionalArgs` to keep the old containment.
 
 - In the Agent & Skills Manager, the **skills.sh** toggle under **Discover &
   import** is now a **Browse skills.sh** button. Once clicked, it fades out and

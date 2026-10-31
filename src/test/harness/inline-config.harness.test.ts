@@ -284,10 +284,10 @@ const AGY_PROBE_RAN = "AGY_PROBE_EXECUTED";
  * parentheses, quotes and `$` in a command line, so the probe command must be
  * a plain `node <script> <file>` rather than an inline `node -e "…"`.
  *
- * `custom` mode still adds `--sandbox`, and on Windows (agy 1.4.12) agy runs
- * even a rule-allowed command inside that sandbox, where it cannot write the
- * workspace. Whether a command was *permitted* is therefore judged by the
- * printed token; the marker file only proves an unsandboxed run.
+ * The printed token proves the command was permitted to start; the marker file
+ * proves it ran unsandboxed. ctrlyoke used to add `--sandbox` in `custom`, and
+ * on Windows (agy 1.4.12) agy ran even a rule-allowed command inside it, where
+ * the write failed with `EPERM`.
  */
 const MARKER_SCRIPT = `"use strict";
 process.stdout.write(${JSON.stringify(AGY_PROBE_RAN)} + "\\n");
@@ -1255,16 +1255,13 @@ suite("Inline harness configuration regression tests", function () {
           shellCase.shouldCreate,
           `command ${shellCase.shouldCreate ? "was refused" : "ran"}\ntool events: ${toolEvents}`
         );
-        // Only an unsandboxed run can write the workspace (see MARKER_SCRIPT).
-        if (shellCase.permissions.mode !== "custom") {
-          assert.strictEqual(
-            fs.existsSync(markerPath),
-            shellCase.shouldCreate,
-            `marker ${shellCase.shouldCreate ? "missing" : "created"}\ntool events: ${toolEvents}`
-          );
-        } else if (!shellCase.shouldCreate) {
-          assert.ok(!fs.existsSync(markerPath), "a refused command wrote");
-        }
+        // No mode sandboxes the command, so an allowed one can write the
+        // workspace; this also guards against `custom` regaining --sandbox.
+        assert.strictEqual(
+          fs.existsSync(markerPath),
+          shellCase.shouldCreate,
+          `marker ${shellCase.shouldCreate ? "missing" : "created"}\ntool events: ${toolEvents}`
+        );
       });
     }
 

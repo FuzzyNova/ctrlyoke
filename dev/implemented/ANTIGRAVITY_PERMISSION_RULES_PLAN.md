@@ -199,12 +199,12 @@ that normalized id. Later permission rules must use the same normalized id. Hyph
 
 ### Mode mapping
 
-| ctrlyoke mode         | agy flags / settings                                                                                                           |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `dangerouslyAllowAll` | `--dangerously-skip-permissions` (unchanged). Lists ignored, matching every other harness.                                     |
-| `allowAll`            | `toolPermission: "always-proceed"` plus `permissions.deny` from `deniedTools`.                                                 |
-| `custom`              | `toolPermission: "request-review"`, `permissions.allow` and `permissions.deny`. `--sandbox`: see "Sandbox is a separate axis". |
-| `none`                | nothing                                                                                                                        |
+| ctrlyoke mode         | agy flags / settings                                                                                                               |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `dangerouslyAllowAll` | `--dangerously-skip-permissions` (unchanged). Lists ignored, matching every other harness.                                         |
+| `allowAll`            | `toolPermission: "always-proceed"` plus `permissions.deny` from `deniedTools`.                                                     |
+| `custom`              | `toolPermission: "request-review"`, `permissions.allow` and `permissions.deny`. No `--sandbox` (see "Sandbox is a separate axis"). |
+| `none`                | nothing                                                                                                                            |
 
 - `allowAll` finally means what the schema says ("auto-grants all but respects deny list"):
   deny rules hold under `always-proceed` (verified). This fixes Gap 2 of
@@ -429,10 +429,8 @@ Gaps between the proposal and the current code, to settle during implementation:
        initialize its drives and `node` got `EPERM` writing a file in the workspace, in
        `%TEMP%` and under the user profile alike. The identical settings without
        `--sandbox` wrote the file. So `custom` on Antigravity permits the allowed commands
-       but leaves them unable to write. The translation is unchanged: removing `--sandbox`
-       from `custom` is the sandbox plan's phase 3 (see "Sandbox is a separate axis"), and
-       the `custom` shell cases judge "permitted" by output the probe prints, not by a file
-       write. The `allowAll` cases (no sandbox) also check the file.
+       but leaves them unable to write. `--sandbox` was then removed from `custom` (see "Sandbox is a
+       separate axis"), and every shell case now also checks the file write.
 4. **Docs and changelog.** Done 2026-10-31. Updated the workflow permissions and Antigravity
    CLI pages with shipped behavior, limitations, and the `--settings` collision; recorded the
    enforcement change under **Changed** and the dotted MCP id fix under **Fixed** in the
@@ -470,10 +468,11 @@ a `custom` run is OS-sandboxed on Antigravity, sandboxed by `codexSandboxMode` o
 not sandboxed anywhere else. The decision and the per-harness sandbox survey live in
 `HARNESS_SANDBOX_PLAN.md`.
 
-**Interim for this plan:** don't change agy's sandbox behavior as a side effect of
-translating rules. Keep `custom` → `--sandbox` until the sandbox plan lands, then move it in
-that plan's commit, under **Changed**. If the sandbox plan is rejected, remove `--sandbox`
-from `custom` here instead, so Antigravity's `custom` means the same as on other harnesses.
+**Superseded 2026-10-31:** the interim was to keep `custom` → `--sandbox` until the sandbox
+plan landed. After phase 3 showed allowed commands can't write under the sandbox, Nathan
+chose to remove it now. `custom` no longer adds `--sandbox` (noted under **Changed**), and
+the sandbox plan's phase 3 now only adds `--sandbox` from the `sandbox` property.
+A user who wants agy's sandbox can pass `--sandbox` in `additionalArgs`.
 
 Probed facts that affect the interim:
 
@@ -483,9 +482,8 @@ Probed facts that affect the interim:
 - ~~Per the docs, a `command` allow rule lets the matching command run **outside** the
   sandbox.~~ **Contradicted by phase 3 (agy 1.4.12, Windows):** an allowed command runs
   inside the sandbox and can't write the workspace (`EPERM`). So today's `custom` +
-  `--sandbox` lets allowed commands run but breaks any that write files. That strengthens
-  the case for moving `--sandbox` off `custom` in the sandbox plan, or here if that plan is
-  rejected.
+  `--sandbox` lets allowed commands run but breaks any that write files. This is why
+  `--sandbox` was moved off `custom`.
 - An allowed command that needs the network fails inside the sandbox unless `read_url`
   rules allow the domain, and ctrlyoke's lists can't express those today.
 - On machines without sandbox support (Windows before 11 24H2, some Linux containers),

@@ -165,8 +165,8 @@ Antigravity translates supported patterns for `custom` and `allowAll`; in
 deny cannot be enforced because agy's `search_web` tool is ungated. It has no
 separate list/search tools, so denies for `glob`, `grep`, `ls`, `list`,
 `list_directory` and `lsp` cannot be enforced either. An allowed `write` also
-allows reads because agy's `write_file` permission implies `read_file`. Its
-`custom` mode still adds `--sandbox`. A workflow `additionalArgs` value that
+allows reads because agy's `write_file` permission implies `read_file`. No mode
+adds agy's `--sandbox`. A workflow `additionalArgs` value that
 contains `--settings` takes precedence over ctrlyoke's settings and disables
 the permission translation. Codex ignores the allow list. From the deny list
 it enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow
@@ -181,7 +181,7 @@ tool name, or a shell pattern.
 | [Codex](/harnesses/codex-cli)             | `--dangerously-bypass-approvals-and-sandbox`     | `--sandbox workspace-write --ask-for-approval on-request` plus MCP `disabled_tools` | `-s` and `-a` from the `permissions.codex*` settings, plus MCP `disabled_tools`; allow list ignored                                |
 | [OpenCode](/harnesses/opencode-cli)       | no permission block (OpenCode's own defaults)    | allow everything, plus the deny list                                                | ask for everything, allow the allow list, deny the deny list                                                                       |
 | [Qwen Code](/harnesses/qwen-cli)          | `-y`                                             | `--approval-mode auto-edit` plus `--exclude-tools`                                  | `--approval-mode default` with `--allowed-tools` and `--exclude-tools`                                                             |
-| [Antigravity](/harnesses/antigravity-cli) | `--dangerously-skip-permissions` (lists ignored) | `--settings` with `always-proceed` and the deny list                                | `--sandbox` and `--settings` with allow and deny lists; allowed command rules match the whole command line                         |
+| [Antigravity](/harnesses/antigravity-cli) | `--dangerously-skip-permissions` (lists ignored) | `--settings` with `always-proceed` and the deny list                                | `--settings` with allow and deny lists; allowed command rules match the whole command line                                         |
 
 Antigravity command allow rules match the entire raw command line. A command
 chain containing an allowed command plus anything else is not allowed piecemeal.
