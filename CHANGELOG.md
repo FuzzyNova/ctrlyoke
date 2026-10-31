@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A **Subagent:** card's prompt and response now start collapsed, behind
+  **Show prompt** and **Show response**, since the agent's own rows below the
+  card already show its work. Find opens either section when a match is inside
+  it, and a section stays open or closed when it scrolls out of view and back.
 - Workspace viewer images now load through the raw media route instead of JSON.
   Images over 2 MB now open and diff. The 2 MB limit applies to text files only;
   workspace images up to 512 MB open, and Git diff images up to 50 MB can be

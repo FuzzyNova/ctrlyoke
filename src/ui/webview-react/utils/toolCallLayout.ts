@@ -26,6 +26,7 @@ export interface ToolCallExpansionState {
   appendStepPromptsExpanded?: boolean;
   readOutputExpanded?: Readonly<Record<string, boolean>>;
   listHarnessModelsExpanded?: boolean;
+  subagentPromptExpanded?: boolean;
 }
 
 export type ToolCallExpansionSection = SharedToolCallExpansionSection;
@@ -39,6 +40,7 @@ export const DEFAULT_TOOL_CALL_EXPANSION_STATE: Readonly<ToolCallExpansionState>
     appendStepPromptsExpanded: false,
     readOutputExpanded: {},
     listHarnessModelsExpanded: false,
+    subagentPromptExpanded: false,
   });
 
 type ToolCallFlagSection =
@@ -56,6 +58,7 @@ const TOOL_CALL_SECTION_EXPANSION_FIELDS: Record<
     "appendStepPromptsExpanded",
   [TOOL_CALL_EXPANSION_SECTIONS.LIST_HARNESS_MODELS]:
     "listHarnessModelsExpanded",
+  [TOOL_CALL_EXPANSION_SECTIONS.SUBAGENT_PROMPT]: "subagentPromptExpanded",
 };
 
 function isReadOutputExpansionSection(

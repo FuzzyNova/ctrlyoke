@@ -31,6 +31,7 @@ import {
   OUTPUT_ROW_KINDS,
   SCRIPT_VERDICT_OUTCOMES,
   STEP_TYPES,
+  SUBAGENT_SPAWN_STATES,
   USER_STEER_ATTRIBUTIONS,
 } from "@root/types/DashboardConstants";
 import { useSettingsStore } from "@store/settingsStore";
@@ -1378,6 +1379,52 @@ describe("OutputRow auto-expand on hidden active match", () => {
       true
     );
   });
+
+  it.each([
+    ["the prompt", "weather", "subagentPrompt"],
+    ["the response", "sunny", "output"],
+  ])(
+    "expands a subagent spawn's collapsed %s for an active find match",
+    (_label, query, section) => {
+      const row: StructuredEventRow = {
+        ...buildToolCallRow("Agent", { success: true, output: "It is sunny" }),
+        event: {
+          type: CLI_EVENT_TYPES.TOOL_CALL,
+          data: {
+            name: "Agent",
+            parameters: {},
+            result: { success: true, output: "It is sunny" },
+            subagentSpawn: {
+              description: "Forecast",
+              prompt: "Find the weather",
+              state: SUBAGENT_SPAWN_STATES.COMPLETED,
+            },
+          },
+        },
+      };
+      const [match] = findOutputMatches([row], query, false);
+      expect(match).toBeDefined();
+      const onToolCallExpansionChange = vi.fn();
+
+      render(
+        <OutputRow
+          row={row}
+          findDecorations={{
+            matches: [{ start: match!.start, end: match!.end, active: true }],
+          }}
+          activeFindMatch={match!}
+          isExecutionActive={false}
+          onToolCallExpansionChange={onToolCallExpansionChange}
+        />
+      );
+
+      expect(onToolCallExpansionChange).toHaveBeenCalledWith(
+        "row-tool",
+        section,
+        true
+      );
+    }
+  );
 
   it("expands tool call error when the active match is hidden behind 'show more'", () => {
     const name = "Bash";
