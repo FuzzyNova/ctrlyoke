@@ -32,10 +32,21 @@ import type {
   SkillUpdateCheckResult,
 } from "@root/types/WebviewMessageTypes";
 import { ManagerConfirmModal } from "@components/shared/ManagerUi";
+import { prefersReducedMotion } from "@utils/outputMotion";
 import { Icon } from "../shared/Icon";
 
 const SKILLS_SH = DATA_SOURCES.SKILLS_SH;
 const SEARCH_DEBOUNCE_MS = 400;
+/** How long Browse skills.sh fades out before the browser replaces it. */
+export const BROWSE_BUTTON_FADE_MS = 150;
+const BROWSER_PANEL_FADE_MS = 200;
+
+const OPEN_PHASES = {
+  IDLE: "idle",
+  BUTTON_FADING: "button-fading",
+  PANEL_FADING: "panel-fading",
+} as const;
+type OpenPhase = (typeof OPEN_PHASES)[keyof typeof OPEN_PHASES];
 
 const installCountFormat = new Intl.NumberFormat("en", {
   notation: "compact",
@@ -473,6 +484,30 @@ export function SkillsRegistryPanel({
 
   const lastSearchedQuery = useRef<string | null>(null);
 
+  // Clicking Browse fades the button out, then fades the browser in. Only a
+  // click in this mount animates: a remount of an already-open browser (a
+  // settings tab switch) shows it straight away.
+  const [openPhase, setOpenPhase] = useState<OpenPhase>(OPEN_PHASES.IDLE);
+  const handleBrowse = () => {
+    if (prefersReducedMotion()) {
+      open();
+      return;
+    }
+    setOpenPhase(OPEN_PHASES.BUTTON_FADING);
+  };
+  useEffect(() => {
+    if (openPhase !== OPEN_PHASES.BUTTON_FADING) return;
+    const handle = window.setTimeout(() => {
+      setOpenPhase(OPEN_PHASES.PANEL_FADING);
+      open();
+    }, BROWSE_BUTTON_FADE_MS);
+    // Unmounting mid-fade still honours the click.
+    return () => {
+      window.clearTimeout(handle);
+      if (!useSkillsRegistryStore.getState().isOpen) open();
+    };
+  }, [openPhase, open]);
+
   useEffect(() => {
     if (!isOpen || lastSearchedQuery.current === query) return;
     // Opening the tab shows the bundled top skills straight away; typing is
@@ -553,9 +588,17 @@ export function SkillsRegistryPanel({
       {!isOpen && (
         <button
           type="button"
-          onClick={open}
+          onClick={handleBrowse}
+          disabled={openPhase === OPEN_PHASES.BUTTON_FADING}
           title={`Search the public ${SKILLS_SH.label} skills directory run by ${SKILLS_SH.operator}`}
           className="flex items-center gap-1.5 rounded-sm bg-btn-bg px-3 py-1 text-xs text-btn-fg transition-colors hover:bg-btn-hover"
+          style={
+            openPhase === OPEN_PHASES.BUTTON_FADING
+              ? {
+                  animation: `fade-out ${BROWSE_BUTTON_FADE_MS}ms ease-in forwards`,
+                }
+              : undefined
+          }
         >
           <Icon name="globe" className="text-xxs" />
           Browse {SKILLS_SH.label}
@@ -563,7 +606,16 @@ export function SkillsRegistryPanel({
       )}
 
       {isOpen && (
-        <div className="space-y-2 rounded-sm border border-panel-border bg-editor-bg p-3">
+        <div
+          className="space-y-2 rounded-sm border border-panel-border bg-editor-bg p-3"
+          style={
+            openPhase === OPEN_PHASES.PANEL_FADING
+              ? {
+                  animation: `fade-in ${BROWSER_PANEL_FADE_MS}ms ease-out both`,
+                }
+              : undefined
+          }
+        >
           <p className="text-xs text-description-fg">
             Results, install counts and security audits come from{" "}
             <a

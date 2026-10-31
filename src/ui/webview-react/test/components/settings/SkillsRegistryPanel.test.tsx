@@ -11,6 +11,7 @@ vi.mock("@hooks/useMessageHandler", () => ({
 }));
 
 import {
+  BROWSE_BUTTON_FADE_MS,
   SkillOriginBadge,
   SkillsRegistryPanel,
   formatSkillInstalls,
@@ -97,10 +98,18 @@ function renderPanel(managedFiles: ManagedFile[] = []) {
   );
 }
 
-/** Open the tab, type a query and let the debounced search go out. */
+/** Click Browse skills.sh and let the button's fade-out finish. */
+function clickBrowse() {
+  fireEvent.click(screen.getByRole("button", { name: BROWSE_LABEL }));
+  act(() => {
+    vi.advanceTimersByTime(BROWSE_BUTTON_FADE_MS);
+  });
+}
+
+/** Open the browser, type a query and let the debounced search go out. */
 function searchFor(query: string) {
   if (!useSkillsRegistryStore.getState().isOpen) {
-    fireEvent.click(screen.getByRole("button", { name: BROWSE_LABEL }));
+    clickBrowse();
   }
   fireEvent.change(
     screen.getByLabelText(`Search ${DATA_SOURCES.SKILLS_SH.label}`),
@@ -141,9 +150,24 @@ describe("SkillsRegistryPanel", () => {
     });
     expect(sendMessageMock).not.toHaveBeenCalled();
 
+    // The button fades out first, and nothing is asked for until it has.
     fireEvent.click(browse);
-    // Opening is one-way: the button goes away and the browser stays.
+    expect(browse.style.animation).toContain("fade-out");
+    expect(browse).toHaveProperty("disabled", true);
+    expect(
+      screen.queryByLabelText(`Search ${DATA_SOURCES.SKILLS_SH.label}`)
+    ).toBeNull();
+    expect(sendMessageMock).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(BROWSE_BUTTON_FADE_MS);
+    });
+
+    // Opening is one-way: the button goes away and the browser fades in.
     expect(screen.queryByRole("button", { name: BROWSE_LABEL })).toBeNull();
+    expect(
+      screen.getByText(/your search text is sent there/).closest("div")?.style
+        .animation
+    ).toContain("fade-in");
     expect(
       screen.getByRole("link", { name: DATA_SOURCES.SKILLS_SH.host })
     ).toBeTruthy();
@@ -166,22 +190,43 @@ describe("SkillsRegistryPanel", () => {
     expect(screen.getByText(/Type at least 2 characters/)).toBeTruthy();
   });
 
-  it("stays open when the panel remounts, such as on a settings tab switch", () => {
+  it("stays open, without fading again, when the panel remounts", () => {
     const { unmount } = renderPanel();
+    // Unmounting mid-fade (a settings tab switch) still honours the click.
     fireEvent.click(screen.getByRole("button", { name: BROWSE_LABEL }));
     unmount();
 
     renderPanel();
     expect(screen.queryByRole("button", { name: BROWSE_LABEL })).toBeNull();
     expect(
-      screen.getByLabelText(`Search ${DATA_SOURCES.SKILLS_SH.label}`)
-    ).toBeTruthy();
+      screen.getByText(/your search text is sent there/).closest("div")?.style
+        .animation
+    ).toBe("");
+  });
+
+  it("opens at once, with no fade, when the user prefers reduced motion", () => {
+    // The setup file's matchMedia is already a mock; answer once rather than
+    // spying, so restoring cannot wipe its implementation for later tests.
+    vi.mocked(window.matchMedia).mockImplementationOnce(
+      (query: string) =>
+        ({
+          matches: query.includes("reduce"),
+          media: query,
+        }) as MediaQueryList
+    );
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: BROWSE_LABEL }));
+    expect(screen.queryByRole("button", { name: BROWSE_LABEL })).toBeNull();
+    expect(
+      screen.getByText(/your search text is sent there/).closest("div")?.style
+        .animation
+    ).toBe("");
   });
 
   describe("top skills", () => {
     function openTop(skills: RegistrySkillEntry[]) {
       renderPanel();
-      fireEvent.click(screen.getByRole("button", { name: BROWSE_LABEL }));
+      clickBrowse();
       act(() => {
         vi.advanceTimersByTime(0);
       });
