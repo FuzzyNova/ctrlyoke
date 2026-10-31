@@ -65,7 +65,7 @@ test("compatibility documentation covers the current registry without uniform fe
     matrixRows[0].includes("[Copilot](/harnesses/copilot-cli)<br>`copilot-cli`")
   );
   assert.match(generated, /sandbox\/approval modes/);
-  assert.match(generated, /Remove the server filter/);
+  assert.match(generated, /allow a command chain piecemeal/);
   for (const uniformFeature of [
     "executionMode",
     "sessions",

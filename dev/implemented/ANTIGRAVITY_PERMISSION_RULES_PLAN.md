@@ -402,9 +402,9 @@ Gaps between the proposal and the current code, to settle during implementation:
        the real one);
      - an MCP tool allowed by exact and by whole-server patterns.
 
-     Skip the dotted-server-id case until the bug in
-     `dev/bugs/backlog/antigravity-mcp-dotted-server-id-drops-tools.md` is fixed, or fix it
-     first.
+     The dotted-server-id case is covered too: the bug in
+     `dev/bugs/implemented/antigravity-mcp-dotted-server-id-drops-tools.md` was fixed first
+     (7c3ec2396).
 
    - `allowAll` runs a shell command without asking and still refuses a denied one.
    - **Done 2026-10-31** against agy 1.4.12 on Windows 11 (26200).

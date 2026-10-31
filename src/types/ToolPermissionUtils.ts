@@ -55,14 +55,23 @@ export function mergeServerDeniedTools(
   };
 }
 
-/** Match Claude Code's MCP server name normalization for permission rules. */
-export function normalizeClaudeMcpServerId(serverId: string): string {
+/** Replace every character outside `[A-Za-z0-9_-]` with `_`. */
+function replaceNonToolNameCharacters(serverId: string): string {
   return serverId.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
-/** Match Antigravity's allowed MCP server-id characters for model tool names. */
+/** Match Claude Code's MCP server name normalization for permission rules. */
+export function normalizeClaudeMcpServerId(serverId: string): string {
+  return replaceNonToolNameCharacters(serverId);
+}
+
+/**
+ * Match Antigravity's allowed MCP server-id characters for model tool names.
+ * agy rejects any `mcp_<serverId>_<tool>` outside `^[a-zA-Z0-9_-]{1,64}$`.
+ * Kept as its own export so the two harness rules can diverge independently.
+ */
 export function normalizeAntigravityMcpServerId(serverId: string): string {
-  return serverId.replace(/[^A-Za-z0-9_-]/g, "_");
+  return replaceNonToolNameCharacters(serverId);
 }
 
 /** Result of {@link foldMcpToolDenialsIntoServers}. */

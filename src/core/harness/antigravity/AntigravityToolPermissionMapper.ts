@@ -299,32 +299,11 @@ export class AntigravityToolPermissionMapper
 
   private async readUserRules(
     environment?: NodeJS.ProcessEnv
-  ): Promise<{ allow: string[]; deny: string[] }> {
-    const homeDirectory =
-      environment?.USERPROFILE || environment?.HOME || os.homedir();
+  ): Promise<AntigravityUserPermissionRules> {
     try {
-      const content = await fs.readFile(
-        getAntigravitySettingsPath(homeDirectory),
-        "utf-8"
+      return parseAntigravityUserPermissionRules(
+        await fs.readFile(getAntigravityUserSettingsPath(environment), "utf-8")
       );
-      const value: unknown = JSON.parse(content);
-      if (!value || typeof value !== "object") return { allow: [], deny: [] };
-      const permissions = (value as { permissions?: unknown }).permissions;
-      if (!permissions || typeof permissions !== "object")
-        return { allow: [], deny: [] };
-      const lists = permissions as { allow?: unknown; deny?: unknown };
-      return {
-        allow: Array.isArray(lists.allow)
-          ? lists.allow.filter(
-              (rule): rule is string => typeof rule === "string"
-            )
-          : [],
-        deny: Array.isArray(lists.deny)
-          ? lists.deny.filter(
-              (rule): rule is string => typeof rule === "string"
-            )
-          : [],
-      };
     } catch {
       return { allow: [], deny: [] };
     }
@@ -337,6 +316,47 @@ export class AntigravityToolPermissionMapper
     );
   }
 }
+/** The user's global agy allow/deny lists, which ctrlyoke unions into its own. */
+export interface AntigravityUserPermissionRules {
+  readonly allow: string[];
+  readonly deny: string[];
+}
+
+/** Path of the user's global agy `settings.json`, honoring an env snapshot. */
+export function getAntigravityUserSettingsPath(
+  environment: NodeJS.ProcessEnv = process.env
+): string {
+  return getAntigravitySettingsPath(
+    environment.USERPROFILE || environment.HOME || os.homedir()
+  );
+}
+
+/**
+ * Read `permissions.{allow,deny}` from agy settings JSON. Malformed content or
+ * non-string entries yield empty lists, as agy itself ignores them.
+ */
+export function parseAntigravityUserPermissionRules(
+  content: string
+): AntigravityUserPermissionRules {
+  const stringRules = (value: unknown): string[] =>
+    Array.isArray(value)
+      ? value.filter((rule): rule is string => typeof rule === "string")
+      : [];
+  try {
+    const value: unknown = JSON.parse(content);
+    const permissions =
+      value && typeof value === "object"
+        ? (value as { permissions?: unknown }).permissions
+        : undefined;
+    if (!permissions || typeof permissions !== "object")
+      return { allow: [], deny: [] };
+    const lists = permissions as { allow?: unknown; deny?: unknown };
+    return { allow: stringRules(lists.allow), deny: stringRules(lists.deny) };
+  } catch {
+    return { allow: [], deny: [] };
+  }
+}
+
 function hasSettingsFlag(additionalArgs: string): boolean {
   return parseArgString(additionalArgs).some(
     (arg) => arg === "--settings" || arg.startsWith("--settings=")

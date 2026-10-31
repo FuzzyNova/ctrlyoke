@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-31 by Claude Code (Antigravity permission-rules spike, agy 1.4.12, Windows 11)
 - **Area:** `src/core/harness/antigravity/AntigravityCliProvider.ts` (`planMcpConfigArgs`)
-- **Resolution:** fixed in this commit
+- **Resolution:** fixed in 7c3ec2396
 
 ## Symptom
 

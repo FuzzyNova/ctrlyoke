@@ -11,7 +11,10 @@ import {
   OpenCodeToolPermissionMapper,
 } from "../../core/harness/opencode/OpenCodeToolPermissionMapper";
 import { QwenToolPermissionMapper } from "../../core/harness/qwen/QwenToolPermissionMapper";
-import { AntigravityToolPermissionMapper } from "../../core/harness/antigravity/AntigravityToolPermissionMapper";
+import {
+  AntigravityToolPermissionMapper,
+  parseAntigravityUserPermissionRules,
+} from "../../core/harness/antigravity/AntigravityToolPermissionMapper";
 import type {
   IToolPermissionMapper,
   PermissionContext,
@@ -249,6 +252,29 @@ suite("HarnessToolPermissionMappers", () => {
 
   suite("AntigravityToolPermissionMapper", () => {
     const mapper = new AntigravityToolPermissionMapper();
+
+    suite("user settings parsing", () => {
+      test("reads string allow/deny rules and drops everything else", () => {
+        assert.deepStrictEqual(
+          parseAntigravityUserPermissionRules(
+            JSON.stringify({
+              permissions: { allow: ["command(*)", 3], deny: ["read_file(*)"] },
+            })
+          ),
+          { allow: ["command(*)"], deny: ["read_file(*)"] }
+        );
+      });
+
+      test("treats malformed or permission-less settings as empty", () => {
+        for (const content of ["{", "null", "[]", '{"permissions":"x"}']) {
+          assert.deepStrictEqual(
+            parseAntigravityUserPermissionRules(content),
+            { allow: [], deny: [] },
+            content
+          );
+        }
+      });
+    });
 
     suite("pattern translation", () => {
       const rows: [string, string, string][] = [

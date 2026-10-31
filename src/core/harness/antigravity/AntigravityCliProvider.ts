@@ -58,7 +58,6 @@ import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
 import {
   StatuslineManager,
-  getAntigravitySettingsPath,
   type StatuslineInstallResult,
 } from "../shared/StatuslineManager";
 import { Log } from "../../../utils/Log";
@@ -71,7 +70,12 @@ import {
   isProcessAlive,
 } from "../../../utils/LockSafetyPrimitives";
 import { AntigravityNotificationMonitor } from "./AntigravityNotificationMonitor";
-import { AntigravityToolPermissionMapper } from "./AntigravityToolPermissionMapper";
+import {
+  AntigravityToolPermissionMapper,
+  getAntigravityUserSettingsPath,
+  parseAntigravityUserPermissionRules,
+  type AntigravityUserPermissionRules,
+} from "./AntigravityToolPermissionMapper";
 import { AntigravityLogParser } from "./AntigravityLogParser";
 import { AntigravityStatuslineSidecar } from "./AntigravityStatuslineSidecar";
 import { AntigravityStreamJsonUsageAccumulator } from "./AntigravityStreamJsonUsage";
@@ -738,31 +742,15 @@ export class AntigravityCliProvider implements ICliProvider {
   }
 
   getExternalPermissionIdentity(): string {
-    const homeDirectory =
-      process.env.USERPROFILE || process.env.HOME || os.homedir();
+    let rules: AntigravityUserPermissionRules = { allow: [], deny: [] };
     try {
-      const parsed = JSON.parse(
-        fsSync.readFileSync(getAntigravitySettingsPath(homeDirectory), "utf-8")
-      ) as {
-        permissions?: { allow?: unknown; deny?: unknown };
-      };
-      return createHash("sha256")
-        .update(
-          JSON.stringify({
-            allow: Array.isArray(parsed.permissions?.allow)
-              ? parsed.permissions.allow
-              : [],
-            deny: Array.isArray(parsed.permissions?.deny)
-              ? parsed.permissions.deny
-              : [],
-          })
-        )
-        .digest("hex");
+      rules = parseAntigravityUserPermissionRules(
+        fsSync.readFileSync(getAntigravityUserSettingsPath(), "utf-8")
+      );
     } catch {
-      return createHash("sha256")
-        .update('{"allow":[],"deny":[]}')
-        .digest("hex");
+      // A missing file means no user rules, exactly as the mapper treats it.
     }
+    return createHash("sha256").update(JSON.stringify(rules)).digest("hex");
   }
 
   /**
