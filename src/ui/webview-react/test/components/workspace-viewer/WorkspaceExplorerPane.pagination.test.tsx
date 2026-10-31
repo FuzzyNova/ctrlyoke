@@ -24,6 +24,7 @@ import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { SCM_KIND_COLOR_CLASS } from "@utils/scmStatus";
+import { HOSTED_WORKSPACE_FILE_CHANGED_EVENT } from "@/types/messages";
 
 const mocks = vi.hoisted(() => ({
   workspaceTree: vi.fn(),
@@ -76,8 +77,17 @@ vi.mock("@hooks/useWorkspaceExplorerContextMenu", () => ({
 }));
 
 vi.mock("@components/workspace-viewer/WorkspaceFileEditor", () => ({
-  WorkspaceFileEditor: (props: { content: string; readOnly?: boolean }) => (
-    <div data-testid="file-editor" data-readonly={props.readOnly}>
+  WorkspaceFileEditor: (props: {
+    content: string;
+    readOnly?: boolean;
+    media?: { kind: string; rawUrl: string };
+  }) => (
+    <div
+      data-testid="file-editor"
+      data-readonly={props.readOnly}
+      data-media-kind={props.media?.kind}
+      data-media-url={props.media?.rawUrl}
+    >
       {props.content}
     </div>
   ),
@@ -537,6 +547,73 @@ describe("WorkspaceExplorerPane pagination", () => {
 
     expect(await screen.findByText("Binary file")).toBeInTheDocument();
     expect(screen.queryByTestId("file-editor")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["video", "video/mp4"],
+    ["pdf", "application/pdf"],
+    ["image", "image/png"],
+    ["audio", "audio/mpeg"],
+  ])(
+    "previews a %s file in the editor area instead of the read-only placeholder",
+    async (kind, mimeType) => {
+      mocks.workspaceFile.mockResolvedValue({
+        path: "file-0.ts",
+        content: "",
+        readOnly: true,
+        modifiedAt: 42,
+        media: { kind, mimeType },
+      });
+      render(<WorkspaceExplorerPane />);
+      await screen.findByText("file-0.ts");
+      fireEvent.click(screen.getByRole("button", { name: /file-0\.ts/ }));
+
+      const editor = await screen.findByTestId("file-editor");
+      expect(editor).toHaveAttribute("data-media-kind", kind);
+      expect(editor.getAttribute("data-media-url")).toContain("v=42");
+      expect(screen.queryByText("This file cannot be edited")).toBeNull();
+      expect(screen.queryByRole("button", { name: "Save file" })).toBeNull();
+    }
+  );
+
+  it("reloads a changed media file through a new versioned URL", async () => {
+    mocks.workspaceFile.mockResolvedValue({
+      path: "file-0.ts",
+      content: "",
+      readOnly: true,
+      modifiedAt: 1,
+      media: { kind: "video", mimeType: "video/mp4" },
+    });
+    render(<WorkspaceExplorerPane />);
+    await screen.findByText("file-0.ts");
+    fireEvent.click(screen.getByRole("button", { name: /file-0\.ts/ }));
+    const editor = await screen.findByTestId("file-editor");
+    expect(editor.getAttribute("data-media-url")).toContain("v=1");
+
+    mocks.workspaceFile.mockResolvedValue({
+      path: "file-0.ts",
+      content: "",
+      readOnly: true,
+      modifiedAt: 2,
+      media: { kind: "video", mimeType: "video/mp4" },
+    });
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(HOSTED_WORKSPACE_FILE_CHANGED_EVENT, {
+          detail: { path: "file-0.ts", modifiedAt: 2 },
+        })
+      );
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("file-editor").getAttribute("data-media-url")
+      ).toContain("v=2")
+    );
+    expect(screen.getByTestId("file-editor")).toHaveAttribute(
+      "data-media-kind",
+      "video"
+    );
   });
 
   it("ignores an older file response and its loading completion", async () => {
