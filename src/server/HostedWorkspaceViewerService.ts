@@ -48,6 +48,9 @@ import {
   PROMISE_SETTLED_STATUSES,
   WORKSPACE_FILE_LANGUAGE_IDS,
   GIT_REF_LABEL_TYPES,
+  workspaceMediaInfoForPath,
+  WORKSPACE_MEDIA_GIT_INDEX_REF,
+  type WorkspaceMediaInfo,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
 import {
@@ -160,6 +163,8 @@ export interface GitRefDiffDownload {
   stderr: Readable;
 }
 export const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
+export const MAX_MEDIA_FILE_SIZE = 512 * 1024 * 1024;
+export const MAX_MEDIA_BLOB_SIZE = 50 * 1024 * 1024;
 const DIFF_SIDE_TOO_LARGE = Symbol("diff-side-too-large");
 const BINARY_CHECK_BYTES = 8192;
 const WORKSPACE_TREE_STAT_CONCURRENCY = 8;
@@ -488,6 +493,37 @@ export class WorkspaceFileConflictError extends Error {
   }
 }
 
+export class WorkspaceMediaError extends Error {
+  constructor(
+    message: string,
+    readonly statusCode: number
+  ) {
+    super(message);
+    this.name = "WorkspaceMediaError";
+  }
+}
+
+export type WorkspaceRawMedia =
+  | {
+      kind: typeof WORKSPACE_RAW_MEDIA_SOURCE_KINDS.WORKING_TREE;
+      absolutePath: string;
+      size: number;
+      mediaInfo: WorkspaceMediaInfo;
+    }
+  | {
+      kind: typeof WORKSPACE_RAW_MEDIA_SOURCE_KINDS.BLOB;
+      bytes: Buffer;
+      blobId: string;
+      mediaInfo: WorkspaceMediaInfo;
+    };
+
+export const WORKSPACE_RAW_MEDIA_SOURCE_KINDS = {
+  WORKING_TREE: "working-tree",
+  BLOB: "blob",
+} as const;
+
+const WORKSPACE_MEDIA_GIT_REF_PATTERN = /^(?:[a-f\d]{40}|[a-f\d]{64})$/i;
+
 export class HostedWorkspaceViewerService {
   private readonly commitGenerator: CommitMessageGenerator;
   private readonly listingSnapshotCache = new WorkspaceListingSnapshotCache();
@@ -515,6 +551,125 @@ export class HostedWorkspaceViewerService {
 
   resolveWorkspacePath(requestedPath: string): string | undefined {
     return this.safeResolveForSettingsEdit(requestedPath) ?? undefined;
+  }
+
+  async getRawMedia(
+    requestedPath: string,
+    repoId?: string,
+    ref?: string
+  ): Promise<WorkspaceRawMedia> {
+    if (
+      ref !== undefined &&
+      ref !== WORKSPACE_MEDIA_GIT_INDEX_REF &&
+      !WORKSPACE_MEDIA_GIT_REF_PATTERN.test(ref)
+    ) {
+      throw new WorkspaceMediaError("Invalid ref", 400);
+    }
+
+    const resolved =
+      ref === undefined
+        ? this.safeResolveForSettingsEdit(requestedPath)
+        : this.safeResolve(requestedPath);
+    if (!resolved) {
+      throw new WorkspaceMediaError("Path not allowed", 403);
+    }
+
+    const mediaInfo = workspaceMediaInfoForPath(resolved);
+    if (!mediaInfo) {
+      throw new WorkspaceMediaError("Unsupported media type", 415);
+    }
+
+    if (ref === undefined) {
+      let stat: fs.Stats;
+      try {
+        stat = await fs.promises.stat(resolved);
+      } catch {
+        throw new WorkspaceMediaError("File not found", 404);
+      }
+      if (!stat.isFile()) {
+        throw new WorkspaceMediaError("File not found", 404);
+      }
+      if (stat.size > MAX_MEDIA_FILE_SIZE) {
+        throw new WorkspaceMediaError("File too large", 413);
+      }
+      return {
+        kind: WORKSPACE_RAW_MEDIA_SOURCE_KINDS.WORKING_TREE,
+        absolutePath: resolved,
+        size: stat.size,
+        mediaInfo,
+      };
+    }
+
+    const repoRoot = await this.requireRepoRootForPath(resolved);
+    if (!isPathWithinAnyDirectory(resolved, this.trustedRoots)) {
+      throw new WorkspaceMediaError("Path not allowed", 403);
+    }
+    if (repoId) {
+      const requestedRepo = (await this.getReposInternal()).find(
+        (repo) => repo.id === repoId
+      );
+      if (!requestedRepo || !pathsEqual(requestedRepo.rootPath, repoRoot)) {
+        throw new WorkspaceMediaError("Path is outside the selected repository", 400);
+      }
+    }
+
+    if (ref !== WORKSPACE_MEDIA_GIT_INDEX_REF) {
+      let commitId: string;
+      try {
+        const result = await execGit([
+          "-C",
+          repoRoot,
+          "rev-parse",
+          "--verify",
+          "--end-of-options",
+          `${ref}^{commit}`,
+        ]);
+        commitId = result.stdout;
+      } catch {
+        throw new WorkspaceMediaError("Invalid ref", 400);
+      }
+      if (commitId.trim().toLowerCase() !== ref.toLowerCase()) {
+        throw new WorkspaceMediaError("Invalid ref", 400);
+      }
+    }
+
+    const gitPath = toGitPath(this.relativeToRepo(resolved, repoRoot));
+    let bytes: Buffer | null;
+    try {
+      bytes = await this.readRawMediaBlob(repoRoot, ref, gitPath);
+    } catch (error) {
+      if (error instanceof GitBlobTooLargeError) {
+        throw new WorkspaceMediaError("File too large", 413);
+      }
+      throw error;
+    }
+    if (!bytes) throw new WorkspaceMediaError("File not found", 404);
+
+    const objectSpec =
+      ref === WORKSPACE_MEDIA_GIT_INDEX_REF
+        ? `${WORKSPACE_MEDIA_GIT_INDEX_REF}${gitPath}`
+        : `${ref}:${gitPath}`;
+    const { stdout } = await execGit([
+      "-C",
+      repoRoot,
+      "rev-parse",
+      "--verify",
+      "--end-of-options",
+      objectSpec,
+    ]);
+    const blobId = stdout.trim();
+    if (!/^(?:[a-f\d]{40}|[a-f\d]{64})$/i.test(blobId)) {
+      throw new Error("Git returned an invalid blob id");
+    }
+    return { kind: WORKSPACE_RAW_MEDIA_SOURCE_KINDS.BLOB, bytes, blobId, mediaInfo };
+  }
+
+  protected readRawMediaBlob(
+    repoRoot: string,
+    ref: string,
+    gitPath: string
+  ): Promise<Buffer | null> {
+    return getBlobBytes(repoRoot, ref, gitPath, MAX_MEDIA_BLOB_SIZE);
   }
 
   /**

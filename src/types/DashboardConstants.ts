@@ -3153,6 +3153,66 @@ export const IMAGE_REF_EXTENSIONS = [
   "webp",
 ] as const;
 
+export const WORKSPACE_MEDIA_KINDS = {
+  IMAGE: "image",
+  VIDEO: "video",
+  AUDIO: "audio",
+  PDF: "pdf",
+} as const;
+
+export type WorkspaceMediaKind =
+  (typeof WORKSPACE_MEDIA_KINDS)[keyof typeof WORKSPACE_MEDIA_KINDS];
+
+export const WORKSPACE_MEDIA_GIT_INDEX_REF = ":";
+
+export interface WorkspaceMediaInfo {
+  mediaKind: WorkspaceMediaKind;
+  mimeType: string;
+}
+
+const IMAGE_WORKSPACE_MEDIA_INFO = Object.fromEntries(
+  IMAGE_REF_EXTENSIONS.map((extension) => [
+    extension,
+    {
+      mediaKind: WORKSPACE_MEDIA_KINDS.IMAGE,
+      mimeType: imageExtensionToMimeType(extension)!,
+    },
+  ])
+) as Record<(typeof IMAGE_REF_EXTENSIONS)[number], WorkspaceMediaInfo>;
+
+/** The raw workspace viewer's allowlisted extension and response MIME table. */
+export const WORKSPACE_MEDIA_INFO_BY_EXTENSION: Readonly<
+  Record<string, WorkspaceMediaInfo>
+> = {
+  ...IMAGE_WORKSPACE_MEDIA_INFO,
+  mp4: { mediaKind: WORKSPACE_MEDIA_KINDS.VIDEO, mimeType: "video/mp4" },
+  m4v: { mediaKind: WORKSPACE_MEDIA_KINDS.VIDEO, mimeType: "video/mp4" },
+  webm: { mediaKind: WORKSPACE_MEDIA_KINDS.VIDEO, mimeType: "video/webm" },
+  ogv: { mediaKind: WORKSPACE_MEDIA_KINDS.VIDEO, mimeType: "video/ogg" },
+  mov: {
+    mediaKind: WORKSPACE_MEDIA_KINDS.VIDEO,
+    mimeType: "video/quicktime",
+  },
+  mp3: { mediaKind: WORKSPACE_MEDIA_KINDS.AUDIO, mimeType: "audio/mpeg" },
+  m4a: { mediaKind: WORKSPACE_MEDIA_KINDS.AUDIO, mimeType: "audio/mp4" },
+  aac: { mediaKind: WORKSPACE_MEDIA_KINDS.AUDIO, mimeType: "audio/aac" },
+  wav: { mediaKind: WORKSPACE_MEDIA_KINDS.AUDIO, mimeType: "audio/wav" },
+  flac: { mediaKind: WORKSPACE_MEDIA_KINDS.AUDIO, mimeType: "audio/flac" },
+  ogg: { mediaKind: WORKSPACE_MEDIA_KINDS.AUDIO, mimeType: "audio/ogg" },
+  oga: { mediaKind: WORKSPACE_MEDIA_KINDS.AUDIO, mimeType: "audio/ogg" },
+  opus: { mediaKind: WORKSPACE_MEDIA_KINDS.AUDIO, mimeType: "audio/ogg" },
+  pdf: { mediaKind: WORKSPACE_MEDIA_KINDS.PDF, mimeType: "application/pdf" },
+};
+
+export function workspaceMediaInfoForPath(
+  filePath: string
+): WorkspaceMediaInfo | undefined {
+  const match = /\.([a-z0-9]+)$/i.exec(filePath);
+  return match
+    ? WORKSPACE_MEDIA_INFO_BY_EXTENSION[match[1].toLowerCase()]
+    : undefined;
+}
+
 /** Placeholder inserted at the cursor while a pasted image saves asynchronously. */
 export const PASTING_IMAGE_PLACEHOLDER = "[Pasting image…]";
 

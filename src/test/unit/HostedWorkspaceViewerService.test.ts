@@ -9,6 +9,8 @@ import { suite, test, teardown } from "mocha";
 import {
   HostedWorkspaceViewerService,
   WorkspaceFileConflictError,
+  WorkspaceMediaError,
+  MAX_MEDIA_BLOB_SIZE,
 } from "../../server/HostedWorkspaceViewerService";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import {
@@ -33,6 +35,7 @@ import {
   setGitCommandObserverForTests,
   setGitTimeoutOverridesForTests,
   setFileHistorySpawnForTests,
+  GitBlobTooLargeError,
 } from "../../utils/GitUtils";
 import { configService } from "../../config/CtrlYokeConfigService";
 import { USER_SETTINGS_VIEWER_SENTINEL_PATH } from "../../types/DashboardConstants";
@@ -107,6 +110,70 @@ suite("HostedWorkspaceViewerService", function () {
     runGit(cwd, "add", fileName);
     runGit(cwd, "commit", "-m", message);
   }
+
+  class BlobTooLargeWorkspaceViewerService extends HostedWorkspaceViewerService {
+    protected override async readRawMediaBlob(): Promise<Buffer> {
+      throw new GitBlobTooLargeError(MAX_MEDIA_BLOB_SIZE + 1, MAX_MEDIA_BLOB_SIZE);
+    }
+  }
+
+  suite("getRawMedia", () => {
+    test("rejects path traversal and non-media extensions", async () => {
+      const root = createWorkspace();
+      const service = new HostedWorkspaceViewerService(root);
+      await assert.rejects(service.getRawMedia("../outside.png"), {
+        statusCode: 403,
+      });
+      await assert.rejects(service.getRawMedia("notes.html"), {
+        statusCode: 415,
+      });
+    });
+
+    test("rejects a repository outside the selected repository scope", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "asset.png", "png-bytes", "Asset");
+      const commit = runGit(root, "rev-parse", "HEAD");
+      await assert.rejects(
+        new HostedWorkspaceViewerService(root).getRawMedia(
+          "asset.png",
+          "unrelated-repo",
+          commit
+        ),
+        { statusCode: 400 }
+      );
+    });
+
+    test("rejects symbolic refs", async () => {
+      const root = createWorkspace();
+      await assert.rejects(
+        new HostedWorkspaceViewerService(root).getRawMedia(
+          "asset.png",
+          undefined,
+          "HEAD"
+        ),
+        (error: unknown) =>
+          error instanceof WorkspaceMediaError && error.statusCode === 400
+      );
+    });
+
+    test("maps an over-cap blob to a too-large error", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "asset.png", "png-bytes", "Asset");
+      const commit = runGit(root, "rev-parse", "HEAD");
+      await assert.rejects(
+        new BlobTooLargeWorkspaceViewerService(root).getRawMedia(
+          "asset.png",
+          undefined,
+          commit
+        ),
+        { statusCode: 413 }
+      );
+    });
+  });
 
   function commitFileAt(
     cwd: string,

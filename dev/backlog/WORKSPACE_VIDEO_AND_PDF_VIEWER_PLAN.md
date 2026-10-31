@@ -341,10 +341,10 @@ enableXfa: false })`. pdf.js issues its own `Range` requests against the raw rou
 
 Each stage is one commit; tick it in the commit that lands it.
 
-- [ ] **A. Classification and raw route** (§1, §2): `WORKSPACE_MEDIA_KINDS`, the
+- [x] **A. Classification and raw route** (§1, §2): `WORKSPACE_MEDIA_KINDS`, the
       extension table, `workspaceMediaInfoForPath`; the pure range parser; the
       service method and `GET /api/workspace-viewer/raw`; CSP `media-src`/`frame-src`.
-      Additive only: no payload changes yet.
+      Additive only: no payload changes yet. No deviations from the plan.
 - [ ] **B. Payload switch, images on the raw route** (§3 descriptor, §5 types and
       builders, client wiring for images): `readFile()` descriptor, `MEDIA` payload
       and `WorkspaceMediaDiffSides`, `buildMediaDiffSides` in all three builders,
