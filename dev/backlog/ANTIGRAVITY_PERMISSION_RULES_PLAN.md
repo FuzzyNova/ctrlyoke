@@ -373,6 +373,11 @@ Gaps between the proposal and the current code, to settle during implementation:
      `git pushx`/`xgit push`;
    - the merge rules, including the user's file being missing or malformed;
    - the `additionalArgs` `--settings` collision.
+   - **Translation only: done 2026-10-31.** Implemented the per-list pure pattern conversion,
+     lossy entry reporting, MCP server-id normalization/formatter, deduplication and unit
+     coverage for table outputs plus command regex behavior. No deviation from the translation
+     tables. Mode mapping, `prepare()`, delivery, user-rule merging and capability declarations
+     remain for the rest of phase 1.
 2. **Version floor and capabilities.** Bump `minimum`/`testedWith`, flip the declarations,
    regenerate the compatibility docs, update the capability registry tests.
 3. **Harness tests** (opt-in, `npm run test:harness`). Run only the new cases while

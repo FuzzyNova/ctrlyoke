@@ -247,6 +247,104 @@ suite("HarnessToolPermissionMappers", () => {
   suite("AntigravityToolPermissionMapper", () => {
     const mapper = new AntigravityToolPermissionMapper();
 
+    suite("pattern translation", () => {
+      const rows: [string, string, string][] = [
+        ["shell", "command(*)", "command(*)"],
+        ["bash", "command(*)", "command(*)"],
+        ["run_shell_command", "command(*)", "command(*)"],
+        ["shell(*)", "command(*)", "command(*)"],
+        ["shell(*:*)", "command(*)", "command(*)"],
+        [
+          "shell(git push:*)",
+          "command(regex:git\\s+push(?:\\s[^;&|`$()<>\\r\\n]*)?)",
+          "command(regex:(?is)(?:.*[^\\w.-])?git\\s+push(?:[^\\w.-].*)?)",
+        ],
+        [
+          "shell(npm run test)",
+          "command(regex:npm\\s+run\\s+test)",
+          "command(regex:(?is)(?:.*[^\\w.-])?npm\\s+run\\s+test(?:[^\\w.-].*)?)",
+        ],
+        [
+          "shell(git * main:*)",
+          "command(regex:git\\s+[^\\s;&|`$()<>\\r\\n]+\\s+main(?:\\s[^;&|`$()<>\\r\\n]*)?)",
+          "command(regex:(?is)(?:.*[^\\w.-])?git\\s+\\S+\\s+main(?:[^\\w.-].*)?)",
+        ],
+        ["read", "read_file(*)", "read_file(*)"],
+        ["write", "write_file(*)", "write_file(*)"],
+        [
+          "web_fetch(example.com)",
+          "read_url(example.com)",
+          "read_url(example.com)",
+        ],
+        ["mcp__my.server__tool", "mcp(my_server/tool)", "mcp(my_server/tool)"],
+        ["mcp__my.server", "mcp(my_server/*)", "mcp(my_server/*)"],
+      ];
+
+      for (const [pattern, allow, deny] of rows) {
+        test(`${pattern} translates exactly for allow and deny`, () => {
+          assert.deepStrictEqual(
+            mapper.convertToAntigravityRules([pattern], "allow"),
+            { rules: [allow], lossy: [] }
+          );
+          assert.deepStrictEqual(
+            mapper.convertToAntigravityRules([pattern], "deny"),
+            { rules: [deny], lossy: [] }
+          );
+        });
+      }
+
+      test("reports unsupported tools as lossy and deduplicates rules", () => {
+        assert.deepStrictEqual(
+          mapper.convertToAntigravityRules(
+            ["web_search", "task", "unknown", "read", "read"],
+            "allow"
+          ),
+          {
+            rules: ["read_file(*)"],
+            lossy: ["task", "unknown"],
+          }
+        );
+        assert.deepStrictEqual(
+          mapper.convertToAntigravityRules(["web_search", "glob"], "deny"),
+          {
+            rules: [],
+            lossy: ["web_search", "glob"],
+          }
+        );
+      });
+
+      test("allow regex rejects chains and newline while deny catches chained command", () => {
+        const allow = mapper.convertToAntigravityRules(
+          ["shell(git push:*)"],
+          "allow"
+        ).rules[0];
+        const deny = mapper.convertToAntigravityRules(
+          ["shell(git push:*)"],
+          "deny"
+        ).rules[0];
+        const asRegex = (rule: string) => {
+          const source = rule.slice("command(regex:".length, -1);
+          const flags = source.startsWith("(?is)") ? "is" : "";
+          return new RegExp(`^(?:${flags ? source.slice(5) : source})$`, flags);
+        };
+        const allowRegex = asRegex(allow);
+        const denyRegex = asRegex(deny);
+        assert.ok(allowRegex.test("git push origin"));
+        for (const command of [
+          "echo a && git push",
+          "echo a; git push",
+          "echo a | git push",
+          "echo a\ngit push",
+          "GIT PUSH origin",
+        ]) {
+          assert.strictEqual(allowRegex.test(command), false, command);
+          assert.strictEqual(denyRegex.test(command), true, command);
+        }
+        assert.strictEqual(denyRegex.test("git pushx"), false);
+        assert.strictEqual(denyRegex.test("xgit push"), false);
+      });
+    });
+
     suite("prepare", () => {
       test("dangerouslyAllowAll returns the Antigravity bypass flag", async () => {
         const args = await mapperArgs(
