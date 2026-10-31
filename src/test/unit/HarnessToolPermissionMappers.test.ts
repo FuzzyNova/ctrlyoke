@@ -1,4 +1,7 @@
 import * as assert from "assert";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
 import { suite, test } from "mocha";
 import { CopilotToolPermissionMapper } from "../../core/harness/copilot/CopilotToolPermissionMapper";
 import { ClaudeToolPermissionMapper } from "../../core/harness/claude/ClaudeToolPermissionMapper";
@@ -354,25 +357,115 @@ suite("HarnessToolPermissionMappers", () => {
         assert.deepStrictEqual(args, ["--dangerously-skip-permissions"]);
       });
 
-      test("allowAll returns no flag because agy has no safe auto-approve flag", async () => {
-        const args = await mapperArgs(mapper, cfg(PERMISSION_MODES.ALLOW_ALL));
-        assert.deepStrictEqual(args, []);
+      const workspaceRoot = path.join(
+        os.tmpdir(),
+        "ctrlyoke-antigravity-permissions"
+      );
+      const environment = { HOME: os.tmpdir(), USERPROFILE: os.tmpdir() };
+
+      test("allowAll writes always-proceed settings and translated denials", async () => {
+        const application = await mapper.prepare(
+          cfg(PERMISSION_MODES.ALLOW_ALL, [], ["shell(git push:*)"]),
+          { workspaceRoot, environment }
+        );
+        assert.deepStrictEqual(application.cliArgs.slice(0, 1), ["--settings"]);
+        const settings = JSON.parse(
+          application.mutations![0].intendedContent!
+        ) as Record<string, any>;
+        assert.strictEqual(settings.toolPermission, "always-proceed");
+        assert.deepStrictEqual(settings.permissions.deny, [
+          "command(regex:(?is)(?:.*[^\\w.-])?git\\s+push(?:[^\\w.-].*)?)",
+        ]);
+        assert.strictEqual("allow" in settings.permissions, false);
       });
 
-      test("allowAll does not bypass a deny list", async () => {
-        const args = await mapperArgs(
-          mapper,
-          cfg(PERMISSION_MODES.ALLOW_ALL, [], ["shell"])
+      test("custom keeps sandbox and writes request-review allow and deny rules", async () => {
+        const application = await mapper.prepare(
+          cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"]),
+          { workspaceRoot, environment }
         );
-        assert.deepStrictEqual(args, []);
+        assert.deepStrictEqual(application.cliArgs.slice(0, 1), ["--sandbox"]);
+        assert.strictEqual(application.cliArgs[1], "--settings");
+        const settings = JSON.parse(
+          application.mutations![0].intendedContent!
+        ) as Record<string, any>;
+        assert.strictEqual(settings.toolPermission, "request-review");
+        assert.deepStrictEqual(settings.permissions.allow, ["write_file(*)"]);
+        assert.deepStrictEqual(settings.permissions.deny, ["command(*)"]);
       });
 
-      test("custom mode uses Antigravity sandbox and ignores allow and deny lists", async () => {
-        const args = await mapperArgs(
-          mapper,
-          cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"])
+      test("unions global user rules and omits empty lists", async () => {
+        const home = await fs.mkdtemp(
+          path.join(os.tmpdir(), "agy-user-rules-")
         );
-        assert.deepStrictEqual(args, ["--sandbox"]);
+        const userSettingsPath = path.join(
+          home,
+          ".gemini",
+          "antigravity-cli",
+          "settings.json"
+        );
+        await fs.mkdir(path.dirname(userSettingsPath), { recursive: true });
+        await fs.writeFile(
+          userSettingsPath,
+          JSON.stringify({
+            permissions: { allow: ["read_file(*)"], deny: ["command(*)"] },
+          })
+        );
+        try {
+          const application = await mapper.prepare(
+            cfg(PERMISSION_MODES.ALLOW_ALL),
+            { workspaceRoot, environment: { HOME: home } }
+          );
+          const settings = JSON.parse(
+            application.mutations![0].intendedContent!
+          ) as Record<string, any>;
+          assert.deepStrictEqual(settings.permissions.deny, ["command(*)"]);
+          assert.strictEqual("allow" in settings.permissions, false);
+        } finally {
+          await fs.rm(home, { recursive: true, force: true });
+        }
+      });
+
+      test("malformed user settings are treated as empty", async () => {
+        const home = await fs.mkdtemp(
+          path.join(os.tmpdir(), "agy-user-rules-")
+        );
+        const userSettingsPath = path.join(
+          home,
+          ".gemini",
+          "antigravity-cli",
+          "settings.json"
+        );
+        await fs.mkdir(path.dirname(userSettingsPath), { recursive: true });
+        await fs.writeFile(userSettingsPath, "{");
+        try {
+          const application = await mapper.prepare(
+            cfg(PERMISSION_MODES.CUSTOM),
+            { workspaceRoot, environment: { HOME: home } }
+          );
+          const settings = JSON.parse(
+            application.mutations![0].intendedContent!
+          ) as Record<string, any>;
+          assert.strictEqual("permissions" in settings, false);
+        } finally {
+          await fs.rm(home, { recursive: true, force: true });
+        }
+      });
+
+      test("skips its settings file when workflow arguments supply --settings", async () => {
+        const application = await mapper.prepare(
+          cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"]),
+          {
+            workspaceRoot,
+            additionalArgs: "--other value --settings=custom.json",
+          }
+        );
+        assert.deepStrictEqual(application.cliArgs, ["--sandbox"]);
+        assert.strictEqual(application.mutations, undefined);
+        assert.match(
+          application.diagnostics.at(-1)!.message,
+          /workflow additionalArgs supplies its own --settings/
+        );
       });
 
       test("none mode returns no permission flags", async () => {
@@ -391,19 +484,19 @@ suite("HarnessToolPermissionMappers", () => {
         );
       });
 
-      test("allowAll → false without a deny list", async () => {
+      test("allowAll → true", async () => {
         assert.strictEqual(
           mapper.hasFullPermissions(cfg(PERMISSION_MODES.ALLOW_ALL)),
-          false
+          true
         );
       });
 
-      test("allowAll → false with a deny list", async () => {
+      test("allowAll → true with a deny list", async () => {
         assert.strictEqual(
           mapper.hasFullPermissions(
             cfg(PERMISSION_MODES.ALLOW_ALL, [], ["shell"])
           ),
-          false
+          true
         );
       });
 

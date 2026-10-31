@@ -395,6 +395,9 @@ export interface ICliProvider {
    */
   getLiveProcessFilePaths?(): string[];
 
+  /** Identity of external permission configuration fixed at process spawn. */
+  getExternalPermissionIdentity?(): string;
+
   /**
    * Restore workspace files modified during interactive hook setup.
    *

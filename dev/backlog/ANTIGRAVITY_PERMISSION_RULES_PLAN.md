@@ -373,11 +373,15 @@ Gaps between the proposal and the current code, to settle during implementation:
      `git pushx`/`xgit push`;
    - the merge rules, including the user's file being missing or malformed;
    - the `additionalArgs` `--settings` collision.
-   - **Translation only: done 2026-10-31.** Implemented the per-list pure pattern conversion,
-     lossy entry reporting, MCP server-id normalization/formatter, deduplication and unit
-     coverage for table outputs plus command regex behavior. No deviation from the translation
-     tables. Mode mapping, `prepare()`, delivery, user-rule merging and capability declarations
-     remain for the rest of phase 1.
+   - **Done 2026-10-31.** Implemented the per-list pure pattern conversion, lossy entry
+     reporting, MCP server-id normalization/formatter, mode mapping, `--settings` delivery,
+     user-global rule union, settings collision diagnostics, cleanup registration, server
+     `deniedTools` merging, `hasFullPermissions`, and terminal-reuse identity for global rule
+     changes. Permission capability declarations and the version floor remain for phase 2.
+     Deviation: terminal reuse compares a hash of only the user's global allow/deny lists,
+     alongside the existing workflow `toolPermissions` comparison; unrelated settings edits
+     do not retire the PTY. The legacy `ToolPermissionMappers.test.ts` assertions were also
+     updated because the targeted test grep includes that suite.
 2. **Version floor and capabilities.** Bump `minimum`/`testedWith`, flip the declarations,
    regenerate the compatibility docs, update the capability registry tests.
 3. **Harness tests** (opt-in, `npm run test:harness`). Run only the new cases while

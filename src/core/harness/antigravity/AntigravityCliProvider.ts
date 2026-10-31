@@ -1,6 +1,7 @@
 import * as path from "path";
 import * as os from "os";
 import * as fs from "fs/promises";
+import * as fsSync from "fs";
 import { createHash, randomUUID } from "crypto";
 import {
   ICliProvider,
@@ -40,7 +41,6 @@ import type {
 import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import {
   COMPATIBILITY_DIAGNOSTIC_CODES,
-  MCP_CAVEAT_CODES,
   capabilitySuiteVerification,
   getCompatibilityDiagnosticMessage,
   getCompatibilityDiagnosticRemediation,
@@ -58,6 +58,7 @@ import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
 import {
   StatuslineManager,
+  getAntigravitySettingsPath,
   type StatuslineInstallResult,
 } from "../shared/StatuslineManager";
 import { Log } from "../../../utils/Log";
@@ -80,15 +81,15 @@ import {
 } from "../shared/interfaces/PreparedMutation";
 
 const ANTIGRAVITY_MCP_FILTERING_CAPABILITY = {
-  fidelity: "unsupported",
-  mechanism: "none",
+  fidelity: "exact",
+  mechanism: "translated-cli",
   verification: {
     kind: "manual",
-    reference: "dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#antigravity",
+    reference:
+      "dev/backlog/ANTIGRAVITY_PERMISSION_RULES_PLAN.md#translating-patterns",
     basis: "cli-version",
-    verifiedVersions: [">=1.1.12"],
+    verifiedVersions: [">=1.4.10"],
   },
-  caveatCode: MCP_CAVEAT_CODES.NO_PER_SERVER_FILTERING,
 } as const;
 
 const ANTIGRAVITY_IMAGE_INPUT_CAPABILITY = {
@@ -199,6 +200,8 @@ export class AntigravityCliProvider implements ICliProvider {
   private statusLineToken: string | undefined;
   /** Snapshot files created by every prompt in this workflow. */
   private readonly statusLineSnapshotPaths = new Set<string>();
+  /** Permission settings stay alive until their agy process or PTY exits. */
+  private readonly permissionSettingsPaths = new Set<string>();
   /** Workspace temp directory for the current statusline invocation. */
   private statusLineDirectory: string | undefined;
   /** Effective ctrlyoke root for workspace-scoped statusline settings. */
@@ -525,7 +528,14 @@ export class AntigravityCliProvider implements ICliProvider {
     if (config === null) {
       return { cliArgs: [], diagnostics: [] };
     }
-    return this.toolPermissionMapper.prepare(config, context);
+    const application = await this.toolPermissionMapper.prepare(
+      config,
+      context
+    );
+    for (const mutation of application.mutations ?? []) {
+      if (mutation.path) this.permissionSettingsPaths.add(mutation.path);
+    }
+    return application;
   }
 
   async buildNotificationHookArgs(
@@ -719,7 +729,39 @@ export class AntigravityCliProvider implements ICliProvider {
   }
 
   getAdditionalCleanupFilePaths(_workspaceRoot: string): string[] {
-    return [...this.statusLineSnapshotPaths];
+    return [...this.statusLineSnapshotPaths, ...this.permissionSettingsPaths];
+  }
+
+  getLiveProcessFilePaths(): string[] {
+    return [...this.permissionSettingsPaths];
+  }
+
+  getExternalPermissionIdentity(): string {
+    const homeDirectory =
+      process.env.USERPROFILE || process.env.HOME || os.homedir();
+    try {
+      const parsed = JSON.parse(
+        fsSync.readFileSync(getAntigravitySettingsPath(homeDirectory), "utf-8")
+      ) as {
+        permissions?: { allow?: unknown; deny?: unknown };
+      };
+      return createHash("sha256")
+        .update(
+          JSON.stringify({
+            allow: Array.isArray(parsed.permissions?.allow)
+              ? parsed.permissions.allow
+              : [],
+            deny: Array.isArray(parsed.permissions?.deny)
+              ? parsed.permissions.deny
+              : [],
+          })
+        )
+        .digest("hex");
+    } catch {
+      return createHash("sha256")
+        .update('{"allow":[],"deny":[]}')
+        .digest("hex");
+    }
   }
 
   /**

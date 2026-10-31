@@ -107,6 +107,8 @@ export interface RunningTerminalContext {
   spawnedWith?: ResolvedProperties;
   /** The resolved session ID that was passed to the initial spawn (may differ from sessionId). */
   spawnedWithSessionId?: string;
+  /** External permission state captured when this process was spawned. */
+  externalPermissionIdentity?: string;
 }
 
 export class CliExecutionRunner {
@@ -721,6 +723,8 @@ export class CliExecutionRunner {
               sessionId: discovery.sessionId,
               spawnedWith: session.resolvedProperties,
               spawnedWithSessionId: session.resolvedSessionId,
+              externalPermissionIdentity:
+                this.deps.provider.getExternalPermissionIdentity?.(),
             };
       this.lastInteractiveContext = runningTerminalContext;
 

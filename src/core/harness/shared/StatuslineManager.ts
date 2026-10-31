@@ -29,6 +29,18 @@ import {
 
 const QWEN_STATUS_LINE_SETTING_KEY = "ui.statusLine";
 
+/** Resolve Antigravity's global settings file from a home directory. */
+export function getAntigravitySettingsPath(
+  homeDirectory = os.homedir()
+): string {
+  return path.join(
+    homeDirectory,
+    ".gemini",
+    "antigravity-cli",
+    "settings.json"
+  );
+}
+
 export interface StatuslineInstallResult {
   readonly kind: SettingsJsonPersistentValueInstallResult["kind"];
   readonly captured: boolean;
@@ -140,13 +152,7 @@ export class StatuslineManager implements StatuslineManagerLike {
                   path.join(os.homedir(), ".qwen", "settings.json"),
               })
             : SettingsJsonMcpTracker.getInstance("antigravity-cli-settings", {
-                projectConfigPath: () =>
-                  path.join(
-                    os.homedir(),
-                    ".gemini",
-                    "antigravity-cli",
-                    "settings.json"
-                  ),
+                projectConfigPath: () => getAntigravitySettingsPath(),
               });
     const definition = { tracker };
     this.definitions.set(provider, definition);

@@ -607,7 +607,8 @@ export class CliIntegration extends HarnessIntegration {
       ctx,
       session.resolvedProperties,
       session.resolvedSessionId,
-      this.getParallelGroupId(session.workflowContext)
+      this.getParallelGroupId(session.workflowContext),
+      this.provider.getExternalPermissionIdentity?.()
     );
     if (reason) {
       Log.info(
@@ -629,9 +630,17 @@ export class CliIntegration extends HarnessIntegration {
     ctx: import("./shared/CliExecutionRunner").RunningTerminalContext,
     curr: ResolvedProperties | undefined,
     currSessionId: string | undefined,
-    parallelGroupId?: string
+    parallelGroupId?: string,
+    externalPermissionIdentity?: string
   ): string | null {
     const prev = ctx.spawnedWith;
+
+    if (
+      ctx.externalPermissionIdentity !== undefined &&
+      ctx.externalPermissionIdentity !== externalPermissionIdentity
+    ) {
+      return "external permission rules changed";
+    }
 
     // Explicit session ID pointing to a different session than the running one
     if (

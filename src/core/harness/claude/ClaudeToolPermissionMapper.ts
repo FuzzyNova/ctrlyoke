@@ -12,6 +12,7 @@ import {
 } from "../../../types/CompatibilityTypes";
 import { COPILOT_TO_CLAUDE_MAP } from "../shared/CliToolPermissionMapper";
 import { Log } from "../../../utils/Log";
+import { normalizeClaudeMcpServerId } from "../../../types/ToolPermissionUtils";
 import {
   HARNESS_IDS,
   PERMISSION_MODES,
@@ -72,6 +73,7 @@ export class ClaudeToolPermissionMapper
   implements IToolPermissionMapper
 {
   readonly capabilities = CLAUDE_PERMISSION_CAPABILITIES;
+  readonly normalizeMcpServerId = normalizeClaudeMcpServerId;
 
   /**
    * Build CLI arguments for tool permissions

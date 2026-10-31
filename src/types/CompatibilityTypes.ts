@@ -50,6 +50,8 @@ export const COMPATIBILITY_DIAGNOSTIC_CODES = {
   IMAGE_INPUT_PARTIAL: "compatibility.promptInputs.images.partial",
   IMAGE_INPUT_UNVERIFIED: "compatibility.promptInputs.images.unverified",
   PERMISSION_TRANSLATION_LOSSY: "compatibility.permissions.translation.lossy",
+  ANTIGRAVITY_SETTINGS_COLLISION:
+    "compatibility.permissions.antigravitySettingsCollision",
   MCP_SERVER_ID_SANITIZED: "compatibility.mcp.serverId.sanitized",
   MCP_SERVER_ID_COLLISION: "compatibility.mcp.serverId.collision",
   MCP_TOOL_NAME_INVALID: "compatibility.mcp.toolName.invalid",
