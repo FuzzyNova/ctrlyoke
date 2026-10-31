@@ -33,6 +33,7 @@ import type {
   WorkspaceEntry,
   SourceControlFile,
   WorkspaceFileChangedMessage,
+  WorkspaceFileResponse,
 } from "@root/types/HostedWorkspaceViewerTypes";
 import {
   HostedHttpError,
@@ -206,6 +207,21 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const [pendingEditorSelection, setPendingEditorSelection] =
     useState<WorkspaceFileEditorPendingSelection | null>(null);
 
+  // A media file has no text content, but it still renders a preview in the
+  // editor area, so it never takes the "cannot be edited" placeholder.
+  const loadMedia = useCallback(
+    (
+      path: string,
+      media: NonNullable<WorkspaceFileResponse["media"]>,
+      modifiedAt: number | undefined
+    ) =>
+      setLoadedMedia(path, {
+        ...media,
+        rawUrl: workspaceRawUrl({ path, version: modifiedAt }),
+      }),
+    [setLoadedMedia]
+  );
+
   const updateWorkspaceFileWatch = useCallback((path: string | null) => {
     fileWatchQueueRef.current = fileWatchQueueRef.current
       .then(() => workspaceFileWatch(path))
@@ -363,13 +379,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
         savedModifiedAtByPathRef.current.delete(canonicalPath);
         setExternalChange(undefined);
         if (result.media) {
-          setLoadedMedia(canonicalPath, {
-            ...result.media,
-            rawUrl: workspaceRawUrl({
-              path: canonicalPath,
-              version: result.modifiedAt,
-            }),
-          });
+          loadMedia(canonicalPath, result.media, result.modifiedAt);
         } else if (result.readOnly) {
           if (typeof result.content === "string") {
             setLoadedReadOnlyFileContent(
@@ -399,7 +409,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
       setFileLoading,
       setLoadedFileContent,
       setLoadedReadOnlyFileContent,
-      setLoadedMedia,
+      loadMedia,
       setFileReadOnly,
       setMobileEditorVisible,
       setError,
@@ -456,7 +466,14 @@ export const WorkspaceExplorerPane: React.FC = () => {
             return;
           }
           modifiedAtRef.current = result.modifiedAt;
-          setLoadedFileContent(result.path, result.content);
+          // A changed media file reloads through a new versioned raw URL.
+          if (result.media)
+            loadMedia(
+              result.path.replace(/\\/g, "/"),
+              result.media,
+              result.modifiedAt
+            );
+          else setLoadedFileContent(result.path, result.content);
         })
         .catch(() => undefined);
     };
@@ -471,6 +488,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
       );
   }, [
     fileDirty,
+    loadMedia,
     myClientId,
     refreshDirectory,
     selectedFilePath,
@@ -1114,7 +1132,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
               <Icon name="loading" className="animate-spin" />
               <span className="text-sm">Loading file…</span>
             </div>
-          ) : fileReadOnly && !fileReadOnlyContentAvailable ? (
+          ) : fileReadOnly && !fileReadOnlyContentAvailable && !fileMedia ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-2 text-editor-fg opacity-70">
               <Icon name="info" className="text-2xl" />
               <p className="text-sm">
@@ -1123,7 +1141,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
             </div>
           ) : (
             <div className="relative flex min-h-0 flex-1 overflow-hidden">
-              {fileReadOnly && (
+              {fileReadOnly && !fileMedia && (
                 <div
                   role="status"
                   className="absolute inset-x-0 top-0 z-10 border-b border-panel-border bg-panel-bg px-3 py-2 text-xs text-editor-fg"
