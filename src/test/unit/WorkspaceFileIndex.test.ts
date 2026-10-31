@@ -298,6 +298,45 @@ suite("WorkspaceFileIndex", () => {
     index.dispose();
   });
 
+  test("keeps creates in a non-Git root without asking Git what is ignored", async () => {
+    let ignoreChecks = 0;
+    const harness = makeHarness({
+      getGitFilesIncludingNestedRepos: async function* () {
+        const error = new Error("not a git repository") as Error & {
+          code: number;
+        };
+        error.code = 128;
+        throw error;
+      },
+      getGitIgnoredPaths: async () => {
+        ignoreChecks++;
+        throw new Error("fatal: not a git repository");
+      },
+      walkSearchFiles: async () => ({
+        files: ["existing.md"],
+        truncated: false,
+      }),
+    });
+    const index = new WorkspaceFileIndex(
+      harness.roots,
+      true,
+      harness.dependencies
+    );
+    await index.build();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(index.getStatus().state, "degraded");
+    await index.applyChanges([
+      { root, path: "copied-in.pdf", kind: WORKSPACE_FILE_CHANGE_KINDS.CREATE },
+    ]);
+    await harness.flushTimers();
+    assert.deepStrictEqual(
+      (await index.queryFiles("copied")).map((item) => item.relativePath),
+      ["copied-in.pdf"]
+    );
+    assert.equal(ignoreChecks, 0);
+    index.dispose();
+  });
+
   test("keeps the active store available until a rebuild is complete", async () => {
     let releaseSecond!: (result: SearchWalkResult) => void;
     let walks = 0;

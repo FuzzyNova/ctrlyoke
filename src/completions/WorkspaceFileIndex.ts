@@ -223,6 +223,11 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
   private rebuildRequested = false;
   private pendingChanges: WorkspaceFileChange[] = [];
   private changeTimer?: ReturnType<typeof setTimeout>;
+  /**
+   * Roots whose last Git listing failed. `git check-ignore` fails there too,
+   * so created files are kept unfiltered, as the degraded walk keeps them.
+   */
+  private readonly rootsWithoutGit = new Set<string>();
 
   constructor(
     private roots: readonly WorkspaceFileIndexRoot[],
@@ -383,6 +388,7 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
           )) {
             files.push(...chunk.filter((file) => !file.endsWith("/")));
           }
+          this.rootsWithoutGit.delete(root.path);
           return this.prefix(root, files, roots);
         } catch (error) {
           const reason = isGitUnavailableError(error)
@@ -391,6 +397,7 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
           const message = `[WorkspaceFileIndex] ${reason} for ${root.path}; using degraded filesystem walk.`;
           Log.warn(message);
           this.options.onWarning?.(message);
+          this.rootsWithoutGit.add(root.path);
           gitSucceeded = false;
           return [];
         }
@@ -586,7 +593,11 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
             (file) => `${relative}/${file.replace(/\\/g, "/")}`
           );
         }
-        if (this.respectGitignore && paths.length > 0) {
+        if (
+          this.respectGitignore &&
+          !this.rootsWithoutGit.has(root.path) &&
+          paths.length > 0
+        ) {
           const absolutes = paths.map((file) => path.resolve(root.path, file));
           const ignored = await this.dependencies.getGitIgnoredPaths(
             root.path,

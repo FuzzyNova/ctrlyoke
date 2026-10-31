@@ -132,6 +132,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- In a workspace folder that is not a Git repository, a file added after the workspace opens now
+  appears in `@` completions straight away. It used to stay missing until the file list was
+  rebuilt, for example by toggling `ui.respectGitignoreForCompletions`.
 - Commit message generation with opencode can submit its message again. `mcp__<server>__<tool>`
   entries in `allowedTools` and `deniedTools` are now translated to opencode's `<server>_<tool>`
   tool names, so opencode no longer rejects tools a workflow allows.
