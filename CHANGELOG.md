@@ -7,11 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-31
+
 ### Added
 
 - The workspace viewer plays video and audio files and displays PDFs, including
   in Before/After diffs. PDFs have an **Open in new tab** link, and files with
   codecs the browser can't play offer open and download links.
+- The prompt editor's spell check can learn your words. A flagged word's quick
+  fixes now include **Add "word" to dictionary** and, with a workspace open,
+  **Add "word" to workspace dictionary**, even when there are no spelling
+  suggestions. The words are saved to the new `spelling.words` setting, which
+  starts out containing `ctrlyoke`; user and workspace lists are combined.
+  **Settings → General → Spelling** lists the words for editing and has a new
+  `spelling.enabled` switch that turns spell check off.
+- **File History** in the workspace viewer has an **Expand all diffs** /
+  **Collapse all diffs** button. After you expand all, commits that load as you
+  scroll arrive expanded too.
+- **Waiting for input** notifications are on by default and fire once when a
+  harness is blocked on a permission prompt or question. They work on every
+  harness except Antigravity.
+- **Screen reader support in the dashboard.** A screen reader now hears when
+  a step starts, finishes or fails, when the AI asks a question or is waiting
+  for input, and each response once it finishes, read as a summary of what the
+  step did and the AI's last message. **Settings → General → Accessibility**
+  can also read responses as they stream, or turn announcements off.
+  `Alt+L` reads the last response again. In the output pane every step header
+  is a heading and every AI message an article, so heading and article
+  navigation jump between steps and messages. **Terminal screen reader mode**
+  makes the Terminal tab readable. See
+  [Screen readers and dictation](https://ctrlyoke.dev/docs/guide/accessibility).
+- **Exit Terminal and Exit All Idle Terminals** in the workflow list's right-click menu. They send the harness Ctrl+C so its TUI quits, then end the process. Running and paused workflows are left alone, and the session stays resumable.
 
 ### Changed
 
@@ -167,6 +193,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Subprocess timeouts are recognized consistently across interpreter probes,
   Git operations, and CLI model discovery; Codex probes do not spawn after the
   launcher resolution outlives their timeout.
+- **The Worktrees settings tab says when an open terminal is the only thing holding a worktree.** A named worktree stays reserved while its finished workflow's harness terminal is open, which blocks Sync. Its row now reads **Held by open terminal** and offers **Exit terminal**. **Exit holding terminals** exits all of them so that **Sync All** includes those worktrees.
+- **Tested with the latest harness CLIs.** The compatibility docs' "Tested with" row now lists
+  Copilot CLI 1.0.105, Claude Code 2.1.316, Codex 0.166.0, OpenCode 1.19.5 and Qwen Code 0.26.4
+  (Antigravity stays at 1.4.12).
 
 ### Fixed
 
@@ -210,37 +240,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to activate with "Timed out waiting for lock: …\projects\.registry.lock" when another window took
   more than 5 seconds to register its project; it now waits for as long as that window is alive.
   The CLI, the MCP server and `ctrlyoke history prune`/`relink` wait the same way.
-
-### Added
-
-- The prompt editor's spell check can learn your words. A flagged word's quick
-  fixes now include **Add "word" to dictionary** and, with a workspace open,
-  **Add "word" to workspace dictionary**, even when there are no spelling
-  suggestions. The words are saved to the new `spelling.words` setting, which
-  starts out containing `ctrlyoke`; user and workspace lists are combined.
-  **Settings → General → Spelling** lists the words for editing and has a new
-  `spelling.enabled` switch that turns spell check off.
-- **File History** in the workspace viewer has an **Expand all diffs** /
-  **Collapse all diffs** button. After you expand all, commits that load as you
-  scroll arrive expanded too.
-- **Waiting for input** notifications are on by default and fire once when a
-  harness is blocked on a permission prompt or question. They work on every
-  harness except Antigravity.
-- **Screen reader support in the dashboard.** A screen reader now hears when
-  a step starts, finishes or fails, when the AI asks a question or is waiting
-  for input, and each response once it finishes, read as a summary of what the
-  step did and the AI's last message. **Settings → General → Accessibility**
-  can also read responses as they stream, or turn announcements off.
-  `Alt+L` reads the last response again. In the output pane every step header
-  is a heading and every AI message an article, so heading and article
-  navigation jump between steps and messages. **Terminal screen reader mode**
-  makes the Terminal tab readable. See
-  [Screen readers and dictation](https://ctrlyoke.dev/docs/guide/accessibility).
-- **Exit Terminal and Exit All Idle Terminals** in the workflow list's right-click menu. They send the harness Ctrl+C so its TUI quits, then end the process. Running and paused workflows are left alone, and the session stays resumable.
-
-### Changed
-
-- **The Worktrees settings tab says when an open terminal is the only thing holding a worktree.** A named worktree stays reserved while its finished workflow's harness terminal is open, which blocks Sync. Its row now reads **Held by open terminal** and offers **Exit terminal**. **Exit holding terminals** exits all of them so that **Sync All** includes those worktrees.
 
 ## [0.3.0] - 2026-10-24
 
