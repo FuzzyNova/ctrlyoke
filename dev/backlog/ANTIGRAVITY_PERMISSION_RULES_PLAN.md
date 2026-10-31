@@ -104,6 +104,51 @@ page says "Deny rules apply in every mode".
 - Headless: an action that needs approval is soft-denied. The run continues, exits 0 and
   prints a notice. Since 1.1.5, `-p` honors `settings.json` policies.
 
+### The terminal sandbox (from <https://antigravity.google/docs/sandbox?tab=cli>)
+
+The sandbox and the permission rules are not independent in agy:
+
+- **Ways to turn it on:**
+  - `--sandbox` (per session, overrides `settings.json`);
+  - `"enableTerminalSandbox": true` (default `false`);
+  - `"toolPermission": "proceed-in-sandbox"` (sandboxed commands run without asking, and
+    commands that leave the sandbox still ask);
+  - `--mode auto` / `"agentMode": "auto"` (sandbox on, plus a reviewer agent that approves
+    safe out-of-sandbox commands). Auto is not available to business accounts.
+- **It contains terminal commands only.** Whether file tools or MCP servers go through it is
+  undocumented.
+- **What it restricts:**
+  - Commands can write the workspace, temp dirs and build caches. `~/.ssh` and `.env` are
+    blocked.
+  - Network is off by default.
+  - On Windows (an AppContainer), folders outside the user profile are read-only, and the
+    rest of the profile is hidden.
+- **The permission rules configure it.** There are no separate sandbox rules:
+  - `read_file` paths are mounted read-only.
+  - `write_file` paths are mounted read-write.
+  - `read_url` domains join the outbound network allowlist.
+  - Denied paths are blocked.
+  - A `command` allow rule lets that command run _outside_ the sandbox without asking
+    (business accounts use `unsandboxed(...)` instead).
+- **Platforms:**
+  - Linux uses namespaces, and macOS uses `sandbox-exec`.
+  - Windows needs Windows 11 24H2 with the August 2026 update.
+  - Where the sandbox can't run (Windows 10, older Windows 11, some Linux containers),
+    `--sandbox` and `enableTerminalSandbox` **silently do nothing**, and
+    `proceed-in-sandbox` acts like `request-review`.
+- **Headless:** a command that needs to leave the sandbox is undocumented. It is presumably
+  soft-denied like any other unapproved action.
+
+Consequences for this plan, once rules are translated:
+
+- `shell(git push:*)` in `allowedTools` becomes `command(git push)`, which runs _outside_ the
+  sandbox. So "custom + `--sandbox`" doesn't sandbox the commands the workflow explicitly
+  allowed. It sandboxes only the commands that would have been soft-denied anyway.
+- An allowed command that needs the network fails inside the sandbox unless ctrlyoke also
+  emits `read_url` rules, and ctrlyoke's lists can't express those today.
+- On machines without sandbox support, ctrlyoke's `custom` mode silently gets no sandbox at
+  all.
+
 ## Proposal
 
 ### Delivery
@@ -126,19 +171,20 @@ page says "Deny rules apply in every mode".
 
 ### Mode mapping
 
-| ctrlyoke mode         | agy flags / settings                                                                                          |
-| --------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `dangerouslyAllowAll` | `--dangerously-skip-permissions` (unchanged). Lists ignored, matching every other harness.                    |
-| `allowAll`            | `toolPermission: "always-proceed"` plus `permissions.deny` from `deniedTools`.                                |
-| `custom`              | `toolPermission: "request-review"`, `permissions.allow` and `permissions.deny`, plus `--sandbox` (unchanged). |
-| `none`                | nothing                                                                                                       |
+| ctrlyoke mode         | agy flags / settings                                                                                                           |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `dangerouslyAllowAll` | `--dangerously-skip-permissions` (unchanged). Lists ignored, matching every other harness.                                     |
+| `allowAll`            | `toolPermission: "always-proceed"` plus `permissions.deny` from `deniedTools`.                                                 |
+| `custom`              | `toolPermission: "request-review"`, `permissions.allow` and `permissions.deny`. `--sandbox`: see "Sandbox is a separate axis". |
+| `none`                | nothing                                                                                                                        |
 
 - `allowAll` finally means what the schema says ("auto-grants all but respects deny list"),
   because deny rules hold under `always-proceed`. This fixes Gap 2 of
   `dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md` properly instead of by omission.
   `hasFullPermissions()` then returns true for `allowAll` too, which matches the base class
   and stops the headless warning for `allowAll` runs.
-- `custom` keeps `--sandbox` as defense in depth. Open question below.
+- Whether `custom` keeps `--sandbox` is not a permission-mapping question. See "Sandbox is a
+  separate axis" below.
 - Never emit `ask`. ctrlyoke has no ask list, and `request-review` already asks for
   everything not allowed. An empty `ask` list in `--settings` would also replace the user's.
 
@@ -273,12 +319,72 @@ old rules. Keep the file alive for the life of the PTY, not just the prompt.
 - Raising the minimum agy version blocks older installs with the existing version-policy
   message and `agy update` as the fix.
 
+## Sandbox is a separate axis (undecided)
+
+`custom` → `--sandbox` dates from when agy had no granular rules. Mapping to `--sandbox` was
+the closest available stand-in for "restricted". That mixes two different controls:
+
+- **Permissions (approval):** which actions run without asking. This is what
+  `toolPermissions.mode` and the tool lists describe on every harness.
+- **Sandboxing (containment):** what a command can touch _when it runs_ (files, network).
+
+Folding containment into the permission mode produces a different end result per harness for
+the same workflow. A `custom` run is OS-sandboxed on Antigravity, sandboxed by
+`codexSandboxMode` on Codex, and not sandboxed anywhere else. Users can't see this from the
+workflow, as the surprise that prompted this section shows.
+
+Codex has the same coupling. "What we did for Codex" is not a free-standing toggle:
+`CodexToolPermissionMapper.resolveSandboxMode()` derives the sandbox from the mode:
+
+- `allowAll` forces `workspace-write`.
+- `dangerouslyAllowAll` uses `--dangerously-bypass-approvals-and-sandbox`, which turns off
+  both controls in one flag.
+- Only `custom` reads `permissions.codexSandboxMode`, clamped to `read-only` when a
+  write-capable tool is denied.
+
+Native sandbox controls, checked from each CLI's `--help` (2026-10-30):
+
+| Harness     | Native sandbox                                                                                                         |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Codex       | `-s read-only \| workspace-write \| danger-full-access`. Independent of `-a` approvals, except for the bypass flag.    |
+| Antigravity | `--sandbox`, `enableTerminalSandbox`, `proceed-in-sandbox`, `--mode auto` (above).                                     |
+| Copilot     | `copilot sandbox` subcommand ("Manage command sandboxing"). Flags and semantics not yet checked.                       |
+| Qwen        | `-s, --sandbox true \| false \| docker \| podman \| sandbox-exec`. Container-style; a different model from the others. |
+| Claude      | No CLI flag in `--help`. A settings-file sandbox may exist; unverified.                                                |
+| OpenCode    | None found.                                                                                                            |
+
+Options:
+
+1. **A workflow `sandbox` property** (plus a `defaults.sandbox` user setting), independent of
+   `toolPermissions.mode`. It is mapped per harness, and the existing capability and
+   compatibility-diagnostic machinery reports harnesses that can't honor it (OpenCode, maybe
+   Claude). A workflow then states containment explicitly and gets the same intent
+   everywhere it can be honored.
+2. **Per-harness settings toggles** ("Enable Antigravity sandbox", like `codexSandboxMode`).
+   This needs less design, but it repeats today's problem: containment is invisible in the
+   workflow and differs by harness.
+3. **Status quo:** keep `custom` → `--sandbox`.
+
+Recommendation: option 1. Semantics would be one level to start (`sandbox: true` means
+"terminal commands may write only the workspace and temp dirs, with no network unless
+allowed"), mapped to Codex `workspace-write`, agy `--sandbox`, and whatever Copilot's sandbox
+supports. Leave Qwen's container backends as harness-specific options. It needs its own plan
+(`dev/backlog/HARNESS_SANDBOX_PLAN.md`), because:
+
+- it is an additive schema property (`npm run schema:update`);
+- `codexSandboxMode` needs a compatibility path (kept as a Codex-specific override, or
+  migrated);
+- Codex's `--dangerously-bypass-approvals-and-sandbox` would have to become `-a never` plus an
+  explicit `-s`, so the two axes really separate;
+- the "silently no effect" platforms (agy below Windows 11 24H2) need a diagnostic.
+
+**Interim for this plan:** don't change agy's sandbox behavior as a side effect of translating
+rules. Keep `custom` → `--sandbox` until the sandbox decision lands, then move it in that
+plan's commit, under **Changed**. If the sandbox plan is rejected, remove `--sandbox` from
+`custom` here instead, so Antigravity's `custom` means the same as on other harnesses.
+
 ## Open questions
 
-- **Keep `--sandbox` in `custom`?** Recommendation: keep it. The other harnesses don't
-  sandbox `custom`, but dropping it would loosen an existing guarantee. A command that is
-  allowed but needs the network may then fail inside the sandbox. If phase 3 shows that
-  breaks real workflows, revisit with a separate setting rather than silently removing it.
 - **`unsandboxed` rules** apply only to business and enterprise accounts. ctrlyoke can't tell
   the account type, so emit only `command` rules.
 - **Path-scoped file rules.** ctrlyoke's `read`/`write` patterns carry no paths today. If they
