@@ -84,6 +84,7 @@ export interface OutputRowSearchSegment {
 export const OUTPUT_FIND_ACTIVE_ATTRIBUTE = "data-find-active";
 export const OUTPUT_FIND_ACTIVE_CLASS = "diff-code-mark-find-active";
 export const OUTPUT_FIND_TOOL_CONTENT_FIELD = "toolContent";
+export const OUTPUT_FIND_PROMPT_FIELD = "prompt";
 
 function getRenderedBashTexts(data: BashCommandData): {
   command: string;

@@ -98,6 +98,7 @@ import {
   getOutputRowSearchSegments,
   highlightText,
   sliceDecorationMatches,
+  OUTPUT_FIND_PROMPT_FIELD,
   OUTPUT_FIND_TOOL_CONTENT_FIELD,
   type OutputFindMatch,
   type RowFindDecoration,
@@ -843,9 +844,11 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
         // The spawn card's prompt and response are fully absent from the DOM
         // while collapsed, so any active match in them opens the section.
         if (
-          activeFindMatch?.field === "prompt" &&
+          activeFindMatch?.field === OUTPUT_FIND_PROMPT_FIELD &&
           !expansion.subagentPromptExpanded &&
-          getFieldMatches("prompt").some((match) => match.active)
+          getFieldMatches(OUTPUT_FIND_PROMPT_FIELD).some(
+            (match) => match.active
+          )
         ) {
           pendingToolCallExpand = TOOL_CALL_EXPANSION_SECTIONS.SUBAGENT_PROMPT;
         } else if (
@@ -1266,7 +1269,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
               result={data.result}
               descriptionFindMatches={getFieldMatches("header")}
               statusFindMatches={getFieldMatches("status")}
-              promptFindMatches={getFieldMatches("prompt")}
+              promptFindMatches={getFieldMatches(OUTPUT_FIND_PROMPT_FIELD)}
               resultFindMatches={getFieldMatches(
                 OUTPUT_FIND_TOOL_CONTENT_FIELD
               )}
@@ -2035,7 +2038,7 @@ function OutputRowComponent({
       content = (
         <PromptReferenceText
           text={row.text}
-          matches={getFieldMatches("prompt")}
+          matches={getFieldMatches(OUTPUT_FIND_PROMPT_FIELD)}
           atomicContextReferences={atomicContextReferences}
           priorContextStepCount={priorContextStepCount}
           blockClassName={getStepLeadBlockBase(row.followsHeader)}
