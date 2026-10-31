@@ -24,6 +24,10 @@ import {
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
   STATUS_LINE_HARNESS_IDS,
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
+  CAPABILITY_VERIFICATION_STATUSES,
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   type HookEvent,
 } from "../../../types/DashboardConstants";
 import type {
@@ -35,10 +39,15 @@ import type {
 } from "../../../types/CtrlYokeTypes";
 import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import {
+  COMPATIBILITY_DIAGNOSTIC_CODES,
   MCP_CAVEAT_CODES,
   capabilitySuiteVerification,
+  getCompatibilityDiagnosticMessage,
+  getCompatibilityDiagnosticRemediation,
+  type CompatibilityDiagnostic,
   type HarnessCapabilityFacts,
 } from "../../../types/CompatibilityTypes";
+import { normalizeAntigravityMcpServerId } from "../../../types/ToolPermissionUtils";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import {
   ConfigurationUtils,
@@ -822,12 +831,20 @@ export class AntigravityCliProvider implements ICliProvider {
     }
 
     try {
+      const diagnostics = this.createMcpServerIdDiagnostics(
+        userServers ?? [],
+        Boolean(mcpServerPath)
+      );
+      const normalizedUserServers = (userServers ?? []).map((server) => ({
+        ...server,
+        id: normalizeAntigravityMcpServerId(server.id),
+      }));
       const mcpEntries = CliProviderUtils.buildSettingsJsonMcpEntries(
         mcpServerPath,
         workspaceRoot,
         workingFilePath,
         additionalEnv,
-        userServers,
+        normalizedUserServers,
         // agy's mcp_config.json uses serverUrl for remote servers and does not
         // recognize the type/trust fields.
         {
@@ -869,7 +886,7 @@ export class AntigravityCliProvider implements ICliProvider {
             },
           },
         ],
-        diagnostics: [],
+        diagnostics,
       };
     } catch (error) {
       Log.warn(
@@ -877,6 +894,90 @@ export class AntigravityCliProvider implements ICliProvider {
       );
       return { cliArgs: [], mutations: [], diagnostics: [] };
     }
+  }
+
+  private createMcpServerIdDiagnostics(
+    userServers: readonly McpServerConfig[],
+    includesCtrlyoke: boolean
+  ): CompatibilityDiagnostic[] {
+    const diagnostics: CompatibilityDiagnostic[] = [];
+    const serverIds = [
+      ...(includesCtrlyoke ? ["ctrlyoke"] : []),
+      ...userServers.map((server) => server.id),
+    ];
+    const normalizedIds = new Map<string, string[]>();
+    for (const id of serverIds) {
+      const normalizedId = normalizeAntigravityMcpServerId(id);
+      normalizedIds.set(normalizedId, [
+        ...(normalizedIds.get(normalizedId) ?? []),
+        id,
+      ]);
+      if (normalizedId !== id) {
+        diagnostics.push(
+          this.createMcpDiagnostic(
+            COMPATIBILITY_DIAGNOSTIC_CODES.MCP_SERVER_ID_SANITIZED,
+            COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO
+          )
+        );
+      }
+    }
+    for (const ids of normalizedIds.values()) {
+      if (ids.length > 1) {
+        diagnostics.push(
+          this.createMcpDiagnostic(
+            COMPATIBILITY_DIAGNOSTIC_CODES.MCP_SERVER_ID_COLLISION,
+            COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+          )
+        );
+      }
+    }
+    for (const server of userServers) {
+      const normalizedId = normalizeAntigravityMcpServerId(server.id);
+      const serverToolLists = server as McpServerConfig & {
+        allowedTools?: string[];
+      };
+      const listedToolNames = [
+        ...(serverToolLists.allowedTools ?? []),
+        ...(server.deniedTools ?? []),
+      ];
+      if (
+        listedToolNames.some(
+          (toolName) =>
+            !/^[A-Za-z0-9_-]+$/u.test(toolName) ||
+            `mcp_${normalizedId}_${toolName}`.length > 64
+        )
+      ) {
+        diagnostics.push(
+          this.createMcpDiagnostic(
+            COMPATIBILITY_DIAGNOSTIC_CODES.MCP_TOOL_NAME_INVALID,
+            COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+          )
+        );
+      }
+    }
+    return diagnostics;
+  }
+
+  private createMcpDiagnostic(
+    code: string,
+    severity: CompatibilityDiagnostic["severity"]
+  ): CompatibilityDiagnostic {
+    return {
+      code,
+      severity,
+      harnessId: HARNESS_IDS.ANTIGRAVITY_CLI,
+      capability: "mcpServers",
+      state: {
+        fidelity: CAPABILITY_FIDELITIES.PARTIAL,
+        mechanism: CAPABILITY_MECHANISMS.TRANSLATED_CLI,
+        verification: CAPABILITY_VERIFICATION_STATUSES.UNKNOWN,
+      },
+      message: getCompatibilityDiagnosticMessage(code, {
+        harnessId: HARNESS_IDS.ANTIGRAVITY_CLI,
+        capability: "mcpServers",
+      }),
+      remediation: getCompatibilityDiagnosticRemediation(code),
+    };
   }
 
   getMcpConfigFilePath(): null {

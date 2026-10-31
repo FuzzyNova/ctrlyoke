@@ -5,6 +5,7 @@ import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
 import { configService } from "../../config/CtrlYokeConfigService";
 import { STATUS_LINE_HARNESS_IDS } from "../../types/DashboardConstants";
+import { COMPATIBILITY_DIAGNOSTIC_CODES } from "../../types/CompatibilityTypes";
 import type { ConfigBackend } from "../../config/CtrlYokeConfigService";
 import { AntigravityCliProvider } from "../../core/harness/antigravity/AntigravityCliProvider";
 import { SettingsJsonMcpTracker } from "../../core/harness/shared/SettingsJsonMcpTracker";
@@ -106,6 +107,63 @@ suite("AntigravityCliProvider", () => {
   function hooksPath(): string {
     return path.join(tempHome, ".gemini", "config", "hooks.json");
   }
+
+  suite("planMcpConfigArgs", () => {
+    test("writes dotted server ids sanitized and preserves hyphenated ids", async () => {
+      const provider = new AntigravityCliProvider();
+      const preparation = await provider.planMcpConfigArgs(
+        undefined,
+        workspaceRoot,
+        undefined,
+        undefined,
+        [
+          { id: "opencode.probe", command: "probe" },
+          { id: "ctrlyoke-probe", command: "probe" },
+        ]
+      );
+
+      await Promise.all(preparation.mutations.map((mutation) => mutation.apply()));
+      const settings = JSON.parse(
+        await fs.readFile(
+          path.join(workspaceRoot, ".agents", "mcp_config.json"),
+          "utf8"
+        )
+      ) as { mcpServers: Record<string, unknown> };
+
+      assert.ok("opencode_probe" in settings.mcpServers);
+      assert.ok("ctrlyoke-probe" in settings.mcpServers);
+      assert.ok(
+        preparation.diagnostics.some(
+          (diagnostic) =>
+            diagnostic.code ===
+            COMPATIBILITY_DIAGNOSTIC_CODES.MCP_SERVER_ID_SANITIZED
+        )
+      );
+    });
+
+    test("reports collisions between sanitized server ids", async () => {
+      const provider = new AntigravityCliProvider();
+      const preparation = await provider.planMcpConfigArgs(
+        undefined,
+        workspaceRoot,
+        undefined,
+        undefined,
+        [
+          { id: "opencode.probe", command: "first" },
+          { id: "opencode_probe", command: "second" },
+        ]
+      );
+
+      assert.ok(
+        preparation.diagnostics.some(
+          (diagnostic) =>
+            diagnostic.code ===
+              COMPATIBILITY_DIAGNOSTIC_CODES.MCP_SERVER_ID_COLLISION &&
+            diagnostic.severity === "warning"
+        )
+      );
+    });
+  });
 
   function hookOwnersPath(): string {
     return path.join(

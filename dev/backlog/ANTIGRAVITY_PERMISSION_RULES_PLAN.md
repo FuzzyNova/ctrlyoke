@@ -171,7 +171,10 @@ agy doesn't normalize server ids. It builds the tool name `mcp_<serverId>_<toolN
 drops any tool that fails `^[a-zA-Z0-9_-]{1,64}$` (`encountered invalid tool …` in agy's
 log). So a server id or tool name containing a dot or a space loses **all** its tools
 before permissions are even checked. This is a separate, existing bug, filed as
-`dev/bugs/backlog/antigravity-mcp-dotted-server-id-drops-tools.md`. Hyphenated ids work:
+`dev/bugs/implemented/antigravity-mcp-dotted-server-id-drops-tools.md`. The bug is fixed:
+`normalizeAntigravityMcpServerId` in `src/types/ToolPermissionUtils.ts` replaces characters
+outside `[A-Za-z0-9_-]` with underscores, and Antigravity writes each user MCP server under
+that normalized id. Later permission rules must use the same normalized id. Hyphenated ids work:
 `mcp(ctrlyoke-commit/submit_commit_message)` let the commit tool run on 1.4.10 and 1.4.12.
 
 ## Proposal

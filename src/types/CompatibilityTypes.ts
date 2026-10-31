@@ -50,6 +50,9 @@ export const COMPATIBILITY_DIAGNOSTIC_CODES = {
   IMAGE_INPUT_PARTIAL: "compatibility.promptInputs.images.partial",
   IMAGE_INPUT_UNVERIFIED: "compatibility.promptInputs.images.unverified",
   PERMISSION_TRANSLATION_LOSSY: "compatibility.permissions.translation.lossy",
+  MCP_SERVER_ID_SANITIZED: "compatibility.mcp.serverId.sanitized",
+  MCP_SERVER_ID_COLLISION: "compatibility.mcp.serverId.collision",
+  MCP_TOOL_NAME_INVALID: "compatibility.mcp.toolName.invalid",
   HOOK_EVENT_UNSUPPORTED: "compatibility.hooks.event.unsupported",
   HOOK_EVENT_PARTIAL: "compatibility.hooks.event.partial",
   HOOK_EVENT_UNVERIFIED: "compatibility.hooks.event.unverified",
@@ -400,6 +403,12 @@ export function getCompatibilityDiagnosticMessage(
       return `Image prompt input support is unverified for the installed ${harness} version.`;
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_TRANSLATION_LOSSY:
       return `${capabilityLabel} include rules that are only partially represented by the ${harness} harness.`;
+    case COMPATIBILITY_DIAGNOSTIC_CODES.MCP_SERVER_ID_SANITIZED:
+      return `Antigravity MCP server ids must match [A-Za-z0-9_-]; ids are written after replacing other characters with underscores.`;
+    case COMPATIBILITY_DIAGNOSTIC_CODES.MCP_SERVER_ID_COLLISION:
+      return `Multiple Antigravity MCP server ids become the same id after replacing characters outside [A-Za-z0-9_-] with underscores; one server entry will replace another.`;
+    case COMPATIBILITY_DIAGNOSTIC_CODES.MCP_TOOL_NAME_INVALID:
+      return `An Antigravity MCP tool name listed in allowedTools or deniedTools contains unsupported characters or makes the generated name exceed 64 characters; ctrlyoke cannot rename server tools.`;
     case COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNSUPPORTED:
       return withCaveat(
         `The ${harness} harness does not support the ${hookEventLabel(context.capability)} hook event`
@@ -455,6 +464,12 @@ export function getCompatibilityDiagnosticRemediation(
       return "Install a harness version covered by the image-input evidence or review this finding manually.";
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_TRANSLATION_LOSSY:
       return "Use a harness with exact translation support or simplify the affected rules.";
+    case COMPATIBILITY_DIAGNOSTIC_CODES.MCP_SERVER_ID_SANITIZED:
+      return "Use only letters, numbers, underscores, and hyphens in Antigravity MCP server ids to keep ids unchanged.";
+    case COMPATIBILITY_DIAGNOSTIC_CODES.MCP_SERVER_ID_COLLISION:
+      return "Rename the colliding MCP servers so their Antigravity-normalized ids are unique.";
+    case COMPATIBILITY_DIAGNOSTIC_CODES.MCP_TOOL_NAME_INVALID:
+      return "Rename the tool in its MCP server, or use a tool name that Antigravity accepts.";
     case COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNSUPPORTED:
     case COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_PARTIAL:
     case COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNVERIFIED:

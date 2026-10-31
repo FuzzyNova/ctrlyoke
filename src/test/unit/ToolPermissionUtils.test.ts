@@ -2,7 +2,10 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import { PERMISSION_MODES } from "../../types/DashboardConstants";
 import type { ToolPermissionConfig } from "../../types/ExecutionPropertyTypes";
-import { isToolPermissionConfigNoWiderThan } from "../../types/ToolPermissionUtils";
+import {
+  isToolPermissionConfigNoWiderThan,
+  normalizeAntigravityMcpServerId,
+} from "../../types/ToolPermissionUtils";
 
 function config(
   mode: ToolPermissionConfig["mode"],
@@ -13,6 +16,17 @@ function config(
 }
 
 suite("ToolPermissionUtils", () => {
+  test("normalizes Antigravity MCP server ids without changing safe ids", () => {
+    assert.strictEqual(
+      normalizeAntigravityMcpServerId("opencode.probe server"),
+      "opencode_probe_server"
+    );
+    assert.strictEqual(
+      normalizeAntigravityMcpServerId("ctrlyoke-probe_server"),
+      "ctrlyoke-probe_server"
+    );
+  });
+
   suite("isToolPermissionConfigNoWiderThan", () => {
     test("orders managed modes custom < allowAll < dangerouslyAllowAll", () => {
       const custom = config(PERMISSION_MODES.CUSTOM);

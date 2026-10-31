@@ -60,6 +60,11 @@ export function normalizeClaudeMcpServerId(serverId: string): string {
   return serverId.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
+/** Match Antigravity's allowed MCP server-id characters for model tool names. */
+export function normalizeAntigravityMcpServerId(serverId: string): string {
+  return serverId.replace(/[^A-Za-z0-9_-]/g, "_");
+}
+
 /** Result of {@link foldMcpToolDenialsIntoServers}. */
 export interface FoldedMcpToolDenials {
   /** `mcpServers` with each foldable denial added to its server's `deniedTools`. */
