@@ -76,6 +76,8 @@ import { createStoreWorkflowValueDataSource } from "@utils/workflowFileSupport/w
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 import { createReferencePatterns } from "@root/utils/ReferencePatterns";
 import { getInclusiveEndLine } from "@root/utils/InclusiveLineRange";
+import { WorkspaceMediaElement } from "@components/shared/WorkspaceMediaElement";
+import { WorkspacePdfViewer } from "./WorkspacePdfViewer";
 import {
   createAtomicReferenceExtension,
   createReferenceLinkHandlerExtension,
@@ -90,7 +92,9 @@ import {
   type CtrlYokeFileKind,
   PROMPT_FILE_LANGUAGE_IDS,
   WORKSPACE_ENTRY_KINDS,
+  WORKSPACE_MEDIA_KINDS,
   type WorkspaceFileTreeEntryKind,
+  type WorkspaceMediaKind,
 } from "@root/types/DashboardConstants";
 
 export interface WorkspaceFileEditorHandle {
@@ -115,12 +119,8 @@ export interface WorkspaceFileEditorHandle {
 interface WorkspaceFileEditorProps {
   filePath: string;
   content: string;
-  /**
-   * When set (a `data:` URI for a known image type), the file is rendered as an
-   * inline <img> instead of the CodeMirror text editor — binary image bytes
-   * can't be loaded into the text editor. See HostedWorkspaceViewerService.readFile.
-   */
-  imageDataUri?: string;
+  /** Raw media descriptor and URL for a read-only media file. */
+  media?: { kind: WorkspaceMediaKind; rawUrl: string };
   readOnly?: boolean;
   onChange: (newContent: string) => void;
   onSave: () => void;
@@ -160,7 +160,7 @@ export const WorkspaceFileEditor = forwardRef<
     {
       filePath,
       content,
-      imageDataUri,
+      media,
       readOnly = false,
       onChange,
       onSave,
@@ -618,8 +618,8 @@ export const WorkspaceFileEditor = forwardRef<
 
     // Create / recreate the editor when extensions change (filePath or readOnly changed)
     useEffect(() => {
-      // Image files render as an <img> (below), not a CodeMirror view.
-      if (imageDataUri) return;
+      // Media files render outside CodeMirror below.
+      if (media) return;
       if (!containerRef.current) return;
 
       const view = new EditorView({
@@ -712,15 +712,18 @@ export const WorkspaceFileEditor = forwardRef<
       };
     }, []);
 
-    if (imageDataUri) {
+    if (media) {
       return (
         <div className="flex h-full min-h-0 w-full items-center justify-center overflow-auto bg-editor-bg p-4">
-          <img
-            src={imageDataUri}
-            alt={filePath}
-            title={filePath}
-            className="max-h-full max-w-full object-contain"
-          />
+          {media.kind === WORKSPACE_MEDIA_KINDS.PDF ? (
+            <WorkspacePdfViewer rawUrl={media.rawUrl} label={filePath} />
+          ) : (
+            <WorkspaceMediaElement
+              kind={media.kind}
+              rawUrl={media.rawUrl}
+              label={filePath}
+            />
+          )}
         </div>
       );
     }

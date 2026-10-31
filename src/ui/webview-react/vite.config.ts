@@ -15,6 +15,24 @@ export default defineConfig(({ mode }) => ({
     staticCopyPlugin([
       // Dictionaries for Typo.js spell checking (keeps the en_US/ locale subfolder)
       { src: "static/dictionaries", dest: "dictionaries" },
+      // pdf.js data files needed by its worker. QuickJS is PDF scripting support.
+      {
+        src: "../../../node_modules/pdfjs-dist/cmaps",
+        dest: "pdfjs/cmaps",
+      },
+      {
+        src: "../../../node_modules/pdfjs-dist/standard_fonts",
+        dest: "pdfjs/standard_fonts",
+      },
+      {
+        src: "../../../node_modules/pdfjs-dist/iccs",
+        dest: "pdfjs/iccs",
+      },
+      {
+        src: "../../../node_modules/pdfjs-dist/wasm",
+        dest: "pdfjs/wasm",
+        filter: (relativePath) => !/^quickjs-eval\./i.test(relativePath),
+      },
       // typo.js for spell checking from npm package (typo-js)
       { src: "../../../node_modules/typo-js/typo.js", dest: "." },
       // Codicon CSS and font from @vscode/codicons package
@@ -71,7 +89,10 @@ export default defineConfig(({ mode }) => ({
         // Predictable names for extension to reference
         entryFileNames: "assets/[name].js",
         chunkFileNames: "assets/[name].js",
-        assetFileNames: "assets/[name].[ext]",
+        assetFileNames: (assetInfo) =>
+          assetInfo.name?.includes("pdf.worker")
+            ? "assets/[name]-[hash][extname]"
+            : "assets/[name].[ext]",
         // Name the main dashboard chunk explicitly; without this Rollup picks
         // "mermaid" from refractor's language grammar modules inside the bundle.
         manualChunks: (id) => {

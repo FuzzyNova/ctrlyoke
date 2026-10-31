@@ -1,6 +1,6 @@
 # Workspace Viewer Media Support (Video, Audio, PDF, and Images via a Raw Route)
 
-**Status:** Ready to implement. Written 2026-10-19; revised 2026-10-31 to add audio,
+**Status:** Implemented. Written 2026-10-19; revised 2026-10-31 to add audio,
 move images onto the same raw-bytes pipeline, and settle the pdf.js questions.
 **Priority:** P3
 
@@ -148,9 +148,13 @@ the route's headers below would make it safe to add later).
 - **Git blob** (`ref` = commit hash, or `:` for the index): read with the existing
   `getBlobBytes()` (`GitUtils.ts`, size checked with `cat-file -s` first) under
   `MAX_MEDIA_BLOB_SIZE`, then answer `Range` ourselves (single range only; `416` on
-  an unsatisfiable range; multi-range requests get the full `200`). Blobs are
-  immutable, so send `Cache-Control: private, max-age=31536000, immutable` and the
-  blob id as `ETag`. Writing to a temp file and using `sendFile` is an acceptable
+  an unsatisfiable range; multi-range requests get the full `200`). The route accepts
+  only `:` or a full 40/64-hex commit id as `ref` (anything else is `400`), so a
+  symbolic ref can never be cached as immutable. A commit's blob is immutable, so send
+  `Cache-Control: private, max-age=31536000, immutable` and the blob id
+  (`git rev-parse <ref>:<path>`) as `ETag`. The index (`:`) is **not** immutable:
+  send the blob id as `ETag` with `Cache-Control: no-cache`, and answer
+  `If-None-Match` with `304`. Writing to a temp file and using `sendFile` is an acceptable
   alternative if the hand-rolled range handling proves fragile; put the range
   parsing in a small pure helper either way so it can be unit-tested.
 - **Allowlist:** serve **only** paths where `workspaceMediaInfoForPath` is defined,
@@ -231,6 +235,10 @@ enableXfa: false })`. pdf.js issues its own `Range` requests against the raw rou
   directory. Point `cMapUrl`, `standardFontDataUrl`, `iccUrl` and `wasmUrl` at it
   (each must end in `/`). Without them, CJK text and non-embedded standard fonts
   render as wrong glyphs, and JPEG 2000/JBIG2 images use the slower JS decoders.
+  `StaticCopyTarget` has no exclude option today, so add an optional filter to it
+  for the `quickjs-eval.*` exclusion (with a unit test). Also add `.wasm`,
+  `.bcmap`, `.pfb` and `.icc` to the plugin's `DEV_SERVER_CONTENT_TYPES`; otherwise
+  the dev server serves them as `application/octet-stream`.
   Check that `.wasm` is served with `application/wasm` by `express.static`
   (it is in `mime`'s table; `WebAssembly.instantiate` from a buffer doesn't need
   it, but a wrong type is a sign the copy went astray).
@@ -249,6 +257,16 @@ enableXfa: false })`. pdf.js issues its own `Range` requests against the raw rou
   busting), `:` means the index, and a commit hash means that commit. For a commit,
   the old side is the first parent, or the parent path for a rename. No
   compatibility shim is needed, for the same reason as `imageDataUri`.
+- **Sides always carry a resolved commit id.** The diff builders receive symbolic
+  refs today: `getDiff()` reads `"HEAD"`, and ref/compare diffs pass
+  `NonTextDiffSources.baseRef`/`targetRef` (`HEAD`, branch names, merge bases,
+  `<hash>^`). `buildMediaDiffSides` resolves each git side to its commit id with
+  `git rev-parse --verify <ref>^{commit}` once per response, never per file, so
+  the route's hash-only `ref` rule holds and a URL never points at a moving ref.
+- There are **three** image branches to replace, not two: `getDiff()`,
+  `buildGitRefDiffEntry()` (used by commit diffs and file-history detail), and
+  `buildNonTextDiffEntries()` (ref/compare diffs; runs only for files git reports
+  as binary, which covers every media kind).
 - Sides never carry bytes, so `getDiff()`, `buildGitRefDiffEntry()` and the
   file-history detail stop reading media blobs into memory. `buildImageDiffSides`
   and the `isImageRefPath` branches in the diff builders are replaced by one
@@ -312,12 +330,37 @@ enableXfa: false })`. pdf.js issues its own `Range` requests against the raw rou
   open-in-new-tab link. `MediaDiffView` renders Before/After per kind with
   placeholders, and media elements are not mounted while a card is collapsed.
   `hostedApi.workspaceRawUrl` encodes path, repo and ref and appends the token.
-- **Manual:** a multi-page PDF on Android Chrome and iOS Safari through the hosted
+- **Manual (still needs a human on real devices):** a multi-page PDF on Android Chrome and iOS Safari through the hosted
   dashboard; a PDF with CJK text and one with JPEG 2000 images (cMaps and WASM
   decoders); a long PDF on a phone, watching the network panel for range requests
   only; "Open in new tab" for a PDF in Chrome, Firefox and Safari (settles the
   `sandbox`-on-PDF question); an mp4 seek in Safari; an ogg/opus file on Safari
   (playback or the fallback message); a >2 MB PNG in the editor and in a commit diff.
+
+## Implementation stages
+
+Each stage is one commit; tick it in the commit that lands it.
+
+- [x] **A. Classification and raw route** (§1, §2): `WORKSPACE_MEDIA_KINDS`, the
+      extension table, `workspaceMediaInfoForPath`; the pure range parser; the
+      service method and `GET /api/workspace-viewer/raw`; CSP `media-src`/`frame-src`.
+      Additive only: no payload changes yet. No deviations from the plan.
+- [x] **B. Payload switch, images on the raw route** (§3 descriptor, §5 types and
+      builders, client wiring for images): `readFile()` descriptor, `MEDIA` payload
+      and `WorkspaceMediaDiffSides`, `buildMediaDiffSides` in all three builders,
+      `hostedApi.workspaceRawUrl`, store/editor `media` prop, `ImageDiffView` →
+      `MediaDiffView` (image sides only render; other kinds show a placeholder with
+      "Open in new tab"), `DiffFileCard`/`rdvAdapter`/`diffFileRows`. No implementation deviations.
+- [x] **C. Video and audio rendering** (§3, §5): `<video>`/`<audio>` in the editor and
+      diff sides, the playback-error fallback (also on `<img>`), mount-only-when-expanded.
+- [x] **D. PDF via pdf.js** (§4): `pdfjs-dist`, static data copy, `WorkspacePdfViewer`,
+      wired into the editor and the diff sides. No implementation deviations.
+- [x] **E. Docs and changelog** (§6).
+
+Review fix: `workspaceMediaInfoForPath` now checks own keys only, so an
+inherited `Object.prototype` name (`file.constructor`) can no longer pass the raw
+route's allowlist. The manual checks in "Testing plan" (phones, Safari seeking,
+`sandbox` on PDF in each browser) still need a person on real devices.
 
 ## Acceptance criteria
 

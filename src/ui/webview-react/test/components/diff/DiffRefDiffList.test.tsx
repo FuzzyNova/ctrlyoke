@@ -63,8 +63,11 @@ function controller(): PagedGitRefDiffController {
       {
         path: "assets/image.png",
         changeType: "created",
-        payloadKind: "image",
-        image: { newImageDataUri: "data:image/png;base64,image" },
+        payloadKind: "media",
+        media: {
+          mediaKind: "image",
+          new: { path: "assets/image.png", ref: "abcdef0" },
+        },
       },
     ],
     [
@@ -131,7 +134,7 @@ describe("DiffRefDiffList", () => {
     );
     expect(screen.getByTestId("diff-card-assets/image.png")).toHaveAttribute(
       "data-source-kind",
-      "image"
+      "media"
     );
     expect(screen.getByTestId("diff-card-assets/font.bin")).toHaveAttribute(
       "data-source-kind",

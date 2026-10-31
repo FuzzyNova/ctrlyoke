@@ -1,8 +1,9 @@
 import * as assert from "assert";
+import { execFileSync } from "child_process";
 import { EventEmitter } from "events";
 import { PassThrough } from "stream";
 import * as fs from "fs";
-import { request as httpRequest } from "http";
+import { request as httpRequest, type IncomingHttpHeaders } from "http";
 import * as path from "path";
 import { suite, test } from "mocha";
 import { WebSocket } from "ws";
@@ -256,11 +257,22 @@ function sendJsonRequest(
 
 function sendGetRequest(
   port: number,
-  requestPath: string
-): Promise<{ statusCode: number | undefined; body: string }> {
+  requestPath: string,
+  headers: Record<string, string> = {}
+): Promise<{
+  statusCode: number | undefined;
+  body: string;
+  headers: IncomingHttpHeaders;
+}> {
   return new Promise((resolve, reject) => {
     const request = httpRequest(
-      { hostname: "127.0.0.1", port, path: requestPath, method: "GET" },
+      {
+        hostname: "127.0.0.1",
+        port,
+        path: requestPath,
+        method: "GET",
+        headers,
+      },
       (res) => {
         let responseBody = "";
         res.setEncoding("utf8");
@@ -268,7 +280,11 @@ function sendGetRequest(
           responseBody += chunk;
         });
         res.on("end", () =>
-          resolve({ statusCode: res.statusCode, body: responseBody })
+          resolve({
+            statusCode: res.statusCode,
+            body: responseBody,
+            headers: res.headers,
+          })
         );
       }
     );
@@ -276,6 +292,160 @@ function sendGetRequest(
     request.end();
   });
 }
+
+suite("CtrlYokeHostedServer raw media route", () => {
+  async function withServer(
+    body: (root: string, port: number, token: string) => Promise<void>
+  ): Promise<void> {
+    const root = makeTempDir("ctrlyoke-hosted-raw-media-");
+    const token = "raw-media-test-token";
+    const server = createHostedServer({ workspaceRoot: root, token });
+    try {
+      const serverUrl = await server.listen();
+      if (!serverUrl) throw new Error("Hosted server did not start");
+      await body(root, Number(new URL(serverUrl).port), token);
+    } finally {
+      server.dispose();
+      removeTempDir(root);
+    }
+  }
+
+  function mediaUrl(pathName: string, token: string, ref?: string): string {
+    const query = new URLSearchParams({ path: pathName, token });
+    if (ref !== undefined) query.set("ref", ref);
+    return `/api/workspace-viewer/raw?${query.toString()}`;
+  }
+
+  test("requires the token and rejects non-media extensions", async () => {
+    await withServer(async (root, port, token) => {
+      const page = await sendGetRequest(
+        port,
+        `/?token=${encodeURIComponent(token)}`
+      );
+      assert.strictEqual(page.statusCode, 200);
+      assert.match(page.body, /media-src 'self'/);
+      assert.match(page.body, /frame-src 'self'/);
+      fs.writeFileSync(path.join(root, "sample.mp4"), "media");
+      assert.strictEqual(
+        (await sendGetRequest(port, mediaUrl("sample.mp4", ""))).statusCode,
+        401
+      );
+      for (const disallowed of ["page.html", "image.svg", "script.js"]) {
+        const response = await sendGetRequest(
+          port,
+          mediaUrl(disallowed, token)
+        );
+        assert.strictEqual(response.statusCode, 415, disallowed);
+      }
+    });
+  });
+
+  test("streams working-tree ranges and applies the media security headers", async () => {
+    await withServer(async (root, port, token) => {
+      fs.writeFileSync(path.join(root, "sample.mp4"), "0123456789");
+      const response = await sendGetRequest(
+        port,
+        mediaUrl("sample.mp4", token),
+        { Range: "bytes=2-5" }
+      );
+      assert.strictEqual(response.statusCode, 206);
+      assert.strictEqual(response.body, "2345");
+      assert.strictEqual(response.headers["content-range"], "bytes 2-5/10");
+      assert.strictEqual(response.headers["cache-control"], "no-cache");
+      assert.strictEqual(response.headers["content-type"], "video/mp4");
+      assert.strictEqual(response.headers["x-content-type-options"], "nosniff");
+      assert.strictEqual(response.headers["content-disposition"], "inline");
+      assert.strictEqual(
+        response.headers["content-security-policy"],
+        "sandbox"
+      );
+
+      const unsatisfiable = await sendGetRequest(
+        port,
+        mediaUrl("sample.mp4", token),
+        { Range: "bytes=20-" }
+      );
+      assert.strictEqual(unsatisfiable.statusCode, 416);
+      assert.strictEqual(unsatisfiable.headers["content-range"], "bytes */10");
+
+      fs.writeFileSync(path.join(root, "document.pdf"), "%PDF");
+      const pdf = await sendGetRequest(port, mediaUrl("document.pdf", token));
+      assert.strictEqual(pdf.statusCode, 200);
+      assert.strictEqual(pdf.headers["content-type"], "application/pdf");
+      assert.strictEqual(pdf.headers["content-disposition"], "inline");
+      assert.strictEqual(pdf.headers["x-content-type-options"], "nosniff");
+      assert.strictEqual(pdf.headers["content-security-policy"], undefined);
+    });
+  });
+
+  test("serves immutable Git blobs with range, ETag and conditional caching", async () => {
+    await withServer(async (root, port, token) => {
+      const runGit = (...args: string[]) =>
+        execFileSync("git", ["-C", root, ...args], {
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+        }).trim();
+      runGit("init");
+      runGit("config", "user.name", "ctrlyoke Test");
+      runGit("config", "user.email", "ctrlyoke@example.com");
+      fs.writeFileSync(path.join(root, "movie.mp4"), "abcdefghij");
+      runGit("add", "movie.mp4");
+      runGit("commit", "-m", "Add media");
+      const commit = runGit("rev-parse", "HEAD");
+
+      const response = await sendGetRequest(
+        port,
+        mediaUrl("movie.mp4", token, commit),
+        { Range: "bytes=3-6" }
+      );
+      assert.strictEqual(response.statusCode, 206);
+      assert.strictEqual(response.body, "defg");
+      assert.strictEqual(response.headers["content-range"], "bytes 3-6/10");
+      assert.strictEqual(
+        response.headers["cache-control"],
+        "private, max-age=31536000, immutable"
+      );
+      assert.strictEqual(
+        response.headers.etag,
+        `"${runGit("rev-parse", `${commit}:movie.mp4`)}"`
+      );
+      assert.strictEqual(
+        response.headers["content-security-policy"],
+        "sandbox"
+      );
+
+      const cached = await sendGetRequest(
+        port,
+        mediaUrl("movie.mp4", token, commit),
+        { "If-None-Match": response.headers.etag ?? "" }
+      );
+      assert.strictEqual(cached.statusCode, 304);
+      assert.strictEqual(
+        cached.headers["cache-control"],
+        response.headers["cache-control"]
+      );
+
+      const unsatisfiable = await sendGetRequest(
+        port,
+        mediaUrl("movie.mp4", token, commit),
+        { Range: "bytes=30-" }
+      );
+      assert.strictEqual(unsatisfiable.statusCode, 416);
+      assert.strictEqual(unsatisfiable.headers["content-range"], "bytes */10");
+
+      fs.writeFileSync(path.join(root, "movie.mp4"), "staged-media");
+      runGit("add", "movie.mp4");
+      const index = await sendGetRequest(
+        port,
+        mediaUrl("movie.mp4", token, ":")
+      );
+      assert.strictEqual(index.statusCode, 200);
+      assert.strictEqual(index.body, "staged-media");
+      assert.strictEqual(index.headers["cache-control"], "no-cache");
+      assert.ok(index.headers.etag);
+    });
+  });
+});
 
 suite("CtrlYokeHostedServer workspace file redaction", () => {
   async function withServer(

@@ -585,8 +585,8 @@ describe("mergeNonTextDiffEntries", () => {
         {
           path: "assets/logo.png",
           changeType: "created",
-          payloadKind: DIFF_PAYLOAD_KINDS.IMAGE,
-          image: { newImageDataUri: "data:image/png;base64,new" },
+          payloadKind: DIFF_PAYLOAD_KINDS.MEDIA,
+          media: { mediaKind: "image", new: { path: "image.png", ref: "abc" } },
         },
         {
           path: "assets/data.bin",
@@ -602,8 +602,8 @@ describe("mergeNonTextDiffEntries", () => {
       "assets/data.bin",
     ]);
     expect(files[1]).toMatchObject({
-      payloadKind: DIFF_PAYLOAD_KINDS.IMAGE,
-      image: { newImageDataUri: "data:image/png;base64,new" },
+      payloadKind: DIFF_PAYLOAD_KINDS.MEDIA,
+      media: { mediaKind: "image", new: { path: "image.png", ref: "abc" } },
     });
     expect(files[2]).toMatchObject({
       payloadKind: DIFF_PAYLOAD_KINDS.BINARY,

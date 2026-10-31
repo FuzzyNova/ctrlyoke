@@ -239,10 +239,17 @@ suite("Node hosted server composition", function () {
       return integration;
     };
     try {
-      const initializationDeadline = Date.now() + 10_000;
+      // Initialization probes every installed harness CLI's version. Alone that
+      // takes a few seconds, but beside five other extension hosts and the
+      // Vitest pool in `npm test` it overran a 10s bound, so this deadline is
+      // sized to catch a hang, not to time a healthy start (60s test timeout).
+      const initializationStartedAt = Date.now();
+      const initializationDeadline = initializationStartedAt + 45_000;
       while (!runtime.orchestrator.isInitialized()) {
         if (Date.now() > initializationDeadline) {
-          throw new Error("Node host orchestrator did not initialize");
+          throw new Error(
+            `Node host orchestrator did not initialize within ${Date.now() - initializationStartedAt}ms`
+          );
         }
         await new Promise((resolve) => setTimeout(resolve, 10));
       }

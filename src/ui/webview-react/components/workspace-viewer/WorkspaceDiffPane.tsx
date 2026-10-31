@@ -58,7 +58,7 @@ export const WorkspaceDiffPane: React.FC = () => {
   );
   const diffKind = useWorkspaceViewerStore((s) => s.diffKind);
   const diffPayloadKind = useWorkspaceViewerStore((s) => s.diffPayloadKind);
-  const diffImage = useWorkspaceViewerStore((s) => s.diffImage);
+  const diffMedia = useWorkspaceViewerStore((s) => s.diffMedia);
   const fileHistoryPath = useWorkspaceViewerStore((s) => s.fileHistoryPath);
   const fileHistoryRepoId = useWorkspaceViewerStore((s) => s.fileHistoryRepoId);
   const fileHistoryActive = useWorkspaceViewerStore((s) => s.fileHistoryActive);
@@ -87,8 +87,8 @@ export const WorkspaceDiffPane: React.FC = () => {
   const sourceForParsedFile = useCallback(
     (file: ParsedDiffFile): DiffFileCardProps["source"] => {
       switch (file.payloadKind) {
-        case DIFF_PAYLOAD_KINDS.IMAGE:
-          return { kind: "image", image: file.image ?? {} };
+        case DIFF_PAYLOAD_KINDS.MEDIA:
+          return { kind: DIFF_PAYLOAD_KINDS.MEDIA, media: file.media! };
         case DIFF_PAYLOAD_KINDS.BINARY:
           return { kind: "binary" };
         case DIFF_PAYLOAD_KINDS.TOO_LARGE:
@@ -153,8 +153,8 @@ export const WorkspaceDiffPane: React.FC = () => {
 
   const sourceForSingleFile = useMemo((): DiffFileCardProps["source"] => {
     switch (diffPayloadKind) {
-      case DIFF_PAYLOAD_KINDS.IMAGE:
-        return { kind: "image", image: diffImage ?? {} };
+      case DIFF_PAYLOAD_KINDS.MEDIA:
+        return { kind: DIFF_PAYLOAD_KINDS.MEDIA, media: diffMedia! };
       case DIFF_PAYLOAD_KINDS.BINARY:
         return { kind: "binary" };
       case DIFF_PAYLOAD_KINDS.TOO_LARGE:
@@ -166,7 +166,7 @@ export const WorkspaceDiffPane: React.FC = () => {
           newContent: diffNewContent,
         };
     }
-  }, [diffImage, diffNewContent, diffOldContent, diffPayloadKind]);
+  }, [diffMedia, diffNewContent, diffOldContent, diffPayloadKind]);
   const singleFileGroups = useMemo<DiffFileGroup[]>(
     () =>
       selectedDiffPath

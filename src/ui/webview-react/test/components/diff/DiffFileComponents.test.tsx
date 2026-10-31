@@ -3,7 +3,7 @@ import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { DiffFileCard } from "@components/diff/DiffFileCard";
 import { DiffFileList } from "@components/diff/DiffFileList";
-import { ImageDiffView } from "@components/diff/ImageDiffView";
+import { MediaDiffView } from "@components/diff/MediaDiffView";
 
 const { diffViewRenderCount } = vi.hoisted(() => ({
   diffViewRenderCount: { value: 0 },
@@ -46,6 +46,20 @@ vi.mock("@components/output/DiffView", () => ({
   },
 }));
 
+vi.mock("@components/workspace-viewer/WorkspacePdfViewer", () => ({
+  WorkspacePdfViewer: ({
+    rawUrl,
+    compact,
+  }: {
+    rawUrl: string;
+    compact?: boolean;
+  }) => (
+    <div data-testid="pdf-viewer" data-compact={String(compact)}>
+      <a href={rawUrl}>Open in new tab</a>
+    </div>
+  ),
+}));
+
 beforeEach(() => {
   diffViewRenderCount.value = 0;
 });
@@ -86,11 +100,12 @@ function listProps(command: { version: number; collapsed: boolean }) {
 describe("DiffFileCard", () => {
   it("renders before and after image sides with accessible labels", () => {
     render(
-      <ImageDiffView
+      <MediaDiffView
         path="assets/logo.png"
         sides={{
-          oldImageDataUri: "data:image/png;base64,old",
-          newImageDataUri: "data:image/png;base64,new",
+          mediaKind: "image",
+          old: { path: "assets/logo.png", ref: "oldhash" },
+          new: { path: "assets/logo.png", ref: "newhash" },
         }}
       />
     );
@@ -99,30 +114,103 @@ describe("DiffFileCard", () => {
     expect(screen.getByText("After")).toBeInTheDocument();
     expect(screen.getByAltText("assets/logo.png before")).toHaveAttribute(
       "src",
-      "data:image/png;base64,old"
+      "/api/workspace-viewer/raw?path=assets%2Flogo.png&ref=oldhash"
     );
     expect(screen.getByAltText("assets/logo.png after")).toHaveAttribute(
       "src",
-      "data:image/png;base64,new"
+      "/api/workspace-viewer/raw?path=assets%2Flogo.png&ref=newhash"
     );
   });
 
+  it.each([["video", "video"] as const, ["audio", "audio"] as const])(
+    "renders Before and After %s players, only when expanded",
+    (kind, tagName) => {
+      const sides = {
+        mediaKind: kind,
+        old: { path: `assets/clip.${kind}`, ref: "oldhash" },
+        new: { path: `assets/clip.${kind}`, version: 42 },
+      } as const;
+      const { container, rerender } = render(
+        <MediaDiffView path={`assets/clip.${kind}`} collapsed sides={sides} />
+      );
+      expect(container.querySelector(tagName)).toBeNull();
+
+      rerender(<MediaDiffView path={`assets/clip.${kind}`} sides={sides} />);
+      expect(screen.getByText("Before")).toBeInTheDocument();
+      expect(screen.getByText("After")).toBeInTheDocument();
+      const players = container.querySelectorAll(tagName);
+      expect(players).toHaveLength(2);
+      expect(players[0]).toHaveAttribute(
+        "src",
+        `/api/workspace-viewer/raw?path=assets%2Fclip.${kind}&ref=oldhash`
+      );
+      expect(players[1]).toHaveAttribute(
+        "src",
+        `/api/workspace-viewer/raw?path=assets%2Fclip.${kind}&v=42`
+      );
+      expect(players[0]).toHaveAttribute("preload", "metadata");
+    }
+  );
+
   it("renders explicit placeholders for deleted and created image sides", () => {
     const { rerender } = render(
-      <ImageDiffView
+      <MediaDiffView
         path="assets/deleted.png"
-        sides={{ oldImageDataUri: "old" }}
+        sides={{
+          mediaKind: "image",
+          old: { path: "assets/deleted.png", ref: "oldhash" },
+        }}
       />
     );
 
     expect(screen.getByText("No new image")).toBeInTheDocument();
     rerender(
-      <ImageDiffView
+      <MediaDiffView
         path="assets/created.png"
-        sides={{ newImageDataUri: "new" }}
+        sides={{
+          mediaKind: "image",
+          new: { path: "assets/created.png", ref: "newhash" },
+        }}
       />
     );
     expect(screen.getByText("No previous image")).toBeInTheDocument();
+  });
+
+  it("does not mount media elements while the diff card is collapsed", () => {
+    const { container } = render(
+      <MediaDiffView
+        path="assets/logo.png"
+        collapsed
+        sides={{
+          mediaKind: "image",
+          new: { path: "assets/logo.png", ref: "newhash" },
+        }}
+      />
+    );
+    expect(container.querySelector("img")).toBeNull();
+  });
+
+  it("renders compact PDF sides only when expanded", () => {
+    const sides = {
+      mediaKind: "pdf" as const,
+      old: { path: "docs/guide.pdf", ref: "oldhash" },
+      new: { path: "docs/guide.pdf", ref: "newhash" },
+    };
+    const { rerender } = render(
+      <MediaDiffView path="docs/guide.pdf" collapsed sides={sides} />
+    );
+    expect(screen.queryByTestId("pdf-viewer")).not.toBeInTheDocument();
+
+    rerender(<MediaDiffView path="docs/guide.pdf" sides={sides} />);
+    const pdfViewers = screen.getAllByTestId("pdf-viewer");
+    expect(pdfViewers).toHaveLength(2);
+    expect(pdfViewers[0]).toHaveAttribute("data-compact", "true");
+    expect(
+      screen.getAllByRole("link", { name: "Open in new tab" })[1]
+    ).toHaveAttribute(
+      "href",
+      "/api/workspace-viewer/raw?path=docs%2Fguide.pdf&ref=newhash"
+    );
   });
 
   it("renders a compact binary fallback without DiffView props", () => {

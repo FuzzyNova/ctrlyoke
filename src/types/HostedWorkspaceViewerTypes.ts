@@ -8,6 +8,7 @@ import {
   type DiffPayloadKind,
   type ScmFileKind,
   type WorkspaceFileTreeEntryKind,
+  type WorkspaceMediaKind,
 } from "./DashboardConstants";
 
 /** Browser-safe URI prefix used to represent workspace-relative LSP documents. */
@@ -122,12 +123,8 @@ export interface WorkspaceFileResponse {
   modifiedAt?: number;
   readOnly?: boolean;
   reason?: string;
-  /**
-   * Populated for known image types: a `data:<mime>;base64,…` URI the client
-   * renders as an inline `<img>` instead of loading `content` into the text
-   * editor. When set, `content` is empty and the file is treated as read-only.
-   */
-  imageDataUri?: string;
+  /** Present for known media types; bytes are loaded through the raw route. */
+  media?: { kind: WorkspaceMediaKind; mimeType: string };
 }
 
 export interface WorkspaceFileSaveRequest {
@@ -257,9 +254,17 @@ export interface WorkspaceScmStatusResponse {
 
 export type DiffKind = ScmFileKind;
 
-export interface WorkspaceImageDiffSides {
-  oldImageDataUri?: string;
-  newImageDataUri?: string;
+export interface WorkspaceMediaSide {
+  path: string;
+  ref?: string;
+  repo?: string;
+  version?: number;
+}
+
+export interface WorkspaceMediaDiffSides {
+  mediaKind: WorkspaceMediaKind;
+  old?: WorkspaceMediaSide;
+  new?: WorkspaceMediaSide;
 }
 
 export interface WorkspaceDiffEntry {
@@ -267,7 +272,7 @@ export interface WorkspaceDiffEntry {
   oldPath?: string;
   changeType: DiffChangeType;
   payloadKind: DiffPayloadKind;
-  image?: WorkspaceImageDiffSides;
+  media?: WorkspaceMediaDiffSides;
 }
 
 interface WorkspaceScmDiffBase {
@@ -283,25 +288,25 @@ export type WorkspaceDiffPayload =
       newContent: string;
     }
   | {
-      payloadKind: typeof DIFF_PAYLOAD_KINDS.IMAGE;
+      payloadKind: typeof DIFF_PAYLOAD_KINDS.MEDIA;
       language?: never;
       oldContent?: never;
       newContent?: never;
-      image: WorkspaceImageDiffSides;
+      media: WorkspaceMediaDiffSides;
     }
   | {
       payloadKind: typeof DIFF_PAYLOAD_KINDS.BINARY;
       language?: never;
       oldContent?: never;
       newContent?: never;
-      image?: never;
+      media?: never;
     }
   | {
       payloadKind: typeof DIFF_PAYLOAD_KINDS.TOO_LARGE;
       language?: never;
       oldContent?: never;
       newContent?: never;
-      image?: never;
+      media?: never;
     };
 
 export type WorkspaceScmDiffResponse = WorkspaceScmDiffBase &

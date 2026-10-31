@@ -20,6 +20,8 @@ import {
   DIFF_PAYLOAD_KINDS,
   DIFF_VIEW_TYPES,
   WORKSPACE_ENTRY_KINDS,
+  WORKSPACE_MEDIA_KINDS,
+  type WorkspaceMediaKind,
   type DiffViewType,
 } from "@root/types/DashboardConstants";
 
@@ -54,7 +56,12 @@ const DIFF_FILE_LIST_TEXT_LINE_HEIGHT = 16;
 /** Approximate monospace advance used by the note's `wrap-anywhere`. */
 const DIFF_FILE_HEADER_CHAR_WIDTH = 0.6;
 const DIFF_FILE_NON_TEXT_TOGGLE_HEIGHT = 24;
-const DIFF_FILE_IMAGE_PREVIEW_HEIGHT = 256;
+const DIFF_FILE_MEDIA_PREVIEW_HEIGHT: Record<WorkspaceMediaKind, number> = {
+  [WORKSPACE_MEDIA_KINDS.IMAGE]: 256,
+  [WORKSPACE_MEDIA_KINDS.VIDEO]: 256,
+  [WORKSPACE_MEDIA_KINDS.AUDIO]: 96,
+  [WORKSPACE_MEDIA_KINDS.PDF]: 256,
+};
 const DIFF_FILE_BINARY_PREVIEW_HEIGHT = 22;
 /** Deferred history cards start collapsed; their unloaded body has no height. */
 const DIFF_FILE_DEFERRED_PREVIEW_HEIGHT = 0;
@@ -304,11 +311,13 @@ function getContentEstimate(
   return plan.diffBlockHeight;
 }
 
-function getImageEstimate(file: DiffFileCardProps, collapsed: boolean): number {
-  if (file.source.kind !== DIFF_PAYLOAD_KINDS.IMAGE) return 0;
+function getMediaEstimate(file: DiffFileCardProps, collapsed: boolean): number {
+  if (file.source.kind !== DIFF_PAYLOAD_KINDS.MEDIA) return 0;
   return (
     DIFF_FILE_NON_TEXT_TOGGLE_HEIGHT +
-    (collapsed ? 0 : DIFF_FILE_IMAGE_PREVIEW_HEIGHT)
+    (collapsed
+      ? 0
+      : DIFF_FILE_MEDIA_PREVIEW_HEIGHT[file.source.media.mediaKind])
   );
 }
 
@@ -379,8 +388,8 @@ function getDiffBodyEstimate(
         ? getPatchEstimate(file, collapsed, options)
         : file.source.kind === WORKSPACE_ENTRY_KINDS.CONTENT
           ? getContentEstimate(file, collapsed, options)
-          : file.source.kind === DIFF_PAYLOAD_KINDS.IMAGE
-            ? getImageEstimate(file, collapsed)
+          : file.source.kind === DIFF_PAYLOAD_KINDS.MEDIA
+            ? getMediaEstimate(file, collapsed)
             : file.source.kind === DIFF_PAYLOAD_KINDS.BINARY
               ? getBinaryEstimate(file, collapsed)
               : getDeferredEstimate(file, collapsed);

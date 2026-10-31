@@ -65,6 +65,8 @@ import {
   type HostKind,
   type ServerThemeMode,
   SERVER_BIND_ADDRESSES,
+  WORKSPACE_MEDIA_GIT_INDEX_REF,
+  WORKSPACE_MEDIA_KINDS,
 } from "../types/DashboardConstants";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
@@ -96,7 +98,13 @@ import {
   MAX_FILE_SIZE,
   RedactionMarkerSaveError,
   WorkspaceFileConflictError,
+  WorkspaceMediaError,
+  WORKSPACE_RAW_MEDIA_SOURCE_KINDS,
 } from "./HostedWorkspaceViewerService";
+import {
+  HTTP_BYTE_RANGE_RESULT_KINDS,
+  parseHttpByteRange,
+} from "./HttpByteRange";
 import { parseWorkspaceTreeQuery } from "./WorkspaceTreeRoute";
 import { WorkspaceTreeHttpError } from "./WorkspaceTreeErrors";
 import type {
@@ -157,6 +165,30 @@ const WORKSPACE_FILE_JSON_BODY_LIMIT_BYTES =
   WORKSPACE_FILE_JSON_METADATA_HEADROOM_BYTES;
 const WORKSPACE_FILE_ROUTE_PATH = "/api/workspace-viewer/file";
 const SERVER_IDENTITY_ROUTE_PATH = "/api/server-identity";
+const WORKSPACE_RAW_MEDIA_ROUTE_PATH = "/api/workspace-viewer/raw";
+const HTTP_HEADERS = {
+  RANGE: "range",
+  CONTENT_TYPE: "Content-Type",
+  CONTENT_RANGE: "Content-Range",
+  CONTENT_LENGTH: "Content-Length",
+  CACHE_CONTROL: "Cache-Control",
+  ETAG: "ETag",
+  ACCEPT_RANGES: "Accept-Ranges",
+  CONTENT_DISPOSITION: "Content-Disposition",
+  CONTENT_SECURITY_POLICY: "Content-Security-Policy",
+  CONTENT_TYPE_OPTIONS: "X-Content-Type-Options",
+} as const;
+const RAW_MEDIA_CACHE_POLICIES = {
+  WORKING_TREE: "no-cache",
+  INDEX: "no-cache",
+  COMMIT: "private, max-age=31536000, immutable",
+} as const;
+const RAW_MEDIA_NOT_MODIFIED_STATUS = 304;
+const RAW_MEDIA_PARTIAL_STATUS = 206;
+const RAW_MEDIA_RANGE_NOT_SATISFIABLE_STATUS = 416;
+const RAW_MEDIA_SANDBOX_POLICY = "sandbox";
+const RAW_MEDIA_INLINE_DISPOSITION = "inline";
+const RAW_MEDIA_NOSNIFF = "nosniff";
 
 function escapeHtmlAttribute(value: string): string {
   return value.replace(/[&"'<>]/g, (character) => {
@@ -1617,6 +1649,128 @@ export class CtrlYokeHostedServer
       }
     });
 
+    this.app.get(
+      WORKSPACE_RAW_MEDIA_ROUTE_PATH,
+      requireToken,
+      async (req, res) => {
+        const filePath =
+          typeof req.query.path === "string" ? req.query.path : "";
+        if (
+          (req.query.repo !== undefined &&
+            typeof req.query.repo !== "string") ||
+          (req.query.ref !== undefined && typeof req.query.ref !== "string")
+        ) {
+          res.status(400).json({ error: "repo and ref must be single values" });
+          return;
+        }
+        const repoId =
+          typeof req.query.repo === "string" ? req.query.repo : undefined;
+        const ref =
+          typeof req.query.ref === "string" ? req.query.ref : undefined;
+        if (!filePath) {
+          res.status(400).json({ error: "path is required" });
+          return;
+        }
+        try {
+          const media = await this.viewerService.getRawMedia(
+            filePath,
+            repoId,
+            ref
+          );
+          res.setHeader(HTTP_HEADERS.CONTENT_TYPE, media.mediaInfo.mimeType);
+          res.setHeader(HTTP_HEADERS.CONTENT_TYPE_OPTIONS, RAW_MEDIA_NOSNIFF);
+          res.setHeader(
+            HTTP_HEADERS.CONTENT_DISPOSITION,
+            RAW_MEDIA_INLINE_DISPOSITION
+          );
+          if (media.mediaInfo.mediaKind !== WORKSPACE_MEDIA_KINDS.PDF) {
+            res.setHeader(
+              HTTP_HEADERS.CONTENT_SECURITY_POLICY,
+              RAW_MEDIA_SANDBOX_POLICY
+            );
+          }
+
+          if (media.kind === WORKSPACE_RAW_MEDIA_SOURCE_KINDS.WORKING_TREE) {
+            res.setHeader(
+              HTTP_HEADERS.CACHE_CONTROL,
+              RAW_MEDIA_CACHE_POLICIES.WORKING_TREE
+            );
+            res.sendFile(
+              media.absolutePath,
+              { acceptRanges: true, cacheControl: false },
+              (error) => {
+                if (!error || res.headersSent) return;
+                const statusCode = (error as Error & { statusCode?: number })
+                  .statusCode;
+                if (statusCode !== RAW_MEDIA_RANGE_NOT_SATISFIABLE_STATUS) {
+                  Log.error(
+                    `[CtrlYokeHostedServer] workspace-viewer GET /raw error: ${String(error)}`
+                  );
+                }
+                res.status(statusCode ?? 500).json({
+                  error: "Unable to serve media file",
+                });
+              }
+            );
+            return;
+          }
+
+          const isIndex = ref === WORKSPACE_MEDIA_GIT_INDEX_REF;
+          res.setHeader(
+            HTTP_HEADERS.CACHE_CONTROL,
+            isIndex
+              ? RAW_MEDIA_CACHE_POLICIES.INDEX
+              : RAW_MEDIA_CACHE_POLICIES.COMMIT
+          );
+          res.setHeader(HTTP_HEADERS.ETAG, `"${media.blobId}"`);
+          res.setHeader(HTTP_HEADERS.ACCEPT_RANGES, "bytes");
+          res.status(200);
+          if (req.fresh) {
+            res.status(RAW_MEDIA_NOT_MODIFIED_STATUS).end();
+            return;
+          }
+
+          const range = parseHttpByteRange(
+            req.header(HTTP_HEADERS.RANGE),
+            media.bytes.length
+          );
+          if (range.kind === HTTP_BYTE_RANGE_RESULT_KINDS.UNSATISFIABLE) {
+            res.setHeader(
+              HTTP_HEADERS.CONTENT_RANGE,
+              `bytes */${media.bytes.length}`
+            );
+            res.status(RAW_MEDIA_RANGE_NOT_SATISFIABLE_STATUS).end();
+            return;
+          }
+          if (range.kind === HTTP_BYTE_RANGE_RESULT_KINDS.RANGE) {
+            const chunk = media.bytes.subarray(range.start, range.end + 1);
+            res.setHeader(
+              HTTP_HEADERS.CONTENT_RANGE,
+              `bytes ${range.start}-${range.end}/${media.bytes.length}`
+            );
+            res.setHeader(HTTP_HEADERS.CONTENT_LENGTH, chunk.length);
+            res.status(RAW_MEDIA_PARTIAL_STATUS).end(chunk);
+            return;
+          }
+
+          res.setHeader(HTTP_HEADERS.CONTENT_LENGTH, media.bytes.length);
+          res.end(media.bytes);
+        } catch (error) {
+          if (error instanceof WorkspaceMediaError) {
+            Log.error(
+              `[CtrlYokeHostedServer] workspace-viewer GET /raw error: ${error.message}`
+            );
+            res.status(error.statusCode).json({ error: error.message });
+            return;
+          }
+          Log.error(
+            `[CtrlYokeHostedServer] workspace-viewer GET /raw error: ${String(error)}`
+          );
+          res.status(500).json({ error: "Internal server error" });
+        }
+      }
+    );
+
     this.app.post(
       `${WORKSPACE_FILE_ROUTE_PATH}/watch`,
       requireToken,
@@ -2469,6 +2623,8 @@ export class CtrlYokeHostedServer
       "img-src 'self' data: https:",
       "script-src 'self' 'unsafe-inline'",
       "worker-src 'self'",
+      "media-src 'self'",
+      "frame-src 'self'",
       "manifest-src 'self'",
       `connect-src ${connectSources.join(" ")}`,
     ].join("; ");

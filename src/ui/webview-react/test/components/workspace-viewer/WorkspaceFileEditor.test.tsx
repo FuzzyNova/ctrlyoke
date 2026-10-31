@@ -1,5 +1,5 @@
 import { createRef } from "react";
-import { render, fireEvent, waitFor } from "@testing-library/react";
+import { render, fireEvent, waitFor, screen } from "@testing-library/react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   WorkspaceFileEditor,
@@ -12,6 +12,16 @@ import { useSettingsStore } from "@store/settingsStore";
 import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 import { EditorView } from "codemirror";
 import { EditorSelection } from "@codemirror/state";
+
+vi.mock("@components/workspace-viewer/WorkspacePdfViewer", () => ({
+  WorkspacePdfViewer: ({ rawUrl }: { rawUrl: string }) => (
+    <div data-testid="workspace-pdf-viewer">
+      <a href={rawUrl} target="_blank" rel="noreferrer">
+        Open in new tab
+      </a>
+    </div>
+  ),
+}));
 
 describe("WorkspaceFileEditor link navigation", () => {
   beforeAll(() => {
@@ -207,13 +217,13 @@ describe("WorkspaceFileEditor link navigation", () => {
   it("renders an <img> instead of the editor for a known image type", () => {
     const onChange = vi.fn();
     const onSave = vi.fn();
-    const dataUri = "data:image/png;base64,AAAA";
+    const rawUrl = "/api/workspace-viewer/raw?path=image.png&token=test";
 
     const { container } = render(
       <WorkspaceFileEditor
         filePath=".ctrlyoke/attachments/pasted-image-abc.png"
         content=""
-        imageDataUri={dataUri}
+        media={{ kind: "image", rawUrl }}
         onChange={onChange}
         onSave={onSave}
       />
@@ -221,9 +231,113 @@ describe("WorkspaceFileEditor link navigation", () => {
 
     const img = container.querySelector("img");
     expect(img).not.toBeNull();
-    expect(img).toHaveAttribute("src", dataUri);
+    expect(img).toHaveAttribute("src", rawUrl);
     // No CodeMirror editor is created for an image.
     expect(container.querySelector(".cm-editor")).toBeNull();
+  });
+
+  it.each([["video", "video"] as const, ["audio", "audio"] as const])(
+    "renders a raw %s element",
+    (kind, tagName) => {
+      const rawUrl = `/api/workspace-viewer/raw?path=media.${kind}&v=42&token=test`;
+      const { container } = render(
+        <WorkspaceFileEditor
+          filePath={`media.${kind}`}
+          content=""
+          media={{ kind, rawUrl }}
+          onChange={vi.fn()}
+          onSave={vi.fn()}
+        />
+      );
+      const player = container.querySelector(tagName);
+      expect(player).toHaveAttribute("src", rawUrl);
+      expect(player).toHaveAttribute("preload", "metadata");
+      if (kind === "video") expect(player).toHaveAttribute("playsinline");
+      expect(player).toHaveAttribute("controls");
+      expect(container.querySelector(".cm-editor")).toBeNull();
+    }
+  );
+
+  it("renders the PDF viewer for PDF media", () => {
+    const rawUrl =
+      "/api/workspace-viewer/raw?path=docs%2Fmanual.pdf&token=test";
+    render(
+      <WorkspaceFileEditor
+        filePath="docs/manual.pdf"
+        content=""
+        media={{ kind: "pdf", rawUrl }}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+      />
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Open in new tab" })
+    ).toHaveAttribute("href", rawUrl);
+    expect(screen.getByTestId("workspace-pdf-viewer")).toBeInTheDocument();
+    expect(screen.queryByText("PDF preview")).not.toBeInTheDocument();
+  });
+
+  it("shows playback fallback links on error and resets them when the URL changes", () => {
+    const firstUrl = "/api/workspace-viewer/raw?path=movie.mp4&v=1";
+    const nextUrl = "/api/workspace-viewer/raw?path=movie.mp4&v=2";
+    const props = {
+      filePath: "movie.mp4",
+      content: "",
+      onChange: vi.fn(),
+      onSave: vi.fn(),
+    };
+    const { container, rerender } = render(
+      <WorkspaceFileEditor
+        {...props}
+        media={{ kind: "video", rawUrl: firstUrl }}
+      />
+    );
+
+    fireEvent.error(container.querySelector("video") as HTMLVideoElement);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "This browser can't play this file"
+    );
+    const openLink = screen.getByRole("link", { name: "Open in new tab" });
+    expect(openLink).toHaveAttribute("href", firstUrl);
+    expect(openLink).toHaveAttribute("target", "_blank");
+    expect(openLink).toHaveAttribute("rel", "noopener");
+    expect(screen.getByRole("link", { name: "Download" })).toHaveAttribute(
+      "download"
+    );
+
+    rerender(
+      <WorkspaceFileEditor
+        {...props}
+        media={{ kind: "video", rawUrl: nextUrl }}
+      />
+    );
+    expect(container.querySelector("video")).toHaveAttribute("src", nextUrl);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("shows an image-specific fallback when an image fails to load", () => {
+    const rawUrl = "/api/workspace-viewer/raw?path=broken.png&v=3";
+    const { container } = render(
+      <WorkspaceFileEditor
+        filePath="broken.png"
+        content=""
+        media={{ kind: "image", rawUrl }}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+      />
+    );
+    fireEvent.error(container.querySelector("img") as HTMLImageElement);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "This image can't be displayed"
+    );
+    expect(
+      screen.getByRole("link", { name: "Open in new tab" })
+    ).toHaveAttribute("href", rawUrl);
+    expect(screen.getByRole("link", { name: "Download" })).toHaveAttribute(
+      "href",
+      rawUrl
+    );
   });
 
   it("applies a pending selection request inside CodeMirror", async () => {

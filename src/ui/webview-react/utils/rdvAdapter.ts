@@ -40,7 +40,7 @@ import {
 } from "@root/types/DashboardConstants";
 import type {
   WorkspaceDiffEntry,
-  WorkspaceImageDiffSides,
+  WorkspaceMediaDiffSides,
 } from "@root/types/HostedWorkspaceViewerTypes";
 
 const RDV_CHANGE_TYPES = {
@@ -60,7 +60,7 @@ export interface ParsedDiffFile {
   diffType: DiffType;
   /** Present for non-text entries merged from the hosted diff response. */
   payloadKind?: Exclude<DiffPayloadKind, typeof DIFF_PAYLOAD_KINDS.TEXT>;
-  image?: WorkspaceImageDiffSides;
+  media?: WorkspaceMediaDiffSides;
 }
 
 const DEV_NULL = "/dev/null";
@@ -186,7 +186,7 @@ export function mergeNonTextDiffEntries(
         entry.payloadKind === DIFF_PAYLOAD_KINDS.TEXT
           ? undefined
           : entry.payloadKind,
-      image: entry.image,
+      media: entry.media,
     });
   }
 

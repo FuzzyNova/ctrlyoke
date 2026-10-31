@@ -11,8 +11,9 @@ import type {
   WorkspaceSearchScope,
   WorkspaceSearchStatus,
   WorkspaceDiffEntry,
-  WorkspaceImageDiffSides,
+  WorkspaceMediaDiffSides,
   WorkspaceScmDiffResponse,
+  WorkspaceFileResponse,
 } from "@root/types/HostedWorkspaceViewerTypes";
 import {
   DIFF_PAYLOAD_KINDS,
@@ -143,8 +144,9 @@ interface WorkspaceViewerState {
   fileReadOnly: boolean;
   fileReadOnlyReason: string | undefined;
   fileReadOnlyContentAvailable: boolean;
-  /** `data:` URI for a known image file, rendered as an inline <img> instead of the text editor. Null for non-image files. */
-  fileImageDataUri: string | null;
+  /** Known media descriptor and raw URL. Null while a text file is selected. */
+  fileMedia:
+    (NonNullable<WorkspaceFileResponse["media"]> & { rawUrl: string }) | null;
   fileDrafts: Record<string, CachedFileDraft>;
 
   // Mobile: in explorer tab, whether the file editor is shown (vs directory list)
@@ -169,7 +171,7 @@ interface WorkspaceViewerState {
   diffLanguage: string | undefined;
   diffKind: DiffKind | null;
   diffPayloadKind: DiffPayloadKind | null;
-  diffImage: WorkspaceImageDiffSides | null;
+  diffMedia: WorkspaceMediaDiffSides | null;
   diffLoading: boolean;
 
   // Search
@@ -246,8 +248,11 @@ interface WorkspaceViewerActions {
   selectFile(path: string, external?: boolean): void;
   setFileContent(content: string): void;
   setLoadedFileContent(path: string, content: string): void;
-  /** Load a known image file for inline <img> preview (read-only, no text content). */
-  setLoadedImage(path: string, imageDataUri: string): void;
+  /** Load a known media file for raw preview (read-only, no text content). */
+  setLoadedMedia(
+    path: string,
+    media: NonNullable<WorkspaceFileResponse["media"]> & { rawUrl: string }
+  ): void;
   discardFileDraft(path: string, diskContent: string): void;
   markFileSaved(path: string, savedContent: string): void;
   setFileLoading(loading: boolean): void;
@@ -363,7 +368,7 @@ const INITIAL_STATE: WorkspaceViewerState = {
   fileReadOnly: false,
   fileReadOnlyReason: undefined,
   fileReadOnlyContentAvailable: false,
-  fileImageDataUri: null,
+  fileMedia: null,
   fileDrafts: {},
 
   mobileEditorVisible: false,
@@ -381,7 +386,7 @@ const INITIAL_STATE: WorkspaceViewerState = {
   diffLanguage: undefined,
   diffKind: null,
   diffPayloadKind: null,
-  diffImage: null,
+  diffMedia: null,
   diffLoading: false,
 
   searchQuery: "",
@@ -489,7 +494,7 @@ export const useWorkspaceViewerStore = create<
           fileReadOnly: false,
           fileReadOnlyReason: undefined,
           fileReadOnlyContentAvailable: false,
-          fileImageDataUri: null,
+          fileMedia: null,
         });
       },
 
@@ -532,7 +537,7 @@ export const useWorkspaceViewerStore = create<
           fileReadOnly: false,
           fileReadOnlyReason: undefined,
           fileReadOnlyContentAvailable: false,
-          fileImageDataUri: null,
+          fileMedia: null,
         });
       },
 
@@ -548,7 +553,7 @@ export const useWorkspaceViewerStore = create<
           fileReadOnly: true,
           fileReadOnlyReason: reason,
           fileReadOnlyContentAvailable: true,
-          fileImageDataUri: null,
+          fileMedia: null,
         });
       },
 
@@ -583,7 +588,7 @@ export const useWorkspaceViewerStore = create<
                 fileReadOnly: false,
                 fileReadOnlyReason: undefined,
                 fileReadOnlyContentAvailable: false,
-                fileImageDataUri: null,
+                fileMedia: null,
               }
             : {}),
         });
@@ -622,16 +627,16 @@ export const useWorkspaceViewerStore = create<
         });
       },
 
-      setLoadedImage(path, imageDataUri) {
+      setLoadedMedia(path, media) {
         set({
           selectedFilePath: path,
           fileContent: "",
           originalFileContent: "",
           fileDirty: false,
-          fileReadOnly: false,
+          fileReadOnly: true,
           fileReadOnlyReason: undefined,
           fileReadOnlyContentAvailable: false,
-          fileImageDataUri: imageDataUri,
+          fileMedia: media,
         });
       },
 
@@ -651,7 +656,7 @@ export const useWorkspaceViewerStore = create<
           fileReadOnlyReason: undefined,
           fileReadOnlyContentAvailable: false,
           fileDrafts: nextDrafts,
-          fileImageDataUri: null,
+          fileMedia: null,
         });
       },
 
@@ -695,7 +700,7 @@ export const useWorkspaceViewerStore = create<
           fileReadOnly: false,
           fileReadOnlyReason: undefined,
           fileReadOnlyContentAvailable: false,
-          fileImageDataUri: null,
+          fileMedia: null,
         });
       },
 
@@ -749,7 +754,7 @@ export const useWorkspaceViewerStore = create<
                 diffLanguage: undefined,
                 diffKind: null,
                 diffPayloadKind: null,
-                diffImage: null,
+                diffMedia: null,
                 diffLoading: false,
               }
             : {}),
@@ -768,7 +773,7 @@ export const useWorkspaceViewerStore = create<
           fileHistoryActive: false,
           pendingFileHistory: null,
           diffPayloadKind: null,
-          diffImage: null,
+          diffMedia: null,
           diffOldContent: "",
           diffNewContent: "",
           diffLanguage: undefined,
@@ -791,7 +796,7 @@ export const useWorkspaceViewerStore = create<
           diffLanguage: undefined,
           diffKind: null,
           diffPayloadKind: null,
-          diffImage: null,
+          diffMedia: null,
           diffLoading: false,
           diffFiles: null,
           diffNonTextEntries: [],
@@ -817,9 +822,9 @@ export const useWorkspaceViewerStore = create<
           diffLanguage: isText ? response.language : undefined,
           diffKind: response.kind,
           diffPayloadKind: response.payloadKind,
-          diffImage:
-            response.payloadKind === DIFF_PAYLOAD_KINDS.IMAGE
-              ? response.image
+          diffMedia:
+            response.payloadKind === DIFF_PAYLOAD_KINDS.MEDIA
+              ? response.media
               : null,
         });
       },

@@ -27,6 +27,7 @@ import type {
   WorkspaceReposResponse,
   WorkspaceSearchRequest,
   WorkspaceSearchResponse,
+  WorkspaceMediaSide,
 } from "@root/types/HostedWorkspaceViewerTypes";
 import { WORKSPACE_GIT_REF_DIFF_DEFAULT_PAGE_SIZE } from "@root/types/HostedWorkspaceViewerTypes";
 import type { LanguageIntelligenceSessionLookupResponse } from "@root/types/HostedWorkspaceViewerTypes";
@@ -86,6 +87,18 @@ export async function runWorkspaceGitMutation<T>(options: {
 }
 
 const token = new URLSearchParams(window.location.search).get("token") ?? "";
+
+/** Build the only supported URL for raw workspace media bytes. */
+export function workspaceRawUrl(side: WorkspaceMediaSide): string {
+  const params = new URLSearchParams({ path: side.path });
+  if (side.repo) params.set("repo", side.repo);
+  if (side.ref) params.set("ref", side.ref);
+  if (side.version !== undefined) params.set("v", String(side.version));
+  const rawToken =
+    new URLSearchParams(window.location.search).get("token") ?? token;
+  if (rawToken) params.set("token", rawToken);
+  return `/api/workspace-viewer/raw?${params.toString()}`;
+}
 
 export async function languageIntelligenceSession(
   filePath: string,

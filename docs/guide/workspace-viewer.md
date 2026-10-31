@@ -114,11 +114,19 @@ rather than overwriting a change you haven't seen.
 
 These open read-only, with a banner giving the reason:
 
-- files larger than 2 MB
-- images (PNG, JPEG, GIF and WebP), which are shown as a picture
+- text files larger than 2 MB
+- images (PNG, JPG/JPEG, GIF and WebP), video (MP4, M4V, WEBM, OGV and MOV),
+  audio (MP3, M4A, AAC, WAV, FLAC, OGG, OGA and OPUS), and PDF files. The
+  viewer plays or displays these files and shows them in Source Control diffs.
+  PDFs include **Open in new tab** to use the browser's PDF viewer.
+- media files larger than 512 MB in the working tree, or larger than 50 MB when
+  read from Git history
 - other binary files, which don't open
 - files that contain a stored [secret](/workflows/secrets): the viewer shows them
   with the secret's value masked, and never lets you save over them
+
+If a browser can't play a video's or audio's codec, the viewer offers **Open in
+new tab** and **Download** links.
 
 ### Go to definition and references
 

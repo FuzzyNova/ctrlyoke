@@ -22,9 +22,9 @@ import {
 import type { DiffChangeType } from "@root/types/DashboardConstants";
 import type {
   WorkspaceFileHistoryDiffResponse,
-  WorkspaceImageDiffSides,
+  WorkspaceMediaDiffSides,
 } from "@root/types/HostedWorkspaceViewerTypes";
-import { ImageDiffView } from "./ImageDiffView";
+import { MediaDiffView } from "./MediaDiffView";
 import { workspaceFileHistoryDiff } from "@utils/hostedApi";
 import { Icon } from "../shared/Icon";
 
@@ -130,8 +130,8 @@ function detailToSource(
         oldContent: detail.oldContent,
         newContent: detail.newContent,
       };
-    case DIFF_PAYLOAD_KINDS.IMAGE:
-      return { kind: DIFF_PAYLOAD_KINDS.IMAGE, image: detail.image };
+    case DIFF_PAYLOAD_KINDS.MEDIA:
+      return { kind: DIFF_PAYLOAD_KINDS.MEDIA, media: detail.media };
     case DIFF_PAYLOAD_KINDS.BINARY:
       return { kind: DIFF_PAYLOAD_KINDS.BINARY };
     case DIFF_PAYLOAD_KINDS.TOO_LARGE:
@@ -162,7 +162,7 @@ export interface DiffFileCardProps {
         structuredPatch: UnifiedDiffHunk[];
         oldContent?: string;
       }
-    | { kind: typeof DIFF_PAYLOAD_KINDS.IMAGE; image: WorkspaceImageDiffSides }
+    | { kind: typeof DIFF_PAYLOAD_KINDS.MEDIA; media: WorkspaceMediaDiffSides }
     | { kind: typeof DIFF_PAYLOAD_KINDS.BINARY }
     | { kind: typeof DIFF_PAYLOAD_KINDS.TOO_LARGE }
     | DeferredDiffFileSource;
@@ -405,11 +405,11 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
             {...sharedDiffViewProps}
           />
         );
-      case DIFF_PAYLOAD_KINDS.IMAGE:
+      case DIFF_PAYLOAD_KINDS.MEDIA:
         return (
-          <ImageDiffView
+          <MediaDiffView
             path={renderedPath}
-            sides={renderedSource.image}
+            sides={renderedSource.media}
             collapsed={cardCollapsed}
             onCollapsedChange={cardCollapseHandler}
           />
