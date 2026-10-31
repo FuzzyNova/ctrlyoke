@@ -34,7 +34,10 @@ import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
 import { getCodexContextWindowSize } from "../../../utils/ModelConstants";
 import { normalizeCodexRolloutQuota } from "./CodexUsageNormalization";
 import { SubagentSourceFollower } from "../shared/SubagentSourceFollower";
-import { readIncrementalJsonl } from "../shared/IncrementalJsonlReader";
+import {
+  readFirstJsonlRecord,
+  readIncrementalJsonl,
+} from "../shared/IncrementalJsonlReader";
 import type { SubagentChildSource } from "../shared/interfaces/SubagentChildSource";
 import {
   buildCodexReasoningBlock,
@@ -158,6 +161,22 @@ interface CodexTrackedToolCall {
   initiatedEvents?: CliEvent[];
 }
 
+/**
+ * Streaming-path state for one rollout. The parent and each subagent rollout
+ * keep their own: the grouper holds a response's events until its usage
+ * record, so a shared one would release one stream's events while mapping
+ * another's record (and attribute them to it), and a child's turn start would
+ * drop the parent's held events.
+ */
+interface CodexStreamState {
+  pendingCalls: Map<string, CodexTrackedToolCall>;
+  reasoning: CodexReasoningGrouper;
+}
+
+function createCodexStreamState(): CodexStreamState {
+  return { pendingCalls: new Map(), reasoning: new CodexReasoningGrouper() };
+}
+
 export class CodexLogParser extends BaseLogParser {
   private readonly subagentFollower = new SubagentSourceFollower();
   private readonly pendingSubagentSpawns = new Map<string, CliEvent>();
@@ -200,15 +219,11 @@ export class CodexLogParser extends BaseLogParser {
   private toolCallMap: Map<string, CodexTrackedToolCall> = new Map();
 
   /**
-   * Streaming-path tool call tracking map
-   *
-   * Parallel to toolCallMap but exclusively used by extractStructuredEventsFromEvent
-   * so that streaming state never contaminates extractResponse()'s toolCallMap.
+   * The parent rollout's streaming state, used only by
+   * extractStructuredEventsFromEvent so it never contaminates
+   * extractResponse()'s toolCallMap.
    */
-  private pendingStreamingCalls: Map<string, CodexTrackedToolCall> = new Map();
-
-  /** Streaming-path reasoning grouping; see {@link CodexReasoningGrouper}. */
-  private readonly streamingReasoning = new CodexReasoningGrouper();
+  private readonly parentStream = createCodexStreamState();
 
   /**
    * Extract complete response from Codex log events
@@ -1328,24 +1343,45 @@ export class CodexLogParser extends BaseLogParser {
    *
    * Overrides the base class default to emit richer events: tool call initiation
    * and completion pairs, thinking blocks, and text — mirroring extractResponse()
-   * event-by-event.  Uses pendingStreamingCalls and streamingReasoning (not
+   * event-by-event.  Uses the parent's {@link CodexStreamState} (not
    * extractResponse()'s per-call state) so the two paths never interfere.
-   * Both are reset at each turn start, so an interrupted turn cannot leak
-   * held or pending state into the next step's stream.
+   * It is reset at each turn start, so an interrupted turn cannot leak held
+   * or pending state into the next step's stream.
    *
    * @param event - Single parsed Codex log event
    * @returns Array of CliEvents to emit; empty if event produces no output
    */
   extractStructuredEventsFromEvent(event: BaseCliEvent): CliEvent[] {
     const e = event as CodexProviderEvent;
+    // The parent thread ID locates subagent rollouts, so a live tail must
+    // record it too, not only extractResponse(). A child's own header names
+    // its parent and must not replace the parent's.
+    if (
+      e.type === CODEX_EVENT_TYPES.SESSION_META &&
+      e.payload &&
+      !("parent_thread_id" in e.payload && e.payload.parent_thread_id)
+    ) {
+      this.sessionMeta = e.payload as CodexSessionMetaPayload;
+    }
+    return this.mapStreamRecord(e, this.parentStream);
+  }
+
+  /** Map one record of a streamed rollout using that rollout's own state. */
+  private mapStreamRecord(
+    e: CodexProviderEvent,
+    stream: CodexStreamState
+  ): CliEvent[] {
     if (
       e.type === CODEX_EVENT_TYPES.EVENT_MSG &&
       e.payload?.type === CODEX_PAYLOAD_TYPES.TASK_STARTED
     ) {
-      this.streamingReasoning.reset();
-      this.pendingStreamingCalls.clear();
+      stream.reasoning.reset();
+      stream.pendingCalls.clear();
     }
-    return this.streamingReasoning.accept(event, this.mapStreamingEvent(e));
+    return stream.reasoning.accept(
+      e,
+      this.mapStreamingEvent(e, stream.pendingCalls)
+    );
   }
 
   private buildSubagentSpawnEvent(
@@ -1419,6 +1455,7 @@ export class CodexLogParser extends BaseLogParser {
       | undefined;
     let usageRecordNumber = 0;
     let childModel: string | undefined;
+    const childStream = createCodexStreamState();
     const source: SubagentChildSource<CodexProviderEvent> = {
       key: `codex:${parentThreadId}:${taskName}`,
       attribution: { parentToolCallId, agentId: taskName },
@@ -1433,24 +1470,9 @@ export class CodexLogParser extends BaseLogParser {
                 continue;
               const candidate = path.join(directory, filename);
               try {
-                const handle = await fs.promises.open(candidate, "r");
-                let firstLine = "";
-                try {
-                  const buffer = Buffer.alloc(8192);
-                  const { bytesRead } = await handle.read(
-                    buffer,
-                    0,
-                    buffer.length,
-                    0
-                  );
-                  const newline = buffer.subarray(0, bytesRead).indexOf(0x0a);
-                  firstLine = buffer
-                    .subarray(0, newline < 0 ? bytesRead : newline)
-                    .toString("utf8");
-                } finally {
-                  await handle.close();
-                }
-                const raw: unknown = JSON.parse(firstLine);
+                // Codex 0.16x embeds base_instructions in session_meta, so
+                // this line is tens of kilobytes; read the whole line.
+                const raw = await readFirstJsonlRecord(candidate);
                 if (
                   !raw ||
                   typeof raw !== "object" ||
@@ -1529,7 +1551,7 @@ export class CodexLogParser extends BaseLogParser {
         return { ...result, records };
       },
       map: (record) => {
-        const events = this.extractStructuredEventsFromEvent(record);
+        const events = this.mapStreamRecord(record, childStream);
         for (const event of events)
           event.subagent = { parentToolCallId, agentId: taskName };
         return events;
@@ -1602,7 +1624,10 @@ export class CodexLogParser extends BaseLogParser {
   }
 
   /** Map one log event to CliEvents, before reasoning grouping. */
-  private mapStreamingEvent(e: CodexProviderEvent): CliEvent[] {
+  private mapStreamingEvent(
+    e: CodexProviderEvent,
+    pendingCalls: Map<string, CodexTrackedToolCall>
+  ): CliEvent[] {
     const timestamp = e.timestamp
       ? new Date(e.timestamp).getTime()
       : Date.now();
@@ -1669,7 +1694,7 @@ export class CodexLogParser extends BaseLogParser {
       const server = item.server;
       const tool = item.tool;
       const parameters = item.arguments;
-      const alreadyParsed = [...this.pendingStreamingCalls.values()].some(
+      const alreadyParsed = [...pendingCalls.values()].some(
         ({ initiatedEvents }) =>
           (initiatedEvents ?? []).some((initiated) => {
             if (initiated.type !== CLI_EVENT_TYPES.MCP_TOOL_CALL) {
@@ -1721,7 +1746,7 @@ export class CodexLogParser extends BaseLogParser {
       e.type === CODEX_EVENT_TYPES.EVENT_MSG &&
       e.payload?.type === CODEX_PAYLOAD_TYPES.PATCH_APPLY_END
     ) {
-      this.applyPatchApplyEndPositions(e.payload, this.pendingStreamingCalls);
+      this.applyPatchApplyEndPositions(e.payload, pendingCalls);
       return results;
     }
 
@@ -1771,7 +1796,7 @@ export class CodexLogParser extends BaseLogParser {
                 CodexToolBuilder.needsCompletionTracking(toolEvent.type)
               )
             ) {
-              this.pendingStreamingCalls.set(callId, {
+              pendingCalls.set(callId, {
                 type: toolEvents[0].type,
                 toolName,
                 initiatedEvents: toolEvents,
@@ -1859,7 +1884,7 @@ export class CodexLogParser extends BaseLogParser {
           CodexToolBuilder.needsCompletionTracking(toolEvent.type)
         )
       ) {
-        this.pendingStreamingCalls.set(callId, {
+        pendingCalls.set(callId, {
           type: toolEvents[0].type,
           toolName: functionName,
           initiatedEvents: toolEvents,
@@ -1877,9 +1902,7 @@ export class CodexLogParser extends BaseLogParser {
       const callId = e.payload.call_id as string | undefined;
       const taskName = this.parseTaskName(e.payload.output);
       if (callId && taskName) this.registerCodexSubagent(callId, taskName);
-      const toolInfo = callId
-        ? this.pendingStreamingCalls.get(callId)
-        : undefined;
+      const toolInfo = callId ? pendingCalls.get(callId) : undefined;
       const isBash = toolInfo?.type === CLI_EVENT_TYPES.BASH_COMMAND;
       results.push(
         CodexToolBuilder.buildFunctionCallOutputCompletedEvent(
@@ -1891,7 +1914,7 @@ export class CodexLogParser extends BaseLogParser {
         )
       );
       if (callId) {
-        this.pendingStreamingCalls.delete(callId);
+        pendingCalls.delete(callId);
       }
       return results;
     }
@@ -1917,7 +1940,7 @@ export class CodexLogParser extends BaseLogParser {
           CodexToolBuilder.needsCompletionTracking(toolEvent.type)
         )
       ) {
-        this.pendingStreamingCalls.set(callId, {
+        pendingCalls.set(callId, {
           type: toolEvents[0].type,
           toolName,
           initiatedEvents: toolEvents,
@@ -1933,9 +1956,7 @@ export class CodexLogParser extends BaseLogParser {
       e.payload?.type === CODEX_PAYLOAD_TYPES.CUSTOM_TOOL_CALL_OUTPUT
     ) {
       const callId = e.payload.call_id as string | undefined;
-      const toolInfo = callId
-        ? this.pendingStreamingCalls.get(callId)
-        : undefined;
+      const toolInfo = callId ? pendingCalls.get(callId) : undefined;
       const { outputText, exitCode } = this.parseCustomToolCallOutput(
         e.payload.output
       );
@@ -1952,7 +1973,7 @@ export class CodexLogParser extends BaseLogParser {
             toolInfo.initiatedEvents
           )
         );
-        this.pendingStreamingCalls.delete(callId!);
+        pendingCalls.delete(callId!);
       } else {
         results.push({
           type: CLI_EVENT_TYPES.TOOL_RESULT,
@@ -2162,7 +2183,7 @@ export class CodexLogParser extends BaseLogParser {
    * the INITIATED and COMPLETED renders.
    *
    * @param payload     - The `patch_apply_end` payload (has `call_id` and `changes`)
-   * @param trackingMap - Active tool-call map (toolCallMap or pendingStreamingCalls)
+   * @param trackingMap - Active tool-call map (toolCallMap or a stream's pendingCalls)
    */
   private applyPatchApplyEndPositions(
     payload: Record<string, any>,

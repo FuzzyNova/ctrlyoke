@@ -35,6 +35,7 @@ import {
 import {
   AntigravityToolEventBuilder,
   parseAntigravityJsonObjectSequence,
+  readAntigravitySubagentDescriptors,
 } from "./AntigravityToolEventBuilder";
 import {
   ANTIGRAVITY_ENTRY_TYPES,
@@ -763,21 +764,11 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     spawnId: string,
     parentSessionId: string
   ): void {
-    const args = call.args ?? {};
-    if (
-      typeof args.Subagents !== "string" ||
-      typeof result.content !== "string"
-    )
-      return;
-    let descriptors: unknown;
-    try {
-      descriptors = JSON.parse(args.Subagents);
-    } catch {
-      return;
-    }
-    if (!Array.isArray(descriptors)) return;
+    if (typeof result.content !== "string") return;
+    const descriptors = readAntigravitySubagentDescriptors(call.args ?? {});
+    if (descriptors.length === 0) return;
     const childObjects = parseAntigravityJsonObjectSequence(result.content);
-    // The result lists created children in the same order as the submitted Subagents array.
+    // The result lists created children in the same order as the submitted descriptors.
     const children = childObjects.filter(
       (item) =>
         typeof item.conversationId === "string" &&
@@ -785,8 +776,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     );
     if (children.length !== descriptors.length) return;
     for (let index = 0; index < children.length; index++) {
-      const descriptor = descriptors[index] as
-        Record<string, unknown> | undefined;
+      const descriptor = descriptors[index];
       const childId = children[index].conversationId as string;
       let transcriptPath: string;
       try {

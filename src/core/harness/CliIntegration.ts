@@ -8,7 +8,6 @@ import {
 import type { DisposableRegistry } from "../HostPorts";
 import {
   mapSourceDefinitionPathToExecution,
-  resolveEffectiveAbsoluteReferences,
   type ResolverWorkspaceFolder,
 } from "../../platform/WorkspaceRootResolver";
 import {
@@ -404,17 +403,8 @@ export class CliIntegration extends HarnessIntegration {
     return this.platform.getNamedWorkspaceRoots();
   }
 
-  /**
-   * Effective "render absolute file paths" decision for this CLI integration,
-   * computed the same way as `HarnessIntegration.buildPromptSections` so
-   * `formatDirectFileRef`/`formatTempFileRef` (invoked outside that method,
-   * via `CliPromptPreparer`'s deps) agree with it by construction.
-   */
-  private getEffectiveAbsolute(): boolean {
-    return resolveEffectiveAbsoluteReferences(
-      ConfigurationUtils.shouldUseAbsolutePathReferences(),
-      this.getExecutionWorkspaceRoots().length > 1
-    );
+  protected override requiresAbsoluteFileReferences(): boolean {
+    return this.provider.requiresAbsoluteFileReferences === true;
   }
 
   /**
@@ -491,7 +481,7 @@ export class CliIntegration extends HarnessIntegration {
    */
   private formatDirectFileRef(absolutePath: string): string {
     const workspaceRoot = this.getExecutionRoot();
-    const refPath = this.getEffectiveAbsolute()
+    const refPath = this.getEffectiveAbsoluteReferences()
       ? absolutePath
       : path.relative(workspaceRoot, absolutePath);
     const quoted = refPath.includes(" ") ? `"${refPath}"` : refPath;
@@ -502,15 +492,14 @@ export class CliIntegration extends HarnessIntegration {
    * Format a temp-file relative path as a file reference using the provider's
    * harness-specific prefix (e.g. "@path" for Copilot, "path" for Claude).
    *
-   * Renders absolute when `getEffectiveAbsolute()` is true (multi-root, or the
-   * `ui.useAbsolutePathReferences` setting in single-root).
+   * Renders absolute when `getEffectiveAbsoluteReferences()` is true.
    */
   private formatTempFileRef(
     tempMgr: TempFileManager,
     absolutePath: string,
     category: (typeof TEMP_FILE_CATEGORIES)[keyof typeof TEMP_FILE_CATEGORIES]
   ): string {
-    const refPath = this.getEffectiveAbsolute()
+    const refPath = this.getEffectiveAbsoluteReferences()
       ? absolutePath
       : tempMgr.getRelativePath(absolutePath);
     const quoted = refPath.includes(" ") ? `"${refPath}"` : refPath;

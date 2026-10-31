@@ -2289,6 +2289,33 @@ suite("CliIntegration", () => {
       assert.strictEqual(result, `@${absolutePath}`);
     });
 
+    test("a harness that requires absolute references gets them with the setting off", () => {
+      configService.setCliOverlay({
+        ui: { useAbsolutePathReferences: false },
+      });
+      const integration = integrationWithPlatform(new MockVsCodePlatform(), {
+        requiresAbsoluteFileReferences: true,
+      });
+      const absolutePath = path.join(
+        process.cwd(),
+        ".ctrlyoke",
+        "temp",
+        "x.md"
+      );
+      const mockTempMgr = {
+        getRelativePath: (p: string) => path.relative(process.cwd(), p),
+      };
+
+      assert.strictEqual(
+        (integration as any).formatTempFileRef(mockTempMgr, absolutePath),
+        `@${absolutePath}`
+      );
+      assert.strictEqual(
+        (integration as any).formatDirectFileRef(absolutePath),
+        `@${absolutePath}`
+      );
+    });
+
     test("formatTempFileRef agrees with the same effective-absolute decision", () => {
       configService.setCliOverlay({
         ui: { useAbsolutePathReferences: true },

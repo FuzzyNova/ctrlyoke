@@ -1014,7 +1014,7 @@ Automatically grow the editor panel as you type past its current height, up to 6
 - **Type:** `boolean`
 - **Default:** `false`
 
-Send absolute file paths to the harness/model instead of relative paths. Stored workflow text stays relative regardless of this setting. Forced on in multi-root workspaces and by harnesses that require it (e.g. Antigravity).
+Send absolute file paths to the harness/model instead of relative paths. Stored workflow text stays relative regardless of this setting. Forced on in multi-root workspaces and for OpenCode, whose models often fail to resolve relative paths.
 
 ### `ui.outputVirtualizationRowThreshold` {#ui-outputvirtualizationrowthreshold}
 

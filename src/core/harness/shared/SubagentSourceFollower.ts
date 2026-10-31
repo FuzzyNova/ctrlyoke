@@ -161,9 +161,15 @@ export class SubagentSourceFollower {
     this.callback = undefined;
   }
 
+  /**
+   * Forget every source and accumulated output. Polling is owned by
+   * start()/stop(), not by a reset: a parser resets when it first learns its
+   * session ID, which is after the headless tail has started this follower,
+   * and stopping here silenced every child registered afterwards. In-flight
+   * reads from before the reset are discarded by the generation check.
+   */
   reset(): void {
     this.generation += 1;
-    this.stop();
     this.sources.clear();
     this.events.length = 0;
     for (const model of Object.keys(this.usageByModel))
@@ -178,7 +184,12 @@ export class SubagentSourceFollower {
     options: SubagentDrainOptions = {}
   ): Promise<SubagentDrainResult> {
     const deadline = Date.now() + deadlineMs;
+    // Stop the interval poll but keep streaming what the drain reads: a
+    // headless run's history is the streamed output, so child output that is
+    // only returned from here would never be recorded.
+    const callback = this.callback;
     this.stop();
+    this.callback = callback;
     const awaited = () =>
       [...this.sources.values()].filter((source) => !source.carried);
     // Always read once, so carried children are caught up too, even though
@@ -210,6 +221,7 @@ export class SubagentSourceFollower {
       );
     }
     if (awaited().some((source) => !source.complete)) this.partial = true;
+    this.stop();
     const result = {
       events: [...this.events],
       usageByModel: { ...this.usageByModel },

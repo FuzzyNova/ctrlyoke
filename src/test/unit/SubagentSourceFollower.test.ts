@@ -151,6 +151,79 @@ suite("SubagentSourceFollower", () => {
     assert.strictEqual(drain.partial, false);
   });
 
+  test("keeps streaming children registered after a reset", async () => {
+    // Antigravity resets its follower when it first learns the session ID,
+    // which is after the headless tail has started streaming.
+    const follower = new SubagentSourceFollower();
+    const live: CliEvent[] = [];
+    follower.start((events) => live.push(...events), 10);
+    follower.reset();
+    follower.register<RecordItem>({
+      key: "after-reset",
+      attribution: { parentToolCallId: "spawn" },
+      read: async () => ({
+        records: [{ id: "one", text: "child output", done: true }],
+        nextOffset: 1,
+      }),
+      map: (record) => [
+        { type: CLI_EVENT_TYPES.TEXT, data: { text: record.text } },
+      ],
+      isComplete: (record) => record.done === true,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    follower.stop();
+    assert.deepStrictEqual(
+      live
+        .filter((event) => event.type === CLI_EVENT_TYPES.TEXT)
+        .map((event) => (event.data as { text: string }).text),
+      ["child output"]
+    );
+  });
+
+  test("streams records the final drain reads, then stops", async () => {
+    // A headless run's history is its streamed output, so child output read
+    // only by the final drain must still reach the streaming callback.
+    const follower = new SubagentSourceFollower();
+    const live: CliEvent[] = [];
+    follower.start((events) => live.push(...events), 60_000);
+    follower.register<RecordItem>({
+      key: "late",
+      attribution: { parentToolCallId: "spawn" },
+      read: async () => ({
+        records: [{ id: "one", text: "read by the drain", done: true }],
+        nextOffset: 1,
+      }),
+      map: (record) => [
+        { type: CLI_EVENT_TYPES.TEXT, data: { text: record.text } },
+      ],
+      isComplete: (record) => record.done === true,
+    });
+    const drain = await follower.drainToEof(500);
+    const streamedText = live
+      .filter((event) => event.type === CLI_EVENT_TYPES.TEXT)
+      .map((event) => (event.data as { text: string }).text);
+    assert.deepStrictEqual(streamedText, ["read by the drain"]);
+    assert.ok(
+      drain.events.some((event) => event.type === CLI_EVENT_TYPES.TEXT)
+    );
+
+    const countAfterDrain = live.length;
+    follower.register<RecordItem>({
+      key: "after-drain",
+      attribution: { parentToolCallId: "other" },
+      read: async () => ({
+        records: [{ id: "two", text: "must not stream" }],
+        nextOffset: 1,
+      }),
+      map: (record) => [
+        { type: CLI_EVENT_TYPES.TEXT, data: { text: record.text } },
+      ],
+      isComplete: () => false,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.strictEqual(live.length, countAfterDrain);
+  });
+
   test("marks unreadable registered sources partial", async () => {
     const follower = new SubagentSourceFollower();
     follower.register({

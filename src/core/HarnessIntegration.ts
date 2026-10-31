@@ -768,6 +768,24 @@ export abstract class HarnessIntegration {
    * @param resolvedSkills Optional resolved skill names
    * @returns Categorized prompt sections
    */
+  /**
+   * Whether file references in the prompt render as absolute paths: in a
+   * multi-root workspace, with `ui.useAbsolutePathReferences`, or for a
+   * harness that cannot resolve relative ones.
+   */
+  protected getEffectiveAbsoluteReferences(): boolean {
+    return resolveEffectiveAbsoluteReferences(
+      ConfigurationUtils.shouldUseAbsolutePathReferences() ||
+        this.requiresAbsoluteFileReferences(),
+      this.getExecutionWorkspaceRoots().length > 1
+    );
+  }
+
+  /** True when this harness must always be given absolute file references. */
+  protected requiresAbsoluteFileReferences(): boolean {
+    return false;
+  }
+
   protected async buildPromptSections(
     prompt: PromptStep,
     resolvedAgent?: string,
@@ -789,10 +807,7 @@ export abstract class HarnessIntegration {
     };
     if (workspaceRoot) {
       try {
-        const effectiveAbsolute = resolveEffectiveAbsoluteReferences(
-          ConfigurationUtils.shouldUseAbsolutePathReferences(),
-          this.getExecutionWorkspaceRoots().length > 1
-        );
+        const effectiveAbsolute = this.getEffectiveAbsoluteReferences();
         const expander = new ContextExpander({
           workspaceRoot,
           additionalTrustedRoots: [

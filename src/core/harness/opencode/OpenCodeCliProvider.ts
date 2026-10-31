@@ -137,8 +137,13 @@ const OPENCODE_IMAGE_INPUT_CAPABILITY = {
  * ```
  */
 export class OpenCodeCliProvider implements ICliProvider {
-  setRunId(runId: string): void {
-    this.logParser.setSubagentRunId(runId);
+  /**
+   * The plugin writes subagent records to `<notifyDir>/<runId>-subagents.jsonl`
+   * in both modes, so the parser must know where on every launch, not only
+   * when interactive hooks are planned.
+   */
+  setRunId(runId: string, notifyDir: string | undefined): void {
+    this.logParser.setSubagentSidecar(notifyDir, runId);
   }
   private static readonly CLI_COMMAND = "opencode";
   static readonly CLI_VERSION_COMMAND = `${OpenCodeCliProvider.CLI_COMMAND} --version`;
@@ -521,6 +526,14 @@ export class OpenCodeCliProvider implements ICliProvider {
   }
 
   /**
+   * Since nothing reads these plain paths for the model, it often does not
+   * resolve a relative one against its working directory and searches other
+   * folders for it (e.g. globbing the home directory, which headless
+   * permissions deny). An absolute path leaves nothing to resolve.
+   */
+  readonly requiresAbsoluteFileReferences = true;
+
+  /**
    * Headless `run` attaches images with `--file`. The TUI has no attachment
    * flag; the image path stays in the prompt and OpenCode's `read` tool loads
    * it as an image.
@@ -747,9 +760,6 @@ export class OpenCodeCliProvider implements ICliProvider {
     userHooks: UserHookConfig[] | undefined,
     _enabledNotificationHookEvents: HookEvent[]
   ): Promise<CliProviderPreparation> {
-    this.logParser.setSubagentNotifyDir(
-      this.notificationMonitor.getNotificationDirectory(_workspaceRoot)
-    );
     const serializedHooks = this.serializeUserHooks(userHooks);
     return {
       cliArgs: [],

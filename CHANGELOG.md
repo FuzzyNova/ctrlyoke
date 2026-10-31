@@ -166,6 +166,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- On Windows, Qwen Code workflow hooks whose command contains double quotes,
+  such as a script path with spaces (`node "C:/my scripts/hook.js"`), now run.
+  Qwen passes hook commands to `cmd.exe` in a way that breaks quoting, so these
+  hooks silently never ran unless Qwen was started from Git Bash; ctrlyoke now
+  launches them itself.
+- What subagents do now appears under their spawn card in headless runs of
+  Codex CLI, OpenCode and Antigravity CLI, as 0.3.0 intended. Codex 0.166's
+  larger session headers, OpenCode's headless `task` events and Antigravity
+  1.4.12's one-subagent-per-call `invoke_subagent` each kept a subagent's
+  commands, text and token usage out of the step's output.
+- When Codex CLI ran subagents in parallel, one subagent's command or reasoning
+  could appear under another's spawn card, or be missing, and the main agent's
+  output could be dropped while a subagent started.
+- OpenCode is given absolute paths to the prompt and other files ctrlyoke
+  references, as it is in a multi-root workspace. With relative paths, its
+  models often searched other folders for the prompt file and stopped when
+  headless permissions denied the search.
+- On Windows, ctrlyoke starts OpenCode 1.19's `opencode.exe` directly instead
+  of through its `opencode.cmd` shim.
 - Dotted Antigravity MCP server ids now work; ctrlyoke rewrites unsupported
   characters in server ids to underscores and uses the rewritten id in rules.
 

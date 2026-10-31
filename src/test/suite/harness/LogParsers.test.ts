@@ -20,7 +20,10 @@ import {
   sanitizeQwenProjectPath,
 } from "../../../core/harness/qwen/QwenLogParser";
 import { AntigravityLogParser } from "../../../core/harness/antigravity/AntigravityLogParser";
-import { AntigravityToolEventBuilder } from "../../../core/harness/antigravity/AntigravityToolEventBuilder";
+import {
+  AntigravityToolEventBuilder,
+  readAntigravitySubagentDescriptors,
+} from "../../../core/harness/antigravity/AntigravityToolEventBuilder";
 import {
   UniversalCliOutput,
   CliEvent,
@@ -6098,6 +6101,243 @@ suite("CodexLogParser", () => {
     }
   });
 
+  test("follows a child rollout from the live stream when its header is over 8 KB", async () => {
+    // Codex 0.16x embeds base_instructions in session_meta, so a child's
+    // first line is tens of kilobytes; and a headless tail only ever calls
+    // extractStructuredEventsFromEvent, never extractResponse.
+    const tempDir = await makeTempDir("codex-subagent-large-header");
+    const previousCodexHome = process.env.CODEX_HOME;
+    process.env.CODEX_HOME = tempDir;
+    try {
+      const dayDir = path.join(tempDir, "sessions", "2026", "10", "31");
+      fs.mkdirSync(dayDir, { recursive: true });
+      const parentThread = "parent-thread-large";
+      fs.writeFileSync(
+        path.join(dayDir, `rollout-parent-${parentThread}.jsonl`),
+        ""
+      );
+      const childRecords = [
+        {
+          type: "session_meta",
+          payload: {
+            id: "child-thread",
+            parent_thread_id: parentThread,
+            agent_path: "/root/alpha",
+            base_instructions: "x".repeat(40_000),
+            model: "gpt-child",
+          },
+        },
+        {
+          type: "event_msg",
+          payload: {
+            type: "task_started",
+            turn_attribution: { initiating_agent_path: "/root" },
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            role: "assistant",
+            content: [{ type: "output_text", text: "alpha done" }],
+          },
+        },
+        { type: "event_msg", payload: { type: "task_complete" } },
+      ];
+      fs.writeFileSync(
+        path.join(dayDir, "rollout-child.jsonl"),
+        childRecords.map((record) => JSON.stringify(record)).join("\n") + "\n"
+      );
+      const parentEvents = [
+        {
+          type: "session_meta",
+          payload: { id: parentThread, model: "gpt-parent" },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "function_call",
+            name: "spawn_agent",
+            namespace: "collaboration",
+            call_id: "spawn-alpha",
+            arguments: JSON.stringify({ task_name: "alpha" }),
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "function_call_output",
+            call_id: "spawn-alpha",
+            output: JSON.stringify({ task_name: "/root/alpha" }),
+          },
+        },
+      ] as unknown as BaseCliEvent[];
+
+      const streamingParser = new CodexLogParser();
+      for (const event of parentEvents) {
+        streamingParser.extractStructuredEventsFromEvent(event);
+      }
+      const drain = await streamingParser.getSubagentFollower().drainToEof(500);
+      assert.ok(
+        drain.events.some(
+          (event) =>
+            event.type === CLI_EVENT_TYPES.TEXT &&
+            (event.data as TextData).text === "alpha done" &&
+            event.subagent?.parentToolCallId === "spawn-alpha"
+        ),
+        "the child's output was not attributed to its spawn"
+      );
+      assert.strictEqual(drain.partial, false);
+    } finally {
+      if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
+      else process.env.CODEX_HOME = previousCodexHome;
+      await removeTempDir(tempDir);
+    }
+  });
+
+  test("keeps each live child's held reasoning events with that child", async () => {
+    // The reasoning grouper holds a response's events until its usage record.
+    // Alpha's command is still held when beta's rollout is next read, so a
+    // grouper shared between rollouts either drops it (beta's turn start
+    // resets the grouper) or releases it with beta's usage record and
+    // attribution.
+    const tempDir = await makeTempDir("codex-subagent-interleaved");
+    const previousCodexHome = process.env.CODEX_HOME;
+    process.env.CODEX_HOME = tempDir;
+    const parser = new CodexLogParser();
+    try {
+      const dayDir = path.join(tempDir, "sessions", "2026", "10", "31");
+      fs.mkdirSync(dayDir, { recursive: true });
+      const parentThread = "parent-thread-interleaved";
+      fs.writeFileSync(
+        path.join(dayDir, `rollout-parent-${parentThread}.jsonl`),
+        ""
+      );
+      const childRecords = (name: string, phase: "head" | "call" | "end") => {
+        const records = {
+          head: [
+            {
+              type: "session_meta",
+              payload: {
+                id: `child-${name}`,
+                parent_thread_id: parentThread,
+                agent_path: `/root/${name}`,
+              },
+            },
+            {
+              type: "event_msg",
+              payload: {
+                type: "task_started",
+                turn_attribution: { initiating_agent_path: "/root" },
+              },
+            },
+          ],
+          call: [
+            {
+              type: "response_item",
+              payload: { type: "reasoning", summary: [{ text: "thinking" }] },
+            },
+            {
+              type: "response_item",
+              payload: {
+                type: "function_call",
+                name: "exec_command",
+                call_id: `exec-${name}`,
+                arguments: JSON.stringify({ cmd: `echo marker-${name}` }),
+              },
+            },
+          ],
+          end: [
+            {
+              type: "event_msg",
+              payload: {
+                type: "token_count",
+                info: { last_token_usage: { reasoning_output_tokens: 5 } },
+              },
+            },
+            {
+              type: "response_item",
+              payload: {
+                type: "function_call_output",
+                call_id: `exec-${name}`,
+                output: `marker-${name}`,
+              },
+            },
+            { type: "event_msg", payload: { type: "task_complete" } },
+          ],
+        }[phase];
+        return records.map((record) => JSON.stringify(record) + "\n").join("");
+      };
+      const alphaFile = path.join(dayDir, "rollout-alpha.jsonl");
+      const betaFile = path.join(dayDir, "rollout-beta.jsonl");
+      fs.writeFileSync(
+        alphaFile,
+        childRecords("alpha", "head") + childRecords("alpha", "call")
+      );
+      fs.writeFileSync(betaFile, childRecords("beta", "head"));
+      const parentEvents = [
+        { type: "session_meta", payload: { id: parentThread } },
+        ...["beta", "alpha"].flatMap((name) => [
+          {
+            type: "response_item",
+            payload: {
+              type: "function_call",
+              name: "spawn_agent",
+              namespace: "collaboration",
+              call_id: `spawn-${name}`,
+              arguments: JSON.stringify({ task_name: name }),
+            },
+          },
+          {
+            type: "response_item",
+            payload: {
+              type: "function_call_output",
+              call_id: `spawn-${name}`,
+              output: JSON.stringify({ task_name: `/root/${name}` }),
+            },
+          },
+        ]),
+      ] as unknown as BaseCliEvent[];
+
+      const live: CliEvent[] = [];
+      parser.getSubagentFollower().start((events) => live.push(...events), 5);
+      for (const event of parentEvents) {
+        parser.extractStructuredEventsFromEvent(event);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      fs.appendFileSync(
+        betaFile,
+        childRecords("beta", "call") + childRecords("beta", "end")
+      );
+      fs.appendFileSync(alphaFile, childRecords("alpha", "end"));
+      await parser.getSubagentFollower().drainToEof(2000);
+
+      for (const name of ["alpha", "beta"]) {
+        const marker = `marker-${name}`;
+        const events = live.filter(
+          (event) =>
+            event.type !== CLI_EVENT_TYPES.THINKING &&
+            JSON.stringify(event.data).includes(marker)
+        );
+        assert.ok(
+          events.some((event) =>
+            JSON.stringify(event.data).includes(`echo ${marker}`)
+          ),
+          `${name}'s command was dropped`
+        );
+        assert.deepStrictEqual(
+          [...new Set(events.map((e) => e.subagent?.parentToolCallId))],
+          [`spawn-${name}`],
+          `${name}'s command was attributed to another spawn`
+        );
+      }
+    } finally {
+      parser.getSubagentFollower().stop();
+      if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
+      else process.env.CODEX_HOME = previousCodexHome;
+      await removeTempDir(tempDir);
+    }
+  });
+
   test("completes a live spawn card from the linked FINAL_ANSWER payload", () => {
     const streamingParser = new CodexLogParser();
     const parentRecords = [
@@ -8210,8 +8450,7 @@ suite("OpenCodeLogParser", () => {
           },
         }) + "\n"
       );
-      parser.setSubagentNotifyDir(directory);
-      parser.setSubagentRunId("run");
+      parser.setSubagentSidecar(directory, "run");
       parser.extractStructuredEventsFromEvent({
         type: OPENCODE_EVENT_TYPES.SUBTASK,
         part: {
@@ -8261,6 +8500,64 @@ suite("OpenCodeLogParser", () => {
     }
   });
 
+  test("follows a headless task spawn reported as a completed tool_use", async () => {
+    // `opencode run --format json` reports a spawn only as a completed
+    // `tool_use` for the task tool, never as a `subtask`, and a run that does
+    // not stream reaches the parser only through extractResponse().
+    const directory = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "opencode-headless-task-")
+    );
+    try {
+      await fs.promises.writeFile(
+        path.join(directory, "run-subagents.jsonl"),
+        [
+          {
+            kind: "part",
+            childSessionId: "child",
+            part: {
+              type: "text",
+              id: "child-text",
+              sessionID: "child",
+              messageID: "message",
+              text: "headless child text",
+            },
+          },
+          { kind: "child-idle", childSessionId: "child" },
+        ]
+          .map((record) => JSON.stringify(record))
+          .join("\n") + "\n"
+      );
+      parser.setSubagentSidecar(directory, "run");
+      parser.extractResponse([
+        {
+          type: OPENCODE_EVENT_TYPES.TOOL_USE,
+          sessionID: "parent",
+          part: {
+            type: "tool",
+            tool: "task",
+            callID: "task-call",
+            sessionID: "parent",
+            state: {
+              status: "completed",
+              input: { description: "alpha" },
+              metadata: {
+                sessionId: "child",
+                model: { modelID: "claude-haiku-5-5", providerID: "opencode" },
+              },
+            },
+          },
+        },
+      ]);
+      const drain = await parser.getSubagentFollower()?.drainToEof(100);
+      const childText = drain?.events.find(
+        (event) => (event.data as TextData).text === "headless child text"
+      );
+      assert.strictEqual(childText?.subagent?.parentToolCallId, "task-call");
+    } finally {
+      await fs.promises.rm(directory, { recursive: true, force: true });
+    }
+  });
+
   test("streams child parts interactively and attributes grandchildren to their task", async () => {
     const directory = await fs.promises.mkdtemp(
       path.join(os.tmpdir(), "opencode-grandchild-")
@@ -8301,8 +8598,7 @@ suite("OpenCodeLogParser", () => {
         file,
         records.map((record) => JSON.stringify(record)).join("\n") + "\n"
       );
-      parser.setSubagentNotifyDir(directory);
-      parser.setSubagentRunId("run");
+      parser.setSubagentSidecar(directory, "run");
       parser.extractStructuredEventsFromEvent({
         type: OPENCODE_EVENT_TYPES.SUBTASK,
         part: {
@@ -9003,6 +9299,39 @@ suite("Antigravity subagent attribution", () => {
       { agentId: "child-one", label: "Researcher" },
       { agentId: "child-two", label: "Reviewer" },
     ]);
+  });
+
+  test("reads the one-subagent-per-call arguments of agy 1.4.12", () => {
+    // agy 1.4.12 dropped the `Subagents` array: each call spawns one
+    // subagent and passes its fields directly.
+    const events = AntigravityToolEventBuilder.build({
+      call: {
+        name: "invoke_subagent",
+        args: {
+          Prompt: "Run echo alpha",
+          Role: "Alpha Worker",
+          TypeName: "self",
+        },
+      },
+      result: {
+        source: "MODEL",
+        type: "GENERIC",
+        status: "DONE",
+        content:
+          'Created the following subagent:\n{"conversationId":"child-alpha","logAbsoluteUri":"file:///tmp/alpha/transcript.jsonl"}',
+      },
+      timestamp: 1,
+      toolCallId: "spawn-alpha",
+    });
+    assert.deepStrictEqual(
+      (events[0].data as ToolCall).subagentSpawn?.children,
+      [{ agentId: "child-alpha", label: "Alpha Worker" }]
+    );
+    assert.deepStrictEqual(
+      readAntigravitySubagentDescriptors({ Prompt: "p", Role: "r" }),
+      [{ Prompt: "p", Role: "r" }]
+    );
+    assert.deepStrictEqual(readAntigravitySubagentDescriptors({}), []);
   });
 
   test("follows child transcripts live and completes only after every report", async () => {

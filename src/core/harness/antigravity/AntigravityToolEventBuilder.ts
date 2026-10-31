@@ -58,7 +58,7 @@ export class AntigravityToolEventBuilder {
     const id = taskId ?? eventId;
 
     if (normalizedName === ANTIGRAVITY_TOOL_NAMES.INVOKE_SUBAGENT) {
-      const children = this.parseSubagents(args.Subagents, resultText);
+      const children = this.parseSubagents(args, resultText);
       return [
         {
           type: CLI_EVENT_TYPES.TOOL_CALL,
@@ -255,32 +255,24 @@ export class AntigravityToolEventBuilder {
   }
 
   private static parseSubagents(
-    value: unknown,
+    args: Record<string, unknown>,
     resultText: string
   ): { agentId: string; label?: string }[] {
-    if (typeof value !== "string") return [];
-    try {
-      const parsed: unknown = JSON.parse(value);
-      if (!Array.isArray(parsed)) return [];
-      const ids = parseAntigravityJsonObjectSequence(resultText).flatMap(
-        (item) =>
-          typeof item.conversationId === "string" ? [item.conversationId] : []
-      );
-      return parsed.flatMap((child, index) => {
-        if (!isRecord(child)) return [];
-        const conversationId = ids[index];
-        return typeof conversationId === "string"
-          ? [
-              {
-                agentId: conversationId,
-                label: typeof child.Role === "string" ? child.Role : undefined,
-              },
-            ]
-          : [];
-      });
-    } catch {
-      return [];
-    }
+    const ids = parseAntigravityJsonObjectSequence(resultText).flatMap(
+      (item) =>
+        typeof item.conversationId === "string" ? [item.conversationId] : []
+    );
+    return readAntigravitySubagentDescriptors(args).flatMap((child, index) => {
+      const conversationId = ids[index];
+      return typeof conversationId === "string"
+        ? [
+            {
+              agentId: conversationId,
+              label: typeof child.Role === "string" ? child.Role : undefined,
+            },
+          ]
+        : [];
+    });
   }
 
   static buildUnmatchedCall(
@@ -817,6 +809,26 @@ export class AntigravityToolEventBuilder {
     }
     return entry.type.toLowerCase();
   }
+}
+
+/**
+ * The subagents an `invoke_subagent` call asked for, in submission order (the
+ * order its result lists the created conversations). agy 1.4.12 and later
+ * spawn one subagent per call with flat `Prompt`/`Role`/`TypeName`/`Model`
+ * arguments; earlier releases pass a JSON array string in `Subagents`.
+ */
+export function readAntigravitySubagentDescriptors(
+  args: Record<string, unknown>
+): Record<string, unknown>[] {
+  if (typeof args.Subagents === "string") {
+    try {
+      const parsed: unknown = JSON.parse(args.Subagents);
+      return Array.isArray(parsed) ? parsed.filter(isRecord) : [];
+    } catch {
+      return [];
+    }
+  }
+  return typeof args.Prompt === "string" ? [args] : [];
 }
 
 /** The creation result contains adjacent JSON objects among explanatory text. */

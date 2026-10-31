@@ -5,6 +5,53 @@ export interface IncrementalJsonlReadResult<TRecord> {
   nextOffset: number;
 }
 
+const FIRST_RECORD_CHUNK_BYTES = 64 * 1024;
+/** Harness headers can embed whole instruction files, so allow a large first line. */
+const FIRST_RECORD_MAX_BYTES = 4 * 1024 * 1024;
+
+/**
+ * Parse the first complete line of a JSONL file, however long it is (up to
+ * `maxBytes`). Returns undefined while that line is still being written, when
+ * it is malformed, or when the file does not exist.
+ */
+export async function readFirstJsonlRecord(
+  filePath: string,
+  maxBytes = FIRST_RECORD_MAX_BYTES
+): Promise<unknown> {
+  let handle: Awaited<ReturnType<typeof fs.promises.open>>;
+  try {
+    handle = await fs.promises.open(filePath, "r");
+  } catch {
+    return undefined;
+  }
+  try {
+    const chunks: Buffer[] = [];
+    let total = 0;
+    while (total < maxBytes) {
+      const chunk = Buffer.allocUnsafe(
+        Math.min(FIRST_RECORD_CHUNK_BYTES, maxBytes - total)
+      );
+      const { bytesRead } = await handle.read(chunk, 0, chunk.length, total);
+      if (bytesRead === 0) return undefined;
+      const filled = chunk.subarray(0, bytesRead);
+      const newline = filled.indexOf(0x0a);
+      if (newline >= 0) {
+        chunks.push(filled.subarray(0, newline));
+        try {
+          return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        } catch {
+          return undefined;
+        }
+      }
+      chunks.push(filled);
+      total += bytesRead;
+    }
+    return undefined;
+  } finally {
+    await handle.close();
+  }
+}
+
 /** Read and parse only complete JSONL records appended at or after `fromOffset`. */
 export async function readIncrementalJsonl<TRecord>(
   filePath: string,

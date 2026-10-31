@@ -223,6 +223,19 @@ async function resolveWindowsLauncher(
       };
     }
 
+    const executableTarget = await resolveNativeCmdShimTarget(resolvedPath);
+    if (executableTarget) {
+      Log.debug(
+        `[CliLauncherResolver] bypassing npm cmd shim "${resolvedPath}" "${executableTarget}"`
+      );
+      return {
+        kind: "direct",
+        command: executableTarget,
+        prefixArgs: [],
+        resolvedPath: executableTarget,
+      };
+    }
+
     return {
       kind: "cmd-file",
       command: "cmd.exe",
@@ -270,17 +283,23 @@ export function parsePowerShellBatchProxyTarget(
   return target;
 }
 
+/** A `.cmd`/`.bat` file's text, or undefined when it is not a small file. */
+async function readSmallBatchFile(
+  batchPath: string
+): Promise<string | undefined> {
+  const stat = await fs.promises.stat(batchPath);
+  if (!stat.isFile() || stat.size > MAX_BATCH_PROXY_BYTES) {
+    return undefined;
+  }
+  return fs.promises.readFile(batchPath, "utf8");
+}
+
 async function resolvePowerShellBatchProxyTarget(
   batchPath: string
 ): Promise<string | undefined> {
   try {
-    const stat = await fs.promises.stat(batchPath);
-    if (!stat.isFile() || stat.size > MAX_BATCH_PROXY_BYTES) {
-      return undefined;
-    }
-
-    const contents = await fs.promises.readFile(batchPath, "utf8");
-    const target = parsePowerShellBatchProxyTarget(contents);
+    const contents = await readSmallBatchFile(batchPath);
+    const target = contents && parsePowerShellBatchProxyTarget(contents);
     if (!target) {
       return undefined;
     }
@@ -337,8 +356,46 @@ async function resolvePowerShellBatchProxyTarget(
 export function parseNpmCmdShimScriptRelativePath(
   contents: string
 ): string | undefined {
+  return readShimRelativePath(
+    contents,
+    String.raw`\r?\nIF EXIST "%dp0%\\node\.exe" \(\r?\n  SET "_prog=%dp0%\\node\.exe"\r?\n\) ELSE \(\r?\n  SET "_prog=node"\r?\n  SET PATHEXT=%PATHEXT:;\.JS;=;%\r?\n\)\r?\n\r?\nendLocal & goto #_undefined_# 2>NUL \|\| title %COMSPEC% & "%_prog%"\s+"%dp0%\\(.+?)" %\*`
+  );
+}
+
+/**
+ * Recognize npm's `.cmd` shim for a bin that is a native executable rather
+ * than a script, and extract the executable's path relative to the shim:
+ *
+ *   ...same preamble as above...
+ *   CALL :find_dp0
+ *   "%dp0%\node_modules\opencode-ai\bin\opencode.exe"   %*
+ *
+ * OpenCode 1.19 ships this shape. Launching the executable directly keeps
+ * prompts out of cmd.exe's metacharacter grammar, for the same reasons as the
+ * node-script shim above.
+ */
+export function parseNpmCmdShimExecutableRelativePath(
+  contents: string
+): string | undefined {
+  return readShimRelativePath(
+    contents,
+    String.raw`"%dp0%\\([^"\r\n]+?\.exe)"\s+%\*`
+  );
+}
+
+/** The npm `cmd-shim` lines every generated `.cmd` shim starts with. */
+const NPM_CMD_SHIM_PREAMBLE = String.raw`^\s*@ECHO off\r?\nGOTO start\r?\n:find_dp0\r?\nSET dp0=%~dp0\r?\nEXIT \/[bB]0?\r?\n:start\r?\nSETLOCAL\r?\nCALL :find_dp0\r?\n`;
+
+/**
+ * Match `contents` against the npm shim preamble followed by `invocation`,
+ * whose one capture group is the target's path relative to the shim.
+ */
+function readShimRelativePath(
+  contents: string,
+  invocation: string
+): string | undefined {
   const match = contents.match(
-    /^\s*@ECHO off\r?\nGOTO start\r?\n:find_dp0\r?\nSET dp0=%~dp0\r?\nEXIT \/[bB]0?\r?\n:start\r?\nSETLOCAL\r?\nCALL :find_dp0\r?\n\r?\nIF EXIST "%dp0%\\node\.exe" \(\r?\n  SET "_prog=%dp0%\\node\.exe"\r?\n\) ELSE \(\r?\n  SET "_prog=node"\r?\n  SET PATHEXT=%PATHEXT:;\.JS;=;%\r?\n\)\r?\n\r?\nendLocal & goto #_undefined_# 2>NUL \|\| title %COMSPEC% & "%_prog%"\s+"%dp0%\\(.+?)" %\*\r?\n?\s*$/
+    new RegExp(`${NPM_CMD_SHIM_PREAMBLE}${invocation}\\r?\\n?\\s*$`)
   );
   const relativePath = match?.[1]?.trim();
   return relativePath && !path.win32.isAbsolute(relativePath)
@@ -346,18 +403,31 @@ export function parseNpmCmdShimScriptRelativePath(
     : undefined;
 }
 
+async function resolveNativeCmdShimTarget(
+  batchPath: string
+): Promise<string | undefined> {
+  try {
+    const contents = await readSmallBatchFile(batchPath);
+    const relativePath =
+      contents && parseNpmCmdShimExecutableRelativePath(contents);
+    if (!relativePath) {
+      return undefined;
+    }
+    const target = path.join(path.dirname(batchPath), relativePath);
+    return (await fileExists(target)) ? target : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function resolveNodeCliShimTarget(
   batchPath: string,
   shell: string
 ): Promise<{ nodePath: string; scriptPath: string } | undefined> {
   try {
-    const stat = await fs.promises.stat(batchPath);
-    if (!stat.isFile() || stat.size > MAX_BATCH_PROXY_BYTES) {
-      return undefined;
-    }
-
-    const contents = await fs.promises.readFile(batchPath, "utf8");
-    const relativeScriptPath = parseNpmCmdShimScriptRelativePath(contents);
+    const contents = await readSmallBatchFile(batchPath);
+    const relativeScriptPath =
+      contents && parseNpmCmdShimScriptRelativePath(contents);
     if (!relativeScriptPath) {
       return undefined;
     }

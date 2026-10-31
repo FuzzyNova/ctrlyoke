@@ -186,10 +186,9 @@ export class OpenCodeLogParser extends BaseLogParser {
   getSubagentFollower(): SubagentSourceFollower {
     return this.subagentFollower;
   }
-  setSubagentNotifyDir(directory: string): void {
+  /** Where the plugin writes this launch's subagent records. */
+  setSubagentSidecar(directory: string | undefined, runId: string): void {
     this.subagentNotifyDir = directory;
-  }
-  setSubagentRunId(runId: string): void {
     this.subagentRunId = runId;
   }
   async cleanupSubagentSidecar(): Promise<void> {
@@ -420,21 +419,8 @@ export class OpenCodeLogParser extends BaseLogParser {
    * step_start and step_finish carry no displayable content and produce no events.
    */
   extractStructuredEventsFromEvent(event: BaseCliEvent): CliEvent[] {
+    this.registerTaskSpawn(event);
     const e = event as Record<string, any>;
-    const part = e.part as Record<string, any> | undefined;
-    const childSessionId = part?.state?.metadata?.sessionId;
-    if (
-      event.type === OPENCODE_EVENT_TYPES.SUBTASK &&
-      typeof childSessionId === "string" &&
-      typeof part?.callID === "string" &&
-      typeof part?.sessionID === "string"
-    ) {
-      this.registerSubagentSource(
-        childSessionId,
-        part.callID,
-        typeof part.model === "string" ? part.model : "unknown"
-      );
-    }
     const cliEvents: CliEvent[] = [];
     const timestamp = e.timestamp as number | undefined;
 
@@ -523,6 +509,41 @@ export class OpenCodeLogParser extends BaseLogParser {
     }
 
     return cliEvents;
+  }
+
+  /**
+   * Follow the child session of a `task` spawn. Called from both the streaming
+   * and the final extraction path: a headless run that does not stream still
+   * drains the follower after extractResponse(). `opencode run --format json`
+   * reports a spawn as a `tool_use` event for the `task` tool (once it
+   * completes), never as a `subtask`.
+   */
+  private registerTaskSpawn(event: BaseCliEvent): void {
+    const part = (event as Record<string, any>).part as
+      Record<string, any> | undefined;
+    const isTaskSpawn =
+      event.type === OPENCODE_EVENT_TYPES.SUBTASK ||
+      (event.type === OPENCODE_EVENT_TYPES.TOOL_USE &&
+        part?.tool === OPENCODE_TOOL_NAMES.TASK);
+    const childSessionId = part?.state?.metadata?.sessionId;
+    if (
+      !isTaskSpawn ||
+      typeof childSessionId !== "string" ||
+      typeof part?.callID !== "string" ||
+      typeof part?.sessionID !== "string"
+    ) {
+      return;
+    }
+    const childModel = part.state?.metadata?.model?.modelID;
+    this.registerSubagentSource(
+      childSessionId,
+      part.callID,
+      typeof part.model === "string"
+        ? part.model
+        : typeof childModel === "string"
+          ? childModel
+          : "unknown"
+    );
   }
 
   private registerSubagentSource(
@@ -650,6 +671,7 @@ export class OpenCodeLogParser extends BaseLogParser {
 
     for (const event of events) {
       const e = event as Record<string, any>;
+      this.registerTaskSpawn(event);
 
       if (typeof e.sessionID === "string" && !sessionId) {
         sessionId = e.sessionID;

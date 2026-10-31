@@ -132,7 +132,12 @@ export interface HarnessConfig {
  * ```
  */
 export interface ICliProvider {
-  setRunId?(runId: string): void;
+  /**
+   * The per-launch run ID and notification directory, exactly as given to the
+   * harness process in CTRLYOKE_RUN_ID / CTRLYOKE_NOTIFY_DIR. Called before
+   * every launch, headless and interactive alike.
+   */
+  setRunId?(runId: string, notifyDir: string | undefined): void;
   /** Static harness configuration */
   readonly config: HarnessConfig;
 
@@ -302,6 +307,12 @@ export interface ICliProvider {
 
   /** Consume the result of the statusline install mutation for host feedback. */
   consumeStatuslineInstallResult?(): StatuslineInstallResult | undefined;
+
+  /**
+   * True when the CLI's model must be given absolute file references, even in
+   * a single-root workspace without `ui.useAbsolutePathReferences`.
+   */
+  readonly requiresAbsoluteFileReferences?: boolean;
 
   /**
    * Format a file path reference for this CLI.
