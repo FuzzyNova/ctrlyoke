@@ -37,8 +37,8 @@ import { CliProviderUtils } from "./CliProviderUtils";
 import { projectStateRoot } from "../../../utils/ProjectStatePaths";
 import { runArtifactStem } from "../../../utils/WorkflowPaths";
 import {
-  hasUserHookEnvironment,
-  prepareUserHookEnvironments,
+  needsUserHookLauncher,
+  prepareUserHookLaunchers,
 } from "./UserHookEnvironment";
 
 export interface ExecutionPlanBuilderDeps {
@@ -171,14 +171,20 @@ export class ExecutionPlanBuilder {
       const workingFilePath = session.workflowContext?.workingFilePath;
       let hookEnvironmentMutation: PreparedMutation | undefined;
 
-      if (userHooks && hasUserHookEnvironment(originalUserHooks)) {
+      if (
+        userHooks &&
+        needsUserHookLauncher(
+          originalUserHooks,
+          this.deps.provider.config.harnessId
+        )
+      ) {
         const stateRoot = this.deps.getStateRoot?.() ?? workspaceRoot;
         const hookTempDirectory = path.join(
           projectStateRoot(stateRoot, "user"),
           "temp",
           "hook-environments"
         );
-        const hookEnvironment = prepareUserHookEnvironments({
+        const hookEnvironment = prepareUserHookLaunchers({
           hooks: userHooks,
           harnessId: this.deps.provider.config.harnessId,
           extensionPath,

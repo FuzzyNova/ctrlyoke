@@ -21,17 +21,53 @@ export interface UserHookEnvironmentEntry {
   timeoutSec?: number;
 }
 
-export function hasUserHookEnvironment(
-  hooks: UserHookConfig[] | undefined
-): boolean {
-  return Boolean(hooks?.some((hook) => Object.keys(hook.env ?? {}).length > 0));
+function hasHookEnvironment(hook: UserHookConfig): boolean {
+  return Object.keys(hook.env ?? {}).length > 0;
 }
 
 /**
- * Keeps resolved hook variables out of the harness process. Each hook gets an
- * ID in one per-step file; the launcher selects only that hook's environment.
+ * On Windows, Qwen Code runs a command hook as
+ * `spawn(ComSpec, ["/d", "/s", "/c", command], { shell: false })` unless it was
+ * itself started from Git Bash. Node escapes every `"` in that argument to
+ * `\"`, which cmd.exe passes on literally, so a hook such as
+ * `node "C:/my scripts/hook.js"` silently never runs. The launcher spawns the
+ * command with `shell: true`, whose cmd.exe quoting is correct.
  */
-export function prepareUserHookEnvironments(params: {
+function harnessBreaksQuotedHookCommands(
+  harnessId: string | undefined
+): boolean {
+  return process.platform === "win32" && harnessId === HARNESS_IDS.QWEN_CLI;
+}
+
+/**
+ * Whether `hook` must run through `ctrlyoke-hook-run.js` instead of being handed
+ * to the harness verbatim: it carries resolved environment values, or the
+ * harness's own launch would mangle its quoting.
+ */
+function hookNeedsLauncher(
+  hook: UserHookConfig,
+  harnessId: string | undefined
+): boolean {
+  return (
+    hasHookEnvironment(hook) ||
+    (harnessBreaksQuotedHookCommands(harnessId) && hook.command.includes('"'))
+  );
+}
+
+export function needsUserHookLauncher(
+  hooks: UserHookConfig[] | undefined,
+  harnessId: string | undefined
+): boolean {
+  return Boolean(hooks?.some((hook) => hookNeedsLauncher(hook, harnessId)));
+}
+
+/**
+ * Routes hooks that need it through `ctrlyoke-hook-run.js`
+ * (see `hookNeedsLauncher`). This keeps resolved hook variables out of the
+ * harness process: each wrapped hook gets an ID in one per-step file, and the
+ * launcher selects only that hook's environment.
+ */
+export function prepareUserHookLaunchers(params: {
   hooks: UserHookConfig[] | undefined;
   harnessId: string | undefined;
   extensionPath: string;
@@ -41,7 +77,7 @@ export function prepareUserHookEnvironments(params: {
   stableFileStem?: string;
 }): PreparedUserHookEnvironments {
   const { hooks } = params;
-  if (!hooks || !hasUserHookEnvironment(hooks)) {
+  if (!hooks || !needsUserHookLauncher(hooks, params.harnessId)) {
     return { hooks };
   }
 
@@ -57,13 +93,12 @@ export function prepareUserHookEnvironments(params: {
   );
   const envByHookId: Record<string, UserHookEnvironmentEntry> = {};
   const wrappedHooks: PreparedUserHookConfig[] = hooks.map((hook, index) => {
-    const env = hook.env;
-    if (!env || Object.keys(env).length === 0) {
+    if (!hookNeedsLauncher(hook, params.harnessId)) {
       return hook;
     }
     const hookId = `hook-${index}`;
     envByHookId[hookId] = {
-      env,
+      env: hook.env ?? {},
       ...(hook.timeoutSec === undefined ? {} : { timeoutSec: hook.timeoutSec }),
     };
     if (params.harnessId === HARNESS_IDS.OPENCODE_CLI) {

@@ -8,7 +8,7 @@ import { EventEmitter } from "events";
 import { spawn, spawnSync, type SpawnSyncReturns } from "child_process";
 import { suite, test } from "mocha";
 import { HARNESS_IDS } from "../../types/DashboardConstants";
-import { prepareUserHookEnvironments } from "../../core/harness/shared/UserHookEnvironment";
+import { prepareUserHookLaunchers } from "../../core/harness/shared/UserHookEnvironment";
 import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
 import { CliExecutionSession } from "../../core/harness/shared/CliExecutionSession";
 import { ExecutionPlanBuilder } from "../../core/harness/shared/ExecutionPlanBuilder";
@@ -85,7 +85,7 @@ suite("UserHookEnvironment", () => {
     try {
       const printTokenCommand =
         'node -e "process.stdout.write(process.env.TOKEN)"';
-      const prepared = prepareUserHookEnvironments({
+      const prepared = prepareUserHookLaunchers({
         harnessId: HARNESS_IDS.CODEX_CLI,
         extensionPath,
         hookTempDirectory: tempDirectory,
@@ -144,7 +144,7 @@ suite("UserHookEnvironment", () => {
       HARNESS_IDS.QWEN_CLI,
       HARNESS_IDS.ANTIGRAVITY_CLI,
     ]) {
-      const prepared = prepareUserHookEnvironments({
+      const prepared = prepareUserHookLaunchers({
         harnessId,
         extensionPath,
         hookTempDirectory: os.tmpdir(),
@@ -162,6 +162,70 @@ suite("UserHookEnvironment", () => {
     }
   });
 
+  test("routes quoted Qwen hook commands through the launcher on Windows", async () => {
+    const tempDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-qwen-quoted-hook-")
+    );
+    const markerPath = path.join(tempDirectory, "marker.txt");
+    const scriptPath = path.join(tempDirectory, "hook.js");
+    await fs.writeFile(
+      scriptPath,
+      "require('fs').writeFileSync(process.argv[2], 'ran');"
+    );
+    const quotedCommand = `node "${scriptPath}" "${markerPath}"`;
+    const unquotedCommand = "echo hook";
+    try {
+      const prepared = prepareUserHookLaunchers({
+        harnessId: HARNESS_IDS.QWEN_CLI,
+        extensionPath,
+        hookTempDirectory: tempDirectory,
+        promptIndex: 0,
+        hooks: [
+          { event: "stop", command: quotedCommand },
+          { event: "sessionStart", command: unquotedCommand },
+        ],
+      });
+      if (process.platform !== "win32") {
+        // Qwen runs hooks through `bash -c` here, which handles quotes.
+        assert.strictEqual(prepared.tempFilePath, undefined);
+        assert.strictEqual(prepared.hooks?.[0].command, quotedCommand);
+        return;
+      }
+
+      const wrapped = prepared.hooks?.[0].command ?? "";
+      assert.ok(wrapped.includes("ctrlyoke-hook-run.js"));
+      assert.ok(!wrapped.includes('"'), "the launcher command is unquoted");
+      assert.strictEqual(prepared.hooks?.[1].command, unquotedCommand);
+      await prepared.mutation!.apply();
+      assert.deepStrictEqual(
+        JSON.parse(await fs.readFile(prepared.tempFilePath!, "utf8")),
+        { "hook-0": { env: {} } }
+      );
+
+      // Launch both the way Qwen Code does on Windows: cmd.exe with
+      // shell: false, so Node escapes every quote in the command to \".
+      const runLikeQwen = (command: string) =>
+        spawnSync(
+          process.env.ComSpec ?? "cmd.exe",
+          ["/d", "/s", "/c", command],
+          {
+            encoding: "utf8",
+            shell: false,
+          }
+        );
+      runLikeQwen(quotedCommand);
+      assert.ok(
+        !fsSync.existsSync(markerPath),
+        "the raw quoted command should fail under Qwen's launch"
+      );
+      const result = runLikeQwen(wrapped);
+      assert.strictEqual(result.status, 0, result.stderr);
+      assert.strictEqual(await fs.readFile(markerPath, "utf8"), "ran");
+    } finally {
+      await fs.rm(tempDirectory, { recursive: true, force: true });
+    }
+  });
+
   test("isolates concurrent Qwen step env files and reuses each step path", async () => {
     const tempDirectory = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-qwen-step-env-")
@@ -170,7 +234,7 @@ suite("UserHookEnvironment", () => {
       { event: "stop" as const, command: "echo hook", env: { TOKEN: token } },
     ];
     try {
-      const first = prepareUserHookEnvironments({
+      const first = prepareUserHookLaunchers({
         harnessId: HARNESS_IDS.QWEN_CLI,
         extensionPath,
         hookTempDirectory: tempDirectory,
@@ -178,7 +242,7 @@ suite("UserHookEnvironment", () => {
         stableFileStem: "workflow-run-123-step-0",
         hooks: hooksFor("first"),
       });
-      const nextStep = prepareUserHookEnvironments({
+      const nextStep = prepareUserHookLaunchers({
         harnessId: HARNESS_IDS.QWEN_CLI,
         extensionPath,
         hookTempDirectory: tempDirectory,
@@ -186,7 +250,7 @@ suite("UserHookEnvironment", () => {
         stableFileStem: "workflow-run-123-step-1",
         hooks: hooksFor("second"),
       });
-      const rerunFirstStep = prepareUserHookEnvironments({
+      const rerunFirstStep = prepareUserHookLaunchers({
         harnessId: HARNESS_IDS.QWEN_CLI,
         extensionPath,
         hookTempDirectory: tempDirectory,
@@ -194,7 +258,7 @@ suite("UserHookEnvironment", () => {
         stableFileStem: "workflow-run-123-step-0",
         hooks: hooksFor("first"),
       });
-      const concurrentRun = prepareUserHookEnvironments({
+      const concurrentRun = prepareUserHookLaunchers({
         harnessId: HARNESS_IDS.QWEN_CLI,
         extensionPath,
         hookTempDirectory: tempDirectory,

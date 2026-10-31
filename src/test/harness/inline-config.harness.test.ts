@@ -1110,7 +1110,26 @@ suite("Inline harness configuration regression tests", function () {
           },
         ],
       };
-      const result = runWorkflowFile(workflow, tmpDir, "qwen-existing-hooks");
+      // The hook commands quote their paths. On Windows Qwen runs hooks through
+      // `cmd.exe /d /s /c` unless it detects Git Bash (MSYSTEM, or an msys or
+      // cygwin TERM), and that launch breaks quoted commands; ctrlyoke must
+      // route them through its hook launcher. Hide Git Bash so the case proves
+      // that path wherever the suite is started from.
+      const gitBashEnv = {
+        MSYSTEM: process.env.MSYSTEM,
+        TERM: process.env.TERM,
+      };
+      delete process.env.MSYSTEM;
+      if (/msys|cygwin/.test(process.env.TERM ?? "")) delete process.env.TERM;
+      let result: ReturnType<typeof runWorkflowFile>;
+      try {
+        result = runWorkflowFile(workflow, tmpDir, "qwen-existing-hooks");
+      } finally {
+        for (const [name, value] of Object.entries(gitBashEnv)) {
+          if (value === undefined) delete process.env[name];
+          else process.env[name] = value;
+        }
+      }
       if (logAndMaybeSkip("qwen-cli (existing hooks)", result)) return;
       assertSuccessfulRun("qwen-cli (existing hooks)", result);
       assert.ok(hasRecordedEvent(outputPath, "sessionStart"));
