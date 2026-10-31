@@ -369,7 +369,7 @@ function SkillUpdateCheckControl({ copies }: { copies: number }) {
         onClick={checkForUpdates}
         disabled={updateCheck.checking}
         title={`Compare the ${copies} skill${copies === 1 ? "" : "s"} installed from ${SKILLS_SH.label} with their GitHub repositories`}
-        className="flex items-center gap-1 rounded-sm border border-panel-border px-2 py-1 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex h-6 items-center gap-1 rounded-sm border border-panel-border px-2 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
       >
         <Icon
           name={updateCheck.checking ? "loading" : "refresh"}
@@ -437,7 +437,7 @@ type SkillsRegistryPanelProps = {
 /**
  * The Agent & Skills Manager's "Discover & import" area for skills: search
  * skills.sh and install a reviewed skill into the active scope's ctrlyoke
- * skills folder. Nothing is fetched until the user opens the skills.sh tab.
+ * skills folder. Nothing is fetched until the user clicks "Browse skills.sh".
  */
 export function SkillsRegistryPanel({
   activeScope,
@@ -445,7 +445,7 @@ export function SkillsRegistryPanel({
   skillsDirectory,
 }: SkillsRegistryPanelProps) {
   const isOpen = useSkillsRegistryStore((s) => s.isOpen);
-  const setOpen = useSkillsRegistryStore((s) => s.setOpen);
+  const open = useSkillsRegistryStore((s) => s.open);
   const query = useSkillsRegistryStore((s) => s.query);
   const setQuery = useSkillsRegistryStore((s) => s.setQuery);
   const search = useSkillsRegistryStore((s) => s.search);
@@ -535,29 +535,32 @@ export function SkillsRegistryPanel({
 
   return (
     <div className="min-w-0 space-y-2">
-      <div className="text-xxs font-semibold uppercase tracking-wide text-description-fg">
-        Discover &amp; import
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setOpen(!isOpen)}
-          aria-expanded={isOpen}
-          title={`Search the public ${SKILLS_SH.label} skills directory run by ${SKILLS_SH.operator}`}
-          className={`flex items-center gap-1 rounded-sm border px-2 py-1 text-xs transition-colors ${
-            isOpen
-              ? "border-btn-bg bg-btn-bg text-btn-fg"
-              : "border-panel-border text-description-fg hover:border-focus-border hover:text-foreground"
-          }`}
-        >
-          <Icon name="globe" className="text-xxs" />
-          {SKILLS_SH.label}
-        </button>
+      {/* min-h-6 matches the Managed skills header beside it, so both
+          columns' first boxes start at the same height. */}
+      <div className="flex min-h-6 flex-wrap items-center gap-2">
+        <div className="text-xxs font-semibold uppercase tracking-wide text-description-fg">
+          Discover &amp; import
+        </div>
         {skillsShCopies > 0 && (
-          <SkillUpdateCheckControl copies={skillsShCopies} />
+          <div className="ml-auto">
+            <SkillUpdateCheckControl copies={skillsShCopies} />
+          </div>
         )}
       </div>
+
+      {/* Opening is a one-way opt-in: the button goes away and the browser
+          stays for the rest of this dashboard instance. */}
+      {!isOpen && (
+        <button
+          type="button"
+          onClick={open}
+          title={`Search the public ${SKILLS_SH.label} skills directory run by ${SKILLS_SH.operator}`}
+          className="flex items-center gap-1.5 rounded-sm bg-btn-bg px-3 py-1 text-xs text-btn-fg transition-colors hover:bg-btn-hover"
+        >
+          <Icon name="globe" className="text-xxs" />
+          Browse {SKILLS_SH.label}
+        </button>
+      )}
 
       {isOpen && (
         <div className="space-y-2 rounded-sm border border-panel-border bg-editor-bg p-3">

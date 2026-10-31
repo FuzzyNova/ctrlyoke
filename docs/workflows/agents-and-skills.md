@@ -209,12 +209,14 @@ applies one action to the selected rows:
 
 ### Installing skills from skills.sh {#manager-skills-sh}
 
-In the **Skills** list, the **skills.sh** tab under **Discover & import**
+In the **Skills** list, **Browse skills.sh** under **Discover & import**
 searches [skills.sh](https://skills.sh), the public skills directory run by
 Vercel. On a wide window, **Discover & import** sits to the right of the skills
-list.
+list. Nothing is sent to skills.sh until you click it. The browser then stays
+open until you reload the window, or in the hosted dashboard until you open a
+new browser tab.
 
-Opening the tab lists the **top skills** on skills.sh by all-time installs. This
+The browser starts with the **top skills** on skills.sh by all-time installs. This
 list is a snapshot bundled with each ctrlyoke release, so its install counts are
 as of the date shown above it. Type at least two characters to search
 skills.sh instead; your search text is sent there, and clearing the search box
@@ -256,7 +258,7 @@ never replaces it; delete or rename it first.
 
 #### Updating skills from skills.sh {#manager-skills-sh-updates}
 
-**Check for updates**, beside the **skills.sh** tab, compares every skill you
+**Check for updates**, beside the **Discover & import** heading, compares every skill you
 installed from skills.sh, in both scopes, with its GitHub repository. It
 appears once you have installed one, and runs only when you click it. Only the
 skill's own folder counts, so commits to other parts of the repository are not

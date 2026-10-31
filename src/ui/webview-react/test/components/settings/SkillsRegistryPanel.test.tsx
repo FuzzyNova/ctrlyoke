@@ -85,6 +85,8 @@ function sentOfType(type: string) {
   return sendMessageMock.mock.calls.filter(([sent]) => sent === type);
 }
 
+const BROWSE_LABEL = `Browse ${DATA_SOURCES.SKILLS_SH.label}`;
+
 function renderPanel(managedFiles: ManagedFile[] = []) {
   return render(
     <SkillsRegistryPanel
@@ -98,9 +100,7 @@ function renderPanel(managedFiles: ManagedFile[] = []) {
 /** Open the tab, type a query and let the debounced search go out. */
 function searchFor(query: string) {
   if (!useSkillsRegistryStore.getState().isOpen) {
-    fireEvent.click(
-      screen.getByRole("button", { name: DATA_SOURCES.SKILLS_SH.label })
-    );
+    fireEvent.click(screen.getByRole("button", { name: BROWSE_LABEL }));
   }
   fireEvent.change(
     screen.getByLabelText(`Search ${DATA_SOURCES.SKILLS_SH.label}`),
@@ -130,12 +130,10 @@ describe("SkillsRegistryPanel", () => {
     vi.useRealTimers();
   });
 
-  it("names skills.sh as the source and asks for nothing until the tab is opened", () => {
+  it("names skills.sh as the source and asks for nothing until Browse is clicked", () => {
     renderPanel();
-    const tab = screen.getByRole("button", {
-      name: DATA_SOURCES.SKILLS_SH.label,
-    });
-    expect(tab.getAttribute("title")).toContain(
+    const browse = screen.getByRole("button", { name: BROWSE_LABEL });
+    expect(browse.getAttribute("title")).toContain(
       DATA_SOURCES.SKILLS_SH.operator
     );
     act(() => {
@@ -143,7 +141,9 @@ describe("SkillsRegistryPanel", () => {
     });
     expect(sendMessageMock).not.toHaveBeenCalled();
 
-    fireEvent.click(tab);
+    fireEvent.click(browse);
+    // Opening is one-way: the button goes away and the browser stays.
+    expect(screen.queryByRole("button", { name: BROWSE_LABEL })).toBeNull();
     expect(
       screen.getByRole("link", { name: DATA_SOURCES.SKILLS_SH.host })
     ).toBeTruthy();
@@ -166,12 +166,22 @@ describe("SkillsRegistryPanel", () => {
     expect(screen.getByText(/Type at least 2 characters/)).toBeTruthy();
   });
 
+  it("stays open when the panel remounts, such as on a settings tab switch", () => {
+    const { unmount } = renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: BROWSE_LABEL }));
+    unmount();
+
+    renderPanel();
+    expect(screen.queryByRole("button", { name: BROWSE_LABEL })).toBeNull();
+    expect(
+      screen.getByLabelText(`Search ${DATA_SOURCES.SKILLS_SH.label}`)
+    ).toBeTruthy();
+  });
+
   describe("top skills", () => {
     function openTop(skills: RegistrySkillEntry[]) {
       renderPanel();
-      fireEvent.click(
-        screen.getByRole("button", { name: DATA_SOURCES.SKILLS_SH.label })
-      );
+      fireEvent.click(screen.getByRole("button", { name: BROWSE_LABEL }));
       act(() => {
         vi.advanceTimersByTime(0);
       });

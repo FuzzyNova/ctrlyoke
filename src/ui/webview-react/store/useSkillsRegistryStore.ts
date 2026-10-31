@@ -66,7 +66,11 @@ export interface SkillsRegistryUpdateCheckState {
 }
 
 export interface SkillsRegistryState {
-  /** Whether the skills.sh tab is open; nothing is fetched until it is. */
+  /**
+   * Whether the user has opened the skills.sh browser; nothing is fetched
+   * until they do. It stays open for the life of this dashboard instance, so
+   * the opt-in is asked for again only after a reload or a new hosted tab.
+   */
   isOpen: boolean;
   query: string;
   /** `undefined` until a search has answered. */
@@ -95,7 +99,7 @@ export interface SkillsRegistryState {
   review: RegistrySkillReview | undefined;
   updateCheck: SkillsRegistryUpdateCheckState;
 
-  setOpen: (isOpen: boolean) => void;
+  open: () => void;
   setQuery: (query: string) => void;
   search: (query: string) => void;
   setSearchResult: (
@@ -149,7 +153,7 @@ export const useSkillsRegistryStore = create<SkillsRegistryState>(
     review: undefined,
     updateCheck: { checking: false, results: {} },
 
-    setOpen: (isOpen) => set({ isOpen }),
+    open: () => set({ isOpen: true }),
 
     setQuery: (query) => set({ query }),
 

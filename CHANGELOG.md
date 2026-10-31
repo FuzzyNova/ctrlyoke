@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- In the Agent & Skills Manager, the **skills.sh** toggle under **Discover &
+  import** is now a **Browse skills.sh** button. It goes away once clicked, and
+  the browser stays open until the window reloads, so the skills list and the
+  browser beside it line up at the top. **Check for updates** moved up beside
+  the **Discover & import** heading.
+
 - The settings drawer's tab rail no longer shows a scrollbar when it is too
   short for every tab, so the scrollbar no longer squeezes the tab icons.
   A fade with a chevron at the top or bottom shows that more tabs are out of
