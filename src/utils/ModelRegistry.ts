@@ -81,7 +81,7 @@ let initializationPromise: Promise<void> | null = null;
 let copilotDiscoveryTimedOut = false;
 let copilotTimeoutRetryCount = 0;
 let copilotRetryTimer: NodeJS.Timeout | null = null;
-const COPILOT_TIMEOUT_RETRY_DELAY_MS = 30_000;
+export const COPILOT_TIMEOUT_RETRY_DELAY_MS = 30_000;
 const COPILOT_TIMEOUT_RETRY_LIMIT = 2;
 
 // Fallback model list - imported from ModelConstants (single source of truth)

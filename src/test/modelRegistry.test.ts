@@ -85,10 +85,23 @@ suite("ModelRegistry discovery", () => {
       callback(Object.assign(new Error("absent"), { code: "ENOENT" }), "", "");
     });
 
+    // Intercept only the retry timer. The extension host keeps scheduling its
+    // own timers while discovery awaits real I/O (its RPC layer arms a 1s one
+    // whenever Log writes), and capturing those instead used to replace the
+    // retry callback and swallow VS Code's timer.
     const originalSetTimeout = global.setTimeout;
     let retryCallback: (() => void) | undefined;
+    let retryTimerCount = 0;
     let retryWasUnrefed = false;
-    global.setTimeout = ((callback: () => void) => {
+    global.setTimeout = ((
+      callback: (...args: unknown[]) => void,
+      ms?: number,
+      ...args: unknown[]
+    ) => {
+      if (ms !== registry.COPILOT_TIMEOUT_RETRY_DELAY_MS) {
+        return originalSetTimeout(callback, ms, ...args);
+      }
+      retryTimerCount++;
       retryCallback = callback;
       return {
         unref: () => {
@@ -102,6 +115,7 @@ suite("ModelRegistry discovery", () => {
       global.setTimeout = originalSetTimeout;
     }
     assert.strictEqual(registry.isRegistryInitialized(), true);
+    assert.strictEqual(retryTimerCount, 1);
     assert.strictEqual(retryWasUnrefed, true);
     assert.ok(registry.getCliSupportedModelIdsSync().length > 0);
     assert.strictEqual(
@@ -110,7 +124,9 @@ suite("ModelRegistry discovery", () => {
     );
     assert.ok(retryCallback);
     retryCallback();
-    await new Promise<void>((resolve) => setImmediate(resolve));
+    // The retry's initialization is in flight; this joins it rather than
+    // guessing how many event-loop turns its real file reads take.
+    await registry.initializeModelRegistry();
     assert.strictEqual(copilotCalls, 2);
     assert.strictEqual(
       registry.getCliSupportedModelIdsSync().includes("copilot-new-model"),
