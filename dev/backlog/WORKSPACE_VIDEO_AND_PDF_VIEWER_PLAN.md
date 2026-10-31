@@ -3,7 +3,7 @@
 **Status:** Not started. Written 2026-10-19 against current code.
 **Priority:** P3
 
-Last reviewed against code: 2026-10-26.
+Last reviewed against code: 2026-10-30.
 
 ## Problem
 
@@ -15,16 +15,24 @@ Before/After `ImageDiffView` (see
 Video files and PDFs get neither: opening one is rejected as a binary file, and
 a diff shows "binary diff preview unavailable".
 
-Browsers can display both natively, so this should not need a bundled package
-for video, and needs one for PDF only if Android matters (see below).
+Browsers play video natively, so video needs no bundled package. PDF does:
+Android Chrome has no inline PDF viewer and iOS Safari's is minimal, and phones
+are a primary target of the hosted dashboard. PDFs therefore render through a
+lazily loaded `pdfjs-dist` (see §3a).
 
 ## Constraints that shape the design
 
 - **The viewer runs only in the hosted browser dashboard.** `WorkspaceViewerModal`
   and its Header button are gated on `isStandalone`, and `hostedApi.ts` uses plain
   same-origin `fetch`. VS Code webview limits (Chromium's PDF plugin disabled,
-  reduced codec set, `vscode-webview://` resource URIs) do not apply. If the viewer
-  ever moves into the VS Code panel, PDF will need pdf.js there.
+  reduced codec set, `vscode-webview://` resource URIs) do not apply. In the VS Code
+  panel, clicking a PDF reference in the output pane already opens it in a VS Code
+  editor (where any installed PDF extension handles it), so the panel needs nothing
+  here. Should PDFs ever render inside the panel itself (e.g. inline in the output
+  pane), the same pdf.js component would work there, but the webview CSP
+  (`CtrlYokeWebviewProvider.ts`) would need `worker-src blob:` with the worker
+  fetched into a blob URL, since a `vscode-webview://` resource cannot start a
+  worker directly.
 - **The `data:` URI approach used for images does not scale to these files.**
   - `readFile()` rejects anything over `MAX_FILE_SIZE` (2 MB,
     `HostedWorkspaceViewerService.ts`), and diff sides use the same cap
@@ -51,6 +59,10 @@ for video, and needs one for PDF only if Android matters (see below).
 | `<video>` mov                   | Safari yes; Chromium if H.264 inside | yes                         | usually                           |
 | mkv / avi                       | no                                   | no                          | no                                |
 | PDF in `<iframe>`               | yes (built-in viewer)                | renders, limited controls   | **no** (blank or download prompt) |
+
+The PDF row is why PDFs use pdf.js rather than an `<iframe>` everywhere: one code
+path that works on every device, and it also works in diff cards, where two native
+viewers side by side would be heavy and awkward to size.
 
 ## Design
 
@@ -106,15 +118,46 @@ CSP: same-origin URLs are already covered by `default-src 'self'`; add explicit
   for these kinds (the raw route enforces its own cap).
 - Generalize `WorkspaceFileEditor`'s `imageDataUri` prop into a `media` source
   (`kind` + `src`) and the store's `fileImageDataUri`/`setLoadedImage` likewise.
-  Render `<img>`, `<video controls preload="metadata">`, or a PDF
-  `<iframe title=…>` filling the editor area.
-- PDF fallback: always render an "Open in new tab" link (to the raw URL) beside
-  the PDF, and make it the primary content when the iframe cannot render. Detecting
-  Android Chrome by user agent is acceptable here; there is no reliable feature test
-  for the built-in PDF viewer.
+  Render `<img>`, `<video controls preload="metadata">`, or `WorkspacePdfViewer`
+  (§3a) filling the editor area.
+- PDF toolbar: always include an "Open in new tab" link to the raw URL, so desktop
+  users can still reach the browser's native viewer (search, print, forms).
 - Optional follow-up: move images to the raw route too, removing base64 inflation
   and the 2 MB image limit. Keep `data:` URIs for anything that must work without
   a URL (none known today).
+
+### 3a. PDF rendering with pdf.js
+
+- **Package:** `pdfjs-dist`, loaded with a dynamic `import()` the way
+  `loadWorkflowFileSupport` is, so the chunk (`pdf.mjs` is a few hundred KB, the
+  worker about 1 MB) downloads only when a PDF is first opened.
+- **Loading:** `getDocument({ url: workspaceRawUrl(...) })`. pdf.js requests byte
+  ranges itself, so it reuses the raw route's `Range` support and opens the first
+  page of a large PDF without downloading the whole file. The token travels in the
+  query string as for `<video>`.
+- **`WorkspacePdfViewer` component** (in `components/workspace-viewer/`): pages
+  rendered to `<canvas>` at `devicePixelRatio`. Only pages near the viewport render,
+  using an `IntersectionObserver` with fixed-size placeholders from each page's
+  viewport size. It has fit-width by default, zoom in/out, and a page indicator,
+  and it calls `destroy()` on the document when the file changes or the component
+  unmounts. Canvases are released as they scroll far away, so a long PDF on a phone
+  does not hold hundreds of bitmaps. A text layer (select/copy) is a follow-up.
+- **Worker:** the hosted CSP already has `worker-src 'self'`, so ship
+  `pdf.worker.mjs` as a bundled asset and point `GlobalWorkerOptions.workerSrc` at
+  it.
+- **No eval / WASM:** pass `isEvalSupported: false` so `script-src` never needs
+  `'unsafe-eval'`. Check whether the chosen `pdfjs-dist` version's WASM image
+  decoders (JPEG 2000, JBIG2) fall back to JS without `'wasm-unsafe-eval'`. If
+  not, decide between adding `'wasm-unsafe-eval'` to the hosted `script-src` and
+  accepting that those images will not render.
+- **Static data:** copy pdf.js's `cmaps/` and `standard_fonts/` (and `wasm/` if
+  used) through `src/ui/webview-react/build/staticCopyPlugin.ts` and set `cMapUrl`
+  / `standardFontDataUrl`. Without them, CJK text and non-embedded standard fonts
+  render as wrong glyphs.
+- **Errors:** password-protected or corrupt PDFs show a message with the
+  "Open in new tab" link instead of a blank pane.
+- **Diff sides** (§4) reuse the same component in a compact mode (bounded height,
+  scrolled independently per side).
 
 ### 4. Diffs: generalize the image payload to media
 
@@ -131,7 +174,7 @@ CSP: same-origin URLs are already covered by `default-src 'self'`; add explicit
   the commit hash (old side = first parent, or the parent path for a rename).
 - `ImageDiffView` → `MediaDiffView`: same Before/After labels, added/deleted
   placeholders and bounded frame; each side renders `<img>`, `<video controls>`
-  or a PDF `<iframe>`. Media elements mount only while the card is expanded, so a
+  or a compact `WorkspacePdfViewer`. Media elements mount only while the card is expanded, so a
   collapsed card or an off-screen virtualized row never starts a download.
   `preload="metadata"` keeps an expanded-but-unplayed video cheap.
 - Update `DiffFileCard`'s source union, `rdvAdapter.ts`'s `ParsedDiffFile`, and
@@ -139,8 +182,7 @@ CSP: same-origin URLs are already covered by `default-src 'self'`; add explicit
 
 ### 5. Docs
 
-- `docs/guide/workspace-viewer.md` — list video formats and PDF next to images,
-  including the Android PDF limitation.
+- `docs/guide/workspace-viewer.md` — list video formats and PDF next to images.
 - `docs/guide/source-control.md` — Before/After now covers video and PDF.
 
 ## Testing plan
@@ -153,15 +195,23 @@ CSP: same-origin URLs are already covered by `default-src 'self'`; add explicit
   served as raw) rejected; `Range` → `206` with correct `Content-Range` for both
   working-tree and blob reads; `416` on bad range; response headers include
   `nosniff`, `sandbox`, `inline`; path traversal and out-of-root repo rejected.
-- UI: file editor renders `<video>`/`<iframe>` with the raw URL; PDF fallback link
-  present; `MediaDiffView` renders Before/After per kind with placeholders; media
-  elements not mounted while collapsed.
+- UI: file editor renders `<video>` with the raw URL and `WorkspacePdfViewer` for
+  PDFs (pdf.js mocked: `getDocument` called with the raw URL and
+  `isEvalSupported: false`; only visible pages render; `destroy()` on file change
+  and unmount; error state shows the open-in-new-tab link); `MediaDiffView` renders
+  Before/After per kind with placeholders; media elements not mounted while
+  collapsed.
+- Manual: a multi-page PDF on Android Chrome and iOS Safari through the hosted
+  dashboard; a PDF with CJK text and one with JPEG 2000 images (to confirm the
+  cMap and WASM decisions).
 
 ## Acceptance criteria
 
 - Opening an mp4/webm/mov or PDF in the explorer shows a playable video (seekable,
-  including in Safari) or the browser's PDF viewer, with an "Open in new tab" link
-  for PDFs.
+  including in Safari) or a pdf.js-rendered PDF that works on Android Chrome and iOS
+  Safari as well as desktop, with an "Open in new tab" link for PDFs.
+- pdf.js loads only when a PDF is opened, and the hosted CSP gains no
+  `'unsafe-eval'`.
 - Every diff surface shows changed videos and PDFs side by side under the same
   Before/After card used for images.
 - No video or PDF bytes travel inside JSON responses, and nothing downloads until a
@@ -171,7 +221,5 @@ CSP: same-origin URLs are already covered by `default-src 'self'`; add explicit
 
 ## Open questions
 
-- Is native PDF with a fallback link enough on Android, or is lazily loaded
-  `pdfjs-dist` (~1–2 MB with worker, loaded only for PDFs) worth adding?
 - Should audio files (`mp3`, `ogg`, `wav`, `m4a`) ride along? They fit the same
   route and an `<audio>` side with almost no extra work.
