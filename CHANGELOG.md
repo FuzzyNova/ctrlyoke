@@ -22,6 +22,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Commit to ctrlyoke** there, or right-click a commit in the dashboard's
   **History**. The Timeline menu item will return if VS Code makes this
   available again.
+- The **Spec-Driven Loop** template now asks for a test command and for a
+  harness and model for the orchestrator (the plan and review steps) and for
+  the implementer (every step the orchestrator queues). Workflows it creates
+  now name these explicitly instead of inheriting your default harness and
+  execution mode: the orchestrator runs `opus` on Claude Code in interactive
+  mode, and queued steps run `sonnet` on Claude Code headless, unless you pick
+  others. Steps are told to pass the test command, which defaults to
+  `npm test`. A workflow-level end condition now requires every step,
+  including the ones the orchestrator queues, to leave a clean working tree:
+  a step with uncommitted changes is asked to finish and commit, and the
+  workflow stops after two failed retries. The template now needs a git
+  repository and stops before planning when there isn't one. Workflows
+  already created from it are unchanged.
 
 ### Fixed
 

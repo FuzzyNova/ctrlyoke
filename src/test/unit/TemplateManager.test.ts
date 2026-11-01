@@ -1065,6 +1065,81 @@ suite("TemplateManager variable metadata", () => {
       });
     }
 
+    test("runs spec-driven-loop's orchestrator and queued steps on their own harnesses", async () => {
+      const tm = makeManager();
+      const workspaceDir = makeTempDir();
+      tm.getWorkspaceFolder = () => ({ uri: { fsPath: workspaceDir } });
+      tm.getBuiltInTemplatesPath = () =>
+        path.resolve(__dirname, "../../templates/workflows");
+
+      const templates = await tm.getAvailableTemplates();
+      const specTemplate = templates.find(
+        (template: { id: string }) => template.id === "spec-driven-loop"
+      );
+      assert.deepStrictEqual(
+        specTemplate?.variables.map(
+          (variable: { name: string; harness?: string; default?: string }) => [
+            variable.name,
+            variable.harness,
+            variable.default,
+          ]
+        ),
+        [
+          ["specFile", undefined, undefined],
+          ["testCommand", undefined, "npm test"],
+          ["orchestratorHarness", undefined, "claude-cli"],
+          ["orchestratorModel", "orchestratorHarness", "opus"],
+          ["implementerHarness", undefined, "claude-cli"],
+          ["implementerModel", "implementerHarness", "sonnet"],
+        ]
+      );
+
+      const workflow = await tm.createWorkflow("spec-driven-loop", {
+        specFile: "docs/spec.md",
+        testCommand: "make check",
+        orchestratorHarness: "codex-cli",
+        orchestratorModel: "gpt-6-luna",
+        implementerHarness: "opencode-cli",
+        implementerModel: "opencode/big-pickle",
+      });
+
+      assert.strictEqual(workflow.harness, "opencode-cli");
+      assert.strictEqual(workflow.model, "opencode/big-pickle");
+      assert.strictEqual(workflow.steps?.[0].harness, "codex-cli");
+      assert.strictEqual(workflow.steps?.[0].model, "gpt-6-luna");
+      assert.strictEqual(workflow.finalStep?.harness, "codex-cli");
+      assert.strictEqual(workflow.finalStep?.model, "gpt-6-luna");
+      assert.strictEqual(workflow.finalStep?.sessionId, 1);
+
+      assert.strictEqual(workflow.executionMode, "headless");
+      assert.strictEqual(workflow.steps?.[0].executionMode, "interactive");
+      assert.strictEqual(workflow.finalStep?.executionMode, "interactive");
+      assert.ok(workflow.steps?.[0].prompt.includes("`make check`"));
+      assert.ok(workflow.finalStep?.prompt.includes("`make check`"));
+
+      // A workflow-level clean-tree gate covers every step, including the ones
+      // the orchestrator queues, without relying on it to attach a preset.
+      assert.strictEqual(workflow.conditions, undefined);
+      // stderr folded in: outside a repo git's error must fail the check, not
+      // leave stdout empty and pass it.
+      assert.strictEqual(
+        workflow.endCondition?.script,
+        "git status --porcelain 2>&1"
+      );
+      assert.strictEqual(
+        workflow.steps?.[0].preCondition?.script,
+        "git rev-parse --is-inside-work-tree"
+      );
+      assert.strictEqual(
+        workflow.steps?.[0].preCondition?.onFail,
+        "stopWorkflow"
+      );
+      assert.strictEqual(workflow.endCondition?.operator, "isEmpty");
+      assert.ok(workflow.endCondition?.retryPrompt?.includes("`make check`"));
+      assert.strictEqual(workflow.steps?.[0].endCondition, undefined);
+      assert.strictEqual(workflow.finalStep?.endCondition, undefined);
+    });
+
     test("keeps dollar replacement tokens literal in prompt and script values", async () => {
       const tm = makeManager();
       const workspaceDir = makeTempDir();

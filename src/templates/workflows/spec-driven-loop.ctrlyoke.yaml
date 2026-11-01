@@ -1,17 +1,7 @@
 schemaVersion: 1
-conditions:
-  committed:
-    script: git status --porcelain
-    compareSource: stdout
-    operator: isEmpty
-    maxRetries: 2
-    retryPrompt: |
-      You left uncommitted changes. Finish the work, run its gate, and commit
-      your own files with a plain conventional commit message.
-      $endCondition:stdout
 _templateMeta:
   name: Spec-Driven Loop
-  description: "Orchestrator loop. Give it a spec/design doc — it breaks the work into steps, queues them, then reviews and keeps looping until every requirement is satisfied."
+  description: "Orchestrator loop. Give it a spec/design doc — it breaks the work into steps, queues them, then reviews and keeps looping until every requirement is satisfied. Needs a git repository: every step commits its own work."
   variables:
     specFile:
       type: file
@@ -22,13 +12,37 @@ _templateMeta:
         - "**/*.yaml"
         - "**/*.json"
       autoFillFilename: true
+    testCommand:
+      type: text
+      default: npm test
+      description: Your test suite. Every queued step must pass it, and the review uses it as the main gate.
+    orchestratorHarness:
+      type: harness
+      default: claude-cli
+      description: Runs the orchestrator — the plan step and the review final step, which resumes the plan step's session.
+    orchestratorModel:
+      type: model
+      harness: orchestratorHarness
+      default: opus
+      description: Use your most capable model; splitting the spec into steps and reviewing the result takes judgment.
+    implementerHarness:
+      type: harness
+      default: claude-cli
+      description: Runs every step the orchestrator queues.
+    implementerModel:
+      type: model
+      harness: implementerHarness
+      default: sonnet
+      description: Each queued step gets a self-contained chunk of the spec, so a faster, cheaper model is often enough.
 
-# Every queued step is its own island: a fresh session that gets all the context
-# it needs from its own prompt and the repo. Chaining them into one session just
-# drives that session into repeated compaction as it tries to hold every step at
-# once. The plan step and finalStep are the exception — see below.
+# Every queued step is its own island: a fresh, headless session that gets all
+# the context it needs from its own prompt and the repo. Chaining them into one
+# session just drives that session into repeated compaction as it tries to hold
+# every step at once. The plan step and finalStep are the exception — they run
+# interactively and share one session, see below.
 resumeSession: false
 priorContext: none
+executionMode: headless
 
 # Only the plan step is queued up front, so it's visible right away instead of
 # hidden behind the finalStep. It reviews the spec and the codebase, then appends
@@ -50,15 +64,53 @@ steps:
       clear problem with it; if the plan needs more thought than you can give it here,
       make finalizing the plan the first queued step. Use your judgment on how to split
       the work — that judgment is the point of this workflow. Every queued step must be
-      self-contained, must keep the planning docs current, and must commit its own work
-      before finishing.
+      self-contained, must keep the planning docs current, must pass `{testCommand}`,
+      and must commit its own work before finishing.
 
       Once you've queued the plan, end your turn. A review pass will run automatically
       after everything you queued has completed.
+    # The orchestrator's settings sit after the prompt so the template dialog
+    # asks for the spec and test command first. It runs interactively so you can
+    # watch and steer the planning and review sessions.
+    harness: "{orchestratorHarness}"
+    model: "{orchestratorModel}"
+    executionMode: interactive
+    # Commits are how the review sees each step's work and how you roll one
+    # back, so stop before planning when there is no git repository.
+    preCondition:
+      script: git rev-parse --is-inside-work-tree
+      onFail: stopWorkflow
+
+# Queued steps inherit these workflow defaults; the plan step and finalStep
+# override them with the orchestrator's harness and model.
+harness: "{implementerHarness}"
+model: "{implementerModel}"
+
+# Every step, including the plan step, the review, and everything queued in
+# between, must leave a clean working tree. The test command stays in the
+# prompts rather than here: agents run it anyway to confirm their fixes, so
+# gating on it too would run the suite twice per step. A dirty tree resumes the
+# step's session to finish and commit; after two retries the workflow stops.
+# stderr is folded into stdout so a git error fails the check instead of
+# leaving stdout empty and passing it.
+endCondition:
+  script: git status --porcelain 2>&1
+  compareSource: stdout
+  operator: isEmpty
+  maxRetries: 2
+  retryPrompt: |
+    You left uncommitted changes. Finish the work, make sure `{testCommand}`
+    passes, and commit your own files with a plain conventional commit message.
+    $endCondition:stdout
 
 finalStep:
   name: review
   agent: workflow-orchestrator
+  # Same harness as the plan step: a session can only be resumed on the harness
+  # that started it.
+  harness: "{orchestratorHarness}"
+  model: "{orchestratorModel}"
+  executionMode: interactive
   mcpServers:
     - ctrlyoke
   # The orchestrator resumes the session it started for the plan step above on
@@ -73,11 +125,11 @@ finalStep:
     @{file:specFile}
 
     All the steps you queued should have run by now. Verify the work is actually
-    complete, inspect it, fix any errors you find, and commit your cleanup. If a large
-    chunk is still missing or wrong, use edit_step/remove_step/reorder_steps for
-    pending work or append_step to add more steps and
-    let the loop continue. Once everything is done, give me a real summary of what was
-    built and end your turn.
+    complete, inspect it, fix any errors you find, and commit your cleanup.
+    `{testCommand}` is the main gate. If a large chunk is still missing or wrong,
+    use edit_step/remove_step/reorder_steps for pending work or append_step to add
+    more steps and let the loop continue. Once everything is done, give me a real
+    summary of what was built and end your turn.
 
     You don't need to work out whether this is your first review pass — you're
     resuming your planning session, so read the state and act accordingly.
