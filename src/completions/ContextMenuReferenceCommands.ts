@@ -262,6 +262,16 @@ export class ContextMenuReferenceCommands {
     await this.insertReferences(references);
   }
 
+  /**
+   * Handler for `ctrlyoke.addTimelineCommitToPromptEditor`. Its
+   * `timeline/item/context` menu entry and `contributes.commands` declaration
+   * were removed from `package.json` because VS Code (1.144 at the latest)
+   * resolves the right-clicked timeline item only for extensions that enable
+   * the proposed `timeline` API. Every other extension receives `undefined`.
+   * The command stays registered so the ID keeps working. Restore the manifest
+   * entries once the item reaches stable-API extensions again: see
+   * `dev/backlog/VSCODE_PROPOSED_API_CONTEXT_MENUS.md`.
+   */
   async addTimelineCommitToPromptEditor(item: unknown): Promise<void> {
     const commitHash = this.extractTimelineCommitHash(item);
     if (!commitHash) {

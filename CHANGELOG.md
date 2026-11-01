@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Add Commit to ctrlyoke** has been removed from VS Code's Timeline view
+  context menu. Current VS Code versions no longer tell other extensions which
+  timeline commit was right-clicked, so the item always failed with "Could not
+  resolve a commit hash". Right-click a commit in the dashboard's **History**
+  instead. The menu item will return if VS Code makes this available again.
+
 ### Fixed
 
 - The "Rendering output…" overlay no longer flashes over the output pane each

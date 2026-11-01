@@ -242,7 +242,8 @@ stabilizes (issue `#201997` closes and the `proposed` marker is dropped from
 implementation path via `contributes.menus`. Re-check `microsoft/vscode#201997` and re-grep
 `menusExtensionPoint.ts` for `scm/historyItem/context` next time this comes up — if the
 `proposed` key is gone, the menu id and existing `2_ctrlyoke`-style group-naming plan above
-apply directly.
+apply directly. This re-check is tracked, together with the Timeline view's proposed-API
+regression, in `dev/backlog/VSCODE_PROPOSED_API_CONTEXT_MENUS.md`.
 
 ## Decision: Option A, everywhere — `z_ctrlyoke` (decided 2026-09-02)
 

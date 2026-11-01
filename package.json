@@ -299,11 +299,6 @@
         "category": "ctrlyoke"
       },
       {
-        "command": "ctrlyoke.addTimelineCommitToPromptEditor",
-        "title": "Add Commit to ctrlyoke",
-        "category": "ctrlyoke"
-      },
-      {
         "command": "ctrlyoke.searchHistory",
         "title": "Search ctrlyoke History",
         "category": "ctrlyoke",
@@ -417,10 +412,6 @@
           "when": "false"
         },
         {
-          "command": "ctrlyoke.addTimelineCommitToPromptEditor",
-          "when": "false"
-        },
-        {
           "command": "ctrlyoke.generateCommitMessage",
           "when": "!ctrlyoke.generatingCommitMessage"
         },
@@ -528,13 +519,6 @@
         {
           "command": "ctrlyoke.addScmResourcesToPromptEditor",
           "when": "scmProvider == git",
-          "group": "z_ctrlyoke"
-        }
-      ],
-      "timeline/item/context": [
-        {
-          "command": "ctrlyoke.addTimelineCommitToPromptEditor",
-          "when": "timelineItem =~ /git:file:commit\\b/",
           "group": "z_ctrlyoke"
         }
       ],
