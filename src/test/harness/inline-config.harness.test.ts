@@ -26,6 +26,10 @@ import {
   EXECUTION_MODES,
 } from "../../types/DashboardConstants";
 import { normalizeAntigravityMcpServerId } from "../../types/ToolPermissionUtils";
+import {
+  OPENCODE_MESSAGE_ROLES,
+  OPENCODE_PART_TYPES,
+} from "../../core/harness/opencode/OpenCodeProtocolConstants";
 import { getAntigravitySettingsPath } from "../../core/harness/shared/StatuslineManager";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import {
@@ -122,6 +126,44 @@ function makeHook(
     event,
     command: hookCommand(scriptPath, event, outputPath),
   };
+}
+
+/** The harness session ID of the single one-step run under `runsRoot`. */
+function readSingleRunSessionId(runsRoot: string): string {
+  const runFiles = findRunFiles(runsRoot, "workflow.ctrlyoke.json").filter(
+    (file) => path.basename(path.dirname(file)).startsWith("run-")
+  );
+  assert.strictEqual(runFiles.length, 1, `expected one run, got ${runFiles}`);
+  const sessionId = (
+    JSON.parse(fs.readFileSync(runFiles[0], "utf8")) as {
+      steps: Array<{ _runtime?: { sessionId?: string } }>;
+    }
+  ).steps[0]?._runtime?.sessionId;
+  assert.ok(sessionId, "the run recorded no OpenCode session ID");
+  return sessionId;
+}
+
+/** The first user text part OpenCode stored for `sessionId`, via export. */
+function readOpenCodeFirstUserText(sessionId: string, cwd: string): string {
+  const exported = spawnSync("opencode", ["export", sessionId], {
+    cwd,
+    encoding: "utf8",
+    shell: process.platform === "win32",
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  assert.strictEqual(exported.status, 0, `opencode export: ${exported.stderr}`);
+  const stdout = exported.stdout;
+  const transcript = JSON.parse(stdout.slice(stdout.indexOf("{"))) as {
+    messages: Array<{
+      info: { role: string };
+      parts: Array<{ type: string; text?: string }>;
+    }>;
+  };
+  const text = transcript.messages
+    .find((message) => message.info.role === OPENCODE_MESSAGE_ROLES.USER)
+    ?.parts.find((part) => part.type === OPENCODE_PART_TYPES.TEXT)?.text;
+  assert.ok(text !== undefined, "the exported session has no user text");
+  return text;
 }
 
 function hasRecordedEvent(outputPath: string, event: string): boolean {
@@ -680,6 +722,52 @@ suite("Inline harness configuration regression tests", function () {
         assertNoWorkspaceConfig(tmpDir, ["opencode.json", ".opencode"]);
       });
     }
+
+    // `opencode run` quote-wraps a positional message containing a space and
+    // escapes its inner quotes, so a headless prompt passed as an argument
+    // reached the model as `"…\"C:\…\work space\notes.md\"…"`. ctrlyoke pipes
+    // it on stdin instead, which OpenCode stores verbatim.
+    test("delivers a headless prompt with quoted spaced paths verbatim", function () {
+      const workspace = path.join(tmpDir, "work space");
+      fs.mkdirSync(workspace);
+      const notesPath = path.join(workspace, "notes.md");
+      fs.writeFileSync(notesPath, "The secret word is BANANA.\n");
+      const restore = isolateRunState(tmpDir);
+      let userText: string;
+      try {
+        const result = runWorkflowFile(
+          {
+            harness: OPENCODE,
+            model: HARNESS_MODELS[OPENCODE],
+            steps: [
+              {
+                name: "opencode-stdin-prompt",
+                prompt:
+                  'Read @notes.md and reply with only the secret word, or "none".',
+              },
+            ],
+          },
+          workspace,
+          "opencode-stdin-prompt"
+        );
+        if (logAndMaybeSkip("opencode-cli (stdin prompt)", result)) return;
+        assertSuccessfulRun("opencode-cli (stdin prompt)", result);
+        const sessionId = readSingleRunSessionId(runsRootFor(workspace));
+        userText = readOpenCodeFirstUserText(sessionId, workspace);
+      } finally {
+        restore();
+      }
+
+      assert.ok(
+        !userText.startsWith('"') && !userText.includes('\\"'),
+        `OpenCode rewrote the prompt: ${userText}`
+      );
+      assert.match(
+        userText,
+        /"[^"]*work space[\\/]notes\.md"/,
+        "the quoted file reference did not arrive intact"
+      );
+    });
 
     // The standalone CLI relaunches the TUI with `-s` for every step. OpenCode
     // ignores `--prompt` alongside `--session` (anomalyco/opencode#21829), so

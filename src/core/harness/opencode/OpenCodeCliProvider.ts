@@ -5,6 +5,7 @@ import { installCommandFor } from "../shared/HarnessInstallCommand";
 import {
   DEFAULT_MODELS,
   HARNESS_IDS,
+  HEADLESS_PROMPT_DELIVERIES,
   HEADLESS_SOURCE_MODES,
 } from "../../../types/DashboardConstants";
 import type {
@@ -20,7 +21,6 @@ import { getOpenCodeContextWindowSize } from "../../../utils/ModelRegistry";
 import { MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
-import { moveGreedyOptionArgsAfterPrompt } from "../shared/CliArgumentUtils";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import {
@@ -167,6 +167,10 @@ export class OpenCodeCliProvider implements ICliProvider {
       updateCommand: "opencode upgrade",
     },
     shouldStreamHeadlessOutput: true,
+    // `opencode run` wraps every positional message argument containing a
+    // space in literal quotes (escaping any inner `"`) before sending it to
+    // the model, but uses piped stdin verbatim when no message is given.
+    headlessPromptDelivery: HEADLESS_PROMPT_DELIVERIES.STDIN,
 
     // OpenCode uses a TypeScript plugin system for interactive completion detection
     usesInteractiveNotificationMonitor: true,
@@ -460,16 +464,17 @@ export class OpenCodeCliProvider implements ICliProvider {
   /**
    * Build CLI arguments for headless mode.
    *
-   * opencode run "prompt" --format json -m model [-s sessionId]
+   * opencode run --format json -m model [-s sessionId] [--file ...]
    *
-   * The prompt precedes --file because OpenCode parses file as a greedy array.
+   * The prompt is not an argument: `config.headlessPromptDelivery` is
+   * `STDIN`, so the transport pipes it in. With no positional message there
+   * is nothing for OpenCode's greedy `--file` array to swallow.
    *
    * @param baseArgs Base arguments array (already includes "run", "--format", "json", "-m", model)
-   * @param prompt Prompt text or file reference
-   * @returns Complete arguments array with prompt appended
+   * @returns The arguments unchanged
    */
-  buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
-    return moveGreedyOptionArgsAfterPrompt(baseArgs, prompt, "--file");
+  buildHeadlessArgs(baseArgs: string[], _prompt: string): string[] {
+    return [...baseArgs];
   }
 
   /**

@@ -28,6 +28,8 @@ import {
   PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES,
   WORKTREE_MODES,
   DEFAULT_ERROR_BEHAVIOR_RETRIES,
+  HEADLESS_PROMPT_DELIVERIES,
+  type HeadlessPromptDelivery,
 } from "../../types/DashboardConstants";
 import type { HarnessCapabilityRegistrySnapshot } from "../../types/CompatibilityTypes";
 import type { PromptFile, PromptStep } from "../../types/CtrlYokeTypes";
@@ -739,6 +741,28 @@ suite("ExecutionPreviewService", () => {
         section.body?.includes("src/app.ts")
       )
     );
+  });
+
+  test("flags a command whose prompt is piped on stdin", async () => {
+    const workflow: PromptFile = { steps: [{ prompt: "inspect" }] };
+    const buildWith = (delivery: HeadlessPromptDelivery | undefined) => {
+      const harness = createHarness();
+      harness.provider.config.headlessPromptDelivery = delivery;
+      return new ExecutionPreviewService({
+        defaults: createDefaults(),
+        capabilities: createCapabilities(),
+        getHarness: () => harness,
+        workspaceRoots: [],
+        extensionPath: "extension",
+        hostCanProvidePty: false,
+        platform: "linux",
+      }).build({ workflow });
+    };
+
+    const piped = await buildWith(HEADLESS_PROMPT_DELIVERIES.STDIN);
+    assert.strictEqual(piped.steps[0].command?.promptOnStdin, true);
+    const inline = await buildWith(undefined);
+    assert.strictEqual(inline.steps[0].command?.promptOnStdin, undefined);
   });
 
   test("omits MCP environment values while retaining structural key names", async () => {

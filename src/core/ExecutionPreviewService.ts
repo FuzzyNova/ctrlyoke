@@ -22,6 +22,7 @@ import {
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   EXECUTION_MODES,
+  HEADLESS_PROMPT_DELIVERIES,
   WORKTREE_MODES,
   SHELL_KINDS,
   type HarnessId,
@@ -1003,19 +1004,26 @@ export class ExecutionPreviewService {
       displayShell,
       { requiresShellVerbatimArgs }
     );
+    const isInteractive =
+      properties.executionMode === EXECUTION_MODES.INTERACTIVE;
     const environmentKeys = new Set<string>([
       ...Object.keys(
-        properties.executionMode === EXECUTION_MODES.INTERACTIVE
+        isInteractive
           ? (provider.getInteractiveSpawnEnv?.() ?? {})
           : (provider.getHeadlessSpawnEnv?.() ?? {})
       ),
     ]);
+    const promptOnStdin =
+      !isInteractive &&
+      provider.config.headlessPromptDelivery ===
+        HEADLESS_PROMPT_DELIVERIES.STDIN;
     return {
       executable,
       args: redactedArgs,
       displayCommand,
       displayShell,
       requiresShellVerbatimArgs,
+      ...(promptOnStdin ? { promptOnStdin } : {}),
       cwd: this.resolveCwd(worktreePreview),
       environmentKeys: [...environmentKeys],
     };

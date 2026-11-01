@@ -11,8 +11,10 @@ import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProv
 import {
   HARNESS_IDS,
   CLI_EVENT_TYPES,
+  HEADLESS_PROMPT_DELIVERIES,
   HEADLESS_SOURCE_MODES,
   FAILURE_KINDS,
+  type HeadlessPromptDelivery,
   MESSAGE_TYPES,
   SESSION_KINDS,
   TERMINAL_END_REASONS,
@@ -277,6 +279,57 @@ suite("CliTransportCoordinator", () => {
     } finally {
       ConfigurationUtils.getMaxPromptExecutionTimeMs = originalTimeoutReader;
     }
+  });
+
+  test("pipes the prompt on stdin only for a stdin-delivery harness", async () => {
+    const received: Array<{ args: string[]; stdinText?: string }> = [];
+    const run = async (
+      headlessPromptDelivery: HeadlessPromptDelivery | undefined
+    ) => {
+      const provider = createHeadlessProvider();
+      const config = { ...provider.config, headlessPromptDelivery };
+      const coordinator = new CliTransportCoordinator({
+        provider: {
+          ...provider,
+          config,
+          buildHeadlessArgs: (baseArgs: string[], prompt: string) =>
+            headlessPromptDelivery === HEADLESS_PROMPT_DELIVERIES.STDIN
+              ? [...baseArgs]
+              : [...baseArgs, prompt],
+        },
+        processManager: {
+          spawn: async (
+            _command: string,
+            args: string[],
+            options: { stdinText?: string }
+          ) => {
+            received.push({ args, stdinText: options.stdinText });
+            return { stdout: "", stderr: "", exitCode: 0 };
+          },
+          isActive: () => false,
+        } as any,
+        resolveCliCommand: resolveCommand,
+        runtimeState: {
+          getWorkspaceRoot: () => process.cwd(),
+          isCancelling: () => false,
+        },
+        hostCallbacks: createHeadlessHostCallbacks(),
+      });
+      await coordinator.executeHeadless(
+        ["run"],
+        'read "C:\\a b\\x.md"',
+        [],
+        async () => true
+      );
+    };
+
+    await run(HEADLESS_PROMPT_DELIVERIES.STDIN);
+    await run(undefined);
+
+    assert.deepStrictEqual(received, [
+      { args: ["run"], stdinText: 'read "C:\\a b\\x.md"' },
+      { args: ["run", 'read "C:\\a b\\x.md"'], stdinText: undefined },
+    ]);
   });
 
   test("classifies headless prompt expiry as a timeout transport failure", async () => {

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Headless OpenCode steps no longer reach the model wrapped in extra quotes.
+  `opencode run` quoted any prompt containing a space and escaped its inner
+  `"`, so a file reference under a folder with a space in its name arrived as
+  `\"C:\Users\Jane Doe\…\"`. ctrlyoke now sends the prompt on stdin, which
+  OpenCode passes through unchanged. Dry-run previews note that the prompt is
+  piped on stdin rather than shown in the command.
+
 ## [0.4.0] - 2026-10-31
 
 ### Added

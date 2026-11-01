@@ -2,6 +2,7 @@ import type { CliEvent } from "../../../types/CliOutputTypes";
 import {
   EXECUTION_MODES,
   CLI_EVENT_TYPES,
+  HEADLESS_PROMPT_DELIVERIES,
   HEADLESS_SOURCE_MODES,
   MESSAGE_TYPES,
   SESSION_KINDS,
@@ -503,6 +504,11 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           timeout: ConfigurationUtils.getMaxPromptExecutionTimeMs(),
           env,
           secretNames,
+          stdinText:
+            this.deps.provider.config.headlessPromptDelivery ===
+            HEADLESS_PROMPT_DELIVERIES.STDIN
+              ? promptArgument
+              : undefined,
           windowsVerbatimArguments: command.requiresShellVerbatimArgs,
           onStdout: shouldStream
             ? (chunk) => {
@@ -735,6 +741,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       env?: Record<string, string>;
       secretNames?: readonly string[];
       onStdout?: (chunk: string) => void;
+      stdinText?: string;
       windowsVerbatimArguments?: boolean;
     } = {}
   ): Promise<SpawnResult> {
@@ -754,6 +761,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         cwd: this.deps.runtimeState.getWorkspaceRoot() || "",
         timeout: options.timeout,
         onStdout: options.onStdout,
+        stdinText: options.stdinText,
         shell: false,
         windowsVerbatimArguments: options.windowsVerbatimArguments,
         env,
