@@ -760,9 +760,12 @@ state from the run's working file, one line per such step, such as
 each is an object with `runRef`, `selector`, `step`, `status`, and `message`.
 `--step 3,57` prints step 3 and then the line for step 57. Likewise, when a run
 has a final step that never ran, `--step final`, `final:latest` and `final:N`
-report `--step final: the final step has not run (pending)`; with `--json` the
-object carries `runRef`, `selector`, `status`, and `message` (no `step`). Both
-notices exit 0. A pause is rendered as `Run paused`.
+report `--step final: the final step has not run (pending)`. If the run has no
+readable working file and its final-step presence is unknown, they report
+`--step final: the final step's state is unknown (no working file)` instead.
+With `--json`, each object carries `runRef`, `selector`, `status`, and `message`
+(no `step`); the unknown notice uses `status: "unknown"`. Both notices exit 0.
+A pause is rendered as `Run paused`.
 
 Pass `--json` to emit one raw attempt record per line as NDJSON. This is
 deliberately different from commands such as `validate --json`, which emit one

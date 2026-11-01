@@ -25,6 +25,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `history show --step final` now reports an unknown state when the run's
+  working file is unavailable and the run summary cannot confirm a final step.
+- Qwen hooks now keep their native shell on Windows: quoted hooks stay
+  unwrapped under Git Bash or PowerShell, and environment-bearing hooks use
+  that same shell through the launcher.
+- Antigravity shell allow rules no longer match newline-separated commands,
+  and a `-settings` flag in workflow `additionalArgs` now disables ctrlyoke's
+  permission translation just like `--settings`.
+- **Add Commit to ctrlyoke** now warns and inserts nothing when a diff editor's
+  commit is unavailable in the workspace repository.
+- Hosted workspace viewer Git actions, history and git-ref media now work when
+  the workspace root is reached through a symlink or junction.
+- Git-ref media now loads deleted files under a symlinked workspace root and
+  reads the committed path instead of following a working-tree directory link.
+- Numeric `append_step` positions inside a parallel group now relocate after
+  the group, even when the requested member has already started. Dashboard
+  inserts use the resolved destination for the same execution guard.
+- Step claims now notify the executor when they adopt new disk steps, so a
+  `parallelWithCurrent` append written during a claim can join the running
+  group without waiting for the anchor to finish.
+- `read_notes` now tells filtered and cursor-based reads to pass `nextCursor`
+  as `since` to continue, and the tool description explains how to page.
+- Deleting or restoring runs and trashing a whole lineage now leave it
+  untouched when its workflow history descriptor was written by a newer
+  ctrlyoke.
+- Runner locks and execution leases now stay heartbeated while worktree setup
+  runs, preventing a live run from being reclaimed as stale.
+- Malformed `$step:` and `$previous:` selectors now show a prompt diagnostic
+  even when they do not use `:summary`. Unknown `$` tokens and prose after
+  `$previous:` remain unaffected.
+- `~diff` is now labelled as unstaged changes in completions, the empty-state
+  message, and the prompt editor guide. The message points to `~staged` for
+  staged changes.
+- History show now reports a skipped final step as skipped, matching history
+  steps. Negative history `--offset` and `--limit` values now explain the
+  minimum allowed value.
 - Typing after `~` in the dashboard prompt editor lists matching commits
   newest first. They were sorted by the length of their subject, so the most
   recent match could sit below older ones, out of view. Commits whose message

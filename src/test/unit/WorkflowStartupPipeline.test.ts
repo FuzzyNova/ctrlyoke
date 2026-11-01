@@ -11,6 +11,7 @@ import {
   type WorkflowStartupPipelinePort,
   type WorkflowStartupQueuePort,
   type WorkflowStartupStatusPort,
+  type WorkflowStartupLifecyclePort,
   type WorkflowStartupWorktreeManagerPort,
   type WorkflowStartupWorktreePort,
 } from "../../core/orchestration/WorkflowStartupPipeline";
@@ -48,6 +49,10 @@ import {
   HARNESS_USAGE_WINDOW_KINDS,
 } from "../../types/DashboardConstants";
 import type { HarnessUsageSnapshot } from "../../types/UsageTypes";
+import {
+  HEARTBEAT_INTERVAL_MS,
+  STALE_HEARTBEAT_MS,
+} from "../../utils/LockSafetyPrimitives";
 
 class TestStatus implements WorkflowStartupStatusPort {
   resetCalls = 0;
@@ -120,6 +125,8 @@ class TestWorktree implements WorkflowStartupWorktreePort {
 }
 
 class TestExecution implements WorkflowStartupExecutionPort {
+  lifecycle: WorkflowStartupLifecyclePort | undefined;
+  duringSetup: (() => void) | undefined;
   currentPrompt: { filePath: string; promptFile: PromptFile } | undefined = {
     filePath: "workflow.prompt.md",
     promptFile: { steps: [{ prompt: "one" }] },
@@ -154,6 +161,7 @@ class TestExecution implements WorkflowStartupExecutionPort {
 
   async prepareExecutionWorktree(historyFilePath: string): Promise<void> {
     this.preparedWorktree = historyFilePath;
+    this.duringSetup?.();
   }
 
   createIntegrationForMode(_modeOverride?: HarnessId): HarnessIntegration {
@@ -385,6 +393,54 @@ suite("WorkflowStartupPipeline", () => {
     );
 
     assert.strictEqual(port.worktree.ensureCalls, 1);
+  });
+
+  test("starts the lock heartbeat before worktree setup outlasts the stale window", async () => {
+    const { pipeline, port } = createPipeline();
+    let heartbeatStarted = false;
+    let heartbeatCount = 0;
+    port.execution.lifecycle = {
+      isStartPending: () => false,
+      beginExecution: () => {},
+      getRunIdentity: () => ({
+        workflowKey: "workflow-key" as WorkflowKey,
+        runRef: "run-ref" as RunRef,
+        lockWorkspaceRoot: process.cwd(),
+      }),
+      acquireExecutionLease: async () => {},
+      ownsExecutionReservation: () => true,
+      startRunnerLockHeartbeat: () => {
+        heartbeatStarted = true;
+      },
+      restoreRetainedIntegrations: async () => {},
+      executeWorkflow: async () => {},
+      settleExecution: async () => {},
+    };
+    port.execution.duringSetup = () => {
+      let elapsed = 0;
+      while (elapsed <= STALE_HEARTBEAT_MS) {
+        if (heartbeatStarted) heartbeatCount += 1;
+        elapsed += HEARTBEAT_INTERVAL_MS;
+      }
+    };
+    const classification = pipeline.classifyContinuation(false, {
+      steps: [{ prompt: "one" }],
+    });
+    const startup = await pipeline.promoteRunAndInitializeHistory(
+      undefined,
+      false,
+      true,
+      classification
+    );
+
+    await pipeline.prepareWorktreeAndDispatch(
+      undefined,
+      false,
+      "workflow.prompt.md",
+      startup
+    );
+
+    assert.ok(heartbeatCount > 1);
   });
 
   test("prepares the worktree, creates integration, and dispatches", async () => {

@@ -74,16 +74,18 @@ never mixes versions of the CLI and its MCP server.
 The CLI and MCP server are covered by the same [ctrlyoke Commercial License](https://ctrlyoke.dev/terms)
 as the extension and are part of the Free Tier. The free-use eligibility terms
 apply to the CLI exactly as they do to the extension, including
-for automated, scripted and CI use. Headless CLI commands other than
-`ctrlyoke server` do not check a license. `ctrlyoke server` checks the Pro
-license for remote access, including LAN HTTPS, and may refresh a cached online
-Pro license with Keygen.
+for automated, scripted and CI use. Workflow and utility CLI commands do not
+check a license. `ctrlyoke server` checks the Pro license for remote access,
+including LAN HTTPS, and may refresh a cached online Pro license with Keygen.
+`ctrlyoke license status` verifies the stored license locally; `activate` and
+`deactivate` manage the online activation and can contact Keygen.
 
-Headless CLI commands other than `ctrlyoke server`, and `ctrlyoke-mcp`, send no
-telemetry and make no network requests of their own. Your harness CLIs talk to
-their providers as usual. `ctrlyoke server` can also send browser push
-notifications when they are enabled. See [Other network requests in the
-privacy guide](/guide/privacy#other-network-requests).
+Headless CLI commands other than `ctrlyoke server`, `ctrlyoke license
+activate`, `ctrlyoke license deactivate`, and `ctrlyoke-mcp` send no telemetry
+and make no network requests of their own. `ctrlyoke license status` checks the
+stored license locally. Your harness CLIs talk to their providers as usual.
+`ctrlyoke server` can also send browser push notifications when they are
+enabled. See [Other network requests in the privacy guide](/guide/privacy#other-network-requests).
 
 ## What the CLI shares with the extension
 

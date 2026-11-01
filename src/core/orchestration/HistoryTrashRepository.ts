@@ -301,6 +301,7 @@ export class HistoryTrashBatch {
       this.repository.stateRoot,
       workflowKey
     );
+    await this.repository.assertLineageWritable(workflowKey);
     const workflowName = await this.repository.readWorkflowName(workflowKey);
     const runRefs = await listRunDirNames(lineageDir);
     const runIds = (
@@ -404,6 +405,24 @@ export class HistoryTrashRepository {
       this.stateRoot,
       workflowKey
     );
+  }
+
+  async assertLineageWritable(workflowKey: WorkflowKey): Promise<void> {
+    const descriptorPath = WorkflowPaths.descriptorPath(
+      this.stateRoot,
+      workflowKey
+    );
+    const descriptor = await this.lineageRepository.tryReadDescriptor(
+      this.stateRoot,
+      workflowKey
+    );
+    if (descriptor) {
+      assertWritableSchema(
+        PERSISTED_STORES.LINEAGE_DESCRIPTOR,
+        descriptor,
+        descriptorPath
+      );
+    }
   }
 
   /** True when a runner lock names a live owner, or the caller knows one is executing. */
@@ -785,6 +804,27 @@ export class HistoryTrashRepository {
         item.workflowKey
       );
       if (item.wholeLineage && !(await pathExists(lineageDir))) {
+        const sourceDescriptorPath = path.join(
+          source,
+          path.basename(
+            WorkflowPaths.descriptorPath(this.stateRoot, item.workflowKey)
+          )
+        );
+        const sourceDescriptor = await this.lineageRepository
+          .readDescriptorFromPath(sourceDescriptorPath)
+          .catch((error: unknown) => {
+            if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+              return undefined;
+            }
+            throw error;
+          });
+        if (sourceDescriptor) {
+          assertWritableSchema(
+            PERSISTED_STORES.LINEAGE_DESCRIPTOR,
+            sourceDescriptor,
+            sourceDescriptorPath
+          );
+        }
         await movePath(source, lineageDir);
         // Deleting a lineage's last run cleared its `latestRunRef` before the
         // lineage was trashed; recompute it so a draftless lineage is listable.

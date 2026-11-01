@@ -20,7 +20,9 @@ ctrlyoke starts the server for each harness launch and attaches it to the curren
 The built-in server lets the harness:
 
 - inspect the run's steps and their status (`workflow_status`)
-- append steps or parallel groups next, at the end, at a specific index, or into the parallel group that is currently running (`append_step`)
+- append steps or parallel groups next, at the end, at a specific index, or
+  into the parallel group that is currently running (`append_step`). An index
+  inside a parallel group inserts after the whole group.
 - edit, remove, or reorder steps that have not started yet (`edit_step`, `remove_step`, `reorder_steps`)
 - check which harnesses and models are installed before choosing them (`list_harnesses`)
 - read earlier steps' output, paging through long responses (`read_output`)

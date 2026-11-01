@@ -152,6 +152,11 @@ suite("McpToolSkillGenerator", () => {
     assert.ok(reference.includes("### remove_step"));
     assert.ok(reference.includes("### reorder_steps"));
     assert.ok(reference.includes("zero-based step index"));
+    assert.ok(
+      reference.includes(
+        "index inside a parallel group inserts after the whole group"
+      )
+    );
   });
 
   test("provides a separate coordination skill subset with CLI placeholders", () => {

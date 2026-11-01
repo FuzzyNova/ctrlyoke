@@ -6,8 +6,9 @@ import * as path from "path";
 import * as vm from "vm";
 import { EventEmitter } from "events";
 import { spawn, spawnSync, type SpawnSyncReturns } from "child_process";
-import { suite, test } from "mocha";
+import { afterEach, beforeEach, suite, test } from "mocha";
 import { HARNESS_IDS } from "../../types/DashboardConstants";
+import type { UserHookConfig } from "../../types/CtrlYokeTypes";
 import { prepareUserHookLaunchers } from "../../core/harness/shared/UserHookEnvironment";
 import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
 import { CliExecutionSession } from "../../core/harness/shared/CliExecutionSession";
@@ -20,6 +21,27 @@ const launcherPath = path.resolve(
 );
 
 suite("UserHookEnvironment", () => {
+  let originalPlatformDescriptor: PropertyDescriptor | undefined;
+  let originalEnvironment: NodeJS.ProcessEnv = {};
+
+  beforeEach(() => {
+    originalPlatformDescriptor = Object.getOwnPropertyDescriptor(
+      process,
+      "platform"
+    );
+    originalEnvironment = { ...process.env };
+  });
+
+  afterEach(() => {
+    if (originalPlatformDescriptor) {
+      Object.defineProperty(process, "platform", originalPlatformDescriptor);
+    }
+    for (const name of Object.keys(process.env)) {
+      if (!(name in originalEnvironment)) delete process.env[name];
+    }
+    Object.assign(process.env, originalEnvironment);
+  });
+
   test("plans per-user env files and wires them to the session outside the workspace", async () => {
     const workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-hook-env-workspace-")
@@ -175,6 +197,9 @@ suite("UserHookEnvironment", () => {
     const quotedCommand = `node "${scriptPath}" "${markerPath}"`;
     const unquotedCommand = "echo hook";
     try {
+      process.env.MSYSTEM = "";
+      process.env.TERM = "";
+      process.env.ComSpec = "cmd.exe";
       const prepared = prepareUserHookLaunchers({
         harnessId: HARNESS_IDS.QWEN_CLI,
         extensionPath,
@@ -224,6 +249,62 @@ suite("UserHookEnvironment", () => {
     } finally {
       await fs.rm(tempDirectory, { recursive: true, force: true });
     }
+  });
+
+  test("uses Qwen's Windows shell choice for quoted and env-bearing hooks", () => {
+    Object.defineProperty(process, "platform", {
+      configurable: true,
+      value: "win32",
+    });
+    const prepare = (env: NodeJS.ProcessEnv, hooks: UserHookConfig[]) => {
+      for (const name of ["MSYSTEM", "TERM", "ComSpec"]) {
+        delete process.env[name];
+      }
+      Object.assign(process.env, env);
+      return prepareUserHookLaunchers({
+        harnessId: HARNESS_IDS.QWEN_CLI,
+        extensionPath,
+        hookTempDirectory: os.tmpdir(),
+        promptIndex: 0,
+        hooks,
+      });
+    };
+    const quotedHook = { event: "stop" as const, command: 'echo "quoted"' };
+    const envHook = {
+      event: "stop" as const,
+      command: "echo hook",
+      env: { TOKEN: "value" },
+    };
+
+    const gitBash = prepare({ MSYSTEM: "MINGW64" }, [quotedHook]);
+    assert.strictEqual(gitBash.tempFilePath, undefined);
+    assert.strictEqual(gitBash.hooks?.[0].command, quotedHook.command);
+
+    const gitBashEnvHook = prepare({ MSYSTEM: "MINGW64" }, [envHook]);
+    assert.ok(gitBashEnvHook.hooks?.[0].command?.includes("hook-0 bash "));
+
+    const msysTerm = prepare({ TERM: "xterm-msys" }, [quotedHook]);
+    assert.strictEqual(msysTerm.tempFilePath, undefined);
+    assert.strictEqual(msysTerm.hooks?.[0].command, quotedHook.command);
+
+    const cmd = prepare({ ComSpec: "C:\\Windows\\System32\\cmd.exe" }, [
+      quotedHook,
+    ]);
+    assert.ok(cmd.hooks?.[0].command?.includes("ctrlyoke-hook-run.js"));
+    assert.ok(cmd.hooks?.[0].command?.includes("hook-0 default "));
+
+    const powershell = prepare(
+      { ComSpec: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" },
+      [quotedHook, envHook]
+    );
+    assert.strictEqual(powershell.hooks?.[0].command, quotedHook.command);
+    const powershellEnvHook = prepare(
+      { ComSpec: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" },
+      [envHook]
+    );
+    assert.ok(
+      powershellEnvHook.hooks?.[0].command?.includes("hook-0 powershell.exe ")
+    );
   });
 
   test("isolates concurrent Qwen step env files and reuses each step path", async () => {

@@ -1689,8 +1689,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       if (!workingFile) {
         throw new Error("Persisted step claim did not return its working file");
       }
-      this.mergeDiskSteps(workingFile.steps ?? [], workingFile.parallelGroups);
-      state.definitionRevision = result.definitionRevision;
+      const newStepsFromDisk = this.mergeDiskDefinition(workingFile);
+      state.definitionRevision = Math.max(
+        state.definitionRevision ?? 1,
+        result.definitionRevision
+      );
       if (
         result.status === STEP_CLAIM_OUTCOMES.CLAIMED &&
         result.stepIndex !== undefined &&
@@ -1700,6 +1703,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         if (this.workflowFile?.steps) {
           this.workflowFile.steps[result.stepIndex] = result.step;
         }
+      }
+      if (newStepsFromDisk.length > 0) {
+        this.onDiskStepsMergedEmitter.fire(newStepsFromDisk);
       }
       this.emitStateChange();
     });
@@ -2333,11 +2339,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     if (!isEmptyInsert && !isValidExistingIndex) {
       throw new Error(`Invalid insert index: ${afterIndex}`);
     }
-    this.assertPendingRewindSuffixIndex(afterIndex + 1, "insert");
-    // During execution an insert must land strictly after the running step so it
-    // cannot shift the running/completed region (insertIndex = afterIndex + 1).
-    this.assertEditableDuringExecution(afterIndex + 1, "insert");
-
     let warning: string | undefined;
     await this.workingFileManager.runInQueue(async () => {
       const previousSteps = this.state.steps;
@@ -2352,6 +2353,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         PARALLEL_GROUP_INSERT_POSITIONS.AFTER
       );
       const insertIndex = placement.insertedIndex;
+      this.assertPendingRewindSuffixIndex(insertIndex, "insert");
+      // Validate the resolved destination: a request inside a live parallel
+      // group is relocated after the group before it can shift started steps.
+      this.assertEditableDuringExecution(insertIndex, "insert");
       const identifiedStep = ensureStepIds([...this.state.steps, step]).at(-1)!;
       const nextTopology = insertParallelGroupSteps(topology, requestedIndex, [
         identifiedStep,

@@ -30,12 +30,14 @@ machine and device IDs and a per-launch session ID. The Privacy Policy lists eve
 **To turn it off**, set VS Code's `telemetry.telemetryLevel` to `off`. ctrlyoke follows that
 setting; there is no separate ctrlyoke switch.
 
-The **headless `ctrlyoke` commands other than `ctrlyoke server`, and
-`ctrlyoke-mcp`, send no telemetry and make no network requests of their own**.
-`ctrlyoke server` checks the Pro license for remote access, including LAN HTTPS,
-and may contact Keygen to refresh a cached online Pro license. When push
-notifications are enabled, it also sends notifications to browser push
-services. See [Other network requests](#other-network-requests).
+The **headless `ctrlyoke` commands other than `ctrlyoke server`,
+`ctrlyoke license activate`, `ctrlyoke license deactivate`, and
+`ctrlyoke-mcp` send no telemetry and make no network requests of their own**.
+`ctrlyoke license status` checks the stored license locally. `ctrlyoke server`
+checks the Pro license for remote access, including LAN HTTPS, and may contact
+Keygen to refresh a cached online Pro license. When push notifications are
+enabled, it also sends notifications to browser push services. See [Other
+network requests](#other-network-requests).
 
 ## Other network requests
 

@@ -95,7 +95,7 @@ import {
   checkPriorContextRefs,
   diagnoseResolvedReferences,
   getConditionOutputDiagnostics,
-  getInvalidPriorContextSummaryDiagnostics,
+  getInvalidPriorContextDiagnostics,
   resolvePromptReferences,
   type ContextReferenceResolver,
   type ContextReferenceValidationResult,
@@ -2511,7 +2511,7 @@ export function createPriorContextLintExtension(
         ...checks.flatMap((check) =>
           check.diagnostic ? [toCodeMirrorDiagnostic(check.diagnostic)] : []
         ),
-        ...getInvalidPriorContextSummaryDiagnostics(
+        ...getInvalidPriorContextDiagnostics(
           view.state.doc.toString()
         ).map(toCodeMirrorDiagnostic),
       ];

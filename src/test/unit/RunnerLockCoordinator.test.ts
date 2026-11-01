@@ -14,6 +14,7 @@ import {
   RunnerLockCoordinator,
   type RunnerLockCoordinatorPort,
 } from "../../core/orchestration/RunnerLockCoordinator";
+import type { ExecutionLeaseHandle } from "../../core/orchestration/ExecutionRootLeaseManager";
 import { Log } from "../../utils/Log";
 import { HEARTBEAT_INTERVAL_MS } from "../../utils/LockSafetyPrimitives";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
@@ -29,6 +30,7 @@ class TestRunnerLockHost implements RunnerLockCoordinatorPort {
   };
   readonly queueState: QueueState;
   stopCalls = 0;
+  executionLease: ExecutionLeaseHandle | undefined;
 
   constructor(
     private readonly workspaceRoot: string,
@@ -64,8 +66,8 @@ class TestRunnerLockHost implements RunnerLockCoordinatorPort {
     this.stopCalls += 1;
   }
 
-  getExecutionLease(): undefined {
-    return undefined;
+  getExecutionLease(): ExecutionLeaseHandle | undefined {
+    return this.executionLease;
   }
 }
 
@@ -134,6 +136,7 @@ suite("RunnerLockCoordinator", () => {
     let workspaceRoot = "";
     let coordinator: RunnerLockCoordinator;
     let workflowKey: QueueState["workflowKey"];
+    let host: TestRunnerLockHost;
 
     const tickHeartbeats = () => {
       for (const interval of intervals) {
@@ -175,7 +178,7 @@ suite("RunnerLockCoordinator", () => {
         workspaceRoot,
         "heartbeat"
       );
-      const host = new TestRunnerLockHost(
+      host = new TestRunnerLockHost(
         workspaceRoot,
         workflowKey,
         WorkflowPaths.formatRunRef(Date.now())
@@ -213,6 +216,34 @@ suite("RunnerLockCoordinator", () => {
       heartbeatCalls = [];
       tickHeartbeats();
       assert.deepStrictEqual(heartbeatCalls, []);
+    });
+
+    test("heartbeats a lease created after the interval starts", () => {
+      let leaseHeartbeats = 0;
+      coordinator.startHeartbeat(workspaceRoot, workflowKey!);
+      tickHeartbeats();
+      assert.strictEqual(leaseHeartbeats, 0);
+
+      host.executionLease = {
+        ownerToken: "lease-owner",
+        mode: "shared-native",
+        pid: process.pid,
+        runner: RUNNER_IDS.CLI,
+        instanceId: host.id,
+        stateRoot: workspaceRoot,
+        executionRoot: workspaceRoot,
+        workflowKey: workflowKey!,
+        runRef: host.queueState.runRef!,
+        startedAt: Date.now(),
+        lastHeartbeat: Date.now(),
+        updateHeartbeat: async () => {
+          leaseHeartbeats += 1;
+        },
+        release: async () => {},
+      };
+      tickHeartbeats();
+
+      assert.strictEqual(leaseHeartbeats, 1);
     });
   });
 

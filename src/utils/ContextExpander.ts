@@ -42,6 +42,7 @@ import {
   MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES,
   MAX_CONTENT_SIZE,
   MAX_EXCERPT_BYTES,
+  NO_UNSTAGED_CHANGES_MESSAGE,
 } from "../types/DashboardConstants";
 import { getErrorMessage } from "./ErrorUtils";
 import { isWorkflowRelativeReferencePath } from "./promptPathUtils";
@@ -862,7 +863,7 @@ export class ContextExpander {
         if (ref.kind === GIT_CHANGE_KINDS.DIFF) {
           content = await getWorkingTreeDiff(this.workspaceRoot);
           if (!content.trim()) {
-            content = "No uncommitted changes in working tree.";
+            content = NO_UNSTAGED_CHANGES_MESSAGE;
           }
           title = "Working tree changes (git diff)";
         } else if (ref.kind === GIT_CHANGE_KINDS.STAGED) {

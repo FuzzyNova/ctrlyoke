@@ -285,17 +285,17 @@ suite("HarnessToolPermissionMappers", () => {
         ["shell(*:*)", "command(*)", "command(*)"],
         [
           "shell(git push:*)",
-          "command(regex:git\\s+push(?:\\s[^;&|`$()<>\\r\\n]*)?)",
+          "command(regex:git[ \\t]+push(?:[ \\t][^;&|`$()<>\\r\\n]*)?)",
           "command(regex:(?is)(?:.*[^\\w.-])?git\\s+push(?:[^\\w.-].*)?)",
         ],
         [
           "shell(npm run test)",
-          "command(regex:npm\\s+run\\s+test)",
+          "command(regex:npm[ \\t]+run[ \\t]+test)",
           "command(regex:(?is)(?:.*[^\\w.-])?npm\\s+run\\s+test(?:[^\\w.-].*)?)",
         ],
         [
           "shell(git * main:*)",
-          "command(regex:git\\s+[^\\s;&|`$()<>\\r\\n]+\\s+main(?:\\s[^;&|`$()<>\\r\\n]*)?)",
+          "command(regex:git[ \\t]+[^\\s;&|`$()<>\\r\\n]+[ \\t]+main(?:[ \\t][^;&|`$()<>\\r\\n]*)?)",
           "command(regex:(?is)(?:.*[^\\w.-])?git\\s+\\S+\\s+main(?:[^\\w.-].*)?)",
         ],
         ["read", "read_file(*)", "read_file(*)"],
@@ -359,6 +359,19 @@ suite("HarnessToolPermissionMappers", () => {
         const allowRegex = asRegex(allow);
         const denyRegex = asRegex(deny);
         assert.ok(allowRegex.test("git push origin"));
+        const statusAllow = mapper.convertToAntigravityRules(
+          ["shell(git status:*)"],
+          "allow"
+        ).rules[0];
+        const statusAllowRegex = asRegex(statusAllow);
+        assert.ok(statusAllowRegex.test("git status --short"));
+        for (const command of [
+          "git status\nwhoami",
+          "git status\r\nwhoami",
+          "git\nstatus",
+        ]) {
+          assert.strictEqual(statusAllowRegex.test(command), false, command);
+        }
         for (const command of [
           "echo a && git push",
           "echo a; git push",
@@ -553,20 +566,29 @@ suite("HarnessToolPermissionMappers", () => {
         }
       });
 
-      test("skips its settings file when workflow arguments supply --settings", async () => {
-        const application = await mapper.prepare(
-          cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"]),
-          {
-            workspaceRoot,
-            additionalArgs: "--other value --settings=custom.json",
-          }
-        );
-        assert.deepStrictEqual(application.cliArgs, []);
-        assert.strictEqual(application.mutations, undefined);
-        assert.match(
-          application.diagnostics.at(-1)!.message,
-          /workflow additionalArgs supplies its own --settings/
-        );
+      test("skips its settings file when workflow arguments supply --settings or -settings", async () => {
+        for (const additionalArgs of [
+          "--other value --settings=custom.json",
+          "--other value -settings custom.json",
+          "--other value -settings=custom.json",
+        ]) {
+          const application = await mapper.prepare(
+            cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"]),
+            { workspaceRoot, additionalArgs }
+          );
+          assert.deepStrictEqual(application.cliArgs, [], additionalArgs);
+          assert.strictEqual(application.mutations, undefined, additionalArgs);
+          assert.strictEqual(
+            application.diagnostics.at(-1)!.code,
+            COMPATIBILITY_DIAGNOSTIC_CODES.ANTIGRAVITY_SETTINGS_COLLISION,
+            additionalArgs
+          );
+          assert.match(
+            application.diagnostics.at(-1)!.message,
+            /workflow additionalArgs supplies its own --settings/,
+            additionalArgs
+          );
+        }
       });
 
       test("none mode returns no permission flags", async () => {

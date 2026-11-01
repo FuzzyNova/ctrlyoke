@@ -653,8 +653,7 @@ export async function showHistoryCommand(
     attemptFilter.kind !== HISTORY_SHOW_ATTEMPT_SELECTORS.ALL ||
     targetFilter?.kind === HISTORY_SHOW_STEP_SELECTORS.RUNNING ||
     targetFilter?.kind === HISTORY_SHOW_STEP_SELECTORS.LATEST ||
-    (targetFilter?.kind === FINAL_STEP_PHASES.FINAL_STEP &&
-      targetFilter.passNumber !== undefined);
+    targetFilter?.kind === FINAL_STEP_PHASES.FINAL_STEP;
   const index = needsAttemptIndex
     ? await collectHistoryAttemptIndex(resolver, manifestPath)
     : undefined;
@@ -793,16 +792,24 @@ export async function showHistoryCommand(
     matchedTargets.size === 0
   ) {
     const selector = formatFinalStepSelector(targetFilter);
-    const state = historyWorkingStepState(
-      workingDefinition?.finalStep?._runtime
+    const passes = index ? historyFinalPassRows(index) : [];
+    const state = historyFinalStepState(
+      workingDefinition,
+      passes,
+      undefined,
+      runSummary.hasFinalStep
     );
     notices.push({
       selector,
       status: state,
       line:
-        state === HISTORY_STEP_STATES.PENDING
-          ? `--step ${selector}: the final step has not run (${HISTORY_STEP_STATES.PENDING})`
-          : `--step ${selector}: the final step is ${state} but has no recorded pass`,
+        state === HISTORY_STEP_STATES.UNKNOWN
+          ? `--step ${selector}: the final step's state is unknown (no working file)`
+          : state === PROMPT_TERMINAL_STATUS.SKIPPED
+          ? `--step ${selector} was skipped`
+          : state === HISTORY_STEP_STATES.PENDING
+            ? `--step ${selector}: the final step has not run (${HISTORY_STEP_STATES.PENDING})`
+            : `--step ${selector}: the final step is ${state} but has no recorded pass`,
     });
   } else if (
     targetFilter?.kind === HISTORY_SHOW_STEP_SELECTORS.RUNNING &&
@@ -1276,17 +1283,11 @@ export async function stepsHistoryCommand(
     passes[passes.length - 1]?.state !== EXECUTION_STATES.RUNNING
       ? passes.length + 1
       : null;
-  const finalStepState =
-    nextPass === null ? undefined : HISTORY_STEP_STATES.PENDING;
   const finalStep: HistoryFinalStepRow | null = definition.finalStep
     ? {
         selector: HISTORY_SHOW_STEP_SELECTORS.FINAL,
         name: definition.finalStep.name?.trim() || null,
-        state:
-          finalStepState ??
-          definition._runtime?.finalStep?.status ??
-          passes[passes.length - 1]?.state ??
-          historyWorkingStepState(definition.finalStep._runtime),
+        state: historyFinalStepState(definition, passes, nextPass),
         harness: definition.finalStep._runtime?.harness ?? null,
         model: definition.finalStep._runtime?.model ?? null,
         elapsedSeconds: historyFinishedPassElapsedSeconds(passes),
@@ -1381,6 +1382,25 @@ function historyFinalPassRows(
     });
   }
   return passes.sort((a, b) => a.pass - b.pass);
+}
+
+function historyFinalStepState(
+  definition: RunWorkingDefinition | undefined,
+  passes: readonly HistoryFinalPassRow[],
+  nextPass?: number | null,
+  hasFinalStep?: boolean
+): string {
+  if (nextPass !== undefined && nextPass !== null) {
+    return HISTORY_STEP_STATES.PENDING;
+  }
+  if (!definition && passes.length === 0 && hasFinalStep === undefined) {
+    return HISTORY_STEP_STATES.UNKNOWN;
+  }
+  return (
+    definition?._runtime?.finalStep?.status ??
+    passes[passes.length - 1]?.state ??
+    historyWorkingStepState(definition?.finalStep?._runtime)
+  );
 }
 
 function historyFinishedPassElapsedSeconds(

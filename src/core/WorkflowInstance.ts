@@ -2451,12 +2451,45 @@ export class WorkflowInstance
       historyFilePath ?? this.resolveHistoryFilePath();
     const workingFilePath = this.promptQueue.getState().workingFilePath;
     await this.ensureRunnerLock(workingFilePath);
-    this.worktreeResolution = await resolveWorktreeForWorkspace(
-      this.promptQueue.getWorkflowFile().worktree,
-      ConfigurationUtils.getDefaultWorktree(),
-      this.platform.getNamedWorkspaceRoots()
-    );
-    await this.prepareExecutionWorktree(resolvedHistoryFilePath);
+    const state = this.promptQueue.getState();
+    const lockWorkspaceRoot = this.getStateRoot();
+    if (
+      this.runnerLockCoordinator.ownsLock() &&
+      state.workflowKey &&
+      lockWorkspaceRoot
+    ) {
+      this.startRunnerLockHeartbeat(lockWorkspaceRoot, state.workflowKey);
+    }
+    try {
+      this.worktreeResolution = await resolveWorktreeForWorkspace(
+        this.promptQueue.getWorkflowFile().worktree,
+        ConfigurationUtils.getDefaultWorktree(),
+        this.platform.getNamedWorkspaceRoots()
+      );
+      await this.prepareExecutionWorktree(resolvedHistoryFilePath);
+      if (this.promptQueue.getState().status === EXECUTION_STATES.STOPPED) {
+        await this.abandonActiveWorktree();
+        await this.releaseRunnerLock();
+        return;
+      }
+    } catch (error) {
+      this.stopRunnerLockHeartbeat();
+      const lease = this.executionLease;
+      this.executionLease = undefined;
+      await lease?.release().catch((releaseError) =>
+        Log.warn(
+          `[inst:${this.id.slice(0, 8)}] Failed to release execution lease after resume setup failure:`,
+          releaseError
+        )
+      );
+      await this.releaseRunnerLock().catch((releaseError) =>
+        Log.warn(
+          `[inst:${this.id.slice(0, 8)}] Failed to release runner lock after resume setup failure:`,
+          releaseError
+        )
+      );
+      throw error;
+    }
 
     Log.info("[WorkflowInstance] Resuming workflow from paused position");
     await this.startWorkflowExecution(

@@ -687,6 +687,11 @@ suite("CompletionCore git change completions", function () {
     runGit(["stash"]);
     const olderHash = runGit(["rev-parse", "HEAD"]);
     const items = await createCore().getGitChangeCompletions(workspaceRoot, "");
+    const diffCompletion = items.find(
+      (item) => item.insertText === GIT_CHANGE_KINDS.DIFF
+    );
+    assert.strictEqual(diffCompletion?.detail, "Unstaged changes");
+    assert.ok(diffCompletion?.filterText?.includes("uncommitted"));
     const iconFor = (insertText: string) =>
       items.find((item) => item.insertText === insertText)?.icon;
     assert.strictEqual(iconFor(GIT_CHANGE_KINDS.DIFF), "git-branch-changes");

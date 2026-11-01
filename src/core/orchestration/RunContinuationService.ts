@@ -480,19 +480,19 @@ export class RunContinuationService {
         ) {
           throw new Error(`Invalid insert index: ${requestedIndex}`);
         }
-        if (typeof position === "number") {
-          assertEditableDuringExecution(
-            source,
-            sourceTopology.steps,
-            requestedIndex,
-            "insert"
-          );
-        }
         const placement = resolveParallelGroupInsertIndex(
           sourceTopology,
           requestedIndex,
           PARALLEL_GROUP_INSERT_POSITIONS.AFTER
         );
+        if (typeof position === "number") {
+          assertEditableDuringExecution(
+            source,
+            sourceTopology.steps,
+            placement.insertedIndex,
+            "insert"
+          );
+        }
         const nextTopology = insertParallelGroupTopology(
           sourceTopology,
           requestedIndex,

@@ -3644,6 +3644,10 @@ export const GIT_CHANGE_KINDS = {
   STASH: "stash",
 } as const;
 
+/** Empty-state text for `~diff`, which includes unstaged working-tree changes. */
+export const NO_UNSTAGED_CHANGES_MESSAGE =
+  "No unstaged changes in working tree (staged changes are attached with ~staged).";
+
 /** Codicon for each `~` git reference kind, shared by its completion item and chip. */
 export const GIT_REFERENCE_ICONS = {
   [GIT_CHANGE_KINDS.COMMIT]: "git-commit",

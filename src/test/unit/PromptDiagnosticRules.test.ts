@@ -164,6 +164,19 @@ suite("PromptDiagnosticRules", () => {
       );
     });
 
+    test("warns on malformed known arguments but ignores prose and unknown kinds", () => {
+      const text =
+        "$step:0 $step:3-1 $previous:0 $previous: fix it $foo:bar";
+      assert.deepStrictEqual(
+        summarize(text, getPriorContextDiagnostics(text, baseContext)),
+        ["$step:0", "$step:3-1", "$previous:0"].map((token) => ({
+          code: PROMPT_DIAGNOSTIC_CODES.PRIOR_CONTEXT_INVALID,
+          severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+          text: token,
+        }))
+      );
+    });
+
     test("offers the kind-first order as a fix for the retired summary prefix", () => {
       const text =
         "See $summary:previous:3, $summary:step:1,2, and $summary:nope.";

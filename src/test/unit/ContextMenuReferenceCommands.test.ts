@@ -117,14 +117,16 @@ suite("ContextMenuReferenceCommands", () => {
     workspaceRoot: string,
     workspaceRelativeReferencePathResolver?: (uri: vscode.Uri) => string | null,
     trustChoice: string | null = EXTERNAL_FILE_TRUST_SCOPES.USER,
-    prepareTrustPrompt?: () => Promise<UserInteractionPort>
+    prepareTrustPrompt?: () => Promise<UserInteractionPort>,
+    workspaceCommitChecker?: (workspaceRoot: string, commitHash: string) => Promise<boolean>
   ): ContextMenuReferenceCommands {
     return new ContextMenuReferenceCommands(
       sink,
       () => workspaceRoot,
       workspaceRelativeReferencePathResolver,
       prepareTrustPrompt ??
-        (async () => new FakeInteractionPort(trustChoice ?? undefined))
+        (async () => new FakeInteractionPort(trustChoice ?? undefined)),
+      workspaceCommitChecker
     );
   }
 
@@ -781,16 +783,61 @@ suite("ContextMenuReferenceCommands", () => {
 
     test("inserts the commit reference for the menu's editor resource", async () => {
       const sink = new RecordingPromptEditorInsertSink();
+      const workspaceRoot = createTestWorkspace();
+      const checkedCommits: string[] = [];
 
       await createCommands(
         sink,
-        createTestWorkspace()
+        workspaceRoot,
+        undefined,
+        undefined,
+        undefined,
+        async (checkedRoot, commitHash) => {
+          assert.strictEqual(checkedRoot, workspaceRoot);
+          checkedCommits.push(commitHash);
+          return true;
+        }
       ).addEditorCommitToPromptEditor(gitUri(COMMIT));
 
+      assert.deepStrictEqual(checkedCommits, [COMMIT]);
       assert.deepStrictEqual(
         sink.requests.map((request) => request.references),
         [[buildGitReference(COMMIT)]]
       );
+    });
+
+    test("warns and inserts nothing for a commit outside the workspace repo", async () => {
+      const sink = new RecordingPromptEditorInsertSink();
+      const warnings: string[] = [];
+      const originalShowWarningMessage = vscode.window.showWarningMessage;
+      Object.defineProperty(vscode.window, "showWarningMessage", {
+        configurable: true,
+        value: ((message: string) => {
+          warnings.push(message);
+          return Promise.resolve(undefined);
+        }) as unknown as typeof originalShowWarningMessage,
+      });
+
+      try {
+        await createCommands(
+          sink,
+          createTestWorkspace(),
+          undefined,
+          undefined,
+          undefined,
+          async () => false
+        ).addEditorCommitToPromptEditor(gitUri(COMMIT));
+      } finally {
+        Object.defineProperty(vscode.window, "showWarningMessage", {
+          configurable: true,
+          value: originalShowWarningMessage,
+        });
+      }
+
+      assert.deepStrictEqual(warnings, [
+        `ctrlyoke: Commit ${COMMIT.slice(0, 7)} is not in this workspace's repository, so a ~ reference can't attach it.`,
+      ]);
+      assert.strictEqual(sink.requests.length, 0);
     });
 
     test("inserts nothing for an editor without a commit", async () => {

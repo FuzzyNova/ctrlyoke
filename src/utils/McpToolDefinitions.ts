@@ -444,7 +444,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
             },
           ],
           description:
-            "Use 'next' to queue them after the current step (or after the active parallel group) and never join that group, 'parallelWithCurrent' to join the active group, 'end' to run them last, or a zero-based step index to insert them before that step.",
+            "Use 'next' to queue them after the current step (or after the active parallel group) and never join that group, 'parallelWithCurrent' to join the active group, 'end' to run them last, or a zero-based step index to insert them before that step. An index inside a parallel group inserts after the whole group.",
         },
         source: {
           type: "string",
@@ -649,7 +649,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
           type: "number",
           minimum: 0,
           description:
-            "Re-read notes after this sequence number instead of only unread ones. Pass 0 to page from the oldest note still on the board.",
+            "Re-read notes after this sequence number instead of only unread ones. Pass 0 to page from the oldest note still on the board. Use a returned nextCursor here to continue through another page.",
         },
         from: {
           type: "array",

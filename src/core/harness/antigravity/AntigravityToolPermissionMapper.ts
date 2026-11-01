@@ -66,7 +66,7 @@ const READ_ONLY_LIST_TOOLS = new Set([
   "list_directory",
   "lsp",
 ]);
-const SHELL_ALLOW_TAIL = "(?:\\s[^;&|`$()<>\\r\\n]*)?";
+const SHELL_ALLOW_TAIL = "(?:[ \\t][^;&|`$()<>\\r\\n]*)?";
 
 function escapeRegexWord(word: string): string {
   return word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -103,7 +103,9 @@ function parseShellCommand(
         : String.raw`\S+`;
     return escapeRegexWord(word);
   });
-  return { words: words.join(String.raw`\s+`), prefix, command };
+  const wordJoiner =
+    kind === ANTIGRAVITY_RULE_LIST_KINDS.ALLOW ? "[ \\t]+" : String.raw`\s+`;
+  return { words: words.join(wordJoiner), prefix, command };
 }
 
 /**
@@ -387,7 +389,11 @@ export function parseAntigravityUserPermissionRules(
 
 function hasSettingsFlag(additionalArgs: string): boolean {
   return parseArgString(additionalArgs).some(
-    (arg) => arg === "--settings" || arg.startsWith("--settings=")
+    (arg) =>
+      arg === "--settings" ||
+      arg.startsWith("--settings=") ||
+      arg === "-settings" ||
+      arg.startsWith("-settings=")
   );
 }
 
