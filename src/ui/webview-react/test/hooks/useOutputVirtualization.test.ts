@@ -266,7 +266,10 @@ describe("useOutputVirtualization live row measurement", () => {
 });
 
 describe("useOutputVirtualization non-virtual row staging", () => {
-  function renderNonVirtualStaging(initialRowCount: number) {
+  function renderNonVirtualStaging(
+    initialRowCount: number,
+    onRender?: (result: ReturnType<typeof useOutputVirtualization>) => void
+  ) {
     const scrollElement = document.createElement("div");
     Object.defineProperties(scrollElement, {
       clientHeight: { configurable: true, value: 600 },
@@ -275,8 +278,8 @@ describe("useOutputVirtualization non-virtual row staging", () => {
     });
 
     return renderHook(
-      ({ rows }: { rows: OutputRenderRow[] }) =>
-        useOutputVirtualization({
+      ({ rows }: { rows: OutputRenderRow[] }) => {
+        const result = useOutputVirtualization({
           applyScrollTargetRef: {
             current: () => ({ resolved: false, appliedDelta: 0 }),
           },
@@ -298,10 +301,39 @@ describe("useOutputVirtualization non-virtual row staging", () => {
           scrollSeekPlaceholderActive: false,
           scrollSeekRestoreRequestedAtRef: { current: null },
           scrollTargetRef: { current: { kind: "bottom" } },
-        }),
+        });
+        onRender?.(result);
+        return result;
+      },
       { initialProps: { rows: makeRows(initialRowCount) } }
     );
   }
+
+  it("never reports staging in any render of a streamed append once caught up", async () => {
+    const renders: { rowCount: number; staging: boolean }[] = [];
+    const { result, rerender } = renderNonVirtualStaging(80, (current) => {
+      renders.push({
+        rowCount: current.nonVirtualRows.length,
+        staging: current.isNonVirtualOutputStaging,
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.nonVirtualRows.length).toBe(80);
+    });
+
+    // Regression: the render that adds the row used to commit (and paint)
+    // with the previous staged count before the passive effect raised it,
+    // so the overlay showed for one frame on every streamed event. Every
+    // render — not just the settled one `act` hands back — must be clean.
+    renders.length = 0;
+    rerender({ rows: makeRows(81) });
+    rerender({ rows: makeRows(82) });
+
+    expect(renders.length).toBeGreaterThan(0);
+    expect(renders.every((render) => !render.staging)).toBe(true);
+    expect(renders[0]?.rowCount).toBe(81);
+  });
 
   it("extends synchronously for a single streamed append once staging has caught up", async () => {
     const { result, rerender } = renderNonVirtualStaging(80);

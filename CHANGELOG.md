@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The "Rendering output…" overlay no longer flashes over the output pane each
+  time a live run streams a new event. It now appears only when output has
+  taken more than half a second to render.
+
 ## [0.4.0] - 2026-10-31
 
 ### Added

@@ -45,6 +45,12 @@ const POST_LOAD_REMEASURE_DELAY_MS = 80;
 const NON_VIRTUAL_STAGING_ROW_THRESHOLD = 60;
 const NON_VIRTUAL_INITIAL_RENDER_ROWS = 24;
 const NON_VIRTUAL_RENDER_CHUNK_ROWS = 24;
+/**
+ * Staged render count meaning "every row, including ones appended later".
+ * Staging is finished once the count reaches this, so a streamed append never
+ * has to wait for an effect to raise the count before it is visible.
+ */
+const NON_VIRTUAL_ALL_ROWS = Number.MAX_SAFE_INTEGER;
 
 interface RowHeightBucketStats {
   sampleCount: number;
@@ -196,7 +202,7 @@ export function useOutputVirtualization({
   const measurementVersionRef = useRef(measurementVersion);
   const measurementVersionFrameRef = useRef<number | null>(null);
   const [nonVirtualRenderedRowCount, setNonVirtualRenderedRowCount] =
-    useState<number>(Number.MAX_SAFE_INTEGER);
+    useState<number>(NON_VIRTUAL_ALL_ROWS);
   const initialMeasurementCompletedRef = useRef(false);
   const nonVirtualRenderFrameRef = useRef<number | null>(null);
   const nonVirtualRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -204,7 +210,7 @@ export function useOutputVirtualization({
   );
   const nonVirtualRenderIdentityRef = useRef<string | null>(null);
   const nonVirtualPrevRowCountRef = useRef(0);
-  const nonVirtualRenderedRowCountRef = useRef(Number.MAX_SAFE_INTEGER);
+  const nonVirtualRenderedRowCountRef = useRef(NON_VIRTUAL_ALL_ROWS);
   const lastVirtualRangeRef = useRef<string>("");
   const isBulkRemeasureInProgressRef = useRef(false);
   const pendingMeasurementCacheRef = useRef<Map<string, number>>(new Map());
@@ -965,8 +971,8 @@ export function useOutputVirtualization({
 
     if (!shouldStageRows) {
       nonVirtualPrevRowCountRef.current = rows.length;
-      nonVirtualRenderedRowCountRef.current = Number.MAX_SAFE_INTEGER;
-      setNonVirtualRenderedRowCount(Number.MAX_SAFE_INTEGER);
+      nonVirtualRenderedRowCountRef.current = NON_VIRTUAL_ALL_ROWS;
+      setNonVirtualRenderedRowCount(NON_VIRTUAL_ALL_ROWS);
       return;
     }
 
@@ -984,12 +990,13 @@ export function useOutputVirtualization({
     if (wasCaughtUp) {
       // This effect only reran because rows.length changed, most commonly a
       // single streamed event appended at the tail while already fully
-      // rendered. Extend synchronously instead of restarting the chunked
-      // catch-up flow below — deferring even a 1-row append via rAF is what
-      // caused the "Rendering output..." overlay to flash on every streamed
-      // event.
-      nonVirtualRenderedRowCountRef.current = rows.length;
-      setNonVirtualRenderedRowCount(rows.length);
+      // rendered. Caught-up is stored as the ALL_ROWS sentinel rather than
+      // the row count, so rows appended later are visible in the very render
+      // that adds them: a passive effect runs after paint, and a stored count
+      // one row short painted the "Rendering output..." overlay for a frame
+      // on every streamed event.
+      nonVirtualRenderedRowCountRef.current = NON_VIRTUAL_ALL_ROWS;
+      setNonVirtualRenderedRowCount(NON_VIRTUAL_ALL_ROWS);
       return;
     }
 
@@ -1002,16 +1009,16 @@ export function useOutputVirtualization({
     nonVirtualRenderTimerRef.current = setTimeout(() => {
       nonVirtualRenderTimerRef.current = null;
       const renderNextChunk = () => {
-        const next = Math.min(
-          rows.length,
-          nonVirtualRenderedRowCountRef.current + NON_VIRTUAL_RENDER_CHUNK_ROWS
-        );
-        nonVirtualRenderedRowCountRef.current = next;
-        setNonVirtualRenderedRowCount(next);
+        const next =
+          nonVirtualRenderedRowCountRef.current + NON_VIRTUAL_RENDER_CHUNK_ROWS;
         if (next < rows.length) {
+          nonVirtualRenderedRowCountRef.current = next;
+          setNonVirtualRenderedRowCount(next);
           nonVirtualRenderFrameRef.current =
             requestAnimationFrame(renderNextChunk);
         } else {
+          nonVirtualRenderedRowCountRef.current = NON_VIRTUAL_ALL_ROWS;
+          setNonVirtualRenderedRowCount(NON_VIRTUAL_ALL_ROWS);
           nonVirtualRenderFrameRef.current = null;
         }
       };

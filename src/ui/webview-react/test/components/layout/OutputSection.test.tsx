@@ -413,18 +413,33 @@ describe("OutputSection", () => {
     );
   });
 
-  it("shows the rendering overlay before the first virtual range is ready", () => {
-    outputRows = Array.from({ length: 20 }, (_, index) => ({
-      key: `row-${index}`,
-    }));
-    outputIsVirtualized = true;
+  it("shows the rendering overlay only once the first virtual range has been pending for a while", () => {
+    vi.useFakeTimers();
+    try {
+      outputRows = Array.from({ length: 20 }, (_, index) => ({
+        key: `row-${index}`,
+      }));
+      outputIsVirtualized = true;
 
-    render(<OutputSection />);
+      render(<OutputSection />);
 
-    expect(screen.getByTestId("output-pane")).toHaveAttribute(
-      "data-virtualization-overlay",
-      "true"
-    );
+      // A wait that resolves within a few frames must never flash it.
+      expect(screen.getByTestId("output-pane")).toHaveAttribute(
+        "data-virtualization-overlay",
+        "false"
+      );
+
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+
+      expect(screen.getByTestId("output-pane")).toHaveAttribute(
+        "data-virtualization-overlay",
+        "true"
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("skips width-change scroll restoration while collapsing the output pane", () => {

@@ -71,6 +71,7 @@ import { OutputUndoDialogs } from "./output-section/OutputUndoDialogs";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { useOutputContextMenu } from "@hooks/useOutputContextMenu";
 import { useLongPress } from "@hooks/useLongPress";
+import { useDelayedFlag } from "@hooks/useDelayedFlag";
 import { toOutputMessageTarget } from "@utils/outputProjection";
 import {
   getProfilerState,
@@ -116,6 +117,13 @@ const EMPTY_HIDDEN_AT_MS: Readonly<Record<string, number>> = {};
 
 // Stable workflowId used for standalone user shell sessions (no active workflow).
 const SHELL_WORKFLOW_ID = "_shell";
+
+/**
+ * How long output must stay unrendered before the "Rendering output…" overlay
+ * appears. Staging and virtual-range setup usually finish within a few frames;
+ * an overlay that appears for that long reads as a glitch, not as progress.
+ */
+const RENDERING_OVERLAY_SHOW_DELAY_MS = 500;
 
 const OUTPUT_SCROLL_TARGET_COMMIT_MAX_RETRIES = 5; // animation-frame retries for capturing a viewport anchor when rows are mid-transition (e.g. scroll-seek placeholder swap).
 const MAX_NAV_ALIGNMENT_ATTEMPTS = 8; // max correction passes when aligning minimap/step navigation.
@@ -1322,7 +1330,7 @@ const OutputSectionInner: React.FC = () => {
     }
   }, [isOutputVirtualized, rowRenderIdentity, virtualRows.length]);
 
-  const showVirtualizationOverlay =
+  const isOutputRenderPending =
     !isOutputScrollSeeking &&
     (isNonVirtualOutputStaging ||
       (isOutputVirtualized &&
@@ -1332,6 +1340,10 @@ const OutputSectionInner: React.FC = () => {
           !hasRenderedVirtualRowsForCurrentIdentity) ||
           (navigationPendingRowIndex !== null &&
             !isNavigationTargetVirtualized))));
+  const showVirtualizationOverlay = useDelayedFlag(
+    isOutputRenderPending,
+    RENDERING_OVERLAY_SHOW_DELAY_MS
+  );
 
   useEffect(() => {
     if (
