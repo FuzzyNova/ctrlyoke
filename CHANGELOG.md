@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Hosted workspace viewer Git actions, history and git-ref media now work when
+  the workspace root is reached through a symlink or junction.
 - Numeric `append_step` positions inside a running parallel group now relocate
   after the group, even when the requested member has already started. Dashboard
   inserts use the resolved destination for the same execution guard.

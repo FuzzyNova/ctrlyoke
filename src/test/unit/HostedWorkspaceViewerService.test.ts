@@ -30,6 +30,7 @@ import {
 import {
   DIFF_PAYLOAD_KINDS,
   GIT_REF_LABEL_TYPES,
+  WORKSPACE_MEDIA_GIT_INDEX_REF,
   WORKSPACE_ENTRY_KINDS,
 } from "../../types/DashboardConstants";
 import {
@@ -181,6 +182,69 @@ suite("HostedWorkspaceViewerService", function () {
           commit
         ),
         { statusCode: 413 }
+      );
+    });
+
+    test("supports git media and SCM paths through a linked workspace root", async function () {
+      const container = createWorkspace();
+      const target = path.join(container, "real-repo");
+      const linkedRoot = path.join(container, "repo-link");
+      fs.mkdirSync(target);
+      runGit(target, "init");
+      configureGitIdentity(target);
+      fs.writeFileSync(path.join(target, "asset.png"), "committed-image");
+      fs.writeFileSync(path.join(target, "notes.txt"), "committed text\n");
+      runGit(target, "add", "asset.png", "notes.txt");
+      runGit(target, "commit", "-m", "Initial files");
+      const commit = runGit(target, "rev-parse", "HEAD");
+
+      try {
+        fs.symlinkSync(
+          target,
+          linkedRoot,
+          process.platform === "win32" ? "junction" : "dir"
+        );
+      } catch {
+        this.skip();
+      }
+
+      fs.writeFileSync(path.join(target, "asset.png"), "staged-image");
+      runGit(target, "add", "asset.png");
+      fs.writeFileSync(path.join(target, "notes.txt"), "working text\n");
+      const service = new HostedWorkspaceViewerService(linkedRoot);
+
+      const [commitMedia, indexMedia, diff] = await Promise.all([
+        service.getRawMedia("asset.png", undefined, commit),
+        service.getRawMedia(
+          "asset.png",
+          undefined,
+          WORKSPACE_MEDIA_GIT_INDEX_REF
+        ),
+        service.getDiff("notes.txt"),
+      ]);
+
+      assert.strictEqual(commitMedia.kind, "blob");
+      assert.strictEqual(indexMedia.kind, "blob");
+      if (commitMedia.kind !== "blob" || indexMedia.kind !== "blob") return;
+      assert.deepStrictEqual(
+        commitMedia.bytes,
+        Buffer.from("committed-image")
+      );
+      assert.deepStrictEqual(indexMedia.bytes, Buffer.from("staged-image"));
+      assert.strictEqual(diff.kind, "modified");
+      assert.strictEqual(diff.payloadKind, DIFF_PAYLOAD_KINDS.TEXT);
+
+      await service.stageFile("notes.txt");
+      assert.ok(
+        runGit(target, "diff", "--cached", "--name-only")
+          .split(/\r?\n/)
+          .includes("notes.txt")
+      );
+      await service.unstageFile("notes.txt");
+      assert.ok(
+        !runGit(target, "diff", "--cached", "--name-only")
+          .split(/\r?\n/)
+          .includes("notes.txt")
       );
     });
   });

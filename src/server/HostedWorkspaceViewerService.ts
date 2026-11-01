@@ -600,8 +600,23 @@ export class HostedWorkspaceViewerService {
       };
     }
 
-    const repoRoot = await this.requireRepoRootForPath(resolved);
-    if (!isPathWithinAnyDirectory(resolved, this.trustedRoots)) {
+    let repoPath: Awaited<ReturnType<typeof this.requireRepoRootForPath>>;
+    try {
+      repoPath = await this.requireRepoRootForPath(resolved);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === "File is not inside a git repository"
+      ) {
+        throw new WorkspaceMediaError(
+          "File is not inside a git repository",
+          400
+        );
+      }
+      throw error;
+    }
+    const { repoRoot, lexicalPath } = repoPath;
+    if (!isPathWithinAnyDirectory(resolved, this.realpathsOf(this.trustedRoots))) {
       throw new WorkspaceMediaError("Path not allowed", 403);
     }
     if (repoId) {
@@ -636,7 +651,7 @@ export class HostedWorkspaceViewerService {
       }
     }
 
-    const gitPath = toGitPath(this.relativeToRepo(resolved, repoRoot));
+    const gitPath = toGitPath(this.relativeToRepo(lexicalPath, repoRoot));
     let bytes: Buffer | null;
     try {
       bytes = await this.readRawMediaBlob(repoRoot, ref, gitPath);
@@ -818,13 +833,25 @@ export class HostedWorkspaceViewerService {
    * Throws when the path is not inside any discovered repo rather than handing
    * git a pathspec outside the repo.
    */
-  private async requireRepoRootForPath(absolutePath: string): Promise<string> {
+  private async requireRepoRootForPath(
+    absolutePath: string
+  ): Promise<{ repoRoot: string; lexicalPath: string }> {
     const repos = await this.getReposInternal();
-    const match = findRepoForPath(absolutePath, repos);
-    if (!match) {
-      throw new Error("File is not inside a git repository");
+    // safeResolve() returns a real path for filesystem and git operations, but
+    // discovered roots can be lexical (when the workspace root is the repo)
+    // or real (when the workspace root is nested inside its repo). Try the
+    // lexical workspace path first, then preserve the real path for ancestor
+    // repos. In either case, repo matching and pathspecs use the same space.
+    const lexicalPath = this.toLexicalViewerPath(absolutePath);
+    const lexicalMatch = findRepoForPath(lexicalPath, repos);
+    if (lexicalMatch) {
+      return { repoRoot: lexicalMatch.rootPath, lexicalPath };
     }
-    return match.rootPath;
+    const realMatch = findRepoForPath(absolutePath, repos);
+    if (realMatch) {
+      return { repoRoot: realMatch.rootPath, lexicalPath: absolutePath };
+    }
+    throw new Error("File is not inside a git repository");
   }
 
   /** Path relative to a specific repo toplevel — for git pathspecs. */
@@ -2102,11 +2129,11 @@ export class HostedWorkspaceViewerService {
     if (!resolved) {
       throw new Error("Path not allowed");
     }
-    const repoRoot = await this.requireRepoRootForPath(resolved);
+    const { repoRoot, lexicalPath } = await this.requireRepoRootForPath(resolved);
 
     const relPath = this.relativePath(resolved);
     const normalizedRelPath = normalizeScmPath(relPath);
-    const gitPath = toGitPath(this.relativeToRepo(resolved, repoRoot));
+    const gitPath = toGitPath(this.relativeToRepo(lexicalPath, repoRoot));
     const language = languageFromPath(resolved);
 
     // Determine kind from the owning repo's status.
@@ -2268,8 +2295,8 @@ export class HostedWorkspaceViewerService {
   async stageFile(filePath: string): Promise<void> {
     const resolved = this.safeResolve(filePath);
     if (!resolved) throw new Error("Path not allowed");
-    const repoRoot = await this.requireRepoRootForPath(resolved);
-    const relPath = toGitPath(this.relativeToRepo(resolved, repoRoot));
+    const { repoRoot, lexicalPath } = await this.requireRepoRootForPath(resolved);
+    const relPath = toGitPath(this.relativeToRepo(lexicalPath, repoRoot));
     await this.runGitAction(
       ["-C", repoRoot, "add", "--", relPath],
       GIT_COMMAND_TIMEOUT_MS
@@ -2279,8 +2306,8 @@ export class HostedWorkspaceViewerService {
   async unstageFile(filePath: string): Promise<void> {
     const resolved = this.safeResolve(filePath);
     if (!resolved) throw new Error("Path not allowed");
-    const repoRoot = await this.requireRepoRootForPath(resolved);
-    const relPath = toGitPath(this.relativeToRepo(resolved, repoRoot));
+    const { repoRoot, lexicalPath } = await this.requireRepoRootForPath(resolved);
+    const relPath = toGitPath(this.relativeToRepo(lexicalPath, repoRoot));
     await this.runGitAction(
       ["-C", repoRoot, "restore", "--staged", "--", relPath],
       GIT_COMMAND_TIMEOUT_MS
@@ -2292,7 +2319,7 @@ export class HostedWorkspaceViewerService {
     if (!resolved || this.isExactRoot(resolved)) {
       throw new Error("Path not allowed");
     }
-    const repoRoot = await this.requireRepoRootForPath(resolved);
+    const { repoRoot, lexicalPath } = await this.requireRepoRootForPath(resolved);
 
     const relPath = this.relativePath(resolved);
     const normalizedRelPath = normalizeScmPath(relPath);
@@ -2317,7 +2344,7 @@ export class HostedWorkspaceViewerService {
         "restore",
         "--worktree",
         "--",
-        toGitPath(this.relativeToRepo(resolved, repoRoot)),
+        toGitPath(this.relativeToRepo(lexicalPath, repoRoot)),
       ],
       GIT_COMMAND_TIMEOUT_MS
     );
@@ -2480,7 +2507,7 @@ export class HostedWorkspaceViewerService {
 
     const resolved = this.safeResolve(requestedPath);
     if (!resolved) throw new Error("Path not allowed");
-    const repoRoot = await this.requireRepoRootForPath(resolved);
+    const { repoRoot, lexicalPath } = await this.requireRepoRootForPath(resolved);
     const viewerPath = normalizeViewerPath(this.relativePath(resolved));
     void repoId;
 
@@ -2518,7 +2545,7 @@ export class HostedWorkspaceViewerService {
       // filesystem entry is allowed; Git remains the source of truth below.
     }
 
-    const gitPath = toGitPath(this.relativeToRepo(resolved, repoRoot));
+    const gitPath = toGitPath(this.relativeToRepo(lexicalPath, repoRoot));
     const headHash = await resolveCommit(repoRoot, "HEAD");
     const snapshot: FileHistorySnapshot = {
       historyId: this.createFileHistoryId(),
@@ -2555,12 +2582,12 @@ export class HostedWorkspaceViewerService {
   ): Promise<WorkspaceFileHistoryDiffResponse> {
     const resolved = this.safeResolve(requestedPath);
     if (!resolved) throw new Error("Path not allowed");
-    const repoRoot = await this.requireRepoRootForPath(resolved);
+    const { repoRoot, lexicalPath } = await this.requireRepoRootForPath(resolved);
     void repoId;
 
     const resolvedCommit = await resolveCommit(repoRoot, commit);
 
-    const requestedGitPath = toGitPath(this.relativeToRepo(resolved, repoRoot));
+    const requestedGitPath = toGitPath(this.relativeToRepo(lexicalPath, repoRoot));
     const changedFiles = await getChangedFilesWithBinaryStatus(repoRoot, [
       "show",
       "--format=",
@@ -3762,7 +3789,7 @@ export class HostedWorkspaceViewerService {
         "offset must be a non-negative integer"
       );
     }
-    const repoRoot = await this.requireRepoRootForPath(
+    const { repoRoot } = await this.requireRepoRootForPath(
       path.resolve(sourceCheckoutRoot)
     );
     const ref = `worktree:${JSON.stringify([path.resolve(sourceCheckoutRoot), baseCommit, branchName])}`;
