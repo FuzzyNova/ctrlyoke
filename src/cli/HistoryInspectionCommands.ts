@@ -793,12 +793,19 @@ export async function showHistoryCommand(
   ) {
     const selector = formatFinalStepSelector(targetFilter);
     const passes = index ? historyFinalPassRows(index) : [];
-    const state = historyFinalStepState(workingDefinition, passes);
+    const state = historyFinalStepState(
+      workingDefinition,
+      passes,
+      undefined,
+      runSummary.hasFinalStep
+    );
     notices.push({
       selector,
       status: state,
       line:
-        state === PROMPT_TERMINAL_STATUS.SKIPPED
+        state === HISTORY_STEP_STATES.UNKNOWN
+          ? `--step ${selector}: the final step's state is unknown (no working file)`
+          : state === PROMPT_TERMINAL_STATUS.SKIPPED
           ? `--step ${selector} was skipped`
           : state === HISTORY_STEP_STATES.PENDING
             ? `--step ${selector}: the final step has not run (${HISTORY_STEP_STATES.PENDING})`
@@ -1380,10 +1387,14 @@ function historyFinalPassRows(
 function historyFinalStepState(
   definition: RunWorkingDefinition | undefined,
   passes: readonly HistoryFinalPassRow[],
-  nextPass?: number | null
+  nextPass?: number | null,
+  hasFinalStep?: boolean
 ): string {
   if (nextPass !== undefined && nextPass !== null) {
     return HISTORY_STEP_STATES.PENDING;
+  }
+  if (!definition && passes.length === 0 && hasFinalStep === undefined) {
+    return HISTORY_STEP_STATES.UNKNOWN;
   }
   return (
     definition?._runtime?.finalStep?.status ??

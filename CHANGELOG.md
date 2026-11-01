@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `history show --step final` now reports an unknown state when the run's
+  working file is unavailable and the run summary cannot confirm a final step.
 - Qwen hooks now keep their native shell on Windows: quoted hooks stay
   unwrapped under Git Bash or PowerShell, and environment-bearing hooks use
   that same shell through the launcher.

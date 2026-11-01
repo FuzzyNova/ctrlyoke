@@ -2545,6 +2545,53 @@ suite("CLI history inspection command handlers", () => {
     );
   });
 
+  test("reports an unknown final step when the working file is unavailable", async () => {
+    const key = "release" as WorkflowKey;
+    const manager = historyManagerForShow(key);
+    const summary = (await manager.getRunSummaries(key))[0];
+    assert.ok(summary);
+    summary.hasFinalStep = undefined;
+    const deps = dependencies(
+      new TestLineageRepository([key], new Map(), new Map()),
+      manager,
+      new TestRunOutputResolver([
+        settledAttempt({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 }),
+      ])
+    );
+    const statuses: string[] = [];
+    const originalStatus = CliTerminalFormatter.renderStatusMessage;
+    CliTerminalFormatter.renderStatusMessage = ((message) => {
+      statuses.push(message);
+    }) as typeof originalStatus;
+    try {
+      await showHistoryCommand(
+        { workflow: key, run: "3", step: "final" },
+        new TestIo(),
+        deps
+      );
+    } finally {
+      CliTerminalFormatter.renderStatusMessage = originalStatus;
+    }
+    assert.deepStrictEqual(statuses, [
+      "--step final: the final step's state is unknown (no working file)",
+    ]);
+
+    const io = new TestIo();
+    await showHistoryCommand(
+      { workflow: key, run: "3", step: "final", json: true },
+      io,
+      deps
+    );
+    assert.deepStrictEqual(io.output.map((line) => JSON.parse(line)), [
+      {
+        runRef: "run-2026-09-20T12-00-00-000Z",
+        selector: "final",
+        status: "unknown",
+        message: "--step final: the final step's state is unknown (no working file)",
+      },
+    ]);
+  });
+
   test("reports a skipped final step consistently in history show and steps", async () => {
     const workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-history-final-skipped-")
