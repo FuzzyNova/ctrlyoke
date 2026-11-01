@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-01 by Claude Code (bug-hunt final step, reviewing `82beddf02`)
 - **Area:** `src/core/harness/codex/CodexLogParser.ts` (`registerCodexSubagent`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dot-folders such as `.github/`, and in any workspace that itself sits
   under a dot-folder. These working-tree files used to fail with "This image
   can't be displayed".
+- Codex subagent output is no longer lost when a later step or workflow
+  spawns a subagent with a task name used earlier, such as `worker`. Its
+  output, token usage and completed spawn card used to appear only for the
+  first session to use that name until VS Code was reloaded.
 
 ## [0.4.0] - 2026-10-31
 

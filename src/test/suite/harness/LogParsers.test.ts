@@ -6101,6 +6101,122 @@ suite("CodexLogParser", () => {
     }
   });
 
+  test("follows a reused task name's child rollout in a later session on the same parser", async () => {
+    // One parser lives as long as the orchestrator, so a later step or
+    // workflow that spawns a subagent with an already-used task name must
+    // still have its own child rollout followed and its own card completed.
+    const tempDir = await makeTempDir("codex-subagent-reused-name");
+    const previousCodexHome = process.env.CODEX_HOME;
+    process.env.CODEX_HOME = tempDir;
+    try {
+      const dayDir = path.join(tempDir, "sessions", "2026", "11", "01");
+      fs.mkdirSync(dayDir, { recursive: true });
+      const runSession = async (parentThread: string) => {
+        fs.writeFileSync(
+          path.join(dayDir, `rollout-parent-${parentThread}.jsonl`),
+          ""
+        );
+        const childRecords = [
+          {
+            type: "session_meta",
+            payload: {
+              id: `child-of-${parentThread}`,
+              parent_thread_id: parentThread,
+              agent_path: "/root/worker",
+              model: "gpt-child",
+            },
+          },
+          {
+            type: "event_msg",
+            payload: {
+              type: "task_started",
+              turn_attribution: { initiating_agent_path: "/root" },
+            },
+          },
+          {
+            type: "response_item",
+            payload: {
+              role: "assistant",
+              content: [
+                { type: "output_text", text: `child work ${parentThread}` },
+              ],
+            },
+          },
+          { type: "event_msg", payload: { type: "task_complete" } },
+        ];
+        fs.writeFileSync(
+          path.join(dayDir, `rollout-child-${parentThread}.jsonl`),
+          childRecords.map((record) => JSON.stringify(record)).join("\n") + "\n"
+        );
+        const spawnCallId = `spawn-${parentThread}`;
+        const parentEvents = [
+          {
+            type: "session_meta",
+            payload: { id: parentThread, model: "gpt-parent" },
+          },
+          {
+            type: "response_item",
+            payload: {
+              type: "function_call",
+              name: "spawn_agent",
+              namespace: "collaboration",
+              call_id: spawnCallId,
+              arguments: JSON.stringify({ task_name: "worker" }),
+            },
+          },
+          {
+            type: "response_item",
+            payload: {
+              type: "function_call_output",
+              call_id: spawnCallId,
+              output: JSON.stringify({ task_name: "/root/worker" }),
+            },
+          },
+          {
+            type: "response_item",
+            payload: {
+              type: "agent_message",
+              author: "/root/worker",
+              content: `Message Type: FINAL_ANSWER\nPayload:\nresult ${parentThread}`,
+            },
+          },
+        ] as unknown as BaseCliEvent[];
+        const output = parser.extractResponse(parentEvents);
+        const drain = await parser.getSubagentFollower().drainToEof(500);
+        return { spawnCallId, merged: mergeSubagentOutput(output, drain) };
+      };
+
+      for (const parentThread of ["session-A", "session-B"]) {
+        const { spawnCallId, merged } = await runSession(parentThread);
+        assert.ok(
+          merged.events.some(
+            (event) =>
+              event.type === CLI_EVENT_TYPES.TEXT &&
+              (event.data as TextData).text === `child work ${parentThread}` &&
+              event.subagent?.parentToolCallId === spawnCallId
+          ),
+          `${parentThread}'s child rollout was not followed`
+        );
+        const spawn = merged.events.find(
+          (event) => (event.data as ToolCall).id === spawnCallId
+        );
+        assert.strictEqual(
+          (spawn?.data as ToolCall).subagentSpawn?.state,
+          "completed",
+          `${parentThread}'s spawn card never completed`
+        );
+        assert.deepStrictEqual((spawn?.data as ToolCall).result, {
+          success: true,
+          output: `result ${parentThread}`,
+        });
+      }
+    } finally {
+      if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
+      else process.env.CODEX_HOME = previousCodexHome;
+      await removeTempDir(tempDir);
+    }
+  });
+
   test("follows a child rollout from the live stream when its header is over 8 KB", async () => {
     // Codex 0.16x embeds base_instructions in session_meta, so a child's
     // first line is tens of kilobytes; and a headless tail only ever calls
