@@ -49,7 +49,9 @@ A headless step cannot wait for background work: the harness process, and anythi
   - `"next"` — after the current step, or after the running parallel group. Never joins that group.
   - `"end"` — after all queued steps.
   - `"parallelWithCurrent"` — join the parallel group that is running now. Flat steps only; limited by `queue.maxParallelSteps`.
-  - a zero-based index — insert before that step. Completed steps cannot be displaced.
+  - a zero-based index — insert before that step. If the index falls inside
+    a parallel group, insertion moves after the whole group. Completed steps
+    cannot be displaced.
 - `source`: optional label describing why the steps were added.
 
 When `harness` or `model` is set, it is checked against the installed harnesses and their models (when that information is available). The run's total step count cannot exceed its effective `maxSteps` cap. A rejected append returns an error such as `Step limit reached: this run has 30/30 steps (workflow maxSteps: 30). Do not retry; finish without appending.` The message identifies whether the cap came from the workflow's `maxSteps` or the global `queue.maxSteps` setting.

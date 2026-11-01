@@ -444,7 +444,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
             },
           ],
           description:
-            "Use 'next' to queue them after the current step (or after the active parallel group) and never join that group, 'parallelWithCurrent' to join the active group, 'end' to run them last, or a zero-based step index to insert them before that step.",
+            "Use 'next' to queue them after the current step (or after the active parallel group) and never join that group, 'parallelWithCurrent' to join the active group, 'end' to run them last, or a zero-based step index to insert them before that step. An index inside a parallel group inserts after the whole group.",
         },
         source: {
           type: "string",

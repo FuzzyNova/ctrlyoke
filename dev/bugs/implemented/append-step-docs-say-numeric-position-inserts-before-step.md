@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-01 by bug-hunt final step (claude-cli)
 - **Area:** `docs/reference/mcp-tools.md`, `src/utils/McpToolDefinitions.ts`, `CHANGELOG.md`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

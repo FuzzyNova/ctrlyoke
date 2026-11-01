@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-01 by bug-hunt final step (claude-cli)
 - **Area:** `docs/cli/index.md`, `docs/guide/privacy.md`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

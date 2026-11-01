@@ -25,7 +25,7 @@ You may be placed anywhere in a workflow: the first step, the final step, or a c
 - Choose the position deliberately:
   - `end` runs after all pending work — the usual choice when a final step stages the plan.
   - `next` runs right after you, ahead of anything already pending — the usual choice for a checkpoint queueing fixes that must land before later planned steps build on broken work.
-  - A zero-based step index inserts before that step.
+  - A zero-based step index inserts before that step; an index inside a parallel group inserts after the whole group.
 - Pass all the steps for one position in a **single** `append_step` call, in order. Each `next` call inserts directly after you, so a second `next` call would land ahead of the first.
 - Chunks that are truly independent — no shared files, neither needing the other's output — can run concurrently as a `{ parallel: [...] }` item in that same call (at least two members). Keep anything that touches the same files sequential. `parallelWithCurrent` joins whatever is running now and is rejected from a final step, which can never run in parallel. See `<parallelSteps>` for what each parallel prompt must say.
 - Use `edit_step`, `remove_step`, or `reorder_steps` when pending work needs correction, deletion, or reprioritization — including steps you did not queue, when what you found makes them wrong. These tools use zero-based workflow step indices; call `workflow_status` for the current ones first.
