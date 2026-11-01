@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- History show now reports a skipped final step as skipped, matching history
+  steps. Negative history `--offset` and `--limit` values now explain the
+  minimum allowed value.
 - Typing after `~` in the dashboard prompt editor lists matching commits
   newest first. They were sorted by the length of their subject, so the most
   recent match could sit below older ones, out of view. Commits whose message

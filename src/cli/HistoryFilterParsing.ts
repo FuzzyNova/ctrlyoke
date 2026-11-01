@@ -30,7 +30,7 @@ export function parseHistoryInteger(
   whenMissing: number
 ): number {
   if (value === undefined) return whenMissing;
-  if (!/^\d+$/.test(value)) {
+  if (!/^-?\d+$/.test(value)) {
     throw new Error(
       `Invalid ${optionName} value "${value}"; expected an integer.`
     );

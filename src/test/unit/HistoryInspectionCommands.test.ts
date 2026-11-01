@@ -2545,6 +2545,75 @@ suite("CLI history inspection command handlers", () => {
     );
   });
 
+  test("reports a skipped final step consistently in history show and steps", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-history-final-skipped-")
+    );
+    const key = "release" as WorkflowKey;
+    const runRef = "run-2026-09-20T12-00-00-000Z" as RunRef;
+    try {
+      const workingFile = WorkflowPaths.runFilePath(
+        workspaceRoot,
+        key,
+        runRef
+      );
+      await fs.mkdir(path.dirname(workingFile), { recursive: true });
+      await fs.writeFile(
+        workingFile,
+        JSON.stringify({
+          steps: [{ prompt: "Queue" }],
+          finalStep: { prompt: "Review" },
+          _runtime: { finalStep: { status: "skipped" } },
+        })
+      );
+      const deps = dependencies(
+        new TestLineageRepository([key], new Map(), new Map()),
+        historyManagerForShow(key),
+        new TestRunOutputResolver([]),
+        undefined,
+        workspaceRoot
+      );
+      const textIo = new TestIo();
+      const originalStatus = CliTerminalFormatter.renderStatusMessage;
+      CliTerminalFormatter.renderStatusMessage = ((message) => {
+        textIo.output.push(message);
+      }) as typeof originalStatus;
+      try {
+        await showHistoryCommand(
+          { workflow: key, run: "3", step: "final" },
+          textIo,
+          deps
+        );
+      } finally {
+        CliTerminalFormatter.renderStatusMessage = originalStatus;
+      }
+      assert.deepStrictEqual(textIo.output, ["--step final was skipped"]);
+
+      const jsonIo = new TestIo();
+      await showHistoryCommand(
+        { workflow: key, run: "3", step: "final", json: true },
+        jsonIo,
+        deps
+      );
+      assert.deepStrictEqual(JSON.parse(jsonIo.output[0]), {
+        runRef,
+        selector: "final",
+        status: "skipped",
+        message: "--step final was skipped",
+      });
+
+      const stepsIo = new TestIo();
+      await stepsHistoryCommand({ workflow: key, json: true }, stepsIo, deps);
+      assert.strictEqual(
+        (JSON.parse(stepsIo.output[0]) as { finalStep: { state: string } })
+          .finalStep.state,
+        "skipped"
+      );
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("still rejects a final pass beyond the recorded passes", async () => {
     const key = "release" as WorkflowKey;
     await assert.rejects(
@@ -3212,6 +3281,30 @@ suite("CLI history inspection command handlers", () => {
 });
 
 suite("CLI history search command", () => {
+  test("reports negative --offset and --limit values as below their minimum", async () => {
+    const deps = dependencies(
+      new TestLineageRepository([], new Map(), new Map()),
+      new TestHistoryManager(new Map(), new Map()),
+      undefined,
+      new TestHistorySearchService(searchResponse())
+    );
+    for (const [options, message] of [
+      [
+        { offset: "-1" },
+        'Invalid --offset value "-1"; expected an integer of at least 0.',
+      ],
+      [
+        { limit: "-5" },
+        'Invalid --limit value "-5"; expected an integer of at least 1.',
+      ],
+    ] as const) {
+      await assert.rejects(
+        searchHistoryCommand("EPERM", options, new TestIo(), deps),
+        { message }
+      );
+    }
+  });
+
   test("rewrites throttled TTY progress in place and terminates the line", async () => {
     const io = new TestIo();
     io.isErrTty = true;
