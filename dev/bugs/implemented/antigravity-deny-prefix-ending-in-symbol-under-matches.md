@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-01 by Claude Code (bug-hunt final step, reading `7d0b7dba3`/`ba289a8d6`)
 - **Area:** `src/core/harness/antigravity/AntigravityToolPermissionMapper.ts` (deny branch of `convertToAntigravityRules`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

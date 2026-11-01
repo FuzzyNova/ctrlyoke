@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Antigravity shell permission rules keep colons that are part of the
+  command. Only a trailing `:*` marks a prefix, so `shell(npm run test:unit)`
+  now allows or denies exactly that command instead of `npm run test`, and a
+  denied `shell(C:\tools\deploy.exe:*)` no longer blocks every command that
+  mentions `C`. A denied prefix that ends in a symbol, such as
+  `shell(rm -rf /:*)`, now also blocks longer commands like `rm -rf /home`.
 - Headless OpenCode steps no longer reach the model wrapped in extra quotes.
   `opencode run` quoted any prompt containing a space and escaped its inner
   `"`, so a file reference under a folder with a space in its name arrived as
