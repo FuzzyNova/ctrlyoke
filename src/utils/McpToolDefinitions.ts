@@ -649,7 +649,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
           type: "number",
           minimum: 0,
           description:
-            "Re-read notes after this sequence number instead of only unread ones. Pass 0 to page from the oldest note still on the board.",
+            "Re-read notes after this sequence number instead of only unread ones. Pass 0 to page from the oldest note still on the board. Use a returned nextCursor here to continue through another page.",
         },
         from: {
           type: "array",

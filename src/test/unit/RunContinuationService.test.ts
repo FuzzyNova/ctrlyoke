@@ -1709,7 +1709,7 @@ suite("RunContinuationService addressed step mutations", () => {
     await seedRun(EXECUTION_STATES.RUNNING, 1, [
       { prompt: "done", _runtime: { completedAt: 10 } },
       { prompt: "running", _runtime: { startedAt: 11 } },
-      { prompt: "sibling" },
+      { prompt: "sibling", _runtime: { startedAt: 12 } },
       { prompt: "pending" },
     ]);
     const runFilePath = WorkflowPaths.runFilePath(

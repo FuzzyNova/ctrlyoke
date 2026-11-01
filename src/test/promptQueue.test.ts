@@ -815,6 +815,31 @@ suite("PromptQueue State Machine Tests", () => {
         );
       });
 
+      test("allows insertion after a running parallel group when the requested member started", async () => {
+        await startQueueExecution(queue);
+        (queue as any).state.currentIndex = 1;
+        for (const index of [1, 2, 3]) {
+          (queue as any).state.steps[index]._runtime = {
+            ...queue.getState().steps[index]._runtime,
+            startedAt: index,
+          };
+        }
+
+        await queue.insertStepAfterIndex(1, { prompt: "after live group" });
+
+        assert.deepStrictEqual(
+          queue.getState().steps.map((step) => (step as PromptStep).prompt),
+          [
+            "before",
+            "member-a",
+            "member-b",
+            "member-c",
+            "after live group",
+            "after",
+          ]
+        );
+      });
+
       test("keeps authored references when appending a parallel-group member and warns", async () => {
         queue.loadPrompts({
           steps: [

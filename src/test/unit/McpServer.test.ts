@@ -533,6 +533,48 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.strictEqual(released.scope.claimSummary.count, 0);
   });
 
+  test("gives cursor paging guidance for filtered reads and keeps the unread hint by default", async () => {
+    const server = await setup();
+    const state = {
+      registry: {
+        readNotes: async () => ({ entries: [], nextCursor: 12 }),
+      },
+      lease: { participantId: "reader" },
+    };
+    const patchableServer = server as unknown as {
+      getCoordinationState: (
+        context: McpToolCallingContext
+      ) => Promise<unknown>;
+      coordinationScope: (state: unknown) => Promise<unknown>;
+    };
+    patchableServer.getCoordinationState = async () => state;
+    patchableServer.coordinationScope = async () => ({});
+
+    const defaultRead = responseJson(
+      await server.invokeTool(MCP_READ_NOTES_TOOL_NAME, {})
+    );
+    assert.strictEqual(
+      defaultRead.more,
+      'More unread notes remain; call read_notes again to continue.'
+    );
+
+    const sinceRead = responseJson(
+      await server.invokeTool(MCP_READ_NOTES_TOOL_NAME, { since: 0 })
+    );
+    assert.strictEqual(
+      sinceRead.more,
+      'More notes remain; call read_notes with "since": 12 to continue.'
+    );
+
+    const filteredRead = responseJson(
+      await server.invokeTool(MCP_READ_NOTES_TOOL_NAME, { from: ["P"] })
+    );
+    assert.strictEqual(
+      filteredRead.more,
+      'More notes remain; call read_notes with "since": 12 and the same "from" filter to continue.'
+    );
+  });
+
   test("attributes unattested CLI steps separately from external sessions", async () => {
     const server = await setup();
     const active = await prepareActiveRun("cli-attribution");
@@ -3911,7 +3953,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     // exercised by the live-run tests above.
     workingFile.steps = [
       { prompt: "authored-a" },
-      { prompt: "authored-b" },
+      { prompt: "authored-b", _runtime: { startedAt: 2 } },
     ] as WorkflowStep[];
     workingFile._runtime = {
       ...workingFile._runtime,

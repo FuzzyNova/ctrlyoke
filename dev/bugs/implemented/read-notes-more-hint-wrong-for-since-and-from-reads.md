@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-01 by bug-hunt final step (claude-cli)
 - **Area:** `src/mcp-server.ts`, `src/core/orchestration/ExecutionRootCoordination.ts`, `src/core/harness/shared/McpToolDefinitions.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

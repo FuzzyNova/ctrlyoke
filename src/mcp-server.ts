@@ -1050,7 +1050,10 @@ export class CtrlYokeMCPServer {
               ...(result.nextCursor !== undefined
                 ? {
                     nextCursor: result.nextCursor,
-                    more: `More unread notes remain; call ${MCP_READ_NOTES_TOOL_NAME} again to continue.`,
+                    more:
+                      args.since !== undefined || args.from !== undefined
+                        ? `More notes remain; call ${MCP_READ_NOTES_TOOL_NAME} with "since": ${result.nextCursor}${args.from !== undefined ? ' and the same "from" filter' : ""} to continue.`
+                        : `More unread notes remain; call ${MCP_READ_NOTES_TOOL_NAME} again to continue.`,
                   }
                 : {}),
               ...(result.omittedOlder !== undefined

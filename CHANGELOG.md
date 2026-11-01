@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Numeric `append_step` positions inside a running parallel group now relocate
+  after the group, even when the requested member has already started. Dashboard
+  inserts use the resolved destination for the same execution guard.
+- `read_notes` now tells filtered and cursor-based reads to pass `nextCursor`
+  as `since` to continue, and the tool description explains how to page.
 - Deleting or restoring runs and trashing a whole lineage now leave it
   untouched when its workflow history descriptor was written by a newer
   ctrlyoke.
