@@ -4,6 +4,10 @@
  * one-render-per-burst claim (checked against a real React root, not assumed).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import {
+  clearImmediate as realClearImmediate,
+  setImmediate as realSetImmediate,
+} from "node:timers";
 import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { create } from "zustand";
@@ -31,6 +35,7 @@ vi.mock("@utils/logger", () => ({
 }));
 
 import {
+  createImmediateTaskScheduler,
   createInboundMessageDispatcher,
   type InboundMessageDispatcher,
 } from "@hooks/inboundMessageDispatcher";
@@ -55,10 +60,20 @@ async function endCurrentTask(): Promise<void> {
   await Promise.resolve();
 }
 
+/*
+ * Every macrotask this file waits on, and every tick the dispatcher under test
+ * schedules, goes through Node's own `node:timers` functions rather than the
+ * global `setImmediate`. The UI suite shares one global across the files a
+ * worker runs (`isolate: false`), and an immediate scheduled while another
+ * file's fake clock stands in for the global is dropped when that clock is
+ * uninstalled. That hung "render count" for the full 60s test timeout, twice,
+ * in full `npm test` runs only; no fake clock can replace these imports.
+ */
+
 /** Waits past the dispatcher's next tick (and the render microtask after it). */
 async function nextTick(): Promise<void> {
-  await new Promise<void>((resolve) => setImmediate(resolve));
-  await new Promise<void>((resolve) => setImmediate(resolve));
+  await new Promise<void>((resolve) => realSetImmediate(resolve));
+  await new Promise<void>((resolve) => realSetImmediate(resolve));
   await endCurrentTask();
 }
 
@@ -70,7 +85,10 @@ function attach(
     routed.push(String(m.seq ?? m.type));
   }
 ): InboundMessageDispatcher {
-  dispatcher = createInboundMessageDispatcher(route);
+  dispatcher = createInboundMessageDispatcher(
+    route,
+    createImmediateTaskScheduler(realSetImmediate, realClearImmediate)
+  );
   window.addEventListener("message", dispatcher.handleEvent);
   return dispatcher;
 }
