@@ -700,6 +700,59 @@ suite("HistoryTrashRepository", () => {
     );
   });
 
+  test("does not move a lineage with a newer descriptor to Recently deleted", async () => {
+    const workflowKey = await createLineage("newer-lineage");
+    const descriptorPath = WorkflowPaths.descriptorPath(workspace, workflowKey);
+    const descriptor = await lineages.readDescriptor(workspace, workflowKey);
+    await fs.writeFile(
+      descriptorPath,
+      JSON.stringify({
+        ...descriptor,
+        schemaVersion:
+          CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.LINEAGE_DESCRIPTOR] + 1,
+      })
+    );
+
+    await assert.rejects(
+      trash.trashLineage(workflowKey, REQUESTER),
+      NewerSchemaError
+    );
+    assert.strictEqual(
+      await exists(WorkflowPaths.lineageDir(workspace, workflowKey)),
+      true
+    );
+    assert.deepStrictEqual(await trash.list(30), []);
+  });
+
+  test("does not restore a whole lineage with a newer descriptor", async () => {
+    const workflowKey = await createLineage("newer-restore");
+    await addRun(workflowKey, 1);
+    const entry = await trash.trashLineage(workflowKey, REQUESTER);
+    assert.ok(entry);
+    const payloadLineageDir = path.join(
+      WorkflowPaths.trashEntryDir(workspace, entry.id),
+      "payload",
+      workflowKey
+    );
+    const descriptorPath = path.join(payloadLineageDir, "workflow.json");
+    const descriptor = JSON.parse(await fs.readFile(descriptorPath, "utf8"));
+    await fs.writeFile(
+      descriptorPath,
+      JSON.stringify({
+        ...descriptor,
+        schemaVersion:
+          CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.LINEAGE_DESCRIPTOR] + 1,
+      })
+    );
+
+    await assert.rejects(trash.restore(entry.id), NewerSchemaError);
+    assert.strictEqual(await exists(payloadLineageDir), true);
+    assert.strictEqual(
+      await exists(WorkflowPaths.lineageDir(workspace, workflowKey)),
+      false
+    );
+  });
+
   test("trash entry ids cannot escape the trash root", () => {
     assert.throws(() => WorkflowPaths.trashEntryDir(workspace, "../x"));
     assert.throws(() => WorkflowPaths.trashEntryDir(workspace, ""));

@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Deleting or restoring runs and trashing a whole lineage now leave it
+  untouched when its workflow history descriptor was written by a newer
+  ctrlyoke.
 - Runner locks and execution leases now stay heartbeated while worktree setup
   runs, preventing a live run from being reclaimed as stale.
 - Malformed `$step:` and `$previous:` selectors now show a prompt diagnostic

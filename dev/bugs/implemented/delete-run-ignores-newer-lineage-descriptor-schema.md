@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-01 by bug-hunt final step (claude-cli)
 - **Area:** `src/core/orchestration/WorkflowLineageRepository.ts`, `src/core/orchestration/RunLifecycleService.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -13,7 +13,7 @@ still deletes its runs:
 - Dashboard **Delete Run**: the run moves to Recently deleted and a success
   toast appears. The descriptor write is then refused with
   `NewerSchemaError`, but `RunLifecycleService.ts:1162` (`if (trash.isEmpty)
-  throw error;`) treats that as "post-delete work failed" and only logs it.
+throw error;`) treats that as "post-delete work failed" and only logs it.
   The newer host's descriptor keeps a `latestRunRef` that points at the
   missing run. If that was the last run, the whole lineage directory, newer
   descriptor included, can also be trashed.

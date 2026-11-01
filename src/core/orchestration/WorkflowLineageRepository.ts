@@ -452,6 +452,11 @@ export class WorkflowLineageRepository {
     );
     return withFileLock(descriptorPath, async () => {
       const descriptor = await this.readDescriptor(workspaceRoot, workflowKey);
+      assertWritableSchema(
+        PERSISTED_STORES.LINEAGE_DESCRIPTOR,
+        descriptor,
+        descriptorPath
+      );
       const protectedByPendingRewind =
         descriptor.pendingEdit?.kind === WORKTREE_EDIT_KINDS.REWIND &&
         descriptor.pendingEdit.runRef === runRef;
@@ -523,6 +528,13 @@ export class WorkflowLineageRepository {
     );
     await withFileLock(descriptorPath, async () => {
       const existing = await this.tryReadDescriptor(workspaceRoot, workflowKey);
+      if (existing) {
+        assertWritableSchema(
+          PERSISTED_STORES.LINEAGE_DESCRIPTOR,
+          existing,
+          descriptorPath
+        );
+      }
       const restoredRunIds = await moveIn(lineageDir);
       const latestRunRef = (
         await this.listRunRefs(workspaceRoot, workflowKey)

@@ -7,6 +7,11 @@ import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLine
 import type { AllocatedRun } from "../../core/orchestration/WorkflowLineageRepository";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
+import {
+  CURRENT_SCHEMA_VERSIONS,
+  NewerSchemaError,
+  PERSISTED_STORES,
+} from "../../utils/PersistedSchemaGuard";
 
 suite("WorkflowLineageRepository", () => {
   const repository = new WorkflowLineageRepository();
@@ -290,6 +295,34 @@ suite("WorkflowLineageRepository", () => {
       );
     });
 
+    test("leaves a run untouched when its lineage descriptor is newer", async () => {
+      const ws = await makeWorkspace("ctrlyoke-lineage-delete-newer-");
+      const lineage = await repository.createLineage(ws, "wf", "Wf");
+      const run = await publishRun(ws, lineage.workflowKey);
+      const descriptorPath = WorkflowPaths.descriptorPath(
+        ws,
+        lineage.workflowKey
+      );
+      const descriptor = await repository.readDescriptor(
+        ws,
+        lineage.workflowKey
+      );
+      await fs.writeFile(
+        descriptorPath,
+        JSON.stringify({
+          ...descriptor,
+          schemaVersion:
+            CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.LINEAGE_DESCRIPTOR] + 1,
+        })
+      );
+
+      await assert.rejects(
+        repository.deleteRun(ws, lineage.workflowKey, run.runRef),
+        NewerSchemaError
+      );
+      await fs.access(run.runDir);
+    });
+
     test("rejects deleting a run named in the caller-supplied protected set", async () => {
       const ws = await makeWorkspace("ctrlyoke-lineage-protectedset-");
       const lineage = await repository.createLineage(ws, "wf", "Wf");
@@ -356,6 +389,38 @@ suite("WorkflowLineageRepository", () => {
       );
       await fs.access(sourceRun.runDir);
     });
+  });
+
+  test("does not move restored runs into a lineage with a newer descriptor", async () => {
+    const ws = await makeWorkspace("ctrlyoke-lineage-restore-newer-");
+    const lineage = await repository.createLineage(ws, "wf", "Wf");
+    const descriptorPath = WorkflowPaths.descriptorPath(
+      ws,
+      lineage.workflowKey
+    );
+    await fs.writeFile(
+      descriptorPath,
+      JSON.stringify({
+        ...lineage.descriptor,
+        schemaVersion:
+          CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.LINEAGE_DESCRIPTOR] + 1,
+      })
+    );
+    const outsideRunDir = path.join(ws, "trashed-run");
+    await fs.mkdir(outsideRunDir);
+    let moveInCalled = false;
+
+    await assert.rejects(
+      repository.restoreRuns(ws, lineage.workflowKey, "Wf", async () => {
+        moveInCalled = true;
+        await fs.rm(outsideRunDir, { recursive: true });
+        return [1];
+      }),
+      NewerSchemaError
+    );
+
+    assert.strictEqual(moveInCalled, false);
+    await fs.access(outsideRunDir);
   });
 
   suite("updateDescriptor", () => {

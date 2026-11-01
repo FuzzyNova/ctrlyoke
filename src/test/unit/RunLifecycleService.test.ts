@@ -24,12 +24,18 @@ import {
   type RunLifecycleViewPort,
 } from "../../core/orchestration/RunLifecycleService";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
+import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import type {
   UserFeedback,
   UserFeedbackSink,
 } from "../../core/UserFeedbackSink";
+import {
+  CURRENT_SCHEMA_VERSIONS,
+  NewerSchemaError,
+  PERSISTED_STORES,
+} from "../../utils/PersistedSchemaGuard";
 
 const workflowKey = "lifecycle-test" as WorkflowKey;
 const runRef = "run-2026-09-17T00-00-00-000Z" as RunRef;
@@ -477,5 +483,83 @@ suite("RunLifecycleService resident reconciliation", () => {
     await service.reconcileResidentWithRunFile(other, runRef);
 
     assert.strictEqual(other.resyncCount, 1);
+  });
+});
+
+suite("RunLifecycleService delete schema guard", () => {
+  test("surfaces a newer lineage schema without moving the run or reporting success", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-delete-newer-lineage-")
+    );
+    try {
+      const lineage = new WorkflowLineageRepository();
+      const created = await lineage.createLineage(
+        workspace,
+        "Lifecycle test",
+        "Lifecycle test"
+      );
+      const startedAt = Date.UTC(2026, 0, 1);
+      const targetRunRef = WorkflowPaths.formatRunRef(startedAt);
+      await new TimelineRecorder().initializeRunAt(
+        WorkflowPaths.runDir(workspace, created.workflowKey, targetRunRef),
+        created.workflowKey,
+        1,
+        startedAt,
+        EXECUTION_STATES.COMPLETED
+      );
+      await lineage.updateDescriptor(
+        workspace,
+        created.workflowKey,
+        (current) => ({
+          ...current,
+          latestRunRef: targetRunRef,
+        })
+      );
+      const descriptorPath = WorkflowPaths.descriptorPath(
+        workspace,
+        created.workflowKey
+      );
+      const currentDescriptor = await lineage.readDescriptor(
+        workspace,
+        created.workflowKey
+      );
+      await fs.writeFile(
+        descriptorPath,
+        JSON.stringify({
+          ...currentDescriptor,
+          schemaVersion:
+            CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.LINEAGE_DESCRIPTOR] + 1,
+        })
+      );
+
+      const registry = new FakeRegistry();
+      const views = new FakeViews();
+      views.address = {
+        workflowKey: created.workflowKey,
+        kind: "run",
+        runRef: targetRunRef,
+      };
+      const baseHost = createHost(registry, views, lineage);
+      const service = new RunLifecycleService({
+        ...baseHost,
+        getWorkspaceRoot: () => workspace,
+      });
+      const sent: unknown[] = [];
+
+      await assert.rejects(
+        service.deleteRunAtAddress(
+          { workflowKey: created.workflowKey, runRef: targetRunRef },
+          (message) => sent.push(message),
+          "panel"
+        ),
+        NewerSchemaError
+      );
+      await fs.access(
+        WorkflowPaths.runDir(workspace, created.workflowKey, targetRunRef)
+      );
+      assert.deepStrictEqual(sent, []);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
   });
 });
