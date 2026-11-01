@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Antigravity shell allow rules no longer match newline-separated commands,
+  and a `-settings` flag in workflow `additionalArgs` now disables ctrlyoke's
+  permission translation just like `--settings`.
 - **Add Commit to ctrlyoke** now warns and inserts nothing when a diff editor's
   commit is unavailable in the workspace repository.
 - Hosted workspace viewer Git actions, history and git-ref media now work when
