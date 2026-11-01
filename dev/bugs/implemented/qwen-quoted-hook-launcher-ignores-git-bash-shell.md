@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-01 by bug-hunt final step (claude-cli)
 - **Area:** `src/core/harness/shared/UserHookEnvironment.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -49,7 +49,7 @@ that:
 - `resolveHookShell` passes `bash` for Qwen under Git Bash, so hooks that
   carry `env` (which always go through the launcher) also keep bash.
 
-Add tests to `src/test/unit/UserHookEnvironment.test.ts`. Stub
-`MSYSTEM=MINGW64` and assert that a quoted hook without `env` stays
-unwrapped and that an env-bearing hook gets the `bash` shell. Restore
-`process.env` and `process.platform` in teardown.
+The fix mirrors those shell choices. Tests in
+`src/test/unit/UserHookEnvironment.test.ts` cover Git Bash, cmd.exe, and
+PowerShell `ComSpec`; the suite restores `process.env` and `process.platform`
+after each test.

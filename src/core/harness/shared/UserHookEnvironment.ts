@@ -25,18 +25,40 @@ function hasHookEnvironment(hook: UserHookConfig): boolean {
   return Object.keys(hook.env ?? {}).length > 0;
 }
 
+type QwenWindowsShell = "bash" | "powershell.exe" | "cmd.exe";
+
+function resolveQwenWindowsShell(env: NodeJS.ProcessEnv): QwenWindowsShell {
+  if (
+    /^(?:MINGW|MSYS)/i.test(env.MSYSTEM ?? "") ||
+    /msys|cygwin/i.test(env.TERM ?? "")
+  ) {
+    return "bash";
+  }
+  if (/(?:^|[\\/])(?:powershell|pwsh)\.exe$/i.test(env.ComSpec ?? "")) {
+    return "powershell.exe";
+  }
+  return "cmd.exe";
+}
+
 /**
- * On Windows, Qwen Code runs a command hook as
- * `spawn(ComSpec, ["/d", "/s", "/c", command], { shell: false })` unless it was
- * itself started from Git Bash. Node escapes every `"` in that argument to
+ * On Windows, Qwen Code runs a command hook with
+ * `spawn(ComSpec, ["/d", "/s", "/c", command], { shell: false })`. Under
+ * cmd.exe, Node escapes every `"` in that argument to
  * `\"`, which cmd.exe passes on literally, so a hook such as
  * `node "C:/my scripts/hook.js"` silently never runs. The launcher spawns the
- * command with `shell: true`, whose cmd.exe quoting is correct.
+ * command with `shell: true`, whose cmd.exe quoting is correct. Qwen selects
+ * bash when started from Git Bash and PowerShell when `ComSpec` names
+ * PowerShell; those shells handle the quotes, so the workaround is only needed
+ * when Qwen would otherwise use cmd.exe.
  */
 function harnessBreaksQuotedHookCommands(
   harnessId: string | undefined
 ): boolean {
-  return process.platform === "win32" && harnessId === HARNESS_IDS.QWEN_CLI;
+  return (
+    process.platform === "win32" &&
+    harnessId === HARNESS_IDS.QWEN_CLI &&
+    resolveQwenWindowsShell(process.env) === "cmd.exe"
+  );
 }
 
 /**
@@ -189,6 +211,10 @@ function buildLauncherCommand(
 function resolveHookShell(harnessId: string | undefined): string {
   if (process.platform === "win32" && harnessId === HARNESS_IDS.CLAUDE_CLI) {
     return "bash";
+  }
+  if (process.platform === "win32" && harnessId === HARNESS_IDS.QWEN_CLI) {
+    const shell = resolveQwenWindowsShell(process.env);
+    return shell === "cmd.exe" ? "default" : shell;
   }
   return "default";
 }

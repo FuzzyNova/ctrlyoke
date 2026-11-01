@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Qwen hooks now keep their native shell on Windows: quoted hooks stay
+  unwrapped under Git Bash or PowerShell, and environment-bearing hooks use
+  that same shell through the launcher.
 - Antigravity shell allow rules no longer match newline-separated commands,
   and a `-settings` flag in workflow `additionalArgs` now disables ctrlyoke's
   permission translation just like `--settings`.
