@@ -61,6 +61,21 @@ const TOOL_CALL_SECTION_EXPANSION_FIELDS: Record<
   [TOOL_CALL_EXPANSION_SECTIONS.SUBAGENT_PROMPT]: "subagentPromptExpanded",
 };
 
+/**
+ * Whether no section is expanded, so the state is interchangeable with
+ * {@link DEFAULT_TOOL_CALL_EXPANSION_STATE}. Derived from the section map so a
+ * new section is never mistaken for the default (which would drop its toggle).
+ */
+export function isDefaultToolCallExpansionState(
+  state: ToolCallExpansionState
+): boolean {
+  return (
+    !Object.values(TOOL_CALL_SECTION_EXPANSION_FIELDS).some(
+      (field) => state[field]
+    ) && !Object.values(state.readOutputExpanded ?? {}).some(Boolean)
+  );
+}
+
 function isReadOutputExpansionSection(
   section: ToolCallExpansionSection
 ): section is `${typeof READ_OUTPUT_EXPANSION_SECTION_PREFIX}${number}` {

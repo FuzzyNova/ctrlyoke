@@ -14,6 +14,7 @@ import type { DiffGapExpansionState } from "@utils/outputRenderUtils";
 import type { HarnessColorSettings } from "@root/types/CtrlYokeSettings";
 import {
   DEFAULT_TOOL_CALL_EXPANSION_STATE,
+  isDefaultToolCallExpansionState,
   withToolCallSectionExpansion,
   type ToolCallExpansionSection,
   type ToolCallExpansionState,
@@ -536,19 +537,8 @@ export function useOutputRowsModel({
           return previous;
         }
 
-        const isDefaultState =
-          !nextState.paramsExpanded &&
-          !nextState.outputExpanded &&
-          !nextState.errorExpanded;
-        const isDefaultExpansionState =
-          isDefaultState &&
-          !nextState.rawExpanded &&
-          !nextState.appendStepPromptsExpanded &&
-          !nextState.listHarnessModelsExpanded &&
-          !Object.values(nextState.readOutputExpanded ?? {}).some(Boolean);
-
         const next = new Map(previous);
-        if (isDefaultExpansionState) {
+        if (isDefaultToolCallExpansionState(nextState)) {
           next.delete(rowKey);
         } else {
           next.set(rowKey, nextState);

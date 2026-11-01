@@ -3,10 +3,14 @@ import {
   buildToolCallRenderPlan,
   DEFAULT_TOOL_CALL_EXPANSION_STATE,
   getVisibleToolCallText,
+  isDefaultToolCallExpansionState,
   withToolCallSectionExpansion,
 } from "@utils/toolCallLayout";
 import { toolResultLineHeight } from "@utils/outputLineMetrics";
-import { readOutputExpansionSection } from "@root/types/DashboardConstants";
+import {
+  readOutputExpansionSection,
+  TOOL_CALL_EXPANSION_SECTIONS,
+} from "@root/types/DashboardConstants";
 
 describe("toolCallLayout", () => {
   const parameters = {
@@ -201,5 +205,42 @@ describe("withToolCallSectionExpansion", () => {
         false
       )
     ).toBe(DEFAULT_TOOL_CALL_EXPANSION_STATE);
+  });
+});
+
+describe("isDefaultToolCallExpansionState", () => {
+  it("treats the default state as default", () => {
+    expect(
+      isDefaultToolCallExpansionState(DEFAULT_TOOL_CALL_EXPANSION_STATE)
+    ).toBe(true);
+  });
+
+  // Every section must count, or the output pane drops that section's toggle
+  // (a subagent card's Show prompt once did nothing for this reason).
+  it.each(Object.values(TOOL_CALL_EXPANSION_SECTIONS))(
+    "treats an expanded %s section as non-default",
+    (section) => {
+      expect(
+        isDefaultToolCallExpansionState(
+          withToolCallSectionExpansion(
+            DEFAULT_TOOL_CALL_EXPANSION_STATE,
+            section,
+            true
+          )
+        )
+      ).toBe(false);
+    }
+  );
+
+  it("treats an expanded read-output section as non-default", () => {
+    expect(
+      isDefaultToolCallExpansionState(
+        withToolCallSectionExpansion(
+          DEFAULT_TOOL_CALL_EXPANSION_STATE,
+          readOutputExpansionSection(2),
+          true
+        )
+      )
+    ).toBe(false);
   });
 });
