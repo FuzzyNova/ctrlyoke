@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `\"C:\Users\Jane Doe\…\"`. ctrlyoke now sends the prompt on stdin, which
   OpenCode passes through unchanged. Dry-run previews note that the prompt is
   piped on stdin rather than shown in the command.
+- The workspace viewer previews images, video, audio and PDFs inside
+  dot-folders such as `.github/`, and in any workspace that itself sits
+  under a dot-folder. These working-tree files used to fail with "This image
+  can't be displayed".
 
 ## [0.4.0] - 2026-10-31
 

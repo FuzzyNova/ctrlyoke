@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-01 by Claude Code (bug-hunt final step, reading `d795ebbf4`/`bd23b6f4a`)
 - **Area:** `src/server/CtrlYokeHostedServer.ts` (`/api/workspace-viewer/raw`, working-tree branch)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
