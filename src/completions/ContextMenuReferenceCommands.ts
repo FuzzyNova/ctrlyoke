@@ -26,7 +26,7 @@ import { evaluateFileAccess } from "../utils/FileAccessPolicy";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { getInclusiveEndLine } from "../utils/InclusiveLineRange";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
-import { repositoryHasCommit } from "../git/GitCommitLookup";
+import { gitRefExists } from "../utils/GitUtils";
 
 interface TimelineItemLike {
   id?: unknown;
@@ -101,6 +101,12 @@ type WorkspaceCommitChecker = (
   commitHash: string
 ) => Promise<boolean>;
 
+/** Same check the prompt editor's `~<hash>` lint marker uses. */
+const workspaceHasCommit: WorkspaceCommitChecker = async (
+  workspaceRoot,
+  commitHash
+) => (await gitRefExists(workspaceRoot, commitHash)).exists;
+
 const FOREIGN_COMMIT_WARNING =
   "ctrlyoke: Commit {shortHash} is not in this workspace's repository, so a ~ reference can't attach it.";
 
@@ -111,7 +117,7 @@ export class ContextMenuReferenceCommands {
     private readonly workspaceRelativeReferencePathResolver: WorkspaceRelativeReferencePathResolver = toWorkspaceRelativeReferencePath,
     private readonly prepareTrustPrompt: () => Promise<UserInteractionPort> = async () =>
       new NullUserInteractionPort(),
-    private readonly workspaceCommitChecker: WorkspaceCommitChecker = repositoryHasCommit
+    private readonly workspaceCommitChecker: WorkspaceCommitChecker = workspaceHasCommit
   ) {}
 
   async addFileToPromptEditor(uri: vscode.Uri): Promise<void> {
