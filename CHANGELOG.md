@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Typing after `~` in the dashboard prompt editor lists matching commits
+  newest first. They were sorted by the length of their subject, so the most
+  recent match could sit below older ones, out of view. Commits whose message
+  body (not just the subject) contains the text you type are now listed too.
 - Antigravity shell permission rules keep colons that are part of the
   command. Only a trailing `:*` marks a prefix, so `shell(npm run test:unit)`
   now allows or denies exactly that command instead of `npm run test`, and a

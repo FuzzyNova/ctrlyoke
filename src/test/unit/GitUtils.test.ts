@@ -36,7 +36,7 @@ import {
   getWorkingTreeDiff,
   getStagedDiff,
   getRecentCommits,
-  searchCommitsBySubject,
+  searchCommitsByMessage,
   getChangedFilesWithBinaryStatus,
   GitLocationMemo,
   countGitWorkingTreeChanges,
@@ -518,16 +518,54 @@ suite("GitUtils.gitRefExists", function () {
     runGit(["commit", "-m", "literal [bracket] and dot.file"]);
 
     assert.deepStrictEqual(
-      (await searchCommitsBySubject(workspaceRoot, "[", 20)).map(
+      (await searchCommitsByMessage(workspaceRoot, "[", 20)).map(
         (commit) => commit.subject
       ),
       ["literal [bracket] and dot.file"]
     );
     assert.deepStrictEqual(
-      (await searchCommitsBySubject(workspaceRoot, ".", 20)).map(
+      (await searchCommitsByMessage(workspaceRoot, ".", 20)).map(
         (commit) => commit.subject
       ),
       ["literal [bracket] and dot.file"]
+    );
+  });
+
+  test("message search matches and returns multi-line bodies", async () => {
+    await writeWorkspaceFile("body.txt", "body\n");
+    runGit(["add", "body.txt"]);
+    runGit([
+      "commit",
+      "-m",
+      "plain subject",
+      "-m",
+      "First body line mentions Needle.\n\nSecond paragraph.",
+    ]);
+    await writeWorkspaceFile("body.txt", "body 2\n");
+    runGit(["commit", "-am", "no body here"]);
+
+    const results = await searchCommitsByMessage(workspaceRoot, "needle", 20);
+
+    assert.deepStrictEqual(
+      results.map(({ subject, body }) => ({ subject, body })),
+      [
+        {
+          subject: "plain subject",
+          body: "First body line mentions Needle.\n\nSecond paragraph.",
+        },
+      ]
+    );
+    assert.deepStrictEqual(
+      (await searchCommitsByMessage(workspaceRoot, "body", 20)).map(
+        ({ subject, body }) => ({ subject, body })
+      ),
+      [
+        { subject: "no body here", body: "" },
+        {
+          subject: "plain subject",
+          body: "First body line mentions Needle.\n\nSecond paragraph.",
+        },
+      ]
     );
   });
 });

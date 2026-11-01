@@ -1347,22 +1347,30 @@ export async function getStashFiles(
   return parseGitNulSeparatedPaths(stdout);
 }
 
+export interface CommitSearchResult extends CommitInfo {
+  /** Commit message after the subject line, trimmed (may be empty). */
+  body: string;
+}
+
 /**
- * Search commits on the current branch by subject/message (case-insensitive).
- * Uses --grep so it can find commits beyond the base cache limit.
+ * Search commits on the current branch by their full message, subject and
+ * body, case-insensitively. Uses --grep so it can find commits beyond the base
+ * cache limit. The body is returned so callers can show why a commit matched
+ * when the query appears only below the subject line.
  */
-export async function searchCommitsBySubject(
+export async function searchCommitsByMessage(
   workspaceRoot: string,
   query: string,
   limit: number = 200
-): Promise<CommitInfo[]> {
+): Promise<CommitSearchResult[]> {
   const { stdout } = await execFileAsync(
     "git",
     [
       "-C",
       workspaceRoot,
       "log",
-      `--format=%H%x00%h%x00%s%x00%an%x00%ar`,
+      // A body spans lines, so each record ends with RS (%x1e), not "\n".
+      `--format=%H%x00%h%x00%s%x00%an%x00%ar%x00%b%x1e`,
       `--grep=${query}`,
       "--fixed-strings",
       "--regexp-ignore-case",
@@ -1373,12 +1381,12 @@ export async function searchCommitsBySubject(
   );
 
   return stdout
-    .trim()
-    .split("\n")
+    .split("\x1e")
+    .map((record) => record.replace(/^\s+/, ""))
     .filter(Boolean)
-    .map((line) => {
-      const parts = line.split("\0");
-      const [hash, shortHash, subject, author, relativeDate] = parts;
+    .map((record) => {
+      const [hash, shortHash, subject, author, relativeDate, body = ""] =
+        record.split("\0");
       // Search results don't carry graph decorations; the consumers that need
       // parents/refs use getRecentCommits / getCommitLog instead.
       return {
@@ -1387,6 +1395,7 @@ export async function searchCommitsBySubject(
         subject,
         author,
         relativeDate,
+        body: body.trim(),
         parentHashes: [],
         refNames: [],
       };

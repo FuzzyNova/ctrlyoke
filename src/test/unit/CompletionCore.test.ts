@@ -708,6 +708,68 @@ suite("CompletionCore git change completions", function () {
       ).some((item) => item.insertText === olderHash)
     );
   });
+
+  test("ranks query results newest first regardless of subject length", async () => {
+    runGit(["commit", "--allow-empty", "-m", "short collapse"]);
+    const olderShort = runGit(["rev-parse", "HEAD"]);
+    runGit([
+      "commit",
+      "--allow-empty",
+      "-m",
+      "a much longer subject line that mentions collapse further along",
+    ]);
+    const newerLong = runGit(["rev-parse", "HEAD"]);
+
+    const items = await createCore().getGitChangeCompletions(
+      workspaceRoot,
+      "collapse"
+    );
+
+    assert.deepStrictEqual(
+      items.map((item) => item.insertText),
+      [newerLong, olderShort]
+    );
+    // `rank` makes the dashboard show the list as sent instead of letting
+    // CodeMirror re-sort it by filterText length.
+    assert.deepStrictEqual(
+      items.map((item) => item.rank),
+      [0, 1]
+    );
+    assert.ok(
+      (await createCore().getGitChangeCompletions(workspaceRoot, "")).every(
+        (item) => item.rank === undefined
+      )
+    );
+  });
+
+  test("matches commits whose body alone contains the query", async () => {
+    runGit([
+      "commit",
+      "--allow-empty",
+      "-m",
+      "recent subject",
+      "-m",
+      "The body explains the Collapse behavior.",
+    ]);
+    const recent = runGit(["rev-parse", "HEAD"]);
+    runGit([
+      "commit",
+      "--allow-empty",
+      "-m",
+      "newest subject",
+      "-m",
+      "Another body that mentions collapse.",
+    ]);
+    const newest = runGit(["rev-parse", "HEAD"]);
+    // Both sit in the 50-commit recent cache, which carries no bodies: each
+    // cached entry must pick up its body from the message search to match.
+    assert.deepStrictEqual(
+      (
+        await createCore().getGitChangeCompletions(workspaceRoot, "collapse")
+      ).map((item) => item.insertText),
+      [newest, recent]
+    );
+  });
 });
 
 suite("VsCodeSymbolIndex completion golden", () => {

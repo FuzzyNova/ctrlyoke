@@ -39,7 +39,7 @@ import {
   getCommitByHash,
   getRecentCommits,
   getStashList,
-  searchCommitsBySubject,
+  searchCommitsByMessage,
   type CommitInfo,
   type StashInfo,
 } from "../utils/GitUtils";
@@ -101,7 +101,8 @@ interface GitCache {
 interface GitSearchCache {
   workspaceRoot: string;
   query: string;
-  commits: CommitInfo[];
+  /** Newest first; `body` is set on every commit the message search matched. */
+  commits: Array<CommitInfo & { body?: string }>;
   timestamp: number;
 }
 
@@ -412,7 +413,7 @@ export class CompletionCore {
         };
       }
     }
-    let commits = this.gitCache!.commits;
+    let commits: GitSearchCache["commits"] = this.gitCache!.commits;
     if (filterText) {
       const stale =
         !this.gitSearchCache ||
@@ -422,12 +423,23 @@ export class CompletionCore {
       if (stale) {
         try {
           const [searched, byHash] = await Promise.all([
-            searchCommitsBySubject(workspaceRoot, filterText, 200),
+            searchCommitsByMessage(workspaceRoot, filterText, 200),
             getCommitByHash(workspaceRoot, filterText),
           ]);
+          // The recent-commit cache has no bodies; borrow them from the
+          // message search so a recent commit matching only in its body
+          // survives the query filter below.
+          const bodies = new Map(
+            searched.map((commit) => [commit.hash, commit.body])
+          );
           const seen = new Set<string>();
+          // The cache holds the newest commits, and search results not in it
+          // are older still, so this concatenation stays newest first.
           commits = [
-            ...this.gitCache.commits,
+            ...this.gitCache.commits.map((commit) => ({
+              ...commit,
+              body: bodies.get(commit.hash),
+            })),
             ...searched,
             ...(byHash ? [byHash] : []),
           ].filter((commit) => {
@@ -482,17 +494,29 @@ export class CompletionCore {
         icon: GIT_REFERENCE_ICONS[GIT_CHANGE_KINDS.COMMIT],
         detail: `${commit.author}, ${commit.relativeDate}`,
         sortText: `!001_git_commit_${String(index).padStart(3, "0")}`,
-        filterText: `${commit.hash} ${commit.shortHash} ${commit.subject} ${commit.author}`,
+        filterText: [
+          commit.hash,
+          commit.shortHash,
+          commit.subject,
+          commit.author,
+          ...(commit.body ? [commit.body.replace(/\s+/g, " ")] : []),
+        ].join(" "),
       })),
     ];
     if (!filterText) return items;
     const lower = filterText.toLowerCase();
-    return items.filter(
-      (item) =>
-        item.label.toLowerCase().includes(lower) ||
-        (item.detail?.toLowerCase().includes(lower) ?? false) ||
-        (item.filterText?.toLowerCase().includes(lower) ?? false)
-    );
+    // Every item here is already matched against the query and in display
+    // order (diff/staged, stashes, then commits newest first). `rank` tells
+    // the dashboard to show it as sent: CodeMirror's own matcher would sort
+    // commits by filterText length instead of recency.
+    return items
+      .filter(
+        (item) =>
+          item.label.toLowerCase().includes(lower) ||
+          (item.detail?.toLowerCase().includes(lower) ?? false) ||
+          (item.filterText?.toLowerCase().includes(lower) ?? false)
+      )
+      .map((item, rank) => ({ ...item, rank }));
   }
 
   getSecretCompletions(
