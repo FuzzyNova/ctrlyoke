@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Runner locks and execution leases now stay heartbeated while worktree setup
+  runs, preventing a live run from being reclaimed as stale.
 - Malformed `$step:` and `$previous:` selectors now show a prompt diagnostic
   even when they do not use `:summary`. Unknown `$` tokens and prose after
   `$previous:` remain unaffected.

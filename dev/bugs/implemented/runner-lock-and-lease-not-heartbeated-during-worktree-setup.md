@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-01 by bug-hunt final step (claude-cli)
 - **Area:** `src/core/orchestration/WorkflowStartupPipeline.ts`, `src/core/WorkflowInstance.ts`, `src/core/orchestration/RunnerLockCoordinator.ts`, `src/git/WorktreeManager.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

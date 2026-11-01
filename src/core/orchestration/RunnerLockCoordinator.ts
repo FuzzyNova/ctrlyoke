@@ -173,9 +173,10 @@ export class RunnerLockCoordinator {
   }
 
   startHeartbeat(workspaceRoot: string, workflowKey: WorkflowKey): void {
-    // A resume after a preserved worktree reservation starts again without a
-    // stop; an overwritten interval could never be cleared.
-    this.stopHeartbeat();
+    // Startup can request this after lock acquisition and execution can
+    // request it again after setup. Keep the original interval so there is
+    // only one timer to clear when the reservation is released.
+    if (this.heartbeatInterval !== undefined) return;
     const ownerToken = this.currentLockOwnerToken;
     if (!ownerToken && !this.port.getExecutionLease()) {
       return;

@@ -830,6 +830,17 @@ export class WorkflowStartupPipeline {
 
     await this.port.onPrepared?.();
     await this.port.worktree.ensureRunnerLock(workingFilePath);
+    const lifecycle = this.port.execution.lifecycle;
+    if (lifecycle) {
+      const { workflowKey, lockWorkspaceRoot } = lifecycle.getRunIdentity();
+      if (
+        lifecycle.ownsExecutionReservation() &&
+        lockWorkspaceRoot &&
+        workflowKey
+      ) {
+        lifecycle.startRunnerLockHeartbeat(lockWorkspaceRoot, workflowKey);
+      }
+    }
 
     return {
       currentQueueState,
@@ -888,6 +899,13 @@ export class WorkflowStartupPipeline {
     }
 
     await this.port.execution.prepareExecutionWorktree(this.historyFilePath);
+    if (
+      this.port.execution.getAuthoritativeExecutionState() ===
+      EXECUTION_STATES.STOPPED
+    ) {
+      await this.releaseReservationsAfterSetupStop();
+      return;
+    }
     const integration =
       this.port.execution.createIntegrationForMode(modeOverride);
 
@@ -1299,6 +1317,50 @@ export class WorkflowStartupPipeline {
           lockError
         )
       );
+  }
+
+  private async releaseReservationsAfterSetupStop(): Promise<void> {
+    const worktree = this.port.worktree.getActiveWorktree();
+    if (worktree) {
+      const worktreeConfig = this.port.worktree.getResolution().config;
+      this.port.worktree.manager.releaseRuntimeTrust(worktree);
+      if (worktree.mode === WORKTREE_MODES.MANAGED) {
+        await this.port.worktree.manager
+          .completeManagedRun(worktree, {
+            merge:
+              worktreeConfig?.mode === WORKTREE_MODES.MANAGED &&
+              worktreeConfig.merge === true,
+            keep:
+              worktreeConfig?.mode === WORKTREE_MODES.MANAGED &&
+              worktreeConfig.keep === true,
+            artifactsClean: true,
+          })
+          .catch((error) =>
+            Log.warn(
+              `[inst:${this.port.id.slice(0, 8)}] Failed to settle worktree after stop during setup:`,
+              error
+            )
+          );
+      } else {
+        await this.port.worktree
+          .getExecutionLease()
+          ?.release()
+          .catch((error) =>
+            Log.warn(
+              `[inst:${this.port.id.slice(0, 8)}] Failed to release worktree lease after stop during setup:`,
+              error
+            )
+          );
+      }
+      this.port.worktree.clearExecutionLease();
+      this.port.worktree.clearActiveWorktree();
+    }
+    await this.port.worktree.releaseRunnerLock().catch((error) =>
+      Log.warn(
+        `[inst:${this.port.id.slice(0, 8)}] Failed to release runner lock after stop during setup:`,
+        error
+      )
+    );
   }
 
   public async finalizePromotedRunAfterEarlyFailure(): Promise<string> {
