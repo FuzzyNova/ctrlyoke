@@ -2814,7 +2814,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       try {
         await assert.rejects(
           () => server.invokeTool(tool, args),
-          /completed step/i
+          /step that has already run/i
         );
       } finally {
         await releaseActiveRun(run, ownerToken);
@@ -2894,7 +2894,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
             position: 0,
             steps: [{ prompt: "must not move execution head" }],
           }),
-        /completed step/i
+        /step that has already run/i
       );
     } finally {
       await releaseActiveRun(run, ownerToken);

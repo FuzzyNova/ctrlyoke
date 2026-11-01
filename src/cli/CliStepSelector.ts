@@ -153,6 +153,30 @@ export function formatFinalPassSelector(passNumber: number): string {
   return `${HISTORY_SHOW_STEP_SELECTORS.FINAL}:${passNumber}`;
 }
 
+/** The canonical `--step` text of a parsed final-step selector. */
+export function formatFinalStepSelector(
+  selector: Extract<
+    CliHistoryShowStepSelector,
+    { kind: typeof FINAL_STEP_PHASES.FINAL_STEP }
+  >
+): string {
+  if (selector.passNumber === undefined) {
+    return HISTORY_SHOW_STEP_SELECTORS.FINAL;
+  }
+  return selector.passNumber === HISTORY_SHOW_ATTEMPT_SELECTORS.LATEST
+    ? `${HISTORY_SHOW_STEP_SELECTORS.FINAL}:${HISTORY_SHOW_ATTEMPT_SELECTORS.LATEST}`
+    : formatFinalPassSelector(selector.passNumber);
+}
+
+/** Whether raw `--step` text is a final-step selector (`final` or `final:…`). */
+export function isFinalStepSelectorText(value: string | undefined): boolean {
+  const trimmed = value?.trim();
+  return (
+    trimmed === HISTORY_SHOW_STEP_SELECTORS.FINAL ||
+    trimmed?.startsWith(`${HISTORY_SHOW_STEP_SELECTORS.FINAL}:`) === true
+  );
+}
+
 function parseNonNegativeSafeInteger(value: string): number | undefined {
   if (!/^\d+$/.test(value)) return undefined;
   const number = Number(value);

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-01 by Claude Code (bug-hunt final step, exercising the CLI)
 - **Area:** `src/cli/HistoryInspectionCommands.ts`, `src/core/StepIdentity.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -22,7 +22,7 @@ Related wording problem in the same area: step mutations refused on a run that h
 settled (completed or errored) say `Cannot remove a completed step while the workflow is
 running`. That comes from `STEP_MUTATION_ERROR_MESSAGES.completed`
 (#selection:src/core/StepIdentity.ts:6-13), and `ctrlyoke step remove|edit --json` and the
-MCP `remove_step`/`edit_step` tools all return it. The run is not running, and a *failed*
+MCP `remove_step`/`edit_step` tools all return it. The run is not running, and a _failed_
 step is also called "completed".
 
 ## Steps to Reproduce

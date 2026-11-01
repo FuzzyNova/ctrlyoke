@@ -2773,7 +2773,7 @@ suite("PromptQueue State Machine Tests", () => {
       );
       await assert.rejects(
         () => queue.deletePrompts([0]),
-        /completed step while the workflow is running/i
+        /step that has already run/i
       );
       await queue.deletePrompts([3]);
       const steps = queue.getState().steps as PromptStep[];
@@ -2791,7 +2791,7 @@ suite("PromptQueue State Machine Tests", () => {
       );
       await assert.rejects(
         () => queue.updatePrompt(0, { prompt: "edited completed" }),
-        /completed step while the workflow is running/i
+        /step that has already run/i
       );
       await queue.updatePrompt(3, { prompt: "edited pending" });
       assert.strictEqual(
@@ -2872,7 +2872,7 @@ suite("PromptQueue State Machine Tests", () => {
       await pausedAtStepTwo(queue);
       await assert.rejects(
         () => queue.updatePrompt(1, { prompt: "edited completed" }),
-        /completed step while the workflow is running/i
+        /step that has already run/i
       );
     });
 

@@ -42,7 +42,7 @@ suite("RunContinuationService addressed step editability", () => {
     };
     assert.throws(
       () => assertEditableDuringExecution(source, source.steps!, 0, "update"),
-      /Cannot update a completed step/
+      /Cannot update a step that has already run/
     );
     assert.doesNotThrow(() =>
       assertEditableDuringExecution(source, source.steps!, 1, "update")
@@ -1157,7 +1157,7 @@ suite("RunContinuationService addressed step mutations", () => {
         repository,
         true
       ),
-      /completed step/i
+      /step that has already run/i
     );
     await assert.rejects(
       RunContinuationService.editStepAtRun(
@@ -1623,7 +1623,7 @@ suite("RunContinuationService addressed step mutations", () => {
         1,
         repository
       ),
-      /completed step/i
+      /step that has already run/i
     );
     await assert.rejects(
       RunContinuationService.removeStepsAtRun(
@@ -1634,7 +1634,7 @@ suite("RunContinuationService addressed step mutations", () => {
         1,
         repository
       ),
-      /completed step/i
+      /step that has already run/i
     );
 
     await seedRun(EXECUTION_STATES.ERROR, 1, [
@@ -1656,7 +1656,7 @@ suite("RunContinuationService addressed step mutations", () => {
         1,
         repository
       ),
-      /completed step/i
+      /step that has already run/i
     );
     await assert.rejects(
       RunContinuationService.removeStepsAtRun(
@@ -1667,7 +1667,7 @@ suite("RunContinuationService addressed step mutations", () => {
         1,
         repository
       ),
-      /completed step/i
+      /step that has already run/i
     );
 
     await seedRun(EXECUTION_STATES.STOPPED, 1, [

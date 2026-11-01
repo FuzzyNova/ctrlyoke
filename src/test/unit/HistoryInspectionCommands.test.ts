@@ -2494,6 +2494,103 @@ suite("CLI history inspection command handlers", () => {
     });
   });
 
+  test("reports a final step that never ran for every final selector", async () => {
+    const key = "release" as WorkflowKey;
+    const deps = dependencies(
+      new TestLineageRepository([key], new Map(), new Map()),
+      historyManagerForShow(key),
+      // Step 0 ran and the run stopped before reaching its final step.
+      new TestRunOutputResolver([
+        settledAttempt({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 }),
+      ])
+    );
+    const statuses: string[] = [];
+    const originalStatus = CliTerminalFormatter.renderStatusMessage;
+    CliTerminalFormatter.renderStatusMessage = ((message) => {
+      statuses.push(message);
+    }) as typeof originalStatus;
+    try {
+      for (const step of ["final", "final:latest", "final:1"]) {
+        await showHistoryCommand(
+          { workflow: key, run: "3", step },
+          new TestIo(),
+          deps
+        );
+      }
+    } finally {
+      CliTerminalFormatter.renderStatusMessage = originalStatus;
+    }
+    assert.deepStrictEqual(statuses, [
+      "--step final: the final step has not run (pending)",
+      "--step final:latest: the final step has not run (pending)",
+      "--step final:1: the final step has not run (pending)",
+    ]);
+
+    const io = new TestIo();
+    await showHistoryCommand(
+      { workflow: key, run: "3", step: "final:2", json: true },
+      io,
+      deps
+    );
+    assert.deepStrictEqual(
+      io.output.map((line) => JSON.parse(line)),
+      [
+        {
+          runRef: "run-2026-09-20T12-00-00-000Z",
+          selector: "final:2",
+          status: "pending",
+          message: "--step final:2: the final step has not run (pending)",
+        },
+      ]
+    );
+  });
+
+  test("still rejects a final pass beyond the recorded passes", async () => {
+    const key = "release" as WorkflowKey;
+    await assert.rejects(
+      showHistoryCommand(
+        { workflow: key, run: "3", step: "final:2" },
+        new TestIo(),
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          historyManagerForShow(key),
+          new TestRunOutputResolver([
+            settledAttempt({
+              kind: FINAL_STEP_PHASES.FINAL_STEP,
+              loopIndex: 0,
+            }),
+          ])
+        )
+      ),
+      /valid final pass numbers are 1 to 1$/
+    );
+  });
+
+  test("appends the queue-index range only to queue selector parse errors", async () => {
+    const key = "release" as WorkflowKey;
+    const invoke = (step: string) =>
+      showHistoryCommand(
+        { workflow: key, run: "3", step },
+        new TestIo(),
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          historyManagerForShow(key),
+          new TestRunOutputResolver([])
+        )
+      );
+    for (const step of ["final:0", "final:x", " final:-1"]) {
+      await assert.rejects(invoke(step), (error: Error) => {
+        assert.match(error.message, /^Invalid --step value/);
+        assert.doesNotMatch(error.message, /zero-based indices are/);
+        return true;
+      });
+    }
+    await assert.rejects(
+      invoke("abc"),
+      /Invalid --step value "abc"; .*; valid zero-based indices are 0 to 1/
+    );
+  });
+
   test("rejects an --attempt beyond the recorded attempts before writing", async () => {
     const key = "release" as WorkflowKey;
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;

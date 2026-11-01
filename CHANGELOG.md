@@ -35,6 +35,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   finished, even though the response reported `promoted: true`, so an agent
   waiting on its parallel helper hung until the step timed out. Every step
   in a multi-step append now starts this way.
+- `ctrlyoke history show --step final`, `final:latest` and `final:N` on a run
+  whose final step never ran now report "the final step has not run
+  (pending)", as a JSON notice with `--json`, instead of printing nothing or
+  failing with "valid final pass numbers are 1 to 0". An invalid final
+  selector such as `final:0` no longer lists the queue-index range in its
+  error.
+- Editing, removing or moving a step that has already run now fails with
+  "Cannot remove a step that has already run". The old message, "a completed
+  step while the workflow is running", was shown for settled runs and failed
+  steps too.
 
 ## [0.4.0] - 2026-10-31
 

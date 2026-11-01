@@ -103,6 +103,7 @@ import {
   findStepById,
   findStepIndexById,
   resetStepRuntimeForRewind,
+  STEP_MUTATION_ERROR_MESSAGES,
 } from "./StepIdentity";
 import {
   hasInFlightStep as isStepInFlight,
@@ -3447,7 +3448,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       if (!hasStarted(step)) {
         throw new Error(
           index < this.state.currentIndex
-            ? `Cannot ${operation} a completed step while the workflow is running`
+            ? STEP_MUTATION_ERROR_MESSAGES.completed(operation)
             : `Cannot ${operation} the currently executing step`
         );
       }

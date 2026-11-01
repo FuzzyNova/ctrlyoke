@@ -261,7 +261,7 @@ suite("CLI step command handlers", () => {
             context(),
             new RecordingIo()
           ),
-        /completed step/i
+        /step that has already run/i
       );
       await assert.rejects(
         () =>

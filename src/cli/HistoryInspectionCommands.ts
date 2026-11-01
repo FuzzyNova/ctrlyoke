@@ -20,7 +20,9 @@ import {
   parseHistoryShowStep,
   formatCliStepSelector,
   formatFinalPassSelector,
+  formatFinalStepSelector,
   formatHistoryTargetSelector,
+  isFinalStepSelectorText,
   type CliHistoryShowAttemptSelector,
   type CliHistoryShowStepSelector,
   type CliRunSummaryProvider,
@@ -603,8 +605,13 @@ export async function showHistoryCommand(
   try {
     targetFilter = parseHistoryShowStep(options.step);
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    // Queue indices say nothing about a final pass number, so only a
+    // queue-style selector gets the valid index range appended.
     throw new Error(
-      `${error instanceof Error ? error.message : String(error)}; ${formatValidStepIndexRange(stepCount)}`
+      isFinalStepSelectorText(options.step)
+        ? message
+        : `${message}; ${formatValidStepIndexRange(stepCount)}`
     );
   }
   if (targetFilter?.kind === FINAL_STEP_PHASES.QUEUE) {
@@ -653,8 +660,11 @@ export async function showHistoryCommand(
     : undefined;
 
   if (targetFilter?.kind === FINAL_STEP_PHASES.FINAL_STEP && index) {
+    // With no pass recorded there is no valid range to name; the selection
+    // falls through to the "final step has not run" notice instead.
     if (
       typeof targetFilter.passNumber === "number" &&
+      index.finalPassCount > 0 &&
       targetFilter.passNumber > index.finalPassCount
     ) {
       throw new Error(
@@ -742,7 +752,12 @@ export async function showHistoryCommand(
     }
   }
 
-  const notices: Array<{ selector: string; step?: number; line: string }> = [];
+  const notices: Array<{
+    selector: string;
+    step?: number;
+    status?: string;
+    line: string;
+  }> = [];
   if (showKinds || pathNeedle !== undefined) {
     for (const targetKey of selectedTargets) {
       if (renderedTargets.has(targetKey)) continue;
@@ -764,6 +779,7 @@ export async function showHistoryCommand(
       notices.push({
         selector,
         step: stepIndex,
+        status: state,
         line:
           state === PROMPT_TERMINAL_STATUS.SKIPPED
             ? `--step ${selector} was skipped`
@@ -772,6 +788,22 @@ export async function showHistoryCommand(
               : `--step ${selector} is ${state} but has no recorded attempt`,
       });
     }
+  } else if (
+    targetFilter?.kind === FINAL_STEP_PHASES.FINAL_STEP &&
+    matchedTargets.size === 0
+  ) {
+    const selector = formatFinalStepSelector(targetFilter);
+    const state = historyWorkingStepState(
+      workingDefinition?.finalStep?._runtime
+    );
+    notices.push({
+      selector,
+      status: state,
+      line:
+        state === HISTORY_STEP_STATES.PENDING
+          ? `--step ${selector}: the final step has not run (${HISTORY_STEP_STATES.PENDING})`
+          : `--step ${selector}: the final step is ${state} but has no recorded pass`,
+    });
   } else if (
     targetFilter?.kind === HISTORY_SHOW_STEP_SELECTORS.RUNNING &&
     renderedAttempts === 0 &&
@@ -788,14 +820,8 @@ export async function showHistoryCommand(
         JSON.stringify({
           runRef,
           selector: notice.selector,
-          ...(notice.step !== undefined
-            ? {
-                step: notice.step,
-                status: historyWorkingStepState(
-                  workingDefinition?.steps[notice.step]?._runtime
-                ),
-              }
-            : {}),
+          ...(notice.step !== undefined ? { step: notice.step } : {}),
+          ...(notice.status !== undefined ? { status: notice.status } : {}),
           message: notice.line,
         })
       );

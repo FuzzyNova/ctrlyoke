@@ -15,7 +15,9 @@ import {
 export {
   formatCliStepSelector,
   formatFinalPassSelector,
+  formatFinalStepSelector,
   formatHistoryTargetSelector,
+  isFinalStepSelectorText,
   matchesHistoryShowStep,
   parseCliStepIndex,
   parseHistoryShowAttempt,

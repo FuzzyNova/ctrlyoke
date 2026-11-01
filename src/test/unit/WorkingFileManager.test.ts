@@ -2251,7 +2251,7 @@ suite("WorkingFileManager", () => {
           { enabled: false },
           1
         ),
-        /Cannot update a completed step/
+        /Cannot update a step that has already run/
       );
       const stillUnchanged = JSON.parse(
         await fs.readFile(runFilePath, "utf8")
