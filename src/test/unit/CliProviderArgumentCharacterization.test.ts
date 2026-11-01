@@ -6,6 +6,7 @@ import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
 import { CopilotCliProvider } from "../../core/harness/copilot/CopilotCliProvider";
 import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
 import { QwenCliProvider } from "../../core/harness/qwen/QwenCliProvider";
+import { HEADLESS_PROMPT_DELIVERIES } from "../../types/DashboardConstants";
 
 suite("CLI provider argument characterization", () => {
   const baseArgs = ["--model", "model-x", "--add-dir", "/workspace"];
@@ -51,11 +52,20 @@ suite("CLI provider argument characterization", () => {
     );
   });
 
-  test("preserves OpenCode headless argument order", () => {
-    assert.deepStrictEqual(
-      new OpenCodeCliProvider().buildHeadlessArgs(baseArgs, prompt),
-      ["--model", "model-x", "--add-dir", "/workspace", "prompt text"]
+  test("keeps the OpenCode headless prompt out of argv for stdin delivery", () => {
+    // `opencode run` quote-wraps a positional message containing a space, so
+    // the prompt is piped on stdin instead.
+    const provider = new OpenCodeCliProvider();
+    assert.strictEqual(
+      provider.config.headlessPromptDelivery,
+      HEADLESS_PROMPT_DELIVERIES.STDIN
     );
+    assert.deepStrictEqual(provider.buildHeadlessArgs(baseArgs, prompt), [
+      "--model",
+      "model-x",
+      "--add-dir",
+      "/workspace",
+    ]);
   });
 
   test("preserves Qwen headless argument order", () => {

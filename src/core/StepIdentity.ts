@@ -4,8 +4,10 @@ import { hasStarted } from "../utils/StepStatusDerivation";
 
 /** Shared mutation diagnostics so every workflow mutation path reports the same policy. */
 export const STEP_MUTATION_ERROR_MESSAGES = {
+  // Said of a settled run and of a failed or skipped step too, so it must not
+  // claim the workflow is running or that the step completed.
   completed: (operation: string) =>
-    `Cannot ${operation} a completed step while the workflow is running`,
+    `Cannot ${operation} a step that has already run`,
   started: (operation: string) =>
     `Cannot ${operation} the currently executing step: the step has already started`,
   shiftedStartedStep: (operation: string, stepId: string) =>

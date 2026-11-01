@@ -758,8 +758,11 @@ When a selected queue step has no attempt at all, the command reports its
 state from the run's working file, one line per such step, such as
 `--step 57 has not started (pending)` or `--step 57 was skipped`; with `--json`
 each is an object with `runRef`, `selector`, `step`, `status`, and `message`.
-`--step 3,57` prints step 3 and then the line for step 57. A pause is rendered
-as `Run paused`.
+`--step 3,57` prints step 3 and then the line for step 57. Likewise, when a run
+has a final step that never ran, `--step final`, `final:latest` and `final:N`
+report `--step final: the final step has not run (pending)`; with `--json` the
+object carries `runRef`, `selector`, `status`, and `message` (no `step`). Both
+notices exit 0. A pause is rendered as `Run paused`.
 
 Pass `--json` to emit one raw attempt record per line as NDJSON. This is
 deliberately different from commands such as `validate --json`, which emit one

@@ -58,6 +58,43 @@ suite("CliProcessManager stream decoding", () => {
   });
 });
 
+suite("CliProcessManager stdin", () => {
+  const echoStdin =
+    "let s='';process.stdin.setEncoding('utf8');process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>process.stdout.write(JSON.stringify(s)))";
+
+  test("writes stdinText verbatim and closes stdin", async () => {
+    // The prompt OpenCode receives this way must be byte-for-byte what was
+    // sent: quotes, spaces in paths and non-ASCII included.
+    const text = 'see "C:\\Users\\Jane Doe\\x.prompt.md" — ok\n';
+    const manager = new CliProcessManager(process.cwd());
+    const result = await manager.spawn(process.execPath, ["-e", echoStdin], {
+      stdinText: text,
+    });
+
+    assert.strictEqual(result.exitCode, 0);
+    assert.strictEqual(JSON.parse(result.stdout), text);
+  });
+
+  test("leaves stdin ignored without stdinText", async () => {
+    const manager = new CliProcessManager(process.cwd());
+    const result = await manager.spawn(process.execPath, ["-e", echoStdin]);
+
+    assert.strictEqual(result.exitCode, 0);
+    assert.strictEqual(JSON.parse(result.stdout), "");
+  });
+
+  test("survives a child that exits without reading stdin", async () => {
+    const manager = new CliProcessManager(process.cwd());
+    const result = await manager.spawn(
+      process.execPath,
+      ["-e", "process.exit(3)"],
+      { stdinText: "x".repeat(4 * 1024 * 1024) }
+    );
+
+    assert.strictEqual(result.exitCode, 3);
+  });
+});
+
 suite("CliProcessManager working directory", () => {
   let tmpDir: string;
 

@@ -730,7 +730,7 @@ export class CliTerminalFormatter {
       }
       if (step.command) {
         writeLine(
-          `${indent}  Command (${COMMAND_DISPLAY_SHELL_LABELS[step.command.displayShell]}): ${step.command.displayCommand}`
+          `${indent}  Command (${COMMAND_DISPLAY_SHELL_LABELS[step.command.displayShell]}): ${step.command.displayCommand}${step.command.promptOnStdin ? " (prompt piped on stdin)" : ""}`
         );
       }
       for (const variable of step.variables) {

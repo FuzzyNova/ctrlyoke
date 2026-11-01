@@ -27,6 +27,12 @@ export interface SpawnOptions {
    */
   stdin?: "ignore" | "pipe";
   /**
+   * Text written to the child's stdin, which is then closed so the child sees
+   * EOF. Implies a piped stdin and takes precedence over `stdin`. Used to pass
+   * a headless prompt without putting it on the command line.
+   */
+  stdinText?: string;
+  /**
    * Set when `args` is already a cmd.exe-escaped verbatim payload (see
    * `CliResolvedCommand.requiresShellVerbatimArgs` /
    * `WindowsCmdEscaping.buildCmdExeVerbatimArgs`) so Node does not apply a
@@ -143,7 +149,13 @@ export class CliProcessManager {
       const child = spawn(command, args, {
         cwd,
         shell: options.shell ?? false,
-        stdio: [options.stdin ?? "ignore", "pipe", "pipe"],
+        stdio: [
+          options.stdinText !== undefined
+            ? "pipe"
+            : (options.stdin ?? "ignore"),
+          "pipe",
+          "pipe",
+        ],
         env: withWorkingDirectoryEnv(options.env, cwd),
         // The extension host is a GUI process, so Windows creates a visible
         // console for cmd.exe/PowerShell launchers unless it is explicitly
@@ -154,6 +166,16 @@ export class CliProcessManager {
       });
 
       this.currentProcess = child;
+
+      if (options.stdinText !== undefined && child.stdin) {
+        // A child that exits without reading stdin closes the pipe under us;
+        // the resulting EPIPE is not a spawn failure, and the exit code says
+        // what happened.
+        child.stdin.on("error", (error: Error) => {
+          this.logger?.(`⚠️ stdin write failed: ${error.message}`);
+        });
+        child.stdin.end(options.stdinText, "utf8");
+      }
 
       // Handle stdout with streaming support
       const flushStdout = child.stdout

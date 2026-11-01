@@ -179,7 +179,11 @@ function createCodexStreamState(): CodexStreamState {
 
 export class CodexLogParser extends BaseLogParser {
   private readonly subagentFollower = new SubagentSourceFollower();
+  // Per parent session: cleared by recordParentSessionMeta() when a different
+  // parent thread starts, because one parser outlives many sessions and models
+  // reuse task names such as "worker" across them.
   private readonly pendingSubagentSpawns = new Map<string, CliEvent>();
+  /** Keyed by {@link subagentRegistrationKey}, the follower's own identity. */
   private readonly registeredSubagentTasks = new Set<string>();
   private readonly subagentPathByTask = new Map<string, string>();
 
@@ -429,7 +433,7 @@ export class CodexLogParser extends BaseLogParser {
 
       // Track session metadata (session_meta)
       if (event.type === CODEX_EVENT_TYPES.SESSION_META && event.payload) {
-        this.sessionMeta = event.payload as CodexSessionMetaPayload;
+        this.recordParentSessionMeta(event.payload as CodexSessionMetaPayload);
         sessionId = event.payload.id;
         model = event.payload.model;
         cliVersion = event.payload.cli_version;
@@ -1361,9 +1365,33 @@ export class CodexLogParser extends BaseLogParser {
       e.payload &&
       !("parent_thread_id" in e.payload && e.payload.parent_thread_id)
     ) {
-      this.sessionMeta = e.payload as CodexSessionMetaPayload;
+      this.recordParentSessionMeta(e.payload as CodexSessionMetaPayload);
     }
     return this.mapStreamRecord(e, this.parentStream);
+  }
+
+  /**
+   * Cache the parent session's metadata. A different parent thread starts a
+   * new set of subagent spawns, so the previous session's spawn cards, task
+   * paths and registration guards are dropped: a reused task name then
+   * resolves to this session's spawn, and the maps stay bounded. The same
+   * thread (a resumed turn, or extractResponse() re-reading a log the live
+   * tail already saw) keeps them, so a child is never registered twice.
+   */
+  private recordParentSessionMeta(meta: CodexSessionMetaPayload): void {
+    if (this.sessionMeta?.id !== meta.id) {
+      this.pendingSubagentSpawns.clear();
+      this.subagentPathByTask.clear();
+      this.registeredSubagentTasks.clear();
+    }
+    this.sessionMeta = meta;
+  }
+
+  private subagentRegistrationKey(
+    parentThreadId: string,
+    taskName: string
+  ): string {
+    return `codex:${parentThreadId}:${taskName}`;
   }
 
   /** Map one record of a streamed rollout using that rollout's own state. */
@@ -1434,7 +1462,12 @@ export class CodexLogParser extends BaseLogParser {
     const agentPath = this.parseAgentPath(taskName);
     this.subagentPathByTask.set(taskName, agentPath);
     const parentThreadId = this.sessionMeta?.id;
-    if (!parentThreadId || this.registeredSubagentTasks.has(taskName)) return;
+    if (!parentThreadId) return;
+    const registrationKey = this.subagentRegistrationKey(
+      parentThreadId,
+      taskName
+    );
+    if (this.registeredSubagentTasks.has(registrationKey)) return;
     const sessionsRoot = path.join(getCodexHomeDir(), "sessions");
     const parentPath = this.findSessionFileRecursive(
       sessionsRoot,
@@ -1457,7 +1490,7 @@ export class CodexLogParser extends BaseLogParser {
     let childModel: string | undefined;
     const childStream = createCodexStreamState();
     const source: SubagentChildSource<CodexProviderEvent> = {
-      key: `codex:${parentThreadId}:${taskName}`,
+      key: registrationKey,
       attribution: { parentToolCallId, agentId: taskName },
       read: async (fromOffset) => {
         if (!childPath) {
@@ -1604,7 +1637,7 @@ export class CodexLogParser extends BaseLogParser {
         record.type === CODEX_EVENT_TYPES.EVENT_MSG &&
         record.payload?.type === CODEX_PAYLOAD_TYPES.TASK_COMPLETE,
     };
-    this.registeredSubagentTasks.add(taskName);
+    this.registeredSubagentTasks.add(registrationKey);
     this.subagentFollower.register(source);
   }
 

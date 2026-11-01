@@ -72,13 +72,30 @@ function escapeRegexWord(word: string): string {
   return word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function commandWords(
+/** Only a trailing `:*` is the prefix marker; any other colon is command text. */
+const SHELL_PREFIX_MARKER = /^([\s\S]*?)\s*:\s*\*\s*$/;
+/** Characters the deny regex's word boundaries treat as part of a word. */
+const DENY_WORD_CHAR = /[\w.-]/;
+const DENY_LEADING_BOUNDARY = String.raw`(?:.*[^\w.-])?`;
+const DENY_TRAILING_BOUNDARY = String.raw`(?:[^\w.-].*)?`;
+
+interface ShellCommandPattern {
+  /** Regex source for the command words, or undefined for "any command". */
+  readonly words: string | undefined;
+  /** The pattern ended in `:*` (the command is a prefix). */
+  readonly prefix: boolean;
+  /** Raw command text the words were built from. */
+  readonly command: string;
+}
+
+function parseShellCommand(
   inner: string,
   kind: AntigravityRuleListKind
-): string | undefined {
-  const colon = inner.indexOf(":");
-  const command = (colon < 0 ? inner : inner.slice(0, colon)).trim();
-  if (!command || command === "*") return undefined;
+): ShellCommandPattern {
+  const marker = SHELL_PREFIX_MARKER.exec(inner);
+  const command = (marker ? marker[1] : inner).trim();
+  const prefix = marker !== null;
+  if (!command || command === "*") return { words: undefined, prefix, command };
   const words = command.split(/\s+/).map((word) => {
     if (word === "*")
       return kind === ANTIGRAVITY_RULE_LIST_KINDS.ALLOW
@@ -86,7 +103,22 @@ function commandWords(
         : String.raw`\S+`;
     return escapeRegexWord(word);
   });
-  return words.join(String.raw`\s+`);
+  return { words: words.join(String.raw`\s+`), prefix, command };
+}
+
+/**
+ * Deny regex that matches the command anywhere in the raw line. The `[^\w.-]`
+ * boundaries stop `git push` from matching `gitx push`, but only make sense
+ * next to a word character: `rm -rf /` must still block `rm -rf /home`.
+ */
+function denyCommandRegex(words: string, command: string): string {
+  const leading = DENY_WORD_CHAR.test(command[0])
+    ? DENY_LEADING_BOUNDARY
+    : ".*";
+  const trailing = DENY_WORD_CHAR.test(command[command.length - 1])
+    ? DENY_TRAILING_BOUNDARY
+    : ".*";
+  return `(?is)${leading}${words}${trailing}`;
 }
 
 const ANTIGRAVITY_PERMISSION_VERIFICATION = capabilitySuiteVerification([
@@ -149,19 +181,13 @@ export class AntigravityToolPermissionMapper
         const inner = args.replace(/^\(|\)$/g, "").trim();
         if (!inner || inner === "*" || inner === "*:*") rules.add("command(*)");
         else {
-          const words = commandWords(inner, listKind);
+          const { words, prefix, command } = parseShellCommand(inner, listKind);
           if (!words) rules.add("command(*)");
-          else if (listKind === ANTIGRAVITY_RULE_LIST_KINDS.ALLOW) {
-            const colon = inner.indexOf(":");
-            const hasAnyArgs =
-              colon >= 0 && inner.slice(colon + 1).trim() === "*";
+          else if (listKind === ANTIGRAVITY_RULE_LIST_KINDS.ALLOW)
             rules.add(
-              `command(regex:${words}${hasAnyArgs ? SHELL_ALLOW_TAIL : ""})`
+              `command(regex:${words}${prefix ? SHELL_ALLOW_TAIL : ""})`
             );
-          } else
-            rules.add(
-              `command(regex:(?is)(?:.*[^\\w.-])?${words}(?:[^\\w.-].*)?)`
-            );
+          else rules.add(`command(regex:${denyCommandRegex(words, command)})`);
         }
       } else if (FILE_READ_TOOLS.has(tool)) rules.add("read_file(*)");
       else if (FILE_WRITE_TOOLS.has(tool)) rules.add("write_file(*)");

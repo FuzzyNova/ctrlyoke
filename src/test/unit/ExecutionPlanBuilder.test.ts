@@ -154,9 +154,9 @@ suite("ExecutionPlanBuilder", () => {
     }
 
     assert.ok(!plans[0].cliArgs.includes("--file"));
-    const promptIndex = plans[1].cliArgs.indexOf("Describe shots/diagram.png");
+    // The headless prompt is piped on stdin, so it is not an argument.
+    assert.ok(!plans[1].cliArgs.includes("Describe shots/diagram.png"));
     const imageFlagIndex = plans[1].cliArgs.indexOf("--file");
-    assert.ok(promptIndex >= 0 && promptIndex < imageFlagIndex);
     assert.deepStrictEqual(plans[1].cliArgs.slice(imageFlagIndex), [
       "--file",
       "shots/diagram.png",

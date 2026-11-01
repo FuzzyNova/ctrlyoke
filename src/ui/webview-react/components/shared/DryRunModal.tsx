@@ -1022,6 +1022,12 @@ function CommandPanel({
             available.
           </p>
         )}
+        {command.promptOnStdin && (
+          <p className="mt-2 text-xxs text-description-fg">
+            This harness reads the prompt from stdin, so it is not part of the
+            command.
+          </p>
+        )}
       </section>
       <DefinitionList
         entries={[

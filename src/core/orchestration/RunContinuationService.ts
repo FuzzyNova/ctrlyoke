@@ -64,6 +64,7 @@ import {
   assertStepMutable,
   ensureStepIds,
   findStepIndexById,
+  STEP_MUTATION_ERROR_MESSAGES,
 } from "../StepIdentity";
 import { hasInFlightStep, hasStarted } from "../../utils/StepStatusDerivation";
 import {
@@ -1328,7 +1329,7 @@ export function assertEditableDuringExecution(
     if (!hasStarted(step)) {
       // Older or partial working files may carry the run boundary or terminal
       // status without the timestamps assertStepMutable normally uses as proof.
-      throw new Error(`Cannot ${operation} a completed step`);
+      throw new Error(STEP_MUTATION_ERROR_MESSAGES.completed(operation));
     }
   }
 
@@ -1344,11 +1345,7 @@ export function assertEditableDuringExecution(
     // Legacy working files may predate per-step claim metadata. Keep the
     // execution-head boundary as a compatibility backstop until they claim.
     if (!hasStarted(step)) {
-      throw new Error(
-        index < currentIndex
-          ? `Cannot ${operation} a completed step while the workflow is running`
-          : `Cannot ${operation} the currently executing step`
-      );
+      throw new Error(`Cannot ${operation} the currently executing step`);
     }
   }
 }

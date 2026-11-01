@@ -61,7 +61,8 @@ export type InboundMessageRoute = (message: BatchedDashboardMessage) => void;
 
 type ScheduledTask = () => void;
 
-interface TaskScheduler {
+/** Runs each task in its own later macrotask. */
+export interface TaskScheduler {
   schedule(task: ScheduledTask): void;
   dispose(): void;
 }
@@ -86,23 +87,36 @@ function isMessageBatch(message: unknown): message is MessageBatchMessage {
   );
 }
 
+/**
+ * `setImmediate`-based scheduler over the given pair. Tests pass Node's own
+ * `node:timers` functions, which no fake clock can replace: the UI suite
+ * shares one global across files, so a fake clock installed by another file
+ * would otherwise swallow the tick for good.
+ */
+export function createImmediateTaskScheduler(
+  schedule: typeof setImmediate,
+  cancel: typeof clearImmediate
+): TaskScheduler {
+  const handles = new Set<ReturnType<typeof setImmediate>>();
+  return {
+    schedule(task) {
+      const handle = schedule(() => {
+        handles.delete(handle);
+        task();
+      });
+      handles.add(handle);
+    },
+    dispose() {
+      for (const handle of handles) cancel(handle);
+      handles.clear();
+    },
+  };
+}
+
 /** Macrotask scheduler that keeps running while the webview is hidden. */
 function createTaskScheduler(): TaskScheduler {
   if (typeof setImmediate === "function") {
-    const handles = new Set<ReturnType<typeof setImmediate>>();
-    return {
-      schedule(task) {
-        const handle = setImmediate(() => {
-          handles.delete(handle);
-          task();
-        });
-        handles.add(handle);
-      },
-      dispose() {
-        for (const handle of handles) clearImmediate(handle);
-        handles.clear();
-      },
-    };
+    return createImmediateTaskScheduler(setImmediate, clearImmediate);
   }
   if (typeof MessageChannel === "function") {
     const channel = new MessageChannel();
@@ -140,9 +154,9 @@ function describeError(error: unknown): string {
 }
 
 export function createInboundMessageDispatcher(
-  route: InboundMessageRoute
+  route: InboundMessageRoute,
+  scheduler: TaskScheduler = createTaskScheduler()
 ): InboundMessageDispatcher {
-  const scheduler = createTaskScheduler();
   let queue: unknown[] = [];
   let tickScheduled = false;
   let inImmediateTask = false;

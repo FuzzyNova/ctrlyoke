@@ -1697,11 +1697,30 @@ export class CtrlYokeHostedServer
             );
             res.sendFile(
               media.absolutePath,
-              { acceptRanges: true, cacheControl: false },
+              {
+                acceptRanges: true,
+                cacheControl: false,
+                // getRawMedia() has already confined the path to the workspace
+                // and the media allowlist. Without a `root`, send checks every
+                // segment of the absolute path for a leading dot, including
+                // ones above the workspace, and 404s on any match.
+                dotfiles: "allow",
+              },
               (error) => {
                 if (!error || res.headersSent) return;
-                const statusCode = (error as Error & { statusCode?: number })
-                  .statusCode;
+                const sendError = error as Error & {
+                  statusCode?: number;
+                  headers?: Record<string, string>;
+                };
+                const statusCode = sendError.statusCode;
+                // When a callback is given, send hands error-specific headers
+                // (Content-Range on a 416) to it on the error instead of
+                // writing its own error response, so apply them here.
+                for (const [name, value] of Object.entries(
+                  sendError.headers ?? {}
+                )) {
+                  res.setHeader(name, value);
+                }
                 if (statusCode !== RAW_MEDIA_RANGE_NOT_SATISFIABLE_STATUS) {
                   Log.error(
                     `[CtrlYokeHostedServer] workspace-viewer GET /raw error: ${String(error)}`

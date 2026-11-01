@@ -24,6 +24,7 @@ import type { ResolvedProperties } from "../../../../utils/PropertyResolver";
 import type { UniversalCliOutput } from "../../../../types/CliOutputTypes";
 import type {
   HarnessId,
+  HeadlessPromptDelivery,
   HeadlessSourceMode,
   TempFileCategory,
 } from "../../../../types/DashboardConstants";
@@ -85,6 +86,15 @@ export interface HarnessConfig {
 
   /** Whether to stream headless output in real-time */
   shouldStreamHeadlessOutput: boolean;
+
+  /**
+   * How a headless launch hands over the prompt. Defaults to `ARGUMENT`.
+   * With `STDIN`, `buildHeadlessArgs()` must leave the prompt out of argv and
+   * the transport writes it to the child's stdin, then closes it. Use it for
+   * a CLI that rewrites its positional message (OpenCode's `run` quote-wraps
+   * every argument containing a space) but reads piped stdin verbatim.
+   */
+  headlessPromptDelivery?: HeadlessPromptDelivery;
 
   /**
    * Whether this provider uses notification-based completion detection in interactive mode.
@@ -279,7 +289,9 @@ export interface ICliProvider {
 
   /**
    * Build CLI arguments for headless mode
-   * Handles both direct prompts and file references identically
+   * Handles both direct prompts and file references identically. When
+   * `config.headlessPromptDelivery` is `STDIN`, the prompt is not an argv
+   * element: return the arguments without it.
    * @param baseArgs Base arguments array
    * @param prompt Prompt text or file reference (e.g., "@.ctrlyoke/temp/prompt.md")
    * @returns Complete arguments array

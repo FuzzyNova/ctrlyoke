@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-31 by the release harness run (OpenCode 1.19.5, Windows)
 - **Area:** `src/core/harness/opencode/OpenCodeCliProvider.ts` (`buildHeadlessArgs`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -47,3 +47,23 @@ needs a stdin-input option on the headless spawn path
 (`CliTransportCoordinator.spawnProcess` → `processManager.spawn`), which has
 none today. Re-run the OpenCode harness tests after the change. Also worth
 reporting upstream, since the quoting was meant for `--command` arguments.
+
+## Resolution
+
+OpenCode's headless prompt now goes on stdin. A provider sets
+`HarnessConfig.headlessPromptDelivery: STDIN` and leaves the prompt out of
+`buildHeadlessArgs()`; `CliTransportCoordinator` passes it to
+`CliProcessManager.spawn()` as `stdinText`, which pipes it and closes stdin.
+Any other harness can opt in the same way. The dry-run command preview sets
+`promptOnStdin` so the command it shows is not mistaken for one with the
+prompt missing.
+
+Verified against OpenCode 1.19.5 with `opencode/claude-haiku-5-5`: the
+stored user message is now verbatim. The new harness case
+"delivers a headless prompt with quoted spaced paths verbatim"
+(`src/test/harness/inline-config.harness.test.ts`) runs a step in a
+workspace whose path has a space and checks the exported text. It fails with
+the old argument delivery and passes with stdin. All 25 OpenCode harness cases
+pass.
+
+Not reported upstream yet.

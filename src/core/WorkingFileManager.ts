@@ -520,6 +520,18 @@ export interface RunDefinitionRejection {
   changes: RunDefinitionChange[];
 }
 
+/** Options for merging a disk snapshot's steps into the live queue. */
+export interface DiskStepMergeOptions {
+  /** Take step `_runtime` from disk instead of memory. */
+  authoritativeRuntime?: boolean;
+  /**
+   * The disk file's `_runtime.activeParallelGroup`. An out-of-process
+   * `parallelWithCurrent` promotion writes it together with the new group, and
+   * the queue must adopt it or its next write erases the admission.
+   */
+  diskActiveParallelGroup?: ActiveParallelGroupRuntime;
+}
+
 /**
  * Interface providing queue state access for working file persistence operations.
  * Implemented as an adapter by PromptQueue to decouple file I/O from queue state management.
@@ -565,7 +577,7 @@ export interface IWorkingFileQueueAccess {
   mergeDiskSteps(
     diskSteps: WorkflowStep[],
     parallelGroups?: ParallelGroupDefinition[],
-    options?: { authoritativeRuntime?: boolean }
+    options?: DiskStepMergeOptions
   ): WorkflowStep[];
 
   /** Notify the execution owner that disk supplied new queue members. */
@@ -2599,7 +2611,10 @@ export class WorkingFileManager {
     const newStepsFromDisk = this.queueAccess.mergeDiskSteps(
       workingFile.steps ?? [],
       workingFile.parallelGroups,
-      { authoritativeRuntime }
+      {
+        authoritativeRuntime,
+        diskActiveParallelGroup: workingFile._runtime?.activeParallelGroup,
+      }
     );
     this.queueAccess.setDefinitionRevision(workingFile.definitionRevision ?? 1);
     this.queueAccess.setPendingRewind?.(workingFile._runtime?.pendingRewind);
@@ -2679,7 +2694,10 @@ export class WorkingFileManager {
 
         const newStepsFromDisk = this.queueAccess.mergeDiskSteps(
           diskSteps,
-          workingFile.parallelGroups
+          workingFile.parallelGroups,
+          {
+            diskActiveParallelGroup: workingFile._runtime?.activeParallelGroup,
+          }
         );
 
         // If disk has new steps, log and emit state change

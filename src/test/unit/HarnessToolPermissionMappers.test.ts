@@ -372,6 +372,79 @@ suite("HarnessToolPermissionMappers", () => {
         assert.strictEqual(denyRegex.test("git pushx"), false);
         assert.strictEqual(denyRegex.test("xgit push"), false);
       });
+
+      const commandRegex = (
+        pattern: string,
+        listKind: "allow" | "deny"
+      ): RegExp => {
+        const { rules, lossy } = mapper.convertToAntigravityRules(
+          [pattern],
+          listKind
+        );
+        assert.deepStrictEqual(lossy, []);
+        assert.strictEqual(rules.length, 1);
+        assert.ok(rules[0].startsWith("command(regex:"), rules[0]);
+        const source = rules[0].slice("command(regex:".length, -1);
+        const flags = source.startsWith("(?is)") ? "is" : "";
+        return new RegExp(`^(?:${flags ? source.slice(5) : source})$`, flags);
+      };
+      const assertMatches = (
+        regex: RegExp,
+        expected: Record<string, boolean>
+      ): void => {
+        for (const [command, matches] of Object.entries(expected)) {
+          assert.strictEqual(regex.test(command), matches, command);
+        }
+      };
+
+      test("a colon that is not a trailing :* stays literal command text", () => {
+        assertMatches(commandRegex("shell(npm run test:unit)", "allow"), {
+          "npm run test:unit": true,
+          "npm run test": false,
+        });
+        assertMatches(commandRegex("shell(npm run test:unit)", "deny"), {
+          "npm run test:unit": true,
+          "echo a && npm run test:unit": true,
+          "npm run test": false,
+        });
+        assertMatches(commandRegex("shell(git checkout:-b *)", "allow"), {
+          "git checkout:-b feat": true,
+          "git checkout": false,
+        });
+        assertMatches(commandRegex("shell(C:\\tools\\deploy.exe:*)", "deny"), {
+          "C:\\tools\\deploy.exe": true,
+          "c:\\tools\\deploy.exe --prod": true,
+          "cd C:\\repo": false,
+          "dir c:": false,
+        });
+        assertMatches(commandRegex("shell(npm run test:unit:*)", "allow"), {
+          "npm run test:unit --watch": true,
+          "npm run test --watch": false,
+        });
+      });
+
+      test("deny prefix ending or starting with a symbol still blocks longer commands", () => {
+        assertMatches(commandRegex("shell(rm -rf /:*)", "deny"), {
+          "rm -rf /": true,
+          "rm -rf /*": true,
+          "rm -rf /home": true,
+          "echo a && rm -rf /home": true,
+          "rm -rf ./build": false,
+        });
+        assertMatches(commandRegex("shell(git push --force=:*)", "deny"), {
+          "git push --force=origin": true,
+          "git push --forcex": false,
+        });
+        assertMatches(commandRegex("shell(/usr/bin/rm:*)", "deny"), {
+          "/usr/bin/rm -rf x": true,
+          "sudo /usr/bin/rm x": true,
+        });
+        assertMatches(commandRegex("shell(git push:*)", "deny"), {
+          "git push origin": true,
+          "gitx push": false,
+          "git pushx": false,
+        });
+      });
     });
 
     suite("prepare", () => {

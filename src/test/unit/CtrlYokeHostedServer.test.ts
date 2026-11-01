@@ -295,9 +295,14 @@ function sendGetRequest(
 
 suite("CtrlYokeHostedServer raw media route", () => {
   async function withServer(
-    body: (root: string, port: number, token: string) => Promise<void>
+    body: (root: string, port: number, token: string) => Promise<void>,
+    workspaceSubdir?: string
   ): Promise<void> {
-    const root = makeTempDir("ctrlyoke-hosted-raw-media-");
+    const tempDir = makeTempDir("ctrlyoke-hosted-raw-media-");
+    const root = workspaceSubdir
+      ? path.join(tempDir, workspaceSubdir)
+      : tempDir;
+    fs.mkdirSync(root, { recursive: true });
     const token = "raw-media-test-token";
     const server = createHostedServer({ workspaceRoot: root, token });
     try {
@@ -306,9 +311,53 @@ suite("CtrlYokeHostedServer raw media route", () => {
       await body(root, Number(new URL(serverUrl).port), token);
     } finally {
       server.dispose();
-      removeTempDir(root);
+      removeTempDir(tempDir);
     }
   }
+
+  // ASCII so the UTF-8 decoded response body compares verbatim; the route
+  // only checks the extension, not that the bytes decode as an image.
+  const PNG_BYTES = "png-test-bytes";
+
+  test("serves working-tree media inside a dot-directory", async () => {
+    await withServer(async (root, port, token) => {
+      fs.mkdirSync(path.join(root, ".github"));
+      fs.writeFileSync(path.join(root, ".github", "x.png"), PNG_BYTES);
+      const response = await sendGetRequest(
+        port,
+        mediaUrl(".github/x.png", token)
+      );
+      assert.strictEqual(response.statusCode, 200, response.body);
+      assert.strictEqual(response.body, PNG_BYTES);
+      assert.strictEqual(response.headers["content-type"], "image/png");
+
+      const unsatisfiable = await sendGetRequest(
+        port,
+        mediaUrl(".github/x.png", token),
+        { Range: "bytes=100-" }
+      );
+      assert.strictEqual(unsatisfiable.statusCode, 416);
+      assert.strictEqual(
+        unsatisfiable.headers["content-range"],
+        `bytes */${PNG_BYTES.length}`
+      );
+    });
+  });
+
+  test("serves working-tree media when the workspace is under a dot-directory", async () => {
+    await withServer(
+      async (root, port, token) => {
+        fs.writeFileSync(path.join(root, "logo.png"), PNG_BYTES);
+        const response = await sendGetRequest(
+          port,
+          mediaUrl("logo.png", token)
+        );
+        assert.strictEqual(response.statusCode, 200, response.body);
+        assert.strictEqual(response.body, PNG_BYTES);
+      },
+      path.join(".dotted-parent", "workspace")
+    );
+  });
 
   function mediaUrl(pathName: string, token: string, ref?: string): string {
     const query = new URLSearchParams({ path: pathName, token });

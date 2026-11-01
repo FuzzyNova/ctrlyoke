@@ -81,6 +81,7 @@ import { reportPromptCompleted } from "../utils/TelemetryEvents";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkingFileManager } from "./WorkingFileManager";
 import type {
+  DiskStepMergeOptions,
   IWorkingFileQueueAccess,
   RunDefinitionRejection,
 } from "./WorkingFileManager";
@@ -102,6 +103,7 @@ import {
   findStepById,
   findStepIndexById,
   resetStepRuntimeForRewind,
+  STEP_MUTATION_ERROR_MESSAGES,
 } from "./StepIdentity";
 import {
   hasInFlightStep as isStepInFlight,
@@ -187,7 +189,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       mergeDiskSteps: (
         diskSteps: WorkflowStep[],
         parallelGroups?: import("../types/CtrlYokeTypes").ParallelGroupDefinition[],
-        options?: { authoritativeRuntime?: boolean }
+        options?: DiskStepMergeOptions
       ) => this.mergeDiskSteps(diskSteps, parallelGroups, options),
       onDiskStepsMerged: (steps) => this.onDiskStepsMergedEmitter.fire(steps),
       onDiskDefinitionRejected: (rejection) =>
@@ -1743,7 +1745,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   private mergeDiskSteps(
     diskSteps: WorkflowStep[],
     parallelGroups: import("../types/CtrlYokeTypes").ParallelGroupDefinition[] = [],
-    options: { authoritativeRuntime?: boolean } = {}
+    options: DiskStepMergeOptions = {}
   ): WorkflowStep[] {
     const diskTopology = normalizeParallelGroupTopology({
       steps: diskSteps,
@@ -1861,7 +1863,46 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       };
     }
     this.state.results = newResults;
+    this.adoptDiskParallelGroupPromotion(options.diskActiveParallelGroup);
     return newStepsFromDisk;
+  }
+
+  /**
+   * Adopt the admission an out-of-process `parallelWithCurrent` promotion
+   * wrote (`RunContinuationService.appendStepsToActiveParallelGroup`). That
+   * transaction turns the running sequential step into the anchor of a new
+   * group and marks the group ACCEPTING, but this queue only learns of it
+   * through a disk merge. Without adopting it, the executor cannot tell the
+   * merged member belongs to a live promotion, and the queue's next write
+   * would erase the admission from disk.
+   *
+   * Adopted only when memory tracks no group and the named group is anchored
+   * at the step executing right now, so a stale disk value can never revive
+   * a group that has already joined (its `currentIndex` has moved past it).
+   */
+  private adoptDiskParallelGroupPromotion(
+    diskRuntime: ActiveParallelGroupRuntime | undefined
+  ): void {
+    if (
+      this.activeParallelGroupRuntime ||
+      diskRuntime?.admission !== PARALLEL_GROUP_ADMISSION.ACCEPTING ||
+      this.stateMachine.status !== EXECUTION_STATES.RUNNING
+    ) {
+      return;
+    }
+    const currentIndex = this.state.currentIndex;
+    const group = this.state.parallelGroups.find(
+      (candidate) => candidate.id === diskRuntime.groupId
+    );
+    const anchor = this.state.steps[currentIndex];
+    if (
+      group?.startIndex !== currentIndex ||
+      anchor?._runtime?.startedAt === undefined ||
+      anchor._runtime.completedAt !== undefined
+    ) {
+      return;
+    }
+    this.activeParallelGroupRuntime = { ...diskRuntime };
   }
 
   private setPendingRewindFromDisk(
@@ -2698,7 +2739,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   private mergeDiskDefinition(workingFile: WorkingFile): WorkflowStep[] {
     const newStepsFromDisk = this.mergeDiskSteps(
       workingFile.steps ?? [],
-      workingFile.parallelGroups
+      workingFile.parallelGroups,
+      { diskActiveParallelGroup: workingFile._runtime?.activeParallelGroup }
     );
     this.state.definitionRevision = Math.max(
       this.state.definitionRevision ?? 1,
@@ -3406,7 +3448,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       if (!hasStarted(step)) {
         throw new Error(
           index < this.state.currentIndex
-            ? `Cannot ${operation} a completed step while the workflow is running`
+            ? STEP_MUTATION_ERROR_MESSAGES.completed(operation)
             : `Cannot ${operation} the currently executing step`
         );
       }

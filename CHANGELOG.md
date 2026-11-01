@@ -25,6 +25,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Antigravity shell permission rules keep colons that are part of the
+  command. Only a trailing `:*` marks a prefix, so `shell(npm run test:unit)`
+  now allows or denies exactly that command instead of `npm run test`, and a
+  denied `shell(C:\tools\deploy.exe:*)` no longer blocks every command that
+  mentions `C`. A denied prefix that ends in a symbol, such as
+  `shell(rm -rf /:*)`, now also blocks longer commands like `rm -rf /home`.
+- Headless OpenCode steps no longer reach the model wrapped in extra quotes.
+  `opencode run` quoted any prompt containing a space and escaped its inner
+  `"`, so a file reference under a folder with a space in its name arrived as
+  `\"C:\Users\Jane Doe\…\"`. ctrlyoke now sends the prompt on stdin, which
+  OpenCode passes through unchanged. Dry-run previews note that the prompt is
+  piped on stdin rather than shown in the command.
+- The workspace viewer previews images, video, audio and PDFs inside
+  dot-folders such as `.github/`, and in any workspace that itself sits
+  under a dot-folder. These working-tree files used to fail with "This image
+  can't be displayed".
+- Codex subagent output is no longer lost when a later step or workflow
+  spawns a subagent with a task name used earlier, such as `worker`. Its
+  output, token usage and completed spawn card used to appear only for the
+  first session to use that name until VS Code was reloaded.
+- MCP `append_step` with `position: "parallelWithCurrent"` from a step that
+  is not already in a parallel group now starts the new steps right away,
+  beside the step that added them. They used to wait until that step
+  finished, even though the response reported `promoted: true`, so an agent
+  waiting on its parallel helper hung until the step timed out. Every step
+  in a multi-step append now starts this way.
+- `ctrlyoke history show --step final`, `final:latest` and `final:N` on a run
+  whose final step never ran now report "the final step has not run
+  (pending)", as a JSON notice with `--json`, instead of printing nothing or
+  failing with "valid final pass numbers are 1 to 0". An invalid final
+  selector such as `final:0` no longer lists the queue-index range in its
+  error.
+- Editing, removing or moving a step that has already run now fails with
+  "Cannot remove a step that has already run". The old message, "a completed
+  step while the workflow is running", was shown for settled runs and failed
+  steps too.
 - The "Rendering output…" overlay no longer flashes over the output pane each
   time a live run streams a new event. It now appears only when output has
   taken more than half a second to render.

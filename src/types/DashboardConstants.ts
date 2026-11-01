@@ -2898,6 +2898,17 @@ export const HEADLESS_SOURCE_MODES = {
 export type HeadlessSourceMode =
   (typeof HEADLESS_SOURCE_MODES)[keyof typeof HEADLESS_SOURCE_MODES];
 
+/** How a headless harness launch hands the prompt to the CLI. */
+export const HEADLESS_PROMPT_DELIVERIES = {
+  /** The prompt is an argv element placed by `buildHeadlessArgs()`. */
+  ARGUMENT: "argument",
+  /** The prompt is written to the process's stdin, which is then closed. */
+  STDIN: "stdin",
+} as const;
+
+export type HeadlessPromptDelivery =
+  (typeof HEADLESS_PROMPT_DELIVERIES)[keyof typeof HEADLESS_PROMPT_DELIVERIES];
+
 export const CONTEXT_RESOLUTION_FAILURE_MODES = {
   WARN: "warn",
   FAIL: "fail",
