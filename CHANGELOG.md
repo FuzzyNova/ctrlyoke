@@ -29,12 +29,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   execution mode: the orchestrator runs `opus` on Claude Code in interactive
   mode, and queued steps run `sonnet` on Claude Code headless, unless you pick
   others. Steps are told to pass the test command, which defaults to
-  `npm test`. A workflow-level end condition now requires every step,
-  including the ones the orchestrator queues, to leave a clean working tree:
-  a step with uncommitted changes is asked to finish and commit, and the
-  workflow stops after two failed retries. The template now needs a git
-  repository and stops before planning when there isn't one. Workflows
-  already created from it are unchanged.
+  `npm test`. Workflows already created from it are unchanged.
+- The **Spec-Driven Loop**, **Feature-Driven Loop**, **Bug Hunt Loop**, and
+  **Bug Drain Loop** templates now require every step to leave a clean git
+  working tree, including the steps the loop queues for itself. Previously
+  this check ran only on steps the orchestrator chose to attach it to, and it
+  passed without complaint outside a git repository. A step with uncommitted
+  changes is asked to finish and commit, and the workflow stops after two
+  failed retries. These loops now also stop before they start unless the
+  folder is a git repository with no uncommitted changes, and the bug loops
+  re-check that at the start of every pass. Workflows already created from
+  them are unchanged.
 
 ### Fixed
 

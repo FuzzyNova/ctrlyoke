@@ -1116,29 +1116,69 @@ suite("TemplateManager variable metadata", () => {
       assert.strictEqual(workflow.finalStep?.executionMode, "interactive");
       assert.ok(workflow.steps?.[0].prompt.includes("`make check`"));
       assert.ok(workflow.finalStep?.prompt.includes("`make check`"));
-
-      // A workflow-level clean-tree gate covers every step, including the ones
-      // the orchestrator queues, without relying on it to attach a preset.
-      assert.strictEqual(workflow.conditions, undefined);
-      // stderr folded in: outside a repo git's error must fail the check, not
-      // leave stdout empty and pass it.
-      assert.strictEqual(
-        workflow.endCondition?.script,
-        "git status --porcelain 2>&1"
-      );
-      assert.strictEqual(
-        workflow.steps?.[0].preCondition?.script,
-        "git rev-parse --is-inside-work-tree"
-      );
-      assert.strictEqual(
-        workflow.steps?.[0].preCondition?.onFail,
-        "stopWorkflow"
-      );
-      assert.strictEqual(workflow.endCondition?.operator, "isEmpty");
       assert.ok(workflow.endCondition?.retryPrompt?.includes("`make check`"));
-      assert.strictEqual(workflow.steps?.[0].endCondition, undefined);
-      assert.strictEqual(workflow.finalStep?.endCondition, undefined);
     });
+
+    // Each loop commits per step. The gate is workflow-level so every step,
+    // including the ones an orchestrator queues, inherits it without relying on
+    // the orchestrator attaching a preset. The first step to run (the finalStep
+    // in final-step-only loops, which re-checks every pass) requires a clean
+    // tree, so the gate never pushes an agent to commit someone else's changes.
+    // stderr is folded in so outside a repo, git's error fails the check
+    // instead of leaving stdout empty and passing it.
+    for (const templateId of [
+      "spec-driven-loop",
+      "feature-driven-loop",
+      "bug-hunt-loop",
+      "bug-drain-loop",
+    ]) {
+      test(`gates every ${templateId} step on a clean git working tree`, async () => {
+        const tm = makeManager();
+        tm.getWorkspaceFolder = () => ({ uri: { fsPath: makeTempDir() } });
+        tm.getBuiltInTemplatesPath = () =>
+          path.resolve(__dirname, "../../templates/workflows");
+
+        const workflow = await tm.createWorkflow(templateId, {
+          specFile: "docs/spec.md",
+          featureDescription: "x",
+        });
+        const cleanTree = {
+          script: "git status --porcelain 2>&1",
+          compareSource: "stdout",
+          operator: "isEmpty",
+        };
+
+        assert.strictEqual(workflow.conditions, undefined);
+        assert.deepStrictEqual(
+          {
+            script: workflow.endCondition?.script,
+            compareSource: workflow.endCondition?.compareSource,
+            operator: workflow.endCondition?.operator,
+          },
+          cleanTree
+        );
+        assert.strictEqual(workflow.endCondition?.maxRetries, 2);
+        assert.ok(
+          !/\{[a-z][a-zA-Z0-9]*\}/.test(workflow.endCondition!.retryPrompt!),
+          workflow.endCondition!.retryPrompt
+        );
+
+        const firstStep = workflow.steps?.[0] ?? workflow.finalStep!;
+        assert.deepStrictEqual(firstStep.preCondition, {
+          ...cleanTree,
+          onFail: "stopWorkflow",
+        });
+        // Only feature-driven-loop's write-plan overrides the gate, with its
+        // own plan-exists check; every other step inherits it.
+        const overriding = [...(workflow.steps ?? []), workflow.finalStep!]
+          .filter((step) => step.endCondition !== undefined)
+          .map((step) => step.name);
+        assert.deepStrictEqual(
+          overriding,
+          templateId === "feature-driven-loop" ? ["write-plan"] : []
+        );
+      });
+    }
 
     test("keeps dollar replacement tokens literal in prompt and script values", async () => {
       const tm = makeManager();

@@ -65,6 +65,14 @@ finalStep:
   resumeSession: false
   priorContext: finalStepPrevious
   priorContextDetail: summary
+  # Each pass starts only in a git repository with a clean tree: otherwise the
+  # commit gate below would fail on changes that aren't the agent's, and its
+  # retry would push the agent to commit them.
+  preCondition:
+    script: git status --porcelain 2>&1
+    compareSource: stdout
+    operator: isEmpty
+    onFail: stopWorkflow
   prompt: |
     Your goal is to review the bugs fixed since the previous pass, then find and file at
     least two new bugs in this project and queue their fixes.
@@ -140,3 +148,18 @@ finalStep:
     steps. When your turn ends your process stops and kills any subprocesses you started,
     so don't end your turn to wait on a task; block on long-running commands such as
     `{testCommand}` instead, and stop any server you started before you end your turn.
+
+# Every step, including each hunting pass and every fix it queues, must leave a
+# clean working tree. A dirty tree resumes the step's session to finish and
+# commit; after two retries the workflow stops. stderr is folded into stdout so
+# a git error fails the check instead of leaving stdout empty and passing it.
+# This sits last so the template dialog keeps its field order.
+endCondition:
+  script: git status --porcelain 2>&1
+  compareSource: stdout
+  operator: isEmpty
+  maxRetries: 2
+  retryPrompt: |
+    You left uncommitted changes. Finish the work, make sure `{testCommand}`
+    passes, and commit your own files with a plain conventional commit message.
+    $endCondition:stdout

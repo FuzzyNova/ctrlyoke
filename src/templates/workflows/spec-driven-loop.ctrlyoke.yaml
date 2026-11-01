@@ -76,9 +76,13 @@ steps:
     model: "{orchestratorModel}"
     executionMode: interactive
     # Commits are how the review sees each step's work and how you roll one
-    # back, so stop before planning when there is no git repository.
+    # back. Stop before planning unless this is a git repository with a clean
+    # tree: otherwise the first step's commit gate would fail on changes that
+    # aren't the agent's, and its retry would push the agent to commit them.
     preCondition:
-      script: git rev-parse --is-inside-work-tree
+      script: git status --porcelain 2>&1
+      compareSource: stdout
+      operator: isEmpty
       onFail: stopWorkflow
 
 # Queued steps inherit these workflow defaults; the plan step and finalStep

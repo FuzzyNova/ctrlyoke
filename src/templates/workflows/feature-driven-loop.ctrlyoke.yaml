@@ -1,17 +1,7 @@
 schemaVersion: 1
-conditions:
-  committed:
-    script: git status --porcelain
-    compareSource: stdout
-    operator: isEmpty
-    maxRetries: 2
-    retryPrompt: |
-      You left uncommitted changes. Finish the work, run its gate, and commit
-      your own files with a plain conventional commit message.
-      $endCondition:stdout
 _templateMeta:
   name: Feature-Driven Loop
-  description: "Describe a feature and get a plan-first self-extending loop that queues and reviews work until the goal is met."
+  description: "Describe a feature and get a plan-first self-extending loop that queues and reviews work until the goal is met. Needs a git repository: every step commits its own work."
   variables:
     featureDescription:
       type: text
@@ -28,6 +18,21 @@ _templateMeta:
 # exception — the finalStep resumes the plan step's orchestrator session.
 resumeSession: false
 priorContext: none
+
+# Every step after write-plan (which has its own check) must leave a clean
+# working tree, including everything the orchestrator queues. A dirty tree
+# resumes the step's session to finish and commit; after two retries the
+# workflow stops. stderr is folded into stdout so a git error fails the check
+# instead of leaving stdout empty and passing it.
+endCondition:
+  script: git status --porcelain 2>&1
+  compareSource: stdout
+  operator: isEmpty
+  maxRetries: 2
+  retryPrompt: |
+    You left uncommitted changes. Finish the work, make sure the tests pass, and
+    commit your own files with a plain conventional commit message.
+    $endCondition:stdout
 
 # First write a durable plan, then let the orchestrator stage visible work and
 # review it repeatedly until the goal is met.
@@ -58,7 +63,16 @@ steps:
         answer; clearly flag anything that still needs a decision.
 
       Keep the plan concise, grounded in the current code, and free of speculative
-      implementation details. Do not modify implementation files.
+      implementation details. Do not modify implementation files. When the plan is
+      written, commit it with a plain conventional commit message.
+    # Stop before any work unless this is a git repository with a clean tree:
+    # otherwise the commit gate would fail on changes that aren't the agent's,
+    # and its retry would push the agent to commit them.
+    preCondition:
+      script: git status --porcelain 2>&1
+      compareSource: stdout
+      operator: isEmpty
+      onFail: stopWorkflow
     endCondition:
       script: node -e "process.exit(require('fs').existsSync(process.argv[1])?0:1)" "{planDoc}"
       maxRetries: 2

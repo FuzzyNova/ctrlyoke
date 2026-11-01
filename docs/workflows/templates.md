@@ -6,7 +6,14 @@ Choose **Spec-Driven Loop** when you already have a spec or design document. **F
 
 Spec-Driven Loop asks for a `testCommand` (default `npm test`), which every queued step is told to pass and the review uses as its main gate, and a harness and model for each of two roles. The orchestrator runs the plan step and the review final step, which resumes the plan step's session, so both always use the same harness. Both run in interactive mode so you can watch and steer them. The implementer runs every step the orchestrator queues, each in a fresh headless session. The defaults are `opus` and `sonnet`, both on Claude Code, so the template works with only Claude Code installed. To use a different pairing, such as `gpt-6-luna` on Codex CLI for the implementer, pick it in the dialog and save it as the variable default.
 
-Spec-Driven Loop needs a git repository, because each step commits its own work: the commits are how the review sees what each step did and how you roll back a step that went wrong. The plan step checks for one first and stops the workflow if there isn't one; run `git init` to start one. Every step must also leave a clean working tree. A workflow-level [end condition](/workflows/end-conditions) checks `git status --porcelain` after each step, including the ones the orchestrator queues. If anything is uncommitted, ctrlyoke resumes that step's session and asks it to finish and commit, then stops the workflow after two failed retries. The test command is not part of the end condition, because agents usually run it themselves and gating on it would run the suite twice per step.
+### Loops commit every step {#loops-commit-every-step}
+
+Spec-Driven Loop, Feature-Driven Loop, Bug Hunt Loop, and Bug Drain Loop need a git repository, because each step commits its own work. The commits are how a review sees what each step did, and how you roll back a step that went wrong.
+
+- **Before it starts**, the loop checks that the working tree is clean and stops if it isn't, or if the folder isn't a git repository. Commit or stash your own changes first, or run `git init` to start a repository. The bug loops repeat this check at the start of every pass.
+- **After every step**, including the ones the loop queues for itself, a workflow-level [end condition](/workflows/end-conditions) checks `git status --porcelain`. If anything is uncommitted, ctrlyoke resumes that step's session and asks it to finish and commit. After two failed retries, the workflow stops.
+
+The test command is not part of the end condition. Agents usually run it themselves, so gating on it as well would run the suite twice per step. To run a loop without git, create a [custom template](#custom-templates) from it with **New template...** and remove its `endCondition` and `preCondition`.
 
 ## Create a workflow from a template {#create-from-template}
 
