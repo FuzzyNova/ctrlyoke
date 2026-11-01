@@ -309,6 +309,7 @@ describe("shouldSyncMeasurementCorrection", () => {
         heightDeltaPx: bigEnough,
         rowTopPx: 100,
         anchorTopPx: 314,
+        isPinnedToBottom: false,
       })
     ).toBe(true);
   });
@@ -319,6 +320,7 @@ describe("shouldSyncMeasurementCorrection", () => {
         heightDeltaPx: bigEnough,
         rowTopPx: -80,
         anchorTopPx: 314,
+        isPinnedToBottom: false,
       })
     ).toBe(true);
   });
@@ -334,6 +336,7 @@ describe("shouldSyncMeasurementCorrection", () => {
         heightDeltaPx: bigEnough,
         rowTopPx,
         anchorTopPx: 314,
+        isPinnedToBottom: false,
       })
     ).toBe(false);
   });
@@ -353,6 +356,7 @@ describe("shouldSyncMeasurementCorrection", () => {
         heightDeltaPx,
         rowTopPx: 100,
         anchorTopPx: 314,
+        isPinnedToBottom: false,
       })
     ).toBe(true);
   });
@@ -363,6 +367,7 @@ describe("shouldSyncMeasurementCorrection", () => {
         heightDeltaPx: 0.25,
         rowTopPx: -5000,
         anchorTopPx: 314,
+        isPinnedToBottom: false,
       })
     ).toBe(false);
   });
@@ -373,8 +378,40 @@ describe("shouldSyncMeasurementCorrection", () => {
         heightDeltaPx: -bigEnough,
         rowTopPx: 100,
         anchorTopPx: 314,
+        isPinnedToBottom: false,
       })
     ).toBe(true);
+  });
+
+  // Pinned to the bottom, the anchor is the pane top, so the newest row is
+  // always "below" it, yet its resize moves the very bottom the lock scrolls
+  // to. Deferring it started the glide toward the estimated bottom.
+  it.each([
+    ["growth", bigEnough],
+    ["shrink", -bigEnough],
+  ])(
+    "claims a %s below the pane top while pinned to the bottom",
+    (_label, heightDeltaPx) => {
+      expect(
+        shouldSyncMeasurementCorrection({
+          heightDeltaPx,
+          rowTopPx: 900,
+          anchorTopPx: 0,
+          isPinnedToBottom: true,
+        })
+      ).toBe(true);
+    }
+  );
+
+  it("still defers a sub-pixel measurement while pinned to the bottom", () => {
+    expect(
+      shouldSyncMeasurementCorrection({
+        heightDeltaPx: 0.25,
+        rowTopPx: 900,
+        anchorTopPx: 0,
+        isPinnedToBottom: true,
+      })
+    ).toBe(false);
   });
 });
 

@@ -33,6 +33,7 @@ import { shouldSyncMeasurementCorrection } from "@utils/outputAutoscroll";
 import type { OutputScrollTarget } from "@store/uiStore";
 import {
   OUTPUT_ROW_KINDS,
+  OUTPUT_SCROLL_APPLY_PHASES,
   OUTPUT_SCROLL_TARGET_KINDS,
 } from "@root/types/DashboardConstants";
 import {
@@ -478,7 +479,8 @@ export function useOutputVirtualization({
       // version synchronously so the correction batches with the reflow render
       // and lands in the SAME paint. Rows at or after the anchor cannot move it,
       // so they keep the batched rAF bump, and the flush path owns its own
-      // (already synchronous) reconciliation.
+      // (already synchronous) reconciliation. Pinned to the bottom, every
+      // resize moves the target, so every resize takes the synchronous path.
       //
       // Every above-anchor resize takes the synchronous path, however small —
       // see shouldSyncMeasurementCorrection for why a magnitude threshold here
@@ -504,6 +506,7 @@ export function useOutputVirtualization({
             target.kind === OUTPUT_SCROLL_TARGET_KINDS.LATEST_ACTIVITY
               ? target.viewportOffsetPx
               : 0),
+          isPinnedToBottom: target.kind === OUTPUT_SCROLL_TARGET_KINDS.BOTTOM,
         })
       ) {
         setMeasurementVersion((version) => version + 1);
@@ -724,11 +727,11 @@ export function useOutputVirtualization({
     setMeasurementVersion((version) => version + 1);
     requestAnimationFrame(() => {
       const firstFrameRestore = applyScrollTargetRef.current(
-        "measurement-flush-raf-1"
+        OUTPUT_SCROLL_APPLY_PHASES.MEASUREMENT_FLUSH_FIRST_FRAME
       );
       requestAnimationFrame(() => {
         const secondFrameRestore = applyScrollTargetRef.current(
-          "measurement-flush-raf-2"
+          OUTPUT_SCROLL_APPLY_PHASES.MEASUREMENT_FLUSH_SECOND_FRAME
         );
 
         requestAnimationFrame(() => {

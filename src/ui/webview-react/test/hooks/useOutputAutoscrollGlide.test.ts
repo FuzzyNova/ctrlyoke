@@ -301,6 +301,103 @@ describe("useOutputAutoscrollGlide", () => {
     expect(clip.style.overflowY).toBe("");
   });
 
+  // A write from a requestAnimationFrame callback paints in this frame, but
+  // its scroll event is only dispatched in the next one. A glide started in
+  // between must not measure from the position before that write, or it
+  // translates the content back there: one frame at the new position, then a
+  // jump back and a glide forward.
+  it("measures the next glide from a write that landed without gliding", () => {
+    const { animations, scrollElement } = buildPane();
+    const { result } = renderGlide(scrollElement);
+
+    paintAt(scrollElement, 1000);
+    scrollElement.scrollTop = 1140;
+    result.current.glideAfterScrollWrite("width-change", BOTTOM, 140);
+    scrollElement.scrollTop = 1145;
+    result.current.glideAfterScrollWrite(
+      OUTPUT_SCROLL_APPLY_PHASES.LAYOUT_EFFECT,
+      BOTTOM,
+      5
+    );
+
+    expect(animations).toHaveLength(1);
+    expect(animations[0]?.keyframes[0]).toEqual({
+      transform: "translateY(5px)",
+    });
+  });
+
+  it("measures the next glide from where a settled glide left the content", () => {
+    const { animations, scrollElement } = buildPane();
+    const { result } = renderGlide(scrollElement);
+
+    paintAt(scrollElement, 1000);
+    scrollElement.scrollTop = 1030;
+    result.current.glideAfterScrollWrite(
+      OUTPUT_SCROLL_APPLY_PHASES.LAYOUT_EFFECT,
+      BOTTOM,
+      30
+    );
+    result.current.settleGlide();
+    scrollElement.scrollTop = 1040;
+    result.current.glideAfterScrollWrite(
+      OUTPUT_SCROLL_APPLY_PHASES.LAYOUT_EFFECT,
+      BOTTOM,
+      10
+    );
+
+    expect(animations[1]?.keyframes[0]).toEqual({
+      transform: "translateY(10px)",
+    });
+  });
+
+  it("measures the next glide from a jump too large to glide", () => {
+    const { animations, scrollElement } = buildPane();
+    const { result } = renderGlide(scrollElement);
+
+    paintAt(scrollElement, 1000);
+    scrollElement.scrollTop = 1400;
+    result.current.glideAfterScrollWrite(
+      OUTPUT_SCROLL_APPLY_PHASES.LAYOUT_EFFECT,
+      BOTTOM,
+      400
+    );
+    scrollElement.scrollTop = 1420;
+    result.current.glideAfterScrollWrite(
+      OUTPUT_SCROLL_APPLY_PHASES.LAYOUT_EFFECT,
+      BOTTOM,
+      20
+    );
+
+    expect(animations).toHaveLength(1);
+    expect(animations[0]?.keyframes[0]).toEqual({
+      transform: "translateY(20px)",
+    });
+  });
+
+  it.each([
+    OUTPUT_SCROLL_APPLY_PHASES.MEASUREMENT_FLUSH_FIRST_FRAME,
+    OUTPUT_SCROLL_APPLY_PHASES.MEASUREMENT_FLUSH_SECOND_FRAME,
+  ])("continues a running glide through the %s write", (phase) => {
+    const { animations, clip, scrollElement } = buildPane();
+    const { result } = renderGlide(scrollElement);
+
+    paintAt(scrollElement, 1000);
+    scrollElement.scrollTop = 1030;
+    result.current.glideAfterScrollWrite(
+      OUTPUT_SCROLL_APPLY_PHASES.LAYOUT_EFFECT,
+      BOTTOM,
+      30
+    );
+    scrollElement.scrollTop = 1070;
+    result.current.glideAfterScrollWrite(phase, BOTTOM, 40);
+
+    expect(animations).toHaveLength(2);
+    expect(animations[1]?.keyframes[0]).toEqual({
+      transform: "translateY(70px)",
+    });
+    expect(clip.style.overflowY).toBe("clip");
+  });
+
   it.each([
     [
       "a row target",

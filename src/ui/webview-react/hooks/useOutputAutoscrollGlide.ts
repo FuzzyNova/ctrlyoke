@@ -112,6 +112,15 @@ function sampleRunningGlide(glide: RunningGlide) {
  * then measured from the clamped value, so a glide sized from it would paint
  * the content that far too low. With no glide running, the delta is taken
  * from the last painted `scrollTop` instead.
+ *
+ * Scroll events alone cannot keep that painted value current. A write made in
+ * a `requestAnimationFrame` or ResizeObserver callback runs after this frame's
+ * scroll events were dispatched, so it paints now but its event arrives a
+ * frame later. A glide started in between would measure from the position
+ * before that write and translate the content back there: one frame at the new
+ * position, then a jump back and a glide forward. So whenever this hook leaves
+ * the content untranslated at the current `scrollTop` (a write that does not
+ * glide, or a settled glide), it records that position as painted itself.
  */
 export function useOutputAutoscrollGlide({
   autoscrollEnabledRef,
@@ -130,12 +139,30 @@ export function useOutputAutoscrollGlide({
     glide.clipElement.style.removeProperty("overflow-y");
   }, []);
 
+  /**
+   * Records that the content now paints untranslated at the pane's current
+   * `scrollTop`, before that position's own scroll event arrives.
+   */
+  const markRestingAtScrollTop = useCallback(() => {
+    const painted = paintedScrollRef.current;
+    if (painted) {
+      painted.scrollTop = painted.element.scrollTop;
+    }
+  }, []);
+
   const settleGlide = useCallback(() => {
     const running = runningGlideRef.current;
     if (!running) return;
     running.animation.cancel();
     releaseGlide(running);
-  }, [releaseGlide]);
+    markRestingAtScrollTop();
+  }, [markRestingAtScrollTop, releaseGlide]);
+
+  /** Lands the current `scrollTop` instantly, ending any running glide. */
+  const landWithoutGlide = useCallback(() => {
+    settleGlide();
+    markRestingAtScrollTop();
+  }, [markRestingAtScrollTop, settleGlide]);
 
   /**
    * Replaces any running glide with one that holds the content where the user
@@ -160,6 +187,7 @@ export function useOutputAutoscrollGlide({
         !clipElement?.matches(OUTPUT_GLIDE_CLIP_SELECTOR) ||
         typeof container.animate !== "function"
       ) {
+        markRestingAtScrollTop();
         return;
       }
       const offsetPx = resolveAutoscrollGlideOffsetPx({
@@ -168,6 +196,7 @@ export function useOutputAutoscrollGlide({
         viewportHeightPx: scrollElement.clientHeight,
       });
       if (offsetPx === null) {
+        markRestingAtScrollTop();
         return;
       }
 
@@ -195,7 +224,7 @@ export function useOutputAutoscrollGlide({
       runningGlideRef.current = glide;
       animation.onfinish = () => releaseGlide(glide);
     },
-    [releaseGlide, settleGlide]
+    [markRestingAtScrollTop, releaseGlide, settleGlide]
   );
 
   const glideAfterScrollWrite = useCallback(
@@ -215,7 +244,7 @@ export function useOutputAutoscrollGlide({
         scrollSeekPlaceholderRef.current ||
         prefersReducedMotion()
       ) {
-        settleGlide();
+        landWithoutGlide();
         return;
       }
       // Measured from where the content last stood, not from where this write
@@ -235,11 +264,11 @@ export function useOutputAutoscrollGlide({
     [
       autoscrollEnabledRef,
       isEnabledRef,
+      landWithoutGlide,
       outputRef,
       pendingNavigationRef,
       retargetGlide,
       scrollSeekPlaceholderRef,
-      settleGlide,
     ]
   );
 

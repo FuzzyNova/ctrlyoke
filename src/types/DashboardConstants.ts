@@ -4814,10 +4814,17 @@ export type OutputScrollAnchorMode =
  * `applyScrollTarget` phases that follow live output. Only these may animate
  * the autoscroll glide; every other phase (restores, width changes, deferred
  * retries after user input) lands instantly.
+ *
+ * The measurement-flush phases run from `requestAnimationFrame` after
+ * deferred row measurements land. While pinned to the bottom they are output
+ * growth like any other, and a write there that did not glide would cancel a
+ * running glide and paint the whole jump in one frame.
  */
 export const OUTPUT_SCROLL_APPLY_PHASES = {
   AUTO_SCROLL: "auto-scroll",
   LAYOUT_EFFECT: "layout-effect",
+  MEASUREMENT_FLUSH_FIRST_FRAME: "measurement-flush-raf-1",
+  MEASUREMENT_FLUSH_SECOND_FRAME: "measurement-flush-raf-2",
 } as const;
 
 export type OutputScrollApplyPhase =

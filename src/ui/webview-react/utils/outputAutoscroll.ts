@@ -187,6 +187,8 @@ export interface MeasurementCorrectionSyncInput {
    * scroll container when no row anchor is committed.
    */
   anchorTopPx: number;
+  /** Whether the committed target is the bottom of the output. */
+  isPinnedToBottom: boolean;
 }
 
 /**
@@ -216,15 +218,22 @@ export interface MeasurementCorrectionSyncInput {
  * re-renders in that same synchronous stack, so React batches this bump into a
  * render that was already going to happen. The rAF path is the one that adds a
  * render, later and separately.
+ *
+ * Pinned to the bottom, the ordinal test does not apply: every resize moves
+ * the bottom, and the newest row (the one most often off its estimate) is the
+ * last one. Deferring it let the first commit scroll, and start the glide, to
+ * the *estimated* bottom; the real one was written a frame or two later, so
+ * the glide slowed toward the wrong target and then sped up again.
  */
 export function shouldSyncMeasurementCorrection({
   anchorTopPx,
   heightDeltaPx,
+  isPinnedToBottom,
   rowTopPx,
 }: MeasurementCorrectionSyncInput): boolean {
   return (
     Math.abs(heightDeltaPx) >= OUTPUT_MEASUREMENT_REFLOW_MIN_DELTA_PX &&
-    rowTopPx < anchorTopPx
+    (isPinnedToBottom || rowTopPx < anchorTopPx)
   );
 }
 
