@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-01 by bug-hunt final step (claude-cli)
 - **Area:** `src/server/HostedWorkspaceViewerService.ts` (`getRawMedia`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

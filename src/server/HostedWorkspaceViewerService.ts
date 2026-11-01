@@ -569,7 +569,7 @@ export class HostedWorkspaceViewerService {
     const resolved =
       ref === undefined
         ? this.safeResolveForSettingsEdit(requestedPath)
-        : this.safeResolve(requestedPath);
+        : this.safeResolve(requestedPath, { preserveLexicalPath: true });
     if (!resolved) {
       throw new WorkspaceMediaError("Path not allowed", 403);
     }
@@ -600,6 +600,10 @@ export class HostedWorkspaceViewerService {
       };
     }
 
+    if (!isPathWithinAnyDirectory(resolved, this.trustedRoots)) {
+      throw new WorkspaceMediaError("Path not allowed", 403);
+    }
+
     let repoPath: Awaited<ReturnType<typeof this.requireRepoRootForPath>>;
     try {
       repoPath = await this.requireRepoRootForPath(resolved);
@@ -616,9 +620,6 @@ export class HostedWorkspaceViewerService {
       throw error;
     }
     const { repoRoot, lexicalPath } = repoPath;
-    if (!isPathWithinAnyDirectory(resolved, this.realpathsOf(this.trustedRoots))) {
-      throw new WorkspaceMediaError("Path not allowed", 403);
-    }
     if (repoId) {
       const requestedRepo = (await this.getReposInternal()).find(
         (repo) => repo.id === repoId

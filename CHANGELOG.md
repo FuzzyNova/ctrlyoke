@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   commit is unavailable in the workspace repository.
 - Hosted workspace viewer Git actions, history and git-ref media now work when
   the workspace root is reached through a symlink or junction.
+- Git-ref media now loads deleted files under a symlinked workspace root and
+  reads the committed path instead of following a working-tree directory link.
 - Numeric `append_step` positions inside a parallel group now relocate after
   the group, even when the requested member has already started. Dashboard
   inserts use the resolved destination for the same execution guard.
