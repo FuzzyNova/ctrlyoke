@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Add Commit to ctrlyoke** now warns and inserts nothing when a diff editor's
+  commit is unavailable in the workspace repository.
 - Hosted workspace viewer Git actions, history and git-ref media now work when
   the workspace root is reached through a symlink or junction.
 - Numeric `append_step` positions inside a running parallel group now relocate

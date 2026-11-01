@@ -26,6 +26,7 @@ import { evaluateFileAccess } from "../utils/FileAccessPolicy";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { getInclusiveEndLine } from "../utils/InclusiveLineRange";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
+import { repositoryHasCommit } from "../git/GitCommitLookup";
 
 interface TimelineItemLike {
   id?: unknown;
@@ -95,13 +96,22 @@ type WorkspaceRelativeReferencePathResolver = (
   uri: vscode.Uri
 ) => string | null;
 
+type WorkspaceCommitChecker = (
+  workspaceRoot: string,
+  commitHash: string
+) => Promise<boolean>;
+
+const FOREIGN_COMMIT_WARNING =
+  "ctrlyoke: Commit {shortHash} is not in this workspace's repository, so a ~ reference can't attach it.";
+
 export class ContextMenuReferenceCommands {
   constructor(
     private readonly webviewProvider: ContextMenuPromptEditorInsertSink,
     private readonly getWorkspaceRoot: () => string,
     private readonly workspaceRelativeReferencePathResolver: WorkspaceRelativeReferencePathResolver = toWorkspaceRelativeReferencePath,
     private readonly prepareTrustPrompt: () => Promise<UserInteractionPort> = async () =>
-      new NullUserInteractionPort()
+      new NullUserInteractionPort(),
+    private readonly workspaceCommitChecker: WorkspaceCommitChecker = repositoryHasCommit
   ) {}
 
   async addFileToPromptEditor(uri: vscode.Uri): Promise<void> {
@@ -342,22 +352,38 @@ export class ContextMenuReferenceCommands {
       candidates
         .map((candidate) => extractCommitHashFromEditorUri(candidate))
         .find((hash) => hash !== undefined),
-      "this editor"
+      "this editor",
+      true
     );
   }
 
   private async insertCommitReference(
     commitHash: string | undefined,
-    source: string
+    source: string,
+    checkWorkspaceRepository = false
   ): Promise<void> {
     if (!commitHash) {
-      void vscode.window.showWarningMessage(
+      this.showCommitReferenceWarning(
         `ctrlyoke: Could not resolve a commit hash from ${source}.`
       );
       return;
     }
 
+    if (
+      checkWorkspaceRepository &&
+      !(await this.workspaceCommitChecker(this.getWorkspaceRoot(), commitHash))
+    ) {
+      this.showCommitReferenceWarning(
+        FOREIGN_COMMIT_WARNING.replace("{shortHash}", commitHash.slice(0, 7))
+      );
+      return;
+    }
+
     await this.insertReferences([buildGitReference(commitHash)]);
+  }
+
+  private showCommitReferenceWarning(message: string): void {
+    void vscode.window.showWarningMessage(message);
   }
 
   private activeTabResources(): vscode.Uri[] {

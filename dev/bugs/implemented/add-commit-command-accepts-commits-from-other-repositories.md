@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-01 by bug-hunt final step (claude-cli)
 - **Area:** `src/completions/ContextMenuReferenceCommands.ts`, `package.json` (`ctrlyoke.addEditorCommitToPromptEditor` menus)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
