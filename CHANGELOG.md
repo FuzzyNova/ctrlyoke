@@ -38,6 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Numeric `append_step` positions inside a parallel group now relocate after
   the group, even when the requested member has already started. Dashboard
   inserts use the resolved destination for the same execution guard.
+- Step claims now notify the executor when they adopt new disk steps, so a
+  `parallelWithCurrent` append written during a claim can join the running
+  group without waiting for the anchor to finish.
 - `read_notes` now tells filtered and cursor-based reads to pass `nextCursor`
   as `since` to continue, and the tool description explains how to page.
 - Deleting or restoring runs and trashing a whole lineage now leave it

@@ -629,6 +629,157 @@ suite("Parallel mutation integration", () => {
     }
   });
 
+  test("admits a second out-of-process parallelWithCurrent append merged during a helper claim", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-parallel-mcp-claim-merge-")
+    );
+    let releaseAnchor!: () => void;
+    let releaseFirstClaim!: () => void;
+    let markFirstClaimHeld!: () => void;
+    let markBothHelpersStarted!: () => void;
+    let anchorFinished = false;
+    let bothStartedWhileAnchorInFlight = false;
+    const anchorMayFinish = new Promise<void>((resolve) => {
+      releaseAnchor = resolve;
+    });
+    const firstClaimMayProceed = new Promise<void>((resolve) => {
+      releaseFirstClaim = resolve;
+    });
+    const firstClaimHeld = new Promise<void>((resolve) => {
+      markFirstClaimHeld = resolve;
+    });
+    const bothHelpersStarted = new Promise<void>((resolve) => {
+      markBothHelpersStarted = resolve;
+    });
+    const originalClaim = RunContinuationService.claimStepAtRun;
+    try {
+      const queue = new PromptQueue();
+      const steps: PromptStep[] = [{ prompt: "anchor" }];
+      const draftPath = await queue.createWorkingFile(
+        "parallel-mcp-claim-merge",
+        steps,
+        workspace
+      );
+      queue.loadPrompts({ steps }, draftPath);
+      await queue.promoteToNewRun(workspace, 100);
+      const { workflowKey, runRef } = queue.getState();
+      assert.ok(workflowKey && runRef);
+      const runPath = WorkflowPaths.runFilePath(workspace, workflowKey, runRef);
+
+      const anchor = new MockHarnessIntegration(undefined, false);
+      const firstHelper = new MockHarnessIntegration(undefined, false);
+      const secondHelper = new MockHarnessIntegration(undefined, false);
+      let startedHelpers = 0;
+      const helperSend = (name: string) => async () => {
+        startedHelpers++;
+        if (startedHelpers === 2) {
+          bothStartedWhileAnchorInFlight = !anchorFinished;
+          markBothHelpersStarted();
+        }
+        await anchorMayFinish;
+        return { responseText: `${name} settled` };
+      };
+      firstHelper.onSend = helperSend("first");
+      secondHelper.onSend = helperSend("second");
+
+      let firstHelperId: string | undefined;
+      RunContinuationService.claimStepAtRun = async (...args) => {
+        if (args[3] === firstHelperId) {
+          markFirstClaimHeld();
+          await firstClaimMayProceed;
+        }
+        return originalClaim.apply(RunContinuationService, args);
+      };
+
+      let anchorError: unknown;
+      anchor.onSend = async () => {
+        try {
+          const firstAppend =
+            await RunContinuationService.appendStepsToActiveParallelGroup(
+              workspace,
+              workflowKey,
+              runRef,
+              [{ prompt: "first helper" }],
+              (await readWorkingFile(runPath)).definitionRevision ?? 1,
+              100,
+              undefined,
+              QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+              6
+            );
+          firstHelperId = firstAppend.workingFile.steps?.[1]?._runtime?.stepId;
+          assert.ok(firstHelperId);
+
+          // This watcher merge admits helper one, then its claim is held
+          // before the claim transaction reads the working file.
+          await queue.mergeStepsFromDisk();
+          await firstClaimHeld;
+
+          const secondAppendSource = await readWorkingFile(runPath);
+          await RunContinuationService.appendStepsToActiveParallelGroup(
+            workspace,
+            workflowKey,
+            runRef,
+            [{ prompt: "second helper" }],
+            secondAppendSource.definitionRevision ?? 1,
+            100,
+            undefined,
+            QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+            6
+          );
+          // The helper claim now reads both helpers from its transaction's
+          // working-file snapshot; the watcher itself will not see helper two.
+          releaseFirstClaim();
+
+          let timer: NodeJS.Timeout | undefined;
+          await Promise.race([
+            bothHelpersStarted,
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(
+                () =>
+                  reject(
+                    new Error(
+                      `Both helpers did not start beside the anchor (started: ${startedHelpers})`
+                    )
+                  ),
+                8_000
+              );
+            }),
+          ]).finally(() => clearTimeout(timer));
+          return { responseText: "anchor settled" };
+        } catch (error) {
+          anchorError = error;
+          throw error;
+        } finally {
+          anchorFinished = true;
+          releaseAnchor();
+        }
+      };
+
+      await createExecutor(queue, workspace).execute(
+        anchor,
+        createContext(
+          workspace,
+          new Map([
+            [0, anchor],
+            [1, firstHelper],
+            [2, secondHelper],
+          ])
+        )
+      );
+
+      assert.ifError(anchorError);
+      assert.strictEqual(startedHelpers, 2);
+      assert.strictEqual(bothStartedWhileAnchorInFlight, true);
+      assert.deepStrictEqual(firstHelper.sentPrompts, ["first helper"]);
+      assert.deepStrictEqual(secondHelper.sentPrompts, ["second helper"]);
+    } finally {
+      RunContinuationService.claimStepAtRun = originalClaim;
+      releaseFirstClaim();
+      releaseAnchor();
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("keeps output, snapshot, PTY, and coordination attribution on started members after pending mutations", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-parallel-attribution-")
