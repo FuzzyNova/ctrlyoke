@@ -14,7 +14,6 @@
 import {
   PRIOR_CONTEXT_REFERENCE_KINDS,
   PRIOR_CONTEXT_DETAILS,
-  PRIOR_CONTEXT_SUMMARY_SEGMENT,
   PROMPT_DIAGNOSTIC_CODES,
   PROMPT_DIAGNOSTIC_FIELDS,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
@@ -221,30 +220,21 @@ export function checkPriorContextRefs(
   return checks;
 }
 
-const PRIOR_CONTEXT_KIND_NAMES: ReadonlySet<string> = new Set(
-  Object.values(PRIOR_CONTEXT_REFERENCE_KINDS)
-);
-
-/** True for a body whose kind carries the `:summary` segment (`step:summary:x`). */
-function hasSummarySegment(body: string): boolean {
-  const colon = body.indexOf(":");
-  if (colon < 0 || !PRIOR_CONTEXT_KIND_NAMES.has(body.slice(0, colon))) {
-    return false;
-  }
-  const end = colon + PRIOR_CONTEXT_SUMMARY_SEGMENT.length;
-  return (
-    body.startsWith(PRIOR_CONTEXT_SUMMARY_SEGMENT, colon) &&
-    (body.length === end || body[end] === ":")
-  );
+/** True for a known argument-taking selector with a non-empty argument. */
+function hasKnownPriorContextArgument(body: string): boolean {
+  return [
+    PRIOR_CONTEXT_REFERENCE_KINDS.STEP,
+    PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS,
+  ].some((kind) => body.startsWith(`${kind}:`) && body.length > kind.length + 1);
 }
 
 /**
- * Diagnose malformed `:summary` selectors (`$step:summary` with no range) and
- * the retired detail-first order (`$summary:previous`, with a quick fix). Valid
- * forms are handled by the normal prior-context parser and receive the same
- * position diagnostics.
+ * Diagnose malformed selectors for known argument-taking kinds and the retired
+ * detail-first order (`$summary:previous`, with a quick fix). Valid forms are
+ * handled by the normal prior-context parser and receive the same position
+ * diagnostics.
  */
-export function getInvalidPriorContextSummaryDiagnostics(
+export function getInvalidPriorContextDiagnostics(
   text: string
 ): PromptDiagnostic[] {
   const codeRanges = findCodeRanges(text);
@@ -254,7 +244,10 @@ export function getInvalidPriorContextSummaryDiagnostics(
   )) {
     // A trailing comma is sentence punctuation, as in the parser.
     const body = match[1].replace(/,+$/, "");
-    if (!hasSummarySegment(body) || parseInlinePriorContextBody(body)) continue;
+    if (
+      !hasKnownPriorContextArgument(body) ||
+      parseInlinePriorContextBody(body)
+    ) continue;
     const from = match.index;
     const to = from + match[0].length - (match[1].length - body.length);
     if (isInCodeRange(from, to, codeRanges)) continue;
@@ -299,7 +292,7 @@ export function getPriorContextDiagnostics(
     ...checkPriorContextRefs(text, context).flatMap((check) =>
       check.diagnostic ? [check.diagnostic] : []
     ),
-    ...getInvalidPriorContextSummaryDiagnostics(text),
+    ...getInvalidPriorContextDiagnostics(text),
   ];
 }
 

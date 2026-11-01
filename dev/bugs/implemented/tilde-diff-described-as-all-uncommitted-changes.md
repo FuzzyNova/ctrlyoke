@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-01 by bug-hunt final step (claude-cli)
 - **Area:** `src/completions/CompletionCore.ts`, `src/utils/ContextExpander.ts`, `docs/guide/prompt-editor.md`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

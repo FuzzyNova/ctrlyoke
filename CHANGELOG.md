@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Malformed `$step:` and `$previous:` selectors now show a prompt diagnostic
+  even when they do not use `:summary`. Unknown `$` tokens and prose after
+  `$previous:` remain unaffected.
+- `~diff` is now labelled as unstaged changes in completions, the empty-state
+  message, and the prompt editor guide. The message points to `~staged` for
+  staged changes.
 - History show now reports a skipped final step as skipped, matching history
   steps. Negative history `--offset` and `--limit` values now explain the
   minimum allowed value.

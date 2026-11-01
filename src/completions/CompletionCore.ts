@@ -465,7 +465,7 @@ export class CompletionCore {
         kind: COMPLETION_ITEM_KINDS.REFERENCE,
         insertText: "diff",
         icon: GIT_REFERENCE_ICONS[GIT_CHANGE_KINDS.DIFF],
-        detail: "All uncommitted changes",
+        detail: "Unstaged changes",
         sortText: "!000_git_0",
         filterText: "diff working tree changes uncommitted",
       },

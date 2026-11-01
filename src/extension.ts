@@ -58,6 +58,7 @@ import {
   GIT_CHANGE_KINDS,
   HOST_KINDS,
   MESSAGE_TYPES,
+  NO_UNSTAGED_CHANGES_MESSAGE,
   RUNNER_IDS,
   USER_FEEDBACK_SEVERITY,
   VSCODE_YAML_EXTENSION_ID,
@@ -1399,7 +1400,7 @@ function registerCommands(
         if (ref === GIT_CHANGE_KINDS.DIFF) {
           content =
             (await getWorkingTreeDiff(workspaceRoot)).trim() ||
-            "No uncommitted changes in working tree.";
+            NO_UNSTAGED_CHANGES_MESSAGE;
         } else if (ref === GIT_CHANGE_KINDS.STAGED) {
           content =
             (await getStagedDiff(workspaceRoot)).trim() || "No staged changes.";
