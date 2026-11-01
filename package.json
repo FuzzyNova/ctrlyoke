@@ -299,6 +299,11 @@
         "category": "ctrlyoke"
       },
       {
+        "command": "ctrlyoke.addEditorCommitToPromptEditor",
+        "title": "Add Commit to ctrlyoke",
+        "category": "ctrlyoke"
+      },
+      {
         "command": "ctrlyoke.searchHistory",
         "title": "Search ctrlyoke History",
         "category": "ctrlyoke",
@@ -412,6 +417,10 @@
           "when": "false"
         },
         {
+          "command": "ctrlyoke.addEditorCommitToPromptEditor",
+          "when": "false"
+        },
+        {
           "command": "ctrlyoke.generateCommitMessage",
           "when": "!ctrlyoke.generatingCommitMessage"
         },
@@ -460,6 +469,11 @@
           "submenu": "ctrlyoke.runSubmenu",
           "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
           "group": "navigation"
+        },
+        {
+          "command": "ctrlyoke.addEditorCommitToPromptEditor",
+          "when": "resource =~ /^(git:.*%22ref%22|scm-history-item:.*%22historyItemId%22)%3A%22[0-9a-f]{7,40}%22|^scm-history-item:[^?#]*\\.\\.[0-9a-f]{7,40}$/",
+          "group": "z_ctrlyoke"
         }
       ],
       "editor/title/context": [
@@ -472,6 +486,11 @@
           "command": "ctrlyoke.addFileToPromptEditor",
           "when": "resourceScheme == file",
           "group": "z_ctrlyoke@2"
+        },
+        {
+          "command": "ctrlyoke.addEditorCommitToPromptEditor",
+          "when": "resource =~ /^(git:.*%22ref%22|scm-history-item:.*%22historyItemId%22)%3A%22[0-9a-f]{7,40}%22|^scm-history-item:[^?#]*\\.\\.[0-9a-f]{7,40}$/",
+          "group": "z_ctrlyoke@3"
         }
       ],
       "editor/context": [

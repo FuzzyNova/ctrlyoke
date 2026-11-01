@@ -37,6 +37,56 @@ interface TimelineItemLike {
   command?: { arguments?: unknown[] };
 }
 
+const COMMIT_HASH_PATTERN = /^[0-9a-f]{7,40}$/i;
+/** Timeline "Open Commit" source paths end in `<parent>..<commit>`. */
+const COMMIT_RANGE_PATH_PATTERN = /\.\.([0-9a-f]{7,40})$/i;
+
+function asCommitHash(value: unknown): string | undefined {
+  return typeof value === "string" && COMMIT_HASH_PATTERN.test(value)
+    ? value.toLowerCase()
+    : undefined;
+}
+
+function readJsonQueryField(uri: vscode.Uri, field: string): unknown {
+  try {
+    const query: unknown = JSON.parse(uri.query);
+    return query && typeof query === "object"
+      ? (query as Record<string, unknown>)[field]
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The commit a git-backed editor shows, or `undefined` when the editor does
+ * not show one commit. Accepts the resource of:
+ * - a vscode.git text editor or diff side (`git:` with `{ ref: <hash> }`),
+ *   as opened by clicking a Timeline or SCM Graph commit. Symbolic refs
+ *   (`HEAD`, `~` for the index, `""` for the working tree) are rejected.
+ * - a commit's multi-file diff (`scm-history-item:`): the SCM Graph's form
+ *   carries `historyItemId` in a JSON query, the Timeline's "Open Commit"
+ *   form ends its path in `<parent>..<commit>`.
+ *
+ * Keep the `ctrlyoke.addEditorCommitToPromptEditor` `when` clauses in
+ * `package.json` in step with these shapes; a test checks them against it.
+ */
+export function extractCommitHashFromEditorUri(
+  uri: vscode.Uri
+): string | undefined {
+  switch (uri.scheme) {
+    case VSCODE_URI_SCHEMES.GIT:
+      return asCommitHash(readJsonQueryField(uri, "ref"));
+    case VSCODE_URI_SCHEMES.SCM_HISTORY_ITEM:
+      return (
+        asCommitHash(readJsonQueryField(uri, "historyItemId")) ??
+        asCommitHash(COMMIT_RANGE_PATH_PATTERN.exec(uri.path)?.[1])
+      );
+    default:
+      return undefined;
+  }
+}
+
 export interface ContextMenuPromptEditorInsertSink {
   enqueuePromptEditorInsert(request: PromptEditorInsertRequest): Promise<void>;
 }
@@ -273,15 +323,52 @@ export class ContextMenuReferenceCommands {
    * `dev/backlog/VSCODE_PROPOSED_API_CONTEXT_MENUS.md`.
    */
   async addTimelineCommitToPromptEditor(item: unknown): Promise<void> {
-    const commitHash = this.extractTimelineCommitHash(item);
+    await this.insertCommitReference(
+      this.extractTimelineCommitHash(item),
+      "the selected timeline item"
+    );
+  }
+
+  /**
+   * Handler for `ctrlyoke.addEditorCommitToPromptEditor`, on the editor title
+   * bar's "..." menu and the tab context menu of a commit's diff. Both menus
+   * pass the editor's resource (a diff editor's modified side, a multi-diff
+   * editor's source URI). Without one, the active tab is used.
+   */
+  async addEditorCommitToPromptEditor(uri?: vscode.Uri): Promise<void> {
+    const candidates =
+      uri instanceof vscode.Uri ? [uri] : this.activeTabResources();
+    await this.insertCommitReference(
+      candidates
+        .map((candidate) => extractCommitHashFromEditorUri(candidate))
+        .find((hash) => hash !== undefined),
+      "this editor"
+    );
+  }
+
+  private async insertCommitReference(
+    commitHash: string | undefined,
+    source: string
+  ): Promise<void> {
     if (!commitHash) {
       void vscode.window.showWarningMessage(
-        "ctrlyoke: Could not resolve a commit hash from the selected timeline item."
+        `ctrlyoke: Could not resolve a commit hash from ${source}.`
       );
       return;
     }
 
     await this.insertReferences([buildGitReference(commitHash)]);
+  }
+
+  private activeTabResources(): vscode.Uri[] {
+    const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+    if (input instanceof vscode.TabInputTextDiff) {
+      return [input.modified];
+    }
+    if (input instanceof vscode.TabInputText) {
+      return [input.uri];
+    }
+    return [];
   }
 
   private async insertReferences(references: string[]): Promise<void> {

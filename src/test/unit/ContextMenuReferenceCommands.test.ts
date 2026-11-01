@@ -1,21 +1,28 @@
 import * as assert from "assert";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { afterEach, suite, test } from "mocha";
 import {
   ContextMenuPromptEditorInsertSink,
   ContextMenuReferenceCommands,
+  extractCommitHashFromEditorUri,
 } from "../../completions/ContextMenuReferenceCommands";
 import {
   buildDirectoryReference,
   buildFileReference,
+  buildGitReference,
   buildSelectionReference,
   buildSymbolReference,
 } from "../../completions/ContextReferenceBuilder";
 import type { PromptEditorInsertRequest } from "../../types/WebviewMessageTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import { EXTERNAL_FILE_TRUST_SCOPES } from "../../types/DashboardConstants";
+import {
+  EXTERNAL_FILE_TRUST_SCOPES,
+  VSCODE_COMMANDS,
+  VSCODE_URI_SCHEMES,
+} from "../../types/DashboardConstants";
 import type {
   ChoiceRequest,
   UserInteractionPort,
@@ -658,5 +665,143 @@ suite("ContextMenuReferenceCommands", () => {
     );
 
     assert.strictEqual(sink.requests.length, 0);
+  });
+
+  suite("commit in an editor", () => {
+    const COMMIT = "0123456789abcdef0123456789abcdef01234567";
+    const PARENT = "fedcba9876543210fedcba9876543210fedcba98";
+    const repoRoot = path.join(os.tmpdir(), "ctrlyoke repo");
+
+    /** The `git:` URI vscode.git builds for a file at a ref (`toGitUri`). */
+    function gitUri(ref: string): vscode.Uri {
+      const file = vscode.Uri.file(path.join(repoRoot, "src", "a.ts"));
+      return file.with({
+        scheme: VSCODE_URI_SCHEMES.GIT,
+        query: JSON.stringify({ path: file.fsPath, ref }),
+      });
+    }
+
+    /** The source URI of the Timeline's "Open Commit" multi-file diff. */
+    function timelineCommitUri(commit: string): vscode.Uri {
+      return vscode.Uri.from({
+        scheme: VSCODE_URI_SCHEMES.SCM_HISTORY_ITEM,
+        path: `${repoRoot}/${PARENT}..${commit}`,
+      });
+    }
+
+    /** The source URI of the SCM Graph's commit multi-file diff. */
+    function graphCommitUri(commit: string): vscode.Uri {
+      return vscode.Uri.from({
+        scheme: VSCODE_URI_SCHEMES.SCM_HISTORY_ITEM,
+        path: repoRoot,
+        query: JSON.stringify({
+          repositoryId: "scm0",
+          historyItemId: commit,
+          historyItemParentId: PARENT,
+          historyItemDisplayId: commit.slice(0, 7),
+        }),
+      });
+    }
+
+    const commitUris = (commit: string) => [
+      gitUri(commit),
+      timelineCommitUri(commit),
+      graphCommitUri(commit),
+    ];
+    const nonCommitUris = [
+      gitUri("HEAD"),
+      gitUri("~"),
+      gitUri(""),
+      gitUri(`${COMMIT}^`),
+      vscode.Uri.file(path.join(repoRoot, "src", "a.ts")),
+      vscode.Uri.from({
+        scheme: VSCODE_URI_SCHEMES.GIT,
+        path: "/a",
+        query: "not json",
+      }),
+    ];
+
+    function editorCommitWhenClauses(): string[] {
+      const manifest = JSON.parse(
+        fs.readFileSync(
+          path.resolve(__dirname, "../../../package.json"),
+          "utf8"
+        )
+      ) as {
+        contributes: {
+          menus: Record<string, { command?: string; when?: string }[]>;
+        };
+      };
+      return Object.values(manifest.contributes.menus)
+        .flat()
+        .filter(
+          (entry) =>
+            entry.command ===
+              VSCODE_COMMANDS.ADD_EDITOR_COMMIT_TO_PROMPT_EDITOR &&
+            entry.when !== "false"
+        )
+        .map((entry) => entry.when ?? "");
+    }
+
+    test("resolves the commit from every editor shape that shows one", () => {
+      for (const uri of commitUris(COMMIT.toUpperCase())) {
+        assert.strictEqual(
+          extractCommitHashFromEditorUri(uri),
+          COMMIT,
+          uri.toString()
+        );
+      }
+    });
+
+    test("rejects symbolic refs and non-git editors", () => {
+      for (const uri of nonCommitUris) {
+        assert.strictEqual(
+          extractCommitHashFromEditorUri(uri),
+          undefined,
+          uri.toString()
+        );
+      }
+    });
+
+    test("the menu when clauses show exactly where a commit resolves", () => {
+      const clauses = editorCommitWhenClauses();
+      assert.ok(clauses.length >= 2, "expected title bar and tab menu entries");
+      for (const clause of clauses) {
+        const match = /^resource =~ \/(.+)\/$/.exec(clause);
+        assert.ok(match, `unexpected when clause: ${clause}`);
+        const pattern = new RegExp(match[1]);
+        for (const uri of commitUris(COMMIT)) {
+          assert.ok(pattern.test(uri.toString()), uri.toString());
+        }
+        for (const uri of nonCommitUris) {
+          assert.ok(!pattern.test(uri.toString()), uri.toString());
+        }
+      }
+    });
+
+    test("inserts the commit reference for the menu's editor resource", async () => {
+      const sink = new RecordingPromptEditorInsertSink();
+
+      await createCommands(
+        sink,
+        createTestWorkspace()
+      ).addEditorCommitToPromptEditor(gitUri(COMMIT));
+
+      assert.deepStrictEqual(
+        sink.requests.map((request) => request.references),
+        [[buildGitReference(COMMIT)]]
+      );
+    });
+
+    test("inserts nothing for an editor without a commit", async () => {
+      const sink = new RecordingPromptEditorInsertSink();
+
+      await createCommands(
+        sink,
+        createTestWorkspace()
+      ).addEditorCommitToPromptEditor(gitUri("~"));
+
+      assert.strictEqual(sink.requests.length, 0);
+    });
   });
 });

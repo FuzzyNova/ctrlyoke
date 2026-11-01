@@ -85,6 +85,10 @@ These menu items insert a reference into the dashboard's prompt editor. They are
 | Add Symbol to ctrlyoke           | Editor and line-number context menus when nothing is selected                     |
 | Add Output Selection to ctrlyoke | Output panel context menu when text is selected                                   |
 | Add Output Channel to ctrlyoke   | Output panel context menu when no text is selected                                |
+| Add Commit to ctrlyoke           | Title bar `...` menu and tab context menu of a commit's diff                      |
+
+A commit's diff is what opens when you click a commit in the Timeline view or the Source
+Control Graph, including **Open Commit**'s multi-file diff.
 
 ## Source Control
 

@@ -6,8 +6,15 @@ blocked by proposed (unstable) APIs. Proposed APIs only work under
 build can't use them. Re-check both whenever VS Code ships a release, and restore the
 menus as soon as either one becomes stable.
 
-The dashboard's own commit history (workspace viewer **History**, right-click a commit)
-already offers **Add Commit to ctrlyoke** and isn't affected.
+Two paths work today and aren't affected:
+
+- The dashboard's own commit history (workspace viewer **History**, right-click a commit).
+- `ctrlyoke.addEditorCommitToPromptEditor`, on the title bar `...` menu and tab context
+  menu of a commit's diff. Clicking a commit in the Timeline or the SCM Graph opens that
+  diff, so both native views are covered with one extra click. It reads the hash from the
+  editor's resource (`extractCommitHashFromEditorUri` in
+  `src/completions/ContextMenuReferenceCommands.ts`), which uses only stable API. Keep it
+  even after the menus below come back: it also covers diffs opened some other way.
 
 ## 1. Timeline view: `timeline/item/context` (removed 2026-11-01)
 
@@ -55,9 +62,10 @@ so consider widening the `when` clause to `/git:(file|folder|workspace):commit\b
 `_resolveItem(`. Our menu is unblocked once the `enabledApiProposals` check for
 `"timeline"` is gone, or the `timeline` proposal is finalized into `vscode.d.ts`.
 
-**Possible workaround if it stays blocked:** the `uri` argument does arrive. The command
-could fall back to a QuickPick of that file's commits (`git log -- <file>`) and insert the
-one the user picks.
+**Workarounds considered and rejected:** a QuickPick of the file's commits built from the
+`uri` argument that does arrive (the user picks the same commit twice), and reading the
+clipboard after git's **Copy Commit ID** (pasting after `~` in the prompt editor already
+does that). The diff-editor command above is the workaround that shipped.
 
 ## 2. SCM Graph: `scm/historyItem/context` (never shipped)
 

@@ -7,13 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Add Commit to ctrlyoke** is now in the title bar `...` menu and the tab
+  context menu of a commit's diff, the editor that opens when you click a
+  commit in the Timeline view or the Source Control Graph.
+
 ### Changed
 
 - **Add Commit to ctrlyoke** has been removed from VS Code's Timeline view
   context menu. Current VS Code versions no longer tell other extensions which
   timeline commit was right-clicked, so the item always failed with "Could not
-  resolve a commit hash". Right-click a commit in the dashboard's **History**
-  instead. The menu item will return if VS Code makes this available again.
+  resolve a commit hash". Click the commit to open its diff and use **Add
+  Commit to ctrlyoke** there, or right-click a commit in the dashboard's
+  **History**. The Timeline menu item will return if VS Code makes this
+  available again.
 
 ### Fixed
 

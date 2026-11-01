@@ -1691,6 +1691,13 @@ function registerCommands(
       }
     );
 
+  const addEditorCommitToPromptEditorCommand = vscode.commands.registerCommand(
+    VSCODE_COMMANDS.ADD_EDITOR_COMMIT_TO_PROMPT_EDITOR,
+    async (uri?: vscode.Uri) => {
+      await contextMenuReferenceCommands.addEditorCommitToPromptEditor(uri);
+    }
+  );
+
   const searchHistoryCommand = vscode.commands.registerCommand(
     VSCODE_COMMANDS.SEARCH_HISTORY,
     async () => {
@@ -2016,6 +2023,7 @@ function registerCommands(
     addOutputChannelToPromptEditorCommand,
     addScmResourcesToPromptEditorCommand,
     addTimelineCommitToPromptEditorCommand,
+    addEditorCommitToPromptEditorCommand,
     searchHistoryCommand,
     initWorkspaceCommand,
     enableServerCommand,

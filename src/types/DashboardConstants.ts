@@ -379,6 +379,10 @@ export type CodeMirrorLanguageId =
 export const VSCODE_URI_SCHEMES = {
   FILE: "file",
   OUTPUT: "output",
+  /** vscode.git file contents at a ref; the query is JSON `{ path, ref }`. */
+  GIT: "git",
+  /** A commit's multi-file diff, opened from the Timeline or the SCM Graph. */
+  SCM_HISTORY_ITEM: "scm-history-item",
 } as const;
 
 /** Name of the manifest that identifies a ctrlyoke-managed bundle assets directory. */
@@ -5663,6 +5667,7 @@ export const VSCODE_COMMANDS = {
   MANAGE_LICENSE: "ctrlyoke.manageLicense",
   INSTALL_CLI: "ctrlyoke.installCli",
   SEARCH_HISTORY: "ctrlyoke.searchHistory",
+  ADD_EDITOR_COMMIT_TO_PROMPT_EDITOR: "ctrlyoke.addEditorCommitToPromptEditor",
   GENERATE_COMMIT_MESSAGE: "ctrlyoke.generateCommitMessage",
   CANCEL_COMMIT_MESSAGE_GENERATION: "ctrlyoke.cancelCommitMessageGeneration",
   REFRESH_HARNESS_USAGE: "ctrlyoke.refreshHarnessUsage",
