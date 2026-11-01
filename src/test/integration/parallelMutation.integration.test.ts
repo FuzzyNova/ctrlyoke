@@ -43,6 +43,7 @@ import {
 import { McpToolSkillGenerator } from "../../utils/McpToolSkillGenerator";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { withFileLock } from "../../utils/FileLockUtils";
+import { RunContinuationService } from "../../core/orchestration/RunContinuationService";
 
 class PromotionSnapshotService extends WorkspaceSnapshotService {
   public captureCount = 0;
@@ -498,6 +499,132 @@ suite("Parallel mutation integration", () => {
         )
       );
     } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("starts every member of an out-of-process parallelWithCurrent promotion beside the running step", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-parallel-mcp-promotion-")
+    );
+    let releaseAnchor!: () => void;
+    const anchorMayFinish = new Promise<void>((resolve) => {
+      releaseAnchor = resolve;
+    });
+    try {
+      const queue = new PromptQueue();
+      const steps: PromptStep[] = [{ prompt: "anchor" }];
+      const draftPath = await queue.createWorkingFile(
+        "parallel-mcp-promotion",
+        steps,
+        workspace
+      );
+      queue.loadPrompts({ steps }, draftPath);
+      await queue.promoteToNewRun(workspace, 100);
+      const { workflowKey, runRef } = queue.getState();
+      assert.ok(workflowKey && runRef);
+      const runPath = WorkflowPaths.runFilePath(workspace, workflowKey, runRef);
+
+      const anchor = new MockHarnessIntegration(undefined, false);
+      const firstHelper = new MockHarnessIntegration(undefined, false);
+      const secondHelper = new MockHarnessIntegration(undefined, false);
+      const started = new Set<string>();
+      let markBothStarted!: () => void;
+      const bothHelpersStarted = new Promise<void>((resolve) => {
+        markBothStarted = resolve;
+      });
+      const helperSend = (name: string) => async () => {
+        started.add(name);
+        if (started.size === 2) markBothStarted();
+        // Hold each helper until the anchor is released, so the helpers can
+        // only have started while the anchor was still in flight.
+        await anchorMayFinish;
+        return { responseText: `${name} settled` };
+      };
+      firstHelper.onSend = helperSend("first");
+      secondHelper.onSend = helperSend("second");
+
+      let anchorError: unknown;
+      let promoted: boolean | undefined;
+      anchor.onSend = async () => {
+        try {
+          // The MCP server's append_step transaction, as a separate process
+          // would run it: it writes the promotion only to the run file.
+          const onDisk = await readWorkingFile(runPath);
+          const joined =
+            await RunContinuationService.appendStepsToActiveParallelGroup(
+              workspace,
+              workflowKey,
+              runRef,
+              [{ prompt: "first helper" }, { prompt: "second helper" }],
+              onDisk.definitionRevision ?? 1,
+              100,
+              undefined,
+              QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+              6
+            );
+          promoted = joined.joinedParallelGroup.promoted;
+          // The working-file watcher's merge, not the in-process join.
+          await queue.mergeStepsFromDisk();
+          let timer: NodeJS.Timeout | undefined;
+          await Promise.race([
+            bothHelpersStarted,
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(
+                () =>
+                  reject(
+                    new Error(
+                      `Promoted members did not start beside the running step (started: ${[...started].join(", ") || "none"})`
+                    )
+                  ),
+                10_000
+              );
+            }),
+          ]).finally(() => clearTimeout(timer));
+          return { responseText: "anchor settled" };
+        } catch (error) {
+          anchorError = error;
+          throw error;
+        } finally {
+          releaseAnchor();
+        }
+      };
+
+      await createExecutor(queue, workspace).execute(
+        anchor,
+        createContext(
+          workspace,
+          new Map([
+            [0, anchor],
+            [1, firstHelper],
+            [2, secondHelper],
+          ])
+        )
+      );
+
+      assert.ifError(anchorError);
+      assert.strictEqual(promoted, true);
+      assert.deepStrictEqual(firstHelper.sentPrompts, ["first helper"]);
+      assert.deepStrictEqual(secondHelper.sentPrompts, ["second helper"]);
+      assert.strictEqual(queue.getState().currentIndex, 3);
+      assert.strictEqual(queue.getActiveParallelGroupRuntime(), undefined);
+      const persisted = await readWorkingFile(runPath);
+      assert.deepStrictEqual(
+        persisted.parallelGroups?.map(({ startIndex, endIndex }) => ({
+          startIndex,
+          endIndex,
+        })),
+        [{ startIndex: 0, endIndex: 2 }]
+      );
+      assert.deepStrictEqual(
+        persisted.steps?.map(
+          (step) => step._runtime?.completedAt !== undefined
+        ),
+        [true, true, true]
+      );
+      assert.strictEqual(persisted._runtime?.activeParallelGroup, undefined);
+    } finally {
+      releaseAnchor?.();
       await fs.rm(workspace, { recursive: true, force: true });
     }
   });

@@ -29,6 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   spawns a subagent with a task name used earlier, such as `worker`. Its
   output, token usage and completed spawn card used to appear only for the
   first session to use that name until VS Code was reloaded.
+- MCP `append_step` with `position: "parallelWithCurrent"` from a step that
+  is not already in a parallel group now starts the new steps right away,
+  beside the step that added them. They used to wait until that step
+  finished, even though the response reported `promoted: true`, so an agent
+  waiting on its parallel helper hung until the step timed out. Every step
+  in a multi-step append now starts this way.
 
 ## [0.4.0] - 2026-10-31
 

@@ -69,6 +69,7 @@ import {
 } from "../types/DashboardConstants";
 import type { CompatibilityDiagnostic } from "../types/CompatibilityTypes";
 import { PromptQueue } from "./PromptQueue";
+import { findStepIndexById } from "./StepIdentity";
 import { HarnessIntegration } from "./HarnessIntegration";
 import {
   EndConditionHandler,
@@ -559,6 +560,7 @@ export class WorkflowExecutor {
     this.promptQueue.onDidMergeDiskSteps((steps) => {
       const groupRun = this.activeParallelGroupRun;
       if (!groupRun) {
+        this.admitMergedPromotionMembers(steps);
         return;
       }
       const group = this.promptQueue
@@ -1521,6 +1523,70 @@ export class WorkflowExecutor {
     return { accepted: true };
   }
 
+  /**
+   * An MCP `parallelWithCurrent` append over a lone running step promotes it
+   * on disk (`RunContinuationService.appendStepsToActiveParallelGroup`), so
+   * the executor only learns of it from a disk merge — while the anchor still
+   * holds the sequential path and no `ParallelGroupRun` exists. Admit each
+   * merged member of the promoted group through the same join the dashboard's
+   * in-process promotion uses: the first starts the run beside the anchor and
+   * the rest join it, in step order. Without this the members waited for the
+   * anchor to settle, so an agent waiting on its "parallel" helper deadlocked.
+   *
+   * Steps the dashboard path inserted are already in memory, so a merge never
+   * reports them and they are never admitted twice.
+   */
+  private admitMergedPromotionMembers(steps: readonly WorkflowStep[]): void {
+    const activeRuntime = this.promptQueue.getActiveParallelGroupRuntime();
+    if (activeRuntime?.admission !== PARALLEL_GROUP_ADMISSION.ACCEPTING) {
+      return;
+    }
+    const state = this.promptQueue.getState();
+    const group = state.parallelGroups.find(
+      (candidate) =>
+        candidate.id === activeRuntime.groupId &&
+        candidate.startIndex === state.currentIndex
+    );
+    if (!group) {
+      return;
+    }
+    const memberIds = steps
+      .map((step) => step._runtime?.stepId)
+      .filter((stepId): stepId is string => stepId !== undefined)
+      .map((stepId) => ({
+        stepId,
+        index: findStepIndexById(state.steps, stepId),
+      }))
+      .filter(
+        ({ index }) => index > group.startIndex && index <= group.endIndex
+      )
+      .sort((left, right) => left.index - right.index)
+      .map(({ stepId }) => stepId);
+    if (memberIds.length === 0) {
+      return;
+    }
+    void (async () => {
+      for (const stepId of memberIds) {
+        // Resolve each index just before its join: an earlier admission
+        // awaits, and the topology may move in between.
+        const stepIndex = findStepIndexById(
+          this.promptQueue.getState().steps,
+          stepId
+        );
+        if (stepIndex < 0) {
+          continue;
+        }
+        const join = await this.joinRunningParallelGroup(stepIndex);
+        if (!join.accepted) {
+          // The queue loop still runs the member once the anchor settles.
+          Log.info(
+            `[WorkflowExecutor] Merged parallel step ${stepIndex + 1} did not join beside the running step: ${join.diagnostic}`
+          );
+        }
+      }
+    })();
+  }
+
   public joinRunningParallelGroup(
     stepIndex: number
   ): Promise<ParallelGroupJoinResult> {
@@ -1550,11 +1616,15 @@ export class WorkflowExecutor {
       // member runs beside it instead of waiting for it to settle.
       const state = this.promptQueue.getState();
       const activeRuntime = this.promptQueue.getActiveParallelGroupRuntime();
+      // Any non-anchor member may start the run: a multi-step MCP promotion
+      // merges several members at once and admits them in order, so the
+      // first one is not the group's last step.
       const promotedGroup = state.parallelGroups.find(
         (candidate) =>
           candidate.id === activeRuntime?.groupId &&
           candidate.startIndex === state.currentIndex &&
-          stepIndex === candidate.endIndex
+          stepIndex > candidate.startIndex &&
+          stepIndex <= candidate.endIndex
       );
       const anchor = state.steps[state.currentIndex];
       if (

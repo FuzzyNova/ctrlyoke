@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-01 by Claude Code (bug-hunt final step, exercising the MCP server)
 - **Area:** `src/core/orchestration/RunContinuationService.ts`, `src/core/WorkflowExecutor.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
