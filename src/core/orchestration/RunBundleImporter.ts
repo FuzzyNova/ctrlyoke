@@ -2,7 +2,11 @@ import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
 import { writeFileAtomic } from "../../utils/AtomicFileUtils";
-import type { WorkflowLineageDescriptor } from "../../types/CtrlYokeTypes";
+import type {
+  RunRef,
+  WorkflowKey,
+  WorkflowLineageDescriptor,
+} from "../../types/CtrlYokeTypes";
 import type { WorkflowTimelineEventDraft } from "../../types/WorkflowTimelineTypes";
 import {
   RUN_BUNDLE_FILES,
@@ -29,8 +33,8 @@ export interface RunBundleImportOptions extends ReadRunBundleOptions {
 }
 
 export type RunBundleImportResult =
-  | { status: "imported"; workflowKey: string; runRef: string }
-  | { status: "alreadyImported"; workflowKey: string };
+  | { status: "imported"; workflowKey: WorkflowKey; runRef: RunRef }
+  | { status: "alreadyImported"; workflowKey: WorkflowKey };
 
 export class RunBundleImporter {
   constructor(

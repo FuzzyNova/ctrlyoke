@@ -26,6 +26,7 @@ ctrlyoke history show --workflow <key-or-name> [--run <ref|runId>] [--step <sele
 ctrlyoke history search <query> [filters] [--json]
 ctrlyoke history trash list|restore <id>|purge <id>|empty [--yes]
 ctrlyoke export --workflow <key-or-name> [--run <ref|runId>] --out <dir> [--with-snapshots] [--force] [--cwd <path>] [--json]
+ctrlyoke import <bundleDir> [--name <name>] [--again] [--cwd <path>] [--json]
 ctrlyoke step edit [file] --workflow <key-or-name> --run <ref|runId> --index <index> [--prompt <text>]
 ctrlyoke step remove --workflow <key-or-name> --run <ref|runId> --index <index>
 ctrlyoke step reorder --workflow <key-or-name> --run <ref|runId> --order <indices>
@@ -899,6 +900,27 @@ The summary lists how many values were redacted and, when multiple bundle files
 had removals, the per-file counts. It also lists every path outside the
 workspace and home folder, which stays as written. Redaction is best effort:
 review a bundle before you share it.
+
+## `ctrlyoke import`
+
+Import a run bundle into the current workspace's history so you can inspect its
+timeline without running any of its workflow steps:
+
+```bash
+ctrlyoke import ./release-run.ctrlyokerun
+ctrlyoke import ./release-run.ctrlyokerun --name "Release investigation"
+ctrlyoke import ./release-run.ctrlyokerun --again --cwd ./other-workspace
+```
+
+The bundle is validated before it is imported. The new lineage and run get fresh
+identifiers, and the import records the source root and export version as
+provenance. An already-imported bundle reports the existing history entry;
+pass `--again` to create another import. Use the printed
+`ctrlyoke history show` command to inspect the imported timeline.
+
+`--json` emits one `schemaVersion: 1` result line with the import status,
+workflow key, run reference, event count and source provenance. Invalid bundle
+data emits the standard error envelope and exits with code `2`.
 
 ## `ctrlyoke step`
 

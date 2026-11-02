@@ -105,6 +105,9 @@ export async function readRunBundleHeader(
       `${resolvedDir} was written by a newer ctrlyoke (bundle schema ${String(manifest.schemaVersion)}).`
     );
   }
+  if (typeof manifest.sourceRoot !== "string") {
+    throw new RunBundleFormatError("run.json contains an invalid sourceRoot.");
+  }
 
   await validateAssets(resolvedDir, manifest.assets);
 
@@ -125,6 +128,10 @@ export async function readRunBundleHeader(
   const definition = load<Record<string, unknown>>(
     await readJson(resolvedDir, RUN_BUNDLE_FILES.DEFINITION, maxBundleFileBytes)
   );
+  const resolvedManifest = load<RunBundleManifest>(manifest);
+  // sourceRoot is provenance, not an input path. Preserve the exporter's value
+  // instead of resolving its workspace token onto the importing workspace.
+  resolvedManifest.sourceRoot = manifest.sourceRoot;
   const files = [
     RUN_BUNDLE_FILES.BUNDLE,
     RUN_BUNDLE_FILES.MANIFEST,
@@ -142,7 +149,7 @@ export async function readRunBundleHeader(
   }
   return {
     bundleDir: resolvedDir,
-    manifest: load<RunBundleManifest>(manifest),
+    manifest: resolvedManifest,
     runManifest,
     definition,
     resolve: <T>(value: unknown): T => mapJsonStrings(value, resolve) as T,

@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Run exports now bundle referenced attachments, inline generated prompt bodies,
   validate asset hashes when reading, and warn when an attachment is missing.
+- Add `ctrlyoke import` to add a run bundle to workspace history for viewing.
 
 ### Fixed
 
