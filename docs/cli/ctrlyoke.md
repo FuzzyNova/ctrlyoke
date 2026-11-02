@@ -920,15 +920,20 @@ ctrlyoke import ./release-run.ctrlyokerun --name "Release investigation"
 ctrlyoke import ./release-run.ctrlyokerun --again --cwd ./other-workspace
 ```
 
-The bundle is validated before it is imported. The new lineage and run get fresh
-identifiers, and the import records the source root and export version as
-provenance. An already-imported bundle reports the existing history entry;
-pass `--again` to create another import. Use the printed
+Before importing, ctrlyoke prints a read-only preview with bundle provenance,
+whether the run can continue, the base-commit and checkout checks, pending
+steps (including scripts, resolved harness/model, secret grants and prompt
+redaction), and resumable-session availability. A missing base commit or
+referenced asset is listed as a blocker. Import itself never starts workflow
+steps. The bundle is validated before it is written to history; the new lineage
+and run get fresh identifiers. An already-imported bundle reports the existing
+history entry; pass `--again` to create another import. Use the printed
 `ctrlyoke history show` command to inspect the imported timeline.
 
 `--json` emits one `schemaVersion: 1` result line with the import status,
-workflow key, run reference, event count and source provenance. Invalid bundle
-data emits the standard error envelope and exits with code `2`.
+workflow key, run reference, event count, source provenance, and the same
+workspace-specific preview under `preview`. Invalid bundle data emits the
+standard error envelope and exits with code `2`.
 
 ## `ctrlyoke step`
 

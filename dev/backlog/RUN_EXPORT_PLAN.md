@@ -9,7 +9,7 @@
 > **Status:** Export half built 2026-10-18 and shipped in `0.2.0` (`ctrlyoke export`, bundle
 > schema 1). The worktree execution-root portability gap, `redaction.byFile`, phase 2 asset
 > bundling, and the phase 4 export side were built within schema 1 on 2026-11-01. Phase 4 still
-> needs the import preview service and import-side continuation. Phase 5 was built on
+> has the `RunImportPreview` service and CLI preview; import-side continuation remains. Phase 5 was built on
 > 2026-11-01: resolved session IDs are preflighted by exact ID, missing/invalid sessions start fresh with a visible
 > warning, and Codex/OpenCode missing-session errors retry without resume. Open item: a verified
 > Copilot CLI or Antigravity CLI rejection string was not found, so those runtime classifiers
@@ -19,7 +19,11 @@
 > and `src/cli/`, including streaming validation, asset import, provenance and re-import detection.
 > Phase 3's dashboard side is built: imported lineage provenance reaches run/history
 > payloads, the dashboard shows the origin badge, and pre-import output is read-only
-> at the import-sequence marker. Phase 3 is complete. Not built:
+> at the import-sequence marker. Phase 3 is complete. Phase 4's preview service is
+> built in `src/core/orchestration/RunImportPreview.ts`; `ctrlyoke import` prints it
+> before importing and includes it additively in `--json`. It reports importing-machine
+> execution properties, secret approvals, session probes, redaction, base-commit and
+> asset blockers without writing state. Not built:
 > **continuing an imported
 > run** (§5, added 2026-10-24) and bundling workspace changes. Originally
 > written 2026-08-14.
@@ -590,7 +594,7 @@ How they work together instead:
 | 1 ✅  | Bundle format, path rewrite, `RunBundleExporter`, `ctrlyoke export`, redaction (`secrets-v1`)                | Yes: shareable artifacts (shipped `0.2.0`)                |
 | 2 ✅  | Asset bundling via the Save As machinery (`redaction.byFile` and asset hashing)                              | Yes: bundles stop dangling `@` refs                       |
 | 3 ✅  | `RunMaterializer` + `RunBundleImporter` view-only core, ingress guards (§6.1), `ctrlyoke import`, dashboard provenance badge and pre-import undo gate | Completes the CLI share loop; imported runs can be viewed |
-| 4     | Continuation: export side built (`run.ctrlyoke.json`, `changes.patch`); import preview, `_runtime` normalization and `import --continue` remain | Yes: the machine-to-machine handoff |
+| 4     | Continuation: export side built (`run.ctrlyoke.json`, `changes.patch`) and the read-only CLI import preview; `_runtime` normalization and `import --continue` remain | Yes: the machine-to-machine handoff |
 | 5 ✅  | Session preflight probe for all runs, uniform warn-and-start-fresh fallback, malformed IDs included (§5.4)   | Yes: fixes native runs too                                |
 | 6     | Dashboard: Export Run / Import Run actions, shared location fields, Load routing, import preview, guide page | Yes                                                       |
 
@@ -606,7 +610,7 @@ fresh-session fallback for missing/invalid IDs, plus Codex/OpenCode runtime reje
 Copilot and Antigravity runtime rejection classifiers remain open pending verified CLI error
 text); phase 3 core (shared materializer and bundle importer, built 2026-11-01; CLI import,
 origin badge and undo gating remain); phase 4
-(export side, then the import preview service, then import-side continuation); phase 6
+(export side, then the import preview service (built 2026-11-01), then import-side continuation); phase 6
 (Export Run, then Import Run and Load routing, then the guide page). Phase 5 lands before
 phase 4 because the import preview reports session availability through its probe.
 

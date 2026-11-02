@@ -13,7 +13,10 @@ import { buildSessionResumeWarning } from "./SessionResumeWarning";
 export interface CliSessionResolution {
   resolvedProperties?: ResolvedProperties;
   resolvedSessionId?: string;
+  /** Candidate ID before invalid or missing sessions fall back to a fresh session. */
+  probedSessionId?: string;
   warningMessage?: string;
+  sessionAvailability?: "available" | "missing" | "unknown" | "malformed";
 }
 
 export interface CliSessionResolverAdapterDeps {
@@ -47,11 +50,14 @@ export class CliSessionResolverAdapter {
             workflowContext?.groupStartBoundary
           );
     let warningMessage: string | undefined;
+    let sessionAvailability: CliSessionResolution["sessionAvailability"];
+    const probedSessionId = resolvedSessionId;
 
     if (resolvedSessionId) {
       const harness =
         resolvedProperties?.harness ?? this.deps.getIntegrationHarness();
       if (!SessionValidator.validate(resolvedSessionId, harness)) {
+        sessionAvailability = "malformed";
         warningMessage = buildSessionResumeWarning(
           workflowContext?.promptIndex ?? 0,
           harness,
@@ -68,13 +74,18 @@ export class CliSessionResolverAdapter {
             workspaceRoot
           );
           if (availability === "missing") {
+            sessionAvailability = "missing";
             warningMessage = buildSessionResumeWarning(
               workflowContext?.promptIndex ?? 0,
               harness,
               "not-found"
             );
             resolvedSessionId = undefined;
+          } else {
+            sessionAvailability = availability;
           }
+        } else {
+          sessionAvailability = "unknown";
         }
       }
     }
@@ -82,7 +93,9 @@ export class CliSessionResolverAdapter {
     return {
       resolvedProperties,
       resolvedSessionId,
+      ...(probedSessionId ? { probedSessionId } : {}),
       warningMessage,
+      ...(sessionAvailability ? { sessionAvailability } : {}),
     };
   }
 }

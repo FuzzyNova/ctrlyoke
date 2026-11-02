@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `ctrlyoke import` now prints a workspace-specific preview before writing a
+  bundle to history, and includes that preview in its JSON result.
 - Imported runs show bundle provenance, and output recorded before import is
   read-only.
 

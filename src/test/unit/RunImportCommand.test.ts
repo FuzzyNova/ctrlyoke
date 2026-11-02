@@ -39,7 +39,10 @@ suite("RunImportCommand", () => {
 
   test("imports a bundle and reports its provenance and history command", async () => {
     await importRunCommand({ bundleDir }, io(), dependencies());
-    assert.match(output[0], /^Imported Imported fixture as /);
+    assert.match(output[0], /^Import preview: Imported fixture$/);
+    assert.ok(
+      output.some((line) => /^Imported Imported fixture as /.test(line))
+    );
     assert.ok(output.includes("  2 events"));
     assert.ok(
       output.some((line) => line.includes("${workspaceFolder}/source"))
@@ -63,6 +66,10 @@ suite("RunImportCommand", () => {
         exportedAt: string;
         exportedByVersion: string;
       };
+      preview: {
+        provenance: { workflowName: string };
+        pendingSteps: unknown[];
+      };
     };
     assert.strictEqual(result.schemaVersion, 1);
     assert.strictEqual(result.success, true);
@@ -75,22 +82,33 @@ suite("RunImportCommand", () => {
       exportedAt: "2026-10-31T12:00:00.000Z",
       exportedByVersion: "0.4.1",
     });
+    assert.strictEqual(
+      result.preview.provenance.workflowName,
+      "Imported fixture"
+    );
+    assert.deepStrictEqual(result.preview.pendingSteps, []);
   });
 
   test("reports an existing import and names --again", async () => {
     await importRunCommand({ bundleDir }, io(), dependencies());
     output = [];
     await importRunCommand({ bundleDir }, io(), dependencies());
-    assert.match(output[0], /^Already imported Imported fixture as /);
-    assert.ok(output[1].includes("--again"));
+    assert.ok(
+      output.some((line) => /^Already imported Imported fixture as /.test(line))
+    );
+    assert.ok(output.some((line) => line.includes("--again")));
   });
 
   test("--again creates another imported lineage", async () => {
     await importRunCommand({ bundleDir }, io(), dependencies());
-    const firstKey = output[0].match(/as ([^ ]+)/)?.[1];
+    const firstKey = output
+      .find((line) => line.startsWith("Imported Imported fixture as "))
+      ?.match(/as ([^ ]+)/)?.[1];
     output = [];
     await importRunCommand({ bundleDir, again: true }, io(), dependencies());
-    const secondKey = output[0].match(/as ([^ ]+)/)?.[1];
+    const secondKey = output
+      .find((line) => line.startsWith("Imported Imported fixture as "))
+      ?.match(/as ([^ ]+)/)?.[1];
     assert.ok(firstKey);
     assert.ok(secondKey);
     assert.notStrictEqual(firstKey, secondKey);
