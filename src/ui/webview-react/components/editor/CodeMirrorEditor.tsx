@@ -885,9 +885,6 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       if (error || !relativePath) {
         resolvePendingCapture(seq, "");
         const messageText = error || "Failed to save output snapshot";
-        WebviewLog.error(
-          `[CodeMirror] Output snapshot save failed: ${messageText}`
-        );
         notifyUser(messageText, USER_FEEDBACK_SEVERITY.ERROR);
         return;
       }
@@ -988,9 +985,6 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       if (error || !relativePath) {
         resolvePendingPaste(seq, "");
         const messageText = error || "Failed to save pasted image";
-        WebviewLog.error(
-          `[CodeMirror] Pasted image save failed: ${messageText}`
-        );
         notifyUser(messageText, USER_FEEDBACK_SEVERITY.ERROR);
         return;
       }

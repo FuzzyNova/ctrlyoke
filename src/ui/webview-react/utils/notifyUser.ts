@@ -3,8 +3,26 @@ import { useUiStore } from "@store/uiStore";
 import type { ToastOptions } from "@store/uiStore";
 import {
   MESSAGE_TYPES,
+  USER_FEEDBACK_SEVERITY,
   type UserFeedbackSeverity,
 } from "@root/types/DashboardConstants";
+import { WebviewLog } from "@utils/logger";
+
+/**
+ * Every error the dashboard shows the user also lands in the session log, so
+ * callers never log before notifying. `WebviewLog` forwards to the extension
+ * host, which writes it as `[<client>] …`.
+ */
+function logShownError(
+  message: string,
+  severity: UserFeedbackSeverity,
+  detail?: string
+): void {
+  if (severity !== USER_FEEDBACK_SEVERITY.ERROR) return;
+  WebviewLog.error(
+    detail ? `[Toast] ${message}\n${detail}` : `[Toast] ${message}`
+  );
+}
 
 /** Route webview-originated feedback to the current host's feedback surface. */
 export function notifyUser(
@@ -12,6 +30,7 @@ export function notifyUser(
   severity: UserFeedbackSeverity,
   detail?: string
 ): void {
+  logShownError(message, severity, detail);
   if (isStandalone) {
     useUiStore.getState().showToast(message, severity, { detail });
     return;
@@ -31,5 +50,6 @@ export function showWebviewToast(
   severity: UserFeedbackSeverity,
   options?: ToastOptions
 ): void {
+  logShownError(message, severity, options?.detail);
   useUiStore.getState().showToast(message, severity, options);
 }

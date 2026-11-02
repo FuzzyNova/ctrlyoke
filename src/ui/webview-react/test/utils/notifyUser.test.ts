@@ -41,4 +41,32 @@ describe("notifyUser", () => {
     });
     expect(useUiStore.getState().toastQueue).toEqual([]);
   });
+
+  it("forwards every error it shows to the session log", async () => {
+    const { notifyUser, showWebviewToast } = await import("@utils/notifyUser");
+    const { useUiStore } = await import("@store/uiStore");
+    useUiStore.getState().resetUi();
+
+    notifyUser("Run export failed", "error", "No timeline.");
+    showWebviewToast("Toast failed", "error");
+    notifyUser("Saved", "success");
+
+    const logged = vi
+      .mocked(window.vscodeApi!.postMessage)
+      .mock.calls.map(([message]) => message)
+      .filter(
+        (message: { type?: string }) =>
+          message.type === MESSAGE_TYPES.LOG_MESSAGE
+      );
+    expect(logged).toEqual([
+      expect.objectContaining({
+        level: "error",
+        message: "[Toast] Run export failed\nNo timeline.",
+      }),
+      expect.objectContaining({
+        level: "error",
+        message: "[Toast] Toast failed",
+      }),
+    ]);
+  });
 });
