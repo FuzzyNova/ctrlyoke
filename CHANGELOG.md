@@ -45,6 +45,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Resuming a paused workflow no longer leaves it stuck as running with
+  nothing executing when the resume cannot set up, for example when its
+  worktree or runner lock cannot be prepared. The workflow now stops with an
+  error you can see, and **Resume** tries again.
+- A worktree workflow whose trusted external folder is on a drive that is not
+  mounted yet, such as a cloud drive that is still connecting, now starts
+  instead of failing with `ENOENT ... realpath 'Z:\'`. The folder is still
+  passed to the harness, as it already was for workflows that do not use a
+  worktree.
 - `history show --step final` now reports an unknown state when the run's
   working file is unavailable and the run summary cannot confirm a final step.
 - Qwen hooks now keep their native shell on Windows: quoted hooks stay

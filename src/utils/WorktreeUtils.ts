@@ -24,11 +24,17 @@ export interface WorkspaceEligibility {
   reason?: string;
 }
 
-/** Resolve symlinks in the existing part of a path while retaining its tail. */
+/**
+ * Resolve symlinks in the existing part of a path while retaining its tail.
+ * When nothing exists, not even the filesystem root (an unmounted drive such
+ * as a cloud drive that has not mounted yet), there is no link to resolve, so
+ * the lexical path is returned rather than failing on `realpath('Z:\')`.
+ */
 export async function resolveThroughNearestExistingAncestor(
   candidate: string
 ): Promise<string> {
-  let current = path.resolve(candidate);
+  const absolute = path.resolve(candidate);
+  let current = absolute;
   const missing: string[] = [];
 
   while (true) {
@@ -38,7 +44,7 @@ export async function resolveThroughNearestExistingAncestor(
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       const parent = path.dirname(current);
-      if (parent === current) throw error;
+      if (parent === current) return path.normalize(absolute);
       missing.push(path.basename(current));
       current = parent;
     }

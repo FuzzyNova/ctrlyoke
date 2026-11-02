@@ -1414,6 +1414,40 @@ export class WorkflowStartupPipeline {
     await this.settleProvisionedWorktreeAfterEarlyFailure();
     await this.releaseLineageLockAfterEarlyFailure();
     const runToFinalize = await this.finalizePromotedRunAfterEarlyFailure();
+    await this.notifyExecutionFailure(failureTarget, cause, runToFinalize);
+  }
+
+  /**
+   * Fail a paused run whose resume setup (runner lock, worktree, execution
+   * workspace) threw after the runtime had already flipped PAUSED → RUNNING.
+   * Without this the run stays RUNNING with nothing dispatched — a hang only
+   * Stop clears. ERROR is the same state a failed start lands in, so Resume
+   * retries the setup once its cause (e.g. an unmounted drive) is fixed.
+   * The caller owns releasing whatever the setup acquired; a paused run's
+   * worktree is deliberately not settled here.
+   */
+  public async failResumeSetup(error: unknown): Promise<void> {
+    Log.error(
+      `[inst:${this.port.id.slice(0, 8)}] Failed to resume workflow:`,
+      error
+    );
+    this.port.failRuntime();
+    await this.port.queue.commitRuntimeTransition();
+    await this.notifyExecutionFailure(
+      {
+        kind: FINAL_STEP_PHASES.QUEUE,
+        stepIndex: this.port.queue.getState().currentIndex,
+      },
+      error,
+      ""
+    );
+  }
+
+  private async notifyExecutionFailure(
+    failureTarget: WorkflowAttemptTarget,
+    cause: unknown,
+    runToFinalize: string
+  ): Promise<void> {
     const executionFailureMessage = this.port.execution.describeExecutionFailure
       ? await this.port.execution.describeExecutionFailure(cause)
       : await this.describeExecutionFailure(cause);

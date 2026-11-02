@@ -9,6 +9,7 @@ import {
   assertWorktreePlacement,
   createWorktreeDirectoryName,
   evaluateWorkspaceEligibility,
+  resolveThroughNearestExistingAncestor,
   resolveWorktreeRoot,
   slugifyWorktreeName,
   validateWorktreeBranchName,
@@ -64,6 +65,28 @@ suite("WorktreeUtils", function () {
     assert.strictEqual(calls.length, 2);
     assert.ok(
       fallback.root.startsWith(path.join(home, ".ctrlyoke", "worktrees"))
+    );
+  });
+
+  test("keeps the lexical path when not even the drive root exists", async function () {
+    // An unmounted drive (a cloud drive that has not mounted yet) used to
+    // throw `realpath 'Z:\'` out of worktree setup.
+    if (process.platform !== "win32") this.skip();
+    let unmounted: string | undefined;
+    for (const letter of "ZYXWVUTSRQPONMLKJIHG") {
+      const root = `${letter}:\\`;
+      try {
+        await fs.stat(root);
+      } catch {
+        unmounted = root;
+        break;
+      }
+    }
+    if (!unmounted) this.skip();
+    const candidate = path.join(unmounted, "My Drive", "Legal");
+    assert.strictEqual(
+      await resolveThroughNearestExistingAncestor(candidate),
+      path.normalize(candidate)
     );
   });
 

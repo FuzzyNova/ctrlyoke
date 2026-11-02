@@ -1443,6 +1443,71 @@ suite("WorkflowInstance runtime transitions", () => {
     }
   });
 
+  test("a resume whose setup fails lands in ERROR instead of hanging in RUNNING", async () => {
+    // Resuming before a trusted external root's drive mounted threw
+    // `realpath 'Z:\'` from worktree setup after the runtime had already flipped
+    // PAUSED -> RUNNING; the error escaped and the run sat RUNNING forever with
+    // nothing dispatched until the user pressed Stop.
+    const platform = new MockPlatform();
+    const tempDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-resume-setup-fail-")
+    );
+    let instance: WorkflowInstance | undefined;
+
+    try {
+      instance = new WorkflowInstance(
+        platform,
+        undefined,
+        new MockIntegrationFactory(platform),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        tempDir
+      );
+      const steps: PromptStep[] = [{ prompt: "done" }, { prompt: "pending" }];
+      const workingFilePath = await instance.promptQueue.createWorkingFile(
+        "resume-setup-fail",
+        steps,
+        tempDir
+      );
+      instance.promptQueue.loadPrompts({ steps }, workingFilePath);
+
+      const runtime = instance.promptQueue.getRuntimeStateMachine();
+      await startQueueExecution(instance);
+      assert.strictEqual(runtime.pause(), true);
+      assert.strictEqual(runtime.confirmPaused(), true);
+      await instance.promptQueue.commitRuntimeTransition();
+
+      let started = false;
+      (instance as any).startWorkflowExecution = async () => {
+        started = true;
+      };
+      (instance as any).prepareExecutionWorktree = async () => {
+        throw Object.assign(
+          new Error("ENOENT: no such file or directory, realpath 'Z:\\'"),
+          { code: "ENOENT" }
+        );
+      };
+
+      await instance.resume();
+
+      assert.strictEqual(started, false, "nothing may dispatch after setup");
+      assert.strictEqual(
+        instance.getQueueState().status,
+        EXECUTION_STATES.ERROR,
+        "a failed resume must leave a retryable ERROR, not a dead RUNNING"
+      );
+      const persisted = JSON.parse(await fs.readFile(workingFilePath, "utf8"));
+      assert.strictEqual(
+        persisted._runtime.executionState,
+        EXECUTION_STATES.ERROR
+      );
+    } finally {
+      await instance?.outputHistoryManager.flushPendingIndexRefresh();
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   test("drives execution-state updates and cancelled-step status from runtime transitions", async () => {
     const platform = new MockPlatform();
 

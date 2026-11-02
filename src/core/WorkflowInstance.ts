@@ -2450,17 +2450,17 @@ export class WorkflowInstance
     const resolvedHistoryFilePath =
       historyFilePath ?? this.resolveHistoryFilePath();
     const workingFilePath = this.promptQueue.getState().workingFilePath;
-    await this.ensureRunnerLock(workingFilePath);
-    const state = this.promptQueue.getState();
-    const lockWorkspaceRoot = this.getStateRoot();
-    if (
-      this.runnerLockCoordinator.ownsLock() &&
-      state.workflowKey &&
-      lockWorkspaceRoot
-    ) {
-      this.startRunnerLockHeartbeat(lockWorkspaceRoot, state.workflowKey);
-    }
     try {
+      await this.ensureRunnerLock(workingFilePath);
+      const state = this.promptQueue.getState();
+      const lockWorkspaceRoot = this.getStateRoot();
+      if (
+        this.runnerLockCoordinator.ownsLock() &&
+        state.workflowKey &&
+        lockWorkspaceRoot
+      ) {
+        this.startRunnerLockHeartbeat(lockWorkspaceRoot, state.workflowKey);
+      }
       this.worktreeResolution = await resolveWorktreeForWorkspace(
         this.promptQueue.getWorkflowFile().worktree,
         ConfigurationUtils.getDefaultWorktree(),
@@ -2488,7 +2488,12 @@ export class WorkflowInstance
           releaseError
         )
       );
-      throw error;
+      // The runtime is already RUNNING; rethrowing would leave it there with
+      // nothing dispatched. Fail it the way a failed start does instead.
+      await new WorkflowStartupPipeline(
+        this.createWorkflowStartupPipelinePort()
+      ).failResumeSetup(error);
+      return;
     }
 
     Log.info("[WorkflowInstance] Resuming workflow from paused position");
