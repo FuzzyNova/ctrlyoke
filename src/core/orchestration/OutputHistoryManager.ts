@@ -2118,7 +2118,7 @@ export class OutputHistoryManager {
    * append is cheap. Awaiting it here previously stalled workflow completion on
    * a full index rebuild (and contributed to the extension-host OOM).
    */
-  private refreshSearchIndex(): Promise<void> {
+  public refreshSearchIndex(): Promise<void> {
     this.pendingIndexRefresh = this.historySearchIndexService
       .enqueueWorkspaceRefresh(this._workspaceFolderPath)
       .then(() => undefined)

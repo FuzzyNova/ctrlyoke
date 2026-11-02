@@ -89,7 +89,9 @@ export class WorkflowLineageRepository {
       sourceWorkflowName: string;
       variantCreatedAt: number;
     },
-    options?: WorkflowLineageCreationOptions
+    options?: WorkflowLineageCreationOptions & {
+      importedFrom?: WorkflowLineageDescriptor["importedFrom"];
+    }
   ): Promise<CreatedLineage> {
     if (options?.existingWorkflowKey) {
       const workflowKey = options.existingWorkflowKey;
@@ -136,6 +138,7 @@ export class WorkflowLineageRepository {
       ...(originalFile ? { originalFile } : {}),
       ...(options?.isSystemGenerated ? { isSystemGenerated: true } : {}),
       ...(provenance ?? {}),
+      ...(options?.importedFrom ? { importedFrom: options.importedFrom } : {}),
       isFavorite: false,
       createdAt: now,
       lastModifiedAt: now,

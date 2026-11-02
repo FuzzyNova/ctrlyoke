@@ -588,6 +588,25 @@ export interface WorkflowLineageDescriptor {
   sourceWorkflowName?: string;
   /** Time at which this workflow variant was created. */
   variantCreatedAt?: number;
+  /** Origin details for a run imported from a ctrlyoke bundle. */
+  importedFrom?: {
+    kind: "runBundle";
+    provenance: {
+      workflowKey: WorkflowKey;
+      runRef: RunRef;
+      runId: number;
+      steps: Array<{
+        stepIndex: number;
+        harness?: string;
+        model?: string;
+        sessionId?: string;
+      }>;
+    };
+    sourceRoot: string;
+    exportedAt: string;
+    exportedByVersion: string;
+    bundleName: string;
+  };
   /** Monotonic; never decremented after deletion. */
   nextRunId: number;
   /**

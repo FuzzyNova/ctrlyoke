@@ -1172,7 +1172,7 @@ export class WorkingFileManager {
    * anchoring after the rename would leave a window in which an outside edit
    * of the brand-new file would be anchored as trusted on its first write.
    */
-  private static async publishAnchoredRun(
+  public static async publishAnchoredRun(
     workspaceFolderPath: string,
     workflowKey: WorkflowKey,
     allocation: import("./orchestration/WorkflowLineageRepository").AllocatedRun,

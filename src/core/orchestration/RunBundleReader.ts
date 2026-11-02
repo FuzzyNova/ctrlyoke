@@ -9,6 +9,7 @@ import {
   type RunBundleManifest,
   type RunBundleRunManifest,
 } from "../../types/RunBundleTypes";
+import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import {
   createWorkspacePathResolver,
   mapJsonStrings,
@@ -35,6 +36,16 @@ export interface ReadRunBundleOptions {
   maxEventLineBytes?: number;
   /** Override for tests exercising streaming past the former whole-file cap. */
   maxBundleFileBytes?: number;
+  maxTotalBytes?: number;
+  maxEventCount?: number;
+}
+
+export interface RunBundleHeader {
+  bundleDir: string;
+  manifest: RunBundleManifest;
+  runManifest: RunBundleRunManifest;
+  definition: Record<string, unknown>;
+  resolve: <T>(value: unknown) => T;
 }
 
 export interface LoadedRunBundle {
@@ -53,6 +64,25 @@ export async function readRunBundle(
   workspaceRoot: string,
   options: ReadRunBundleOptions = {}
 ): Promise<LoadedRunBundle> {
+  const header = await readRunBundleHeader(bundleDir, workspaceRoot, options);
+  const events: RunBundleEvent[] = [];
+  for await (const event of streamRunBundleEvents(header, options))
+    events.push(event);
+  return {
+    bundleDir: header.bundleDir,
+    manifest: header.manifest,
+    runManifest: header.runManifest,
+    definition: header.definition,
+    events,
+  };
+}
+
+/** Validate bundle metadata and assets before an importer allocates any state. */
+export async function readRunBundleHeader(
+  bundleDir: string,
+  workspaceRoot: string,
+  options: ReadRunBundleOptions = {}
+): Promise<RunBundleHeader> {
   const resolvedDir = path.resolve(bundleDir);
   const maxBundleFileBytes = options.maxBundleFileBytes;
   const manifest = (await readJson(
@@ -67,6 +97,8 @@ export async function readRunBundle(
   }
   if (
     typeof manifest.schemaVersion !== "number" ||
+    !Number.isInteger(manifest.schemaVersion) ||
+    manifest.schemaVersion < 1 ||
     manifest.schemaVersion > RUN_BUNDLE_SCHEMA_VERSION
   ) {
     throw new RunBundleFormatError(
@@ -78,23 +110,71 @@ export async function readRunBundle(
 
   const resolve = createWorkspacePathResolver(workspaceRoot);
   const load = <T>(value: unknown): T => mapJsonStrings(value, resolve) as T;
-  const events = await readEvents(resolvedDir, load, options.maxEventLineBytes);
-
+  const runManifest = load<RunBundleRunManifest>(
+    await readJson(resolvedDir, RUN_BUNDLE_FILES.MANIFEST, maxBundleFileBytes)
+  );
+  if (
+    !Number.isSafeInteger(runManifest.nextSequence) ||
+    runManifest.nextSequence < 1 ||
+    !Number.isFinite(runManifest.startedAt)
+  ) {
+    throw new RunBundleFormatError(
+      "manifest.json contains invalid run metadata."
+    );
+  }
+  const definition = load<Record<string, unknown>>(
+    await readJson(resolvedDir, RUN_BUNDLE_FILES.DEFINITION, maxBundleFileBytes)
+  );
+  const files = [
+    RUN_BUNDLE_FILES.BUNDLE,
+    RUN_BUNDLE_FILES.MANIFEST,
+    RUN_BUNDLE_FILES.DEFINITION,
+  ];
+  let totalBytes = 0;
+  for (const name of files)
+    totalBytes += (await fs.promises.stat(path.join(resolvedDir, name))).size;
+  const eventsStat = await safeEventStat(resolvedDir);
+  totalBytes +=
+    eventsStat.size +
+    (manifest.assets ?? []).reduce((sum, asset) => sum + asset.bytes, 0);
+  if (totalBytes > (options.maxTotalBytes ?? 512 * 1024 * 1024)) {
+    throw new RunBundleFormatError("Run bundle exceeds the total size limit.");
+  }
   return {
     bundleDir: resolvedDir,
     manifest: load<RunBundleManifest>(manifest),
-    runManifest: load<RunBundleRunManifest>(
-      await readJson(resolvedDir, RUN_BUNDLE_FILES.MANIFEST, maxBundleFileBytes)
-    ),
-    definition: load<Record<string, unknown>>(
-      await readJson(
-        resolvedDir,
-        RUN_BUNDLE_FILES.DEFINITION,
-        maxBundleFileBytes
-      )
-    ),
-    events,
+    runManifest,
+    definition,
+    resolve: <T>(value: unknown): T => mapJsonStrings(value, resolve) as T,
   };
+}
+
+/** Stream validated JSONL events, enforcing line and total event caps. */
+export async function* streamRunBundleEvents(
+  header: RunBundleHeader,
+  options: ReadRunBundleOptions = {}
+): AsyncGenerator<RunBundleEvent, void, undefined> {
+  for await (const event of readEvents(
+    header.bundleDir,
+    <T>(value: unknown) => header.resolve<T>(value),
+    options.maxEventLineBytes,
+    options.maxEventCount
+  )) {
+    yield event;
+  }
+}
+
+async function safeEventStat(bundleDir: string): Promise<fs.Stats> {
+  const filePath = path.join(bundleDir, RUN_BUNDLE_FILES.EVENTS);
+  try {
+    const stat = await fs.promises.lstat(filePath);
+    if (!stat.isFile() || stat.isSymbolicLink()) throw new Error();
+    return stat;
+  } catch {
+    throw new RunBundleFormatError(
+      `${bundleDir} has no ${RUN_BUNDLE_FILES.EVENTS}.`
+    );
+  }
 }
 
 async function validateAssets(
@@ -168,11 +248,12 @@ async function validateAssets(
   }
 }
 
-async function readEvents(
+async function* readEvents(
   bundleDir: string,
   load: <T>(value: unknown) => T,
-  maxEventLineBytes = MAX_EVENT_LINE_BYTES
-): Promise<RunBundleEvent[]> {
+  maxEventLineBytes = MAX_EVENT_LINE_BYTES,
+  maxEventCount = 1_000_000
+): AsyncGenerator<RunBundleEvent, void, undefined> {
   const fileName = RUN_BUNDLE_FILES.EVENTS;
   const filePath = path.join(bundleDir, fileName);
   let stat: fs.Stats;
@@ -187,8 +268,8 @@ async function readEvents(
     );
   }
 
-  const events: RunBundleEvent[] = [];
   let lineNumber = 0;
+  let eventCount = 0;
   try {
     for await (const line of streamFileLines(filePath, {
       maxLineLength: maxEventLineBytes,
@@ -200,14 +281,31 @@ async function readEvents(
         );
       }
       if (line.trim().length === 0) continue;
+      if (eventCount >= maxEventCount) {
+        throw new RunBundleFormatError(
+          `events.jsonl exceeds the ${maxEventCount}-event limit.`
+        );
+      }
+      let event: RunBundleEvent;
       try {
-        events.push(load<RunBundleEvent>(JSON.parse(line)));
+        event = load<RunBundleEvent>(JSON.parse(line));
       } catch (error) {
         if (error instanceof RunBundleFormatError) throw error;
         throw new RunBundleFormatError(
           `${fileName} line ${lineNumber} is not valid JSON.`
         );
       }
+      if (
+        !event ||
+        typeof event !== "object" ||
+        !Object.values(TIMELINE_EVENT_TYPES).includes(event.eventType)
+      ) {
+        throw new RunBundleFormatError(
+          `${fileName} line ${lineNumber} is not a recognized timeline event.`
+        );
+      }
+      eventCount++;
+      yield event;
     }
   } catch (error) {
     if (error instanceof RunBundleFormatError) throw error;
@@ -218,7 +316,6 @@ async function readEvents(
     }
     throw error;
   }
-  return events;
 }
 
 async function readText(

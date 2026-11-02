@@ -12,8 +12,11 @@
 > session IDs are preflighted by exact ID, missing/invalid sessions start fresh with a visible
 > warning, and Codex/OpenCode missing-session errors retry without resume. Open item: a verified
 > Copilot CLI or Antigravity CLI rejection string was not found, so those runtime classifiers
-> remain unimplemented; their normal local-store misses are handled by preflight. Not built:
-> import, **continuing an imported
+> remain unimplemented; their normal local-store misses are handled by preflight. Phase 3's
+> shared materializer and view-only bundle importer core are now built: `RunMaterializer` and
+> `RunBundleImporter` under `src/core/orchestration/`, including streaming validation, asset
+> import, provenance and re-import detection. Not built: CLI import, origin badge/undo gating,
+> **continuing an imported
 > run** (§5, added 2026-10-24), bundling workspace changes, and the dashboard UI. Originally
 > written 2026-08-14.
 >
@@ -577,27 +580,27 @@ How they work together instead:
 
 ## 9. Phasing
 
-| Phase | Content                                                                                                      | Ships value alone?                         |
-| ----- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
-| 1 ✅  | Bundle format, path rewrite, `RunBundleExporter`, `ctrlyoke export`, redaction (`secrets-v1`)                | Yes: shareable artifacts (shipped `0.2.0`) |
-| 2 ✅  | Asset bundling via the Save As machinery (`redaction.byFile` and asset hashing)                              | Yes: bundles stop dangling `@` refs        |
-| 3     | `RunMaterializer` + `ctrlyoke import` (view-only), ingress guards (§6.1), origin badge                       | Yes: completes the share loop              |
-| 4     | Continuation: `run.ctrlyoke.json`, `changes.patch`, `_runtime` normalization, `import --continue`            | Yes: the machine-to-machine handoff        |
-| 5 ✅  | Session preflight probe for all runs, uniform warn-and-start-fresh fallback, malformed IDs included (§5.4)   | Yes: fixes native runs too                 |
-| 6     | Dashboard: Export Run / Import Run actions, shared location fields, Load routing, import preview, guide page | Yes                                        |
+| Phase | Content                                                                                                                                 | Ships value alone?                                            |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| 1 ✅  | Bundle format, path rewrite, `RunBundleExporter`, `ctrlyoke export`, redaction (`secrets-v1`)                                           | Yes: shareable artifacts (shipped `0.2.0`)                    |
+| 2 ✅  | Asset bundling via the Save As machinery (`redaction.byFile` and asset hashing)                                                         | Yes: bundles stop dangling `@` refs                           |
+| 3 ◐   | `RunMaterializer` + `RunBundleImporter` view-only core and ingress guards (§6.1) built; CLI import, origin badge and undo gating remain | Core enables a future second source; CLI completes share loop |
+| 4     | Continuation: `run.ctrlyoke.json`, `changes.patch`, `_runtime` normalization, `import --continue`                                       | Yes: the machine-to-machine handoff                           |
+| 5 ✅  | Session preflight probe for all runs, uniform warn-and-start-fresh fallback, malformed IDs included (§5.4)                              | Yes: fixes native runs too                                    |
+| 6     | Dashboard: Export Run / Import Run actions, shared location fields, Load routing, import preview, guide page                            | Yes                                                           |
 
 Phase 5 is a **release gate on phase 4**, the way redaction was on phase 1: without it, four of
 six harnesses fail the first step that tries to resume a session from the other machine. It has
 no dependency on the import work, so it can land first. A native run whose harness session was
 cleaned up benefits the same way.
 
-**Build order (orchestrated 2026-11-01):** the §2.1 worktree-root fix and `redaction.byFile`;
+**Build order (updated 2026-11-01):** the §2.1 worktree-root fix and `redaction.byFile`;
 phase 2 assets (built 2026-11-01; implementation stayed within schema 1 and added an optional
 manifest field); phase 5 (built 2026-11-01: exact-ID probes for all six harnesses, warning and
 fresh-session fallback for missing/invalid IDs, plus Codex/OpenCode runtime rejection recovery;
 Copilot and Antigravity runtime rejection classifiers remain open pending verified CLI error
-text); phase 3
-(materializer and importer core, then the CLI, then the origin badge and undo gating); phase 4
+text); phase 3 core (shared materializer and bundle importer, built 2026-11-01; CLI import,
+origin badge and undo gating remain); phase 4
 (export side, then the import preview service, then import-side continuation); phase 6
 (Export Run, then Import Run and Load routing, then the guide page). Phase 5 lands before
 phase 4 because the import preview reports session availability through its probe.
