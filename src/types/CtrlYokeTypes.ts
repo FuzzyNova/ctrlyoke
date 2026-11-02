@@ -786,6 +786,25 @@ export interface WorkingFileRuntime {
   worktree?: WorkingFileWorktreeRuntime;
   /** Durable notice when an inherited worktree default degraded to none. */
   worktreeNotice?: string;
+  /** Provenance chain for a run materialized from an exported run bundle. */
+  importedFrom?: {
+    provenance: {
+      workflowKey: WorkflowKey;
+      runRef: RunRef;
+      runId: number;
+      steps: Array<{
+        stepIndex: number;
+        harness?: string;
+        model?: string;
+        sessionId?: string;
+      }>;
+    };
+    exportedAt: string;
+    exportedByVersion: string;
+    sourceRoot: string;
+    /** Earlier origin carried by the bundle this run imported. */
+    previous?: WorkingFileRuntime["importedFrom"];
+  };
 }
 
 export interface ActiveParallelGroupRuntime {

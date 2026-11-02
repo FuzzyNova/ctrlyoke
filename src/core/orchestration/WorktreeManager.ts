@@ -669,6 +669,38 @@ export class WorktreeManager {
     return this.tryReadRecord(recordPath);
   }
 
+  /** Remove a just-created imported worktree after its patch failed to apply. */
+  public async removeImportedManagedWorktree(
+    info: WorktreeInfo
+  ): Promise<void> {
+    if (
+      info.mode !== WORKTREE_MODES.MANAGED ||
+      info.lifecycleOwner !== WORKTREE_LIFECYCLE_OWNERS.CTRLYOKE
+    ) {
+      throw new Error(
+        "Only an owned managed worktree can be removed after import."
+      );
+    }
+    const { repositoryRoot, commonDirectory } =
+      await this.resolveRepositoryContext(info.sourceCheckoutRoot);
+    const recordPath = this.recordPath(commonDirectory, info.branchName);
+    const record = await this.tryReadRecord(recordPath);
+    if (
+      !record ||
+      record.workflowKey !== info.workflowKey ||
+      record.runRef !== info.runRef ||
+      !pathsEqual(record.worktreePath, info.worktreePath)
+    ) {
+      throw new Error(
+        "Managed worktree ownership did not match the imported run."
+      );
+    }
+    await this.removeCheckout(repositoryRoot, info.worktreePath, true);
+    await deleteLocalBranch(repositoryRoot, info.branchName, true);
+    await fs.rm(recordPath, { force: true });
+    await sweepOrphanedScopeStorage(repositoryRoot);
+  }
+
   /**
    * Settle a managed run while its exclusive execution lease is still held.
    * Cleanup of harness integrations is deliberately supplied by

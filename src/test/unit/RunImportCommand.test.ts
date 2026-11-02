@@ -10,6 +10,7 @@ import {
 } from "../../cli/RunImportCommand";
 import type { CliWorkspaceBootstrap } from "../../cli/CliWorkspaceBootstrap";
 import { RunBundleFormatError } from "../../core/orchestration/RunBundleReader";
+import { readRunBundleHeader } from "../../core/orchestration/RunBundleReader";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 suite("RunImportCommand", () => {
@@ -70,6 +71,8 @@ suite("RunImportCommand", () => {
         provenance: { workflowName: string };
         pendingSteps: unknown[];
       };
+      changes: unknown;
+      continued: boolean;
     };
     assert.strictEqual(result.schemaVersion, 1);
     assert.strictEqual(result.success, true);
@@ -87,6 +90,83 @@ suite("RunImportCommand", () => {
       "Imported fixture"
     );
     assert.deepStrictEqual(result.preview.pendingSteps, []);
+    assert.strictEqual(result.changes, null);
+    assert.strictEqual(result.continued, false);
+  });
+
+  test("continues only when explicitly requested and reports the changes target", async () => {
+    let continued: string[] | undefined;
+    await importRunCommand(
+      { bundleDir, continue: true, changes: "skip", json: true },
+      io(),
+      dependencies({
+        bootstrapCliWorkspace: async () => ({
+          ...workspace,
+          createLineageRepository: () =>
+            ({
+              listLineageKeys: async () => [],
+              tryReadDescriptor: async () => undefined,
+              readDescriptor: async () => ({
+                workflowName: "Imported fixture",
+                latestRunRef: "run-imported" as never,
+              }),
+            }) as never,
+        }),
+        readBundleHeader: async (dir, root, opts) => {
+          const header = await readRunBundleHeader(dir, root, opts);
+          return {
+            ...header,
+            manifest: {
+              ...header.manifest,
+              continuation: {
+                executionState: "stopped",
+                nextStep: { kind: "queue", stepIndex: 0 },
+                pendingStepCount: 1,
+                worktreeMode: "none",
+                workspace: { baseCommit: "a".repeat(40), branch: "main" },
+              },
+            },
+          };
+        },
+        importer: {
+          importRun: async () => ({
+            status: "imported",
+            workflowKey: "imported" as never,
+            runRef: "run-imported" as never,
+            placement: { target: "skip", applied: false },
+          }),
+        },
+        continueRun: async (workflowKey, runRef) => {
+          continued = [workflowKey, runRef];
+        },
+      })
+    );
+    const result = JSON.parse(output[0]) as {
+      continued: boolean;
+      changes: { target: string; applied: boolean };
+    };
+    assert.deepStrictEqual(continued, ["imported", "run-imported"], output[0]);
+    assert.strictEqual(result.continued, true);
+    assert.deepStrictEqual(result.changes, {
+      target: "skip",
+      applied: false,
+      worktreePath: null,
+    });
+  });
+
+  test("history-only bundles warn and ignore continuation flags", async () => {
+    let continued = false;
+    await importRunCommand(
+      { bundleDir, continue: true, changes: "worktree" },
+      io(),
+      dependencies({
+        continueRun: async () => {
+          continued = true;
+        },
+      })
+    );
+    assert.strictEqual(continued, false);
+    assert.ok(output.some((line) => line.includes("history-only bundle")));
   });
 
   test("reports an existing import and names --again", async () => {

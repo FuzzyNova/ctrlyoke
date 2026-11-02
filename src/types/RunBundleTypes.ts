@@ -83,6 +83,8 @@ export interface RunBundleManifest {
     runId: number;
     steps: RunBundleStepProvenance[];
   };
+  /** Origin chain when the exported run was itself imported. */
+  importedFrom?: import("./CtrlYokeTypes").WorkingFileRuntime["importedFrom"];
   /** Workspace snapshot, undo and redo events; dropped unless asked for. */
   includesSnapshots: boolean;
   redaction: {

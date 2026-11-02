@@ -27,11 +27,13 @@ export interface RunMaterializationInput {
   events: AsyncIterable<WorkflowTimelineEventDraft>;
   executionState?: ExecutionState;
   currentIndex?: number;
-  runtimeState?: Partial<
-    Pick<WorkingFileRuntime, "currentIndex" | "executionState">
-  >;
+  runtimeState?: Partial<WorkingFileRuntime>;
   startedAt?: number;
   provenance: NonNullable<WorkflowLineageDescriptor["importedFrom"]>;
+  beforeEvents?: (identity: {
+    workflowKey: WorkflowKey;
+    runRef: import("../../types/CtrlYokeTypes").RunRef;
+  }) => Promise<{ runtimeState?: Partial<WorkingFileRuntime> }>;
 }
 
 export interface MaterializedRun {
@@ -77,6 +79,10 @@ export class RunMaterializer {
         input.workspaceRoot,
         created.workflowKey
       );
+      const prepared = await input.beforeEvents?.({
+        workflowKey: created.workflowKey,
+        runRef: allocation.runRef,
+      });
       const descriptor = await this.lineageRepository.readDescriptor(
         input.workspaceRoot,
         created.workflowKey
@@ -93,11 +99,15 @@ export class RunMaterializer {
       const workingFile: WorkingFile = {
         ...definition,
         _runtime: {
+          ...input.runtimeState,
+          ...prepared?.runtimeState,
           currentIndex:
+            prepared?.runtimeState?.currentIndex ??
             input.runtimeState?.currentIndex ??
             input.currentIndex ??
             steps.length,
-          executionState,
+          executionState:
+            prepared?.runtimeState?.executionState ?? executionState,
           executionEndTime: Date.now(),
         },
       };

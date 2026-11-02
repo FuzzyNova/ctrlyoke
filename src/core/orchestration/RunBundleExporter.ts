@@ -425,6 +425,16 @@ export async function exportRunBundle(
       ...analysis.plan.warnings.map((warning) => warning.message),
       ...writeResult.warnings,
     ];
+    const importedFrom =
+      workingFile._runtime?.importedFrom ??
+      (descriptor.importedFrom?.kind === "runBundle"
+        ? {
+            provenance: descriptor.importedFrom.provenance,
+            sourceRoot: descriptor.importedFrom.sourceRoot,
+            exportedAt: descriptor.importedFrom.exportedAt,
+            exportedByVersion: descriptor.importedFrom.exportedByVersion,
+          }
+        : undefined);
     const bundleManifest: RunBundleManifest = {
       schemaVersion: RUN_BUNDLE_SCHEMA_VERSION,
       kind: RUN_BUNDLE_KIND,
@@ -449,6 +459,7 @@ export async function exportRunBundle(
         runId,
         steps: collectStepProvenance(workingFile),
       },
+      ...(importedFrom ? { importedFrom } : {}),
       includesSnapshots: options.includeSnapshots === true,
       redaction: {
         policy: RUN_BUNDLE_REDACTION_POLICY,

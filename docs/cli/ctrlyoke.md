@@ -911,13 +911,15 @@ review a bundle before you share it.
 
 ## `ctrlyoke import`
 
-Import a run bundle into the current workspace's history so you can inspect its
-timeline without running any of its workflow steps:
+Import a run bundle into the current workspace's history. Imports remain
+view-only unless the bundle can continue and you explicitly pass `--continue`:
 
 ```bash
 ctrlyoke import ./release-run.ctrlyokerun
 ctrlyoke import ./release-run.ctrlyokerun --name "Release investigation"
 ctrlyoke import ./release-run.ctrlyokerun --again --cwd ./other-workspace
+ctrlyoke import ./release-run.ctrlyokerun --continue
+ctrlyoke import ./release-run.ctrlyokerun --continue --changes worktree
 ```
 
 Before importing, ctrlyoke prints a read-only preview with bundle provenance,
@@ -925,15 +927,23 @@ whether the run can continue, the base-commit and checkout checks, pending
 steps (including scripts, resolved harness/model, secret grants and prompt
 redaction), and resumable-session availability. A missing base commit or
 referenced asset is listed as a blocker. Import itself never starts workflow
-steps. The bundle is validated before it is written to history; the new lineage
+steps unless `--continue` was passed. `--changes` chooses `worktree`,
+`checkout`, or `skip`; it defaults to `worktree` for managed runs and `checkout`
+otherwise. Checkout mode requires a clean checkout at the exported base commit.
+Worktree mode creates a managed worktree at that commit. Skip mode compares the
+current tree with the patch and warns if they differ. A missing base commit or
+rejected patch leaves the import view-only. If the bundle omitted the patch
+with `export --no-changes`, use `--changes skip` after syncing the code yourself.
+History-only bundles ignore these options with a warning. The bundle is validated before it is written to history; the new lineage
 and run get fresh identifiers. An already-imported bundle reports the existing
 history entry; pass `--again` to create another import. Use the printed
 `ctrlyoke history show` command to inspect the imported timeline.
 
 `--json` emits one `schemaVersion: 1` result line with the import status,
-workflow key, run reference, event count, source provenance, and the same
-workspace-specific preview under `preview`. Invalid bundle data emits the
-standard error envelope and exits with code `2`.
+workflow key, run reference, event count, source provenance, the `changes`
+target and apply result, `continued`, warnings, and the same workspace-specific
+preview under `preview`. Invalid bundle data emits the standard error envelope
+and exits with code `2`.
 
 ## `ctrlyoke step`
 

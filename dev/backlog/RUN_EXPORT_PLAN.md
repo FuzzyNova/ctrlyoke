@@ -1,6 +1,6 @@
 # Run Export / Import
 
-> Last reviewed against code: 2026-11-01 (orchestration pass added the `import` CLI flags in §4 and a build order in §9). The status below is accurate; every cited symbol
+> Last reviewed against code: 2026-11-01 (phase 4 import continuation is complete). The status below is accurate; every cited symbol
 > exists. Two gaps found in review, now written into §2.1 and §6: the exporter never maps a
 > worktree run's execution root to `${workspaceFolder}`, and an importer must write run files
 > through the definition anchor (`bcc6c74a1`, `aa2f6117d`), or the imported run loads
@@ -8,8 +8,7 @@
 >
 > **Status:** Export half built 2026-10-18 and shipped in `0.2.0` (`ctrlyoke export`, bundle
 > schema 1). The worktree execution-root portability gap, `redaction.byFile`, phase 2 asset
-> bundling, and the phase 4 export side were built within schema 1 on 2026-11-01. Phase 4 still
-> has the `RunImportPreview` service and CLI preview; import-side continuation remains. Phase 5 was built on
+> bundling, and phase 4 continuation were built within schema 1 on 2026-11-01. Phase 5 was built on
 > 2026-11-01: resolved session IDs are preflighted by exact ID, missing/invalid sessions start fresh with a visible
 > warning, and Codex/OpenCode missing-session errors retry without resume. Open item: a verified
 > Copilot CLI or Antigravity CLI rejection string was not found, so those runtime classifiers
@@ -23,9 +22,10 @@
 > built in `src/core/orchestration/RunImportPreview.ts`; `ctrlyoke import` prints it
 > before importing and includes it additively in `--json`. It reports importing-machine
 > execution properties, secret approvals, session probes, redaction, base-commit and
-> asset blockers without writing state. Not built:
-> **continuing an imported
-> run** (§5, added 2026-10-24) and bundling workspace changes. Originally
+> asset blockers without writing state. Phase 4 import-side continuation is complete: imported runtime is normalized and anchored,
+> workspace patches are safely placed, and continuation is explicit. Adding optional `_runtime.importedFrom` is additive;
+> `PersistedSchemaGuard` keeps run-file format 2, and the run-file reader ignores unknown runtime fields, so no schema bump is needed.
+> Originally
 > written 2026-08-14.
 >
 > **Built 2026-10-18:** `exportRunBundle` (`src/core/orchestration/RunBundleExporter.ts`), the
@@ -589,14 +589,14 @@ How they work together instead:
 
 ## 9. Phasing
 
-| Phase | Content                                                                                                      | Ships value alone?                                        |
-| ----- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| 1 ✅  | Bundle format, path rewrite, `RunBundleExporter`, `ctrlyoke export`, redaction (`secrets-v1`)                | Yes: shareable artifacts (shipped `0.2.0`)                |
-| 2 ✅  | Asset bundling via the Save As machinery (`redaction.byFile` and asset hashing)                              | Yes: bundles stop dangling `@` refs                       |
+| Phase | Content                                                                                                                                               | Ships value alone?                                        |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| 1 ✅  | Bundle format, path rewrite, `RunBundleExporter`, `ctrlyoke export`, redaction (`secrets-v1`)                                                         | Yes: shareable artifacts (shipped `0.2.0`)                |
+| 2 ✅  | Asset bundling via the Save As machinery (`redaction.byFile` and asset hashing)                                                                       | Yes: bundles stop dangling `@` refs                       |
 | 3 ✅  | `RunMaterializer` + `RunBundleImporter` view-only core, ingress guards (§6.1), `ctrlyoke import`, dashboard provenance badge and pre-import undo gate | Completes the CLI share loop; imported runs can be viewed |
-| 4     | Continuation: export side built (`run.ctrlyoke.json`, `changes.patch`) and the read-only CLI import preview; `_runtime` normalization and `import --continue` remain | Yes: the machine-to-machine handoff |
-| 5 ✅  | Session preflight probe for all runs, uniform warn-and-start-fresh fallback, malformed IDs included (§5.4)   | Yes: fixes native runs too                                |
-| 6     | Dashboard: Export Run / Import Run actions, shared location fields, Load routing, import preview, guide page | Yes                                                       |
+| 4 ✅  | Continuation: export side, import preview, normalized runtime, safe workspace patch placement, `import --continue`                                    | Yes: the machine-to-machine handoff                       |
+| 5 ✅  | Session preflight probe for all runs, uniform warn-and-start-fresh fallback, malformed IDs included (§5.4)                                            | Yes: fixes native runs too                                |
+| 6     | Dashboard: Export Run / Import Run actions, shared location fields, Load routing, import preview, guide page                                          | Yes                                                       |
 
 Phase 5 is a **release gate on phase 4**, the way redaction was on phase 1: without it, four of
 six harnesses fail the first step that tries to resume a session from the other machine. It has
@@ -609,8 +609,8 @@ manifest field); phase 5 (built 2026-11-01: exact-ID probes for all six harnesse
 fresh-session fallback for missing/invalid IDs, plus Codex/OpenCode runtime rejection recovery;
 Copilot and Antigravity runtime rejection classifiers remain open pending verified CLI error
 text); phase 3 core (shared materializer and bundle importer, built 2026-11-01; CLI import,
-origin badge and undo gating remain); phase 4
-(export side, then the import preview service (built 2026-11-01), then import-side continuation); phase 6
+origin badge and undo gating remain); phase 4 (export side, preview and import-side continuation,
+built 2026-11-01); phase 6
 (Export Run, then Import Run and Load routing, then the guide page). Phase 5 lands before
 phase 4 because the import preview reports session availability through its probe.
 

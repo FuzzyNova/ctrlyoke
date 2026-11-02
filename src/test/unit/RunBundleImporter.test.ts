@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as path from "path";
+import * as crypto from "crypto";
 import { suite, setup, teardown, test } from "mocha";
 import { RunBundleImporter } from "../../core/orchestration/RunBundleImporter";
 import { exportRunBundle } from "../../core/orchestration/RunBundleExporter";
@@ -13,6 +14,7 @@ import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import { HistorySearchService } from "../../core/orchestration/HistorySearchService";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { execGit } from "../../utils/GitUtils";
 
 suite("RunBundleImporter", () => {
   let root: string;
@@ -64,10 +66,11 @@ suite("RunBundleImporter", () => {
       [1, 2, 3, 4]
     );
     assert.strictEqual(events[3].eventType, TIMELINE_EVENT_TYPES.RUN_IMPORTED);
-    const importedDescriptor = await new WorkflowLineageRepository().readDescriptor(
-      workspace,
-      result.workflowKey
-    );
+    const importedDescriptor =
+      await new WorkflowLineageRepository().readDescriptor(
+        workspace,
+        result.workflowKey
+      );
     assert.strictEqual(importedDescriptor.importedFrom?.kind, "runBundle");
     assert.ok(
       events.every(
@@ -114,6 +117,17 @@ suite("RunBundleImporter", () => {
         currentIndex: 1,
         executionState: EXECUTION_STATES.COMPLETED,
         executionEndTime: 200,
+        importedFrom: {
+          provenance: {
+            workflowKey: "source-workflow" as never,
+            runRef: "source-run" as never,
+            runId: 7,
+            steps: [],
+          },
+          exportedAt: "2026-10-31T12:00:00.000Z",
+          exportedByVersion: "0.4.1",
+          sourceRoot: "${workspaceFolder}/original",
+        },
       },
     } as WorkingFile;
     await WorkingFileManager.writeWorkingFileAtomic(
@@ -167,6 +181,13 @@ suite("RunBundleImporter", () => {
       exportedByVersion: "test",
       homeDir: root,
     });
+    const exportedBundle = JSON.parse(
+      await fs.readFile(path.join(exported.bundleDir, "run.json"), "utf8")
+    ) as { importedFrom: unknown };
+    assert.deepStrictEqual(
+      exportedBundle.importedFrom,
+      workingFile._runtime?.importedFrom
+    );
     const imported = await importer.importRun({
       workspaceRoot: workspace,
       bundleDir: exported.bundleDir,
@@ -197,7 +218,10 @@ suite("RunBundleImporter", () => {
           ).cliOutput.workingDirectory === workspace
       )
     );
-    assert.strictEqual(events.at(-1)?.eventType, TIMELINE_EVENT_TYPES.RUN_IMPORTED);
+    assert.strictEqual(
+      events.at(-1)?.eventType,
+      TIMELINE_EVENT_TYPES.RUN_IMPORTED
+    );
     assert.deepStrictEqual(
       await importer.importRun({ workspaceRoot: workspace, bundleDir: bundle }),
       {
@@ -256,6 +280,142 @@ suite("RunBundleImporter", () => {
       before
     );
   });
+
+  test("normalizes imported runtime, preserves timing, and rewrites output root", async () => {
+    const baseCommit = await makeContinuableBundle();
+    const result = await importer.importRun({
+      workspaceRoot: workspace,
+      bundleDir: bundle,
+      changes: "skip",
+    });
+    assert.strictEqual(result.status, "imported");
+    if (result.status !== "imported") return;
+    assert.strictEqual(result.placement?.target, "skip");
+    const runFile = JSON.parse(
+      await fs.readFile(
+        WorkflowPaths.runFilePath(workspace, result.workflowKey, result.runRef),
+        "utf8"
+      )
+    ) as { _runtime: Record<string, unknown> };
+    assert.strictEqual(runFile._runtime.executionState, "stopped");
+    assert.strictEqual(runFile._runtime.currentIndex, 0);
+    assert.strictEqual(runFile._runtime.startTime, 100);
+    assert.strictEqual(runFile._runtime.totalPausedDuration, 15);
+    assert.strictEqual("worktree" in runFile._runtime, false);
+    assert.strictEqual("stopReason" in runFile._runtime, false);
+    assert.strictEqual("worktreeNotice" in runFile._runtime, false);
+    assert.strictEqual("pendingRewind" in runFile._runtime, false);
+    assert.ok(runFile._runtime.importedFrom);
+    assert.strictEqual(
+      (runFile._runtime.importedFrom as { previous?: { sourceRoot: string } })
+        .previous?.sourceRoot,
+      "${workspaceFolder}/previous-origin"
+    );
+    assert.strictEqual(baseCommit.length, 40);
+    const events = await new TimelineRecorder().readEvents(
+      WorkflowPaths.manifestPath(workspace, result.workflowKey, result.runRef)
+    );
+    assert.strictEqual(
+      (events[0].payload as { cliOutput: { workingDirectory: string } })
+        .cliOutput.workingDirectory,
+      workspace
+    );
+  });
+
+  test("missing base commit imports history only", async () => {
+    await makeContinuableBundle("f".repeat(40));
+    const result = await importer.importRun({
+      workspaceRoot: workspace,
+      bundleDir: bundle,
+      changes: "checkout",
+    });
+    assert.strictEqual(result.status, "imported");
+    if (result.status !== "imported") return;
+    assert.strictEqual(result.placement?.applied, false);
+    assert.match(result.placement?.warning ?? "", /push\/fetch commit/);
+    const runFile = JSON.parse(
+      await fs.readFile(
+        WorkflowPaths.runFilePath(workspace, result.workflowKey, result.runRef),
+        "utf8"
+      )
+    ) as { _runtime: Record<string, unknown> };
+    assert.strictEqual("importedFrom" in runFile._runtime, false);
+  });
+
+  async function makeContinuableBundle(missingBase?: string): Promise<string> {
+    await execGit(["init"], { cwd: workspace });
+    await execGit(["config", "user.email", "test@example.com"], {
+      cwd: workspace,
+    });
+    await execGit(["config", "user.name", "Test"], { cwd: workspace });
+    await fs.writeFile(path.join(workspace, "tracked.txt"), "base\n");
+    await execGit(["add", "tracked.txt"], { cwd: workspace });
+    await execGit(["commit", "-m", "base"], { cwd: workspace });
+    const baseCommit = (
+      await execGit(["rev-parse", "HEAD"], { cwd: workspace })
+    ).stdout.trim();
+    await fs.writeFile(path.join(workspace, "tracked.txt"), "changed\n");
+    const patch = (await execGit(["diff", "--binary"], { cwd: workspace }))
+      .stdout;
+    await execGit(["reset", "--hard", baseCommit], { cwd: workspace });
+    await fs.writeFile(path.join(bundle, "changes.patch"), patch);
+    const bundleManifest = JSON.parse(
+      await fs.readFile(path.join(bundle, "run.json"), "utf8")
+    ) as Record<string, unknown>;
+    bundleManifest.continuation = {
+      executionState: "paused",
+      nextStep: { kind: "queue", stepIndex: 0 },
+      pendingStepCount: 1,
+      worktreeMode: "none",
+      workspace: {
+        baseCommit: missingBase ?? baseCommit,
+        branch: "main",
+        patch: {
+          file: "changes.patch",
+          sha256: crypto.createHash("sha256").update(patch).digest("hex"),
+          files: 1,
+          binary: 0,
+        },
+      },
+    };
+    bundleManifest.importedFrom = {
+      provenance: {
+        workflowKey: "earlier-workflow",
+        runRef: "earlier-run",
+        runId: 5,
+        steps: [],
+      },
+      exportedAt: "2026-10-30T12:00:00.000Z",
+      exportedByVersion: "0.4.0",
+      sourceRoot: "${workspaceFolder}/previous-origin",
+    };
+    await fs.writeFile(
+      path.join(bundle, "run.json"),
+      JSON.stringify(bundleManifest)
+    );
+    await fs.writeFile(
+      path.join(bundle, "run.ctrlyoke.json"),
+      JSON.stringify({
+        currentIndex: 0,
+        executionState: "paused",
+        startTime: 100,
+        totalPausedDuration: 15,
+        stopReason: { reason: "old" },
+        worktreeNotice: "old location",
+        pendingRewind: { fromStepIndex: 1, baseDefinitionRevision: 1 },
+        worktree: { worktreePath: "C:/source/worktree" },
+      })
+    );
+    const runManifest = JSON.parse(
+      await fs.readFile(path.join(bundle, "manifest.json"), "utf8")
+    ) as Record<string, unknown>;
+    runManifest.executionState = "paused";
+    await fs.writeFile(
+      path.join(bundle, "manifest.json"),
+      JSON.stringify(runManifest)
+    );
+    return baseCommit;
+  }
 });
 
 async function writeFixtureBundle(bundle: string): Promise<void> {

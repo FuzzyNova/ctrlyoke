@@ -403,9 +403,22 @@ registerExportCommand(program, (options) =>
 
 registerImportCommand(program, (options) =>
   handleHistoryCommand(
-    importRunCommand(options, {
-      writeOut: (message) => console.log(message),
-    })
+    importRunCommand(
+      options,
+      {
+        writeOut: (message) => console.log(message),
+      },
+      {
+        continueRun: async (workflowKey, runRef, cwd) =>
+          continueCommand({
+            workflow: workflowKey,
+            run: runRef,
+            cwd,
+            allowTool: [],
+            denyTool: [],
+          }),
+      }
+    )
   )
 );
 

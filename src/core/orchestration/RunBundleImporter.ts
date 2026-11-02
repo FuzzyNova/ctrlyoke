@@ -24,22 +24,36 @@ import {
 } from "./RunBundleReader";
 import { RunMaterializer } from "./RunMaterializer";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
+import { EXECUTION_STATES } from "../../types/DashboardConstants";
+import {
+  RunChangesPlacer,
+  type RunChangesTarget,
+  type RunChangesPlacement,
+} from "./RunChangesPlacer";
+import type { WorkingFileRuntime } from "../../types/CtrlYokeTypes";
 
 export interface RunBundleImportOptions extends ReadRunBundleOptions {
   workspaceRoot: string;
   bundleDir: string;
   again?: boolean;
   name?: string;
+  changes?: RunChangesTarget;
 }
 
 export type RunBundleImportResult =
-  | { status: "imported"; workflowKey: WorkflowKey; runRef: RunRef }
+  | {
+      status: "imported";
+      workflowKey: WorkflowKey;
+      runRef: RunRef;
+      placement?: RunChangesPlacement;
+    }
   | { status: "alreadyImported"; workflowKey: WorkflowKey };
 
 export class RunBundleImporter {
   constructor(
     private readonly materializer = new RunMaterializer(),
-    private readonly lineageRepository = new WorkflowLineageRepository()
+    private readonly lineageRepository = new WorkflowLineageRepository(),
+    private readonly changesPlacer = new RunChangesPlacer()
   ) {}
 
   async importRun(
@@ -90,6 +104,8 @@ export class RunBundleImporter {
       header.manifest.assets ?? [],
       header.definition
     );
+    let executionRoot = options.workspaceRoot;
+    let placement: RunChangesPlacement | undefined;
     async function* drafts() {
       for await (const event of streamRunBundleEvents(header, options)) {
         const { sequence: _sequence, ...draft } = event as RunBundleEvent & {
@@ -102,7 +118,7 @@ export class RunBundleImporter {
             Object.entries(value).map(([key, child]) => [
               key,
               key === "workingDirectory"
-                ? options.workspaceRoot
+                ? executionRoot
                 : rewriteWorkingDirectories(child),
             ])
           );
@@ -116,15 +132,70 @@ export class RunBundleImporter {
         options.name?.trim() || header.manifest.lineage.workflowName,
       definition,
       events: drafts(),
-      executionState: header.runManifest.executionState,
+      executionState: header.manifest.continuation
+        ? EXECUTION_STATES.STOPPED
+        : header.runManifest.executionState,
       currentIndex: (definition.steps as unknown[] | undefined)?.length ?? 0,
       startedAt: header.runManifest.startedAt,
       provenance,
+      ...(header.manifest.continuation
+        ? {
+            beforeEvents: async ({ workflowKey, runRef }) => {
+              const continuation = header.manifest.continuation!;
+              const target =
+                options.changes ??
+                (continuation.worktreeMode === "managed"
+                  ? "worktree"
+                  : "checkout");
+              const patchPath = continuation.workspace.patch
+                ? path.join(header.bundleDir, RUN_BUNDLE_FILES.CHANGES)
+                : undefined;
+              placement = await this.changesPlacer.place({
+                workspaceRoot: options.workspaceRoot,
+                patchPath,
+                baseCommit: continuation.workspace.baseCommit,
+                target,
+                worktreeMode: continuation.worktreeMode,
+                workflowKey,
+                runRef,
+                workflowName:
+                  options.name?.trim() || header.manifest.lineage.workflowName,
+              });
+              if (placement.worktreeRuntime) {
+                const normalized = normalizeImportedRuntime(
+                  header.runtime,
+                  header.manifest,
+                  header.runManifest
+                );
+                return {
+                  runtimeState: {
+                    ...normalized,
+                    worktree: placement.worktreeRuntime,
+                  },
+                };
+              }
+              if (
+                placement.canContinue === false ||
+                (!placement.applied && target !== "skip")
+              )
+                return { runtimeState: undefined };
+              executionRoot = placement.worktreePath ?? options.workspaceRoot;
+              return {
+                runtimeState: normalizeImportedRuntime(
+                  header.runtime,
+                  header.manifest,
+                  header.runManifest
+                ),
+              };
+            },
+          }
+        : {}),
     });
     return {
       status: "imported",
       workflowKey: materialized.workflowKey,
       runRef: materialized.runRef,
+      ...(placement ? { placement } : {}),
     };
   }
 
@@ -213,4 +284,31 @@ export class RunBundleImporter {
     });
     return workspaceDefinition;
   }
+}
+
+function normalizeImportedRuntime(
+  runtime: Record<string, unknown> | undefined,
+  manifest: import("../../types/RunBundleTypes").RunBundleManifest,
+  runManifest: import("../../types/RunBundleTypes").RunBundleRunManifest
+): Partial<WorkingFileRuntime> {
+  const normalized: Record<string, unknown> = { ...(runtime ?? {}) };
+  delete normalized.worktree;
+  delete normalized.stopReason;
+  delete normalized.worktreeNotice;
+  delete normalized.pendingRewind;
+  normalized.executionState = EXECUTION_STATES.STOPPED;
+  normalized.currentIndex =
+    typeof normalized.currentIndex === "number"
+      ? normalized.currentIndex
+      : Array.isArray(normalized.steps)
+        ? normalized.steps.length
+        : runManifest.stepCount;
+  normalized.importedFrom = {
+    provenance: manifest.provenance,
+    exportedAt: manifest.exportedAt,
+    exportedByVersion: manifest.exportedByVersion,
+    sourceRoot: manifest.sourceRoot,
+    ...(manifest.importedFrom ? { previous: manifest.importedFrom } : {}),
+  };
+  return normalized as Partial<WorkingFileRuntime>;
 }

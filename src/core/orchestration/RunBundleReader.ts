@@ -176,6 +176,8 @@ export async function readRunBundleHeader(
   // sourceRoot is provenance, not an input path. Preserve the exporter's value
   // instead of resolving its workspace token onto the importing workspace.
   resolvedManifest.sourceRoot = manifest.sourceRoot;
+  // The ancestry chain is also provenance; keep its portable roots intact.
+  resolvedManifest.importedFrom = manifest.importedFrom;
   const files = [
     RUN_BUNDLE_FILES.BUNDLE,
     RUN_BUNDLE_FILES.MANIFEST,

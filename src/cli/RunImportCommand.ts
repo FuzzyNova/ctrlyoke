@@ -1,4 +1,4 @@
-import { Command } from "commander";
+import { Command, Option } from "commander";
 import * as path from "node:path";
 import { RunBundleImporter } from "../core/orchestration/RunBundleImporter";
 import { readRunBundleHeader } from "../core/orchestration/RunBundleReader";
@@ -9,6 +9,7 @@ import {
   type CliWorkspaceBootstrap,
 } from "./CliWorkspaceBootstrap";
 import { CLI_USAGE_EXIT_CODE } from "./CliExitCode";
+import type { RunChangesTarget } from "../core/orchestration/RunChangesPlacer";
 
 export interface RunImportOptions {
   bundleDir: string;
@@ -16,6 +17,8 @@ export interface RunImportOptions {
   again?: boolean;
   cwd?: string;
   json?: boolean;
+  continue?: boolean;
+  changes?: RunChangesTarget;
 }
 
 export interface RunImportCommandIo {
@@ -30,6 +33,11 @@ export interface RunImportCommandDependencies {
   readBundleHeader?: typeof readRunBundleHeader;
   previewService?: Pick<RunImportPreviewService, "preview">;
   setExitCode?: (code: number) => void;
+  continueRun?: (
+    workflowKey: string,
+    runRef: string,
+    cwd?: string
+  ) => Promise<void>;
 }
 
 export function registerImportCommand(
@@ -38,10 +46,17 @@ export function registerImportCommand(
 ): void {
   program
     .command("import")
-    .description("Import a run bundle into workspace history for viewing")
+    .description("Import a run bundle into workspace history")
     .argument("<bundleDir>", "Run bundle directory to import")
     .option("--name <name>", "Name for the imported workflow lineage")
     .option("--again", "Import a bundle that was already imported")
+    .option("--continue", "Continue the imported run after a successful import")
+    .addOption(
+      new Option(
+        "--changes <target>",
+        "Place changes with worktree, checkout, or skip"
+      ).choices(["worktree", "checkout", "skip"])
+    )
     .option("-d, --cwd <path>", "Workspace root (default: current directory)")
     .option("--json", "Emit one versioned JSON result line")
     .action(
@@ -77,6 +92,7 @@ export async function importRunCommand(
       bundleDir,
       ...(options.again === true ? { again: true } : {}),
       ...(options.name !== undefined ? { name: options.name } : {}),
+      ...(options.changes ? { changes: options.changes } : {}),
     });
     const descriptor = await workspace
       .createLineageRepository()
@@ -91,6 +107,36 @@ export async function importRunCommand(
       exportedAt: header.manifest.exportedAt,
       exportedByVersion: header.manifest.exportedByVersion,
     };
+    const warnings: string[] = [];
+    if (
+      !header.manifest.continuation &&
+      (options.continue || options.changes)
+    ) {
+      warnings.push(
+        "This history-only bundle has no continuation data; --continue and --changes were ignored."
+      );
+    }
+    if (imported.status === "imported" && imported.placement?.warning)
+      warnings.push(imported.placement.warning);
+    for (const warning of warnings)
+      if (!options.json) io.writeOut(`Warning: ${warning}`);
+    let continued = false;
+    if (
+      options.continue &&
+      header.manifest.continuation &&
+      imported.status === "imported" &&
+      imported.placement?.canContinue !== false &&
+      (imported.placement?.target === "skip" ||
+        imported.placement?.applied !== false) &&
+      dependencies.continueRun
+    ) {
+      await dependencies.continueRun(
+        imported.workflowKey,
+        imported.runRef,
+        options.cwd
+      );
+      continued = true;
+    }
 
     if (options.json) {
       io.writeOut(
@@ -102,6 +148,16 @@ export async function importRunCommand(
           runRef: runRef ?? null,
           eventCount,
           importedFrom,
+          changes:
+            imported.status === "imported" && imported.placement
+              ? {
+                  target: imported.placement.target,
+                  applied: imported.placement.applied,
+                  worktreePath: imported.placement.worktreePath ?? null,
+                }
+              : null,
+          continued,
+          warnings,
           preview,
         })
       );
@@ -127,6 +183,7 @@ export async function importRunCommand(
     io.writeOut(
       `View it with: ctrlyoke history show --workflow ${imported.workflowKey} --run ${imported.runRef}`
     );
+    if (continued) io.writeOut("Continuing imported run.");
   } catch (error) {
     if (!options.json) throw error;
     const message = error instanceof Error ? error.message : String(error);
