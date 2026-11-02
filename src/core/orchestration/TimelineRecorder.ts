@@ -23,6 +23,8 @@ import {
 import { migrateToCurrent } from "../../utils/FormatMigrations";
 import { truncateCliEventTextFields } from "../../utils/CliEventText";
 import { writeFileAtomic } from "../../utils/AtomicFileUtils";
+import { runStateWriteOptions } from "../../utils/RunStateWrites";
+import { Log } from "../../utils/Log";
 
 export class TimelineRecorder {
   static readonly MANIFEST_FILE_NAME = TIMELINE_STORAGE_FILES.MANIFEST;
@@ -171,13 +173,63 @@ export class TimelineRecorder {
           }),
           null,
           2
-        )
+        ),
+        // The manifest's `nextSequence` is what keeps events.jsonl ordered, and
+        // a history-index rebuild or antivirus pass can hold it well past the
+        // default rename window; ride that out like the run's working file.
+        runStateWriteOptions(manifestPath, "TimelineRecorder")
       );
     } finally {
       // The single writer of the manifest half of a run summary. In `finally`
       // because a failed atomic replacement can leave the old manifest in
       // place, while a successful replacement changes the cached summary.
       invalidateRunSummaryFor(manifestPath);
+    }
+  }
+
+  /**
+   * Append events and publish the manifest that counts them, as one unit.
+   *
+   * The events go first so a reader that trusts the manifest never sees a
+   * sequence it cannot find. If the manifest write then fails, the append is
+   * cut back off: otherwise events.jsonl holds events the manifest does not
+   * count, and the next append reuses their sequence numbers, which is how a
+   * transient `EPERM` on the manifest rename produced duplicate sequences.
+   * Callers must already hold this manifest's queue slot and file lock.
+   */
+  private async appendEventLinesAndCommitManifest(
+    manifestPath: string,
+    events: readonly WorkflowTimelineEvent[],
+    nextManifest: WorkflowRunManifest
+  ): Promise<void> {
+    const eventsPath =
+      TimelineRecorder.getEventsPathFromManifestPath(manifestPath);
+    const sizeBeforeAppend = await fs.promises
+      .stat(eventsPath)
+      .then((stats) => stats.size)
+      .catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return 0;
+        throw error;
+      });
+    await fs.promises.appendFile(
+      eventsPath,
+      `${events.map((event) => JSON.stringify(event)).join("\n")}\n`,
+      "utf8"
+    );
+    try {
+      await this.writeManifestDirect(manifestPath, nextManifest);
+    } catch (error) {
+      await fs.promises
+        .truncate(eventsPath, sizeBeforeAppend)
+        .catch((truncateError) =>
+          // The next append's torn-tail scan cannot help here: these are whole
+          // lines. Say so, because duplicate sequences will follow.
+          Log.error(
+            `[TimelineRecorder] Could not roll back ${events.length} event(s) after the manifest write failed; ${eventsPath} may now repeat sequence numbers:`,
+            truncateError
+          )
+        );
+      throw error;
     }
   }
 
@@ -300,19 +352,17 @@ export class TimelineRecorder {
         );
         const redactedEvents = secretRedactionService.redactValue(events);
 
-        await fs.promises.appendFile(
-          TimelineRecorder.getEventsPathFromManifestPath(manifestPath),
-          `${redactedEvents.map((event) => JSON.stringify(event)).join("\n")}\n`,
-          "utf8"
-        );
-
         const lastEventTimestamp = events[events.length - 1].timestampMs;
-        await this.writeManifestDirect(manifestPath, {
-          ...manifest,
-          eventCount: manifest.eventCount + events.length,
-          nextSequence,
-          lastUpdatedAt: Math.max(manifest.lastUpdatedAt, lastEventTimestamp),
-        });
+        await this.appendEventLinesAndCommitManifest(
+          manifestPath,
+          redactedEvents,
+          {
+            ...manifest,
+            eventCount: manifest.eventCount + events.length,
+            nextSequence,
+            lastUpdatedAt: Math.max(manifest.lastUpdatedAt, lastEventTimestamp),
+          }
+        );
 
         return redactedEvents;
       })
@@ -364,19 +414,17 @@ export class TimelineRecorder {
         };
 
         const redactedEvent = secretRedactionService.redactValue(event);
-        await fs.promises.appendFile(
-          TimelineRecorder.getEventsPathFromManifestPath(manifestPath),
-          `${JSON.stringify(redactedEvent)}\n`,
-          "utf8"
+        await this.appendEventLinesAndCommitManifest(
+          manifestPath,
+          [redactedEvent],
+          {
+            ...manifest,
+            definitionRevision,
+            eventCount: manifest.eventCount + 1,
+            nextSequence: manifest.nextSequence + 1,
+            lastUpdatedAt: Math.max(manifest.lastUpdatedAt, timestampMs),
+          }
         );
-
-        await this.writeManifestDirect(manifestPath, {
-          ...manifest,
-          definitionRevision,
-          eventCount: manifest.eventCount + 1,
-          nextSequence: manifest.nextSequence + 1,
-          lastUpdatedAt: Math.max(manifest.lastUpdatedAt, timestampMs),
-        });
 
         return { committed: true, event: redactedEvent };
       })

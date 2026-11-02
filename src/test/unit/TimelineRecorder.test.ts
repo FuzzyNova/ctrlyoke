@@ -326,6 +326,67 @@ suite("TimelineRecorder", () => {
     assert.strictEqual(await fs.readFile(manifestPath, "utf8"), original);
   });
 
+  test("rolls back the appended events when the manifest write fails, so sequences never repeat", async () => {
+    // A history-index rebuild holding manifest.json made its rename fail with
+    // EPERM after the event had been appended; the manifest still said
+    // nextSequence 5, so the next append wrote a second sequence 5.
+    await recorder.appendEvents(manifestPath, [
+      createStatusEventDraft(105, "before"),
+    ]);
+    const fsPromises = require("fs/promises") as typeof import("fs/promises");
+    const originalRename = fsPromises.rename;
+    Object.defineProperty(fsPromises, "rename", {
+      configurable: true,
+      // Only the manifest replacement fails: the file lock releases itself
+      // through a rename too, and must keep working for the next append.
+      value: async (source: string, destination: string) => {
+        if (path.resolve(destination) !== path.resolve(manifestPath)) {
+          return originalRename(source, destination);
+        }
+        const error = new Error(
+          "injected rename failure"
+        ) as NodeJS.ErrnoException;
+        error.code = "EIO";
+        throw error;
+      },
+    });
+    try {
+      await assert.rejects(
+        recorder.appendEvents(manifestPath, [
+          createStatusEventDraft(110, "lost-a"),
+          createStatusEventDraft(111, "lost-b"),
+        ]),
+        /injected rename failure/
+      );
+    } finally {
+      Object.defineProperty(fsPromises, "rename", {
+        configurable: true,
+        value: originalRename,
+      });
+    }
+
+    await recorder.appendEvents(manifestPath, [
+      createStatusEventDraft(120, "after"),
+    ]);
+
+    const events = await recorder.readEvents(manifestPath);
+    assert.deepStrictEqual(
+      events.map((event) => event.sequence),
+      [1, 2]
+    );
+    assert.deepStrictEqual(
+      events.map((event) =>
+        event.eventType === TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED
+          ? event.payload.statusMessage.message
+          : ""
+      ),
+      ["before", "after"]
+    );
+    const manifest = await recorder.readManifest(manifestPath);
+    assert.strictEqual(manifest.eventCount, 2);
+    assert.strictEqual(manifest.nextSequence, 3);
+  });
+
   test("serializes manifest updates with concurrent append operations", async () => {
     await Promise.all([
       recorder.appendEvents(manifestPath, [

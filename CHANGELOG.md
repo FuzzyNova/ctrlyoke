@@ -54,6 +54,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of failing with `ENOENT ... realpath 'Z:\'`. The folder is still
   passed to the harness, as it already was for workflows that do not use a
   worktree.
+- A step's output is no longer lost, and a run's timeline no longer repeats
+  event numbers, when something such as antivirus or ctrlyoke's own history
+  search indexing briefly holds the run's `manifest.json`. ctrlyoke now waits
+  for the file to be released, as it already did for the run's working file.
+  If the write still fails, the output that could not be recorded is removed
+  cleanly instead of being left half-saved.
 - `history show --step final` now reports an unknown state when the run's
   working file is unavailable and the run summary cannot confirm a final step.
 - Qwen hooks now keep their native shell on Windows: quoted hooks stay
