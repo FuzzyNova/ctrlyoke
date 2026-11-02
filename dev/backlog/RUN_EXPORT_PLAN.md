@@ -1,6 +1,6 @@
 # Run Export / Import
 
-> Last reviewed against code: 2026-10-26. The status below is accurate; every cited symbol
+> Last reviewed against code: 2026-11-01 (orchestration pass added the `import` CLI flags in §4 and a build order in §9). The status below is accurate; every cited symbol
 > exists. Two gaps found in review, now written into §2.1 and §6: the exporter never maps a
 > worktree run's execution root to `${workspaceFolder}`, and an importer must write run files
 > through the definition anchor (`bcc6c74a1`, `aa2f6117d`), or the imported run loads
@@ -238,12 +238,27 @@ CLI (additive to the shipped command):
 
 ```
 ctrlyoke export -w <workflow> [--run <ref|runId>] -o <dir> [--with-snapshots] [--no-changes] [--force] [--json]
-ctrlyoke import <bundleDir> [--continue] [--json]
+ctrlyoke import <bundleDir> [--continue] [--changes <worktree|checkout|skip>] [--name <name>] [--again] [--cwd <path>] [--json]
 ```
 
 `--no-changes` skips `changes.patch` (for a run whose changes the user syncs through git
 themselves). The `export` description changes from "one finished run" to "one settled run";
 the `--json` envelope gains `continuable` and `continuation`.
+
+`import` always prints the import preview (§5.2, §5.4) before it writes anything, and its
+`--json` envelope carries the same preview. `--changes` picks where `changes.patch` lands
+(§5.3): `worktree` is a new managed worktree at `baseCommit`, `checkout` is the checkout named
+by `--cwd` (it must be clean and at `baseCommit`), and `skip` means "I've synced the code myself"
+(ctrlyoke compares the tree to the patch and warns on mismatch). Default: `worktree` for a
+`managed` run, `checkout` for `none`/`named`. A `checkout` that isn't clean or at `baseCommit`
+fails with a message naming `--changes worktree` and `--changes skip`; it never falls back
+silently. `--again` imports a bundle that was already imported (open question 5); without it,
+`import` reports the existing import and exits. `--name` overrides the lineage name. A bundle
+without continuation parts ignores `--continue`/`--changes` with a warning and imports
+view-only. (Added 2026-11-01: the original CLI line had no way to choose §5.3's target.)
+
+The preview is one vscode-free service (`RunImportPreview`, `src/core/orchestration/`) that
+both `ctrlyoke import` and the dashboard's import modal (§7) render. Neither builds its own.
 
 ---
 
@@ -568,6 +583,13 @@ Phase 5 is a **release gate on phase 4**, the way redaction was on phase 1: with
 six harnesses fail the first step that tries to resume a session from the other machine. It has
 no dependency on the import work, so it can land first. A native run whose harness session was
 cleaned up benefits the same way.
+
+**Build order (orchestrated 2026-11-01):** the §2.1 worktree-root fix and `redaction.byFile`;
+phase 2 assets; phase 5 (fallback infrastructure, then the remaining four harnesses); phase 3
+(materializer and importer core, then the CLI, then the origin badge and undo gating); phase 4
+(export side, then the import preview service, then import-side continuation); phase 6
+(Export Run, then Import Run and Load routing, then the guide page). Phase 5 lands before
+phase 4 because the import preview reports session availability through its probe.
 
 ---
 
