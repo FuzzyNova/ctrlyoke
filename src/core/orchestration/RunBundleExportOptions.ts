@@ -11,6 +11,7 @@ export interface RunBundleExportOptionInput {
   bundleDir: string;
   exportedByVersion: string;
   includeSnapshots?: boolean;
+  includeStreamDeltas?: boolean;
   includeChanges?: boolean;
   replace?: boolean;
   environment?: NodeJS.ProcessEnv;
@@ -30,6 +31,7 @@ export function buildRunBundleExportOptions(
     bundleDir: input.bundleDir,
     exportedByVersion: input.exportedByVersion,
     includeSnapshots: input.includeSnapshots === true,
+    includeStreamDeltas: input.includeStreamDeltas === true,
     includeChanges: input.includeChanges !== false,
     secrets: {
       workspaceRoot: input.workspaceRoot,

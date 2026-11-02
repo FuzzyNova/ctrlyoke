@@ -37,6 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Run exports now collapse streaming text deltas into sealed attempt output by
+  default; `ctrlyoke export --with-stream-deltas` keeps every chunk for replay.
+
 - `ctrlyoke import` can now place exported workspace changes in a managed
   worktree or clean checkout, and explicitly continue the imported run.
 - `ctrlyoke import` now prints a workspace-specific preview before writing a

@@ -87,6 +87,8 @@ export interface RunBundleManifest {
   importedFrom?: import("./CtrlYokeTypes").WorkingFileRuntime["importedFrom"];
   /** Workspace snapshot, undo and redo events; dropped unless asked for. */
   includesSnapshots: boolean;
+  /** Whether the bundle retained per-chunk deltas; absent in legacy bundles (kept). */
+  includesStreamDeltas?: boolean;
   redaction: {
     policy: typeof RUN_BUNDLE_REDACTION_POLICY;
     removedCount: number;

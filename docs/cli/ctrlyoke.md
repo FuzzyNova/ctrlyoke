@@ -876,6 +876,7 @@ directory you can attach to a bug report or keep outside your history:
 ```bash
 ctrlyoke export --workflow release --out release-run
 ctrlyoke export --workflow release --run 7 --out release-run --with-snapshots --force
+ctrlyoke export --workflow release --run 7 --out replay-run --with-stream-deltas
 ctrlyoke export --workflow release --run 7 --out release-run --no-changes
 ```
 
@@ -897,6 +898,13 @@ Values of the secrets the workflow declares, and values that look like
 credentials, are replaced with `[REDACTED]`. Workspace
 snapshots carry file contents, so they are left out unless you pass
 `--with-snapshots`.
+
+Streaming text deltas are collapsed into the sealed attempt output by default
+to keep bundles smaller. Chunks from attempts that never received a final
+aggregate are merged into one event so their partial output remains available.
+Pass `--with-stream-deltas` to keep every chunk and its timing, for example
+when creating a media replay fixture. The JSON result reports
+`includesStreamDeltas`; human output says when deltas were kept.
 
 Runs in `stopped`, `paused`, or `error` state with pending work also include
 `run.ctrlyoke.json` and a redacted `changes.patch`, so they can be continued

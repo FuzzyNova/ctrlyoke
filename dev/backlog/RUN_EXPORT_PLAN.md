@@ -263,7 +263,7 @@ run gets a history-only bundle. One format, one exporter, no "export kind" to pi
 CLI (additive to the shipped command):
 
 ```
-ctrlyoke export -w <workflow> [--run <ref|runId>] -o <dir> [--with-snapshots] [--no-changes] [--force] [--json]
+ctrlyoke export -w <workflow> [--run <ref|runId>] -o <dir> [--with-snapshots] [--with-stream-deltas] [--no-changes] [--force] [--json]
 ctrlyoke import <bundleDir> [--continue] [--changes <worktree|checkout|skip>] [--name <name>] [--again] [--cwd <path>] [--json]
 ```
 
@@ -628,9 +628,17 @@ phase 4 because the import preview reports session availability through its prob
 1. **Bundle a lineage or a single run?** Settled: a single run. A lineage bundle is a directory of
    run bundles plus a shared asset store, if ever wanted.
 2. **Redaction default.** Settled: always on (`secrets-v1`); no opt-out.
-3. **Chunk events.** Keep `cliOutputChunkAppended` streaming deltas, or collapse to the sealed
-   aggregate at export? Proposed: collapse. The deltas are a streaming implementation detail
-   and dominate bundle size. Still open: the shipped exporter copies them as-is.
+3. **Chunk events.** Settled: collapse `cliOutputChunkAppended` deltas by default. Deltas in a
+   streaming interval followed by a sealed aggregate are removed. Consecutive chunks in an
+   unsealed interval are merged into one event at the first chunk's timestamp and sequence, so
+   stopped mid-step output remains available. A streaming placeholder reopens a previously
+   sealed attempt; only deltas superseded by a later sealed aggregate are removed. Structured
+   `cliOutputEventsAppended` events remain unchanged. `--with-stream-deltas` keeps every chunk
+   and its timing for media replay; the dashboard export uses the default collapsed form.
+   Export updates `eventCount` to match the bundle. Sequence gaps remain valid: importer drops
+   source sequence numbers and re-stamps events contiguously. The adapter's output projection
+   still renders the sealed aggregate in the output pane; collapsed imports have no per-chunk
+   TEXT activity entries, so their activity view omits those incremental entries.
 4. **Workspace snapshots.** Settled: dropped by default, `--with-snapshots` to opt in.
 5. **Re-import of an already-imported bundle.** Settled 2026-10-24: detect (match on
    `provenance.runRef` + `sourceRoot` + `exportedAt`) and offer "open the existing import", with

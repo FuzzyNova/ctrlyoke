@@ -211,6 +211,25 @@ suite("OutputHistoryTimelineAdapter", () => {
     );
   });
 
+  test("projects a collapsed sealed output into the output pane without chunk activity", () => {
+    const response = "the complete sealed response";
+    const history = new OutputHistoryTimelineAdapter().project(MANIFEST, [
+      cliEvent(1, EXECUTION_PHASES.PROMPT, response),
+    ]);
+    const entry = history.orderedEntries.find(
+      (candidate) => candidate.kind === OUTPUT_HISTORY_KINDS.CLI
+    );
+    assert.ok(entry && entry.kind === OUTPUT_HISTORY_KINDS.CLI);
+    assert.strictEqual(
+      getStepOutputText(
+        { output: entry.cliOutput },
+        StepOutputTextMode.TRANSCRIPT
+      ),
+      response
+    );
+    assert.deepStrictEqual(history.activityEntries, []);
+  });
+
   test("keeps setup and prompt entries distinct at the same attempt identity", () => {
     const adapter = new OutputHistoryTimelineAdapter();
     const history = adapter.project(MANIFEST, [

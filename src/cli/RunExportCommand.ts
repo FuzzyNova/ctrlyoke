@@ -20,6 +20,7 @@ export interface RunExportOptions {
   run?: string;
   out: string;
   withSnapshots?: boolean;
+  withStreamDeltas?: boolean;
   changes?: boolean;
   force?: boolean;
   json?: boolean;
@@ -56,6 +57,10 @@ export function registerExportCommand(
     .option(
       "--with-snapshots",
       "Include workspace snapshots, which carry file contents (needed for diffs and Undo)"
+    )
+    .option(
+      "--with-stream-deltas",
+      "Keep per-chunk streaming text events (normally collapsed into final output)"
     )
     .option("--no-changes", "Omit the workspace changes patch")
     .option("-f, --force", "Replace an existing bundle at --out")
@@ -94,6 +99,7 @@ export async function exportRunCommand(
         : `${out}${RUN_BUNDLE_DIR_SUFFIX}`,
       exportedByVersion: version,
       includeSnapshots: options.withSnapshots === true,
+      includeStreamDeltas: options.withStreamDeltas === true,
       includeChanges: options.changes !== false,
       onWarning: io.writeErr,
       environment: dependencies.environment,
@@ -113,6 +119,7 @@ export async function exportRunCommand(
         runRef,
         eventCount: result.eventCount,
         includesSnapshots: result.manifest.includesSnapshots,
+        includesStreamDeltas: result.manifest.includesStreamDeltas === true,
         continuable: result.continuable,
         continuation: result.continuation ?? null,
         redaction,
@@ -124,7 +131,7 @@ export async function exportRunCommand(
   }
   io.writeOut(`Exported ${workflowKey} ${runRef} to ${result.bundleDir}`);
   io.writeOut(
-    `  ${result.eventCount} events${result.manifest.includesSnapshots ? ", with workspace snapshots" : ""}`
+    `  ${result.eventCount} events${result.manifest.includesSnapshots ? ", with workspace snapshots" : ""}${result.manifest.includesStreamDeltas ? ", with streaming deltas" : ""}`
   );
   io.writeOut(`  ${result.continuable ? "Continuable run" : "History only"}`);
   if (result.continuation) {

@@ -28,6 +28,12 @@ import { RUN_BUNDLE_FILES } from "../../types/RunBundleTypes";
 import { readRunBundle } from "../../core/orchestration/RunBundleReader";
 import { execGit } from "../../utils/GitUtils";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import {
+  EXECUTION_PHASES,
+  FINAL_STEP_PHASES,
+} from "../../types/DashboardConstants";
+import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 
 let root: string;
 let workspace: string;
@@ -186,6 +192,119 @@ suite("RunBundleExporter secrets", () => {
     );
     const loaded = await readRunBundle(noChanges.bundleDir, workspace);
     assert.ok(loaded.runtime);
+  });
+
+  test("collapses sealed deltas, merges an unsealed reopened attempt, and can retain all deltas", async () => {
+    const run = await createRun({
+      state: EXECUTION_STATES.COMPLETED,
+      currentIndex: 1,
+      steps: [{ prompt: "done" }],
+    });
+    const recorder = new TimelineRecorder();
+    const manifestPath = WorkflowPaths.manifestPath(
+      workspace,
+      run.workflowKey,
+      run.runRef
+    );
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const recorded = (isStreaming: boolean, text: string) => ({
+      eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+      timestampMs: 10,
+      target,
+      runIndex: 0,
+      attemptIndex: 0,
+      phase: EXECUTION_PHASES.PROMPT,
+      payload: {
+        cliOutput: {
+          structured: {
+            events: [{ type: "text", data: { text } }],
+            metadata: {},
+          },
+          elapsed: 0,
+          isStreaming,
+        },
+      },
+    });
+    const chunk = (text: string) => ({
+      eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED,
+      timestampMs: 11,
+      target,
+      runIndex: 0,
+      attemptIndex: 0,
+      phase: EXECUTION_PHASES.PROMPT,
+      payload: { chunk: text },
+    });
+    await recorder.appendEvents(manifestPath, [
+      recorded(true, ""),
+      chunk("sealed "),
+      chunk("copy"),
+      recorded(false, "sealed copy"),
+      recorded(true, ""),
+      chunk("partial "),
+      chunk("tail"),
+    ] as never);
+
+    const collapsed = await exportRunBundle({
+      stateRoot: workspace,
+      workspaceRoot: workspace,
+      ...run,
+      bundleDir: path.join(root, "collapsed.ctrlyokerun"),
+      exportedByVersion: "test",
+    });
+    const collapsedEvents = (
+      await fs.readFile(
+        path.join(collapsed.bundleDir, RUN_BUNDLE_FILES.EVENTS),
+        "utf8"
+      )
+    )
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    const chunks = collapsedEvents.filter(
+      (event) =>
+        event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED
+    );
+    assert.deepStrictEqual(
+      chunks.map((event) => event.payload.chunk),
+      ["partial tail"]
+    );
+    assert.strictEqual(collapsed.manifest.includesStreamDeltas, false);
+    const exportedTimelineManifest = JSON.parse(
+      await fs.readFile(
+        path.join(collapsed.bundleDir, RUN_BUNDLE_FILES.MANIFEST),
+        "utf8"
+      )
+    ) as { eventCount: number };
+    assert.strictEqual(
+      exportedTimelineManifest.eventCount,
+      collapsed.eventCount
+    );
+
+    const retained = await exportRunBundle({
+      stateRoot: workspace,
+      workspaceRoot: workspace,
+      ...run,
+      bundleDir: path.join(root, "retained.ctrlyokerun"),
+      exportedByVersion: "test",
+      includeStreamDeltas: true,
+    });
+    const retainedLines = (
+      await fs.readFile(
+        path.join(retained.bundleDir, RUN_BUNDLE_FILES.EVENTS),
+        "utf8"
+      )
+    )
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    assert.strictEqual(
+      retainedLines.filter(
+        (event) =>
+          event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED
+      ).length,
+      4
+    );
+    assert.strictEqual(retained.manifest.includesStreamDeltas, true);
   });
 
   test("refuses pending rewinds and records managed worktree base commits", async () => {

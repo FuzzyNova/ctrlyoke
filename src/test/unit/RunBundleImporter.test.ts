@@ -15,6 +15,7 @@ import { HistorySearchService } from "../../core/orchestration/HistorySearchServ
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { execGit } from "../../utils/GitUtils";
+import { RunOutputResolver } from "../../core/orchestration/RunOutputResolver";
 
 suite("RunBundleImporter", () => {
   let root: string;
@@ -181,6 +182,16 @@ suite("RunBundleImporter", () => {
       exportedByVersion: "test",
       homeDir: root,
     });
+    const sourceAttempt = await new RunOutputResolver().resolveAttempt(
+      WorkflowPaths.manifestPath(
+        sourceWorkspace,
+        lineage.workflowKey,
+        allocation.runRef
+      ),
+      { kind: "queue", stepIndex: 0 },
+      0,
+      0
+    );
     const exportedBundle = JSON.parse(
       await fs.readFile(path.join(exported.bundleDir, "run.json"), "utf8")
     ) as { importedFrom: unknown };
@@ -193,6 +204,21 @@ suite("RunBundleImporter", () => {
       bundleDir: exported.bundleDir,
     });
     assert.strictEqual(imported.status, "imported");
+    if (imported.status !== "imported") return;
+    const importedAttempt = await new RunOutputResolver().resolveAttempt(
+      WorkflowPaths.manifestPath(
+        workspace,
+        imported.workflowKey as never,
+        imported.runRef as never
+      ),
+      { kind: "queue", stepIndex: 0 },
+      0,
+      0
+    );
+    assert.deepStrictEqual(
+      importedAttempt?.output?.structured?.events,
+      sourceAttempt?.output?.structured?.events
+    );
   });
 
   test("recomputes output workingDirectory and detects a repeated bundle", async () => {
@@ -468,7 +494,7 @@ async function writeFixtureBundle(bundle: string): Promise<void> {
         JSON.stringify({
           eventType: "cliOutputRecorded",
           timestampMs: 150 + index,
-          sequence: index + 1,
+          sequence: index === 0 ? 1 : 8,
           target: { stepIndex: 0 },
           attemptIndex: 0,
           definitionRevision: 1,

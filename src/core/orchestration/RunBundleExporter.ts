@@ -59,6 +59,7 @@ import {
 } from "../../types/DashboardConstants";
 import { execGit } from "../../utils/GitUtils";
 import { assertRunHasWorkToContinue } from "./RunContinuationService";
+import { getCliEntryKey } from "./OutputHistoryTimelineAdapter";
 
 /**
  * Exports one settled run as a portable, redacted run bundle
@@ -100,6 +101,8 @@ export interface RunBundleExportOptions {
   exportedByVersion: string;
   /** Keep workspace snapshot, undo and redo events (they carry file contents). */
   includeSnapshots?: boolean;
+  /** Keep streaming text deltas instead of collapsing them into sealed output. */
+  includeStreamDeltas?: boolean;
   /** Omit the workspace patch while retaining the runtime continuation state. */
   includeChanges?: boolean;
   /**
@@ -390,13 +393,22 @@ export async function exportRunBundle(
   );
   await fs.promises.mkdir(stagingDir, { recursive: true });
   try {
+    const collapsedDeltas =
+      options.includeStreamDeltas === true
+        ? new Set<number>()
+        : await findSupersededChunkSequences(
+            recorder.streamEvents(manifestPath)
+          );
     const eventCount = await writeEvents(
       recorder.streamEvents(manifestPath),
       path.join(stagingDir, RUN_BUNDLE_FILES.EVENTS),
       transform,
-      options.includeSnapshots === true
+      options.includeSnapshots === true,
+      collapsedDeltas,
+      options.includeStreamDeltas === true
     );
     const { workflowId: _workflowId, runId, ...portableManifest } = runManifest;
+    portableManifest.eventCount = eventCount;
     await writeJson(
       path.join(stagingDir, RUN_BUNDLE_FILES.MANIFEST),
       transform.apply<RunBundleRunManifest>(
@@ -506,6 +518,7 @@ export async function exportRunBundle(
       },
       ...(importedFrom ? { importedFrom } : {}),
       includesSnapshots: options.includeSnapshots === true,
+      includesStreamDeltas: options.includeStreamDeltas === true,
       redaction: {
         policy: RUN_BUNDLE_REDACTION_POLICY,
         removedCount: transform.removedCount(),
@@ -647,14 +660,73 @@ async function writeEvents(
   events: AsyncIterable<WorkflowTimelineEvent>,
   eventsPath: string,
   transform: BundleTransform,
-  includeSnapshots: boolean
+  includeSnapshots: boolean,
+  collapsedDeltas: ReadonlySet<number>,
+  includeStreamDeltas: boolean
 ): Promise<number> {
   const handle = await fs.promises.open(eventsPath, "w");
   let count = 0;
+  let pendingChunk:
+    | Extract<
+        WorkflowTimelineEvent,
+        { eventType: typeof TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED }
+      >
+    | undefined;
   try {
+    const flushChunk = async (): Promise<void> => {
+      if (!pendingChunk) return;
+      const {
+        workflowId: _workflowId,
+        runId: _runId,
+        ...portable
+      } = pendingChunk;
+      const bundleEvent = transform.apply(
+        portable as RunBundleEvent,
+        RUN_BUNDLE_FILES.EVENTS
+      );
+      await handle.write(`${JSON.stringify(bundleEvent)}\n`);
+      count += 1;
+      pendingChunk = undefined;
+    };
     for await (const event of events) {
-      if (!includeSnapshots && SNAPSHOT_EVENT_TYPES.has(event.eventType))
+      if (!includeSnapshots && SNAPSHOT_EVENT_TYPES.has(event.eventType)) {
+        await flushChunk();
         continue;
+      }
+      if (event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED) {
+        if (collapsedDeltas.has(event.sequence)) {
+          await flushChunk();
+          continue;
+        }
+        const key = getCliEntryKey(
+          event.target,
+          event.runIndex ?? 0,
+          event.attemptIndex,
+          event.phase
+        );
+        if (
+          !includeStreamDeltas &&
+          pendingChunk &&
+          getCliEntryKey(
+            pendingChunk.target,
+            pendingChunk.runIndex ?? 0,
+            pendingChunk.attemptIndex,
+            pendingChunk.phase
+          ) === key
+        ) {
+          pendingChunk = {
+            ...pendingChunk,
+            payload: {
+              chunk: pendingChunk.payload.chunk + event.payload.chunk,
+            },
+          };
+        } else {
+          await flushChunk();
+          pendingChunk = event;
+        }
+        continue;
+      }
+      await flushChunk();
       const { workflowId: _workflowId, runId: _runId, ...portable } = event;
       const bundleEvent = transform.apply(
         portable as RunBundleEvent,
@@ -663,11 +735,52 @@ async function writeEvents(
       await handle.write(`${JSON.stringify(bundleEvent)}\n`);
       count += 1;
     }
+    await flushChunk();
     await handle.sync();
   } finally {
     await handle.close();
   }
   return count;
+}
+
+/**
+ * Find chunks in streaming intervals that a later sealed aggregate replaces.
+ * Only stores sequence numbers, so both passes remain bounded by event count
+ * metadata rather than event payload size.
+ */
+async function findSupersededChunkSequences(
+  events: AsyncIterable<WorkflowTimelineEvent>
+): Promise<Set<number>> {
+  const openChunks = new Map<string, number[]>();
+  const superseded = new Set<number>();
+  for await (const event of events) {
+    if (event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED) {
+      const key = getCliEntryKey(
+        event.target,
+        event.runIndex ?? 0,
+        event.attemptIndex,
+        event.phase
+      );
+      if (event.payload.cliOutput.isStreaming) {
+        if (!openChunks.has(key)) openChunks.set(key, []);
+      } else {
+        for (const sequence of openChunks.get(key) ?? [])
+          superseded.add(sequence);
+        openChunks.delete(key);
+      }
+    } else if (
+      event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED
+    ) {
+      const key = getCliEntryKey(
+        event.target,
+        event.runIndex ?? 0,
+        event.attemptIndex,
+        event.phase
+      );
+      openChunks.get(key)?.push(event.sequence);
+    }
+  }
+  return superseded;
 }
 
 async function writeJson(filePath: string, value: unknown): Promise<void> {
