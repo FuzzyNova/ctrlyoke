@@ -374,12 +374,17 @@ describe("test suite wiring", () => {
         `${suite.script} compiles, which races the concurrently running suites`
       );
     }
-    assert.match(
+    // The rerun may compile in the script line itself or, as `test:extension`
+    // does, in the `node scripts/<file>` it runs; follow that one hop.
+    const rerun =
       packageJson.scripts[
         TEST_SUITES.find((suite) => suite.key === "extension").rerun
-      ],
-      new RegExp(PREPARE_SCRIPT)
-    );
+      ];
+    const delegate = /^node\s+(scripts\/\S+\.mjs)\b/.exec(rerun)?.[1];
+    const rerunSource = delegate
+      ? readFileSync(new URL(`../${delegate}`, import.meta.url), "utf8")
+      : rerun;
+    assert.match(rerunSource, new RegExp(PREPARE_SCRIPT));
   });
 
   it("gives every core to a suite without oversubscribing the machine", () => {

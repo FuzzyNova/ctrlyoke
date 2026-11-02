@@ -158,9 +158,15 @@ async function main() {
 
   let selectionEnv: Record<string, string>;
   try {
-    selectionEnv = testSelectionToEnv(
-      parseTestSelectionArgs(process.argv.slice(2))
-    );
+    const selection = parseTestSelectionArgs(process.argv.slice(2));
+    if (selection.grep !== undefined || selection.files.length > 0) {
+      // Shell and npm quoting can reshape an argument on its way here; show
+      // what actually arrived so a run that selects nothing is diagnosable.
+      console.log(
+        `Test selection: files=${JSON.stringify(selection.files)} grep=${JSON.stringify(selection.grep ?? null)}`
+      );
+    }
+    selectionEnv = testSelectionToEnv(selection);
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 2;
