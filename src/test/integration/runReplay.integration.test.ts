@@ -2,6 +2,7 @@ import { suite, test, setup, teardown } from "mocha";
 import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as path from "path";
+import * as crypto from "crypto";
 import { WorkflowInstance } from "../../core/WorkflowInstance";
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 import { buildAuthoredWorkflow } from "../../core/WorkflowStepSanitizer";
@@ -471,6 +472,47 @@ suite("Run replay (bundle -> live engine)", function () {
     assert.strictEqual(loaded.events.at(-1)?.eventType, "large-test-event");
   });
 
+  test("reads a 0.2.0-shaped bundle without an assets field", async () => {
+    const loaded = await readRunBundle(
+      path.join(root, "test.ctrlyokerun"),
+      workspace
+    );
+    assert.strictEqual(loaded.manifest.assets, undefined);
+  });
+
+  test("rejects a bundle asset whose recorded hash was tampered", async () => {
+    const bundleDir = path.join(root, "tampered-asset.ctrlyokerun");
+    await writeBundle(bundleDir);
+    const assetsDir = path.join(bundleDir, RUN_BUNDLE_FILES.ASSETS_DIR);
+    await fs.mkdir(assetsDir);
+    await fs.writeFile(path.join(assetsDir, "note.txt"), "changed");
+    const manifestPath = path.join(bundleDir, RUN_BUNDLE_FILES.BUNDLE);
+    const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+    manifest.assets = [
+      { path: "assets/note.txt", sha256: "0".repeat(64), bytes: 7 },
+    ];
+    await fs.writeFile(manifestPath, JSON.stringify(manifest));
+    await assert.rejects(
+      readRunBundle(bundleDir, workspace),
+      RunBundleFormatError
+    );
+  });
+
+  test("rejects a bundle asset path that escapes the bundle", async () => {
+    const bundleDir = path.join(root, "escaping-asset.ctrlyokerun");
+    await writeBundle(bundleDir);
+    const manifestPath = path.join(bundleDir, RUN_BUNDLE_FILES.BUNDLE);
+    const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+    manifest.assets = [
+      { path: "../outside.txt", sha256: "0".repeat(64), bytes: 0 },
+    ];
+    await fs.writeFile(manifestPath, JSON.stringify(manifest));
+    await assert.rejects(
+      readRunBundle(bundleDir, workspace),
+      RunBundleFormatError
+    );
+  });
+
   test("rejects an event line larger than the per-line cap", async () => {
     const bundleDir = path.join(root, "oversized-event.ctrlyokerun");
     await writeBundle(bundleDir);
@@ -510,7 +552,11 @@ suite("Run replay (bundle -> live engine)", function () {
     assert.ok(workflowKey && runRef);
 
     const worktree = path.join(root, "managed-worktree");
-    const runFilePath = WorkflowPaths.runFilePath(workspace, workflowKey, runRef);
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspace,
+      workflowKey,
+      runRef
+    );
     const workingFile = JSON.parse(await fs.readFile(runFilePath, "utf8")) as {
       _runtime?: Record<string, unknown>;
       steps?: Array<{ prompt?: string }>;
@@ -568,9 +614,11 @@ suite("Run replay (bundle -> live engine)", function () {
 
     const bundleText = (
       await Promise.all(
-        Object.values(RUN_BUNDLE_FILES).map((file) =>
-          fs.readFile(path.join(exported.bundleDir, file), "utf8")
-        )
+        Object.values(RUN_BUNDLE_FILES)
+          .filter((file) => file !== RUN_BUNDLE_FILES.ASSETS_DIR)
+          .map((file) =>
+            fs.readFile(path.join(exported.bundleDir, file), "utf8")
+          )
       )
     ).join("\n");
     for (const spelling of [
@@ -598,7 +646,8 @@ suite("Run replay (bundle -> live engine)", function () {
       (exported.manifest.redaction.byFile?.[RUN_BUNDLE_FILES.EVENTS] ?? 0) > 0
     );
     assert.ok(
-      (exported.manifest.redaction.byFile?.[RUN_BUNDLE_FILES.DEFINITION] ?? 0) > 0,
+      (exported.manifest.redaction.byFile?.[RUN_BUNDLE_FILES.DEFINITION] ?? 0) >
+        0,
       "redactions are counted separately in the workflow definition"
     );
     const exportedEvents = await fs.readFile(
@@ -607,7 +656,9 @@ suite("Run replay (bundle -> live engine)", function () {
     );
     assert.ok(exportedEvents.includes(`${BUNDLE_WORKSPACE_TOKEN}/src/main.ts`));
     assert.ok(
-      exportedEvents.includes(`\"workingDirectory\":\"${BUNDLE_WORKSPACE_TOKEN}/src\"`)
+      exportedEvents.includes(
+        `\"workingDirectory\":\"${BUNDLE_WORKSPACE_TOKEN}/src\"`
+      )
     );
     assert.ok(
       !exported.manifest.externalPaths.some((externalPath) =>
@@ -651,6 +702,83 @@ suite("Run replay (bundle -> live engine)", function () {
       ).length,
       2
     );
+  });
+
+  test("exports and hashes referenced generated attachments", async () => {
+    const { instance } = await replay();
+    const { workflowKey, runRef } = instance.promptQueue.getState();
+    assert.ok(workflowKey && runRef);
+    const attachmentPath = path.join(
+      workspace,
+      ".ctrlyoke",
+      "attachments",
+      "notes.txt"
+    );
+    await fs.mkdir(path.dirname(attachmentPath), { recursive: true });
+    const attachment = "secret sk-test0123456789abcdefghij\n";
+    await fs.writeFile(attachmentPath, attachment);
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspace,
+      workflowKey,
+      runRef
+    );
+    const workingFile = JSON.parse(await fs.readFile(runFilePath, "utf8"));
+    workingFile.steps[0].prompt = "Review @.ctrlyoke/attachments/notes.txt";
+    await fs.writeFile(runFilePath, JSON.stringify(workingFile));
+
+    const exported = await exportRunBundle({
+      stateRoot: workspace,
+      workspaceRoot: workspace,
+      workflowKey,
+      runRef,
+      bundleDir: path.join(root, "with-assets.ctrlyokerun"),
+      exportedByVersion: "test",
+      homeDir: root,
+    });
+    assert.strictEqual(exported.manifest.assets?.length, 1);
+    const asset = exported.manifest.assets![0];
+    const bundledBytes = await fs.readFile(
+      path.join(exported.bundleDir, asset.path)
+    );
+    assert.strictEqual(asset.bytes, bundledBytes.byteLength);
+    assert.strictEqual(
+      asset.sha256,
+      crypto.createHash("sha256").update(bundledBytes).digest("hex")
+    );
+    assert.ok(!bundledBytes.toString("utf8").includes("sk-test"));
+    const definition = await fs.readFile(
+      path.join(exported.bundleDir, RUN_BUNDLE_FILES.DEFINITION),
+      "utf8"
+    );
+    assert.ok(definition.includes(`@./${asset.path}`), definition);
+    assert.ok(exported.manifest.redaction.byFile?.[asset.path]);
+  });
+
+  test("reports a missing generated attachment as an export warning", async () => {
+    const { instance } = await replay();
+    const { workflowKey, runRef } = instance.promptQueue.getState();
+    assert.ok(workflowKey && runRef);
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspace,
+      workflowKey,
+      runRef
+    );
+    const workingFile = JSON.parse(await fs.readFile(runFilePath, "utf8"));
+    workingFile.steps[0].prompt = "Review @.ctrlyoke/attachments/missing.txt";
+    await fs.writeFile(runFilePath, JSON.stringify(workingFile));
+
+    const exported = await exportRunBundle({
+      stateRoot: workspace,
+      workspaceRoot: workspace,
+      workflowKey,
+      runRef,
+      bundleDir: path.join(root, "missing-asset.ctrlyokerun"),
+      exportedByVersion: "test",
+    });
+    assert.ok(
+      exported.warnings.some((warning) => warning.includes("missing.txt"))
+    );
+    assert.deepStrictEqual(exported.manifest.assets, undefined);
   });
 
   test("refuses to replace an existing bundle unless asked", async () => {

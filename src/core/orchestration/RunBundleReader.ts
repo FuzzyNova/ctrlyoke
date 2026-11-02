@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import * as crypto from "crypto";
 import {
   RUN_BUNDLE_FILES,
   RUN_BUNDLE_KIND,
@@ -13,6 +14,7 @@ import {
   mapJsonStrings,
 } from "../../utils/RunBundlePaths";
 import { LineTooLongError, streamFileLines } from "../../utils/TextLines";
+import { isPathWithinDirectory } from "../../utils/PathSecurity";
 
 /**
  * Reads a run bundle (dev/backlog/RUN_EXPORT_PLAN.md §3) into memory, with its
@@ -72,6 +74,8 @@ export async function readRunBundle(
     );
   }
 
+  await validateAssets(resolvedDir, manifest.assets);
+
   const resolve = createWorkspacePathResolver(workspaceRoot);
   const load = <T>(value: unknown): T => mapJsonStrings(value, resolve) as T;
   const events = await readEvents(resolvedDir, load, options.maxEventLineBytes);
@@ -91,6 +95,77 @@ export async function readRunBundle(
     ),
     events,
   };
+}
+
+async function validateAssets(
+  bundleDir: string,
+  assets: RunBundleManifest["assets"]
+): Promise<void> {
+  if (assets === undefined) return;
+  if (!Array.isArray(assets)) {
+    throw new RunBundleFormatError("run.json assets must be an array.");
+  }
+  const bundleRealPath = await fs.promises.realpath(bundleDir);
+  for (const asset of assets) {
+    if (
+      !asset ||
+      typeof asset.path !== "string" ||
+      !asset.path ||
+      path.isAbsolute(asset.path) ||
+      path.posix.isAbsolute(asset.path) ||
+      asset.path.includes("\\") ||
+      typeof asset.sha256 !== "string" ||
+      !/^[a-f0-9]{64}$/i.test(asset.sha256) ||
+      !Number.isSafeInteger(asset.bytes) ||
+      asset.bytes < 0
+    ) {
+      throw new RunBundleFormatError(
+        "run.json contains an invalid asset record."
+      );
+    }
+    const filePath = path.resolve(bundleDir, asset.path);
+    if (!isPathWithinDirectory(filePath, bundleDir)) {
+      throw new RunBundleFormatError(
+        `Bundle asset path "${asset.path}" escapes the bundle directory.`
+      );
+    }
+    let stats: fs.Stats;
+    let realPath: string;
+    try {
+      [stats, realPath] = await Promise.all([
+        fs.promises.lstat(filePath),
+        fs.promises.realpath(filePath),
+      ]);
+    } catch {
+      throw new RunBundleFormatError(
+        `Bundle asset "${asset.path}" is missing or unreadable.`
+      );
+    }
+    if (!stats.isFile() || !isPathWithinDirectory(realPath, bundleRealPath)) {
+      throw new RunBundleFormatError(
+        `Bundle asset "${asset.path}" is not a regular file inside the bundle.`
+      );
+    }
+    if (stats.size !== asset.bytes) {
+      throw new RunBundleFormatError(
+        `Bundle asset "${asset.path}" failed its size check.`
+      );
+    }
+    const hash = crypto.createHash("sha256");
+    try {
+      for await (const chunk of fs.createReadStream(filePath))
+        hash.update(chunk);
+    } catch {
+      throw new RunBundleFormatError(
+        `Bundle asset "${asset.path}" is missing or unreadable.`
+      );
+    }
+    if (hash.digest("hex") !== asset.sha256) {
+      throw new RunBundleFormatError(
+        `Bundle asset "${asset.path}" failed its SHA-256 check.`
+      );
+    }
+  }
 }
 
 async function readEvents(

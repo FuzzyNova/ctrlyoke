@@ -18,6 +18,7 @@ export const RUN_BUNDLE_FILES = {
   DEFINITION: "workflow.ctrlyoke.json",
   MANIFEST: "manifest.json",
   EVENTS: "events.jsonl",
+  ASSETS_DIR: "assets",
 } as const;
 
 /** The redaction pass every export applies (§2.1): resolved secrets plus heuristics. */
@@ -61,6 +62,8 @@ export interface RunBundleManifest {
   };
   /** Absolute paths the run touched outside the workspace and home. */
   externalPaths: string[];
+  /** Bundled files referenced by the definition; absent in 0.2.0 bundles. */
+  assets?: Array<{ path: string; sha256: string; bytes: number }>;
 }
 
 /** A timeline event in a bundle: the run identity is in `provenance` instead. */

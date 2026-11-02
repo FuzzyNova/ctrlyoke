@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Run exports now bundle referenced attachments, inline generated prompt bodies,
+  validate asset hashes when reading, and warn when an attachment is missing.
+
 ### Fixed
 
 - Exporting a run executed in a managed or named worktree now writes its paths

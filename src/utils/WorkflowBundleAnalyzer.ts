@@ -113,6 +113,10 @@ export interface WorkflowBundleAnalyzerOptions {
   sourceDefinitionPath?: string;
   /** Absolute or workspace-relative Save As destination. */
   destinationPath?: string;
+  /** Override Save As's sibling `<workflow>.assets` directory. */
+  assetsDirectory?: string;
+  /** Export can preserve a missing attachment reference while reporting it. */
+  missingGeneratedReferencesAreWarnings?: boolean;
   /** Template exports cannot carry a sibling assets directory. */
   templateMode?: boolean;
 }
@@ -518,7 +522,12 @@ async function analyzeInlineReferences(
       continue;
     }
     if (!item.canonicalPath) {
-      addBlocker(
+      const diagnostic =
+        options.missingGeneratedReferencesAreWarnings &&
+        generatedStore === BUNDLE_GENERATED_STORES.ATTACHMENTS
+          ? addWarning
+          : addBlocker;
+      diagnostic(
         plan,
         "missing-generated-reference",
         `Cannot export ${field.label}: inline reference "${token}" is missing or unreadable.`,
@@ -678,7 +687,9 @@ async function finalizeCopyPlan(
   const destinationPath = path.isAbsolute(options.destinationPath)
     ? path.resolve(options.destinationPath)
     : path.resolve(workspaceRoot, options.destinationPath);
-  const assetsDirectory = deriveAssetsDirectory(destinationPath);
+  const assetsDirectory = options.assetsDirectory
+    ? path.resolve(options.assetsDirectory)
+    : deriveAssetsDirectory(destinationPath);
   plan.assetsDirectory = assetsDirectory;
   const destinationFileName = path.basename(destinationPath);
   const manifest = await readExistingManifest(assetsDirectory, plan);

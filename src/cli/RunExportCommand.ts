@@ -113,6 +113,7 @@ export async function exportRunCommand(
         includesSnapshots: result.manifest.includesSnapshots,
         redaction,
         externalPaths,
+        warnings: result.warnings,
       })
     );
     return;
@@ -121,6 +122,9 @@ export async function exportRunCommand(
   io.writeOut(
     `  ${result.eventCount} events${result.manifest.includesSnapshots ? ", with workspace snapshots" : ""}`
   );
+  for (const warning of result.warnings) {
+    io.writeOut(`  Warning: ${warning}`);
+  }
   const rules = Object.entries(redaction.byRule)
     .map(([rule, count]) => `${rule} ${count}`)
     .join(", ");

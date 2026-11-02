@@ -7,10 +7,10 @@
 > read-only.
 >
 > **Status:** Export half built 2026-10-18 and shipped in `0.2.0` (`ctrlyoke export`, bundle
-> schema 1). The worktree execution-root portability gap and `redaction.byFile` were added
-> within schema 1 on 2026-11-01. Not built: import, **continuing an imported run** (§5, added
-> 2026-10-24), bundling workspace changes and assets, and the dashboard UI. Originally written
-> 2026-08-14.
+> schema 1). The worktree execution-root portability gap, `redaction.byFile`, and phase 2 asset
+> bundling were added within schema 1 on 2026-11-01. Not built: import, **continuing an imported
+> run** (§5, added 2026-10-24), bundling workspace changes, and the dashboard UI. Originally
+> written 2026-08-14.
 >
 > **Built 2026-10-18:** `exportRunBundle` (`src/core/orchestration/RunBundleExporter.ts`), the
 > loader `readRunBundle` (`RunBundleReader.ts`, today used only by media replay), the format types
@@ -126,14 +126,17 @@ while its run executes) and runs `redactPreviewText` with those exact values plu
 schema-1 field). The per-file summary identifies when redaction changes a _pending_ step's
 prompt, because that changes what the importing machine will execute (§5.2).
 
-**Assets.** Not built. Attachments and prompt bodies live in
+**Assets.** Built 2026-11-01. Attachments and prompt bodies live in
 `<stateRoot>/.ctrlyoke/{attachments,prompts}/`, are gitignored, and stay workspace-scoped. A
 bundle without them is a bundle of dangling `@` references, and a continuable bundle without
 them runs pending steps against missing files. **Reuse the Save As machinery**:
 `analyzeWorkflowBundle` (`src/utils/WorkflowBundleAnalyzer.ts`) discovers references, plans
 copies, inlines lone prompt bodies and rewrites refs; `writeWorkflowBundle`
 (`src/utils/WorkflowBundleWriter.ts`) stages and publishes them atomically. Do not write a
-second asset copier.
+second asset copier. Export diagnostics are warnings; missing attachments remain referenced and
+are reported. Referenced UTF-8 text assets receive the normal secret redaction pass; binary assets
+are copied byte-for-byte. `run.json` records each copied asset's bundle-relative path, SHA-256 and
+byte length, and `readRunBundle` validates all three. A bundle without `assets` remains readable.
 
 ---
 
@@ -222,7 +225,7 @@ it). Steps 1, 2, 4, 5 and 6 are built.
    them).
 2. **Read** through `TimelineRecorder.streamEvents`. _Built._
 3. **Plan assets** with `analyzeWorkflowBundle`; surface its diagnostics as export warnings. A
-   missing attachment is reported, not silently dropped. _Not built._
+   missing attachment is reported, not silently dropped. _Built 2026-11-01._
 4. **Rewrite** paths. _Built._
 5. **Redact.** _Built._ Add the per-file breakdown.
 6. **Write atomically** through a staging sibling and a rename. _Built._
@@ -572,7 +575,7 @@ How they work together instead:
 | Phase | Content                                                                                                      | Ships value alone?                         |
 | ----- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
 | 1 ✅  | Bundle format, path rewrite, `RunBundleExporter`, `ctrlyoke export`, redaction (`secrets-v1`)                | Yes: shareable artifacts (shipped `0.2.0`) |
-| 2     | Asset bundling via the Save As machinery (`redaction.byFile` built 2026-11-01)                                | Yes: bundles stop dangling `@` refs        |
+| 2 ✅  | Asset bundling via the Save As machinery (`redaction.byFile` and asset hashing)                              | Yes: bundles stop dangling `@` refs        |
 | 3     | `RunMaterializer` + `ctrlyoke import` (view-only), ingress guards (§6.1), origin badge                       | Yes: completes the share loop              |
 | 4     | Continuation: `run.ctrlyoke.json`, `changes.patch`, `_runtime` normalization, `import --continue`            | Yes: the machine-to-machine handoff        |
 | 5     | Session preflight probe for all runs, uniform warn-and-start-fresh fallback, malformed IDs included (§5.4)   | Yes: fixes native runs too                 |
@@ -584,7 +587,8 @@ no dependency on the import work, so it can land first. A native run whose harne
 cleaned up benefits the same way.
 
 **Build order (orchestrated 2026-11-01):** the §2.1 worktree-root fix and `redaction.byFile`;
-phase 2 assets; phase 5 (fallback infrastructure, then the remaining four harnesses); phase 3
+phase 2 assets (built 2026-11-01; implementation stayed within schema 1 and added an optional
+manifest field); phase 5 (fallback infrastructure, then the remaining four harnesses); phase 3
 (materializer and importer core, then the CLI, then the origin badge and undo gating); phase 4
 (export side, then the import preview service, then import-side continuation); phase 6
 (Export Run, then Import Run and Load routing, then the guide page). Phase 5 lands before

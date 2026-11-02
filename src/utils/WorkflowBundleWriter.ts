@@ -1,5 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import * as crypto from "crypto";
 import {
   BUNDLE_MANIFEST_FILE_NAME,
   BUNDLE_MANIFEST_VERSION,
@@ -12,10 +13,20 @@ export interface WorkflowBundleWriteOptions {
   workflowPath: string;
   serializedWorkflow: string;
   plan: BundlePlan;
+  /** Keep assets inside an enclosing atomic export staging directory. */
+  stagingDirectory?: string;
+  /** Omit Save As's ownership manifest and pruning for ephemeral bundles. */
+  publishManifest?: boolean;
+  /** Transform copied bytes (for example, redact UTF-8 text assets). */
+  transformCopy?: (
+    content: Buffer,
+    copy: BundlePlan["copies"][number]
+  ) => Buffer;
 }
 
 export interface WorkflowBundleWriteResult {
   warnings: string[];
+  files: Array<{ path: string; sha256: string; bytes: number }>;
 }
 
 /**
@@ -40,6 +51,7 @@ export async function writeWorkflowBundle(
   const copies = plan.copies;
   let stagingDirectory: string | undefined;
   const stagedPaths = new Map<BundlePlan["copies"][number], string>();
+  const files: WorkflowBundleWriteResult["files"] = [];
 
   try {
     if (copies.length > 0) {
@@ -48,9 +60,10 @@ export async function writeWorkflowBundle(
       }
       await fs.mkdir(assetsDirectory, { recursive: true });
       await assertDirectory(assetsDirectory);
-      stagingDirectory = await fs.mkdtemp(
-        path.join(assetsDirectory, ".ctrlyoke-staging-")
-      );
+      stagingDirectory = options.stagingDirectory
+        ? path.join(options.stagingDirectory, ".asset-staging")
+        : await fs.mkdtemp(path.join(assetsDirectory, ".ctrlyoke-staging-"));
+      await fs.mkdir(stagingDirectory, { recursive: true });
 
       for (const [index, copy] of copies.entries()) {
         const fileName = getAssetFileName(
@@ -59,9 +72,12 @@ export async function writeWorkflowBundle(
         );
         const stagedPath = path.join(stagingDirectory, `${index}-${fileName}`);
         const sourceBytes = await fs.readFile(copy.sourcePath);
-        await fs.writeFile(stagedPath, sourceBytes);
+        const outputBytes = options.transformCopy
+          ? options.transformCopy(sourceBytes, copy)
+          : sourceBytes;
+        await fs.writeFile(stagedPath, outputBytes);
         const stagedBytes = await fs.readFile(stagedPath);
-        if (!sourceBytes.equals(stagedBytes)) {
+        if (!outputBytes.equals(stagedBytes)) {
           throw new Error(
             `Staged asset verification failed for "${copy.sourcePath}".`
           );
@@ -77,13 +93,19 @@ export async function writeWorkflowBundle(
           throw new Error(`Missing staged asset for "${copy.sourcePath}".`);
         }
         await renameWithTransientRetry(stagedPath, copy.destinationPath);
+        const content = await fs.readFile(copy.destinationPath);
+        files.push({
+          path: copy.relativePath.replace(/\\/g, "/").replace(/^\.\//, ""),
+          sha256: crypto.createHash("sha256").update(content).digest("hex"),
+          bytes: content.byteLength,
+        });
       }
     }
 
     await fs.mkdir(path.dirname(workflowPath), { recursive: true });
     await writeFileAtomic(workflowPath, serializedWorkflow);
 
-    if (assetsDirectory) {
+    if (assetsDirectory && options.publishManifest !== false) {
       const manifestPath = path.join(
         assetsDirectory,
         BUNDLE_MANIFEST_FILE_NAME
@@ -148,14 +170,14 @@ export async function writeWorkflowBundle(
       }
     }
   } finally {
-    if (stagingDirectory) {
+    if (stagingDirectory && !options.stagingDirectory) {
       await fs
         .rm(stagingDirectory, { recursive: true, force: true })
         .catch(() => {});
     }
   }
 
-  return { warnings };
+  return { warnings, files };
 }
 
 function getAssetFileName(

@@ -45,14 +45,16 @@ import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { buildAuthoredWorkflow } from "../WorkflowStepSanitizer";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
+import { analyzeWorkflowBundle } from "../../utils/WorkflowBundleAnalyzer";
+import { writeWorkflowBundle } from "../../utils/WorkflowBundleWriter";
 
 /**
  * Exports one finished run as a portable, redacted run bundle
  * (dev/backlog/RUN_EXPORT_PLAN.md §4). vscode-free, so the CLI and the
  * extension share it.
  *
- * Not yet covered from §4: bundling referenced attachments and prompt bodies
- * (step 3), which the Save As machinery will provide.
+ * Referenced generated attachments and prompt bodies are planned and copied
+ * by the same analyzer/writer used by Save As.
  */
 
 /** Events that carry workspace file contents; exported only on request (§9 Q4). */
@@ -102,6 +104,7 @@ export interface RunBundleExportResult {
   bundleDir: string;
   manifest: RunBundleManifest;
   eventCount: number;
+  warnings: string[];
 }
 
 export class RunBundleExportError extends Error {}
@@ -142,7 +145,11 @@ export async function exportRunBundle(
     worktree?.sourceCheckoutRoot,
     ...(worktree?.namedWorkspaceRoots.map((root) => root.fsPath) ?? []),
   ].filter((root): root is string => !!root);
-  const transform = createBundleTransform(options, exactSecrets, workspaceRoots);
+  const transform = createBundleTransform(
+    options,
+    exactSecrets,
+    workspaceRoots
+  );
   const bundleDir = path.resolve(options.bundleDir);
   const stagingDir = path.join(
     path.dirname(bundleDir),
@@ -164,13 +171,45 @@ export async function exportRunBundle(
         RUN_BUNDLE_FILES.MANIFEST
       )
     );
-    await writeJson(
-      path.join(stagingDir, RUN_BUNDLE_FILES.DEFINITION),
-      transform.apply(
-        buildAuthoredWorkflow(workingFile, descriptor.workflowName),
-        RUN_BUNDLE_FILES.DEFINITION
-      )
-    );
+    const authoredWorkflow = buildAuthoredWorkflow(
+      workingFile,
+      descriptor.workflowName
+    ) as Record<string, unknown>;
+    const definitionPath = path.join(stagingDir, RUN_BUNDLE_FILES.DEFINITION);
+    const analysis = await analyzeWorkflowBundle(authoredWorkflow, {
+      workspaceRoot: options.workspaceRoot,
+      trustedRoots: [
+        ...new Set([options.workspaceRoot, options.stateRoot, stagingDir]),
+      ],
+      ...(descriptor.originalFile && path.isAbsolute(descriptor.originalFile)
+        ? { sourceDefinitionPath: descriptor.originalFile }
+        : {}),
+      destinationPath: definitionPath,
+      assetsDirectory: path.join(stagingDir, RUN_BUNDLE_FILES.ASSETS_DIR),
+      missingGeneratedReferencesAreWarnings: true,
+    });
+    const writeResult = await writeWorkflowBundle({
+      workflowPath: definitionPath,
+      serializedWorkflow: `${JSON.stringify(
+        transform.apply(analysis.workflow, RUN_BUNDLE_FILES.DEFINITION),
+        null,
+        2
+      )}\n`,
+      plan: { ...analysis.plan, blockers: [] },
+      stagingDirectory: stagingDir,
+      publishManifest: false,
+      transformCopy: (content, copy) =>
+        redactAssetContent(
+          content,
+          transform,
+          copy.relativePath.replace(/^\.\//, "").replace(/\\/g, "/")
+        ),
+    });
+    const warnings = [
+      ...analysis.plan.blockers.map((blocker) => blocker.message),
+      ...analysis.plan.warnings.map((warning) => warning.message),
+      ...writeResult.warnings,
+    ];
     const bundleManifest: RunBundleManifest = {
       schemaVersion: RUN_BUNDLE_SCHEMA_VERSION,
       kind: RUN_BUNDLE_KIND,
@@ -203,16 +242,32 @@ export async function exportRunBundle(
         byFile: transform.removedByFile(),
       },
       externalPaths: transform.externalPaths(),
+      ...(writeResult.files.length > 0 ? { assets: writeResult.files } : {}),
     };
     await writeJson(
       path.join(stagingDir, RUN_BUNDLE_FILES.BUNDLE),
       bundleManifest
     );
     await publishStagedBundle(stagingDir, bundleDir, options.replace === true);
-    return { bundleDir, manifest: bundleManifest, eventCount };
+    return { bundleDir, manifest: bundleManifest, eventCount, warnings };
   } catch (error) {
     await fs.promises.rm(stagingDir, { recursive: true, force: true });
     throw error;
+  }
+}
+
+/** Redact UTF-8 text assets; binary attachment bytes remain byte-for-byte. */
+function redactAssetContent(
+  content: Buffer,
+  transform: BundleTransform,
+  fileName: string
+): Buffer {
+  if (content.includes(0)) return content;
+  try {
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(content);
+    return Buffer.from(transform.redactText(text, fileName), "utf8");
+  } catch {
+    return content;
   }
 }
 
@@ -239,6 +294,7 @@ async function assertRunSettled(
 
 interface BundleTransform {
   apply<T>(value: T, fileName: string): T;
+  redactText(text: string, fileName: string): string;
   removedCount(): number;
   removedByRule(): Record<string, number>;
   removedByFile(): Record<string, number>;
@@ -260,23 +316,26 @@ function createBundleTransform(
   const external = new Set<string>();
 
   let activeFileName: string | undefined;
-  const transformString = (text: string, key: string | undefined): string => {
-    const rewritten = rewrite(text);
-    const redacted = redactPreviewText(rewritten, [], exactSecrets);
+  const redact = (text: string): string => {
+    const redacted = redactPreviewText(text, [], exactSecrets);
     for (const span of redacted.spans) {
       byRule[span.ruleId] = (byRule[span.ruleId] ?? 0) + 1;
       if (activeFileName) {
         byFile[activeFileName] = (byFile[activeFileName] ?? 0) + 1;
       }
     }
+    return redacted.text;
+  };
+  const transformString = (text: string, key: string | undefined): string => {
+    const redacted = redact(rewrite(text));
     if (
       key !== undefined &&
       PATH_VALUED_KEYS.has(key) &&
-      isExternalAbsolutePath(redacted.text)
+      isExternalAbsolutePath(redacted)
     ) {
-      external.add(redacted.text);
+      external.add(redacted);
     }
-    return redacted.text;
+    return redacted;
   };
 
   return {
@@ -284,6 +343,14 @@ function createBundleTransform(
       activeFileName = fileName;
       try {
         return mapJsonStrings(value, transformString);
+      } finally {
+        activeFileName = undefined;
+      }
+    },
+    redactText: (text, fileName) => {
+      activeFileName = fileName;
+      try {
+        return redact(text);
       } finally {
         activeFileName = undefined;
       }
