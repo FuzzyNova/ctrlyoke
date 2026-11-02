@@ -23,6 +23,15 @@ import {
 } from "../../utils/PathSecurity";
 import { mapJsonStrings } from "../../utils/RunBundlePaths";
 import {
+  parseAllFileReferences,
+  type FileReference,
+} from "../../utils/FileReferenceParser";
+import {
+  buildFileReference,
+  buildSelectionReference,
+  buildSymbolReference,
+} from "../../completions/ContextReferenceBuilder";
+import {
   readRunBundleHeader,
   streamRunBundleEvents,
   type ReadRunBundleOptions,
@@ -136,18 +145,14 @@ export class RunBundleImporter {
     for await (const _event of streamRunBundleEvents(header, options)) {
       /* validate */
     }
-    const rewriteAssets = await this.createAssetReferenceRewriter(
-      header.bundleDir,
-      options.workspaceRoot,
-      header.manifest.assets ?? []
-    );
-    const definition = rewriteAssets(header.definition) as Record<
-      string,
-      unknown
-    >;
-    const runFile = header.runtime
-      ? (rewriteAssets(header.runtime) as WorkingFile)
-      : undefined;
+    const { rewrite: rewriteAssets, cleanup: cleanupAssets } =
+      await this.createAssetReferenceRewriter(
+        header.bundleDir,
+        options.workspaceRoot,
+        header.manifest.assets ?? []
+      );
+    let definition: Record<string, unknown>;
+    let runFile: WorkingFile | undefined;
     let executionRoot = options.workspaceRoot;
     let placement: RunChangesPlacement | undefined;
     async function* drafts() {
@@ -170,99 +175,110 @@ export class RunBundleImporter {
         yield rewriteWorkingDirectories(draft) as WorkflowTimelineEventDraft;
       }
     }
-    const materialized = await this.materializer.materialize({
-      workspaceRoot: options.workspaceRoot,
-      workflowName:
-        options.name?.trim() || header.manifest.lineage.workflowName,
-      definition,
-      ...(runFile ? { workingFile: runFile } : {}),
-      events: drafts(),
-      executionState: header.manifest.continuation
-        ? EXECUTION_STATES.STOPPED
-        : header.runManifest.executionState,
-      currentIndex: (definition.steps as unknown[] | undefined)?.length ?? 0,
-      startedAt: header.runManifest.startedAt,
-      provenance,
-      ...(header.manifest.continuation
-        ? {
-            beforeEvents: async ({ workflowKey, runRef }) => {
-              const continuation = header.manifest.continuation!;
-              const target =
-                options.changes ??
-                defaultRunChangesTarget(continuation.worktreeMode);
-              const patchPath = continuation.workspace.patch
-                ? path.join(header.bundleDir, RUN_BUNDLE_FILES.CHANGES)
-                : undefined;
-              placement = await this.changesPlacer.place({
-                workspaceRoot: options.workspaceRoot,
-                patchPath,
-                baseCommit: continuation.workspace.baseCommit,
-                target,
-                worktreeMode: continuation.worktreeMode,
-                workflowKey,
-                runRef,
-                workflowName:
-                  options.name?.trim() || header.manifest.lineage.workflowName,
-              });
-              if (placement.worktreeRuntime) {
-                // Imported outputs record the new worktree as their
-                // working directory, never the bundle's or the checkout (§5.5).
-                executionRoot = placement.worktreePath ?? executionRoot;
-                const normalized = normalizeImportedRuntime(
-                  header.runtime,
-                  header.manifest,
-                  header.runManifest
-                );
-                return {
-                  runtimeState: {
-                    ...normalized,
-                    worktree: placement.worktreeRuntime,
-                  },
-                };
-              }
-              if (
-                placement.canContinue === false ||
-                (!placement.applied && target !== RUN_CHANGES_TARGETS.SKIP)
-              ) {
-                const reason =
-                  placement.warning ?? "workspace changes could not be placed";
+    try {
+      definition = rewriteAssets(header.definition) as Record<string, unknown>;
+      runFile = header.runtime
+        ? (rewriteAssets(header.runtime) as WorkingFile)
+        : undefined;
+      const materialized = await this.materializer.materialize({
+        workspaceRoot: options.workspaceRoot,
+        workflowName:
+          options.name?.trim() || header.manifest.lineage.workflowName,
+        definition,
+        ...(runFile ? { workingFile: runFile } : {}),
+        events: drafts(),
+        executionState: header.manifest.continuation
+          ? EXECUTION_STATES.STOPPED
+          : header.runManifest.executionState,
+        currentIndex: (definition.steps as unknown[] | undefined)?.length ?? 0,
+        startedAt: header.runManifest.startedAt,
+        provenance,
+        ...(header.manifest.continuation
+          ? {
+              beforeEvents: async ({ workflowKey, runRef }) => {
+                const continuation = header.manifest.continuation!;
+                const target =
+                  options.changes ??
+                  defaultRunChangesTarget(continuation.worktreeMode);
+                const patchPath = continuation.workspace.patch
+                  ? path.join(header.bundleDir, RUN_BUNDLE_FILES.CHANGES)
+                  : undefined;
+                placement = await this.changesPlacer.place({
+                  workspaceRoot: options.workspaceRoot,
+                  patchPath,
+                  baseCommit: continuation.workspace.baseCommit,
+                  target,
+                  worktreeMode: continuation.worktreeMode,
+                  workflowKey,
+                  runRef,
+                  workflowName:
+                    options.name?.trim() ||
+                    header.manifest.lineage.workflowName,
+                });
+                if (placement.worktreeRuntime) {
+                  // Imported outputs record the new worktree as their
+                  // working directory, never the bundle's or the checkout (§5.5).
+                  executionRoot = placement.worktreePath ?? executionRoot;
+                  const normalized = normalizeImportedRuntime(
+                    header.runtime,
+                    header.manifest,
+                    header.runManifest
+                  );
+                  return {
+                    runtimeState: {
+                      ...normalized,
+                      worktree: placement.worktreeRuntime,
+                    },
+                  };
+                }
+                if (
+                  placement.canContinue === false ||
+                  (!placement.applied && target !== RUN_CHANGES_TARGETS.SKIP)
+                ) {
+                  const reason =
+                    placement.warning ??
+                    "workspace changes could not be placed";
+                  return {
+                    runtimeState: normalizeImportedRuntime(
+                      header.runtime,
+                      header.manifest,
+                      header.runManifest,
+                      { reason }
+                    ),
+                  };
+                }
+                executionRoot = placement.worktreePath ?? options.workspaceRoot;
                 return {
                   runtimeState: normalizeImportedRuntime(
                     header.runtime,
                     header.manifest,
-                    header.runManifest,
-                    { reason }
+                    header.runManifest
                   ),
                 };
-              }
-              executionRoot = placement.worktreePath ?? options.workspaceRoot;
-              return {
-                runtimeState: normalizeImportedRuntime(
+              },
+            }
+          : {
+              runtimeState: {
+                ...normalizeImportedRuntime(
                   header.runtime,
                   header.manifest,
-                  header.runManifest
+                  header.runManifest,
+                  { reason: "this bundle contains history only" }
                 ),
-              };
-            },
-          }
-        : {
-            runtimeState: {
-              ...normalizeImportedRuntime(
-                header.runtime,
-                header.manifest,
-                header.runManifest,
-                { reason: "this bundle contains history only" }
-              ),
-              executionState: header.runManifest.executionState,
-            },
-          }),
-    });
-    return {
-      status: RUN_IMPORT_STATUSES.IMPORTED,
-      workflowKey: materialized.workflowKey,
-      runRef: materialized.runRef,
-      ...(placement ? { placement } : {}),
-    };
+                executionState: header.runManifest.executionState,
+              },
+            }),
+      });
+      return {
+        status: RUN_IMPORT_STATUSES.IMPORTED,
+        workflowKey: materialized.workflowKey,
+        runRef: materialized.runRef,
+        ...(placement ? { placement } : {}),
+      };
+    } catch (error) {
+      await cleanupAssets();
+      throw error;
+    }
   }
 
   private async createAssetReferenceRewriter(
@@ -270,84 +286,170 @@ export class RunBundleImporter {
     workspaceRoot: string,
     assets: NonNullable<
       import("../../types/RunBundleTypes").RunBundleManifest["assets"]
-    >,
-  ): Promise<(value: unknown) => unknown> {
+    >
+  ): Promise<{
+    rewrite: (value: unknown) => unknown;
+    cleanup: () => Promise<void>;
+  }> {
     const replacements = new Map<string, string>();
+    const createdFiles: string[] = [];
     const realWorkspace = await fs.promises.realpath(workspaceRoot);
-    for (const asset of assets) {
-      const segments = asset.path.split("/");
-      if (segments.some((segment) => !isSafePathSegment(segment))) {
-        throw new Error(`Invalid bundled asset path: ${asset.path}`);
-      }
-      const bundleSegments =
-        segments[0] === RUN_BUNDLE_FILES.ASSETS_DIR
-          ? segments.slice(1)
-          : segments;
-      const isPrompt = bundleSegments[0] === "prompts";
-      const relative = isPrompt
-        ? bundleSegments.slice(1)
-        : bundleSegments[0] === "attachments"
-          ? bundleSegments.slice(1)
-          : bundleSegments;
-      if (!relative.length)
-        throw new Error(`Invalid bundled asset path: ${asset.path}`);
-      const store = path.join(
-        realWorkspace,
-        ".ctrlyoke",
-        isPrompt ? "prompts" : "attachments"
-      );
-      await fs.promises.mkdir(store, { recursive: true });
-      const realStore = await fs.promises.realpath(store);
-      if (!isPathWithinDirectory(realStore, realWorkspace))
-        throw new Error("Asset store escapes the importing workspace.");
-      let destination = path.resolve(realStore, ...relative);
-      if (!isPathWithinDirectory(destination, realStore))
-        throw new Error(`Asset path escapes its store: ${asset.path}`);
-      await fs.promises.mkdir(path.dirname(destination), { recursive: true });
-      const realParent = await fs.promises.realpath(path.dirname(destination));
-      if (!isPathWithinDirectory(realParent, realStore))
-        throw new Error(`Asset destination escapes its store: ${asset.path}`);
-      const source = path.resolve(bundleDir, ...segments);
-      const realBundle = await fs.promises.realpath(bundleDir);
-      const realSource = await fs.promises.realpath(source);
-      if (!isPathWithinDirectory(realSource, realBundle))
-        throw new Error(`Bundled asset escapes its bundle: ${asset.path}`);
-      const content = await fs.promises.readFile(realSource);
-      try {
-        const existingStat = await fs.promises.lstat(destination);
-        if (existingStat.isSymbolicLink() || !existingStat.isFile()) {
-          throw new Error(
-            `Asset destination is not a regular file: ${destination}`
-          );
+    try {
+      for (const asset of assets) {
+        const segments = asset.path.split("/");
+        if (segments.some((segment) => !isSafePathSegment(segment))) {
+          throw new Error(`Invalid bundled asset path: ${asset.path}`);
         }
-        const existing = await fs.promises.readFile(destination);
-        if (!existing.equals(content)) {
-          const extension = path.extname(destination);
-          const stem = path.basename(destination, extension);
-          destination = path.join(
-            path.dirname(destination),
-            `${stem}-${crypto.createHash("sha256").update(content).digest("hex").slice(0, 12)}${extension}`
-          );
-          if (!isPathWithinDirectory(destination, realStore))
-            throw new Error(`Asset path escapes its store: ${asset.path}`);
+        const bundleSegments =
+          segments[0] === RUN_BUNDLE_FILES.ASSETS_DIR
+            ? segments.slice(1)
+            : segments;
+        // Run bundle exports store every referenced asset under assets/<name>;
+        // they do not preserve Save As' prompt/attachment category, so imports
+        // place all assets in the workspace attachment store.
+        const relative =
+          bundleSegments[0] === "prompts" || bundleSegments[0] === "attachments"
+            ? bundleSegments.slice(1)
+            : bundleSegments;
+        if (!relative.length)
+          throw new Error(`Invalid bundled asset path: ${asset.path}`);
+        const store = path.join(realWorkspace, ".ctrlyoke", "attachments");
+        await fs.promises.mkdir(store, { recursive: true });
+        const realStore = await fs.promises.realpath(store);
+        if (!isPathWithinDirectory(realStore, realWorkspace))
+          throw new Error("Asset store escapes the importing workspace.");
+        let destination = path.resolve(realStore, ...relative);
+        if (!isPathWithinDirectory(destination, realStore))
+          throw new Error(`Asset path escapes its store: ${asset.path}`);
+        await fs.promises.mkdir(path.dirname(destination), { recursive: true });
+        const realParent = await fs.promises.realpath(
+          path.dirname(destination)
+        );
+        if (!isPathWithinDirectory(realParent, realStore))
+          throw new Error(`Asset destination escapes its store: ${asset.path}`);
+        const source = path.resolve(bundleDir, ...segments);
+        const realBundle = await fs.promises.realpath(bundleDir);
+        const realSource = await fs.promises.realpath(source);
+        if (!isPathWithinDirectory(realSource, realBundle))
+          throw new Error(`Bundled asset escapes its bundle: ${asset.path}`);
+        const content = await fs.promises.readFile(realSource);
+        let exists = false;
+        try {
+          const existingStat = await fs.promises.lstat(destination);
+          if (existingStat.isSymbolicLink() || !existingStat.isFile()) {
+            throw new Error(
+              `Asset destination is not a regular file: ${destination}`
+            );
+          }
+          const existing = await fs.promises.readFile(destination);
+          if (!existing.equals(content)) {
+            const extension = path.extname(destination);
+            const stem = path.basename(destination, extension);
+            destination = path.join(
+              path.dirname(destination),
+              `${stem}-${crypto.createHash("sha256").update(content).digest("hex").slice(0, 12)}${extension}`
+            );
+            if (!isPathWithinDirectory(destination, realStore))
+              throw new Error(`Asset path escapes its store: ${asset.path}`);
+            try {
+              const hashedExisting = await fs.promises.lstat(destination);
+              if (hashedExisting.isSymbolicLink() || !hashedExisting.isFile()) {
+                throw new Error(
+                  `Asset destination is not a regular file: ${destination}`
+                );
+              }
+              if (!(await fs.promises.readFile(destination)).equals(content)) {
+                throw new Error(
+                  `Conflicting bundled asset destination: ${destination}`
+                );
+              }
+              exists = true;
+            } catch (hashedError) {
+              if ((hashedError as NodeJS.ErrnoException).code !== "ENOENT")
+                throw hashedError;
+            }
+          } else {
+            exists = true;
+          }
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
         }
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        if (!exists) {
+          await writeFileAtomic(destination, content);
+          createdFiles.push(destination);
+        }
+        const workspaceRelative = path
+          .relative(realWorkspace, destination)
+          .replace(/\\/g, "/");
+        const normalizedAssetPath = bundleSegments.join("/");
+        replacements.set(
+          normalizeReferenceAssetPath(normalizedAssetPath),
+          workspaceRelative
+        );
       }
-      await writeFileAtomic(destination, content);
-      replacements.set(
-        `${RUN_BUNDLE_FILES.ASSETS_DIR}/${asset.path}`,
-        destination
+      return {
+        rewrite: (input: unknown) =>
+          mapJsonStrings(input, rewriteAssetReferences),
+        cleanup: async () => {
+          await Promise.all(
+            createdFiles.map((file) => fs.promises.rm(file, { force: true }))
+          );
+        },
+      };
+    } catch (error) {
+      await Promise.all(
+        createdFiles.map((file) => fs.promises.rm(file, { force: true }))
       );
-      replacements.set(asset.path, destination);
+      throw error;
     }
-    return (input: unknown) => mapJsonStrings(input, (value) => {
+
+    function rewriteAssetReferences(value: string): string {
+      const references = parseAllFileReferences(value);
       let rewritten = value;
-      for (const [from, to] of replacements)
-        rewritten = rewritten.split(from).join(to);
+      for (const reference of [...references].reverse()) {
+        const relativeAsset = normalizeReferenceAssetPath(reference.path);
+        const replacementPath = replacements.get(relativeAsset);
+        if (!replacementPath) continue;
+        rewritten =
+          rewritten.slice(0, reference.startOffset!) +
+          buildAssetReference(reference, replacementPath) +
+          rewritten.slice(reference.endOffset!);
+      }
       return rewritten;
-    });
+    }
   }
+}
+
+function normalizeReferenceAssetPath(value: string): string {
+  const normalized = value.replace(/\\/g, "/").replace(/^\.\//, "");
+  return normalized.startsWith(`${RUN_BUNDLE_FILES.ASSETS_DIR}/`)
+    ? normalized.slice(RUN_BUNDLE_FILES.ASSETS_DIR.length + 1)
+    : normalized;
+}
+
+function buildAssetReference(
+  reference: FileReference,
+  relativePath: string
+): string {
+  if (reference.symbolName !== undefined) {
+    return buildSymbolReference(
+      relativePath,
+      reference.symbolName,
+      reference.startLine!,
+      reference.endLine!,
+      reference.symbolKind
+    );
+  }
+  if (reference.startLine !== undefined && reference.endLine !== undefined) {
+    return buildSelectionReference(
+      relativePath,
+      reference.startLine,
+      reference.endLine
+    );
+  }
+  return reference.isDirectory
+    ? `@${relativePath.replace(/\/$/, "")}/`
+    : buildFileReference(relativePath);
 }
 
 function normalizeImportedRuntime(

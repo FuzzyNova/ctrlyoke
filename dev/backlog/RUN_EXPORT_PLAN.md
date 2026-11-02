@@ -634,8 +634,16 @@ text); phase 3 core (shared materializer, bundle importer, CLI import, origin ba
 gating, all built 2026-11-01); phase 4 (export side, preview and import-side continuation,
 built 2026-11-01); phase 6
 (Export Run, then Import Run and Load routing, then the guide page; all built
-2026-11-01). Phase 5 lands before phase 4 because the import preview reports
-session availability through its probe.
+2026-11-01). The run-bundle importer now rewrites complete asset references to
+workspace-relative `.ctrlyoke/attachments/` paths and removes files it created
+when materialization fails. Bundles do not distinguish prompt assets from
+attachments, so all imported assets use the attachment store. Phase 5 lands
+before phase 4 because the import preview reports session availability through
+its probe.
+
+**Follow-up fix (2026-11-02):** imported continuation prompts now resolve their
+bundled asset references, and failed imports remove assets newly copied into
+the workspace.
 
 ---
 

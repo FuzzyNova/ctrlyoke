@@ -16,6 +16,12 @@ import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { execGit } from "../../utils/GitUtils";
 import { RunOutputResolver } from "../../core/orchestration/RunOutputResolver";
 import { RunContinuationService } from "../../core/orchestration/RunContinuationService";
+import {
+  RunMaterializer,
+  type RunMaterializationInput,
+} from "../../core/orchestration/RunMaterializer";
+import { parseAtReferences } from "../../utils/FileReferenceParser";
+import { resolveReferencePath } from "../../platform/WorkspaceRootResolver";
 
 suite("RunBundleImporter", () => {
   let root: string;
@@ -353,11 +359,13 @@ suite("RunBundleImporter", () => {
     assert.strictEqual("pendingRewind" in runFile._runtime, false);
     assert.ok(runFile._runtime.importedFrom);
     assert.strictEqual(
-      (await RunContinuationService.validateContinuationTarget(
-        workspace,
-        result.workflowKey,
-        result.runRef
-      )).allowInterruptedRun,
+      (
+        await RunContinuationService.validateContinuationTarget(
+          workspace,
+          result.workflowKey,
+          result.runRef
+        )
+      ).allowInterruptedRun,
       false
     );
     const events = await new TimelineRecorder().readEvents(
@@ -367,6 +375,61 @@ suite("RunBundleImporter", () => {
       (events[0].payload as { cliOutput: { workingDirectory: string } })
         .cliOutput.workingDirectory,
       workspace
+    );
+  });
+
+  test("rewrites exported attachment references in continuation prompts", async () => {
+    await makeContinuableBundle(undefined, true);
+    await fs.rm(path.join(workspace, ".ctrlyoke", "attachments", "note.md"));
+    const result = await importer.importRun({
+      workspaceRoot: workspace,
+      bundleDir: bundle,
+      changes: "skip",
+    });
+    assert.strictEqual(result.status, "imported");
+    if (result.status !== "imported") return;
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspace,
+      result.workflowKey,
+      result.runRef
+    );
+    const runFile = JSON.parse(await fs.readFile(runFilePath, "utf8")) as {
+      steps: Array<{ prompt: string }>;
+    };
+    const prompt = runFile.steps[2].prompt;
+    assert.match(prompt, /assets\/app\.css/);
+    const reference = parseAtReferences(prompt).find((item) =>
+      item.path.includes("note.md")
+    );
+    assert.ok(reference, "pending step should retain its attachment reference");
+    const resolved = resolveReferencePath(reference!.path, {
+      primaryRoot: workspace,
+      namedRoots: [],
+    }).absolutePath;
+    assert.strictEqual(
+      resolved,
+      path.join(workspace, ".ctrlyoke", "attachments", "note.md")
+    );
+    assert.strictEqual(
+      await fs.readFile(resolved, "utf8"),
+      "shared attachment\n"
+    );
+  });
+
+  test("removes newly copied assets when materialization fails", async () => {
+    await makeContinuableBundle(undefined, true);
+    await fs.rm(path.join(workspace, ".ctrlyoke", "attachments", "note.md"));
+    const failingImporter = new RunBundleImporter(new FailingRunMaterializer());
+    await assert.rejects(
+      failingImporter.importRun({
+        workspaceRoot: workspace,
+        bundleDir: bundle,
+      }),
+      /simulated materialization failure/
+    );
+    await assert.rejects(
+      fs.access(path.join(workspace, ".ctrlyoke", "attachments", "note.md")),
+      { code: "ENOENT" }
     );
   });
 
@@ -388,8 +451,8 @@ suite("RunBundleImporter", () => {
       )
     ) as { _runtime: Record<string, unknown> };
     assert.match(
-      ((runFile._runtime.importedFrom as { viewOnly: { reason: string } })
-        .viewOnly.reason),
+      (runFile._runtime.importedFrom as { viewOnly: { reason: string } })
+        .viewOnly.reason,
       /Base commit .* unavailable/
     );
     await assert.rejects(
@@ -419,7 +482,10 @@ suite("RunBundleImporter", () => {
     );
   });
 
-  async function makeContinuableBundle(missingBase?: string): Promise<string> {
+  async function makeContinuableBundle(
+    missingBase?: string,
+    withAttachment = false
+  ): Promise<string> {
     await execGit(["init"], { cwd: workspace });
     await execGit(["config", "user.email", "test@example.com"], {
       cwd: workspace,
@@ -432,6 +498,15 @@ suite("RunBundleImporter", () => {
       await execGit(["rev-parse", "HEAD"], { cwd: workspace })
     ).stdout.trim();
     await fs.writeFile(path.join(workspace, "tracked.txt"), "changed\n");
+    if (withAttachment) {
+      await fs.mkdir(path.join(workspace, ".ctrlyoke", "attachments"), {
+        recursive: true,
+      });
+      await fs.writeFile(
+        path.join(workspace, ".ctrlyoke", "attachments", "note.md"),
+        "shared attachment\n"
+      );
+    }
     const repository = new WorkflowLineageRepository();
     const lineage = await repository.createLineage(
       workspace,
@@ -444,9 +519,19 @@ suite("RunBundleImporter", () => {
     );
     const workingFile = {
       steps: [
-        { prompt: "step 0", _runtime: { sessionId: "session-0", completedAt: 110 } },
-        { prompt: "step 1", _runtime: { sessionId: "session-1", completedAt: 120 } },
-        { prompt: "step 2" },
+        {
+          prompt: "step 0",
+          _runtime: { sessionId: "session-0", completedAt: 110 },
+        },
+        {
+          prompt: "step 1",
+          _runtime: { sessionId: "session-1", completedAt: 120 },
+        },
+        {
+          prompt: withAttachment
+            ? "Read @.ctrlyoke/attachments/note.md; keep assets/app.css unchanged."
+            : "step 2",
+        },
         { prompt: "step 3" },
       ],
       finalStep: {
@@ -533,11 +618,20 @@ suite("RunBundleImporter", () => {
         await fs.readFile(path.join(bundle, "run.json"), "utf8")
       ) as { continuation: { workspace: { baseCommit: string } } };
       bundleManifest.continuation.workspace.baseCommit = missingBase;
-      await fs.writeFile(path.join(bundle, "run.json"), JSON.stringify(bundleManifest));
+      await fs.writeFile(
+        path.join(bundle, "run.json"),
+        JSON.stringify(bundleManifest)
+      );
     }
     return baseCommit;
   }
 });
+
+class FailingRunMaterializer extends RunMaterializer {
+  override async materialize(_input: RunMaterializationInput): Promise<never> {
+    throw new Error("simulated materialization failure");
+  }
+}
 
 async function writeFixtureBundle(bundle: string): Promise<void> {
   await fs.writeFile(
