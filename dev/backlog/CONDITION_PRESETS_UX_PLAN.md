@@ -78,8 +78,24 @@ the steps it queues. Today:
    map to resolve against.
 3. **A reference resolves only against the workflow's own `conditions`.**
    There is no run-time fallback to settings or built-ins, so a workflow file
-   means the same thing on every machine and every ctrlyoke version. Loading a
-   workflow whose reference names a missing preset is a validation error.
+   means the same thing on every machine and every ctrlyoke version. Deleting
+   or editing a settings library entry therefore never changes an existing
+   workflow, finished or not; there is nothing to block. A run's working file
+   is a copy of the workflow file, so it carries the snapshot of `conditions`
+   it started with.
+
+   A reference can only dangle when the workflow's own map lacks the name:
+   someone removed the preset from that workflow, or hand-edited the file. That
+   is allowed, and treated like the stale dropdown values in
+   `dev/implemented/DROPDOWN_VALIDATION_STYLING_PLAN.md`:
+   - the condition section shows the shared warning border and a message
+     ("Preset 'committed' isn't defined in this workflow"), and the reference
+     stays as written until the author changes it;
+   - loading the file and the dry run report it as a warning, not an error;
+   - when the step runs, the unresolvable condition is an internal error for
+     that phase, handled by the step's `errorBehavior` (default: stop). It is
+     never skipped, because silently dropping a gate is worse than stopping.
+
 4. **Built-in presets are defined once in code and can't be edited.**
    `committed` is the first. Their names are reserved: a settings library entry
    can't use one. Built-ins reach a workflow only by being copied into its
@@ -165,10 +181,11 @@ The first workflow schema bump; follow "Changing the schemas" in
 4. Move the resolver from `McpConditionPresetResolver.ts` to a shared
    `ConditionPresetResolver.ts`, add the `usedAs` check, and call it from
    `ExecutionPropertyResolver` for authored references and from the MCP layer
-   for appended ones. Validate unknown names when a workflow loads.
-5. Built-in presets (`src/types/BuiltInConditionPresets.ts`), `_templateMeta.
-conditions` support in `TemplateManager`, and the `_templateMeta.variables`
-   ordering change.
+   for appended ones. An unknown name is a load-time and dry-run warning and
+   a run-time internal error under `errorBehavior` (decision 3).
+5. Built-in presets (`src/types/BuiltInConditionPresets.ts`),
+   `_templateMeta.conditions` support in `TemplateManager`, and the
+   `_templateMeta.variables` ordering change.
 6. Convert the four built-in loops and the workspace loops: drop the YAML
    anchors and the inline gate, list `committed` in `_templateMeta.conditions`,
    and put `endCondition: { use: committed }` on the plan, review and
@@ -192,6 +209,11 @@ conditions` support in `TemplateManager`, and the `_templateMeta.variables`
 - In the step editor's and the properties panel's end/pre-condition sections,
   add a **Preset** choice next to a custom script: picking one writes
   `{ use }`, with the override fields beneath.
+- A reference to a name the workflow doesn't define keeps its value and shows
+  the shared warning border and message from `utils/dropdownValidation.ts`
+  (decision 3).
+- Removing a preset that steps still reference is allowed; those steps then
+  show the warning.
 
 ### Stage 3: Settings library and defaults
 
@@ -212,13 +234,12 @@ conditions` support in `TemplateManager`, and the `_templateMeta.variables`
 - "Save to library" for a workflow-only preset, using the existing scope
   selector.
 
-## Open questions
+## Resolved questions
 
-1. **Removing a preset a step still references.** Unchecking or deleting
-   `committed` in the panel while `{ use: committed }` sits on a step would
-   leave a broken workflow. Block the removal and name the steps, or offer to
-   inline the condition into each step first. Blocking is simpler.
-2. **Reference on the workflow root.** A root `endCondition: { use: x }` is
-   inherited by queued steps, which brings back the parallel-step problem this
-   work started from. Allow it (it is the author's choice, and the docs can
-   say why the templates don't) or reject it. Leaning allow.
+1. **Removing a preset a step still references** is allowed, in settings and
+   in a workflow. A settings removal can't affect any workflow (decision 3). A
+   removal from a workflow's own map leaves its references dangling, and they
+   show the stale-value warning until the author changes them.
+2. **A preset reference on the workflow root** is allowed. It's the author's
+   choice, and many presets work fine across parallel steps. The docs say why
+   the loop templates don't use a root clean-tree gate.
