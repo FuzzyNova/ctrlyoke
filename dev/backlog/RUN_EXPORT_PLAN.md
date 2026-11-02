@@ -7,9 +7,10 @@
 > read-only.
 >
 > **Status:** Export half built 2026-10-18 and shipped in `0.2.0` (`ctrlyoke export`, bundle
-> schema 1). The worktree execution-root portability gap, `redaction.byFile`, and phase 2 asset
-> bundling were added within schema 1 on 2026-11-01. Phase 5 was built on 2026-11-01: resolved
-> session IDs are preflighted by exact ID, missing/invalid sessions start fresh with a visible
+> schema 1). The worktree execution-root portability gap, `redaction.byFile`, phase 2 asset
+> bundling, and the phase 4 export side were built within schema 1 on 2026-11-01. Phase 4 still
+> needs the import preview service and import-side continuation. Phase 5 was built on
+> 2026-11-01: resolved session IDs are preflighted by exact ID, missing/invalid sessions start fresh with a visible
 > warning, and Codex/OpenCode missing-session errors retry without resume. Open item: a verified
 > Copilot CLI or Antigravity CLI rejection string was not found, so those runtime classifiers
 > remain unimplemented; their normal local-store misses are handled by preflight. Phase 3's
@@ -230,17 +231,18 @@ own** workspace and never against the exporter's path.
 `RunBundleExporter` (`src/core/orchestration/`, vscode-free so the CLI and the extension share
 it). Steps 1, 2, 4, 5 and 6 are built.
 
-1. **Resolve the run** and refuse one whose lineage holds a live `runner.json`. _Built._
-   Continuation adds: refuse a run with `_runtime.pendingRewind` (commit or discard the rewind
-   first), and refuse states `pausing`/`cancelling` (transient; the lock check normally catches
-   them).
+1. **Resolve the run** and refuse one whose lineage holds a live `runner.json`, whose
+   `_runtime.pendingRewind` is set (commit or discard the rewind first), or whose state is
+   `pausing`/`cancelling`. _Built._
 2. **Read** through `TimelineRecorder.streamEvents`. _Built._
 3. **Plan assets** with `analyzeWorkflowBundle`; surface its diagnostics as export warnings. A
    missing attachment is reported, not silently dropped. _Built 2026-11-01._
 4. **Rewrite** paths. _Built._
 5. **Redact.** _Built._ Add the per-file breakdown.
 6. **Write atomically** through a staging sibling and a rename. _Built._
-7. **NEW, continuation only:** write `run.ctrlyoke.json` and `changes.patch` (§5.1, §5.3).
+7. **Continuation only:** write `run.ctrlyoke.json` and, unless `--no-changes` is set,
+   `changes.patch` (§5.1, §5.3). Hash and validate the patch in the reader, and report its
+   files in the CLI summary. _Export side built 2026-11-01._
 
 Whether a bundle is continuable is **derived, not chosen**: the exporter writes the continuation
 parts whenever the run has pending work (`assertRunHasWorkToContinue` in
@@ -588,7 +590,7 @@ How they work together instead:
 | 1 ✅  | Bundle format, path rewrite, `RunBundleExporter`, `ctrlyoke export`, redaction (`secrets-v1`)                | Yes: shareable artifacts (shipped `0.2.0`)                |
 | 2 ✅  | Asset bundling via the Save As machinery (`redaction.byFile` and asset hashing)                              | Yes: bundles stop dangling `@` refs                       |
 | 3 ✅  | `RunMaterializer` + `RunBundleImporter` view-only core, ingress guards (§6.1), `ctrlyoke import`, dashboard provenance badge and pre-import undo gate | Completes the CLI share loop; imported runs can be viewed |
-| 4     | Continuation: `run.ctrlyoke.json`, `changes.patch`, `_runtime` normalization, `import --continue`            | Yes: the machine-to-machine handoff                       |
+| 4     | Continuation: export side built (`run.ctrlyoke.json`, `changes.patch`); import preview, `_runtime` normalization and `import --continue` remain | Yes: the machine-to-machine handoff |
 | 5 ✅  | Session preflight probe for all runs, uniform warn-and-start-fresh fallback, malformed IDs included (§5.4)   | Yes: fixes native runs too                                |
 | 6     | Dashboard: Export Run / Import Run actions, shared location fields, Load routing, import preview, guide page | Yes                                                       |
 

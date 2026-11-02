@@ -3,6 +3,7 @@ import type {
   WorkflowRunManifest,
   WorkflowTimelineEvent,
 } from "./WorkflowTimelineTypes";
+import type { ExecutionState } from "./DashboardConstants";
 
 /**
  * A run bundle: one run exported as a reviewable directory
@@ -18,11 +19,43 @@ export const RUN_BUNDLE_FILES = {
   DEFINITION: "workflow.ctrlyoke.json",
   MANIFEST: "manifest.json",
   EVENTS: "events.jsonl",
+  RUNTIME: "run.ctrlyoke.json",
+  CHANGES: "changes.patch",
   ASSETS_DIR: "assets",
 } as const;
 
 /** The redaction pass every export applies (§2.1): resolved secrets plus heuristics. */
 export const RUN_BUNDLE_REDACTION_POLICY = "secrets-v1" as const;
+
+export const RUN_BUNDLE_CONTINUATION_KINDS = {
+  QUEUE: "queue",
+  FINAL_STEP: "finalStep",
+} as const;
+
+export const RUN_BUNDLE_WORKTREE_MODES = {
+  NONE: "none",
+  MANAGED: "managed",
+  NAMED: "named",
+} as const;
+
+export interface RunBundleContinuation {
+  executionState: ExecutionState;
+  nextStep:
+    | { kind: typeof RUN_BUNDLE_CONTINUATION_KINDS.QUEUE; stepIndex: number }
+    | { kind: typeof RUN_BUNDLE_CONTINUATION_KINDS.FINAL_STEP; pass: number };
+  pendingStepCount: number;
+  worktreeMode: (typeof RUN_BUNDLE_WORKTREE_MODES)[keyof typeof RUN_BUNDLE_WORKTREE_MODES];
+  workspace: {
+    baseCommit: string;
+    branch: string;
+    patch?: {
+      file: typeof RUN_BUNDLE_FILES.CHANGES;
+      sha256: string;
+      files: number;
+      binary: number;
+    };
+  };
+}
 
 /** What a step ran with; informational, never used to resume a session. */
 export interface RunBundleStepProvenance {
@@ -64,6 +97,8 @@ export interface RunBundleManifest {
   externalPaths: string[];
   /** Bundled files referenced by the definition; absent in 0.2.0 bundles. */
   assets?: Array<{ path: string; sha256: string; bytes: number }>;
+  /** Present when the run has pending work and can continue. */
+  continuation?: RunBundleContinuation;
 }
 
 /** A timeline event in a bundle: the run identity is in `provenance` instead. */

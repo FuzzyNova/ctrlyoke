@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Continuable run exports now include redacted runtime state and a workspace
+  patch; `ctrlyoke export --no-changes` omits the patch, and its JSON output
+  reports continuation details.
 - Run exports now bundle referenced attachments, inline generated prompt bodies,
   validate asset hashes when reading, and warn when an attachment is missing.
 - Add `ctrlyoke import` to add a run bundle to workspace history for viewing.

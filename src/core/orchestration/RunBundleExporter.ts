@@ -1,5 +1,7 @@
+import * as crypto from "crypto";
 import { randomUUID } from "crypto";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import type {
   PromptFile,
@@ -14,9 +16,12 @@ import {
   RUN_BUNDLE_KIND,
   RUN_BUNDLE_REDACTION_POLICY,
   RUN_BUNDLE_SCHEMA_VERSION,
+  RUN_BUNDLE_CONTINUATION_KINDS,
+  RUN_BUNDLE_WORKTREE_MODES,
   type RunBundleEvent,
   type RunBundleManifest,
   type RunBundleRunManifest,
+  type RunBundleContinuation,
   type RunBundleStepProvenance,
 } from "../../types/RunBundleTypes";
 import {
@@ -47,9 +52,16 @@ import { TimelineRecorder } from "./TimelineRecorder";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import { analyzeWorkflowBundle } from "../../utils/WorkflowBundleAnalyzer";
 import { writeWorkflowBundle } from "../../utils/WorkflowBundleWriter";
+import {
+  EXECUTION_STATES,
+  FINAL_STEP_PHASES,
+  WORKTREE_MODES,
+} from "../../types/DashboardConstants";
+import { execGit } from "../../utils/GitUtils";
+import { assertRunHasWorkToContinue } from "./RunContinuationService";
 
 /**
- * Exports one finished run as a portable, redacted run bundle
+ * Exports one settled run as a portable, redacted run bundle
  * (dev/backlog/RUN_EXPORT_PLAN.md §4). vscode-free, so the CLI and the
  * extension share it.
  *
@@ -88,6 +100,8 @@ export interface RunBundleExportOptions {
   exportedByVersion: string;
   /** Keep workspace snapshot, undo and redo events (they carry file contents). */
   includeSnapshots?: boolean;
+  /** Omit the workspace patch while retaining the runtime continuation state. */
+  includeChanges?: boolean;
   /**
    * Where the run's declared secrets resolve. Their current values are
    * removed from the bundle along with the heuristic matches (§2.1).
@@ -105,9 +119,178 @@ export interface RunBundleExportResult {
   manifest: RunBundleManifest;
   eventCount: number;
   warnings: string[];
+  continuable: boolean;
+  continuation?: RunBundleContinuation;
+  changedFiles: string[];
 }
 
 export class RunBundleExportError extends Error {}
+
+interface ContinuationInfo {
+  executionRoot: string;
+  baseCommit: string;
+  branch: string;
+  worktreeMode: (typeof RUN_BUNDLE_WORKTREE_MODES)[keyof typeof RUN_BUNDLE_WORKTREE_MODES];
+}
+
+function assertExportableRun(workingFile: WorkingFile): void {
+  if (workingFile._runtime?.pendingRewind) {
+    throw new RunBundleExportError(
+      "This run has a pending rewind. Commit or discard the rewind first."
+    );
+  }
+  const state = workingFile._runtime?.executionState;
+  if (
+    state === EXECUTION_STATES.PAUSING ||
+    state === EXECUTION_STATES.CANCELLING
+  ) {
+    throw new RunBundleExportError(
+      `This run is ${state} and has not settled yet. Export it once it settles.`
+    );
+  }
+}
+
+async function getContinuationInfo(
+  workingFile: WorkingFile,
+  workspaceRoot: string
+): Promise<ContinuationInfo | undefined> {
+  const state = workingFile._runtime?.executionState;
+  if (
+    state !== EXECUTION_STATES.STOPPED &&
+    state !== EXECUTION_STATES.PAUSED &&
+    state !== EXECUTION_STATES.ERROR
+  ) {
+    return undefined;
+  }
+  try {
+    assertRunHasWorkToContinue(state, false);
+  } catch {
+    return undefined;
+  }
+  const hasPendingWork = getPendingStepCount(workingFile) > 0;
+  if (!hasPendingWork) return undefined;
+
+  const worktree = workingFile._runtime?.worktree;
+  const executionRoot = worktree?.executionRoot ?? workspaceRoot;
+  const baseCommit =
+    worktree?.baseCommit ??
+    (
+      await execGit(["rev-parse", "HEAD"], { cwd: executionRoot })
+    ).stdout.trim();
+  const branch =
+    worktree?.branchName ??
+    (
+      await execGit(["branch", "--show-current"], { cwd: executionRoot })
+    ).stdout.trim();
+  return {
+    executionRoot,
+    baseCommit,
+    branch,
+    worktreeMode:
+      worktree?.mode === WORKTREE_MODES.MANAGED
+        ? RUN_BUNDLE_WORKTREE_MODES.MANAGED
+        : worktree?.mode === WORKTREE_MODES.NAMED
+          ? RUN_BUNDLE_WORKTREE_MODES.NAMED
+          : RUN_BUNDLE_WORKTREE_MODES.NONE,
+  };
+}
+
+function getPendingStepCount(workingFile: WorkingFile): number {
+  const steps = workingFile.steps ?? [];
+  const currentIndex = Math.min(
+    workingFile._runtime?.currentIndex ?? 0,
+    steps.length
+  );
+  return steps.length - currentIndex + (workingFile.finalStep ? 1 : 0);
+}
+
+function getNextStep(
+  workingFile: WorkingFile
+): RunBundleContinuation["nextStep"] {
+  const currentIndex = Math.min(
+    workingFile._runtime?.currentIndex ?? 0,
+    (workingFile.steps ?? []).length
+  );
+  const runtimeFinalStep = workingFile._runtime?.finalStep;
+  if (
+    currentIndex >= (workingFile.steps ?? []).length &&
+    (runtimeFinalStep?.phase === FINAL_STEP_PHASES.FINAL_STEP ||
+      workingFile.finalStep)
+  ) {
+    return {
+      kind: RUN_BUNDLE_CONTINUATION_KINDS.FINAL_STEP,
+      pass: Math.max(1, (runtimeFinalStep?.loopCount ?? 0) + 1),
+    };
+  }
+  return {
+    kind: RUN_BUNDLE_CONTINUATION_KINDS.QUEUE,
+    stepIndex: currentIndex,
+  };
+}
+
+async function writeChangesPatch(
+  options: RunBundleExportOptions,
+  executionRoot: string,
+  baseCommit: string,
+  stagingDir: string,
+  transform: BundleTransform
+): Promise<{
+  patch?: RunBundleContinuation["workspace"]["patch"];
+  files: string[];
+}> {
+  if (options.includeChanges === false) return { files: [] };
+
+  const indexPath = path.join(
+    os.tmpdir(),
+    `ctrlyoke-export-index-${randomUUID()}`
+  );
+  const env = { ...process.env, GIT_INDEX_FILE: indexPath };
+  try {
+    await execGit(["read-tree", baseCommit], { cwd: executionRoot, env });
+    await execGit(["add", "-A"], { cwd: executionRoot, env });
+    const [{ stdout: patchText }, { stdout: namesText }] = await Promise.all([
+      execGit(["diff", "--cached", "--binary", "--full-index", baseCommit], {
+        cwd: executionRoot,
+        env,
+        maxBuffer: 500 * 1024 * 1024,
+      }),
+      execGit(["diff", "--cached", "--name-only", "-z", baseCommit], {
+        cwd: executionRoot,
+        env,
+        maxBuffer: 50 * 1024 * 1024,
+      }),
+    ]);
+    const transformedPatch = transform.redactText(
+      patchText,
+      RUN_BUNDLE_FILES.CHANGES
+    );
+    await fs.promises.writeFile(
+      path.join(stagingDir, RUN_BUNDLE_FILES.CHANGES),
+      transformedPatch,
+      "utf8"
+    );
+    const files = namesText.split("\0").filter(Boolean);
+    const binary = (
+      transformedPatch.match(
+        /^(?:GIT binary patch|Binary files .* differ)$/gm
+      ) ?? []
+    ).length;
+    return {
+      patch: {
+        file: RUN_BUNDLE_FILES.CHANGES,
+        sha256: crypto
+          .createHash("sha256")
+          .update(transformedPatch)
+          .digest("hex"),
+        files: files.length,
+        binary,
+      },
+      files,
+    };
+  } finally {
+    await fs.promises.rm(indexPath, { force: true });
+  }
+}
 
 export async function exportRunBundle(
   options: RunBundleExportOptions
@@ -128,6 +311,7 @@ export async function exportRunBundle(
       "utf8"
     )
   ) as WorkingFile;
+  assertExportableRun(workingFile);
   const descriptor = await new WorkflowLineageRepository().readDescriptor(
     stateRoot,
     workflowKey
@@ -149,6 +333,10 @@ export async function exportRunBundle(
     options,
     exactSecrets,
     workspaceRoots
+  );
+  const continuationInfo = await getContinuationInfo(
+    workingFile,
+    options.workspaceRoot
   );
   const bundleDir = path.resolve(options.bundleDir);
   const stagingDir = path.join(
@@ -205,6 +393,33 @@ export async function exportRunBundle(
           copy.relativePath.replace(/^\.\//, "").replace(/\\/g, "/")
         ),
     });
+    let continuation: RunBundleContinuation | undefined;
+    let changedFiles: string[] = [];
+    if (continuationInfo) {
+      await writeJson(
+        path.join(stagingDir, RUN_BUNDLE_FILES.RUNTIME),
+        transform.apply(workingFile, RUN_BUNDLE_FILES.RUNTIME)
+      );
+      const patchResult = await writeChangesPatch(
+        options,
+        continuationInfo.executionRoot,
+        continuationInfo.baseCommit,
+        stagingDir,
+        transform
+      );
+      changedFiles = patchResult.files;
+      continuation = {
+        executionState: workingFile._runtime!.executionState,
+        nextStep: getNextStep(workingFile),
+        pendingStepCount: getPendingStepCount(workingFile),
+        worktreeMode: continuationInfo.worktreeMode,
+        workspace: {
+          baseCommit: continuationInfo.baseCommit,
+          branch: continuationInfo.branch,
+          ...(patchResult.patch ? { patch: patchResult.patch } : {}),
+        },
+      };
+    }
     const warnings = [
       ...analysis.plan.blockers.map((blocker) => blocker.message),
       ...analysis.plan.warnings.map((warning) => warning.message),
@@ -243,13 +458,22 @@ export async function exportRunBundle(
       },
       externalPaths: transform.externalPaths(),
       ...(writeResult.files.length > 0 ? { assets: writeResult.files } : {}),
+      ...(continuation ? { continuation } : {}),
     };
     await writeJson(
       path.join(stagingDir, RUN_BUNDLE_FILES.BUNDLE),
       bundleManifest
     );
     await publishStagedBundle(stagingDir, bundleDir, options.replace === true);
-    return { bundleDir, manifest: bundleManifest, eventCount, warnings };
+    return {
+      bundleDir,
+      manifest: bundleManifest,
+      eventCount,
+      warnings,
+      continuable: continuation !== undefined,
+      ...(continuation ? { continuation } : {}),
+      changedFiles,
+    };
   } catch (error) {
     await fs.promises.rm(stagingDir, { recursive: true, force: true });
     throw error;
@@ -350,7 +574,7 @@ function createBundleTransform(
     redactText: (text, fileName) => {
       activeFileName = fileName;
       try {
-        return redact(text);
+        return redact(rewrite(text));
       } finally {
         activeFileName = undefined;
       }

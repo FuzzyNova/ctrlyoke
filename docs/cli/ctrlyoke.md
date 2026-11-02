@@ -25,7 +25,7 @@ ctrlyoke history steps --workflow <key-or-name> [--run <ref|runId>] [--json] [--
 ctrlyoke history show --workflow <key-or-name> [--run <ref|runId>] [--step <selector>] [--attempt <n|latest|all>] [--json] [--summary|--events]
 ctrlyoke history search <query> [filters] [--json]
 ctrlyoke history trash list|restore <id>|purge <id>|empty [--yes]
-ctrlyoke export --workflow <key-or-name> [--run <ref|runId>] --out <dir> [--with-snapshots] [--force] [--cwd <path>] [--json]
+ctrlyoke export --workflow <key-or-name> [--run <ref|runId>] --out <dir> [--with-snapshots] [--no-changes] [--force] [--cwd <path>] [--json]
 ctrlyoke import <bundleDir> [--name <name>] [--again] [--cwd <path>] [--json]
 ctrlyoke step edit [file] --workflow <key-or-name> --run <ref|runId> --index <index> [--prompt <text>]
 ctrlyoke step remove --workflow <key-or-name> --run <ref|runId> --index <index>
@@ -870,20 +870,22 @@ interactively.
 
 ## `ctrlyoke export`
 
-Write one finished run to a portable run bundle, a `<name>.ctrlyokerun`
+Write one settled run to a portable run bundle, a `<name>.ctrlyokerun`
 directory you can attach to a bug report or keep outside your history:
 
 ```bash
 ctrlyoke export --workflow release --out release-run
 ctrlyoke export --workflow release --run 7 --out release-run --with-snapshots --force
+ctrlyoke export --workflow release --run 7 --out release-run --no-changes
 ```
 
 `--run` defaults to the lineage's latest run, and `.ctrlyokerun` is appended to
-`--out` when missing. A run that is still executing is refused, as is an
-existing bundle unless you pass `--force`.
+`--out` when missing. A run that is still executing or has a pending rewind is
+refused, as is an existing bundle unless you pass `--force`.
 
-The bundle holds the run's workflow as authored (no runtime state), its step
-summary and its recorded timeline. Paths under the workspace and the run's
+The `workflow.ctrlyoke.json` file holds the run's workflow as authored, without
+runtime state; the bundle also carries its step summary and recorded timeline.
+Paths under the workspace and the run's
 managed or named worktree are written as `${workspaceFolder}/…`; paths under
 your home folder are written as `~/…`, so the bundle names neither your
 checkout nor your user. Referenced attachments are copied into the bundle's
@@ -895,6 +897,12 @@ Values of the secrets the workflow declares, and values that look like
 credentials, are replaced with `[REDACTED]`. Workspace
 snapshots carry file contents, so they are left out unless you pass
 `--with-snapshots`.
+
+Runs in `stopped`, `paused`, or `error` state with pending work also include
+`run.ctrlyoke.json` and a redacted `changes.patch`, so they can be continued
+after import. Completed runs stay history-only. `--no-changes` omits the patch
+while retaining the runtime state. The export summary lists every patched file
+for review; the `--json` result includes `continuable` and `continuation`.
 
 The summary lists how many values were redacted and, when multiple bundle files
 had removals, the per-file counts. It also lists every path outside the

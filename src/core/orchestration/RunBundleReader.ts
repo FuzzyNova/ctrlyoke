@@ -8,6 +8,7 @@ import {
   type RunBundleEvent,
   type RunBundleManifest,
   type RunBundleRunManifest,
+  type RunBundleContinuation,
 } from "../../types/RunBundleTypes";
 import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import {
@@ -45,6 +46,7 @@ export interface RunBundleHeader {
   manifest: RunBundleManifest;
   runManifest: RunBundleRunManifest;
   definition: Record<string, unknown>;
+  runtime?: Record<string, unknown>;
   resolve: <T>(value: unknown) => T;
 }
 
@@ -54,6 +56,7 @@ export interface LoadedRunBundle {
   runManifest: RunBundleRunManifest;
   /** The authored workflow the run executed (`buildAuthoredWorkflow`). */
   definition: Record<string, unknown>;
+  runtime?: Record<string, unknown>;
   events: RunBundleEvent[];
 }
 
@@ -73,6 +76,7 @@ export async function readRunBundle(
     manifest: header.manifest,
     runManifest: header.runManifest,
     definition: header.definition,
+    ...(header.runtime ? { runtime: header.runtime } : {}),
     events,
   };
 }
@@ -128,6 +132,46 @@ export async function readRunBundleHeader(
   const definition = load<Record<string, unknown>>(
     await readJson(resolvedDir, RUN_BUNDLE_FILES.DEFINITION, maxBundleFileBytes)
   );
+  const runtime = await readOptionalJson(
+    resolvedDir,
+    RUN_BUNDLE_FILES.RUNTIME,
+    maxBundleFileBytes
+  );
+  const continuation = manifest.continuation as
+    RunBundleContinuation | undefined;
+  if (
+    continuation !== undefined &&
+    (!continuation ||
+      typeof continuation !== "object" ||
+      !continuation.workspace ||
+      typeof continuation.workspace !== "object")
+  ) {
+    throw new RunBundleFormatError(
+      "run.json contains invalid continuation metadata."
+    );
+  }
+  if (continuation?.workspace.patch) {
+    if (
+      continuation.workspace.patch.file !== RUN_BUNDLE_FILES.CHANGES ||
+      typeof continuation.workspace.patch.sha256 !== "string" ||
+      !/^[a-f0-9]{64}$/i.test(continuation.workspace.patch.sha256)
+    ) {
+      throw new RunBundleFormatError(
+        "run.json contains an invalid patch file."
+      );
+    }
+    const patch = await readText(
+      resolvedDir,
+      continuation.workspace.patch.file,
+      maxBundleFileBytes
+    );
+    const digest = crypto.createHash("sha256").update(patch).digest("hex");
+    if (digest !== continuation.workspace.patch.sha256) {
+      throw new RunBundleFormatError(
+        `${continuation.workspace.patch.file} failed its SHA-256 check.`
+      );
+    }
+  }
   const resolvedManifest = load<RunBundleManifest>(manifest);
   // sourceRoot is provenance, not an input path. Preserve the exporter's value
   // instead of resolving its workspace token onto the importing workspace.
@@ -143,6 +187,20 @@ export async function readRunBundleHeader(
   const eventsStat = await safeEventStat(resolvedDir);
   totalBytes +=
     eventsStat.size +
+    (runtime === undefined
+      ? 0
+      : (
+          await fs.promises.stat(
+            path.join(resolvedDir, RUN_BUNDLE_FILES.RUNTIME)
+          )
+        ).size) +
+    (continuation?.workspace.patch
+      ? (
+          await fs.promises.stat(
+            path.join(resolvedDir, RUN_BUNDLE_FILES.CHANGES)
+          )
+        ).size
+      : 0) +
     (manifest.assets ?? []).reduce((sum, asset) => sum + asset.bytes, 0);
   if (totalBytes > (options.maxTotalBytes ?? 512 * 1024 * 1024)) {
     throw new RunBundleFormatError("Run bundle exceeds the total size limit.");
@@ -152,6 +210,9 @@ export async function readRunBundleHeader(
     manifest: resolvedManifest,
     runManifest,
     definition,
+    ...(runtime !== undefined
+      ? { runtime: load<Record<string, unknown>>(runtime) }
+      : {}),
     resolve: <T>(value: unknown): T => mapJsonStrings(value, resolve) as T,
   };
 }
@@ -269,7 +330,7 @@ async function* readEvents(
   } catch {
     throw new RunBundleFormatError(`${bundleDir} has no ${fileName}.`);
   }
-  if (!stat.isFile()) {
+  if (!stat.isFile() || stat.isSymbolicLink()) {
     throw new RunBundleFormatError(
       `${fileName} in ${bundleDir} is not a regular file.`
     );
@@ -337,7 +398,7 @@ async function readText(
   } catch {
     throw new RunBundleFormatError(`${bundleDir} has no ${fileName}.`);
   }
-  if (!stat.isFile()) {
+  if (!stat.isFile() || stat.isSymbolicLink()) {
     throw new RunBundleFormatError(
       `${fileName} in ${bundleDir} is not a regular file.`
     );
@@ -363,4 +424,17 @@ async function readJson(
       `${fileName} in ${bundleDir} is not valid JSON.`
     );
   }
+}
+
+async function readOptionalJson(
+  bundleDir: string,
+  fileName: string,
+  maxBytes?: number
+): Promise<unknown | undefined> {
+  try {
+    await fs.promises.lstat(path.join(bundleDir, fileName));
+  } catch {
+    return undefined;
+  }
+  return readJson(bundleDir, fileName, maxBytes);
 }

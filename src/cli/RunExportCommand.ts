@@ -20,6 +20,7 @@ export interface RunExportOptions {
   run?: string;
   out: string;
   withSnapshots?: boolean;
+  changes?: boolean;
   force?: boolean;
   json?: boolean;
 }
@@ -44,7 +45,7 @@ export function registerExportCommand(
   program
     .command("export")
     .description(
-      "Export one finished run as a portable, redacted run bundle directory"
+      "Export one settled run as a portable, redacted run bundle directory"
     )
     .requiredOption(CLI_WORKFLOW_OPTION_FLAGS, CLI_WORKFLOW_OPTION_DESCRIPTION)
     .option("--run <ref|runId>", "Target run (default: latest)")
@@ -56,6 +57,7 @@ export function registerExportCommand(
       "--with-snapshots",
       "Include workspace snapshots, which carry file contents (needed for diffs and Undo)"
     )
+    .option("--no-changes", "Omit the workspace changes patch")
     .option("-f, --force", "Replace an existing bundle at --out")
     .option(
       "-d, --cwd <path>",
@@ -91,6 +93,7 @@ export async function exportRunCommand(
       : `${out}${RUN_BUNDLE_DIR_SUFFIX}`,
     exportedByVersion: version,
     includeSnapshots: options.withSnapshots === true,
+    includeChanges: options.changes !== false,
     secrets: {
       workspaceRoot: workspace.workspaceRoot,
       secretStore: createNodeSecretStore({ warn: io.writeErr }),
@@ -111,6 +114,8 @@ export async function exportRunCommand(
         runRef,
         eventCount: result.eventCount,
         includesSnapshots: result.manifest.includesSnapshots,
+        continuable: result.continuable,
+        continuation: result.continuation ?? null,
         redaction,
         externalPaths,
         warnings: result.warnings,
@@ -122,6 +127,16 @@ export async function exportRunCommand(
   io.writeOut(
     `  ${result.eventCount} events${result.manifest.includesSnapshots ? ", with workspace snapshots" : ""}`
   );
+  io.writeOut(`  ${result.continuable ? "Continuable run" : "History only"}`);
+  if (result.continuation) {
+    const patch = result.continuation.workspace.patch;
+    if (patch) {
+      io.writeOut(`  ${patch.files} changed file(s) in ${patch.file}`);
+      for (const file of result.changedFiles) io.writeOut(`    ${file}`);
+    } else if (options.changes === false) {
+      io.writeOut("  Workspace changes patch omitted (--no-changes)");
+    }
+  }
   for (const warning of result.warnings) {
     io.writeOut(`  Warning: ${warning}`);
   }

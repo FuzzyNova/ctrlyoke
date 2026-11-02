@@ -293,7 +293,7 @@ async function writeBundle(bundleDir: string): Promise<void> {
       definitionRevision: 1,
       stepCount: 2,
       eventCount: 0,
-      nextSequence: 0,
+      nextSequence: 1,
       lastUpdatedAt: 3000,
     })
   );
@@ -460,7 +460,10 @@ suite("Run replay (bundle -> live engine)", function () {
   test("streams events larger than the configured whole-file cap", async () => {
     const bundleDir = path.join(root, "large-events.ctrlyokerun");
     await writeBundle(bundleDir);
-    const event = { eventType: "large-test-event", text: "x".repeat(4096) };
+    const event = {
+      eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+      text: "x".repeat(4096),
+    };
     await fs.appendFile(
       path.join(bundleDir, RUN_BUNDLE_FILES.EVENTS),
       `${JSON.stringify(event)}\n`
@@ -469,7 +472,10 @@ suite("Run replay (bundle -> live engine)", function () {
       maxBundleFileBytes: 512,
     });
     assert.strictEqual(loaded.events.length, buildEvents().length + 1);
-    assert.strictEqual(loaded.events.at(-1)?.eventType, "large-test-event");
+    assert.strictEqual(
+      loaded.events.at(-1)?.eventType,
+      TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED
+    );
   });
 
   test("reads a 0.2.0-shaped bundle without an assets field", async () => {
@@ -614,7 +620,7 @@ suite("Run replay (bundle -> live engine)", function () {
 
     const bundleText = (
       await Promise.all(
-        Object.values(RUN_BUNDLE_FILES)
+        (await fs.readdir(exported.bundleDir))
           .filter((file) => file !== RUN_BUNDLE_FILES.ASSETS_DIR)
           .map((file) =>
             fs.readFile(path.join(exported.bundleDir, file), "utf8")
