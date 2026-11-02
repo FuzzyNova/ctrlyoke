@@ -882,14 +882,16 @@ ctrlyoke export --workflow release --run 7 --out release-run --with-snapshots --
 existing bundle unless you pass `--force`.
 
 The bundle holds the run's workflow as authored (no runtime state), its step
-summary and its recorded timeline. Paths under the workspace are written as
-`${workspaceFolder}/…` and paths under your home folder as `~/…`, so the bundle
-names neither your checkout nor your user. Values of the secrets the workflow
-declares, and values that look like credentials, are replaced with
-`[REDACTED]`. Workspace snapshots carry file contents, so they are left out
-unless you pass `--with-snapshots`.
+summary and its recorded timeline. Paths under the workspace and the run's
+managed or named worktree are written as `${workspaceFolder}/…`; paths under
+your home folder are written as `~/…`, so the bundle names neither your
+checkout nor your user. Values of the secrets the workflow declares, and
+values that look like credentials, are replaced with `[REDACTED]`. Workspace
+snapshots carry file contents, so they are left out unless you pass
+`--with-snapshots`.
 
-The summary lists how many values were redacted and every path outside the
+The summary lists how many values were redacted and, when multiple bundle files
+had removals, the per-file counts. It also lists every path outside the
 workspace and home folder, which stays as written. Redaction is best effort:
 review a bundle before you share it.
 

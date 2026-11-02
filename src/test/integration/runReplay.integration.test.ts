@@ -509,6 +509,52 @@ suite("Run replay (bundle -> live engine)", function () {
     const { workflowKey, runRef } = first.instance.promptQueue.getState();
     assert.ok(workflowKey && runRef);
 
+    const worktree = path.join(root, "managed-worktree");
+    const runFilePath = WorkflowPaths.runFilePath(workspace, workflowKey, runRef);
+    const workingFile = JSON.parse(await fs.readFile(runFilePath, "utf8")) as {
+      _runtime?: Record<string, unknown>;
+      steps?: Array<{ prompt?: string }>;
+    };
+    if (workingFile.steps?.[0]) {
+      workingFile.steps[0].prompt = `credential ${LEAKED_CREDENTIAL}`;
+    }
+    workingFile._runtime = {
+      ...workingFile._runtime,
+      worktree: {
+        executionRoot: worktree,
+        executionCheckoutRoot: path.join(worktree, "checkout"),
+        worktreePath: worktree,
+        namedWorkspaceRoots: [{ fsPath: path.join(worktree, "nested") }],
+      },
+    };
+    await fs.writeFile(runFilePath, JSON.stringify(workingFile));
+
+    const eventsPath = WorkflowPaths.eventsPath(workspace, workflowKey, runRef);
+    const eventLines = (await fs.readFile(eventsPath, "utf8"))
+      .trimEnd()
+      .split("\n");
+    const worktreeEventIndex = eventLines.findIndex((line) => {
+      const event = JSON.parse(line) as {
+        payload?: { cliOutput?: unknown };
+      };
+      return !!event.payload?.cliOutput;
+    });
+    assert.ok(worktreeEventIndex >= 0, "the run has a recorded CLI output");
+    const worktreeEvent = JSON.parse(eventLines[worktreeEventIndex]) as {
+      payload: { cliOutput: Record<string, unknown> };
+    };
+    worktreeEvent.payload.cliOutput.workingDirectory = path.join(
+      worktree,
+      "src"
+    );
+    worktreeEvent.payload.cliOutput.outputPath = path.join(
+      worktree,
+      "src",
+      "main.ts"
+    );
+    eventLines[worktreeEventIndex] = JSON.stringify(worktreeEvent);
+    await fs.writeFile(eventsPath, `${eventLines.join("\n")}\n`);
+
     const exported = await exportRunBundle({
       stateRoot: workspace,
       workspaceRoot: workspace,
@@ -543,6 +589,32 @@ suite("Run replay (bundle -> live engine)", function () {
       "heuristic redaction removes the credential"
     );
     assert.ok(exported.manifest.redaction.removedCount > 0);
+    assert.strictEqual(
+      exported.manifest.sourceRoot,
+      "~/workspace",
+      "sourceRoot still identifies the checkout used to export"
+    );
+    assert.ok(
+      (exported.manifest.redaction.byFile?.[RUN_BUNDLE_FILES.EVENTS] ?? 0) > 0
+    );
+    assert.ok(
+      (exported.manifest.redaction.byFile?.[RUN_BUNDLE_FILES.DEFINITION] ?? 0) > 0,
+      "redactions are counted separately in the workflow definition"
+    );
+    const exportedEvents = await fs.readFile(
+      path.join(exported.bundleDir, RUN_BUNDLE_FILES.EVENTS),
+      "utf8"
+    );
+    assert.ok(exportedEvents.includes(`${BUNDLE_WORKSPACE_TOKEN}/src/main.ts`));
+    assert.ok(
+      exportedEvents.includes(`\"workingDirectory\":\"${BUNDLE_WORKSPACE_TOKEN}/src\"`)
+    );
+    assert.ok(
+      !exported.manifest.externalPaths.some((externalPath) =>
+        externalPath.includes(worktree)
+      ),
+      "worktree paths are portable rather than external"
+    );
     assert.strictEqual(exported.manifest.provenance.runRef, runRef);
     assert.ok(
       !bundleText.includes(`"_runtime"`),

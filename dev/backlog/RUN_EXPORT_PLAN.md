@@ -7,8 +7,10 @@
 > read-only.
 >
 > **Status:** Export half built 2026-10-18 and shipped in `0.2.0` (`ctrlyoke export`, bundle
-> schema 1). Not built: import, **continuing an imported run** (§5, added 2026-10-24), bundling
-> workspace changes and assets, and the dashboard UI. Originally written 2026-08-14.
+> schema 1). The worktree execution-root portability gap and `redaction.byFile` were added
+> within schema 1 on 2026-11-01. Not built: import, **continuing an imported run** (§5, added
+> 2026-10-24), bundling workspace changes and assets, and the dashboard UI. Originally written
+> 2026-08-14.
 >
 > **Built 2026-10-18:** `exportRunBundle` (`src/core/orchestration/RunBundleExporter.ts`), the
 > loader `readRunBundle` (`RunBundleReader.ts`, today used only by media replay), the format types
@@ -105,13 +107,10 @@ legacy aggregates retained for read compatibility.
 
 **Absolute paths.** Built: `RunBundlePaths` tokenizes them, and `externalPaths` in `run.json`
 lists absolute paths the run touched outside the workspace and home.
-**Gap (2026-10-26):** `ctrlyoke export` (`src/cli/RunExportCommand.ts`) passes the source
-checkout as `workspaceRoot`. A run that executed in a managed or named worktree
-(`_runtime.worktree.executionRoot`, by default under `~/.ctrlyoke/worktrees/<identity>/`)
-therefore exports its file paths as `~/.ctrlyoke/worktrees/…` or as external absolute
-paths, not as `${workspaceFolder}/…`. The exporter should rewrite the run's
-`executionRoot` (and its `namedWorkspaceRoots`) to `${workspaceFolder}` as well. This needs
-fixing before import (phase 3), and §5.3 depends on it.
+**Fixed 2026-11-01:** the exporter reads the run's `_runtime.worktree` and adds its
+`executionRoot`, `executionCheckoutRoot`, `worktreePath`, and named workspace roots to
+the workspace path rewrite set. The source checkout remains `sourceRoot`; worktree paths
+in events now become `${workspaceFolder}/…` and are not reported as external paths.
 
 **Identity.** `allocateWorkflowKey` guarantees uniqueness only within one runs root. Export
 demotes `workflowKey`/`runRef`/`runId` to `provenance`; import allocates fresh ones through the
@@ -123,9 +122,9 @@ never assumed.
 **Secrets.** Built: redaction runs at the export boundary and is irreversible by design. The
 exporter re-resolves the workflow's declared secrets (a `RunSecretRedactor` only holds values
 while its run executes) and runs `redactPreviewText` with those exact values plus heuristics.
-`run.json` records `redaction.removedCount` and `byRule`. Continuation adds one requirement: the
-redaction summary must say **which file** was touched, because a removal inside a _pending_
-step's prompt changes what the importing machine will execute (§5.2).
+`run.json` records `redaction.removedCount`, `byRule`, and `byFile` (the latter is an additive
+schema-1 field). The per-file summary identifies when redaction changes a _pending_ step's
+prompt, because that changes what the importing machine will execute (§5.2).
 
 **Assets.** Not built. Attachments and prompt bodies live in
 `<stateRoot>/.ctrlyoke/{attachments,prompts}/`, are gitignored, and stay workspace-scoped. A
@@ -573,7 +572,7 @@ How they work together instead:
 | Phase | Content                                                                                                      | Ships value alone?                         |
 | ----- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
 | 1 ✅  | Bundle format, path rewrite, `RunBundleExporter`, `ctrlyoke export`, redaction (`secrets-v1`)                | Yes: shareable artifacts (shipped `0.2.0`) |
-| 2     | Asset bundling via the Save As machinery; `redaction.byFile`                                                 | Yes: bundles stop dangling `@` refs        |
+| 2     | Asset bundling via the Save As machinery (`redaction.byFile` built 2026-11-01)                                | Yes: bundles stop dangling `@` refs        |
 | 3     | `RunMaterializer` + `ctrlyoke import` (view-only), ingress guards (§6.1), origin badge                       | Yes: completes the share loop              |
 | 4     | Continuation: `run.ctrlyoke.json`, `changes.patch`, `_runtime` normalization, `import --continue`            | Yes: the machine-to-machine handoff        |
 | 5     | Session preflight probe for all runs, uniform warn-and-start-fresh fallback, malformed IDs included (§5.4)   | Yes: fixes native runs too                 |

@@ -133,7 +133,16 @@ export async function exportRunBundle(
   const exactSecrets = options.secrets
     ? await resolveRunBundleSecrets(workingFile, options.secrets)
     : [];
-  const transform = createBundleTransform(options, exactSecrets);
+  const worktree = workingFile._runtime?.worktree;
+  const workspaceRoots = [
+    options.workspaceRoot,
+    worktree?.executionRoot,
+    worktree?.executionCheckoutRoot,
+    worktree?.worktreePath,
+    worktree?.sourceCheckoutRoot,
+    ...(worktree?.namedWorkspaceRoots.map((root) => root.fsPath) ?? []),
+  ].filter((root): root is string => !!root);
+  const transform = createBundleTransform(options, exactSecrets, workspaceRoots);
   const bundleDir = path.resolve(options.bundleDir);
   const stagingDir = path.join(
     path.dirname(bundleDir),
@@ -150,12 +159,16 @@ export async function exportRunBundle(
     const { workflowId: _workflowId, runId, ...portableManifest } = runManifest;
     await writeJson(
       path.join(stagingDir, RUN_BUNDLE_FILES.MANIFEST),
-      transform.apply<RunBundleRunManifest>(portableManifest)
+      transform.apply<RunBundleRunManifest>(
+        portableManifest,
+        RUN_BUNDLE_FILES.MANIFEST
+      )
     );
     await writeJson(
       path.join(stagingDir, RUN_BUNDLE_FILES.DEFINITION),
       transform.apply(
-        buildAuthoredWorkflow(workingFile, descriptor.workflowName)
+        buildAuthoredWorkflow(workingFile, descriptor.workflowName),
+        RUN_BUNDLE_FILES.DEFINITION
       )
     );
     const bundleManifest: RunBundleManifest = {
@@ -167,12 +180,15 @@ export async function exportRunBundle(
       sourceRoot: createPortablePathRewriter({ homeDir: options.homeDir })(
         options.workspaceRoot
       ),
-      lineage: transform.apply({
-        workflowName: descriptor.workflowName,
-        ...(descriptor.originalFile
-          ? { originalFile: descriptor.originalFile }
-          : {}),
-      }),
+      lineage: transform.apply(
+        {
+          workflowName: descriptor.workflowName,
+          ...(descriptor.originalFile
+            ? { originalFile: descriptor.originalFile }
+            : {}),
+        },
+        RUN_BUNDLE_FILES.BUNDLE
+      ),
       provenance: {
         workflowKey,
         runRef,
@@ -184,6 +200,7 @@ export async function exportRunBundle(
         policy: RUN_BUNDLE_REDACTION_POLICY,
         removedCount: transform.removedCount(),
         byRule: transform.removedByRule(),
+        byFile: transform.removedByFile(),
       },
       externalPaths: transform.externalPaths(),
     };
@@ -221,29 +238,36 @@ async function assertRunSettled(
 }
 
 interface BundleTransform {
-  apply<T>(value: T): T;
+  apply<T>(value: T, fileName: string): T;
   removedCount(): number;
   removedByRule(): Record<string, number>;
+  removedByFile(): Record<string, number>;
   externalPaths(): string[];
 }
 
 /** Path rewrite, then redaction (§4 steps 4-5), over every string in a value. */
 function createBundleTransform(
   options: RunBundleExportOptions,
-  exactSecrets: readonly string[]
+  exactSecrets: readonly string[],
+  workspaceRoots: readonly string[]
 ): BundleTransform {
   const rewrite = createPortablePathRewriter({
-    workspaceRoot: options.workspaceRoot,
+    workspaceRoots,
     homeDir: options.homeDir,
   });
   const byRule: Record<string, number> = {};
+  const byFile: Record<string, number> = {};
   const external = new Set<string>();
 
+  let activeFileName: string | undefined;
   const transformString = (text: string, key: string | undefined): string => {
     const rewritten = rewrite(text);
     const redacted = redactPreviewText(rewritten, [], exactSecrets);
     for (const span of redacted.spans) {
       byRule[span.ruleId] = (byRule[span.ruleId] ?? 0) + 1;
+      if (activeFileName) {
+        byFile[activeFileName] = (byFile[activeFileName] ?? 0) + 1;
+      }
     }
     if (
       key !== undefined &&
@@ -256,10 +280,18 @@ function createBundleTransform(
   };
 
   return {
-    apply: (value) => mapJsonStrings(value, transformString),
+    apply: (value, fileName) => {
+      activeFileName = fileName;
+      try {
+        return mapJsonStrings(value, transformString);
+      } finally {
+        activeFileName = undefined;
+      }
+    },
     removedCount: () =>
       Object.values(byRule).reduce((sum, count) => sum + count, 0),
     removedByRule: () => ({ ...byRule }),
+    removedByFile: () => ({ ...byFile }),
     externalPaths: () => [...external].sort(),
   };
 }
@@ -277,7 +309,10 @@ async function writeEvents(
       if (!includeSnapshots && SNAPSHOT_EVENT_TYPES.has(event.eventType))
         continue;
       const { workflowId: _workflowId, runId: _runId, ...portable } = event;
-      const bundleEvent = transform.apply(portable as RunBundleEvent);
+      const bundleEvent = transform.apply(
+        portable as RunBundleEvent,
+        RUN_BUNDLE_FILES.EVENTS
+      );
       await handle.write(`${JSON.stringify(bundleEvent)}\n`);
       count += 1;
     }

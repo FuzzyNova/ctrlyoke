@@ -127,6 +127,14 @@ export async function exportRunCommand(
   io.writeOut(
     `  ${redaction.removedCount} value(s) redacted${rules ? ` (${rules})` : ""}`
   );
+  const filesWithRedactions = Object.entries(redaction.byFile ?? {});
+  if (filesWithRedactions.length > 1) {
+    io.writeOut(
+      `  By file: ${filesWithRedactions
+        .map(([file, count]) => `${file} ${count}`)
+        .join(", ")}`
+    );
+  }
   if (externalPaths.length > 0) {
     io.writeOut(`  Paths outside the workspace (left as written):`);
     for (const externalPath of externalPaths)

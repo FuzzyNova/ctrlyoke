@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Exporting a run executed in a managed or named worktree now writes its paths
+  as `${workspaceFolder}/…`, so those paths remain portable with the bundle.
+
 ### Added
 
 - **Add Commit to ctrlyoke** is now in the title bar `...` menu and the tab

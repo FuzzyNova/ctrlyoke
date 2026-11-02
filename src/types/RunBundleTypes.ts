@@ -56,6 +56,8 @@ export interface RunBundleManifest {
     removedCount: number;
     /** Removals per rule id (`exact-secret`, `bearer-token`, ...). */
     byRule: Record<string, number>;
+    /** Removals per bundle file name. */
+    byFile?: Record<string, number>;
   };
   /** Absolute paths the run touched outside the workspace and home. */
   externalPaths: string[];
