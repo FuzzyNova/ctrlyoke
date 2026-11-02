@@ -2,7 +2,14 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { IntegrationFactory } from "../IntegrationFactory";
 import { CliSessionResolverAdapter } from "../harness/shared/CliSessionResolverAdapter";
-import { RUN_BUNDLE_FILES } from "../../types/RunBundleTypes";
+import {
+  defaultRunChangesTarget,
+  RUN_BUNDLE_CONTINUATION_KINDS,
+  RUN_BUNDLE_FILES,
+  RUN_BUNDLE_WORKTREE_MODES,
+  RUN_CHANGES_TARGETS,
+  type RunChangesTarget,
+} from "../../types/RunBundleTypes";
 import type {
   PromptFile,
   PromptStep,
@@ -11,7 +18,11 @@ import type {
 import {
   HARNESS_IDS,
   PRIOR_CONTEXT_KEYWORDS,
+  SESSION_AVAILABILITY,
+  STEP_TYPES,
 } from "../../types/DashboardConstants";
+import { isSessionResumeFailure } from "../harness/shared/SessionResumeWarning";
+import { findExistingBundleImport } from "./RunBundleImporter";
 import type { RunImportPreview } from "../../types/RunImportPreviewTypes";
 import { REDACTION_MARKER } from "../../types/PreviewRedactor";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
@@ -42,7 +53,7 @@ export interface RunImportPreviewDependencies {
     allSteps: WorkflowStep[]
   ) => Promise<{
     sessionId?: string;
-    availability: "available" | "missing" | "unknown" | "malformed";
+    availability: import("../../types/DashboardConstants").SessionAvailability;
   }>;
   createProvider?: (
     harness: import("../../types/DashboardConstants").HarnessId
@@ -73,7 +84,7 @@ export class RunImportPreviewService {
       header.definition.steps ??
       []) as WorkflowStep[];
     const pendingIndexes = new Set<number>();
-    if (continuation?.nextStep.kind === "queue") {
+    if (continuation?.nextStep.kind === RUN_BUNDLE_CONTINUATION_KINDS.QUEUE) {
       for (
         let index = continuation.nextStep.stepIndex;
         index < steps.length;
@@ -86,7 +97,8 @@ export class RunImportPreviewService {
     const finalStepRunsAgain =
       !!continuation &&
       !!workflow.finalStep &&
-      (continuation.nextStep.kind === "finalStep" ||
+      (continuation.nextStep.kind ===
+        RUN_BUNDLE_CONTINUATION_KINDS.FINAL_STEP ||
         pendingIndexes.size > 0 ||
         continuation.pendingStepCount > 0);
     const pendingEntries = [...pendingIndexes].map((index) => ({
@@ -145,18 +157,18 @@ export class RunImportPreviewService {
         /* not a usable checkout */
       }
       const mode = continuation.worktreeMode;
-      const allowedChangesTargets =
-        mode === "managed"
-          ? (["managed-worktree", "skip"] as const)
-          : mode === "named"
-            ? (["current-checkout", "managed-worktree", "skip"] as const)
-            : (["current-checkout", "managed-worktree", "skip"] as const);
-      const defaultChangesTarget =
-        mode === "managed"
-          ? "managed-worktree"
-          : checkoutClean && checkoutAtBaseCommit
-            ? "current-checkout"
-            : "managed-worktree";
+      // `checkout` is offered only where it can succeed: never for a managed
+      // run (its checkout is never touched), and only when clean at base.
+      const allowedChangesTargets: RunChangesTarget[] = [
+        ...(mode !== RUN_BUNDLE_WORKTREE_MODES.MANAGED &&
+        checkoutClean &&
+        checkoutAtBaseCommit
+          ? [RUN_CHANGES_TARGETS.CHECKOUT]
+          : []),
+        RUN_CHANGES_TARGETS.WORKTREE,
+        RUN_CHANGES_TARGETS.SKIP,
+      ];
+      const defaultChangesTarget = defaultRunChangesTarget(mode);
       continuationPreview = {
         baseCommit: {
           commit: baseCommit,
@@ -228,7 +240,8 @@ export class RunImportPreviewService {
               });
               return {
                 sessionId: result.probedSessionId ?? result.resolvedSessionId,
-                availability: result.sessionAvailability ?? "unknown",
+                availability:
+                  result.sessionAvailability ?? SESSION_AVAILABILITY.UNKNOWN,
               };
             });
           const session = await resolveSession(
@@ -239,8 +252,7 @@ export class RunImportPreviewService {
           );
           if (
             session.sessionId ||
-            session.availability === "missing" ||
-            session.availability === "malformed"
+            isSessionResumeFailure(session.availability)
           ) {
             const executedStepIndices = [
               ...steps.flatMap((candidate, index) =>
@@ -273,7 +285,7 @@ export class RunImportPreviewService {
         return {
           stepIndex: actualIndex,
           ...(step.name ? { name: step.name } : {}),
-          kind: isScript ? ("script" as const) : ("prompt" as const),
+          kind: isScript ? STEP_TYPES.SCRIPT : STEP_TYPES.PROMPT,
           ...(!isScript
             ? { promptPreview: (step as PromptStep).prompt }
             : {
@@ -338,28 +350,7 @@ export class RunImportPreviewService {
     repository?: RunImportPreviewDependencies["lineageRepository"]
   ): Promise<{ workflowKey: string; runRef?: string } | undefined> {
     if (!repository) return undefined;
-    for (const workflowKey of await repository.listLineageKeys(workspaceRoot)) {
-      const descriptor = await repository.tryReadDescriptor(
-        workspaceRoot,
-        workflowKey
-      );
-      const imported = descriptor?.importedFrom;
-      if (
-        imported?.kind === "runBundle" &&
-        imported.provenance.workflowKey ===
-          header.manifest.provenance.workflowKey &&
-        imported.provenance.runRef === header.manifest.provenance.runRef &&
-        imported.sourceRoot === header.manifest.sourceRoot &&
-        imported.exportedAt === header.manifest.exportedAt
-      )
-        return {
-          workflowKey,
-          ...(descriptor?.latestRunRef
-            ? { runRef: descriptor.latestRunRef }
-            : {}),
-        };
-    }
-    return undefined;
+    return findExistingBundleImport(repository, workspaceRoot, header.manifest);
   }
 
   private async findMissingAssets(

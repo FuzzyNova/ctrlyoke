@@ -44,6 +44,7 @@ import {
   type HarnessId,
   HARNESS_IDS,
   PRIOR_CONTEXT_KEYWORDS,
+  STATUS_MESSAGE_SEVERITY,
   TEMP_FILE_CATEGORIES,
   USER_FEEDBACK_SEVERITY,
   type TerminalEndReason,
@@ -918,8 +919,7 @@ export class CliIntegration extends HarnessIntegration {
     prompt: PromptStep,
     workflowContext: WorkflowContext | undefined,
     resolvedProperties: ResolvedProperties | undefined,
-    resolvedSessionId: string | undefined,
-    warningMessage?: string
+    resolvedSessionId: string | undefined
   ): CliExecutionSession {
     this.lastExecutionSnapshot = undefined;
     this.activeSecretRedactor = workflowContext?.secretRedactor;
@@ -935,7 +935,6 @@ export class CliIntegration extends HarnessIntegration {
         : undefined,
       resolvedProperties,
       resolvedSessionId,
-      warningMessage,
     });
   }
 
@@ -1203,12 +1202,19 @@ export class CliIntegration extends HarnessIntegration {
   ): Promise<CliExecutionSession> {
     const { resolvedProperties, resolvedSessionId, warningMessage } =
       await this.sessionResolverAdapter.resolve(prompt, workflowContext);
+    if (warningMessage) {
+      // A status line, not response text: it must not reach `$previous`,
+      // commit messages or end-condition input (RUN_EXPORT_PLAN.md §5.4).
+      workflowContext?.reportStatusMessage?.(
+        warningMessage,
+        STATUS_MESSAGE_SEVERITY.WARNING
+      );
+    }
     return this.createExecutionSession(
       prompt,
       workflowContext,
       resolvedProperties,
-      resolvedSessionId,
-      warningMessage
+      resolvedSessionId
     );
   }
 
@@ -2298,11 +2304,6 @@ export class CliIntegration extends HarnessIntegration {
         prompt,
         workflowContext
       );
-      if (executionSession.warningMessage) {
-        this.emitStreamingEvents([
-          { type: "text", data: { text: executionSession.warningMessage } },
-        ]);
-      }
       this.activeSession = executionSession;
 
       const isInteractive =

@@ -1,8 +1,12 @@
-import type { HarnessId } from "./DashboardConstants";
+import type {
+  HarnessId,
+  SessionAvailability,
+  STEP_TYPES,
+} from "./DashboardConstants";
 import type { McpServerConfig, ScriptProperties } from "./CtrlYokeTypes";
+import type { RunBundleWorktreeMode, RunChangesTarget } from "./RunBundleTypes";
 
-export type RunImportSessionAvailability =
-  "available" | "missing" | "unknown" | "malformed";
+export type RunImportSessionAvailability = SessionAvailability;
 
 export interface RunImportPreviewProvenance {
   workflowName: string;
@@ -12,8 +16,7 @@ export interface RunImportPreviewProvenance {
   alreadyImported?: { workflowKey: string; runRef?: string };
 }
 
-export type RunImportChangesTarget =
-  "managed-worktree" | "current-checkout" | "skip";
+export type RunImportChangesTarget = RunChangesTarget;
 
 export interface RunImportPreviewContinuation {
   baseCommit: {
@@ -21,8 +24,10 @@ export interface RunImportPreviewContinuation {
     exists: boolean;
     instruction?: string;
   };
-  worktreeMode: "none" | "managed" | "named";
+  worktreeMode: RunBundleWorktreeMode;
+  /** What `ctrlyoke import` uses without `--changes` (`defaultRunChangesTarget`). */
   defaultChangesTarget: RunImportChangesTarget;
+  /** Targets that can succeed here; `checkout` only when clean at base. */
   allowedChangesTargets: RunImportChangesTarget[];
   checkoutClean: boolean;
   checkoutAtBaseCommit: boolean;
@@ -32,7 +37,7 @@ export interface RunImportPreviewContinuation {
 export interface RunImportPreviewPendingStep {
   stepIndex: number;
   name?: string;
-  kind: "prompt" | "script";
+  kind: (typeof STEP_TYPES)[keyof typeof STEP_TYPES];
   promptPreview?: string;
   script?: ScriptProperties;
   preCondition?: ScriptProperties;

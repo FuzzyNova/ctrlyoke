@@ -1,5 +1,9 @@
 import type { PromptStep } from "../../../types/CtrlYokeTypes";
-import type { HarnessId } from "../../../types/DashboardConstants";
+import {
+  SESSION_AVAILABILITY,
+  type HarnessId,
+  type SessionAvailability,
+} from "../../../types/DashboardConstants";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import {
   PropertyResolver,
@@ -16,7 +20,7 @@ export interface CliSessionResolution {
   /** Candidate ID before invalid or missing sessions fall back to a fresh session. */
   probedSessionId?: string;
   warningMessage?: string;
-  sessionAvailability?: "available" | "missing" | "unknown" | "malformed";
+  sessionAvailability?: SessionAvailability;
 }
 
 export interface CliSessionResolverAdapterDeps {
@@ -57,11 +61,11 @@ export class CliSessionResolverAdapter {
       const harness =
         resolvedProperties?.harness ?? this.deps.getIntegrationHarness();
       if (!SessionValidator.validate(resolvedSessionId, harness)) {
-        sessionAvailability = "malformed";
+        sessionAvailability = SESSION_AVAILABILITY.MALFORMED;
         warningMessage = buildSessionResumeWarning(
           workflowContext?.promptIndex ?? 0,
           harness,
-          "invalid-id"
+          SESSION_AVAILABILITY.MALFORMED
         );
         resolvedSessionId = undefined;
       } else {
@@ -73,19 +77,19 @@ export class CliSessionResolverAdapter {
             resolvedSessionId,
             workspaceRoot
           );
-          if (availability === "missing") {
-            sessionAvailability = "missing";
+          if (availability === SESSION_AVAILABILITY.MISSING) {
+            sessionAvailability = SESSION_AVAILABILITY.MISSING;
             warningMessage = buildSessionResumeWarning(
               workflowContext?.promptIndex ?? 0,
               harness,
-              "not-found"
+              SESSION_AVAILABILITY.MISSING
             );
             resolvedSessionId = undefined;
           } else {
             sessionAvailability = availability;
           }
         } else {
-          sessionAvailability = "unknown";
+          sessionAvailability = SESSION_AVAILABILITY.UNKNOWN;
         }
       }
     }

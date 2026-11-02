@@ -590,7 +590,7 @@ export interface WorkflowLineageDescriptor {
   variantCreatedAt?: number;
   /** Origin details for a run imported from a ctrlyoke bundle. */
   importedFrom?: {
-    kind: "runBundle";
+    kind: typeof import("./RunBundleTypes").RUN_IMPORT_SOURCE_KINDS.RUN_BUNDLE;
     provenance: {
       workflowKey: WorkflowKey;
       runRef: RunRef;

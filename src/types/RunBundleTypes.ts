@@ -37,6 +37,48 @@ export const RUN_BUNDLE_WORKTREE_MODES = {
   MANAGED: "managed",
   NAMED: "named",
 } as const;
+export type RunBundleWorktreeMode =
+  (typeof RUN_BUNDLE_WORKTREE_MODES)[keyof typeof RUN_BUNDLE_WORKTREE_MODES];
+
+/**
+ * Where an imported run's `changes.patch` lands (§4, §5.3). These are the
+ * `ctrlyoke import --changes` values; the dashboard import modal uses the
+ * same ones.
+ */
+export const RUN_CHANGES_TARGETS = {
+  /** A new managed worktree at the base commit; the checkout is untouched. */
+  WORKTREE: "worktree",
+  /** The importing checkout, which must be clean and at the base commit. */
+  CHECKOUT: "checkout",
+  /** The user synced the code; compare and warn, apply nothing. */
+  SKIP: "skip",
+} as const;
+export type RunChangesTarget =
+  (typeof RUN_CHANGES_TARGETS)[keyof typeof RUN_CHANGES_TARGETS];
+
+/**
+ * The target used when none is chosen (§4): a managed run gets a new managed
+ * worktree, `none`/`named` the checkout. Never adjusted for a dirty checkout;
+ * that fails loudly instead of falling back.
+ */
+export function defaultRunChangesTarget(
+  mode: RunBundleWorktreeMode
+): RunChangesTarget {
+  return mode === RUN_BUNDLE_WORKTREE_MODES.MANAGED
+    ? RUN_CHANGES_TARGETS.WORKTREE
+    : RUN_CHANGES_TARGETS.CHECKOUT;
+}
+
+/** Outcome of `RunBundleImporter.importRun` and `ctrlyoke import --json`. */
+export const RUN_IMPORT_STATUSES = {
+  IMPORTED: "imported",
+  ALREADY_IMPORTED: "alreadyImported",
+} as const;
+
+/** `importedFrom.kind` on a lineage or run imported from elsewhere. */
+export const RUN_IMPORT_SOURCE_KINDS = {
+  RUN_BUNDLE: "runBundle",
+} as const;
 
 export interface RunBundleContinuation {
   executionState: ExecutionState;
@@ -44,7 +86,7 @@ export interface RunBundleContinuation {
     | { kind: typeof RUN_BUNDLE_CONTINUATION_KINDS.QUEUE; stepIndex: number }
     | { kind: typeof RUN_BUNDLE_CONTINUATION_KINDS.FINAL_STEP; pass: number };
   pendingStepCount: number;
-  worktreeMode: (typeof RUN_BUNDLE_WORKTREE_MODES)[keyof typeof RUN_BUNDLE_WORKTREE_MODES];
+  worktreeMode: RunBundleWorktreeMode;
   workspace: {
     baseCommit: string;
     branch: string;

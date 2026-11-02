@@ -44,7 +44,10 @@ import {
   getRunBundleExportPreview,
 } from "../core/orchestration/RunBundleExporter";
 import { buildRunBundleExportOptions } from "../core/orchestration/RunBundleExportOptions";
-import { RUN_BUNDLE_DIR_SUFFIX } from "../types/RunBundleTypes";
+import {
+  RUN_BUNDLE_DIR_SUFFIX,
+  RUN_IMPORT_STATUSES,
+} from "../types/RunBundleTypes";
 import { RunBundleImporter } from "../core/orchestration/RunBundleImporter";
 import { RunImportPreviewService } from "../core/orchestration/RunImportPreview";
 import { WorkflowLineageRepository } from "../core/orchestration/WorkflowLineageRepository";
@@ -1208,7 +1211,7 @@ export class WebviewMessageRouter {
           changes: message.changes,
           again: message.again,
         });
-        if (result.status === "alreadyImported") {
+        if (result.status === RUN_IMPORT_STATUSES.ALREADY_IMPORTED) {
           const descriptor =
             await new WorkflowLineageRepository().tryReadDescriptor(
               this.getWorkspaceRoot(),

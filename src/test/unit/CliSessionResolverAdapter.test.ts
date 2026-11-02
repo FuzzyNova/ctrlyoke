@@ -3,7 +3,10 @@ import { suite, test } from "mocha";
 import { CliSessionResolverAdapter } from "../../core/harness/shared/CliSessionResolverAdapter";
 import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
 import { type PromptFile, type PromptStep } from "../../types/CtrlYokeTypes";
-import { HARNESS_IDS } from "../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  SESSION_AVAILABILITY,
+} from "../../types/DashboardConstants";
 import type { WorkflowContext } from "../../types/WorkflowContextTypes";
 
 suite("CliSessionResolverAdapter", () => {
@@ -78,15 +81,55 @@ suite("CliSessionResolverAdapter", () => {
     } as WorkflowContext);
 
     assert.strictEqual(result.resolvedSessionId, undefined);
-    assert.match(result.warningMessage ?? "", /not valid/);
+    assert.strictEqual(
+      result.sessionAvailability,
+      SESSION_AVAILABILITY.MALFORMED
+    );
+    assert.match(
+      result.warningMessage ?? "",
+      /is not a valid claude-cli session ID/
+    );
   });
+
+  for (const availability of [
+    SESSION_AVAILABILITY.AVAILABLE,
+    SESSION_AVAILABILITY.UNKNOWN,
+  ]) {
+    test(`keeps the resume when the probe reports ${availability}`, async () => {
+      const adapter = new CliSessionResolverAdapter({
+        getIntegrationHarness: () => HARNESS_IDS.COPILOT_CLI,
+        provider: {
+          probeResumableSession: async () => availability,
+        } as Partial<ICliProvider> as ICliProvider,
+        getWorkspaceRoot: () => "/workspace",
+      });
+      const prompt: PromptStep = {
+        prompt: "continue",
+        resumeSession: true,
+        sessionId: "550e8400-e29b-41d4-a716-446655440000",
+      };
+      const result = await adapter.resolve(prompt, {
+        promptIndex: 0,
+        allPrompts: [prompt],
+        preflightSession: {
+          sessionId: "550e8400-e29b-41d4-a716-446655440000",
+        },
+      } as WorkflowContext);
+      assert.strictEqual(
+        result.resolvedSessionId,
+        "550e8400-e29b-41d4-a716-446655440000"
+      );
+      assert.strictEqual(result.sessionAvailability, availability);
+      assert.strictEqual(result.warningMessage, undefined);
+    });
+  }
 
   test("preflights a resolved ID and clears only a confirmed missing session", async () => {
     const adapter = new CliSessionResolverAdapter({
       getIntegrationHarness: () => HARNESS_IDS.COPILOT_CLI,
       provider: {
-        probeResumableSession: async () => "missing",
-      } as unknown as ICliProvider,
+        probeResumableSession: async () => SESSION_AVAILABILITY.MISSING,
+      } as Partial<ICliProvider> as ICliProvider,
       getWorkspaceRoot: () => "/workspace",
     });
     const prompt: PromptStep = {

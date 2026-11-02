@@ -38,6 +38,10 @@ import { resolveCliCommand } from "../shared/CliLauncherResolver";
 import { PollingFsWatcher } from "../shared/FsWatcherHandles";
 import { SubagentSourceFollower } from "../shared/SubagentSourceFollower";
 import { readIncrementalJsonl } from "../shared/IncrementalJsonlReader";
+import {
+  SESSION_AVAILABILITY,
+  type SessionProbeResult,
+} from "../../../types/DashboardConstants";
 
 const execFileAsync = promisify(execFile);
 
@@ -230,19 +234,22 @@ export class OpenCodeLogParser extends BaseLogParser {
   async probeSessionId(
     sessionId: string,
     workspaceRoot: string
-  ): Promise<"available" | "missing" | "unknown"> {
+  ): Promise<SessionProbeResult> {
     try {
       const parsed = JSON.parse(
         await this.runExport(sessionId, workspaceRoot)
       ) as OpenCodeExport;
       if (!parsed?.info || typeof parsed.info.id !== "string") {
-        return "unknown";
+        return SESSION_AVAILABILITY.UNKNOWN;
       }
-      return parsed?.info?.id === sessionId ? "available" : "missing";
+      return parsed?.info?.id === sessionId
+        ? SESSION_AVAILABILITY.AVAILABLE
+        : SESSION_AVAILABILITY.MISSING;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (message.includes("Session not found")) return "missing";
-      return "unknown";
+      if (message.includes("Session not found"))
+        return SESSION_AVAILABILITY.MISSING;
+      return SESSION_AVAILABILITY.UNKNOWN;
     }
   }
 

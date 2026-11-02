@@ -18,6 +18,7 @@ import {
   RUN_BUNDLE_SCHEMA_VERSION,
   RUN_BUNDLE_CONTINUATION_KINDS,
   RUN_BUNDLE_WORKTREE_MODES,
+  RUN_IMPORT_SOURCE_KINDS,
   type RunBundleEvent,
   type RunBundleManifest,
   type RunBundleRunManifest,
@@ -484,7 +485,7 @@ export async function exportRunBundle(
     ];
     const importedFrom =
       workingFile._runtime?.importedFrom ??
-      (descriptor.importedFrom?.kind === "runBundle"
+      (descriptor.importedFrom?.kind === RUN_IMPORT_SOURCE_KINDS.RUN_BUNDLE
         ? {
             provenance: descriptor.importedFrom.provenance,
             sourceRoot: descriptor.importedFrom.sourceRoot,

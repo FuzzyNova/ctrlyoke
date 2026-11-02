@@ -23,17 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   import it view-only or explicitly continue it.
 - Loading a workflow from a run bundle now offers to import the stopped run or
   load only its authored workflow and start over.
+- **Add Commit to ctrlyoke** is now in the title bar `...` menu and the tab
+  context menu of a commit's diff, the editor that opens when you click a
+  commit in the Timeline view or the Source Control Graph.
 
 ### Fixed
 
 - Exporting a run executed in a managed or named worktree now writes its paths
   as `${workspaceFolder}/…`, so those paths remain portable with the bundle.
-
-### Added
-
-- **Add Commit to ctrlyoke** is now in the title bar `...` menu and the tab
-  context menu of a commit's diff, the editor that opens when you click a
-  commit in the Timeline view or the Source Control Graph.
 
 ### Changed
 

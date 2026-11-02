@@ -2468,6 +2468,8 @@ export class WorkflowExecutor {
           // this unset keeps first-attempt prompt text deterministic.
           reportCompatibilityDiagnostics:
             context.reportCompatibilityDiagnostics,
+          reportStatusMessage: (message, severity) =>
+            void this.trackStatusMessage(context, target, message, severity),
           analyzeCompatibilityForPrompt: context.analyzeCompatibilityForPrompt,
           resolvePriorContextItems: context.resolvePriorContextItems,
           releaseConflictingAiSession: context.releaseConflictingAiSession,
@@ -4848,6 +4850,8 @@ export class WorkflowExecutor {
             endConditionResult: this.promptQueue.getEndConditionSummary(target),
             reportCompatibilityDiagnostics:
               context.reportCompatibilityDiagnostics,
+            reportStatusMessage: (message, severity) =>
+              void this.trackStatusMessage(context, target, message, severity),
             analyzeCompatibilityForPrompt:
               context.analyzeCompatibilityForPrompt,
             resolvePriorContextItems: context.resolvePriorContextItems,

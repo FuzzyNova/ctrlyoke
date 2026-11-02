@@ -21,6 +21,7 @@ import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
 import { getContextMenuOpener, useLongPress } from "@hooks/useLongPress";
 import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import { RUN_IMPORT_SOURCE_KINDS } from "@root/types/RunBundleTypes";
 import { Icon } from "../shared/Icon";
 import {
   ImportedOriginBadge,
@@ -120,7 +121,7 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
     workflowTokenTotalsAccessibleLabel(summary?.tokenTotals),
     runDurationAccessibleLabel(activeExecutionMs),
     timeAgo,
-    summary?.importedFrom?.kind === "runBundle"
+    summary?.importedFrom?.kind === RUN_IMPORT_SOURCE_KINDS.RUN_BUNDLE
       ? importedOriginAccessibleName(summary.importedFrom)
       : undefined,
   ]);
@@ -208,9 +209,10 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
                 unstarted={summary?.unstarted}
               />
             )}
-            {summary?.importedFrom?.kind === "runBundle" && (
+            {summary?.importedFrom?.kind ===
+              RUN_IMPORT_SOURCE_KINDS.RUN_BUNDLE && (
               <ImportedOriginBadge
-                kind="runBundle"
+                kind={RUN_IMPORT_SOURCE_KINDS.RUN_BUNDLE}
                 description={importedOriginAccessibleName(summary.importedFrom)}
               />
             )}

@@ -61,6 +61,7 @@ import {
   applyPreparedMutations,
   type CliProviderPreparation,
 } from "../shared/interfaces/PreparedMutation";
+import { type SessionProbeResult } from "../../../types/DashboardConstants";
 
 const QWEN_MCP_FILTERING_CAPABILITY = {
   fidelity: "exact",
@@ -107,9 +108,7 @@ const QWEN_IMAGE_INPUT_CAPABILITY = {
  * ```
  */
 export class QwenCliProvider implements ICliProvider {
-  probeResumableSession(
-    sessionId: string
-  ): "available" | "missing" | "unknown" {
+  probeResumableSession(sessionId: string): SessionProbeResult {
     return this.logParser.probeSessionId(sessionId);
   }
   private static readonly CLI_COMMAND = "qwen";

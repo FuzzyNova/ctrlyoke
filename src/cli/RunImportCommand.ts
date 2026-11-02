@@ -9,7 +9,12 @@ import {
   type CliWorkspaceBootstrap,
 } from "./CliWorkspaceBootstrap";
 import { CLI_USAGE_EXIT_CODE } from "./CliExitCode";
-import type { RunChangesTarget } from "../core/orchestration/RunChangesPlacer";
+import { STEP_TYPES } from "../types/DashboardConstants";
+import {
+  RUN_CHANGES_TARGETS,
+  RUN_IMPORT_STATUSES,
+  type RunChangesTarget,
+} from "../types/RunBundleTypes";
 
 export interface RunImportOptions {
   bundleDir: string;
@@ -55,7 +60,7 @@ export function registerImportCommand(
       new Option(
         "--changes <target>",
         "Place changes with worktree, checkout, or skip"
-      ).choices(["worktree", "checkout", "skip"])
+      ).choices(Object.values(RUN_CHANGES_TARGETS))
     )
     .option("-d, --cwd <path>", "Workspace root (default: current directory)")
     .option("--json", "Emit one versioned JSON result line")
@@ -98,7 +103,7 @@ export async function importRunCommand(
       .createLineageRepository()
       .readDescriptor(workspace.workspaceRoot, imported.workflowKey);
     const runRef =
-      imported.status === "imported"
+      imported.status === RUN_IMPORT_STATUSES.IMPORTED
         ? imported.runRef
         : descriptor.latestRunRef;
     const eventCount = header.runManifest.eventCount;
@@ -116,7 +121,10 @@ export async function importRunCommand(
         "This history-only bundle has no continuation data; --continue and --changes were ignored."
       );
     }
-    if (imported.status === "imported" && imported.placement?.warning)
+    if (
+      imported.status === RUN_IMPORT_STATUSES.IMPORTED &&
+      imported.placement?.warning
+    )
       warnings.push(imported.placement.warning);
     for (const warning of warnings)
       if (!options.json) io.writeOut(`Warning: ${warning}`);
@@ -124,9 +132,9 @@ export async function importRunCommand(
     if (
       options.continue &&
       header.manifest.continuation &&
-      imported.status === "imported" &&
+      imported.status === RUN_IMPORT_STATUSES.IMPORTED &&
       imported.placement?.canContinue !== false &&
-      (imported.placement?.target === "skip" ||
+      (imported.placement?.target === RUN_CHANGES_TARGETS.SKIP ||
         imported.placement?.applied !== false) &&
       dependencies.continueRun
     ) {
@@ -149,7 +157,8 @@ export async function importRunCommand(
           eventCount,
           importedFrom,
           changes:
-            imported.status === "imported" && imported.placement
+            imported.status === RUN_IMPORT_STATUSES.IMPORTED &&
+            imported.placement
               ? {
                   target: imported.placement.target,
                   applied: imported.placement.applied,
@@ -164,7 +173,7 @@ export async function importRunCommand(
       return;
     }
 
-    if (imported.status === "alreadyImported") {
+    if (imported.status === RUN_IMPORT_STATUSES.ALREADY_IMPORTED) {
       io.writeOut(
         `Already imported ${descriptor.workflowName} as ${imported.workflowKey} ${runRef ?? "(run reference unavailable)"}.`
       );
@@ -237,7 +246,7 @@ function printImportPreview(
     io.writeOut(
       `  Pending ${step.kind} step ${step.stepIndex + 1}${step.name ? ` (${step.name})` : ""}${step.promptRedacted ? " [prompt redacted]" : ""}`
     );
-    if (step.kind === "prompt")
+    if (step.kind === STEP_TYPES.PROMPT)
       io.writeOut(
         `    ${step.harness ?? "default"}${step.model ? ` / ${step.model}` : ""}${step.previouslyUsed ? ` (used ${step.previouslyUsed.harness ?? "?"}${step.previouslyUsed.model ? ` / ${step.previouslyUsed.model}` : ""})` : ""}`
       );

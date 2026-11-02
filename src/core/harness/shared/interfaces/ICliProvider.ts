@@ -32,6 +32,7 @@ import type { HarnessCapabilityFacts } from "../../../../types/CompatibilityType
 import type { CliEvent } from "../../../../types/CliOutputTypes";
 import type { HarnessQuotaSnapshot } from "../../../../types/UsageTypes";
 import type { StatuslineInstallResult } from "../StatuslineManager";
+import type { SessionProbeResult } from "../../../../types/DashboardConstants";
 
 /** Timeout for CLI version/help-check subprocesses. */
 export const CLI_VERSION_CHECK_TIMEOUT_MS = 30_000;
@@ -219,15 +220,16 @@ export interface ICliProvider {
    */
   finishHeadlessStdout?(): void;
 
-  /** Input accepted by provider-specific invalid-session classifiers. */
+  /**
+   * Looks `sessionId` up in this harness's local session store **by ID only**
+   * (never by prompt-text fallback), for the workspace the step runs in.
+   * `UNKNOWN` means the store could not be probed; the caller treats it as
+   * available and leaves rejection to `isRecoverableSessionError`.
+   */
   probeResumableSession?(
     sessionId: string,
     workspaceRoot: string
-  ):
-    | Promise<"available" | "missing" | "unknown">
-    | "available"
-    | "missing"
-    | "unknown";
+  ): Promise<SessionProbeResult> | SessionProbeResult;
 
   /** Input accepted by provider-specific invalid-session classifiers. */
   isRecoverableSessionError?(

@@ -54,6 +54,7 @@ import {
   OPENCODE_RESUMED_PROMPT_DELIVERIES,
   type OpenCodeResumedPromptDelivery,
 } from "./OpenCodeProtocolConstants";
+import { type SessionProbeResult } from "../../../types/DashboardConstants";
 
 /**
  * How a resumed interactive step delivers its prompt.
@@ -200,7 +201,7 @@ export class OpenCodeCliProvider implements ICliProvider {
   probeResumableSession(
     sessionId: string,
     workspaceRoot: string
-  ): Promise<"available" | "missing" | "unknown"> {
+  ): Promise<SessionProbeResult> {
     return this.logParser.probeSessionId(sessionId, workspaceRoot);
   }
 

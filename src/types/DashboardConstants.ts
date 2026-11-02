@@ -5479,6 +5479,27 @@ export type StepStatus = (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
 export type FinalStepPhase =
   (typeof FINAL_STEP_PHASES)[keyof typeof FINAL_STEP_PHASES];
 export type HarnessId = (typeof HARNESS_IDS)[keyof typeof HARNESS_IDS];
+
+/**
+ * Whether a resolved harness session can be resumed on this machine
+ * (dev/backlog/RUN_EXPORT_PLAN.md §5.4). `MALFORMED` is decided by
+ * `SessionValidator` before any probe; the other three come from a provider's
+ * by-ID session-store probe.
+ */
+export const SESSION_AVAILABILITY = {
+  AVAILABLE: "available",
+  MISSING: "missing",
+  UNKNOWN: "unknown",
+  MALFORMED: "malformed",
+} as const;
+export type SessionAvailability =
+  (typeof SESSION_AVAILABILITY)[keyof typeof SESSION_AVAILABILITY];
+/** What `ICliProvider.probeResumableSession` can report. */
+export type SessionProbeResult = Exclude<
+  SessionAvailability,
+  typeof SESSION_AVAILABILITY.MALFORMED
+>;
+
 type HarnessMcpSourcePrefix<T extends string> = T extends `${infer Prefix}-cli`
   ? Prefix
   : never;

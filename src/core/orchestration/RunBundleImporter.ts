@@ -9,8 +9,13 @@ import type {
 } from "../../types/CtrlYokeTypes";
 import type { WorkflowTimelineEventDraft } from "../../types/WorkflowTimelineTypes";
 import {
+  defaultRunChangesTarget,
   RUN_BUNDLE_FILES,
+  RUN_CHANGES_TARGETS,
+  RUN_IMPORT_SOURCE_KINDS,
+  RUN_IMPORT_STATUSES,
   type RunBundleEvent,
+  type RunBundleManifest,
 } from "../../types/RunBundleTypes";
 import {
   isPathWithinDirectory,
@@ -42,12 +47,52 @@ export interface RunBundleImportOptions extends ReadRunBundleOptions {
 
 export type RunBundleImportResult =
   | {
-      status: "imported";
+      status: typeof RUN_IMPORT_STATUSES.IMPORTED;
       workflowKey: WorkflowKey;
       runRef: RunRef;
       placement?: RunChangesPlacement;
     }
-  | { status: "alreadyImported"; workflowKey: WorkflowKey };
+  | {
+      status: typeof RUN_IMPORT_STATUSES.ALREADY_IMPORTED;
+      workflowKey: WorkflowKey;
+    };
+
+/**
+ * The lineage an earlier import of this same bundle created, if any (open
+ * question 5): matched on the exported run's identity, `sourceRoot` and
+ * `exportedAt`. Shared by the importer and `RunImportPreview`.
+ */
+export async function findExistingBundleImport(
+  repository: Pick<
+    WorkflowLineageRepository,
+    "listLineageKeys" | "tryReadDescriptor"
+  >,
+  workspaceRoot: string,
+  manifest: RunBundleManifest
+): Promise<{ workflowKey: WorkflowKey; runRef?: RunRef } | undefined> {
+  for (const workflowKey of await repository.listLineageKeys(workspaceRoot)) {
+    const descriptor = await repository.tryReadDescriptor(
+      workspaceRoot,
+      workflowKey
+    );
+    const imported = descriptor?.importedFrom;
+    if (
+      imported?.kind === RUN_IMPORT_SOURCE_KINDS.RUN_BUNDLE &&
+      imported.provenance.workflowKey === manifest.provenance.workflowKey &&
+      imported.provenance.runRef === manifest.provenance.runRef &&
+      imported.sourceRoot === manifest.sourceRoot &&
+      imported.exportedAt === manifest.exportedAt
+    ) {
+      return {
+        workflowKey,
+        ...(descriptor?.latestRunRef
+          ? { runRef: descriptor.latestRunRef }
+          : {}),
+      };
+    }
+  }
+  return undefined;
+}
 
 export class RunBundleImporter {
   constructor(
@@ -65,7 +110,7 @@ export class RunBundleImporter {
       options
     );
     const provenance: NonNullable<WorkflowLineageDescriptor["importedFrom"]> = {
-      kind: "runBundle",
+      kind: RUN_IMPORT_SOURCE_KINDS.RUN_BUNDLE,
       provenance: header.manifest.provenance,
       sourceRoot: header.manifest.sourceRoot,
       exportedAt: header.manifest.exportedAt,
@@ -73,24 +118,16 @@ export class RunBundleImporter {
       bundleName: path.basename(path.resolve(options.bundleDir)),
     };
     if (!options.again) {
-      for (const workflowKey of await this.lineageRepository.listLineageKeys(
-        options.workspaceRoot
-      )) {
-        const descriptor = await this.lineageRepository.tryReadDescriptor(
-          options.workspaceRoot,
-          workflowKey
-        );
-        const imported = descriptor?.importedFrom;
-        if (
-          imported?.kind === "runBundle" &&
-          imported.provenance.workflowKey ===
-            provenance.provenance.workflowKey &&
-          imported.provenance.runRef === provenance.provenance.runRef &&
-          imported.sourceRoot === provenance.sourceRoot &&
-          imported.exportedAt === provenance.exportedAt
-        ) {
-          return { status: "alreadyImported", workflowKey };
-        }
+      const existing = await findExistingBundleImport(
+        this.lineageRepository,
+        options.workspaceRoot,
+        header.manifest
+      );
+      if (existing) {
+        return {
+          status: RUN_IMPORT_STATUSES.ALREADY_IMPORTED,
+          workflowKey: existing.workflowKey,
+        };
       }
     }
 
@@ -144,9 +181,7 @@ export class RunBundleImporter {
               const continuation = header.manifest.continuation!;
               const target =
                 options.changes ??
-                (continuation.worktreeMode === "managed"
-                  ? "worktree"
-                  : "checkout");
+                defaultRunChangesTarget(continuation.worktreeMode);
               const patchPath = continuation.workspace.patch
                 ? path.join(header.bundleDir, RUN_BUNDLE_FILES.CHANGES)
                 : undefined;
@@ -162,6 +197,9 @@ export class RunBundleImporter {
                   options.name?.trim() || header.manifest.lineage.workflowName,
               });
               if (placement.worktreeRuntime) {
+                // Imported outputs record the new worktree as their
+                // working directory, never the bundle's or the checkout (§5.5).
+                executionRoot = placement.worktreePath ?? executionRoot;
                 const normalized = normalizeImportedRuntime(
                   header.runtime,
                   header.manifest,
@@ -176,7 +214,7 @@ export class RunBundleImporter {
               }
               if (
                 placement.canContinue === false ||
-                (!placement.applied && target !== "skip")
+                (!placement.applied && target !== RUN_CHANGES_TARGETS.SKIP)
               )
                 return { runtimeState: undefined };
               executionRoot = placement.worktreePath ?? options.workspaceRoot;
@@ -192,7 +230,7 @@ export class RunBundleImporter {
         : {}),
     });
     return {
-      status: "imported",
+      status: RUN_IMPORT_STATUSES.IMPORTED,
       workflowKey: materialized.workflowKey,
       runRef: materialized.runRef,
       ...(placement ? { placement } : {}),

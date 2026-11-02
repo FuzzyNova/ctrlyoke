@@ -4,19 +4,38 @@ import { Modal } from "@components/shared/Modal";
 import { useUiStore } from "@store/uiStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
+import {
+  RUN_CHANGES_TARGETS,
+  type RunChangesTarget,
+} from "@root/types/RunBundleTypes";
+
+const CHANGES_TARGET_LABELS: Record<RunChangesTarget, string> = {
+  [RUN_CHANGES_TARGETS.WORKTREE]: "A new managed worktree",
+  [RUN_CHANGES_TARGETS.CHECKOUT]: "This checkout",
+  [RUN_CHANGES_TARGETS.SKIP]: "Nowhere: I've synced the code myself",
+};
 
 export const ImportRunDialog: React.FC = () => {
   const data = useUiStore((state) => state.runImportDialogData);
   const close = useUiStore((state) => state.closeRunImportDialog);
   const update = useUiStore((state) => state.updateRunImportDialog);
   const vscode = useVsCodeApi();
-  const [changes, setChanges] = useState<
-    "worktree" | "checkout" | "skip" | null
-  >(null);
+  const [changes, setChanges] = useState<RunChangesTarget | null>(null);
   useEffect(() => setChanges(null), [data?.requestId]);
   if (!data) return null;
   const preview = data.preview;
   const blocked = !!preview?.blockers.length;
+  const continuation = preview?.continuation;
+  // The preview offers only targets that can succeed here; fall back to the
+  // first of them when the CLI default (e.g. a dirty checkout) is not one.
+  const selectedChanges: RunChangesTarget | undefined = continuation
+    ? (changes ??
+      (continuation.allowedChangesTargets.includes(
+        continuation.defaultChangesTarget
+      )
+        ? continuation.defaultChangesTarget
+        : continuation.allowedChangesTargets[0]))
+    : undefined;
   const importRun = (continueRun: boolean, again = false) => {
     update(data.requestId, { importing: true, error: undefined });
     vscode.postMessage({
@@ -25,7 +44,7 @@ export const ImportRunDialog: React.FC = () => {
         : MESSAGE_TYPES.IMPORT_RUN,
       requestId: data.requestId,
       bundleDir: data.bundleDir,
-      ...(changes ? { changes } : {}),
+      ...(selectedChanges ? { changes: selectedChanges } : {}),
       again,
     });
   };
@@ -107,42 +126,19 @@ export const ImportRunDialog: React.FC = () => {
                   ? "available"
                   : preview.continuation.baseCommit.instruction}
               </p>
-              <p>
-                {preview.continuation.patchFileCount} changed files. Default
-                target: {preview.continuation.defaultChangesTarget}.
-              </p>
+              <p>{preview.continuation.patchFileCount} changed files.</p>
               <label className="block">
                 Where changes will land
                 <select
-                  value={
-                    changes ??
-                    (preview.continuation.defaultChangesTarget ===
-                    "managed-worktree"
-                      ? "worktree"
-                      : preview.continuation.defaultChangesTarget ===
-                          "current-checkout"
-                        ? "checkout"
-                        : "skip")
-                  }
+                  value={selectedChanges}
                   onChange={(event) =>
-                    setChanges(
-                      event.target.value as "worktree" | "checkout" | "skip"
-                    )
+                    setChanges(event.target.value as RunChangesTarget)
                   }
                   className="ml-2"
                 >
                   {preview.continuation.allowedChangesTargets.map((target) => (
-                    <option
-                      key={target}
-                      value={
-                        target === "managed-worktree"
-                          ? "worktree"
-                          : target === "current-checkout"
-                            ? "checkout"
-                            : "skip"
-                      }
-                    >
-                      {target}
+                    <option key={target} value={target}>
+                      {CHANGES_TARGET_LABELS[target]}
                     </option>
                   ))}
                 </select>

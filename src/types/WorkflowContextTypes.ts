@@ -152,6 +152,15 @@ export interface WorkflowContext {
     diagnostics: readonly CompatibilityDiagnostic[],
     timestampMs?: number
   ) => void;
+  /**
+   * Report a status line for this step's dispatch target: shown in its output
+   * and recorded on the timeline (`statusMessageRecorded`). Never part of the
+   * harness response, so it stays out of `$previous` and end-condition input.
+   */
+  reportStatusMessage?: (
+    message: string,
+    severity: import("./DashboardConstants").StatusMessageSeverity
+  ) => void;
   /** Analyze resolved prompt attachments at the final execution boundary. */
   analyzeCompatibilityForPrompt?: (
     promptIndex: number,

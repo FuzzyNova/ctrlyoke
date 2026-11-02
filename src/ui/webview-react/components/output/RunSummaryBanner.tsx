@@ -18,6 +18,7 @@ import {
 } from "@components/workflow/RunDuration";
 import { writeClipboardText } from "@utils/stepClipboard";
 import type { ExecutionState } from "@root/types/DashboardConstants";
+import { RUN_IMPORT_SOURCE_KINDS } from "@root/types/RunBundleTypes";
 import type {
   WorktreeRunProjection,
   WorkflowViewAddress,
@@ -219,9 +220,9 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
             labelOverride={stopReason ? "Limit stop" : undefined}
             titleOverride={stopReason?.message}
           />
-          {importedFrom?.kind === "runBundle" && (
+          {importedFrom?.kind === RUN_IMPORT_SOURCE_KINDS.RUN_BUNDLE && (
             <ImportedOriginBadge
-              kind="runBundle"
+              kind={RUN_IMPORT_SOURCE_KINDS.RUN_BUNDLE}
               description={importedOriginAccessibleName(importedFrom)}
             />
           )}

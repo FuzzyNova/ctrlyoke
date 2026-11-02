@@ -68,6 +68,7 @@ import {
   type CliProviderPreparation,
   type PreparedMutation,
 } from "../shared/interfaces/PreparedMutation";
+import { type SessionProbeResult } from "../../../types/DashboardConstants";
 
 const CLAUDE_MCP_FILTERING_CAPABILITY = {
   fidelity: "exact",
@@ -103,9 +104,7 @@ const CLAUDE_IMAGE_INPUT_CAPABILITY = {
  * ```
  */
 export class ClaudeCliProvider implements ICliProvider {
-  probeResumableSession(
-    sessionId: string
-  ): "available" | "missing" | "unknown" {
+  probeResumableSession(sessionId: string): SessionProbeResult {
     return this.logParser.probeSessionId(sessionId);
   }
   private static readonly CLI_COMMAND = "claude";

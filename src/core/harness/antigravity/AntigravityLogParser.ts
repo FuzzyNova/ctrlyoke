@@ -56,6 +56,10 @@ import type {
 import { Log } from "../../../utils/Log";
 import { CompositeFsWatcher } from "../shared/FsWatcherHandles";
 import { SubagentSourceFollower } from "../shared/SubagentSourceFollower";
+import {
+  SESSION_AVAILABILITY,
+  type SessionProbeResult,
+} from "../../../types/DashboardConstants";
 
 /**
  * Synthetic `AntigravityLogEvent.type` tags — ctrlyoke's own internal event
@@ -122,13 +126,13 @@ interface PendingPlannerToolCall {
 
 export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   /** Check the local transcript store by conversation ID only. */
-  probeSessionId(sessionId: string): "available" | "missing" | "unknown" {
+  probeSessionId(sessionId: string): SessionProbeResult {
     try {
       return this.getAuthoritativeTranscriptPath(sessionId)
-        ? "available"
-        : "missing";
+        ? SESSION_AVAILABILITY.AVAILABLE
+        : SESSION_AVAILABILITY.MISSING;
     } catch {
-      return "unknown";
+      return SESSION_AVAILABILITY.UNKNOWN;
     }
   }
 

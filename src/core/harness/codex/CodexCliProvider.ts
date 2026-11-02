@@ -64,6 +64,7 @@ import {
   applyPreparedMutations,
   type CliProviderPreparation,
 } from "../shared/interfaces/PreparedMutation";
+import { type SessionProbeResult } from "../../../types/DashboardConstants";
 
 const CODEX_MCP_FILTERING_CAPABILITY = {
   fidelity: "exact",
@@ -224,7 +225,7 @@ export class CodexCliProvider implements ICliProvider {
   probeResumableSession(
     sessionId: string,
     _workspaceRoot: string
-  ): "available" | "missing" | "unknown" {
+  ): SessionProbeResult {
     return this.logParser.probeSessionId(sessionId);
   }
 

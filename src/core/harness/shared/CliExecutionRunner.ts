@@ -7,6 +7,8 @@ import {
   CTRLYOKE_ENV_VARS,
   HEADLESS_SOURCE_MODES,
   INTERACTIVE_TERMINAL_MODES,
+  SESSION_AVAILABILITY,
+  STATUS_MESSAGE_SEVERITY,
   type InteractiveTerminalMode,
 } from "../../../types/DashboardConstants";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
@@ -426,12 +428,13 @@ export class CliExecutionRunner {
           deferTempFileCleanup
         ) {
           const rejectedSessionId = session.resolvedSessionId;
-          session.setWarningMessage(
+          session.workflowContext?.reportStatusMessage?.(
             buildSessionResumeWarning(
-              session.workflowContext?.promptIndex ?? 0,
+              session.workflowContext.promptIndex,
               this.deps.provider.config.harnessId,
-              "not-found"
-            )
+              SESSION_AVAILABILITY.MISSING
+            ),
+            STATUS_MESSAGE_SEVERITY.WARNING
           );
           Log.warn(
             `[CliExecutionRunner] ${this.deps.provider.config.displayName} rejected session ID "${rejectedSessionId}". Retrying without resume flag.`

@@ -12,11 +12,16 @@ import type {
   WorkingFileWorktreeRuntime,
   WorkflowKey,
 } from "../../types/CtrlYokeTypes";
+import {
+  RUN_CHANGES_TARGETS,
+  type RunBundleWorktreeMode,
+  type RunChangesTarget,
+} from "../../types/RunBundleTypes";
 import { isPathWithinDirectory } from "../../utils/PathSecurity";
 import { execGit, resolveCommit } from "../../utils/GitUtils";
 import { WorktreeManager, type ActiveWorktreeInfo } from "./WorktreeManager";
 
-export type RunChangesTarget = "worktree" | "checkout" | "skip";
+export type { RunChangesTarget };
 
 export interface RunChangesPlacement {
   target: RunChangesTarget;
@@ -32,7 +37,7 @@ export interface RunChangesPlacementOptions {
   patchPath?: string;
   baseCommit: string;
   target: RunChangesTarget;
-  worktreeMode: "none" | "managed" | "named";
+  worktreeMode: RunBundleWorktreeMode;
   workflowKey: WorkflowKey;
   runRef: RunRef;
   workflowName: string;
@@ -72,7 +77,7 @@ export class RunChangesPlacer {
     }
 
     if (!options.patchPath) {
-      if (options.target === "skip")
+      if (options.target === RUN_CHANGES_TARGETS.SKIP)
         return { target: options.target, applied: false };
       return {
         target: options.target,
@@ -92,11 +97,9 @@ export class RunChangesPlacer {
       await worktreeInfo.lease.release();
       worktreeHandlesReleased = true;
     };
-    if (options.target === "worktree") {
-      if (options.worktreeMode !== "managed")
-        throw new Error(
-          "--changes worktree is only available for managed runs."
-        );
+    if (options.target === RUN_CHANGES_TARGETS.WORKTREE) {
+      // Valid for every worktree mode: it is the safe fallback the checkout
+      // error below names for a `none`/`named` run (§5.3).
       worktreeInfo = await this.worktreeManager.ensureManagedWorktree({
         sourceCheckoutRoot: root,
         stateRoot: root,
@@ -109,7 +112,7 @@ export class RunChangesPlacer {
         runner: "cli",
       });
       targetRoot = worktreeInfo.executionWorkspace.executionRoot;
-    } else if (options.target === "checkout") {
+    } else if (options.target === RUN_CHANGES_TARGETS.CHECKOUT) {
       const status = await execGit([
         "-C",
         root,
@@ -128,7 +131,7 @@ export class RunChangesPlacer {
     try {
       const patch = await fs.readFile(options.patchPath, "utf8");
       await validatePatchPaths(targetRoot, patch);
-      if (options.target === "skip") {
+      if (options.target === RUN_CHANGES_TARGETS.SKIP) {
         try {
           await execGit([
             "-C",
@@ -170,7 +173,7 @@ export class RunChangesPlacer {
       };
     } catch (error) {
       const cleanupErrors: string[] = [];
-      if (options.target !== "skip") {
+      if (options.target !== RUN_CHANGES_TARGETS.SKIP) {
         try {
           await execGit([
             "-C",

@@ -69,6 +69,7 @@ import {
   type PreparedMutation,
 } from "../shared/interfaces/PreparedMutation";
 import { COPILOT_EVENT_TYPES } from "./CopilotProtocolConstants";
+import { type SessionProbeResult } from "../../../types/DashboardConstants";
 
 const COPILOT_MCP_FILTERING_CAPABILITY = {
   fidelity: "exact",
@@ -155,7 +156,7 @@ export class CopilotCliProvider implements ICliProvider {
   probeResumableSession(
     sessionId: string,
     _workspaceRoot: string
-  ): "available" | "missing" | "unknown" {
+  ): SessionProbeResult {
     return this.logParser.probeSessionId(sessionId);
   }
   readonly headlessSource = HEADLESS_SOURCE_MODES.STDOUT;
