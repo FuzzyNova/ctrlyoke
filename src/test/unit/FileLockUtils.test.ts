@@ -13,6 +13,17 @@ import { errorWithCode } from "../helpers/errnoError";
 suite("FileLockUtils", () => {
   const tempPaths: string[] = [];
 
+  // Liveness tests use a real heartbeat (setInterval at staleMs / 3) on the
+  // test's own event loop, and judge staleness by wall-clock time against the
+  // lock's mtime. A stall longer than staleMs - staleMs / 3 therefore makes a
+  // live holder look stale. A 120 ms window flaked under `npm test`, where
+  // concurrent extension hosts and Vitest stall the loop well past that. This
+  // window tolerates about a second of stall. Holders keep the lock for longer
+  // than the window, so the heartbeat, not the initial mtime, is what keeps it
+  // fresh.
+  const HEARTBEAT_STALE_MS = 1_500;
+  const HOLD_PAST_STALE_MS = 2_000;
+
   function tempTarget(name?: string): string {
     const p = path.join(
       os.tmpdir(),
@@ -127,7 +138,7 @@ suite("FileLockUtils", () => {
           await holderGate;
           order.push("holder-end");
         },
-        { staleMs: 120 }
+        { staleMs: HEARTBEAT_STALE_MS }
       );
       while (!order.includes("holder-start"))
         await new Promise((resolve) => setTimeout(resolve, 1));
@@ -137,11 +148,11 @@ suite("FileLockUtils", () => {
           order.push("waiter");
         },
         {
-          staleMs: 120,
-          timeoutMs: 2_000,
+          staleMs: HEARTBEAT_STALE_MS,
+          timeoutMs: HOLD_PAST_STALE_MS * 5,
         }
       );
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await new Promise((resolve) => setTimeout(resolve, HOLD_PAST_STALE_MS));
       assert.deepStrictEqual(order, ["holder-start"]);
       releaseHolder();
       await Promise.all([holder, waiter]);
@@ -155,7 +166,7 @@ suite("FileLockUtils", () => {
         releaseHolder = resolve;
       });
       const holder = withFileLock(target, async () => holderGate, {
-        staleMs: 120,
+        staleMs: HEARTBEAT_STALE_MS,
       });
       const lockPath = `${target}.lock`;
       while (!(await fs.stat(lockPath).catch(() => undefined))) {
@@ -169,17 +180,100 @@ suite("FileLockUtils", () => {
           waiterEntered = true;
         },
         {
-          staleMs: 120,
-          timeoutMs: 80,
+          staleMs: HEARTBEAT_STALE_MS,
+          timeoutMs: 100,
           waitWhileHolderAlive: true,
-          maxWaitMs: 2_000,
+          maxWaitMs: HOLD_PAST_STALE_MS * 5,
         }
       );
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await new Promise((resolve) => setTimeout(resolve, HOLD_PAST_STALE_MS));
       assert.strictEqual(waiterEntered, false);
       releaseHolder();
       await Promise.all([holder, waiter]);
       assert.strictEqual(waiterEntered, true);
+    });
+
+    // The waiter judges the lock stale, but by the time it renames the lock
+    // away the file has changed (here the fake stat reports an old mtime; in
+    // the wild, a stalled holder's heartbeat lands late). It restores the lock,
+    // which proves an owner is alive, so wait mode must keep waiting past
+    // timeoutMs instead of throwing FileLockTimeoutError.
+    test("wait mode keeps waiting after restoring a lock that changed during reclaim", async () => {
+      const target = tempTarget();
+      const lockPath = `${target}.lock`;
+      let releaseHolder!: () => void;
+      const holderGate = new Promise<void>((resolve) => {
+        releaseHolder = resolve;
+      });
+      let holderEnded = false;
+      const holder = withFileLock(target, async () => {
+        await holderGate;
+        holderEnded = true;
+      });
+      while (!(await fs.stat(lockPath).catch(() => undefined))) {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+      }
+
+      let reportedStale = false;
+      let waiterSawHolderEnded: boolean | undefined;
+      const waiter = withFileLock(
+        target,
+        async () => {
+          waiterSawHolderEnded = holderEnded;
+        },
+        {
+          timeoutMs: 50,
+          waitWhileHolderAlive: true,
+          maxWaitMs: 10_000,
+          stat: async (filePath) => {
+            const stats = await fs.stat(filePath);
+            if (filePath !== lockPath || reportedStale) return stats;
+            reportedStale = true;
+            return Object.assign(
+              Object.create(Object.getPrototypeOf(stats)),
+              stats,
+              { mtimeMs: stats.mtimeMs - 60_000 }
+            );
+          },
+        }
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      assert.strictEqual(reportedStale, true, "the waiter never judged stale");
+      assert.strictEqual(
+        await fs.readFile(lockPath, "utf8").then((token) => token.length > 0),
+        true,
+        "the holder's lock was not restored"
+      );
+      releaseHolder();
+      await Promise.all([holder, waiter]);
+      assert.strictEqual(waiterSawHolderEnded, true);
+    });
+
+    // The waiter's timeout passes while it is still reclaiming a stale lock
+    // (here a slow stat; in the wild, any slow disk or stalled event loop). It
+    // has already removed the lock, so it must try to take it rather than
+    // throw FileLockTimeoutError and leave the freed lock to someone else.
+    test("takes a stale lock it reclaimed after its timeout passed", async () => {
+      const target = tempTarget();
+      const lockPath = `${target}.lock`;
+      await fs.writeFile(lockPath, "99999 stale-lock", "utf8");
+      const past = new Date(Date.now() - 60_000);
+      await fs.utimes(lockPath, past, past);
+
+      let delayedStat = false;
+      const result = await withFileLock(target, async () => "acquired", {
+        timeoutMs: 20,
+        stat: async (filePath) => {
+          if (filePath === lockPath && !delayedStat) {
+            delayedStat = true;
+            await new Promise((resolve) => setTimeout(resolve, 200));
+          }
+          return fs.stat(filePath);
+        },
+      });
+      assert.strictEqual(delayedStat, true);
+      assert.strictEqual(result, "acquired");
     });
 
     test("wait mode still reclaims a stale lock", async () => {
@@ -211,9 +305,9 @@ suite("FileLockUtils", () => {
       const holderGate = new Promise<void>((resolve) => {
         releaseHolder = resolve;
       });
-      const holder = withFileLock(target, async () => holderGate, {
-        staleMs: 120,
-      });
+      // Default stale window: this case is about the timeout, and a short
+      // window would let an event-loop stall make the holder look stale.
+      const holder = withFileLock(target, async () => holderGate);
       while (!(await fs.stat(`${target}.lock`).catch(() => undefined))) {
         await new Promise((resolve) => setTimeout(resolve, 1));
       }
@@ -221,7 +315,6 @@ suite("FileLockUtils", () => {
       try {
         await assert.rejects(
           withFileLock(target, async () => undefined, {
-            staleMs: 120,
             timeoutMs: 80,
           }),
           FileLockTimeoutError

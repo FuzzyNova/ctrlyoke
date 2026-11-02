@@ -97,9 +97,17 @@ async function acquireLock(
   let lastSharingError: unknown;
   let sawHeldLock = false;
   let sawLiveHolder = false;
+  // Set when this waiter has just removed a stale lock. Its next attempt runs
+  // even past timeoutAt: giving up there would delete the lock and leave it
+  // for someone else, and the timeout can easily pass during the reclaim's
+  // own stat/rename/unlink round trips.
+  let reclaimedStaleLock = false;
 
   while (Date.now() < ceilingAt) {
-    if (Date.now() >= timeoutAt && !(waitWhileHolderAlive && sawLiveHolder)) {
+    const mayRetryPastTimeout =
+      reclaimedStaleLock || (waitWhileHolderAlive && sawLiveHolder);
+    reclaimedStaleLock = false;
+    if (Date.now() >= timeoutAt && !mayRetryPastTimeout) {
       break;
     }
     try {
@@ -154,10 +162,16 @@ async function acquireLock(
             renamedPayload === judgedPayload;
           if (sameFile) {
             await ops.unlink(tombstone).catch(() => undefined);
+            reclaimedStaleLock = true;
             continue;
           }
           // The pathname changed after our stale check. Restore without
           // replacing a new owner, then keep polling as though it were held.
+          // A change means a live owner: the holder refreshed its heartbeat
+          // late (its event loop stalled past staleMs) or a new owner took
+          // over. Either way waitWhileHolderAlive should keep waiting rather
+          // than give up at timeoutMs on a lock that is still in use.
+          sawLiveHolder = true;
           try {
             const restore = await ops.open(lockPath, "wx");
             try {
