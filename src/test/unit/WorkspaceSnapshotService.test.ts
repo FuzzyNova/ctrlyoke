@@ -658,7 +658,10 @@ suite("WorkspaceSnapshotService — multi-root", function () {
 
     assert.deepStrictEqual(result.restoredFiles, []);
     assert.strictEqual(result.failedFiles.length, 1);
-    assert.strictEqual(await fs.readFile(sourceFile, "utf8"), "source contents\n");
+    assert.strictEqual(
+      await fs.readFile(sourceFile, "utf8"),
+      "source contents\n"
+    );
   });
 
   test("discovers and persists the execution checkout for remapped named roots", async () => {

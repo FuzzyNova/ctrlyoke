@@ -2130,7 +2130,8 @@ export class HostedWorkspaceViewerService {
     if (!resolved) {
       throw new Error("Path not allowed");
     }
-    const { repoRoot, lexicalPath } = await this.requireRepoRootForPath(resolved);
+    const { repoRoot, lexicalPath } =
+      await this.requireRepoRootForPath(resolved);
 
     const relPath = this.relativePath(resolved);
     const normalizedRelPath = normalizeScmPath(relPath);
@@ -2296,7 +2297,8 @@ export class HostedWorkspaceViewerService {
   async stageFile(filePath: string): Promise<void> {
     const resolved = this.safeResolve(filePath);
     if (!resolved) throw new Error("Path not allowed");
-    const { repoRoot, lexicalPath } = await this.requireRepoRootForPath(resolved);
+    const { repoRoot, lexicalPath } =
+      await this.requireRepoRootForPath(resolved);
     const relPath = toGitPath(this.relativeToRepo(lexicalPath, repoRoot));
     await this.runGitAction(
       ["-C", repoRoot, "add", "--", relPath],
@@ -2307,7 +2309,8 @@ export class HostedWorkspaceViewerService {
   async unstageFile(filePath: string): Promise<void> {
     const resolved = this.safeResolve(filePath);
     if (!resolved) throw new Error("Path not allowed");
-    const { repoRoot, lexicalPath } = await this.requireRepoRootForPath(resolved);
+    const { repoRoot, lexicalPath } =
+      await this.requireRepoRootForPath(resolved);
     const relPath = toGitPath(this.relativeToRepo(lexicalPath, repoRoot));
     await this.runGitAction(
       ["-C", repoRoot, "restore", "--staged", "--", relPath],
@@ -2320,7 +2323,8 @@ export class HostedWorkspaceViewerService {
     if (!resolved || this.isExactRoot(resolved)) {
       throw new Error("Path not allowed");
     }
-    const { repoRoot, lexicalPath } = await this.requireRepoRootForPath(resolved);
+    const { repoRoot, lexicalPath } =
+      await this.requireRepoRootForPath(resolved);
 
     const relPath = this.relativePath(resolved);
     const normalizedRelPath = normalizeScmPath(relPath);
@@ -2508,7 +2512,8 @@ export class HostedWorkspaceViewerService {
 
     const resolved = this.safeResolve(requestedPath);
     if (!resolved) throw new Error("Path not allowed");
-    const { repoRoot, lexicalPath } = await this.requireRepoRootForPath(resolved);
+    const { repoRoot, lexicalPath } =
+      await this.requireRepoRootForPath(resolved);
     const viewerPath = normalizeViewerPath(this.relativePath(resolved));
     void repoId;
 
@@ -2583,12 +2588,15 @@ export class HostedWorkspaceViewerService {
   ): Promise<WorkspaceFileHistoryDiffResponse> {
     const resolved = this.safeResolve(requestedPath);
     if (!resolved) throw new Error("Path not allowed");
-    const { repoRoot, lexicalPath } = await this.requireRepoRootForPath(resolved);
+    const { repoRoot, lexicalPath } =
+      await this.requireRepoRootForPath(resolved);
     void repoId;
 
     const resolvedCommit = await resolveCommit(repoRoot, commit);
 
-    const requestedGitPath = toGitPath(this.relativeToRepo(lexicalPath, repoRoot));
+    const requestedGitPath = toGitPath(
+      this.relativeToRepo(lexicalPath, repoRoot)
+    );
     const changedFiles = await getChangedFilesWithBinaryStatus(repoRoot, [
       "show",
       "--format=",

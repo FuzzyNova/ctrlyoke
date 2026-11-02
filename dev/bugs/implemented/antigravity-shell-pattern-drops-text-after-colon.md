@@ -10,14 +10,14 @@ A workflow `allowedTools`/`deniedTools` shell pattern whose arguments contain a 
 other than a trailing `:*` is silently truncated at the first colon for Antigravity, with no
 lossy diagnostic:
 
-| Pattern (list)                     | Antigravity rule produced                               | Effect                                                         |
-| ---------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------- |
-| `shell(npm run test:unit)` (allow) | `command(regex:npm\s+run\s+test)`                       | allows `npm run test` (never listed), refuses `npm run test:unit` |
-| `shell(npm run test:unit)` (deny)  | deny regex on `npm\s+run\s+test`                        | also blocks plain `npm run test`                               |
-| `shell(git checkout:-b *)` (allow) | `command(regex:git\s+checkout)`                         | allows bare `git checkout`, refuses `git checkout -b feat`     |
-| `shell(C:\tools\deploy.exe:*)` (deny) | deny regex on just `C`                               | blocks `cd C:\repo`, `dir c:` — nearly any drive-path command  |
+| Pattern (list)                        | Antigravity rule produced         | Effect                                                            |
+| ------------------------------------- | --------------------------------- | ----------------------------------------------------------------- |
+| `shell(npm run test:unit)` (allow)    | `command(regex:npm\s+run\s+test)` | allows `npm run test` (never listed), refuses `npm run test:unit` |
+| `shell(npm run test:unit)` (deny)     | deny regex on `npm\s+run\s+test`  | also blocks plain `npm run test`                                  |
+| `shell(git checkout:-b *)` (allow)    | `command(regex:git\s+checkout)`   | allows bare `git checkout`, refuses `git checkout -b feat`        |
+| `shell(C:\tools\deploy.exe:*)` (deny) | deny regex on just `C`            | blocks `cd C:\repo`, `dir c:` — nearly any drive-path command     |
 
-`docs/workflows/permissions.md` says only `:*` *at the end* is the prefix marker and
+`docs/workflows/permissions.md` says only `:*` _at the end_ is the prefix marker and
 `shell(npm test)` means exactly that command. Claude and Copilot pass the arguments through
 verbatim, and the Qwen and OpenCode mappers keep the text after the colon; only Antigravity
 discards it.

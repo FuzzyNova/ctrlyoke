@@ -2511,9 +2511,9 @@ export function createPriorContextLintExtension(
         ...checks.flatMap((check) =>
           check.diagnostic ? [toCodeMirrorDiagnostic(check.diagnostic)] : []
         ),
-        ...getInvalidPriorContextDiagnostics(
-          view.state.doc.toString()
-        ).map(toCodeMirrorDiagnostic),
+        ...getInvalidPriorContextDiagnostics(view.state.doc.toString()).map(
+          toCodeMirrorDiagnostic
+        ),
       ];
     },
     {

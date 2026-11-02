@@ -225,7 +225,9 @@ function hasKnownPriorContextArgument(body: string): boolean {
   return [
     PRIOR_CONTEXT_REFERENCE_KINDS.STEP,
     PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS,
-  ].some((kind) => body.startsWith(`${kind}:`) && body.length > kind.length + 1);
+  ].some(
+    (kind) => body.startsWith(`${kind}:`) && body.length > kind.length + 1
+  );
 }
 
 /**
@@ -247,7 +249,8 @@ export function getInvalidPriorContextDiagnostics(
     if (
       !hasKnownPriorContextArgument(body) ||
       parseInlinePriorContextBody(body)
-    ) continue;
+    )
+      continue;
     const from = match.index;
     const to = from + match[0].length - (match[1].length - body.length);
     if (isInCodeRange(from, to, codeRanges)) continue;

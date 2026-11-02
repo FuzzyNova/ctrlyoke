@@ -294,12 +294,18 @@ suite("UserHookEnvironment", () => {
     assert.ok(cmd.hooks?.[0].command?.includes("hook-0 default "));
 
     const powershell = prepare(
-      { ComSpec: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" },
+      {
+        ComSpec:
+          "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      },
       [quotedHook, envHook]
     );
     assert.strictEqual(powershell.hooks?.[0].command, quotedHook.command);
     const powershellEnvHook = prepare(
-      { ComSpec: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" },
+      {
+        ComSpec:
+          "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      },
       [envHook]
     );
     assert.ok(

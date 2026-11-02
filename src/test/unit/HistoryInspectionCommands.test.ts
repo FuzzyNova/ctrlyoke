@@ -2582,14 +2582,18 @@ suite("CLI history inspection command handlers", () => {
       io,
       deps
     );
-    assert.deepStrictEqual(io.output.map((line) => JSON.parse(line)), [
-      {
-        runRef: "run-2026-09-20T12-00-00-000Z",
-        selector: "final",
-        status: "unknown",
-        message: "--step final: the final step's state is unknown (no working file)",
-      },
-    ]);
+    assert.deepStrictEqual(
+      io.output.map((line) => JSON.parse(line)),
+      [
+        {
+          runRef: "run-2026-09-20T12-00-00-000Z",
+          selector: "final",
+          status: "unknown",
+          message:
+            "--step final: the final step's state is unknown (no working file)",
+        },
+      ]
+    );
   });
 
   test("reports a skipped final step consistently in history show and steps", async () => {
@@ -2599,11 +2603,7 @@ suite("CLI history inspection command handlers", () => {
     const key = "release" as WorkflowKey;
     const runRef = "run-2026-09-20T12-00-00-000Z" as RunRef;
     try {
-      const workingFile = WorkflowPaths.runFilePath(
-        workspaceRoot,
-        key,
-        runRef
-      );
+      const workingFile = WorkflowPaths.runFilePath(workspaceRoot, key, runRef);
       await fs.mkdir(path.dirname(workingFile), { recursive: true });
       await fs.writeFile(
         workingFile,

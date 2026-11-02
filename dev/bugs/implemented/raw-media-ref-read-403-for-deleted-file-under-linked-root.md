@@ -35,7 +35,7 @@ Reproduced against the current build: `link old.png ERR 403 Path not allowed`,
 In the `ref !== undefined` branch, `getRawMedia` resolves the path with
 `this.safeResolve(requestedPath)`, which returns a real path. For a file
 that no longer exists, `safeResolveWorkspacePath` falls back to its
-closest-existing-ancestor branch and returns the *lexical* `link\old.png`.
+closest-existing-ancestor branch and returns the _lexical_ `link\old.png`.
 The containment check that follows,
 `isPathWithinAnyDirectory(resolved, this.realpathsOf(this.trustedRoots))`,
 compares only against the real roots, so a lexical path under a linked root

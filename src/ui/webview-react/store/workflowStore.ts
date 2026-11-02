@@ -1618,7 +1618,8 @@ export const useWorkflowStore = create<
                   importedSequenceBoundary: history.importedSequenceBoundary,
                 },
               }),
-              importedSequenceBoundary: history.importedSequenceBoundary ?? null,
+              importedSequenceBoundary:
+                history.importedSequenceBoundary ?? null,
               undoRecords: preserveReferences(state.undoRecords, {}),
               workspaceSnapshots: preserveReferences(
                 state.workspaceSnapshots,

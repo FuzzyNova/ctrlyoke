@@ -2,7 +2,8 @@ import React from "react";
 import type { WorkflowLineageDescriptor } from "@root/types/CtrlYokeTypes";
 
 type ImportedFrom = NonNullable<WorkflowLineageDescriptor["importedFrom"]>;
-export type ImportedOriginKind = "runBundle" | "harnessSession" | "observedSession";
+export type ImportedOriginKind =
+  "runBundle" | "harnessSession" | "observedSession";
 
 export interface ImportedOriginBadgeProps {
   kind: ImportedOriginKind;
@@ -10,7 +11,9 @@ export interface ImportedOriginBadgeProps {
   label?: string;
 }
 
-export function importedOriginAccessibleName(importedFrom: ImportedFrom): string {
+export function importedOriginAccessibleName(
+  importedFrom: ImportedFrom
+): string {
   return `Imported from ${importedFrom.bundleName}; source ${importedFrom.sourceRoot}; exported ${importedFrom.exportedAt}`;
 }
 

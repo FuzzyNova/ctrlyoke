@@ -40,7 +40,7 @@ promise that an allow rule refuses a chain containing an unlisted command.
 `dev/implemented/ANTIGRAVITY_PERMISSION_RULES_PLAN.md` probed a literal space
 and recorded the two-line command as refused. The unit test in
 `src/test/unit/HarnessToolPermissionMappers.test.ts` (around line 345) only
-covers a newline *before* the prefix (`"echo a\ngit push"`).
+covers a newline _before_ the prefix (`"echo a\ngit push"`).
 
 ## Suggested Fix
 
@@ -48,5 +48,5 @@ In allow mode, use horizontal whitespace only: the tail becomes
 `(?:[ \t][^;&|`$()<>\r\n]*)?`, and the word joiner becomes `[ \t]+`. Keep the
 deny form broad (`\s+`): a deny rule should keep matching across
 whitespace. Add cases expecting no match for `"git status\nwhoami"`,
-`"git\nstatus"` and `"git status\r\nwhoami"`, and confirm the existing
+`"git\nstatus"`and`"git status\r\nwhoami"`, and confirm the existing
 positive cases still pass.

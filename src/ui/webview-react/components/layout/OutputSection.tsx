@@ -285,7 +285,8 @@ const OutputSectionInner: React.FC = () => {
         worktree:
           displayedRunSummary.worktree ?? matchingHistoryMetadata?.worktree,
         importedFrom:
-          matchingHistoryMetadata?.importedFrom ?? displayedRunSummary.importedFrom,
+          matchingHistoryMetadata?.importedFrom ??
+          displayedRunSummary.importedFrom,
       };
     }
     return {

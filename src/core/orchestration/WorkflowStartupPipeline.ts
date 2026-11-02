@@ -1355,12 +1355,14 @@ export class WorkflowStartupPipeline {
       this.port.worktree.clearExecutionLease();
       this.port.worktree.clearActiveWorktree();
     }
-    await this.port.worktree.releaseRunnerLock().catch((error) =>
-      Log.warn(
-        `[inst:${this.port.id.slice(0, 8)}] Failed to release runner lock after stop during setup:`,
-        error
-      )
-    );
+    await this.port.worktree
+      .releaseRunnerLock()
+      .catch((error) =>
+        Log.warn(
+          `[inst:${this.port.id.slice(0, 8)}] Failed to release runner lock after stop during setup:`,
+          error
+        )
+      );
   }
 
   public async finalizePromotedRunAfterEarlyFailure(): Promise<string> {

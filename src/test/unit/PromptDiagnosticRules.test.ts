@@ -165,8 +165,7 @@ suite("PromptDiagnosticRules", () => {
     });
 
     test("warns on malformed known arguments but ignores prose and unknown kinds", () => {
-      const text =
-        "$step:0 $step:3-1 $previous:0 $previous: fix it $foo:bar";
+      const text = "$step:0 $step:3-1 $previous:0 $previous: fix it $foo:bar";
       assert.deepStrictEqual(
         summarize(text, getPriorContextDiagnostics(text, baseContext)),
         ["$step:0", "$step:3-1", "$previous:0"].map((token) => ({

@@ -118,10 +118,11 @@ describe("useOutputUndoActions", () => {
     openContentRequest.mockClear();
 
     await act(async () => {
-      await result.current.handleFileUndo(
-        { target, sequence: 7 } as never,
-        { path: "src/file.ts", eventIndex: 0, event: {} as never }
-      );
+      await result.current.handleFileUndo({ target, sequence: 7 } as never, {
+        path: "src/file.ts",
+        eventIndex: 0,
+        event: {} as never,
+      });
     });
 
     expect(openContentRequest).not.toHaveBeenCalled();

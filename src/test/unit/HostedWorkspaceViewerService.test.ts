@@ -226,10 +226,7 @@ suite("HostedWorkspaceViewerService", function () {
       assert.strictEqual(commitMedia.kind, "blob");
       assert.strictEqual(indexMedia.kind, "blob");
       if (commitMedia.kind !== "blob" || indexMedia.kind !== "blob") return;
-      assert.deepStrictEqual(
-        commitMedia.bytes,
-        Buffer.from("committed-image")
-      );
+      assert.deepStrictEqual(commitMedia.bytes, Buffer.from("committed-image"));
       assert.deepStrictEqual(indexMedia.bytes, Buffer.from("staged-image"));
       assert.strictEqual(diff.kind, "modified");
       assert.strictEqual(diff.payloadKind, DIFF_PAYLOAD_KINDS.TEXT);
@@ -248,73 +245,69 @@ suite("HostedWorkspaceViewerService", function () {
       );
     });
 
-    test(
-      "reads committed media deleted under a linked workspace root",
-      async function () {
-        const container = createWorkspace();
-        const target = path.join(container, "real-repo");
-        const linkedRoot = path.join(container, "repo-link");
-        fs.mkdirSync(target);
-        runGit(target, "init");
-        configureGitIdentity(target);
-        commitFile(target, "old.png", "deleted-image", "Add image");
-        const commit = runGit(target, "rev-parse", "HEAD");
-        fs.unlinkSync(path.join(target, "old.png"));
+    test("reads committed media deleted under a linked workspace root", async function () {
+      const container = createWorkspace();
+      const target = path.join(container, "real-repo");
+      const linkedRoot = path.join(container, "repo-link");
+      fs.mkdirSync(target);
+      runGit(target, "init");
+      configureGitIdentity(target);
+      commitFile(target, "old.png", "deleted-image", "Add image");
+      const commit = runGit(target, "rev-parse", "HEAD");
+      fs.unlinkSync(path.join(target, "old.png"));
 
-        try {
-          fs.symlinkSync(
-            target,
-            linkedRoot,
-            process.platform === "win32" ? "junction" : "dir"
-          );
-        } catch {
-          this.skip();
-        }
-
-        const media = await new HostedWorkspaceViewerService(
-          linkedRoot
-        ).getRawMedia("old.png", undefined, commit);
-
-        assert.strictEqual(media.kind, "blob");
-        if (media.kind !== "blob") return;
-        assert.deepStrictEqual(media.bytes, Buffer.from("deleted-image"));
+      try {
+        fs.symlinkSync(
+          target,
+          linkedRoot,
+          process.platform === "win32" ? "junction" : "dir"
+        );
+      } catch {
+        this.skip();
       }
-    );
 
-    test(
-      "reads the requested committed path through a working-tree directory junction",
-      async function () {
-        const root = createWorkspace();
-        runGit(root, "init");
-        configureGitIdentity(root);
-        fs.mkdirSync(path.join(root, "assets"));
-        fs.mkdirSync(path.join(root, "public"));
-        fs.writeFileSync(path.join(root, "assets", "logo.png"), "ASSETS-logo");
-        fs.writeFileSync(path.join(root, "public", "logo.png"), "PUBLIC-logo");
-        runGit(root, "add", "assets/logo.png", "public/logo.png");
-        runGit(root, "commit", "-m", "Add logos");
-        const commit = runGit(root, "rev-parse", "HEAD");
-        fs.rmSync(path.join(root, "assets"), { recursive: true, force: true });
+      const media = await new HostedWorkspaceViewerService(
+        linkedRoot
+      ).getRawMedia("old.png", undefined, commit);
 
-        try {
-          fs.symlinkSync(
-            path.join(root, "public"),
-            path.join(root, "assets"),
-            process.platform === "win32" ? "junction" : "dir"
-          );
-        } catch {
-          this.skip();
-        }
+      assert.strictEqual(media.kind, "blob");
+      if (media.kind !== "blob") return;
+      assert.deepStrictEqual(media.bytes, Buffer.from("deleted-image"));
+    });
 
-        const media = await new HostedWorkspaceViewerService(
-          root
-        ).getRawMedia("assets/logo.png", undefined, commit);
+    test("reads the requested committed path through a working-tree directory junction", async function () {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      fs.mkdirSync(path.join(root, "assets"));
+      fs.mkdirSync(path.join(root, "public"));
+      fs.writeFileSync(path.join(root, "assets", "logo.png"), "ASSETS-logo");
+      fs.writeFileSync(path.join(root, "public", "logo.png"), "PUBLIC-logo");
+      runGit(root, "add", "assets/logo.png", "public/logo.png");
+      runGit(root, "commit", "-m", "Add logos");
+      const commit = runGit(root, "rev-parse", "HEAD");
+      fs.rmSync(path.join(root, "assets"), { recursive: true, force: true });
 
-        assert.strictEqual(media.kind, "blob");
-        if (media.kind !== "blob") return;
-        assert.deepStrictEqual(media.bytes, Buffer.from("ASSETS-logo"));
+      try {
+        fs.symlinkSync(
+          path.join(root, "public"),
+          path.join(root, "assets"),
+          process.platform === "win32" ? "junction" : "dir"
+        );
+      } catch {
+        this.skip();
       }
-    );
+
+      const media = await new HostedWorkspaceViewerService(root).getRawMedia(
+        "assets/logo.png",
+        undefined,
+        commit
+      );
+
+      assert.strictEqual(media.kind, "blob");
+      if (media.kind !== "blob") return;
+      assert.deepStrictEqual(media.bytes, Buffer.from("ASSETS-logo"));
+    });
   });
 
   function commitFileAt(

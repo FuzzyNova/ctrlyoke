@@ -806,10 +806,10 @@ export async function showHistoryCommand(
         state === HISTORY_STEP_STATES.UNKNOWN
           ? `--step ${selector}: the final step's state is unknown (no working file)`
           : state === PROMPT_TERMINAL_STATUS.SKIPPED
-          ? `--step ${selector} was skipped`
-          : state === HISTORY_STEP_STATES.PENDING
-            ? `--step ${selector}: the final step has not run (${HISTORY_STEP_STATES.PENDING})`
-            : `--step ${selector}: the final step is ${state} but has no recorded pass`,
+            ? `--step ${selector} was skipped`
+            : state === HISTORY_STEP_STATES.PENDING
+              ? `--step ${selector}: the final step has not run (${HISTORY_STEP_STATES.PENDING})`
+              : `--step ${selector}: the final step is ${state} but has no recorded pass`,
     });
   } else if (
     targetFilter?.kind === HISTORY_SHOW_STEP_SELECTORS.RUNNING &&

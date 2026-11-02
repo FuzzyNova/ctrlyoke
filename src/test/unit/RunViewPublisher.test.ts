@@ -259,7 +259,10 @@ suite("RunViewPublisher", () => {
         (message) =>
           (message as { type?: string }).type === MESSAGE_TYPES.RUN_VIEW_LOADED
       ) as { importedFrom?: typeof lineageRepository.importedFrom } | undefined;
-      assert.deepStrictEqual(snapshot?.importedFrom, lineageRepository.importedFrom);
+      assert.deepStrictEqual(
+        snapshot?.importedFrom,
+        lineageRepository.importedFrom
+      );
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }

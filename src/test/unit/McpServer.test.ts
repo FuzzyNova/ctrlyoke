@@ -555,7 +555,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
     assert.strictEqual(
       defaultRead.more,
-      'More unread notes remain; call read_notes again to continue.'
+      "More unread notes remain; call read_notes again to continue."
     );
 
     const sinceRead = responseJson(

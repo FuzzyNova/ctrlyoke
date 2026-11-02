@@ -30,7 +30,7 @@ Reproduced against the current build.
 In the `ref !== undefined` branch, `getRawMedia` resolves the requested path
 with `this.safeResolve(requestedPath)`, which follows working-tree symlinks to
 a real path (`public/logo.png`). `requireRepoRootForPath` maps it back onto the
-lexical root but cannot undo a symlink *inside* the workspace, so `gitPath` is
+lexical root but cannot undo a symlink _inside_ the workspace, so `gitPath` is
 built from `public/logo.png`. Git trees are lexical and ignore working-tree
 links, so the blob read targets the wrong path. The read still runs with
 `git -C <repoRoot>` against a commit in that repo, so this is a correctness

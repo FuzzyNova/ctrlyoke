@@ -118,7 +118,10 @@ suite("ContextMenuReferenceCommands", () => {
     workspaceRelativeReferencePathResolver?: (uri: vscode.Uri) => string | null,
     trustChoice: string | null = EXTERNAL_FILE_TRUST_SCOPES.USER,
     prepareTrustPrompt?: () => Promise<UserInteractionPort>,
-    workspaceCommitChecker?: (workspaceRoot: string, commitHash: string) => Promise<boolean>
+    workspaceCommitChecker?: (
+      workspaceRoot: string,
+      commitHash: string
+    ) => Promise<boolean>
   ): ContextMenuReferenceCommands {
     return new ContextMenuReferenceCommands(
       sink,

@@ -40,7 +40,7 @@ bold in each row.
 | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@`     | Files and folders in the workspace. Type a `/` to narrow to a folder; a folder name that isn't at the workspace root, like `@backlog/`, matches anywhere in the path.   |
 | `#`     | Symbols from the language servers, as `#sym:` references. In VS Code, the current selection in each visible editor appears first, as a `#selection:` reference.         |
-| `~`     | `diff` (unstaged changes), `staged`, your stashes, and recent commits. Typing searches full commit messages and hashes beyond the most recent 50, newest first.        |
+| `~`     | `diff` (unstaged changes), `staged`, your stashes, and recent commits. Typing searches full commit messages and hashes beyond the most recent 50, newest first.         |
 | `$`     | `previous`, `previous:`, `all`, `step:`, `finalStep`, `allFinalStep`, and the `preCondition:` / `endCondition:` script output fields.                                   |
 | `!`     | The names of your [secrets](/workflows/secrets). Values are never shown.                                                                                                |
 | `/`     | `/skill:` and `/mcp:`, then the skills and registered MCP servers you can attach. Only at the start of a line or after a space, so `src/` and `./` don't open the list. |

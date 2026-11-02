@@ -12,12 +12,12 @@ same mistake is flagged.
 
 With `getPriorContextDiagnostics(text, { stepCount: 3, hasFinalStep: false })`:
 
-| Input                       | Diagnostic                                                         |
-| --------------------------- | ------------------------------------------------------------------ |
-| `see $step:3-1 now`         | none                                                               |
-| `see $step:0 now`           | none                                                               |
-| `see $previous:0 now`       | none                                                               |
-| `see $step:summary:3-1 now` | `Unknown or invalid prior-context selector: $step:summary:3-1`     |
+| Input                       | Diagnostic                                                     |
+| --------------------------- | -------------------------------------------------------------- |
+| `see $step:3-1 now`         | none                                                           |
+| `see $step:0 now`           | none                                                           |
+| `see $previous:0 now`       | none                                                           |
+| `see $step:summary:3-1 now` | `Unknown or invalid prior-context selector: $step:summary:3-1` |
 
 ## Steps to Reproduce
 

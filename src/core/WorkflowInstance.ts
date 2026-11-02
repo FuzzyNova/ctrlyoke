@@ -2476,12 +2476,14 @@ export class WorkflowInstance
       this.stopRunnerLockHeartbeat();
       const lease = this.executionLease;
       this.executionLease = undefined;
-      await lease?.release().catch((releaseError) =>
-        Log.warn(
-          `[inst:${this.id.slice(0, 8)}] Failed to release execution lease after resume setup failure:`,
-          releaseError
-        )
-      );
+      await lease
+        ?.release()
+        .catch((releaseError) =>
+          Log.warn(
+            `[inst:${this.id.slice(0, 8)}] Failed to release execution lease after resume setup failure:`,
+            releaseError
+          )
+        );
       await this.releaseRunnerLock().catch((releaseError) =>
         Log.warn(
           `[inst:${this.id.slice(0, 8)}] Failed to release runner lock after resume setup failure:`,

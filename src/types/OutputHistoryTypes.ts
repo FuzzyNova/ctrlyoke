@@ -140,7 +140,8 @@ export type WorkflowRunMetadata = Pick<
   | "stopReason"
   | "worktree"
   | "worktreeNotice"
-> & Pick<WorkflowOutputHistory, "importedSequenceBoundary" | "importedFrom">;
+> &
+  Pick<WorkflowOutputHistory, "importedSequenceBoundary" | "importedFrom">;
 
 /**
  * Output data for a single workflow step.

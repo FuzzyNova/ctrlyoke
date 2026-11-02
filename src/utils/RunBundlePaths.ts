@@ -104,9 +104,7 @@ export function createPortablePathRewriter(
     .filter((root, index, all) => all.indexOf(root) === index)
     .sort((left, right) => right.length - left.length);
   const rewrites = [
-    ...workspaceRoots.map((root) =>
-      tokenRewrite(root, BUNDLE_WORKSPACE_TOKEN)
-    ),
+    ...workspaceRoots.map((root) => tokenRewrite(root, BUNDLE_WORKSPACE_TOKEN)),
     roots.homeDir ? tokenRewrite(roots.homeDir, BUNDLE_HOME_TOKEN) : undefined,
     roots.homeDir ? userNameRewrite(roots.homeDir) : undefined,
   ].filter((rewrite): rewrite is (text: string) => string => !!rewrite);
