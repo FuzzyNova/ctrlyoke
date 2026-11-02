@@ -19,21 +19,6 @@ _templateMeta:
 resumeSession: false
 priorContext: none
 
-# Every step after write-plan (which has its own check) must leave a clean
-# working tree, including everything the orchestrator queues. A dirty tree
-# resumes the step's session to finish and commit; after two retries the
-# workflow stops. stderr is folded into stdout so a git error fails the check
-# instead of leaving stdout empty and passing it.
-endCondition:
-  script: git status --porcelain 2>&1
-  compareSource: stdout
-  operator: isEmpty
-  maxRetries: 2
-  retryPrompt: |
-    You left uncommitted changes. Finish the work, make sure the tests pass, and
-    commit your own files with a plain conventional commit message.
-    $endCondition:stdout
-
 # First write a durable plan, then let the orchestrator stage visible work and
 # review it repeatedly until the goal is met.
 steps:
@@ -66,8 +51,8 @@ steps:
       implementation details. Do not modify implementation files. When the plan is
       written, commit it with a plain conventional commit message.
     # Stop before any work unless this is a git repository with a clean tree:
-    # otherwise the commit gate would fail on changes that aren't the agent's,
-    # and its retry would push the agent to commit them.
+    # otherwise the commit gates would fail on changes that aren't the agent's,
+    # and their retry would push the agent to commit them.
     preCondition:
       script: git status --porcelain 2>&1
       compareSource: stdout
@@ -101,6 +86,28 @@ steps:
 
       Once you've queued the plan, end your turn. A review pass will run automatically
       after everything you queued has completed.
+    # The orchestrator steps never run alongside other steps, so they can
+    # require a clean tree when they end. A dirty tree resumes the step's
+    # session to finish and commit; after two retries the workflow stops.
+    # stderr is folded into stdout so a git error fails the check instead of
+    # leaving stdout empty and passing it.
+    endCondition: &committed
+      script: git status --porcelain 2>&1
+      compareSource: stdout
+      operator: isEmpty
+      maxRetries: 2
+      retryPrompt: |
+        You left uncommitted changes. Finish the work, make sure the tests pass, and
+        commit your own files with a plain conventional commit message.
+        $endCondition:stdout
+
+# The plan step's clean-tree gate, offered to the orchestrator as the
+# `committed` preset. It attaches the preset (`endCondition: { use:
+# "committed" }`) to each queued step that runs on its own. This is not a
+# workflow-level endCondition: parallel steps share one working tree, so a
+# member would fail it on a sibling's unfinished edits.
+conditions:
+  committed: *committed
 
 finalStep:
   name: review
@@ -111,6 +118,7 @@ finalStep:
   # it remembers the work it staged. The write-plan step has its own session.
   resumeSession: true
   sessionId: 2
+  endCondition: *committed
   prompt: |
     Resume your ctrlyoke orchestrator session for this feature plan:
     @{planDoc}

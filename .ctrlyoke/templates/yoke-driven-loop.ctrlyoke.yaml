@@ -18,19 +18,24 @@ executionMode: headless
 agent: null
 skills:
   - commit
-# Every step, including the plan, the review, and everything queued in between,
-# must leave a clean working tree. A dirty tree resumes the step's session to
-# finish and commit; after two retries the workflow stops. stderr is folded
-# into stdout so a git error fails the check instead of leaving stdout empty.
-endCondition:
-  script: git status --porcelain 2>&1
-  compareSource: stdout
-  operator: isEmpty
-  maxRetries: 2
-  retryPrompt: |
-    You left uncommitted changes. Finish the work, make sure `npm test` passes,
-    and commit your own files with a plain conventional commit message.
-    $endCondition:stdout
+# A clean-tree gate. The plan and review steps use it directly, because they
+# never run alongside other steps. The orchestrator attaches it as the
+# `committed` preset to each queued step that runs on its own. It is not a
+# workflow-level endCondition: parallel steps share one working tree, so a
+# member would fail it on a sibling's unfinished edits. A dirty tree resumes
+# the step's session to finish and commit; after two retries the workflow
+# stops. stderr is folded into stdout so a git error fails the check instead
+# of leaving stdout empty.
+conditions:
+  committed: &committed
+    script: git status --porcelain 2>&1
+    compareSource: stdout
+    operator: isEmpty
+    maxRetries: 2
+    retryPrompt: |
+      You left uncommitted changes. Finish the work, make sure `npm test` passes,
+      and commit your own files with a plain conventional commit message.
+      $endCondition:stdout
 steps:
   - name: plan
     harness: claude-cli
@@ -44,6 +49,7 @@ steps:
       compareSource: stdout
       operator: isEmpty
       onFail: stopWorkflow
+    endCondition: *committed
     mcpServers:
       - ctrlyoke
     prompt: |
@@ -71,6 +77,7 @@ finalStep:
     - ctrlyoke
   resumeSession: true
   sessionId: 1
+  endCondition: *committed
   prompt: |
     Resume your ctrlyoke orchestrator session for this specification:
     @{file:specFile}

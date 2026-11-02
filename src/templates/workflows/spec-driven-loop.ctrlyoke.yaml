@@ -84,28 +84,35 @@ steps:
       compareSource: stdout
       operator: isEmpty
       onFail: stopWorkflow
+    # The orchestrator steps never run alongside other steps, so they can
+    # require a clean tree when they end. A dirty tree resumes the step's
+    # session to finish and commit; after two retries the workflow stops. The
+    # test command stays in the prompt rather than here: agents run it anyway,
+    # so gating on it too would run the suite twice per step. stderr is folded
+    # into stdout so a git error fails the check instead of leaving stdout
+    # empty and passing it.
+    endCondition: &committed
+      script: git status --porcelain 2>&1
+      compareSource: stdout
+      operator: isEmpty
+      maxRetries: 2
+      retryPrompt: |
+        You left uncommitted changes. Finish the work, make sure `{testCommand}`
+        passes, and commit your own files with a plain conventional commit message.
+        $endCondition:stdout
 
 # Queued steps inherit these workflow defaults; the plan step and finalStep
 # override them with the orchestrator's harness and model.
 harness: "{implementerHarness}"
 model: "{implementerModel}"
 
-# Every step, including the plan step, the review, and everything queued in
-# between, must leave a clean working tree. The test command stays in the
-# prompts rather than here: agents run it anyway to confirm their fixes, so
-# gating on it too would run the suite twice per step. A dirty tree resumes the
-# step's session to finish and commit; after two retries the workflow stops.
-# stderr is folded into stdout so a git error fails the check instead of
-# leaving stdout empty and passing it.
-endCondition:
-  script: git status --porcelain 2>&1
-  compareSource: stdout
-  operator: isEmpty
-  maxRetries: 2
-  retryPrompt: |
-    You left uncommitted changes. Finish the work, make sure `{testCommand}`
-    passes, and commit your own files with a plain conventional commit message.
-    $endCondition:stdout
+# The plan step's clean-tree gate, offered to the orchestrator as the
+# `committed` preset. It attaches the preset (`endCondition: { use:
+# "committed" }`) to each queued step that runs on its own. This is not a
+# workflow-level endCondition: parallel steps share one working tree, so a
+# member would fail it on a sibling's unfinished edits.
+conditions:
+  committed: *committed
 
 finalStep:
   name: review
@@ -124,6 +131,7 @@ finalStep:
   # prompt.
   resumeSession: true
   sessionId: 1
+  endCondition: *committed
   prompt: |
     Resume your ctrlyoke orchestrator session for this specification:
     @{file:specFile}

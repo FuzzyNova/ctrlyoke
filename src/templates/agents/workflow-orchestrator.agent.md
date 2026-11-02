@@ -65,8 +65,11 @@ Each queued prompt runs in a fresh session with none of your reasoning. Write it
 - Tell it how to wait for long commands, based on the mode the step will run in (`workflow_status` shows each step's `harness` and `executionMode`, and the workflow default an appended step inherits). Never tell a step to "run it in the background and check back later" unless that mode supports it. See `<longRunningCommands>`.
 - If a step must wait for a long command, set `executionMode: interactive` and choose a non-Codex harness.
 - When the workflow declares a `committed` condition preset, attach
-  `endCondition: { use: "committed" }` to every implementation step. In your
-  review, name the preset you relied on.
+  `endCondition: { use: "committed" }` to every implementation step that runs on
+  its own. Never attach it to a parallel group member: the members share one
+  working tree, so one would fail the check on a sibling's unfinished edits. Put
+  it on the sequential step after the group instead. In your review, name the
+  preset you relied on.
 - Require it to keep the plan current (check off the requirement, move the bug report, record the finding).
 - Require it to **commit its own work** at the end, with a plain conventional-commit message.
 

@@ -137,17 +137,22 @@ finalStep:
     started, so don't end your turn to wait on a task; block on long-running commands
     such as `npm test` instead. If you started the dev host, stop it
     (`npm run dev:host:stop`) before you end your turn.
+  # The final step never runs alongside other steps, so each pass can require a
+  # clean tree when it ends. A dirty tree resumes the step's session to finish
+  # and commit; after two retries the workflow stops. stderr is folded into
+  # stdout so a git error fails the check instead of leaving stdout empty.
+  endCondition: &committed
+    script: git status --porcelain 2>&1
+    compareSource: stdout
+    operator: isEmpty
+    maxRetries: 2
+    retryPrompt: |
+      You left uncommitted changes. Finish the work, make sure `npm test` passes,
+      and commit your own files with a plain conventional commit message.
+      $endCondition:stdout
 
-# Every step, including each final-step pass and every fix it queues, must
-# leave a clean working tree. A dirty tree resumes the step's session to finish
-# and commit; after two retries the workflow stops. stderr is folded into
-# stdout so a git error fails the check instead of leaving stdout empty.
-endCondition:
-  script: git status --porcelain 2>&1
-  compareSource: stdout
-  operator: isEmpty
-  maxRetries: 2
-  retryPrompt: |
-    You left uncommitted changes. Finish the work, make sure `npm test` passes,
-    and commit your own files with a plain conventional commit message.
-    $endCondition:stdout
+# The same gate, offered to the orchestrator as the `committed` preset for each
+# fix step that runs on its own. Not a workflow-level endCondition: parallel
+# steps share one working tree, so a member would fail it on a sibling's edits.
+conditions:
+  committed: *committed

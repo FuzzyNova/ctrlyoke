@@ -1116,23 +1116,29 @@ suite("TemplateManager variable metadata", () => {
       assert.strictEqual(workflow.finalStep?.executionMode, "interactive");
       assert.ok(workflow.steps?.[0].prompt.includes("`make check`"));
       assert.ok(workflow.finalStep?.prompt.includes("`make check`"));
-      assert.ok(workflow.endCondition?.retryPrompt?.includes("`make check`"));
+      assert.ok(
+        workflow.conditions?.committed?.retryPrompt?.includes("`make check`")
+      );
     });
 
-    // Each loop commits per step. The gate is workflow-level so every step,
-    // including the ones an orchestrator queues, inherits it without relying on
-    // the orchestrator attaching a preset. The first step to run (the finalStep
-    // in final-step-only loops, which re-checks every pass) requires a clean
-    // tree, so the gate never pushes an agent to commit someone else's changes.
+    // Each loop commits per step, but the clean-tree gate is never
+    // workflow-level: parallel steps share one working tree, so an inherited
+    // gate would fail a member on its sibling's unfinished edits. The steps
+    // that never run alongside others (plan, review, final step) carry it
+    // directly, and the orchestrator attaches the same gate to queued steps as
+    // the `committed` preset. The first step to run (the finalStep in
+    // final-step-only loops, which re-checks every pass) requires a clean tree,
+    // so the gate never pushes an agent to commit someone else's changes.
     // stderr is folded in so outside a repo, git's error fails the check
     // instead of leaving stdout empty and passing it.
-    for (const templateId of [
-      "spec-driven-loop",
-      "feature-driven-loop",
-      "bug-hunt-loop",
-      "bug-drain-loop",
-    ]) {
-      test(`gates every ${templateId} step on a clean git working tree`, async () => {
+    const gatedSteps: Record<string, string[]> = {
+      "spec-driven-loop": ["plan", "review"],
+      "feature-driven-loop": ["plan", "review"],
+      "bug-hunt-loop": ["hunt-bugs"],
+      "bug-drain-loop": ["drain-backlog"],
+    };
+    for (const [templateId, expectedGated] of Object.entries(gatedSteps)) {
+      test(`offers ${templateId} a clean-tree preset instead of a workflow-level gate`, async () => {
         const tm = makeManager();
         tm.getWorkspaceFolder = () => ({ uri: { fsPath: makeTempDir() } });
         tm.getBuiltInTemplatesPath = () =>
@@ -1148,19 +1154,20 @@ suite("TemplateManager variable metadata", () => {
           operator: "isEmpty",
         };
 
-        assert.strictEqual(workflow.conditions, undefined);
+        assert.strictEqual(workflow.endCondition, undefined);
+        const committed = workflow.conditions?.committed;
         assert.deepStrictEqual(
           {
-            script: workflow.endCondition?.script,
-            compareSource: workflow.endCondition?.compareSource,
-            operator: workflow.endCondition?.operator,
+            script: committed?.script,
+            compareSource: committed?.compareSource,
+            operator: committed?.operator,
           },
           cleanTree
         );
-        assert.strictEqual(workflow.endCondition?.maxRetries, 2);
+        assert.strictEqual(committed?.maxRetries, 2);
         assert.ok(
-          !/\{[a-z][a-zA-Z0-9]*\}/.test(workflow.endCondition!.retryPrompt!),
-          workflow.endCondition!.retryPrompt
+          !/\{[a-z][a-zA-Z0-9]*\}/.test(committed!.retryPrompt!),
+          committed!.retryPrompt
         );
 
         const firstStep = workflow.steps?.[0] ?? workflow.finalStep!;
@@ -1168,15 +1175,18 @@ suite("TemplateManager variable metadata", () => {
           ...cleanTree,
           onFail: "stopWorkflow",
         });
-        // Only feature-driven-loop's write-plan overrides the gate, with its
-        // own plan-exists check; every other step inherits it.
-        const overriding = [...(workflow.steps ?? []), workflow.finalStep!]
-          .filter((step) => step.endCondition !== undefined)
-          .map((step) => step.name);
+        const allSteps = [...(workflow.steps ?? []), workflow.finalStep!];
         assert.deepStrictEqual(
-          overriding,
-          templateId === "feature-driven-loop" ? ["write-plan"] : []
+          allSteps
+            .filter((step) => step.endCondition?.script === cleanTree.script)
+            .map((step) => step.name),
+          expectedGated
         );
+        for (const step of allSteps) {
+          if (step.endCondition?.script === cleanTree.script) {
+            assert.deepStrictEqual(step.endCondition, committed, step.name);
+          }
+        }
       });
     }
 

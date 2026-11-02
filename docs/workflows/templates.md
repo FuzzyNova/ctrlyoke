@@ -11,9 +11,10 @@ Spec-Driven Loop asks for a `testCommand` (default `npm test`), which every queu
 Spec-Driven Loop, Feature-Driven Loop, Bug Hunt Loop, and Bug Drain Loop need a git repository, because each step commits its own work. The commits are how a review sees what each step did, and how you roll back a step that went wrong.
 
 - **Before it starts**, the loop checks that the working tree is clean and stops if it isn't, or if the folder isn't a git repository. Commit or stash your own changes first, or run `git init` to start a repository. The bug loops repeat this check at the start of every pass.
-- **After every step**, including the ones the loop queues for itself, a workflow-level [end condition](/workflows/end-conditions) checks `git status --porcelain`. If anything is uncommitted, ctrlyoke resumes that step's session and asks it to finish and commit. After two failed retries, the workflow stops.
+- **After each planning, review, or bug-hunting step**, an [end condition](/workflows/end-conditions) checks `git status --porcelain`. If anything is uncommitted, ctrlyoke resumes that step's session and asks it to finish and commit. After two failed retries, the workflow stops.
+- **After each step the loop queues for itself**, the same check runs when the orchestrator attaches it. Each loop declares it as the `committed` [condition preset](/workflows/end-conditions#condition-presets), and the orchestrator attaches it to every queued step that runs on its own. It leaves the check off steps it queues to run in parallel, because those steps share one working tree: one would fail the check on the other's unfinished edits. Steps in a parallel group still commit their own files, and the step after the group or the next review catches anything they left behind.
 
-The test command is not part of the end condition. Agents usually run it themselves, so gating on it as well would run the suite twice per step. To run a loop without git, create a [custom template](#custom-templates) from it with **New template...** and remove its `endCondition` and `preCondition`.
+The test command is not part of the end condition. Agents usually run it themselves, so gating on it as well would run the suite twice per step. To run a loop without git, create a [custom template](#custom-templates) from it with **New template...** and remove its `endCondition`, `preCondition`, and `conditions`.
 
 ## Create a workflow from a template {#create-from-template}
 

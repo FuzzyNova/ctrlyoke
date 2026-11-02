@@ -31,15 +31,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   others. Steps are told to pass the test command, which defaults to
   `npm test`. Workflows already created from it are unchanged.
 - The **Spec-Driven Loop**, **Feature-Driven Loop**, **Bug Hunt Loop**, and
-  **Bug Drain Loop** templates now require every step to leave a clean git
-  working tree, including the steps the loop queues for itself. Previously
-  this check ran only on steps the orchestrator chose to attach it to, and it
-  passed without complaint outside a git repository. A step with uncommitted
-  changes is asked to finish and commit, and the workflow stops after two
-  failed retries. These loops now also stop before they start unless the
-  folder is a git repository with no uncommitted changes, and the bug loops
-  re-check that at the start of every pass. Workflows already created from
-  them are unchanged.
+  **Bug Drain Loop** templates now require their planning, review, and
+  bug-hunting steps to leave a clean git working tree. A step with
+  uncommitted changes is asked to finish and commit, and the workflow stops
+  after two failed retries. Steps the loop queues for itself get the same
+  check through the `committed` condition preset, which the orchestrator now
+  attaches to every queued step except members of a parallel group, because
+  those steps share one working tree. The check previously passed without
+  complaint outside a git repository. These loops now also stop before they
+  start unless the folder is a git repository with no uncommitted changes, and
+  the bug loops re-check that at the start of every pass. Workflows already
+  created from them are unchanged.
 
 ### Fixed
 
