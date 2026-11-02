@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Continuing a view-only imported run now reports why it cannot continue.
 - Run exports now collapse streaming text deltas into sealed attempt output by
   default; `ctrlyoke export --with-stream-deltas` keeps every chunk for replay.
 

@@ -24,6 +24,8 @@ export interface RunMaterializationInput {
   workspaceRoot: string;
   workflowName: string;
   definition: Record<string, unknown>;
+  /** Full run working file when the source contains runtime step state. */
+  workingFile?: WorkingFile;
   events: AsyncIterable<WorkflowTimelineEventDraft>;
   executionState?: ExecutionState;
   currentIndex?: number;
@@ -53,6 +55,7 @@ export class RunMaterializer {
   async materialize(input: RunMaterializationInput): Promise<MaterializedRun> {
     const executionState =
       input.runtimeState?.executionState ??
+      input.workingFile?._runtime?.executionState ??
       input.executionState ??
       EXECUTION_STATES.COMPLETED;
     if (
@@ -87,11 +90,14 @@ export class RunMaterializer {
         input.workspaceRoot,
         created.workflowKey
       );
-      const steps = Array.isArray(input.definition.steps)
-        ? input.definition.steps
+      const sourceFile = input.workingFile
+        ? { ...input.definition, ...input.workingFile }
+        : input.definition;
+      const steps = Array.isArray(sourceFile.steps)
+        ? sourceFile.steps
         : [];
       const definition = {
-        ...input.definition,
+        ...sourceFile,
         startedAt,
         definitionRevision: 1,
         steps,
@@ -99,11 +105,13 @@ export class RunMaterializer {
       const workingFile: WorkingFile = {
         ...definition,
         _runtime: {
-          ...input.runtimeState,
-          ...prepared?.runtimeState,
+          ...(prepared?.runtimeState ??
+            input.runtimeState ??
+            input.workingFile?._runtime),
           currentIndex:
             prepared?.runtimeState?.currentIndex ??
             input.runtimeState?.currentIndex ??
+            input.workingFile?._runtime?.currentIndex ??
             input.currentIndex ??
             steps.length,
           executionState:

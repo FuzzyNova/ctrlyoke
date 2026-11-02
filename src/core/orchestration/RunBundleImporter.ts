@@ -36,6 +36,7 @@ import {
   type RunChangesPlacement,
 } from "./RunChangesPlacer";
 import type { WorkingFileRuntime } from "../../types/CtrlYokeTypes";
+import type { WorkingFile } from "../../types/CtrlYokeTypes";
 
 export interface RunBundleImportOptions extends ReadRunBundleOptions {
   workspaceRoot: string;
@@ -135,12 +136,18 @@ export class RunBundleImporter {
     for await (const _event of streamRunBundleEvents(header, options)) {
       /* validate */
     }
-    const definition = await this.copyAssetsAndRewriteDefinition(
+    const rewriteAssets = await this.createAssetReferenceRewriter(
       header.bundleDir,
       options.workspaceRoot,
-      header.manifest.assets ?? [],
-      header.definition
+      header.manifest.assets ?? []
     );
+    const definition = rewriteAssets(header.definition) as Record<
+      string,
+      unknown
+    >;
+    const runFile = header.runtime
+      ? (rewriteAssets(header.runtime) as WorkingFile)
+      : undefined;
     let executionRoot = options.workspaceRoot;
     let placement: RunChangesPlacement | undefined;
     async function* drafts() {
@@ -168,6 +175,7 @@ export class RunBundleImporter {
       workflowName:
         options.name?.trim() || header.manifest.lineage.workflowName,
       definition,
+      ...(runFile ? { workingFile: runFile } : {}),
       events: drafts(),
       executionState: header.manifest.continuation
         ? EXECUTION_STATES.STOPPED
@@ -215,8 +223,18 @@ export class RunBundleImporter {
               if (
                 placement.canContinue === false ||
                 (!placement.applied && target !== RUN_CHANGES_TARGETS.SKIP)
-              )
-                return { runtimeState: undefined };
+              ) {
+                const reason =
+                  placement.warning ?? "workspace changes could not be placed";
+                return {
+                  runtimeState: normalizeImportedRuntime(
+                    header.runtime,
+                    header.manifest,
+                    header.runManifest,
+                    { reason }
+                  ),
+                };
+              }
               executionRoot = placement.worktreePath ?? options.workspaceRoot;
               return {
                 runtimeState: normalizeImportedRuntime(
@@ -227,7 +245,17 @@ export class RunBundleImporter {
               };
             },
           }
-        : {}),
+        : {
+            runtimeState: {
+              ...normalizeImportedRuntime(
+                header.runtime,
+                header.manifest,
+                header.runManifest,
+                { reason: "this bundle contains history only" }
+              ),
+              executionState: header.runManifest.executionState,
+            },
+          }),
     });
     return {
       status: RUN_IMPORT_STATUSES.IMPORTED,
@@ -237,14 +265,13 @@ export class RunBundleImporter {
     };
   }
 
-  private async copyAssetsAndRewriteDefinition(
+  private async createAssetReferenceRewriter(
     bundleDir: string,
     workspaceRoot: string,
     assets: NonNullable<
       import("../../types/RunBundleTypes").RunBundleManifest["assets"]
     >,
-    definition: Record<string, unknown>
-  ): Promise<Record<string, unknown>> {
+  ): Promise<(value: unknown) => unknown> {
     const replacements = new Map<string, string>();
     const realWorkspace = await fs.promises.realpath(workspaceRoot);
     for (const asset of assets) {
@@ -314,22 +341,24 @@ export class RunBundleImporter {
       );
       replacements.set(asset.path, destination);
     }
-    const workspaceDefinition = mapJsonStrings(definition, (value) => {
+    return (input: unknown) => mapJsonStrings(input, (value) => {
       let rewritten = value;
       for (const [from, to] of replacements)
         rewritten = rewritten.split(from).join(to);
       return rewritten;
     });
-    return workspaceDefinition;
   }
 }
 
 function normalizeImportedRuntime(
-  runtime: Record<string, unknown> | undefined,
+  workingFile: Record<string, unknown> | undefined,
   manifest: import("../../types/RunBundleTypes").RunBundleManifest,
-  runManifest: import("../../types/RunBundleTypes").RunBundleRunManifest
+  runManifest: import("../../types/RunBundleTypes").RunBundleRunManifest,
+  viewOnly?: { reason: string }
 ): Partial<WorkingFileRuntime> {
-  const normalized: Record<string, unknown> = { ...(runtime ?? {}) };
+  const normalized: Record<string, unknown> = {
+    ...((workingFile?._runtime as Record<string, unknown> | undefined) ?? {}),
+  };
   delete normalized.worktree;
   delete normalized.stopReason;
   delete normalized.worktreeNotice;
@@ -338,14 +367,15 @@ function normalizeImportedRuntime(
   normalized.currentIndex =
     typeof normalized.currentIndex === "number"
       ? normalized.currentIndex
-      : Array.isArray(normalized.steps)
-        ? normalized.steps.length
+      : Array.isArray(workingFile?.steps)
+        ? workingFile.steps.length
         : runManifest.stepCount;
   normalized.importedFrom = {
     provenance: manifest.provenance,
     exportedAt: manifest.exportedAt,
     exportedByVersion: manifest.exportedByVersion,
     sourceRoot: manifest.sourceRoot,
+    ...(viewOnly ? { viewOnly } : {}),
     ...(manifest.importedFrom ? { previous: manifest.importedFrom } : {}),
   };
   return normalized as Partial<WorkingFileRuntime>;

@@ -103,8 +103,14 @@ type RunContinuationAction =
  */
 export function assertRunHasWorkToContinue(
   executionState: ExecutionState,
-  pendingRewindOnThisRun: boolean
+  pendingRewindOnThisRun: boolean,
+  importedFrom?: NonNullable<WorkingFile["_runtime"]>["importedFrom"]
 ): void {
+  if (importedFrom?.viewOnly) {
+    throw new Error(
+      `This run was imported view-only: ${importedFrom.viewOnly.reason}`
+    );
+  }
   if (
     executionState === EXECUTION_STATES.COMPLETED &&
     !pendingRewindOnThisRun
@@ -308,7 +314,11 @@ export class RunContinuationService {
       throw new Error("This workflow has a draft or pending continuation");
     }
     if (action === RUN_CONTINUATION_ACTIONS.CONTINUE) {
-      assertRunHasWorkToContinue(executionState, pendingRewindOnThisRun);
+      assertRunHasWorkToContinue(
+        executionState,
+        pendingRewindOnThisRun,
+        target._runtime?.importedFrom
+      );
     }
 
     if (

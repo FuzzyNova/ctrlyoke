@@ -802,6 +802,8 @@ export interface WorkingFileRuntime {
     exportedAt: string;
     exportedByVersion: string;
     sourceRoot: string;
+    /** Why this imported copy is for history only and cannot be continued. */
+    viewOnly?: { reason: string };
     /** Earlier origin carried by the bundle this run imported. */
     previous?: WorkingFileRuntime["importedFrom"];
   };

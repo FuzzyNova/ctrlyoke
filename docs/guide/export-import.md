@@ -57,7 +57,10 @@ For a continuable bundle, choose where its patch should go:
 
 Choose **Import** to add the run to history without starting it, or **Import
 and Continue** to import and resume its pending work. A history-only bundle,
-missing base commit, or patch that cannot be applied remains view-only.
+missing base commit, or patch that cannot be applied remains view-only. Continue
+reports the reason for a view-only import. After fixing the issue, import the
+bundle again; a continuable import whose changes were placed, or explicitly
+skipped after syncing, can be continued later from the dashboard.
 
 ### Resuming an earlier conversation
 

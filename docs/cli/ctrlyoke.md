@@ -942,8 +942,10 @@ Worktree mode creates a managed worktree at that commit. Skip mode compares the
 current tree with the patch and warns if they differ. A missing base commit or
 rejected patch leaves the import view-only. If the bundle omitted the patch
 with `export --no-changes`, use `--changes skip` after syncing the code yourself.
-History-only bundles ignore these options with a warning. The bundle is validated before it is written to history; the new lineage
-and run get fresh identifiers. An already-imported bundle reports the existing
+History-only bundles ignore these options with a warning. A view-only import
+records why it cannot continue, and `continue` reports that reason; after fixing
+the issue, import the bundle again. The bundle is validated before it is written
+to history; the new lineage and run get fresh identifiers. An already-imported bundle reports the existing
 history entry; pass `--again` to create another import. Use the printed
 `ctrlyoke history show` command to inspect the imported timeline.
 
