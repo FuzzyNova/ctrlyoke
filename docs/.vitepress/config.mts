@@ -93,6 +93,10 @@ export default defineConfig({
             { text: "File changes and undo", link: "/guide/file-changes" },
             { text: "Dry Run", link: "/guide/dry-run" },
             { text: "Run history and search", link: "/guide/history" },
+            {
+              text: "Exporting and importing runs",
+              link: "/guide/export-import",
+            },
             { text: "Notifications", link: "/guide/notifications" },
             {
               text: "Screen readers and dictation",
