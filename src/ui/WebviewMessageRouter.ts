@@ -1,4 +1,5 @@
 import * as fs from "fs/promises";
+import * as path from "path";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import type {
   ActionResult,
@@ -37,6 +38,20 @@ import {
   PATH_SELECTION_TITLES,
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { projectStateRoot } from "../utils/ProjectStatePaths";
+import {
+  exportRunBundle,
+  getRunBundleExportPreview,
+} from "../core/orchestration/RunBundleExporter";
+import { buildRunBundleExportOptions } from "../core/orchestration/RunBundleExportOptions";
+import {
+  RUN_BUNDLE_DIR_SUFFIX,
+  RUN_IMPORT_STATUSES,
+} from "../types/RunBundleTypes";
+import { RunBundleImporter } from "../core/orchestration/RunBundleImporter";
+import { RunImportPreviewService } from "../core/orchestration/RunImportPreview";
+import { WorkflowLineageRepository } from "../core/orchestration/WorkflowLineageRepository";
+import { CTRLYOKE_VERSION } from "../utils/BuildConfig";
 import { Log } from "../utils/Log";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import type { WorkspaceSnapshotContentMessage } from "../types/WebviewMessageTypes";
@@ -1154,6 +1169,131 @@ export class WebviewMessageRouter {
         ctx.postMessage,
         ctx.clientId
       );
+    });
+
+    table.set(MESSAGE_TYPES.SELECT_RUN_BUNDLE, async (_message, ctx) => {
+      const selectPath = this.hostDependencies.actions.selectWorkspacePath;
+      const bundleDir = selectPath
+        ? await selectPath.call(this.hostDependencies.actions, {
+            kind: PATH_SELECTION_KINDS.FOLDER,
+            title: "Select a .ctrlyokerun folder",
+          })
+        : undefined;
+      if (bundleDir) {
+        const requestId = `import-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        await this.sendRunImportPreview(bundleDir, requestId, ctx);
+      } else if (!selectPath) {
+        this.replyHostAction(ctx, DASHBOARD_HOST_ACTIONS.SELECT_FILE);
+      }
+    });
+
+    table.set(
+      MESSAGE_TYPES.REQUEST_RUN_IMPORT_PREVIEW,
+      async (message, ctx) => {
+        await this.sendRunImportPreview(
+          this.resolveClientWorkflowFilePath(message.bundleDir),
+          message.requestId,
+          ctx
+        );
+      }
+    );
+
+    const importBundle = async (
+      message: any,
+      ctx: any,
+      shouldContinue: boolean
+    ) => {
+      try {
+        const bundleDir = this.resolveClientWorkflowFilePath(message.bundleDir);
+        const result = await new RunBundleImporter().importRun({
+          workspaceRoot: this.getWorkspaceRoot(),
+          bundleDir,
+          changes: message.changes,
+          again: message.again,
+        });
+        if (result.status === RUN_IMPORT_STATUSES.ALREADY_IMPORTED) {
+          const descriptor =
+            await new WorkflowLineageRepository().tryReadDescriptor(
+              this.getWorkspaceRoot(),
+              result.workflowKey
+            );
+          if (descriptor?.latestRunRef)
+            await this.getOrchestrator()?.loadRunViewForClient(
+              {
+                workflowKey: result.workflowKey,
+                kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+                runRef: descriptor.latestRunRef,
+              },
+              ctx.postMessage,
+              ctx.clientId
+            );
+          ctx.emit({
+            type: MESSAGE_TYPES.RUN_IMPORT_RESULT,
+            requestId: message.requestId,
+            workflowKey: result.workflowKey,
+          });
+          return;
+        }
+        const address = {
+          workflowKey: result.workflowKey,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: result.runRef,
+        } as const;
+        await this.getOrchestrator()?.loadRunViewForClient(
+          address,
+          ctx.postMessage,
+          ctx.clientId
+        );
+        if (shouldContinue && result.placement?.canContinue !== false) {
+          const orchestrator = this.getOrchestrator();
+          const identity = await orchestrator?.getViewIdentity(ctx.clientId);
+          if (identity) {
+            await orchestrator?.continueAtRun(
+              address,
+              identity.definitionRevision,
+              identity.descriptorRevision,
+              ctx.clientId
+            );
+          }
+        }
+        ctx.emit({
+          type: MESSAGE_TYPES.RUN_IMPORT_RESULT,
+          requestId: message.requestId,
+          workflowKey: result.workflowKey,
+          runRef: result.runRef,
+        });
+      } catch (error) {
+        ctx.emit({
+          type: MESSAGE_TYPES.RUN_IMPORT_RESULT,
+          requestId: message.requestId,
+          error: getErrorMessage(error),
+        });
+      }
+    };
+    table.set(MESSAGE_TYPES.IMPORT_RUN, (message, ctx) =>
+      importBundle(message, ctx, false)
+    );
+    table.set(MESSAGE_TYPES.IMPORT_RUN_AND_CONTINUE, (message, ctx) =>
+      importBundle(message, ctx, true)
+    );
+    table.set(MESSAGE_TYPES.OPEN_IMPORTED_RUN, async (message, ctx) => {
+      const descriptor =
+        await new WorkflowLineageRepository().tryReadDescriptor(
+          this.getWorkspaceRoot(),
+          message.workflowKey
+        );
+      const runRef = message.runRef ?? descriptor?.latestRunRef;
+      if (runRef) {
+        await this.getOrchestrator()?.loadRunViewForClient(
+          {
+            workflowKey: message.workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef,
+          },
+          ctx.postMessage,
+          ctx.clientId
+        );
+      }
     });
 
     table.set(MESSAGE_TYPES.APPEND_FILE, async (message, ctx) => {
@@ -2503,8 +2643,28 @@ export class WebviewMessageRouter {
             ctx.clientId
           );
         } else if (message.filePath) {
+          const resolvedPath = this.resolveClientWorkflowFilePath(
+            message.filePath
+          );
+          const bundleDir =
+            await this.findRunBundleForWorkflowPath(resolvedPath);
+          let workflowPath = resolvedPath;
+          if (bundleDir && ctx.clientId === PANEL_CLIENT_ID) {
+            const choice =
+              await this.hostDependencies.actions.chooseRunBundleLoad?.();
+            if (!choice) return;
+            if (choice === "import") {
+              await this.sendRunImportPreview(
+                bundleDir,
+                `load-${Date.now()}`,
+                ctx
+              );
+              return;
+            }
+            workflowPath = path.join(bundleDir, "workflow.ctrlyoke.json");
+          }
           await orchestrator.loadPromptFileForClient(
-            this.resolveClientWorkflowFilePath(message.filePath),
+            workflowPath,
             ctx.postMessage,
             ctx.clientId,
             ctx.interactionPort
@@ -3115,6 +3275,87 @@ export class WebviewMessageRouter {
         ctx.clientId
       );
     });
+
+    table.set(MESSAGE_TYPES.REQUEST_RUN_EXPORT_INFO, async (message, ctx) => {
+      const workspaceRoot = this.getWorkspaceRoot();
+      const stateRoot = projectStateRoot(
+        workspaceRoot,
+        ConfigurationUtils.getRunHistoryLocation()
+      );
+      try {
+        const preview = await getRunBundleExportPreview(
+          stateRoot,
+          workspaceRoot,
+          message.address.workflowKey,
+          message.address.runRef
+        );
+        const safeName =
+          message.workflowName.trim().replace(/[\\/:*?"<>|]+/g, "-") || "run";
+        ctx.emit({
+          type: MESSAGE_TYPES.RUN_EXPORT_INFO,
+          requestId: message.requestId,
+          address: message.address,
+          workflowName: message.workflowName,
+          defaultPath: path.join(
+            workspaceRoot,
+            `${safeName}${RUN_BUNDLE_DIR_SUFFIX}`
+          ),
+          ...preview,
+        });
+      } catch (error) {
+        ctx.emit({
+          type: MESSAGE_TYPES.RUN_EXPORT_FAILED,
+          requestId: message.requestId,
+          error: getErrorMessage(error),
+        });
+      }
+    });
+
+    table.set(MESSAGE_TYPES.EXPORT_RUN, async (message, ctx) => {
+      const workspaceRoot = this.getWorkspaceRoot();
+      const stateRoot = projectStateRoot(
+        workspaceRoot,
+        ConfigurationUtils.getRunHistoryLocation()
+      );
+      const requestedDir = path.isAbsolute(message.bundleDir)
+        ? message.bundleDir
+        : path.resolve(workspaceRoot, message.bundleDir);
+      const bundleDir = requestedDir.endsWith(RUN_BUNDLE_DIR_SUFFIX)
+        ? requestedDir
+        : `${requestedDir}${RUN_BUNDLE_DIR_SUFFIX}`;
+      try {
+        const result = await exportRunBundle(
+          buildRunBundleExportOptions({
+            stateRoot,
+            workspaceRoot,
+            workflowKey: message.address.workflowKey,
+            runRef: message.address.runRef,
+            bundleDir,
+            exportedByVersion: CTRLYOKE_VERSION,
+            includeSnapshots: message.includeSnapshots,
+            includeChanges: message.includeChanges,
+            onWarning: (warning) => Log.warn(`[Run export] ${warning}`),
+          })
+        );
+        ctx.emit({
+          type: MESSAGE_TYPES.RUN_EXPORTED,
+          requestId: message.requestId,
+          bundleDir: result.bundleDir,
+          eventCount: result.eventCount,
+          continuable: result.continuable,
+          changedFiles: result.changedFiles,
+          redaction: result.manifest.redaction,
+          externalPaths: result.manifest.externalPaths,
+          warnings: result.warnings,
+        });
+      } catch (error) {
+        ctx.emit({
+          type: MESSAGE_TYPES.RUN_EXPORT_FAILED,
+          requestId: message.requestId,
+          error: getErrorMessage(error),
+        });
+      }
+    });
   }
 
   private registerMultiWorkflow(table: DispatchTable): void {
@@ -3439,6 +3680,48 @@ export class WebviewMessageRouter {
 
   private getWorkspaceRoot(): string {
     return this.hostDependencies.getNamedRoots()[0]?.fsPath ?? "";
+  }
+
+  private async sendRunImportPreview(
+    bundleDir: string,
+    requestId: string,
+    ctx: WebviewClientContext
+  ): Promise<void> {
+    try {
+      const preview = await new RunImportPreviewService().preview(
+        bundleDir,
+        this.getWorkspaceRoot()
+      );
+      ctx.emit({
+        type: MESSAGE_TYPES.RUN_IMPORT_PREVIEW,
+        requestId,
+        bundleDir,
+        preview,
+      });
+    } catch (error) {
+      ctx.emit({
+        type: MESSAGE_TYPES.RUN_IMPORT_PREVIEW,
+        requestId,
+        bundleDir,
+        error: getErrorMessage(error),
+      });
+    }
+  }
+
+  private async findRunBundleForWorkflowPath(
+    workflowPath: string
+  ): Promise<string | undefined> {
+    let candidate = path.resolve(workflowPath);
+    try {
+      if ((await fs.stat(candidate)).isFile())
+        candidate = path.dirname(candidate);
+      if (!candidate.toLowerCase().endsWith(RUN_BUNDLE_DIR_SUFFIX)) return;
+      const stat = await fs.stat(candidate);
+      if (stat.isDirectory()) return candidate;
+    } catch {
+      return;
+    }
+    return;
   }
 
   private async runHostAction(

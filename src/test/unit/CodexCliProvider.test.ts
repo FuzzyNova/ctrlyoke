@@ -23,6 +23,41 @@ function makeWorkflowContext(resumeSession?: boolean): {
 // ============================================================================
 
 suite("CodexCliProvider", () => {
+  test("probes Codex rollout files by session ID only", async () => {
+    const home = await fs.mkdtemp(path.join(os.tmpdir(), "codex-probe-"));
+    const previous = process.env.CODEX_HOME;
+    process.env.CODEX_HOME = home;
+    try {
+      const provider = new CodexCliProvider();
+      const rolloutDir = path.join(home, "sessions", "2026", "11", "01");
+      await fs.mkdir(rolloutDir, { recursive: true });
+      await fs.writeFile(
+        path.join(rolloutDir, "rollout-x-test-id.jsonl"),
+        "{}\n"
+      );
+      assert.strictEqual(
+        provider.probeResumableSession("test-id", "/workspace"),
+        "available"
+      );
+      assert.strictEqual(
+        provider.probeResumableSession("missing-id", "/workspace"),
+        "missing"
+      );
+      assert.strictEqual(
+        provider.isRecoverableSessionError("thread test-id not found"),
+        true
+      );
+      assert.strictEqual(
+        provider.isRecoverableSessionError("authentication failed"),
+        false
+      );
+    } finally {
+      if (previous === undefined) delete process.env.CODEX_HOME;
+      else process.env.CODEX_HOME = previous;
+      await fs.rm(home, { recursive: true, force: true });
+    }
+  });
+
   test("emits user hook timeout in native seconds", () => {
     const provider = new CodexCliProvider();
     const hooks = (provider as any).buildUserHooksSection([

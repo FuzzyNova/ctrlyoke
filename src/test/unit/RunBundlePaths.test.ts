@@ -109,6 +109,20 @@ suite("RunBundlePaths", () => {
     assert.strictEqual(nested("/Home/someone/src/app"), "/Home/<user>/src/app");
   });
 
+  test("rewrites several roots and lets the longest nested root win", () => {
+    const rewriter = createPortablePathRewriter({
+      workspaceRoots: ["C:\\repo", "C:\\repo\\worktrees\\feature"],
+    });
+    assert.strictEqual(
+      rewriter("C:\\repo\\worktrees\\feature\\src\\a.ts"),
+      "${workspaceFolder}/src/a.ts"
+    );
+    assert.strictEqual(
+      rewriter("C:\\repo\\src\\a.ts"),
+      "${workspaceFolder}/src/a.ts"
+    );
+  });
+
   test("resolves the workspace token onto the loading workspace", () => {
     const resolve = createWorkspacePathResolver("D:\\work\\demo-app\\");
     assert.strictEqual(resolve("${workspaceFolder}"), "D:/work/demo-app");

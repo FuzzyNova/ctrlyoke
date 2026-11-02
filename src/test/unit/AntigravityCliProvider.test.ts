@@ -49,6 +49,30 @@ function makeBackend(data: PartialCtrlYokeSettings): ConfigBackend {
 }
 
 suite("AntigravityCliProvider", () => {
+  test("probes Antigravity transcripts by conversation ID only", async () => {
+    const provider = new AntigravityCliProvider();
+    const transcript = path.join(
+      tempHome,
+      ".gemini",
+      "antigravity-cli",
+      "brain",
+      "session-id",
+      ".system_generated",
+      "logs",
+      "transcript_full.jsonl"
+    );
+    await fs.mkdir(path.dirname(transcript), { recursive: true });
+    await fs.writeFile(transcript, "{}\n");
+    assert.strictEqual(
+      provider.probeResumableSession("session-id", workspaceRoot),
+      "available"
+    );
+    assert.strictEqual(
+      provider.probeResumableSession("missing", workspaceRoot),
+      "missing"
+    );
+  });
+
   let tempHome: string;
   let workspaceRoot: string;
   let originalHome: string | undefined;

@@ -69,6 +69,7 @@ import {
   type PreparedMutation,
 } from "../shared/interfaces/PreparedMutation";
 import { COPILOT_EVENT_TYPES } from "./CopilotProtocolConstants";
+import { type SessionProbeResult } from "../../../types/DashboardConstants";
 
 const COPILOT_MCP_FILTERING_CAPABILITY = {
   fidelity: "exact",
@@ -151,6 +152,13 @@ export class CopilotCliProvider implements ICliProvider {
     };
   }
   readonly logParser = new CopilotLogParser();
+
+  probeResumableSession(
+    sessionId: string,
+    _workspaceRoot: string
+  ): SessionProbeResult {
+    return this.logParser.probeSessionId(sessionId);
+  }
   readonly headlessSource = HEADLESS_SOURCE_MODES.STDOUT;
 
   /** Convert Copilot's JSONL stdout into the event vocabulary of CopilotLogParser. */

@@ -492,9 +492,10 @@ ctrlyoke-dispatched ones. Design that badge once, for three origins.
    follow-up tracker) that also signals which turns support undo.
 
 Phases 1–2 are this plan's own foundation, not a shared one — the follow-up tracker
-shipped without them (see Relationship). What _is_ shared is phase 3's materializer, which
-`RUN_EXPORT_PLAN.md` phase 3 also consumes; whichever plan reaches it first should extract
-it rather than inline it.
+shipped without them (see Relationship). The shared phase 3 materializer now exists at
+`src/core/orchestration/RunMaterializer.ts`; `RunBundleImporter` is its first consumer.
+The native-session importer should provide its synthesized definition, streamed events,
+runtime state and provenance to that service rather than building a second allocation path.
 
 ---
 

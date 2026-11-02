@@ -410,6 +410,41 @@ export async function execGit(
   return execFileAsync("git", args, options);
 }
 
+/** Run git with the shared limits while preserving stdout and stderr bytes. */
+export async function execGitBuffer(
+  args: readonly string[],
+  options: ExecFileOptions = {}
+): Promise<{ stdout: Buffer; stderr: Buffer }> {
+  gitCommandObserverForTests?.("git", args);
+  const timeoutMs = options.timeout ?? getGitTimeoutMs();
+  const startedAt = Date.now();
+  let result;
+  try {
+    result = await execFilePromisified("git", args, {
+      timeout: timeoutMs,
+      maxBuffer: GIT_MAX_BUFFER,
+      ...options,
+      encoding: "buffer",
+    });
+  } catch (error) {
+    if (
+      timeoutMs !== GIT_NO_TIMEOUT &&
+      (isTimeoutError(error) || exceededTimeout(startedAt, timeoutMs))
+    ) {
+      throw timeoutError(args, timeoutMs);
+    }
+    throw error;
+  }
+  return {
+    stdout: Buffer.isBuffer(result.stdout)
+      ? result.stdout
+      : Buffer.from(result.stdout),
+    stderr: Buffer.isBuffer(result.stderr)
+      ? result.stderr
+      : Buffer.from(result.stderr),
+  };
+}
+
 function execGitCheckIgnore(
   repoRoot: string,
   absolutePaths: readonly string[]

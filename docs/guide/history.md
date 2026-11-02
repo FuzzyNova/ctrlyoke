@@ -95,6 +95,10 @@ From a terminal, the same operations are
 [`ctrlyoke append`](/cli/ctrlyoke#ctrlyoke-append) and
 [`ctrlyoke continue`](/cli/ctrlyoke#ctrlyoke-continue).
 
+Runs imported from a bundle show an **Imported** badge with their source in its
+tooltip. Output recorded before the import is read-only; output from later
+execution remains undoable.
+
 ## Runs started somewhere else {#external-runs}
 
 The dashboard also shows runs that the [CLI](/cli/) or another VS Code window is
@@ -124,12 +128,8 @@ For the files inside each run, see [Run files](/reference/run-files).
 
 ### Exporting a run {#export}
 
-To keep a finished run outside your history or attach it to a bug report,
-export it as a portable run bundle with
-[`ctrlyoke export`](/cli/ctrlyoke#ctrlyoke-export). The bundle holds the
-workflow as authored, its step summary and its timeline, with workspace and
-home-folder paths and secret values redacted. The dashboard has no export
-command yet, and a bundle can't be imported back into history.
+See [Exporting and importing runs](/guide/export-import) to share a run bundle
+or move a pending run to another machine.
 
 ### Changes made outside ctrlyoke {#changes-made-outside-ctrlyoke}
 

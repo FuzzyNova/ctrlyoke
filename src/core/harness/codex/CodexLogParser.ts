@@ -55,6 +55,10 @@ import {
   CODEX_ROLLOUT_FILE_PREFIX,
   CODEX_ROLLOUT_FILE_SUFFIX,
 } from "./CodexProtocolConstants";
+import {
+  SESSION_AVAILABILITY,
+  type SessionProbeResult,
+} from "../../../types/DashboardConstants";
 
 // ============================================================================
 // Codex Log Event Payload Types
@@ -178,6 +182,16 @@ function createCodexStreamState(): CodexStreamState {
 }
 
 export class CodexLogParser extends BaseLogParser {
+  /** Check the Codex rollout store by ID without prompt matching. */
+  probeSessionId(sessionId: string): SessionProbeResult {
+    return this.findSessionFileRecursive(
+      path.join(getCodexHomeDir(), "sessions"),
+      sessionId
+    )
+      ? SESSION_AVAILABILITY.AVAILABLE
+      : SESSION_AVAILABILITY.MISSING;
+  }
+
   private readonly subagentFollower = new SubagentSourceFollower();
   // Per parent session: cleared by recordParentSessionMeta() when a different
   // parent thread starts, because one parser outlives many sessions and models

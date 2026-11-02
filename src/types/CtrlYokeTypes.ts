@@ -588,6 +588,25 @@ export interface WorkflowLineageDescriptor {
   sourceWorkflowName?: string;
   /** Time at which this workflow variant was created. */
   variantCreatedAt?: number;
+  /** Origin details for a run imported from a ctrlyoke bundle. */
+  importedFrom?: {
+    kind: typeof import("./RunBundleTypes").RUN_IMPORT_SOURCE_KINDS.RUN_BUNDLE;
+    provenance: {
+      workflowKey: WorkflowKey;
+      runRef: RunRef;
+      runId: number;
+      steps: Array<{
+        stepIndex: number;
+        harness?: string;
+        model?: string;
+        sessionId?: string;
+      }>;
+    };
+    sourceRoot: string;
+    exportedAt: string;
+    exportedByVersion: string;
+    bundleName: string;
+  };
   /** Monotonic; never decremented after deletion. */
   nextRunId: number;
   /**
@@ -767,6 +786,27 @@ export interface WorkingFileRuntime {
   worktree?: WorkingFileWorktreeRuntime;
   /** Durable notice when an inherited worktree default degraded to none. */
   worktreeNotice?: string;
+  /** Provenance chain for a run materialized from an exported run bundle. */
+  importedFrom?: {
+    provenance: {
+      workflowKey: WorkflowKey;
+      runRef: RunRef;
+      runId: number;
+      steps: Array<{
+        stepIndex: number;
+        harness?: string;
+        model?: string;
+        sessionId?: string;
+      }>;
+    };
+    exportedAt: string;
+    exportedByVersion: string;
+    sourceRoot: string;
+    /** Why this imported copy is for history only and cannot be continued. */
+    viewOnly?: { reason: string };
+    /** Earlier origin carried by the bundle this run imported. */
+    previous?: WorkingFileRuntime["importedFrom"];
+  };
 }
 
 export interface ActiveParallelGroupRuntime {

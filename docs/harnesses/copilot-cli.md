@@ -97,6 +97,9 @@ See [Permissions](/workflows/permissions) for the modes, the pattern syntax and
 
 - Directories outside the workspace are granted through `permissions.trustedExternalRoots`; ctrlyoke passes each approved root to Copilot as `--add-dir`. To pass `--allow-all-paths` instead, add it to `defaults.additionalArgs["copilot-cli"]`.
 - If you need a workflow to continue a previous Copilot conversation, use `resumeSession` or `sessionId`.
+- Before resuming, ctrlyoke checks Copilot's local session store by ID. If the
+  transcript is missing, it starts a new conversation and shows a warning in
+  that step's output.
 - Copilot has no command-line option for hooks, so ctrlyoke writes a hook file for each step to `.github/hooks/` and removes it afterwards. See [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#copilot-cli).
 
 ## Usage and rate limits

@@ -34,6 +34,10 @@ import {
   COPILOT_TOOL_NAMES,
   type CopilotMcpToolIdentity,
 } from "./CopilotProtocolConstants";
+import {
+  SESSION_AVAILABILITY,
+  type SessionProbeResult,
+} from "../../../types/DashboardConstants";
 
 // ============================================================================
 // Copilot Log Event Type Definitions
@@ -248,6 +252,20 @@ const COPILOT_OTEL_TOKEN_LIMIT_ATTRIBUTE = "github.copilot.token_limit";
 const COPILOT_OTEL_CURRENT_TOKENS_ATTRIBUTE = "github.copilot.current_tokens";
 
 export class CopilotLogParser extends BaseLogParser {
+  /** Check the Copilot session store by ID without prompt matching. */
+  probeSessionId(sessionId: string): SessionProbeResult {
+    const logDir = path.join(os.homedir(), ".copilot", "session-state");
+    try {
+      if (!fs.existsSync(logDir)) return SESSION_AVAILABILITY.MISSING;
+      const directoryLog = path.join(logDir, sessionId, "events.jsonl");
+      const flatLog = path.join(logDir, `${sessionId}.jsonl`);
+      return fs.existsSync(directoryLog) || fs.existsSync(flatLog)
+        ? SESSION_AVAILABILITY.AVAILABLE
+        : SESSION_AVAILABILITY.MISSING;
+    } catch {
+      return SESSION_AVAILABILITY.UNKNOWN;
+    }
+  }
   /**
    * Event buffer for multi-event responses
    *

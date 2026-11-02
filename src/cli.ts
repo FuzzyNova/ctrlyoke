@@ -149,6 +149,10 @@ import {
   exportRunCommand,
   registerExportCommand,
 } from "./cli/RunExportCommand";
+import {
+  importRunCommand,
+  registerImportCommand,
+} from "./cli/RunImportCommand";
 import { registerStatusCommand } from "./cli/StatusCommandDefinitions";
 import { registerServerCommand } from "./cli/ServerCommand";
 import { statusCommand } from "./cli/CliStatusCommand";
@@ -394,6 +398,27 @@ registerExportCommand(program, (options) =>
       writeOut: (message) => console.log(message),
       writeErr: (message) => console.error(chalk.yellow(message)),
     })
+  )
+);
+
+registerImportCommand(program, (options) =>
+  handleHistoryCommand(
+    importRunCommand(
+      options,
+      {
+        writeOut: (message) => console.log(message),
+      },
+      {
+        continueRun: async (workflowKey, runRef, cwd) =>
+          continueCommand({
+            workflow: workflowKey,
+            run: runRef,
+            cwd,
+            allowTool: [],
+            denyTool: [],
+          }),
+      }
+    )
   )
 );
 

@@ -26,6 +26,38 @@ import {
 } from "../../types/DashboardConstants";
 
 suite("OpenCodeCliProvider", () => {
+  test("probes OpenCode export by exact session ID and recognizes its missing-session error", async () => {
+    const parser = new OpenCodeLogParser(
+      () => undefined,
+      async (id, workspaceRoot) => {
+        assert.strictEqual(workspaceRoot, "/workspace");
+        if (id === "gone") throw new Error("Error: Session not found");
+        if (id === "bad-json") return "not json";
+        return JSON.stringify({ info: { id }, messages: [] });
+      }
+    );
+    assert.strictEqual(
+      await parser.probeSessionId("present", "/workspace"),
+      "available"
+    );
+    assert.strictEqual(
+      await parser.probeSessionId("gone", "/workspace"),
+      "missing"
+    );
+    assert.strictEqual(
+      await parser.probeSessionId("bad-json", "/workspace"),
+      "unknown"
+    );
+    const provider = new OpenCodeCliProvider();
+    assert.strictEqual(
+      provider.isRecoverableSessionError("Error: Session not found"),
+      true
+    );
+    assert.strictEqual(
+      provider.isRecoverableSessionError("authentication failed"),
+      false
+    );
+  });
   function collisionContext(
     topLevelKeys: string[],
     nestedKeysByTool: Record<string, string[]> = {}

@@ -1,15 +1,20 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { CliSessionResolverAdapter } from "../../core/harness/shared/CliSessionResolverAdapter";
+import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
 import { type PromptFile, type PromptStep } from "../../types/CtrlYokeTypes";
-import { HARNESS_IDS } from "../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  SESSION_AVAILABILITY,
+} from "../../types/DashboardConstants";
 import type { WorkflowContext } from "../../types/WorkflowContextTypes";
-import { Log } from "../../utils/Log";
 
 suite("CliSessionResolverAdapter", () => {
-  test("should resolve workflow properties and auto-resumed session IDs", () => {
+  test("should resolve workflow properties and auto-resumed session IDs", async () => {
     const adapter = new CliSessionResolverAdapter({
       getIntegrationHarness: () => HARNESS_IDS.COPILOT_CLI,
+      provider: {} as ICliProvider,
+      getWorkspaceRoot: () => "/workspace",
     });
 
     const previousPrompt: PromptStep = {
@@ -33,7 +38,7 @@ suite("CliSessionResolverAdapter", () => {
       resumeSession: true,
     };
 
-    const result = adapter.resolve(currentPrompt, {
+    const result = await adapter.resolve(currentPrompt, {
       promptIndex: 1,
       allPrompts: [previousPrompt, currentPrompt],
       workflowFile,
@@ -50,57 +55,120 @@ suite("CliSessionResolverAdapter", () => {
     assert.strictEqual(result.resolvedProperties?.model, "gpt-5");
   });
 
-  test("should clear invalid session IDs for the resolved harness", () => {
-    const messages: string[] = [];
-    const originalInfo = Log.info;
-    (Log as unknown as { info(message: string): void }).info = (
-      message: string
-    ) => {
-      messages.push(message);
+  test("should clear invalid session IDs and explain the fallback", async () => {
+    const adapter = new CliSessionResolverAdapter({
+      getIntegrationHarness: () => HARNESS_IDS.CLAUDE_CLI,
+      provider: {} as ICliProvider,
+      getWorkspaceRoot: () => "/workspace",
+    });
+
+    const prompt: PromptStep = {
+      prompt: "test",
+      resumeSession: true,
+      sessionId: "not-a-valid-uuid",
+    };
+    const workflowFile: PromptFile = {
+      steps: [prompt],
+      harness: HARNESS_IDS.CLAUDE_CLI,
+      model: "sonnet",
+      resumeSession: true,
     };
 
-    try {
-      const adapter = new CliSessionResolverAdapter({
-        getIntegrationHarness: () => HARNESS_IDS.CLAUDE_CLI,
-      });
+    const result = await adapter.resolve(prompt, {
+      promptIndex: 0,
+      allPrompts: [prompt],
+      workflowFile,
+    } as WorkflowContext);
 
-      const prompt: PromptStep = {
-        prompt: "test",
-        resumeSession: true,
-        sessionId: "not-a-valid-uuid",
-      };
-      const workflowFile: PromptFile = {
-        steps: [prompt],
-        harness: HARNESS_IDS.CLAUDE_CLI,
-        model: "sonnet",
-        resumeSession: true,
-      };
-
-      const result = adapter.resolve(prompt, {
-        promptIndex: 0,
-        allPrompts: [prompt],
-        workflowFile,
-      } as WorkflowContext);
-
-      assert.strictEqual(result.resolvedSessionId, undefined);
-      assert.deepStrictEqual(messages, [
-        "[CliSessionResolverAdapter] Starting new session due to invalid session ID format",
-      ]);
-    } finally {
-      (Log as unknown as { info(message: string): void }).info = originalInfo;
-    }
+    assert.strictEqual(result.resolvedSessionId, undefined);
+    assert.strictEqual(
+      result.sessionAvailability,
+      SESSION_AVAILABILITY.MALFORMED
+    );
+    assert.match(
+      result.warningMessage ?? "",
+      /is not a valid claude-cli session ID/
+    );
   });
 
-  test("should return workflowContext resolved properties when no workflow file exists", () => {
+  for (const availability of [
+    SESSION_AVAILABILITY.AVAILABLE,
+    SESSION_AVAILABILITY.UNKNOWN,
+  ]) {
+    test(`keeps the resume when the probe reports ${availability}`, async () => {
+      const adapter = new CliSessionResolverAdapter({
+        getIntegrationHarness: () => HARNESS_IDS.COPILOT_CLI,
+        provider: {
+          probeResumableSession: async () => availability,
+        } as Partial<ICliProvider> as ICliProvider,
+        getWorkspaceRoot: () => "/workspace",
+      });
+      const prompt: PromptStep = {
+        prompt: "continue",
+        resumeSession: true,
+        sessionId: "550e8400-e29b-41d4-a716-446655440000",
+      };
+      const result = await adapter.resolve(prompt, {
+        promptIndex: 0,
+        allPrompts: [prompt],
+        preflightSession: {
+          sessionId: "550e8400-e29b-41d4-a716-446655440000",
+        },
+      } as WorkflowContext);
+      assert.strictEqual(
+        result.resolvedSessionId,
+        "550e8400-e29b-41d4-a716-446655440000"
+      );
+      assert.strictEqual(result.sessionAvailability, availability);
+      assert.strictEqual(result.warningMessage, undefined);
+    });
+  }
+
+  test("preflights a resolved ID and clears only a confirmed missing session", async () => {
+    const adapter = new CliSessionResolverAdapter({
+      getIntegrationHarness: () => HARNESS_IDS.COPILOT_CLI,
+      provider: {
+        probeResumableSession: async () => SESSION_AVAILABILITY.MISSING,
+      } as Partial<ICliProvider> as ICliProvider,
+      getWorkspaceRoot: () => "/workspace",
+    });
+    const prompt: PromptStep = {
+      prompt: "continue",
+      resumeSession: true,
+      sessionId: "550e8400-e29b-41d4-a716-446655440000",
+    };
+    const result = await adapter.resolve(prompt, {
+      promptIndex: 0,
+      allPrompts: [prompt],
+      preflightSession: {
+        sessionId: "550e8400-e29b-41d4-a716-446655440000",
+      },
+      resolvedProperties: {
+        harness: HARNESS_IDS.COPILOT_CLI,
+        model: "test-model",
+        resumeSession: true,
+        mcpServers: null,
+        hooks: null,
+        toolPermissions: null,
+      },
+    } as WorkflowContext);
+    assert.strictEqual(result.resolvedSessionId, undefined);
+    assert.match(result.warningMessage ?? "", /Step 1/);
+    assert.match(result.warningMessage ?? "", /not found on this machine/);
+  });
+
+  test("should return workflowContext resolved properties when no workflow file exists", async () => {
     const adapter = new CliSessionResolverAdapter({
       getIntegrationHarness: () => HARNESS_IDS.CODEX_CLI,
+      provider: {} as ICliProvider,
+      getWorkspaceRoot: () => "/workspace",
     });
 
     const prompt: PromptStep = {
       prompt: "continue",
     };
 
-    const result = adapter.resolve(prompt, {
+    const result = await adapter.resolve(prompt, {
       promptIndex: 0,
       allPrompts: [prompt],
       resolvedProperties: {

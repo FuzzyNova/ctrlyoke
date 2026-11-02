@@ -25,7 +25,8 @@ ctrlyoke history steps --workflow <key-or-name> [--run <ref|runId>] [--json] [--
 ctrlyoke history show --workflow <key-or-name> [--run <ref|runId>] [--step <selector>] [--attempt <n|latest|all>] [--json] [--summary|--events]
 ctrlyoke history search <query> [filters] [--json]
 ctrlyoke history trash list|restore <id>|purge <id>|empty [--yes]
-ctrlyoke export --workflow <key-or-name> [--run <ref|runId>] --out <dir> [--with-snapshots] [--force] [--cwd <path>] [--json]
+ctrlyoke export --workflow <key-or-name> [--run <ref|runId>] --out <dir> [--with-snapshots] [--no-changes] [--force] [--cwd <path>] [--json]
+ctrlyoke import <bundleDir> [--name <name>] [--again] [--cwd <path>] [--json]
 ctrlyoke step edit [file] --workflow <key-or-name> --run <ref|runId> --index <index> [--prompt <text>]
 ctrlyoke step remove --workflow <key-or-name> --run <ref|runId> --index <index>
 ctrlyoke step reorder --workflow <key-or-name> --run <ref|runId> --order <indices>
@@ -869,29 +870,90 @@ interactively.
 
 ## `ctrlyoke export`
 
-Write one finished run to a portable run bundle, a `<name>.ctrlyokerun`
+Write one settled run to a portable run bundle, a `<name>.ctrlyokerun`
 directory you can attach to a bug report or keep outside your history:
 
 ```bash
 ctrlyoke export --workflow release --out release-run
 ctrlyoke export --workflow release --run 7 --out release-run --with-snapshots --force
+ctrlyoke export --workflow release --run 7 --out replay-run --with-stream-deltas
+ctrlyoke export --workflow release --run 7 --out release-run --no-changes
 ```
 
 `--run` defaults to the lineage's latest run, and `.ctrlyokerun` is appended to
-`--out` when missing. A run that is still executing is refused, as is an
-existing bundle unless you pass `--force`.
+`--out` when missing. A run that is still executing or has a pending rewind is
+refused, as is an existing bundle unless you pass `--force`.
 
-The bundle holds the run's workflow as authored (no runtime state), its step
-summary and its recorded timeline. Paths under the workspace are written as
-`${workspaceFolder}/…` and paths under your home folder as `~/…`, so the bundle
-names neither your checkout nor your user. Values of the secrets the workflow
-declares, and values that look like credentials, are replaced with
-`[REDACTED]`. Workspace snapshots carry file contents, so they are left out
-unless you pass `--with-snapshots`.
+The `workflow.ctrlyoke.json` file holds the run's workflow as authored, without
+runtime state; the bundle also carries its step summary and recorded timeline.
+Paths under the workspace and the run's
+managed or named worktree are written as `${workspaceFolder}/…`; paths under
+your home folder are written as `~/…`, so the bundle names neither your
+checkout nor your user. Referenced attachments are copied into the bundle's
+`assets/` directory and the workflow references are rewritten to those copies;
+lone generated prompt bodies are inlined. Text assets receive the same secret
+redaction as the workflow and timeline, while binary assets are copied as-is.
+Missing attachments are reported as export warnings and remain referenced.
+Values of the secrets the workflow declares, and values that look like
+credentials, are replaced with `[REDACTED]`. Workspace
+snapshots carry file contents, so they are left out unless you pass
+`--with-snapshots`.
 
-The summary lists how many values were redacted and every path outside the
+Streaming text deltas are collapsed into the sealed attempt output by default
+to keep bundles smaller. Chunks from attempts that never received a final
+aggregate are merged into one event so their partial output remains available.
+Pass `--with-stream-deltas` to keep every chunk and its timing, for example
+when creating a media replay fixture. The JSON result reports
+`includesStreamDeltas`; human output says when deltas were kept.
+
+Runs in `stopped`, `paused`, or `error` state with pending work also include
+`run.ctrlyoke.json` and a redacted `changes.patch`, so they can be continued
+after import. Completed runs stay history-only. `--no-changes` omits the patch
+while retaining the runtime state. The export summary lists every patched file
+for review; the `--json` result includes `continuable` and `continuation`.
+
+The summary lists how many values were redacted and, when multiple bundle files
+had removals, the per-file counts. It also lists every path outside the
 workspace and home folder, which stays as written. Redaction is best effort:
 review a bundle before you share it.
+
+## `ctrlyoke import`
+
+Import a run bundle into the current workspace's history. Imports remain
+view-only unless the bundle can continue and you explicitly pass `--continue`:
+
+```bash
+ctrlyoke import ./release-run.ctrlyokerun
+ctrlyoke import ./release-run.ctrlyokerun --name "Release investigation"
+ctrlyoke import ./release-run.ctrlyokerun --again --cwd ./other-workspace
+ctrlyoke import ./release-run.ctrlyokerun --continue
+ctrlyoke import ./release-run.ctrlyokerun --continue --changes worktree
+```
+
+Before importing, ctrlyoke prints a read-only preview with bundle provenance,
+whether the run can continue, the base-commit and checkout checks, pending
+steps (including scripts, resolved harness/model, secret grants and prompt
+redaction), and resumable-session availability. A missing base commit or
+referenced asset is listed as a blocker. Import itself never starts workflow
+steps unless `--continue` was passed. `--changes` chooses `worktree`,
+`checkout`, or `skip`; it defaults to `worktree` for managed runs and `checkout`
+otherwise. Checkout mode requires a clean checkout at the exported base commit.
+Worktree mode creates a managed worktree at that commit. Skip mode compares the
+current tree with the patch and warns if they differ. A missing base commit or
+rejected patch leaves the import view-only. If the bundle omitted the patch
+with `export --no-changes`, use `--changes skip` after syncing the code yourself.
+History-only bundles ignore these options with a warning. A view-only import
+records why it cannot continue, and `continue` reports that reason; after fixing
+the issue, import the bundle again. The bundle is validated before it is written
+to history; the new lineage and run get fresh identifiers. An already-imported bundle reports the existing
+history entry; pass `--again` to create another import. Use the printed
+`ctrlyoke history show` command to inspect the imported timeline.
+
+`--json` emits one `schemaVersion: 1` result line with the import status,
+workflow key, run reference, event count, source provenance, the `changes`
+target and apply result, `continued`, warnings, and the same workspace-specific
+preview under `preview`. Invalid bundle data emits the standard error envelope
+and exits with code `2`.
 
 ## `ctrlyoke step`
 

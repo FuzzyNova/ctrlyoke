@@ -11,6 +11,7 @@ import {
   FINAL_STEP_PHASES,
   MESSAGE_TYPES,
   UNDO_FILE_ACTIONS,
+  OUTPUT_HISTORY_KINDS,
 } from "../../types/DashboardConstants";
 import type { PostMessageFn } from "../../ui/WebviewSettingsSync";
 import type { UnifiedDiffHunk } from "../../types/CliOutputTypes";
@@ -258,6 +259,107 @@ suite("UndoRedoCoordinator", function () {
       );
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("refuses pre-import undo while allowing post-import and native outputs", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-undo-import-boundary-")
+    );
+    try {
+      const workflowKey = "undo-import-boundary" as WorkflowKey;
+      const runRef = "run-2026-08-11T00-00-00-000Z" as RunRef;
+      const runFilePath = WorkflowPaths.runFilePath(
+        workspaceRoot,
+        workflowKey,
+        runRef
+      );
+      await fs.mkdir(path.dirname(runFilePath), { recursive: true });
+      await fs.writeFile(runFilePath, JSON.stringify({}), "utf8");
+      const filePath = path.join(workspaceRoot, "bundle.txt");
+      const target = {
+        kind: FINAL_STEP_PHASES.QUEUE,
+        stepIndex: 0,
+      } as const;
+      const makeOrchestrator = (
+        importedSequenceBoundary: number | undefined,
+        outputSequence: number | undefined
+      ) =>
+        ({
+          getWorkspaceSnapshotFileContent: async () => ({
+            contentToRestore: "bundle supplied content",
+          }),
+          getOutputHistoryManager: () => ({
+            getHistoryFilePath: () => "history.json",
+            loadHistory: async () => ({
+              importedSequenceBoundary,
+              orderedEntries: [
+                {
+                  kind: OUTPUT_HISTORY_KINDS.CLI,
+                  target,
+                  sequence: outputSequence ?? 2,
+                },
+              ],
+            }),
+          }),
+        }) as unknown as WorkflowOrchestrator;
+
+      const undo = async (
+        importedSequenceBoundary: number | undefined,
+        outputSequence: number | undefined,
+        requestId: string
+      ) => {
+        await fs.writeFile(filePath, "workspace content", "utf8");
+        const messages: Record<string, unknown>[] = [];
+        const coordinator = new UndoRedoCoordinator(
+          () => makeOrchestrator(importedSequenceBoundary, outputSequence),
+          () => ({ executionRoot: workspaceRoot, namedWorkspaceRoots: [] })
+        );
+        await coordinator.handleUndoPromptChanges(
+          {
+            type: MESSAGE_TYPES.UNDO_PROMPT_CHANGES,
+            data: {
+              requestId,
+              target,
+              workflowKey,
+              runRef,
+              files: [
+                {
+                  path: "bundle.txt",
+                  action: UNDO_FILE_ACTIONS.RESTORE_CONTENT,
+                  contentToRestore: "bundle supplied content",
+                },
+              ],
+            },
+          },
+          ((message: Record<string, unknown>) =>
+            messages.push(message)) as PostMessageFn
+        );
+        return {
+          content: await fs.readFile(filePath, "utf8"),
+          messages,
+        };
+      };
+
+      const preImport = await undo(10, 2, "pre-import");
+      assert.strictEqual(preImport.content, "workspace content");
+      assert.ok(
+        JSON.stringify(preImport.messages).includes("imported"),
+        "the refusal should explain that imported history is read-only"
+      );
+
+      const postImport = await undo(10, 12, "post-import");
+      assert.strictEqual(postImport.content, "bundle supplied content");
+
+      const native = await undo(undefined, 2, "native");
+      assert.strictEqual(native.content, "bundle supplied content");
+    } finally {
+      await fs.rm(workspaceRoot, {
+        recursive: true,
+        force: true,
+        maxRetries: 5,
+        retryDelay: 50,
+      });
     }
   });
 

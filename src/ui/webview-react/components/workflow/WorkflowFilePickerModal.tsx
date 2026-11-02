@@ -28,11 +28,19 @@ interface WorkflowFilePickerModalProps {
   actionLabel: string;
   onClose: () => void;
   onSelect: (filePath: string) => void;
+  directoryMode?: boolean;
 }
 
 export const WorkflowFilePickerModal: React.FC<
   WorkflowFilePickerModalProps
-> = ({ isOpen, title, actionLabel, onClose, onSelect }) => {
+> = ({
+  isOpen,
+  title,
+  actionLabel,
+  onClose,
+  onSelect,
+  directoryMode = false,
+}) => {
   const [files, setFiles] = useState<WorkflowFileEntry[]>([]);
   const [isGitRepo, setIsGitRepo] = useState(false);
   const [query, setQuery] = useState("");
@@ -94,9 +102,25 @@ export const WorkflowFilePickerModal: React.FC<
     };
   }, [isOpen, hideGitIgnoredFiles]);
 
+  const filesForMode = useMemo(() => {
+    if (!directoryMode) return files;
+    return files
+      .filter((file) =>
+        /\.ctrlyokerun\/workflow\.ctrlyoke\.json$/i.test(file.relativePath)
+      )
+      .map((file) => ({
+        ...file,
+        path: file.path.replace(/[\\/]workflow\.ctrlyoke\.json$/i, ""),
+        relativePath: file.relativePath.replace(
+          /\/workflow\.ctrlyoke\.json$/i,
+          ""
+        ),
+      }));
+  }, [files, directoryMode]);
+
   const filteredFiles = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return files.filter((file) => {
+    return filesForMode.filter((file) => {
       if (hideGitIgnoredFiles && file.gitIgnored) return false;
       if (
         normalizedQuery &&
@@ -105,7 +129,7 @@ export const WorkflowFilePickerModal: React.FC<
         return false;
       return true;
     });
-  }, [files, query, hideGitIgnoredFiles]);
+  }, [filesForMode, query, hideGitIgnoredFiles]);
 
   const effectiveSelectedPath = filteredFiles.some(
     (file) => file.path === selectedPath
@@ -148,7 +172,7 @@ export const WorkflowFilePickerModal: React.FC<
               htmlFor="workflow-file-search"
               className="text-sm font-medium text-foreground"
             >
-              Search workspace files
+              {directoryMode ? "Run bundle folder" : "Search workspace files"}
             </label>
             {isGitRepo && (
               <button
@@ -187,7 +211,11 @@ export const WorkflowFilePickerModal: React.FC<
             type="text"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="workflow, prompt, .ctrlyoke"
+            placeholder={
+              directoryMode
+                ? "path/to/run.ctrlyokerun"
+                : "workflow, prompt, .ctrlyoke"
+            }
             className="w-full rounded-sm border border-input-border bg-input-bg px-3 py-2 text-input-fg placeholder:text-input-placeholder focus:outline-hidden focus:ring-1 focus:ring-focus-border"
           />
         </div>
@@ -205,7 +233,9 @@ export const WorkflowFilePickerModal: React.FC<
           )}
           {!isLoading && !error && filteredFiles.length === 0 && (
             <div className="px-3 py-2 text-sm text-description-fg">
-              No workflow files found.
+              {directoryMode
+                ? "No run bundles found."
+                : "No workflow files found."}
             </div>
           )}
           {!isLoading &&
@@ -229,12 +259,18 @@ export const WorkflowFilePickerModal: React.FC<
         </div>
 
         <label className="block text-sm font-medium text-foreground">
-          Or enter a path
+          {directoryMode
+            ? "Or enter a bundle directory path"
+            : "Or enter a path"}
           <input
             type="text"
             value={manualPath}
             onChange={(event) => setManualPath(event.target.value)}
-            placeholder={WORKFLOW_PATH_PLACEHOLDER}
+            placeholder={
+              directoryMode
+                ? "path/to/run.ctrlyokerun"
+                : WORKFLOW_PATH_PLACEHOLDER
+            }
             className="mt-2 w-full rounded-sm border border-input-border bg-input-bg px-3 py-2 text-input-fg placeholder:text-input-placeholder focus:outline-hidden focus:ring-1 focus:ring-focus-border"
           />
         </label>

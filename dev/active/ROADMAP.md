@@ -558,7 +558,7 @@ criteria matter more than speculative dates.
 | [`MCP_OUTPUT_PAGING_PLAN.md`](../implemented/MCP_OUTPUT_PAGING_PLAN.md)                                           | P2 — shipped 2026-09-05                                             |
 | [`PARALLEL_STEPS_PLAN.md`](../implemented/PARALLEL_STEPS_PLAN.md)                                                 | Shipped                                                             |
 | [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../implemented/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)                     | Shipped 2026-10-06 (shim retirement moved to standalone plan)       |
-| [`RUN_EXPORT_PLAN.md`](../backlog/RUN_EXPORT_PLAN.md)                                                             | P2 (ships with redaction)                                           |
+| [`RUN_EXPORT_PLAN.md`](../implemented/RUN_EXPORT_PLAN.md)                                                         | P2 — shipped (implemented 2026-11-02)                               |
 | [`PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`](../implemented/PROMPT_TOTAL_TOKEN_USAGE_PLAN.md)                             | P2 — shipped                                                        |
 | [`HARNESS_USAGE_TRACKING_PLAN.md`](../implemented/HARNESS_USAGE_TRACKING_PLAN.md)                                 | P2 — shipped                                                        |
 | [`TELEMETRY_PLAN.md`](../implemented/TELEMETRY_PLAN.md)                                                           | P2 — shipped (verified 2026-09-15)                                  |

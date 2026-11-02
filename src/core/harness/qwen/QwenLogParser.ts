@@ -52,6 +52,10 @@ import {
   QWEN_TOOL_NAMES,
   QWEN_USER_RECORD_SUBTYPES,
 } from "./QwenProtocolConstants";
+import {
+  SESSION_AVAILABILITY,
+  type SessionProbeResult,
+} from "../../../types/DashboardConstants";
 
 /** Match Qwen's `sanitizeCwd` naming for directories under `~/.qwen/projects`. */
 export function sanitizeQwenProjectPath(projectPath: string): string {
@@ -201,6 +205,19 @@ function isQwenProviderEvent(value: unknown): value is QwenProviderEvent {
 }
 
 export class QwenLogParser extends BaseLogParser {
+  probeSessionId(sessionId: string): SessionProbeResult {
+    const projectsDir = path.join(os.homedir(), ".qwen", "projects");
+    try {
+      return this.findSessionLogAcrossProjectDirectories(projectsDir, [
+        "chats",
+        `${sessionId}.jsonl`,
+      ])
+        ? SESSION_AVAILABILITY.AVAILABLE
+        : SESSION_AVAILABILITY.MISSING;
+    } catch {
+      return SESSION_AVAILABILITY.UNKNOWN;
+    }
+  }
   private readonly subagentFollower = new SubagentSourceFollower();
   private subagentUsageEnabled = true;
 

@@ -9,11 +9,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The dashboard can export a settled run from its workflow menu, review the
+  continuation files before export, and inspect redaction details before sharing.
+- Save Workflow and Export Run now share location, name, and browse controls.
+- Continuable run exports now include redacted runtime state and a workspace
+  patch; `ctrlyoke export --no-changes` omits the patch, and its JSON output
+  reports continuation details.
+- Run exports now bundle referenced attachments, inline generated prompt bodies,
+  validate asset hashes when reading, and warn when an attachment is missing.
+- Add `ctrlyoke import` to add a run bundle to workspace history for viewing.
+- The dashboard can import a run bundle from the New menu, review its provenance,
+  workspace changes, sessions, pending scripts, secret grants and blockers, then
+  import it view-only or explicitly continue it.
+- Loading a workflow from a run bundle now offers to import the stopped run or
+  load only its authored workflow and start over.
 - **Add Commit to ctrlyoke** is now in the title bar `...` menu and the tab
   context menu of a commit's diff, the editor that opens when you click a
   commit in the Timeline view or the Source Control Graph.
 
+### Fixed
+
+- Undo and redo requests for outputs before an imported run's boundary are now
+  refused by the extension, even when a client bypasses the dashboard gate.
+- Run export now preserves patch paths and binary or non-UTF-8 content, and only
+  redacts matching values on added text lines; import previews report patch redactions.
+
+- Exporting a run executed in a managed or named worktree now writes its paths
+  as `${workspaceFolder}/…`, so those paths remain portable with the bundle.
+
 ### Changed
+
+- Continuing a view-only imported run now reports why it cannot continue.
+- Run exports now collapse streaming text deltas into sealed attempt output by
+  default; `ctrlyoke export --with-stream-deltas` keeps every chunk for replay.
+
+- `ctrlyoke import` can now place exported workspace changes in a managed
+  worktree or clean checkout, and explicitly continue the imported run.
+- `ctrlyoke import` now prints a workspace-specific preview before writing a
+  bundle to history, and includes that preview in its JSON result.
+- Imported runs show bundle provenance, and output recorded before import is
+  read-only.
+
+- A resume whose session can't be found, or whose ID is badly formatted, now
+  warns and starts a new session on every harness. Before, Copilot, Codex,
+  OpenCode and Antigravity failed the step, and Claude/Qwen and badly formatted
+  IDs started a new session without telling the user.
 
 - **Add Commit to ctrlyoke** has been removed from VS Code's Timeline view
   context menu. Current VS Code versions no longer tell other extensions which

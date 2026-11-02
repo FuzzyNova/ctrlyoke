@@ -25,6 +25,38 @@ function createProperties(
 }
 
 suite("CopilotCliProvider", () => {
+  test("probes Copilot session logs by ID only", async () => {
+    const home = await makeTempDir("copilot-probe-");
+    const oldHome = process.env.HOME;
+    const oldUserProfile = process.env.USERPROFILE;
+    process.env.HOME = home;
+    process.env.USERPROFILE = home;
+    try {
+      const provider = new CopilotCliProvider();
+      const sessionDir = path.join(
+        home,
+        ".copilot",
+        "session-state",
+        "session-id"
+      );
+      await fs.mkdir(sessionDir, { recursive: true });
+      await fs.writeFile(path.join(sessionDir, "events.jsonl"), "{}\n");
+      assert.strictEqual(
+        provider.probeResumableSession("session-id", "/workspace"),
+        "available"
+      );
+      assert.strictEqual(
+        provider.probeResumableSession("missing", "/workspace"),
+        "missing"
+      );
+    } finally {
+      if (oldHome === undefined) delete process.env.HOME;
+      else process.env.HOME = oldHome;
+      if (oldUserProfile === undefined) delete process.env.USERPROFILE;
+      else process.env.USERPROFILE = oldUserProfile;
+      await removeTempDir(home);
+    }
+  });
   const mcpServerCases: Array<
     [string, NonNullable<ResolvedProperties["mcpServers"]>]
   > = [

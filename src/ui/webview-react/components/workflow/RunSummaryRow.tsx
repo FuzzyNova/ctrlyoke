@@ -21,7 +21,12 @@ import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
 import { getContextMenuOpener, useLongPress } from "@hooks/useLongPress";
 import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import { RUN_IMPORT_SOURCE_KINDS } from "@root/types/RunBundleTypes";
 import { Icon } from "../shared/Icon";
+import {
+  ImportedOriginBadge,
+  importedOriginAccessibleName,
+} from "../shared/ImportedOriginBadge";
 
 /** One row of the run panel's flat draft+run list. */
 export type RunPanelRow =
@@ -116,6 +121,9 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
     workflowTokenTotalsAccessibleLabel(summary?.tokenTotals),
     runDurationAccessibleLabel(activeExecutionMs),
     timeAgo,
+    summary?.importedFrom?.kind === RUN_IMPORT_SOURCE_KINDS.RUN_BUNDLE
+      ? importedOriginAccessibleName(summary.importedFrom)
+      : undefined,
   ]);
   const openContextMenu = (
     x: number,
@@ -193,13 +201,22 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
           ) : undefined
         }
         badge={
-          executionState && (
-            <ExecutionStateBadge
-              state={executionState}
-              isNarrow={isCompactRow(tier)}
-              unstarted={summary?.unstarted}
-            />
-          )
+          <>
+            {executionState && (
+              <ExecutionStateBadge
+                state={executionState}
+                isNarrow={isCompactRow(tier)}
+                unstarted={summary?.unstarted}
+              />
+            )}
+            {summary?.importedFrom?.kind ===
+              RUN_IMPORT_SOURCE_KINDS.RUN_BUNDLE && (
+              <ImportedOriginBadge
+                kind={RUN_IMPORT_SOURCE_KINDS.RUN_BUNDLE}
+                description={importedOriginAccessibleName(summary.importedFrom)}
+              />
+            )}
+          </>
         }
         usage={
           hasWorkflowTokenUsage(summary?.tokenTotals) ? (

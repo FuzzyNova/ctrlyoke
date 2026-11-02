@@ -14,6 +14,7 @@ import {
 import { writeClipboardText } from "@utils/stepClipboard";
 import { notifyUser } from "@utils/notifyUser";
 import { openWorkflowDryRun } from "@utils/executionPreview";
+import { generateId } from "@utils/string";
 import { workflowViewAddressKey } from "@utils/viewAddress";
 import { sendMessage } from "@hooks/useMessageHandler";
 import { useIsViewingDeletedWorkflow } from "@hooks/useIsViewingDeletedWorkflow";
@@ -137,6 +138,12 @@ export function useWorkflowContextMenu({
         : isSystemGeneratedWorkflow
           ? "Managed automatically by commit message generation"
           : undefined;
+      const exportDisabledTitle =
+        target.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN
+          ? "Export is available for a saved run"
+          : target.isExecuting
+            ? "Cannot export a run while it is executing"
+            : undefined;
 
       setContextMenu({
         x,
@@ -181,6 +188,23 @@ export function useWorkflowContextMenu({
                 },
               ]
             : []),
+          {
+            label: "Export Run…",
+            icon: "codicon-export",
+            disabled: exportDisabledTitle !== undefined,
+            disabledTitle: exportDisabledTitle,
+            title: "Create a redacted, portable bundle of this run",
+            onClick: () => {
+              if (target.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN)
+                return;
+              onCloseDropdown();
+              sendMessage(MESSAGE_TYPES.REQUEST_RUN_EXPORT_INFO, {
+                requestId: generateId(),
+                address: target.address,
+                workflowName: target.workflowName,
+              });
+            },
+          },
           {
             label: "Duplicate Workflow…",
             icon: "codicon-copy",

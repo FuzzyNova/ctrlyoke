@@ -96,6 +96,7 @@ describe("useWorkflowContextMenu", () => {
         .map((button) => button.textContent?.trim())
     ).toEqual([
       "New Run (Don't Start)",
+      "Export Run…",
       "Duplicate Workflow…",
       "Copy Workflow Key",
       "Copy Run Directory Path",
@@ -339,9 +340,14 @@ describe("useWorkflowContextMenu", () => {
     expect(
       screen
         .getAllByRole("menuitem")
-        .slice(0, 3)
+        .slice(0, 4)
         .map((button) => button.textContent?.trim())
-    ).toEqual(["New Run (Don't Start)", "Dry Run", "Duplicate Workflow…"]);
+    ).toEqual([
+      "New Run (Don't Start)",
+      "Dry Run",
+      "Export Run…",
+      "Duplicate Workflow…",
+    ]);
     fireEvent.click(screen.getByRole("menuitem", { name: "Dry Run" }));
 
     expect(useExecutionPreviewStore.getState().scope).toEqual({
@@ -353,6 +359,45 @@ describe("useWorkflowContextMenu", () => {
         scope: { kind: PREVIEW_SCOPES.WORKFLOW },
       })
     );
+  });
+
+  it("exports the targeted run address and disables export for drafts or executing runs", () => {
+    const postMessage = vi.fn();
+    Object.defineProperty(window, "vscodeApi", {
+      configurable: true,
+      value: { postMessage, getState: vi.fn(), setState: vi.fn() },
+    });
+    render(<TestHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Export Run…" }));
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.REQUEST_RUN_EXPORT_INFO,
+        address: target.address,
+        workflowName: target.workflowName,
+      })
+    );
+
+    cleanup();
+    const draft = {
+      ...target,
+      address: {
+        workflowKey: "workflow-1" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
+    };
+    render(<TestHarness menuTarget={draft} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    expect(
+      screen.getByRole("menuitem", { name: "Export Run…" })
+    ).toBeDisabled();
+
+    cleanup();
+    render(<TestHarness menuTarget={{ ...target, isExecuting: true }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    expect(
+      screen.getByRole("menuitem", { name: "Export Run…" })
+    ).toBeDisabled();
   });
 
   it("disables Dry Run for a system-generated workflow", () => {

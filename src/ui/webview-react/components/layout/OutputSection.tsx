@@ -171,6 +171,9 @@ const OutputSectionInner: React.FC = () => {
     (s) => s.finalStepStreamingChunks
   );
   const historyOutputs = useWorkflowStore((s) => s.historyOutputs);
+  const importedSequenceBoundary = useWorkflowStore(
+    (s) => s.importedSequenceBoundary
+  );
   const workspaceSnapshots = useWorkflowStore((s) => s.workspaceSnapshots);
   const finalStepWorkspaceSnapshots = useWorkflowStore(
     (s) => s.finalStepWorkspaceSnapshots
@@ -281,6 +284,8 @@ const OutputSectionInner: React.FC = () => {
         duration: settledRunDuration(displayedRunSummary.activeExecutionMs),
         worktree:
           displayedRunSummary.worktree ?? matchingHistoryMetadata?.worktree,
+        importedFrom:
+          matchingHistoryMetadata?.importedFrom ?? displayedRunSummary.importedFrom,
       };
     }
     return {
@@ -298,6 +303,7 @@ const OutputSectionInner: React.FC = () => {
       // Keep this run-owned: the bound live instance may not be the run shown
       // in the banner while history navigation is in progress.
       worktree: displayedRunSummary.worktree,
+      importedFrom: displayedRunSummary.importedFrom,
     };
   }, [
     displayedRunSummary,
@@ -543,6 +549,7 @@ const OutputSectionInner: React.FC = () => {
     handleScriptOutputExpansionChange,
     handleAttemptGroupToggle,
   } = useOutputRowsModel({
+    importedSequenceBoundary,
     isViewingHistory,
     historyOutputs,
     liveOrderedEntries,
@@ -1365,6 +1372,7 @@ const OutputSectionInner: React.FC = () => {
   ]);
 
   const outputUndo = useOutputUndoActions({
+    importedSequenceBoundary,
     allMessages,
     allowUndoActions,
     finalStepWorkspaceSnapshots,

@@ -64,6 +64,7 @@ import {
   applyPreparedMutations,
   type CliProviderPreparation,
 } from "../shared/interfaces/PreparedMutation";
+import { type SessionProbeResult } from "../../../types/DashboardConstants";
 
 const CODEX_MCP_FILTERING_CAPABILITY = {
   fidelity: "exact",
@@ -220,6 +221,25 @@ export class CodexCliProvider implements ICliProvider {
   static readonly CLI_HELP_COMMAND = `${CodexCliProvider.CLI_COMMAND} --help`;
 
   readonly logParser: CodexLogParser;
+
+  probeResumableSession(
+    sessionId: string,
+    _workspaceRoot: string
+  ): SessionProbeResult {
+    return this.logParser.probeSessionId(sessionId);
+  }
+
+  isRecoverableSessionError(
+    input: string | Error | { stdout?: string; stderr?: string }
+  ): boolean {
+    const message =
+      typeof input === "string"
+        ? input
+        : input instanceof Error
+          ? input.message
+          : `${input.stdout ?? ""}\n${input.stderr ?? ""}`;
+    return /thread [^\s:]+ not found/i.test(message);
+  }
 
   constructor(onProviderUsageUpdate?: (quota: HarnessQuotaSnapshot) => void) {
     this.logParser = new CodexLogParser(onProviderUsageUpdate);

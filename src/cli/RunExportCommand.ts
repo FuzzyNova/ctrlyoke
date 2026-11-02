@@ -2,8 +2,12 @@ import { Command } from "commander";
 import * as os from "node:os";
 import * as path from "node:path";
 import { exportRunBundle } from "../core/orchestration/RunBundleExporter";
-import { createNodeSecretStore } from "../platform/NodeSecretStore";
-import { RUN_BUNDLE_DIR_SUFFIX } from "../types/RunBundleTypes";
+import { buildRunBundleExportOptions } from "../core/orchestration/RunBundleExportOptions";
+import {
+  formatRunPatchRedactionWarning,
+  RUN_BUNDLE_DIR_SUFFIX,
+  RUN_BUNDLE_FILES,
+} from "../types/RunBundleTypes";
 import {
   bootstrapCliWorkspace,
   type CliWorkspaceBootstrap,
@@ -20,6 +24,8 @@ export interface RunExportOptions {
   run?: string;
   out: string;
   withSnapshots?: boolean;
+  withStreamDeltas?: boolean;
+  changes?: boolean;
   force?: boolean;
   json?: boolean;
 }
@@ -44,7 +50,7 @@ export function registerExportCommand(
   program
     .command("export")
     .description(
-      "Export one finished run as a portable, redacted run bundle directory"
+      "Export one settled run as a portable, redacted run bundle directory"
     )
     .requiredOption(CLI_WORKFLOW_OPTION_FLAGS, CLI_WORKFLOW_OPTION_DESCRIPTION)
     .option("--run <ref|runId>", "Target run (default: latest)")
@@ -56,6 +62,11 @@ export function registerExportCommand(
       "--with-snapshots",
       "Include workspace snapshots, which carry file contents (needed for diffs and Undo)"
     )
+    .option(
+      "--with-stream-deltas",
+      "Keep per-chunk streaming text events (normally collapsed into final output)"
+    )
+    .option("--no-changes", "Omit the workspace changes patch")
     .option("-f, --force", "Replace an existing bundle at --out")
     .option(
       "-d, --cwd <path>",
@@ -81,24 +92,25 @@ export async function exportRunCommand(
     options.run
   );
   const out = path.resolve(options.out);
-  const result = await exportRunBundle({
-    stateRoot: workspace.workspaceRoot,
-    workspaceRoot: workspace.workspaceRoot,
-    workflowKey,
-    runRef,
-    bundleDir: out.endsWith(RUN_BUNDLE_DIR_SUFFIX)
-      ? out
-      : `${out}${RUN_BUNDLE_DIR_SUFFIX}`,
-    exportedByVersion: version,
-    includeSnapshots: options.withSnapshots === true,
-    secrets: {
+  const result = await exportRunBundle(
+    buildRunBundleExportOptions({
+      stateRoot: workspace.workspaceRoot,
       workspaceRoot: workspace.workspaceRoot,
-      secretStore: createNodeSecretStore({ warn: io.writeErr }),
-      environment: dependencies.environment ?? process.env,
-    },
-    homeDir: dependencies.homeDir ?? os.homedir(),
-    replace: options.force === true,
-  });
+      workflowKey,
+      runRef,
+      bundleDir: out.endsWith(RUN_BUNDLE_DIR_SUFFIX)
+        ? out
+        : `${out}${RUN_BUNDLE_DIR_SUFFIX}`,
+      exportedByVersion: version,
+      includeSnapshots: options.withSnapshots === true,
+      includeStreamDeltas: options.withStreamDeltas === true,
+      includeChanges: options.changes !== false,
+      onWarning: io.writeErr,
+      environment: dependencies.environment,
+      homeDir: dependencies.homeDir ?? os.homedir(),
+      replace: options.force === true,
+    })
+  );
 
   const { redaction, externalPaths } = result.manifest;
   if (options.json) {
@@ -111,22 +123,52 @@ export async function exportRunCommand(
         runRef,
         eventCount: result.eventCount,
         includesSnapshots: result.manifest.includesSnapshots,
+        includesStreamDeltas: result.manifest.includesStreamDeltas === true,
+        continuable: result.continuable,
+        continuation: result.continuation ?? null,
         redaction,
         externalPaths,
+        warnings: result.warnings,
       })
     );
     return;
   }
   io.writeOut(`Exported ${workflowKey} ${runRef} to ${result.bundleDir}`);
   io.writeOut(
-    `  ${result.eventCount} events${result.manifest.includesSnapshots ? ", with workspace snapshots" : ""}`
+    `  ${result.eventCount} events${result.manifest.includesSnapshots ? ", with workspace snapshots" : ""}${result.manifest.includesStreamDeltas ? ", with streaming deltas" : ""}`
   );
+  io.writeOut(`  ${result.continuable ? "Continuable run" : "History only"}`);
+  if (result.continuation) {
+    const patch = result.continuation.workspace.patch;
+    if (patch) {
+      io.writeOut(`  ${patch.files} changed file(s) in ${patch.file}`);
+      for (const file of result.changedFiles) io.writeOut(`    ${file}`);
+    } else if (options.changes === false) {
+      io.writeOut("  Workspace changes patch omitted (--no-changes)");
+    }
+  }
+  const patchRedactions = redaction.byFile?.[RUN_BUNDLE_FILES.CHANGES] ?? 0;
+  if (patchRedactions > 0)
+    io.writeOut(
+      `  Warning: ${formatRunPatchRedactionWarning(patchRedactions)}`
+    );
+  for (const warning of result.warnings) {
+    io.writeOut(`  Warning: ${warning}`);
+  }
   const rules = Object.entries(redaction.byRule)
     .map(([rule, count]) => `${rule} ${count}`)
     .join(", ");
   io.writeOut(
     `  ${redaction.removedCount} value(s) redacted${rules ? ` (${rules})` : ""}`
   );
+  const filesWithRedactions = Object.entries(redaction.byFile ?? {});
+  if (filesWithRedactions.length > 1) {
+    io.writeOut(
+      `  By file: ${filesWithRedactions
+        .map(([file, count]) => `${file} ${count}`)
+        .join(", ")}`
+    );
+  }
   if (externalPaths.length > 0) {
     io.writeOut(`  Paths outside the workspace (left as written):`);
     for (const externalPath of externalPaths)

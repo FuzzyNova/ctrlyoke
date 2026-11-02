@@ -58,6 +58,10 @@ import {
   CLAUDE_WORKFLOW_TOOL_NAME,
   isClaudeSubagentToolName,
 } from "./ClaudeProtocolConstants";
+import {
+  SESSION_AVAILABILITY,
+  type SessionProbeResult,
+} from "../../../types/DashboardConstants";
 
 /**
  * Claude CLI Log Parser
@@ -240,6 +244,18 @@ export function normalizeClaudeWorkspacePath(workspacePath: string): string {
 }
 
 export class ClaudeLogParser extends BaseLogParser implements ILogParser {
+  probeSessionId(sessionId: string): SessionProbeResult {
+    const projectsDir = path.join(os.homedir(), ".claude", "projects");
+    try {
+      return this.findSessionLogAcrossProjectDirectories(projectsDir, [
+        `${sessionId}.jsonl`,
+      ])
+        ? SESSION_AVAILABILITY.AVAILABLE
+        : SESSION_AVAILABILITY.MISSING;
+    } catch {
+      return SESSION_AVAILABILITY.UNKNOWN;
+    }
+  }
   private readonly subagentFollower = new SubagentSourceFollower();
 
   getSubagentFollower(): SubagentSourceFollower {

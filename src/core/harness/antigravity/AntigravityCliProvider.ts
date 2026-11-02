@@ -83,6 +83,7 @@ import {
   applyPreparedMutations,
   type CliProviderPreparation,
 } from "../shared/interfaces/PreparedMutation";
+import { type SessionProbeResult } from "../../../types/DashboardConstants";
 
 const ANTIGRAVITY_MCP_FILTERING_CAPABILITY = {
   fidelity: "exact",
@@ -197,6 +198,13 @@ export class AntigravityCliProvider implements ICliProvider {
     };
   }
   readonly logParser = new AntigravityLogParser();
+
+  probeResumableSession(
+    sessionId: string,
+    _workspaceRoot: string
+  ): SessionProbeResult {
+    return this.logParser.probeSessionId(sessionId);
+  }
   readonly headlessSource = HEADLESS_SOURCE_MODES.LOG;
   private readonly streamJsonUsage =
     new AntigravityStreamJsonUsageAccumulator();

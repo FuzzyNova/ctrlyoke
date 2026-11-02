@@ -54,6 +54,7 @@ import {
   OPENCODE_RESUMED_PROMPT_DELIVERIES,
   type OpenCodeResumedPromptDelivery,
 } from "./OpenCodeProtocolConstants";
+import { type SessionProbeResult } from "../../../types/DashboardConstants";
 
 /**
  * How a resumed interactive step delivers its prompt.
@@ -196,6 +197,25 @@ export class OpenCodeCliProvider implements ICliProvider {
   readonly logParser = new OpenCodeLogParser(() =>
     getOpenCodeContextWindowSize(this.resolvedCurrentModel)
   );
+
+  probeResumableSession(
+    sessionId: string,
+    workspaceRoot: string
+  ): Promise<SessionProbeResult> {
+    return this.logParser.probeSessionId(sessionId, workspaceRoot);
+  }
+
+  isRecoverableSessionError(
+    input: string | Error | { stdout?: string; stderr?: string }
+  ): boolean {
+    const message =
+      typeof input === "string"
+        ? input
+        : input instanceof Error
+          ? input.message
+          : `${input.stdout ?? ""}\n${input.stderr ?? ""}`;
+    return message.includes("Session not found");
+  }
 
   /** MCP server ids prepared for the current execution. */
   private attachedMcpServerIds: ReadonlySet<string> = new Set();

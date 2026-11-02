@@ -70,6 +70,7 @@ export interface DashboardHostActions {
   selectWorkspacePath?(
     request: PathSelectionRequest
   ): Promise<string | undefined>;
+  chooseRunBundleLoad?(): Promise<"import" | "workflow" | undefined>;
   revealOutput?(): Promise<void>;
   /** Focus the dashboard when this host provides one. */
   focusDashboard?(): void;

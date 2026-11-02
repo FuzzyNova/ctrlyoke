@@ -65,6 +65,25 @@ describe("FileEditOutput", () => {
     expect(getByRole("button", { name: "Redo file operation" })).toBeTruthy();
   });
 
+  it("disables undo for imported history and explains why", () => {
+    render(
+      <FileEditOutput
+        path="src/example.ts"
+        status={OPERATION_STATUS.COMPLETED}
+        oldContent="before"
+        newContent="after"
+        onUndoFile={vi.fn()}
+        undoDisabledReason="This output was imported and is read-only."
+      />
+    );
+
+    const undo = screen.getByRole("button", {
+      name: "Undo file operation",
+    }) as HTMLButtonElement;
+    expect(undo.disabled).toBe(true);
+    expect(undo.title).toBe("This output was imported and is read-only.");
+  });
+
   it("uses file chips for every structured operation when enabled", () => {
     const props = { path: "src/example.ts", atomicContextReferences: true };
     render(

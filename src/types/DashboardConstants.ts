@@ -100,6 +100,7 @@ type OptionalDashboardHostAction = {
 export const DASHBOARD_HOST_CAPABILITIES = {
   openContentPreview: "openContentPreview",
   selectWorkspacePath: "selectWorkspacePath",
+  chooseRunBundleLoad: "chooseRunBundleLoad",
   revealOutput: "revealOutput",
   focusDashboard: "focusDashboard",
   openFolderWindow: "openFolderWindow",
@@ -124,6 +125,7 @@ export type DashboardHostCapability = OptionalDashboardHostAction;
  */
 const HOST_SCREEN_CAPABILITIES: ReadonlySet<DashboardHostCapability> = new Set([
   DASHBOARD_HOST_CAPABILITIES.selectWorkspacePath,
+  DASHBOARD_HOST_CAPABILITIES.chooseRunBundleLoad,
   DASHBOARD_HOST_CAPABILITIES.revealOutput,
   DASHBOARD_HOST_CAPABILITIES.focusDashboard,
   DASHBOARD_HOST_CAPABILITIES.openFolderWindow,
@@ -817,6 +819,18 @@ export const MESSAGE_TYPES = {
   WORKFLOW_VARIANT_FAILED: "workflowVariantFailed",
   BROWSE_SAVE_LOCATION: "browseSaveLocation", // Webview -> Extension: Request OS folder picker for the Save As location (VS Code panel only)
   SAVE_LOCATION_SELECTED: "saveLocationSelected", // Extension -> Webview: OS folder picker result { path }
+  REQUEST_RUN_EXPORT_INFO: "requestRunExportInfo",
+  RUN_EXPORT_INFO: "runExportInfo",
+  EXPORT_RUN: "exportRun",
+  SELECT_RUN_BUNDLE: "selectRunBundle",
+  REQUEST_RUN_IMPORT_PREVIEW: "requestRunImportPreview",
+  RUN_IMPORT_PREVIEW: "runImportPreview",
+  IMPORT_RUN: "importRun",
+  IMPORT_RUN_AND_CONTINUE: "importRunAndContinue",
+  RUN_IMPORT_RESULT: "runImportResult",
+  OPEN_IMPORTED_RUN: "openImportedRun",
+  RUN_EXPORTED: "runExported",
+  RUN_EXPORT_FAILED: "runExportFailed",
 
   // Multi-workflow coordination — Extension → Webview
   WORKFLOWS_LIST: "workflowsList", // Full list of loaded WorkflowSummary[]
@@ -5057,6 +5071,7 @@ export const WORKFLOW_DROPDOWN_VIEWS = {
 export const WORKFLOW_FILE_PICKER_MODES = {
   LOAD: "load",
   QUEUE: "queue",
+  IMPORT_RUN: "import-run",
 } as const;
 
 /** Row categories used by the unified workflow dropdown list. */
@@ -5464,6 +5479,27 @@ export type StepStatus = (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
 export type FinalStepPhase =
   (typeof FINAL_STEP_PHASES)[keyof typeof FINAL_STEP_PHASES];
 export type HarnessId = (typeof HARNESS_IDS)[keyof typeof HARNESS_IDS];
+
+/**
+ * Whether a resolved harness session can be resumed on this machine
+ * (dev/implemented/RUN_EXPORT_PLAN.md §5.4). `MALFORMED` is decided by
+ * `SessionValidator` before any probe; the other three come from a provider's
+ * by-ID session-store probe.
+ */
+export const SESSION_AVAILABILITY = {
+  AVAILABLE: "available",
+  MISSING: "missing",
+  UNKNOWN: "unknown",
+  MALFORMED: "malformed",
+} as const;
+export type SessionAvailability =
+  (typeof SESSION_AVAILABILITY)[keyof typeof SESSION_AVAILABILITY];
+/** What `ICliProvider.probeResumableSession` can report. */
+export type SessionProbeResult = Exclude<
+  SessionAvailability,
+  typeof SESSION_AVAILABILITY.MALFORMED
+>;
+
 type HarnessMcpSourcePrefix<T extends string> = T extends `${infer Prefix}-cli`
   ? Prefix
   : never;

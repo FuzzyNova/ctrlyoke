@@ -7,6 +7,7 @@ import {
   CTRLYOKE_ENV_VARS,
   FAILURE_KINDS,
   INTERACTIVE_TERMINAL_MODES,
+  STATUS_MESSAGE_SEVERITY,
   type InteractiveTerminalMode,
 } from "../../types/DashboardConstants";
 import { CliLogMonitor } from "../../core/harness/CliLogMonitor";
@@ -359,9 +360,16 @@ suite("CliExecutionRunner", () => {
         );
       },
     });
+    const statusMessages: Array<{ message: string; severity: string }> = [];
     const session = new CliExecutionSession({
       prompt: { prompt: "retry this" },
       resolvedSessionId: "x",
+      workflowContext: {
+        promptIndex: 2,
+        allPrompts: [],
+        reportStatusMessage: (message, severity) =>
+          statusMessages.push({ message, severity }),
+      },
     });
     session.preparePrompt("@prompt.txt", [tempPath]);
 
@@ -399,6 +407,20 @@ suite("CliExecutionRunner", () => {
         ...attempts[0].slice(attempts[0].indexOf("x") + 1),
       ]);
       assert.strictEqual(session.effectiveSessionId, "fresh-session");
+      // The fallback is a status line, never text added to the response.
+      assert.strictEqual(statusMessages.length, 1);
+      assert.match(
+        statusMessages[0].message,
+        /^Step 3 could not resume .* it was not found on this machine\. Started a new session\.$/
+      );
+      assert.strictEqual(
+        statusMessages[0].severity,
+        STATUS_MESSAGE_SEVERITY.WARNING
+      );
+      assert.doesNotMatch(
+        getTranscriptText(session.parsedOutput?.events ?? []),
+        /could not resume/
+      );
       assert.strictEqual(cleanupCalls, 1);
       await assert.rejects(fs.access(tempPath));
     } finally {

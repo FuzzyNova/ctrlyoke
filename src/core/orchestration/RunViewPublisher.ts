@@ -107,6 +107,7 @@ export interface RunViewPublisherLineageRepository {
     lastModifiedAt: number;
     workflowName: string;
     isSystemGenerated?: boolean;
+    importedFrom?: import("../../types/CtrlYokeTypes").WorkflowLineageDescriptor["importedFrom"];
   }>;
 }
 
@@ -117,6 +118,7 @@ interface AddressedRunView {
   workflowProperties: RunViewLoadedMessage["workflowProperties"];
   descriptorRevision: number;
   workflowName: string;
+  importedFrom?: import("../../types/CtrlYokeTypes").WorkflowLineageDescriptor["importedFrom"];
   isSystemGenerated: boolean;
   definitionChangedOutside?: RunViewLoadedMessage["definitionChangedOutside"];
 }
@@ -427,6 +429,14 @@ export class RunViewPublisher implements RunLifecycleViewPort {
       ),
       WorkingFileManager.inspectDefinitionIntegrity(filePath),
     ]);
+    if (history && descriptor.importedFrom) {
+      history.importedFrom = descriptor.importedFrom;
+    }
+    if (descriptor.importedFrom) {
+      for (const summary of runSummaries) {
+        summary.importedFrom = descriptor.importedFrom;
+      }
+    }
     Log.debug(
       `${logPrefix} summaries/descriptor/history read at ${Date.now() - startTime}ms`
     );
@@ -439,6 +449,7 @@ export class RunViewPublisher implements RunLifecycleViewPort {
       workingFile,
       history: stripSnapshotContents(history),
       runSummaries,
+      importedFrom: descriptor.importedFrom,
       workflowProperties,
       descriptorRevision: descriptor.revision,
       workflowName: descriptor.workflowName,
@@ -496,6 +507,7 @@ export class RunViewPublisher implements RunLifecycleViewPort {
         : {}),
       workingFile,
       workflowName: view.workflowName,
+      importedFrom: view.importedFrom,
       history: view.history,
       runSummaries: view.runSummaries,
       workflowProperties: view.workflowProperties,
@@ -589,6 +601,11 @@ export class RunViewPublisher implements RunLifecycleViewPort {
       historyManager.getRunSummaries(workflowKey),
       this.host.lineageRepository.readDescriptor(workspaceRoot, workflowKey),
     ]);
+    if (descriptor.importedFrom) {
+      for (const summary of runSummaries) {
+        summary.importedFrom = descriptor.importedFrom;
+      }
+    }
     const snapshot: RunSummariesLoadedMessage = {
       type: MESSAGE_TYPES.RUN_SUMMARIES_LOADED,
       requestId,

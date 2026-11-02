@@ -44,6 +44,7 @@ import {
   type HarnessId,
   HARNESS_IDS,
   PRIOR_CONTEXT_KEYWORDS,
+  STATUS_MESSAGE_SEVERITY,
   TEMP_FILE_CATEGORIES,
   USER_FEEDBACK_SEVERITY,
   type TerminalEndReason,
@@ -1004,6 +1005,8 @@ export class CliIntegration extends HarnessIntegration {
 
     const sessionResolverAdapter = new CliSessionResolverAdapter({
       getIntegrationHarness: () => this.getIntegrationMode(),
+      provider: this.provider,
+      getWorkspaceRoot: () => this.getExecutionRoot(),
     });
 
     const promptRuntimeCoordinator = new CliPromptRuntimeCoordinator({
@@ -1193,12 +1196,20 @@ export class CliIntegration extends HarnessIntegration {
     return diagnostics.map((diagnostic) => ({ ...diagnostic, consumer }));
   }
 
-  private createUnpreparedExecutionSession(
+  private async createUnpreparedExecutionSession(
     prompt: PromptStep,
     workflowContext?: WorkflowContext
-  ): CliExecutionSession {
-    const { resolvedProperties, resolvedSessionId } =
-      this.sessionResolverAdapter.resolve(prompt, workflowContext);
+  ): Promise<CliExecutionSession> {
+    const { resolvedProperties, resolvedSessionId, warningMessage } =
+      await this.sessionResolverAdapter.resolve(prompt, workflowContext);
+    if (warningMessage) {
+      // A status line, not response text: it must not reach `$previous`,
+      // commit messages or end-condition input (RUN_EXPORT_PLAN.md §5.4).
+      workflowContext?.reportStatusMessage?.(
+        warningMessage,
+        STATUS_MESSAGE_SEVERITY.WARNING
+      );
+    }
     return this.createExecutionSession(
       prompt,
       workflowContext,
@@ -2289,7 +2300,7 @@ export class CliIntegration extends HarnessIntegration {
 
       // Create session without prompt preparation so we can check terminal reuse
       // before deciding which inline-check rules to apply.
-      executionSession = this.createUnpreparedExecutionSession(
+      executionSession = await this.createUnpreparedExecutionSession(
         prompt,
         workflowContext
       );

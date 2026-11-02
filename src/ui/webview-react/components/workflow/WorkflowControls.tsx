@@ -89,6 +89,14 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
     vscode.postMessage({ type: MESSAGE_TYPES.NEW_WORKFLOW });
   }, [vscode]);
 
+  const handleImportRun = useCallback(() => {
+    if (isStandalone) {
+      setFilePickerMode(WORKFLOW_FILE_PICKER_MODES.IMPORT_RUN);
+      return;
+    }
+    vscode.postMessage({ type: MESSAGE_TYPES.SELECT_RUN_BUNDLE });
+  }, [vscode]);
+
   // Handle load file action
   const handleLoadFile = useCallback(() => {
     if (isStandalone) {
@@ -125,6 +133,29 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
   const handlePickerSelect = useCallback(
     (filePath: string) => {
       if (filePickerMode === WORKFLOW_FILE_PICKER_MODES.LOAD) {
+        if (isStandalone && /\.ctrlyokerun(?:[\\/]|$)/i.test(filePath)) {
+          const bundleDir = filePath.replace(
+            /[\\/]workflow\.ctrlyoke\.json$/i,
+            ""
+          );
+          if (
+            window.confirm(
+              "Import this run (continue where it stopped)? Choose Cancel to load its workflow only and start over."
+            )
+          ) {
+            vscode.postMessage({
+              type: MESSAGE_TYPES.REQUEST_RUN_IMPORT_PREVIEW,
+              bundleDir,
+              requestId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            });
+          } else {
+            vscode.postMessage({
+              type: MESSAGE_TYPES.LOAD_WORKFLOW,
+              filePath: `${bundleDir.replace(/[\\/]$/, "")}/workflow.ctrlyoke.json`,
+            });
+          }
+          return;
+        }
         vscode.postMessage({ type: MESSAGE_TYPES.LOAD_WORKFLOW, filePath });
         return;
       }
@@ -132,6 +163,14 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
         postWorkflowDefinitionMutation(vscode, {
           type: MESSAGE_TYPES.APPEND_FILE,
           filePath,
+        });
+        return;
+      }
+      if (filePickerMode === WORKFLOW_FILE_PICKER_MODES.IMPORT_RUN) {
+        vscode.postMessage({
+          type: MESSAGE_TYPES.REQUEST_RUN_IMPORT_PREVIEW,
+          bundleDir: filePath,
+          requestId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
         });
       }
     },
@@ -151,6 +190,12 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
       value: "load-file",
       icon: <LucideIcon icon={FilePlusCorner} />,
       onClick: handleLoadFile,
+    },
+    {
+      label: "Import Run...",
+      value: "import-run",
+      icon: <Icon name="folder-opened" />,
+      onClick: handleImportRun,
     },
     {
       label: isViewingRun
@@ -207,13 +252,18 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
         title={
           filePickerMode === WORKFLOW_FILE_PICKER_MODES.QUEUE
             ? "Queue Workflow File"
-            : "Load Workflow File"
+            : filePickerMode === WORKFLOW_FILE_PICKER_MODES.IMPORT_RUN
+              ? "Import Run"
+              : "Load Workflow File"
         }
         actionLabel={
           filePickerMode === WORKFLOW_FILE_PICKER_MODES.QUEUE
             ? "Queue File"
-            : "Load File"
+            : filePickerMode === WORKFLOW_FILE_PICKER_MODES.IMPORT_RUN
+              ? "Preview Import"
+              : "Load File"
         }
+        directoryMode={filePickerMode === WORKFLOW_FILE_PICKER_MODES.IMPORT_RUN}
         onClose={() => setFilePickerMode(null)}
         onSelect={handlePickerSelect}
       />

@@ -18,6 +18,7 @@ import {
 } from "@components/workflow/RunDuration";
 import { writeClipboardText } from "@utils/stepClipboard";
 import type { ExecutionState } from "@root/types/DashboardConstants";
+import { RUN_IMPORT_SOURCE_KINDS } from "@root/types/RunBundleTypes";
 import type {
   WorktreeRunProjection,
   WorkflowViewAddress,
@@ -34,6 +35,11 @@ import { sendMessage } from "@hooks/useMessageHandler";
 import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { Icon } from "../shared/Icon";
+import {
+  ImportedOriginBadge,
+  importedOriginAccessibleName,
+} from "../shared/ImportedOriginBadge";
+import type { WorkflowLineageDescriptor } from "@root/types/CtrlYokeTypes";
 
 /** Bordered pill styling shared by the worktree row's action buttons, so two adjacent buttons never read as one run-together label. */
 const WORKTREE_BUTTON_CLASS =
@@ -60,6 +66,7 @@ export interface RunBannerData {
   /** Persisted projection from the displayed run's `_runtime.worktree`. */
   worktree?: WorktreeRunProjection;
   address?: Extract<WorkflowViewAddress, { kind: "run" }>;
+  importedFrom?: WorkflowLineageDescriptor["importedFrom"];
 }
 
 /**
@@ -128,6 +135,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
   duration,
   worktree,
   address,
+  importedFrom,
   isPinned,
   onTogglePinned,
   showBackToLive,
@@ -212,6 +220,12 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
             labelOverride={stopReason ? "Limit stop" : undefined}
             titleOverride={stopReason?.message}
           />
+          {importedFrom?.kind === RUN_IMPORT_SOURCE_KINDS.RUN_BUNDLE && (
+            <ImportedOriginBadge
+              kind={RUN_IMPORT_SOURCE_KINDS.RUN_BUNDLE}
+              description={importedOriginAccessibleName(importedFrom)}
+            />
+          )}
         </span>
         <span className="flex items-center gap-2 shrink-0">
           {hasWorkflowTokenUsage(tokenTotals) && (

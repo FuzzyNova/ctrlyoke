@@ -1,5 +1,5 @@
 /**
- * Path portability for run bundles (dev/backlog/RUN_EXPORT_PLAN.md §2.1).
+ * Path portability for run bundles (dev/implemented/RUN_EXPORT_PLAN.md §2.1).
  *
  * A run's timeline is full of absolute paths: every `CliOutput` carries its
  * `workingDirectory`, tool events carry the paths the harness touched, and
@@ -87,6 +87,8 @@ function tokenRewrite(
 export interface PortablePathRoots {
   /** Rewritten to `${workspaceFolder}`. */
   workspaceRoot?: string;
+  /** Additional roots rewritten to `${workspaceFolder}`. Nested roots win. */
+  workspaceRoots?: readonly string[];
   /** Rewritten to `~`; the workspace wins where both apply. */
   homeDir?: string;
 }
@@ -95,10 +97,16 @@ export interface PortablePathRoots {
 export function createPortablePathRewriter(
   roots: PortablePathRoots
 ): (text: string) => string {
+  const workspaceRoots = [
+    ...(roots.workspaceRoots ?? []),
+    ...(roots.workspaceRoot ? [roots.workspaceRoot] : []),
+  ]
+    .filter((root, index, all) => all.indexOf(root) === index)
+    .sort((left, right) => right.length - left.length);
   const rewrites = [
-    roots.workspaceRoot
-      ? tokenRewrite(roots.workspaceRoot, BUNDLE_WORKSPACE_TOKEN)
-      : undefined,
+    ...workspaceRoots.map((root) =>
+      tokenRewrite(root, BUNDLE_WORKSPACE_TOKEN)
+    ),
     roots.homeDir ? tokenRewrite(roots.homeDir, BUNDLE_HOME_TOKEN) : undefined,
     roots.homeDir ? userNameRewrite(roots.homeDir) : undefined,
   ].filter((rewrite): rewrite is (text: string) => string => !!rewrite);

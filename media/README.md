@@ -107,7 +107,7 @@ makes no git commits.
 To add a run, export it from the workspace that recorded it and add it to `fixtures.json`:
 
 ```sh
-ctrlyoke export --cwd <demo-app checkout> --workflow <key> --run <ref> --with-snapshots \
+ctrlyoke export --cwd <demo-app checkout> --workflow <key> --run <ref> --with-snapshots --with-stream-deltas \
   --out media/fixtures/runs/<name>
 ```
 

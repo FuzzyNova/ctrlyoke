@@ -9,6 +9,8 @@
  * host's cwd. Both handlers must resolve at the transport edge, identically.
  */
 import * as assert from "assert";
+import * as fs from "fs/promises";
+import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
@@ -254,6 +256,88 @@ suite("WebviewMessageRouter — completion routing", () => {
       [3, 4]
     );
     router.disposeClient("browser:completion");
+  });
+});
+
+suite("WebviewMessageRouter — run bundle import", () => {
+  test("opens the native directory picker and replies with an import preview", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "run-import-router-"));
+    const selected = path.join(root, "missing.ctrlyokerun");
+    const selectWorkspacePath = async (request: { kind: string }) => {
+      assert.strictEqual(request.kind, PATH_SELECTION_KINDS.FOLDER);
+      return selected;
+    };
+    const emitted: unknown[] = [];
+    const router = buildRouter(
+      {},
+      () => undefined,
+      undefined,
+      {
+        openWorkspaceTarget: async () => ({ status: "unsupported" }),
+        selectWorkspacePath,
+      },
+      () => [{ name: "workspace", fsPath: root }]
+    );
+    try {
+      await router.route(
+        { type: MESSAGE_TYPES.SELECT_RUN_BUNDLE },
+        { clientTag: "panel", postMessage: (message) => emitted.push(message) }
+      );
+      assert.ok(
+        emitted.some(
+          (message) =>
+            (message as { type?: string }).type ===
+              MESSAGE_TYPES.RUN_IMPORT_PREVIEW &&
+            typeof (message as { error?: unknown }).error === "string"
+        )
+      );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+suite("WebviewMessageRouter — run export", () => {
+  test("answers a run export preflight on the requesting hosted client", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-export-route-")
+    );
+    try {
+      const emitted: any[] = [];
+      const router = buildRouter(
+        {},
+        () => undefined,
+        undefined,
+        undefined,
+        () => [{ name: "workspace", fsPath: workspaceRoot }]
+      );
+      await router.route(
+        {
+          type: MESSAGE_TYPES.REQUEST_RUN_EXPORT_INFO,
+          requestId: "export-preflight-1",
+          address: {
+            workflowKey: "missing-workflow",
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: "run-2026-01-01T00-00-00-000Z",
+          },
+          workflowName: "Missing run",
+        },
+        {
+          clientTag: "browser:export-test",
+          postMessage: (message) => emitted.push(message),
+        }
+      );
+
+      assert.strictEqual(emitted.length, 1);
+      assert.strictEqual(emitted[0].type, MESSAGE_TYPES.RUN_EXPORT_FAILED);
+      assert.strictEqual(emitted[0].requestId, "export-preflight-1");
+      assert.match(
+        emitted[0].error,
+        /no timeline|ENOENT|no such file|cannot find/i
+      );
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
   });
 });
 

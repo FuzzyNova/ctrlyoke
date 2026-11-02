@@ -219,25 +219,28 @@ const FileUndoButton: React.FC<{
   fileUndoMode?: UndoRedoDirection;
   /** What was undone/redone, e.g. "changes to" or "deletion of". */
   actionNoun?: string;
+  disabledReason?: string;
 }> = ({
   path,
   onUndoFile,
   fileUndoMode = UNDO_REDO_DIRECTIONS.UNDO,
   actionNoun = "changes to",
+  disabledReason,
 }) => (
   <button
     type="button"
+    disabled={Boolean(disabledReason)}
     aria-label={
       fileUndoMode === UNDO_REDO_DIRECTIONS.REDO
         ? "Redo file operation"
         : "Undo file operation"
     }
     className={`icon-btn inline-flex items-center gap-1 py-0.5 px-1.5 text-(length:--cy-output-font-size-xs) ${fileUndoMode === UNDO_REDO_DIRECTIONS.REDO ? "text-terminal-ansiGreen hover:opacity-80" : "text-link-fg hover:text-link-active-fg"}`}
-    title={
+    title={disabledReason ?? (
       fileUndoMode === UNDO_REDO_DIRECTIONS.REDO
         ? `Redo ${actionNoun} ${path}`
         : `Undo ${actionNoun} ${path}`
-    }
+    )}
     onClick={onUndoFile}
   >
     <Icon
@@ -273,6 +276,7 @@ interface FileEditOutputProps {
   }>;
   error?: string;
   onUndoFile?: () => void;
+  undoDisabledReason?: string;
   fileUndoMode?: UndoRedoDirection;
   /** When true, suppresses the diff display (used when a COMPLETED event for the same file follows) */
   hideDiff?: boolean;
@@ -311,6 +315,7 @@ export const FileEditOutput = memo<FileEditOutputProps>(
     structuredPatch,
     error,
     onUndoFile,
+    undoDisabledReason,
     fileUndoMode = UNDO_REDO_DIRECTIONS.UNDO,
     hideDiff = false,
     collapsed,
@@ -345,6 +350,7 @@ export const FileEditOutput = memo<FileEditOutputProps>(
           path={path}
           onUndoFile={onUndoFile}
           fileUndoMode={fileUndoMode}
+          disabledReason={undoDisabledReason}
         />
       ) : null;
 
@@ -401,6 +407,7 @@ interface FileWriteOutputProps {
   content?: string;
   error?: string;
   onUndoFile?: () => void;
+  undoDisabledReason?: string;
   fileUndoMode?: UndoRedoDirection;
   className?: string;
 }
@@ -414,6 +421,7 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
   content,
   error,
   onUndoFile,
+  undoDisabledReason,
   fileUndoMode = UNDO_REDO_DIRECTIONS.UNDO,
   className = "",
 }) => {
@@ -441,6 +449,7 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
             path={path}
             onUndoFile={onUndoFile}
             fileUndoMode={fileUndoMode}
+            disabledReason={undoDisabledReason}
           />
         ) : null
       }
@@ -514,6 +523,7 @@ interface FileDeleteOutputProps {
   success?: boolean;
   error?: string;
   onUndoFile?: () => void;
+  undoDisabledReason?: string;
   fileUndoMode?: UndoRedoDirection;
   className?: string;
 }
@@ -526,6 +536,7 @@ export const FileDeleteOutput: React.FC<FileDeleteOutputProps> = ({
   success,
   error,
   onUndoFile,
+  undoDisabledReason,
   fileUndoMode = UNDO_REDO_DIRECTIONS.UNDO,
   className = "",
 }) => {
@@ -548,6 +559,7 @@ export const FileDeleteOutput: React.FC<FileDeleteOutputProps> = ({
             onUndoFile={onUndoFile}
             fileUndoMode={fileUndoMode}
             actionNoun="deletion of"
+            disabledReason={undoDisabledReason}
           />
         ) : null
       }

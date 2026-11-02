@@ -50,6 +50,7 @@ export const TIMELINE_EVENT_TYPES = {
   RETRY_SCHEDULED: "retryScheduled",
   FOLLOW_UP_RESPONSE_APPENDED: "followUpResponseAppended",
   RUN_TERMINATED: "runTerminated",
+  RUN_IMPORTED: "runImported",
   STATUS_MESSAGE_RECORDED: "statusMessageRecorded",
   DEFINITION_REVISION_COMMITTED: "definitionRevisionCommitted",
   // Legacy aggregate event retained for read compatibility only.
@@ -168,6 +169,7 @@ export interface RunSummary {
   worktree?: WorktreeRunProjection;
   /** Durable notice when an inherited worktree default degraded to none. */
   worktreeNotice?: string;
+  importedFrom?: import("./CtrlYokeTypes").WorkflowLineageDescriptor["importedFrom"];
 }
 
 export interface HistorySearchResult {
@@ -441,6 +443,12 @@ export interface RunTerminatedEventDraft extends RunTimelineEventDraftBase {
   };
 }
 
+/** Marks the first sequence after an imported history bundle. */
+export interface RunImportedEventDraft extends RunTimelineEventDraftBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.RUN_IMPORTED;
+  payload: Record<string, never>;
+}
+
 export interface StatusMessageRecordedEventDraft extends TargetedTimelineEventDraftBase {
   eventType: typeof TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED;
   payload: {
@@ -502,6 +510,7 @@ export type WorkflowTimelineEventDraft =
   | RetryScheduledEventDraft
   | FollowUpResponseAppendedEventDraft
   | RunTerminatedEventDraft
+  | RunImportedEventDraft
   | StatusMessageRecordedEventDraft
   | StatusMessagesUpdatedEventDraft
   | WorkspaceSnapshotCapturedEventDraft
@@ -659,6 +668,11 @@ export interface DefinitionRevisionCommittedEvent extends RunTimelineEventBase {
   };
 }
 
+export interface RunImportedEvent extends RunTimelineEventBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.RUN_IMPORTED;
+  payload: Record<string, never>;
+}
+
 export type WorkflowTimelineEvent =
   | DefinitionRevisionCommittedEvent
   | WorkflowRuntimeTransitionRecordedEvent
@@ -671,6 +685,7 @@ export type WorkflowTimelineEvent =
   | RetryScheduledEvent
   | FollowUpResponseAppendedEvent
   | RunTerminatedEvent
+  | RunImportedEvent
   | StatusMessageRecordedEvent
   | StatusMessagesUpdatedEvent
   | WorkspaceSnapshotCapturedEvent

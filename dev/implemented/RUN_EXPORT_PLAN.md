@@ -1,14 +1,47 @@
 # Run Export / Import
 
-> Last reviewed against code: 2026-10-26. The status below is accurate; every cited symbol
+> Last reviewed against code: 2026-11-02 (all six phases, including the guide, are built). The status below is accurate; every cited symbol
 > exists. Two gaps found in review, now written into §2.1 and §6: the exporter never maps a
 > worktree run's execution root to `${workspaceFolder}`, and an importer must write run files
 > through the definition anchor (`bcc6c74a1`, `aa2f6117d`), or the imported run loads
 > read-only.
 >
-> **Status:** Export half built 2026-10-18 and shipped in `0.2.0` (`ctrlyoke export`, bundle
-> schema 1). Not built: import, **continuing an imported run** (§5, added 2026-10-24), bundling
-> workspace changes and assets, and the dashboard UI. Originally written 2026-08-14.
+> **Status:** Implemented 2026-11-02. All six phases are built, and the review findings are
+> fixed: session-resume warnings are status messages rather than response text, and
+> `--changes worktree` works for every worktree mode (`32e17816e`); continuation reads
+> `run.ctrlyoke.json` as the full working file and view-only imports refuse to continue
+> (`086fd4e80`); imported asset references are rewritten per reference to
+> `.ctrlyoke/attachments/` and cleaned up on failure (`03a730e8b`); placement rolls back on a
+> failed import and applies at the repository root (`b3bd38d38`); the patch keeps raw bytes and
+> redacts only added UTF-8 lines (`cf8eb2f2c`); the extension refuses undo of pre-import
+> outputs, not just the dashboard (`b4edb4444`). Export half built 2026-10-18 and shipped in `0.2.0` (`ctrlyoke export`, bundle
+> schema 1). The worktree execution-root portability gap, `redaction.byFile`, phase 2 asset
+> bundling, and phase 4 continuation were built within schema 1 on 2026-11-01. Phase 5 was built on
+> 2026-11-01: resolved session IDs are preflighted by exact ID, missing/invalid sessions start fresh with a visible
+> warning, and Codex/OpenCode missing-session errors retry without resume. Open item: a verified
+> Copilot CLI or Antigravity CLI rejection string was not found, so those runtime classifiers
+> remain unimplemented; their normal local-store misses are handled by preflight. Phase 3's
+> shared materializer, view-only bundle importer core and `ctrlyoke import` are now built:
+> `RunMaterializer`, `RunBundleImporter` and `RunImportCommand` under `src/core/orchestration/`
+> and `src/cli/`, including streaming validation, asset import, provenance and re-import detection.
+> Phase 3's dashboard side is built: imported lineage provenance reaches run/history
+> payloads, the dashboard shows the origin badge, and pre-import output is read-only
+> at the import-sequence marker. Phase 3 is complete. Phase 4's preview service is
+> built in `src/core/orchestration/RunImportPreview.ts`; `ctrlyoke import` prints it
+> before importing and includes it additively in `--json`. It reports importing-machine
+> execution properties, secret approvals, session probes, redaction, base-commit and
+> asset blockers without writing state. Phase 4 import-side continuation is complete: imported runtime is normalized and anchored,
+> workspace patches are safely placed, and continuation is explicit. Adding optional `_runtime.importedFrom` is additive;
+> `PersistedSchemaGuard` keeps run-file format 2, and the run-file reader ignores unknown runtime fields, so no schema bump is needed.
+> Originally
+> written 2026-08-14.
+>
+> **Dashboard Export built 2026-11-01:** the workflow context menu exports an addressed settled
+> run, with shared Save/Export location fields, a continuation preview, snapshot and patch
+> options, and a post-export redaction/path/warning review.
+>
+> **Dashboard Import built 2026-11-01:** Import Run, Load routing and the import preview are
+> built. The full guide page was added in phase 6; every planned phase is complete.
 >
 > **Built 2026-10-18:** `exportRunBundle` (`src/core/orchestration/RunBundleExporter.ts`), the
 > loader `readRunBundle` (`RunBundleReader.ts`, today used only by media replay), the format types
@@ -105,13 +138,10 @@ legacy aggregates retained for read compatibility.
 
 **Absolute paths.** Built: `RunBundlePaths` tokenizes them, and `externalPaths` in `run.json`
 lists absolute paths the run touched outside the workspace and home.
-**Gap (2026-10-26):** `ctrlyoke export` (`src/cli/RunExportCommand.ts`) passes the source
-checkout as `workspaceRoot`. A run that executed in a managed or named worktree
-(`_runtime.worktree.executionRoot`, by default under `~/.ctrlyoke/worktrees/<identity>/`)
-therefore exports its file paths as `~/.ctrlyoke/worktrees/…` or as external absolute
-paths, not as `${workspaceFolder}/…`. The exporter should rewrite the run's
-`executionRoot` (and its `namedWorkspaceRoots`) to `${workspaceFolder}` as well. This needs
-fixing before import (phase 3), and §5.3 depends on it.
+**Fixed 2026-11-01:** the exporter reads the run's `_runtime.worktree` and adds its
+`executionRoot`, `executionCheckoutRoot`, `worktreePath`, and named workspace roots to
+the workspace path rewrite set. The source checkout remains `sourceRoot`; worktree paths
+in events now become `${workspaceFolder}/…` and are not reported as external paths.
 
 **Identity.** `allocateWorkflowKey` guarantees uniqueness only within one runs root. Export
 demotes `workflowKey`/`runRef`/`runId` to `provenance`; import allocates fresh ones through the
@@ -123,18 +153,21 @@ never assumed.
 **Secrets.** Built: redaction runs at the export boundary and is irreversible by design. The
 exporter re-resolves the workflow's declared secrets (a `RunSecretRedactor` only holds values
 while its run executes) and runs `redactPreviewText` with those exact values plus heuristics.
-`run.json` records `redaction.removedCount` and `byRule`. Continuation adds one requirement: the
-redaction summary must say **which file** was touched, because a removal inside a _pending_
-step's prompt changes what the importing machine will execute (§5.2).
+`run.json` records `redaction.removedCount`, `byRule`, and `byFile` (the latter is an additive
+schema-1 field). The per-file summary identifies when redaction changes a _pending_ step's
+prompt, because that changes what the importing machine will execute (§5.2).
 
-**Assets.** Not built. Attachments and prompt bodies live in
+**Assets.** Built 2026-11-01. Attachments and prompt bodies live in
 `<stateRoot>/.ctrlyoke/{attachments,prompts}/`, are gitignored, and stay workspace-scoped. A
 bundle without them is a bundle of dangling `@` references, and a continuable bundle without
 them runs pending steps against missing files. **Reuse the Save As machinery**:
 `analyzeWorkflowBundle` (`src/utils/WorkflowBundleAnalyzer.ts`) discovers references, plans
 copies, inlines lone prompt bodies and rewrites refs; `writeWorkflowBundle`
 (`src/utils/WorkflowBundleWriter.ts`) stages and publishes them atomically. Do not write a
-second asset copier.
+second asset copier. Export diagnostics are warnings; missing attachments remain referenced and
+are reported. Referenced UTF-8 text assets receive the normal secret redaction pass; binary assets
+are copied byte-for-byte. `run.json` records each copied asset's bundle-relative path, SHA-256 and
+byte length, and `readRunBundle` validates all three. A bundle without `assets` remains readable.
 
 ---
 
@@ -217,17 +250,18 @@ own** workspace and never against the exporter's path.
 `RunBundleExporter` (`src/core/orchestration/`, vscode-free so the CLI and the extension share
 it). Steps 1, 2, 4, 5 and 6 are built.
 
-1. **Resolve the run** and refuse one whose lineage holds a live `runner.json`. _Built._
-   Continuation adds: refuse a run with `_runtime.pendingRewind` (commit or discard the rewind
-   first), and refuse states `pausing`/`cancelling` (transient; the lock check normally catches
-   them).
+1. **Resolve the run** and refuse one whose lineage holds a live `runner.json`, whose
+   `_runtime.pendingRewind` is set (commit or discard the rewind first), or whose state is
+   `pausing`/`cancelling`. _Built._
 2. **Read** through `TimelineRecorder.streamEvents`. _Built._
 3. **Plan assets** with `analyzeWorkflowBundle`; surface its diagnostics as export warnings. A
-   missing attachment is reported, not silently dropped. _Not built._
+   missing attachment is reported, not silently dropped. _Built 2026-11-01._
 4. **Rewrite** paths. _Built._
 5. **Redact.** _Built._ Add the per-file breakdown.
 6. **Write atomically** through a staging sibling and a rename. _Built._
-7. **NEW, continuation only:** write `run.ctrlyoke.json` and `changes.patch` (§5.1, §5.3).
+7. **Continuation only:** write `run.ctrlyoke.json` and, unless `--no-changes` is set,
+   `changes.patch` (§5.1, §5.3). Hash and validate the patch in the reader, and report its
+   files in the CLI summary. _Export side built 2026-11-01._
 
 Whether a bundle is continuable is **derived, not chosen**: the exporter writes the continuation
 parts whenever the run has pending work (`assertRunHasWorkToContinue` in
@@ -237,13 +271,28 @@ run gets a history-only bundle. One format, one exporter, no "export kind" to pi
 CLI (additive to the shipped command):
 
 ```
-ctrlyoke export -w <workflow> [--run <ref|runId>] -o <dir> [--with-snapshots] [--no-changes] [--force] [--json]
-ctrlyoke import <bundleDir> [--continue] [--json]
+ctrlyoke export -w <workflow> [--run <ref|runId>] -o <dir> [--with-snapshots] [--with-stream-deltas] [--no-changes] [--force] [--json]
+ctrlyoke import <bundleDir> [--continue] [--changes <worktree|checkout|skip>] [--name <name>] [--again] [--cwd <path>] [--json]
 ```
 
 `--no-changes` skips `changes.patch` (for a run whose changes the user syncs through git
 themselves). The `export` description changes from "one finished run" to "one settled run";
 the `--json` envelope gains `continuable` and `continuation`.
+
+`import` always prints the import preview (§5.2, §5.4) before it writes anything, and its
+`--json` envelope carries the same preview. `--changes` picks where `changes.patch` lands
+(§5.3): `worktree` is a new managed worktree at `baseCommit`, `checkout` is the checkout named
+by `--cwd` (it must be clean and at `baseCommit`), and `skip` means "I've synced the code myself"
+(ctrlyoke compares the tree to the patch and warns on mismatch). Default: `worktree` for a
+`managed` run, `checkout` for `none`/`named`. A `checkout` that isn't clean or at `baseCommit`
+fails with a message naming `--changes worktree` and `--changes skip`; it never falls back
+silently. `--again` imports a bundle that was already imported (open question 5); without it,
+`import` reports the existing import and exits. `--name` overrides the lineage name. A bundle
+without continuation parts ignores `--continue`/`--changes` with a warning and imports
+view-only. (Added 2026-11-01: the original CLI line had no way to choose §5.3's target.)
+
+The preview is one vscode-free service (`RunImportPreview`, `src/core/orchestration/`) that
+both `ctrlyoke import` and the dashboard's import modal (§7) render. Neither builds its own.
 
 ---
 
@@ -306,8 +355,9 @@ checkout. ctrlyoke must not copy files around ad hoc, so carry the changes git-n
   from the base commit to the working tree covers both commits made during the run and
   uncommitted edits, so it doesn't matter whether steps committed. Commit history isn't
   preserved, only the tree, and that is enough to continue.
-- The patch goes through the **same redaction pass** (it is file contents leaving the machine),
-  and the export summary shows its file count before anything is shared. `--no-changes` skips it.
+- Redaction applies **only to added lines in valid UTF-8 text hunks**. Patch headers, context,
+  removed lines, binary hunks, and invalid UTF-8 hunks are preserved unchanged. The export
+  summary reports patch redactions and their counts; `--no-changes` skips the patch.
 - **Import** requires `baseCommit` to exist locally (`git cat-file -e`). If it doesn't, the user
   is told exactly what to do ("push/fetch commit 3f9c2a1"), and the run imports as view-only
   until they do.
@@ -555,19 +605,47 @@ How they work together instead:
 
 ## 9. Phasing
 
-| Phase | Content                                                                                                      | Ships value alone?                         |
-| ----- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
-| 1 ✅  | Bundle format, path rewrite, `RunBundleExporter`, `ctrlyoke export`, redaction (`secrets-v1`)                | Yes: shareable artifacts (shipped `0.2.0`) |
-| 2     | Asset bundling via the Save As machinery; `redaction.byFile`                                                 | Yes: bundles stop dangling `@` refs        |
-| 3     | `RunMaterializer` + `ctrlyoke import` (view-only), ingress guards (§6.1), origin badge                       | Yes: completes the share loop              |
-| 4     | Continuation: `run.ctrlyoke.json`, `changes.patch`, `_runtime` normalization, `import --continue`            | Yes: the machine-to-machine handoff        |
-| 5     | Session preflight probe for all runs, uniform warn-and-start-fresh fallback, malformed IDs included (§5.4)   | Yes: fixes native runs too                 |
-| 6     | Dashboard: Export Run / Import Run actions, shared location fields, Load routing, import preview, guide page | Yes                                        |
+| Phase | Content                                                                                                                                               | Ships value alone?                                        |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| 1 ✅  | Bundle format, path rewrite, `RunBundleExporter`, `ctrlyoke export`, redaction (`secrets-v1`)                                                         | Yes: shareable artifacts (shipped `0.2.0`)                |
+| 2 ✅  | Asset bundling via the Save As machinery (`redaction.byFile` and asset hashing)                                                                       | Yes: bundles stop dangling `@` refs                       |
+| 3 ✅  | `RunMaterializer` + `RunBundleImporter` view-only core, ingress guards (§6.1), `ctrlyoke import`, dashboard provenance badge and pre-import undo gate | Completes the CLI share loop; imported runs can be viewed |
+| 4 ✅  | Continuation: export side, import preview, normalized runtime, safe workspace patch placement, `import --continue`                                    | Yes: the machine-to-machine handoff                       |
+| 5 ✅  | Session preflight probe for all runs, uniform warn-and-start-fresh fallback, malformed IDs included (§5.4)                                            | Yes: fixes native runs too                                |
+| 6 ✅  | Dashboard: Export and Import Run actions, Load routing, import preview, and user guide                                                                | Yes                                                       |
+
+All planned phases are built. Deliberately deferred follow-up: verified runtime
+session-rejection classifiers for Copilot CLI and Antigravity CLI; preflight
+handles their normal local-store misses, and no verified rejection text was
+available to implement the runtime classifiers. The open mid-step export
+question remains for later review (§10.8). Chunk-event collapse is implemented
+and settled in §10.3; collapsed imports omit incremental per-chunk TEXT activity
+entries, while retaining the sealed output projection.
 
 Phase 5 is a **release gate on phase 4**, the way redaction was on phase 1: without it, four of
 six harnesses fail the first step that tries to resume a session from the other machine. It has
 no dependency on the import work, so it can land first. A native run whose harness session was
 cleaned up benefits the same way.
+
+**Build order (updated 2026-11-01):** the §2.1 worktree-root fix and `redaction.byFile`;
+phase 2 assets (built 2026-11-01; implementation stayed within schema 1 and added an optional
+manifest field); phase 5 (built 2026-11-01: exact-ID probes for all six harnesses, warning and
+fresh-session fallback for missing/invalid IDs, plus Codex/OpenCode runtime rejection recovery;
+Copilot and Antigravity runtime rejection classifiers remain open pending verified CLI error
+text); phase 3 core (shared materializer, bundle importer, CLI import, origin badge and undo
+gating, all built 2026-11-01); phase 4 (export side, preview and import-side continuation,
+built 2026-11-01); phase 6
+(Export Run, then Import Run and Load routing, then the guide page; all built
+2026-11-01). The run-bundle importer now rewrites complete asset references to
+workspace-relative `.ctrlyoke/attachments/` paths and removes files it created
+when materialization fails. Bundles do not distinguish prompt assets from
+attachments, so all imported assets use the attachment store. Phase 5 lands
+before phase 4 because the import preview reports session availability through
+its probe.
+
+**Follow-up fix (2026-11-02):** imported continuation prompts now resolve their
+bundled asset references, and failed imports remove assets newly copied into
+the workspace.
 
 ---
 
@@ -576,9 +654,17 @@ cleaned up benefits the same way.
 1. **Bundle a lineage or a single run?** Settled: a single run. A lineage bundle is a directory of
    run bundles plus a shared asset store, if ever wanted.
 2. **Redaction default.** Settled: always on (`secrets-v1`); no opt-out.
-3. **Chunk events.** Keep `cliOutputChunkAppended` streaming deltas, or collapse to the sealed
-   aggregate at export? Proposed: collapse. The deltas are a streaming implementation detail
-   and dominate bundle size. Still open: the shipped exporter copies them as-is.
+3. **Chunk events.** Settled: collapse `cliOutputChunkAppended` deltas by default. Deltas in a
+   streaming interval followed by a sealed aggregate are removed. Consecutive chunks in an
+   unsealed interval are merged into one event at the first chunk's timestamp and sequence, so
+   stopped mid-step output remains available. A streaming placeholder reopens a previously
+   sealed attempt; only deltas superseded by a later sealed aggregate are removed. Structured
+   `cliOutputEventsAppended` events remain unchanged. `--with-stream-deltas` keeps every chunk
+   and its timing for media replay; the dashboard export uses the default collapsed form.
+   Export updates `eventCount` to match the bundle. Sequence gaps remain valid: importer drops
+   source sequence numbers and re-stamps events contiguously. The adapter's output projection
+   still renders the sealed aggregate in the output pane; collapsed imports have no per-chunk
+   TEXT activity entries, so their activity view omits those incremental entries.
 4. **Workspace snapshots.** Settled: dropped by default, `--with-snapshots` to opt in.
 5. **Re-import of an already-imported bundle.** Settled 2026-10-24: detect (match on
    `provenance.runRef` + `sourceRoot` + `exportedAt`) and offer "open the existing import", with

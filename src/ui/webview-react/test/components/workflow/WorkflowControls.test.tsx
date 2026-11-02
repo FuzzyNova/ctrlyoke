@@ -66,6 +66,9 @@ describe("WorkflowControls — dropdown options", () => {
     expect(
       screen.getByRole("option", { name: /Load from File/i })
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: /Import Run/i })
+    ).toBeInTheDocument();
   });
 
   it("posts NEW_WORKFLOW when 'New From Template' clicked", async () => {

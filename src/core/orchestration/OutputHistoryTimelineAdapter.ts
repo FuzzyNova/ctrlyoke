@@ -220,6 +220,9 @@ export class OutputHistoryTimelineAdapter {
 
     for (const event of [...events].sort(compareTimelineEvents)) {
       switch (event.eventType) {
+        case TIMELINE_EVENT_TYPES.RUN_IMPORTED:
+          history.importedSequenceBoundary = event.sequence;
+          break;
         case TIMELINE_EVENT_TYPES.WORKFLOW_RUNTIME_TRANSITION_RECORDED:
           orderedEntries.push({
             kind: OUTPUT_HISTORY_KINDS.RUNTIME,

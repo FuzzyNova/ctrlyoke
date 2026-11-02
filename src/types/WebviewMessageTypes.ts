@@ -142,6 +142,7 @@ import type {
   WorkspaceStatsSnapshot,
 } from "./UsageTypes";
 import type { CommitMessageGenerationRecord } from "../git/CommitMessageGenerationTracker";
+import type { RunImportPreview } from "./RunImportPreviewTypes";
 export type { CommitMessageGenerationRecord } from "../git/CommitMessageGenerationTracker";
 import type {
   HistoryTrashEntryKind,
@@ -1322,6 +1323,54 @@ export interface SaveWorkflowDialogDataMessage {
   defaultFormat: WorkflowFileFormat;
 }
 
+export interface RequestRunExportInfoMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_RUN_EXPORT_INFO;
+  requestId: string;
+  address: Extract<WorkflowViewAddress, { kind: "run" }>;
+  workflowName: string;
+}
+
+export interface RunExportInfoMessage {
+  type: typeof MESSAGE_TYPES.RUN_EXPORT_INFO;
+  requestId: string;
+  address: Extract<WorkflowViewAddress, { kind: "run" }>;
+  workflowName: string;
+  defaultPath: string;
+  continuable: boolean;
+  changedFiles: string[];
+}
+
+export interface ExportRunMessage {
+  type: typeof MESSAGE_TYPES.EXPORT_RUN;
+  requestId: string;
+  address: Extract<WorkflowViewAddress, { kind: "run" }>;
+  bundleDir: string;
+  includeSnapshots: boolean;
+  includeChanges: boolean;
+}
+
+export interface RunExportedMessage {
+  type: typeof MESSAGE_TYPES.RUN_EXPORTED;
+  requestId: string;
+  bundleDir: string;
+  eventCount: number;
+  continuable: boolean;
+  changedFiles: string[];
+  redaction: {
+    removedCount: number;
+    byRule: Record<string, number>;
+    byFile?: Record<string, number>;
+  };
+  externalPaths: string[];
+  warnings: string[];
+}
+
+export interface RunExportFailedMessage {
+  type: typeof MESSAGE_TYPES.RUN_EXPORT_FAILED;
+  requestId: string;
+  error: string;
+}
+
 /** Webview → Extension: non-mutating overwrite/security preflight for an export path. */
 export interface CheckSavePathMessage {
   type: typeof MESSAGE_TYPES.CHECK_SAVE_PATH;
@@ -1375,6 +1424,40 @@ export interface SaveWorkflowMessage {
   format: WorkflowFileFormat;
   planFingerprint?: string;
   pathCheckRequestId?: string;
+}
+
+export interface RequestRunImportPreviewMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_RUN_IMPORT_PREVIEW;
+  requestId: string;
+  bundleDir: string;
+}
+export interface RunImportPreviewMessage {
+  type: typeof MESSAGE_TYPES.RUN_IMPORT_PREVIEW;
+  requestId: string;
+  bundleDir: string;
+  preview?: RunImportPreview;
+  error?: string;
+}
+export interface ImportRunMessage {
+  type:
+    | typeof MESSAGE_TYPES.IMPORT_RUN
+    | typeof MESSAGE_TYPES.IMPORT_RUN_AND_CONTINUE;
+  requestId: string;
+  bundleDir: string;
+  changes?: "worktree" | "checkout" | "skip";
+  again?: boolean;
+}
+export interface RunImportResultMessage {
+  type: typeof MESSAGE_TYPES.RUN_IMPORT_RESULT;
+  requestId: string;
+  workflowKey?: WorkflowKey;
+  runRef?: RunRef;
+  error?: string;
+}
+export interface OpenImportedRunMessage {
+  type: typeof MESSAGE_TYPES.OPEN_IMPORTED_RUN;
+  workflowKey: WorkflowKey;
+  runRef?: RunRef;
 }
 
 /**
@@ -2102,6 +2185,8 @@ export interface RunViewLoadedMessage {
   runDirectory?: string;
   workingFile: WorkingFile;
   workflowName?: string;
+  /** Lineage provenance when the addressed run was imported. */
+  importedFrom?: import("./CtrlYokeTypes").WorkflowLineageDescriptor["importedFrom"];
   history: WorkflowOutputHistory | null;
   runSummaries: RunSummary[];
   workflowProperties: Record<string, unknown>;
@@ -3489,6 +3574,8 @@ export interface WorkflowDocumentDiagnosticsMessage {
  * Union type for all incoming messages from extension to webview
  */
 export type IncomingMessage =
+  | RunImportPreviewMessage
+  | RunImportResultMessage
   | { type: typeof MESSAGE_TYPES.INIT; data: InitMessageData }
   | CoordinationScopeUpdatedMessage
   | OpenGlobalSettingsTabMessage
@@ -3582,6 +3669,9 @@ export type IncomingMessage =
       sourceDefinitionPath?: string;
     }
   | SaveWorkflowDialogDataMessage
+  | RunExportInfoMessage
+  | RunExportedMessage
+  | RunExportFailedMessage
   | SavePathCheckedMessage
   | WorkflowSavedMessage
   | WorkflowSaveFailedMessage

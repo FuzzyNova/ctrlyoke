@@ -30,6 +30,18 @@ import {
 export class VsCodeDashboardHostActions implements DashboardHostActions {
   constructor(private readonly feedbackSink?: UserFeedbackSink) {}
 
+  async chooseRunBundleLoad(): Promise<"import" | "workflow" | undefined> {
+    const choice = await vscode.window.showQuickPick(
+      [
+        "Import this run (continue where it stopped)",
+        "Load its workflow only (start over)",
+      ],
+      { title: "This workflow belongs to a ctrlyoke run bundle" }
+    );
+    if (!choice) return undefined;
+    return choice.startsWith("Import") ? "import" : "workflow";
+  }
+
   async openWorkspaceTarget(
     target: WorkspaceOpenTarget
   ): Promise<ActionResult> {
