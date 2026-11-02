@@ -6,7 +6,13 @@
 > through the definition anchor (`bcc6c74a1`, `aa2f6117d`), or the imported run loads
 > read-only.
 >
-> **Status:** Complete. Export half built 2026-10-18 and shipped in `0.2.0` (`ctrlyoke export`, bundle
+> **Status:** All phases built; review fixes in progress. The 2026-11-01 review found that
+> continuation reads `run.ctrlyoke.json` as the wrong shape, a view-only import could still
+> be continued, imported asset references broke, placement had no rollback, the patch was
+> path-rewritten and over-redacted, and pre-import undo was gated only in the UI. Fixes are
+> queued in the orchestrating workflow; this plan moves to `dev/implemented/` once they land.
+> Fixed in review (`32e17816e`): session-resume warnings are status messages rather than
+> response text, and `--changes worktree` works for every worktree mode. Export half built 2026-10-18 and shipped in `0.2.0` (`ctrlyoke export`, bundle
 > schema 1). The worktree execution-root portability gap, `redaction.byFile`, phase 2 asset
 > bundling, and phase 4 continuation were built within schema 1 on 2026-11-01. Phase 5 was built on
 > 2026-11-01: resolved session IDs are preflighted by exact ID, missing/invalid sessions start fresh with a visible
