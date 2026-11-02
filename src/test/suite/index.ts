@@ -21,6 +21,7 @@ import {
   type TestTimings,
 } from "./sharding";
 import { startEventLoopStallWatchdog } from "./eventLoopStallWatchdog";
+import { filterTestFiles, readTestSelection } from "./testSelection";
 import { vscodeGetterGuardHooks } from "./vscodeGetterGuard";
 
 async function activateExtensionForTests(): Promise<void> {
@@ -66,6 +67,8 @@ function recordElapsedPerFile(
 }
 
 export function run(): Promise<void> {
+  const selection = readTestSelection(process.env);
+  const narrowed = selection.grep !== undefined || selection.files.length > 0;
   // Create the mocha test
   const mocha = new Mocha({
     ui: "tdd",
@@ -82,8 +85,11 @@ export function run(): Promise<void> {
     // Fails the exact test that leaves a VS Code API getter frozen, instead of
     // whichever later file in the shard happens to read it.
     rootHooks: vscodeGetterGuardHooks,
-    // Allow focused runs via `MOCHA_GREP="<pattern>"` for fast local iteration.
-    ...(process.env.MOCHA_GREP ? { grep: process.env.MOCHA_GREP } : {}),
+    // Focused runs: `npm run test:extension -- --grep <pattern>` (or the
+    // older `MOCHA_GREP` env var); see `testSelection.ts`.
+    ...(selection.grep !== undefined ? { grep: selection.grep } : {}),
+    // A focused run that selects nothing is a typo, not a pass.
+    failZero: narrowed,
   });
 
   const testsRoot = path.resolve(__dirname, "..");
@@ -119,17 +125,18 @@ export function run(): Promise<void> {
         // a shard split has to be identical in every host or files get run
         // twice or not at all.
         discovered.sort();
+        const selected = filterTestFiles(discovered, selection.files, (file) =>
+          testKey(testsRoot, file)
+        );
         const mine = selectShardFiles(
-          discovered,
+          selected,
           shardIndex,
           shardCount,
-          createWeigher(
-            discovered,
-            readTimings(timingsPath(repoRoot)),
-            (file) => testKey(testsRoot, file)
+          createWeigher(selected, readTimings(timingsPath(repoRoot)), (file) =>
+            testKey(testsRoot, file)
           )
         );
-        if (shardCount > 1) {
+        if (shardCount > 1 || selected.length < discovered.length) {
           console.log(
             `[shard ${shardIndex + 1}/${shardCount}] running ${mine.length} of ${discovered.length} test files`
           );
@@ -141,7 +148,11 @@ export function run(): Promise<void> {
         // Run the mocha test
         const elapsed: TestTimings = {};
         const runner = mocha.run((failures: number) => {
-          writeShardTimings(repoRoot, shardIndex, elapsed);
+          // A grep times only the matching cases, which would record a file
+          // as far cheaper than it is and skew the next full run's split.
+          if (selection.grep === undefined) {
+            writeShardTimings(repoRoot, shardIndex, elapsed);
+          }
           if (failures > 0) {
             e(new Error(`${failures} tests failed.`));
           } else {

@@ -4,6 +4,10 @@ import * as path from "path";
 import { Writable } from "stream";
 import { mergeShardTimings } from "./suite/sharding";
 import { STALL_REPORT_ENV_VAR } from "./suite/eventLoopStallWatchdog";
+import {
+  parseTestSelectionArgs,
+  testSelectionToEnv,
+} from "./suite/testSelection";
 
 /**
  * How many VS Code instances to split the extension-host suite across.
@@ -54,7 +58,8 @@ function createShardSink(): { stream: Writable; text(): string } {
 
 async function runShard(
   vscodeExecutablePath: string,
-  index: number
+  index: number,
+  selectionEnv: Readonly<Record<string, string>>
 ): Promise<ShardResult> {
   // Every shard needs its own state home *and* its own `--user-data-dir`:
   // VS Code treats a user-data dir as an exclusive single-instance lock, so
@@ -88,6 +93,7 @@ async function runShard(
       extensionTestsPath: path.resolve(__dirname, "./suite/index"),
       launchArgs: ["--user-data-dir", userDataDir],
       extensionTestsEnv: {
+        ...selectionEnv,
         CTRLYOKE_HOME: stateHome,
         TMPDIR: resolvedTmpDir,
         CTRLYOKE_TEST_SHARD_INDEX: String(index),
@@ -150,6 +156,17 @@ async function main() {
   // Code.exe, Electron runs as plain Node and rejects VS Code launch flags.
   delete process.env.ELECTRON_RUN_AS_NODE;
 
+  let selectionEnv: Record<string, string>;
+  try {
+    selectionEnv = testSelectionToEnv(
+      parseTestSelectionArgs(process.argv.slice(2))
+    );
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 2;
+    return;
+  }
+
   const { downloadAndUnzipVSCode } = await import("@vscode/test-electron");
   // Resolve (and if needed download/unzip) the build once up front. Letting
   // every shard do this concurrently races them onto the same cache directory.
@@ -157,7 +174,7 @@ async function main() {
 
   const results = await Promise.all(
     Array.from({ length: SHARD_COUNT }, (_unused, index) =>
-      runShard(vscodeExecutablePath, index)
+      runShard(vscodeExecutablePath, index, selectionEnv)
     )
   );
 
