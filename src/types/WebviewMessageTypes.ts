@@ -2102,6 +2102,8 @@ export interface RunViewLoadedMessage {
   runDirectory?: string;
   workingFile: WorkingFile;
   workflowName?: string;
+  /** Lineage provenance when the addressed run was imported. */
+  importedFrom?: import("./CtrlYokeTypes").WorkflowLineageDescriptor["importedFrom"];
   history: WorkflowOutputHistory | null;
   runSummaries: RunSummary[];
   workflowProperties: Record<string, unknown>;

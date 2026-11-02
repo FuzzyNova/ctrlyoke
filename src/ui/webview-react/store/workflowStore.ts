@@ -288,6 +288,8 @@ interface WorkflowState {
     finalStepOutputs?: Record<number, StepOutput>;
     runMetadata: WorkflowRunMetadata;
   } | null;
+  /** Import boundary retained while a run's history is promoted to live output. */
+  importedSequenceBoundary: number | null;
   /** Live workspace snapshots keyed by stepIndex (queue) */
   workspaceSnapshots: Record<number, WorkspaceSnapshot>;
   /** Live workspace snapshots keyed by loopIndex (finalStep) */
@@ -550,6 +552,7 @@ const initialState: WorkflowState = {
   streamingChunks: {},
   finalStepStreamingChunks: {},
   historyOutputs: null,
+  importedSequenceBoundary: null,
   workspaceSnapshots: {},
   finalStepWorkspaceSnapshots: {},
   undoResults: {},
@@ -1525,6 +1528,9 @@ export const useWorkflowStore = create<
             finalStepLoopCount,
             finalStepPhase,
             schemaWarnings,
+            importedSequenceBoundary: preserveLiveOutput
+              ? state.importedSequenceBoundary
+              : null,
             // Clear runtime state on new workflow. `preserveReferences`
             // keeps the existing (already-empty) references stable so a
             // replayed clear is identity-neutral.
@@ -1608,8 +1614,11 @@ export const useWorkflowStore = create<
                   executionState: history.executionState,
                   worktree: history.worktree,
                   worktreeNotice: history.worktreeNotice,
+                  importedFrom: history.importedFrom,
+                  importedSequenceBoundary: history.importedSequenceBoundary,
                 },
               }),
+              importedSequenceBoundary: history.importedSequenceBoundary ?? null,
               undoRecords: preserveReferences(state.undoRecords, {}),
               workspaceSnapshots: preserveReferences(
                 state.workspaceSnapshots,
@@ -1653,6 +1662,8 @@ export const useWorkflowStore = create<
               // the rehydrated timeline matches what the store already holds,
               // so the output pane doesn't redraw unchanged rows.
               historyOutputs: null,
+              importedSequenceBoundary:
+                history.importedSequenceBoundary ?? null,
               liveOrderedEntries: preserveReferences(
                 state.liveOrderedEntries,
                 overlay.entries

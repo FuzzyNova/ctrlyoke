@@ -66,6 +66,7 @@ type OutputHistoryView = {
 } | null;
 
 interface UseOutputUndoActionsInput {
+  importedSequenceBoundary?: number | null;
   allMessages: OutputMessage[];
   allowUndoActions: boolean;
   finalStepWorkspaceSnapshots: Record<number, WorkspaceSnapshot>;
@@ -104,6 +105,7 @@ function toUndoExecutionTarget(
 }
 
 export function useOutputUndoActions({
+  importedSequenceBoundary,
   allMessages,
   allowUndoActions,
   finalStepWorkspaceSnapshots,
@@ -159,6 +161,16 @@ export function useOutputUndoActions({
         const lastMsg = allMessages[lastCliIdx];
         const lastOutput = lastMsg?.data as CliOutputType | undefined;
         if (!lastOutput || lastOutput.isStreaming) continue;
+        const importedBoundary =
+          importedSequenceBoundary ??
+          historyOutputs?.runMetadata.importedSequenceBoundary;
+        if (
+          importedBoundary !== undefined &&
+          lastMsg.sequence !== undefined &&
+          lastMsg.sequence < importedBoundary
+        ) {
+          continue;
+        }
 
         const isFinalStep = msgTarget.kind === FINAL_STEP_PHASES.FINAL_STEP;
         const stepIndex = msgTarget.index;
@@ -389,18 +401,44 @@ export function useOutputUndoActions({
   // Widened past `CliHeaderRow` so a parallel group's header row — which
   // carries the same group-wide `promptUndo` meta — reuses this handler.
   const handlePromptView = useCallback(
-    (row: CliHeaderRow | ParallelGroupHeaderRow) =>
+    (row: CliHeaderRow | ParallelGroupHeaderRow) => {
+      const importedBoundary =
+        importedSequenceBoundary ??
+        historyOutputs?.runMetadata.importedSequenceBoundary;
+      if (
+        importedBoundary !== undefined &&
+        row.sequence !== undefined &&
+        row.sequence < importedBoundary
+      ) {
+        return;
+      }
       handlePromptViewMeta(
         row.target,
         row.promptUndo,
         "stepLabel" in row ? row.stepLabel : undefined,
         "stepName" in row ? row.stepName : undefined
-      ),
-    [handlePromptViewMeta]
+      );
+    },
+    [
+      handlePromptViewMeta,
+      historyOutputs,
+      importedSequenceBoundary,
+      isViewingHistory,
+    ]
   );
 
   const handleFileUndo = useCallback(
     async (row: StructuredEventRow, request: OutputRowFileUndoRequest) => {
+      const importedBoundary =
+        importedSequenceBoundary ??
+        historyOutputs?.runMetadata.importedSequenceBoundary;
+      if (
+        importedBoundary !== undefined &&
+        row.sequence !== undefined &&
+        row.sequence < importedBoundary
+      ) {
+        return;
+      }
       const target = toUndoExecutionTarget(row.target);
       const stepOutputs = stepOutputsMap.get(getTargetKey(row.target));
       const workspacePath =
@@ -467,7 +505,15 @@ export function useOutputUndoActions({
         intent: UNDO_DIALOG_INTENTS.ACT,
       });
     },
-    [openMinimapDialog, requestSnapshotContent, runAddress, stepOutputsMap]
+    [
+      historyOutputs,
+      importedSequenceBoundary,
+      isViewingHistory,
+      openMinimapDialog,
+      requestSnapshotContent,
+      runAddress,
+      stepOutputsMap,
+    ]
   );
 
   const handleWorkflowView = useCallback(() => {
@@ -560,6 +606,7 @@ export function useOutputUndoActions({
       .catch(() => reportWorkspaceSnapshotContentFailure());
   }, [
     historyOutputs,
+    importedSequenceBoundary,
     isViewingHistory,
     finalStepWorkspaceSnapshots,
     requestSnapshotContent,

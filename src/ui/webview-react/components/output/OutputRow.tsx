@@ -1046,6 +1046,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
                 : null
             }
             onUndoFile={handleUndo}
+            undoDisabledReason={row.undoReadOnlyReason}
             fileUndoMode={
               hasFileRedoInstruction(row.undoRecord, data.path)
                 ? "redo"
@@ -1098,6 +1099,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
                       event,
                     })
             }
+            undoDisabledReason={row.undoReadOnlyReason}
             fileUndoMode={
               hasFileRedoInstruction(row.undoRecord, data.path)
                 ? "redo"
@@ -1144,6 +1146,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
                       event,
                     })
             }
+            undoDisabledReason={row.undoReadOnlyReason}
             fileUndoMode={
               hasFileRedoInstruction(row.undoRecord, data.path)
                 ? "redo"
@@ -1625,10 +1628,11 @@ const CliHeaderRowView: React.FC<{
         promptUndoSummary && promptUndoSummary.total > 0 && (
           <button
             type="button"
+            disabled={Boolean(row.undoReadOnlyReason)}
             onClick={() => onPromptView?.(row)}
             style={{ touchAction: "manipulation" }}
-            title={promptUndoSummary.title}
-            aria-label={promptUndoSummary.label}
+            title={row.undoReadOnlyReason ?? promptUndoSummary.title}
+            aria-label={row.undoReadOnlyReason ?? promptUndoSummary.label}
             className="inline-flex min-w-0 max-w-full items-center gap-1 text-link-fg hover:text-link-active-fg transition-colors"
           >
             <Icon name="diff" className="shrink-0" />

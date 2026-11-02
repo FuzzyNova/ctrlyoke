@@ -118,6 +118,23 @@ const MANIFEST: WorkflowRunManifest = {
 };
 
 suite("OutputHistoryTimelineAdapter", () => {
+  test("projects the import marker sequence as the read-only boundary", () => {
+    const marker = {
+      eventType: TIMELINE_EVENT_TYPES.RUN_IMPORTED,
+      workflowId: "workflow",
+      runId: 1,
+      sequence: 3,
+      timestampMs: 3,
+      payload: {},
+    } as const;
+    const history = new OutputHistoryTimelineAdapter().project(MANIFEST, [
+      cliEvent(1, EXECUTION_PHASES.PROMPT, "imported output"),
+      marker,
+    ]);
+
+    assert.strictEqual(history.importedSequenceBoundary, 3);
+  });
+
   test("joins script execution records into the completed dashboard output payload", () => {
     const script: ScriptExecutionRecordedEvent = {
       eventType: TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED,

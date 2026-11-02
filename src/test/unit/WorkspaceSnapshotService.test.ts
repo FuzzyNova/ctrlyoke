@@ -639,6 +639,28 @@ suite("WorkspaceSnapshotService — multi-root", function () {
     assert.match(result.failedFiles[0]?.error ?? "", /traversal/i);
   });
 
+  test("undo cannot write to the source root recorded by an imported output", async () => {
+    const workspaceRoot = await createRepo();
+    const sourceRoot = await createRepo();
+    const sourceFile = path.join(sourceRoot, "source-only.txt");
+    await fs.writeFile(sourceFile, "source contents\n", "utf8");
+
+    const result = await snapshotService.undoFiles(
+      [
+        {
+          path: sourceFile,
+          action: UNDO_FILE_ACTIONS.RESTORE_CONTENT,
+          contentToRestore: "bundle supplied data",
+        },
+      ],
+      workspaceRoot
+    );
+
+    assert.deepStrictEqual(result.restoredFiles, []);
+    assert.strictEqual(result.failedFiles.length, 1);
+    assert.strictEqual(await fs.readFile(sourceFile, "utf8"), "source contents\n");
+  });
+
   test("discovers and persists the execution checkout for remapped named roots", async () => {
     const sourceRoot = await createRepo();
     await fs.mkdir(path.join(sourceRoot, "packages", "app"), {

@@ -142,13 +142,21 @@ class FakeRegistry implements RunViewPublisherRegistryPort {
 }
 
 class FakeLineageRepository implements RunViewPublisherLineageRepository {
-  constructor(private readonly events: string[]) {}
+  constructor(
+    private readonly events: string[],
+    public importedFrom?: NonNullable<
+      import("../../types/CtrlYokeTypes").WorkflowLineageDescriptor["importedFrom"]
+    >
+  ) {}
 
   async readDescriptor(): Promise<{
     revision: number;
     lastModifiedAt: number;
     workflowName: string;
     isSystemGenerated: boolean;
+    importedFrom?: NonNullable<
+      import("../../types/CtrlYokeTypes").WorkflowLineageDescriptor["importedFrom"]
+    >;
   }> {
     this.events.push("read");
     return {
@@ -156,6 +164,7 @@ class FakeLineageRepository implements RunViewPublisherLineageRepository {
       lastModifiedAt: 12,
       workflowName: "fixture",
       isSystemGenerated: false,
+      importedFrom: this.importedFrom,
     };
   }
 }
@@ -175,13 +184,15 @@ async function createPublisher(): Promise<{
   publisher: RunViewPublisher;
   registry: FakeRegistry;
   events: string[];
+  lineageRepository: FakeLineageRepository;
 }> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-run-view-"));
   const events: string[] = [];
   const registry = new FakeRegistry(events);
+  const lineageRepository = new FakeLineageRepository(events);
   const publisher = new RunViewPublisher({
     workspaceRoot: root,
-    lineageRepository: new FakeLineageRepository(events),
+    lineageRepository,
     registry,
     externalRunWatch: new FakeExternalRunWatch(),
     loadFreshInstanceAndReplay: async () => {},
@@ -189,7 +200,7 @@ async function createPublisher(): Promise<{
     getActiveTerminalWorkflowRefs: () => [],
     replayTerminalSessionsTo: () => events.push("terminals"),
   });
-  return { root, publisher, registry, events };
+  return { root, publisher, registry, events, lineageRepository };
 }
 
 async function writeAddressedFile(
@@ -214,6 +225,46 @@ async function writeAddressedFile(
 }
 
 suite("RunViewPublisher", () => {
+  test("carries lineage import provenance in the run-view payload", async () => {
+    const { root, publisher, lineageRepository } = await createPublisher();
+    try {
+      const workflowKey = "imported-lineage" as WorkflowKey;
+      const address: WorkflowViewAddress = {
+        workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      };
+      lineageRepository.importedFrom = {
+        kind: "runBundle",
+        provenance: {
+          workflowKey: "source-lineage" as WorkflowKey,
+          runRef: "run-source" as RunRef,
+          runId: 4,
+          steps: [],
+        },
+        sourceRoot: "/source/project",
+        exportedAt: "2026-10-31T12:00:00.000Z",
+        exportedByVersion: "0.4.1",
+        bundleName: "fixture.ctrlyokerun",
+      };
+      await writeAddressedFile(root, address, 1);
+      const sent: unknown[] = [];
+
+      await publisher.loadRunViewForClient(
+        address,
+        (message) => sent.push(message),
+        "imported-client"
+      );
+
+      const snapshot = sent.find(
+        (message) =>
+          (message as { type?: string }).type === MESSAGE_TYPES.RUN_VIEW_LOADED
+      ) as { importedFrom?: typeof lineageRepository.importedFrom } | undefined;
+      assert.deepStrictEqual(snapshot?.importedFrom, lineageRepository.importedFrom);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("binds the addressed lineage before reading its view", async () => {
     const { root, publisher, registry, events } = await createPublisher();
     try {

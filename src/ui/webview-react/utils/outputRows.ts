@@ -172,6 +172,8 @@ export interface OutputRowBase<TRowKind extends OutputRowKind = OutputRowKind> {
   activityStepType?: StepType;
   /** Identity color painted by OutputRow's inset gutter bar. */
   stepColor?: string;
+  sequence?: number;
+  undoReadOnlyReason?: string;
 }
 
 export interface AttemptGroupSummaryRow extends OutputRowBase<
@@ -259,6 +261,7 @@ export interface CliHeaderRow extends OutputRowBase<
   stepName?: string;
   attemptIndex: number;
   runIndex: number;
+  sequence?: number;
   promptUndo?: OutputRowPromptUndoMeta;
   /**
    * The pane is in the output section header's narrow tier: the header drops
@@ -320,6 +323,7 @@ export interface StructuredEventRow extends OutputRowBase<
     showLabel: boolean;
   };
   eventIndex: number;
+  sequence?: number;
   rawTextOutput: boolean;
   workspaceSnapshot?: WorkspaceSnapshot;
   undoRecord?: UndoRecord;
@@ -2752,6 +2756,7 @@ export function buildOutputRows(
         stepName,
         attemptIndex,
         runIndex,
+        sequence: message.sequence,
         promptUndo,
         narrowLayout: !showParamsLabel,
         estimateSize: 44,
@@ -2977,6 +2982,7 @@ export function buildOutputRows(
         event: visibleEvent.event,
         subagent,
         eventIndex: visibleEvent.originalIndex,
+        sequence: message.sequence,
         rawTextOutput,
         workspaceSnapshot,
         undoRecord,

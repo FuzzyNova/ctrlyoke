@@ -22,6 +22,10 @@ import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
 import { getContextMenuOpener, useLongPress } from "@hooks/useLongPress";
 import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
+import {
+  ImportedOriginBadge,
+  importedOriginAccessibleName,
+} from "../shared/ImportedOriginBadge";
 
 /** One row of the run panel's flat draft+run list. */
 export type RunPanelRow =
@@ -116,6 +120,9 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
     workflowTokenTotalsAccessibleLabel(summary?.tokenTotals),
     runDurationAccessibleLabel(activeExecutionMs),
     timeAgo,
+    summary?.importedFrom?.kind === "runBundle"
+      ? importedOriginAccessibleName(summary.importedFrom)
+      : undefined,
   ]);
   const openContextMenu = (
     x: number,
@@ -193,13 +200,21 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
           ) : undefined
         }
         badge={
-          executionState && (
-            <ExecutionStateBadge
-              state={executionState}
-              isNarrow={isCompactRow(tier)}
-              unstarted={summary?.unstarted}
-            />
-          )
+          <>
+            {executionState && (
+              <ExecutionStateBadge
+                state={executionState}
+                isNarrow={isCompactRow(tier)}
+                unstarted={summary?.unstarted}
+              />
+            )}
+            {summary?.importedFrom?.kind === "runBundle" && (
+              <ImportedOriginBadge
+                kind="runBundle"
+                description={importedOriginAccessibleName(summary.importedFrom)}
+              />
+            )}
+          </>
         }
         usage={
           hasWorkflowTokenUsage(summary?.tokenTotals) ? (

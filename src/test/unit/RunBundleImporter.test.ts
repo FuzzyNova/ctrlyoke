@@ -59,7 +59,16 @@ suite("RunBundleImporter", () => {
     );
     assert.notStrictEqual(manifest.workflowId, "source-workflow");
     assert.notStrictEqual(manifest.runId, 41);
-    assert.strictEqual(events[0].sequence, 17);
+    assert.deepStrictEqual(
+      events.map((event) => event.sequence),
+      [1, 2, 3, 4]
+    );
+    assert.strictEqual(events[3].eventType, TIMELINE_EVENT_TYPES.RUN_IMPORTED);
+    const importedDescriptor = await new WorkflowLineageRepository().readDescriptor(
+      workspace,
+      result.workflowKey
+    );
+    assert.strictEqual(importedDescriptor.importedFrom?.kind, "runBundle");
     assert.ok(
       events.every(
         (event) =>
@@ -188,6 +197,7 @@ suite("RunBundleImporter", () => {
           ).cliOutput.workingDirectory === workspace
       )
     );
+    assert.strictEqual(events.at(-1)?.eventType, TIMELINE_EVENT_TYPES.RUN_IMPORTED);
     assert.deepStrictEqual(
       await importer.importRun({ workspaceRoot: workspace, bundleDir: bundle }),
       {

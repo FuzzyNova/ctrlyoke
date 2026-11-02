@@ -16,9 +16,11 @@
 > shared materializer, view-only bundle importer core and `ctrlyoke import` are now built:
 > `RunMaterializer`, `RunBundleImporter` and `RunImportCommand` under `src/core/orchestration/`
 > and `src/cli/`, including streaming validation, asset import, provenance and re-import detection.
-> Not built: origin badge/undo gating,
+> Phase 3's dashboard side is built: imported lineage provenance reaches run/history
+> payloads, the dashboard shows the origin badge, and pre-import output is read-only
+> at the import-sequence marker. Phase 3 is complete. Not built:
 > **continuing an imported
-> run** (§5, added 2026-10-24), bundling workspace changes, and the dashboard UI. Originally
+> run** (§5, added 2026-10-24) and bundling workspace changes. Originally
 > written 2026-08-14.
 >
 > **Built 2026-10-18:** `exportRunBundle` (`src/core/orchestration/RunBundleExporter.ts`), the
@@ -585,7 +587,7 @@ How they work together instead:
 | ----- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
 | 1 ✅  | Bundle format, path rewrite, `RunBundleExporter`, `ctrlyoke export`, redaction (`secrets-v1`)                | Yes: shareable artifacts (shipped `0.2.0`)                |
 | 2 ✅  | Asset bundling via the Save As machinery (`redaction.byFile` and asset hashing)                              | Yes: bundles stop dangling `@` refs                       |
-| 3 ✅  | `RunMaterializer` + `RunBundleImporter` view-only core, ingress guards (§6.1) and `ctrlyoke import`          | Completes the CLI share loop; imported runs can be viewed |
+| 3 ✅  | `RunMaterializer` + `RunBundleImporter` view-only core, ingress guards (§6.1), `ctrlyoke import`, dashboard provenance badge and pre-import undo gate | Completes the CLI share loop; imported runs can be viewed |
 | 4     | Continuation: `run.ctrlyoke.json`, `changes.patch`, `_runtime` normalization, `import --continue`            | Yes: the machine-to-machine handoff                       |
 | 5 ✅  | Session preflight probe for all runs, uniform warn-and-start-fresh fallback, malformed IDs included (§5.4)   | Yes: fixes native runs too                                |
 | 6     | Dashboard: Export Run / Import Run actions, shared location fields, Load routing, import preview, guide page | Yes                                                       |

@@ -34,6 +34,11 @@ import { sendMessage } from "@hooks/useMessageHandler";
 import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { Icon } from "../shared/Icon";
+import {
+  ImportedOriginBadge,
+  importedOriginAccessibleName,
+} from "../shared/ImportedOriginBadge";
+import type { WorkflowLineageDescriptor } from "@root/types/CtrlYokeTypes";
 
 /** Bordered pill styling shared by the worktree row's action buttons, so two adjacent buttons never read as one run-together label. */
 const WORKTREE_BUTTON_CLASS =
@@ -60,6 +65,7 @@ export interface RunBannerData {
   /** Persisted projection from the displayed run's `_runtime.worktree`. */
   worktree?: WorktreeRunProjection;
   address?: Extract<WorkflowViewAddress, { kind: "run" }>;
+  importedFrom?: WorkflowLineageDescriptor["importedFrom"];
 }
 
 /**
@@ -128,6 +134,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
   duration,
   worktree,
   address,
+  importedFrom,
   isPinned,
   onTogglePinned,
   showBackToLive,
@@ -212,6 +219,12 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
             labelOverride={stopReason ? "Limit stop" : undefined}
             titleOverride={stopReason?.message}
           />
+          {importedFrom?.kind === "runBundle" && (
+            <ImportedOriginBadge
+              kind="runBundle"
+              description={importedOriginAccessibleName(importedFrom)}
+            />
+          )}
         </span>
         <span className="flex items-center gap-2 shrink-0">
           {hasWorkflowTokenUsage(tokenTotals) && (

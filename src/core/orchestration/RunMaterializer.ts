@@ -9,9 +9,10 @@ import type {
   WorkingFile,
   WorkingFileRuntime,
 } from "../../types/CtrlYokeTypes";
-import type {
-  WorkflowTimelineEventDraft,
-  WorkflowDefinitionSnapshot,
+import {
+  TIMELINE_EVENT_TYPES,
+  type WorkflowTimelineEventDraft,
+  type WorkflowDefinitionSnapshot,
 } from "../../types/WorkflowTimelineTypes";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
@@ -30,7 +31,6 @@ export interface RunMaterializationInput {
     Pick<WorkingFileRuntime, "currentIndex" | "executionState">
   >;
   startedAt?: number;
-  nextSequence?: number;
   provenance: NonNullable<WorkflowLineageDescriptor["importedFrom"]>;
 }
 
@@ -125,15 +125,6 @@ export class RunMaterializer {
       const manifestPath = initialized.filePath;
       if (!manifestPath)
         throw new Error("Could not initialize imported run history.");
-      if (input.nextSequence !== undefined) {
-        await this.timelineRecorder.updateManifest(
-          manifestPath,
-          (manifest) => ({
-            ...manifest,
-            nextSequence: input.nextSequence!,
-          })
-        );
-      }
       let batch: WorkflowTimelineEventDraft[] = [];
       for await (const event of input.events) {
         batch.push(event);
@@ -145,6 +136,13 @@ export class RunMaterializer {
       if (batch.length)
         await this.timelineRecorder.appendEvents(manifestPath, batch);
       await history.finalizeRun(manifestPath, executionState, steps.length);
+      await this.timelineRecorder.appendEvents(manifestPath, [
+        {
+          eventType: TIMELINE_EVENT_TYPES.RUN_IMPORTED,
+          timestampMs: Date.now(),
+          payload: {},
+        },
+      ]);
       await WorkingFileManager.publishAnchoredRun(
         input.workspaceRoot,
         created.workflowKey,

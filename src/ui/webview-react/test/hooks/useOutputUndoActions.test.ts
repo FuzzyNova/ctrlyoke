@@ -89,6 +89,45 @@ describe("useOutputUndoActions", () => {
     expect(result.current.workflowDialogState).toBeNull();
   });
 
+  it("does not apply undo from an output before an imported run boundary", async () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
+    const { result } = renderHook(() =>
+      useOutputUndoActions({
+        allMessages: [],
+        allowUndoActions: true,
+        finalStepWorkspaceSnapshots: {},
+        historyOutputs: {
+          orderedEntries: [],
+          promptOutputs: {},
+          runMetadata: {
+            runId: 1,
+            startedAt: 1,
+            executionState: "completed" as never,
+            importedSequenceBoundary: 8,
+          },
+        },
+        isViewingHistory: true,
+        lastCliIndexPerStep: new Map(),
+        stepOutputsMap: new Map(),
+        undoRecords: {},
+        uniqueStepTargets: [],
+        workspaceSnapshots: {},
+      })
+    );
+    const openContentRequest = vi.mocked(window.vscodeApi!.postMessage);
+    openContentRequest.mockClear();
+
+    await act(async () => {
+      await result.current.handleFileUndo(
+        { target, sequence: 7 } as never,
+        { path: "src/file.ts", eventIndex: 0, event: {} as never }
+      );
+    });
+
+    expect(openContentRequest).not.toHaveBeenCalled();
+    expect(result.current.minimapDialogState).toBeNull();
+  });
+
   it("keeps blocked candidates in the single workflow entry list", async () => {
     const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
     const { result } = renderHook(() =>

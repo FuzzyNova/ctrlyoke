@@ -95,6 +95,10 @@ From a terminal, the same operations are
 [`ctrlyoke append`](/cli/ctrlyoke#ctrlyoke-append) and
 [`ctrlyoke continue`](/cli/ctrlyoke#ctrlyoke-continue).
 
+Runs imported from a bundle show an **Imported** badge with their source in its
+tooltip. Output recorded before the import is read-only; output from later
+execution remains undoable.
+
 ## Runs started somewhere else {#external-runs}
 
 The dashboard also shows runs that the [CLI](/cli/) or another VS Code window is

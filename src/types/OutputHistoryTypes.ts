@@ -110,6 +110,10 @@ export interface WorkflowOutputHistory {
   worktree?: WorktreeRunProjection;
   /** Durable notice when an inherited worktree default degraded to none. */
   worktreeNotice?: string;
+  /** Sequence of the import marker; entries before it are read-only history. */
+  importedSequenceBoundary?: number;
+  /** Bundle provenance for imported runs. */
+  importedFrom?: import("./CtrlYokeTypes").WorkflowLineageDescriptor["importedFrom"];
 
   // Per-step outputs (keyed by stepIndex)
   promptOutputs: {
@@ -136,7 +140,7 @@ export type WorkflowRunMetadata = Pick<
   | "stopReason"
   | "worktree"
   | "worktreeNotice"
->;
+> & Pick<WorkflowOutputHistory, "importedSequenceBoundary" | "importedFrom">;
 
 /**
  * Output data for a single workflow step.

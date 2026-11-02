@@ -46,6 +46,7 @@ import type {
 } from "@root/types/OutputHistoryTypes";
 
 interface UseOutputRowsModelInput {
+  importedSequenceBoundary?: number | null;
   isViewingHistory: boolean;
   historyOutputs: {
     orderedEntries: OrderedHistoryEntry[];
@@ -98,6 +99,7 @@ const SHELL_WORKFLOW_ID = "_shell";
  * the invalidation callbacks it is given.
  */
 export function useOutputRowsModel({
+  importedSequenceBoundary,
   isViewingHistory,
   historyOutputs,
   liveOrderedEntries,
@@ -228,8 +230,8 @@ export function useOutputRowsModel({
           wordWrap,
           hiddenTargets: hiddenTargetKeys.size,
         },
-        () =>
-          buildOutputRows({
+        () => {
+          const builtRows = buildOutputRows({
             allMessages,
             steps,
             finalStep,
@@ -261,7 +263,25 @@ export function useOutputRowsModel({
             outputContentWidth,
             collapsedToolOutputLineCount,
             wordWrap,
-          })
+          });
+          const boundary =
+            importedSequenceBoundary ??
+            historyOutputs?.runMetadata.importedSequenceBoundary;
+          return boundary === undefined
+            ? builtRows
+            : {
+                ...builtRows,
+                rows: builtRows.rows.map((row) =>
+                  row.sequence !== undefined && row.sequence < boundary
+                    ? {
+                        ...row,
+                        undoReadOnlyReason:
+                          "This output was imported and is read-only.",
+                      }
+                    : row
+                ),
+              };
+        }
       ),
     [
       allMessages,
@@ -278,6 +298,7 @@ export function useOutputRowsModel({
       allowUndoActions,
       isViewingHistory,
       historyOutputs,
+      importedSequenceBoundary,
       workspaceSnapshots,
       finalStepWorkspaceSnapshots,
       undoRecords,
