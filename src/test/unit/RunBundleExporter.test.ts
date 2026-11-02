@@ -48,6 +48,7 @@ suite("RunBundleExporter secrets", () => {
       cwd: workspace,
     });
     await execGit(["config", "user.name", "Test"], { cwd: workspace });
+    await execGit(["config", "core.autocrlf", "false"], { cwd: workspace });
     await fs.writeFile(path.join(workspace, "base.txt"), "base\n");
     await execGit(["add", "base.txt"], { cwd: workspace });
     await execGit(["commit", "-m", "base"], { cwd: workspace });
@@ -153,6 +154,70 @@ suite("RunBundleExporter secrets", () => {
     await assert.rejects(
       readRunBundle(exported.bundleDir, workspace),
       /failed its SHA-256 check/
+    );
+  });
+
+  test("keeps patch paths and non-UTF-8 bytes intact while redacting added lines only", async () => {
+    await fs.writeFile(
+      path.join(workspace, "code.js"),
+      "before\ntoken = getToken()\nafter\n",
+      "utf8"
+    );
+    await execGit(["add", "code.js"], { cwd: workspace });
+    await execGit(["commit", "-m", "code fixture"], { cwd: workspace });
+    await fs.writeFile(
+      path.join(workspace, "code.js"),
+      'changed\ntoken = getToken()\nafter\napi_key = "sk-test123456789"\n',
+      "utf8"
+    );
+    const absolutePath = path.join(workspace, "embedded-path.txt");
+    await fs.writeFile(
+      path.join(workspace, "embedded-path.txt"),
+      `kept as written: ${absolutePath}\n`,
+      "utf8"
+    );
+    const latin1 = Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x0a]);
+    const binary = Buffer.from([0x00, 0xff, 0x01, 0x0a]);
+    await fs.writeFile(path.join(workspace, "latin1.txt"), latin1);
+    await fs.writeFile(path.join(workspace, "binary.dat"), binary);
+    const run = await createRun({
+      state: EXECUTION_STATES.STOPPED,
+      currentIndex: 0,
+      steps: [{ prompt: "next" }],
+    });
+    const exported = await exportRunBundle({
+      stateRoot: workspace,
+      workspaceRoot: workspace,
+      ...run,
+      bundleDir: path.join(root, "lossless.ctrlyokerun"),
+      exportedByVersion: "test",
+      secrets: { workspaceRoot: workspace, environment: {} },
+    });
+    const patchPath = path.join(exported.bundleDir, RUN_BUNDLE_FILES.CHANGES);
+    const patch = await fs.readFile(patchPath);
+    const patchText = patch.toString("utf8");
+    assert.ok(patchText.includes(absolutePath));
+    assert.ok(patchText.includes(" token = getToken()"));
+    assert.ok(patchText.includes('api_key = "[REDACTED]"'));
+    assert.strictEqual(
+      exported.manifest.redaction.byFile?.[RUN_BUNDLE_FILES.CHANGES],
+      1
+    );
+
+    await execGit(["reset", "--hard", "HEAD"], { cwd: workspace });
+    await execGit(["clean", "-fd"], { cwd: workspace });
+    await execGit(["apply", "--binary", patchPath], { cwd: workspace });
+    assert.deepStrictEqual(
+      await fs.readFile(path.join(workspace, "latin1.txt")),
+      latin1
+    );
+    assert.deepStrictEqual(
+      await fs.readFile(path.join(workspace, "binary.dat")),
+      binary
+    );
+    assert.match(
+      await fs.readFile(path.join(workspace, "code.js"), "utf8"),
+      /token = getToken\(\)/
     );
   });
 

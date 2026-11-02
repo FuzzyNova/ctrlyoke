@@ -29,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Run export now preserves patch paths and binary or non-UTF-8 content, and only
+  redacts matching values on added text lines; import previews report patch redactions.
+
 - Exporting a run executed in a managed or named worktree now writes its paths
   as `${workspaceFolder}/…`, so those paths remain portable with the bundle.
 

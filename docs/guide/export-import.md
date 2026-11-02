@@ -25,6 +25,12 @@ are off by default; opt in only when you intend to share them. Review the
 bundle, redaction report, external paths, changed-file list, and warnings before
 attaching it to a bug report or pull request.
 
+For `changes.patch`, redaction applies only to added lines in valid UTF-8 text
+hunks. Context, removed lines, patch headers, binary hunks, and text hunks that
+are not valid UTF-8 are preserved byte-for-byte so the patch remains applicable.
+If added patch content is redacted, the export report and import preview show
+the count; those values appear as `[REDACTED]` in the continued checkout.
+
 ## Start over or import history
 
 If you want to run a workflow again from its first step, use **Load** on the

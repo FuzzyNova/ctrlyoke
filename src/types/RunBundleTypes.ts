@@ -27,6 +27,10 @@ export const RUN_BUNDLE_FILES = {
 /** The redaction pass every export applies (§2.1): resolved secrets plus heuristics. */
 export const RUN_BUNDLE_REDACTION_POLICY = "secrets-v1" as const;
 
+export function formatRunPatchRedactionWarning(count: number): string {
+  return `${count} values in changes.patch were redacted; those lines will contain [REDACTED] in the continued checkout.`;
+}
+
 export const RUN_BUNDLE_CONTINUATION_KINDS = {
   QUEUE: "queue",
   FINAL_STEP: "finalStep",

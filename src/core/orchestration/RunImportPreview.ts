@@ -6,6 +6,7 @@ import {
   defaultRunChangesTarget,
   RUN_BUNDLE_CONTINUATION_KINDS,
   RUN_BUNDLE_FILES,
+  formatRunPatchRedactionWarning,
   RUN_BUNDLE_WORKTREE_MODES,
   RUN_CHANGES_TARGETS,
   type RunChangesTarget,
@@ -341,6 +342,14 @@ export class RunImportPreviewService {
       pendingSteps: previewSteps,
       sessions,
       blockers,
+      warnings:
+        (header.manifest.redaction.byFile?.[RUN_BUNDLE_FILES.CHANGES] ?? 0) > 0
+          ? [
+              formatRunPatchRedactionWarning(
+                header.manifest.redaction.byFile![RUN_BUNDLE_FILES.CHANGES]!
+              ),
+            ]
+          : [],
     };
   }
 

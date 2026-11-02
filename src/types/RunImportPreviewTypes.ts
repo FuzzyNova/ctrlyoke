@@ -76,4 +76,5 @@ export interface RunImportPreview {
   pendingSteps: RunImportPreviewPendingStep[];
   sessions: RunImportPreviewSession[];
   blockers: RunImportPreviewBlocker[];
+  warnings?: string[];
 }

@@ -156,6 +156,15 @@ export const ImportRunDialog: React.FC = () => {
               </p>
             </section>
           )}
+          {!!preview.warnings?.length && (
+            <section aria-label="Warnings" role="status">
+              {(preview.warnings ?? []).map((warning) => (
+                <p key={warning} className="text-warning-fg">
+                  {warning}
+                </p>
+              ))}
+            </section>
+          )}
           <section aria-label="Harness sessions">
             <h3 className="font-medium">Harness sessions</h3>
             {preview.sessions.length ? (

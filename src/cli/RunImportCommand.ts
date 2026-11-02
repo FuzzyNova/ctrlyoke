@@ -224,6 +224,8 @@ function printImportPreview(
       `  Already imported as ${preview.provenance.alreadyImported.workflowKey}${preview.provenance.alreadyImported.runRef ? ` ${preview.provenance.alreadyImported.runRef}` : ""}`
     );
   }
+  for (const warning of preview.warnings ?? [])
+    io.writeOut(`  Warning: ${warning}`);
   if (preview.continuation) {
     const {
       baseCommit,

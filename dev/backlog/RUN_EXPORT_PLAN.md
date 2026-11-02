@@ -6,11 +6,12 @@
 > through the definition anchor (`bcc6c74a1`, `aa2f6117d`), or the imported run loads
 > read-only.
 >
-> **Status:** All phases built; review fixes in progress. The 2026-11-01 review found that
+> **Status:** All phases built; review fixes complete. The 2026-11-01 review found that
 > continuation reads `run.ctrlyoke.json` as the wrong shape, a view-only import could still
 > be continued, imported asset references broke, placement had no rollback, the patch was
 > path-rewritten and over-redacted, and pre-import undo was gated only in the UI. Fixes are
-> queued in the orchestrating workflow; this plan moves to `dev/implemented/` once they land.
+> fixed in review (`b3bd38d38`, `03a730e8b`, `086fd4e80`, `32e17816e`, and this change);
+> this plan moves to `dev/implemented/` once the remaining planned review closes.
 > The run working-file import shape and continuation refusal for view-only imports are fixed in this change.
 > Placement rollback, repository-root patch handling for subdirectory workspaces, and
 > patch-header path validation are fixed in this change. Materialization failures now roll
@@ -357,8 +358,9 @@ checkout. ctrlyoke must not copy files around ad hoc, so carry the changes git-n
   from the base commit to the working tree covers both commits made during the run and
   uncommitted edits, so it doesn't matter whether steps committed. Commit history isn't
   preserved, only the tree, and that is enough to continue.
-- The patch goes through the **same redaction pass** (it is file contents leaving the machine),
-  and the export summary shows its file count before anything is shared. `--no-changes` skips it.
+- Redaction applies **only to added lines in valid UTF-8 text hunks**. Patch headers, context,
+  removed lines, binary hunks, and invalid UTF-8 hunks are preserved unchanged. The export
+  summary reports patch redactions and their counts; `--no-changes` skips the patch.
 - **Import** requires `baseCommit` to exist locally (`git cat-file -e`). If it doesn't, the user
   is told exactly what to do ("push/fetch commit 3f9c2a1"), and the run imports as view-only
   until they do.

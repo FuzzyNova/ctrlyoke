@@ -58,7 +58,7 @@ import {
   FINAL_STEP_PHASES,
   WORKTREE_MODES,
 } from "../../types/DashboardConstants";
-import { execGit } from "../../utils/GitUtils";
+import { execGit, execGitBuffer } from "../../utils/GitUtils";
 import { assertRunHasWorkToContinue } from "./RunContinuationService";
 import { getCliEntryKey } from "./OutputHistoryTimelineAdapter";
 
@@ -238,7 +238,7 @@ export async function getRunBundleExportPreview(
 async function collectWorkspaceChanges(
   executionRoot: string,
   baseCommit: string
-): Promise<{ patchText: string; files: string[] }> {
+): Promise<{ patch: Buffer; files: string[] }> {
   const indexPath = path.join(
     os.tmpdir(),
     `ctrlyoke-export-index-${randomUUID()}`
@@ -247,19 +247,22 @@ async function collectWorkspaceChanges(
   try {
     await execGit(["read-tree", baseCommit], { cwd: executionRoot, env });
     await execGit(["add", "-A"], { cwd: executionRoot, env });
-    const [{ stdout: patchText }, { stdout: namesText }] = await Promise.all([
-      execGit(["diff", "--cached", "--binary", "--full-index", baseCommit], {
-        cwd: executionRoot,
-        env,
-        maxBuffer: 500 * 1024 * 1024,
-      }),
+    const [{ stdout: patch }, { stdout: namesText }] = await Promise.all([
+      execGitBuffer(
+        ["diff", "--cached", "--binary", "--full-index", baseCommit],
+        {
+          cwd: executionRoot,
+          env,
+          maxBuffer: 500 * 1024 * 1024,
+        }
+      ),
       execGit(["diff", "--cached", "--name-only", "-z", baseCommit], {
         cwd: executionRoot,
         env,
         maxBuffer: 50 * 1024 * 1024,
       }),
     ]);
-    return { patchText, files: namesText.split("\0").filter(Boolean) };
+    return { patch, files: namesText.split("\0").filter(Boolean) };
   } finally {
     await fs.promises.rm(indexPath, { force: true });
   }
@@ -310,22 +313,23 @@ async function writeChangesPatch(
 }> {
   if (options.includeChanges === false) return { files: [] };
 
-  const { patchText, files } = await collectWorkspaceChanges(
+  const { patch, files } = await collectWorkspaceChanges(
     executionRoot,
     baseCommit
   );
-  const transformedPatch = transform.redactText(
-    patchText,
+  const transformedPatch = redactPatchAddedLines(
+    patch,
+    transform,
     RUN_BUNDLE_FILES.CHANGES
   );
   await fs.promises.writeFile(
     path.join(stagingDir, RUN_BUNDLE_FILES.CHANGES),
-    transformedPatch,
-    "utf8"
+    transformedPatch
   );
   const binary = (
-    transformedPatch.match(/^(?:GIT binary patch|Binary files .* differ)$/gm) ??
-    []
+    transformedPatch
+      .toString("latin1")
+      .match(/^(?:GIT binary patch|Binary files .* differ)$/gm) ?? []
   ).length;
   return {
     patch: {
@@ -589,6 +593,7 @@ async function assertRunSettled(
 interface BundleTransform {
   apply<T>(value: T, fileName: string): T;
   redactText(text: string, fileName: string): string;
+  redactOnly(text: string, fileName: string): string;
   removedCount(): number;
   removedByRule(): Record<string, number>;
   removedByFile(): Record<string, number>;
@@ -649,12 +654,81 @@ function createBundleTransform(
         activeFileName = undefined;
       }
     },
+    redactOnly: (text, fileName) => {
+      activeFileName = fileName;
+      try {
+        return redact(text);
+      } finally {
+        activeFileName = undefined;
+      }
+    },
     removedCount: () =>
       Object.values(byRule).reduce((sum, count) => sum + count, 0),
     removedByRule: () => ({ ...byRule }),
     removedByFile: () => ({ ...byFile }),
     externalPaths: () => [...external].sort(),
   };
+}
+
+/** Redact added lines in valid UTF-8 text hunks; preserve all other patch bytes. */
+function redactPatchAddedLines(
+  patch: Buffer,
+  transform: BundleTransform,
+  fileName: string
+): Buffer {
+  const lines: Buffer[] = [];
+  for (let offset = 0; offset < patch.length;) {
+    const newline = patch.indexOf(0x0a, offset);
+    const end = newline < 0 ? patch.length : newline + 1;
+    lines.push(patch.subarray(offset, end));
+    offset = end;
+  }
+
+  const output: Buffer[] = [];
+  let hunk: Buffer[] = [];
+  const flushHunk = (): void => {
+    if (!hunk.length) return;
+    const bytes = Buffer.concat(hunk);
+    hunk = [];
+    let decoded: string;
+    try {
+      decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch {
+      output.push(bytes);
+      return;
+    }
+    const hunkLines = decoded.match(/[^\n]*\n|[^\n]+$/g) ?? [];
+    output.push(
+      ...hunkLines.map((line) => {
+        if (!line.startsWith("+")) return Buffer.from(line, "utf8");
+        const ending = line.endsWith("\n") ? "\n" : "";
+        const body = ending ? line.slice(0, -1) : line;
+        const carriageReturn = body.endsWith("\r") ? "\r" : "";
+        const content = carriageReturn ? body.slice(0, -1) : body;
+        return Buffer.from(
+          `${transform.redactOnly(content, fileName)}${carriageReturn}${ending}`,
+          "utf8"
+        );
+      })
+    );
+  };
+
+  for (const line of lines) {
+    const lineText = line.toString("ascii");
+    if (lineText.startsWith("diff --git ")) {
+      flushHunk();
+      output.push(line);
+    } else if (lineText.startsWith("@@")) {
+      flushHunk();
+      hunk.push(line);
+    } else if (hunk.length) {
+      hunk.push(line);
+    } else {
+      output.push(line);
+    }
+  }
+  flushHunk();
+  return Buffer.concat(output);
 }
 
 async function writeEvents(

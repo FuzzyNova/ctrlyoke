@@ -52,6 +52,9 @@ const preview: RunImportPreview = {
     },
   ],
   blockers: [],
+  warnings: [
+    "1 values in changes.patch were redacted; those lines will contain [REDACTED] in the continued checkout.",
+  ],
 };
 
 describe("ImportRunDialog", () => {
@@ -158,5 +161,17 @@ describe("ImportRunDialog", () => {
     expect(postMessage).toHaveBeenCalledWith(
       expect.objectContaining({ type: MESSAGE_TYPES.IMPORT_RUN, again: true })
     );
+  });
+
+  it("shows patch redactions in the import preview", () => {
+    useUiStore.getState().openRunImportDialog({
+      requestId: "r-warning",
+      bundleDir: "/bundle",
+      preview,
+    });
+    render(<ImportRunDialog />);
+    expect(
+      screen.getByText(/values in changes\.patch were redacted/)
+    ).toBeInTheDocument();
   });
 });

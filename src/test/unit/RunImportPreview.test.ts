@@ -46,6 +46,9 @@ suite("RunImportPreview", () => {
       "push/fetch commit abcdef0"
     );
     assert.strictEqual(preview.continuation?.patchFileCount, 3);
+    assert.deepStrictEqual(preview.warnings, [
+      "2 values in changes.patch were redacted; those lines will contain [REDACTED] in the continued checkout.",
+    ]);
     assert.strictEqual(preview.blockers[0]?.code, "base-commit-missing");
     assert.strictEqual(preview.pendingSteps.length, 4);
     assert.strictEqual(preview.pendingSteps[0]?.promptRedacted, true);
@@ -141,7 +144,7 @@ async function writeBundle(bundleDir: string): Promise<void> {
         policy: "secrets-v1",
         removedCount: 1,
         byRule: {},
-        byFile: { "run.ctrlyoke.json": 1 },
+        byFile: { "run.ctrlyoke.json": 1, "changes.patch": 2 },
       },
       externalPaths: [],
       continuation: {

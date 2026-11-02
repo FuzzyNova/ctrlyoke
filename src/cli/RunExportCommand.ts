@@ -3,7 +3,11 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { exportRunBundle } from "../core/orchestration/RunBundleExporter";
 import { buildRunBundleExportOptions } from "../core/orchestration/RunBundleExportOptions";
-import { RUN_BUNDLE_DIR_SUFFIX } from "../types/RunBundleTypes";
+import {
+  formatRunPatchRedactionWarning,
+  RUN_BUNDLE_DIR_SUFFIX,
+  RUN_BUNDLE_FILES,
+} from "../types/RunBundleTypes";
 import {
   bootstrapCliWorkspace,
   type CliWorkspaceBootstrap,
@@ -143,6 +147,11 @@ export async function exportRunCommand(
       io.writeOut("  Workspace changes patch omitted (--no-changes)");
     }
   }
+  const patchRedactions = redaction.byFile?.[RUN_BUNDLE_FILES.CHANGES] ?? 0;
+  if (patchRedactions > 0)
+    io.writeOut(
+      `  Warning: ${formatRunPatchRedactionWarning(patchRedactions)}`
+    );
   for (const warning of result.warnings) {
     io.writeOut(`  Warning: ${warning}`);
   }
