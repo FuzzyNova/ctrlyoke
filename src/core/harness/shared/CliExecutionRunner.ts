@@ -39,6 +39,7 @@ import type {
 import type { InteractiveExitResult } from "../../../utils/CliProcessManager";
 import type { CliResolvedCommand } from "./CliLauncherResolver";
 import { AsyncMutex } from "./AsyncMutex";
+import { buildSessionResumeWarning } from "./SessionResumeWarning";
 import { CliTransportError } from "./CliTransportError";
 import type { ExecutionPlanBuilder } from "./ExecutionPlanBuilder";
 
@@ -425,6 +426,13 @@ export class CliExecutionRunner {
           deferTempFileCleanup
         ) {
           const rejectedSessionId = session.resolvedSessionId;
+          session.setWarningMessage(
+            buildSessionResumeWarning(
+              session.workflowContext?.promptIndex ?? 0,
+              this.deps.provider.config.harnessId,
+              "not-found"
+            )
+          );
           Log.warn(
             `[CliExecutionRunner] ${this.deps.provider.config.displayName} rejected session ID "${rejectedSessionId}". Retrying without resume flag.`
           );

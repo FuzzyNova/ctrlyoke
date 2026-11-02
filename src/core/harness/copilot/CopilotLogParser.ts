@@ -248,6 +248,20 @@ const COPILOT_OTEL_TOKEN_LIMIT_ATTRIBUTE = "github.copilot.token_limit";
 const COPILOT_OTEL_CURRENT_TOKENS_ATTRIBUTE = "github.copilot.current_tokens";
 
 export class CopilotLogParser extends BaseLogParser {
+  /** Check the Copilot session store by ID without prompt matching. */
+  probeSessionId(sessionId: string): "available" | "missing" | "unknown" {
+    const logDir = path.join(os.homedir(), ".copilot", "session-state");
+    try {
+      if (!fs.existsSync(logDir)) return "missing";
+      const directoryLog = path.join(logDir, sessionId, "events.jsonl");
+      const flatLog = path.join(logDir, `${sessionId}.jsonl`);
+      return fs.existsSync(directoryLog) || fs.existsSync(flatLog)
+        ? "available"
+        : "missing";
+    } catch {
+      return "unknown";
+    }
+  }
   /**
    * Event buffer for multi-event responses
    *

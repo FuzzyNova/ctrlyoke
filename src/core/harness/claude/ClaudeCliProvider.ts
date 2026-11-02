@@ -103,6 +103,11 @@ const CLAUDE_IMAGE_INPUT_CAPABILITY = {
  * ```
  */
 export class ClaudeCliProvider implements ICliProvider {
+  probeResumableSession(
+    sessionId: string
+  ): "available" | "missing" | "unknown" {
+    return this.logParser.probeSessionId(sessionId);
+  }
   private static readonly CLI_COMMAND = "claude";
   static readonly CLI_VERSION_COMMAND = `${ClaudeCliProvider.CLI_COMMAND} --version`;
   static readonly CLI_HELP_COMMAND = `${ClaudeCliProvider.CLI_COMMAND} --help`;

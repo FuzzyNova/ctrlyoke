@@ -221,6 +221,25 @@ export class CodexCliProvider implements ICliProvider {
 
   readonly logParser: CodexLogParser;
 
+  probeResumableSession(
+    sessionId: string,
+    _workspaceRoot: string
+  ): "available" | "missing" | "unknown" {
+    return this.logParser.probeSessionId(sessionId);
+  }
+
+  isRecoverableSessionError(
+    input: string | Error | { stdout?: string; stderr?: string }
+  ): boolean {
+    const message =
+      typeof input === "string"
+        ? input
+        : input instanceof Error
+          ? input.message
+          : `${input.stdout ?? ""}\n${input.stderr ?? ""}`;
+    return /thread [^\s:]+ not found/i.test(message);
+  }
+
   constructor(onProviderUsageUpdate?: (quota: HarnessQuotaSnapshot) => void) {
     this.logParser = new CodexLogParser(onProviderUsageUpdate);
   }

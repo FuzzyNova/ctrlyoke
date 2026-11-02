@@ -220,6 +220,16 @@ export interface ICliProvider {
   finishHeadlessStdout?(): void;
 
   /** Input accepted by provider-specific invalid-session classifiers. */
+  probeResumableSession?(
+    sessionId: string,
+    workspaceRoot: string
+  ):
+    | Promise<"available" | "missing" | "unknown">
+    | "available"
+    | "missing"
+    | "unknown";
+
+  /** Input accepted by provider-specific invalid-session classifiers. */
   isRecoverableSessionError?(
     input: string | Error | { stderr?: string }
   ): boolean;

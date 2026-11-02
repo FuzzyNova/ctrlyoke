@@ -918,7 +918,8 @@ export class CliIntegration extends HarnessIntegration {
     prompt: PromptStep,
     workflowContext: WorkflowContext | undefined,
     resolvedProperties: ResolvedProperties | undefined,
-    resolvedSessionId: string | undefined
+    resolvedSessionId: string | undefined,
+    warningMessage?: string
   ): CliExecutionSession {
     this.lastExecutionSnapshot = undefined;
     this.activeSecretRedactor = workflowContext?.secretRedactor;
@@ -934,6 +935,7 @@ export class CliIntegration extends HarnessIntegration {
         : undefined,
       resolvedProperties,
       resolvedSessionId,
+      warningMessage,
     });
   }
 
@@ -1004,6 +1006,8 @@ export class CliIntegration extends HarnessIntegration {
 
     const sessionResolverAdapter = new CliSessionResolverAdapter({
       getIntegrationHarness: () => this.getIntegrationMode(),
+      provider: this.provider,
+      getWorkspaceRoot: () => this.getExecutionRoot(),
     });
 
     const promptRuntimeCoordinator = new CliPromptRuntimeCoordinator({
@@ -1193,17 +1197,18 @@ export class CliIntegration extends HarnessIntegration {
     return diagnostics.map((diagnostic) => ({ ...diagnostic, consumer }));
   }
 
-  private createUnpreparedExecutionSession(
+  private async createUnpreparedExecutionSession(
     prompt: PromptStep,
     workflowContext?: WorkflowContext
-  ): CliExecutionSession {
-    const { resolvedProperties, resolvedSessionId } =
-      this.sessionResolverAdapter.resolve(prompt, workflowContext);
+  ): Promise<CliExecutionSession> {
+    const { resolvedProperties, resolvedSessionId, warningMessage } =
+      await this.sessionResolverAdapter.resolve(prompt, workflowContext);
     return this.createExecutionSession(
       prompt,
       workflowContext,
       resolvedProperties,
-      resolvedSessionId
+      resolvedSessionId,
+      warningMessage
     );
   }
 
@@ -2289,10 +2294,15 @@ export class CliIntegration extends HarnessIntegration {
 
       // Create session without prompt preparation so we can check terminal reuse
       // before deciding which inline-check rules to apply.
-      executionSession = this.createUnpreparedExecutionSession(
+      executionSession = await this.createUnpreparedExecutionSession(
         prompt,
         workflowContext
       );
+      if (executionSession.warningMessage) {
+        this.emitStreamingEvents([
+          { type: "text", data: { text: executionSession.warningMessage } },
+        ]);
+      }
       this.activeSession = executionSession;
 
       const isInteractive =

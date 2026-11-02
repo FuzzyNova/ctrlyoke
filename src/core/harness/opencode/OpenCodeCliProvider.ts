@@ -197,6 +197,25 @@ export class OpenCodeCliProvider implements ICliProvider {
     getOpenCodeContextWindowSize(this.resolvedCurrentModel)
   );
 
+  probeResumableSession(
+    sessionId: string,
+    workspaceRoot: string
+  ): Promise<"available" | "missing" | "unknown"> {
+    return this.logParser.probeSessionId(sessionId, workspaceRoot);
+  }
+
+  isRecoverableSessionError(
+    input: string | Error | { stdout?: string; stderr?: string }
+  ): boolean {
+    const message =
+      typeof input === "string"
+        ? input
+        : input instanceof Error
+          ? input.message
+          : `${input.stdout ?? ""}\n${input.stderr ?? ""}`;
+    return message.includes("Session not found");
+  }
+
   /** MCP server ids prepared for the current execution. */
   private attachedMcpServerIds: ReadonlySet<string> = new Set();
 

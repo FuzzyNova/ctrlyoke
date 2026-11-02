@@ -121,6 +121,17 @@ interface PendingPlannerToolCall {
 }
 
 export class AntigravityLogParser extends BaseLogParser implements ILogParser {
+  /** Check the local transcript store by conversation ID only. */
+  probeSessionId(sessionId: string): "available" | "missing" | "unknown" {
+    try {
+      return this.getAuthoritativeTranscriptPath(sessionId)
+        ? "available"
+        : "missing";
+    } catch {
+      return "unknown";
+    }
+  }
+
   private cachedSessionId?: string;
   private cachedLastConversationsSessionId?: string;
   private readonly transcriptReader = new AntigravityTranscriptReader();

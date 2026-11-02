@@ -107,6 +107,11 @@ const QWEN_IMAGE_INPUT_CAPABILITY = {
  * ```
  */
 export class QwenCliProvider implements ICliProvider {
+  probeResumableSession(
+    sessionId: string
+  ): "available" | "missing" | "unknown" {
+    return this.logParser.probeSessionId(sessionId);
+  }
   private static readonly CLI_COMMAND = "qwen";
   static readonly CLI_VERSION_COMMAND = `${QwenCliProvider.CLI_COMMAND} --version`;
   static readonly CLI_HELP_COMMAND = `${QwenCliProvider.CLI_COMMAND} --help`;

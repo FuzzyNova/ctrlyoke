@@ -77,6 +77,9 @@ its default, so the step fails.
 ## Notes
 
 - Antigravity 1.4.10 is the minimum supported version because it added `--settings`, which ctrlyoke uses to pass per-run permission rules.
+- Before resuming, ctrlyoke checks Antigravity's local transcript by conversation
+  ID. If it is missing, ctrlyoke starts a new conversation and shows a warning
+  in the step output.
 - `custom` passes a per-run `--settings` file containing translated allow and deny rules. `allowAll` passes `always-proceed` and the deny rules, so tools are auto-approved except for denied actions. `dangerouslyAllowAll` still passes `--dangerously-skip-permissions` and ignores both workflow lists. The injected file unions the translated rules with your global `permissions.allow` and `permissions.deny`; project and shared rules remain in force.
 - Shell allow rules match the entire raw command line. A chain containing an allowed command and anything else is not allowed piecemeal. No permission mode adds `--sandbox`; pass it through `additionalArgs` if you want agy's terminal sandbox. Under it, agy 1.4.12 on Windows runs even rule-allowed commands inside the sandbox, where they cannot write the workspace. A workflow `additionalArgs` value containing `--settings` or `-settings` disables ctrlyoke's permission translation because agy uses only the last settings argument.
 - `web_search` is ungated by agy's rules, so a web-search deny cannot be enforced. Antigravity has no separate list/search tools, so denies for `glob`, `grep`, `ls`, `list`, `list_directory` and `lsp` cannot be enforced. An allowed `write` also allows reads because agy's `write_file` permission implies `read_file`.

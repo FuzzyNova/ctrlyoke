@@ -197,6 +197,13 @@ export class AntigravityCliProvider implements ICliProvider {
     };
   }
   readonly logParser = new AntigravityLogParser();
+
+  probeResumableSession(
+    sessionId: string,
+    _workspaceRoot: string
+  ): "available" | "missing" | "unknown" {
+    return this.logParser.probeSessionId(sessionId);
+  }
   readonly headlessSource = HEADLESS_SOURCE_MODES.LOG;
   private readonly streamJsonUsage =
     new AntigravityStreamJsonUsageAccumulator();

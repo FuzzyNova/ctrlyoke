@@ -86,6 +86,9 @@ Codex than ctrlyoke's minimum. If a step fails because the model is not supporte
 - `permissions.codexSandboxMode` (`read-only`, `workspace-write`, `danger-full-access`; default `workspace-write`) and `permissions.codexApprovalPolicy` (`untrusted`, `on-request`, `never`; default `on-request`) are only read in `custom` mode.
 - Headless runs use `codex exec`, which does not accept an approval flag, so only the sandbox flag is passed there.
 - In a headless run, ctrlyoke reads the step's output, including file diffs, from Codex's session log under `~/.codex/sessions` (or `$CODEX_HOME/sessions`). `codex exec --json` reports a changed file without its contents, so stdout supplies only the session ID and request errors such as an unknown model.
+- Before resuming, ctrlyoke checks the local rollout store by thread ID. If the
+  rollout is missing, or Codex reports `thread <id> not found`, it starts a new
+  session and shows a warning in the step output.
 - Directories in `permissions.trustedExternalRoots` are passed to Codex as `--add-dir`.
 - Hooks, MCP servers and approvals are all passed as `-c` overrides, so ctrlyoke never edits your Codex configuration. See [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#codex-cli).
 

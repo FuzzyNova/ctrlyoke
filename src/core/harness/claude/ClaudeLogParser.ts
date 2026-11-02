@@ -240,6 +240,18 @@ export function normalizeClaudeWorkspacePath(workspacePath: string): string {
 }
 
 export class ClaudeLogParser extends BaseLogParser implements ILogParser {
+  probeSessionId(sessionId: string): "available" | "missing" | "unknown" {
+    const projectsDir = path.join(os.homedir(), ".claude", "projects");
+    try {
+      return this.findSessionLogAcrossProjectDirectories(projectsDir, [
+        `${sessionId}.jsonl`,
+      ])
+        ? "available"
+        : "missing";
+    } catch {
+      return "unknown";
+    }
+  }
   private readonly subagentFollower = new SubagentSourceFollower();
 
   getSubagentFollower(): SubagentSourceFollower {

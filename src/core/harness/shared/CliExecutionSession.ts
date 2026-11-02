@@ -13,6 +13,7 @@ export interface CliExecutionSessionParams {
   workflowContext?: WorkflowContext;
   resolvedProperties?: ResolvedProperties;
   resolvedSessionId?: string;
+  warningMessage?: string;
   executionStartTime?: Date;
 }
 
@@ -28,6 +29,7 @@ export class CliExecutionSession {
   readonly workflowContext?: WorkflowContext;
   readonly resolvedProperties?: ResolvedProperties;
   readonly executionStartTime: Date;
+  private warningMessageValue?: string;
 
   private resolvedSessionIdValue?: string;
   private promptText: string;
@@ -49,6 +51,7 @@ export class CliExecutionSession {
     this.prompt = params.prompt;
     this.workflowContext = params.workflowContext;
     this.resolvedProperties = params.resolvedProperties;
+    this.warningMessageValue = params.warningMessage;
     this.resolvedSessionIdValue = params.resolvedSessionId;
     this.executionStartTime = params.executionStartTime ?? new Date();
     this.promptText = params.prompt.prompt;
@@ -56,6 +59,14 @@ export class CliExecutionSession {
 
   get resolvedSessionId(): string | undefined {
     return this.resolvedSessionIdValue;
+  }
+
+  get warningMessage(): string | undefined {
+    return this.warningMessageValue;
+  }
+
+  setWarningMessage(message: string): void {
+    this.warningMessageValue = message;
   }
 
   /** Drops a session ID the harness rejected so nothing resumes it again. */
@@ -117,7 +128,7 @@ export class CliExecutionSession {
   }
 
   recordHeadlessResponse(collected: CollectedHeadlessResponse): void {
-    this.parsed = collected.parsedOutput;
+    this.parsed = this.withWarning(collected.parsedOutput);
     this.cliResult = collected.cliResult;
     this.failureKindValue = collected.failureKind;
     this.failureMessageValue = collected.failureMessage;
@@ -127,7 +138,20 @@ export class CliExecutionSession {
   }
 
   updateParsedOutput(parsedOutput: UniversalCliOutput | undefined): void {
-    this.parsed = parsedOutput;
+    this.parsed = this.withWarning(parsedOutput);
+  }
+
+  private withWarning(
+    output: UniversalCliOutput | undefined
+  ): UniversalCliOutput | undefined {
+    if (!output || !this.warningMessage) return output;
+    return {
+      ...output,
+      events: [
+        { type: "text", data: { text: this.warningMessage } },
+        ...output.events,
+      ],
+    };
   }
 
   updateResult(result: CliResult | undefined): void {

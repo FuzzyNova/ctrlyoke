@@ -59,7 +59,10 @@ const EXPORT_POLL_INTERVAL_MS = 1000;
 const OPENCODE_EXPORT_MAX_BUFFER = 100 * 1024 * 1024;
 const OPENCODE_SUBAGENT_SIDECAR_SUFFIX = "-subagents.jsonl";
 
-type OpenCodeExportRunner = (sessionId: string) => Promise<string>;
+type OpenCodeExportRunner = (
+  sessionId: string,
+  workspaceRoot?: string
+) => Promise<string>;
 
 /**
  * Run OpenCode's export command through the same platform-aware launcher used
@@ -67,9 +70,13 @@ type OpenCodeExportRunner = (sessionId: string) => Promise<string>;
  * a shell depends on the extension host's PATH, which may not include npm's
  * shim directory even when the TUI itself launched successfully.
  */
-async function runOpenCodeExport(sessionId: string): Promise<string> {
+async function runOpenCodeExport(
+  sessionId: string,
+  workspaceRoot?: string
+): Promise<string> {
   const command = await resolveCliCommand("opencode", ["export", sessionId]);
   const { stdout } = await execFileAsync(command.command, command.args, {
+    cwd: workspaceRoot,
     encoding: "utf8",
     timeout: 10_000,
     maxBuffer: OPENCODE_EXPORT_MAX_BUFFER,
@@ -218,6 +225,26 @@ export class OpenCodeLogParser extends BaseLogParser {
    * Injected from OpenCodeCliProvider so parsers don't call the CLI themselves.
    */
   private readonly contextWindowSizeFn: () => number | undefined;
+
+  /** Probe OpenCode's own session store through its ID-addressed export API. */
+  async probeSessionId(
+    sessionId: string,
+    workspaceRoot: string
+  ): Promise<"available" | "missing" | "unknown"> {
+    try {
+      const parsed = JSON.parse(
+        await this.runExport(sessionId, workspaceRoot)
+      ) as OpenCodeExport;
+      if (!parsed?.info || typeof parsed.info.id !== "string") {
+        return "unknown";
+      }
+      return parsed?.info?.id === sessionId ? "available" : "missing";
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("Session not found")) return "missing";
+      return "unknown";
+    }
+  }
 
   constructor(
     contextWindowSizeFn: () => number | undefined = () => undefined,

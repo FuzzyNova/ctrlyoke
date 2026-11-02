@@ -151,6 +151,13 @@ export class CopilotCliProvider implements ICliProvider {
     };
   }
   readonly logParser = new CopilotLogParser();
+
+  probeResumableSession(
+    sessionId: string,
+    _workspaceRoot: string
+  ): "available" | "missing" | "unknown" {
+    return this.logParser.probeSessionId(sessionId);
+  }
   readonly headlessSource = HEADLESS_SOURCE_MODES.STDOUT;
 
   /** Convert Copilot's JSONL stdout into the event vocabulary of CopilotLogParser. */

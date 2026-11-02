@@ -201,6 +201,19 @@ function isQwenProviderEvent(value: unknown): value is QwenProviderEvent {
 }
 
 export class QwenLogParser extends BaseLogParser {
+  probeSessionId(sessionId: string): "available" | "missing" | "unknown" {
+    const projectsDir = path.join(os.homedir(), ".qwen", "projects");
+    try {
+      return this.findSessionLogAcrossProjectDirectories(projectsDir, [
+        "chats",
+        `${sessionId}.jsonl`,
+      ])
+        ? "available"
+        : "missing";
+    } catch {
+      return "unknown";
+    }
+  }
   private readonly subagentFollower = new SubagentSourceFollower();
   private subagentUsageEnabled = true;
 

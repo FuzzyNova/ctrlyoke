@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A resume whose session can't be found, or whose ID is badly formatted, now
+  warns and starts a new session on every harness. Before, Copilot, Codex,
+  OpenCode and Antigravity failed the step, and Claude/Qwen and badly formatted
+  IDs started a new session without telling the user.
+
 - **Add Commit to ctrlyoke** has been removed from VS Code's Timeline view
   context menu. Current VS Code versions no longer tell other extensions which
   timeline commit was right-clicked, so the item always failed with "Could not
