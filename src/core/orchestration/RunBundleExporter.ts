@@ -133,6 +133,11 @@ interface ContinuationInfo {
   worktreeMode: (typeof RUN_BUNDLE_WORKTREE_MODES)[keyof typeof RUN_BUNDLE_WORKTREE_MODES];
 }
 
+export interface RunBundleExportPreview {
+  continuable: boolean;
+  changedFiles: string[];
+}
+
 function assertExportableRun(workingFile: WorkingFile): void {
   if (workingFile._runtime?.pendingRewind) {
     throw new RunBundleExportError(
@@ -195,6 +200,67 @@ async function getContinuationInfo(
   };
 }
 
+/** Cheap dashboard preflight using the same continuation derivation as export. */
+export async function getRunBundleExportPreview(
+  stateRoot: string,
+  workspaceRoot: string,
+  workflowKey: WorkflowKey,
+  runRef: RunRef
+): Promise<RunBundleExportPreview> {
+  const manifestPath = WorkflowPaths.manifestPath(
+    stateRoot,
+    workflowKey,
+    runRef
+  );
+  await assertRunSettled({ stateRoot, workflowKey, runRef }, manifestPath);
+  const workingFile = JSON.parse(
+    await fs.promises.readFile(
+      WorkflowPaths.runFilePath(stateRoot, workflowKey, runRef),
+      "utf8"
+    )
+  ) as WorkingFile;
+  assertExportableRun(workingFile);
+  const continuation = await getContinuationInfo(workingFile, workspaceRoot);
+  if (!continuation) return { continuable: false, changedFiles: [] };
+  return {
+    continuable: true,
+    changedFiles: await collectWorkspaceChanges(
+      continuation.executionRoot,
+      continuation.baseCommit
+    ).then((changes) => changes.files),
+  };
+}
+
+async function collectWorkspaceChanges(
+  executionRoot: string,
+  baseCommit: string
+): Promise<{ patchText: string; files: string[] }> {
+  const indexPath = path.join(
+    os.tmpdir(),
+    `ctrlyoke-export-index-${randomUUID()}`
+  );
+  const env = { ...process.env, GIT_INDEX_FILE: indexPath };
+  try {
+    await execGit(["read-tree", baseCommit], { cwd: executionRoot, env });
+    await execGit(["add", "-A"], { cwd: executionRoot, env });
+    const [{ stdout: patchText }, { stdout: namesText }] = await Promise.all([
+      execGit(["diff", "--cached", "--binary", "--full-index", baseCommit], {
+        cwd: executionRoot,
+        env,
+        maxBuffer: 500 * 1024 * 1024,
+      }),
+      execGit(["diff", "--cached", "--name-only", "-z", baseCommit], {
+        cwd: executionRoot,
+        env,
+        maxBuffer: 50 * 1024 * 1024,
+      }),
+    ]);
+    return { patchText, files: namesText.split("\0").filter(Boolean) };
+  } finally {
+    await fs.promises.rm(indexPath, { force: true });
+  }
+}
+
 function getPendingStepCount(workingFile: WorkingFile): number {
   const steps = workingFile.steps ?? [];
   const currentIndex = Math.min(
@@ -240,56 +306,35 @@ async function writeChangesPatch(
 }> {
   if (options.includeChanges === false) return { files: [] };
 
-  const indexPath = path.join(
-    os.tmpdir(),
-    `ctrlyoke-export-index-${randomUUID()}`
+  const { patchText, files } = await collectWorkspaceChanges(
+    executionRoot,
+    baseCommit
   );
-  const env = { ...process.env, GIT_INDEX_FILE: indexPath };
-  try {
-    await execGit(["read-tree", baseCommit], { cwd: executionRoot, env });
-    await execGit(["add", "-A"], { cwd: executionRoot, env });
-    const [{ stdout: patchText }, { stdout: namesText }] = await Promise.all([
-      execGit(["diff", "--cached", "--binary", "--full-index", baseCommit], {
-        cwd: executionRoot,
-        env,
-        maxBuffer: 500 * 1024 * 1024,
-      }),
-      execGit(["diff", "--cached", "--name-only", "-z", baseCommit], {
-        cwd: executionRoot,
-        env,
-        maxBuffer: 50 * 1024 * 1024,
-      }),
-    ]);
-    const transformedPatch = transform.redactText(
-      patchText,
-      RUN_BUNDLE_FILES.CHANGES
-    );
-    await fs.promises.writeFile(
-      path.join(stagingDir, RUN_BUNDLE_FILES.CHANGES),
-      transformedPatch,
-      "utf8"
-    );
-    const files = namesText.split("\0").filter(Boolean);
-    const binary = (
-      transformedPatch.match(
-        /^(?:GIT binary patch|Binary files .* differ)$/gm
-      ) ?? []
-    ).length;
-    return {
-      patch: {
-        file: RUN_BUNDLE_FILES.CHANGES,
-        sha256: crypto
-          .createHash("sha256")
-          .update(transformedPatch)
-          .digest("hex"),
-        files: files.length,
-        binary,
-      },
-      files,
-    };
-  } finally {
-    await fs.promises.rm(indexPath, { force: true });
-  }
+  const transformedPatch = transform.redactText(
+    patchText,
+    RUN_BUNDLE_FILES.CHANGES
+  );
+  await fs.promises.writeFile(
+    path.join(stagingDir, RUN_BUNDLE_FILES.CHANGES),
+    transformedPatch,
+    "utf8"
+  );
+  const binary = (
+    transformedPatch.match(/^(?:GIT binary patch|Binary files .* differ)$/gm) ??
+    []
+  ).length;
+  return {
+    patch: {
+      file: RUN_BUNDLE_FILES.CHANGES,
+      sha256: crypto
+        .createHash("sha256")
+        .update(transformedPatch)
+        .digest("hex"),
+      files: files.length,
+      binary,
+    },
+    files,
+  };
 }
 
 export async function exportRunBundle(
@@ -508,7 +553,7 @@ function redactAssetContent(
 
 /** A run still being written has no stable `eventCount` (§4 step 1). */
 async function assertRunSettled(
-  options: RunBundleExportOptions,
+  options: Pick<RunBundleExportOptions, "stateRoot" | "workflowKey" | "runRef">,
   manifestPath: string
 ): Promise<void> {
   if (!fs.existsSync(manifestPath)) {

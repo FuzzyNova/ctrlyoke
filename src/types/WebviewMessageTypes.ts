@@ -1322,6 +1322,54 @@ export interface SaveWorkflowDialogDataMessage {
   defaultFormat: WorkflowFileFormat;
 }
 
+export interface RequestRunExportInfoMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_RUN_EXPORT_INFO;
+  requestId: string;
+  address: Extract<WorkflowViewAddress, { kind: "run" }>;
+  workflowName: string;
+}
+
+export interface RunExportInfoMessage {
+  type: typeof MESSAGE_TYPES.RUN_EXPORT_INFO;
+  requestId: string;
+  address: Extract<WorkflowViewAddress, { kind: "run" }>;
+  workflowName: string;
+  defaultPath: string;
+  continuable: boolean;
+  changedFiles: string[];
+}
+
+export interface ExportRunMessage {
+  type: typeof MESSAGE_TYPES.EXPORT_RUN;
+  requestId: string;
+  address: Extract<WorkflowViewAddress, { kind: "run" }>;
+  bundleDir: string;
+  includeSnapshots: boolean;
+  includeChanges: boolean;
+}
+
+export interface RunExportedMessage {
+  type: typeof MESSAGE_TYPES.RUN_EXPORTED;
+  requestId: string;
+  bundleDir: string;
+  eventCount: number;
+  continuable: boolean;
+  changedFiles: string[];
+  redaction: {
+    removedCount: number;
+    byRule: Record<string, number>;
+    byFile?: Record<string, number>;
+  };
+  externalPaths: string[];
+  warnings: string[];
+}
+
+export interface RunExportFailedMessage {
+  type: typeof MESSAGE_TYPES.RUN_EXPORT_FAILED;
+  requestId: string;
+  error: string;
+}
+
 /** Webview → Extension: non-mutating overwrite/security preflight for an export path. */
 export interface CheckSavePathMessage {
   type: typeof MESSAGE_TYPES.CHECK_SAVE_PATH;
@@ -3584,6 +3632,9 @@ export type IncomingMessage =
       sourceDefinitionPath?: string;
     }
   | SaveWorkflowDialogDataMessage
+  | RunExportInfoMessage
+  | RunExportedMessage
+  | RunExportFailedMessage
   | SavePathCheckedMessage
   | WorkflowSavedMessage
   | WorkflowSaveFailedMessage

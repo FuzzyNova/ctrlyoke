@@ -129,11 +129,17 @@ For the files inside each run, see [Run files](/reference/run-files).
 ### Exporting a run {#export}
 
 To keep a finished run outside your history or attach it to a bug report,
-export it as a portable run bundle with
-[`ctrlyoke export`](/cli/ctrlyoke#ctrlyoke-export). The bundle holds the
-workflow as authored, its step summary and its timeline, with workspace and
-home-folder paths and secret values redacted. The dashboard has no export
-command yet, and a bundle can't be imported back into history.
+use **Export Run…** from the workflow menu on a settled run, or export it from
+a terminal with [`ctrlyoke export`](/cli/ctrlyoke#ctrlyoke-export). The bundle
+holds the workflow as authored, its step summary and its timeline, with
+workspace and home-folder paths and secret values redacted. For a run with
+pending work, it can also include runtime state and a patch of workspace
+changes. Review the redaction summary, external paths and warnings before
+sharing; redaction is best effort. Snapshots are omitted unless you opt in,
+and workspace changes can be omitted while retaining run state.
+
+To add a bundle to history from a terminal, use
+[`ctrlyoke import`](/cli/ctrlyoke#ctrlyoke-import).
 
 ### Changes made outside ctrlyoke {#changes-made-outside-ctrlyoke}
 

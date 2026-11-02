@@ -2,7 +2,7 @@ import { Command } from "commander";
 import * as os from "node:os";
 import * as path from "node:path";
 import { exportRunBundle } from "../core/orchestration/RunBundleExporter";
-import { createNodeSecretStore } from "../platform/NodeSecretStore";
+import { buildRunBundleExportOptions } from "../core/orchestration/RunBundleExportOptions";
 import { RUN_BUNDLE_DIR_SUFFIX } from "../types/RunBundleTypes";
 import {
   bootstrapCliWorkspace,
@@ -83,25 +83,24 @@ export async function exportRunCommand(
     options.run
   );
   const out = path.resolve(options.out);
-  const result = await exportRunBundle({
-    stateRoot: workspace.workspaceRoot,
-    workspaceRoot: workspace.workspaceRoot,
-    workflowKey,
-    runRef,
-    bundleDir: out.endsWith(RUN_BUNDLE_DIR_SUFFIX)
-      ? out
-      : `${out}${RUN_BUNDLE_DIR_SUFFIX}`,
-    exportedByVersion: version,
-    includeSnapshots: options.withSnapshots === true,
-    includeChanges: options.changes !== false,
-    secrets: {
+  const result = await exportRunBundle(
+    buildRunBundleExportOptions({
+      stateRoot: workspace.workspaceRoot,
       workspaceRoot: workspace.workspaceRoot,
-      secretStore: createNodeSecretStore({ warn: io.writeErr }),
-      environment: dependencies.environment ?? process.env,
-    },
-    homeDir: dependencies.homeDir ?? os.homedir(),
-    replace: options.force === true,
-  });
+      workflowKey,
+      runRef,
+      bundleDir: out.endsWith(RUN_BUNDLE_DIR_SUFFIX)
+        ? out
+        : `${out}${RUN_BUNDLE_DIR_SUFFIX}`,
+      exportedByVersion: version,
+      includeSnapshots: options.withSnapshots === true,
+      includeChanges: options.changes !== false,
+      onWarning: io.writeErr,
+      environment: dependencies.environment,
+      homeDir: dependencies.homeDir ?? os.homedir(),
+      replace: options.force === true,
+    })
+  );
 
   const { redaction, externalPaths } = result.manifest;
   if (options.json) {

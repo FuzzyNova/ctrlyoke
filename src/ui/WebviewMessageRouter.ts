@@ -1,4 +1,5 @@
 import * as fs from "fs/promises";
+import * as path from "path";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import type {
   ActionResult,
@@ -37,6 +38,14 @@ import {
   PATH_SELECTION_TITLES,
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { projectStateRoot } from "../utils/ProjectStatePaths";
+import {
+  exportRunBundle,
+  getRunBundleExportPreview,
+} from "../core/orchestration/RunBundleExporter";
+import { buildRunBundleExportOptions } from "../core/orchestration/RunBundleExportOptions";
+import { RUN_BUNDLE_DIR_SUFFIX } from "../types/RunBundleTypes";
+import { CTRLYOKE_VERSION } from "../utils/BuildConfig";
 import { Log } from "../utils/Log";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import type { WorkspaceSnapshotContentMessage } from "../types/WebviewMessageTypes";
@@ -3114,6 +3123,87 @@ export class WebviewMessageRouter {
         ctx.postMessage,
         ctx.clientId
       );
+    });
+
+    table.set(MESSAGE_TYPES.REQUEST_RUN_EXPORT_INFO, async (message, ctx) => {
+      const workspaceRoot = this.getWorkspaceRoot();
+      const stateRoot = projectStateRoot(
+        workspaceRoot,
+        ConfigurationUtils.getRunHistoryLocation()
+      );
+      try {
+        const preview = await getRunBundleExportPreview(
+          stateRoot,
+          workspaceRoot,
+          message.address.workflowKey,
+          message.address.runRef
+        );
+        const safeName =
+          message.workflowName.trim().replace(/[\\/:*?"<>|]+/g, "-") || "run";
+        ctx.emit({
+          type: MESSAGE_TYPES.RUN_EXPORT_INFO,
+          requestId: message.requestId,
+          address: message.address,
+          workflowName: message.workflowName,
+          defaultPath: path.join(
+            workspaceRoot,
+            `${safeName}${RUN_BUNDLE_DIR_SUFFIX}`
+          ),
+          ...preview,
+        });
+      } catch (error) {
+        ctx.emit({
+          type: MESSAGE_TYPES.RUN_EXPORT_FAILED,
+          requestId: message.requestId,
+          error: getErrorMessage(error),
+        });
+      }
+    });
+
+    table.set(MESSAGE_TYPES.EXPORT_RUN, async (message, ctx) => {
+      const workspaceRoot = this.getWorkspaceRoot();
+      const stateRoot = projectStateRoot(
+        workspaceRoot,
+        ConfigurationUtils.getRunHistoryLocation()
+      );
+      const requestedDir = path.isAbsolute(message.bundleDir)
+        ? message.bundleDir
+        : path.resolve(workspaceRoot, message.bundleDir);
+      const bundleDir = requestedDir.endsWith(RUN_BUNDLE_DIR_SUFFIX)
+        ? requestedDir
+        : `${requestedDir}${RUN_BUNDLE_DIR_SUFFIX}`;
+      try {
+        const result = await exportRunBundle(
+          buildRunBundleExportOptions({
+            stateRoot,
+            workspaceRoot,
+            workflowKey: message.address.workflowKey,
+            runRef: message.address.runRef,
+            bundleDir,
+            exportedByVersion: CTRLYOKE_VERSION,
+            includeSnapshots: message.includeSnapshots,
+            includeChanges: message.includeChanges,
+            onWarning: (warning) => Log.warn(`[Run export] ${warning}`),
+          })
+        );
+        ctx.emit({
+          type: MESSAGE_TYPES.RUN_EXPORTED,
+          requestId: message.requestId,
+          bundleDir: result.bundleDir,
+          eventCount: result.eventCount,
+          continuable: result.continuable,
+          changedFiles: result.changedFiles,
+          redaction: result.manifest.redaction,
+          externalPaths: result.manifest.externalPaths,
+          warnings: result.warnings,
+        });
+      } catch (error) {
+        ctx.emit({
+          type: MESSAGE_TYPES.RUN_EXPORT_FAILED,
+          requestId: message.requestId,
+          error: getErrorMessage(error),
+        });
+      }
     });
   }
 

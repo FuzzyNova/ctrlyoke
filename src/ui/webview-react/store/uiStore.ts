@@ -250,6 +250,30 @@ export interface SaveWorkflowDialogData {
   defaultFormat: WorkflowFileFormat;
 }
 
+export interface RunExportDialogData {
+  requestId: string;
+  address: Extract<WorkflowViewAddress, { kind: "run" }>;
+  workflowName: string;
+  defaultPath: string;
+  continuable: boolean;
+  changedFiles: string[];
+  exporting?: boolean;
+  result?: {
+    bundleDir: string;
+    eventCount: number;
+    continuable: boolean;
+    changedFiles: string[];
+    redaction: {
+      removedCount: number;
+      byRule: Record<string, number>;
+      byFile?: Record<string, number>;
+    };
+    externalPaths: string[];
+    warnings: string[];
+  };
+  error?: string;
+}
+
 export interface DuplicateWorkflowDialogData {
   source: WorkflowViewAddress;
   workflowName: string;
@@ -715,6 +739,7 @@ interface UiState {
   saveWorkflowDialogOpen: boolean;
   saveWorkflowDialogData: SaveWorkflowDialogData | null;
   savePathCheck: SavePathCheck | null;
+  runExportDialogData: RunExportDialogData | null;
 
   // Duplicate workflow dialog state
   duplicateWorkflowDialogOpen: boolean;
@@ -1005,6 +1030,12 @@ interface UiActions {
   ) => void;
   resolveSavePathCheck: (result: Omit<SavePathCheck, "checking">) => void;
   clearSavePathCheck: () => void;
+  openRunExportDialog: (data: RunExportDialogData) => void;
+  updateRunExportDialog: (
+    requestId: string,
+    update: Partial<RunExportDialogData>
+  ) => void;
+  closeRunExportDialog: () => void;
 
   // Duplicate workflow dialog
   openDuplicateWorkflowDialog: (
@@ -1270,6 +1301,7 @@ const initialState: UiState = {
   saveWorkflowDialogOpen: false,
   saveWorkflowDialogData: null,
   savePathCheck: null,
+  runExportDialogData: null,
   duplicateWorkflowDialogOpen: false,
   duplicateWorkflowDialogData: null,
   duplicateWorkflowRequest: null,
@@ -1743,6 +1775,7 @@ export const useUiStore = create<UiState & UiActions>()(
           saveWorkflowDialogOpen: true,
           saveWorkflowDialogData: data,
           savePathCheck: null,
+          runExportDialogData: null,
         }),
 
       closeSaveWorkflowDialog: () =>
@@ -1812,6 +1845,20 @@ export const useUiStore = create<UiState & UiActions>()(
         }),
 
       clearSavePathCheck: () => set({ savePathCheck: null }),
+
+      openRunExportDialog: (data) => set({ runExportDialogData: data }),
+      updateRunExportDialog: (requestId, update) =>
+        set((state) =>
+          state.runExportDialogData?.requestId === requestId
+            ? {
+                runExportDialogData: {
+                  ...state.runExportDialogData,
+                  ...update,
+                },
+              }
+            : state
+        ),
+      closeRunExportDialog: () => set({ runExportDialogData: null }),
 
       // ============================================================================
       // FILE BROWSER MODAL

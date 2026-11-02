@@ -817,6 +817,11 @@ export const MESSAGE_TYPES = {
   WORKFLOW_VARIANT_FAILED: "workflowVariantFailed",
   BROWSE_SAVE_LOCATION: "browseSaveLocation", // Webview -> Extension: Request OS folder picker for the Save As location (VS Code panel only)
   SAVE_LOCATION_SELECTED: "saveLocationSelected", // Extension -> Webview: OS folder picker result { path }
+  REQUEST_RUN_EXPORT_INFO: "requestRunExportInfo",
+  RUN_EXPORT_INFO: "runExportInfo",
+  EXPORT_RUN: "exportRun",
+  RUN_EXPORTED: "runExported",
+  RUN_EXPORT_FAILED: "runExportFailed",
 
   // Multi-workflow coordination — Extension → Webview
   WORKFLOWS_LIST: "workflowsList", // Full list of loaded WorkflowSummary[]

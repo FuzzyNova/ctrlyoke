@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Modal, Button, ScopeToggle, SettingToggleRow } from "../shared";
 import { useUiStore } from "@store/uiStore";
-import { useSettingsStore } from "@store/settingsStore";
-import { DASHBOARD_HOST_CAPABILITIES } from "@root/types/DashboardConstants";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import {
   MESSAGE_TYPES,
@@ -12,13 +10,13 @@ import {
 import { validateSafeName } from "@utils/string";
 import { type TemplateScope, TEMPLATE_SCOPE_OPTIONS } from "./templateScope";
 import { TEMPLATE_FORMAT_OPTIONS } from "./templateFormat";
-import { toWorkspaceRelative } from "../workspace-viewer/fileBrowserShared";
 import {
   KEYBOARD_KEYS,
   SETTING_SCOPES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
+import { WorkflowLocationNameFields } from "./WorkflowLocationNameFields";
 
 /**
  * Split a full save path into its directory (`location`) and basename
@@ -75,11 +73,6 @@ function joinSavePath(
  * dialog would open invisibly on the host's screen.
  */
 export const SaveWorkflowDialog: React.FC = () => {
-  const canSelectWorkspacePath = useUiStore((state) =>
-    state.hostCapabilities.includes(
-      DASHBOARD_HOST_CAPABILITIES.selectWorkspacePath
-    )
-  );
   const vscode = useVsCodeApi();
   const saveWorkflowDialogOpen = useUiStore((s) => s.saveWorkflowDialogOpen);
   const saveWorkflowDialogData = useUiStore((s) => s.saveWorkflowDialogData);
@@ -88,12 +81,6 @@ export const SaveWorkflowDialog: React.FC = () => {
   const beginSavePathCheck = useUiStore((s) => s.beginSavePathCheck);
   const clearSavePathCheck = useUiStore((s) => s.clearSavePathCheck);
   const fileBrowserState = useUiStore((s) => s.fileBrowserState);
-  const openFileBrowser = useUiStore((s) => s.openFileBrowser);
-  const saveLocationSelection = useUiStore((s) => s.saveLocationSelection);
-  const setSaveLocationSelection = useUiStore(
-    (s) => s.setSaveLocationSelection
-  );
-  const workspaceRoot = useSettingsStore((s) => s.globalSettings.workspaceRoot);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const pathCheckSequence = useRef(0);
@@ -139,38 +126,6 @@ export const SaveWorkflowDialog: React.FC = () => {
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [saveWorkflowDialogOpen]);
-
-  // Consume a location picked via the native OS folder dialog (VS Code panel).
-  useEffect(() => {
-    if (!saveLocationSelection) return;
-    setLocation(saveLocationSelection.path);
-    setSaveLocationSelection(null);
-  }, [saveLocationSelection, setSaveLocationSelection]);
-
-  const handleBrowseLocation = useCallback(() => {
-    if (!canSelectWorkspacePath) {
-      // `location` may hold an absolute filesystem path (SAVE_WORKFLOW_DIALOG_DATA's
-      // defaultPath is extension-supplied and absolute) or a user-typed relative
-      // path, but the hosted file browser's directory listing only understands
-      // workspace-relative viewer paths — convert before opening it.
-      openFileBrowser({
-        mode: "directory",
-        initialPath: toWorkspaceRelative(location, workspaceRoot),
-        onSelect: setLocation,
-      });
-      return;
-    }
-    vscode.postMessage({
-      type: MESSAGE_TYPES.BROWSE_SAVE_LOCATION,
-      defaultDir: location,
-    });
-  }, [
-    vscode,
-    openFileBrowser,
-    location,
-    workspaceRoot,
-    canSelectWorkspacePath,
-  ]);
 
   const handleNameChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -446,56 +401,16 @@ export const SaveWorkflowDialog: React.FC = () => {
           </div>
         ) : (
           <>
+            <WorkflowLocationNameFields
+              location={location}
+              name={name}
+              nameError={nameError}
+              inputRef={inputRef}
+              onLocationChange={setLocation}
+              onNameChange={handleNameChange}
+              onNameKeyDown={handleKeyDown}
+            />
             <div className="form-group">
-              <span className="block mb-1 text-sm font-medium text-foreground">
-                Location
-              </span>
-              <div className="flex items-center gap-1.5">
-                <span
-                  className="flex-1 min-w-0 truncate px-2 py-1.5 rounded-sm bg-input-bg text-input-fg border border-input-border font-mono text-xs"
-                  title={location || "(workspace root)"}
-                >
-                  {location || "(workspace root)"}
-                </span>
-                <Button
-                  variant="secondary"
-                  onClick={handleBrowseLocation}
-                  title="Browse for save location"
-                >
-                  Browse…
-                </Button>
-              </div>
-              <p className="mt-1 text-xs text-description-fg">
-                Absolute path or path relative to the workspace root.
-              </p>
-            </div>
-
-            <div className="form-group">
-              <label
-                htmlFor="save-workflow-name"
-                className="block text-sm font-medium text-foreground"
-              >
-                <span className="block mb-1">Name</span>
-                <input
-                  ref={inputRef}
-                  id="save-workflow-name"
-                  type="text"
-                  aria-label="Name"
-                  value={name}
-                  onChange={handleNameChange}
-                  onKeyDown={handleKeyDown}
-                  spellCheck={false}
-                  placeholder="my-workflow"
-                  className={`w-full px-2 py-1.5 rounded-sm bg-input-bg text-input-fg border focus:outline-hidden font-mono text-xs ${
-                    nameError
-                      ? "border-input-error-border"
-                      : "border-input-border focus:border-focus-border"
-                  }`}
-                />
-              </label>
-              {nameError && (
-                <p className="mt-1 text-xs text-error-fg">{nameError}</p>
-              )}
               {matchingPathCheck?.checking && (
                 <p className="mt-1 text-xs text-description-fg">
                   Checking destination…

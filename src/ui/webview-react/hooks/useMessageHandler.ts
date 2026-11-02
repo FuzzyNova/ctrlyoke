@@ -3130,6 +3130,48 @@ export function createMessageHandlers(
     });
   };
 
+  handlers[MESSAGE_TYPES.RUN_EXPORT_INFO] = (message) => {
+    useUiStore.getState().openRunExportDialog({
+      requestId: message.requestId,
+      address: message.address,
+      workflowName: message.workflowName,
+      defaultPath: message.defaultPath,
+      continuable: message.continuable,
+      changedFiles: message.changedFiles,
+    });
+  };
+
+  handlers[MESSAGE_TYPES.RUN_EXPORTED] = (message) => {
+    useUiStore.getState().updateRunExportDialog(message.requestId, {
+      result: {
+        bundleDir: message.bundleDir,
+        eventCount: message.eventCount,
+        continuable: message.continuable,
+        changedFiles: message.changedFiles,
+        redaction: message.redaction,
+        externalPaths: message.externalPaths,
+        warnings: message.warnings,
+      },
+      error: undefined,
+      exporting: false,
+    });
+  };
+
+  handlers[MESSAGE_TYPES.RUN_EXPORT_FAILED] = (message) => {
+    const store = useUiStore.getState();
+    if (store.runExportDialogData?.requestId !== message.requestId) {
+      notifyUser(
+        `Run export failed: ${message.error}`,
+        USER_FEEDBACK_SEVERITY.ERROR
+      );
+      return;
+    }
+    store.updateRunExportDialog(message.requestId, {
+      error: message.error,
+      exporting: false,
+    });
+  };
+
   // --------------------------------------------------------------------------
   // SAVE_PATH_CHECKED - consume only the dialog's latest path request.
   // --------------------------------------------------------------------------

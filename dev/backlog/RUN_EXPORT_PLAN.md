@@ -1,6 +1,6 @@
 # Run Export / Import
 
-> Last reviewed against code: 2026-11-01 (phase 4 import continuation is complete). The status below is accurate; every cited symbol
+> Last reviewed against code: 2026-11-01 (dashboard Export is built; phase 4 import continuation is complete). The status below is accurate; every cited symbol
 > exists. Two gaps found in review, now written into §2.1 and §6: the exporter never maps a
 > worktree run's execution root to `${workspaceFolder}`, and an importer must write run files
 > through the definition anchor (`bcc6c74a1`, `aa2f6117d`), or the imported run loads
@@ -27,6 +27,11 @@
 > `PersistedSchemaGuard` keeps run-file format 2, and the run-file reader ignores unknown runtime fields, so no schema bump is needed.
 > Originally
 > written 2026-08-14.
+>
+> **Dashboard Export built 2026-11-01:** the workflow context menu exports an addressed settled
+> run, with shared Save/Export location fields, a continuation preview, snapshot and patch
+> options, and a post-export redaction/path/warning review. Dashboard Import Run, Load routing,
+> import preview and the full guide page remain open.
 >
 > **Built 2026-10-18:** `exportRunBundle` (`src/core/orchestration/RunBundleExporter.ts`), the
 > loader `readRunBundle` (`RunBundleReader.ts`, today used only by media replay), the format types
@@ -596,7 +601,7 @@ How they work together instead:
 | 3 ✅  | `RunMaterializer` + `RunBundleImporter` view-only core, ingress guards (§6.1), `ctrlyoke import`, dashboard provenance badge and pre-import undo gate | Completes the CLI share loop; imported runs can be viewed |
 | 4 ✅  | Continuation: export side, import preview, normalized runtime, safe workspace patch placement, `import --continue`                                    | Yes: the machine-to-machine handoff                       |
 | 5 ✅  | Session preflight probe for all runs, uniform warn-and-start-fresh fallback, malformed IDs included (§5.4)                                            | Yes: fixes native runs too                                |
-| 6     | Dashboard: Export Run / Import Run actions, shared location fields, Load routing, import preview, guide page                                          | Yes                                                       |
+| 6     | Dashboard: **Export built**; Import Run actions, Load routing, import preview, guide page                                                              | Yes                                                       |
 
 Phase 5 is a **release gate on phase 4**, the way redaction was on phase 1: without it, four of
 six harnesses fail the first step that tries to resume a session from the other machine. It has
