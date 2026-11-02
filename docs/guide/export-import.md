@@ -52,6 +52,12 @@ The import preview checks whether the commit is available. If it is missing,
 the run can still be imported for viewing, but it cannot continue until the
 base is available.
 
+A run stopped mid-step moves the same way it continues locally. The step that
+was running stays cancelled and continuing starts at the next step. Any edits
+the cancelled step made before it stopped are in the exported changes. To run
+that step again, rerun it after importing. This also applies to a run whose
+VS Code window or CLI process exited while a step was running.
+
 For a continuable bundle, choose where its patch should go:
 
 - **Worktree** creates a managed worktree at the exported base commit. This is

@@ -22,6 +22,7 @@ import { WorkingFileManager } from "../../core/WorkingFileManager";
 import type { PromptFile, WorkingFile } from "../../types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
+  PROMPT_TERMINAL_STATUS,
   WORKTREE_MODES,
 } from "../../types/DashboardConstants";
 import { RUN_BUNDLE_FILES } from "../../types/RunBundleTypes";
@@ -259,6 +260,57 @@ suite("RunBundleExporter secrets", () => {
     assert.ok(loaded.runtime);
   });
 
+  test("a run whose owner died mid-step exports as continuing natively would", async () => {
+    // No lock names the run, so it is orphaned: native continue settles the
+    // in-flight step as cancelled and resumes at the next one (§10.8).
+    const run = await createRun({
+      state: EXECUTION_STATES.RUNNING,
+      currentIndex: 1,
+      steps: [
+        { prompt: "done", _runtime: { startedAt: 1, completedAt: 2 } },
+        { prompt: "in flight", _runtime: { startedAt: 3 } },
+        { prompt: "next" },
+      ],
+    });
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspace,
+      run.workflowKey,
+      run.runRef
+    );
+    const sourceBefore = await fs.readFile(runFilePath, "utf8");
+    const exported = await exportRunBundle({
+      stateRoot: workspace,
+      workspaceRoot: workspace,
+      ...run,
+      bundleDir: path.join(root, "interrupted.ctrlyokerun"),
+      exportedByVersion: "test",
+    });
+    assert.strictEqual(exported.continuable, true);
+    assert.strictEqual(
+      exported.continuation?.executionState,
+      EXECUTION_STATES.STOPPED
+    );
+    assert.deepStrictEqual(exported.continuation?.nextStep, {
+      kind: "queue",
+      stepIndex: 2,
+    });
+    const runtime = JSON.parse(
+      await fs.readFile(
+        path.join(exported.bundleDir, RUN_BUNDLE_FILES.RUNTIME),
+        "utf8"
+      )
+    ) as WorkingFile;
+    assert.strictEqual(
+      runtime.steps?.[1]._runtime?.terminalStatus,
+      PROMPT_TERMINAL_STATUS.CANCELLED
+    );
+    assert.strictEqual(
+      await fs.readFile(runFilePath, "utf8"),
+      sourceBefore,
+      "export never rewrites the source run"
+    );
+  });
+
   test("collapses sealed deltas, merges an unsealed reopened attempt, and can retain all deltas", async () => {
     const run = await createRun({
       state: EXECUTION_STATES.COMPLETED,
@@ -444,7 +496,7 @@ suite("RunBundleExporter secrets", () => {
 async function createRun(args: {
   state: (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES];
   currentIndex: number;
-  steps: Array<{ prompt: string }>;
+  steps: Array<{ prompt: string; _runtime?: Record<string, unknown> }>;
   pendingRewind?: boolean;
   worktree?: {
     mode: string;

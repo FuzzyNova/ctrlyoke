@@ -59,6 +59,7 @@ import {
   WORKTREE_MODES,
 } from "../../types/DashboardConstants";
 import { execGit, execGitBuffer } from "../../utils/GitUtils";
+import { settleInterruptedRun } from "../../utils/InterruptedRunSettlement";
 import { assertRunHasWorkToContinue } from "./RunContinuationService";
 import { getCliEntryKey } from "./OutputHistoryTimelineAdapter";
 
@@ -159,6 +160,33 @@ function assertExportableRun(workingFile: WorkingFile): void {
   }
 }
 
+/**
+ * Read the run's working file as it would continue natively (§10.8). The
+ * caller has already checked that no live lock names this run, so a run still
+ * recorded as RUNNING lost its owner mid-step. Continuing it natively settles
+ * the in-flight step as cancelled and moves past it (`settleInterruptedRun`,
+ * as `PromptQueue` does on load), so the export applies the same settlement
+ * to its in-memory copy. The source run file is never written.
+ */
+async function readExportableWorkingFile(
+  stateRoot: string,
+  workflowKey: WorkflowKey,
+  runRef: RunRef
+): Promise<WorkingFile> {
+  const workingFile = JSON.parse(
+    await fs.promises.readFile(
+      WorkflowPaths.runFilePath(stateRoot, workflowKey, runRef),
+      "utf8"
+    )
+  ) as WorkingFile;
+  assertExportableRun(workingFile);
+  if (workingFile._runtime?.executionState === EXECUTION_STATES.RUNNING) {
+    workingFile._runtime.executionState = EXECUTION_STATES.STOPPED;
+    settleInterruptedRun(workingFile);
+  }
+  return workingFile;
+}
+
 async function getContinuationInfo(
   workingFile: WorkingFile,
   workspaceRoot: string
@@ -217,13 +245,11 @@ export async function getRunBundleExportPreview(
     runRef
   );
   await assertRunSettled({ stateRoot, workflowKey, runRef }, manifestPath);
-  const workingFile = JSON.parse(
-    await fs.promises.readFile(
-      WorkflowPaths.runFilePath(stateRoot, workflowKey, runRef),
-      "utf8"
-    )
-  ) as WorkingFile;
-  assertExportableRun(workingFile);
+  const workingFile = await readExportableWorkingFile(
+    stateRoot,
+    workflowKey,
+    runRef
+  );
   const continuation = await getContinuationInfo(workingFile, workspaceRoot);
   if (!continuation) return { continuable: false, changedFiles: [] };
   return {
@@ -358,13 +384,11 @@ export async function exportRunBundle(
 
   const recorder = new TimelineRecorder();
   const runManifest = await recorder.readManifest(manifestPath);
-  const workingFile = JSON.parse(
-    await fs.promises.readFile(
-      WorkflowPaths.runFilePath(stateRoot, workflowKey, runRef),
-      "utf8"
-    )
-  ) as WorkingFile;
-  assertExportableRun(workingFile);
+  const workingFile = await readExportableWorkingFile(
+    stateRoot,
+    workflowKey,
+    runRef
+  );
   const descriptor = await new WorkflowLineageRepository().readDescriptor(
     stateRoot,
     workflowKey

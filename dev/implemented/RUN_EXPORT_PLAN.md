@@ -617,8 +617,8 @@ How they work together instead:
 All planned phases are built. Deliberately deferred follow-up: verified runtime
 session-rejection classifiers for Copilot CLI and Antigravity CLI; preflight
 handles their normal local-store misses, and no verified rejection text was
-available to implement the runtime classifiers. The open mid-step export
-question remains for later review (§10.8). Chunk-event collapse is implemented
+available to implement the runtime classifiers. Mid-step export is settled
+as native behavior (§10.8). Chunk-event collapse is implemented
 and settled in §10.3; collapsed imports omit incremental per-chunk TEXT activity
 entries, while retaining the sealed output projection.
 
@@ -679,6 +679,14 @@ the workspace.
 7. **Uncommitted changes on export when the run is `none`-mode in a dirty checkout.** Settled
    2026-10-24: include them (the run may have depended on them). The export summary lists every
    file in the patch so the user can cancel before sharing.
-8. **Exporting a run that is `stopped` mid-step.** The in-flight step re-runs from its start on
-   continue (as it does natively), but on another machine its partial edits are in the patch.
-   Proposed: same as native; the step's retry sees a partially edited tree either way.
+8. **Exporting a run that is `stopped` mid-step.** Settled 2026-11-02: same as native. The
+   original wording here ("the in-flight step re-runs from its start") was wrong about native
+   behavior. Natively, Stop records the in-flight step as `cancelled` and moves `currentIndex`
+   past it (`PromptQueue.finalizeCancelledPromptAfterStop`); Continue starts at the next step,
+   and the cancelled step's partial edits stay in the tree. The bundle carries exactly that:
+   `run.ctrlyoke.json` holds the cancelled step and the advanced index, and `changes.patch`
+   holds the partial edits, so the imported run continues the way the original would. To redo
+   the cancelled step, rerun it, as natively. A run whose owner died mid-step (still `running`
+   on disk, no live lock) is settled in the exporter's in-memory copy with
+   `settleInterruptedRun`, the same settlement native continue applies, so it exports as
+   continuable instead of history-only. The source run file is not rewritten.
