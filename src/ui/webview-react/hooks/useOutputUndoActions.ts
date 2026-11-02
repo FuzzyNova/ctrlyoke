@@ -38,6 +38,7 @@ import type {
   WorkspaceSnapshot,
   WorkflowRunMetadata,
 } from "@root/types/OutputHistoryTypes";
+import { isPreImportOutput } from "@root/utils/ImportedRunUndo";
 import { FINAL_STEP_PHASES } from "@/types/messages";
 import type { WorkflowRunAddress } from "@root/types/CtrlYokeTypes";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
@@ -165,9 +166,7 @@ export function useOutputUndoActions({
           importedSequenceBoundary ??
           historyOutputs?.runMetadata.importedSequenceBoundary;
         if (
-          importedBoundary !== undefined &&
-          lastMsg.sequence !== undefined &&
-          lastMsg.sequence < importedBoundary
+          isPreImportOutput(lastMsg.sequence, importedBoundary)
         ) {
           continue;
         }
@@ -406,9 +405,7 @@ export function useOutputUndoActions({
         importedSequenceBoundary ??
         historyOutputs?.runMetadata.importedSequenceBoundary;
       if (
-        importedBoundary !== undefined &&
-        row.sequence !== undefined &&
-        row.sequence < importedBoundary
+        isPreImportOutput(row.sequence, importedBoundary)
       ) {
         return;
       }
@@ -433,9 +430,7 @@ export function useOutputUndoActions({
         importedSequenceBoundary ??
         historyOutputs?.runMetadata.importedSequenceBoundary;
       if (
-        importedBoundary !== undefined &&
-        row.sequence !== undefined &&
-        row.sequence < importedBoundary
+        isPreImportOutput(row.sequence, importedBoundary)
       ) {
         return;
       }

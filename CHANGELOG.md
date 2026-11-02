@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Undo and redo requests for outputs before an imported run's boundary are now
+  refused by the extension, even when a client bypasses the dashboard gate.
 - Run export now preserves patch paths and binary or non-UTF-8 content, and only
   redacts matching values on added text lines; import previews report patch redactions.
 

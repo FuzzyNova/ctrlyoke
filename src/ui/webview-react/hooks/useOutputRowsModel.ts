@@ -44,6 +44,10 @@ import type {
   WorkflowRunMetadata,
   WorkspaceSnapshot,
 } from "@root/types/OutputHistoryTypes";
+import {
+  IMPORTED_OUTPUT_READ_ONLY_MESSAGE,
+  isPreImportOutput,
+} from "@root/utils/ImportedRunUndo";
 
 interface UseOutputRowsModelInput {
   importedSequenceBoundary?: number | null;
@@ -272,11 +276,10 @@ export function useOutputRowsModel({
             : {
                 ...builtRows,
                 rows: builtRows.rows.map((row) =>
-                  row.sequence !== undefined && row.sequence < boundary
+                  isPreImportOutput(row.sequence, boundary)
                     ? {
                         ...row,
-                        undoReadOnlyReason:
-                          "This output was imported and is read-only.",
+                        undoReadOnlyReason: IMPORTED_OUTPUT_READ_ONLY_MESSAGE,
                       }
                     : row
                 ),

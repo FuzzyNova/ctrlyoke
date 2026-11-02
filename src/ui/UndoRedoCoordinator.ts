@@ -9,6 +9,7 @@ import {
   WORKTREE_LIFECYCLE_STATES,
   WORKTREE_MODES,
   UNDO_FILE_ACTIONS,
+  OUTPUT_HISTORY_KINDS,
 } from "../types/DashboardConstants";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import type { PostMessageFn } from "./WebviewSettingsSync";
@@ -39,11 +40,21 @@ import {
 } from "../utils/GitUtils";
 import { isPathWithinDirectory } from "../utils/PathSecurity";
 import { pathsEqual } from "../utils/PathCasing";
+import {
+  IMPORTED_OUTPUT_READ_ONLY_MESSAGE,
+  isPreImportOutput,
+} from "../utils/ImportedRunUndo";
 
 type SnapshotEntry = {
   target: OutputExecutionTarget;
   files: UndoFileInstruction[];
 };
+
+function targetKey(target: OutputExecutionTarget): string {
+  return target.kind === FINAL_STEP_PHASES.QUEUE
+    ? `${target.kind}:${target.stepIndex}`
+    : `${target.kind}:${target.loopIndex}`;
+}
 
 interface UndoExecutionWorkspace {
   executionRoot: string;
@@ -245,21 +256,39 @@ export class UndoRedoCoordinator {
     const failedFiles: Array<{ path: string; error: string }> = [];
     const redoInstructions: UndoFileInstruction[] = [];
 
+    const preImportTargets = await this.findPreImportTargets(
+      entries,
+      workflowKey,
+      runRef
+    );
+    const writableEntries = entries.filter(
+      (entry) => !preImportTargets.has(targetKey(entry.target))
+    );
+    failedFiles.push(
+      ...this.createFailedUndoFiles(
+        entries
+          .filter((entry) => preImportTargets.has(targetKey(entry.target)))
+          .flatMap((entry) => entry.files),
+        IMPORTED_OUTPUT_READ_ONLY_MESSAGE
+      )
+    );
+    if (writableEntries.length === 0)
+      return { restoredFiles, failedFiles, redoInstructions };
+
     let workspace: UndoExecutionWorkspace;
     try {
       workspace = await this.resolveUndoExecutionWorkspace(workflowKey, runRef);
     } catch (error) {
-      return {
-        restoredFiles,
-        failedFiles: this.createFailedUndoFiles(
-          entries.flatMap((entry) => entry.files),
+      failedFiles.push(
+        ...this.createFailedUndoFiles(
+          writableEntries.flatMap((entry) => entry.files),
           `Undo refused: ${getErrorMessage(error)}`
-        ),
-        redoInstructions,
-      };
+        )
+      );
+      return { restoredFiles, failedFiles, redoInstructions };
     }
 
-    for (const entry of entries) {
+    for (const entry of writableEntries) {
       if (entry.files.length === 0) continue;
       const filesWithContent = entry.files.filter((file) => {
         if (
@@ -296,6 +325,65 @@ export class UndoRedoCoordinator {
     }
 
     return { restoredFiles, failedFiles, redoInstructions };
+  }
+
+  private async findPreImportTargets(
+    entries: SnapshotEntry[],
+    workflowKey: WorkflowKey,
+    runRef: RunRef
+  ): Promise<Set<string>> {
+    const denyImportedTargets = async (): Promise<Set<string>> => {
+      try {
+        const current = this.getCurrentWorkspaceRoots();
+        const runFilePath = WorkflowPaths.runFilePath(
+          current.executionRoot,
+          workflowKey,
+          runRef
+        );
+        const workingFile = JSON.parse(
+          await fs.readFile(runFilePath, "utf8")
+        ) as WorkingFile;
+        return workingFile._runtime?.importedFrom
+          ? new Set(entries.map((entry) => targetKey(entry.target)))
+          : new Set();
+      } catch {
+        return new Set();
+      }
+    };
+    try {
+      const historyManager = this.getOrchestrator()?.getOutputHistoryManager();
+      if (!historyManager) return denyImportedTargets();
+      const historyPath = historyManager.getHistoryFilePath(workflowKey, runRef);
+      if (!historyPath) return denyImportedTargets();
+      const history = await historyManager.loadHistory(historyPath);
+      const boundary = history.importedSequenceBoundary;
+      if (boundary === undefined) return denyImportedTargets();
+
+      const latestSequenceByTarget = new Map<string, number>();
+      for (const historyEntry of history.orderedEntries) {
+        if (historyEntry.kind !== OUTPUT_HISTORY_KINDS.CLI) continue;
+        const key = targetKey(historyEntry.target);
+        latestSequenceByTarget.set(
+          key,
+          Math.max(latestSequenceByTarget.get(key) ?? -1, historyEntry.sequence)
+        );
+      }
+
+      return new Set(
+        entries
+          .filter((entry) => {
+            const sequence = latestSequenceByTarget.get(
+              targetKey(entry.target)
+            );
+            // An imported run with no matching output cannot authorize a write.
+            return sequence === undefined || isPreImportOutput(sequence, boundary);
+          })
+          .map((entry) => targetKey(entry.target))
+      );
+    } catch {
+      // Preserve native-run behavior while failing closed for imported runs.
+      return denyImportedTargets();
+    }
   }
 
   /** Resolve the only workspace an addressed run may write to. */

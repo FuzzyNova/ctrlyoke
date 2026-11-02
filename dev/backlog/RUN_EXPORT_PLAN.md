@@ -1,6 +1,6 @@
 # Run Export / Import
 
-> Last reviewed against code: 2026-11-01 (all six phases, including the guide, are built). The status below is accurate; every cited symbol
+> Last reviewed against code: 2026-11-02 (all six phases, including the guide, are built). The status below is accurate; every cited symbol
 > exists. Two gaps found in review, now written into §2.1 and §6: the exporter never maps a
 > worktree run's execution root to `${workspaceFolder}`, and an importer must write run files
 > through the definition anchor (`bcc6c74a1`, `aa2f6117d`), or the imported run loads
@@ -13,6 +13,9 @@
 > fixed in review (`b3bd38d38`, `03a730e8b`, `086fd4e80`, `32e17816e`, and this change);
 > this plan moves to `dev/implemented/` once the remaining planned review closes.
 > The run working-file import shape and continuation refusal for view-only imports are fixed in this change.
+> Backend undo/redo now checks the run timeline's latest output for each target
+> against `RUN_IMPORTED` before restoring files; the dashboard and extension share
+> the same pre-import sequence predicate, and post-import outputs remain undoable.
 > Placement rollback, repository-root patch handling for subdirectory workspaces, and
 > patch-header path validation are fixed in this change. Materialization failures now roll
 > back applied checkout changes or remove the newly created managed worktree.
