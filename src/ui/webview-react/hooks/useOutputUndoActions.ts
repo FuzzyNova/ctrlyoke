@@ -165,9 +165,7 @@ export function useOutputUndoActions({
         const importedBoundary =
           importedSequenceBoundary ??
           historyOutputs?.runMetadata.importedSequenceBoundary;
-        if (
-          isPreImportOutput(lastMsg.sequence, importedBoundary)
-        ) {
+        if (isPreImportOutput(lastMsg.sequence, importedBoundary)) {
           continue;
         }
 
@@ -404,9 +402,7 @@ export function useOutputUndoActions({
       const importedBoundary =
         importedSequenceBoundary ??
         historyOutputs?.runMetadata.importedSequenceBoundary;
-      if (
-        isPreImportOutput(row.sequence, importedBoundary)
-      ) {
+      if (isPreImportOutput(row.sequence, importedBoundary)) {
         return;
       }
       handlePromptViewMeta(
@@ -429,9 +425,7 @@ export function useOutputUndoActions({
       const importedBoundary =
         importedSequenceBoundary ??
         historyOutputs?.runMetadata.importedSequenceBoundary;
-      if (
-        isPreImportOutput(row.sequence, importedBoundary)
-      ) {
+      if (isPreImportOutput(row.sequence, importedBoundary)) {
         return;
       }
       const target = toUndoExecutionTarget(row.target);

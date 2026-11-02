@@ -64,7 +64,7 @@ import { getCliEntryKey } from "./OutputHistoryTimelineAdapter";
 
 /**
  * Exports one settled run as a portable, redacted run bundle
- * (dev/backlog/RUN_EXPORT_PLAN.md §4). vscode-free, so the CLI and the
+ * (dev/implemented/RUN_EXPORT_PLAN.md §4). vscode-free, so the CLI and the
  * extension share it.
  *
  * Referenced generated attachments and prompt bodies are planned and copied

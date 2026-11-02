@@ -1,5 +1,5 @@
 /**
- * Path portability for run bundles (dev/backlog/RUN_EXPORT_PLAN.md §2.1).
+ * Path portability for run bundles (dev/implemented/RUN_EXPORT_PLAN.md §2.1).
  *
  * A run's timeline is full of absolute paths: every `CliOutput` carries its
  * `workingDirectory`, tool events carry the paths the harness touched, and

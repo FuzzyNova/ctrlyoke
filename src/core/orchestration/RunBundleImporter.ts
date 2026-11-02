@@ -44,8 +44,10 @@ import {
   type RunChangesTarget,
   type RunChangesPlacement,
 } from "./RunChangesPlacer";
-import type { WorkingFileRuntime } from "../../types/CtrlYokeTypes";
-import type { WorkingFile } from "../../types/CtrlYokeTypes";
+import type {
+  WorkingFile,
+  WorkingFileRuntime,
+} from "../../types/CtrlYokeTypes";
 
 export interface RunBundleImportOptions extends ReadRunBundleOptions {
   workspaceRoot: string;

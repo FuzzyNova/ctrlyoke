@@ -353,7 +353,10 @@ export class UndoRedoCoordinator {
     try {
       const historyManager = this.getOrchestrator()?.getOutputHistoryManager();
       if (!historyManager) return denyImportedTargets();
-      const historyPath = historyManager.getHistoryFilePath(workflowKey, runRef);
+      const historyPath = historyManager.getHistoryFilePath(
+        workflowKey,
+        runRef
+      );
       if (!historyPath) return denyImportedTargets();
       const history = await historyManager.loadHistory(historyPath);
       const boundary = history.importedSequenceBoundary;
@@ -376,7 +379,9 @@ export class UndoRedoCoordinator {
               targetKey(entry.target)
             );
             // An imported run with no matching output cannot authorize a write.
-            return sequence === undefined || isPreImportOutput(sequence, boundary);
+            return (
+              sequence === undefined || isPreImportOutput(sequence, boundary)
+            );
           })
           .map((entry) => targetKey(entry.target))
       );

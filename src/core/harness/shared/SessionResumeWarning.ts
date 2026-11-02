@@ -19,7 +19,7 @@ export function isSessionResumeFailure(
 
 /**
  * The status line every path that drops a resume shows
- * (dev/backlog/RUN_EXPORT_PLAN.md §5.4): the preflight probe, a malformed ID,
+ * (dev/implemented/RUN_EXPORT_PLAN.md §5.4): the preflight probe, a malformed ID,
  * and a harness that rejects the resume at runtime.
  */
 export function buildSessionResumeWarning(

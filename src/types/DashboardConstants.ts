@@ -5482,7 +5482,7 @@ export type HarnessId = (typeof HARNESS_IDS)[keyof typeof HARNESS_IDS];
 
 /**
  * Whether a resolved harness session can be resumed on this machine
- * (dev/backlog/RUN_EXPORT_PLAN.md §5.4). `MALFORMED` is decided by
+ * (dev/implemented/RUN_EXPORT_PLAN.md §5.4). `MALFORMED` is decided by
  * `SessionValidator` before any probe; the other three come from a provider's
  * by-ID session-store probe.
  */

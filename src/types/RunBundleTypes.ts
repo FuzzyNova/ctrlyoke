@@ -7,7 +7,7 @@ import type { ExecutionState } from "./DashboardConstants";
 
 /**
  * A run bundle: one run exported as a reviewable directory
- * (dev/backlog/RUN_EXPORT_PLAN.md §3). Paths inside it are portable
+ * (dev/implemented/RUN_EXPORT_PLAN.md §3). Paths inside it are portable
  * (`src/utils/RunBundlePaths.ts`) and its identity is provenance only.
  */
 export const RUN_BUNDLE_KIND = "ctrlyoke.run.bundle" as const;

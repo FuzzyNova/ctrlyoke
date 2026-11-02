@@ -6,21 +6,15 @@
 > through the definition anchor (`bcc6c74a1`, `aa2f6117d`), or the imported run loads
 > read-only.
 >
-> **Status:** All phases built; review fixes complete. The 2026-11-01 review found that
-> continuation reads `run.ctrlyoke.json` as the wrong shape, a view-only import could still
-> be continued, imported asset references broke, placement had no rollback, the patch was
-> path-rewritten and over-redacted, and pre-import undo was gated only in the UI. Fixes are
-> fixed in review (`b3bd38d38`, `03a730e8b`, `086fd4e80`, `32e17816e`, and this change);
-> this plan moves to `dev/implemented/` once the remaining planned review closes.
-> The run working-file import shape and continuation refusal for view-only imports are fixed in this change.
-> Backend undo/redo now checks the run timeline's latest output for each target
-> against `RUN_IMPORTED` before restoring files; the dashboard and extension share
-> the same pre-import sequence predicate, and post-import outputs remain undoable.
-> Placement rollback, repository-root patch handling for subdirectory workspaces, and
-> patch-header path validation are fixed in this change. Materialization failures now roll
-> back applied checkout changes or remove the newly created managed worktree.
-> Fixed in review (`32e17816e`): session-resume warnings are status messages rather than
-> response text, and `--changes worktree` works for every worktree mode. Export half built 2026-10-18 and shipped in `0.2.0` (`ctrlyoke export`, bundle
+> **Status:** Implemented 2026-11-02. All six phases are built, and the review findings are
+> fixed: session-resume warnings are status messages rather than response text, and
+> `--changes worktree` works for every worktree mode (`32e17816e`); continuation reads
+> `run.ctrlyoke.json` as the full working file and view-only imports refuse to continue
+> (`086fd4e80`); imported asset references are rewritten per reference to
+> `.ctrlyoke/attachments/` and cleaned up on failure (`03a730e8b`); placement rolls back on a
+> failed import and applies at the repository root (`b3bd38d38`); the patch keeps raw bytes and
+> redacts only added UTF-8 lines (`cf8eb2f2c`); the extension refuses undo of pre-import
+> outputs, not just the dashboard (`b4edb4444`). Export half built 2026-10-18 and shipped in `0.2.0` (`ctrlyoke export`, bundle
 > schema 1). The worktree execution-root portability gap, `redaction.byFile`, phase 2 asset
 > bundling, and phase 4 continuation were built within schema 1 on 2026-11-01. Phase 5 was built on
 > 2026-11-01: resolved session IDs are preflighted by exact ID, missing/invalid sessions start fresh with a visible

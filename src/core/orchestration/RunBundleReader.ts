@@ -19,7 +19,7 @@ import { LineTooLongError, streamFileLines } from "../../utils/TextLines";
 import { isPathWithinDirectory } from "../../utils/PathSecurity";
 
 /**
- * Reads a run bundle (dev/backlog/RUN_EXPORT_PLAN.md §3) into memory, with its
+ * Reads a run bundle (dev/implemented/RUN_EXPORT_PLAN.md §3) into memory, with its
  * `${workspaceFolder}` paths resolved onto the loading workspace.
  *
  * A bundle is untrusted input (§6): it is validated before anything uses it,
