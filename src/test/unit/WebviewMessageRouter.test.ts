@@ -32,7 +32,12 @@ import {
   PATH_SELECTION_TITLES,
   WORKSPACE_FOLDER_PICKERS,
   LOG_LEVELS,
+  EXECUTION_STATES,
 } from "../../types/DashboardConstants";
+import type { WorkingFile } from "../../types/CtrlYokeTypes";
+import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
+import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
+import { WorkingFileManager } from "../../core/WorkingFileManager";
 import { Log } from "../../utils/Log";
 import type { DashboardHostActions, NamedRoot } from "../../core/HostPorts";
 import { getVsCodeNamedWorkspaceRoots } from "../../platform/VsCodeWorkspaceRoot";
@@ -335,6 +340,85 @@ suite("WebviewMessageRouter — run export", () => {
         emitted[0].error,
         /no timeline|ENOENT|no such file|cannot find/i
       );
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("finds a run stored under the workspace's project state root", async () => {
+    // Regression: the handler projected the workspace root onto its run
+    // storage before calling the exporter, which projects again, so every
+    // existing run reported "has no timeline to export".
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-export-route-")
+    );
+    try {
+      const repository = new WorkflowLineageRepository();
+      const lineage = await repository.createLineage(
+        workspaceRoot,
+        "export route fixture",
+        "Export route fixture"
+      );
+      const allocation = await repository.allocateRun(
+        workspaceRoot,
+        lineage.workflowKey
+      );
+      const workingFile = {
+        steps: [{ prompt: "done" }],
+        startedAt: 100,
+        definitionRevision: 1,
+        _runtime: {
+          currentIndex: 1,
+          executionState: EXECUTION_STATES.COMPLETED,
+        },
+      } as unknown as WorkingFile;
+      await WorkingFileManager.writeWorkingFileAtomic(
+        allocation.stagingRunFilePath,
+        workingFile
+      );
+      await new TimelineRecorder().initializeRunAt(
+        allocation.stagingRunDir,
+        lineage.workflowKey,
+        allocation.runId,
+        100,
+        EXECUTION_STATES.COMPLETED
+      );
+      await WorkingFileManager.publishAnchoredRun(
+        workspaceRoot,
+        lineage.workflowKey,
+        allocation,
+        workingFile,
+        repository
+      );
+
+      const emitted: any[] = [];
+      const router = buildRouter(
+        {},
+        () => undefined,
+        undefined,
+        undefined,
+        () => [{ name: "workspace", fsPath: workspaceRoot }]
+      );
+      await router.route(
+        {
+          type: MESSAGE_TYPES.REQUEST_RUN_EXPORT_INFO,
+          requestId: "export-preflight-2",
+          address: {
+            workflowKey: lineage.workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: allocation.runRef,
+          },
+          workflowName: "Export route fixture",
+        },
+        {
+          clientTag: "browser:export-test",
+          postMessage: (message) => emitted.push(message),
+        }
+      );
+
+      assert.strictEqual(emitted.length, 1, JSON.stringify(emitted));
+      assert.strictEqual(emitted[0].type, MESSAGE_TYPES.RUN_EXPORT_INFO);
+      assert.strictEqual(emitted[0].continuable, false);
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
     }

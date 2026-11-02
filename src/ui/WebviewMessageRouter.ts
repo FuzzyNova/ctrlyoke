@@ -38,7 +38,6 @@ import {
   PATH_SELECTION_TITLES,
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
-import { projectStateRoot } from "../utils/ProjectStatePaths";
 import {
   exportRunBundle,
   getRunBundleExportPreview,
@@ -3276,15 +3275,14 @@ export class WebviewMessageRouter {
       );
     });
 
+    // Run storage is addressed by the raw workspace root: `WorkflowPaths`
+    // applies the history-location projection itself, so passing an already
+    // projected root would project it twice and miss the run.
     table.set(MESSAGE_TYPES.REQUEST_RUN_EXPORT_INFO, async (message, ctx) => {
       const workspaceRoot = this.getWorkspaceRoot();
-      const stateRoot = projectStateRoot(
-        workspaceRoot,
-        ConfigurationUtils.getRunHistoryLocation()
-      );
       try {
         const preview = await getRunBundleExportPreview(
-          stateRoot,
+          workspaceRoot,
           workspaceRoot,
           message.address.workflowKey,
           message.address.runRef
@@ -3313,10 +3311,6 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.EXPORT_RUN, async (message, ctx) => {
       const workspaceRoot = this.getWorkspaceRoot();
-      const stateRoot = projectStateRoot(
-        workspaceRoot,
-        ConfigurationUtils.getRunHistoryLocation()
-      );
       const requestedDir = path.isAbsolute(message.bundleDir)
         ? message.bundleDir
         : path.resolve(workspaceRoot, message.bundleDir);
@@ -3326,7 +3320,7 @@ export class WebviewMessageRouter {
       try {
         const result = await exportRunBundle(
           buildRunBundleExportOptions({
-            stateRoot,
+            stateRoot: workspaceRoot,
             workspaceRoot,
             workflowKey: message.address.workflowKey,
             runRef: message.address.runRef,
@@ -3349,6 +3343,9 @@ export class WebviewMessageRouter {
           warnings: result.warnings,
         });
       } catch (error) {
+        // Shown inside the export dialog rather than as a toast, so the toast
+        // path's logging does not cover it.
+        Log.error("[Run export] Export failed", error);
         ctx.emit({
           type: MESSAGE_TYPES.RUN_EXPORT_FAILED,
           requestId: message.requestId,
