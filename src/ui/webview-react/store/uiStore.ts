@@ -43,6 +43,7 @@ import type {
 } from "@root/types/CtrlYokeTypes";
 import type { CreateWorkflowVariantRequest } from "@root/types/WebviewMessageTypes";
 import type { SaveWorkflowBundlePreview } from "../types/messages";
+import type { RunImportPreview } from "@root/types/RunImportPreviewTypes";
 import type { WorkspaceEntrySort } from "@root/types/HostedWorkspaceViewerTypes";
 import { DEFAULT_WORKSPACE_ENTRY_SORT } from "@root/types/HostedWorkspaceViewerTypes";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
@@ -271,6 +272,14 @@ export interface RunExportDialogData {
     externalPaths: string[];
     warnings: string[];
   };
+  error?: string;
+}
+
+export interface RunImportDialogData {
+  requestId: string;
+  bundleDir: string;
+  preview?: RunImportPreview;
+  importing?: boolean;
   error?: string;
 }
 
@@ -740,6 +749,7 @@ interface UiState {
   saveWorkflowDialogData: SaveWorkflowDialogData | null;
   savePathCheck: SavePathCheck | null;
   runExportDialogData: RunExportDialogData | null;
+  runImportDialogData: RunImportDialogData | null;
 
   // Duplicate workflow dialog state
   duplicateWorkflowDialogOpen: boolean;
@@ -1036,6 +1046,12 @@ interface UiActions {
     update: Partial<RunExportDialogData>
   ) => void;
   closeRunExportDialog: () => void;
+  openRunImportDialog: (data: RunImportDialogData) => void;
+  updateRunImportDialog: (
+    requestId: string,
+    update: Partial<RunImportDialogData>
+  ) => void;
+  closeRunImportDialog: () => void;
 
   // Duplicate workflow dialog
   openDuplicateWorkflowDialog: (
@@ -1302,6 +1318,7 @@ const initialState: UiState = {
   saveWorkflowDialogData: null,
   savePathCheck: null,
   runExportDialogData: null,
+  runImportDialogData: null,
   duplicateWorkflowDialogOpen: false,
   duplicateWorkflowDialogData: null,
   duplicateWorkflowRequest: null,
@@ -1859,6 +1876,19 @@ export const useUiStore = create<UiState & UiActions>()(
             : state
         ),
       closeRunExportDialog: () => set({ runExportDialogData: null }),
+      openRunImportDialog: (data) => set({ runImportDialogData: data }),
+      updateRunImportDialog: (requestId, update) =>
+        set((state) =>
+          state.runImportDialogData?.requestId === requestId
+            ? {
+                runImportDialogData: {
+                  ...state.runImportDialogData,
+                  ...update,
+                },
+              }
+            : state
+        ),
+      closeRunImportDialog: () => set({ runImportDialogData: null }),
 
       // ============================================================================
       // FILE BROWSER MODAL

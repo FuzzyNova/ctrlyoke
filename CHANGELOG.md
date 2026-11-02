@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Run exports now bundle referenced attachments, inline generated prompt bodies,
   validate asset hashes when reading, and warn when an attachment is missing.
 - Add `ctrlyoke import` to add a run bundle to workspace history for viewing.
+- The dashboard can import a run bundle from the New menu, review its provenance,
+  workspace changes, sessions, pending scripts, secret grants and blockers, then
+  import it view-only or explicitly continue it.
+- Loading a workflow from a run bundle now offers to import the stopped run or
+  load only its authored workflow and start over.
 
 ### Fixed
 

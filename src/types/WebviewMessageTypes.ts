@@ -142,6 +142,7 @@ import type {
   WorkspaceStatsSnapshot,
 } from "./UsageTypes";
 import type { CommitMessageGenerationRecord } from "../git/CommitMessageGenerationTracker";
+import type { RunImportPreview } from "./RunImportPreviewTypes";
 export type { CommitMessageGenerationRecord } from "../git/CommitMessageGenerationTracker";
 import type {
   HistoryTrashEntryKind,
@@ -1423,6 +1424,40 @@ export interface SaveWorkflowMessage {
   format: WorkflowFileFormat;
   planFingerprint?: string;
   pathCheckRequestId?: string;
+}
+
+export interface RequestRunImportPreviewMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_RUN_IMPORT_PREVIEW;
+  requestId: string;
+  bundleDir: string;
+}
+export interface RunImportPreviewMessage {
+  type: typeof MESSAGE_TYPES.RUN_IMPORT_PREVIEW;
+  requestId: string;
+  bundleDir: string;
+  preview?: RunImportPreview;
+  error?: string;
+}
+export interface ImportRunMessage {
+  type:
+    | typeof MESSAGE_TYPES.IMPORT_RUN
+    | typeof MESSAGE_TYPES.IMPORT_RUN_AND_CONTINUE;
+  requestId: string;
+  bundleDir: string;
+  changes?: "worktree" | "checkout" | "skip";
+  again?: boolean;
+}
+export interface RunImportResultMessage {
+  type: typeof MESSAGE_TYPES.RUN_IMPORT_RESULT;
+  requestId: string;
+  workflowKey?: WorkflowKey;
+  runRef?: RunRef;
+  error?: string;
+}
+export interface OpenImportedRunMessage {
+  type: typeof MESSAGE_TYPES.OPEN_IMPORTED_RUN;
+  workflowKey: WorkflowKey;
+  runRef?: RunRef;
 }
 
 /**
@@ -3539,6 +3574,8 @@ export interface WorkflowDocumentDiagnosticsMessage {
  * Union type for all incoming messages from extension to webview
  */
 export type IncomingMessage =
+  | RunImportPreviewMessage
+  | RunImportResultMessage
   | { type: typeof MESSAGE_TYPES.INIT; data: InitMessageData }
   | CoordinationScopeUpdatedMessage
   | OpenGlobalSettingsTabMessage

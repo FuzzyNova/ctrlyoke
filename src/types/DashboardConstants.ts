@@ -100,6 +100,7 @@ type OptionalDashboardHostAction = {
 export const DASHBOARD_HOST_CAPABILITIES = {
   openContentPreview: "openContentPreview",
   selectWorkspacePath: "selectWorkspacePath",
+  chooseRunBundleLoad: "chooseRunBundleLoad",
   revealOutput: "revealOutput",
   focusDashboard: "focusDashboard",
   openFolderWindow: "openFolderWindow",
@@ -124,6 +125,7 @@ export type DashboardHostCapability = OptionalDashboardHostAction;
  */
 const HOST_SCREEN_CAPABILITIES: ReadonlySet<DashboardHostCapability> = new Set([
   DASHBOARD_HOST_CAPABILITIES.selectWorkspacePath,
+  DASHBOARD_HOST_CAPABILITIES.chooseRunBundleLoad,
   DASHBOARD_HOST_CAPABILITIES.revealOutput,
   DASHBOARD_HOST_CAPABILITIES.focusDashboard,
   DASHBOARD_HOST_CAPABILITIES.openFolderWindow,
@@ -820,6 +822,13 @@ export const MESSAGE_TYPES = {
   REQUEST_RUN_EXPORT_INFO: "requestRunExportInfo",
   RUN_EXPORT_INFO: "runExportInfo",
   EXPORT_RUN: "exportRun",
+  SELECT_RUN_BUNDLE: "selectRunBundle",
+  REQUEST_RUN_IMPORT_PREVIEW: "requestRunImportPreview",
+  RUN_IMPORT_PREVIEW: "runImportPreview",
+  IMPORT_RUN: "importRun",
+  IMPORT_RUN_AND_CONTINUE: "importRunAndContinue",
+  RUN_IMPORT_RESULT: "runImportResult",
+  OPEN_IMPORTED_RUN: "openImportedRun",
   RUN_EXPORTED: "runExported",
   RUN_EXPORT_FAILED: "runExportFailed",
 
@@ -5062,6 +5071,7 @@ export const WORKFLOW_DROPDOWN_VIEWS = {
 export const WORKFLOW_FILE_PICKER_MODES = {
   LOAD: "load",
   QUEUE: "queue",
+  IMPORT_RUN: "import-run",
 } as const;
 
 /** Row categories used by the unified workflow dropdown list. */

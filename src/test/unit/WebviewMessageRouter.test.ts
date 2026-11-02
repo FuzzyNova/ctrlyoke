@@ -259,6 +259,44 @@ suite("WebviewMessageRouter — completion routing", () => {
   });
 });
 
+suite("WebviewMessageRouter — run bundle import", () => {
+  test("opens the native directory picker and replies with an import preview", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "run-import-router-"));
+    const selected = path.join(root, "missing.ctrlyokerun");
+    const selectWorkspacePath = async (request: { kind: string }) => {
+      assert.strictEqual(request.kind, PATH_SELECTION_KINDS.FOLDER);
+      return selected;
+    };
+    const emitted: unknown[] = [];
+    const router = buildRouter(
+      {},
+      () => undefined,
+      undefined,
+      {
+        openWorkspaceTarget: async () => ({ status: "unsupported" }),
+        selectWorkspacePath,
+      },
+      () => [{ name: "workspace", fsPath: root }]
+    );
+    try {
+      await router.route(
+        { type: MESSAGE_TYPES.SELECT_RUN_BUNDLE },
+        { clientTag: "panel", postMessage: (message) => emitted.push(message) }
+      );
+      assert.ok(
+        emitted.some(
+          (message) =>
+            (message as { type?: string }).type ===
+              MESSAGE_TYPES.RUN_IMPORT_PREVIEW &&
+            typeof (message as { error?: unknown }).error === "string"
+        )
+      );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
 suite("WebviewMessageRouter — run export", () => {
   test("answers a run export preflight on the requesting hosted client", async () => {
     const workspaceRoot = await fs.mkdtemp(

@@ -26,6 +26,7 @@ import { WorkflowStatus } from "../workflow/WorkflowStatus";
 import { HeaderStatusBanner } from "./HeaderStatusBanner";
 import { SaveWorkflowDialog } from "../workflow/SaveWorkflowDialog";
 import { ExportRunDialog } from "../workflow/ExportRunDialog";
+import { ImportRunDialog } from "../workflow/ImportRunDialog";
 import { DuplicateWorkflowDialog } from "../workflow/DuplicateWorkflowDialog";
 import { TemplateModal } from "../workflow/TemplateModal";
 import { FileBrowserModal } from "../workflow/FileBrowserModal";
@@ -742,6 +743,7 @@ export const Header: React.FC<{
         {/* Save Workflow Dialog — rendered here for co-location with SaveWorkflowButton */}
         <SaveWorkflowDialog />
         <ExportRunDialog />
+        <ImportRunDialog />
         <DuplicateWorkflowDialog />
 
         {/* Template Modal — controlled by uiStore.newWorkflowModalOpen */}

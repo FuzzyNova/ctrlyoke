@@ -3172,6 +3172,29 @@ export function createMessageHandlers(
     });
   };
 
+  handlers[MESSAGE_TYPES.RUN_IMPORT_PREVIEW] = (message) => {
+    useUiStore.getState().openRunImportDialog({
+      requestId: message.requestId,
+      bundleDir: message.bundleDir,
+      preview: message.preview,
+      error: message.error,
+    });
+  };
+
+  handlers[MESSAGE_TYPES.RUN_IMPORT_RESULT] = (message) => {
+    const store = useUiStore.getState();
+    if (message.error) {
+      store.updateRunImportDialog(message.requestId, {
+        importing: false,
+        error: message.error,
+      });
+      return;
+    }
+    if (store.runImportDialogData?.requestId === message.requestId) {
+      store.closeRunImportDialog();
+    }
+  };
+
   // --------------------------------------------------------------------------
   // SAVE_PATH_CHECKED - consume only the dialog's latest path request.
   // --------------------------------------------------------------------------
