@@ -35,7 +35,10 @@ export interface RunMaterializationInput {
   beforeEvents?: (identity: {
     workflowKey: WorkflowKey;
     runRef: import("../../types/CtrlYokeTypes").RunRef;
-  }) => Promise<{ runtimeState?: Partial<WorkingFileRuntime> }>;
+  }) => Promise<{
+    runtimeState?: Partial<WorkingFileRuntime>;
+    rollback?: () => Promise<void>;
+  }>;
 }
 
 export interface MaterializedRun {
@@ -77,6 +80,7 @@ export class RunMaterializer {
     );
     let allocation:
       Awaited<ReturnType<WorkflowLineageRepository["allocateRun"]>> | undefined;
+    let rollback: (() => Promise<void>) | undefined;
     try {
       allocation = await this.lineageRepository.allocateRun(
         input.workspaceRoot,
@@ -86,6 +90,7 @@ export class RunMaterializer {
         workflowKey: created.workflowKey,
         runRef: allocation.runRef,
       });
+      rollback = prepared?.rollback;
       const descriptor = await this.lineageRepository.readDescriptor(
         input.workspaceRoot,
         created.workflowKey
@@ -93,9 +98,7 @@ export class RunMaterializer {
       const sourceFile = input.workingFile
         ? { ...input.definition, ...input.workingFile }
         : input.definition;
-      const steps = Array.isArray(sourceFile.steps)
-        ? sourceFile.steps
-        : [];
+      const steps = Array.isArray(sourceFile.steps) ? sourceFile.steps : [];
       const definition = {
         ...sourceFile,
         startedAt,
@@ -184,6 +187,12 @@ export class RunMaterializer {
         ),
       };
     } catch (error) {
+      let rollbackError: unknown;
+      try {
+        await rollback?.();
+      } catch (cleanupError) {
+        rollbackError = cleanupError;
+      }
       if (allocation)
         await fs.promises
           .rm(allocation.stagingRunDir, { recursive: true, force: true })
@@ -191,6 +200,11 @@ export class RunMaterializer {
       await this.lineageRepository
         .removeIncompleteLineage(input.workspaceRoot, created.workflowKey)
         .catch(() => undefined);
+      if (rollbackError) {
+        throw new Error(
+          `${error instanceof Error ? error.message : String(error)}; imported workspace rollback failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`
+        );
+      }
       throw error;
     }
   }

@@ -155,6 +155,7 @@ export class RunBundleImporter {
     let runFile: WorkingFile | undefined;
     let executionRoot = options.workspaceRoot;
     let placement: RunChangesPlacement | undefined;
+    let placementRollback: (() => Promise<void>) | undefined;
     async function* drafts() {
       for await (const event of streamRunBundleEvents(header, options)) {
         const { sequence: _sequence, ...draft } = event as RunBundleEvent & {
@@ -215,6 +216,8 @@ export class RunBundleImporter {
                     options.name?.trim() ||
                     header.manifest.lineage.workflowName,
                 });
+                placementRollback = placement.rollback;
+                const placementRollbackHandle = placementRollback;
                 if (placement.worktreeRuntime) {
                   // Imported outputs record the new worktree as their
                   // working directory, never the bundle's or the checkout (§5.5).
@@ -229,6 +232,7 @@ export class RunBundleImporter {
                       ...normalized,
                       worktree: placement.worktreeRuntime,
                     },
+                    rollback: placementRollbackHandle,
                   };
                 }
                 if (
@@ -245,6 +249,7 @@ export class RunBundleImporter {
                       header.runManifest,
                       { reason }
                     ),
+                    rollback: placementRollbackHandle,
                   };
                 }
                 executionRoot = placement.worktreePath ?? options.workspaceRoot;
@@ -254,6 +259,7 @@ export class RunBundleImporter {
                     header.manifest,
                     header.runManifest
                   ),
+                  rollback: placementRollbackHandle,
                 };
               },
             }
@@ -273,7 +279,12 @@ export class RunBundleImporter {
         status: RUN_IMPORT_STATUSES.IMPORTED,
         workflowKey: materialized.workflowKey,
         runRef: materialized.runRef,
-        ...(placement ? { placement } : {}),
+        ...(placement
+          ? {
+              placement: (({ rollback: _rollback, ...publicPlacement }) =>
+                publicPlacement)(placement),
+            }
+          : {}),
       };
     } catch (error) {
       await cleanupAssets();

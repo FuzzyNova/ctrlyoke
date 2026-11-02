@@ -12,6 +12,9 @@
 > path-rewritten and over-redacted, and pre-import undo was gated only in the UI. Fixes are
 > queued in the orchestrating workflow; this plan moves to `dev/implemented/` once they land.
 > The run working-file import shape and continuation refusal for view-only imports are fixed in this change.
+> Placement rollback, repository-root patch handling for subdirectory workspaces, and
+> patch-header path validation are fixed in this change. Materialization failures now roll
+> back applied checkout changes or remove the newly created managed worktree.
 > Fixed in review (`32e17816e`): session-resume warnings are status messages rather than
 > response text, and `--changes worktree` works for every worktree mode. Export half built 2026-10-18 and shipped in `0.2.0` (`ctrlyoke export`, bundle
 > schema 1). The worktree execution-root portability gap, `redaction.byFile`, phase 2 asset

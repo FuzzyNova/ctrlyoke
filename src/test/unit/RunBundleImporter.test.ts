@@ -433,6 +433,59 @@ suite("RunBundleImporter", () => {
     );
   });
 
+  test("rolls back checkout placement when event materialization fails", async () => {
+    const baseCommit = await makeContinuableBundle();
+    await execGit(["reset", "--hard", baseCommit], { cwd: workspace });
+    await assert.rejects(
+      new RunBundleImporter(
+        new FailingAfterPlacementRunMaterializer()
+      ).importRun({
+        workspaceRoot: workspace,
+        bundleDir: bundle,
+        changes: "checkout",
+      }),
+      /simulated post-placement failure/
+    );
+    assert.strictEqual(
+      (
+        await execGit(["status", "--porcelain=v1", "--untracked-files=all"], {
+          cwd: workspace,
+        })
+      ).stdout.trim(),
+      ""
+    );
+    assert.strictEqual(
+      (await fs.readFile(path.join(workspace, "tracked.txt"), "utf8")).replace(
+        /\r\n/g,
+        "\n"
+      ),
+      "base\n"
+    );
+    assert.strictEqual(
+      (await execGit(["rev-parse", "HEAD"], { cwd: workspace })).stdout.trim(),
+      baseCommit
+    );
+  });
+
+  test("removes a managed worktree when event materialization fails", async () => {
+    const baseCommit = await makeContinuableBundle();
+    await execGit(["reset", "--hard", baseCommit], { cwd: workspace });
+    await assert.rejects(
+      new RunBundleImporter(
+        new FailingAfterPlacementRunMaterializer()
+      ).importRun({
+        workspaceRoot: workspace,
+        bundleDir: bundle,
+        changes: "worktree",
+      }),
+      /simulated post-placement failure/
+    );
+    const worktrees = (
+      await execGit(["worktree", "list", "--porcelain"], { cwd: workspace })
+    ).stdout;
+    assert.strictEqual((worktrees.match(/^worktree /gm) ?? []).length, 1);
+  });
+
   test("missing base commit imports history only", async () => {
     await makeContinuableBundle("f".repeat(40));
     const result = await importer.importRun({
@@ -630,6 +683,15 @@ suite("RunBundleImporter", () => {
 class FailingRunMaterializer extends RunMaterializer {
   override async materialize(_input: RunMaterializationInput): Promise<never> {
     throw new Error("simulated materialization failure");
+  }
+}
+
+class FailingAfterPlacementRunMaterializer extends RunMaterializer {
+  override async materialize(input: RunMaterializationInput) {
+    async function* failAfterPlacement(): AsyncGenerator<never> {
+      throw new Error("simulated post-placement failure");
+    }
+    return super.materialize({ ...input, events: failAfterPlacement() });
   }
 }
 

@@ -30,6 +30,8 @@ export interface RunChangesPlacement {
   worktreePath?: string;
   warning?: string;
   worktreeRuntime?: WorkingFileWorktreeRuntime;
+  /** Reverts a successful placement if the enclosing import later fails. */
+  rollback?: () => Promise<void>;
 }
 
 export interface RunChangesPlacementOptions {
@@ -88,7 +90,8 @@ export class RunChangesPlacer {
       };
     }
 
-    let targetRoot = root;
+    const repositoryRoot = await resolveRepositoryRoot(root);
+    let targetRoot = repositoryRoot;
     let worktreeInfo: ActiveWorktreeInfo | undefined;
     let worktreeHandlesReleased = false;
     const releaseWorktreeHandles = async (): Promise<void> => {
@@ -101,7 +104,7 @@ export class RunChangesPlacer {
       // Valid for every worktree mode: it is the safe fallback the checkout
       // error below names for a `none`/`named` run (§5.3).
       worktreeInfo = await this.worktreeManager.ensureManagedWorktree({
-        sourceCheckoutRoot: root,
+        sourceCheckoutRoot: repositoryRoot,
         stateRoot: root,
         workflowKey: options.workflowKey,
         runRef: options.runRef,
@@ -111,16 +114,18 @@ export class RunChangesPlacer {
         namedWorkspaceRoots: [{ name: path.basename(root), fsPath: root }],
         runner: "cli",
       });
-      targetRoot = worktreeInfo.executionWorkspace.executionRoot;
+      // The patch is produced from the repository index, so its paths are
+      // relative to the worktree checkout root even for a subdirectory run.
+      targetRoot = worktreeInfo.worktreePath;
     } else if (options.target === RUN_CHANGES_TARGETS.CHECKOUT) {
       const status = await execGit([
         "-C",
-        root,
+        repositoryRoot,
         "status",
         "--porcelain=v1",
         "--untracked-files=all",
       ]);
-      const head = await resolveCommit(root, "HEAD");
+      const head = await resolveCommit(repositoryRoot, "HEAD");
       if (status.stdout.trim() || head !== options.baseCommit) {
         throw new Error(
           `The checkout must be clean and at base commit ${options.baseCommit.slice(0, 7)}. Use --changes worktree or --changes skip.`
@@ -161,9 +166,23 @@ export class RunChangesPlacer {
         "--",
         options.patchPath,
       ]);
+      let rolledBack = false;
+      const rollback = async (): Promise<void> => {
+        if (rolledBack) return;
+        rolledBack = true;
+        if (worktreeInfo) {
+          await releaseWorktreeHandles();
+          await this.worktreeManager.removeImportedManagedWorktree(
+            worktreeInfo
+          );
+          return;
+        }
+        await rollbackTree(targetRoot, options.baseCommit);
+      };
       return {
         target: options.target,
         applied: true,
+        rollback,
         ...(worktreeInfo
           ? {
               worktreePath: worktreeInfo.worktreePath,
@@ -175,23 +194,7 @@ export class RunChangesPlacer {
       const cleanupErrors: string[] = [];
       if (options.target !== RUN_CHANGES_TARGETS.SKIP) {
         try {
-          await execGit([
-            "-C",
-            targetRoot,
-            "reset",
-            "--hard",
-            options.baseCommit,
-          ]);
-          await execGit(["-C", targetRoot, "clean", "-fd"]);
-          const status = await execGit([
-            "-C",
-            targetRoot,
-            "status",
-            "--porcelain=v1",
-            "--untracked-files=all",
-          ]);
-          if (status.stdout.trim())
-            throw new Error("Git reported remaining tree or index changes.");
+          await rollbackTree(targetRoot, options.baseCommit);
         } catch (rollbackError) {
           cleanupErrors.push(
             `tree/index rollback failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`
@@ -235,11 +238,56 @@ export class RunChangesPlacer {
 async function validatePatchPaths(root: string, patch: string): Promise<void> {
   const realRoot = await fs.realpath(root);
   const paths = new Set<string>();
+  const hasGitDiffHeaders = patch
+    .split(/\r?\n/)
+    .some((line) => line.startsWith("diff --git "));
+  let inFileHeader = false;
   for (const line of patch.split(/\r?\n/)) {
-    if (!line.startsWith("+++ ") && !line.startsWith("--- ")) continue;
-    const raw = line.slice(4).split("\t", 1)[0];
-    if (!raw || raw === "/dev/null") continue;
-    const relative = decodePatchPath(raw).replace(/^[ab]\//, "");
+    if (line.startsWith("diff --git ")) {
+      inFileHeader = true;
+      for (const raw of parseDiffGitPaths(line.slice("diff --git ".length)))
+        await validate(raw, false, true);
+      continue;
+    }
+    if (!hasGitDiffHeaders && !inFileHeader && line.startsWith("--- ")) {
+      inFileHeader = true;
+    }
+    if (!inFileHeader) continue;
+    if (
+      line.startsWith("@@") ||
+      line === "GIT binary patch" ||
+      line.startsWith("Binary files ")
+    ) {
+      inFileHeader = false;
+      continue;
+    }
+    const header =
+      /^(?:--- |\+\+\+ |rename from |rename to |copy from |copy to )(.*)$/.exec(
+        line
+      );
+    if (!header) continue;
+    const raw = header[1].split("\t", 1)[0];
+    await validate(
+      raw,
+      raw === "/dev/null",
+      line.startsWith("--- ") || line.startsWith("+++ ")
+    );
+  }
+  if (!paths.size && patch.trim())
+    throw new Error("The changes patch contains no safe target paths.");
+
+  async function validate(
+    raw: string,
+    allowDevNull: boolean,
+    stripSidePrefix: boolean
+  ): Promise<void> {
+    if (!raw || (allowDevNull && raw === "/dev/null")) return;
+    const decoded = decodePatchPath(raw);
+    if (path.posix.isAbsolute(decoded) || path.win32.isAbsolute(decoded))
+      throw new Error(`Patch path must be relative: ${decoded}`);
+    const relative = stripSidePrefix ? decoded.replace(/^[ab]\//, "") : decoded;
+    if (relative.split(/[\\/]/).some((segment) => segment === ".."))
+      throw new Error(`Patch path escapes the target workspace: ${relative}`);
     const candidate = path.resolve(root, relative);
     if (!isPathWithinDirectory(candidate, root))
       throw new Error(`Patch path escapes the target workspace: ${relative}`);
@@ -261,8 +309,56 @@ async function validatePatchPaths(root: string, patch: string): Promise<void> {
     }
     paths.add(candidate);
   }
-  if (!paths.size && patch.trim())
-    throw new Error("The changes patch contains no safe target paths.");
+}
+
+function parseDiffGitPaths(value: string): string[] {
+  const tokens: string[] = [];
+  let index = 0;
+  while (index < value.length && tokens.length < 2) {
+    while (value[index] === " ") index++;
+    if (value[index] === '"') {
+      let end = index + 1;
+      let escaped = false;
+      for (; end < value.length; end++) {
+        if (!escaped && value[end] === '"') break;
+        escaped = !escaped && value[end] === "\\";
+        if (value[end] !== "\\") escaped = false;
+      }
+      if (end === value.length) throw new Error("Invalid diff path header.");
+      tokens.push(value.slice(index, end + 1));
+      index = end + 1;
+    } else {
+      const end = value.indexOf(" ", index);
+      tokens.push(value.slice(index, end < 0 ? value.length : end));
+      index = end < 0 ? value.length : end;
+    }
+  }
+  if (tokens.length !== 2) throw new Error("Invalid diff path header.");
+  return tokens;
+}
+
+async function resolveRepositoryRoot(workspaceRoot: string): Promise<string> {
+  const result = await execGit([
+    "-C",
+    workspaceRoot,
+    "rev-parse",
+    "--show-toplevel",
+  ]);
+  return path.resolve(result.stdout.trim());
+}
+
+async function rollbackTree(root: string, baseCommit: string): Promise<void> {
+  await execGit(["-C", root, "reset", "--hard", baseCommit]);
+  await execGit(["-C", root, "clean", "-fd"]);
+  const status = await execGit([
+    "-C",
+    root,
+    "status",
+    "--porcelain=v1",
+    "--untracked-files=all",
+  ]);
+  if (status.stdout.trim())
+    throw new Error("Git reported remaining tree or index changes.");
 }
 
 function decodePatchPath(value: string): string {

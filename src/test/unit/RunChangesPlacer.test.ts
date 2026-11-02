@@ -83,6 +83,56 @@ suite("RunChangesPlacer", function () {
     );
   });
 
+  test("applies repository-relative patches from a subdirectory workspace", async () => {
+    const subdirectory = path.join(workspace, "nested");
+    await fs.mkdir(subdirectory);
+    const result = await placer().place({
+      ...options("checkout", "none"),
+      workspaceRoot: subdirectory,
+    });
+    assert.strictEqual(result.applied, true);
+    assert.strictEqual(
+      (await fs.readFile(path.join(workspace, "tracked.txt"), "utf8")).replace(
+        /\r\n/g,
+        "\n"
+      ),
+      "changed\n"
+    );
+    await result.rollback?.();
+    assert.strictEqual(
+      (await fs.readFile(path.join(workspace, "tracked.txt"), "utf8")).replace(
+        /\r\n/g,
+        "\n"
+      ),
+      "base\n"
+    );
+  });
+
+  test("validates rename headers and ignores path-like hunk content", async () => {
+    await fs.writeFile(
+      patchFile,
+      "diff --git a/tracked.txt b/tracked.txt\nsimilarity index 100%\nrename from tracked.txt\nrename to ../outside.txt\n"
+    );
+    const hostileRename = await placer().place(options("checkout", "none"));
+    assert.match(hostileRename.warning ?? "", /escapes the target workspace/);
+
+    await fs.writeFile(
+      patchFile,
+      "diff --git a/tracked.txt b/tracked.txt\n--- a/tracked.txt\n+++ b/tracked.txt\n@@ -1 +1 @@\n--- /etc/passwd\n+safe\n"
+    );
+    const hunkContent = await placer().place(options("checkout", "none"));
+    assert.doesNotMatch(hunkContent.warning ?? "", /Patch path/);
+  });
+
+  test("validates binary-only file headers", async () => {
+    await fs.writeFile(
+      patchFile,
+      "diff --git a/../outside.bin b/../outside.bin\nGIT binary patch\nliteral 0\nHcmV?d00001\n"
+    );
+    const result = await placer().place(options("checkout", "none"));
+    assert.match(result.warning ?? "", /escapes the target workspace/);
+  });
+
   test("rejects dirty checkout with recovery guidance", async () => {
     await fs.writeFile(path.join(workspace, "tracked.txt"), "dirty\n");
     await assert.rejects(
