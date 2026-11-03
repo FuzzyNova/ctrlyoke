@@ -58,8 +58,12 @@ Option 2: make both settings user-only by adding them to
 `WORKSPACE_FORBIDDEN_SETTING_ROOTS`.
 
 Either way, update the settings docs and add a **Changed** entry to the
-changelog. `dev/backlog/HARNESS_SANDBOX_PLAN.md` plans to redesign this
-area, so decide whether to fix it now or fold it into that plan.
+changelog.
+
+**Decision (2026-11-03):** option 1. Option 2 would break repositories that
+legitimately narrow Codex (for example to `read-only`). This bug is phase 1 of
+`dev/backlog/HARNESS_SANDBOX_PLAN.md`, which has the implementation details.
+That phase doesn't depend on the rest of the plan, so it can ship first.
 
 This is a behavior change: workspace values that used to apply silently will
 prompt, or stop applying.

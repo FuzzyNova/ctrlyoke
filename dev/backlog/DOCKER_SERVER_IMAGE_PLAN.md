@@ -176,6 +176,11 @@ the image must not be presented as a complete sandbox on its own.
   `workspace-write` mapping works inside the container. If its Linux sandbox fails there, the
   image needs `sandbox: false` explicitly for Codex.
 
+- **Reuse as a local sandbox backend:** `HARNESS_SANDBOX_PLAN.md` ("Possible follow-up: a
+  ctrlyoke-owned container backend") proposes running individual steps on a developer's own
+  machine inside this image, with only the worktree mounted. Keep the entrypoint and the
+  login volume usable outside `ctrlyoke server` so that stays possible.
+
 ## Release process
 
 - CI builds and pushes a multi-arch image (`linux/amd64`, `linux/arm64`; arm64 matters for
