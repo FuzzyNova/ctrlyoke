@@ -774,7 +774,10 @@ export class WebviewSettingsSync {
         }
       );
     } else if (property === PROMPT_PROPERTIES.SANDBOX) {
-      await ConfigurationUtils.updateSetting(CONFIG_KEYS.DEFAULTS_SANDBOX, value);
+      await ConfigurationUtils.updateSetting(
+        CONFIG_KEYS.DEFAULTS_SANDBOX,
+        value
+      );
     } else if (property === PROMPT_PROPERTIES.WORKTREE) {
       const authored = value as WorktreeConfig;
       await ConfigurationUtils.setDefaultWorktree(authored);

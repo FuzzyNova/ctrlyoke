@@ -28,7 +28,10 @@ suite("WorkspaceSensitiveSettings", () => {
   suite("default sandbox", () => {
     test("auto-applies true and withholds false unless the user value is false", () => {
       assert.deepStrictEqual(
-        collectWorkspaceSensitiveSettingRequests(settings({ defaults: { sandbox: true } }), {}),
+        collectWorkspaceSensitiveSettingRequests(
+          settings({ defaults: { sandbox: true } }),
+          {}
+        ),
         []
       );
       const workspaceFalse = settings({ defaults: { sandbox: false } });
