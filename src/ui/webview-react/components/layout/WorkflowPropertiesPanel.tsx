@@ -1453,7 +1453,10 @@ const WorkflowPropertiesPanelInner: React.FC<{
     const globalHarness = globalSettings.harness as string;
     const resetWorktree = globalSettings.worktree;
     const resetWorktreeConfig = worktreeObjectConfig(resetWorktree);
+    // `satisfies` keeps this an inventory of every WorkflowProperties key, so
+    // a new workflow property cannot be left out of the reset.
     const updates: Partial<WorkflowProperties> = {
+      maxSteps: undefined,
       harness: globalHarness,
       model: globalSettings.harnessDefaultModels[globalHarness],
       agent: globalSettings.agent,
@@ -1478,8 +1481,10 @@ const WorkflowPropertiesPanelInner: React.FC<{
         globalSettings.defaultEndCondition as WorkflowProperties["endCondition"],
       preCondition:
         globalSettings.defaultPreCondition as WorkflowProperties["preCondition"],
+      sandbox: undefined,
       worktree: globalSettings.worktree,
-    };
+      trustedExternalRoots: undefined,
+    } satisfies Record<keyof WorkflowProperties, unknown>;
     setSessionIdInput("");
     setWorktreeMode(
       resetWorktreeConfig === false

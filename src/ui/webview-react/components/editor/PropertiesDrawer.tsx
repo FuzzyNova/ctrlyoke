@@ -5,6 +5,8 @@ import { useCompatibilityDiagnostics } from "../../hooks/useCompatibilityDiagnos
 import {
   useEditorStore,
   END_CONDITION_DEFAULTS,
+  PROPERTY_DEFAULTS,
+  type PropertyValues,
 } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
@@ -209,24 +211,15 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const promptText = useEditorStore((s) => s.promptText);
   const { hiddenDropdownOptions, hideDropdownOption, unhideDropdownOption } =
     useUiStore();
+  // Driven by PROPERTY_DEFAULTS, which lists every PropertyValues key, so a
+  // new drawer property is reset without touching this handler.
   const handleResetAllToInherit = useCallback(() => {
-    setProperty(PROMPT_PROPERTIES.HARNESS, undefined);
-    setProperty(PROMPT_PROPERTIES.MODEL, undefined);
-    setProperty(PROMPT_PROPERTIES.AGENT, undefined);
-    setProperty(PROMPT_PROPERTIES.SKILLS, undefined);
-    setProperty(PROMPT_PROPERTIES.SECRETS, undefined);
-    setProperty(PROMPT_PROPERTIES.ADDITIONAL_ARGS, undefined);
-    setProperty(PROMPT_PROPERTIES.EXECUTION_MODE, undefined);
-    setProperty(PROMPT_PROPERTIES.COLOR, undefined);
-    setProperty(PROMPT_PROPERTIES.RESUME_SESSION, undefined);
-    setProperty(PROMPT_PROPERTIES.SESSION_ID, "");
-    setProperty(PROMPT_PROPERTIES.PRIOR_CONTEXT, undefined);
-    setProperty(PROMPT_PROPERTIES.PRIOR_CONTEXT_DETAIL, undefined);
-    setProperty(PROMPT_PROPERTIES.MCP_SERVERS, undefined);
-    setProperty(PROMPT_PROPERTIES.TOOL_PERMISSIONS, undefined);
-    setProperty(PROMPT_PROPERTIES.HOOKS, undefined);
-    setProperty(PROMPT_PROPERTIES.ERROR_BEHAVIOR, undefined);
-    setProperty(PROMPT_PROPERTIES.PRE_CONDITION, undefined);
+    for (const key of Object.keys(
+      PROPERTY_DEFAULTS
+    ) as (keyof PropertyValues)[]) {
+      if (key === PROMPT_PROPERTIES.END_CONDITION) continue;
+      setProperty(key, PROPERTY_DEFAULTS[key]);
+    }
     clearEndCondition();
   }, [setProperty, clearEndCondition]);
 

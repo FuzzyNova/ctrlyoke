@@ -208,10 +208,14 @@ export const PROPERTY_DEFAULTS: PropertyValues = {
   errorBehavior: undefined,
   endCondition: undefined, // undefined = inherit from workflow
   preCondition: undefined,
+  priorContext: undefined,
+  priorContextDetail: undefined,
   additionalArgs: undefined,
   toolPermissions: undefined,
   sandbox: undefined,
-};
+  // Every key must be listed: the drawer's "Reset all to inherit" iterates
+  // these keys, so an omitted property would survive a reset.
+} satisfies Record<keyof PropertyValues, unknown>;
 
 export const END_CONDITION_DEFAULTS: EndConditionConfig = {
   script: "",

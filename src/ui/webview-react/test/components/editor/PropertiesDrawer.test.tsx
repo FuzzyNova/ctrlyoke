@@ -7,7 +7,11 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PropertiesDrawer } from "@components/editor/PropertiesDrawer";
-import { useEditorStore } from "@store/editorStore";
+import {
+  PROPERTY_DEFAULTS,
+  useEditorStore,
+  type PropertyValues,
+} from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
@@ -15,8 +19,13 @@ import { useSecretRegistryStore } from "@store/secretRegistryStore";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { DRAWER_PAGES } from "@/types/drawerPages";
 import {
+  CONDITION_ACTIONS,
   EXECUTION_MODES,
   HARNESS_IDS,
+  HOOK_EVENT_NAMES,
+  PERMISSION_MODES,
+  PRIOR_CONTEXT_DETAILS,
+  PRIOR_CONTEXT_KEYWORDS,
   SECRET_REGISTRY_STATES,
   STEP_COLOR_MODES,
 } from "@root/types/DashboardConstants";
@@ -335,6 +344,59 @@ describe("PropertiesDrawer sandbox", () => {
     renderPermissionsDrawer();
     expect(screen.getByRole("button", { name: /^Sandbox/ })).toHaveTextContent(
       "Inherit (Off)"
+    );
+  });
+});
+
+describe("PropertiesDrawer reset all to inherit", () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  afterEach(cleanup);
+
+  // `Required<>` makes this a compile-time inventory: a property added to
+  // PropertyValues without an entry here fails typecheck, so the reset test
+  // below covers every drawer control by construction.
+  const OVERRIDES: Required<PropertyValues> = {
+    harness: HARNESS_IDS.CODEX_CLI,
+    model: "custom-model",
+    executionMode: EXECUTION_MODES.HEADLESS,
+    color: "#abcdef",
+    agent: "custom-agent",
+    skills: ["custom-skill"],
+    secrets: ["CUSTOM_SECRET"],
+    resumeSession: true,
+    sessionId: "session-123",
+    mcpServers: ["custom-server"],
+    hooks: [{ event: HOOK_EVENT_NAMES.STOP, command: "echo done" }],
+    errorBehavior: { onError: CONDITION_ACTIONS.CONTINUE },
+    endCondition: { script: "exit 0" },
+    preCondition: { script: "exit 0" },
+    priorContext: PRIOR_CONTEXT_KEYWORDS.ALL,
+    priorContextDetail: PRIOR_CONTEXT_DETAILS.SUMMARY,
+    additionalArgs: "--custom",
+    toolPermissions: { mode: PERMISSION_MODES.CUSTOM },
+    sandbox: true,
+  };
+
+  it("returns every step property to its inherit default", () => {
+    useEditorStore.setState({ properties: { ...OVERRIDES } });
+    renderPermissionsDrawer();
+    expect(screen.getByRole("button", { name: /^Sandbox/ })).toHaveTextContent(
+      "On"
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Reset all to inherit" })
+    );
+
+    const properties = useEditorStore.getState().properties;
+    for (const key of Object.keys(OVERRIDES) as (keyof PropertyValues)[]) {
+      expect(properties[key], key).toEqual(PROPERTY_DEFAULTS[key]);
+    }
+    expect(screen.getByRole("button", { name: /^Sandbox/ })).toHaveTextContent(
+      /^Inherit/
     );
   });
 });

@@ -20,17 +20,24 @@ import {
 } from "vitest";
 import { WorkflowPropertiesPanel } from "@components/layout/WorkflowPropertiesPanel";
 import { useEditorStore } from "@store/editorStore";
-import { useSettingsStore } from "@store/settingsStore";
+import {
+  useSettingsStore,
+  type WorkflowProperties,
+} from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useSecretRegistryStore } from "@store/secretRegistryStore";
 import { defineWorkflowVariable } from "@utils/workflowVars";
 import {
+  CONDITION_ACTIONS,
   EXECUTION_MODES,
   HARNESS_IDS,
+  HOOK_EVENT_NAMES,
   MESSAGE_TYPES,
   PERMISSION_MODES,
   PICKER_SHORTCUT_TARGETS,
+  PRIOR_CONTEXT_DETAILS,
+  PRIOR_CONTEXT_KEYWORDS,
   PROMPT_PROPERTIES,
   WORKTREE_MODES,
   type PickerShortcutTarget,
@@ -970,6 +977,85 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
       base: undefined,
       setup: undefined,
     });
+  });
+
+  it("returns every workflow property to its default", () => {
+    // `Required<>` makes this a compile-time inventory: a property added to
+    // WorkflowProperties without an entry here fails typecheck, so the reset
+    // covers every panel control by construction.
+    const overrides: Required<WorkflowProperties> = {
+      maxSteps: 7,
+      harness: HARNESS_IDS.CODEX_CLI,
+      model: "custom-model",
+      executionMode: EXECUTION_MODES.HEADLESS,
+      agent: "custom-agent",
+      skills: ["custom-skill"],
+      secrets: ["CUSTOM_SECRET"],
+      vars: { name: "value" },
+      resumeSession: true,
+      sessionId: "session-123",
+      mcpServers: ["custom-server"],
+      hooks: [{ event: HOOK_EVENT_NAMES.STOP, command: "echo done" }],
+      errorBehavior: { onError: CONDITION_ACTIONS.CONTINUE },
+      endCondition: { script: "exit 0" },
+      preCondition: { script: "exit 0" },
+      priorContext: PRIOR_CONTEXT_KEYWORDS.ALL,
+      priorContextDetail: PRIOR_CONTEXT_DETAILS.SUMMARY,
+      additionalArgs: "--custom",
+      toolPermissions: { mode: PERMISSION_MODES.CUSTOM },
+      sandbox: true,
+      worktree: { mode: WORKTREE_MODES.NAMED, branch: "custom" },
+      trustedExternalRoots: ["/custom/root"],
+    };
+    const global = useSettingsStore.getState().globalSettings;
+    const expected: Record<keyof WorkflowProperties, unknown> = {
+      maxSteps: undefined,
+      harness: global.harness,
+      model: global.harnessDefaultModels[global.harness],
+      executionMode: global.executionMode,
+      agent: global.agent,
+      skills: global.skills,
+      secrets: global.secrets,
+      vars: undefined,
+      resumeSession: global.resumeSession,
+      sessionId: "",
+      mcpServers: global.mcpServers,
+      hooks: global.hooks,
+      errorBehavior: global.defaultErrorBehavior,
+      endCondition: global.defaultEndCondition,
+      preCondition: global.defaultPreCondition,
+      priorContext: global.priorContext,
+      priorContextDetail: undefined,
+      additionalArgs: "",
+      toolPermissions: global.toolPermissions,
+      sandbox: undefined,
+      worktree: global.worktree,
+      trustedExternalRoots: undefined,
+    };
+    useSettingsStore.getState().setWorkflowProperties({ ...overrides });
+    render(<WorkflowPropertiesPanel />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Reset all to defaults" })
+    );
+
+    const properties = useSettingsStore.getState().workflowProperties;
+    for (const key of Object.keys(overrides) as (keyof WorkflowProperties)[]) {
+      expect(properties[key], key).toEqual(expected[key]);
+    }
+
+    // Controls holding local state must follow the store back to default.
+    fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
+    expect(screen.getByRole("button", { name: /^Sandbox/ })).toHaveTextContent(
+      "Inherit"
+    );
+    expect(
+      screen.getByRole("button", { name: /^Trusted External Roots/ })
+    ).toHaveTextContent("Inherit");
+    fireEvent.click(screen.getByRole("tab", { name: "Validation" }));
+    expect(
+      screen.getByRole("button", { name: /property maxSteps/ })
+    ).toHaveTextContent("Inherit");
   });
 
   it("keeps reset and collapse as sibling controls", () => {

@@ -49,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Exporting a run executed in a managed or named worktree now writes its paths
   as `${workspaceFolder}/…`, so those paths remain portable with the bundle.
+- **Reset all to defaults** in Workflow Properties now also resets Max Steps
+  and Trusted External Roots to Inherit.
 
 ### Changed
 
