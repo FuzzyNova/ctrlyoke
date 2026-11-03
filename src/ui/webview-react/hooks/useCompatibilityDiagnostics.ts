@@ -110,6 +110,7 @@ function applyPromptProperties(
     priorContext: properties.priorContext,
     additionalArgs: properties.additionalArgs,
     toolPermissions: properties.toolPermissions,
+    sandbox: properties.sandbox,
   };
 }
 

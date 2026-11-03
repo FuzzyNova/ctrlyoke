@@ -312,7 +312,7 @@ Implemented as specified; the approval-policy order treats `untrusted` as equal 
   `CapabilityDomainDescriptorMap` and `CAPABILITY_DOMAINS` (`src/types/CompatibilityTypes.ts`,
   `DashboardConstants.ts`). Add a `SANDBOX_CAVEAT_CODES` set (network follows the harness
   policy; file tools are best-effort; MCP servers are not contained) and a
-  `CompatibilityAnalyzer` check modeled on `mcp.perServerToolFiltering`. An explicit `true`
+  [x] `CompatibilityAnalyzer` check modeled on `mcp.perServerToolFiltering`. An explicit `true`
   on an `unsupported` harness is an **error**; on a `partial` one it is information carrying
   the caveat. This is an additive domain in the registry snapshot.
 

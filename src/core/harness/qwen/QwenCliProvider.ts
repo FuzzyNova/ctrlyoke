@@ -1,3 +1,5 @@
+import { SANDBOX_CAVEAT_CODE } from "../../../types/CompatibilityTypes";
+import { unsupportedSandboxCapabilities } from "../shared/SandboxCapabilities";
 import * as path from "path";
 import { randomUUID } from "crypto";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
@@ -181,6 +183,10 @@ export class QwenCliProvider implements ICliProvider {
   get capabilities(): HarnessCapabilityFacts {
     return {
       permissions: this.toolPermissionMapper.capabilities,
+      sandbox: unsupportedSandboxCapabilities(
+        SANDBOX_CAVEAT_CODE.QWEN_UNUSABLE,
+        "dev/backlog/HARNESS_SANDBOX_PLAN.md#the-other-harnesses"
+      ),
       hooks: QwenNotificationMonitor.CAPABILITIES,
       mcp: {
         perServerToolFiltering: QWEN_MCP_FILTERING_CAPABILITY,

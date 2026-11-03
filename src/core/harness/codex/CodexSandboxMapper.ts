@@ -2,6 +2,7 @@ import type {
   ISandboxMapper,
   SandboxApplication,
 } from "../shared/interfaces/ISandboxMapper";
+import { SANDBOX_CAVEAT_CODE } from "../../../types/CompatibilityTypes";
 import { CODEX_SANDBOX_MODES } from "../../../types/DashboardConstants";
 import type { SandboxCapabilityDescriptor } from "../shared/interfaces/ISandboxMapper";
 import { resolveCodexContainment } from "./CodexToolPermissionMapper";
@@ -19,6 +20,7 @@ export const CODEX_SANDBOX_CAPABILITIES: SandboxCapabilityDescriptor = {
   terminal: {
     fidelity: "partial",
     mechanism: "native",
+    caveatCode: SANDBOX_CAVEAT_CODE.NETWORK_FOLLOWS_HARNESS_POLICY,
     verification: CODEX_SANDBOX_VERIFICATION,
   },
 };

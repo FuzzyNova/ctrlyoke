@@ -81,6 +81,7 @@ function installed(
       hooks: hookDeclarations,
       mcp: { perServerToolFiltering: declaration },
       promptInputs: { images: declaration },
+      sandbox: { terminal: declaration },
     },
     effective: {
       permissions: {
@@ -91,6 +92,7 @@ function installed(
       hooks: hookState,
       mcp: { perServerToolFiltering: state },
       promptInputs: { images: state },
+      sandbox: { terminal: state },
     },
   };
 }
@@ -107,6 +109,7 @@ function snapshot(
     schemaVersion: 1,
     enabledDomains: [
       CAPABILITY_DOMAINS.PERMISSIONS,
+      CAPABILITY_DOMAINS.SANDBOX,
       CAPABILITY_DOMAINS.PROMPT_INPUTS,
       CAPABILITY_DOMAINS.HOOKS,
       CAPABILITY_DOMAINS.MCP,
@@ -181,10 +184,61 @@ function mixedWorkflow(overrides: Partial<PromptFile> = {}): PromptFile {
 }
 
 suite("CompatibilityAnalyzer", () => {
+  test("diagnoses explicit sandbox requests by harness support", () => {
+    const unsupported = [
+      HARNESS_IDS.COPILOT_CLI,
+      HARNESS_IDS.ANTIGRAVITY_CLI,
+      HARNESS_IDS.QWEN_CLI,
+      HARNESS_IDS.OPENCODE_CLI,
+    ];
+    for (const harnessId of unsupported) {
+      const result = analyze(
+        { steps: [{ prompt: "test", sandbox: true, harness: harnessId }] },
+        snapshot({
+          [harnessId]: installed(harnessId, true, "unsupported", "verified"),
+        })
+      );
+      const diagnostic = result.find(
+        (item) =>
+          item.code === COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED
+      );
+      assert.strictEqual(
+        diagnostic?.severity,
+        COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
+      );
+      assert.strictEqual(diagnostic?.propertyPointer, "/steps/0/sandbox");
+    }
+    for (const harnessId of [HARNESS_IDS.CLAUDE_CLI, HARNESS_IDS.CODEX_CLI]) {
+      const result = analyze(
+        { steps: [{ prompt: "test", sandbox: true, harness: harnessId }] },
+        snapshot({
+          [harnessId]: installed(harnessId, true, "partial", "verified"),
+        })
+      );
+      assert.strictEqual(
+        result.find(
+          (item) => item.code === COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_PARTIAL
+        )?.severity,
+        COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO
+      );
+    }
+    assert.deepStrictEqual(
+      analyze({ steps: [{ prompt: "test", sandbox: false }] }),
+      []
+    );
+    assert.deepStrictEqual(analyze({ steps: [{ prompt: "test" }] }), []);
+  });
   test("resolves sandbox prompt, workflow, defaults, and absent sources", () => {
-    const workflow = { harness: HARNESS_IDS.CODEX_CLI, steps: [] } as PromptFile;
+    const workflow = {
+      harness: HARNESS_IDS.CODEX_CLI,
+      steps: [],
+    } as PromptFile;
     const prompt = { prompt: "test" } as PromptStep;
-    const make = (p: boolean | undefined, w: boolean | undefined, d: boolean | undefined) =>
+    const make = (
+      p: boolean | undefined,
+      w: boolean | undefined,
+      d: boolean | undefined
+    ) =>
       resolveExecutionProperties(
         { ...prompt, sandbox: p },
         { ...workflow, sandbox: w },
@@ -192,8 +246,14 @@ suite("CompatibilityAnalyzer", () => {
       );
 
     assert.deepStrictEqual(make(true, false, false).sources.sandbox, "prompt");
-    assert.deepStrictEqual(make(undefined, true, false).sources.sandbox, "workflow");
-    assert.deepStrictEqual(make(undefined, undefined, true).sources.sandbox, "defaults");
+    assert.deepStrictEqual(
+      make(undefined, true, false).sources.sandbox,
+      "workflow"
+    );
+    assert.deepStrictEqual(
+      make(undefined, undefined, true).sources.sandbox,
+      "defaults"
+    );
     const absent = make(undefined, undefined, undefined);
     assert.strictEqual(absent.properties.sandbox, undefined);
     assert.strictEqual(absent.sources.sandbox, "defaults");

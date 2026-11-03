@@ -2485,17 +2485,39 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <CustomSelect
                     id="settings-sandbox"
-                    value={sandboxSelectionFromValue(workflowProperties.sandbox)}
+                    value={sandboxSelectionFromValue(
+                      workflowProperties.sandbox
+                    )}
                     onChange={(value) => {
                       const sandbox = sandboxValueFromSelection(value);
                       postWorkflowPropertiesUpdate({ sandbox });
                     }}
                     options={[
-                      { value: SANDBOX_SELECTIONS.INHERIT, label: SANDBOX_UI_LABELS.INHERIT },
-                      { value: SANDBOX_SELECTIONS.ON, label: SANDBOX_UI_LABELS.ON },
-                      { value: SANDBOX_SELECTIONS.OFF, label: SANDBOX_UI_LABELS.OFF },
+                      {
+                        value: SANDBOX_SELECTIONS.INHERIT,
+                        label: SANDBOX_UI_LABELS.INHERIT,
+                      },
+                      {
+                        value: SANDBOX_SELECTIONS.ON,
+                        label: SANDBOX_UI_LABELS.ON,
+                      },
+                      {
+                        value: SANDBOX_SELECTIONS.OFF,
+                        label: SANDBOX_UI_LABELS.OFF,
+                      },
                     ]}
                   />
+                  {compatibility.diagnostics.find((diagnostic) =>
+                    diagnostic.code.startsWith("compatibility.sandbox.")
+                  )?.message && (
+                    <p className="text-xs text-description-fg">
+                      {
+                        compatibility.diagnostics.find((diagnostic) =>
+                          diagnostic.code.startsWith("compatibility.sandbox.")
+                        )?.message
+                      }
+                    </p>
+                  )}
                 </FormField>
                 {/* Permission Mode */}
                 <FormField

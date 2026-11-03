@@ -34,3 +34,22 @@ export function partialSandboxCapabilities(
     },
   };
 }
+
+export function unsupportedSandboxCapabilities(
+  caveatCode: import("../../../types/CompatibilityTypes").SandboxCaveatCode,
+  reference: string
+): SandboxCapabilityDescriptor {
+  return {
+    terminal: {
+      fidelity: "unsupported",
+      mechanism: "none",
+      caveatCode,
+      verification: {
+        kind: "manual",
+        reference,
+        basis: "cli-version",
+        verifiedVersions: [],
+      },
+    },
+  };
+}

@@ -175,6 +175,9 @@ export function analyzeCompatibility({
       });
     }
 
+    if (capabilities.enabledDomains.includes(CAPABILITY_DOMAINS.SANDBOX)) {
+      analyzeSandbox(target, installed, diagnostics);
+    }
     if (capabilities.enabledDomains.includes(CAPABILITY_DOMAINS.MCP)) {
       analyzeConfiguredMcpFilters(target, installed, diagnostics);
     }
@@ -299,6 +302,77 @@ export function getPromptImageFileRefs(
     )
     .map((reference) => reference.path);
   return imageFileRefs.length > 0 ? imageFileRefs : undefined;
+}
+
+function analyzeSandbox(
+  target: CompatibilityExecutionTarget,
+  installed: NonNullable<
+    CompatibilityAnalyzerInput["capabilities"]["harnesses"][HarnessId]
+  >,
+  diagnostics: CompatibilityDiagnostic[]
+): void {
+  if (target.resolved.properties.sandbox !== true) return;
+  const state = installed.effective?.sandbox?.terminal;
+  const declaration = installed.descriptor.sandbox?.terminal;
+  if (
+    !state ||
+    !declaration ||
+    state.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED
+  ) {
+    const code = COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED;
+    diagnostics.push({
+      code,
+      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR,
+      harnessId: target.resolved.properties.harness,
+      capability: "terminal",
+      consumer: target.consumer,
+      ...(target.resolved.sources.sandbox
+        ? { sourceTier: target.resolved.sources.sandbox }
+        : {}),
+      propertyPointer: sandboxPointer(target),
+      state: state ?? unknownCapabilityState(),
+      message: getCompatibilityDiagnosticMessage(code, {
+        harnessId: target.resolved.properties.harness,
+        capability: "terminal",
+        caveatCode: declaration?.caveatCode,
+      }),
+      ...(getCompatibilityDiagnosticRemediation(code)
+        ? { remediation: getCompatibilityDiagnosticRemediation(code) }
+        : {}),
+    });
+  } else if (state.fidelity === CAPABILITY_FIDELITIES.PARTIAL) {
+    const code = COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_PARTIAL;
+    diagnostics.push({
+      code,
+      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO,
+      harnessId: target.resolved.properties.harness,
+      capability: "terminal",
+      consumer: target.consumer,
+      ...(target.resolved.sources.sandbox
+        ? { sourceTier: target.resolved.sources.sandbox }
+        : {}),
+      propertyPointer: sandboxPointer(target),
+      state,
+      message: getCompatibilityDiagnosticMessage(code, {
+        harnessId: target.resolved.properties.harness,
+        capability: "terminal",
+        caveatCode: declaration.caveatCode,
+      }),
+      ...(getCompatibilityDiagnosticRemediation(code)
+        ? { remediation: getCompatibilityDiagnosticRemediation(code) }
+        : {}),
+    });
+  }
+}
+
+function sandboxPointer(target: CompatibilityExecutionTarget): string {
+  const base =
+    target.consumer.kind === FINAL_STEP_PHASES.QUEUE
+      ? `/steps/${target.consumer.stepIndex}`
+      : "/finalStep";
+  return target.resolved.sources.sandbox === COMPATIBILITY_SOURCE_TIERS.WORKFLOW
+    ? "/sandbox"
+    : `${base}/sandbox`;
 }
 
 function analyzeConfiguredImageInputs(

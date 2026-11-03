@@ -1341,12 +1341,32 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     )
                   }
                   options={[
-                    { value: SANDBOX_SELECTIONS.INHERIT, label: SANDBOX_UI_LABELS.INHERIT },
-                    { value: SANDBOX_SELECTIONS.ON, label: SANDBOX_UI_LABELS.ON },
-                    { value: SANDBOX_SELECTIONS.OFF, label: SANDBOX_UI_LABELS.OFF },
+                    {
+                      value: SANDBOX_SELECTIONS.INHERIT,
+                      label: SANDBOX_UI_LABELS.INHERIT,
+                    },
+                    {
+                      value: SANDBOX_SELECTIONS.ON,
+                      label: SANDBOX_UI_LABELS.ON,
+                    },
+                    {
+                      value: SANDBOX_SELECTIONS.OFF,
+                      label: SANDBOX_UI_LABELS.OFF,
+                    },
                   ]}
                   disabled={fieldDisabled(PROMPT_PROPERTIES.SANDBOX)}
                 />
+                {compatibility.diagnostics.find((diagnostic) =>
+                  diagnostic.code.startsWith("compatibility.sandbox.")
+                )?.message && (
+                  <p className="text-xs text-description-fg">
+                    {
+                      compatibility.diagnostics.find((diagnostic) =>
+                        diagnostic.code.startsWith("compatibility.sandbox.")
+                      )?.message
+                    }
+                  </p>
+                )}
               </div>
               {/* Permission Mode */}
               <div className="flex flex-col gap-1">

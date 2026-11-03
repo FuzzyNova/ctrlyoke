@@ -113,7 +113,10 @@ function emptyPreparation(): CliProviderPreparation {
 export class ExecutionPlanBuilder {
   constructor(private readonly deps: ExecutionPlanBuilderDeps) {}
 
-  async plan(session: CliExecutionSession): Promise<ExecutionPlan> {
+  async plan(
+    session: CliExecutionSession,
+    options: { allowUnsupportedSandboxPreview?: boolean } = {}
+  ): Promise<ExecutionPlan> {
     const isInteractive =
       (session.resolvedProperties?.executionMode ??
         this.deps.getExecutionMode()) === EXECUTION_MODES.INTERACTIVE;
@@ -172,7 +175,11 @@ export class ExecutionPlanBuilder {
           additionalArgs: session.resolvedProperties?.additionalArgs,
         })
       : undefined;
-    if (!this.deps.provider.sandboxMapper && sandboxRequest === true) {
+    if (
+      !this.deps.provider.sandboxMapper &&
+      sandboxRequest === true &&
+      !options.allowUnsupportedSandboxPreview
+    ) {
       throw new Error(
         `${this.deps.provider.config.displayName} does not support ctrlyoke terminal sandboxing.`
       );

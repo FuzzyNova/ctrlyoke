@@ -44,6 +44,7 @@ test("compatibility documentation covers the current registry without uniform fe
   );
   assert.deepEqual(facts.enabledDomains, [
     "permissions",
+    "sandbox",
     "promptInputs",
     "hooks",
     "mcp",
@@ -53,8 +54,8 @@ test("compatibility documentation covers the current registry without uniform fe
     .filter((line) => line.startsWith("| "));
   assert.equal(
     matrixRows.length,
-    19,
-    "thirteen capability rows, four domain rows, plus the header and divider"
+    21,
+    "fifteen capability rows, five domain rows, plus the header and divider"
   );
   assert.equal(
     matrixRows[0].split(" | ").length,

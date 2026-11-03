@@ -172,13 +172,16 @@ suite("HarnessVersion", () => {
  * this short: every entry warns users the version policy calls supported.
  */
 const FEATURES_NEWER_THAN_MINIMUM: Partial<Record<HarnessId, string[]>> = {
+  [HARNESS_IDS.COPILOT_CLI]: ["sandbox.terminal"],
+  [HARNESS_IDS.OPENCODE_CLI]: ["sandbox.terminal"],
+  [HARNESS_IDS.QWEN_CLI]: ["sandbox.terminal"],
   // Sandbox terminal evidence exists only at these verified CLI versions,
   // which are newer than the currently declared harness minimums.
   [HARNESS_IDS.CLAUDE_CLI]: ["sandbox.terminal"],
   [HARNESS_IDS.CODEX_CLI]: ["sandbox.terminal"],
   // Only 1.4.4 has been tested; the agy changelog implies the agent could
   // view PNG/JPEG by about 1.2.15. Test at the minimum, then remove this.
-  [HARNESS_IDS.ANTIGRAVITY_CLI]: ["promptInputs.images"],
+  [HARNESS_IDS.ANTIGRAVITY_CLI]: ["promptInputs.images", "sandbox.terminal"],
 };
 
 function collectVerifiedRanges(

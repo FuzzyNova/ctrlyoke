@@ -49,6 +49,8 @@ export const COMPATIBILITY_DIAGNOSTIC_CODES = {
   IMAGE_INPUT_UNSUPPORTED: "compatibility.promptInputs.images.unsupported",
   IMAGE_INPUT_PARTIAL: "compatibility.promptInputs.images.partial",
   IMAGE_INPUT_UNVERIFIED: "compatibility.promptInputs.images.unverified",
+  SANDBOX_UNSUPPORTED: "compatibility.sandbox.terminal.unsupported",
+  SANDBOX_PARTIAL: "compatibility.sandbox.terminal.partial",
   PERMISSION_TRANSLATION_LOSSY: "compatibility.permissions.translation.lossy",
   ANTIGRAVITY_SETTINGS_COLLISION:
     "compatibility.permissions.antigravitySettingsCollision",
@@ -154,6 +156,10 @@ export const SANDBOX_CAVEAT_CODE = {
   NETWORK_FOLLOWS_HARNESS_POLICY: "network-follows-harness-policy",
   FILE_TOOLS_BEST_EFFORT: "file-tools-best-effort",
   MCP_SERVERS_NOT_CONTAINED: "mcp-servers-not-contained",
+  COPILOT_UNUSABLE: "copilot-sandbox-unusable",
+  ANTIGRAVITY_UNUSABLE: "antigravity-sandbox-unusable",
+  QWEN_UNUSABLE: "qwen-sandbox-unusable",
+  OPENCODE_UNUSABLE: "opencode-sandbox-unusable",
 } as const;
 export const SANDBOX_CAVEAT_CODES: ReadonlySet<string> = new Set(
   Object.values(SANDBOX_CAVEAT_CODE)
@@ -327,6 +333,20 @@ export function getCompatibilityCaveatMessage(
       return "because this harness's pre-tool hook fires but cannot block the tool call";
     case HOOK_CAVEAT_CODES.DECISION_UNSUPPORTED:
       return "because OpenCode delivers this event as notification-only; allow and deny decisions are not supported";
+    case SANDBOX_CAVEAT_CODE.NETWORK_FOLLOWS_HARNESS_POLICY:
+      return "because network access follows the harness policy and is not independently controlled";
+    case SANDBOX_CAVEAT_CODE.FILE_TOOLS_BEST_EFFORT:
+      return "because file-tool access is best-effort and not covered by the terminal sandbox";
+    case SANDBOX_CAVEAT_CODE.MCP_SERVERS_NOT_CONTAINED:
+      return "because MCP servers run outside the terminal sandbox";
+    case SANDBOX_CAVEAT_CODE.COPILOT_UNUSABLE:
+      return "because Copilot also sandboxes ctrlyoke MCP servers and hook scripts, which cannot start inside it";
+    case SANDBOX_CAVEAT_CODE.ANTIGRAVITY_UNUSABLE:
+      return "because Antigravity makes the workspace read-only while leaving outside paths writable";
+    case SANDBOX_CAVEAT_CODE.QWEN_UNUSABLE:
+      return "because Qwen's sandbox re-launches the CLI and disables MCP servers and executable hooks";
+    case SANDBOX_CAVEAT_CODE.OPENCODE_UNUSABLE:
+      return "because OpenCode has no supported per-run terminal sandbox mechanism";
     default:
       return undefined;
   }
@@ -415,6 +435,14 @@ export function getCompatibilityDiagnosticMessage(
       );
     case COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_UNVERIFIED:
       return `Image prompt input support is unverified for the installed ${harness} version.`;
+    case COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED:
+      return withCaveat(
+        `Terminal sandboxing is NOT SUPPORTED by the ${harness} harness`
+      );
+    case COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_PARTIAL:
+      return withCaveat(
+        `Terminal sandboxing is only partially supported by the ${harness} harness`
+      );
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_TRANSLATION_LOSSY:
       return `${capabilityLabel} include rules that are only partially represented by the ${harness} harness.`;
     case COMPATIBILITY_DIAGNOSTIC_CODES.MCP_SERVER_ID_SANITIZED:
@@ -470,6 +498,10 @@ export function getCompatibilityDiagnosticRemediation(
       return "Use only the supported server filter subset or select a harness with exact per-server MCP filtering.";
     case COMPATIBILITY_DIAGNOSTIC_CODES.MCP_FILTERING_UNVERIFIED:
       return "Install a harness version covered by the MCP filtering evidence or review this finding manually.";
+    case COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED:
+      return "Turn Sandbox off or select a harness with verified terminal sandbox support.";
+    case COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_PARTIAL:
+      return "Review the sandbox caveat or select a harness with verified complete support.";
     case COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_UNSUPPORTED:
       return "Remove the image reference or select a harness with verified native image-input support.";
     case COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_PARTIAL:
@@ -600,7 +632,9 @@ function getDeclarationDiagnosticCode(
         ? COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_PARTIAL
         : COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNSUPPORTED;
     case CAPABILITY_DOMAINS.SANDBOX:
-      return undefined;
+      return fidelity === CAPABILITY_FIDELITIES.PARTIAL
+        ? COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_PARTIAL
+        : COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED;
   }
 }
 

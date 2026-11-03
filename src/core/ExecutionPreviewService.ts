@@ -655,7 +655,9 @@ export class ExecutionPreviewService {
       promptPlan.imageFileRefs,
       promptPlan.attachedSkills
     );
-    const executionPlan = await harness.executionPlanBuilder.plan(session);
+    const executionPlan = await harness.executionPlanBuilder.plan(session, {
+      allowUnsupportedSandboxPreview: true,
+    });
     const command = this.toCommandPreview(
       executionPlan,
       harness.provider,

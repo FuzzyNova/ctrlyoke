@@ -261,8 +261,11 @@ enforces each list.
 ### Workflows that mix harnesses
 
 When a workflow's steps run on different harnesses, the Permissions tab shows a
-note under each list naming the harnesses that won't enforce it. A step that
-runs on such a harness also records a compatibility warning when it starts. A
+note under each list naming the harnesses that won't enforce it. The Sandbox row
+shows the selected harness's support and caveat. An explicit `sandbox: true` on
+an unsupported harness is an error in compatibility diagnostics and in Dry Run;
+launch also fails closed. A step with a permission mismatch records a
+compatibility warning when it starts. A
 list the mode ignores never warns: `dangerouslyAllowAll` skips both lists, and
 `allowAll` skips the allow list.
 

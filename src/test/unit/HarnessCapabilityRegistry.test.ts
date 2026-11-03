@@ -217,6 +217,7 @@ suite("HarnessCapabilityRegistry", () => {
     const snapshot = await registry.getSnapshot();
     assert.deepStrictEqual(snapshot.enabledDomains, [
       CAPABILITY_DOMAINS.PERMISSIONS,
+      CAPABILITY_DOMAINS.SANDBOX,
       CAPABILITY_DOMAINS.PROMPT_INPUTS,
       CAPABILITY_DOMAINS.HOOKS,
       CAPABILITY_DOMAINS.MCP,

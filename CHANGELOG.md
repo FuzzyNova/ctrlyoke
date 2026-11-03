@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Compatibility diagnostics and Dry Run now flag explicit sandbox requests on unsupported harnesses; the Permissions views show each harness's sandbox support and caveat.
 - A workspace `permissions.codexSandboxMode` or `codexApprovalPolicy` that is less restrictive than your own now waits for your approval before it applies.
 - Codex steps that run in the `workspace-write` sandbox (the `allowAll` permission mode) can now stage and commit: ctrlyoke grants Codex write access to the checkout's Git directory, and to a linked worktree's own Git directory, so `git add` and `git commit` no longer fail with `Operation not permitted`.
 
