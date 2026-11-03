@@ -365,6 +365,9 @@ export interface ExecutionProperties {
    */
   toolPermissions?: ToolPermissionsOverride | null;
 
+  /** Terminal-command write containment. Undefined inherits settings/harness behavior. */
+  sandbox?: boolean;
+
   /**
    * Internal-error policy for every phase of the step: pre-condition,
    * harness/prompt, end-condition, and script execution.
@@ -405,6 +408,7 @@ export const EXECUTION_PROPERTY_KEYS = [
   "priorContextDetail",
   "additionalArgs",
   "toolPermissions",
+  "sandbox",
   "errorBehavior",
   "hooks",
 ] as const satisfies readonly (keyof ExecutionProperties)[];

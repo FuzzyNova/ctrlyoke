@@ -236,6 +236,14 @@ const SENSITIVE_WORKSPACE_SETTINGS: readonly SensitiveSettingDescriptor[] = [
     summarize: summarizeToolPermissions,
   },
   {
+    path: SETTING_PATHS.DEFAULTS_SANDBOX,
+    shape: SENSITIVE_SETTING_SHAPES.VALUE,
+    isSensitive: isPresent,
+    isCoveredByUser: (workspace, user) => workspace === true || user === false,
+    summarize: summarizeValue,
+    summaryLabel: "Default sandbox",
+  },
+  {
     path: SETTING_PATHS.DEFAULTS_WORKTREE,
     shape: SENSITIVE_SETTING_SHAPES.VALUE,
     isSensitive: hasWorktreeSetupCommand,

@@ -299,6 +299,13 @@ Tool patterns to allow (used in custom mode). Currently supported by Copilot CLI
 
 Tool patterns to deny (takes precedence over allow list). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE\_CONFIG\_CONTENT and writes no workspace opencode.json. Antigravity only supports an overall permission mode and does NOT ENFORCE Denied Tools. Codex enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT ENFORCE shell or other tool patterns.
 
+### `sandbox` {#execution-properties-sandbox}
+
+- **Type:** `boolean`
+- **Settings default:** [`defaults.sandbox`](/reference/settings#defaults-sandbox)
+
+true contains terminal commands' writes to the workspace roots, approved external roots, temp dirs and the harness's own caches; network, harness file tools and MCP servers follow each harness's own policy. false removes only ctrlyoke's containment and never disables a sandbox enabled in the harness's own settings. When absent, inherits defaults.sandbox then today's per-harness behavior. An explicit true fails the step at launch on harnesses that can't honor it (Qwen, OpenCode, plus any phase 0 marked unsupported).
+
 ### `errorBehavior` {#execution-properties-errorbehavior}
 
 - **Type:** [Error behavior](#error-behavior) or `null`

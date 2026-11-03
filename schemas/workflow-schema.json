@@ -798,6 +798,10 @@
           "description": "Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'.",
           "$ref": "#/$defs/toolPermissions"
         },
+        "sandbox": {
+          "type": "boolean",
+          "description": "true contains terminal commands' writes to the workspace roots, approved external roots, temp dirs and the harness's own caches; network, harness file tools and MCP servers follow each harness's own policy. false removes only ctrlyoke's containment and never disables a sandbox enabled in the harness's own settings. When absent, inherits defaults.sandbox then today's per-harness behavior. An explicit true fails the step at launch on harnesses that can't honor it (Qwen, OpenCode, plus any phase 0 marked unsupported)."
+        },
         "errorBehavior": {
           "description": "Internal-error policy for every step phase: pre-conditions, prompts/harnesses, end-conditions, and script steps. Resolves prompt → workflow → the `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is the recovery gesture. Use null to explicitly disable an inherited policy.",
           "$ref": "#/$defs/errorBehaviorDefault"

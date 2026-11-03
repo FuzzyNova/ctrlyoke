@@ -194,6 +194,8 @@ export interface CtrlYokeGlobalSettings {
     mcpServers: (string | McpServerConfig)[];
     hooks: UserHookConfig[];
     errorBehavior?: ErrorBehavior | null;
+    /** Default terminal-command containment; absent preserves harness behavior. */
+    sandbox?: boolean;
     toolPermissions: {
       mode: PermissionMode;
       allowedTools: string[];

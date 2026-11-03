@@ -25,6 +25,26 @@ function settings(value: unknown): PartialCtrlYokeSettings {
 }
 
 suite("WorkspaceSensitiveSettings", () => {
+  suite("default sandbox", () => {
+    test("auto-applies true and withholds false unless the user value is false", () => {
+      assert.deepStrictEqual(
+        collectWorkspaceSensitiveSettingRequests(settings({ defaults: { sandbox: true } }), {}),
+        []
+      );
+      const workspaceFalse = settings({ defaults: { sandbox: false } });
+      assert.strictEqual(
+        collectWorkspaceSensitiveSettingRequests(workspaceFalse, {}).length,
+        1
+      );
+      assert.deepStrictEqual(
+        collectWorkspaceSensitiveSettingRequests(
+          workspaceFalse,
+          settings({ defaults: { sandbox: false } })
+        ),
+        []
+      );
+    });
+  });
   suite("Codex sandbox and approval settings", () => {
     test("auto-applies narrower and equal workspace values", () => {
       for (const [path, narrow, equal, user] of [

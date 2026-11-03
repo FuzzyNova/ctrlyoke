@@ -527,6 +527,11 @@ export const ConfigurationUtils = {
     return configService.get(CONFIG_KEYS.DEFAULTS).errorBehavior;
   },
 
+  /** Get the default terminal-command containment setting. */
+  getDefaultSandbox(): boolean | undefined {
+    return configService.get(CONFIG_KEYS.DEFAULTS).sandbox;
+  },
+
   /**
    * Get default max retries for end conditions (reads from endCondition)
    */

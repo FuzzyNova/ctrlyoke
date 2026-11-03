@@ -327,6 +327,13 @@ Fields:
 - `maxRetries` · `integer` — Maximum retry attempts when onError is retry. When omitted, one retry is allowed.
 - `retryDelaySec` · `number` — Delay before retrying, in seconds.
 
+### `defaults.sandbox` {#defaults-sandbox}
+
+- **Type:** `boolean`
+- **Workflow field:** [`sandbox`](/reference/workflow-schema#execution-properties-sandbox) — a workflow or step value overrides this default
+
+Default terminal-command write containment for workflows and steps that omit sandbox. A workspace-scope value takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies.
+
 ### `defaults.toolPermissions` {#defaults-toolpermissions}
 
 - **Type:** `{ mode?, allowedTools?, deniedTools? }` or `null`

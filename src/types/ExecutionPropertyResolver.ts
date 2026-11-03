@@ -59,6 +59,7 @@ export interface ExecutionPropertyDefaults {
   priorContext?: PriorContext;
   priorContextDetail?: PriorContextDetail;
   toolPermissions?: ToolPermissionsOverride | null;
+  sandbox?: boolean;
   errorBehavior?: ErrorBehavior | null;
 }
 
@@ -466,6 +467,7 @@ export function resolveExecutionProperties(
     workflow.errorBehavior,
     defaults.errorBehavior
   );
+  const sandbox = select(prompt.sandbox, workflow.sandbox, defaults.sandbox);
 
   const resolvedExecutionMode = context.hostCanProvidePty
     ? executionMode.value
@@ -494,6 +496,7 @@ export function resolveExecutionProperties(
     additionalArgs: additionalArgs.value,
     toolPermissions: toolPermissions.value,
     errorBehavior: errorBehavior.value,
+    sandbox: sandbox.value,
   };
   if (ctrlyokeMcpModeIsSkill) {
     properties.ctrlyokeMcpMode = defaults.ctrlyokeMcpMode;
@@ -520,6 +523,7 @@ export function resolveExecutionProperties(
       additionalArgs: additionalArgs.source,
       toolPermissions: toolPermissions.source,
       errorBehavior: errorBehavior.source,
+      sandbox: sandbox.source,
     },
   };
 }

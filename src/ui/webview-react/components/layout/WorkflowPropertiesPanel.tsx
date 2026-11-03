@@ -136,7 +136,12 @@ const WORKFLOW_VARS_EDITOR_ID = "settings-vars";
 
 type WorktreeField = "branch" | "base" | "setup" | "keep" | "merge";
 type WorktreeObjectConfig = Exclude<WorktreeConfig, false | true | string>;
-type ExecutionPropertyKey = (typeof EXECUTION_PROPERTY_KEYS)[number];
+// `sandbox` is in the shared execution contract, but UI carry-through is a
+// later phase; keep this panel's current property guard scoped to its shape.
+type ExecutionPropertyKey = Exclude<
+  (typeof EXECUTION_PROPERTY_KEYS)[number],
+  "sandbox"
+>;
 type TrustedRootsMode =
   (typeof TRUSTED_ROOTS_MODES)[keyof typeof TRUSTED_ROOTS_MODES];
 

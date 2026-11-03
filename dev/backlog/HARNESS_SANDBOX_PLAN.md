@@ -227,34 +227,34 @@ Implemented as specified; the approval-policy order treats `untrusted` as equal 
 
 ## Phase 2: schema and resolution
 
-- `schemas/workflow-schema.json`: add a boolean `sandbox` to the shared execution
+- [x] `schemas/workflow-schema.json`: add a boolean `sandbox` to the shared execution
   properties, at workflow and step level beside `toolPermissions`, with no default.
   `schemas/settings-schema.json`: add `defaults.sandbox`, which `$ref`s the same definition.
   Additive and optional, so no `schema:bump`; run `npm run schema:update`. The description
   states that `true` contains terminal commands' writes, that network, harness file tools and
   MCP servers follow each harness's policy, that `false` never disables a sandbox enabled in
   the harness's own settings, and which harnesses fail an explicit `true`.
-- Types: `sandbox?: boolean` on `ExecutionProperties` (`CtrlYokeTypes.ts`) and
+- [x] Types: `sandbox?: boolean` on `ExecutionProperties` (`CtrlYokeTypes.ts`) and
   `"sandbox"` in `EXECUTION_PROPERTY_KEYS`. In `ResolvedProperties`, `sandbox?: boolean`
   (undefined = inherit). `CtrlYokeSettings.defaults.sandbox?: boolean`, with no shipped
   default.
-- Resolution: `resolveExecutionProperties` (`src/types/ExecutionPropertyResolver.ts`)
+- [x] Resolution: `resolveExecutionProperties` (`src/types/ExecutionPropertyResolver.ts`)
   resolves prompt → workflow → `defaults.sandbox` with a source, like `errorBehavior`.
   `PropertyResolver.createDefaults` reads `ConfigurationUtils.getDefaultSandbox()`.
-- **Spawn identity:** add `SANDBOX` to `SPAWN_IDENTITY_FIELDS`
+- [x] **Spawn identity:** add `SANDBOX` to `SPAWN_IDENTITY_FIELDS`
   (`src/types/ExecutionSpawnIdentity.ts`), so a reused process is never carried into a step
   with different containment.
-- **Workspace gate:** add a `defaults.sandbox` descriptor to `SENSITIVE_WORKSPACE_SETTINGS`.
+- [x] **Workspace gate:** add a `defaults.sandbox` descriptor to `SENSITIVE_WORKSPACE_SETTINGS`.
   `true` is always covered. `false` is covered only when the user's own value is `false`,
   because on Codex it is wider than both inherit and `true`.
-- **MCP:** leave `sandbox` out of `MCP_STEP_UPDATE_SCHEMA` (`src/utils/McpToolDefinitions.ts`),
+- [x] **MCP:** leave `sandbox` out of `MCP_STEP_UPDATE_SCHEMA` (`src/utils/McpToolDefinitions.ts`),
   so an agent can't relax a later step. Add a test that `edit_step` rejects it.
-- Carry the property everywhere `toolPermissions` is carried today. The files are
+- [ ] **Remaining for the next step:** Carry the property everywhere `toolPermissions` is carried today. The files are
   `WorkflowStepSanitizer`, `PromptFileLoader`, `WorkingFileManager`, `RunDefinitionChanges`,
   `RunDefinitionAnchor`, `CliPropertyOverrides` (add a `--sandbox` / `--no-sandbox`
   override, which is additive), `coreWorkflowAdapter`, `promptPropertyValues`,
   `stepOverrideChips`, `stepMetadataClipboard`, `replyToStep` and
-  `workflowFileCompletionExtension`. `grep -rln toolPermissions src` is the checklist.
+  `workflowFileCompletionExtension`. `grep -rln toolPermissions src` is the checklist. The CLI `--sandbox` / `--no-sandbox` override is also remaining.
 - Tests: resolver precedence and source, the sanitizer and loader round trip, spawn
   identity, the workspace gate, and MCP rejection.
 

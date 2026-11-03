@@ -866,6 +866,16 @@ $defs:
           'none'.
         $ref: '#/$defs/toolPermissions'
         title: Tool Permissions
+      sandbox:
+        type: boolean
+        description: >-
+          true contains terminal commands' writes to the workspace roots, approved external roots,
+          temp dirs and the harness's own caches; network, harness file tools and MCP servers follow
+          each harness's own policy. false removes only ctrlyoke's containment and never disables a
+          sandbox enabled in the harness's own settings. When absent, inherits defaults.sandbox then
+          today's per-harness behavior. An explicit true fails the step at launch on harnesses that
+          can't honor it (Qwen, OpenCode, plus any phase 0 marked unsupported).
+        title: Sandbox
       errorBehavior:
         description: >-
           Internal-error policy for every step phase: pre-conditions, prompts/harnesses,

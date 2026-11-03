@@ -184,6 +184,10 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         ],
         "description": "Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'."
       },
+      "sandbox": {
+        "valueKind": "boolean",
+        "description": "true contains terminal commands' writes to the workspace roots, approved external roots, temp dirs and the harness's own caches; network, harness file tools and MCP servers follow each harness's own policy. false removes only ctrlyoke's containment and never disables a sandbox enabled in the harness's own settings. When absent, inherits defaults.sandbox then today's per-harness behavior. An explicit true fails the step at launch on harnesses that can't honor it (Qwen, OpenCode, plus any phase 0 marked unsupported)."
+      },
       "errorBehavior": {
         "valueKind": "oneOf",
         "alternatives": [
@@ -471,6 +475,10 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "null"
         ],
         "description": "Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'."
+      },
+      "sandbox": {
+        "valueKind": "boolean",
+        "description": "true contains terminal commands' writes to the workspace roots, approved external roots, temp dirs and the harness's own caches; network, harness file tools and MCP servers follow each harness's own policy. false removes only ctrlyoke's containment and never disables a sandbox enabled in the harness's own settings. When absent, inherits defaults.sandbox then today's per-harness behavior. An explicit true fails the step at launch on harnesses that can't honor it (Qwen, OpenCode, plus any phase 0 marked unsupported)."
       },
       "errorBehavior": {
         "valueKind": "oneOf",

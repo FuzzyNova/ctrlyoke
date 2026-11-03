@@ -5,6 +5,7 @@ export const SPAWN_IDENTITY_FIELDS = {
   HARNESS: "harness",
   MODEL: "model",
   TOOL_PERMISSIONS: "toolPermissions",
+  SANDBOX: "sandbox",
   HOOKS: "hooks",
   MCP_SERVERS: "mcpServers",
   ADDITIONAL_ARGS: "additionalArgs",
@@ -50,6 +51,7 @@ export function spawnIdentityFields(
     [SPAWN_IDENTITY_FIELDS.TOOL_PERMISSIONS]: canonicalSerialize(
       props.toolPermissions
     ),
+    [SPAWN_IDENTITY_FIELDS.SANDBOX]: canonicalSerialize(props.sandbox),
     [SPAWN_IDENTITY_FIELDS.HOOKS]: canonicalSerialize(props.hooks),
     [SPAWN_IDENTITY_FIELDS.MCP_SERVERS]: canonicalSerialize(props.mcpServers),
     [SPAWN_IDENTITY_FIELDS.ADDITIONAL_ARGS]: canonicalSerialize(

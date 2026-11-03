@@ -44,5 +44,7 @@ export interface ResolvedProperties {
   priorContextDetail?: PriorContextDetail;
   additionalArgs?: string;
   toolPermissions: ToolPermissionConfig | null;
+  /** Undefined preserves each harness's current containment behavior. */
+  sandbox?: boolean;
   errorBehavior?: ErrorBehavior;
 }

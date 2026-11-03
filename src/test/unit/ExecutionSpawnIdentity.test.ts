@@ -71,6 +71,13 @@ suite("ExecutionSpawnIdentity", () => {
     assert.notStrictEqual(spawnIdentityHash(first), spawnIdentityHash(second));
   });
 
+  test("changes when sandbox containment changes", () => {
+    assert.notStrictEqual(
+      spawnIdentityHash(createResolvedProperties({ sandbox: true })),
+      spawnIdentityHash(createResolvedProperties({ sandbox: false }))
+    );
+  });
+
   test("folds undefined and null together but not empty arrays", () => {
     const absent = createResolvedProperties();
     delete (absent as Partial<ResolvedProperties>).mcpServers;

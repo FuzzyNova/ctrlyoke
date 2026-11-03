@@ -1921,6 +1921,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         { type: "script", script: "echo pwned" },
         { endCondition: { script: "echo pwned" } },
         { secrets: ["GITHUB_TOKEN"] },
+        { sandbox: false },
       ]) {
         await assert.rejects(
           server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, { index: 2, updates }),

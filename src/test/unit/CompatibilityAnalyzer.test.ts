@@ -28,6 +28,7 @@ import {
 } from "../../types/CompatibilityTypes";
 import { CODEX_PERMISSION_CAPABILITIES } from "../../core/harness/codex/CodexToolPermissionMapper";
 import type { PromptFile } from "../../types/CtrlYokeTypes";
+import type { PromptStep } from "../../types/CtrlYokeTypes";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import { mergeServerDeniedTools } from "../../types/ToolPermissionUtils";
 
@@ -180,6 +181,23 @@ function mixedWorkflow(overrides: Partial<PromptFile> = {}): PromptFile {
 }
 
 suite("CompatibilityAnalyzer", () => {
+  test("resolves sandbox prompt, workflow, defaults, and absent sources", () => {
+    const workflow = { harness: HARNESS_IDS.CODEX_CLI, steps: [] } as PromptFile;
+    const prompt = { prompt: "test" } as PromptStep;
+    const make = (p: boolean | undefined, w: boolean | undefined, d: boolean | undefined) =>
+      resolveExecutionProperties(
+        { ...prompt, sandbox: p },
+        { ...workflow, sandbox: w },
+        { defaults: { ...defaults, sandbox: d }, hostCanProvidePty: false }
+      );
+
+    assert.deepStrictEqual(make(true, false, false).sources.sandbox, "prompt");
+    assert.deepStrictEqual(make(undefined, true, false).sources.sandbox, "workflow");
+    assert.deepStrictEqual(make(undefined, undefined, true).sources.sandbox, "defaults");
+    const absent = make(undefined, undefined, undefined);
+    assert.strictEqual(absent.properties.sandbox, undefined);
+    assert.strictEqual(absent.sources.sandbox, "defaults");
+  });
   test("points merged workflow and step hook diagnostics at their authored fields", () => {
     const workflow: PromptFile = {
       hooks: [

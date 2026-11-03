@@ -2303,6 +2303,7 @@ export const SETTING_PATHS = {
   DEFAULTS_END_CONDITION: "defaults.endCondition",
   DEFAULTS_PRE_CONDITION: "defaults.preCondition",
   DEFAULTS_TOOL_PERMISSIONS: "defaults.toolPermissions",
+  DEFAULTS_SANDBOX: "defaults.sandbox",
   DEFAULTS_WORKTREE: "defaults.worktree",
 } as const;
 
