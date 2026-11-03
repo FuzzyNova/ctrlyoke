@@ -942,6 +942,7 @@ export class WebviewSettingsSync {
         allowedTools: ConfigurationUtils.getCliAllowedTools(),
         deniedTools: ConfigurationUtils.getCliDeniedTools(),
       },
+      sandbox: ConfigurationUtils.getDefaultSandbox(),
       respectGitignore,
       autoExpandEditorWhenTyping:
         ConfigurationUtils.shouldAutoExpandEditorWhenTyping(),

@@ -19,6 +19,23 @@ import type {
 } from "../../types/CtrlYokeTypes";
 
 suite("CLI property overrides", () => {
+  test("applies sandbox CLI overrides at workflow and forced step scope", () => {
+    const workflow: PromptFile = { sandbox: true, steps: [{ prompt: "one" }] };
+    const overrides = buildCliPropertyOverrides({
+      allowTool: [],
+      denyTool: [],
+      sandbox: false,
+      force: ["sandbox"],
+    });
+    applyCliPropertyOverrides(workflow, overrides);
+    assert.strictEqual(workflow.sandbox, false);
+    assert.strictEqual((workflow.steps![0] as PromptStep).sandbox, false);
+    assert.strictEqual(
+      buildCliPropertyOverrides({ allowTool: [], denyTool: [], sandbox: true })
+        .workflow.sandbox,
+      true
+    );
+  });
   test("--force all applies each passed forceable flag to prompts and scripts", () => {
     const workflow: PromptFile = {
       steps: [
@@ -47,6 +64,7 @@ suite("CLI property overrides", () => {
       resumeSession: true,
       sessionId: "forced-session",
       scriptTimeout: 17,
+      sandbox: true,
       force: [FORCE_ALL_KEYWORD],
     });
 

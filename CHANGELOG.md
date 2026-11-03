@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add `--sandbox` and `--no-sandbox` CLI overrides for terminal sandboxing.
 - The dashboard can export a settled run from its workflow menu, review the
   continuation files before export, and inspect redaction details before sharing.
 - Save Workflow and Export Run now share location, name, and browse controls.

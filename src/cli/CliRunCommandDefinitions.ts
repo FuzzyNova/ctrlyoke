@@ -38,6 +38,7 @@ export interface CliExecutionOptions {
   force?: string[];
   headless?: boolean;
   interactive?: boolean;
+  sandbox?: boolean;
   allowTool: string[];
   denyTool: string[];
   permissionMode?: PermissionMode;
@@ -253,6 +254,17 @@ function addExecutionOptions(command: Command, allowForce = false): Command {
       "--interactive",
       workflowPropertyDescription(
         "Force interactive mode (TUI passthrough, user controls session end)",
+        allowForce
+      )
+    )
+    .option(
+      "--sandbox",
+      workflowPropertyDescription("Request terminal sandboxing", allowForce)
+    )
+    .option(
+      "--no-sandbox",
+      workflowPropertyDescription(
+        "Disable ctrlyoke-requested terminal sandboxing",
         allowForce
       )
     )

@@ -38,6 +38,7 @@ toolPermissions:
     - "list_directory"
   deniedTools:
     - "execute_command"
+sandbox: true
 
 hooks:
   - event: stop
@@ -158,6 +159,7 @@ steps:
 
     toolPermissions:
       mode: dangerouslyAllowAll
+    sandbox: false
 
     hooks:
       - event: stop

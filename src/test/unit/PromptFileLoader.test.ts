@@ -558,6 +558,7 @@ suite("PromptFileLoader Tests", () => {
       const explicitValues: Record<string, unknown> = {
         harness: "copilot-cli",
         toolPermissions: null,
+        sandbox: false,
       };
 
       const defaults =
@@ -744,6 +745,11 @@ suite("PromptFileLoader Tests", () => {
           allowedTools: ["read_file", "list_directory"],
           deniedTools: ["execute_command"],
         });
+        assert.strictEqual(loaded.sandbox, true);
+        const firstStep = loaded.steps?.[0];
+        assert.ok(firstStep, "first step should exist");
+        assertPromptStep(firstStep, "first step should be a prompt");
+        assert.strictEqual(firstStep.sandbox, false);
         assert.deepStrictEqual(loaded.hooks, [
           {
             event: "stop",

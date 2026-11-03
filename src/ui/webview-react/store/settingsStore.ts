@@ -133,6 +133,7 @@ export interface GlobalSettings {
     allowedTools: string[];
     deniedTools: string[];
   };
+  sandbox?: boolean;
   respectGitignore: boolean;
   autoExpandEditorWhenTyping: boolean;
   atomicContextReferences: boolean;
@@ -202,6 +203,7 @@ export interface WorkflowProperties {
     allowedTools?: string[];
     deniedTools?: string[];
   } | null;
+  sandbox?: boolean;
   worktree?: WorktreeConfig;
   trustedExternalRoots?: string[] | null;
 }
@@ -450,6 +452,7 @@ const initialGlobalSettings: GlobalSettings = {
     allowedTools: [],
     deniedTools: [],
   },
+  sandbox: CTRLYOKE_SETTINGS_DEFAULTS.defaults.sandbox,
   respectGitignore: true,
   autoExpandEditorWhenTyping: true,
   atomicContextReferences: false,

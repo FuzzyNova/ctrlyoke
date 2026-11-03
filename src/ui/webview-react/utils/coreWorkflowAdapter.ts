@@ -33,6 +33,7 @@ export function toCorePromptStep(
     priorContextDetail: step.priorContextDetail,
     additionalArgs: step.additionalArgs,
     toolPermissions: step.toolPermissions,
+    sandbox: step.sandbox,
     errorBehavior: step.errorBehavior,
   };
 }
@@ -66,6 +67,7 @@ export function toCoreWorkflow(
     priorContextDetail: properties.priorContextDetail,
     additionalArgs: properties.additionalArgs,
     toolPermissions: properties.toolPermissions,
+    sandbox: properties.sandbox,
     errorBehavior: properties.errorBehavior,
     steps: steps.map(toCoreStep),
     ...(finalStep ? { finalStep: toCoreStep(finalStep) } : {}),
@@ -88,6 +90,7 @@ export function createDefaults(globalSettings: GlobalSettings) {
     priorContext: globalSettings.priorContext as PromptFile["priorContext"],
     toolPermissions:
       globalSettings.toolPermissions as PromptFile["toolPermissions"],
+    sandbox: globalSettings.sandbox,
     endCondition: globalSettings.defaultEndCondition,
     preCondition: globalSettings.defaultPreCondition,
     errorBehavior: globalSettings.defaultErrorBehavior,

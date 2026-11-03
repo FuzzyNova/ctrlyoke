@@ -91,6 +91,7 @@ export interface PropertyValues {
   priorContextDetail?: PriorContextDetail;
   additionalArgs: Disableable<string>; // undefined = inherit, null = none, string = custom args
   toolPermissions?: ToolPermissionsOverride | null; // undefined = inherit workflow, null = none (omit flags), object = override
+  sandbox?: boolean;
 }
 
 /** Returned by bulk display selectors when selected steps have unlike values. */
@@ -209,6 +210,7 @@ export const PROPERTY_DEFAULTS: PropertyValues = {
   preCondition: undefined,
   additionalArgs: undefined,
   toolPermissions: undefined,
+  sandbox: undefined,
 };
 
 export const END_CONDITION_DEFAULTS: EndConditionConfig = {
@@ -826,6 +828,7 @@ export const useEditorStore = create<
         priorContextDetail: promptData.priorContextDetail,
         additionalArgs: promptData.additionalArgs,
         toolPermissions: promptData.toolPermissions,
+        sandbox: promptData.sandbox,
       };
 
       set({
@@ -1884,6 +1887,7 @@ export const useEditorStore = create<
     if (properties.toolPermissions !== undefined) {
       result.toolPermissions = properties.toolPermissions;
     }
+    if (properties.sandbox !== undefined) result.sandbox = properties.sandbox;
 
     return result;
   },

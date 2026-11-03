@@ -644,6 +644,7 @@ function buildClipboardExecutionProperties(
     ...((toolPermissions !== undefined || step.toolPermissions === null) && {
       toolPermissions,
     }),
+    ...(typeof step.sandbox === "boolean" && { sandbox: step.sandbox }),
   };
 }
 
@@ -976,5 +977,6 @@ export function buildPromptStepProperties(
     ...(props?.toolPermissions !== undefined && {
       toolPermissions: props.toolPermissions as ToolPermissionsOverride | null,
     }),
+    ...(typeof props?.sandbox === "boolean" && { sandbox: props.sandbox }),
   };
 }

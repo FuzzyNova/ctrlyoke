@@ -100,6 +100,10 @@ function labels(
 }
 
 describe("buildStepOverrideChips", () => {
+  it("shows an explicit sandbox override", () => {
+    expect(labels({ prompt: "p", sandbox: true })).toContain("sandbox: on");
+    expect(labels({ prompt: "p", sandbox: false })).toContain("sandbox: off");
+  });
   it("collapses a reply to a session chip plus the values that really differ", () => {
     const chips = buildStepOverrideChips(replyStep, {}, globalSettings);
 

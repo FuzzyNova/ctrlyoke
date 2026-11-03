@@ -278,6 +278,12 @@ export function buildStepMetadataClipboardText({
         fmtToolPermissions
       ),
       resolvedLine(
+        "sandbox",
+        step.sandbox,
+        workflowProperties.sandbox ?? globalSettings.sandbox,
+        (value) => String(value)
+      ),
+      resolvedLine(
         "endCondition",
         step.endCondition,
         workflowProperties.endCondition ?? globalSettings.defaultEndCondition,

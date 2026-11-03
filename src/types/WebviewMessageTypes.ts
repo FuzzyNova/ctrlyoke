@@ -440,6 +440,7 @@ export interface PromptStep extends StepDisplayProperties {
   priorContextDetail?: PriorContextDetail;
   additionalArgs?: string | null;
   toolPermissions?: ToolPermissionsOverride | null;
+  sandbox?: boolean;
   errorBehavior?: ErrorBehavior | null;
   _runtime?: Pick<
     ExecutionProperties,

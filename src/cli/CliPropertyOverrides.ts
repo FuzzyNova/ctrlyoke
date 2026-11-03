@@ -15,6 +15,7 @@ export const ForceableFlag = {
   RESUME_SESSION: "resume-session",
   SESSION_ID: "session-id",
   SCRIPT_TIMEOUT: "script-timeout",
+  SANDBOX: "sandbox",
 } as const;
 
 export const FORCE_ALL_KEYWORD = "all";
@@ -42,6 +43,7 @@ export function buildCliPropertyOverrides(
     | "resumeSession"
     | "sessionId"
     | "scriptTimeout"
+    | "sandbox"
     | "force"
   >,
   defaultHarness?: HarnessId
@@ -49,6 +51,7 @@ export function buildCliPropertyOverrides(
   const workflow: Partial<ExecutionProperties> = {};
   if (options.harness) workflow.harness = options.harness as HarnessId;
   if (options.model) workflow.model = options.model;
+  if (options.sandbox !== undefined) workflow.sandbox = options.sandbox;
   if (options.headless) workflow.executionMode = EXECUTION_MODES.HEADLESS;
   else if (options.interactive)
     workflow.executionMode = EXECUTION_MODES.INTERACTIVE;
@@ -125,6 +128,8 @@ export function applyCliPropertyOverrides(
   if (overrides.workflow.sessionId !== undefined) {
     workflow.sessionId = overrides.workflow.sessionId;
   }
+  if (overrides.workflow.sandbox !== undefined)
+    workflow.sandbox = overrides.workflow.sandbox;
 
   const permissions = overrides.workflow.toolPermissions;
   if (permissions) {
@@ -238,6 +243,11 @@ function applyForcedFlagToStep(
         }
       }
       return;
+    case ForceableFlag.SANDBOX:
+      if (!isScriptStep(step) && overrides.workflow.sandbox !== undefined) {
+        step.sandbox = overrides.workflow.sandbox;
+      }
+      return;
   }
 }
 
@@ -255,6 +265,7 @@ function parseAndValidateForcedFlags(
     | "resumeSession"
     | "sessionId"
     | "scriptTimeout"
+    | "sandbox"
   >
 ): Set<ForceableFlag> {
   const requested = (options.force ?? []).flatMap((value) =>
@@ -286,6 +297,7 @@ function parseAndValidateForcedFlags(
     [ForceableFlag.RESUME_SESSION, options.resumeSession !== undefined],
     [ForceableFlag.SESSION_ID, options.sessionId !== undefined],
     [ForceableFlag.SCRIPT_TIMEOUT, options.scriptTimeout !== undefined],
+    [ForceableFlag.SANDBOX, options.sandbox !== undefined],
   ]);
   const selected = requested.includes(FORCE_ALL_KEYWORD)
     ? [...passed].filter(([, wasPassed]) => wasPassed).map(([flag]) => flag)

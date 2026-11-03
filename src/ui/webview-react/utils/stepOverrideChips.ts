@@ -228,6 +228,15 @@ const CHIP_FIELDS = {
       };
     },
   },
+  sandbox: {
+    chip: (step) =>
+      step.sandbox === undefined
+        ? undefined
+        : {
+            label: `sandbox: ${step.sandbox ? "on" : "off"}`,
+            title: schemaTitle("sandbox", step.sandbox),
+          },
+  },
 } satisfies Partial<
   Record<keyof PromptStep & keyof ResolvedProperties, ChipFieldConfig>
 >;

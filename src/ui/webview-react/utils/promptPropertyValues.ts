@@ -43,6 +43,7 @@ export function buildPropertyUpdateValues(
     "errorBehavior",
     "preCondition",
     "toolPermissions",
+    "sandbox",
   ] as const) {
     if (!has(key)) continue;
     const value = values[key];

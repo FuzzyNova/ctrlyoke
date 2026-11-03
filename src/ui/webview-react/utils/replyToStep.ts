@@ -108,6 +108,7 @@ export function buildReplyPropertyValues({
           deniedTools: [...toolPermissions.deniedTools],
         }
       : null,
+    sandbox: properties.sandbox,
   };
 }
 

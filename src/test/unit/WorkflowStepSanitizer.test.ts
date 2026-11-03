@@ -11,6 +11,29 @@ import {
 } from "../../core/WorkflowStepSanitizer";
 
 suite("WorkflowStepSanitizer clipboard helpers", () => {
+  test("preserves sandbox booleans and leaves an absent override absent", () => {
+    for (const sandbox of [true, false]) {
+      assert.strictEqual(
+        (
+          sanitizeClipboardWorkflowStep({ prompt: "p", sandbox }) as {
+            sandbox?: boolean;
+          }
+        ).sandbox,
+        sandbox
+      );
+    }
+    assert.strictEqual(
+      Object.prototype.hasOwnProperty.call(
+        sanitizeClipboardWorkflowStep({ prompt: "p" }),
+        "sandbox"
+      ),
+      false
+    );
+    const parsed = parseClipboardWorkflowStep(
+      serializeWorkflowStepForClipboard({ prompt: "p", sandbox: true })
+    ) as { sandbox?: boolean };
+    assert.strictEqual(parsed.sandbox, true);
+  });
   test("preserves shell overrides on script steps and their conditions", () => {
     const scriptStep = sanitizeClipboardWorkflowStep({
       type: STEP_TYPES.SCRIPT,
@@ -96,6 +119,7 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
         allowedTools: ["read"],
         deniedTools: ["write"],
       },
+      sandbox: false,
       _runtime: {
         startedAt: 1,
         completedAt: 2,
@@ -159,6 +183,7 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
         allowedTools: ["read"],
         deniedTools: ["write"],
       },
+      sandbox: false,
     });
   });
 

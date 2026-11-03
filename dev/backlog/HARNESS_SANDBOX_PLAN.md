@@ -249,13 +249,12 @@ Implemented as specified; the approval-policy order treats `untrusted` as equal 
   because on Codex it is wider than both inherit and `true`.
 - [x] **MCP:** leave `sandbox` out of `MCP_STEP_UPDATE_SCHEMA` (`src/utils/McpToolDefinitions.ts`),
   so an agent can't relax a later step. Add a test that `edit_step` rejects it.
-- [ ] **Remaining for the next step:** Carry the property everywhere `toolPermissions` is carried today. The files are
-  `WorkflowStepSanitizer`, `PromptFileLoader`, `WorkingFileManager`, `RunDefinitionChanges`,
-  `RunDefinitionAnchor`, `CliPropertyOverrides` (add a `--sandbox` / `--no-sandbox`
-  override, which is additive), `coreWorkflowAdapter`, `promptPropertyValues`,
-  `stepOverrideChips`, `stepMetadataClipboard`, `replyToStep` and
-  `workflowFileCompletionExtension`. `grep -rln toolPermissions src` is the checklist. The CLI `--sandbox` / `--no-sandbox` override is also remaining.
-- Tests: resolver precedence and source, the sanitizer and loader round trip, spawn
+- [x] Carry the property through the listed property plumbing: `WorkflowStepSanitizer`,
+  `PromptFileLoader`, `WorkingFileManager`, `RunDefinitionChanges`, `RunDefinitionAnchor`,
+  `CliPropertyOverrides`, `coreWorkflowAdapter`, `promptPropertyValues`, `stepOverrideChips`,
+  `stepMetadataClipboard`, `replyToStep` and `workflowFileCompletionExtension`. The CLI
+  `--sandbox` / `--no-sandbox` override is additive.
+- [x] Tests: resolver precedence and source, the sanitizer and loader round trip, spawn
   identity, the workspace gate, and MCP rejection.
 
 ## Phase 3: mappers and diagnostics

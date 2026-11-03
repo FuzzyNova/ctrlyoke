@@ -199,6 +199,25 @@ suite("RunDefinitionAnchor", () => {
     assert.strictEqual(await statusOnDisk(), RUN_DEFINITION_INTEGRITY.TRUSTED);
   });
 
+  test("reports an outside sandbox change", async () => {
+    await writeAsCtrlyoke(runFile([{ prompt: "a", sandbox: true }]));
+    await writeOutside(runFile([{ prompt: "a", sandbox: false }]));
+    const verified = await verifyRunDefinitionFile(workingFilePath);
+    assert.strictEqual(
+      verified?.verdict.status,
+      RUN_DEFINITION_INTEGRITY.CHANGED_OUTSIDE
+    );
+    if (verified?.verdict.status === RUN_DEFINITION_INTEGRITY.CHANGED_OUTSIDE) {
+      assert.deepStrictEqual(verified.verdict.changes, [
+        {
+          scope: RUN_DEFINITION_CHANGE_SCOPES.STEP,
+          stepNumber: 1,
+          fields: ["sandbox"],
+        },
+      ]);
+    }
+  });
+
   test("an outside definition change is reported with the step and field it touched", async () => {
     await writeAsCtrlyoke(runFile([{ prompt: "a" }, { prompt: "b" }]));
     await writeOutside(

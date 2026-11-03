@@ -1100,6 +1100,7 @@ export const BULK_EDITABLE_PROMPT_STEP_KEYS = [
   "priorContext",
   "additionalArgs",
   "toolPermissions",
+  "sandbox",
 ] as const;
 
 /** Stable action identifiers used by the license-management RPC responses. */
@@ -4266,6 +4267,7 @@ export const PROMPT_PROPERTIES = {
   ADDITIONAL_ARGS: "additionalArgs",
   EXECUTION_MODE: "executionMode",
   TOOL_PERMISSIONS: "toolPermissions",
+  SANDBOX: "sandbox",
   ERROR_BEHAVIOR: "errorBehavior",
 
   // Template metadata (removed when a template is instantiated)
@@ -4380,6 +4382,7 @@ export const WORKFLOW_PROPERTY_KEYS = [
   PROMPT_PROPERTIES.PRIOR_CONTEXT_DETAIL,
   PROMPT_PROPERTIES.ADDITIONAL_ARGS,
   PROMPT_PROPERTIES.TOOL_PERMISSIONS,
+  PROMPT_PROPERTIES.SANDBOX,
   PROMPT_PROPERTIES.WORKTREE,
   PROMPT_PROPERTIES.TRUSTED_EXTERNAL_ROOTS,
   PROMPT_PROPERTIES.MAX_STEPS,
