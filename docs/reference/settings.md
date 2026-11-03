@@ -639,14 +639,14 @@ field. To approve the new roots a workflow declares, use
 - **Type:** `"read-only" | "workspace-write" | "danger-full-access"`
 - **Default:** `"workspace-write"`
 
-Sandbox mode for Codex CLI.
+Sandbox mode for Codex CLI. A workspace-scope value that is less restrictive than your user value takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies. A workspace value that only narrows permissions applies without asking.
 
 ### `permissions.codexApprovalPolicy` {#permissions-codexapprovalpolicy}
 
 - **Type:** `"untrusted" | "on-request" | "never"`
 - **Default:** `"on-request"`
 
-Approval policy for Codex CLI tool calls. The untrusted value is deprecated and maps to on-request in Codex 0.149.0 and newer.
+Approval policy for Codex CLI tool calls. The untrusted value is deprecated and maps to on-request in Codex 0.149.0 and newer. A workspace-scope value that is less restrictive than your user value takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies. A workspace value that only narrows permissions applies without asking.
 
 ### `permissions.trustedExternalRoots` {#permissions-trustedexternalroots}
 

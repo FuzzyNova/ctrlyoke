@@ -155,7 +155,7 @@ phase 3.
 If phase 0 finds agy or Copilot not worth declaring, set them to `unsupported` in phase 3.
 The design doesn't change.
 
-## Phase 1: workspace Codex settings gate (fixes the bug)
+## Phase 1: workspace Codex settings gate (fixes the bug) — **Done.**
 
 This phase is independent of the `sandbox` property and ships first.
 
@@ -190,6 +190,8 @@ This phase is independent of the `sandbox` property and ships first.
   `codexApprovalPolicy` that is less restrictive than your own now waits for your approval
   before it applies."
 - `git mv` the bug to `dev/bugs/implemented/` and set its Resolution line.
+
+Implemented as specified; the approval-policy order treats `untrusted` as equal to `on-request` for Codex 0.149.0 and newer.
 
 ## Phase 2: schema and resolution
 

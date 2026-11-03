@@ -381,13 +381,13 @@
         "codexSandboxMode": {
           "type": "string",
           "enum": ["read-only", "workspace-write", "danger-full-access"],
-          "description": "Sandbox mode for Codex CLI.",
+          "description": "Sandbox mode for Codex CLI. A workspace-scope value that is less restrictive than your user value takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies. A workspace value that only narrows permissions applies without asking.",
           "default": "workspace-write"
         },
         "codexApprovalPolicy": {
           "type": "string",
           "enum": ["untrusted", "on-request", "never"],
-          "description": "Approval policy for Codex CLI tool calls. The untrusted value is deprecated and maps to on-request in Codex 0.149.0 and newer.",
+          "description": "Approval policy for Codex CLI tool calls. The untrusted value is deprecated and maps to on-request in Codex 0.149.0 and newer. A workspace-scope value that is less restrictive than your user value takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies. A workspace value that only narrows permissions applies without asking.",
           "default": "on-request"
         },
         "trustedExternalRoots": {

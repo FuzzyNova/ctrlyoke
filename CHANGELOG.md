@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- A workspace `permissions.codexSandboxMode` or `codexApprovalPolicy` that is less restrictive than your own now waits for your approval before it applies.
+
 ### Added
 
 - The dashboard can export a settled run from its workflow menu, review the

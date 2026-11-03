@@ -2247,6 +2247,8 @@ export const SETTING_PATHS = {
   COORDINATION: "coordination",
   STORAGE_RUN_HISTORY_LOCATION: "storage.runHistoryLocation",
   PERMISSIONS_TRUSTED_EXTERNAL_ROOTS: "permissions.trustedExternalRoots",
+  PERMISSIONS_CODEX_SANDBOX_MODE: "permissions.codexSandboxMode",
+  PERMISSIONS_CODEX_APPROVAL_POLICY: "permissions.codexApprovalPolicy",
   EXECUTION_CONTEXT_RESOLUTION_FAILURE: "execution.contextResolutionFailure",
   UI_SHOW_COST_ESTIMATES: "ui.showCostEstimates",
   SPELLING: "spelling",
@@ -3502,6 +3504,12 @@ export const CODEX_SANDBOX_MODES = {
   DANGER_FULL_ACCESS: "danger-full-access",
 } as const;
 
+export const CODEX_SANDBOX_MODE_ORDER = [
+  CODEX_SANDBOX_MODES.READ_ONLY,
+  CODEX_SANDBOX_MODES.WORKSPACE_WRITE,
+  CODEX_SANDBOX_MODES.DANGER_FULL_ACCESS,
+] as const;
+
 export type CodexSandboxMode =
   (typeof CODEX_SANDBOX_MODES)[keyof typeof CODEX_SANDBOX_MODES];
 
@@ -3511,6 +3519,28 @@ export const CODEX_APPROVAL_POLICIES = {
   ON_REQUEST: "on-request",
   NEVER: "never",
 } as const;
+
+export const CODEX_APPROVAL_POLICY_ORDER = [
+  [CODEX_APPROVAL_POLICIES.UNTRUSTED, CODEX_APPROVAL_POLICIES.ON_REQUEST],
+  CODEX_APPROVAL_POLICIES.NEVER,
+] as const;
+
+/** Whether a workspace rank is equal to or narrower than the user's rank. */
+export function isRankNoWiderThan(
+  order: readonly (string | readonly string[])[],
+  workspace: unknown,
+  user: unknown
+): boolean {
+  const rankOf = (value: unknown): number => {
+    if (typeof value !== "string") return -1;
+    return order.findIndex((rank) =>
+      typeof rank === "string" ? rank === value : rank.includes(value)
+    );
+  };
+  const workspaceRank = rankOf(workspace);
+  const userRank = rankOf(user);
+  return workspaceRank >= 0 && userRank >= 0 && workspaceRank <= userRank;
+}
 
 export type CodexApprovalPolicy =
   (typeof CODEX_APPROVAL_POLICIES)[keyof typeof CODEX_APPROVAL_POLICIES];

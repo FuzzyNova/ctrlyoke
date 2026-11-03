@@ -84,6 +84,7 @@ Codex than ctrlyoke's minimum. If a step fails because the model is not supporte
   - `custom` → `-s <permissions.codexSandboxMode> -a <permissions.codexApprovalPolicy>`
   - `none` → no permission flags (Codex's own defaults)
 - `permissions.codexSandboxMode` (`read-only`, `workspace-write`, `danger-full-access`; default `workspace-write`) and `permissions.codexApprovalPolicy` (`untrusted`, `on-request`, `never`; default `on-request`) are only read in `custom` mode.
+- A workspace setting that makes either value less restrictive than your user setting waits for approval through the VS Code prompt or `ctrlyoke trust-workspace-settings`; narrower workspace values apply without asking.
 - Headless runs use `codex exec`, which does not accept an approval flag, so only the sandbox flag is passed there.
 - In a headless run, ctrlyoke reads the step's output, including file diffs, from Codex's session log under `~/.codex/sessions` (or `$CODEX_HOME/sessions`). `codex exec --json` reports a changed file without its contents, so stdout supplies only the session ID and request errors such as an unknown model.
 - Before resuming, ctrlyoke checks the local rollout store by thread ID. If the

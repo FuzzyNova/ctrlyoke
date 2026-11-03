@@ -8,8 +8,11 @@ import type { ToolPermissionConfig } from "../types/ExecutionPropertyTypes";
 import { isToolPermissionConfigNoWiderThan } from "../types/ToolPermissionUtils";
 import {
   PERMISSION_CAPABILITY_KEYS,
+  CODEX_APPROVAL_POLICY_ORDER,
+  CODEX_SANDBOX_MODE_ORDER,
   SETTING_PATHS,
   WORKSPACE_MCP_REGISTRY_TRUST_PATH,
+  isRankNoWiderThan,
 } from "../types/DashboardConstants";
 import { stableStringify } from "../utils/StableJson";
 
@@ -59,6 +62,8 @@ interface SensitiveSettingDescriptor {
   isCoveredByUser?: (workspaceValue: unknown, userValue: unknown) => boolean;
   /** Approval-prompt text for a value, when the generic JSON would hide what matters. */
   summarize?: (value: unknown) => string;
+  /** Optional concise label for approval prompts. */
+  summaryLabel?: string;
 }
 
 function isNonEmptyString(value: unknown): boolean {
@@ -164,6 +169,15 @@ function worktreeSetupCoveredByUser(
   );
 }
 
+function codexSettingCoveredByUser(
+  order: readonly (string | readonly string[])[],
+  workspaceValue: unknown,
+  userValue: unknown,
+  defaultValue: string
+): boolean {
+  return isRankNoWiderThan(order, workspaceValue, userValue ?? defaultValue);
+}
+
 /** Lead with the command; the generic sorted JSON can truncate it away. */
 function summarizeWorktreeSetup(value: unknown): string {
   return summarizeValue(`setup command ${worktreeSetupCommand(value) ?? ""}`);
@@ -228,6 +242,34 @@ const SENSITIVE_WORKSPACE_SETTINGS: readonly SensitiveSettingDescriptor[] = [
     isCoveredByUser: worktreeSetupCoveredByUser,
     summarize: summarizeWorktreeSetup,
   },
+  {
+    path: SETTING_PATHS.PERMISSIONS_CODEX_SANDBOX_MODE,
+    shape: SENSITIVE_SETTING_SHAPES.VALUE,
+    isSensitive: isPresent,
+    isCoveredByUser: (workspace, user) =>
+      codexSettingCoveredByUser(
+        CODEX_SANDBOX_MODE_ORDER,
+        workspace,
+        user,
+        CTRLYOKE_SETTINGS_DEFAULTS.permissions.codexSandboxMode
+      ),
+    summarize: summarizeValue,
+    summaryLabel: "Codex sandbox",
+  },
+  {
+    path: SETTING_PATHS.PERMISSIONS_CODEX_APPROVAL_POLICY,
+    shape: SENSITIVE_SETTING_SHAPES.VALUE,
+    isSensitive: isPresent,
+    isCoveredByUser: (workspace, user) =>
+      codexSettingCoveredByUser(
+        CODEX_APPROVAL_POLICY_ORDER,
+        workspace,
+        user,
+        CTRLYOKE_SETTINGS_DEFAULTS.permissions.codexApprovalPolicy
+      ),
+    summarize: summarizeValue,
+    summaryLabel: "Codex approval policy",
+  },
 ];
 
 function fingerprintOf(value: unknown): string {
@@ -272,7 +314,7 @@ function createDescriptorRequest(
   return createRequest(
     settingPath,
     value,
-    settingPath,
+    descriptor.summaryLabel ?? settingPath,
     descriptor.summarize?.(value)
   );
 }

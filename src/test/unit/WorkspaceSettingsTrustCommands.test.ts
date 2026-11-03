@@ -7,18 +7,19 @@ import {
 import type { WorkspaceSensitiveSettingState } from "../../config/CtrlYokeConfigService";
 import type { WorkspaceSensitiveSettingRequest } from "../../config/WorkspaceSensitiveSettings";
 import type { WorkspaceSettingsTrustAccess } from "../../config/WorkspaceSettingsTrust";
-import { TRUST_DECISIONS } from "../../types/DashboardConstants";
+import { SETTING_PATHS, TRUST_DECISIONS } from "../../types/DashboardConstants";
 import { RecordingCliTrustIo } from "../helpers/RecordingCliTrustIo";
 
 const WORKSPACE = "workspace-root";
 
 function state(
   summary: string,
-  decision?: WorkspaceSensitiveSettingState["decision"]
+  decision?: WorkspaceSensitiveSettingState["decision"],
+  settingPath = "terminal.shellExecutable"
 ): WorkspaceSensitiveSettingState {
   return {
     request: {
-      settingPath: "terminal.shellExecutable",
+      settingPath,
       fingerprint: summary,
       summary,
     },
@@ -148,9 +149,28 @@ suite("WorkspaceSettingsTrustCommands", () => {
         WORKSPACE,
         {},
         io,
-        new RecordingDependencies([state("a")])
+        new RecordingDependencies([
+          state(
+            "Codex sandbox: danger-full-access",
+            undefined,
+            SETTING_PATHS.PERMISSIONS_CODEX_SANDBOX_MODE
+          ),
+          state(
+            "Codex approval policy: never",
+            undefined,
+            SETTING_PATHS.PERMISSIONS_CODEX_APPROVAL_POLICY
+          ),
+        ])
       );
       assert.strictEqual(code, 2);
+      assert.ok(
+        io.err.some((line) =>
+          line.includes("Codex sandbox: danger-full-access")
+        )
+      );
+      assert.ok(
+        io.err.some((line) => line.includes("Codex approval policy: never"))
+      );
     });
   });
 });

@@ -205,6 +205,7 @@ flags; see [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#opencode-cli
 Codex's sandbox and approval policy for `custom` mode come from the
 `permissions.codexSandboxMode` and `permissions.codexApprovalPolicy` settings, in
 **Settings → Advanced Permissions**.
+A workspace value that makes either setting less restrictive than your user value waits for approval through the VS Code prompt or `ctrlyoke trust-workspace-settings`. A narrower workspace value applies without asking.
 
 Claude Code's `custom` mode uses `dontAsk` in headless runs, which denies tools
 that are not pre-approved, and the `default` mode in interactive runs, which

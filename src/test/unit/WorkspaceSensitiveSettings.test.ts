@@ -10,6 +10,8 @@ import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
 import type { McpServerConfig } from "../../types/CtrlYokeTypes";
 import {
   PERMISSION_MODES,
+  CODEX_APPROVAL_POLICIES,
+  CODEX_SANDBOX_MODES,
   SETTING_PATHS,
   WORKSPACE_MCP_REGISTRY_TRUST_PATH,
 } from "../../types/DashboardConstants";
@@ -23,6 +25,118 @@ function settings(value: unknown): PartialCtrlYokeSettings {
 }
 
 suite("WorkspaceSensitiveSettings", () => {
+  suite("Codex sandbox and approval settings", () => {
+    test("auto-applies narrower and equal workspace values", () => {
+      for (const [path, narrow, equal, user] of [
+        [
+          SETTING_PATHS.PERMISSIONS_CODEX_SANDBOX_MODE,
+          CODEX_SANDBOX_MODES.READ_ONLY,
+          CODEX_SANDBOX_MODES.WORKSPACE_WRITE,
+          CODEX_SANDBOX_MODES.WORKSPACE_WRITE,
+        ],
+        [
+          SETTING_PATHS.PERMISSIONS_CODEX_APPROVAL_POLICY,
+          CODEX_APPROVAL_POLICIES.ON_REQUEST,
+          CODEX_APPROVAL_POLICIES.NEVER,
+          CODEX_APPROVAL_POLICIES.NEVER,
+        ],
+      ] as const) {
+        const workspace =
+          path === SETTING_PATHS.PERMISSIONS_CODEX_SANDBOX_MODE
+            ? settings({ permissions: { codexSandboxMode: narrow } })
+            : settings({ permissions: { codexApprovalPolicy: narrow } });
+        const userSettings =
+          path === SETTING_PATHS.PERMISSIONS_CODEX_SANDBOX_MODE
+            ? settings({ permissions: { codexSandboxMode: user } })
+            : settings({ permissions: { codexApprovalPolicy: user } });
+        assert.deepStrictEqual(
+          collectWorkspaceSensitiveSettingRequests(workspace, userSettings),
+          []
+        );
+        const equalWorkspace =
+          path === SETTING_PATHS.PERMISSIONS_CODEX_SANDBOX_MODE
+            ? settings({ permissions: { codexSandboxMode: equal } })
+            : settings({ permissions: { codexApprovalPolicy: equal } });
+        assert.deepStrictEqual(
+          collectWorkspaceSensitiveSettingRequests(
+            equalWorkspace,
+            userSettings
+          ),
+          []
+        );
+      }
+      assert.deepStrictEqual(
+        collectWorkspaceSensitiveSettingRequests(
+          settings({
+            permissions: {
+              codexApprovalPolicy: CODEX_APPROVAL_POLICIES.UNTRUSTED,
+            },
+          }),
+          settings({
+            permissions: {
+              codexApprovalPolicy: CODEX_APPROVAL_POLICIES.ON_REQUEST,
+            },
+          })
+        ),
+        []
+      );
+    });
+
+    test("withholds wider values until approved and compares unset user values to defaults", () => {
+      const workspace = settings({
+        permissions: {
+          codexSandboxMode: CODEX_SANDBOX_MODES.DANGER_FULL_ACCESS,
+          codexApprovalPolicy: CODEX_APPROVAL_POLICIES.NEVER,
+        },
+      });
+      const requests = collectWorkspaceSensitiveSettingRequests(
+        workspace,
+        settings({
+          permissions: {
+            codexSandboxMode: CODEX_SANDBOX_MODES.READ_ONLY,
+            codexApprovalPolicy: CODEX_APPROVAL_POLICIES.ON_REQUEST,
+          },
+        })
+      );
+      assert.deepStrictEqual(
+        requests.map((request) => request.summary),
+        ["Codex sandbox: danger-full-access", "Codex approval policy: never"]
+      );
+      const withheld = removeUntrustedWorkspaceSensitiveSettings(
+        workspace,
+        {},
+        () => false
+      );
+      assert.deepStrictEqual(withheld, { permissions: {} });
+      assert.deepStrictEqual(
+        removeUntrustedWorkspaceSensitiveSettings(workspace, {}, () => true),
+        workspace
+      );
+      assert.deepStrictEqual(
+        collectWorkspaceSensitiveSettingRequests(
+          settings({
+            permissions: {
+              codexSandboxMode: CODEX_SANDBOX_MODES.DANGER_FULL_ACCESS,
+              codexApprovalPolicy: CODEX_APPROVAL_POLICIES.NEVER,
+            },
+          }),
+          {}
+        ).map((request) => request.settingPath),
+        [
+          SETTING_PATHS.PERMISSIONS_CODEX_SANDBOX_MODE,
+          SETTING_PATHS.PERMISSIONS_CODEX_APPROVAL_POLICY,
+        ]
+      );
+      assert.strictEqual(
+        collectWorkspaceSensitiveSettingRequests(
+          settings({ permissions: { codexSandboxMode: "unknown-mode" } }),
+          settings({ permissions: { codexSandboxMode: "unknown-mode" } })
+        ).length,
+        1
+      );
+    });
+  });
+
   suite("collectWorkspaceSensitiveSettingRequests", () => {
     test("requests every setting that can choose a program to run", () => {
       const requests = collectWorkspaceSensitiveSettingRequests(
