@@ -23,6 +23,7 @@ import {
   CAPABILITY_VERIFICATION_KINDS,
   HARNESS_IDS,
   HOOK_EVENT_ORDER,
+  SANDBOX_CAPABILITY_KEYS,
   type HarnessId,
 } from "../../types/DashboardConstants";
 import type {
@@ -182,6 +183,12 @@ function allDomainFacts(harnessId: HarnessId): HarnessCapabilityFacts {
       ])
     ),
     mcp: { perServerToolFiltering: declaration("exact", "workspace-config") },
+    sandbox: {
+      [SANDBOX_CAPABILITY_KEYS.TERMINAL]: declaration(
+        "partial",
+        "translated-cli"
+      ),
+    },
   };
 }
 

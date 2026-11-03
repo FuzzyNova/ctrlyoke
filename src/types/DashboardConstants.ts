@@ -2069,6 +2069,19 @@ export const CAPABILITY_DOMAINS = {
   PROMPT_INPUTS: "promptInputs",
   HOOKS: "hooks",
   MCP: "mcp",
+  SANDBOX: "sandbox",
+} as const;
+
+export const EFFECTIVE_SANDBOX_KINDS = {
+  ON: "on",
+  OFF: "off",
+  HARNESS: "harness",
+} as const;
+export type EffectiveSandboxKind =
+  (typeof EFFECTIVE_SANDBOX_KINDS)[keyof typeof EFFECTIVE_SANDBOX_KINDS];
+
+export const SANDBOX_CAPABILITY_KEYS = {
+  TERMINAL: "terminal",
 } as const;
 
 export const PERMISSION_CAPABILITY_KEYS = {

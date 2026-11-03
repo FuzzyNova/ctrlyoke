@@ -7,6 +7,7 @@ import {
   MCP_CAPABILITY_KEYS,
   PERMISSION_CAPABILITY_KEYS,
   PROMPT_INPUT_CAPABILITY_KEYS,
+  SANDBOX_CAPABILITY_KEYS,
   type HarnessId,
 } from "../types/DashboardConstants";
 import type {
@@ -401,6 +402,8 @@ function requiredLeavesForDomain(domain: CapabilityDomain): readonly string[] {
       return [PROMPT_INPUT_CAPABILITY_KEYS.IMAGES];
     case CAPABILITY_DOMAINS.MCP:
       return [MCP_CAPABILITY_KEYS.PER_SERVER_TOOL_FILTERING];
+    case CAPABILITY_DOMAINS.SANDBOX:
+      return [SANDBOX_CAPABILITY_KEYS.TERMINAL];
     case CAPABILITY_DOMAINS.HOOKS:
       return HOOK_EVENT_ORDER;
   }

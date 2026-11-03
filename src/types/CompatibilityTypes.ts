@@ -147,7 +147,14 @@ export interface CapabilityDomainDescriptorMap {
   mcp: {
     perServerToolFiltering: CapabilityDeclaration;
   };
+  sandbox: { terminal: CapabilityDeclaration };
 }
+
+export const SANDBOX_CAVEAT_CODES = new Set([
+  "network-follows-harness-policy",
+  "file-tools-best-effort",
+  "mcp-servers-not-contained",
+]);
 
 export type CapabilityDomainState<T> = {
   [K in keyof T]: NonNullable<T[K]> extends CapabilityDeclaration
@@ -587,6 +594,8 @@ function getDeclarationDiagnosticCode(
       return fidelity === CAPABILITY_FIDELITIES.PARTIAL
         ? COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_PARTIAL
         : COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNSUPPORTED;
+    case CAPABILITY_DOMAINS.SANDBOX:
+      return undefined;
   }
 }
 

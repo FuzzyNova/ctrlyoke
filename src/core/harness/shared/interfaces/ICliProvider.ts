@@ -5,6 +5,7 @@ import type {
   ToolPermissionApplication,
   ToolPermissionConfig,
 } from "./IToolPermissionMapper";
+import type { ISandboxMapper } from "./ISandboxMapper";
 import type { CliProviderPreparation } from "./PreparedMutation";
 export type {
   CliProviderPreparation,
@@ -160,6 +161,7 @@ export interface ICliProvider {
 
   /** Tool permission mapper component */
   readonly toolPermissionMapper: IToolPermissionMapper;
+  readonly sandboxMapper?: ISandboxMapper;
 
   /** Log parser component (for log file monitoring in interactive mode) */
   readonly logParser?: ILogParser;

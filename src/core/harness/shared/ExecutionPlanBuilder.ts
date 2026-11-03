@@ -34,6 +34,10 @@ import {
 import type { CliExecutionSession } from "./CliExecutionSession";
 import type { CliProviderWorkflowContext } from "./CliProviderUtils";
 import { CliProviderUtils } from "./CliProviderUtils";
+import { EFFECTIVE_SANDBOX_KINDS } from "../../../types/DashboardConstants";
+import { COMPATIBILITY_DIAGNOSTIC_SEVERITIES } from "../../../types/DashboardConstants";
+import { Log } from "../../../utils/Log";
+import type { CodexSandboxMode } from "../../../types/DashboardConstants";
 import { projectStateRoot } from "../../../utils/ProjectStatePaths";
 import { runArtifactStem } from "../../../utils/WorkflowPaths";
 import {
@@ -144,6 +148,52 @@ export class ExecutionPlanBuilder {
           diagnostics: [],
         };
     const baseArgs = [...providerPreparation.cliArgs];
+    const resolvedPermissions = session.resolvedProperties?.toolPermissions;
+    const sandboxRequest = session.resolvedProperties?.sandbox;
+    const sandboxApplication = this.deps.provider.sandboxMapper
+      ? await this.deps.provider.sandboxMapper.prepare(sandboxRequest, {
+          toolPermissions: resolvedPermissions ?? null,
+          isInteractive,
+          writableRoots: workspaceRoot
+            ? CliProviderUtils.getWorkspaceDirs(
+                workspaceRoot,
+                this.deps.getWorkspaceRoots(),
+                approvedExternalRoots,
+                workflowContext
+              )
+            : [],
+          codexSandboxMode:
+            ConfigurationUtils.getCodexSandboxMode() as CodexSandboxMode,
+          cliVersion: await this.deps.provider.getVersion?.(),
+          additionalArgs: session.resolvedProperties?.additionalArgs,
+        })
+      : undefined;
+    if (!this.deps.provider.sandboxMapper && sandboxRequest === true) {
+      throw new Error(
+        `${this.deps.provider.config.displayName} does not support ctrlyoke terminal sandboxing.`
+      );
+    }
+    if (
+      sandboxApplication?.diagnostics.some(
+        (item) => item.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
+      )
+    ) {
+      throw new Error(
+        sandboxApplication.diagnostics.find(
+          (item) => item.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
+        )!.message
+      );
+    }
+    if (sandboxApplication) {
+      baseArgs.push(...sandboxApplication.cliArgs);
+      Log.info(
+        `[Sandbox] ${sandboxApplication.effective.kind}${sandboxApplication.effective.detail ? `: ${sandboxApplication.effective.detail}` : ""}`
+      );
+    } else if (sandboxRequest !== true) {
+      Log.info(
+        `[Sandbox] ${sandboxRequest === false ? EFFECTIVE_SANDBOX_KINDS.OFF : EFFECTIVE_SANDBOX_KINDS.HARNESS}`
+      );
+    }
     if (
       session.imageFileRefs.length > 0 &&
       this.deps.provider.buildImageAttachmentArgs
