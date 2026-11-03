@@ -25,7 +25,7 @@ import {
   EXECUTION_MODE_HELP_TEXT,
   PERMISSION_MODES,
   SANDBOX_UI_LABELS,
-  SANDBOX_SELECT_OPTIONS,
+  sandboxSelectOptions,
   sandboxSelectionFromValue,
   sandboxValueFromSelection,
   PERMISSION_CAPABILITY_KEYS,
@@ -1343,13 +1343,17 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       sandboxValueFromSelection(value)
                     )
                   }
-                  options={[...SANDBOX_SELECT_OPTIONS]}
+                  options={sandboxSelectOptions(
+                    workflowProperties.sandbox ?? globalSettings.sandbox
+                  )}
                   disabled={fieldDisabled(PROMPT_PROPERTIES.SANDBOX)}
                 />
                 {sandboxSupport && (
-                  <p className="text-xs text-description-fg">
-                    {sandboxSupport.message}
-                  </p>
+                  <FieldDiagnostic
+                    id="prop-sandbox-diagnostic"
+                    diagnostics={[sandboxSupport]}
+                    className="mt-1"
+                  />
                 )}
               </div>
               {/* Permission Mode */}

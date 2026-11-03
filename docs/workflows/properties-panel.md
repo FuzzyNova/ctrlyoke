@@ -126,8 +126,11 @@ Field details: [`hooks`](/reference/workflow-schema#execution-properties-hooks).
   lists, and a denied tool always wins. How strictly each harness applies them
   differs; see [How each harness applies them](/workflows/permissions#how-each-harness-applies-them).
 - **Sandbox** — request terminal write containment independently of approval.
-  Choose **Inherit**, **On**, or **Off**; harness support and caveats appear
-  alongside the control. Steps can override the workflow value. See
+  Choose **Inherit**, **On**, or **Off**; Inherit names the value it resolves
+  to, and **Harness default** means each harness keeps its own behavior for the
+  permission mode (Codex's `allowAll` still runs in its `workspace-write`
+  sandbox). An error appears under the control when the harness can't sandbox. Steps can
+  override the workflow value. See
   [Sandboxing](/workflows/permissions#sandboxing).
 - **Secrets** — secret environment variables this workflow may use.
 - **Trusted External Roots** — directories outside the workspace this workflow

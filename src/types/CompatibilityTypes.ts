@@ -50,7 +50,6 @@ export const COMPATIBILITY_DIAGNOSTIC_CODES = {
   IMAGE_INPUT_PARTIAL: "compatibility.promptInputs.images.partial",
   IMAGE_INPUT_UNVERIFIED: "compatibility.promptInputs.images.unverified",
   SANDBOX_UNSUPPORTED: "compatibility.sandbox.terminal.unsupported",
-  SANDBOX_PARTIAL: "compatibility.sandbox.terminal.partial",
   SANDBOX_SETTINGS_OVERRIDDEN:
     "compatibility.sandbox.terminal.settingsOverridden",
   PERMISSION_TRANSLATION_LOSSY: "compatibility.permissions.translation.lossy",
@@ -336,9 +335,9 @@ export function getCompatibilityCaveatMessage(
     case HOOK_CAVEAT_CODES.DECISION_UNSUPPORTED:
       return "because OpenCode delivers this event as notification-only; allow and deny decisions are not supported";
     case SANDBOX_CAVEAT_CODE.NETWORK_FOLLOWS_HARNESS_POLICY:
-      return "because network access follows the harness policy and is not independently controlled";
+      return "because network access is set by the harness's own sandbox settings, not by ctrlyoke";
     case SANDBOX_CAVEAT_CODE.FILE_TOOLS_BEST_EFFORT:
-      return "because file-tool access is best-effort and not covered by the terminal sandbox";
+      return "because built-in Write and Edit tools run outside the terminal sandbox and follow tool permissions instead";
     case SANDBOX_CAVEAT_CODE.MCP_SERVERS_NOT_CONTAINED:
       return "because MCP servers run outside the terminal sandbox";
     case SANDBOX_CAVEAT_CODE.COPILOT_UNUSABLE:
@@ -438,13 +437,7 @@ export function getCompatibilityDiagnosticMessage(
     case COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_UNVERIFIED:
       return `Image prompt input support is unverified for the installed ${harness} version.`;
     case COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED:
-      return withCaveat(
-        `Terminal sandboxing is NOT SUPPORTED by the ${harness} harness`
-      );
-    case COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_PARTIAL:
-      return withCaveat(
-        `Terminal sandboxing is only partially supported by the ${harness} harness`
-      );
+      return `${harness} can't sandbox commands, so this step will fail to start.`;
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_TRANSLATION_LOSSY:
       return `${capabilityLabel} include rules that are only partially represented by the ${harness} harness.`;
     case COMPATIBILITY_DIAGNOSTIC_CODES.MCP_SERVER_ID_SANITIZED:
@@ -502,8 +495,6 @@ export function getCompatibilityDiagnosticRemediation(
       return "Install a harness version covered by the MCP filtering evidence or review this finding manually.";
     case COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED:
       return "Turn Sandbox off or select a harness with verified terminal sandbox support.";
-    case COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_PARTIAL:
-      return "Review the sandbox caveat or select a harness with verified complete support.";
     case COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_UNSUPPORTED:
       return "Remove the image reference or select a harness with verified native image-input support.";
     case COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_PARTIAL:
@@ -634,8 +625,9 @@ function getDeclarationDiagnosticCode(
         ? COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_PARTIAL
         : COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNSUPPORTED;
     case CAPABILITY_DOMAINS.SANDBOX:
+      // Partial sandbox support has no per-step diagnostic; see analyzeSandbox.
       return fidelity === CAPABILITY_FIDELITIES.PARTIAL
-        ? COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_PARTIAL
+        ? undefined
         : COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED;
   }
 }

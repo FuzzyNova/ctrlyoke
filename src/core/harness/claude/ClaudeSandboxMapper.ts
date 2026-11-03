@@ -5,10 +5,11 @@ import type {
 } from "../shared/interfaces/ISandboxMapper";
 import {
   effectiveSandboxKind,
-  partialSandboxCapabilities,
+  nativeSandboxCapabilities,
 } from "../shared/SandboxCapabilities";
 import {
   COMPATIBILITY_DIAGNOSTIC_CODES,
+  SANDBOX_CAVEAT_CODE,
   type CompatibilityDiagnostic,
 } from "../../../types/CompatibilityTypes";
 import {
@@ -22,9 +23,11 @@ import {
 import { hasCliFlag } from "../../../utils/CliArgParser";
 
 export class ClaudeSandboxMapper implements ISandboxMapper {
-  readonly capabilities = partialSandboxCapabilities(
-    "phase-0-results-2026-11-03-macos",
-    [">=2.1.317"]
+  readonly capabilities = nativeSandboxCapabilities(
+    "claude-file-tool-probe-2026-11-03-macos",
+    [">=2.1.317"],
+    "partial",
+    SANDBOX_CAVEAT_CODE.FILE_TOOLS_BEST_EFFORT
   );
 
   async prepare(

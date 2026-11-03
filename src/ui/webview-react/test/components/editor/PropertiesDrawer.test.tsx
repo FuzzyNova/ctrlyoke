@@ -306,7 +306,7 @@ describe("PropertiesDrawer sandbox", () => {
   it("writes On and Off as booleans and clears the override for Inherit", () => {
     renderPermissionsDrawer();
     expect(screen.getByRole("button", { name: /^Sandbox/ })).toHaveTextContent(
-      "Inherit"
+      "Inherit (Harness default)"
     );
 
     chooseSandbox("On");
@@ -317,6 +317,25 @@ describe("PropertiesDrawer sandbox", () => {
 
     chooseSandbox("Inherit");
     expect(useEditorStore.getState().properties.sandbox).toBeUndefined();
+  });
+
+  it("names the value Inherit resolves to: the workflow's, else the default", () => {
+    useSettingsStore.setState((state) => ({
+      globalSettings: { ...state.globalSettings, sandbox: true },
+    }));
+    const { unmount } = renderPermissionsDrawer();
+    expect(screen.getByRole("button", { name: /^Sandbox/ })).toHaveTextContent(
+      "Inherit (On)"
+    );
+    unmount();
+
+    useSettingsStore.setState((state) => ({
+      workflowProperties: { ...state.workflowProperties, sandbox: false },
+    }));
+    renderPermissionsDrawer();
+    expect(screen.getByRole("button", { name: /^Sandbox/ })).toHaveTextContent(
+      "Inherit (Off)"
+    );
   });
 });
 

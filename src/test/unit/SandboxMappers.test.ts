@@ -2,7 +2,11 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import { ClaudeSandboxMapper } from "../../core/harness/claude/ClaudeSandboxMapper";
 import { CodexSandboxMapper } from "../../core/harness/codex/CodexSandboxMapper";
-import { COMPATIBILITY_DIAGNOSTIC_CODES } from "../../types/CompatibilityTypes";
+import {
+  COMPATIBILITY_DIAGNOSTIC_CODES,
+  getCompatibilityCaveatMessage,
+  SANDBOX_CAVEAT_CODE,
+} from "../../types/CompatibilityTypes";
 import {
   CODEX_SANDBOX_MODES,
   EFFECTIVE_SANDBOX_KINDS,
@@ -17,6 +21,29 @@ const context = {
 };
 
 suite("sandbox mappers", () => {
+  test("Codex declares exact terminal containment; Claude records its verified file-tool gap", () => {
+    const codex = new CodexSandboxMapper().capabilities.terminal;
+    const claude = new ClaudeSandboxMapper().capabilities.terminal;
+    assert.strictEqual(codex.fidelity, "exact");
+    assert.strictEqual(
+      codex.caveatCode,
+      SANDBOX_CAVEAT_CODE.NETWORK_FOLLOWS_HARNESS_POLICY
+    );
+    assert.strictEqual(claude.fidelity, "partial");
+    assert.strictEqual(
+      claude.caveatCode,
+      SANDBOX_CAVEAT_CODE.FILE_TOOLS_BEST_EFFORT
+    );
+    assert.match(
+      claude.verification?.reference ?? "",
+      /#claude-file-tool-probe-2026-11-03-macos$/
+    );
+    assert.match(
+      getCompatibilityCaveatMessage(claude.caveatCode) ?? "",
+      /Write and Edit tools run outside/
+    );
+  });
+
   test("Claude contributes containment settings without adding another CLI flag", async () => {
     const result = await new ClaudeSandboxMapper().prepare(true, context);
     assert.deepStrictEqual(result.cliArgs, []);
@@ -63,14 +90,11 @@ suite("sandbox mappers", () => {
     assert.deepStrictEqual(inherit.diagnostics, []);
   });
 
-  test("Codex only claims a closed network for a contained mode", async () => {
+  test("Codex names the sandbox mode without a network claim", async () => {
     const mapper = new CodexSandboxMapper();
     const contained = await mapper.prepare(true, context);
     assert.strictEqual(contained.effective.kind, EFFECTIVE_SANDBOX_KINDS.ON);
-    assert.strictEqual(
-      contained.effective.detail,
-      "Codex workspace-write, network off"
-    );
+    assert.strictEqual(contained.effective.detail, "Codex workspace-write");
     const off = await mapper.prepare(false, {
       ...context,
       toolPermissions: {

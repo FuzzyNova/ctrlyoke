@@ -315,23 +315,23 @@ function analyzeSandbox(
   if (target.resolved.properties.sandbox !== true) return;
   const state = installed.effective?.sandbox?.terminal;
   const declaration = installed.descriptor.sandbox?.terminal;
+  // Only a request that will fail at launch is reported. A partial harness's
+  // caveat (network follows the harness's own settings) holds for every
+  // supported harness, so it is documented rather than flagged per step.
   // An undeclared harness has no sandbox mapper, so it fails at launch too.
-  const unsupported =
-    !state ||
-    !declaration ||
-    state.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED;
-  if (!unsupported && state.fidelity !== CAPABILITY_FIDELITIES.PARTIAL) return;
-  const code = unsupported
-    ? COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED
-    : COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_PARTIAL;
+  if (
+    state &&
+    declaration &&
+    state.fidelity !== CAPABILITY_FIDELITIES.UNSUPPORTED
+  )
+    return;
+  const code = COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED;
   const sourceTier = target.resolved.sources.sandbox;
   const propertyPointer = sandboxPointer(target);
   const remediation = getCompatibilityDiagnosticRemediation(code);
   diagnostics.push({
     code,
-    severity: unsupported
-      ? COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
-      : COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO,
+    severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR,
     harnessId: target.resolved.properties.harness,
     capability: SANDBOX_CAPABILITY_KEYS.TERMINAL,
     consumer: target.consumer,

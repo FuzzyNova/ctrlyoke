@@ -182,8 +182,9 @@ sibling of a temp workspace proves nothing.
   other (the last one wins):** sandbox first and env second ran unsandboxed, and the
   reverse lost the env, so ctrlyoke must (and does) emit one merged file; a user
   `additionalArgs` `--settings` would override it. `network.allowedDomains: []` is not
-  deny-all (phase 0 first pass: `curl` still returned 200). Network and file-tool scope
-  are still not established, hence `partial`.
+  deny-all (phase 0 first pass: `curl` still returned 200). The follow-up file-tool
+  probe below establishes the reason for `partial`: Write and Edit run outside
+  the Bash sandbox. Network policy is separate from the containment rating.
 - **Copilot 1.0.105 (not usable; declared `unsupported`).** `--sandbox` does contain
   shell commands (a non-temp outside write fails with `EPERM`, after the agent really
   ran it), but it also runs ctrlyoke's own helpers inside the sandbox: the ctrlyoke MCP
@@ -207,6 +208,54 @@ sibling of a temp workspace proves nothing.
   by `src/test/harness/sandbox.harness.test.ts` (no model call).
 - **Phase 0 status:** complete on macOS. Not probed: Linux/Windows hosts, Copilot
   per-command bypass, Claude network policy.
+
+### Claude file-tool probe (2026-11-03, macOS)
+
+Claude Code **2.1.317**, model alias `sonnet`, headless `-p` with
+`--permission-mode bypassPermissions` (ctrlyoke's `allowAll` mapping). The
+disposable workspace and its outside sibling were created under the home
+directory, **not the OS temp directory**. Only the workspace was granted write
+access. `--setting-sources ''` excluded user/project settings and hooks, and
+`--strict-mcp-config --mcp-config '{"mcpServers":{}}'` excluded MCP servers.
+The single `--settings` file used the same sandbox fragment as ctrlyoke:
+
+```json
+{
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+    "allowUnsandboxedCommands": false,
+    "autoAllowBashIfSandboxed": false,
+    "filesystem": { "allowWrite": ["<workspace>"] }
+  }
+}
+```
+
+The prompt requested each action once, continuing after failures without retries
+through other tools. Stream-json tool-use/result records and filesystem state
+agreed; the run exited 0 with no permission denials:
+
+| Attempt                                                                                     | Observed result                                |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Bash: `node write-outside.cjs`, whose fixture calls `fs.writeFileSync` on an outside marker | `EPERM`; marker absent                         |
+| Write: create another marker directly in the outside directory                              | Success; marker present with requested content |
+| Read then Edit: replace `before` with `after` in an existing outside file                   | Success; file contained `after`                |
+
+This verifies a file-tool gap, rather than inferring containment from a model's
+report or a permission refusal. Claude stays **partial**, with the
+`file-tools-best-effort` caveat now explaining that built-in Write/Edit run
+outside the terminal sandbox and follow tool permissions. This also matches
+[Claude's documented sandbox scope](https://code.claude.com/docs/en/sandboxing#what-runs-outside-the-sandbox).
+The probe does not establish interactive or other-host behavior.
+Raw stream-json results and invocation arguments are retained locally under
+`.ctrlyoke/logs/probes/claude-file-sandbox-2026-11-03/`; disposable fixture
+directories were removed after inspection.
+
+Codex is now declared **exact** for the terminal write-containment contract,
+using the existing phase-0 evidence above. The network caveat remains factual
+information, not a reason for partial containment: network is explicitly outside
+this property's contract. This declaration does not claim whole-process
+isolation or add Linux/Windows probe coverage.
 
 ## Phase 1: workspace Codex settings gate (fixes the bug) — **Done.**
 
@@ -297,7 +346,7 @@ permission mode.
     /** Merged into the harness's single settings payload (Claude). */
     settings?: Record<string, unknown>;
     diagnostics: CompatibilityDiagnostic[];
-    /** For Dry Run and logs: "on" | "off" | "harness" plus a detail like "Codex workspace-write, network off". */
+    /** For Dry Run and logs: "on" | "off" | "harness" plus a detail like "Codex workspace-write". */
     effective: EffectiveSandbox;
   }
   interface ISandboxMapper {
@@ -321,8 +370,9 @@ permission mode.
   `DashboardConstants.ts`). Add a `SANDBOX_CAVEAT_CODES` set (network follows the harness
   policy; file tools are best-effort; MCP servers are not contained) and a
   `CompatibilityAnalyzer` check modeled on `mcp.perServerToolFiltering`. An explicit `true`
-  on an `unsupported` harness is an **error**; on a `partial` one it is information carrying
-  the caveat. This is an additive domain in the registry snapshot.
+  on an `unsupported` harness is an **error**. Partial caveats appear in the
+  compatibility matrix rather than per-step diagnostics. This is an additive
+  domain in the registry snapshot.
 
 ### [x] Codex: one resolver for both axes
 
@@ -347,13 +397,13 @@ strict Codex's sandbox is when containment is on**:
 
 ### The other harnesses
 
-| Harness     | `true`                                                                                                                                                                                                                                                                                                                                                                                                                        | `false` | absent  | Declared                                                                                                                                  |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Claude      | `settings.sandbox = { enabled: true, failIfUnavailable: true, allowUnsandboxedCommands: false, autoAllowBashIfSandboxed: false, filesystem: { allowWrite: <writable roots> } }`, merged into the one `--settings` file written by `planNotificationHookArgs` / `planHeadlessUserHookArgs` (`ClaudeCliProvider.ts`). **Verified: repeated `--settings` flags replace each other (last wins), so one merged file is required.** | nothing | nothing | `partial` (verified 2.1.317: outside write blocked, `git commit`, MCP and hooks work; network policy and file-tool scope not established) |
-| Copilot     | fails (error diagnostic). **Verified unusable on 1.0.105:** `--sandbox` contains shell commands but also sandboxes ctrlyoke's own MCP server and hook scripts, which then cannot start or run; the policy (`sandboxMcpServers`) is settable only in `~/.copilot/settings.json`.                                                                                                                                               | nothing | nothing | `unsupported` (revisit if Copilot gets a per-run policy flag)                                                                             |
-| Antigravity | fails (error diagnostic). **Verified unusable on 1.4.12 (macOS and Windows):** the sandbox is active but makes the workspace read-only while outside paths stay writable; no supported setting changes the mounts.                                                                                                                                                                                                            | nothing | nothing | `unsupported`                                                                                                                             |
-| Qwen        | fails (error diagnostic)                                                                                                                                                                                                                                                                                                                                                                                                      | nothing | nothing | `unsupported`                                                                                                                             |
-| OpenCode    | fails (error diagnostic)                                                                                                                                                                                                                                                                                                                                                                                                      | nothing | nothing | `unsupported`                                                                                                                             |
+| Harness     | `true`                                                                                                                                                                                                                                                                                                                                                                                                                        | `false` | absent  | Declared                                                                                                                                                           |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Claude      | `settings.sandbox = { enabled: true, failIfUnavailable: true, allowUnsandboxedCommands: false, autoAllowBashIfSandboxed: false, filesystem: { allowWrite: <writable roots> } }`, merged into the one `--settings` file written by `planNotificationHookArgs` / `planHeadlessUserHookArgs` (`ClaudeCliProvider.ts`). **Verified: repeated `--settings` flags replace each other (last wins), so one merged file is required.** | nothing | nothing | `partial` (verified 2.1.317: Bash outside write blocked, `git commit`, MCP and hooks work; built-in Write/Edit can write outside; network follows Claude settings) |
+| Copilot     | fails (error diagnostic). **Verified unusable on 1.0.105:** `--sandbox` contains shell commands but also sandboxes ctrlyoke's own MCP server and hook scripts, which then cannot start or run; the policy (`sandboxMcpServers`) is settable only in `~/.copilot/settings.json`.                                                                                                                                               | nothing | nothing | `unsupported` (revisit if Copilot gets a per-run policy flag)                                                                                                      |
+| Antigravity | fails (error diagnostic). **Verified unusable on 1.4.12 (macOS and Windows):** the sandbox is active but makes the workspace read-only while outside paths stay writable; no supported setting changes the mounts.                                                                                                                                                                                                            | nothing | nothing | `unsupported`                                                                                                                                                      |
+| Qwen        | fails (error diagnostic)                                                                                                                                                                                                                                                                                                                                                                                                      | nothing | nothing | `unsupported`                                                                                                                                                      |
+| OpenCode    | fails (error diagnostic)                                                                                                                                                                                                                                                                                                                                                                                                      | nothing | nothing | `unsupported`                                                                                                                                                      |
 
 On Claude, `autoAllowBashIfSandboxed: false` and `allowUnsandboxedCommands: false` keep
 approvals governed by `toolPermissions` alone. Without them, turning containment on would

@@ -2085,6 +2085,8 @@ export const SANDBOX_UI_LABELS = {
   SANDBOXED: "Sandboxed",
   NOT_SANDBOXED: "Not sandboxed",
   HARNESS_SETTING: "Harness setting",
+  /** An unset `defaults.sandbox`: each harness keeps its permission-mode behavior. */
+  HARNESS_DEFAULT: "Harness default",
 } as const;
 export const SANDBOX_SELECTIONS = {
   INHERIT: "inherit",
@@ -2102,6 +2104,49 @@ export const SANDBOX_SELECT_OPTIONS: readonly {
   { value: SANDBOX_SELECTIONS.ON, label: SANDBOX_UI_LABELS.ON },
   { value: SANDBOX_SELECTIONS.OFF, label: SANDBOX_UI_LABELS.OFF },
 ];
+
+/** Label for a resolved sandbox value; unset means each harness's own behavior. */
+export function sandboxValueLabel(value: boolean | undefined): string {
+  return value === undefined
+    ? SANDBOX_UI_LABELS.HARNESS_DEFAULT
+    : value
+      ? SANDBOX_UI_LABELS.ON
+      : SANDBOX_UI_LABELS.OFF;
+}
+
+/**
+ * Sandbox choices with the Inherit option naming what it resolves to, e.g.
+ * "Inherit (Off)". Pass the value the level above resolves to: the workflow's
+ * (else `defaults.sandbox`) for a step, `defaults.sandbox` for a workflow.
+ */
+export function sandboxSelectOptions(inherited: boolean | undefined): {
+  value: SandboxSelection;
+  label: string;
+}[] {
+  return SANDBOX_SELECT_OPTIONS.map((option) =>
+    option.value === SANDBOX_SELECTIONS.INHERIT
+      ? {
+          ...option,
+          label: `${SANDBOX_UI_LABELS.INHERIT} (${sandboxValueLabel(inherited)})`,
+        }
+      : { ...option }
+  );
+}
+
+/**
+ * Choices for `defaults.sandbox` itself: nothing sits above it, so the unset
+ * option is the harnesses' own behavior rather than an Inherit.
+ */
+export function defaultSandboxSelectOptions(): {
+  value: SandboxSelection;
+  label: string;
+}[] {
+  return SANDBOX_SELECT_OPTIONS.map((option) =>
+    option.value === SANDBOX_SELECTIONS.INHERIT
+      ? { ...option, label: SANDBOX_UI_LABELS.HARNESS_DEFAULT }
+      : { ...option }
+  );
+}
 
 /** Convert an authored sandbox override to the dashboard's select value. */
 export function sandboxSelectionFromValue(

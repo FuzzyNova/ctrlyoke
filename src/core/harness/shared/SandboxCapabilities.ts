@@ -1,8 +1,5 @@
 import type { SandboxCapabilityDescriptor } from "./interfaces/ISandboxMapper";
-import {
-  SANDBOX_CAVEAT_CODE,
-  type SandboxCaveatCode,
-} from "../../../types/CompatibilityTypes";
+import type { SandboxCaveatCode } from "../../../types/CompatibilityTypes";
 import {
   EFFECTIVE_SANDBOX_KINDS,
   type EffectiveSandboxKind,
@@ -21,15 +18,17 @@ export function effectiveSandboxKind(
       : EFFECTIVE_SANDBOX_KINDS.HARNESS;
 }
 
-export function partialSandboxCapabilities(
+export function nativeSandboxCapabilities(
   reference: string,
-  verifiedVersions: readonly string[] = []
+  verifiedVersions: readonly string[],
+  fidelity: "exact" | "partial",
+  caveatCode: SandboxCaveatCode
 ): SandboxCapabilityDescriptor {
   return {
     terminal: {
-      fidelity: "partial",
+      fidelity,
       mechanism: "native",
-      caveatCode: SANDBOX_CAVEAT_CODE.NETWORK_FOLLOWS_HARNESS_POLICY,
+      caveatCode,
       verification: {
         kind: "manual",
         reference: `${SANDBOX_PLAN_REFERENCE}#${reference}`,

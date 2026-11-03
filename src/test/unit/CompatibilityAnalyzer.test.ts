@@ -215,11 +215,11 @@ suite("CompatibilityAnalyzer", () => {
           [harnessId]: installed(harnessId, true, "partial", "verified"),
         })
       );
-      assert.strictEqual(
-        result.find(
-          (item) => item.code === COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_PARTIAL
-        )?.severity,
-        COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO
+      // Partial support is documented, not flagged on every sandboxed step.
+      assert.deepStrictEqual(
+        result.filter((item) => item.capability === "terminal"),
+        [],
+        harnessId
       );
     }
     assert.deepStrictEqual(

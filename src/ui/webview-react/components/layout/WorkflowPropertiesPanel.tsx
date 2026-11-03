@@ -86,7 +86,7 @@ import {
   WORKTREE_MODES,
   PERMISSION_MODES,
   SANDBOX_UI_LABELS,
-  SANDBOX_SELECT_OPTIONS,
+  sandboxSelectOptions,
   sandboxSelectionFromValue,
   sandboxValueFromSelection,
   PERMISSION_CAPABILITY_KEYS,
@@ -2495,12 +2495,14 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       const sandbox = sandboxValueFromSelection(value);
                       postWorkflowPropertiesUpdate({ sandbox });
                     }}
-                    options={[...SANDBOX_SELECT_OPTIONS]}
+                    options={sandboxSelectOptions(globalSettings.sandbox)}
                   />
                   {sandboxSupport && (
-                    <p className="text-xs text-description-fg">
-                      {sandboxSupport.message}
-                    </p>
+                    <FieldDiagnostic
+                      id="settings-sandbox-diagnostic"
+                      diagnostics={[sandboxSupport]}
+                      className="mt-1"
+                    />
                   )}
                 </FormField>
                 {/* Permission Mode */}

@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DefaultsPermissionsPage } from "@components/settings/defaults/DefaultsPermissionsPage";
 import { SETTING_SCOPES } from "@/types/messages";
 import {
@@ -132,8 +133,47 @@ describe("DefaultsPermissionsPage compatibility summary", () => {
         "These settings control how strict Codex is when contained."
       )
     ).toBeInTheDocument();
+    // Unset is its own state, not "Off": `false` changes Codex's sandbox.
     expect(
-      screen.getByRole("checkbox", { name: /defaults\.sandbox/i })
-    ).toBeInTheDocument();
+      screen.getByRole("button", { name: /property defaults\.sandbox$/ })
+    ).toHaveTextContent("Harness default");
+  });
+
+  it("writes On and Off and clears the setting for Harness default", async () => {
+    const user = userEvent.setup();
+    const onUpdate = vi.fn();
+    const onReset = vi.fn();
+    render(
+      <DefaultsPermissionsPage
+        settings={createSettings()}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={onUpdate}
+        onReset={onReset}
+      />
+    );
+    const choose = async (label: string) => {
+      await user.click(
+        screen.getByRole("button", { name: /property defaults\.sandbox$/ })
+      );
+      // Match the option, not the trigger ("<value>, property …") or the
+      // approval policy's "On Request".
+      const option = screen
+        .getAllByRole("button", { name: new RegExp(`^${label}\\b`) })
+        .find(
+          (element) =>
+            !/property|Request/.test(
+              element.getAttribute("aria-label") ?? element.textContent ?? ""
+            )
+        );
+      expect(option, label).toBeDefined();
+      await user.click(option!);
+    };
+
+    await choose("On");
+    expect(onUpdate).toHaveBeenLastCalledWith("defaults.sandbox", true);
+    await choose("Off");
+    expect(onUpdate).toHaveBeenLastCalledWith("defaults.sandbox", false);
+    await choose("Harness default");
+    expect(onReset).toHaveBeenCalledWith("defaults.sandbox");
   });
 });

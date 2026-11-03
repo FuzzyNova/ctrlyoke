@@ -125,17 +125,24 @@ enabled in the harness's own settings. When absent, the value inherits from
 `defaults.sandbox`; if that is also absent, each harness keeps its existing
 behavior. New installations do not enable the default.
 
-Containment covers terminal commands. Network access follows the harness's own
-policy, and harness file tools and MCP servers may have different boundaries.
+Containment covers where terminal commands can write. **ctrlyoke does not
+control network access**: it is set by each harness's own sandbox settings, as
+the table shows. Harness file tools and MCP servers may have different
+boundaries.
 
-| Harness                              | Network when `sandbox: true`                             | Mapping                                                                                                                                                                        |
-| ------------------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [Codex](/harnesses/codex-cli)        | Off unless your Codex `config.toml` enables it           | Native `-s` sandbox mode; its writable roots include the workspace, approved external roots, temp directories, caches, and the Git common and linked-worktree Git directories. |
-| [Claude Code](/harnesses/claude-cli) | Follows Claude's policy; not established by verification | `--settings` enables the Bash sandbox, requires it to be available, and limits its writable roots.                                                                             |
-| Copilot CLI                          | Not supported                                            | Explicit `true` fails because its per-run sandbox also blocks ctrlyoke's MCP server and hooks.                                                                                 |
-| Antigravity                          | Not supported                                            | Explicit `true` fails because its sandbox makes the workspace read-only.                                                                                                       |
-| Qwen Code                            | Not supported                                            | Explicit `true` fails; its available sandbox wraps the whole CLI and its helpers.                                                                                              |
-| OpenCode                             | Not supported                                            | Explicit `true` fails because no per-run terminal sandbox mapping is available.                                                                                                |
+Codex declares exact support for this terminal-containment contract. Claude is
+partial: its Bash commands are contained, but its built-in Write and Edit tools
+can still change outside files when tool permissions allow them (verified on
+macOS with Claude Code 2.1.317). Network policy is separate from these ratings.
+
+| Harness                              | Network when `sandbox: true`                                     | Mapping                                                                                                                                                                        |
+| ------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [Codex](/harnesses/codex-cli)        | Off unless `sandbox_workspace_write` in `config.toml` enables it | Native `-s` sandbox mode; its writable roots include the workspace, approved external roots, temp directories, caches, and the Git common and linked-worktree Git directories. |
+| [Claude Code](/harnesses/claude-cli) | Set by `sandbox.network` in Claude's settings files              | `--settings` enables the Bash sandbox, requires it to be available, and limits its writable roots.                                                                             |
+| Copilot CLI                          | Not supported                                                    | Explicit `true` fails because its per-run sandbox also blocks ctrlyoke's MCP server and hooks.                                                                                 |
+| Antigravity                          | Not supported                                                    | Explicit `true` fails because its sandbox makes the workspace read-only.                                                                                                       |
+| Qwen Code                            | Not supported                                                    | Explicit `true` fails; its available sandbox wraps the whole CLI and its helpers.                                                                                              |
+| OpenCode                             | Not supported                                                    | Explicit `true` fails because no per-run terminal sandbox mapping is available.                                                                                                |
 
 An explicit `true` fails the step before launch whenever ctrlyoke cannot honor
 the request. This fail-closed rule applies to unsupported harnesses and any
@@ -264,8 +271,8 @@ enforces each list.
 
 When a workflow's steps run on different harnesses, the Permissions tab shows a
 note under each list naming the harnesses that won't enforce it. The Sandbox row
-shows the selected harness's support and caveat. An explicit `sandbox: true` on
-an unsupported harness is an error in compatibility diagnostics and in Dry Run;
+shows an error when the selected harness can't sandbox. An explicit
+`sandbox: true` on an unsupported harness is an error in compatibility diagnostics and in Dry Run;
 launch also fails closed. A step with a permission mismatch records a
 compatibility warning when it starts. A
 list the mode ignores never warns: `dangerouslyAllowAll` skips both lists, and

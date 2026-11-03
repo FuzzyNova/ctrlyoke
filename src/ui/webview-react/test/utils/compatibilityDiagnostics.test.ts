@@ -223,11 +223,6 @@ describe("sandboxSupportDiagnostic", () => {
       COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED
     );
     expect(sandboxSupportDiagnostic([other, sandbox])).toBe(sandbox);
-    expect(
-      sandboxSupportDiagnostic([
-        diagnostic(COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_PARTIAL),
-      ])?.code
-    ).toBe(COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_PARTIAL);
     expect(sandboxSupportDiagnostic([other])).toBeUndefined();
   });
 });

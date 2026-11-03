@@ -42,17 +42,13 @@ export function diagnosticsForHookEvents(
   );
 }
 
-const SANDBOX_DIAGNOSTIC_CODES: ReadonlySet<string> = new Set([
-  COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED,
-  COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_PARTIAL,
-]);
-
 /** The harness-support note shown under a Sandbox control, if the analyzer raised one. */
 export function sandboxSupportDiagnostic(
   diagnostics: readonly CompatibilityDiagnostic[]
 ): CompatibilityDiagnostic | undefined {
-  return diagnostics.find((diagnostic) =>
-    SANDBOX_DIAGNOSTIC_CODES.has(diagnostic.code)
+  return diagnostics.find(
+    (diagnostic) =>
+      diagnostic.code === COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED
   );
 }
 

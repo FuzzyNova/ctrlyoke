@@ -90,8 +90,14 @@ The `sandbox` property is separate from approval modes. `true` adds one merged
 unavailable, keeps approvals governed by `toolPermissions`, and limits writable
 paths to ctrlyoke's approved roots. `false` removes only ctrlyoke's sandbox
 settings; it does not disable a sandbox configured in Claude's own settings.
-When absent, ctrlyoke adds no sandbox settings. Network policy and file-tool
-scope have not been verified, so containment is declared partial. See [Sandboxing](/workflows/permissions#sandboxing).
+When absent, ctrlyoke adds no sandbox settings. ctrlyoke does not set network
+access: it follows the `sandbox.network` settings in Claude's own settings
+files (`~/.claude/settings.json` and the project's `.claude/settings.json`).
+Containment is declared partial: the Bash sandbox blocks outside writes, but the
+built-in Write and Edit tools run outside it and follow tool permissions instead.
+Verified on macOS with Claude Code 2.1.317: with `sandbox: true` and `allowAll`,
+Bash's outside write failed with `EPERM`, while Write and Edit changed outside
+files. See [Sandboxing](/workflows/permissions#sandboxing).
 Claude uses only the last `--settings` it is given, so a step with
 `sandbox: true` and a `--settings` flag in `additionalArgs` fails at launch
 instead of running uncontained.

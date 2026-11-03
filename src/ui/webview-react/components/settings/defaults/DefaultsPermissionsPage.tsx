@@ -7,13 +7,17 @@ import type {
 import { CustomSelect } from "../../shared/CustomSelect";
 import { PermissionListEditor } from "../../shared/PermissionListEditor";
 import { SettingInputRow } from "../../shared/SettingInputRow";
-import { SettingToggleRow } from "../../shared/SettingToggleRow";
 import { PermissionCapabilitySummary } from "../../shared/PermissionCapabilitySummary";
 import {
   PERMISSION_MODE_OPTIONS_META,
   toSelectOptions,
 } from "@root/types/SchemaUiMetadata";
-import { PERMISSION_MODES } from "@root/types/DashboardConstants";
+import {
+  PERMISSION_MODES,
+  defaultSandboxSelectOptions,
+  sandboxSelectionFromValue,
+  sandboxValueFromSelection,
+} from "@root/types/DashboardConstants";
 import {
   CODEX_APPROVAL_POLICY_OPTIONS_META,
   CODEX_SANDBOX_MODE_OPTIONS_META,
@@ -57,12 +61,25 @@ export function DefaultsPermissionsPage({
 
   return (
     <div className="space-y-4">
-      <SettingToggleRow
+      {/* Three states, not a toggle: `false` is not the same as unset. On
+          Codex it removes the sandbox that allowAll otherwise runs in. */}
+      <SettingInputRow
         settingKey="defaults.sandbox"
-        checked={settings.settings.defaults.sandbox === true}
-        onChange={(value) => onUpdate("defaults.sandbox", value)}
+        id="defaults-sandbox"
         {...rowProps}
-      />
+      >
+        <CustomSelect
+          id="defaults-sandbox"
+          value={sandboxSelectionFromValue(settings.settings.defaults.sandbox)}
+          onChange={(selection) => {
+            const value = sandboxValueFromSelection(selection);
+            if (value === undefined) onReset("defaults.sandbox");
+            else onUpdate("defaults.sandbox", value);
+          }}
+          schemaPath="defaults.sandbox"
+          options={defaultSandboxSelectOptions()}
+        />
+      </SettingInputRow>
       <div className="border-t border-panel-border pt-4">
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-2 tracking-wide">
           Codex sandbox

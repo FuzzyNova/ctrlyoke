@@ -388,8 +388,8 @@ describe("DryRunModal", () => {
 
   it.each([
     [
-      { kind: "on", detail: "Codex workspace-write, network off" },
-      "Sandboxed: Codex workspace-write, network off",
+      { kind: "on", detail: "Codex workspace-write" },
+      "Sandboxed: Codex workspace-write",
     ],
     [{ kind: "off" }, "Not sandboxed"],
     [{ kind: "harness" }, "Harness setting"],
