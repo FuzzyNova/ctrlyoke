@@ -25,10 +25,23 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+    # Majors we have decided not to take yet. Each entry names what unblocks it
+    # and links its backlog doc; delete the entry to get the PR back. Prefer this
+    # over `@dependabot ignore`, which records the decision only inside Dependabot.
+    ignore:
+      # Blocked: @typescript-eslint 8.x peers typescript <6.1.0.
+      # See dev/backlog/TYPESCRIPT_7_UPGRADE.md.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
     groups:
       minor-and-patch:
         applies-to: version-updates
         update-types: [minor, patch]
+      # A TypeScript major moves /, /landing and /media together in one PR.
+      typescript-major:
+        applies-to: version-updates
+        patterns: [typescript]
+        update-types: [major]
       security:
         applies-to: security-updates
         update-types: [minor, patch]

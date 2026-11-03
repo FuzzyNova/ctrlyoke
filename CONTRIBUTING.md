@@ -36,6 +36,15 @@ Plain [Conventional Commits](https://www.conventionalcommits.org/) style (`feat:
 
 Small, focused PRs are easier to review than large ones — if you're planning something big (a new harness, a major refactor), consider opening an issue first to discuss the approach.
 
+## Dependency updates (maintainers)
+
+Dependabot (`.github/dependabot.yml`) opens PRs every Monday: one grouped PR for minor and patch bumps across `/`, `/landing` and `/media`, one for GitHub Actions, and a separate PR for each major. Merging needs green `fast-checks` and a code owner's approval. `deploy-preview` always fails on Dependabot PRs (no Netlify token) and is not required.
+
+1. **Stale checks first.** A PR's checks test it merged with `main` as it was when CI ran. Re-running jobs reuses that merge. If several PRs fail the same test unrelated to their bump, or the checks are older than recent work on `main`, comment `@dependabot rebase` and judge the new run.
+2. **Grouped minor/patch PR:** skim the release notes for raised Node minimums or behavior changes, then approve and squash-merge.
+3. **Each major:** either merge it (green, changelog read, affected feature checked by hand), leave it open if you'll take it within a week or two, or add an `ignore` entry to `dependabot.yml` with a backlog doc naming what unblocks it, then close the PR. Don't leave blocked majors open.
+4. **Native or harness-facing dependencies** (such as `node-pty`): leave open, whatever the bump type, and merge just before a release's `npm run test:harness` run (see step 1 of [Cutting a release](#cutting-a-release-maintainers)). Merging one makes the next release a full release, not a patch release.
+
 ## Changing the schemas
 
 `schemas/workflow-schema.json` and `schemas/settings-schema.json` are published at the URL in their `$id` (`https://ctrlyoke.dev/schema/v<N>/…`) by `deploy.yml` whenever `schemas/**` changes on `main`. Each change is one of two kinds:
