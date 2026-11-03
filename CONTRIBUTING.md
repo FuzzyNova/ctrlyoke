@@ -44,6 +44,9 @@ Dependabot (`.github/dependabot.yml`) opens PRs every Monday: one grouped PR for
 2. **Grouped minor/patch PR:** skim the release notes for raised Node minimums or behavior changes, then approve and squash-merge.
 3. **Each major:** either merge it (green, changelog read, affected feature checked by hand), leave it open if you'll take it within a week or two, or add an `ignore` entry to `dependabot.yml` with a backlog doc naming what unblocks it, then close the PR. Don't leave blocked majors open.
 4. **Native or harness-facing dependencies** (such as `node-pty`): leave open, whatever the bump type, and merge just before a release's `npm run test:harness` run (see step 1 of [Cutting a release](#cutting-a-release-maintainers)). Merging one makes the next release a full release, not a patch release.
+5. **Code changes or an unresponsive Dependabot:** if a major needs code changes, or Dependabot stops responding to `@dependabot` commands, a maintainer with push access to `main` makes the bump and the fixes there, runs `npm test`, and closes the PR with a link to the commit.
+
+Contributors: don't open PRs that only bump dependencies; Dependabot handles those. Bumping a dependency as part of a fix or feature is fine. Explain why in the PR description.
 
 ## Changing the schemas
 
