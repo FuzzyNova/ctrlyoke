@@ -55,7 +55,7 @@ which removes the user's Codex sandbox without the approval prompt that a wider
 
 | Harness     | Per-run control                                                                                                                                                                                                                               | What it contains                                                                                                                                                                                                                                                                                                                                                                                                             | Unsupported host                                                                                                                                                                               |
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Codex       | `-s read-only \| workspace-write \| danger-full-access` (both `codex` and `codex exec`). `-a on-request \| never` is interactive only; 0.149.0 removed `untrusted`.                                                                           | OS sandbox for model shell commands. `workspace-write` allows writes to the workspace and `--add-dir` roots only, with network off unless `config.toml` enables it. `git add` fails in both a plain checkout and a linked worktree because the index is under `.git`, outside the writable root. Phase 3 must add the git common dir as a writable root.                                                                                                                                                                                                                                                          | Phase 0.                                                                                                                                                                                       |
+| Codex       | `-s read-only \| workspace-write \| danger-full-access` (both `codex` and `codex exec`). `-a on-request \| never` is interactive only; 0.149.0 removed `untrusted`.                                                                           | OS sandbox for model shell commands. `workspace-write` allows writes to the workspace and `--add-dir` roots only, with network off unless `config.toml` enables it. `git add` fails in both a plain checkout and a linked worktree because the index is under `.git`, outside the writable root. Phase 3 must add the git common dir, and a linked worktree's own gitdir, as writable roots (see Phase 0 results).                                                                                                                                                                                                                                                          | Phase 0.                                                                                                                                                                                       |
 | Copilot     | `--sandbox` / `--no-sandbox`. Both parse on 1.0.105 but neither is listed in `--help`; `copilot help sandbox` documents `--sandbox`. Policy lives only in the user's `~/.copilot/settings.json` `sandbox` key.                                | Shell commands, via Microsoft Execution Containers (Seatbelt on macOS, bubblewrap plus a private network namespace on Linux, ProcessContainer on Windows). Built-in file edits follow the policy only best-effort. **The default policy allows outbound network** and a per-command bypass (`allowBypass`). `sandboxMcpServers` decides whether local MCP servers run inside. git/`gh` authenticate through a masking proxy. | Prints a startup warning, then **every sandboxed shell command and sandboxed MCP server fails**: closed, not open. An org policy can force sandboxing on, and then refuses `/sandbox disable`. |
 | Claude      | `--settings` JSON: `sandbox.enabled`, `sandbox.failIfUnavailable`, `sandbox.allowUnsandboxedCommands`, `sandbox.autoAllowBashIfSandboxed`, `sandbox.filesystem.allowWrite`, `sandbox.network.allowedDomains`, … (found in the 2.1.317 binary) | The Bash tool. **`autoAllowBashIfSandboxed` defaults to on**, which auto-approves sandboxed commands, and `allowUnsandboxedCommands` lets the model retry a command outside the sandbox (`dangerouslyDisableSandbox`). Both change approval as well as containment, so ctrlyoke must turn both off.                                                                                                                          | `failIfUnavailable: true` makes it refuse instead of running unsandboxed.                                                                                                                      |
 | Antigravity | `--sandbox` ("Run in a sandbox with terminal restrictions enabled"), or `enableTerminalSandbox` in `--settings`                                                                                                                               | Terminal commands. Permission rules configure mounts and the network allowlist. On Windows, 1.4.12 ran even rule-allowed commands inside the sandbox, and they got `EPERM` writing the workspace ([permission rules plan](../implemented/ANTIGRAVITY_PERMISSION_RULES_PLAN.md)).                                                                                                                                             | **Silently does nothing** (below Windows 11 24H2, some Linux containers).                                                                                                                      |
@@ -157,35 +157,54 @@ The design doesn't change.
 
 ### Phase 0 results (2026-11-03, macOS)
 
-- **Claude 2.1.317:** `--settings` accepted the sandbox JSON and ran a short Bash command.
-  With `allowUnsandboxedCommands: false` and `autoAllowBashIfSandboxed: false`, the
-  throwaway checkout's `git add` and `git commit` succeeded. A write to a sibling path
-  under `/tmp` also succeeded; macOS temp paths are available to the sandbox, so this did
-  not test an arbitrary external path. `network.allowedDomains: []` still allowed
-  `curl https://example.com` (HTTP 200), so an empty list is not a deny-all policy.
-  A second `--settings` invocation was accepted but the model did not report effective
-  settings reliably; merge-vs-replace remains unverified. MCP and hook containment were
-  not tested. **Phase 3 declaration: partial** until MCP and file-tool boundaries are
-  established; merge settings by reading and combining the caller's settings file rather
-  than relying on repeated flags.
-- **Copilot 1.0.105:** `copilot --sandbox -p=… --allow-all-tools` started and executed
-  `pwd`, labelled by the CLI as a “sandboxed shell.” The call consumed the account's
-  remaining AI credits, so blocked-command behavior, bypass auto-approval, `--add-dir`,
-  `sandboxMcpServers`, hooks and `git commit` could not be probed. No user settings were
-  changed. Keep the phase 3 declaration `partial`; caveats remain network policy,
-  best-effort built-in file edits, per-command bypass, `--add-dir` scope and MCP/hooks.
-- **Antigravity 1.4.12:** the `--sandbox` stream-json run returned the account's quota
-  error before a model turn; no workspace write or sandbox-active signal was observed.
-  Keep `partial` provisionally, with the existing Windows host pre-check; whether macOS
-  containment works and whether output reports it remain open.
-- **Codex 0.166.0:** `codex exec -s workspace-write` ran in both throwaway checkouts but
-  staging failed. In the plain checkout Git could not create `.git/index.lock`; in the
-  linked worktree it could not create the common checkout's `.git/worktrees/<name>/index.lock`
-  (`Operation not permitted`). Phase 3 must include the git common dir in writable roots.
-  Linux without Landlock/bubblewrap and Windows were not probed (macOS host).
-- **Phase 0 status:** complete for the probes possible on this machine; quota-limited
-  Copilot and Antigravity checks and the listed non-macOS Codex checks remain explicitly
-  unverified.
+First pass: thin, because Copilot and Antigravity were out of quota. Re-run the same
+day with working quota, using `src/test/harness/sandbox.harness.test.ts` and direct
+probes. Throwaway "outside" targets were hidden directories under the home directory:
+**macOS temp paths are writable inside the Codex, Claude and Copilot sandboxes**, so a
+sibling of a temp workspace proves nothing.
+
+- **Codex 0.166.0 (verified).** `-s workspace-write` blocks a write to a non-temp
+  outside path and closes the network. `git add`/`git commit` fail in a plain checkout
+  (`.git/index.lock`) and in a linked worktree. Adding the common dir as `--add-dir`
+  fixes the **plain checkout** (the root *is* the protected `.git`), but **not a linked
+  worktree**: Codex protects the gitdir the worktree's `.git` pointer file names
+  (`<common>/worktrees/<name>`) even inside an added root. Granting that directory as a
+  root too fixes it. `CodexCliProvider` now adds both (`gitWritableAdminDirs`), with a
+  unit test using a real plain checkout and linked worktree. The `global_status`-style
+  MCP call and a Stop hook both work under `sandbox: true`. Linux without
+  Landlock/bubblewrap and Windows remain unprobed (macOS host).
+- **Claude 2.1.317 (verified; stays `partial`).** With the exact settings ctrlyoke
+  generates: a write to a non-temp outside path is blocked, `git commit` works in a
+  plain checkout and a linked worktree (only the worktree itself writable), ctrlyoke's
+  MCP server answers and a Stop hook fires. **Repeated `--settings` flags replace each
+  other (the last one wins):** sandbox first and env second ran unsandboxed, and the
+  reverse lost the env, so ctrlyoke must (and does) emit one merged file; a user
+  `additionalArgs` `--settings` would override it. `network.allowedDomains: []` is not
+  deny-all (phase 0 first pass: `curl` still returned 200). Network and file-tool scope
+  are still not established, hence `partial`.
+- **Copilot 1.0.105 (not usable; declared `unsupported`).** `--sandbox` does contain
+  shell commands (a non-temp outside write fails with `EPERM`, after the agent really
+  ran it), but it also runs ctrlyoke's own helpers inside the sandbox: the ctrlyoke MCP
+  server could not start (`Cannot read package config` for the ctrlyoke checkout, and
+  after widening reads with `--add-dir` it still closed during discovery), so
+  `workflow_status` was unavailable, and hook commands failed with `EPERM` reading
+  their script. Policy, including `sandboxMcpServers`, is settable only in
+  `~/.copilot/settings.json`, so ctrlyoke can't change it per run. Revisit if Copilot
+  gains a per-run policy flag. Bypass auto-approval was not probed.
+- **Antigravity 1.4.12 (not usable; declared `unsupported`).** Nothing is missing:
+  `/usr/bin/sandbox-exec` is present and the log says "Print mode: enabling terminal
+  sandbox for this session" (that line is the only sandbox-active signal; stream-json
+  carries none). But on macOS, as on Windows, the policy makes the **workspace**
+  read-only (`echo > inside.txt` and `git commit` fail with `Operation not permitted`,
+  even with the workspace under the home directory) while paths outside it stay
+  writable (`/Users/Shared`, `$HOME`, sibling dirs), and it denies reading
+  `~/.gemini/config`. `--settings` rejects `cnsSandboxMounts`, `sandboxAllowNetwork`
+  and the other `sandbox*` keys, and a `write(<workspace>/**)` allow rule does not
+  change it, so there is no supported way to make the workspace writable.
+- **Qwen and OpenCode:** an explicit `sandbox: true` fails the step at launch, checked
+  by `src/test/harness/sandbox.harness.test.ts` (no model call).
+- **Phase 0 status:** complete on macOS. Not probed: Linux/Windows hosts, Copilot
+  per-command bypass, Claude network policy.
 
 ## Phase 1: workspace Codex settings gate (fixes the bug) — **Done.**
 
@@ -322,9 +341,9 @@ strict Codex's sandbox is when containment is on**:
 
 | Harness     | `true`                                                                                                                                                                                                                                                                                                              | `false` | absent  | Declared                                    |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------- | ------------------------------------------- |
-| Claude      | `settings.sandbox = { enabled: true, failIfUnavailable: true, allowUnsandboxedCommands: false, autoAllowBashIfSandboxed: false, filesystem: { allowWrite: <writable roots> } }`, merged into the one `--settings` file written by `planNotificationHookArgs` / `planHeadlessUserHookArgs` (`ClaudeCliProvider.ts`). Repeated `--settings` merge semantics are unverified; explicitly merge settings into one file. | nothing | nothing | `partial` (MCP and file-tool scope unverified) |
-| Copilot     | `--sandbox`; the startup warning becomes an error diagnostic (sandboxed commands already fail closed). Keep per-command bypass and `--add-dir` handling as caveats; MCP/hooks behavior is unverified.                                                                                                                        | nothing | nothing | `partial` (network, file edits best-effort, bypass, external roots, MCP/hooks) |
-| Antigravity | `--sandbox`. Before launch, fail on Windows builds below 26100. macOS sandbox effectiveness and an active signal remain unverified; do not claim the signal-based check until probed. Warn when `additionalArgs` already has `--sandbox`.                                                                                   | nothing | nothing | `partial` provisionally; macOS probe open |
+| Claude      | `settings.sandbox = { enabled: true, failIfUnavailable: true, allowUnsandboxedCommands: false, autoAllowBashIfSandboxed: false, filesystem: { allowWrite: <writable roots> } }`, merged into the one `--settings` file written by `planNotificationHookArgs` / `planHeadlessUserHookArgs` (`ClaudeCliProvider.ts`). **Verified: repeated `--settings` flags replace each other (last wins), so one merged file is required.** | nothing | nothing | `partial` (verified 2.1.317: outside write blocked, `git commit`, MCP and hooks work; network policy and file-tool scope not established) |
+| Copilot     | fails (error diagnostic). **Verified unusable on 1.0.105:** `--sandbox` contains shell commands but also sandboxes ctrlyoke's own MCP server and hook scripts, which then cannot start or run; the policy (`sandboxMcpServers`) is settable only in `~/.copilot/settings.json`. | nothing | nothing | `unsupported` (revisit if Copilot gets a per-run policy flag) |
+| Antigravity | fails (error diagnostic). **Verified unusable on 1.4.12 (macOS and Windows):** the sandbox is active but makes the workspace read-only while outside paths stay writable; no supported setting changes the mounts. | nothing | nothing | `unsupported` |
 | Qwen        | fails (error diagnostic)                                                                                                                                                                                                                                                                                            | nothing | nothing | `unsupported`                               |
 | OpenCode    | fails (error diagnostic)                                                                                                                                                                                                                                                                                            | nothing | nothing | `unsupported`                               |
 

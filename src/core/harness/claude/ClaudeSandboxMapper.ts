@@ -6,7 +6,8 @@ import { partialSandboxCapabilities } from "../shared/SandboxCapabilities";
 
 export class ClaudeSandboxMapper implements ISandboxMapper {
   readonly capabilities = partialSandboxCapabilities(
-    "phase-0-results-2026-11-03-macos"
+    "phase-0-results-2026-11-03-macos",
+    [">=2.1.317"]
   );
 
   async prepare(

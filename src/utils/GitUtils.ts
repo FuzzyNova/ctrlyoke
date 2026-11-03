@@ -1903,6 +1903,36 @@ export async function gitCommonDir(dir: string): Promise<string | null> {
   }
 }
 
+/**
+ * Every Git administrative directory a commit from `dir` writes to: the shared
+ * common directory (objects, refs) and, in a linked worktree, that worktree's
+ * own directory under `<common>/worktrees/<name>` (index, HEAD). They are the
+ * same path in a plain checkout. Returns an empty list outside a repository.
+ *
+ * Codex's `workspace-write` sandbox protects a checkout's Git directory even
+ * inside a writable root, and a linked worktree's pointer file names the inner
+ * directory as the protected one, so both must be granted as roots themselves
+ * (verified against Codex 0.166.0: the common directory alone is not enough).
+ */
+export async function gitWritableAdminDirs(dir: string): Promise<string[]> {
+  const [common, own] = await Promise.all([
+    gitCommonDir(dir),
+    absoluteGitDir(dir),
+  ]);
+  const resolved: string[] = [];
+  for (const candidate of [common, own]) {
+    if (!candidate) continue;
+    let real = candidate;
+    try {
+      real = path.normalize(await fs.realpath(candidate));
+    } catch {
+      // Keep the path Git reported.
+    }
+    if (!resolved.includes(real)) resolved.push(real);
+  }
+  return resolved;
+}
+
 /** Where a directory's repository lives, as answered by `git rev-parse`. */
 export interface GitLocationLookup {
   repoToplevel(dir: string): Promise<string | null>;

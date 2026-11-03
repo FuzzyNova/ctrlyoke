@@ -1,5 +1,8 @@
 import * as assert from "assert";
+import { execFileSync } from "child_process";
+import * as fsSync from "fs";
 import * as fs from "fs/promises";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
@@ -282,6 +285,80 @@ suite("CodexCliProvider", () => {
       CODEX_SANDBOX_MODES.WORKSPACE_WRITE
     );
     assert.ok(resolveCodexContainment(configs.denied as any, false).diagnostic);
+  });
+
+  test("grants Git's admin directories as roots under workspace-write, in a plain checkout and a linked worktree", async () => {
+    const root = makeTempDir("codex-git-roots-");
+    try {
+      const git = (cwd: string, ...args: string[]) =>
+        execFileSync(
+          "git",
+          ["-c", "user.email=t@example.com", "-c", "user.name=t", ...args],
+          { cwd, stdio: "ignore" }
+        );
+      const plain = path.join(root, "plain");
+      const linked = path.join(root, "linked");
+      fsSync.mkdirSync(plain);
+      git(plain, "init", "--quiet");
+      git(plain, "commit", "--quiet", "--allow-empty", "-m", "init");
+      git(plain, "worktree", "add", "--quiet", linked, "-b", "linked-branch");
+      const plainGit = fsSync.realpathSync(path.join(plain, ".git"));
+      const linkedGit = path.join(plainGit, "worktrees", "linked");
+
+      const provider = new CodexCliProvider();
+      const addDirs = async (
+        workspaceRoot: string,
+        resolvedProperties: Record<string, unknown>
+      ) => {
+        const args = await provider.buildCliArgs(
+          {} as any,
+          false,
+          "/ext",
+          workspaceRoot,
+          undefined,
+          { promptIndex: 0, allPrompts: [], resolvedProperties } as any,
+          [],
+          []
+        );
+        return args.flatMap((arg, index) =>
+          arg === "--add-dir" ? [args[index + 1]] : []
+        );
+      };
+      const allowAll = {
+        toolPermissions: {
+          mode: PERMISSION_MODES.ALLOW_ALL,
+          allowedTools: [],
+          deniedTools: [],
+        },
+      };
+
+      // Plain checkout: the common dir is the only admin directory.
+      assert.deepStrictEqual(await addDirs(plain, allowAll), [plainGit]);
+      // Linked worktree: Codex protects the worktree's own gitdir even inside
+      // the added common dir, so it must be a root in its own right.
+      assert.deepStrictEqual(
+        (await addDirs(linked, allowAll)).sort(),
+        [plainGit, fsSync.realpathSync(linkedGit)].sort()
+      );
+      // Read-only containment grants no extra roots, and neither does a
+      // sandbox that is off.
+      assert.deepStrictEqual(
+        await addDirs(linked, { ...allowAll, sandbox: false }),
+        []
+      );
+      assert.deepStrictEqual(
+        await addDirs(linked, {
+          toolPermissions: {
+            mode: PERMISSION_MODES.CUSTOM,
+            allowedTools: [],
+            deniedTools: ["write"],
+          },
+        }),
+        []
+      );
+    } finally {
+      removeTempDir(root);
+    }
   });
 
   test("probes Codex rollout files by session ID only", async () => {

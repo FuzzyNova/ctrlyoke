@@ -2,7 +2,8 @@ import type { SandboxCapabilityDescriptor } from "./interfaces/ISandboxMapper";
 import { SANDBOX_CAVEAT_CODE } from "../../../types/CompatibilityTypes";
 
 export function partialSandboxCapabilities(
-  reference: string
+  reference: string,
+  verifiedVersions: readonly string[] = []
 ): SandboxCapabilityDescriptor {
   return {
     terminal: {
@@ -13,7 +14,7 @@ export function partialSandboxCapabilities(
         kind: "manual",
         reference: `dev/backlog/HARNESS_SANDBOX_PLAN.md#${reference}`,
         basis: "cli-version",
-        verifiedVersions: [],
+        verifiedVersions: [...verifiedVersions],
       },
     },
   };

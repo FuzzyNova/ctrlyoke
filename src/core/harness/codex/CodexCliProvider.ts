@@ -20,7 +20,7 @@ import {
   resolveCodexContainment,
 } from "./CodexToolPermissionMapper";
 import { CodexSandboxMapper } from "./CodexSandboxMapper";
-import { gitCommonDir } from "../../../utils/GitUtils";
+import { gitWritableAdminDirs } from "../../../utils/GitUtils";
 import { CODEX_SANDBOX_MODES } from "../../../types/DashboardConstants";
 import { foldMcpToolDenialsIntoServers } from "../../../types/ToolPermissionUtils";
 import { CodexLogParser } from "./CodexLogParser";
@@ -510,14 +510,14 @@ export class CodexCliProvider implements ICliProvider {
                 : resolvedDir !== resolvedWorkspaceRoot;
             });
       if (resolvedSandboxMode === CODEX_SANDBOX_MODES.WORKSPACE_WRITE) {
-        const commonDir = await gitCommonDir(workspaceRoot);
-        if (
-          commonDir &&
-          !workspaceDirs.some(
-            (dir) => path.resolve(dir) === path.resolve(commonDir)
-          )
-        ) {
-          workspaceDirs.push(commonDir);
+        for (const adminDir of await gitWritableAdminDirs(workspaceRoot)) {
+          if (
+            !workspaceDirs.some(
+              (dir) => path.resolve(dir) === path.resolve(adminDir)
+            )
+          ) {
+            workspaceDirs.push(adminDir);
+          }
         }
       }
       workspaceDirs.forEach((dir) => {

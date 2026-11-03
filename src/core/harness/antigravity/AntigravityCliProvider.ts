@@ -76,7 +76,6 @@ import {
   parseAntigravityUserPermissionRules,
   type AntigravityUserPermissionRules,
 } from "./AntigravityToolPermissionMapper";
-import { AntigravitySandboxMapper } from "./AntigravitySandboxMapper";
 import { AntigravityLogParser } from "./AntigravityLogParser";
 import { AntigravityStatuslineSidecar } from "./AntigravityStatuslineSidecar";
 import { AntigravityStreamJsonUsageAccumulator } from "./AntigravityStreamJsonUsage";
@@ -188,11 +187,9 @@ export class AntigravityCliProvider implements ICliProvider {
     new AntigravityNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new AntigravityToolPermissionMapper();
-  readonly sandboxMapper = new AntigravitySandboxMapper();
   get capabilities(): HarnessCapabilityFacts {
     return {
       permissions: this.toolPermissionMapper.capabilities,
-      sandbox: this.sandboxMapper.capabilities,
       hooks: AntigravityNotificationMonitor.CAPABILITIES,
       mcp: {
         perServerToolFiltering: ANTIGRAVITY_MCP_FILTERING_CAPABILITY,

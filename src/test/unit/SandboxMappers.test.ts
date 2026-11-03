@@ -1,8 +1,6 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { AntigravitySandboxMapper } from "../../core/harness/antigravity/AntigravitySandboxMapper";
 import { ClaudeSandboxMapper } from "../../core/harness/claude/ClaudeSandboxMapper";
-import { CopilotSandboxMapper } from "../../core/harness/copilot/CopilotSandboxMapper";
 
 const context = {
   toolPermissions: null,
@@ -23,24 +21,5 @@ suite("sandbox mappers", () => {
         filesystem: { allowWrite: context.writableRoots },
       },
     });
-  });
-
-  test("Copilot and Antigravity emit the native sandbox flag only when requested", async () => {
-    for (const mapper of [
-      new CopilotSandboxMapper(),
-      new AntigravitySandboxMapper(),
-    ]) {
-      assert.deepStrictEqual((await mapper.prepare(true, context)).cliArgs, [
-        "--sandbox",
-      ]);
-      assert.deepStrictEqual(
-        (await mapper.prepare(false, context)).cliArgs,
-        []
-      );
-      assert.deepStrictEqual(
-        (await mapper.prepare(undefined, context)).cliArgs,
-        []
-      );
-    }
   });
 });
