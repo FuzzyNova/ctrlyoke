@@ -876,7 +876,7 @@
     "prettier": "^3.6.2",
     "sass": "^1.97.2",
     "svg2ttf": "^6.1.0",
-    "svgicons2svgfont": "^15.0.1",
+    "svgicons2svgfont": "^16.0.0",
     "tailwindcss": "^4.3.3",
     "ttf2woff": "^3.0.0",
     "typescript": "^6.0.3",
