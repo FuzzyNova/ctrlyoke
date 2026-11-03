@@ -243,7 +243,7 @@
         },
         "worktree": {
           "$ref": "workflow.json#/$defs/worktreeConfig",
-          "description": "Default worktree behavior for workflows that omit a root worktree value. Uses the same false, shorthand, and object forms as workflow worktree; an inherited value degrades to ordinary execution when the workspace is not eligible.",
+          "description": "Default worktree behavior for workflows that omit a root worktree value. Uses the same false, shorthand, and object forms as workflow worktree; an inherited value degrades to ordinary execution when the workspace is not eligible. A workspace-scope value with a `setup` command takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies. A value without `setup`, or one whose `setup` matches your user value's, applies without asking.",
           "default": false
         }
       }

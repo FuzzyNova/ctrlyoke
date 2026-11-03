@@ -180,6 +180,77 @@ suite("WorkspaceSensitiveSettings", () => {
     });
   });
 
+  suite("defaults.worktree", () => {
+    const worktreeRequests = (workspace: unknown, user: unknown = undefined) =>
+      collectWorkspaceSensitiveSettingRequests(
+        settings({ defaults: { worktree: workspace } }),
+        user === undefined ? {} : settings({ defaults: { worktree: user } })
+      );
+
+    test("requests a worktree default that names a setup command", () => {
+      const requests = worktreeRequests({
+        mode: "managed",
+        setup: "node evil.js",
+      });
+      assert.deepStrictEqual(
+        requests.map((request) => request.settingPath),
+        [SETTING_PATHS.DEFAULTS_WORKTREE]
+      );
+      assert.strictEqual(
+        requests[0]!.summary,
+        `${SETTING_PATHS.DEFAULTS_WORKTREE}: setup command node evil.js`
+      );
+      assert.strictEqual(
+        worktreeRequests({ mode: "named", branch: "x", setup: "./s.sh" })
+          .length,
+        1
+      );
+    });
+
+    test("needs no approval for a worktree default without a setup command", () => {
+      for (const value of [
+        true,
+        false,
+        "feature/x",
+        { mode: "managed", merge: true },
+        { mode: "managed", setup: "  " },
+      ]) {
+        assert.deepStrictEqual(worktreeRequests(value), [], String(value));
+      }
+    });
+
+    test("needs no approval when the user's value runs the same setup", () => {
+      assert.strictEqual(
+        worktreeRequests(
+          { mode: "managed", keep: true, setup: "npm ci" },
+          { mode: "managed", setup: "npm ci" }
+        ).length,
+        0
+      );
+      assert.strictEqual(
+        worktreeRequests(
+          { mode: "managed", setup: "npm ci && evil" },
+          { mode: "managed", setup: "npm ci" }
+        ).length,
+        1
+      );
+    });
+
+    test("withholds an unapproved setup so the user value applies", () => {
+      const result = removeUntrustedWorkspaceSensitiveSettings(
+        settings({
+          defaults: {
+            agent: "reviewer",
+            worktree: { mode: "managed", setup: "node evil.js" },
+          },
+        }),
+        {},
+        () => false
+      );
+      assert.deepStrictEqual(result.defaults, { agent: "reviewer" });
+    });
+  });
+
   suite("defaults.toolPermissions", () => {
     const toolPermissionRequests = (
       workspace: unknown,

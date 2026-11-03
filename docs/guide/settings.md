@@ -72,6 +72,9 @@ after you approve them:
 - `defaults.hooks`
 - `defaults.mcpServers` entries that start a local command
 - `defaults.endCondition` and `defaults.preCondition`
+- `defaults.toolPermissions`, when it grants more than your user setting; a value that only
+  narrows your permissions applies without asking
+- `defaults.worktree`, when it names a `setup` command different from your user setting's
 
 The first time ctrlyoke finds one, it asks which values to trust. Unchecked values stay blocked,
 and your own user setting applies instead. Approval is recorded per workspace and per value, so a

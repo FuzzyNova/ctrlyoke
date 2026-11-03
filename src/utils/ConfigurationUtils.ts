@@ -144,7 +144,7 @@ export const CONFIG_KEYS = {
   DEFAULTS_PRIOR_CONTEXT: "defaults.priorContext",
   DEFAULTS_END_CONDITION: "defaults.endCondition",
   DEFAULTS_PRE_CONDITION: "defaults.preCondition",
-  DEFAULTS_WORKTREE: "defaults.worktree",
+  DEFAULTS_WORKTREE: SETTING_PATHS.DEFAULTS_WORKTREE,
   WORKTREES_ROOT: "worktrees.root",
   COORDINATION_READ_NOTES_PAGE_SIZE: "coordination.readNotesPageSize",
   COORDINATION_MAX_NOTE_LENGTH: "coordination.maxNoteLength",

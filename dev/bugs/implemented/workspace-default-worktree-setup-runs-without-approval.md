@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-01 by bug-hunt final step (claude-cli)
 - **Area:** `src/config/WorkspaceSensitiveSettings.ts`, `src/core/orchestration/WorktreeManager.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

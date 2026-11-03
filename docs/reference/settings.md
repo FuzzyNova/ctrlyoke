@@ -38,6 +38,8 @@ Some settings choose a program for ctrlyoke to run:
   broader mode, an allowed tool your custom list lacks, a denied tool removed,
   or `none`/`null` while yours is a managed mode. A value that only narrows
   your permissions applies without asking.
+- `defaults.worktree`, when it names a `setup` command different from your
+  user value's. A value without `setup` applies without asking.
 - servers in the workspace MCP registry that launch a command
 
 A repository can commit any of these in its `.ctrlyoke/settings.json`. So a
@@ -435,7 +437,7 @@ Fields:
 - **Default:** `false`
 - **Workflow field:** [`worktree`](/reference/workflow-schema#workflow-file-worktree) — a workflow or step value overrides this default
 
-Default worktree behavior for workflows that omit a root worktree value. Uses the same false, shorthand, and object forms as workflow worktree; an inherited value degrades to ordinary execution when the workspace is not eligible.
+Default worktree behavior for workflows that omit a root worktree value. Uses the same false, shorthand, and object forms as workflow worktree; an inherited value degrades to ordinary execution when the workspace is not eligible. A workspace-scope value with a `setup` command takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies. A value without `setup`, or one whose `setup` matches your user value's, applies without asking.
 
 Accepted forms:
 

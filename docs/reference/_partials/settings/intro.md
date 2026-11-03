@@ -29,6 +29,8 @@ Some settings choose a program for ctrlyoke to run:
   broader mode, an allowed tool your custom list lacks, a denied tool removed,
   or `none`/`null` while yours is a managed mode. A value that only narrows
   your permissions applies without asking.
+- `defaults.worktree`, when it names a `setup` command different from your
+  user value's. A value without `setup` applies without asking.
 - servers in the workspace MCP registry that launch a command
 
 A repository can commit any of these in its `.ctrlyoke/settings.json`. So a

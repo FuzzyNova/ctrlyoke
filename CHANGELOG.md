@@ -44,6 +44,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.ctrlyoke/logs/` as a `[Toast]` line. Command errors that have no buttons,
   such as "No file selected", now follow your `notifications.toastLevel`
   setting like ctrlyoke's other messages.
+- A workspace `.ctrlyoke/settings.json` whose `defaults.worktree` names a
+  `setup` command now needs your approval before that value applies, like
+  other workspace settings that run programs. Until you approve it, workflows
+  that omit `worktree` use your user value. A value without `setup` still
+  applies without asking.
 - Continuing a view-only imported run now reports why it cannot continue.
 - Run exports now collapse streaming text deltas into sealed attempt output by
   default; `ctrlyoke export --with-stream-deltas` keeps every chunk for replay.

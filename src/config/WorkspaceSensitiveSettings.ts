@@ -136,6 +136,39 @@ function isStdioMcpServer(value: unknown): boolean {
   return isPlainObject(value) && isNonEmptyString(value.command);
 }
 
+/** The setup command of a worktree object value, if it names one. */
+function worktreeSetupCommand(value: unknown): string | undefined {
+  return isPlainObject(value) && isNonEmptyString(value.setup)
+    ? (value.setup as string)
+    : undefined;
+}
+
+/**
+ * Only the setup command can launch anything. `true`, a branch shorthand, or
+ * an object without `setup` apply without approval.
+ */
+function hasWorktreeSetupCommand(value: unknown): boolean {
+  return worktreeSetupCommand(value) !== undefined;
+}
+
+/**
+ * The user's own value already runs the same setup command, so the workspace
+ * changing only mode, branch, base, merge or keep asks nothing new.
+ */
+function worktreeSetupCoveredByUser(
+  workspaceValue: unknown,
+  userValue: unknown
+): boolean {
+  return (
+    worktreeSetupCommand(workspaceValue) === worktreeSetupCommand(userValue)
+  );
+}
+
+/** Lead with the command; the generic sorted JSON can truncate it away. */
+function summarizeWorktreeSetup(value: unknown): string {
+  return summarizeValue(`setup command ${worktreeSetupCommand(value) ?? ""}`);
+}
+
 /**
  * Workspace settings that can make ctrlyoke launch a program. Each one is
  * honored from `.ctrlyoke/settings.json` only after the user approves that
@@ -145,7 +178,9 @@ function isStdioMcpServer(value: unknown): boolean {
  * - hook commands and stdio MCP server commands attached to every step;
  * - default end/pre-conditions, which are scripts run on every step;
  * - default tool permissions wider than the user's, which let every step's
- *   harness run programs without asking.
+ *   harness run programs without asking;
+ * - a default worktree with a setup command, which runs whenever a workflow
+ *   that omits `worktree` creates its worktree.
  */
 const SENSITIVE_WORKSPACE_SETTINGS: readonly SensitiveSettingDescriptor[] = [
   {
@@ -185,6 +220,13 @@ const SENSITIVE_WORKSPACE_SETTINGS: readonly SensitiveSettingDescriptor[] = [
     isSensitive: (value) => value !== undefined,
     isCoveredByUser: toolPermissionsCoveredByUser,
     summarize: summarizeToolPermissions,
+  },
+  {
+    path: SETTING_PATHS.DEFAULTS_WORKTREE,
+    shape: SENSITIVE_SETTING_SHAPES.VALUE,
+    isSensitive: hasWorktreeSetupCommand,
+    isCoveredByUser: worktreeSetupCoveredByUser,
+    summarize: summarizeWorktreeSetup,
   },
 ];
 
