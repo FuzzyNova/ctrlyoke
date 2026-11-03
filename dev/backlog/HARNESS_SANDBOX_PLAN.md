@@ -380,13 +380,13 @@ For each harness declared other than `unsupported`, `src/test/harness/` checks f
 
 The network checks are per harness, matching the documented policy.
 
-`src/test/harness/sandbox.harness.test.ts` now covers every declared sandbox
-implementation with sibling-temp-dir write checks, plus `global_status` and a
-completion hook under containment. Codex also has a closed-network check and a
+`src/test/harness/sandbox.harness.test.ts` covers Codex and Claude (the two
+declared implementations) with a non-temp outside-path write check, `global_status`
+and a completion hook under containment. Codex also has a closed-network check and a
 `dangerouslyAllowAll` case that checks the generated launch arguments and the
-outside-write behavior. These tests are written but have not been run against
-live harnesses; the user must run `npm run test:harness` (which may take 30+
-minutes and incur model costs).
+outside-write behavior. Qwen, OpenCode, Copilot and Antigravity get a launch-failure
+check for an explicit `true`. The file runs against live harnesses as part of
+`npm run test:harness`.
 
 ## Phase 5: UI, docs, changelog — **Done**
 

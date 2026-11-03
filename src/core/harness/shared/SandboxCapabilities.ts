@@ -1,5 +1,20 @@
 import type { SandboxCapabilityDescriptor } from "./interfaces/ISandboxMapper";
 import { SANDBOX_CAVEAT_CODE } from "../../../types/CompatibilityTypes";
+import {
+  EFFECTIVE_SANDBOX_KINDS,
+  type EffectiveSandboxKind,
+} from "../../../types/DashboardConstants";
+
+/** What a step's `sandbox` request means before harness detail: on, off or the harness's own behavior. */
+export function effectiveSandboxKind(
+  request: boolean | undefined
+): EffectiveSandboxKind {
+  return request === true
+    ? EFFECTIVE_SANDBOX_KINDS.ON
+    : request === false
+      ? EFFECTIVE_SANDBOX_KINDS.OFF
+      : EFFECTIVE_SANDBOX_KINDS.HARNESS;
+}
 
 export function partialSandboxCapabilities(
   reference: string,

@@ -2,7 +2,10 @@ import type {
   ISandboxMapper,
   SandboxApplication,
 } from "../shared/interfaces/ISandboxMapper";
-import { partialSandboxCapabilities } from "../shared/SandboxCapabilities";
+import {
+  effectiveSandboxKind,
+  partialSandboxCapabilities,
+} from "../shared/SandboxCapabilities";
 
 export class ClaudeSandboxMapper implements ISandboxMapper {
   readonly capabilities = partialSandboxCapabilities(
@@ -30,7 +33,7 @@ export class ClaudeSandboxMapper implements ISandboxMapper {
           : undefined,
       diagnostics: [],
       effective: {
-        kind: request === true ? "on" : request === false ? "off" : "harness",
+        kind: effectiveSandboxKind(request),
       },
     };
   }

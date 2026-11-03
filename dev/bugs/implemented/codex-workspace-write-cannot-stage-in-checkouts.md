@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-03 by Phase 0 Codex sandbox probe
 - **Area:** `src/core/harness/codex/CodexCliProvider.ts`
-- **Severity:** medium
+- **Resolution:** fixed in d12dd032d (1a2e3edcd granted the common dir, which fixed only plain checkouts)
 
 ## Symptom
 

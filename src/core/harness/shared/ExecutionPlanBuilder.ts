@@ -34,10 +34,13 @@ import {
 import type { CliExecutionSession } from "./CliExecutionSession";
 import type { CliProviderWorkflowContext } from "./CliProviderUtils";
 import { CliProviderUtils } from "./CliProviderUtils";
-import { EFFECTIVE_SANDBOX_KINDS } from "../../../types/DashboardConstants";
-import { COMPATIBILITY_DIAGNOSTIC_SEVERITIES } from "../../../types/DashboardConstants";
+import {
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  type CodexSandboxMode,
+} from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
-import type { CodexSandboxMode } from "../../../types/DashboardConstants";
+import { effectiveSandboxKind } from "./SandboxCapabilities";
+import type { EffectiveSandbox } from "./interfaces/ISandboxMapper";
 import { projectStateRoot } from "../../../utils/ProjectStatePaths";
 import { runArtifactStem } from "../../../utils/WorkflowPaths";
 import {
@@ -74,7 +77,7 @@ export interface ExecutionPlan {
   readonly mcpApplication: CliProviderPreparation;
   readonly effectiveToolPermissions:
     ResolvedProperties["toolPermissions"] | undefined;
-  readonly effectiveSandbox?: import("./interfaces/ISandboxMapper").EffectiveSandbox;
+  readonly effectiveSandbox?: EffectiveSandbox;
   readonly diagnostics: CliProviderPreparation["diagnostics"];
   readonly tempFilePaths: string[];
   /** Hook environment files stay available for the lifetime of their hook config. */
@@ -190,10 +193,8 @@ export class ExecutionPlanBuilder {
       Log.info(
         `[Sandbox] ${sandboxApplication.effective.kind}${sandboxApplication.effective.detail ? `: ${sandboxApplication.effective.detail}` : ""}`
       );
-    } else if (sandboxRequest !== true) {
-      Log.info(
-        `[Sandbox] ${sandboxRequest === false ? EFFECTIVE_SANDBOX_KINDS.OFF : EFFECTIVE_SANDBOX_KINDS.HARNESS}`
-      );
+    } else {
+      Log.info(`[Sandbox] ${effectiveSandboxKind(sandboxRequest)}`);
     }
     if (
       session.imageFileRefs.length > 0 &&
@@ -412,10 +413,7 @@ export class ExecutionPlanBuilder {
       mcpApplication: providerPreparation,
       effectiveToolPermissions,
       effectiveSandbox: sandboxApplication?.effective ?? {
-        kind:
-          sandboxRequest === false
-            ? EFFECTIVE_SANDBOX_KINDS.OFF
-            : EFFECTIVE_SANDBOX_KINDS.HARNESS,
+        kind: effectiveSandboxKind(sandboxRequest),
       },
       diagnostics: [
         ...providerPreparation.diagnostics,

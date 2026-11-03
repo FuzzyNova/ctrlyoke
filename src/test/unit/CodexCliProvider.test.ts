@@ -285,6 +285,21 @@ suite("CodexCliProvider", () => {
       CODEX_SANDBOX_MODES.WORKSPACE_WRITE
     );
     assert.ok(resolveCodexContainment(configs.denied as any, false).diagnostic);
+    // A `read-only` codexSandboxMode setting applies under `sandbox: true` for
+    // every permission mode, not only `custom` and `none`.
+    for (const mode of ["allowAll", "dangerous", "custom", "none"] as const) {
+      const strict = resolveCodexContainment(
+        configs[mode] as any,
+        true,
+        CODEX_SANDBOX_MODES.READ_ONLY
+      );
+      assert.strictEqual(
+        strict.sandboxMode,
+        CODEX_SANDBOX_MODES.READ_ONLY,
+        `true:${mode}:read-only`
+      );
+      assert.strictEqual(strict.bypass, false, `true:${mode}:read-only`);
+    }
   });
 
   test("grants Git's admin directories as roots under workspace-write, in a plain checkout and a linked worktree", async () => {

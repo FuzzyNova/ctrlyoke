@@ -21,7 +21,10 @@ import {
 } from "./CodexToolPermissionMapper";
 import { CodexSandboxMapper } from "./CodexSandboxMapper";
 import { gitWritableAdminDirs } from "../../../utils/GitUtils";
-import { CODEX_SANDBOX_MODES } from "../../../types/DashboardConstants";
+import {
+  CODEX_SANDBOX_MODES,
+  type CodexSandboxMode,
+} from "../../../types/DashboardConstants";
 import { foldMcpToolDenialsIntoServers } from "../../../types/ToolPermissionUtils";
 import { CodexLogParser } from "./CodexLogParser";
 import {
@@ -491,7 +494,7 @@ export class CodexCliProvider implements ICliProvider {
       const resolvedSandboxMode = resolveCodexContainment(
         permissions ?? null,
         sandboxRequest,
-        ConfigurationUtils.getCodexSandboxMode() as import("../../../types/DashboardConstants").CodexSandboxMode
+        ConfigurationUtils.getCodexSandboxMode() as CodexSandboxMode
       ).sandboxMode;
       const workspaceDirs =
         resolvedSandboxMode === CODEX_SANDBOX_MODES.READ_ONLY

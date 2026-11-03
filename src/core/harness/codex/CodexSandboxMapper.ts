@@ -5,6 +5,7 @@ import type {
 import { CODEX_SANDBOX_MODES } from "../../../types/DashboardConstants";
 import type { SandboxCapabilityDescriptor } from "../shared/interfaces/ISandboxMapper";
 import { resolveCodexContainment } from "./CodexToolPermissionMapper";
+import { effectiveSandboxKind } from "../shared/SandboxCapabilities";
 
 const CODEX_SANDBOX_VERIFICATION = {
   kind: "manual",
@@ -41,7 +42,7 @@ export class CodexSandboxMapper implements ISandboxMapper {
           : ["-s", result.sandboxMode],
       diagnostics: result.diagnostic ? [result.diagnostic] : [],
       effective: {
-        kind: request === true ? "on" : request === false ? "off" : "harness",
+        kind: effectiveSandboxKind(request),
         detail: result.sandboxMode
           ? `Codex ${result.sandboxMode}, network off`
           : undefined,

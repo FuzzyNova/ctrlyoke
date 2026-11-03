@@ -21,6 +21,7 @@ import {
   CAPABILITY_MECHANISMS,
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  EFFECTIVE_SANDBOX_KINDS,
   EXECUTION_MODES,
   HEADLESS_PROMPT_DELIVERIES,
   WORKTREE_MODES,
@@ -685,7 +686,9 @@ export class ExecutionPreviewService {
       prompt: promptPlan.promptPreview,
       command,
       permissionApplication,
-      sandbox: executionPlan.effectiveSandbox ?? { kind: "harness" },
+      sandbox: executionPlan.effectiveSandbox ?? {
+        kind: EFFECTIVE_SANDBOX_KINDS.HARNESS,
+      },
       mcpApplication,
       workspaceMutations,
       variables: variablesPreview,

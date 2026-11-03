@@ -36,7 +36,8 @@ export interface CodexContainmentResolution {
 export function resolveCodexContainment(
   config: ToolPermissionConfig | null,
   sandbox: boolean | undefined,
-  codexSandboxMode: CodexSandboxMode = CODEX_SANDBOX_MODES.WORKSPACE_WRITE
+  /** Undefined keeps inherit's legacy "no sandbox setting" fallback; containment treats it as workspace-write. */
+  codexSandboxMode?: CodexSandboxMode
 ): CodexContainmentResolution {
   const mode = config?.mode ?? PERMISSION_MODES.NONE;
   const deniedWrite =
@@ -52,20 +53,18 @@ export function resolveCodexContainment(
     else if (deniedWrite) sandboxMode = CODEX_SANDBOX_MODES.READ_ONLY;
     else if (mode === PERMISSION_MODES.CUSTOM) sandboxMode = codexSandboxMode;
   } else if (sandbox) {
-    if (
-      mode === PERMISSION_MODES.ALLOW_ALL ||
-      mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL
-    )
-      sandboxMode = CODEX_SANDBOX_MODES.WORKSPACE_WRITE;
-    else if (deniedWrite) sandboxMode = CODEX_SANDBOX_MODES.READ_ONLY;
-    else
-      sandboxMode = isRankNoWiderThan(
+    // Contained: codexSandboxMode sets how strict, clamped to workspace-write.
+    if (deniedWrite) sandboxMode = CODEX_SANDBOX_MODES.READ_ONLY;
+    else if (
+      codexSandboxMode !== undefined &&
+      isRankNoWiderThan(
         CODEX_SANDBOX_MODE_ORDER,
         codexSandboxMode,
         CODEX_SANDBOX_MODES.WORKSPACE_WRITE
       )
-        ? codexSandboxMode
-        : CODEX_SANDBOX_MODES.WORKSPACE_WRITE;
+    )
+      sandboxMode = codexSandboxMode;
+    else sandboxMode = CODEX_SANDBOX_MODES.WORKSPACE_WRITE;
   } else {
     if (mode === PERMISSION_MODES.ALLOW_ALL)
       sandboxMode = CODEX_SANDBOX_MODES.DANGER_FULL_ACCESS;
