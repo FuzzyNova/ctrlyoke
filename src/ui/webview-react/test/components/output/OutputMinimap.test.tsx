@@ -263,14 +263,16 @@ describe("OutputMinimap diff bars", () => {
 
       const bars = document.querySelectorAll("[data-minimap-diff-bar]");
       expect(bars).toHaveLength(5);
-      expect(bars[0]).toHaveStyle({
-        top: "2px",
-        background: "var(--cy-minimap-diff-added)",
-      });
-      expect(bars[4]).toHaveStyle({
-        top: "6px",
-        background: "var(--cy-minimap-diff-added)",
-      });
+      // The background is asserted on the inline style: jsdom computes an
+      // undefined custom property to the initial value, as browsers do.
+      expect(bars[0]).toHaveStyle({ top: "2px" });
+      expect((bars[0] as HTMLElement).style.background).toBe(
+        "var(--cy-minimap-diff-added)"
+      );
+      expect(bars[4]).toHaveStyle({ top: "6px" });
+      expect((bars[4] as HTMLElement).style.background).toBe(
+        "var(--cy-minimap-diff-added)"
+      );
     } finally {
       clientHeight.mockRestore();
     }
@@ -307,9 +309,9 @@ describe("OutputMinimap diff bars", () => {
 
       const soloBar = document.querySelector("[data-minimap-diff-bar]");
       expect(soloBar).not.toBeNull();
-      expect(soloBar).toHaveStyle({
-        background: "var(--cy-minimap-diff-removed)",
-      });
+      expect((soloBar as HTMLElement).style.background).toBe(
+        "var(--cy-minimap-diff-removed)"
+      );
       unmount();
 
       // A single split-view paired delete+insert run is genuinely mixed and
