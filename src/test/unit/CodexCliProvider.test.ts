@@ -5,6 +5,16 @@ import * as path from "path";
 import { suite, test } from "mocha";
 import { parse } from "smol-toml";
 import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
+import {
+  CodexToolPermissionMapper,
+  resolveCodexContainment,
+} from "../../core/harness/codex/CodexToolPermissionMapper";
+import { CodexSandboxMapper } from "../../core/harness/codex/CodexSandboxMapper";
+import {
+  CODEX_SANDBOX_MODES,
+  PERMISSION_MODES,
+} from "../../types/DashboardConstants";
+import type { ToolPermissionConfig } from "../../core/harness/shared/interfaces/IToolPermissionMapper";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -23,6 +33,257 @@ function makeWorkflowContext(resumeSession?: boolean): {
 // ============================================================================
 
 suite("CodexCliProvider", () => {
+  test("snapshots current permission args and add-dir behavior before sandbox changes", async () => {
+    const mapper = new CodexToolPermissionMapper();
+    const cases = [
+      [
+        "none",
+        { mode: PERMISSION_MODES.NONE, allowedTools: [], deniedTools: [] },
+      ],
+      [
+        "custom",
+        { mode: PERMISSION_MODES.CUSTOM, allowedTools: [], deniedTools: [] },
+      ],
+      [
+        "custom denied write",
+        {
+          mode: PERMISSION_MODES.CUSTOM,
+          allowedTools: [],
+          deniedTools: ["write"],
+        },
+      ],
+      [
+        "allowAll",
+        { mode: PERMISSION_MODES.ALLOW_ALL, allowedTools: [], deniedTools: [] },
+      ],
+      [
+        "dangerouslyAllowAll",
+        {
+          mode: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
+          allowedTools: [],
+          deniedTools: [],
+        },
+      ],
+    ] as const satisfies readonly (readonly [string, ToolPermissionConfig])[];
+    const snapshots: Record<
+      string,
+      { interactive: string[]; headless: string[] }
+    > = {};
+    for (const [name, config] of cases) {
+      const args = (isInteractive: boolean) =>
+        mapper.buildCodexSpecificArgs(
+          config,
+          "workspace-write",
+          "on-request",
+          isInteractive,
+          "0.166.0"
+        );
+      snapshots[name] = { interactive: args(true), headless: args(false) };
+    }
+    assert.deepStrictEqual(snapshots, {
+      none: { interactive: [], headless: [] },
+      custom: {
+        interactive: ["-s", "workspace-write", "-a", "on-request"],
+        headless: ["-s", "workspace-write"],
+      },
+      "custom denied write": {
+        interactive: ["--sandbox", "read-only"],
+        headless: ["--sandbox", "read-only"],
+      },
+      allowAll: {
+        interactive: [
+          "--sandbox",
+          "workspace-write",
+          "--ask-for-approval",
+          "on-request",
+        ],
+        headless: ["--sandbox", "workspace-write"],
+      },
+      dangerouslyAllowAll: {
+        interactive: ["--dangerously-bypass-approvals-and-sandbox"],
+        headless: ["--dangerously-bypass-approvals-and-sandbox"],
+      },
+    });
+
+    const provider = new CodexCliProvider();
+    const roots = [path.resolve("workspace/extra"), path.resolve("approved")];
+    const addDirs = async (
+      toolPermissions: unknown,
+      isInteractive: boolean
+    ) => {
+      const args = await provider.buildCliArgs(
+        {} as any,
+        isInteractive,
+        "/ext",
+        path.resolve("workspace"),
+        undefined,
+        {
+          promptIndex: 0,
+          allPrompts: [],
+          resolvedProperties: { toolPermissions },
+        } as any,
+        roots,
+        []
+      );
+      return args.flatMap((arg, index) =>
+        arg === "--add-dir" ? [args[index + 1]] : []
+      );
+    };
+    for (const [, config] of cases) {
+      const expectedRoots =
+        config.mode === PERMISSION_MODES.CUSTOM &&
+        (config.deniedTools as readonly string[]).includes("write")
+          ? []
+          : roots;
+      assert.deepStrictEqual(await addDirs(config, true), expectedRoots);
+      assert.deepStrictEqual(await addDirs(config, false), expectedRoots);
+    }
+    assert.deepStrictEqual(await addDirs(null, true), roots);
+    assert.deepStrictEqual(await addDirs(null, false), roots);
+  });
+
+  test("resolves each Codex containment table row for interactive and headless launches", async () => {
+    const mapper = new CodexToolPermissionMapper();
+    const sandboxMapper = new CodexSandboxMapper();
+    const configs = {
+      none: null,
+      custom: {
+        mode: PERMISSION_MODES.CUSTOM,
+        allowedTools: [],
+        deniedTools: [],
+      },
+      denied: {
+        mode: PERMISSION_MODES.CUSTOM,
+        allowedTools: [],
+        deniedTools: ["write"],
+      },
+      allowAll: {
+        mode: PERMISSION_MODES.ALLOW_ALL,
+        allowedTools: [],
+        deniedTools: [],
+      },
+      dangerous: {
+        mode: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
+        allowedTools: [],
+        deniedTools: [],
+      },
+    } as const;
+    const rows: Array<
+      [boolean, keyof typeof configs, string | undefined, boolean]
+    > = [
+      [true, "allowAll", "workspace-write", false],
+      [true, "dangerous", "workspace-write", false],
+      [true, "custom", "workspace-write", false],
+      [true, "denied", "read-only", false],
+      [true, "none", "workspace-write", false],
+      [false, "allowAll", "danger-full-access", false],
+      [false, "dangerous", undefined, true],
+      [false, "custom", "danger-full-access", false],
+      [false, "denied", "read-only", false],
+      [false, "none", "danger-full-access", false],
+    ];
+    for (const [request, mode, expectedMode, bypass] of rows) {
+      const config = configs[mode] as any;
+      const resolved = resolveCodexContainment(
+        config,
+        request,
+        CODEX_SANDBOX_MODES.WORKSPACE_WRITE
+      );
+      assert.strictEqual(
+        resolved.sandboxMode,
+        expectedMode,
+        `${request}:${mode}`
+      );
+      assert.strictEqual(resolved.bypass, bypass, `${request}:${mode}`);
+      const sandboxResult = await sandboxMapper.prepare(request, {
+        toolPermissions: config,
+        isInteractive: true,
+        writableRoots: [],
+        codexSandboxMode: CODEX_SANDBOX_MODES.WORKSPACE_WRITE,
+      });
+      const sandboxArgs = sandboxResult.cliArgs;
+      const permissionArgs = config
+        ? mapper.buildCodexSpecificArgs(
+            config,
+            CODEX_SANDBOX_MODES.WORKSPACE_WRITE,
+            "on-request",
+            true,
+            "0.166.0",
+            request
+          )
+        : [];
+      assert.deepStrictEqual(
+        sandboxArgs,
+        expectedMode ? ["-s", expectedMode] : []
+      );
+      const expectedPermissionArgs = bypass
+        ? ["--dangerously-bypass-approvals-and-sandbox"]
+        : mode === "none"
+          ? []
+          : mode === "allowAll"
+            ? ["-a", "on-request"]
+            : mode === "dangerous"
+              ? ["-a", "never"]
+              : ["-a", "on-request"];
+      assert.deepStrictEqual(
+        permissionArgs,
+        expectedPermissionArgs,
+        `interactive ${request}:${mode}`
+      );
+      assert.deepStrictEqual(
+        [...sandboxArgs, ...permissionArgs],
+        bypass
+          ? ["--dangerously-bypass-approvals-and-sandbox"]
+          : [
+              ...(expectedMode ? ["-s", expectedMode] : []),
+              ...expectedPermissionArgs,
+            ]
+      );
+      const headlessPermissionArgs = config
+        ? mapper.buildCodexSpecificArgs(
+            config,
+            CODEX_SANDBOX_MODES.WORKSPACE_WRITE,
+            "on-request",
+            false,
+            "0.166.0",
+            request
+          )
+        : [];
+      const headlessSandbox = await sandboxMapper.prepare(request, {
+        toolPermissions: config,
+        isInteractive: false,
+        writableRoots: [],
+        codexSandboxMode: CODEX_SANDBOX_MODES.WORKSPACE_WRITE,
+      });
+      const expectedHeadlessPermission = bypass
+        ? ["--dangerously-bypass-approvals-and-sandbox"]
+        : [];
+      assert.deepStrictEqual(
+        headlessPermissionArgs,
+        expectedHeadlessPermission,
+        `headless ${request}:${mode}`
+      );
+      assert.deepStrictEqual(
+        [...headlessSandbox.cliArgs, ...headlessPermissionArgs],
+        bypass
+          ? ["--dangerously-bypass-approvals-and-sandbox"]
+          : expectedMode
+            ? ["-s", expectedMode]
+            : []
+      );
+    }
+    const clamped = resolveCodexContainment(
+      configs.custom as any,
+      true,
+      CODEX_SANDBOX_MODES.DANGER_FULL_ACCESS
+    );
+    assert.strictEqual(
+      clamped.sandboxMode,
+      CODEX_SANDBOX_MODES.WORKSPACE_WRITE
+    );
+    assert.ok(resolveCodexContainment(configs.denied as any, false).diagnostic);
+  });
+
   test("probes Codex rollout files by session ID only", async () => {
     const home = await fs.mkdtemp(path.join(os.tmpdir(), "codex-probe-"));
     const previous = process.env.CODEX_HOME;

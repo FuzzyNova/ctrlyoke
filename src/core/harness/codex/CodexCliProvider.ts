@@ -17,7 +17,11 @@ import { CodexNotificationMonitor } from "./CodexNotificationMonitor";
 import {
   CODEX_FOLD_EXCLUDED_SERVER_IDS,
   CodexToolPermissionMapper,
+  resolveCodexContainment,
 } from "./CodexToolPermissionMapper";
+import { CodexSandboxMapper } from "./CodexSandboxMapper";
+import { gitCommonDir } from "../../../utils/GitUtils";
+import { CODEX_SANDBOX_MODES } from "../../../types/DashboardConstants";
 import { foldMcpToolDenialsIntoServers } from "../../../types/ToolPermissionUtils";
 import { CodexLogParser } from "./CodexLogParser";
 import {
@@ -296,9 +300,11 @@ export class CodexCliProvider implements ICliProvider {
     new CodexNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new CodexToolPermissionMapper();
+  readonly sandboxMapper = new CodexSandboxMapper();
   get capabilities(): HarnessCapabilityFacts {
     return {
       permissions: this.toolPermissionMapper.capabilities,
+      sandbox: this.sandboxMapper.capabilities,
       hooks: CodexNotificationMonitor.CAPABILITIES,
       mcp: {
         perServerToolFiltering: CODEX_MCP_FILTERING_CAPABILITY,
@@ -481,14 +487,14 @@ export class CodexCliProvider implements ICliProvider {
       const permissions = ConfigurationUtils.resolveSpawnToolPermissions(
         workflowContext?.resolvedProperties?.toolPermissions
       );
-      const resolvedSandboxMode = permissions
-        ? CodexToolPermissionMapper.resolveSandboxMode(
-            permissions,
-            ConfigurationUtils.getCodexSandboxMode()
-          )
-        : undefined;
+      const sandboxRequest = workflowContext?.resolvedProperties?.sandbox;
+      const resolvedSandboxMode = resolveCodexContainment(
+        permissions ?? null,
+        sandboxRequest,
+        ConfigurationUtils.getCodexSandboxMode() as import("../../../types/DashboardConstants").CodexSandboxMode
+      ).sandboxMode;
       const workspaceDirs =
-        resolvedSandboxMode === "read-only"
+        resolvedSandboxMode === CODEX_SANDBOX_MODES.READ_ONLY
           ? []
           : CliProviderUtils.getWorkspaceDirs(
               workspaceRoot,
@@ -503,6 +509,17 @@ export class CodexCliProvider implements ICliProvider {
                     resolvedWorkspaceRoot.toLowerCase()
                 : resolvedDir !== resolvedWorkspaceRoot;
             });
+      if (resolvedSandboxMode === CODEX_SANDBOX_MODES.WORKSPACE_WRITE) {
+        const commonDir = await gitCommonDir(workspaceRoot);
+        if (
+          commonDir &&
+          !workspaceDirs.some(
+            (dir) => path.resolve(dir) === path.resolve(commonDir)
+          )
+        ) {
+          workspaceDirs.push(commonDir);
+        }
+      }
       workspaceDirs.forEach((dir) => {
         args.push("--add-dir", dir);
       });

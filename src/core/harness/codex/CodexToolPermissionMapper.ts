@@ -18,6 +18,79 @@ import {
 } from "../../../types/DashboardConstants";
 import { foldMcpToolDenialsIntoServers } from "../../../types/ToolPermissionUtils";
 import { compareVersions } from "../../../utils/CtrlyokeInstallations";
+import {
+  CODEX_SANDBOX_MODES,
+  CODEX_SANDBOX_MODE_ORDER,
+  isRankNoWiderThan,
+} from "../../../types/DashboardConstants";
+import type { CodexSandboxMode } from "../../../types/DashboardConstants";
+import type { CompatibilityDiagnostic } from "../../../types/CompatibilityTypes";
+
+export interface CodexContainmentResolution {
+  sandboxMode?: CodexSandboxMode;
+  bypass: boolean;
+  diagnostic?: CompatibilityDiagnostic;
+}
+
+/** Single policy decision shared by Codex's sandbox, permissions and add-dir arguments. */
+export function resolveCodexContainment(
+  config: ToolPermissionConfig | null,
+  sandbox: boolean | undefined,
+  codexSandboxMode: CodexSandboxMode = CODEX_SANDBOX_MODES.WORKSPACE_WRITE
+): CodexContainmentResolution {
+  const mode = config?.mode ?? PERMISSION_MODES.NONE;
+  const deniedWrite =
+    !!config &&
+    mode === PERMISSION_MODES.CUSTOM &&
+    deniesWriteCapableTool(config);
+  let sandboxMode: CodexSandboxMode | undefined;
+  let bypass = false;
+  if (sandbox === undefined) {
+    if (mode === PERMISSION_MODES.ALLOW_ALL)
+      sandboxMode = CODEX_SANDBOX_MODES.WORKSPACE_WRITE;
+    else if (mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) bypass = true;
+    else if (deniedWrite) sandboxMode = CODEX_SANDBOX_MODES.READ_ONLY;
+    else if (mode === PERMISSION_MODES.CUSTOM) sandboxMode = codexSandboxMode;
+  } else if (sandbox) {
+    if (
+      mode === PERMISSION_MODES.ALLOW_ALL ||
+      mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL
+    )
+      sandboxMode = CODEX_SANDBOX_MODES.WORKSPACE_WRITE;
+    else if (deniedWrite) sandboxMode = CODEX_SANDBOX_MODES.READ_ONLY;
+    else
+      sandboxMode = isRankNoWiderThan(
+        CODEX_SANDBOX_MODE_ORDER,
+        codexSandboxMode,
+        CODEX_SANDBOX_MODES.WORKSPACE_WRITE
+      )
+        ? codexSandboxMode
+        : CODEX_SANDBOX_MODES.WORKSPACE_WRITE;
+  } else {
+    if (mode === PERMISSION_MODES.ALLOW_ALL)
+      sandboxMode = CODEX_SANDBOX_MODES.DANGER_FULL_ACCESS;
+    else if (mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) bypass = true;
+    else if (deniedWrite) sandboxMode = CODEX_SANDBOX_MODES.READ_ONLY;
+    else sandboxMode = CODEX_SANDBOX_MODES.DANGER_FULL_ACCESS;
+  }
+  const diagnostic =
+    sandbox === false && deniedWrite
+      ? {
+          code: "DENIED_TOOLS_PARTIAL",
+          severity: "info" as const,
+          harnessId: HARNESS_IDS.CODEX_CLI,
+          capability: "permissions.deniedTools",
+          message:
+            "Codex keeps the read-only sandbox because it is the only way to enforce denied write-capable tools.",
+          state: {
+            fidelity: "partial" as const,
+            mechanism: "native" as const,
+            verification: "verified" as const,
+          },
+        }
+      : undefined;
+  return { sandboxMode, bypass, diagnostic };
+}
 
 const CODEX_PERMISSION_VERIFICATION = capabilitySuiteVerification([
   ">=0.129.0",
@@ -107,26 +180,6 @@ export class CodexToolPermissionMapper
 {
   readonly capabilities = CODEX_PERMISSION_CAPABILITIES;
 
-  /**
-   * Resolve the sandbox once for both permission args and --add-dir handling.
-   * Codex rejects extra writable roots in a read-only sandbox.
-   */
-  static resolveSandboxMode(
-    config: ToolPermissionConfig,
-    sandboxMode?: string
-  ): string | undefined {
-    switch (config.mode) {
-      case PERMISSION_MODES.CUSTOM:
-        return deniesWriteCapableTool(config) ? "read-only" : sandboxMode;
-      case PERMISSION_MODES.ALLOW_ALL:
-        return "workspace-write";
-      case PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL:
-        return "danger-full-access";
-      default:
-        return undefined;
-    }
-  }
-
   private readonly AUTO_PRESET_ARGS = [
     "--sandbox",
     "workspace-write",
@@ -152,7 +205,8 @@ export class CodexToolPermissionMapper
         context.sandboxMode,
         context.approvalPolicy,
         context.isInteractive,
-        context.cliVersion
+        context.cliVersion,
+        context.sandboxRequest
       ),
       // CodexCliProvider folds MCP tool denials into the attached servers'
       // `disabled_tools`; only the rest of the deny list goes unenforced.
@@ -194,52 +248,86 @@ export class CodexToolPermissionMapper
     sandboxMode?: string,
     approvalPolicy?: string,
     isInteractive?: boolean,
-    cliVersion?: string
+    cliVersion?: string,
+    sandbox?: boolean
   ): string[] {
     // --ask-for-approval / -a is an interactive-only flag: not recognised by `codex exec`.
     // Only suppress it when isInteractive is explicitly false (headless exec mode).
     // When undefined (e.g. tests that don't pass the flag), behave as before.
     const includeApprovalFlag = isInteractive !== false;
+    const containment = resolveCodexContainment(
+      config,
+      sandbox,
+      sandboxMode as CodexSandboxMode | undefined
+    );
+    const approval =
+      approvalPolicy === "untrusted" &&
+      (!cliVersion ||
+        compareVersions(cliVersion, CODEX_UNTRUSTED_APPROVAL_REMOVED_VERSION) >=
+          0)
+        ? "on-request"
+        : approvalPolicy;
+    if (sandbox !== undefined) {
+      if (containment.bypass)
+        return ["--dangerously-bypass-approvals-and-sandbox"];
+      if (!includeApprovalFlag || config.mode === PERMISSION_MODES.NONE)
+        return [];
+      if (config.mode === PERMISSION_MODES.ALLOW_ALL)
+        return ["-a", "on-request"];
+      if (config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)
+        return ["-a", "never"];
+      if (config.mode === PERMISSION_MODES.CUSTOM)
+        return ["-a", approval ?? "on-request"];
+      return [];
+    }
 
     switch (config.mode) {
       case PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL:
-        // Bypass ALL checks (dangerous!)
-        return ["--dangerously-bypass-approvals-and-sandbox"];
+        return containment.bypass
+          ? ["--dangerously-bypass-approvals-and-sandbox"]
+          : [
+              "-s",
+              containment.sandboxMode ?? CODEX_SANDBOX_MODES.WORKSPACE_WRITE,
+              ...(includeApprovalFlag ? ["-a", "never"] : []),
+            ];
 
       case PERMISSION_MODES.ALLOW_ALL:
         // Auto preset: workspace-write sandbox + on-request approval.
         // --ask-for-approval is not a valid flag for `codex exec` (headless), so omit it.
-        if (includeApprovalFlag) {
-          return [...this.AUTO_PRESET_ARGS];
-        }
-        return ["--sandbox", "workspace-write"];
+        if (sandbox === undefined)
+          return includeApprovalFlag
+            ? [...this.AUTO_PRESET_ARGS]
+            : ["--sandbox", "workspace-write"];
+        return [
+          "-s",
+          containment.sandboxMode ?? CODEX_SANDBOX_MODES.WORKSPACE_WRITE,
+          ...(includeApprovalFlag ? ["-a", "on-request"] : []),
+        ];
 
       case PERMISSION_MODES.CUSTOM:
         // Codex cannot enforce ctrlyoke's per-tool patterns. A config that
         // denies a whole write-capable tool can only be honoured by the
         // read-only sandbox, so fail closed instead of inheriting the user's
         // broader Codex sandbox setting.
-        const resolvedSandboxMode =
-          CodexToolPermissionMapper.resolveSandboxMode(config, sandboxMode);
+        const resolvedSandboxMode = containment.sandboxMode;
         if (deniesWriteCapableTool(config)) {
-          return ["--sandbox", resolvedSandboxMode ?? "read-only"];
+          if (sandbox === undefined)
+            return ["--sandbox", resolvedSandboxMode ?? "read-only"];
+          return [
+            "-s",
+            resolvedSandboxMode ?? "read-only",
+            ...(sandbox !== undefined && includeApprovalFlag
+              ? ["-a", approval ?? "on-request"]
+              : []),
+          ];
         }
         // Otherwise use Codex-specific sandbox and approval settings.
         // -a / --ask-for-approval is interactive-only; omit for headless exec.
         if (resolvedSandboxMode && approvalPolicy) {
           // Codex 0.149.0 removed `untrusted`; retain its original behavior on
           // supported older CLIs and map it to the nearest current policy after.
-          const resolvedApprovalPolicy =
-            approvalPolicy === "untrusted" &&
-            (!cliVersion ||
-              compareVersions(
-                cliVersion,
-                CODEX_UNTRUSTED_APPROVAL_REMOVED_VERSION
-              ) >= 0)
-              ? "on-request"
-              : approvalPolicy;
           if (includeApprovalFlag) {
-            return ["-s", resolvedSandboxMode, "-a", resolvedApprovalPolicy];
+            return ["-s", resolvedSandboxMode, "-a", approval ?? "on-request"];
           }
           return ["-s", resolvedSandboxMode];
         }
@@ -252,7 +340,7 @@ export class CodexToolPermissionMapper
         return ["--sandbox", "workspace-write"];
 
       case PERMISSION_MODES.NONE:
-        return [];
+        return containment.sandboxMode ? ["-s", containment.sandboxMode] : [];
 
       default:
         if (includeApprovalFlag) {

@@ -352,6 +352,7 @@ export class ExecutionPlanBuilder {
       environment: CliProviderUtils.buildProcessEnv(),
       additionalArgs: session.resolvedProperties?.additionalArgs,
       mcpServers: session.resolvedProperties?.mcpServers,
+      sandboxRequest,
     };
     const permissionApplication: ToolPermissionApplication = this.deps.provider
       .planToolPermissions
@@ -408,6 +409,7 @@ export class ExecutionPlanBuilder {
       effectiveToolPermissions,
       diagnostics: [
         ...providerPreparation.diagnostics,
+        ...(sandboxApplication?.diagnostics ?? []),
         ...hookPreparations.flatMap((application) => application.diagnostics),
         ...permissionApplication.diagnostics,
       ],

@@ -44,6 +44,8 @@ export interface PermissionContext {
   readonly cliVersion?: string;
   /** The step's resolved MCP servers, for harnesses that filter MCP tools per server (Codex). */
   readonly mcpServers?: readonly (string | McpServerConfig)[] | null;
+  /** Explicit terminal containment request for shared policy resolvers. */
+  readonly sandboxRequest?: boolean;
   /** Existing permission keys used by config-driven harnesses for collision safety. */
   readonly permissionCollisionContext?: {
     readonly topLevelKeys: ReadonlySet<string>;

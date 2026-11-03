@@ -49,6 +49,10 @@ export function collectClaims(
 export const UNPROVEN_CLAIMS: Partial<
   Record<HarnessId, Partial<Record<CapabilityPath, string>>>
 > = {
+  "codex-cli": {
+    "sandbox.terminal":
+      "dev/backlog/HARNESS_SANDBOX_PLAN.md#phase-0-results-2026-11-03-macos",
+  },
   "antigravity-cli": {
     "mcp.perServerToolFiltering":
       "dev/implemented/ANTIGRAVITY_PERMISSION_RULES_PLAN.md#translating-patterns",

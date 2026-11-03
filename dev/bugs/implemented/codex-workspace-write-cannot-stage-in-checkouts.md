@@ -30,3 +30,9 @@ does not add that common directory as a writable root.
 Phase 3 should add `ExecutionRootScope.gitCommonDir` to Codex writable roots when
 workspace-write containment is enabled, then verify staging and commit in both
 plain and linked worktrees.
+
+## Resolution
+
+The Codex sandbox mapper adds Git's common directory as a writable root for
+`workspace-write`, allowing Git to create its index lock in plain checkouts and
+managed linked worktrees.

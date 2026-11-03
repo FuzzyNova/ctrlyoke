@@ -297,7 +297,7 @@ Implemented as specified; the approval-policy order treats `untrusted` as equal 
   on an `unsupported` harness is an **error**; on a `partial` one it is information carrying
   the caveat. This is an additive domain in the registry snapshot.
 
-### Codex: one resolver for both axes
+### [x] Codex: one resolver for both axes
 
 Replace `CodexToolPermissionMapper.resolveSandboxMode` with
 `resolveCodexContainment(config | null, sandbox, codexSandboxMode)`, which returns
