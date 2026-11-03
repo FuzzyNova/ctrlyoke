@@ -75,6 +75,13 @@ config` sometimes lags behind the models Copilot accepts; to use one it doesn't 
 
 ## Permissions {#permissions}
 
+Copilot does not support ctrlyoke's `sandbox` property. An explicit
+`sandbox: true` fails the step at launch: Copilot's per-run sandbox also
+contains ctrlyoke's MCP server and hooks, preventing them from running, and its
+policy can only be configured in the user's settings. `false` adds no sandbox
+flags, and absent preserves Copilot's existing behavior. See
+[Sandboxing](/workflows/permissions#sandboxing).
+
 The permission `mode` maps to Copilot flags:
 
 - `dangerouslyAllowAll` → `--yolo`. The deny list is ignored.

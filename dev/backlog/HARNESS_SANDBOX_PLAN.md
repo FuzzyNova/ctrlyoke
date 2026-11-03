@@ -55,7 +55,7 @@ which removes the user's Codex sandbox without the approval prompt that a wider
 
 | Harness     | Per-run control                                                                                                                                                                                                                               | What it contains                                                                                                                                                                                                                                                                                                                                                                                                             | Unsupported host                                                                                                                                                                               |
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Codex       | `-s read-only \| workspace-write \| danger-full-access` (both `codex` and `codex exec`). `-a on-request \| never` is interactive only; 0.149.0 removed `untrusted`.                                                                           | OS sandbox for model shell commands. `workspace-write` allows writes to the workspace and `--add-dir` roots only, with network off unless `config.toml` enables it. `git add` fails in both a plain checkout and a linked worktree because the index is under `.git`, outside the writable root. Phase 3 must add the git common dir, and a linked worktree's own gitdir, as writable roots (see Phase 0 results).                                                                                                                                                                                                                                                          | Phase 0.                                                                                                                                                                                       |
+| Codex       | `-s read-only \| workspace-write \| danger-full-access` (both `codex` and `codex exec`). `-a on-request \| never` is interactive only; 0.149.0 removed `untrusted`.                                                                           | OS sandbox for model shell commands. `workspace-write` allows writes to the workspace and `--add-dir` roots only, with network off unless `config.toml` enables it. `git add` fails in both a plain checkout and a linked worktree because the index is under `.git`, outside the writable root. Phase 3 must add the git common dir, and a linked worktree's own gitdir, as writable roots (see Phase 0 results).           | Phase 0.                                                                                                                                                                                       |
 | Copilot     | `--sandbox` / `--no-sandbox`. Both parse on 1.0.105 but neither is listed in `--help`; `copilot help sandbox` documents `--sandbox`. Policy lives only in the user's `~/.copilot/settings.json` `sandbox` key.                                | Shell commands, via Microsoft Execution Containers (Seatbelt on macOS, bubblewrap plus a private network namespace on Linux, ProcessContainer on Windows). Built-in file edits follow the policy only best-effort. **The default policy allows outbound network** and a per-command bypass (`allowBypass`). `sandboxMcpServers` decides whether local MCP servers run inside. git/`gh` authenticate through a masking proxy. | Prints a startup warning, then **every sandboxed shell command and sandboxed MCP server fails**: closed, not open. An org policy can force sandboxing on, and then refuses `/sandbox disable`. |
 | Claude      | `--settings` JSON: `sandbox.enabled`, `sandbox.failIfUnavailable`, `sandbox.allowUnsandboxedCommands`, `sandbox.autoAllowBashIfSandboxed`, `sandbox.filesystem.allowWrite`, `sandbox.network.allowedDomains`, … (found in the 2.1.317 binary) | The Bash tool. **`autoAllowBashIfSandboxed` defaults to on**, which auto-approves sandboxed commands, and `allowUnsandboxedCommands` lets the model retry a command outside the sandbox (`dangerouslyDisableSandbox`). Both change approval as well as containment, so ctrlyoke must turn both off.                                                                                                                          | `failIfUnavailable: true` makes it refuse instead of running unsandboxed.                                                                                                                      |
 | Antigravity | `--sandbox` ("Run in a sandbox with terminal restrictions enabled"), or `enableTerminalSandbox` in `--settings`                                                                                                                               | Terminal commands. Permission rules configure mounts and the network allowlist. On Windows, 1.4.12 ran even rule-allowed commands inside the sandbox, and they got `EPERM` writing the workspace ([permission rules plan](../implemented/ANTIGRAVITY_PERMISSION_RULES_PLAN.md)).                                                                                                                                             | **Silently does nothing** (below Windows 11 24H2, some Linux containers).                                                                                                                      |
@@ -166,7 +166,7 @@ sibling of a temp workspace proves nothing.
 - **Codex 0.166.0 (verified).** `-s workspace-write` blocks a write to a non-temp
   outside path and closes the network. `git add`/`git commit` fail in a plain checkout
   (`.git/index.lock`) and in a linked worktree. Adding the common dir as `--add-dir`
-  fixes the **plain checkout** (the root *is* the protected `.git`), but **not a linked
+  fixes the **plain checkout** (the root _is_ the protected `.git`), but **not a linked
   worktree**: Codex protects the gitdir the worktree's `.git` pointer file names
   (`<common>/worktrees/<name>`) even inside an added root. Granting that directory as a
   root too fixes it. `CodexCliProvider` now adds both (`gitWritableAdminDirs`), with a
@@ -247,34 +247,34 @@ Implemented as specified; the approval-policy order treats `untrusted` as equal 
 ## Phase 2: schema and resolution
 
 - [x] `schemas/workflow-schema.json`: add a boolean `sandbox` to the shared execution
-  properties, at workflow and step level beside `toolPermissions`, with no default.
-  `schemas/settings-schema.json`: add `defaults.sandbox`, which `$ref`s the same definition.
-  Additive and optional, so no `schema:bump`; run `npm run schema:update`. The description
-  states that `true` contains terminal commands' writes, that network, harness file tools and
-  MCP servers follow each harness's policy, that `false` never disables a sandbox enabled in
-  the harness's own settings, and which harnesses fail an explicit `true`.
+      properties, at workflow and step level beside `toolPermissions`, with no default.
+      `schemas/settings-schema.json`: add `defaults.sandbox`, which `$ref`s the same definition.
+      Additive and optional, so no `schema:bump`; run `npm run schema:update`. The description
+      states that `true` contains terminal commands' writes, that network, harness file tools and
+      MCP servers follow each harness's policy, that `false` never disables a sandbox enabled in
+      the harness's own settings, and which harnesses fail an explicit `true`.
 - [x] Types: `sandbox?: boolean` on `ExecutionProperties` (`CtrlYokeTypes.ts`) and
-  `"sandbox"` in `EXECUTION_PROPERTY_KEYS`. In `ResolvedProperties`, `sandbox?: boolean`
-  (undefined = inherit). `CtrlYokeSettings.defaults.sandbox?: boolean`, with no shipped
-  default.
+      `"sandbox"` in `EXECUTION_PROPERTY_KEYS`. In `ResolvedProperties`, `sandbox?: boolean`
+      (undefined = inherit). `CtrlYokeSettings.defaults.sandbox?: boolean`, with no shipped
+      default.
 - [x] Resolution: `resolveExecutionProperties` (`src/types/ExecutionPropertyResolver.ts`)
-  resolves prompt → workflow → `defaults.sandbox` with a source, like `errorBehavior`.
-  `PropertyResolver.createDefaults` reads `ConfigurationUtils.getDefaultSandbox()`.
+      resolves prompt → workflow → `defaults.sandbox` with a source, like `errorBehavior`.
+      `PropertyResolver.createDefaults` reads `ConfigurationUtils.getDefaultSandbox()`.
 - [x] **Spawn identity:** add `SANDBOX` to `SPAWN_IDENTITY_FIELDS`
-  (`src/types/ExecutionSpawnIdentity.ts`), so a reused process is never carried into a step
-  with different containment.
+      (`src/types/ExecutionSpawnIdentity.ts`), so a reused process is never carried into a step
+      with different containment.
 - [x] **Workspace gate:** add a `defaults.sandbox` descriptor to `SENSITIVE_WORKSPACE_SETTINGS`.
-  `true` is always covered. `false` is covered only when the user's own value is `false`,
-  because on Codex it is wider than both inherit and `true`.
+      `true` is always covered. `false` is covered only when the user's own value is `false`,
+      because on Codex it is wider than both inherit and `true`.
 - [x] **MCP:** leave `sandbox` out of `MCP_STEP_UPDATE_SCHEMA` (`src/utils/McpToolDefinitions.ts`),
-  so an agent can't relax a later step. Add a test that `edit_step` rejects it.
+      so an agent can't relax a later step. Add a test that `edit_step` rejects it.
 - [x] Carry the property through the listed property plumbing: `WorkflowStepSanitizer`,
-  `PromptFileLoader`, `WorkingFileManager`, `RunDefinitionChanges`, `RunDefinitionAnchor`,
-  `CliPropertyOverrides`, `coreWorkflowAdapter`, `promptPropertyValues`, `stepOverrideChips`,
-  `stepMetadataClipboard`, `replyToStep` and `workflowFileCompletionExtension`. The CLI
-  `--sandbox` / `--no-sandbox` override is additive.
+      `PromptFileLoader`, `WorkingFileManager`, `RunDefinitionChanges`, `RunDefinitionAnchor`,
+      `CliPropertyOverrides`, `coreWorkflowAdapter`, `promptPropertyValues`, `stepOverrideChips`,
+      `stepMetadataClipboard`, `replyToStep` and `workflowFileCompletionExtension`. The CLI
+      `--sandbox` / `--no-sandbox` override is additive.
 - [x] Tests: resolver precedence and source, the sanitizer and loader round trip, spawn
-  identity, the workspace gate, and MCP rejection.
+      identity, the workspace gate, and MCP rejection.
 
 ## Phase 3: mappers and diagnostics
 
@@ -339,13 +339,13 @@ strict Codex's sandbox is when containment is on**:
 
 ### The other harnesses
 
-| Harness     | `true`                                                                                                                                                                                                                                                                                                              | `false` | absent  | Declared                                    |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------- | ------------------------------------------- |
+| Harness     | `true`                                                                                                                                                                                                                                                                                                                                                                                                                        | `false` | absent  | Declared                                                                                                                                  |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | Claude      | `settings.sandbox = { enabled: true, failIfUnavailable: true, allowUnsandboxedCommands: false, autoAllowBashIfSandboxed: false, filesystem: { allowWrite: <writable roots> } }`, merged into the one `--settings` file written by `planNotificationHookArgs` / `planHeadlessUserHookArgs` (`ClaudeCliProvider.ts`). **Verified: repeated `--settings` flags replace each other (last wins), so one merged file is required.** | nothing | nothing | `partial` (verified 2.1.317: outside write blocked, `git commit`, MCP and hooks work; network policy and file-tool scope not established) |
-| Copilot     | fails (error diagnostic). **Verified unusable on 1.0.105:** `--sandbox` contains shell commands but also sandboxes ctrlyoke's own MCP server and hook scripts, which then cannot start or run; the policy (`sandboxMcpServers`) is settable only in `~/.copilot/settings.json`. | nothing | nothing | `unsupported` (revisit if Copilot gets a per-run policy flag) |
-| Antigravity | fails (error diagnostic). **Verified unusable on 1.4.12 (macOS and Windows):** the sandbox is active but makes the workspace read-only while outside paths stay writable; no supported setting changes the mounts. | nothing | nothing | `unsupported` |
-| Qwen        | fails (error diagnostic)                                                                                                                                                                                                                                                                                            | nothing | nothing | `unsupported`                               |
-| OpenCode    | fails (error diagnostic)                                                                                                                                                                                                                                                                                            | nothing | nothing | `unsupported`                               |
+| Copilot     | fails (error diagnostic). **Verified unusable on 1.0.105:** `--sandbox` contains shell commands but also sandboxes ctrlyoke's own MCP server and hook scripts, which then cannot start or run; the policy (`sandboxMcpServers`) is settable only in `~/.copilot/settings.json`.                                                                                                                                               | nothing | nothing | `unsupported` (revisit if Copilot gets a per-run policy flag)                                                                             |
+| Antigravity | fails (error diagnostic). **Verified unusable on 1.4.12 (macOS and Windows):** the sandbox is active but makes the workspace read-only while outside paths stay writable; no supported setting changes the mounts.                                                                                                                                                                                                            | nothing | nothing | `unsupported`                                                                                                                             |
+| Qwen        | fails (error diagnostic)                                                                                                                                                                                                                                                                                                                                                                                                      | nothing | nothing | `unsupported`                                                                                                                             |
+| OpenCode    | fails (error diagnostic)                                                                                                                                                                                                                                                                                                                                                                                                      | nothing | nothing | `unsupported`                                                                                                                             |
 
 On Claude, `autoAllowBashIfSandboxed: false` and `allowUnsandboxedCommands: false` keep
 approvals governed by `toolPermissions` alone. Without them, turning containment on would
@@ -388,31 +388,31 @@ outside-write behavior. These tests are written but have not been run against
 live harnesses; the user must run `npm run test:harness` (which may take 30+
 minutes and incur model costs).
 
-## Phase 5: UI, docs, changelog
+## Phase 5: UI, docs, changelog — **Done**
 
 - [x] **Properties panel** (`WorkflowPropertiesPanel.tsx`, `PropertiesDrawer.tsx`): a
-  **Sandbox** row beside Tool Permissions with Inherit / On / Off, and per-harness support
-  shown the way permission fidelity is shown (`useCompatibilityDiagnostics`). Add a step
-  override chip.
+      **Sandbox** row beside Tool Permissions with Inherit / On / Off, and per-harness support
+      shown the way permission fidelity is shown (`useCompatibilityDiagnostics`). Add a step
+      override chip.
 - [x] **Settings:** `defaults.sandbox` on `DefaultsPermissionsPage.tsx`, with
-  `settingsCatalog.ts` entries. Move the `codexSandboxMode` / `codexApprovalPolicy` rows from
-  `AdvancedPermissionsSection.tsx` under it as the Codex detail, and say that they set how
-  strict Codex is when contained.
+      `settingsCatalog.ts` entries. Move the `codexSandboxMode` / `codexApprovalPolicy` rows from
+      `AdvancedPermissionsSection.tsx` under it as the Codex detail, and say that they set how
+      strict Codex is when contained.
 - [x] **Dry Run** (`ExecutionPreviewService`, `DryRunModal.tsx`, `executionPreview.ts`): show
-  each step's `SandboxApplication.effective`, e.g. "Sandboxed: Codex workspace-write, network
-  off" / "Not sandboxed" / "Harness setting". Log the same line at launch. A persisted
-  per-run record, in the run header, waits until there is demand; it would be a `_runtime`
-  field.
-- **Docs:**
-  - `docs/workflows/permissions.md`: a new "Sandboxing" section on the two axes, the
-    per-harness network table, and the fail-closed rule.
-  - Each `docs/harnesses/<harness>.md`: its mapping. Rewrite the Codex mode bullets in
-    `codex-cli.md` (lines 81–87) around the table above.
-  - `antigravity-cli.md`: the `additionalArgs` advice changes to "use `sandbox: true`".
-  - `npm run schema:update`, then regenerate the compatibility docs.
-- **`CHANGELOG.md`:** **Added** for the `sandbox` property, `defaults.sandbox` and the CLI
-  override. Inherit leaves every existing workflow's command line unchanged, so the only
-  **Changed** entry is phase 1's.
+      each step's `SandboxApplication.effective`, e.g. "Sandboxed: Codex workspace-write, network
+      off" / "Not sandboxed" / "Harness setting". Log the same line at launch. A persisted
+      per-run record, in the run header, waits until there is demand; it would be a `_runtime`
+      field.
+- [x] **Docs:**
+  - [x] `docs/workflows/permissions.md`: a new "Sandboxing" section on the two axes, the
+        per-harness network table, and the fail-closed rule.
+  - [x] Each `docs/harnesses/<harness>.md`: its mapping. Rewrite the Codex mode bullets in
+        `codex-cli.md` (lines 81–87) around the table above.
+  - [x] `antigravity-cli.md`: the `additionalArgs` advice changes to "use `sandbox: true`".
+  - [x] `npm run schema:update`, then regenerate the compatibility docs.
+- [x] **`CHANGELOG.md`:** **Added** for the `sandbox` property, `defaults.sandbox` and the CLI
+      override. Inherit leaves every existing workflow's command line unchanged, so the only
+      **Changed** entry is phase 1's.
 
 ## Later
 

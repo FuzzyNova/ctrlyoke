@@ -78,12 +78,12 @@ Codex than ctrlyoke's minimum. If a step fails because the model is not supporte
 
 ## Notes
 
-- Codex uses sandbox and approval modes rather than individual tool patterns, so `allowedTools` is **not enforced** on this harness. `deniedTools` is enforced only for `mcp__<server>__<tool>` entries naming an MCP server the workflow attaches; they're passed as that server's `disabled_tools`. Shell patterns, wildcard tool names, and servers configured only in Codex's own `config.toml` are not enforced. The permission `mode` maps to Codex flags:
-  - `dangerouslyAllowAll` → `--dangerously-bypass-approvals-and-sandbox`
-  - `allowAll` → `--sandbox workspace-write --ask-for-approval on-request`
-  - `custom` → `-s <permissions.codexSandboxMode> -a <permissions.codexApprovalPolicy>`
-  - `none` → no permission flags (Codex's own defaults)
-- `permissions.codexSandboxMode` (`read-only`, `workspace-write`, `danger-full-access`; default `workspace-write`) and `permissions.codexApprovalPolicy` (`untrusted`, `on-request`, `never`; default `on-request`) are only read in `custom` mode.
+- Codex uses sandbox and approval modes rather than individual tool patterns, so `allowedTools` is **not enforced** on this harness. `deniedTools` is enforced only for `mcp__<server>__<tool>` entries naming an MCP server the workflow attaches; they're passed as that server's `disabled_tools`. Shell patterns, wildcard tool names, and servers configured only in Codex's own `config.toml` are not enforced. The `sandbox` property controls containment independently of the permission mode:
+  - When absent, ctrlyoke preserves today's flags exactly.
+  - With `sandbox: true`, `allowAll` uses `-s workspace-write -a on-request`; `dangerouslyAllowAll` uses `-s workspace-write -a never` (headless: `-s workspace-write`); `custom` uses the configured sandbox mode and approval policy; and `none` uses `-s workspace-write` without an approval flag. `read-only` remains read-only, and `danger-full-access` is clamped to `workspace-write`.
+  - With `sandbox: false`, `allowAll` uses `-s danger-full-access -a on-request`, `custom` uses `-s danger-full-access -a <policy>` (subject to the read-only clamp), and `none` uses `-s danger-full-access`. `dangerouslyAllowAll` keeps its existing bypass flag.
+- `permissions.codexSandboxMode` (`read-only`, `workspace-write`, `danger-full-access`; default `workspace-write`) controls how strict Codex is when containment is on. `permissions.codexApprovalPolicy` (`untrusted`, `on-request`, `never`; default `on-request`) controls approvals. Both are read in `custom` mode; the approval policy is also used by contained `allowAll` and `dangerouslyAllowAll` runs.
+- With containment on, network access is off. The writable roots include the workspace and approved external roots, temp directories, harness caches, the Git common directory, and for linked worktrees their own Git directory. Granting both Git directories lets contained steps stage and commit changes.
 - A workspace setting that makes either value less restrictive than your user setting waits for approval through the VS Code prompt or `ctrlyoke trust-workspace-settings`; narrower workspace values apply without asking.
 - Headless runs use `codex exec`, which does not accept an approval flag, so only the sandbox flag is passed there.
 - In a headless run, ctrlyoke reads the step's output, including file diffs, from Codex's session log under `~/.codex/sessions` (or `$CODEX_HOME/sessions`). `codex exec --json` reports a changed file without its contents, so stdout supplies only the session ID and request errors such as an unknown model.
@@ -91,11 +91,6 @@ Codex than ctrlyoke's minimum. If a step fails because the model is not supporte
   rollout is missing, or Codex reports `thread <id> not found`, it starts a new
   session and shows a warning in the step output.
 - Directories in `permissions.trustedExternalRoots` are passed to Codex as `--add-dir`.
-- A macOS `workspace-write` probe could create workspace files but could not stage
-  them: `git add` failed because Codex protects the `.git` index path. Linked worktrees
-  have the same issue when their Git common directory is outside the worktree. ctrlyoke's
-  sandbox integration will need to grant that directory before contained workflow steps
-  can commit changes.
 - Hooks, MCP servers and approvals are all passed as `-c` overrides, so ctrlyoke never edits your Codex configuration. See [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#codex-cli).
 
 ## Usage and rate limits

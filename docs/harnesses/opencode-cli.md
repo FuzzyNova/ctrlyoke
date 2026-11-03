@@ -78,6 +78,11 @@ default, with a warning in the log.
 
 ## Notes
 
+- OpenCode does not support ctrlyoke's `sandbox` property. An explicit
+  `sandbox: true` fails the step at launch because there is no per-run terminal
+  sandbox mapping. `false` adds no sandbox configuration, and absent preserves
+  OpenCode's existing behavior. See
+  [Sandboxing](/workflows/permissions#sandboxing).
 - The workflow surface is the same as the other CLI harnesses.
 - Tool permissions (`mode`, `allowedTools`, `deniedTools`), MCP servers, and ctrlyoke's completion plugin are delivered per process through `OPENCODE_CONFIG_CONTENT`; ctrlyoke does not write a workspace `opencode.json`. OpenCode's own categories are coarser than tool patterns (for example, `write` and `edit` both map to OpenCode's `edit` permission). See [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#opencode-cli).
 - `permissions.trustedExternalRoots` is not passed to OpenCode; it has no `--add-dir` equivalent.

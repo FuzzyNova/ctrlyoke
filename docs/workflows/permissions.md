@@ -115,6 +115,46 @@ it warns.
 
 Edit the defaults in **Settings → Workflow Defaults → Permissions**.
 
+## Sandboxing {#sandboxing}
+
+Tool permissions control **approval**: which actions can run without asking.
+Sandboxing controls **containment**: where terminal commands can write. They
+are separate controls. `sandbox: true` requests terminal write containment;
+`false` removes only containment ctrlyoke added and never disables a sandbox
+enabled in the harness's own settings. When absent, the value inherits from
+`defaults.sandbox`; if that is also absent, each harness keeps its existing
+behavior. New installations do not enable the default.
+
+Containment covers terminal commands. Network access follows the harness's own
+policy, and harness file tools and MCP servers may have different boundaries.
+
+| Harness                              | Network when `sandbox: true`                             | Mapping                                                                                                                                                                        |
+| ------------------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [Codex](/harnesses/codex-cli)        | Off                                                      | Native `-s` sandbox mode; its writable roots include the workspace, approved external roots, temp directories, caches, and the Git common and linked-worktree Git directories. |
+| [Claude Code](/harnesses/claude-cli) | Follows Claude's policy; not established by verification | `--settings` enables the Bash sandbox, requires it to be available, and limits its writable roots.                                                                             |
+| Copilot CLI                          | Not supported                                            | Explicit `true` fails because its per-run sandbox also blocks ctrlyoke's MCP server and hooks.                                                                                 |
+| Antigravity                          | Not supported                                            | Explicit `true` fails because its sandbox makes the workspace read-only.                                                                                                       |
+| Qwen Code                            | Not supported                                            | Explicit `true` fails; its available sandbox wraps the whole CLI and its helpers.                                                                                              |
+| OpenCode                             | Not supported                                            | Explicit `true` fails because no per-run terminal sandbox mapping is available.                                                                                                |
+
+An explicit `true` fails the step before launch whenever ctrlyoke cannot honor
+the request. This fail-closed rule applies to unsupported harnesses and any
+other unavailable sandbox. An absent value never fails for this reason.
+
+For example, request containment for every step by setting the workflow default;
+steps can still override it:
+
+```yaml
+sandbox: true
+steps:
+  - name: install
+    prompt: Install the project dependencies.
+```
+
+A workspace `defaults.sandbox` value that widens containment beyond your
+effective user setting waits for your approval before it applies. Narrower
+values apply without asking.
+
 ## Which level wins
 
 `toolPermissions` can be set in three places. The first one that is set wins:

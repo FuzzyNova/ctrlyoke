@@ -74,6 +74,12 @@ Code checks it against your configured providers.
 
 ## Permissions {#permissions}
 
+Qwen does not support ctrlyoke's `sandbox` property. An explicit
+`sandbox: true` fails the step at launch because Qwen's available sandbox wraps
+the whole CLI, including ctrlyoke's MCP server and hooks. `false` adds no
+sandbox flags, and absent preserves Qwen's existing behavior. See
+[Sandboxing](/workflows/permissions#sandboxing).
+
 The permission `mode` maps to Qwen Code flags:
 
 - `dangerouslyAllowAll` → `-y`. The deny list is ignored.

@@ -85,6 +85,15 @@ exist or you may not have access to it, run `claude update`.
 
 ## Permissions {#permissions}
 
+The `sandbox` property is separate from approval modes. `true` adds one merged
+`--settings` payload that enables Claude's Bash sandbox, refuses to run if it is
+unavailable, keeps approvals governed by `toolPermissions`, and limits writable
+paths to ctrlyoke's approved roots. `false` removes only ctrlyoke's sandbox
+settings; it does not disable a sandbox configured in Claude's own settings.
+When absent, ctrlyoke adds no sandbox settings. Verification established that
+network policy and file-tool scope are not established, so containment is
+partially supported. See [Sandboxing](/workflows/permissions#sandboxing).
+
 The permission `mode` maps to Claude Code flags:
 
 - `dangerouslyAllowAll` → `--dangerously-skip-permissions`. The deny list is ignored.
