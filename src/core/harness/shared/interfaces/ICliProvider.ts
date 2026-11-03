@@ -516,7 +516,8 @@ export interface ICliProvider {
     promptIndex: number,
     workingFilePath: string | undefined,
     userHooks: UserHookConfig[] | undefined,
-    enabledNotificationHookEvents: HookEvent[]
+    enabledNotificationHookEvents: HookEvent[],
+    sandboxSettings?: Record<string, unknown>
   ): Promise<CliProviderPreparation>;
 
   /**
@@ -541,7 +542,8 @@ export interface ICliProvider {
     promptIndex: number,
     workingFilePath: string | undefined,
     userHooks: UserHookConfig[] | undefined,
-    enabledNotificationHookEvents: HookEvent[]
+    enabledNotificationHookEvents: HookEvent[],
+    sandboxSettings?: Record<string, unknown>
   ): Promise<CliProviderPreparation>;
 
   /**

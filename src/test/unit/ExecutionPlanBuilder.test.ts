@@ -78,6 +78,38 @@ function createBuilder(
 }
 
 suite("ExecutionPlanBuilder", () => {
+  test("merges Claude sandbox settings into its single hook settings file in both modes", async () => {
+    const provider = new ClaudeCliProvider();
+    provider.getVersion = async () => "2.1.316";
+    const properties: ResolvedProperties = {
+      ...resolvedProperties,
+      sandbox: true,
+      hooks: null,
+    };
+    const workspaceRoot = path.join(os.tmpdir(), "claude-sandbox-plan");
+
+    for (const mode of ["interactive", "headless"] as const) {
+      const plan = await createBuilder(provider, workspaceRoot).plan(
+        createSession(mode, properties)
+      );
+      const settingsMutation = plan.mutations.find((mutation) =>
+        mutation.description?.includes("Claude") &&
+        mutation.description?.includes("hook settings")
+      );
+      assert.ok(settingsMutation?.intendedContent);
+      const settings = JSON.parse(settingsMutation.intendedContent) as {
+        sandbox?: { enabled?: boolean; filesystem?: { allowWrite?: string[] } };
+      };
+      assert.strictEqual(settings.sandbox?.enabled, true, mode);
+      assert.ok(settings.sandbox?.filesystem?.allowWrite?.includes(workspaceRoot));
+      assert.strictEqual(
+        plan.cliArgs.filter((arg) => arg === "--settings").length,
+        1,
+        mode
+      );
+    }
+  });
+
   test("uses a stable but step-specific env file for Qwen hooks", async () => {
     const workspaceRoot = "workspace";
     const properties: ResolvedProperties = {

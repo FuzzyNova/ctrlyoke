@@ -89,6 +89,28 @@ suite("ClaudeCliProvider", () => {
     assert.strictEqual(provider.shouldRetainWorkflowArtifactsForReuse(), true);
   });
 
+  test("merges sandbox settings into the single Claude hook settings file", async () => {
+    const provider = new ClaudeCliProvider();
+    const preparation = await provider.planNotificationHookArgs(
+      "/extension",
+      workspaceRoot,
+      0,
+      undefined,
+      undefined,
+      [],
+      { sandbox: { enabled: true, failIfUnavailable: true } }
+    );
+    assert.strictEqual(
+      preparation.cliArgs.filter((arg) => arg === "--settings").length,
+      1
+    );
+    const settings = JSON.parse(
+      preparation.mutations[0].intendedContent ?? "{}"
+    ) as { hooks?: unknown; sandbox?: { enabled?: boolean } };
+    assert.ok(settings.hooks);
+    assert.strictEqual(settings.sandbox?.enabled, true);
+  });
+
   test("strips inherited Claude Code session markers from interactive spawn env", () => {
     const provider = new ClaudeCliProvider();
     const markerVars = [

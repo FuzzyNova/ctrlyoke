@@ -23,6 +23,7 @@ import {
 import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import { CopilotNotificationMonitor } from "./CopilotNotificationMonitor";
 import { CopilotToolPermissionMapper } from "./CopilotToolPermissionMapper";
+import { CopilotSandboxMapper } from "./CopilotSandboxMapper";
 import { CopilotLogParser } from "./CopilotLogParser";
 import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
 import {
@@ -141,9 +142,11 @@ export class CopilotCliProvider implements ICliProvider {
     new CopilotNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new CopilotToolPermissionMapper();
+  readonly sandboxMapper = new CopilotSandboxMapper();
   get capabilities(): HarnessCapabilityFacts {
     return {
       permissions: this.toolPermissionMapper.capabilities,
+      sandbox: this.sandboxMapper.capabilities,
       hooks: CopilotNotificationMonitor.CAPABILITIES,
       mcp: {
         perServerToolFiltering: COPILOT_MCP_FILTERING_CAPABILITY,

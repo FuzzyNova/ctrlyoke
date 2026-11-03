@@ -281,7 +281,8 @@ export class ExecutionPlanBuilder {
               promptIndex,
               workingFilePath,
               userHooks,
-              enabledNotificationHookEvents
+              enabledNotificationHookEvents,
+              sandboxApplication?.settings
             )
           : this.deps.provider.buildNotificationHookArgs
             ? {
@@ -297,7 +298,7 @@ export class ExecutionPlanBuilder {
                 diagnostics: [],
               }
             : emptyPreparation()
-        : !hooksExplicitlyDisabled &&
+        : (!hooksExplicitlyDisabled || sandboxApplication?.settings !== undefined) &&
             this.deps.provider.planHeadlessUserHookArgs
           ? await this.deps.provider.planHeadlessUserHookArgs(
               extensionPath,
@@ -305,7 +306,8 @@ export class ExecutionPlanBuilder {
               promptIndex,
               workingFilePath,
               userHooks,
-              enabledNotificationHookEvents
+              enabledNotificationHookEvents,
+              sandboxApplication?.settings
             )
           : !hooksExplicitlyDisabled &&
               this.deps.provider.buildHeadlessUserHookArgs

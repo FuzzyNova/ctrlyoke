@@ -18,6 +18,7 @@ import {
 } from "../shared/interfaces/IToolPermissionMapper";
 import { ClaudeNotificationMonitor } from "./ClaudeNotificationMonitor";
 import { ClaudeToolPermissionMapper } from "./ClaudeToolPermissionMapper";
+import { ClaudeSandboxMapper } from "./ClaudeSandboxMapper";
 import { ClaudeLogParser } from "./ClaudeLogParser";
 import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
 import {
@@ -81,6 +82,15 @@ const CLAUDE_IMAGE_INPUT_CAPABILITY = {
   mechanism: "native",
   verification: capabilitySuiteVerification([">=2.1.17"]),
 } as const;
+
+function mergeClaudeSettings(
+  settingsJson: string,
+  fragment?: Record<string, unknown>
+): string {
+  if (!fragment) return settingsJson;
+  const settings = JSON.parse(settingsJson) as Record<string, unknown>;
+  return JSON.stringify({ ...settings, ...fragment });
+}
 
 /**
  * Claude CLI Harness
@@ -165,9 +175,11 @@ export class ClaudeCliProvider implements ICliProvider {
     new ClaudeNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new ClaudeToolPermissionMapper();
+  readonly sandboxMapper = new ClaudeSandboxMapper();
   get capabilities(): HarnessCapabilityFacts {
     return {
       permissions: this.toolPermissionMapper.capabilities,
+      sandbox: this.sandboxMapper.capabilities,
       hooks: ClaudeNotificationMonitor.CAPABILITIES,
       mcp: {
         perServerToolFiltering: CLAUDE_MCP_FILTERING_CAPABILITY,
@@ -540,7 +552,8 @@ export class ClaudeCliProvider implements ICliProvider {
     promptIndex: number,
     workingFilePath: string | undefined,
     userHooks: UserHookConfig[] | undefined,
-    enabledNotificationHookEvents: HookEvent[]
+    enabledNotificationHookEvents: HookEvent[],
+    sandboxSettings?: Record<string, unknown>
   ): Promise<CliProviderPreparation> {
     const scriptPath = path.join(
       extensionPath,
@@ -576,7 +589,7 @@ export class ClaudeCliProvider implements ICliProvider {
       mutations: [
         this.createHookSettingsMutation(
           settingsPath,
-          hookConfig.config,
+          mergeClaudeSettings(hookConfig.config, sandboxSettings),
           "Write Claude notification hook settings"
         ),
       ],
@@ -636,7 +649,8 @@ export class ClaudeCliProvider implements ICliProvider {
     promptIndex: number,
     workingFilePath: string | undefined,
     userHooks: UserHookConfig[] | undefined,
-    enabledNotificationHookEvents: HookEvent[]
+    enabledNotificationHookEvents: HookEvent[],
+    sandboxSettings?: Record<string, unknown>
   ): Promise<CliProviderPreparation> {
     const settingsJson =
       enabledNotificationHookEvents.length > 0
@@ -669,7 +683,7 @@ export class ClaudeCliProvider implements ICliProvider {
       mutations: [
         this.createHookSettingsMutation(
           settingsPath,
-          settingsJson,
+          mergeClaudeSettings(settingsJson, sandboxSettings),
           "Write Claude headless hook settings"
         ),
       ],

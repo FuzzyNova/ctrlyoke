@@ -150,11 +150,16 @@ export interface CapabilityDomainDescriptorMap {
   sandbox: { terminal: CapabilityDeclaration };
 }
 
-export const SANDBOX_CAVEAT_CODES = new Set([
-  "network-follows-harness-policy",
-  "file-tools-best-effort",
-  "mcp-servers-not-contained",
-]);
+export const SANDBOX_CAVEAT_CODE = {
+  NETWORK_FOLLOWS_HARNESS_POLICY: "network-follows-harness-policy",
+  FILE_TOOLS_BEST_EFFORT: "file-tools-best-effort",
+  MCP_SERVERS_NOT_CONTAINED: "mcp-servers-not-contained",
+} as const;
+export const SANDBOX_CAVEAT_CODES: ReadonlySet<string> = new Set(
+  Object.values(SANDBOX_CAVEAT_CODE)
+);
+export type SandboxCaveatCode =
+  (typeof SANDBOX_CAVEAT_CODE)[keyof typeof SANDBOX_CAVEAT_CODE];
 
 export type CapabilityDomainState<T> = {
   [K in keyof T]: NonNullable<T[K]> extends CapabilityDeclaration
@@ -275,7 +280,7 @@ export type HookCaveatCode =
   (typeof HOOK_CAVEAT_CODES)[keyof typeof HOOK_CAVEAT_CODES];
 
 export type CompatibilityCaveatCode =
-  PermissionCaveatCode | McpCaveatCode | HookCaveatCode;
+  PermissionCaveatCode | McpCaveatCode | HookCaveatCode | SandboxCaveatCode;
 
 /**
  * Caveats that explain a risk alongside a capability that is enforced. Every
