@@ -1,10 +1,12 @@
 # Harness Sandbox Property
 
-**Status:** Ready to implement. Revised 2026-11-03 against current code and the installed CLIs
-(codex 0.166.0, copilot 1.0.105, claude 2.1.317, agy 1.4.12, qwen 0.26.0, opencode 1.19.5).
-Phase 1 can ship on its own. Phases 2–5 begin with the short probes in phase 0.
+**Status:** Implemented 2026-11-03 (phases 0–5). Verified against codex 0.166.0,
+copilot 1.0.105, claude 2.1.317, agy 1.4.12, qwen 0.26.0 and opencode 1.19.5 on macOS. Only
+Codex and Claude support `sandbox: true`; the other four declare it `unsupported` and fail an
+explicit `true` at launch. Still unprobed: Linux and Windows hosts, Copilot per-command bypass,
+Claude network policy.
 **Priority:** P2. Folds in
-[`workspace-codex-sandbox-settings-widen-permissions-without-approval`](../bugs/backlog/workspace-codex-sandbox-settings-widen-permissions-without-approval.md)
+[`workspace-codex-sandbox-settings-widen-permissions-without-approval`](../bugs/implemented/workspace-codex-sandbox-settings-widen-permissions-without-approval.md)
 (phase 1), and settles "Sandbox is a separate axis" from
 `dev/implemented/ANTIGRAVITY_PERMISSION_RULES_PLAN.md`.
 
@@ -276,7 +278,13 @@ Implemented as specified; the approval-policy order treats `untrusted` as equal 
 - [x] Tests: resolver precedence and source, the sanitizer and loader round trip, spawn
       identity, the workspace gate, and MCP rejection.
 
-## Phase 3: mappers and diagnostics
+## Phase 3: mappers and diagnostics — **Done.**
+
+Implemented as below, with three refinements found in review: a harness with no mapper
+previews (Dry Run) as "Not sandboxed" with the analyzer's error instead of failing the
+preview, while a real launch still refuses; a diagnostic sourced from `defaults.sandbox` has
+no property pointer; and under `sandbox: true` the `read-only` Codex setting applies to every
+permission mode.
 
 ### Code shape
 
@@ -312,7 +320,7 @@ Implemented as specified; the approval-policy order treats `untrusted` as equal 
   `CapabilityDomainDescriptorMap` and `CAPABILITY_DOMAINS` (`src/types/CompatibilityTypes.ts`,
   `DashboardConstants.ts`). Add a `SANDBOX_CAVEAT_CODES` set (network follows the harness
   policy; file tools are best-effort; MCP servers are not contained) and a
-  [x] `CompatibilityAnalyzer` check modeled on `mcp.perServerToolFiltering`. An explicit `true`
+  `CompatibilityAnalyzer` check modeled on `mcp.perServerToolFiltering`. An explicit `true`
   on an `unsupported` harness is an **error**; on a `partial` one it is information carrying
   the caveat. This is an additive domain in the registry snapshot.
 
@@ -448,7 +456,7 @@ itself (Seatbelt, bubblewrap) was considered and rejected:
   vulnerability.
 
 A container backend avoids most of that. The step runs inside the
-[`DOCKER_SERVER_IMAGE_PLAN.md`](DOCKER_SERVER_IMAGE_PLAN.md) image, with only the execution
+[`DOCKER_SERVER_IMAGE_PLAN.md`](../backlog/DOCKER_SERVER_IMAGE_PLAN.md) image, with only the execution
 root (usually a ctrlyoke managed worktree) mounted. It:
 
 - works the same for all six harnesses, including Qwen and OpenCode;

@@ -289,6 +289,37 @@ describe("PropertiesDrawer execution mode", () => {
   });
 });
 
+describe("PropertiesDrawer sandbox", () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  afterEach(cleanup);
+
+  function chooseSandbox(label: string): void {
+    fireEvent.click(screen.getByRole("button", { name: /^Sandbox/ }));
+    fireEvent.click(
+      screen.getByRole("button", { name: new RegExp(`^${label}\\b`) })
+    );
+  }
+
+  it("writes On and Off as booleans and clears the override for Inherit", () => {
+    renderPermissionsDrawer();
+    expect(screen.getByRole("button", { name: /^Sandbox/ })).toHaveTextContent(
+      "Inherit"
+    );
+
+    chooseSandbox("On");
+    expect(useEditorStore.getState().properties.sandbox).toBe(true);
+
+    chooseSandbox("Off");
+    expect(useEditorStore.getState().properties.sandbox).toBe(false);
+
+    chooseSandbox("Inherit");
+    expect(useEditorStore.getState().properties.sandbox).toBeUndefined();
+  });
+});
+
 describe("PropertiesDrawer Dry Run entry point", () => {
   beforeEach(resetStores);
 

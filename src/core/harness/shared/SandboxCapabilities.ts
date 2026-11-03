@@ -27,7 +27,7 @@ export function partialSandboxCapabilities(
       caveatCode: SANDBOX_CAVEAT_CODE.NETWORK_FOLLOWS_HARNESS_POLICY,
       verification: {
         kind: "manual",
-        reference: `dev/backlog/HARNESS_SANDBOX_PLAN.md#${reference}`,
+        reference: `dev/implemented/HARNESS_SANDBOX_PLAN.md#${reference}`,
         basis: "cli-version",
         verifiedVersions: [...verifiedVersions],
       },

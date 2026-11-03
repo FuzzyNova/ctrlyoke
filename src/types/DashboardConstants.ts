@@ -2093,6 +2093,15 @@ export const SANDBOX_SELECTIONS = {
 } as const;
 export type SandboxSelection =
   (typeof SANDBOX_SELECTIONS)[keyof typeof SANDBOX_SELECTIONS];
+/** The Inherit / On / Off choices every Sandbox control offers, in order. */
+export const SANDBOX_SELECT_OPTIONS: readonly {
+  readonly value: SandboxSelection;
+  readonly label: string;
+}[] = [
+  { value: SANDBOX_SELECTIONS.INHERIT, label: SANDBOX_UI_LABELS.INHERIT },
+  { value: SANDBOX_SELECTIONS.ON, label: SANDBOX_UI_LABELS.ON },
+  { value: SANDBOX_SELECTIONS.OFF, label: SANDBOX_UI_LABELS.OFF },
+];
 
 /** Convert an authored sandbox override to the dashboard's select value. */
 export function sandboxSelectionFromValue(

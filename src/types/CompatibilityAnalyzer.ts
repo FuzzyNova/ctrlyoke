@@ -10,6 +10,7 @@ import {
   HARNESS_VERSION_STATUSES,
   HOOK_EVENT_ORDER,
   MCP_CAPABILITY_KEYS,
+  SANDBOX_CAPABILITY_KEYS,
   PERMISSION_CAPABILITY_KEYS,
   PERMISSION_MODES,
   permissionModeAppliesToolList,
@@ -314,65 +315,50 @@ function analyzeSandbox(
   if (target.resolved.properties.sandbox !== true) return;
   const state = installed.effective?.sandbox?.terminal;
   const declaration = installed.descriptor.sandbox?.terminal;
-  if (
+  // An undeclared harness has no sandbox mapper, so it fails at launch too.
+  const unsupported =
     !state ||
     !declaration ||
-    state.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED
-  ) {
-    const code = COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED;
-    diagnostics.push({
-      code,
-      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR,
+    state.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED;
+  if (!unsupported && state.fidelity !== CAPABILITY_FIDELITIES.PARTIAL) return;
+  const code = unsupported
+    ? COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED
+    : COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_PARTIAL;
+  const sourceTier = target.resolved.sources.sandbox;
+  const propertyPointer = sandboxPointer(target);
+  const remediation = getCompatibilityDiagnosticRemediation(code);
+  diagnostics.push({
+    code,
+    severity: unsupported
+      ? COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
+      : COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO,
+    harnessId: target.resolved.properties.harness,
+    capability: SANDBOX_CAPABILITY_KEYS.TERMINAL,
+    consumer: target.consumer,
+    ...(sourceTier ? { sourceTier } : {}),
+    ...(propertyPointer ? { propertyPointer } : {}),
+    state: state ?? unknownCapabilityState(),
+    message: getCompatibilityDiagnosticMessage(code, {
       harnessId: target.resolved.properties.harness,
-      capability: "terminal",
-      consumer: target.consumer,
-      ...(target.resolved.sources.sandbox
-        ? { sourceTier: target.resolved.sources.sandbox }
-        : {}),
-      propertyPointer: sandboxPointer(target),
-      state: state ?? unknownCapabilityState(),
-      message: getCompatibilityDiagnosticMessage(code, {
-        harnessId: target.resolved.properties.harness,
-        capability: "terminal",
-        caveatCode: declaration?.caveatCode,
-      }),
-      ...(getCompatibilityDiagnosticRemediation(code)
-        ? { remediation: getCompatibilityDiagnosticRemediation(code) }
-        : {}),
-    });
-  } else if (state.fidelity === CAPABILITY_FIDELITIES.PARTIAL) {
-    const code = COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_PARTIAL;
-    diagnostics.push({
-      code,
-      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO,
-      harnessId: target.resolved.properties.harness,
-      capability: "terminal",
-      consumer: target.consumer,
-      ...(target.resolved.sources.sandbox
-        ? { sourceTier: target.resolved.sources.sandbox }
-        : {}),
-      propertyPointer: sandboxPointer(target),
-      state,
-      message: getCompatibilityDiagnosticMessage(code, {
-        harnessId: target.resolved.properties.harness,
-        capability: "terminal",
-        caveatCode: declaration.caveatCode,
-      }),
-      ...(getCompatibilityDiagnosticRemediation(code)
-        ? { remediation: getCompatibilityDiagnosticRemediation(code) }
-        : {}),
-    });
-  }
+      capability: SANDBOX_CAPABILITY_KEYS.TERMINAL,
+      caveatCode: declaration?.caveatCode,
+    }),
+    ...(remediation ? { remediation } : {}),
+  });
 }
 
-function sandboxPointer(target: CompatibilityExecutionTarget): string {
-  const base =
-    target.consumer.kind === FINAL_STEP_PHASES.QUEUE
-      ? `/steps/${target.consumer.stepIndex}`
-      : "/finalStep";
-  return target.resolved.sources.sandbox === COMPATIBILITY_SOURCE_TIERS.WORKFLOW
-    ? "/sandbox"
-    : `${base}/sandbox`;
+/** Pointer to the authored `sandbox` value; none when it comes from `defaults.sandbox`. */
+function sandboxPointer(
+  target: CompatibilityExecutionTarget
+): string | undefined {
+  const sourceTier = target.resolved.sources.sandbox;
+  if (!sourceTier || sourceTier === COMPATIBILITY_SOURCE_TIERS.DEFAULTS) {
+    return undefined;
+  }
+  if (sourceTier === COMPATIBILITY_SOURCE_TIERS.WORKFLOW) return "/sandbox";
+  return target.consumer.kind === FINAL_STEP_PHASES.QUEUE
+    ? `/steps/${target.consumer.stepIndex}/sandbox`
+    : "/finalStep/sandbox";
 }
 
 function analyzeConfiguredImageInputs(

@@ -11,7 +11,7 @@ import { effectiveSandboxKind } from "../shared/SandboxCapabilities";
 const CODEX_SANDBOX_VERIFICATION = {
   kind: "manual",
   reference:
-    "dev/backlog/HARNESS_SANDBOX_PLAN.md#phase-0-results-2026-11-03-macos",
+    "dev/implemented/HARNESS_SANDBOX_PLAN.md#phase-0-results-2026-11-03-macos",
   basis: "cli-version",
   verifiedVersions: [">=0.166.0"],
 } as const;

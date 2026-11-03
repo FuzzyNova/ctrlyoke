@@ -228,7 +228,7 @@ export class AntigravityToolPermissionMapper
       case PERMISSION_MODES.ALLOW_ALL:
       case PERMISSION_MODES.CUSTOM:
         // No --sandbox: containment is not an approval-mode concern (see
-        // dev/backlog/HARNESS_SANDBOX_PLAN.md), and under agy's sandbox even a
+        // dev/implemented/HARNESS_SANDBOX_PLAN.md), and under agy's sandbox even a
         // rule-allowed command could not write the workspace.
         if (context.additionalArgs && hasSettingsFlag(context.additionalArgs)) {
           diagnostics.push({

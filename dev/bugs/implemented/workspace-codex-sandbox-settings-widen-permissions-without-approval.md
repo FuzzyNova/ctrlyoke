@@ -62,7 +62,7 @@ changelog.
 
 **Decision (2026-11-03):** option 1. Option 2 would break repositories that
 legitimately narrow Codex (for example to `read-only`). This bug is phase 1 of
-`dev/backlog/HARNESS_SANDBOX_PLAN.md`, which has the implementation details.
+`dev/implemented/HARNESS_SANDBOX_PLAN.md`, which has the implementation details.
 That phase doesn't depend on the rest of the plan, so it can ship first.
 
 This is a behavior change: workspace values that used to apply silently will

@@ -51,11 +51,11 @@ export const UNPROVEN_CLAIMS: Partial<
 > = {
   "codex-cli": {
     "sandbox.terminal":
-      "dev/backlog/HARNESS_SANDBOX_PLAN.md#phase-0-results-2026-11-03-macos",
+      "dev/implemented/HARNESS_SANDBOX_PLAN.md#phase-0-results-2026-11-03-macos",
   },
   "claude-cli": {
     "sandbox.terminal":
-      "dev/backlog/HARNESS_SANDBOX_PLAN.md#phase-0-results-2026-11-03-macos",
+      "dev/implemented/HARNESS_SANDBOX_PLAN.md#phase-0-results-2026-11-03-macos",
   },
   "copilot-cli": {
     "hooks.error":

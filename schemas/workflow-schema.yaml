@@ -869,12 +869,15 @@ $defs:
       sandbox:
         type: boolean
         description: >-
-          true contains terminal commands' writes to the workspace roots, approved external roots,
-          temp dirs and the harness's own caches; network, harness file tools and MCP servers follow
-          each harness's own policy. false removes only ctrlyoke's containment and never disables a
-          sandbox enabled in the harness's own settings. When absent, inherits defaults.sandbox then
-          today's per-harness behavior. An explicit true fails the step at launch on harnesses that
-          can't honor it (Qwen, OpenCode, plus any phase 0 marked unsupported).
+          Terminal-command write containment, separate from tool approval. `true` lets terminal
+          commands write only the workspace roots, approved external roots, temp directories and the
+          harness's own caches; network access, harness file tools and MCP servers follow each
+          harness's own sandbox policy. `false` removes only ctrlyoke's containment and never
+          disables a sandbox you enabled in the harness's own settings. When absent, inherits
+          `defaults.sandbox`, then each harness's behavior for the permission mode (Codex `allowAll`
+          still runs in its `workspace-write` sandbox). Only Codex CLI and Claude Code support it:
+          an explicit `true` fails the step at launch on Copilot CLI, Antigravity CLI, Qwen Code and
+          OpenCode.
         title: Sandbox
       errorBehavior:
         description: >-

@@ -86,7 +86,7 @@ import {
   WORKTREE_MODES,
   PERMISSION_MODES,
   SANDBOX_UI_LABELS,
-  SANDBOX_SELECTIONS,
+  SANDBOX_SELECT_OPTIONS,
   sandboxSelectionFromValue,
   sandboxValueFromSelection,
   PERMISSION_CAPABILITY_KEYS,
@@ -127,6 +127,7 @@ import {
   diagnosticsForMcpFiltering,
   firstCompatibilityProperty,
   formatCompatibilitySource,
+  sandboxSupportDiagnostic,
   toFieldDiagnostic,
   workflowPermissionDiagnostic,
 } from "@utils/compatibilityDiagnostics";
@@ -539,6 +540,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
   );
   const hookDiagnostics = diagnosticsForHookEvents(compatibility.diagnostics);
   const mcpDiagnostics = diagnosticsForMcpFiltering(compatibility.diagnostics);
+  const sandboxSupport = sandboxSupportDiagnostic(compatibility.diagnostics);
   const allowedDiagnostics = diagnosticsForPermissionField(
     compatibility.diagnostics,
     "allowedTools"
@@ -2485,6 +2487,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <CustomSelect
                     id="settings-sandbox"
+                    triggerAriaLabel={SANDBOX_UI_LABELS.FIELD}
                     value={sandboxSelectionFromValue(
                       workflowProperties.sandbox
                     )}
@@ -2492,30 +2495,11 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       const sandbox = sandboxValueFromSelection(value);
                       postWorkflowPropertiesUpdate({ sandbox });
                     }}
-                    options={[
-                      {
-                        value: SANDBOX_SELECTIONS.INHERIT,
-                        label: SANDBOX_UI_LABELS.INHERIT,
-                      },
-                      {
-                        value: SANDBOX_SELECTIONS.ON,
-                        label: SANDBOX_UI_LABELS.ON,
-                      },
-                      {
-                        value: SANDBOX_SELECTIONS.OFF,
-                        label: SANDBOX_UI_LABELS.OFF,
-                      },
-                    ]}
+                    options={[...SANDBOX_SELECT_OPTIONS]}
                   />
-                  {compatibility.diagnostics.find((diagnostic) =>
-                    diagnostic.code.startsWith("compatibility.sandbox.")
-                  )?.message && (
+                  {sandboxSupport && (
                     <p className="text-xs text-description-fg">
-                      {
-                        compatibility.diagnostics.find((diagnostic) =>
-                          diagnostic.code.startsWith("compatibility.sandbox.")
-                        )?.message
-                      }
+                      {sandboxSupport.message}
                     </p>
                   )}
                 </FormField>

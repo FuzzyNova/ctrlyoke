@@ -17,7 +17,10 @@ import {
 import { CliPromptPreparer } from "../../core/harness/shared/CliPromptPreparer";
 import { ExecutionPlanBuilder } from "../../core/harness/shared/ExecutionPlanBuilder";
 import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
+import { QwenCliProvider } from "../../core/harness/qwen/QwenCliProvider";
+import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
 import {
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   HARNESS_IDS,
   MCP_CAPABILITY_KEYS,
   PREVIEW_MUTATION_SCOPES,
@@ -31,7 +34,10 @@ import {
   HEADLESS_PROMPT_DELIVERIES,
   type HeadlessPromptDelivery,
 } from "../../types/DashboardConstants";
-import type { HarnessCapabilityRegistrySnapshot } from "../../types/CompatibilityTypes";
+import {
+  COMPATIBILITY_DIAGNOSTIC_CODES,
+  type HarnessCapabilityRegistrySnapshot,
+} from "../../types/CompatibilityTypes";
 import type { PromptFile, PromptStep } from "../../types/CtrlYokeTypes";
 import {
   resolveExecutionProperties,
@@ -146,9 +152,9 @@ function createPromptPreparer(
 
 function createHarness(
   workspaceRoot?: string,
-  buildPromptSections?: (prompt: PromptStep) => Promise<PromptSections>
+  buildPromptSections?: (prompt: PromptStep) => Promise<PromptSections>,
+  provider: ICliProvider = new ClaudeCliProvider()
 ): ExecutionPreviewHarness {
-  const provider = new ClaudeCliProvider();
   return {
     provider,
     promptPreparer: createPromptPreparer(buildPromptSections, workspaceRoot),
@@ -328,6 +334,55 @@ suite("ExecutionPreviewService", () => {
     });
 
     assert.deepStrictEqual(preview.steps[0]?.sandbox, { kind: "on" });
+  });
+
+  test("previews an explicit sandbox on an unsupported harness with the error instead of throwing", async () => {
+    const provider = new QwenCliProvider();
+    const harness = createHarness(undefined, undefined, provider);
+    const unsupported = {
+      fidelity: "unsupported" as const,
+      mechanism: "none" as const,
+      verification: "verified" as const,
+    };
+    const capabilities = {
+      schemaVersion: 1,
+      enabledDomains: ["sandbox"],
+      harnesses: {
+        [HARNESS_IDS.QWEN_CLI]: {
+          available: true,
+          version: "1.0.0",
+          descriptor: {
+            harnessId: HARNESS_IDS.QWEN_CLI,
+            permissions: provider.toolPermissionMapper.capabilities,
+            sandbox: provider.capabilities.sandbox,
+          },
+          effective: { sandbox: { terminal: unsupported } },
+        },
+      },
+    } as HarnessCapabilityRegistrySnapshot;
+    const service = new ExecutionPreviewService({
+      defaults: createDefaults(),
+      capabilities,
+      getHarness: () => harness,
+      extensionPath: "extension",
+      hostCanProvidePty: false,
+      platform: "linux",
+    });
+
+    const preview = await service.build({
+      workflow: {
+        harness: HARNESS_IDS.QWEN_CLI,
+        steps: [{ prompt: "contained", sandbox: true }],
+      },
+    });
+
+    const diagnostic = preview.steps[0]?.diagnostics.find(
+      (item) => item.code === COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED
+    );
+    assert.strictEqual(
+      diagnostic?.severity,
+      COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
+    );
   });
 
   test("counts disabled queue entries against the limit in a scoped preview", async () => {

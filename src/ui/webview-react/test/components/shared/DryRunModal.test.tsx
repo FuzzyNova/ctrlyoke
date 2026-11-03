@@ -386,6 +386,29 @@ describe("DryRunModal", () => {
     ).toHaveTextContent("Maximum attempts2");
   });
 
+  it.each([
+    [
+      { kind: "on", detail: "Codex workspace-write, network off" },
+      "Sandboxed: Codex workspace-write, network off",
+    ],
+    [{ kind: "off" }, "Not sandboxed"],
+    [{ kind: "harness" }, "Harness setting"],
+  ] as const)("shows the step's effective sandbox (%o)", (sandbox, label) => {
+    openPreview(
+      { kind: "step", stepIndex: 0 },
+      {
+        ...preview,
+        steps: [{ ...preview.steps[0], sandbox: { ...sandbox } }],
+      }
+    );
+
+    render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
+
+    expect(screen.getByText("Sandbox").parentElement).toHaveTextContent(
+      `Sandbox${label}`
+    );
+  });
+
   it("keeps tab order and primary icon shapes stable while showing severity and permission badges", () => {
     const diagnosticPreview: WorkflowExecutionPreview = {
       ...preview,

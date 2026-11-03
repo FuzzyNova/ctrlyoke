@@ -13,6 +13,7 @@ import {
   type HarnessId,
 } from "@root/types/DashboardConstants";
 import {
+  COMPATIBILITY_DIAGNOSTIC_CODES,
   getCompatibilityCaveatMessage,
   isAdvisoryCaveat,
   type CompatibilityCaveatCode,
@@ -38,6 +39,20 @@ export function diagnosticsForHookEvents(
 ): CompatibilityDiagnostic[] {
   return diagnostics.filter((diagnostic) =>
     HOOK_EVENT_ORDER.includes(diagnostic.capability as HookEvent)
+  );
+}
+
+const SANDBOX_DIAGNOSTIC_CODES: ReadonlySet<string> = new Set([
+  COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED,
+  COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_PARTIAL,
+]);
+
+/** The harness-support note shown under a Sandbox control, if the analyzer raised one. */
+export function sandboxSupportDiagnostic(
+  diagnostics: readonly CompatibilityDiagnostic[]
+): CompatibilityDiagnostic | undefined {
+  return diagnostics.find((diagnostic) =>
+    SANDBOX_DIAGNOSTIC_CODES.has(diagnostic.code)
   );
 }
 

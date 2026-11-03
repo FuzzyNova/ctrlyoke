@@ -25,7 +25,7 @@ import {
   EXECUTION_MODE_HELP_TEXT,
   PERMISSION_MODES,
   SANDBOX_UI_LABELS,
-  SANDBOX_SELECTIONS,
+  SANDBOX_SELECT_OPTIONS,
   sandboxSelectionFromValue,
   sandboxValueFromSelection,
   PERMISSION_CAPABILITY_KEYS,
@@ -93,6 +93,7 @@ import {
   diagnosticsForMcpFiltering,
   firstCompatibilityProperty,
   formatCompatibilitySource,
+  sandboxSupportDiagnostic,
   toFieldDiagnostic,
 } from "@utils/compatibilityDiagnostics";
 import { HooksEditor } from "./HooksEditor";
@@ -414,6 +415,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   );
   const hookDiagnostics = diagnosticsForHookEvents(compatibility.diagnostics);
   const mcpDiagnostics = diagnosticsForMcpFiltering(compatibility.diagnostics);
+  const sandboxSupport = sandboxSupportDiagnostic(compatibility.diagnostics);
   const allowedDiagnostics = diagnosticsForPermissionField(
     permissionDiagnostics,
     "allowedTools"
@@ -1333,6 +1335,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 <CustomSelect
                   id="prop-sandbox"
                   schemaPath="sandbox"
+                  triggerAriaLabel={SANDBOX_UI_LABELS.FIELD}
                   value={sandboxSelectionFromValue(displayedProperties.sandbox)}
                   onChange={(value) =>
                     setProperty(
@@ -1340,31 +1343,12 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       sandboxValueFromSelection(value)
                     )
                   }
-                  options={[
-                    {
-                      value: SANDBOX_SELECTIONS.INHERIT,
-                      label: SANDBOX_UI_LABELS.INHERIT,
-                    },
-                    {
-                      value: SANDBOX_SELECTIONS.ON,
-                      label: SANDBOX_UI_LABELS.ON,
-                    },
-                    {
-                      value: SANDBOX_SELECTIONS.OFF,
-                      label: SANDBOX_UI_LABELS.OFF,
-                    },
-                  ]}
+                  options={[...SANDBOX_SELECT_OPTIONS]}
                   disabled={fieldDisabled(PROMPT_PROPERTIES.SANDBOX)}
                 />
-                {compatibility.diagnostics.find((diagnostic) =>
-                  diagnostic.code.startsWith("compatibility.sandbox.")
-                )?.message && (
+                {sandboxSupport && (
                   <p className="text-xs text-description-fg">
-                    {
-                      compatibility.diagnostics.find((diagnostic) =>
-                        diagnostic.code.startsWith("compatibility.sandbox.")
-                      )?.message
-                    }
+                    {sandboxSupport.message}
                   </p>
                 )}
               </div>

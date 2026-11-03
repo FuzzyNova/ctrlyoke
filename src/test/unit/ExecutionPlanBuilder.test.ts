@@ -11,8 +11,13 @@ import { QwenCliProvider } from "../../core/harness/qwen/QwenCliProvider";
 import { CliExecutionSession } from "../../core/harness/shared/CliExecutionSession";
 import { ExecutionPlanBuilder } from "../../core/harness/shared/ExecutionPlanBuilder";
 import { resolveHookNotificationPlan } from "../../core/harness/shared/HookNotificationPlan";
+import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
-import { EXECUTION_MODES, HARNESS_IDS } from "../../types/DashboardConstants";
+import {
+  EFFECTIVE_SANDBOX_KINDS,
+  EXECUTION_MODES,
+  HARNESS_IDS,
+} from "../../types/DashboardConstants";
 import type { ResolvedProperties } from "../../utils/PropertyResolver";
 
 const fsPromises = require("fs/promises") as typeof import("fs/promises");
@@ -92,20 +97,50 @@ suite("ExecutionPlanBuilder", () => {
       const plan = await createBuilder(provider, workspaceRoot).plan(
         createSession(mode, properties)
       );
-      const settingsMutation = plan.mutations.find((mutation) =>
-        mutation.description?.includes("Claude") &&
-        mutation.description?.includes("hook settings")
+      const settingsMutation = plan.mutations.find(
+        (mutation) =>
+          mutation.description?.includes("Claude") &&
+          mutation.description?.includes("hook settings")
       );
       assert.ok(settingsMutation?.intendedContent);
       const settings = JSON.parse(settingsMutation.intendedContent) as {
         sandbox?: { enabled?: boolean; filesystem?: { allowWrite?: string[] } };
       };
       assert.strictEqual(settings.sandbox?.enabled, true, mode);
-      assert.ok(settings.sandbox?.filesystem?.allowWrite?.includes(workspaceRoot));
+      assert.ok(
+        settings.sandbox?.filesystem?.allowWrite?.includes(workspaceRoot)
+      );
       assert.strictEqual(
         plan.cliArgs.filter((arg) => arg === "--settings").length,
         1,
         mode
+      );
+    }
+  });
+
+  test("refuses to launch an explicit sandbox on a harness without a sandbox mapper", async () => {
+    for (const [harnessId, create] of providers) {
+      const provider = create();
+      if ((provider as ICliProvider).sandboxMapper) continue;
+      const properties: ResolvedProperties = {
+        ...resolvedProperties,
+        harness: harnessId,
+        sandbox: true,
+      };
+      await assert.rejects(
+        createBuilder(provider).plan(createSession("headless", properties)),
+        /does not support ctrlyoke terminal sandboxing/,
+        harnessId
+      );
+      const preview = await createBuilder(provider).plan(
+        createSession("headless", properties),
+        { allowUnsupportedSandboxPreview: true }
+      );
+      // Dry Run must not call an uncontained step "Sandboxed".
+      assert.strictEqual(
+        preview.effectiveSandbox?.kind,
+        EFFECTIVE_SANDBOX_KINDS.OFF,
+        harnessId
       );
     }
   });

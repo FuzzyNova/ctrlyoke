@@ -228,6 +228,42 @@ suite("CompatibilityAnalyzer", () => {
     );
     assert.deepStrictEqual(analyze({ steps: [{ prompt: "test" }] }), []);
   });
+  test("points a sandbox diagnostic at the tier that authored it", () => {
+    const qwen = HARNESS_IDS.QWEN_CLI;
+    const caps = snapshot({
+      [qwen]: installed(qwen, true, "unsupported", "verified"),
+    });
+    const find = (items: ReturnType<typeof analyze>) =>
+      items.find(
+        (item) =>
+          item.code === COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED
+      );
+    assert.strictEqual(
+      find(
+        analyze(
+          { harness: qwen, sandbox: true, steps: [{ prompt: "w" }] },
+          caps
+        )
+      )?.propertyPointer,
+      "/sandbox"
+    );
+    const fromDefaults = find(
+      analyzeCompatibility({
+        workflow: { harness: qwen, steps: [{ prompt: "d" }] },
+        executionTargets: enumerateCompatibilityTargets(
+          { harness: qwen, steps: [{ prompt: "d" }] },
+          (prompt, file) =>
+            resolveExecutionProperties(prompt, file, {
+              defaults: { ...defaults, sandbox: true },
+              hostCanProvidePty: false,
+            })
+        ),
+        capabilities: caps,
+      })
+    );
+    assert.ok(fromDefaults, "defaults.sandbox: true still reports the error");
+    assert.strictEqual(fromDefaults.propertyPointer, undefined);
+  });
   test("resolves sandbox prompt, workflow, defaults, and absent sources", () => {
     const workflow = {
       harness: HARNESS_IDS.CODEX_CLI,

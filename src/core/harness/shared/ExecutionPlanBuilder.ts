@@ -36,6 +36,7 @@ import type { CliProviderWorkflowContext } from "./CliProviderUtils";
 import { CliProviderUtils } from "./CliProviderUtils";
 import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  EFFECTIVE_SANDBOX_KINDS,
   type CodexSandboxMode,
 } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
@@ -175,15 +176,22 @@ export class ExecutionPlanBuilder {
           additionalArgs: session.resolvedProperties?.additionalArgs,
         })
       : undefined;
-    if (
-      !this.deps.provider.sandboxMapper &&
-      sandboxRequest === true &&
-      !options.allowUnsupportedSandboxPreview
-    ) {
-      throw new Error(
-        `${this.deps.provider.config.displayName} does not support ctrlyoke terminal sandboxing.`
-      );
+    const unsupportedSandboxMessage =
+      !this.deps.provider.sandboxMapper && sandboxRequest === true
+        ? `${this.deps.provider.config.displayName} does not support ctrlyoke terminal sandboxing.`
+        : undefined;
+    if (unsupportedSandboxMessage && !options.allowUnsupportedSandboxPreview) {
+      throw new Error(unsupportedSandboxMessage);
     }
+    // Without a mapper nothing is contained, whatever was requested.
+    const effectiveSandbox: EffectiveSandbox =
+      sandboxApplication?.effective ??
+      (unsupportedSandboxMessage
+        ? {
+            kind: EFFECTIVE_SANDBOX_KINDS.OFF,
+            detail: unsupportedSandboxMessage,
+          }
+        : { kind: effectiveSandboxKind(sandboxRequest) });
     if (
       sandboxApplication?.diagnostics.some(
         (item) => item.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
@@ -197,12 +205,10 @@ export class ExecutionPlanBuilder {
     }
     if (sandboxApplication) {
       baseArgs.push(...sandboxApplication.cliArgs);
-      Log.info(
-        `[Sandbox] ${sandboxApplication.effective.kind}${sandboxApplication.effective.detail ? `: ${sandboxApplication.effective.detail}` : ""}`
-      );
-    } else {
-      Log.info(`[Sandbox] ${effectiveSandboxKind(sandboxRequest)}`);
     }
+    Log.info(
+      `[Sandbox] ${effectiveSandbox.kind}${effectiveSandbox.detail ? `: ${effectiveSandbox.detail}` : ""}`
+    );
     if (
       session.imageFileRefs.length > 0 &&
       this.deps.provider.buildImageAttachmentArgs
@@ -419,9 +425,7 @@ export class ExecutionPlanBuilder {
       permissionApplication,
       mcpApplication: providerPreparation,
       effectiveToolPermissions,
-      effectiveSandbox: sandboxApplication?.effective ?? {
-        kind: effectiveSandboxKind(sandboxRequest),
-      },
+      effectiveSandbox,
       diagnostics: [
         ...providerPreparation.diagnostics,
         ...(sandboxApplication?.diagnostics ?? []),
