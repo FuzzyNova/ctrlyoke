@@ -23,7 +23,9 @@ describe("notifyUser", () => {
       severity: "success",
       detail: "The workflow was saved.",
     });
-    expect(window.vscodeApi?.postMessage).not.toHaveBeenCalled();
+    expect(window.vscodeApi?.postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK })
+    );
   });
 
   it("sends panel feedback to the native host without queueing a toast", async () => {
@@ -42,13 +44,15 @@ describe("notifyUser", () => {
     expect(useUiStore.getState().toastQueue).toEqual([]);
   });
 
-  it("forwards every error it shows to the session log", async () => {
+  it("forwards every toast it shows to the session log at its severity", async () => {
     const { notifyUser, showWebviewToast } = await import("@utils/notifyUser");
     const { useUiStore } = await import("@store/uiStore");
     useUiStore.getState().resetUi();
 
     notifyUser("Run export failed", "error", "No timeline.");
     showWebviewToast("Toast failed", "error");
+    notifyUser("Check the harness", "warning");
+    showWebviewToast("Copied", "info");
     notifyUser("Saved", "success");
 
     const logged = vi
@@ -67,6 +71,12 @@ describe("notifyUser", () => {
         level: "error",
         message: "[Toast] Toast failed",
       }),
+      expect.objectContaining({
+        level: "warn",
+        message: "[Toast] Check the harness",
+      }),
+      expect.objectContaining({ level: "info", message: "[Toast] Copied" }),
+      expect.objectContaining({ level: "info", message: "[Toast] Saved" }),
     ]);
   });
 });

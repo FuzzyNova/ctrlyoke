@@ -22,11 +22,12 @@ export async function saveIfDirty(
   try {
     await dirtyDocument.save();
   } catch (error) {
-    Log.error("[VsCodeDocuments] Failed to auto-save file:", error);
     notifyUserFeedback(
       userFeedbackSink,
       USER_FEEDBACK_SEVERITY.WARNING,
-      "ctrlyoke: Could not auto-save file. Running with last saved version."
+      "ctrlyoke: Could not auto-save file. Running with last saved version.",
+      undefined,
+      error
     );
   }
 }

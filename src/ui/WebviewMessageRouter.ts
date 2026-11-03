@@ -1997,11 +1997,7 @@ export class WebviewMessageRouter {
     const message = hideDetails
       ? `${action} failed.`
       : `${action} failed: ${getErrorMessage(error)}`;
-    Log.error(
-      hideDetails
-        ? `[WebviewMessageRouter] ${action} failed while writing secret data.`
-        : `[WebviewMessageRouter] ${message}`
-    );
+    // The dashboard toasts and logs `message`; no host log line needed.
     ctx.emit({
       type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED,
       action,
@@ -3016,10 +3012,8 @@ export class WebviewMessageRouter {
         if (success) {
           Log.info(`[WorktreeManagement] sync succeeded: ${summary}`);
         } else {
+          // The dashboard toasts and logs `errorMessage`.
           errorMessage = resultMessage;
-          Log.warn(
-            `[WorktreeManagement] sync finished with issues: ${summary}`
-          );
         }
       } catch (error) {
         success = false;

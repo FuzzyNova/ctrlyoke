@@ -9,19 +9,29 @@ import {
 import { WebviewLog } from "@utils/logger";
 
 /**
- * Every error the dashboard shows the user also lands in the session log, so
- * callers never log before notifying. `WebviewLog` forwards to the extension
- * host, which writes it as `[<client>] …`.
+ * Every toast the dashboard shows the user also lands in the session log at
+ * its own severity, so callers never log before notifying. `WebviewLog`
+ * forwards to the extension host, which writes it as `[<client>] …`. The host
+ * does not log these again: `SHOW_NATIVE_FEEDBACK` goes straight to its sink.
  */
-function logShownError(
+function logShownToast(
   message: string,
   severity: UserFeedbackSeverity,
   detail?: string
 ): void {
-  if (severity !== USER_FEEDBACK_SEVERITY.ERROR) return;
-  WebviewLog.error(
-    detail ? `[Toast] ${message}\n${detail}` : `[Toast] ${message}`
-  );
+  const line = detail ? `[Toast] ${message}\n${detail}` : `[Toast] ${message}`;
+  switch (severity) {
+    case USER_FEEDBACK_SEVERITY.ERROR:
+      WebviewLog.error(line);
+      return;
+    case USER_FEEDBACK_SEVERITY.WARNING:
+      WebviewLog.warn(line);
+      return;
+    case USER_FEEDBACK_SEVERITY.INFO:
+    case USER_FEEDBACK_SEVERITY.SUCCESS:
+      WebviewLog.info(line);
+      return;
+  }
 }
 
 /** Route webview-originated feedback to the current host's feedback surface. */
@@ -30,7 +40,7 @@ export function notifyUser(
   severity: UserFeedbackSeverity,
   detail?: string
 ): void {
-  logShownError(message, severity, detail);
+  logShownToast(message, severity, detail);
   if (isStandalone) {
     useUiStore.getState().showToast(message, severity, { detail });
     return;
@@ -50,6 +60,6 @@ export function showWebviewToast(
   severity: UserFeedbackSeverity,
   options?: ToastOptions
 ): void {
-  logShownError(message, severity, options?.detail);
+  logShownToast(message, severity, options?.detail);
   useUiStore.getState().showToast(message, severity, options);
 }

@@ -30,7 +30,11 @@ import {
 } from "../utils/MarkdownFrontmatter";
 import { getVariableKeyErrors } from "../utils/KeyValueKeyKinds";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
-import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
+import {
+  emitUserFeedback,
+  notifyUserFeedback,
+  type UserFeedbackSink,
+} from "./UserFeedbackSink";
 import {
   STEP_TYPES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
@@ -208,11 +212,12 @@ export class PromptFileParser {
       this.strictValidator = compiled.strictValidator;
       this.relaxedValidator = compiled.relaxedValidator;
     } catch (error) {
-      Log.error("[PromptFileParser] Failed to load JSON schema:", error);
       notifyUserFeedback(
         this.userFeedbackSink,
-        "error",
-        "ctrlyoke: Failed to load validation schema"
+        USER_FEEDBACK_SEVERITY.ERROR,
+        "ctrlyoke: Failed to load validation schema",
+        undefined,
+        error
       );
     }
   }
@@ -273,29 +278,23 @@ export class PromptFileParser {
     } catch (error) {
       if (isNewerSchemaError(error)) {
         this.lastNewerSchemaError = error;
-        if (this.userFeedbackSink) {
-          this.userFeedbackSink.notify({
-            severity: "error",
-            message: error.message,
-            action: USER_FEEDBACK_ACTIONS.UPDATE_EXTENSION,
-          });
-        }
+        emitUserFeedback(this.userFeedbackSink, {
+          severity: USER_FEEDBACK_SEVERITY.ERROR,
+          message: error.message,
+          action: USER_FEEDBACK_ACTIONS.UPDATE_EXTENSION,
+        });
         return null;
       }
       this.lastParseError =
         error instanceof Error ? error : new Error(String(error));
-      Log.error(`[PromptFileParser] Failed to parse file ${filePath}:`, error);
-      if (this.userFeedbackSink) {
-        notifyUserFeedback(
-          this.userFeedbackSink,
-          "error",
-          `ctrlyoke: Failed to parse ${path.basename(filePath)}: ${error}`
-        );
-      } else {
-        Log.error(
-          `[PromptFileParser] ctrlyoke: Failed to parse ${path.basename(filePath)}: ${error}`
-        );
-      }
+      Log.debug(`[PromptFileParser] Failed to parse file ${filePath}`);
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.ERROR,
+        `ctrlyoke: Failed to parse ${path.basename(filePath)}: ${error}`,
+        undefined,
+        error
+      );
       return null;
     }
   }
@@ -945,7 +944,7 @@ export class PromptFileParser {
     } catch (error) {
       if (isNewerSchemaError(error)) {
         this.lastNewerSchemaError = error;
-        this.userFeedbackSink?.notify({
+        emitUserFeedback(this.userFeedbackSink, {
           severity: USER_FEEDBACK_SEVERITY.ERROR,
           message: error.message,
           action: USER_FEEDBACK_ACTIONS.UPDATE_EXTENSION,
@@ -954,21 +953,16 @@ export class PromptFileParser {
       }
       this.lastParseError =
         error instanceof Error ? error : new Error(String(error));
-      Log.error(
-        `[PromptFileParser] Failed to read markdown prompt file ${filePath}:`,
+      Log.debug(
+        `[PromptFileParser] Failed to read markdown prompt file ${filePath}`
+      );
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.ERROR,
+        `ctrlyoke: Failed to read ${path.basename(filePath)}: ${error}`,
+        undefined,
         error
       );
-      if (this.userFeedbackSink) {
-        notifyUserFeedback(
-          this.userFeedbackSink,
-          "error",
-          `ctrlyoke: Failed to read ${path.basename(filePath)}: ${error}`
-        );
-      } else {
-        Log.error(
-          `[PromptFileParser] ctrlyoke: Failed to read ${path.basename(filePath)}: ${error}`
-        );
-      }
       return null;
     }
   }

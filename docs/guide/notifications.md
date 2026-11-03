@@ -134,7 +134,9 @@ screen.
   sets the minimum severity for ctrlyoke's _other_ popups: the results of
   actions, such as a failed save or a validation error. Choose **All**,
   **Warning and Error**, **Error Only** or **None**. It doesn't affect the
-  completion and hook notifications above.
+  completion and hook notifications above. A message this hides is still
+  written to the session log in `.ctrlyoke/logs/`, as is every message
+  ctrlyoke does show.
 - **Only notify when ctrlyoke is not focused**
   ([`notifications.onlyWhenWindowUnfocused`](/reference/settings#notifications-onlywhenwindowunfocused))
   skips VS Code popups while the VS Code window has focus, and browser

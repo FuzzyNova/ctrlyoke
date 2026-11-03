@@ -60,14 +60,12 @@ export class WorkflowCommandHandler {
         `[WorkflowCommandHandler] ctrlyoke: Opened prompt file: ${currentFilePath}`
       );
     } catch (error) {
-      Log.error(
-        "[WorkflowCommandHandler] ctrlyoke: Failed to open prompt file:",
-        error
-      );
       notifyUserFeedback(
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.ERROR,
-        `ctrlyoke: Failed to open file: ${getErrorMessage(error)}`
+        `ctrlyoke: Failed to open file: ${getErrorMessage(error)}`,
+        undefined,
+        error
       );
     }
   }

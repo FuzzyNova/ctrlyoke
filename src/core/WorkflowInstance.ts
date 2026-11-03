@@ -1704,14 +1704,13 @@ export class WorkflowInstance
       await this.restoreWorkflowFromWorkingFile(filePath);
       Log.info(`[WorkflowInstance] Loaded workflow: ${filePath}`);
     } catch (loadError) {
-      Log.error(
-        "[WorkflowInstance] Failed to load workflow:",
-        loadError as Error
-      );
+      Log.debug(`[WorkflowInstance] Failed to load workflow: ${filePath}`);
       notifyUserFeedback(
         this.userFeedbackSink,
         "error",
-        `Failed to load workflow: ${getErrorMessage(loadError)}`
+        `Failed to load workflow: ${getErrorMessage(loadError)}`,
+        undefined,
+        loadError
       );
       throw loadError;
     }
@@ -2783,11 +2782,12 @@ export class WorkflowInstance
       );
       this.notifyShiftedReferences(shiftWarning);
     } catch (error) {
-      Log.error("[WorkflowInstance] Failed to queue prompts:", error);
       notifyUserFeedback(
         this.userFeedbackSink,
         "error",
-        `Failed to queue prompts: ${getErrorMessage(error)}`
+        `Failed to queue prompts: ${getErrorMessage(error)}`,
+        undefined,
+        error
       );
     }
   }

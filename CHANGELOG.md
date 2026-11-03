@@ -39,6 +39,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Every error, warning and information message ctrlyoke shows, in VS Code or
+  the dashboard, is now also written to the session log in
+  `.ctrlyoke/logs/` as a `[Toast]` line. Command errors that have no buttons,
+  such as "No file selected", now follow your `notifications.toastLevel`
+  setting like ctrlyoke's other messages.
 - Continuing a view-only imported run now reports why it cannot continue.
 - Run exports now collapse streaming text deltas into sealed attempt output by
   default; `ctrlyoke export --with-stream-deltas` keeps every chunk for replay.

@@ -1366,9 +1366,9 @@ export class WebviewSettingsSync {
       feedbackSink,
       USER_FEEDBACK_SEVERITY.ERROR,
       message,
-      detail
+      detail,
+      error
     );
-    Log.error(`[WebviewSettingsSync] ${message}`, detail ?? "");
   }
 
   private reportGlobalSettingFailure(error: unknown): void {
@@ -1378,9 +1378,9 @@ export class WebviewSettingsSync {
       this.getOrchestrator()?.getUserFeedbackSink?.(),
       USER_FEEDBACK_SEVERITY.ERROR,
       message,
-      detail
+      detail,
+      error
     );
-    Log.error(`[WebviewSettingsSync] ${message}`, detail);
   }
 
   async handleUpdateGlobalSetting(

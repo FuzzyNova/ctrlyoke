@@ -27,6 +27,7 @@ import type {
   UpdateStepsMessage,
 } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
+import { logUserFeedback } from "../core/UserFeedbackSink";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { restoreClearedWorkflowProperties } from "../utils/WorkflowPropertyPatch";
 import type { WebviewClientContext } from "./WebviewClientContext";
@@ -302,6 +303,11 @@ export class WorkflowStepHandlers {
     warning: string | undefined
   ): void {
     if (!warning) return;
+    // USER_FEEDBACK toasts are not logged by the dashboard.
+    logUserFeedback({
+      severity: USER_FEEDBACK_SEVERITY.WARNING,
+      message: warning,
+    });
     ctx.emit({
       type: MESSAGE_TYPES.USER_FEEDBACK,
       id: `${operation}-references-${Date.now()}`,

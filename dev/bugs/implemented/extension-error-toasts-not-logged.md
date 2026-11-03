@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-02 by Claude, while investigating a dashboard Run export failure that toasted but left no log line
 - **Area:** `src/core/UserFeedbackSink.ts`, `src/extension.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit. Warning and info messages are logged too, on both the host and the dashboard.
 
 ## Symptom
 

@@ -1393,10 +1393,6 @@ export class WorkflowStartupPipeline {
   }
 
   private async finalizeFailure(error: unknown): Promise<void> {
-    Log.error(
-      "[executeLoadedPromptFile] Failed to execute prompt file:",
-      error
-    );
     const failureMessage = getErrorMessage(error);
     // The executor already failed the step and advanced past it; finalizing
     // the "in-flight" step here would fail the next, never-started one too.
@@ -1429,9 +1425,8 @@ export class WorkflowStartupPipeline {
    * worktree is deliberately not settled here.
    */
   public async failResumeSetup(error: unknown): Promise<void> {
-    Log.error(
-      `[inst:${this.port.id.slice(0, 8)}] Failed to resume workflow:`,
-      error
+    Log.debug(
+      `[inst:${this.port.id.slice(0, 8)}] Resume setup failed; failing the run`
     );
     this.port.failRuntime();
     await this.port.queue.commitRuntimeTransition();
@@ -1456,7 +1451,9 @@ export class WorkflowStartupPipeline {
     notifyUserFeedback(
       this.port.userFeedbackSink,
       "error",
-      `ctrlyoke: Execution failed: ${executionFailureMessage}`
+      `ctrlyoke: Execution failed: ${executionFailureMessage}`,
+      undefined,
+      cause
     );
     const reportExecutionFailure = () =>
       this.port.status.report(

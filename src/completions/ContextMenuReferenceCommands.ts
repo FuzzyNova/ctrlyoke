@@ -27,6 +27,7 @@ import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { getInclusiveEndLine } from "../utils/InclusiveLineRange";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import { gitRefExists } from "../utils/GitUtils";
+import { showWarningMessage } from "../platform/VsCodeMessages";
 
 interface TimelineItemLike {
   id?: unknown;
@@ -127,7 +128,7 @@ export class ContextMenuReferenceCommands {
 
     const referencePath = await this.resolveReferencePath(uri);
     if (!referencePath) {
-      void vscode.window.showWarningMessage(
+      void showWarningMessage(
         "ctrlyoke: Selected file is outside the workspace."
       );
       return;
@@ -143,7 +144,7 @@ export class ContextMenuReferenceCommands {
 
     const referencePath = await this.resolveReferencePath(uri);
     if (!referencePath) {
-      void vscode.window.showWarningMessage(
+      void showWarningMessage(
         "ctrlyoke: Selected directory is outside the workspace."
       );
       return;
@@ -159,7 +160,7 @@ export class ContextMenuReferenceCommands {
 
     const referencePath = await this.resolveReferencePath(uri);
     if (!referencePath) {
-      void vscode.window.showWarningMessage(
+      void showWarningMessage(
         "ctrlyoke: Selected file is outside the workspace."
       );
       return;
@@ -196,7 +197,7 @@ export class ContextMenuReferenceCommands {
 
     const referencePath = await this.resolveReferencePath(uri);
     if (!referencePath) {
-      void vscode.window.showWarningMessage(
+      void showWarningMessage(
         "ctrlyoke: Selected file is outside the workspace."
       );
       return;
@@ -319,7 +320,7 @@ export class ContextMenuReferenceCommands {
       .filter((reference): reference is string => reference !== null);
 
     if (references.length === 0) {
-      void vscode.window.showWarningMessage(
+      void showWarningMessage(
         "ctrlyoke: No selected SCM resources are inside the workspace."
       );
       return;
@@ -389,7 +390,7 @@ export class ContextMenuReferenceCommands {
   }
 
   private showCommitReferenceWarning(message: string): void {
-    void vscode.window.showWarningMessage(message);
+    void showWarningMessage(message);
   }
 
   private activeTabResources(): vscode.Uri[] {

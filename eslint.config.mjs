@@ -20,6 +20,19 @@ const jsxA11yRecommendedRules = Object.fromEntries(
     return [key, severity === "off" ? "off" : "error"];
   })
 );
+const STATUS_MESSAGE_RESTRICTION = {
+  selector:
+    "CallExpression[callee.type='MemberExpression'][callee.property.name='updateStatusMessage']",
+  message:
+    "Use StatusMessageReporter.report() instead of calling updateStatusMessage() directly.",
+};
+// Every message ctrlyoke shows the user must also reach the session log.
+const NATIVE_MESSAGE_RESTRICTION = {
+  selector:
+    "CallExpression > MemberExpression.callee[object.property.name='window'][property.name=/^show(Error|Warning|Information)Message$/]",
+  message:
+    "Use notifyUserFeedback() (src/core/UserFeedbackSink.ts), or the logging wrappers in src/platform/VsCodeMessages.ts when the message needs buttons, so the message is also logged.",
+};
 
 export default [
   {
@@ -56,12 +69,8 @@ export default [
       "no-throw-literal": "warn",
       "no-restricted-syntax": [
         "error",
-        {
-          selector:
-            "CallExpression[callee.type='MemberExpression'][callee.property.name='updateStatusMessage']",
-          message:
-            "Use StatusMessageReporter.report() instead of calling updateStatusMessage() directly.",
-        },
+        STATUS_MESSAGE_RESTRICTION,
+        NATIVE_MESSAGE_RESTRICTION,
       ],
       semi: "warn",
     },
@@ -116,7 +125,15 @@ export default [
       "src/core/OutputCaptureBuffer.ts",
     ],
     rules: {
-      "no-restricted-syntax": "off",
+      "no-restricted-syntax": ["error", NATIVE_MESSAGE_RESTRICTION],
+    },
+  },
+  // The logging wrappers are the one place that shows native messages. Tests
+  // stub and drive the native API directly.
+  {
+    files: ["src/platform/VsCodeMessages.ts", "src/test/**/*.ts"],
+    rules: {
+      "no-restricted-syntax": ["error", STATUS_MESSAGE_RESTRICTION],
     },
   },
   // React hooks rules for TSX files

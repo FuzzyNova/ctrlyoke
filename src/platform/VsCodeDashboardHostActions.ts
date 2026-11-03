@@ -94,7 +94,9 @@ export class VsCodeDashboardHostActions implements DashboardHostActions {
         notifyUserFeedback(
           this.feedbackSink,
           USER_FEEDBACK_SEVERITY.ERROR,
-          `Failed to list workflow files: ${error instanceof Error ? error.message : String(error)}`
+          `Failed to list workflow files: ${error instanceof Error ? error.message : String(error)}`,
+          undefined,
+          error
         );
         return undefined;
       }

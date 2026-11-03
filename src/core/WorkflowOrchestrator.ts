@@ -1603,14 +1603,12 @@ export class WorkflowOrchestrator {
       }
     } catch (error) {
       this.orchestratorInitialized = true;
-      Log.error(
-        "[WorkflowOrchestrator] Failed to initialize WorkflowOrchestrator:",
-        error
-      );
       notifyUserFeedback(
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.ERROR,
-        `ctrlyoke: Initialization failed: ${error}`
+        `ctrlyoke: Initialization failed: ${error}`,
+        undefined,
+        error
       );
     }
     if (!this.dashboardReady) {
@@ -4996,14 +4994,12 @@ export class WorkflowOrchestrator {
 
       return sessions;
     } catch (error) {
-      Log.error(
-        "[WorkflowOrchestrator] Failed to discover resumable sessions:",
-        error as Error
-      );
       notifyUserFeedback(
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.ERROR,
-        `Failed to resume session: ${getErrorMessage(error)}`
+        `Failed to resume session: ${getErrorMessage(error)}`,
+        undefined,
+        error
       );
       return [];
     }
@@ -5020,14 +5016,13 @@ export class WorkflowOrchestrator {
         `[WorkflowOrchestrator] Resumed session from working file: ${filePath}`
       );
     } catch (loadError) {
-      Log.error(
-        "[WorkflowOrchestrator] Failed to load session:",
-        loadError as Error
-      );
+      Log.debug(`[WorkflowOrchestrator] Failed to load session: ${filePath}`);
       notifyUserFeedback(
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.ERROR,
-        `Failed to load session: ${getErrorMessage(loadError)}`
+        `Failed to load session: ${getErrorMessage(loadError)}`,
+        undefined,
+        loadError
       );
     }
   }

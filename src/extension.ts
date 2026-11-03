@@ -64,6 +64,7 @@ import {
   VSCODE_YAML_EXTENSION_ID,
   VSCODE_COMMANDS,
   VSCODE_GIT_COMMANDS,
+  type UserFeedbackSeverity,
 } from "./types/DashboardConstants";
 import type { RunnerHostIdentity } from "./types/CtrlYokeTypes";
 import {
@@ -125,6 +126,10 @@ import { ScmCommitCommand } from "./scm/ScmCommitCommand";
 import { CompositeUserFeedbackSink } from "./core/CompositeUserFeedbackSink";
 import { notifyUserFeedback } from "./core/UserFeedbackSink";
 import { VsCodeUserFeedbackSink } from "./platform/VsCodeUserFeedbackSink";
+import {
+  showErrorMessageFor,
+  showWarningMessage,
+} from "./platform/VsCodeMessages";
 import { HostedWebSocketUserFeedbackSink } from "./server/HostedWebSocketUserFeedbackSink";
 import {
   ProjectStateRegistry,
@@ -711,8 +716,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // WorkflowOrchestrator.setDashboardReady() handles the race: if READY
     // arrives before init completes, auto-load is deferred until init finishes.
     workflowOrchestrator.initialize().catch((err) => {
-      Log.error("[Extension] Manager initialization failed:", err);
-      vscode.window.showErrorMessage(`ctrlyoke: Initialization failed: ${err}`);
+      void showErrorMessageFor(err, `ctrlyoke: Initialization failed: ${err}`);
     });
 
     // Re-capture theme vars when VS Code theme changes
@@ -740,19 +744,18 @@ export async function activate(context: vscode.ExtensionContext) {
         }
         const previousRoot = resolvedWorkspaceRoot;
         resolvedWorkspaceRoot = nextRoot;
-        Log.warn(
-          `[Extension] ctrlyoke: Resolved workspace root changed from "${previousRoot}" to "${nextRoot}". A window reload is required to relocate .ctrlyoke.`
+        // The warning toast below is logged without the paths; keep them.
+        Log.info(
+          `[Extension] ctrlyoke: Resolved workspace root changed from "${previousRoot}" to "${nextRoot}".`
         );
-        vscode.window
-          .showWarningMessage(
-            "ctrlyoke: The workspace root changed. Reload the window to relocate the .ctrlyoke directory.",
-            "Reload Window"
-          )
-          .then((choice) => {
-            if (choice === "Reload Window") {
-              vscode.commands.executeCommand("workbench.action.reloadWindow");
-            }
-          });
+        void showWarningMessage(
+          "ctrlyoke: The workspace root changed. Reload the window to relocate the .ctrlyoke directory.",
+          "Reload Window"
+        ).then((choice) => {
+          if (choice === "Reload Window") {
+            vscode.commands.executeCommand("workbench.action.reloadWindow");
+          }
+        });
       })
     );
 
@@ -867,8 +870,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     Log.info("[Extension] ctrlyoke: Extension activated successfully!");
   } catch (error) {
-    Log.error("[Extension] ctrlyoke: Failed to activate extension:", error);
-    vscode.window.showErrorMessage(`ctrlyoke: Activation failed: ${error}`);
+    void showErrorMessageFor(error, `ctrlyoke: Activation failed: ${error}`);
     reportExtensionActivationFailed(getErrorTypeName(error));
   }
 }
@@ -877,13 +879,29 @@ function registerCommands(
   context: vscode.ExtensionContext,
   runnerHostIdentity: RunnerHostIdentity
 ) {
-  const reportCommandError = (message: string): void => {
+  // Commands run after activation, so the orchestrator exists and its sink
+  // honors the user's toast level. notifyUserFeedback logs the message.
+  const reportCommandFeedback = (
+    severity: UserFeedbackSeverity,
+    message: string,
+    error?: unknown
+  ): void => {
     notifyUserFeedback(
       workflowOrchestrator.getUserFeedbackSink(),
-      USER_FEEDBACK_SEVERITY.ERROR,
-      message
+      severity,
+      message,
+      undefined,
+      error
     );
   };
+  const reportCommandError = (message: string, error?: unknown): void =>
+    reportCommandFeedback(USER_FEEDBACK_SEVERITY.ERROR, message, error);
+  const reportCommandWarning = (message: string): void =>
+    reportCommandFeedback(USER_FEEDBACK_SEVERITY.WARNING, message);
+  const reportCommandInfo = (message: string): void =>
+    reportCommandFeedback(USER_FEEDBACK_SEVERITY.INFO, message);
+  const reportCommandSuccess = (message: string): void =>
+    reportCommandFeedback(USER_FEEDBACK_SEVERITY.SUCCESS, message);
   const getWorkspaceRoot = () => getVsCodeWorkspaceRoot() ?? "";
   const contextMenuReferenceCommands = new ContextMenuReferenceCommands(
     webviewProvider,
@@ -898,12 +916,7 @@ function registerCommands(
 
   const resolveOutputCaptureCommand = registerNativeOutputCaptureCommand(
     getWorkspaceRoot,
-    (message) =>
-      notifyUserFeedback(
-        workflowOrchestrator.getUserFeedbackSink(),
-        USER_FEEDBACK_SEVERITY.ERROR,
-        message
-      )
+    (message) => reportCommandError(message)
   );
 
   context.subscriptions.push(
@@ -945,18 +958,12 @@ function registerCommands(
   const reviewWorkspaceSettingsTrustCommand = vscode.commands.registerCommand(
     VSCODE_COMMANDS.REVIEW_WORKSPACE_SETTINGS_TRUST,
     async () => {
-      const reportInfo = (message: string): void =>
-        notifyUserFeedback(
-          workflowOrchestrator.getUserFeedbackSink(),
-          USER_FEEDBACK_SEVERITY.INFO,
-          message
-        );
       if (!vscode.workspace.workspaceFolders?.length) {
-        reportInfo("Open a workspace folder to review its settings.");
+        reportCommandInfo("Open a workspace folder to review its settings.");
         return;
       }
       if (!vscode.workspace.isTrusted) {
-        reportInfo(
+        reportCommandInfo(
           "Trust this workspace in VS Code first; its ctrlyoke settings are not read until then."
         );
         return;
@@ -968,7 +975,7 @@ function registerCommands(
       if (
         result === WORKSPACE_SETTINGS_TRUST_PROMPT_RESULTS.NOTHING_TO_REVIEW
       ) {
-        reportInfo(
+        reportCommandInfo(
           "This workspace's settings don't choose any programs to run."
         );
       }
@@ -1026,23 +1033,18 @@ function registerCommands(
 
         const entitlement = await licenseService.importLicenseFile(blob);
         if (entitlement.tier !== LICENSE_TIERS.PRO) {
-          notifyUserFeedback(
-            workflowOrchestrator.getUserFeedbackSink(),
-            USER_FEEDBACK_SEVERITY.ERROR,
+          reportCommandError(
             "ctrlyoke: The offline license file could not be imported."
           );
           return;
         }
-        notifyUserFeedback(
-          workflowOrchestrator.getUserFeedbackSink(),
-          USER_FEEDBACK_SEVERITY.SUCCESS,
+        reportCommandSuccess(
           "ctrlyoke: Offline Pro license activated successfully."
         );
       } catch (error) {
-        notifyUserFeedback(
-          workflowOrchestrator.getUserFeedbackSink(),
-          USER_FEEDBACK_SEVERITY.ERROR,
-          `ctrlyoke: Offline license activation failed — ${getErrorMessage(error)}`
+        reportCommandError(
+          `ctrlyoke: Offline license activation failed — ${getErrorMessage(error)}`,
+          error
         );
       }
     }
@@ -1109,7 +1111,7 @@ function registerCommands(
     "ctrlyoke.queueFromContext",
     async (uri: vscode.Uri) => {
       if (!uri) {
-        vscode.window.showErrorMessage("No file selected");
+        reportCommandError("No file selected");
         return;
       }
       await saveIfDirty(uri.fsPath, workflowOrchestrator.getUserFeedbackSink());
@@ -1122,7 +1124,7 @@ function registerCommands(
     "ctrlyoke.queueNextFromContext",
     async (uri: vscode.Uri) => {
       if (!uri) {
-        vscode.window.showErrorMessage("No file selected");
+        reportCommandError("No file selected");
         return;
       }
       await saveIfDirty(uri.fsPath, workflowOrchestrator.getUserFeedbackSink());
@@ -1135,7 +1137,7 @@ function registerCommands(
     "ctrlyoke.runFromContext",
     async (uri: vscode.Uri) => {
       if (!uri) {
-        vscode.window.showErrorMessage(
+        reportCommandError(
           "No file selected. Please right-click on a prompt file."
         );
         return;
@@ -1148,8 +1150,9 @@ function registerCommands(
         );
         await workflowOrchestrator.executePromptFile(uri.fsPath);
       } catch (error) {
-        vscode.window.showErrorMessage(
-          `Failed to execute ctrlyoke workflow: ${error}`
+        reportCommandError(
+          `Failed to execute ctrlyoke workflow: ${error}`,
+          error
         );
       }
     }
@@ -1160,7 +1163,7 @@ function registerCommands(
     "ctrlyoke.loadFromContext",
     async (uri: vscode.Uri) => {
       if (!uri) {
-        vscode.window.showErrorMessage(
+        reportCommandError(
           "No file selected. Please right-click on a prompt file."
         );
         return;
@@ -1175,8 +1178,9 @@ function registerCommands(
         // Open the ctrlyoke panel to show the loaded file
         await vscode.commands.executeCommand("ctrlyoke.dashboard.focus");
       } catch (error) {
-        vscode.window.showErrorMessage(
-          `Failed to load ctrlyoke prompt file: ${error}`
+        reportCommandError(
+          `Failed to load ctrlyoke prompt file: ${error}`,
+          error
         );
       }
     }
@@ -1187,7 +1191,7 @@ function registerCommands(
   ): Promise<string | undefined> => {
     const workspaceRoot = getVsCodeWorkspaceRoot();
     if (!workspaceRoot) {
-      vscode.window.showErrorMessage(NO_WORKSPACE_FOLDER_MESSAGE);
+      reportCommandError(NO_WORKSPACE_FOLDER_MESSAGE);
       return undefined;
     }
 
@@ -1198,16 +1202,15 @@ function registerCommands(
           ConfigurationUtils.shouldIncludeGitIgnoredWorkflowFiles(),
       });
     } catch (error) {
-      notifyUserFeedback(
-        workflowOrchestrator.getUserFeedbackSink(),
-        USER_FEEDBACK_SEVERITY.ERROR,
-        `Failed to list workflow files: ${error instanceof Error ? error.message : String(error)}`
+      reportCommandError(
+        `Failed to list workflow files: ${error instanceof Error ? error.message : String(error)}`,
+        error
       );
       return undefined;
     }
 
     if (promptFiles.length === 0) {
-      vscode.window.showWarningMessage("No prompt files found in workspace");
+      reportCommandWarning("No prompt files found in workspace");
       return undefined;
     }
 
@@ -1273,14 +1276,9 @@ function registerCommands(
           );
         }
       } catch (error) {
-        Log.error(
-          "[Extension] ctrlyoke: Failed to resume session:",
-          error as Error
-        );
-        notifyUserFeedback(
-          workflowOrchestrator.getUserFeedbackSink(),
-          USER_FEEDBACK_SEVERITY.ERROR,
-          `Failed to resume session: ${getErrorMessage(error)}`
+        reportCommandError(
+          `Failed to resume session: ${getErrorMessage(error)}`,
+          error
         );
       }
     }
@@ -1339,8 +1337,9 @@ function registerCommands(
         editor.selection = new vscode.Selection(selection.start, selection.end);
         editor.revealRange(selection, vscode.TextEditorRevealType.InCenter);
       } catch (error) {
-        vscode.window.showErrorMessage(
-          `Failed to open file: ${getErrorMessage(error)}`
+        reportCommandError(
+          `Failed to open file: ${getErrorMessage(error)}`,
+          error
         );
       }
     }
@@ -1384,7 +1383,7 @@ function registerCommands(
     async (args: { ref: string; workspaceRoot?: string }) => {
       const workspaceRoot = args.workspaceRoot ?? getVsCodeWorkspaceRoot();
       if (!workspaceRoot) {
-        vscode.window.showErrorMessage(NO_WORKSPACE_FOLDER_MESSAGE);
+        reportCommandError(NO_WORKSPACE_FOLDER_MESSAGE);
         return;
       }
 
@@ -1478,8 +1477,9 @@ function registerCommands(
         try {
           await openGeneratedDiff();
         } catch (fallbackError) {
-          vscode.window.showErrorMessage(
-            `ctrlyoke: Failed to open git change: ${getErrorMessage(fallbackError)}`
+          reportCommandError(
+            `ctrlyoke: Failed to open git change: ${getErrorMessage(fallbackError)}`,
+            fallbackError
           );
         }
       }
@@ -1578,7 +1578,8 @@ function registerCommands(
           reportCommandError(
             `ctrlyoke: Failed to open worktree diff: ${getErrorMessage(
               fallbackError
-            )}`
+            )}`,
+            fallbackError
           );
         }
       }
@@ -1603,7 +1604,8 @@ function registerCommands(
         );
       } catch (error) {
         reportCommandError(
-          `ctrlyoke: Managed worktree merge failed: ${getErrorMessage(error)}`
+          `ctrlyoke: Managed worktree merge failed: ${getErrorMessage(error)}`,
+          error
         );
       }
     }
@@ -1733,31 +1735,26 @@ function registerCommands(
     async () => {
       const workspaceRoot = getVsCodeWorkspaceRoot();
       if (!workspaceRoot) {
-        vscode.window.showErrorMessage(NO_WORKSPACE_FOLDER_MESSAGE);
+        reportCommandError(NO_WORKSPACE_FOLDER_MESSAGE);
         return;
       }
       try {
         await WorkspaceInitializer.reinitialize(workspaceRoot);
-        vscode.window.showInformationMessage(
+        reportCommandInfo(
           `ctrlyoke: Workspace initialized — ${PATH_CONSTANTS.CTRLYOKE_DIR}/ and its .gitignore are up to date.`
         );
       } catch (err) {
-        vscode.window.showErrorMessage(
-          `ctrlyoke: Workspace initialization failed: ${err}`
+        reportCommandError(
+          `ctrlyoke: Workspace initialization failed: ${err}`,
+          err
         );
       }
     }
   );
 
   // Server commands
-  const confirmServerCommand = (message: string): void =>
-    notifyUserFeedback(
-      workflowOrchestrator.getUserFeedbackSink(),
-      USER_FEEDBACK_SEVERITY.SUCCESS,
-      message
-    );
   const confirmServerRunning = (url: string): void =>
-    confirmServerCommand(
+    reportCommandSuccess(
       `ctrlyoke: Hosted dashboard server running at ${maskHostedServerUrlToken(url)}. The full URL and access token are in the dashboard's Server settings.`
     );
   const enableServerCommand = vscode.commands.registerCommand(
@@ -1814,9 +1811,7 @@ function registerCommands(
             getUserFeedbackSink: () =>
               workflowOrchestrator.getUserFeedbackSink(),
             onSiblingServerDetected: (existingServerUrl) =>
-              notifyUserFeedback(
-                workflowOrchestrator.getUserFeedbackSink(),
-                USER_FEEDBACK_SEVERITY.WARNING,
+              reportCommandWarning(
                 `ctrlyoke: A sibling ctrlyoke server is already running for this workspace at ${existingServerUrl}. This window is starting its own server on a different port.`
               ),
             runnerHostIdentity,
@@ -1829,8 +1824,9 @@ function registerCommands(
       } catch (err) {
         unprotectServerToken?.();
         unprotectServerToken = undefined;
-        vscode.window.showErrorMessage(
-          `ctrlyoke: Failed to start server — ${err instanceof Error ? err.message : String(err)}`
+        reportCommandError(
+          `ctrlyoke: Failed to start server — ${err instanceof Error ? err.message : String(err)}`,
+          err
         );
         return;
       }
@@ -1860,8 +1856,9 @@ function registerCommands(
           return;
         }
         cleanupServer();
-        vscode.window.showErrorMessage(
-          `ctrlyoke: Failed to bind server — ${err instanceof Error ? err.message : String(err)}`
+        reportCommandError(
+          `ctrlyoke: Failed to bind server — ${err instanceof Error ? err.message : String(err)}`,
+          err
         );
         return;
       }
@@ -1890,12 +1887,7 @@ function registerCommands(
         `[Extension] ctrlyoke: Hosted server started at ${maskHostedServerUrlToken(url)}`
       );
       if (portFallback) {
-        Log.warn(
-          `[Extension] ctrlyoke: Port ${portFallback.requestedPort} was already in use — server started on port ${portFallback.actualPort} instead.`
-        );
-        notifyUserFeedback(
-          workflowOrchestrator.getUserFeedbackSink(),
-          USER_FEEDBACK_SEVERITY.WARNING,
+        reportCommandWarning(
           `ctrlyoke: Port ${portFallback.requestedPort} was already in use by another process. The server started on port ${portFallback.actualPort} instead — restart the server to try binding to ${portFallback.requestedPort} again.`
         );
       }
@@ -1907,7 +1899,7 @@ function registerCommands(
     VSCODE_COMMANDS.DISABLE_SERVER,
     (options?: ServerCommandOptions) => {
       if (!options?.quiet) {
-        confirmServerCommand(
+        reportCommandSuccess(
           hostedServer
             ? "ctrlyoke: Hosted dashboard server stopped."
             : "ctrlyoke: Hosted dashboard server is not running."

@@ -16,20 +16,17 @@ export const FEEDBACK_SOURCE_AUDIT_BASELINES = {
     // behind UserInteractionPort too.
     // Shrank from 46 to 41: Stage 3b removed five router worktree notices;
     // routine success notices were dropped and failures now use scoped replies.
-    boundary: 41,
+    // Shrank from 41 to 3: every remaining caller now goes through the
+    // logging wrappers in VsCodeMessages.ts, which hold the only three calls
+    // (and lint forbids new ones elsewhere).
+    boundary: 3,
     reusable: 0,
-    boundaryFiles: [
-      "src/completions/ContextMenuReferenceCommands.ts",
-      "src/dev/DevCommands.ts",
-      "src/extension.ts",
-      "src/platform/VsCodeAdapter.ts",
-      "src/scm/ScmCommitCommand.ts",
-      "src/ui/ExternalFileTrustPrompt.ts",
-      "src/ui/NotificationManager.ts",
-    ] as readonly string[],
+    boundaryFiles: ["src/platform/VsCodeMessages.ts"] as readonly string[],
   },
   adapterUi: 0,
-  webviewToast: 1,
+  // Shrank from 1 to 0: the standalone "Created workflow" toast now goes
+  // through showWebviewToast, which logs it.
+  webviewToast: 0,
 } as const;
 
 const DIRECT_MESSAGE_NAMES = new Set([

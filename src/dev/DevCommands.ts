@@ -29,6 +29,12 @@ import { MESSAGE_TYPES } from "../types/DashboardConstants";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { attachStreamTextDecoder } from "../utils/StreamTextDecoder";
 import { canonicalizeSpawnCwd } from "../utils/PathCasing";
+import {
+  showErrorMessage,
+  showErrorMessageFor,
+  showInformationMessage,
+  showWarningMessage,
+} from "../platform/VsCodeMessages";
 
 export type DevDashboardAction =
   | "buildExtension"
@@ -377,7 +383,7 @@ ${filteredCommands.map((cmd) => `- \`${cmd}\``).join("\n")}
     // Save to file
     const workspaceRoot = getVsCodeWorkspaceRoot();
     if (!workspaceRoot) {
-      vscode.window.showErrorMessage(NO_WORKSPACE_FOLDER_MESSAGE);
+      showErrorMessage(NO_WORKSPACE_FOLDER_MESSAGE);
       return;
     }
 
@@ -397,12 +403,11 @@ ${filteredCommands.map((cmd) => `- \`${cmd}\``).join("\n")}
       const doc = await vscode.workspace.openTextDocument(fullPath);
       await vscode.window.showTextDocument(doc);
 
-      vscode.window.showInformationMessage(
+      showInformationMessage(
         `Saved ${filteredCommands.length} commands to ${outputFilePath}`
       );
     } catch (error) {
-      Log.error(`[DevCommands] Failed to save to ${fullPath}:`, error);
-      vscode.window.showErrorMessage(`Failed to save commands: ${error}`);
+      showErrorMessageFor(error, `Failed to save commands: ${error}`);
     }
   } else {
     // Create a temporary document to show the commands
@@ -429,7 +434,7 @@ async function dumpVsCodeCssVariables(
 ): Promise<void> {
   const workspaceRoot = getVsCodeWorkspaceRoot();
   if (!workspaceRoot) {
-    vscode.window.showErrorMessage(NO_WORKSPACE_FOLDER_MESSAGE);
+    showErrorMessage(NO_WORKSPACE_FOLDER_MESSAGE);
     return;
   }
 
@@ -497,7 +502,7 @@ async function dumpVsCodeCssVariables(
           `[DevCommands] Dumped ${message.count} CSS variables to ${outputPath}`
         );
 
-        const action = await vscode.window.showInformationMessage(
+        const action = await showInformationMessage(
           `Dumped ${message.count} --vscode-* CSS variables to ${outputPath}`,
           "Open File"
         );
@@ -506,8 +511,7 @@ async function dumpVsCodeCssVariables(
           await vscode.window.showTextDocument(doc);
         }
       } catch (error) {
-        Log.error("[DevCommands] Failed to write CSS vars file:", error);
-        vscode.window.showErrorMessage(`Failed to write CSS vars: ${error}`);
+        showErrorMessageFor(error, `Failed to write CSS vars: ${error}`);
       }
     },
     undefined,
@@ -622,12 +626,12 @@ export function registerDevCommands(
       const editor = vscode.window.activeTextEditor;
       if (editor) {
         const doc = editor.document;
-        vscode.window.showInformationMessage(
+        showInformationMessage(
           `Language ID: ${doc.languageId}\nFile: ${doc.fileName}`,
           { modal: true }
         );
       } else {
-        vscode.window.showWarningMessage("No active editor");
+        showWarningMessage("No active editor");
       }
     })
   );

@@ -7,10 +7,15 @@ import {
 import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
 import { VSCODE_CONTEXT_KEYS } from "../types/DashboardConstants";
 import type { RunnerHostIdentity } from "../types/CtrlYokeTypes";
-import { Log } from "../utils/Log";
 import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
 import { NO_WORKSPACE_FOLDER_MESSAGE } from "../platform/PlatformAdapter";
 import { pathsEqual } from "../utils/PathCasing";
+import {
+  showErrorMessage,
+  showErrorMessageFor,
+  showInformationMessage,
+  showWarningMessage,
+} from "../platform/VsCodeMessages";
 
 interface GitRepository {
   rootUri: vscode.Uri;
@@ -68,7 +73,7 @@ export class ScmCommitCommand {
 
     const stateRoot = getVsCodeWorkspaceRoot();
     if (!stateRoot) {
-      void vscode.window.showErrorMessage(NO_WORKSPACE_FOLDER_MESSAGE);
+      void showErrorMessage(NO_WORKSPACE_FOLDER_MESSAGE);
       return;
     }
 
@@ -105,7 +110,7 @@ export class ScmCommitCommand {
             }
 
             if (!diffResult) {
-              void vscode.window.showInformationMessage(
+              void showInformationMessage(
                 "ctrlyoke: No changes detected. Stage or modify files first."
               );
               return;
@@ -137,7 +142,7 @@ export class ScmCommitCommand {
             });
 
             if (diffResult.truncated) {
-              void vscode.window.showWarningMessage(
+              void showWarningMessage(
                 `ctrlyoke: Diff exceeded ${getMaxDiffSizeLabel()} and was truncated. Commit message may be incomplete.`
               );
             }
@@ -148,7 +153,7 @@ export class ScmCommitCommand {
             }
 
             if (!diffResult.staged) {
-              void vscode.window.showInformationMessage(
+              void showInformationMessage(
                 "ctrlyoke: Generated from unstaged changes. Remember to stage files before committing."
               );
             }
@@ -159,12 +164,8 @@ export class ScmCommitCommand {
             ) {
               return;
             }
-            Log.error(
-              "[ScmCommitCommand] Commit message generation failed",
-              err
-            );
             const message = err instanceof Error ? err.message : String(err);
-            void vscode.window.showErrorMessage(`ctrlyoke: ${message}`);
+            void showErrorMessageFor(err, `ctrlyoke: ${message}`);
           }
         }
       );

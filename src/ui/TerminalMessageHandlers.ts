@@ -14,7 +14,6 @@ import {
   type SpawnPtyOptions,
 } from "../core/harness/PtyProcessManager";
 import { getErrorMessage } from "../utils/ErrorUtils";
-import { Log } from "../utils/Log";
 import {
   notifyUserFeedback,
   type UserFeedbackSink,
@@ -151,10 +150,8 @@ export class TerminalMessageHandlers {
         ...this.buildSessionCallbacks(),
       });
     } catch (error) {
+      // The dashboard toasts and logs this failure; no host log line needed.
       const errorMessage = getErrorMessage(error);
-      Log.warn(
-        `[TerminalMessageHandlers] Failed to spawn embedded shell: ${errorMessage}`
-      );
       ctx.emit({
         type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED,
         action: "spawn embedded shell",
@@ -189,14 +186,12 @@ export class TerminalMessageHandlers {
         this.buildSessionCallbacks()
       );
     } catch (error) {
-      const errorMessage = getErrorMessage(error);
-      Log.warn(
-        `[TerminalMessageHandlers] Failed to restart embedded shell: ${errorMessage}`
-      );
       notifyUserFeedback(
         this.getUserFeedbackSink(),
         USER_FEEDBACK_SEVERITY.WARNING,
-        errorMessage
+        getErrorMessage(error),
+        undefined,
+        error
       );
       return;
     }

@@ -21,7 +21,11 @@ import {
   notificationIdentityPrefix,
   type CtrlYokeNotificationEvent,
 } from "./notifications/CompletionNotificationFactory";
-import { Log } from "../utils/Log";
+import {
+  showErrorMessage,
+  showInformationMessage,
+  showWarningMessage,
+} from "../platform/VsCodeMessages";
 
 /**
  * NotificationManager
@@ -160,59 +164,49 @@ export class NotificationManager implements DashboardClient {
     }
     this.notifiedKeys.add(event.id);
 
-    Log.debug(
-      `[NotificationManager] showing VS Code notification ${event.id} ${event.title}`
-    );
-
     if (event.severity === COMPLETION_NOTIFICATION_SEVERITY.ERROR) {
-      void vscode.window
-        .showErrorMessage(
-          event.title,
-          { detail: event.body },
-          "Open Dashboard",
-          "View Output",
-          "Dismiss"
-        )
-        .then((action) => {
-          if (action === "Open Dashboard") {
-            void vscode.commands.executeCommand("ctrlyoke.openPanel");
-          } else if (action === "View Output") {
-            void vscode.commands.executeCommand("ctrlyoke.showOutputPanel");
-          }
-        });
+      void showErrorMessage(
+        event.title,
+        { detail: event.body },
+        "Open Dashboard",
+        "View Output",
+        "Dismiss"
+      ).then((action) => {
+        if (action === "Open Dashboard") {
+          void vscode.commands.executeCommand("ctrlyoke.openPanel");
+        } else if (action === "View Output") {
+          void vscode.commands.executeCommand("ctrlyoke.showOutputPanel");
+        }
+      });
       return;
     }
 
     if (event.severity === COMPLETION_NOTIFICATION_SEVERITY.WARNING) {
-      void vscode.window
-        .showWarningMessage(
-          event.title,
-          { detail: event.body },
-          "Open Dashboard",
-          "View Output",
-          "Dismiss"
-        )
-        .then((action) => {
-          if (action === "Open Dashboard") {
-            void vscode.commands.executeCommand("ctrlyoke.openPanel");
-          } else if (action === "View Output") {
-            void vscode.commands.executeCommand("ctrlyoke.showOutputPanel");
-          }
-        });
-      return;
-    }
-
-    void vscode.window
-      .showInformationMessage(
+      void showWarningMessage(
         event.title,
         { detail: event.body },
         "Open Dashboard",
+        "View Output",
         "Dismiss"
-      )
-      .then((action) => {
+      ).then((action) => {
         if (action === "Open Dashboard") {
           void vscode.commands.executeCommand("ctrlyoke.openPanel");
+        } else if (action === "View Output") {
+          void vscode.commands.executeCommand("ctrlyoke.showOutputPanel");
         }
       });
+      return;
+    }
+
+    void showInformationMessage(
+      event.title,
+      { detail: event.body },
+      "Open Dashboard",
+      "Dismiss"
+    ).then((action) => {
+      if (action === "Open Dashboard") {
+        void vscode.commands.executeCommand("ctrlyoke.openPanel");
+      }
+    });
   }
 }

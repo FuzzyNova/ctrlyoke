@@ -1925,7 +1925,7 @@ export function createMessageHandlers(
     }
     // Standalone-only: an action's onClick closure cannot cross the postMessage
     // boundary to the extension host, so the panel took the notifyUser() path above.
-    uiStore.showToast(toastMessage, USER_FEEDBACK_SEVERITY.SUCCESS, {
+    showWebviewToast(toastMessage, USER_FEEDBACK_SEVERITY.SUCCESS, {
       action: {
         label: "Open in New Tab",
         onClick: () => openWorkflowAddressInNewTab(message.address),

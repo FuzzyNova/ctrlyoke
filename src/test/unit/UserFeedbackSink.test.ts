@@ -1,11 +1,23 @@
 import * as assert from "assert";
-import { suite, test } from "mocha";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+import { setup, suite, teardown, test } from "mocha";
+import * as vscode from "vscode";
 import { CompositeUserFeedbackSink } from "../../core/CompositeUserFeedbackSink";
-import type {
-  UserFeedback,
-  UserFeedbackSink,
+import {
+  emitUserFeedback,
+  notifyUserFeedback,
+  type UserFeedback,
+  type UserFeedbackSink,
 } from "../../core/UserFeedbackSink";
 import { ConsoleUserFeedbackSink } from "../../platform/ConsoleUserFeedbackSink";
+import {
+  showErrorMessageFor,
+  showWarningMessage,
+} from "../../platform/VsCodeMessages";
+import { Log, LogLevel } from "../../utils/Log";
+import { captureLog } from "../helpers/logCapture";
 import { VsCodeUserFeedbackSink } from "../../platform/VsCodeUserFeedbackSink";
 import { CtrlYokeHostedServer } from "../../server/CtrlYokeHostedServer";
 import { HostedWebSocketUserFeedbackSink } from "../../server/HostedWebSocketUserFeedbackSink";
@@ -22,6 +34,195 @@ const feedback: UserFeedback = {
   detail: "Check the configured permissions.",
   dedupeKey: "harness-warning",
 };
+
+class RecordingSink implements UserFeedbackSink {
+  readonly received: UserFeedback[] = [];
+  notify(message: UserFeedback): void {
+    this.received.push(message);
+  }
+}
+
+suite("notifyUserFeedback logging survives hidden toasts and CLI mode", () => {
+  test("logs every severity while toastLevel is none", () => {
+    const log = captureLog();
+    try {
+      const shown: string[] = [];
+      const sink = new VsCodeUserFeedbackSink(
+        {
+          showInformationMessage: () => shown.push("info"),
+          showWarningMessage: () => shown.push("warning"),
+          showErrorMessage: () => shown.push("error"),
+        },
+        () => TOAST_LEVEL_MODES.NONE
+      );
+
+      notifyUserFeedback(sink, "error", "Save failed");
+      notifyUserFeedback(sink, "warning", "Harness slow");
+      notifyUserFeedback(sink, "info", "Copied");
+
+      assert.deepStrictEqual(shown, []);
+      assert.deepStrictEqual(log.lines, [
+        { level: LogLevel.ERROR, message: "[Toast] Save failed" },
+        { level: LogLevel.WARN, message: "[Toast] Harness slow" },
+        { level: LogLevel.INFO, message: "[Toast] Copied" },
+      ]);
+    } finally {
+      log.restore();
+    }
+  });
+
+  test("writes every severity to the CLI log file", () => {
+    const internal = Log as unknown as {
+      logLevel: LogLevel;
+      cliMode: boolean;
+      cliLogFilePath: string | undefined;
+    };
+    const saved = { ...internal };
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-toast-"));
+    try {
+      fs.mkdirSync(path.join(workspace, ".ctrlyoke"));
+      // The CLI's default (non-verbose) level.
+      Log.initializeCli(workspace, false);
+      const consoleLines: string[] = [];
+      const sink = new ConsoleUserFeedbackSink({
+        log: (message) => consoleLines.push(message),
+        warn: (message) => consoleLines.push(message),
+        error: (message) => consoleLines.push(message),
+      });
+
+      notifyUserFeedback(
+        sink,
+        "error",
+        "Parse failed",
+        undefined,
+        new Error("bad yaml")
+      );
+      notifyUserFeedback(sink, "warning", "Guardrail hit");
+      notifyUserFeedback(sink, "info", "Session resumed");
+
+      assert.strictEqual(consoleLines.length, 3);
+      const cliLog = fs.readFileSync(internal.cliLogFilePath!, "utf8");
+      assert.match(cliLog, /ERROR: \[Toast\] Parse failed: bad yaml/);
+      assert.match(cliLog, /Stack trace: Error: bad yaml/);
+      assert.match(cliLog, /WARN: \[Toast\] Guardrail hit/);
+      assert.match(cliLog, /INFO: \[Toast\] Session resumed/);
+    } finally {
+      internal.logLevel = saved.logLevel;
+      internal.cliMode = saved.cliMode;
+      internal.cliLogFilePath = saved.cliLogFilePath;
+      fs.rmSync(workspace, { recursive: true, force: true });
+    }
+  });
+});
+
+suite("notifyUserFeedback logging", () => {
+  let log: ReturnType<typeof captureLog>;
+  setup(() => {
+    log = captureLog();
+  });
+  teardown(() => {
+    log.restore();
+  });
+
+  test("logs every severity at its own level before notifying", () => {
+    const sink = new RecordingSink();
+
+    notifyUserFeedback(sink, "error", "Export failed", "No timeline.");
+    notifyUserFeedback(sink, "warning", "Harness slow");
+    notifyUserFeedback(sink, "info", "Copied");
+    notifyUserFeedback(sink, "success", "Saved");
+
+    assert.deepStrictEqual(log.lines, [
+      { level: LogLevel.ERROR, message: "[Toast] Export failed\nNo timeline." },
+      { level: LogLevel.WARN, message: "[Toast] Harness slow" },
+      { level: LogLevel.INFO, message: "[Toast] Copied" },
+      { level: LogLevel.INFO, message: "[Toast] Saved" },
+    ]);
+    assert.strictEqual(sink.received.length, 4);
+  });
+
+  test("keeps the error's message and stack without repeating it", () => {
+    const error = new Error("disk full");
+
+    notifyUserFeedback(undefined, "error", "Could not save", undefined, error);
+    notifyUserFeedback(
+      undefined,
+      "error",
+      "Could not save: disk full",
+      undefined,
+      error
+    );
+
+    assert.strictEqual(log.lines.length, 2);
+    assert.ok(
+      log.lines[0].message.startsWith(
+        "[Toast] Could not save: disk full\nStack trace: Error: disk full"
+      )
+    );
+    assert.ok(
+      log.lines[1].message.startsWith(
+        "[Toast] Could not save: disk full\nStack trace:"
+      )
+    );
+  });
+
+  test("logs even when the host has no feedback surface", () => {
+    emitUserFeedback(undefined, {
+      severity: "error",
+      message: "Newer workflow format",
+      action: USER_FEEDBACK_ACTIONS.UPDATE_EXTENSION,
+    });
+
+    assert.deepStrictEqual(log.lines, [
+      { level: LogLevel.ERROR, message: "[Toast] Newer workflow format" },
+    ]);
+  });
+
+  test("native message wrappers log before showing", async () => {
+    const originalWarning = vscode.window.showWarningMessage;
+    const originalError = vscode.window.showErrorMessage;
+    const shown: unknown[][] = [];
+    const replace = (name: string, value: unknown): void => {
+      Object.defineProperty(vscode.window, name, { configurable: true, value });
+    };
+    replace("showWarningMessage", (...args: unknown[]) => {
+      shown.push(["warning", ...args]);
+      return Promise.resolve("Reload Window");
+    });
+    replace("showErrorMessage", (...args: unknown[]) => {
+      shown.push(["error", ...args]);
+      return Promise.resolve(undefined);
+    });
+    try {
+      const choice = await showWarningMessage(
+        "Root changed",
+        { detail: "Reload to relocate." },
+        "Reload Window"
+      );
+      await showErrorMessageFor(new Error("boom"), "Init failed");
+
+      assert.strictEqual(choice, "Reload Window");
+      assert.deepStrictEqual(shown, [
+        [
+          "warning",
+          "Root changed",
+          { detail: "Reload to relocate." },
+          "Reload Window",
+        ],
+        ["error", "Init failed"],
+      ]);
+      assert.deepStrictEqual(log.lines[0], {
+        level: LogLevel.WARN,
+        message: "[Toast] Root changed\nReload to relocate.",
+      });
+      assert.strictEqual(log.lines[1].level, LogLevel.ERROR);
+      assert.ok(log.lines[1].message.startsWith("[Toast] Init failed: boom\n"));
+    } finally {
+      replace("showWarningMessage", originalWarning);
+      replace("showErrorMessage", originalError);
+    }
+  });
+});
 
 suite("VsCodeUserFeedbackSink", () => {
   test("maps info and success to showInformationMessage", () => {

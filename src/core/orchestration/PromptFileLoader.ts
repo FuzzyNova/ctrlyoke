@@ -101,11 +101,12 @@ export class PromptFileLoader {
         promptFile.name
       );
     } catch (error) {
-      Log.error("[PromptFileLoader] Failed to load prompt file:", error);
       notifyUserFeedback(
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.ERROR,
-        `ctrlyoke: Failed to load file: ${error}`
+        `ctrlyoke: Failed to load file: ${error}`,
+        undefined,
+        error
       );
       return undefined;
     }
@@ -135,14 +136,12 @@ export class PromptFileLoader {
         []
       );
     } catch (error) {
-      Log.error(
-        "[PromptFileLoader] Failed to load workflow from template:",
-        error
-      );
       notifyUserFeedback(
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.ERROR,
-        `ctrlyoke: Failed to create workflow: ${error}`
+        `ctrlyoke: Failed to create workflow: ${error}`,
+        undefined,
+        error
       );
       return undefined;
     }

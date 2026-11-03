@@ -22,7 +22,6 @@ import {
   McpRegistryFileManager,
   resolveCtrlYokeMcpInvocation,
 } from "../utils/McpRegistryFileManager";
-import { Log } from "../utils/Log";
 import { REDACTION_MARKER } from "../types/PreviewRedactor";
 import type { WebviewClientContext } from "./WebviewClientContext";
 
@@ -114,7 +113,6 @@ export class McpManagerService {
       await this.emitManagedRegistryServers(ctx);
     } catch (error) {
       const message = `Failed to load MCP registry servers: ${getErrorMessage(error)}`;
-      Log.error(message);
       this.emitActionFailure(ctx, "load MCP registry servers", message);
     }
   }
@@ -135,7 +133,6 @@ export class McpManagerService {
       await this.emitManagedRegistryServers(ctx);
     } catch (error) {
       const errorMessage = `Failed to save MCP registry server: ${getErrorMessage(error)}`;
-      Log.error(errorMessage);
       this.emitActionFailure(ctx, "save MCP registry server", errorMessage);
     }
   }
@@ -149,7 +146,6 @@ export class McpManagerService {
       await this.emitManagedRegistryServers(ctx);
     } catch (error) {
       const errorMessage = `Failed to delete MCP registry server: ${getErrorMessage(error)}`;
-      Log.error(errorMessage);
       this.emitActionFailure(ctx, "delete MCP registry server", errorMessage);
     }
   }
@@ -197,7 +193,6 @@ export class McpManagerService {
       await this.emitLocalScan(ctx);
     } catch (error) {
       const errorMessage = `Failed to export MCP servers: ${getErrorMessage(error)}`;
-      Log.error(errorMessage);
       this.emitActionFailure(ctx, "export MCP servers", errorMessage);
     }
   }
@@ -216,7 +211,6 @@ export class McpManagerService {
       await this.emitLocalScan(ctx);
     } catch (error) {
       const errorMessage = `Failed to delete MCP servers from harness config: ${getErrorMessage(error)}`;
-      Log.error(errorMessage);
       this.emitActionFailure(
         ctx,
         "delete MCP servers from harness config",
