@@ -25,6 +25,9 @@ import {
   EXECUTION_MODE_HELP_TEXT,
   PERMISSION_MODES,
   SANDBOX_UI_LABELS,
+  SANDBOX_SELECTIONS,
+  sandboxSelectionFromValue,
+  sandboxValueFromSelection,
   PERMISSION_CAPABILITY_KEYS,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   PROPERTY_EDITOR_MODES,
@@ -1330,23 +1333,17 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 <CustomSelect
                   id="prop-sandbox"
                   schemaPath="sandbox"
-                  value={
-                    displayedProperties.sandbox === undefined
-                      ? "inherit"
-                      : displayedProperties.sandbox
-                        ? "on"
-                        : "off"
-                  }
+                  value={sandboxSelectionFromValue(displayedProperties.sandbox)}
                   onChange={(value) =>
                     setProperty(
                       PROMPT_PROPERTIES.SANDBOX,
-                      value === "inherit" ? undefined : value === "on"
+                      sandboxValueFromSelection(value)
                     )
                   }
                   options={[
-                    { value: "inherit", label: SANDBOX_UI_LABELS.INHERIT },
-                    { value: "on", label: SANDBOX_UI_LABELS.ON },
-                    { value: "off", label: SANDBOX_UI_LABELS.OFF },
+                    { value: SANDBOX_SELECTIONS.INHERIT, label: SANDBOX_UI_LABELS.INHERIT },
+                    { value: SANDBOX_SELECTIONS.ON, label: SANDBOX_UI_LABELS.ON },
+                    { value: SANDBOX_SELECTIONS.OFF, label: SANDBOX_UI_LABELS.OFF },
                   ]}
                   disabled={fieldDisabled(PROMPT_PROPERTIES.SANDBOX)}
                 />

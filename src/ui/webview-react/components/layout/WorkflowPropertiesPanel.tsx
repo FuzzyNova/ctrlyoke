@@ -86,6 +86,9 @@ import {
   WORKTREE_MODES,
   PERMISSION_MODES,
   SANDBOX_UI_LABELS,
+  SANDBOX_SELECTIONS,
+  sandboxSelectionFromValue,
+  sandboxValueFromSelection,
   PERMISSION_CAPABILITY_KEYS,
   PROMPT_PROPERTIES,
   PRIOR_CONTEXT_DETAILS,
@@ -2482,22 +2485,15 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <CustomSelect
                     id="settings-sandbox"
-                    value={
-                      workflowProperties.sandbox === undefined
-                        ? "inherit"
-                        : workflowProperties.sandbox
-                          ? "on"
-                          : "off"
-                    }
+                    value={sandboxSelectionFromValue(workflowProperties.sandbox)}
                     onChange={(value) => {
-                      const sandbox =
-                        value === "inherit" ? undefined : value === "on";
+                      const sandbox = sandboxValueFromSelection(value);
                       postWorkflowPropertiesUpdate({ sandbox });
                     }}
                     options={[
-                      { value: "inherit", label: SANDBOX_UI_LABELS.INHERIT },
-                      { value: "on", label: SANDBOX_UI_LABELS.ON },
-                      { value: "off", label: SANDBOX_UI_LABELS.OFF },
+                      { value: SANDBOX_SELECTIONS.INHERIT, label: SANDBOX_UI_LABELS.INHERIT },
+                      { value: SANDBOX_SELECTIONS.ON, label: SANDBOX_UI_LABELS.ON },
+                      { value: SANDBOX_SELECTIONS.OFF, label: SANDBOX_UI_LABELS.OFF },
                     ]}
                   />
                 </FormField>

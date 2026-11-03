@@ -2086,6 +2086,39 @@ export const SANDBOX_UI_LABELS = {
   NOT_SANDBOXED: "Not sandboxed",
   HARNESS_SETTING: "Harness setting",
 } as const;
+export const SANDBOX_SELECTIONS = {
+  INHERIT: "inherit",
+  ON: "on",
+  OFF: "off",
+} as const;
+export type SandboxSelection =
+  (typeof SANDBOX_SELECTIONS)[keyof typeof SANDBOX_SELECTIONS];
+
+/** Convert an authored sandbox override to the dashboard's select value. */
+export function sandboxSelectionFromValue(
+  value: boolean | undefined
+): SandboxSelection {
+  return value === undefined
+    ? SANDBOX_SELECTIONS.INHERIT
+    : value
+      ? SANDBOX_SELECTIONS.ON
+      : SANDBOX_SELECTIONS.OFF;
+}
+
+/** Convert the dashboard's select value back to an authored override. */
+export function sandboxValueFromSelection(
+  selection: string
+): boolean | undefined {
+  switch (selection) {
+    case SANDBOX_SELECTIONS.ON:
+      return true;
+    case SANDBOX_SELECTIONS.OFF:
+      return false;
+    case SANDBOX_SELECTIONS.INHERIT:
+    default:
+      return undefined;
+  }
+}
 export type EffectiveSandboxKind =
   (typeof EFFECTIVE_SANDBOX_KINDS)[keyof typeof EFFECTIVE_SANDBOX_KINDS];
 

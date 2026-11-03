@@ -12,6 +12,11 @@ interface SettingsSchema {
 
 const OPTIONAL_NO_DEFAULT_LEAVES = [
   {
+    path: /^defaults\.sandbox$/,
+    reason:
+      "An absent sandbox default means inherit; shipping a default would change that plan decision.",
+  },
+  {
     path: /^defaults\.additionalArgs\.[^.]+$/,
     reason:
       "Per-harness additional arguments are sparse overrides; an absent harness entry means no extra arguments.",

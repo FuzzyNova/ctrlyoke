@@ -2128,6 +2128,7 @@ suite("WebviewSettingsSync", () => {
       "hooks",
       "errorBehavior",
       "toolPermissions",
+      "sandbox",
       "endCondition",
       "preCondition",
       "worktree",
@@ -2312,6 +2313,12 @@ suite("WebviewSettingsSync", () => {
             allowedTools: ["read", "write"],
             deniedTools: ["bash"],
           },
+        },
+        {
+          property: PROMPT_PROPERTIES.SANDBOX,
+          value: true,
+          expectedKey: CONFIG_KEYS.DEFAULTS_SANDBOX,
+          expectedValue: true,
         },
         {
           property: PROMPT_PROPERTIES.TOOL_PERMISSIONS,

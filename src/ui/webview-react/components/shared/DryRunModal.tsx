@@ -19,6 +19,7 @@ import {
   WORKTREE_CONFIG_ORIGINS,
   WORKTREE_MODES,
   SANDBOX_UI_LABELS,
+  EFFECTIVE_SANDBOX_KINDS,
 } from "@root/types/DashboardConstants";
 import type {
   CompatibilityDiagnostic,
@@ -698,9 +699,9 @@ function SummaryPanel({
             ["Permission mode", permissionMode],
             [
               "Sandbox",
-              step.sandbox?.kind === "on"
+              step.sandbox?.kind === EFFECTIVE_SANDBOX_KINDS.ON
                 ? `${SANDBOX_UI_LABELS.SANDBOXED}${step.sandbox.detail ? `: ${step.sandbox.detail}` : ""}`
-                : step.sandbox?.kind === "off"
+                : step.sandbox?.kind === EFFECTIVE_SANDBOX_KINDS.OFF
                   ? SANDBOX_UI_LABELS.NOT_SANDBOXED
                   : SANDBOX_UI_LABELS.HARNESS_SETTING,
             ],

@@ -150,6 +150,7 @@ function authorableProperties(node: SchemaObject): string[] {
  */
 const SAMPLES: Record<string, unknown> = {
   color: "#123456",
+  sandbox: true,
   conditions: {
     committed: {
       script: "git status --porcelain",
@@ -434,6 +435,7 @@ const UI_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
     ["settings-prior-context-detail", "prop-prior-context-detail"],
   ],
   ["resumeSession", ["settings-resume-session"]],
+  ["sandbox", ["prop-sandbox", "settings-sandbox"]],
   ["expected", ["${idPrefix}-expected"]],
   ["ignoreCase", ["${idPrefix}-ignore-case"]],
   ["operator", ["${idPrefix}-operator"]],
