@@ -147,8 +147,7 @@ export class CopilotCliProvider implements ICliProvider {
     return {
       permissions: this.toolPermissionMapper.capabilities,
       sandbox: unsupportedSandboxCapabilities(
-        SANDBOX_CAVEAT_CODE.COPILOT_UNUSABLE,
-        "dev/implemented/HARNESS_SANDBOX_PLAN.md#the-other-harnesses"
+        SANDBOX_CAVEAT_CODE.COPILOT_UNUSABLE
       ),
       hooks: CopilotNotificationMonitor.CAPABILITIES,
       mcp: {

@@ -118,6 +118,34 @@ suite("ExecutionPlanBuilder", () => {
     }
   });
 
+  test("refuses a Claude sandbox that additionalArgs --settings would replace", async () => {
+    const provider = new ClaudeCliProvider();
+    provider.getVersion = async () => "2.1.317";
+    const properties: ResolvedProperties = {
+      ...resolvedProperties,
+      sandbox: true,
+      additionalArgs: "--settings=user.json",
+    };
+    const workspaceRoot = path.join(os.tmpdir(), "claude-sandbox-plan");
+    await assert.rejects(
+      createBuilder(provider, workspaceRoot).plan(
+        createSession("headless", properties)
+      ),
+      /additionalArgs passes its own --settings/
+    );
+  });
+
+  test("refuses a Claude sandbox with no workspace to write its settings to", async () => {
+    const provider = new ClaudeCliProvider();
+    provider.getVersion = async () => "2.1.317";
+    await assert.rejects(
+      createBuilder(provider).plan(
+        createSession("headless", { ...resolvedProperties, sandbox: true })
+      ),
+      /sandboxing needs a workspace folder/
+    );
+  });
+
   test("refuses to launch an explicit sandbox on a harness without a sandbox mapper", async () => {
     for (const [harnessId, create] of providers) {
       const provider = create();

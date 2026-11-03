@@ -184,8 +184,7 @@ export class QwenCliProvider implements ICliProvider {
     return {
       permissions: this.toolPermissionMapper.capabilities,
       sandbox: unsupportedSandboxCapabilities(
-        SANDBOX_CAVEAT_CODE.QWEN_UNUSABLE,
-        "dev/implemented/HARNESS_SANDBOX_PLAN.md#the-other-harnesses"
+        SANDBOX_CAVEAT_CODE.QWEN_UNUSABLE
       ),
       hooks: QwenNotificationMonitor.CAPABILITIES,
       mcp: {

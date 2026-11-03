@@ -1,9 +1,14 @@
 import type { SandboxCapabilityDescriptor } from "./interfaces/ISandboxMapper";
-import { SANDBOX_CAVEAT_CODE } from "../../../types/CompatibilityTypes";
+import {
+  SANDBOX_CAVEAT_CODE,
+  type SandboxCaveatCode,
+} from "../../../types/CompatibilityTypes";
 import {
   EFFECTIVE_SANDBOX_KINDS,
   type EffectiveSandboxKind,
 } from "../../../types/DashboardConstants";
+
+const SANDBOX_PLAN_REFERENCE = "dev/implemented/HARNESS_SANDBOX_PLAN.md";
 
 /** What a step's `sandbox` request means before harness detail: on, off or the harness's own behavior. */
 export function effectiveSandboxKind(
@@ -27,7 +32,7 @@ export function partialSandboxCapabilities(
       caveatCode: SANDBOX_CAVEAT_CODE.NETWORK_FOLLOWS_HARNESS_POLICY,
       verification: {
         kind: "manual",
-        reference: `dev/implemented/HARNESS_SANDBOX_PLAN.md#${reference}`,
+        reference: `${SANDBOX_PLAN_REFERENCE}#${reference}`,
         basis: "cli-version",
         verifiedVersions: [...verifiedVersions],
       },
@@ -35,9 +40,10 @@ export function partialSandboxCapabilities(
   };
 }
 
+/** A harness ctrlyoke cannot contain; its caveat says why. */
 export function unsupportedSandboxCapabilities(
-  caveatCode: import("../../../types/CompatibilityTypes").SandboxCaveatCode,
-  reference: string
+  caveatCode: SandboxCaveatCode,
+  reference = `${SANDBOX_PLAN_REFERENCE}#the-other-harnesses`
 ): SandboxCapabilityDescriptor {
   return {
     terminal: {

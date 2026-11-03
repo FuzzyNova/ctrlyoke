@@ -90,9 +90,11 @@ The `sandbox` property is separate from approval modes. `true` adds one merged
 unavailable, keeps approvals governed by `toolPermissions`, and limits writable
 paths to ctrlyoke's approved roots. `false` removes only ctrlyoke's sandbox
 settings; it does not disable a sandbox configured in Claude's own settings.
-When absent, ctrlyoke adds no sandbox settings. Verification established that
-network policy and file-tool scope are not established, so containment is
-partially supported. See [Sandboxing](/workflows/permissions#sandboxing).
+When absent, ctrlyoke adds no sandbox settings. Network policy and file-tool
+scope have not been verified, so containment is declared partial. See [Sandboxing](/workflows/permissions#sandboxing).
+Claude uses only the last `--settings` it is given, so a step with
+`sandbox: true` and a `--settings` flag in `additionalArgs` fails at launch
+instead of running uncontained.
 
 The permission `mode` maps to Claude Code flags:
 

@@ -51,6 +51,8 @@ export const COMPATIBILITY_DIAGNOSTIC_CODES = {
   IMAGE_INPUT_UNVERIFIED: "compatibility.promptInputs.images.unverified",
   SANDBOX_UNSUPPORTED: "compatibility.sandbox.terminal.unsupported",
   SANDBOX_PARTIAL: "compatibility.sandbox.terminal.partial",
+  SANDBOX_SETTINGS_OVERRIDDEN:
+    "compatibility.sandbox.terminal.settingsOverridden",
   PERMISSION_TRANSLATION_LOSSY: "compatibility.permissions.translation.lossy",
   ANTIGRAVITY_SETTINGS_COLLISION:
     "compatibility.permissions.antigravitySettingsCollision",

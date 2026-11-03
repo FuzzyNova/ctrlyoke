@@ -329,11 +329,20 @@ suite("ExecutionPreviewService", () => {
   });
 
   test("includes the effective sandbox application in each step preview", async () => {
-    const preview = await createService().build({
-      workflow: { steps: [{ prompt: "contained", sandbox: true }] },
+    const workflow = { steps: [{ prompt: "contained", sandbox: true }] };
+    const preview = await createService(
+      path.join(os.tmpdir(), "sandbox-preview")
+    ).build({ workflow });
+
+    assert.deepStrictEqual(preview.steps[0]?.sandbox, {
+      kind: "on",
+      detail: "Claude Bash sandbox, network per Claude settings",
     });
 
-    assert.deepStrictEqual(preview.steps[0]?.sandbox, { kind: "on" });
+    // Claude's settings are written under the workspace, so without one
+    // the step would not be contained and must not preview as sandboxed.
+    const noWorkspace = await createService().build({ workflow });
+    assert.strictEqual(noWorkspace.steps[0]?.sandbox?.kind, "off");
   });
 
   test("previews an explicit sandbox on an unsupported harness with the error instead of throwing", async () => {

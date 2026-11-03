@@ -74,6 +74,16 @@ export function parseArgString(input: string): string[] {
 }
 
 /**
+ * Whether an `additionalArgs` string passes any of the given flags, either as
+ * a separate token (`--settings file`) or inline (`--settings=file`).
+ */
+export function hasCliFlag(input: string, flags: readonly string[]): boolean {
+  return parseArgString(input).some((arg) =>
+    flags.some((flag) => arg === flag || arg.startsWith(`${flag}=`))
+  );
+}
+
+/**
  * Formats argument tokens as a string that {@link parseArgString} can recover.
  * Tokens containing whitespace or quote characters are double-quoted, with
  * backslashes and double quotes escaped for the parser.

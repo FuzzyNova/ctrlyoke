@@ -176,34 +176,32 @@ export class ExecutionPlanBuilder {
           additionalArgs: session.resolvedProperties?.additionalArgs,
         })
       : undefined;
-    const unsupportedSandboxMessage =
-      !this.deps.provider.sandboxMapper && sandboxRequest === true
+    // An explicit request ctrlyoke cannot honor fails the launch; Dry Run
+    // previews it as uncontained with the reason instead.
+    const sandboxRefusal = !this.deps.provider.sandboxMapper
+      ? sandboxRequest === true
         ? `${this.deps.provider.config.displayName} does not support ctrlyoke terminal sandboxing.`
-        : undefined;
-    if (unsupportedSandboxMessage && !options.allowUnsupportedSandboxPreview) {
-      throw new Error(unsupportedSandboxMessage);
-    }
-    // Without a mapper nothing is contained, whatever was requested.
-    const effectiveSandbox: EffectiveSandbox =
-      sandboxApplication?.effective ??
-      (unsupportedSandboxMessage
-        ? {
-            kind: EFFECTIVE_SANDBOX_KINDS.OFF,
-            detail: unsupportedSandboxMessage,
-          }
-        : { kind: effectiveSandboxKind(sandboxRequest) });
-    if (
-      sandboxApplication?.diagnostics.some(
-        (item) => item.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
-      )
-    ) {
-      throw new Error(
-        sandboxApplication.diagnostics.find(
+        : undefined
+      : (sandboxApplication?.diagnostics.find(
           (item) => item.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
-        )!.message
-      );
+        )?.message ??
+        // Settings fragments travel in the hook settings file, which is
+        // written under the workspace; without one they would not apply.
+        (sandboxApplication?.settings && !workspaceRoot
+          ? `${this.deps.provider.config.displayName} sandboxing needs a workspace folder.`
+          : undefined));
+    if (sandboxRefusal && !options.allowUnsupportedSandboxPreview) {
+      throw new Error(sandboxRefusal);
     }
-    if (sandboxApplication) {
+    const effectiveSandbox: EffectiveSandbox = sandboxRefusal
+      ? { kind: EFFECTIVE_SANDBOX_KINDS.OFF, detail: sandboxRefusal }
+      : (sandboxApplication?.effective ?? {
+          kind: effectiveSandboxKind(sandboxRequest),
+        });
+    const sandboxSettings = sandboxRefusal
+      ? undefined
+      : sandboxApplication?.settings;
+    if (sandboxApplication && !sandboxRefusal) {
       baseArgs.push(...sandboxApplication.cliArgs);
     }
     Log.info(
@@ -297,7 +295,7 @@ export class ExecutionPlanBuilder {
               workingFilePath,
               userHooks,
               enabledNotificationHookEvents,
-              sandboxApplication?.settings
+              sandboxSettings
             )
           : this.deps.provider.buildNotificationHookArgs
             ? {
@@ -313,8 +311,7 @@ export class ExecutionPlanBuilder {
                 diagnostics: [],
               }
             : emptyPreparation()
-        : (!hooksExplicitlyDisabled ||
-              sandboxApplication?.settings !== undefined) &&
+        : (!hooksExplicitlyDisabled || sandboxSettings !== undefined) &&
             this.deps.provider.planHeadlessUserHookArgs
           ? await this.deps.provider.planHeadlessUserHookArgs(
               extensionPath,
@@ -323,7 +320,7 @@ export class ExecutionPlanBuilder {
               workingFilePath,
               userHooks,
               enabledNotificationHookEvents,
-              sandboxApplication?.settings
+              sandboxSettings
             )
           : !hooksExplicitlyDisabled &&
               this.deps.provider.buildHeadlessUserHookArgs

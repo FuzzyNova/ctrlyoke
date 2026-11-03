@@ -193,8 +193,7 @@ export class AntigravityCliProvider implements ICliProvider {
     return {
       permissions: this.toolPermissionMapper.capabilities,
       sandbox: unsupportedSandboxCapabilities(
-        SANDBOX_CAVEAT_CODE.ANTIGRAVITY_UNUSABLE,
-        "dev/implemented/HARNESS_SANDBOX_PLAN.md#the-other-harnesses"
+        SANDBOX_CAVEAT_CODE.ANTIGRAVITY_UNUSABLE
       ),
       hooks: AntigravityNotificationMonitor.CAPABILITIES,
       mcp: {

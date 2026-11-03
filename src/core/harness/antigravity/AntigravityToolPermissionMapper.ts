@@ -22,7 +22,7 @@ import {
   PERMISSION_MODES,
 } from "../../../types/DashboardConstants";
 import { normalizeAntigravityMcpServerId } from "../../../types/ToolPermissionUtils";
-import { parseArgString } from "../../../utils/CliArgParser";
+import { hasCliFlag } from "../../../utils/CliArgParser";
 import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
 import { getAntigravitySettingsPath } from "../shared/StatuslineManager";
 
@@ -388,13 +388,8 @@ export function parseAntigravityUserPermissionRules(
 }
 
 function hasSettingsFlag(additionalArgs: string): boolean {
-  return parseArgString(additionalArgs).some(
-    (arg) =>
-      arg === "--settings" ||
-      arg.startsWith("--settings=") ||
-      arg === "-settings" ||
-      arg.startsWith("-settings=")
-  );
+  // agy parses Go-style flags, so a single dash is accepted too.
+  return hasCliFlag(additionalArgs, ["--settings", "-settings"]);
 }
 
 function uniqueRules(rules: readonly string[]): string[] {

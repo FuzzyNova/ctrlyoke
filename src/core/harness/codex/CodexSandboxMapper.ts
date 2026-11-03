@@ -2,28 +2,16 @@ import type {
   ISandboxMapper,
   SandboxApplication,
 } from "../shared/interfaces/ISandboxMapper";
-import { SANDBOX_CAVEAT_CODE } from "../../../types/CompatibilityTypes";
 import { CODEX_SANDBOX_MODES } from "../../../types/DashboardConstants";
 import type { SandboxCapabilityDescriptor } from "../shared/interfaces/ISandboxMapper";
 import { resolveCodexContainment } from "./CodexToolPermissionMapper";
-import { effectiveSandboxKind } from "../shared/SandboxCapabilities";
+import {
+  effectiveSandboxKind,
+  partialSandboxCapabilities,
+} from "../shared/SandboxCapabilities";
 
-const CODEX_SANDBOX_VERIFICATION = {
-  kind: "manual",
-  reference:
-    "dev/implemented/HARNESS_SANDBOX_PLAN.md#phase-0-results-2026-11-03-macos",
-  basis: "cli-version",
-  verifiedVersions: [">=0.166.0"],
-} as const;
-
-export const CODEX_SANDBOX_CAPABILITIES: SandboxCapabilityDescriptor = {
-  terminal: {
-    fidelity: "partial",
-    mechanism: "native",
-    caveatCode: SANDBOX_CAVEAT_CODE.NETWORK_FOLLOWS_HARNESS_POLICY,
-    verification: CODEX_SANDBOX_VERIFICATION,
-  },
-};
+export const CODEX_SANDBOX_CAPABILITIES: SandboxCapabilityDescriptor =
+  partialSandboxCapabilities("phase-0-results-2026-11-03-macos", [">=0.166.0"]);
 
 export class CodexSandboxMapper implements ISandboxMapper {
   readonly capabilities = CODEX_SANDBOX_CAPABILITIES;
@@ -45,9 +33,11 @@ export class CodexSandboxMapper implements ISandboxMapper {
       diagnostics: result.diagnostic ? [result.diagnostic] : [],
       effective: {
         kind: effectiveSandboxKind(request),
-        detail: result.sandboxMode
-          ? `Codex ${result.sandboxMode}, network off`
-          : undefined,
+        detail: !result.sandboxMode
+          ? undefined
+          : result.sandboxMode === CODEX_SANDBOX_MODES.DANGER_FULL_ACCESS
+            ? `Codex ${result.sandboxMode}`
+            : `Codex ${result.sandboxMode}, network off`,
       },
     };
   }

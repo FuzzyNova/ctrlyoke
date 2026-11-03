@@ -130,7 +130,7 @@ policy, and harness file tools and MCP servers may have different boundaries.
 
 | Harness                              | Network when `sandbox: true`                             | Mapping                                                                                                                                                                        |
 | ------------------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [Codex](/harnesses/codex-cli)        | Off                                                      | Native `-s` sandbox mode; its writable roots include the workspace, approved external roots, temp directories, caches, and the Git common and linked-worktree Git directories. |
+| [Codex](/harnesses/codex-cli)        | Off unless your Codex `config.toml` enables it           | Native `-s` sandbox mode; its writable roots include the workspace, approved external roots, temp directories, caches, and the Git common and linked-worktree Git directories. |
 | [Claude Code](/harnesses/claude-cli) | Follows Claude's policy; not established by verification | `--settings` enables the Bash sandbox, requires it to be available, and limits its writable roots.                                                                             |
 | Copilot CLI                          | Not supported                                            | Explicit `true` fails because its per-run sandbox also blocks ctrlyoke's MCP server and hooks.                                                                                 |
 | Antigravity                          | Not supported                                            | Explicit `true` fails because its sandbox makes the workspace read-only.                                                                                                       |
@@ -151,9 +151,9 @@ steps:
     prompt: Install the project dependencies.
 ```
 
-A workspace `defaults.sandbox` value that widens containment beyond your
-effective user setting waits for your approval before it applies. Narrower
-values apply without asking.
+A workspace `defaults.sandbox: false` waits for your approval before it applies
+unless your own value is also `false`, because on Codex it removes the sandbox
+that inherit would apply. A workspace `true` applies without asking.
 
 ## Which level wins
 
@@ -243,8 +243,10 @@ The deny list is translated to Claude's syntax and the allow list is left out.
 OpenCode receives its permissions through `OPENCODE_CONFIG_CONTENT` rather than
 flags; see [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#opencode-cli).
 Codex's sandbox and approval policy for `custom` mode come from the
-`permissions.codexSandboxMode` and `permissions.codexApprovalPolicy` settings, in
-**Settings → Advanced Permissions**.
+`permissions.codexSandboxMode` and `permissions.codexApprovalPolicy` settings, under
+**Settings → Workflow Defaults → Permissions → Codex sandbox**. Under
+`sandbox: true` the sandbox mode sets how strict Codex is in every permission
+mode, clamped to `workspace-write`.
 A workspace value that makes either setting less restrictive than your user value waits for approval through the VS Code prompt or `ctrlyoke trust-workspace-settings`. A narrower workspace value applies without asking.
 
 Claude Code's `custom` mode uses `dontAsk` in headless runs, which denies tools

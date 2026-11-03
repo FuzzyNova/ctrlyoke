@@ -189,8 +189,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     return {
       permissions: this.toolPermissionMapper.capabilities,
       sandbox: unsupportedSandboxCapabilities(
-        SANDBOX_CAVEAT_CODE.OPENCODE_UNUSABLE,
-        "dev/implemented/HARNESS_SANDBOX_PLAN.md#the-other-harnesses"
+        SANDBOX_CAVEAT_CODE.OPENCODE_UNUSABLE
       ),
       hooks: OpenCodeNotificationMonitor.CAPABILITIES,
       mcp: {
