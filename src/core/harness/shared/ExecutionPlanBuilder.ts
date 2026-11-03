@@ -74,6 +74,7 @@ export interface ExecutionPlan {
   readonly mcpApplication: CliProviderPreparation;
   readonly effectiveToolPermissions:
     ResolvedProperties["toolPermissions"] | undefined;
+  readonly effectiveSandbox?: import("./interfaces/ISandboxMapper").EffectiveSandbox;
   readonly diagnostics: CliProviderPreparation["diagnostics"];
   readonly tempFilePaths: string[];
   /** Hook environment files stay available for the lifetime of their hook config. */
@@ -298,7 +299,8 @@ export class ExecutionPlanBuilder {
                 diagnostics: [],
               }
             : emptyPreparation()
-        : (!hooksExplicitlyDisabled || sandboxApplication?.settings !== undefined) &&
+        : (!hooksExplicitlyDisabled ||
+              sandboxApplication?.settings !== undefined) &&
             this.deps.provider.planHeadlessUserHookArgs
           ? await this.deps.provider.planHeadlessUserHookArgs(
               extensionPath,
@@ -409,6 +411,12 @@ export class ExecutionPlanBuilder {
       permissionApplication,
       mcpApplication: providerPreparation,
       effectiveToolPermissions,
+      effectiveSandbox: sandboxApplication?.effective ?? {
+        kind:
+          sandboxRequest === false
+            ? EFFECTIVE_SANDBOX_KINDS.OFF
+            : EFFECTIVE_SANDBOX_KINDS.HARNESS,
+      },
       diagnostics: [
         ...providerPreparation.diagnostics,
         ...(sandboxApplication?.diagnostics ?? []),

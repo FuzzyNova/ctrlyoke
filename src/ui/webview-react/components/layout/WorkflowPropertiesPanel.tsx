@@ -85,6 +85,7 @@ import {
   WORKTREE_MODE_SELECTIONS,
   WORKTREE_MODES,
   PERMISSION_MODES,
+  SANDBOX_UI_LABELS,
   PERMISSION_CAPABILITY_KEYS,
   PROMPT_PROPERTIES,
   PRIOR_CONTEXT_DETAILS,
@@ -2474,6 +2475,32 @@ const WorkflowPropertiesPanelInner: React.FC<{
           {activePage === DRAWER_PAGES.PERMISSIONS && (
             <div className="flex-1 flex flex-col min-h-0">
               <div className="flex-1 flex flex-col min-h-0">
+                <FormField
+                  label={SANDBOX_UI_LABELS.FIELD}
+                  schemaPath="sandbox"
+                  htmlFor="settings-sandbox"
+                >
+                  <CustomSelect
+                    id="settings-sandbox"
+                    value={
+                      workflowProperties.sandbox === undefined
+                        ? "inherit"
+                        : workflowProperties.sandbox
+                          ? "on"
+                          : "off"
+                    }
+                    onChange={(value) => {
+                      const sandbox =
+                        value === "inherit" ? undefined : value === "on";
+                      postWorkflowPropertiesUpdate({ sandbox });
+                    }}
+                    options={[
+                      { value: "inherit", label: SANDBOX_UI_LABELS.INHERIT },
+                      { value: "on", label: SANDBOX_UI_LABELS.ON },
+                      { value: "off", label: SANDBOX_UI_LABELS.OFF },
+                    ]}
+                  />
+                </FormField>
                 {/* Permission Mode */}
                 <FormField
                   label="Tool Permission Mode"

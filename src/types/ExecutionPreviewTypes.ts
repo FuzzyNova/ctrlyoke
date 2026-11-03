@@ -89,11 +89,17 @@ export interface StepExecutionPreview {
   prompt?: CategorizedPromptPreview;
   command?: CommandPreview;
   permissionApplication?: PermissionApplicationPreview;
+  sandbox?: EffectiveSandboxPreview;
   mcpApplication?: McpApplicationPreview;
   workspaceMutations: WorkspaceMutationPreview[];
   variables: VariableResolutionPreview[];
   conditions: ConditionPreview;
   diagnostics: CompatibilityDiagnostic[];
+}
+
+export interface EffectiveSandboxPreview {
+  kind: "on" | "off" | "harness";
+  detail?: string;
 }
 
 export interface ResolvedPropertiesPreview {

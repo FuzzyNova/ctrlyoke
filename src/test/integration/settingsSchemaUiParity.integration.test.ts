@@ -416,6 +416,8 @@ function schemaEnumValues(node: SchemaNode, document: SchemaNode): string[] {
 }
 
 const CUSTOM_SELECT_ALLOWLIST: Readonly<Record<string, string>> = {
+  "layout/WorkflowPropertiesPanel.tsx#0":
+    "Selects the tri-state boolean sandbox override (inherit/on/off).",
   "settings/SecretsSection.tsx#0":
     "Selects the scope for a secret editor, not a schema enum.",
   "settings/ServerSection.tsx#0":

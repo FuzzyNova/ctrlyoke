@@ -18,6 +18,7 @@ import {
   PREVIEW_TRUNCATION_REASONS,
   WORKTREE_CONFIG_ORIGINS,
   WORKTREE_MODES,
+  SANDBOX_UI_LABELS,
 } from "@root/types/DashboardConstants";
 import type {
   CompatibilityDiagnostic,
@@ -695,6 +696,14 @@ function SummaryPanel({
             ["Continuation", properties.continuationMode ?? "Default"],
             ["Session", properties.session.present ? "Present" : "Not present"],
             ["Permission mode", permissionMode],
+            [
+              "Sandbox",
+              step.sandbox?.kind === "on"
+                ? `${SANDBOX_UI_LABELS.SANDBOXED}${step.sandbox.detail ? `: ${step.sandbox.detail}` : ""}`
+                : step.sandbox?.kind === "off"
+                  ? SANDBOX_UI_LABELS.NOT_SANDBOXED
+                  : SANDBOX_UI_LABELS.HARNESS_SETTING,
+            ],
             [
               "Granted secrets",
               properties.secrets && properties.secrets.length > 0

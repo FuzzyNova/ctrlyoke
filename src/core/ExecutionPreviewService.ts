@@ -685,6 +685,7 @@ export class ExecutionPreviewService {
       prompt: promptPlan.promptPreview,
       command,
       permissionApplication,
+      sandbox: executionPlan.effectiveSandbox ?? { kind: "harness" },
       mcpApplication,
       workspaceMutations,
       variables: variablesPreview,

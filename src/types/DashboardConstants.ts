@@ -2077,6 +2077,15 @@ export const EFFECTIVE_SANDBOX_KINDS = {
   OFF: "off",
   HARNESS: "harness",
 } as const;
+export const SANDBOX_UI_LABELS = {
+  FIELD: "Sandbox",
+  INHERIT: "Inherit",
+  ON: "On",
+  OFF: "Off",
+  SANDBOXED: "Sandboxed",
+  NOT_SANDBOXED: "Not sandboxed",
+  HARNESS_SETTING: "Harness setting",
+} as const;
 export type EffectiveSandboxKind =
   (typeof EFFECTIVE_SANDBOX_KINDS)[keyof typeof EFFECTIVE_SANDBOX_KINDS];
 

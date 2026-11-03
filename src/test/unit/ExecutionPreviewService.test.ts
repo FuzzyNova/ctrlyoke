@@ -322,6 +322,14 @@ suite("ExecutionPreviewService", () => {
     });
   });
 
+  test("includes the effective sandbox application in each step preview", async () => {
+    const preview = await createService().build({
+      workflow: { steps: [{ prompt: "contained", sandbox: true }] },
+    });
+
+    assert.deepStrictEqual(preview.steps[0]?.sandbox, { kind: "on" });
+  });
+
   test("counts disabled queue entries against the limit in a scoped preview", async () => {
     const harness = createHarness();
     const service = new ExecutionPreviewService({

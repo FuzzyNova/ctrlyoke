@@ -390,15 +390,15 @@ minutes and incur model costs).
 
 ## Phase 5: UI, docs, changelog
 
-- **Properties panel** (`WorkflowPropertiesPanel.tsx`, `PropertiesDrawer.tsx`): a
+- [x] **Properties panel** (`WorkflowPropertiesPanel.tsx`, `PropertiesDrawer.tsx`): a
   **Sandbox** row beside Tool Permissions with Inherit / On / Off, and per-harness support
   shown the way permission fidelity is shown (`useCompatibilityDiagnostics`). Add a step
   override chip.
-- **Settings:** `defaults.sandbox` on `DefaultsPermissionsPage.tsx`, with
+- [x] **Settings:** `defaults.sandbox` on `DefaultsPermissionsPage.tsx`, with
   `settingsCatalog.ts` entries. Move the `codexSandboxMode` / `codexApprovalPolicy` rows from
   `AdvancedPermissionsSection.tsx` under it as the Codex detail, and say that they set how
   strict Codex is when contained.
-- **Dry Run** (`ExecutionPreviewService`, `DryRunModal.tsx`, `executionPreview.ts`): show
+- [x] **Dry Run** (`ExecutionPreviewService`, `DryRunModal.tsx`, `executionPreview.ts`): show
   each step's `SandboxApplication.effective`, e.g. "Sandboxed: Codex workspace-write, network
   off" / "Not sandboxed" / "Harness setting". Log the same line at launch. A persisted
   per-run record, in the run header, waits until there is demand; it would be a `_runtime`

@@ -9,16 +9,10 @@ import {
   SETTING_SCOPES,
 } from "@root/types/DashboardConstants";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
-import { CustomSelect } from "../shared/CustomSelect";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 import { PermissionCapabilitySummary } from "../shared/PermissionCapabilitySummary";
 import { TrustedRootsListEditor } from "../shared/TrustedRootsListEditor";
-import {
-  CODEX_APPROVAL_POLICY_OPTIONS_META,
-  CODEX_SANDBOX_MODE_OPTIONS_META,
-  toSelectOptions,
-} from "@root/types/SchemaUiMetadata";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -147,49 +141,6 @@ export function AdvancedPermissionsSection({
             onChange={(v) => onUpdate("ui.offerTrustForUntrustedFileLinks", v)}
             {...rowProps}
           />
-        </div>
-      </div>
-      <div className="border-t border-panel-border pt-4">
-        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
-          Codex CLI
-        </h3>
-        <p className="text-xs text-description-fg mb-3">
-          Sandbox mode and approval policy only apply when Permission Mode is
-          set to <span className="font-medium text-foreground">Custom</span>.
-        </p>
-        <div className="space-y-3">
-          <SettingInputRow
-            settingKey="permissions.codexSandboxMode"
-            id="codex-sandbox-mode"
-            {...rowProps}
-          >
-            <CustomSelect
-              id="codex-sandbox-mode"
-              value={permissions.codexSandboxMode}
-              onChange={(v) => onUpdate("permissions.codexSandboxMode", v)}
-              schemaPath="permissions.codexSandboxMode"
-              options={toSelectOptions(
-                CODEX_SANDBOX_MODE_OPTIONS_META,
-                "permissions.codexSandboxMode"
-              )}
-            />
-          </SettingInputRow>
-          <SettingInputRow
-            settingKey="permissions.codexApprovalPolicy"
-            id="codex-approval-policy"
-            {...rowProps}
-          >
-            <CustomSelect
-              id="codex-approval-policy"
-              value={permissions.codexApprovalPolicy}
-              onChange={(v) => onUpdate("permissions.codexApprovalPolicy", v)}
-              schemaPath="permissions.codexApprovalPolicy"
-              options={toSelectOptions(
-                CODEX_APPROVAL_POLICY_OPTIONS_META,
-                "permissions.codexApprovalPolicy"
-              )}
-            />
-          </SettingInputRow>
         </div>
       </div>
       <div className="border-t border-panel-border pt-4">

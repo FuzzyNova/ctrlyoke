@@ -115,4 +115,25 @@ describe("DefaultsPermissionsPage compatibility summary", () => {
       )
     ).toBeInTheDocument();
   });
+
+  it("renders the default sandbox setting and Codex containment details", () => {
+    render(
+      <DefaultsPermissionsPage
+        settings={createSettings()}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={() => {}}
+        onReset={() => {}}
+      />
+    );
+
+    expect(screen.getByText("Codex sandbox")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "These settings control how strict Codex is when contained."
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: /defaults\.sandbox/i })
+    ).toBeInTheDocument();
+  });
 });

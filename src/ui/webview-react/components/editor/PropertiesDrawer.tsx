@@ -24,6 +24,7 @@ import {
   RESUME_SESSION_SELECTIONS,
   EXECUTION_MODE_HELP_TEXT,
   PERMISSION_MODES,
+  SANDBOX_UI_LABELS,
   PERMISSION_CAPABILITY_KEYS,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   PROPERTY_EDITOR_MODES,
@@ -1319,6 +1320,37 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         {activePage === DRAWER_PAGES.PERMISSIONS && (
           <div className="flex-1 flex flex-col min-h-0">
             <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="prop-sandbox"
+                  className="text-xs font-semibold uppercase text-description-fg"
+                >
+                  {SANDBOX_UI_LABELS.FIELD}
+                </label>
+                <CustomSelect
+                  id="prop-sandbox"
+                  schemaPath="sandbox"
+                  value={
+                    displayedProperties.sandbox === undefined
+                      ? "inherit"
+                      : displayedProperties.sandbox
+                        ? "on"
+                        : "off"
+                  }
+                  onChange={(value) =>
+                    setProperty(
+                      PROMPT_PROPERTIES.SANDBOX,
+                      value === "inherit" ? undefined : value === "on"
+                    )
+                  }
+                  options={[
+                    { value: "inherit", label: SANDBOX_UI_LABELS.INHERIT },
+                    { value: "on", label: SANDBOX_UI_LABELS.ON },
+                    { value: "off", label: SANDBOX_UI_LABELS.OFF },
+                  ]}
+                  disabled={fieldDisabled(PROMPT_PROPERTIES.SANDBOX)}
+                />
+              </div>
               {/* Permission Mode */}
               <div className="flex flex-col gap-1">
                 <label
