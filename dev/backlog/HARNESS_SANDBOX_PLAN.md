@@ -350,7 +350,7 @@ to keep.
 - `ExecutionPlanBuilder` fails the launch on an error diagnostic.
 - `CompatibilityAnalyzer` reports an error for an explicit `true` on Qwen and OpenCode.
 
-## Phase 4: harness tests (opt-in, `npm run test:harness` only)
+## Phase 4: harness tests (opt-in, `npm run test:harness` only) — **Done.**
 
 For each harness declared other than `unsupported`, `src/test/harness/` checks four things:
 
@@ -360,6 +360,14 @@ For each harness declared other than `unsupported`, `src/test/harness/` checks f
 - A Codex `dangerouslyAllowAll` + `true` run gets no bypass.
 
 The network checks are per harness, matching the documented policy.
+
+`src/test/harness/sandbox.harness.test.ts` now covers every declared sandbox
+implementation with sibling-temp-dir write checks, plus `global_status` and a
+completion hook under containment. Codex also has a closed-network check and a
+`dangerouslyAllowAll` case that checks the generated launch arguments and the
+outside-write behavior. These tests are written but have not been run against
+live harnesses; the user must run `npm run test:harness` (which may take 30+
+minutes and incur model costs).
 
 ## Phase 5: UI, docs, changelog
 
