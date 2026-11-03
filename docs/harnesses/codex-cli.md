@@ -91,6 +91,11 @@ Codex than ctrlyoke's minimum. If a step fails because the model is not supporte
   rollout is missing, or Codex reports `thread <id> not found`, it starts a new
   session and shows a warning in the step output.
 - Directories in `permissions.trustedExternalRoots` are passed to Codex as `--add-dir`.
+- A macOS `workspace-write` probe could create workspace files but could not stage
+  them: `git add` failed because Codex protects the `.git` index path. Linked worktrees
+  have the same issue when their Git common directory is outside the worktree. ctrlyoke's
+  sandbox integration will need to grant that directory before contained workflow steps
+  can commit changes.
 - Hooks, MCP servers and approvals are all passed as `-c` overrides, so ctrlyoke never edits your Codex configuration. See [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#codex-cli).
 
 ## Usage and rate limits
