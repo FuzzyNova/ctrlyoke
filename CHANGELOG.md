@@ -42,6 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Claude Code's compaction summary now shows as a system message instead of a
+  user message, and a step's context-window bar shows the compaction marker as
+  soon as the step compacts instead of only after it completes.
 - Undo and redo requests for outputs before an imported run's boundary are now
   refused by the extension, even when a client bypasses the dashboard gate.
 - Run export now preserves patch paths and binary or non-UTF-8 content, and only

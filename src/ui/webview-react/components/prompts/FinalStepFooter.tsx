@@ -5,6 +5,7 @@ import { ExecutingStepHighlight } from "./ExecutingStepHighlight";
 import { PromptStepDetails } from "./PromptStepDetails";
 import { ContextWindowBar } from "./ContextWindowBar";
 import { resolveEffectiveContextWindow } from "@utils/tokenUtils";
+import { resolveDisplayedAttemptTokens } from "@root/utils/TokenUsage";
 import type { PromptOverride } from "./PromptStepDetails";
 import {
   FINAL_STEP_PHASES,
@@ -222,7 +223,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
             </div>
             <ContextWindowBar
               contextWindow={contextWindow}
-              attemptTokens={latestOutput?.tokens}
+              attemptTokens={resolveDisplayedAttemptTokens(latestOutput)}
               harnessId={harnessId}
             />
           </div>
