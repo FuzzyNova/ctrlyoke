@@ -1004,6 +1004,7 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
       additionalArgs: "--custom",
       toolPermissions: { mode: PERMISSION_MODES.CUSTOM },
       sandbox: true,
+      sandboxMode: "read-only",
       worktree: { mode: WORKTREE_MODES.NAMED, branch: "custom" },
       trustedExternalRoots: ["/custom/root"],
     };
@@ -1029,6 +1030,7 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
       additionalArgs: "",
       toolPermissions: global.toolPermissions,
       sandbox: undefined,
+      sandboxMode: undefined,
       worktree: global.worktree,
       trustedExternalRoots: undefined,
     };
@@ -1046,7 +1048,7 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
 
     // Controls holding local state must follow the store back to default.
     fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
-    expect(screen.getByRole("button", { name: /^Sandbox/ })).toHaveTextContent(
+    expect(screen.getByRole("button", { name: "Sandbox" })).toHaveTextContent(
       "Inherit"
     );
     expect(

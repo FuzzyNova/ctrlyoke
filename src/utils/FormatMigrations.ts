@@ -48,10 +48,52 @@ export const BASELINE_SCHEMA_VERSIONS: Record<PersistedStore, number> = {
   [PERSISTED_STORES.RUN_DEFINITION_BASELINE]: 1,
 };
 
+type JsonObject = Record<string, unknown>;
+
+function isJsonObject(value: unknown): value is JsonObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Settings v2: Codex's sandbox strictness became the cross-harness
+ * `defaults.sandboxMode` (`workspace-write` | `read-only`), and the approval
+ * policy now follows the permission mode alone. `danger-full-access` maps to
+ * `workspace-write`: "no sandbox" is now `sandbox: false`, the shipped default.
+ */
+function migrateSettingsV1ToV2(doc: unknown): unknown {
+  if (!isJsonObject(doc)) return doc;
+  const next: JsonObject = { ...doc };
+  if (typeof next.schemaVersion === "number") next.schemaVersion = 2;
+  if (!isJsonObject(next.permissions)) return next;
+  const permissions: JsonObject = { ...next.permissions };
+  const codexSandboxMode = permissions.codexSandboxMode;
+  delete permissions.codexSandboxMode;
+  delete permissions.codexApprovalPolicy;
+  next.permissions = permissions;
+  if (typeof codexSandboxMode !== "string") return next;
+  const defaults: JsonObject = isJsonObject(next.defaults)
+    ? { ...next.defaults }
+    : {};
+  if (defaults.sandboxMode === undefined) {
+    defaults.sandboxMode =
+      codexSandboxMode === "read-only" ? "read-only" : "workspace-write";
+  }
+  next.defaults = defaults;
+  return next;
+}
+
 /** Ordered migrations, one entry for every version transition. */
 export const MIGRATIONS: Record<PersistedStore, readonly FormatMigration[]> = {
   [PERSISTED_STORES.WORKFLOW_DEFINITION]: [],
-  [PERSISTED_STORES.SETTINGS]: [],
+  [PERSISTED_STORES.SETTINGS]: [
+    {
+      store: PERSISTED_STORES.SETTINGS,
+      from: 1,
+      describe:
+        "Move permissions.codexSandboxMode to defaults.sandboxMode and remove permissions.codexApprovalPolicy",
+      migrate: migrateSettingsV1ToV2,
+    },
+  ],
   [PERSISTED_STORES.RUN_FILE]: [
     {
       store: PERSISTED_STORES.RUN_FILE,

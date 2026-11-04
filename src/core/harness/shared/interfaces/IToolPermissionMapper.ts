@@ -37,15 +37,10 @@ export interface PermissionContext {
   readonly environment?: NodeJS.ProcessEnv;
   /** Workflow-provided CLI arguments, used for provider flag collision checks. */
   readonly additionalArgs?: string;
-  /** Codex-only mode settings, supplied by the provider. */
-  readonly sandboxMode?: string;
-  readonly approvalPolicy?: string;
-  /** Detected Codex CLI version for version-specific permission values. */
+  /** Detected harness CLI version for version-specific permission values. */
   readonly cliVersion?: string;
   /** The step's resolved MCP servers, for harnesses that filter MCP tools per server (Codex). */
   readonly mcpServers?: readonly (string | McpServerConfig)[] | null;
-  /** Explicit terminal containment request for shared policy resolvers. */
-  readonly sandboxRequest?: boolean;
   /** Existing permission keys used by config-driven harnesses for collision safety. */
   readonly permissionCollisionContext?: {
     readonly topLevelKeys: ReadonlySet<string>;

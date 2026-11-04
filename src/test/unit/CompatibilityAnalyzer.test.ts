@@ -228,6 +228,32 @@ suite("CompatibilityAnalyzer", () => {
     );
     assert.deepStrictEqual(analyze({ steps: [{ prompt: "test" }] }), []);
   });
+  test("notes a sandboxMode that has no effect because sandbox isn't true", () => {
+    const unused = (step: PromptStep) =>
+      analyze({ steps: [step] }).filter(
+        (item) =>
+          item.code === COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_MODE_UNUSED
+      );
+    for (const sandbox of [false, null, undefined]) {
+      const [diagnostic] = unused({
+        prompt: "test",
+        sandbox,
+        sandboxMode: "read-only",
+      });
+      assert.strictEqual(
+        diagnostic?.severity,
+        COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO,
+        String(sandbox)
+      );
+      assert.strictEqual(diagnostic?.propertyPointer, "/steps/0/sandboxMode");
+    }
+    assert.deepStrictEqual(
+      unused({ prompt: "test", sandbox: true, sandboxMode: "read-only" }),
+      []
+    );
+    // The inherited default mode is never authored, so it is never flagged.
+    assert.deepStrictEqual(unused({ prompt: "test" }), []);
+  });
   test("points a sandbox diagnostic at the tier that authored it", () => {
     const qwen = HARNESS_IDS.QWEN_CLI;
     const caps = snapshot({
@@ -247,7 +273,7 @@ suite("CompatibilityAnalyzer", () => {
       )?.propertyPointer,
       "/sandbox"
     );
-    const fromDefaults = find(
+    const fromDefaults = (
       analyzeCompatibility({
         workflow: { harness: qwen, steps: [{ prompt: "d" }] },
         executionTargets: enumerateCompatibilityTargets(
@@ -259,10 +285,25 @@ suite("CompatibilityAnalyzer", () => {
             })
         ),
         capabilities: caps,
-      })
+      }) as ReturnType<typeof analyze>
+    ).find(
+      (item) =>
+        item.code === COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_DEFAULT_SKIPPED
     );
-    assert.ok(fromDefaults, "defaults.sandbox: true still reports the error");
+    // A defaults.sandbox: true is skipped with a warning, not refused.
+    assert.ok(fromDefaults, "defaults.sandbox: true reports the skip");
+    assert.strictEqual(
+      fromDefaults.severity,
+      COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+    );
     assert.strictEqual(fromDefaults.propertyPointer, undefined);
+    const authored = find(
+      analyze({ harness: qwen, steps: [{ prompt: "s", sandbox: true }] }, caps)
+    );
+    assert.strictEqual(
+      authored?.severity,
+      COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
+    );
   });
   test("resolves sandbox prompt, workflow, defaults, and absent sources", () => {
     const workflow = {

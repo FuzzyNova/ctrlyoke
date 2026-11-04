@@ -151,25 +151,23 @@ suite("WorkspaceSettingsTrustCommands", () => {
         io,
         new RecordingDependencies([
           state(
-            "Codex sandbox: danger-full-access",
+            "Default sandbox: false",
             undefined,
-            SETTING_PATHS.PERMISSIONS_CODEX_SANDBOX_MODE
+            SETTING_PATHS.DEFAULTS_SANDBOX
           ),
           state(
-            "Codex approval policy: never",
+            "Default sandbox mode: workspace-write",
             undefined,
-            SETTING_PATHS.PERMISSIONS_CODEX_APPROVAL_POLICY
+            SETTING_PATHS.DEFAULTS_SANDBOX_MODE
           ),
         ])
       );
       assert.strictEqual(code, 2);
+      assert.ok(io.err.some((line) => line.includes("Default sandbox: false")));
       assert.ok(
         io.err.some((line) =>
-          line.includes("Codex sandbox: danger-full-access")
+          line.includes("Default sandbox mode: workspace-write")
         )
-      );
-      assert.ok(
-        io.err.some((line) => line.includes("Codex approval policy: never"))
       );
     });
   });

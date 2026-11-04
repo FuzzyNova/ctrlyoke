@@ -6,7 +6,11 @@ import {
   FORCE_ALL_KEYWORD,
   ForceableFlag,
 } from "../../cli/CliPropertyOverrides";
-import { HARNESS_IDS, PERMISSION_MODES } from "../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  PERMISSION_MODES,
+  SANDBOX_MODES,
+} from "../../types/DashboardConstants";
 import {
   resolveExecutionProperties,
   resolveSessionId,
@@ -35,6 +39,38 @@ suite("CLI property overrides", () => {
         .workflow.sandbox,
       true
     );
+  });
+
+  test("--sandbox-none writes null and --sandbox-mode sets the mode", () => {
+    const workflow: PromptFile = {
+      sandbox: true,
+      steps: [{ prompt: "one", sandbox: true, sandboxMode: "workspace-write" }],
+    };
+    const overrides = buildCliPropertyOverrides({
+      allowTool: [],
+      denyTool: [],
+      sandboxNone: true,
+      sandboxMode: SANDBOX_MODES.READ_ONLY,
+      force: ["sandbox-none", "sandbox-mode"],
+    });
+    applyCliPropertyOverrides(workflow, overrides);
+    assert.strictEqual(workflow.sandbox, null);
+    assert.strictEqual(workflow.sandboxMode, SANDBOX_MODES.READ_ONLY);
+    const step = workflow.steps![0] as PromptStep;
+    assert.strictEqual(step.sandbox, null);
+    assert.strictEqual(step.sandboxMode, SANDBOX_MODES.READ_ONLY);
+    for (const sandbox of [true, false]) {
+      assert.throws(
+        () =>
+          buildCliPropertyOverrides({
+            allowTool: [],
+            denyTool: [],
+            sandbox,
+            sandboxNone: true,
+          }),
+        /--sandbox-none cannot be combined/u
+      );
+    }
   });
   test("--force all applies each passed forceable flag to prompts and scripts", () => {
     const workflow: PromptFile = {
@@ -65,14 +101,18 @@ suite("CLI property overrides", () => {
       sessionId: "forced-session",
       scriptTimeout: 17,
       sandbox: true,
+      sandboxMode: SANDBOX_MODES.READ_ONLY,
       force: [FORCE_ALL_KEYWORD],
     });
 
+    // --sandbox-none can't be passed alongside --sandbox, so it isn't forced.
     assert.deepStrictEqual(
       overrides.forced,
       new Set(
         Object.values(ForceableFlag).filter(
-          (flag) => flag !== ForceableFlag.INTERACTIVE
+          (flag) =>
+            flag !== ForceableFlag.INTERACTIVE &&
+            flag !== ForceableFlag.SANDBOX_NONE
         )
       )
     );

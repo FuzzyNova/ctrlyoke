@@ -125,12 +125,14 @@ Field details: [`hooks`](/reference/workflow-schema#execution-properties-hooks).
   **Custom** mode the harness gets the **Allowed Tools** and **Denied Tools**
   lists, and a denied tool always wins. How strictly each harness applies them
   differs; see [How each harness applies them](/workflows/permissions#how-each-harness-applies-them).
-- **Sandbox** — request terminal write containment independently of approval.
-  Choose **Inherit**, **On**, or **Off**; Inherit names the value it resolves
-  to, and **Harness default** means each harness keeps its own behavior for the
-  permission mode (Codex's `allowAll` still runs in its `workspace-write`
-  sandbox). An error appears under the control when the harness can't sandbox. Steps can
-  override the workflow value. See
+- **Sandbox** — terminal write containment, independent of approval. Choose
+  **Inherit**, **On**, **Off** or **None**; Inherit names the value it resolves
+  to (Off by default). Off turns each harness's sandbox off, and None passes no
+  sandbox flags so the harness's own settings decide. An error appears under
+  the control when the harness can't sandbox. Steps can override the workflow
+  value.
+- **Sandbox mode** — how strict On is: **Workspace write** or **Read-only**.
+  It has no effect unless Sandbox resolves to On. See
   [Sandboxing](/workflows/permissions#sandboxing).
 - **Secrets** — secret environment variables this workflow may use.
 - **Trusted External Roots** — directories outside the workspace this workflow

@@ -117,8 +117,8 @@ suite("Workflow template schema", () => {
     const validateSettings = settingsAjv.compile(settingsSchema);
     assert.strictEqual(
       validateSettings({
-        $schema: "https://ctrlyoke.dev/schema/v1/settings.json",
-        schemaVersion: 1,
+        $schema: "https://ctrlyoke.dev/schema/v2/settings.json",
+        schemaVersion: 2,
       }),
       true,
       JSON.stringify(validateSettings.errors)

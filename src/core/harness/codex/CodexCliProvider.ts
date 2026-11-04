@@ -17,14 +17,10 @@ import { CodexNotificationMonitor } from "./CodexNotificationMonitor";
 import {
   CODEX_FOLD_EXCLUDED_SERVER_IDS,
   CodexToolPermissionMapper,
-  resolveCodexContainment,
 } from "./CodexToolPermissionMapper";
-import { CodexSandboxMapper } from "./CodexSandboxMapper";
+import { CodexSandboxMapper, codexSandboxFlag } from "./CodexSandboxMapper";
 import { gitWritableAdminDirs } from "../../../utils/GitUtils";
-import {
-  CODEX_SANDBOX_MODES,
-  type CodexSandboxMode,
-} from "../../../types/DashboardConstants";
+import { CODEX_SANDBOX_MODES } from "../../../types/DashboardConstants";
 import { foldMcpToolDenialsIntoServers } from "../../../types/ToolPermissionUtils";
 import { CodexLogParser } from "./CodexLogParser";
 import {
@@ -214,7 +210,7 @@ function splitCodexHeaders(headers: Record<string, string> | undefined): {
  * - OpenAI token format in usage metadata
  * - Completion detection via {"type": "turn.completed"} events
  * - Supports --resume flag for session continuation
- * - Mode-based permissions (Auto preset flags, --dangerously-bypass-approvals-and-sandbox)
+ * - Mode-based approval (-a), with containment (-s) from the sandbox mapper
  *
  * Usage:
  * ```typescript
@@ -369,7 +365,7 @@ export class CodexCliProvider implements ICliProvider {
    * - Model selection (with validation and fallback)
    * - Workspace directories (--add-dir)
    * - Session management (resume subcommand with session ID)
-   * - Tool permissions (sandbox mode, approval policy, Auto preset flags)
+   * - Tool permissions (approval flag; the sandbox flag comes from the sandbox mapper)
    * - Hook settings (interactive mode only: --enable hooks + inline overrides)
    *
    * @param prompt The prompt item with model/agent/session settings
@@ -487,15 +483,14 @@ export class CodexCliProvider implements ICliProvider {
 
     // Add workspace directories
     if (workspaceRoot) {
-      const permissions = ConfigurationUtils.resolveSpawnToolPermissions(
-        workflowContext?.resolvedProperties?.toolPermissions
+      // Read-only Codex refuses --add-dir, and only workspace-write needs the
+      // git admin dirs. Under `sandbox: null` config.toml decides the mode, so
+      // only the external roots are passed, as before.
+      const resolvedSandboxMode = codexSandboxFlag(
+        workflowContext?.resolvedProperties?.sandbox,
+        workflowContext?.resolvedProperties?.sandboxMode ??
+          ConfigurationUtils.getDefaultSandboxMode()
       );
-      const sandboxRequest = workflowContext?.resolvedProperties?.sandbox;
-      const resolvedSandboxMode = resolveCodexContainment(
-        permissions ?? null,
-        sandboxRequest,
-        ConfigurationUtils.getCodexSandboxMode() as CodexSandboxMode
-      ).sandboxMode;
       const workspaceDirs =
         resolvedSandboxMode === CODEX_SANDBOX_MODES.READ_ONLY
           ? []
@@ -720,15 +715,7 @@ export class CodexCliProvider implements ICliProvider {
       // none mode — skip permission flags entirely
       return { cliArgs: [], diagnostics: [] };
     }
-    const sandboxMode = ConfigurationUtils.getCodexSandboxMode();
-    const approvalPolicy = ConfigurationUtils.getCodexApprovalPolicy();
-    const cliVersion = await this.getVersion();
-    return this.toolPermissionMapper.prepare(config, {
-      ...context,
-      sandboxMode,
-      approvalPolicy,
-      cliVersion,
-    });
+    return this.toolPermissionMapper.prepare(config, context);
   }
 
   /**

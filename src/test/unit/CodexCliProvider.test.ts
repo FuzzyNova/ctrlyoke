@@ -8,15 +8,15 @@ import * as path from "path";
 import { suite, test } from "mocha";
 import { parse } from "smol-toml";
 import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
-import {
-  CodexToolPermissionMapper,
-  resolveCodexContainment,
-} from "../../core/harness/codex/CodexToolPermissionMapper";
+import { CodexToolPermissionMapper } from "../../core/harness/codex/CodexToolPermissionMapper";
 import { CodexSandboxMapper } from "../../core/harness/codex/CodexSandboxMapper";
 import {
-  CODEX_SANDBOX_MODES,
   PERMISSION_MODES,
+  SANDBOX_MODES,
+  type SandboxMode,
+  type SandboxRequest,
 } from "../../types/DashboardConstants";
+import { COMPATIBILITY_DIAGNOSTIC_CODES } from "../../types/CompatibilityTypes";
 import type { ToolPermissionConfig } from "../../core/harness/shared/interfaces/IToolPermissionMapper";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -36,7 +36,7 @@ function makeWorkflowContext(resumeSession?: boolean): {
 // ============================================================================
 
 suite("CodexCliProvider", () => {
-  test("snapshots current permission args and add-dir behavior before sandbox changes", async () => {
+  test("approval flags follow the permission mode alone, and only interactively", () => {
     const mapper = new CodexToolPermissionMapper();
     const cases = [
       [
@@ -73,58 +73,79 @@ suite("CodexCliProvider", () => {
       { interactive: string[]; headless: string[] }
     > = {};
     for (const [name, config] of cases) {
-      const args = (isInteractive: boolean) =>
-        mapper.buildCodexSpecificArgs(
-          config,
-          "workspace-write",
-          "on-request",
-          isInteractive,
-          "0.166.0"
-        );
-      snapshots[name] = { interactive: args(true), headless: args(false) };
+      snapshots[name] = {
+        interactive: mapper.buildCodexSpecificArgs(config, true),
+        headless: mapper.buildCodexSpecificArgs(config, false),
+      };
     }
     assert.deepStrictEqual(snapshots, {
       none: { interactive: [], headless: [] },
-      custom: {
-        interactive: ["-s", "workspace-write", "-a", "on-request"],
-        headless: ["-s", "workspace-write"],
-      },
+      custom: { interactive: ["-a", "on-request"], headless: [] },
+      // No read-only clamp: the deny list is reported, not enforced.
       "custom denied write": {
-        interactive: ["--sandbox", "read-only"],
-        headless: ["--sandbox", "read-only"],
+        interactive: ["-a", "on-request"],
+        headless: [],
       },
-      allowAll: {
-        interactive: [
-          "--sandbox",
-          "workspace-write",
-          "--ask-for-approval",
-          "on-request",
-        ],
-        headless: ["--sandbox", "workspace-write"],
-      },
-      dangerouslyAllowAll: {
-        interactive: ["--dangerously-bypass-approvals-and-sandbox"],
-        headless: ["--dangerously-bypass-approvals-and-sandbox"],
-      },
+      allowAll: { interactive: ["-a", "on-request"], headless: [] },
+      dangerouslyAllowAll: { interactive: ["-a", "never"], headless: [] },
     });
+  });
 
+  test("a denied write tool is reported as not enforced", async () => {
+    const result = await new CodexToolPermissionMapper().prepare(
+      {
+        mode: PERMISSION_MODES.CUSTOM,
+        allowedTools: [],
+        deniedTools: ["write"],
+      },
+      { isInteractive: true } as any
+    );
+    // Nothing clamps the sandbox any more, so the denial is only reported.
+    assert.deepStrictEqual(
+      result.diagnostics.map((d) => d.code),
+      [COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL]
+    );
+    assert.deepStrictEqual(result.cliArgs, ["-a", "on-request"]);
+  });
+
+  test("sandbox flags follow sandbox and sandboxMode alone", async () => {
+    const sandboxMapper = new CodexSandboxMapper();
+    const rows: Array<[SandboxRequest | undefined, SandboxMode, string[]]> = [
+      [true, SANDBOX_MODES.WORKSPACE_WRITE, ["-s", "workspace-write"]],
+      [true, SANDBOX_MODES.READ_ONLY, ["-s", "read-only"]],
+      [false, SANDBOX_MODES.WORKSPACE_WRITE, ["-s", "danger-full-access"]],
+      [false, SANDBOX_MODES.READ_ONLY, ["-s", "danger-full-access"]],
+      [null, SANDBOX_MODES.READ_ONLY, []],
+      [undefined, SANDBOX_MODES.WORKSPACE_WRITE, []],
+    ];
+    for (const [request, sandboxMode, expected] of rows) {
+      for (const isInteractive of [true, false]) {
+        const result = await sandboxMapper.prepare(request, {
+          isInteractive,
+          writableRoots: [],
+          sandboxMode,
+          requestFromDefaults: false,
+        });
+        assert.deepStrictEqual(
+          result.cliArgs,
+          expected,
+          `${request}:${sandboxMode}:${isInteractive}`
+        );
+      }
+    }
+  });
+
+  test("passes external roots to --add-dir except under read-only", async () => {
     const provider = new CodexCliProvider();
     const roots = [path.resolve("workspace/extra"), path.resolve("approved")];
-    const addDirs = async (
-      toolPermissions: unknown,
-      isInteractive: boolean
-    ) => {
+    const addDirs = async (resolvedProperties: Record<string, unknown>) => {
       const args = await provider.buildCliArgs(
         {} as any,
-        isInteractive,
+        true,
         "/ext",
         path.resolve("workspace"),
         undefined,
-        {
-          promptIndex: 0,
-          allPrompts: [],
-          resolvedProperties: { toolPermissions },
-        } as any,
+        { promptIndex: 0, allPrompts: [], resolvedProperties } as any,
         roots,
         []
       );
@@ -132,174 +153,20 @@ suite("CodexCliProvider", () => {
         arg === "--add-dir" ? [args[index + 1]] : []
       );
     };
-    for (const [, config] of cases) {
-      const expectedRoots =
-        config.mode === PERMISSION_MODES.CUSTOM &&
-        (config.deniedTools as readonly string[]).includes("write")
-          ? []
-          : roots;
-      assert.deepStrictEqual(await addDirs(config, true), expectedRoots);
-      assert.deepStrictEqual(await addDirs(config, false), expectedRoots);
-    }
-    assert.deepStrictEqual(await addDirs(null, true), roots);
-    assert.deepStrictEqual(await addDirs(null, false), roots);
-  });
-
-  test("resolves each Codex containment table row for interactive and headless launches", async () => {
-    const mapper = new CodexToolPermissionMapper();
-    const sandboxMapper = new CodexSandboxMapper();
-    const configs = {
-      none: null,
-      custom: {
-        mode: PERMISSION_MODES.CUSTOM,
-        allowedTools: [],
-        deniedTools: [],
-      },
-      denied: {
-        mode: PERMISSION_MODES.CUSTOM,
-        allowedTools: [],
-        deniedTools: ["write"],
-      },
-      allowAll: {
-        mode: PERMISSION_MODES.ALLOW_ALL,
-        allowedTools: [],
-        deniedTools: [],
-      },
-      dangerous: {
-        mode: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
-        allowedTools: [],
-        deniedTools: [],
-      },
-    } as const;
-    const rows: Array<
-      [boolean, keyof typeof configs, string | undefined, boolean]
-    > = [
-      [true, "allowAll", "workspace-write", false],
-      [true, "dangerous", "workspace-write", false],
-      [true, "custom", "workspace-write", false],
-      [true, "denied", "read-only", false],
-      [true, "none", "workspace-write", false],
-      [false, "allowAll", "danger-full-access", false],
-      [false, "dangerous", undefined, true],
-      [false, "custom", "danger-full-access", false],
-      [false, "denied", "read-only", false],
-      [false, "none", "danger-full-access", false],
-    ];
-    for (const [request, mode, expectedMode, bypass] of rows) {
-      const config = configs[mode] as any;
-      const resolved = resolveCodexContainment(
-        config,
-        request,
-        CODEX_SANDBOX_MODES.WORKSPACE_WRITE
-      );
-      assert.strictEqual(
-        resolved.sandboxMode,
-        expectedMode,
-        `${request}:${mode}`
-      );
-      assert.strictEqual(resolved.bypass, bypass, `${request}:${mode}`);
-      const sandboxResult = await sandboxMapper.prepare(request, {
-        toolPermissions: config,
-        isInteractive: true,
-        writableRoots: [],
-        codexSandboxMode: CODEX_SANDBOX_MODES.WORKSPACE_WRITE,
-      });
-      const sandboxArgs = sandboxResult.cliArgs;
-      const permissionArgs = config
-        ? mapper.buildCodexSpecificArgs(
-            config,
-            CODEX_SANDBOX_MODES.WORKSPACE_WRITE,
-            "on-request",
-            true,
-            "0.166.0",
-            request
-          )
-        : [];
-      assert.deepStrictEqual(
-        sandboxArgs,
-        expectedMode ? ["-s", expectedMode] : []
-      );
-      const expectedPermissionArgs = bypass
-        ? ["--dangerously-bypass-approvals-and-sandbox"]
-        : mode === "none"
-          ? []
-          : mode === "allowAll"
-            ? ["-a", "on-request"]
-            : mode === "dangerous"
-              ? ["-a", "never"]
-              : ["-a", "on-request"];
-      assert.deepStrictEqual(
-        permissionArgs,
-        expectedPermissionArgs,
-        `interactive ${request}:${mode}`
-      );
-      assert.deepStrictEqual(
-        [...sandboxArgs, ...permissionArgs],
-        bypass
-          ? ["--dangerously-bypass-approvals-and-sandbox"]
-          : [
-              ...(expectedMode ? ["-s", expectedMode] : []),
-              ...expectedPermissionArgs,
-            ]
-      );
-      const headlessPermissionArgs = config
-        ? mapper.buildCodexSpecificArgs(
-            config,
-            CODEX_SANDBOX_MODES.WORKSPACE_WRITE,
-            "on-request",
-            false,
-            "0.166.0",
-            request
-          )
-        : [];
-      const headlessSandbox = await sandboxMapper.prepare(request, {
-        toolPermissions: config,
-        isInteractive: false,
-        writableRoots: [],
-        codexSandboxMode: CODEX_SANDBOX_MODES.WORKSPACE_WRITE,
-      });
-      const expectedHeadlessPermission = bypass
-        ? ["--dangerously-bypass-approvals-and-sandbox"]
-        : [];
-      assert.deepStrictEqual(
-        headlessPermissionArgs,
-        expectedHeadlessPermission,
-        `headless ${request}:${mode}`
-      );
-      assert.deepStrictEqual(
-        [...headlessSandbox.cliArgs, ...headlessPermissionArgs],
-        bypass
-          ? ["--dangerously-bypass-approvals-and-sandbox"]
-          : expectedMode
-            ? ["-s", expectedMode]
-            : []
-      );
-    }
-    const clamped = resolveCodexContainment(
-      configs.custom as any,
-      true,
-      CODEX_SANDBOX_MODES.DANGER_FULL_ACCESS
+    assert.deepStrictEqual(await addDirs({}), roots);
+    assert.deepStrictEqual(await addDirs({ sandbox: null }), roots);
+    assert.deepStrictEqual(await addDirs({ sandbox: false }), roots);
+    assert.deepStrictEqual(
+      await addDirs({ sandbox: true, sandboxMode: SANDBOX_MODES.READ_ONLY }),
+      []
     );
-    assert.strictEqual(
-      clamped.sandboxMode,
-      CODEX_SANDBOX_MODES.WORKSPACE_WRITE
+    assert.deepStrictEqual(
+      await addDirs({
+        sandbox: false,
+        sandboxMode: SANDBOX_MODES.READ_ONLY,
+      }),
+      roots
     );
-    assert.ok(resolveCodexContainment(configs.denied as any, false).diagnostic);
-    // A `read-only` codexSandboxMode setting applies under `sandbox: true` for
-    // every permission mode, not only `custom` and `none`.
-    for (const mode of ["allowAll", "dangerous", "custom", "none"] as const) {
-      const strict = resolveCodexContainment(
-        configs[mode] as any,
-        true,
-        CODEX_SANDBOX_MODES.READ_ONLY
-      );
-      assert.strictEqual(
-        strict.sandboxMode,
-        CODEX_SANDBOX_MODES.READ_ONLY,
-        `true:${mode}:read-only`
-      );
-      assert.strictEqual(strict.bypass, false, `true:${mode}:read-only`);
-    }
   });
 
   test("grants Git's admin directories as roots under workspace-write, in a plain checkout and a linked worktree", async () => {
@@ -339,38 +206,37 @@ suite("CodexCliProvider", () => {
           arg === "--add-dir" ? [args[index + 1]] : []
         );
       };
-      const allowAll = {
+      const contained = {
         toolPermissions: {
           mode: PERMISSION_MODES.ALLOW_ALL,
           allowedTools: [],
           deniedTools: [],
         },
+        sandbox: true,
+        sandboxMode: SANDBOX_MODES.WORKSPACE_WRITE,
       };
 
       // Plain checkout: the common dir is the only admin directory.
-      assert.deepStrictEqual(await addDirs(plain, allowAll), [plainGit]);
+      assert.deepStrictEqual(await addDirs(plain, contained), [plainGit]);
       // Linked worktree: Codex protects the worktree's own gitdir even inside
       // the added common dir, so it must be a root in its own right.
       assert.deepStrictEqual(
-        (await addDirs(linked, allowAll)).sort(),
+        (await addDirs(linked, contained)).sort(),
         [plainGit, fsSync.realpathSync(linkedGit)].sort()
       );
       // Read-only containment grants no extra roots, and neither does a
-      // sandbox that is off.
-      assert.deepStrictEqual(
-        await addDirs(linked, { ...allowAll, sandbox: false }),
-        []
-      );
-      assert.deepStrictEqual(
-        await addDirs(linked, {
-          toolPermissions: {
-            mode: PERMISSION_MODES.CUSTOM,
-            allowedTools: [],
-            deniedTools: ["write"],
-          },
-        }),
-        []
-      );
+      // sandbox that is off or left to config.toml.
+      for (const override of [
+        { sandbox: false },
+        { sandbox: null },
+        { sandboxMode: SANDBOX_MODES.READ_ONLY },
+      ]) {
+        assert.deepStrictEqual(
+          await addDirs(linked, { ...contained, ...override }),
+          [],
+          JSON.stringify(override)
+        );
+      }
     } finally {
       removeTempDir(root);
     }
@@ -487,30 +353,6 @@ suite("CodexCliProvider", () => {
       path.resolve("workspace"),
       undefined,
       makeWorkflowContext() as any
-    );
-
-    assert.ok(!args.includes("--add-dir"), JSON.stringify(args));
-  });
-
-  test("skips all extra directories when a denied write tool forces read-only", async () => {
-    const args = await new CodexCliProvider().buildCliArgs(
-      {} as any,
-      true,
-      "/ext",
-      path.resolve("workspace"),
-      undefined,
-      {
-        ...makeWorkflowContext(),
-        resolvedProperties: {
-          toolPermissions: {
-            mode: "custom",
-            allowedTools: [],
-            deniedTools: ["write"],
-          },
-        },
-      } as any,
-      [path.resolve("workspace", "other")],
-      [path.resolve("external")]
     );
 
     assert.ok(!args.includes("--add-dir"), JSON.stringify(args));

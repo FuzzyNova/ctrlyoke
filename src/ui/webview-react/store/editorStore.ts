@@ -22,6 +22,8 @@ import {
   type ExecutionMode,
   type HarnessId,
   type PriorContextDetail,
+  type SandboxMode,
+  type SandboxRequest,
 } from "@root/types/DashboardConstants";
 import type {
   PromptEditorInsertRequest,
@@ -91,7 +93,8 @@ export interface PropertyValues {
   priorContextDetail?: PriorContextDetail;
   additionalArgs: Disableable<string>; // undefined = inherit, null = none, string = custom args
   toolPermissions?: ToolPermissionsOverride | null; // undefined = inherit workflow, null = none (omit flags), object = override
-  sandbox?: boolean;
+  sandbox?: SandboxRequest; // undefined = inherit, null = none (no sandbox flags)
+  sandboxMode?: SandboxMode;
 }
 
 /** Returned by bulk display selectors when selected steps have unlike values. */
@@ -213,6 +216,7 @@ export const PROPERTY_DEFAULTS: PropertyValues = {
   additionalArgs: undefined,
   toolPermissions: undefined,
   sandbox: undefined,
+  sandboxMode: undefined,
   // Every key must be listed: the drawer's "Reset all to inherit" iterates
   // these keys, so an omitted property would survive a reset.
 } satisfies Record<keyof PropertyValues, unknown>;
@@ -833,6 +837,7 @@ export const useEditorStore = create<
         additionalArgs: promptData.additionalArgs,
         toolPermissions: promptData.toolPermissions,
         sandbox: promptData.sandbox,
+        sandboxMode: promptData.sandboxMode,
       };
 
       set({
@@ -1892,6 +1897,8 @@ export const useEditorStore = create<
       result.toolPermissions = properties.toolPermissions;
     }
     if (properties.sandbox !== undefined) result.sandbox = properties.sandbox;
+    if (properties.sandboxMode !== undefined)
+      result.sandboxMode = properties.sandboxMode;
 
     return result;
   },

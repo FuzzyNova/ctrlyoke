@@ -15,6 +15,7 @@ import {
   PERMISSION_MODES,
   permissionModeAppliesToolList,
   PROMPT_INPUT_CAPABILITY_KEYS,
+  PROMPT_PROPERTIES,
   STEP_TYPES,
   type HarnessId,
   type HookEvent,
@@ -37,6 +38,7 @@ import {
   getCompatibilityDiagnosticRemediation,
   getPermissionFidelityDiagnosticCode,
   getPermissionFidelityDiagnosticSeverity,
+  sandboxUnsupportedDiagnostic,
 } from "./CompatibilityTypes";
 import type { CompatibilityCaveatCode } from "./CompatibilityTypes";
 import { isShippedDefaultToolList } from "./CtrlYokeSettings";
@@ -312,53 +314,80 @@ function analyzeSandbox(
   >,
   diagnostics: CompatibilityDiagnostic[]
 ): void {
-  if (target.resolved.properties.sandbox !== true) return;
+  const { properties, sources } = target.resolved;
+  if (properties.sandbox !== true) {
+    // An authored mode only matters under `sandbox: true`; the defaults
+    // tier always has one, so only a workflow or step value is reported.
+    const modePointer = executionPropertyPointer(
+      target,
+      PROMPT_PROPERTIES.SANDBOX_MODE
+    );
+    if (modePointer) {
+      const code = COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_MODE_UNUSED;
+      const remediation = getCompatibilityDiagnosticRemediation(code);
+      diagnostics.push({
+        code,
+        severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO,
+        harnessId: properties.harness,
+        capability: SANDBOX_CAPABILITY_KEYS.TERMINAL,
+        consumer: target.consumer,
+        ...(sources.sandboxMode ? { sourceTier: sources.sandboxMode } : {}),
+        propertyPointer: modePointer,
+        state:
+          installed.effective?.sandbox?.terminal ?? unknownCapabilityState(),
+        message: getCompatibilityDiagnosticMessage(code, {
+          harnessId: properties.harness,
+          capability: SANDBOX_CAPABILITY_KEYS.TERMINAL,
+        }),
+        ...(remediation ? { remediation } : {}),
+      });
+    }
+    return;
+  }
   const state = installed.effective?.sandbox?.terminal;
   const declaration = installed.descriptor.sandbox?.terminal;
-  // Only a request that will fail at launch is reported. A partial harness's
+  // Only a request the harness can't honor is reported. A partial harness's
   // caveat (network follows the harness's own settings) holds for every
   // supported harness, so it is documented rather than flagged per step.
-  // An undeclared harness has no sandbox mapper, so it fails at launch too.
+  // An undeclared harness has no sandbox mapper, so it is unsupported too.
   if (
     state &&
     declaration &&
     state.fidelity !== CAPABILITY_FIDELITIES.UNSUPPORTED
   )
     return;
-  const code = COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED;
-  const sourceTier = target.resolved.sources.sandbox;
-  const propertyPointer = sandboxPointer(target);
-  const remediation = getCompatibilityDiagnosticRemediation(code);
+  const sourceTier = sources.sandbox;
+  const propertyPointer = executionPropertyPointer(
+    target,
+    PROMPT_PROPERTIES.SANDBOX
+  );
   diagnostics.push({
-    code,
-    severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR,
-    harnessId: target.resolved.properties.harness,
-    capability: SANDBOX_CAPABILITY_KEYS.TERMINAL,
+    ...sandboxUnsupportedDiagnostic({
+      harnessId: properties.harness,
+      // From `defaults.sandbox` it is skipped with a warning, not refused.
+      fromDefaults: sourceTier === COMPATIBILITY_SOURCE_TIERS.DEFAULTS,
+      caveatCode: declaration?.caveatCode,
+      state: state ?? unknownCapabilityState(),
+    }),
     consumer: target.consumer,
     ...(sourceTier ? { sourceTier } : {}),
     ...(propertyPointer ? { propertyPointer } : {}),
-    state: state ?? unknownCapabilityState(),
-    message: getCompatibilityDiagnosticMessage(code, {
-      harnessId: target.resolved.properties.harness,
-      capability: SANDBOX_CAPABILITY_KEYS.TERMINAL,
-      caveatCode: declaration?.caveatCode,
-    }),
-    ...(remediation ? { remediation } : {}),
   });
 }
 
-/** Pointer to the authored `sandbox` value; none when it comes from `defaults.sandbox`. */
-function sandboxPointer(
-  target: CompatibilityExecutionTarget
+/** Pointer to an authored execution property; none when it comes from settings. */
+function executionPropertyPointer(
+  target: CompatibilityExecutionTarget,
+  key: typeof PROMPT_PROPERTIES.SANDBOX | typeof PROMPT_PROPERTIES.SANDBOX_MODE
 ): string | undefined {
-  const sourceTier = target.resolved.sources.sandbox;
+  const sourceTier = target.resolved.sources[key];
   if (!sourceTier || sourceTier === COMPATIBILITY_SOURCE_TIERS.DEFAULTS) {
     return undefined;
   }
-  if (sourceTier === COMPATIBILITY_SOURCE_TIERS.WORKFLOW) return "/sandbox";
+  if (sourceTier === COMPATIBILITY_SOURCE_TIERS.WORKFLOW) return `/${key}`;
   return target.consumer.kind === FINAL_STEP_PHASES.QUEUE
-    ? `/steps/${target.consumer.stepIndex}/sandbox`
-    : "/finalStep/sandbox";
+    ? `/steps/${target.consumer.stepIndex}/${key}`
+    : `/finalStep/${key}`;
 }
 
 function analyzeConfiguredImageInputs(

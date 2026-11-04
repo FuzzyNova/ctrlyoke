@@ -3,8 +3,8 @@ import { SCHEMA_VARIANT_DESCRIPTIONS } from "./generated/SchemaDescriptions";
 import {
   BROWSER_NOTIFICATION_MODES,
   CTRLYOKE_MCP_MODES,
-  CODEX_APPROVAL_POLICIES,
-  CODEX_SANDBOX_MODES,
+  SANDBOX_MODES,
+  SANDBOX_MODE_LABELS,
   COMPARE_SOURCES,
   CONDITION_ACTIONS,
   CONTEXT_RESOLUTION_FAILURE_MODES,
@@ -39,8 +39,7 @@ import {
   WORKFLOW_FILE_FORMATS,
   type BrowserNotificationMode,
   type CtrlYokeMcpMode,
-  type CodexApprovalPolicy,
-  type CodexSandboxMode,
+  type SandboxMode,
   type ContextResolutionFailureMode,
   type ExecutionMode,
   type HarnessId,
@@ -800,39 +799,18 @@ export const CONTEXT_RESOLUTION_FAILURE_OPTIONS_META: Record<
   },
 };
 
-export const CODEX_SANDBOX_MODE_OPTIONS_META: Record<
-  CodexSandboxMode,
-  SchemaOptionMeta<CodexSandboxMode>
+/** `sandboxMode` choices; labels come from `SANDBOX_MODE_LABELS`. */
+export const SANDBOX_MODE_OPTIONS_META: Record<
+  SandboxMode,
+  SchemaOptionMeta<SandboxMode>
 > = {
-  [CODEX_SANDBOX_MODES.READ_ONLY]: {
-    value: CODEX_SANDBOX_MODES.READ_ONLY,
-    label: "Read Only",
+  [SANDBOX_MODES.WORKSPACE_WRITE]: {
+    value: SANDBOX_MODES.WORKSPACE_WRITE,
+    label: SANDBOX_MODE_LABELS[SANDBOX_MODES.WORKSPACE_WRITE],
   },
-  [CODEX_SANDBOX_MODES.WORKSPACE_WRITE]: {
-    value: CODEX_SANDBOX_MODES.WORKSPACE_WRITE,
-    label: "Workspace Write",
-  },
-  [CODEX_SANDBOX_MODES.DANGER_FULL_ACCESS]: {
-    value: CODEX_SANDBOX_MODES.DANGER_FULL_ACCESS,
-    label: "Danger Full Access",
-  },
-};
-
-export const CODEX_APPROVAL_POLICY_OPTIONS_META: Record<
-  CodexApprovalPolicy,
-  SchemaOptionMeta<CodexApprovalPolicy>
-> = {
-  [CODEX_APPROVAL_POLICIES.UNTRUSTED]: {
-    value: CODEX_APPROVAL_POLICIES.UNTRUSTED,
-    label: "Untrusted",
-  },
-  [CODEX_APPROVAL_POLICIES.ON_REQUEST]: {
-    value: CODEX_APPROVAL_POLICIES.ON_REQUEST,
-    label: "On Request",
-  },
-  [CODEX_APPROVAL_POLICIES.NEVER]: {
-    value: CODEX_APPROVAL_POLICIES.NEVER,
-    label: "Never",
+  [SANDBOX_MODES.READ_ONLY]: {
+    value: SANDBOX_MODES.READ_ONLY,
+    label: SANDBOX_MODE_LABELS[SANDBOX_MODES.READ_ONLY],
   },
 };
 

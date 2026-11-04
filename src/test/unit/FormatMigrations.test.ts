@@ -140,4 +140,47 @@ suite("FormatMigrations", () => {
       await fs.rm(tempRoot, { recursive: true, force: true });
     }
   });
+
+  test("settings v1 → v2 moves the Codex sandbox mode to defaults.sandboxMode", () => {
+    const migrate = (doc: unknown) =>
+      migrateToCurrent(PERSISTED_STORES.SETTINGS, doc).doc;
+    for (const [codexSandboxMode, expected] of [
+      ["read-only", "read-only"],
+      ["workspace-write", "workspace-write"],
+      // "No sandbox" is now sandbox: false, so the mode keeps its default.
+      ["danger-full-access", "workspace-write"],
+    ] as const) {
+      assert.deepStrictEqual(
+        migrate({
+          schemaVersion: 1,
+          defaults: { model: "m" },
+          permissions: {
+            codexSandboxMode,
+            codexApprovalPolicy: "never",
+            trustedPaths: ["/a"],
+          },
+        }),
+        {
+          schemaVersion: 2,
+          defaults: { model: "m", sandboxMode: expected },
+          permissions: { trustedPaths: ["/a"] },
+        },
+        codexSandboxMode
+      );
+    }
+    // An explicit defaults.sandboxMode wins; a file without a version stays
+    // without one; nothing is added when there was no Codex mode.
+    assert.deepStrictEqual(
+      migrate({
+        defaults: { sandboxMode: "workspace-write" },
+        permissions: { codexSandboxMode: "read-only" },
+      }),
+      { defaults: { sandboxMode: "workspace-write" }, permissions: {} }
+    );
+    assert.deepStrictEqual(
+      migrate({ permissions: { codexApprovalPolicy: "on-request" } }),
+      { permissions: {} }
+    );
+    assert.deepStrictEqual(migrate({ general: {} }), { general: {} });
+  });
 });

@@ -2,22 +2,28 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import { ClaudeSandboxMapper } from "../../core/harness/claude/ClaudeSandboxMapper";
 import { CodexSandboxMapper } from "../../core/harness/codex/CodexSandboxMapper";
+import { CopilotCliProvider } from "../../core/harness/copilot/CopilotCliProvider";
+import { QwenCliProvider } from "../../core/harness/qwen/QwenCliProvider";
+import { AntigravityCliProvider } from "../../core/harness/antigravity/AntigravityCliProvider";
+import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
+import type { SandboxContext } from "../../core/harness/shared/interfaces/ISandboxMapper";
 import {
   COMPATIBILITY_DIAGNOSTIC_CODES,
   getCompatibilityCaveatMessage,
   SANDBOX_CAVEAT_CODE,
 } from "../../types/CompatibilityTypes";
 import {
-  CODEX_SANDBOX_MODES,
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   EFFECTIVE_SANDBOX_KINDS,
-  PERMISSION_MODES,
+  SANDBOX_MODES,
 } from "../../types/DashboardConstants";
 import { hasCliFlag } from "../../utils/CliArgParser";
 
-const context = {
-  toolPermissions: null,
+const context: SandboxContext = {
   isInteractive: true,
   writableRoots: ["/workspace", "/approved"],
+  sandboxMode: SANDBOX_MODES.WORKSPACE_WRITE,
+  requestFromDefaults: false,
 };
 
 suite("sandbox mappers", () => {
@@ -44,7 +50,7 @@ suite("sandbox mappers", () => {
     );
   });
 
-  test("Claude contributes containment settings without adding another CLI flag", async () => {
+  test("Claude workspace-write allows writes to the workspace roots without another CLI flag", async () => {
     const result = await new ClaudeSandboxMapper().prepare(true, context);
     assert.deepStrictEqual(result.cliArgs, []);
     assert.deepStrictEqual(result.diagnostics, []);
@@ -59,11 +65,31 @@ suite("sandbox mappers", () => {
     });
   });
 
-  test("Claude contributes nothing for inherit or false", async () => {
-    for (const request of [undefined, false]) {
-      const result = await new ClaudeSandboxMapper().prepare(request, context);
-      assert.strictEqual(result.settings, undefined);
-      assert.deepStrictEqual(result.cliArgs, []);
+  test("Claude read-only denies Bash writes to the workspace roots", async () => {
+    const result = await new ClaudeSandboxMapper().prepare(true, {
+      ...context,
+      sandboxMode: SANDBOX_MODES.READ_ONLY,
+    });
+    const sandbox = (result.settings as { sandbox: Record<string, unknown> })
+      .sandbox;
+    assert.strictEqual(sandbox.enabled, true);
+    assert.deepStrictEqual(sandbox.filesystem, {
+      denyWrite: context.writableRoots,
+    });
+    assert.strictEqual(result.effective.kind, EFFECTIVE_SANDBOX_KINDS.ON);
+    assert.match(result.effective.detail ?? "", /read-only/);
+  });
+
+  test("Claude Off turns the sandbox off through settings; None contributes nothing", async () => {
+    const off = await new ClaudeSandboxMapper().prepare(false, context);
+    assert.deepStrictEqual(off.settings, { sandbox: { enabled: false } });
+    assert.deepStrictEqual(off.cliArgs, []);
+    assert.strictEqual(off.effective.kind, EFFECTIVE_SANDBOX_KINDS.OFF);
+    for (const request of [undefined, null]) {
+      const none = await new ClaudeSandboxMapper().prepare(request, context);
+      assert.strictEqual(none.settings, undefined);
+      assert.deepStrictEqual(none.cliArgs, []);
+      assert.strictEqual(none.effective.kind, EFFECTIVE_SANDBOX_KINDS.HARNESS);
     }
   });
 
@@ -83,29 +109,100 @@ suite("sandbox mappers", () => {
       );
     }
     // Without sandbox: true the user's --settings is none of our business.
-    const inherit = await new ClaudeSandboxMapper().prepare(undefined, {
+    const none = await new ClaudeSandboxMapper().prepare(null, {
       ...context,
       additionalArgs: "--settings user.json",
     });
-    assert.deepStrictEqual(inherit.diagnostics, []);
+    assert.deepStrictEqual(none.diagnostics, []);
   });
 
-  test("Codex names the sandbox mode without a network claim", async () => {
+  test("Codex maps On to the sandbox mode, Off to danger-full-access and None to nothing", async () => {
     const mapper = new CodexSandboxMapper();
     const contained = await mapper.prepare(true, context);
+    assert.deepStrictEqual(contained.cliArgs, ["-s", "workspace-write"]);
     assert.strictEqual(contained.effective.kind, EFFECTIVE_SANDBOX_KINDS.ON);
+    // No network claim: config.toml can open it.
     assert.strictEqual(contained.effective.detail, "Codex workspace-write");
-    const off = await mapper.prepare(false, {
+    const readOnly = await mapper.prepare(true, {
       ...context,
-      toolPermissions: {
-        mode: PERMISSION_MODES.ALLOW_ALL,
-        allowedTools: [],
-        deniedTools: [],
-      },
-      codexSandboxMode: CODEX_SANDBOX_MODES.WORKSPACE_WRITE,
+      sandboxMode: SANDBOX_MODES.READ_ONLY,
     });
+    assert.deepStrictEqual(readOnly.cliArgs, ["-s", "read-only"]);
+    const off = await mapper.prepare(false, context);
     assert.deepStrictEqual(off.cliArgs, ["-s", "danger-full-access"]);
+    assert.strictEqual(off.effective.kind, EFFECTIVE_SANDBOX_KINDS.OFF);
     assert.strictEqual(off.effective.detail, "Codex danger-full-access");
+    for (const request of [undefined, null]) {
+      const none = await mapper.prepare(request, context);
+      assert.deepStrictEqual(none.cliArgs, []);
+      assert.strictEqual(none.effective.kind, EFFECTIVE_SANDBOX_KINDS.HARNESS);
+    }
+  });
+
+  test("Copilot and Qwen emit their off switches for Off", async () => {
+    const copilot = await new CopilotCliProvider().sandboxMapper.prepare(
+      false,
+      context
+    );
+    assert.deepStrictEqual(copilot.cliArgs, ["--no-sandbox"]);
+    assert.strictEqual(copilot.env, undefined);
+    assert.strictEqual(copilot.effective.kind, EFFECTIVE_SANDBOX_KINDS.OFF);
+
+    // QWEN_SANDBOX outranks the flag, so Off sets it too.
+    const qwen = await new QwenCliProvider().sandboxMapper.prepare(
+      false,
+      context
+    );
+    assert.deepStrictEqual(qwen.cliArgs, ["--sandbox=false"]);
+    assert.deepStrictEqual(qwen.env, { QWEN_SANDBOX: "false" });
+  });
+
+  test("Antigravity and OpenCode have nothing to turn off", async () => {
+    for (const provider of [
+      new AntigravityCliProvider(),
+      new OpenCodeCliProvider(),
+    ]) {
+      const off = await provider.sandboxMapper.prepare(false, context);
+      assert.deepStrictEqual(off.cliArgs, [], provider.config.harnessId);
+      assert.deepStrictEqual(off.diagnostics, []);
+      assert.strictEqual(off.effective.kind, EFFECTIVE_SANDBOX_KINDS.OFF);
+    }
+  });
+
+  test("a harness that can't sandbox refuses an authored true but only warns for defaults.sandbox", async () => {
+    for (const provider of [
+      new CopilotCliProvider(),
+      new QwenCliProvider(),
+      new AntigravityCliProvider(),
+      new OpenCodeCliProvider(),
+    ]) {
+      const authored = await provider.sandboxMapper.prepare(true, context);
+      assert.strictEqual(
+        authored.diagnostics[0]?.code,
+        COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED
+      );
+      assert.strictEqual(
+        authored.diagnostics[0]?.severity,
+        COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
+      );
+      const inherited = await provider.sandboxMapper.prepare(true, {
+        ...context,
+        requestFromDefaults: true,
+      });
+      assert.strictEqual(
+        inherited.diagnostics[0]?.code,
+        COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_DEFAULT_SKIPPED
+      );
+      assert.strictEqual(
+        inherited.diagnostics[0]?.severity,
+        COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+      );
+      assert.deepStrictEqual(inherited.cliArgs, []);
+      assert.strictEqual(
+        inherited.effective.kind,
+        EFFECTIVE_SANDBOX_KINDS.HARNESS
+      );
+    }
   });
 
   test("hasCliFlag matches separate and inline flag forms only", () => {

@@ -336,7 +336,7 @@ suite("ExecutionPreviewService", () => {
 
     assert.deepStrictEqual(preview.steps[0]?.sandbox, {
       kind: "on",
-      detail: "Claude Bash sandbox, network per Claude settings",
+      detail: "Claude Bash workspace-write, network per Claude settings",
     });
 
     // Claude's settings are written under the workspace, so without one

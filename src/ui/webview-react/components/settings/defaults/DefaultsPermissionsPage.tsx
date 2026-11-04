@@ -10,6 +10,7 @@ import { SettingInputRow } from "../../shared/SettingInputRow";
 import { PermissionCapabilitySummary } from "../../shared/PermissionCapabilitySummary";
 import {
   PERMISSION_MODE_OPTIONS_META,
+  SANDBOX_MODE_OPTIONS_META,
   toSelectOptions,
 } from "@root/types/SchemaUiMetadata";
 import {
@@ -18,10 +19,6 @@ import {
   sandboxSelectionFromValue,
   sandboxValueFromSelection,
 } from "@root/types/DashboardConstants";
-import {
-  CODEX_APPROVAL_POLICY_OPTIONS_META,
-  CODEX_SANDBOX_MODE_OPTIONS_META,
-} from "@root/types/SchemaUiMetadata";
 
 const EMPTY_TOOL_PERMISSIONS = {
   mode: PERMISSION_MODES.NONE,
@@ -61,8 +58,7 @@ export function DefaultsPermissionsPage({
 
   return (
     <div className="space-y-4">
-      {/* Three states, not a toggle: `false` is not the same as unset. On
-          Codex it removes the sandbox that allowAll otherwise runs in. */}
+      {/* On / Off / None: removing the key restores the shipped Off. */}
       <SettingInputRow
         settingKey="defaults.sandbox"
         id="defaults-sandbox"
@@ -80,46 +76,22 @@ export function DefaultsPermissionsPage({
           options={defaultSandboxSelectOptions()}
         />
       </SettingInputRow>
-      <div className="border-t border-panel-border pt-4">
-        <h3 className="text-xs font-semibold uppercase text-description-fg mb-2 tracking-wide">
-          Codex sandbox
-        </h3>
-        <p className="text-xs text-description-fg mb-3">
-          These settings control how strict Codex is when contained.
-        </p>
-        <SettingInputRow
-          settingKey="permissions.codexSandboxMode"
-          id="codex-sandbox-mode"
-          {...rowProps}
-        >
-          <CustomSelect
-            id="codex-sandbox-mode"
-            value={settings.settings.permissions.codexSandboxMode}
-            onChange={(v) => onUpdate("permissions.codexSandboxMode", v)}
-            schemaPath="permissions.codexSandboxMode"
-            options={toSelectOptions(
-              CODEX_SANDBOX_MODE_OPTIONS_META,
-              "permissions.codexSandboxMode"
-            )}
-          />
-        </SettingInputRow>
-        <SettingInputRow
-          settingKey="permissions.codexApprovalPolicy"
-          id="codex-approval-policy"
-          {...rowProps}
-        >
-          <CustomSelect
-            id="codex-approval-policy"
-            value={settings.settings.permissions.codexApprovalPolicy}
-            onChange={(v) => onUpdate("permissions.codexApprovalPolicy", v)}
-            schemaPath="permissions.codexApprovalPolicy"
-            options={toSelectOptions(
-              CODEX_APPROVAL_POLICY_OPTIONS_META,
-              "permissions.codexApprovalPolicy"
-            )}
-          />
-        </SettingInputRow>
-      </div>
+      <SettingInputRow
+        settingKey="defaults.sandboxMode"
+        id="defaults-sandbox-mode"
+        {...rowProps}
+      >
+        <CustomSelect
+          id="defaults-sandbox-mode"
+          value={settings.settings.defaults.sandboxMode}
+          onChange={(v) => onUpdate("defaults.sandboxMode", v)}
+          schemaPath="defaults.sandboxMode"
+          options={toSelectOptions(
+            SANDBOX_MODE_OPTIONS_META,
+            "defaults.sandboxMode"
+          )}
+        />
+      </SettingInputRow>
       <SettingInputRow
         settingKey="defaults.toolPermissions.mode"
         id="defaults-permission-mode"

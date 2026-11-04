@@ -37,11 +37,15 @@ import { CliProviderUtils } from "./CliProviderUtils";
 import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   EFFECTIVE_SANDBOX_KINDS,
-  type CodexSandboxMode,
+  effectiveSandboxLabel,
 } from "../../../types/DashboardConstants";
+import { sandboxUnsupportedDiagnostic } from "../../../types/CompatibilityTypes";
 import { Log } from "../../../utils/Log";
-import { effectiveSandboxKind } from "./SandboxCapabilities";
-import type { EffectiveSandbox } from "./interfaces/ISandboxMapper";
+import { harnessSettingSandbox } from "./SandboxCapabilities";
+import type {
+  EffectiveSandbox,
+  SandboxApplication,
+} from "./interfaces/ISandboxMapper";
 import { projectStateRoot } from "../../../utils/ProjectStatePaths";
 import { runArtifactStem } from "../../../utils/WorkflowPaths";
 import {
@@ -156,11 +160,18 @@ export class ExecutionPlanBuilder {
           diagnostics: [],
         };
     const baseArgs = [...providerPreparation.cliArgs];
-    const resolvedPermissions = session.resolvedProperties?.toolPermissions;
     const sandboxRequest = session.resolvedProperties?.sandbox;
-    const sandboxApplication = this.deps.provider.sandboxMapper
+    // A `true` inherited from `defaults.sandbox` is skipped on a harness that
+    // can't sandbox; one written in the workflow or step refuses to launch.
+    // Without the workflow file the request is treated as written (fail closed).
+    const authoredWorkflow = session.workflowContext?.workflowFile;
+    const requestFromDefaults =
+      session.prompt.sandbox === undefined &&
+      !!authoredWorkflow &&
+      authoredWorkflow.sandbox === undefined;
+    const sandboxApplication: SandboxApplication = this.deps.provider
+      .sandboxMapper
       ? await this.deps.provider.sandboxMapper.prepare(sandboxRequest, {
-          toolPermissions: resolvedPermissions ?? null,
           isInteractive,
           writableRoots: workspaceRoot
             ? CliProviderUtils.getWorkspaceDirs(
@@ -170,42 +181,55 @@ export class ExecutionPlanBuilder {
                 workflowContext
               )
             : [],
-          codexSandboxMode:
-            ConfigurationUtils.getCodexSandboxMode() as CodexSandboxMode,
+          sandboxMode:
+            session.resolvedProperties?.sandboxMode ??
+            ConfigurationUtils.getDefaultSandboxMode(),
+          requestFromDefaults,
           cliVersion: await this.deps.provider.getVersion?.(),
           additionalArgs: session.resolvedProperties?.additionalArgs,
         })
-      : undefined;
+      : sandboxRequest === true
+        ? {
+            ...harnessSettingSandbox(),
+            diagnostics: [
+              sandboxUnsupportedDiagnostic({
+                harnessId: this.deps.provider.config.harnessId,
+                fromDefaults: requestFromDefaults,
+              }),
+            ],
+          }
+        : harnessSettingSandbox();
     // An explicit request ctrlyoke cannot honor fails the launch; Dry Run
-    // previews it as uncontained with the reason instead.
-    const sandboxRefusal = !this.deps.provider.sandboxMapper
-      ? sandboxRequest === true
-        ? `${this.deps.provider.config.displayName} does not support ctrlyoke terminal sandboxing.`
-        : undefined
-      : (sandboxApplication?.diagnostics.find(
-          (item) => item.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
-        )?.message ??
-        // Settings fragments travel in the hook settings file, which is
-        // written under the workspace; without one they would not apply.
-        (sandboxApplication?.settings && !workspaceRoot
-          ? `${this.deps.provider.config.displayName} sandboxing needs a workspace folder.`
-          : undefined));
+    // previews it as not sandboxed with the reason instead.
+    const sandboxRefusal =
+      sandboxApplication.diagnostics.find(
+        (item) => item.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
+      )?.message ??
+      // Settings fragments travel in the hook settings file, which is
+      // written under the workspace; without one they would not apply.
+      // Only containment is refused; Off then just leaves the harness as is.
+      (sandboxApplication.settings && !workspaceRoot && sandboxRequest === true
+        ? `${this.deps.provider.config.displayName} sandboxing needs a workspace folder.`
+        : undefined);
     if (sandboxRefusal && !options.allowUnsupportedSandboxPreview) {
       throw new Error(sandboxRefusal);
     }
+    const settingsUnwritable = !!sandboxApplication.settings && !workspaceRoot;
     const effectiveSandbox: EffectiveSandbox = sandboxRefusal
       ? { kind: EFFECTIVE_SANDBOX_KINDS.OFF, detail: sandboxRefusal }
-      : (sandboxApplication?.effective ?? {
-          kind: effectiveSandboxKind(sandboxRequest),
-        });
-    const sandboxSettings = sandboxRefusal
-      ? undefined
-      : sandboxApplication?.settings;
-    if (sandboxApplication && !sandboxRefusal) {
+      : settingsUnwritable
+        ? harnessSettingSandbox("no workspace folder for the settings file")
+            .effective
+        : sandboxApplication.effective;
+    const sandboxSettings =
+      sandboxRefusal || settingsUnwritable
+        ? undefined
+        : sandboxApplication.settings;
+    if (!sandboxRefusal) {
       baseArgs.push(...sandboxApplication.cliArgs);
     }
     Log.info(
-      `[Sandbox] ${effectiveSandbox.kind}${effectiveSandbox.detail ? `: ${effectiveSandbox.detail}` : ""}`
+      `[Sandbox] ${effectiveSandboxLabel(effectiveSandbox.kind, effectiveSandbox.detail)}`
     );
     if (
       session.imageFileRefs.length > 0 &&
@@ -219,6 +243,14 @@ export class ExecutionPlanBuilder {
       );
     }
     const mutations = [...providerPreparation.mutations];
+    if (this.deps.provider.setSandboxSpawnEnv) {
+      // Reset on every launch so one step's sandbox env never leaks into the next.
+      const sandboxEnv = sandboxRefusal ? {} : (sandboxApplication.env ?? {});
+      mutations.push({
+        description: "Set sandbox process environment",
+        apply: async () => this.deps.provider.setSandboxSpawnEnv!(sandboxEnv),
+      });
+    }
     const hookPreparations: CliProviderPreparation[] = [];
     const tempFilePaths: string[] = [];
     const deferredHookEnvironmentFilePaths: string[] = [];
@@ -367,7 +399,6 @@ export class ExecutionPlanBuilder {
       environment: CliProviderUtils.buildProcessEnv(),
       additionalArgs: session.resolvedProperties?.additionalArgs,
       mcpServers: session.resolvedProperties?.mcpServers,
-      sandboxRequest,
     };
     const permissionApplication: ToolPermissionApplication = this.deps.provider
       .planToolPermissions
@@ -425,7 +456,7 @@ export class ExecutionPlanBuilder {
       effectiveSandbox,
       diagnostics: [
         ...providerPreparation.diagnostics,
-        ...(sandboxApplication?.diagnostics ?? []),
+        ...sandboxApplication.diagnostics,
         ...hookPreparations.flatMap((application) => application.diagnostics),
         ...permissionApplication.diagnostics,
       ],

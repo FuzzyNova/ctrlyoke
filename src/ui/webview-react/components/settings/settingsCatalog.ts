@@ -715,23 +715,17 @@ const STATIC_SETTINGS_CATALOG = {
     tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
     page: "permissions",
     label: "Default sandbox",
-    description: "Contain terminal commands for workflows by default.",
+    description:
+      "Turn each harness's terminal sandbox on or off for workflows that don't choose, or None to leave it to each harness's own settings.",
   },
-  "permissions.codexSandboxMode": {
-    id: "permissions.codexSandboxMode",
-    path: "permissions.codexSandboxMode",
+  "defaults.sandboxMode": {
+    id: "defaults.sandboxMode",
+    path: "defaults.sandboxMode",
     tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
     page: "permissions",
-    label: "Sandbox mode",
-    context: "Codex",
-  },
-  "permissions.codexApprovalPolicy": {
-    id: "permissions.codexApprovalPolicy",
-    path: "permissions.codexApprovalPolicy",
-    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
-    page: "permissions",
-    label: "Approval policy",
-    context: "Codex",
+    label: "Default sandbox mode",
+    description:
+      "How strict the sandbox is when it is on: terminal commands may write the workspace, or nothing in it.",
   },
   "server.autoStart": {
     id: "server.autoStart",

@@ -82,40 +82,44 @@ which removes the user's Codex sandbox without the approval prompt that a wider
 
 ## Decisions
 
-These were open questions in the 2026-10-30 draft; each is now decided.
+These were open questions in the 2026-10-30 draft. Decisions 1 and 3–7 were revised on
+2026-11-04, before the property shipped, once the Off flags for Copilot and Qwen and
+Claude's `denyWrite` had been probed.
 
-1. **Values: `true`, `false` or absent.** Absent means inherit: `defaults.sandbox`, then
-   each harness's derived behavior today. No `null`; there is no harness config to defer to
-   beyond what absent already means. Every existing workflow keeps its exact command line
-   until someone sets the property.
+1. **Values: `true` (On), `false` (Off), `null` (None) or absent.** Absent inherits:
+   step → workflow → `defaults.sandbox`. `null` passes no sandbox flags at all, so the
+   harness's own settings (Codex `config.toml`, Claude settings, Copilot `/sandbox`)
+   decide. It is the escape hatch for anyone who configured a harness's sandbox themselves.
 2. **`true` = contained.** Terminal commands may write only the workspace roots, approved
    external roots (`CliProviderUtils.getWorkspaceDirs`), temp dirs and the harness's own
    caches. Network follows the harness's policy. Harness file tools and MCP servers are not
-   necessarily covered, and the schema description says so.
-3. **`false` removes only ctrlyoke's containment.** It never turns off a sandbox the user
-   enabled in the harness's own settings (Copilot `/sandbox enable`, Claude
-   `sandbox.enabled`), so a workflow from a repository can't quietly undo the user's choice.
-   In practice it changes only Codex, the one harness where ctrlyoke supplies containment
-   today. There it means `-s danger-full-access`.
-4. **An explicit `true` that can't be honored fails the step at launch.** That covers a
-   harness declared `unsupported` (Qwen, OpenCode) and a host where the sandbox can't run.
-   An explicit containment request that silently doesn't apply is the worst outcome. It also
-   closes the gap where MCP `edit_step` switches a pending step's `harness`: the step fails
-   instead of running uncontained. Inherit never fails.
-5. **Default for new users: inherit.** `defaults.sandbox: true` breaks any workflow that
-   needs the network on Codex (npm install, API calls) until an allowlist exists. Revisit
-   with the object form.
-6. **Inherit keeps its meaning for now.** Making absent mean "not sandboxed" everywhere, so
-   `allowAll` stops implying `workspace-write` on Codex, would be a **Changed** entry for
-   released workflows. Decide after the property has shipped for one release. The dashboard
-   could first flag workflows that rely on the derived sandbox.
-7. **Workspace widening needs approval (phase 1 and phase 2).** A workspace settings value
-   for `permissions.codexSandboxMode`, `permissions.codexApprovalPolicy` or
-   `defaults.sandbox` that is wider than the user's effective value is held until the user
-   approves it, the same way `defaults.toolPermissions` already works (bug option 1). Making
-   the settings user-only (option 2) was rejected: it breaks repositories that legitimately
-   _narrow_ Codex, for example to `read-only`, and it doesn't match how the rest of the
-   permissions surface works.
+   necessarily covered, and the schema description says so. `sandboxMode`
+   (`workspace-write` | `read-only`, step → workflow → `defaults.sandboxMode`) sets how
+   strict it is; it replaces `permissions.codexSandboxMode`.
+3. **`false` turns the harness's sandbox off,** including one the user enabled in its own
+   settings: Codex `-s danger-full-access`, Claude `sandbox.enabled: false`, Copilot
+   `--no-sandbox`, Qwen `--sandbox=false` plus `QWEN_SANDBOX=false` (the env var outranks
+   the flag). Antigravity and OpenCode have nothing to turn off. A managed or organization
+   policy still wins. The earlier "only remove ctrlyoke's containment" rule left Copilot
+   and Qwen users who had enabled their sandbox unable to run ctrlyoke at all, because that
+   sandbox blocks ctrlyoke's MCP server and hooks.
+4. **A `true` written in the workflow or step that can't be honored fails the step at
+   launch;** one inherited from `defaults.sandbox` is skipped with a warning
+   (`SANDBOX_DEFAULT_SKIPPED`), so the default can be On while steps run on several
+   harnesses. Without the workflow file the plan builder treats the request as written
+   (fail closed). This still closes the gap where MCP `edit_step` switches a pending
+   step's `harness`.
+5. **Shipped default: Off (`defaults.sandbox: false`).** On breaks any Codex workflow that
+   needs the network until an allowlist exists.
+6. **Approval and containment are fully separate.** The permission mode no longer implies a
+   Codex sandbox, and the hidden read-only clamp for a denied write tool is gone (the
+   denial is reported as not enforced). This was a **Changed** entry: Codex `allowAll`
+   went from `workspace-write` to full access under the Off default.
+7. **Workspace widening needs approval.** A workspace `defaults.sandbox` less contained
+   than the user's effective value (order `true` > `null` > `false`), or a workspace
+   `defaults.sandboxMode: workspace-write` over a user `read-only`, is held until the user
+   approves it, the same way `defaults.toolPermissions` works. Making the settings
+   user-only was rejected: it breaks repositories that legitimately narrow them.
 
 ## Phase 0: probes (half a day, short real runs)
 
@@ -374,36 +378,34 @@ permission mode.
   compatibility matrix rather than per-step diagnostics. This is an additive
   domain in the registry snapshot.
 
-### [x] Codex: one resolver for both axes
+### [x] Codex: two independent flags
 
-Replace `CodexToolPermissionMapper.resolveSandboxMode` with
-`resolveCodexContainment(config | null, sandbox, codexSandboxMode)`, which returns
-`{ sandboxMode?: CodexSandboxMode; bypass: boolean }`. `CodexSandboxMapper` emits `-s`,
-`CodexToolPermissionMapper` emits `-a` or the bypass flag, and the `--add-dir` filter in
-`CodexCliProvider` reads the same result. `permissions.codexSandboxMode` becomes **how
-strict Codex's sandbox is when containment is on**:
+Revised 2026-11-04: `resolveCodexContainment` and the clamp were removed. `codexSandboxFlag`
+(`CodexSandboxMapper.ts`) is the single source for `-s` and the `--add-dir` filter, and
+`CodexToolPermissionMapper` emits only `-a`, interactively (`codex exec` takes none).
 
-| `sandbox` | mode                  | Result (interactive adds `-a`)                                                                                                                                                         |
-| --------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| absent    | any                   | **Today's args exactly**, including the bypass flag for `dangerouslyAllowAll`. Snapshot-tested for every mode × interactive/headless.                                                  |
-| `true`    | `allowAll`            | `-s workspace-write -a on-request`, or `-s read-only` when `codexSandboxMode` is `read-only`.                                                                                          |
-| `true`    | `dangerouslyAllowAll` | `-s workspace-write -a never` (headless: `-s workspace-write`). **No bypass flag.** `read-only` setting applies as above.                                                              |
-| `true`    | `custom`              | `-s <codexSandboxMode, clamped to workspace-write if it is danger-full-access> -a <policy>`. `read-only` clamp kept when a write-capable tool is denied.                               |
-| `true`    | `none` / `null`       | `-s workspace-write`, or `read-only` per the setting. No `-a`: approvals are the harness's own.                                                                                        |
-| `false`   | `allowAll`            | `-s danger-full-access -a on-request`                                                                                                                                                  |
-| `false`   | `dangerouslyAllowAll` | `--dangerously-bypass-approvals-and-sandbox` (same as today)                                                                                                                           |
-| `false`   | `custom`              | `-s danger-full-access -a <policy>`. When a write-capable tool is denied, the `read-only` clamp still wins, with an info diagnostic: it is the only way Codex can enforce that denial. |
-| `false`   | `none` / `null`       | `-s danger-full-access`                                                                                                                                                                |
+| Permission mode       | `-a` (interactive only) |
+| --------------------- | ----------------------- |
+| `dangerouslyAllowAll` | `-a never`              |
+| `allowAll`            | `-a on-request`         |
+| `custom`              | `-a on-request`         |
+| `none` / `null`       | nothing                 |
+
+| `sandbox`       | `-s`                                   | `--add-dir`                                                |
+| --------------- | -------------------------------------- | ---------------------------------------------------------- |
+| `true`          | `-s workspace-write` or `-s read-only` | external roots plus Git admin dirs; none under `read-only` |
+| `false`         | `-s danger-full-access`                | external roots                                             |
+| `null` / absent | nothing (`config.toml` decides)        | external roots; a `read-only` `config.toml` refuses them   |
 
 ### The other harnesses
 
-| Harness     | `true`                                                                                                                                                                                                                                                                                                                                                                                                                        | `false` | absent  | Declared                                                                                                                                                           |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Claude      | `settings.sandbox = { enabled: true, failIfUnavailable: true, allowUnsandboxedCommands: false, autoAllowBashIfSandboxed: false, filesystem: { allowWrite: <writable roots> } }`, merged into the one `--settings` file written by `planNotificationHookArgs` / `planHeadlessUserHookArgs` (`ClaudeCliProvider.ts`). **Verified: repeated `--settings` flags replace each other (last wins), so one merged file is required.** | nothing | nothing | `partial` (verified 2.1.317: Bash outside write blocked, `git commit`, MCP and hooks work; built-in Write/Edit can write outside; network follows Claude settings) |
-| Copilot     | fails (error diagnostic). **Verified unusable on 1.0.105:** `--sandbox` contains shell commands but also sandboxes ctrlyoke's own MCP server and hook scripts, which then cannot start or run; the policy (`sandboxMcpServers`) is settable only in `~/.copilot/settings.json`.                                                                                                                                               | nothing | nothing | `unsupported` (revisit if Copilot gets a per-run policy flag)                                                                                                      |
-| Antigravity | fails (error diagnostic). **Verified unusable on 1.4.12 (macOS and Windows):** the sandbox is active but makes the workspace read-only while outside paths stay writable; no supported setting changes the mounts.                                                                                                                                                                                                            | nothing | nothing | `unsupported`                                                                                                                                                      |
-| Qwen        | fails (error diagnostic)                                                                                                                                                                                                                                                                                                                                                                                                      | nothing | nothing | `unsupported`                                                                                                                                                      |
-| OpenCode    | fails (error diagnostic)                                                                                                                                                                                                                                                                                                                                                                                                      | nothing | nothing | `unsupported`                                                                                                                                                      |
+| Harness     | `true`                                                                                                                                                                                                                                                                                                                              | `false`                                                                                                                                       | `null`  | Declared                                       |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------------------------------------------- |
+| Claude      | `settings.sandbox = { enabled: true, failIfUnavailable: true, allowUnsandboxedCommands: false, autoAllowBashIfSandboxed: false, filesystem: { allowWrite \| denyWrite: <writable roots> } }` in the one merged `--settings` file. **Verified: repeated `--settings` flags replace each other, and `denyWrite` blocks Bash writes.** | `settings.sandbox = { enabled: false }`                                                                                                       | nothing | `partial` (Write/Edit run outside the sandbox) |
+| Copilot     | fails if written, warns if from defaults. **Verified unusable on 1.0.105:** `--sandbox` also sandboxes ctrlyoke's MCP server and hooks; the policy is settable only in `~/.copilot/settings.json`.                                                                                                                                  | `--no-sandbox` (verified on 1.0.105 to beat a saved `sandbox.enabled: true`; an org policy wins)                                              | nothing | `unsupported`                                  |
+| Antigravity | fails / warns. **Verified unusable on 1.4.12:** the sandbox makes the workspace read-only.                                                                                                                                                                                                                                          | nothing to turn off                                                                                                                           | nothing | `unsupported`                                  |
+| Qwen        | fails / warns                                                                                                                                                                                                                                                                                                                       | `--sandbox=false` + `QWEN_SANDBOX=false` (verified on 0.26.7: env beats flag beats `tools.sandbox`; `tools.executionSandbox` not overridable) | nothing | `unsupported`                                  |
+| OpenCode    | fails / warns                                                                                                                                                                                                                                                                                                                       | nothing to turn off                                                                                                                           | nothing | `unsupported`                                  |
 
 On Claude, `autoAllowBashIfSandboxed: false` and `allowUnsandboxedCommands: false` keep
 approvals governed by `toolPermissions` alone. Without them, turning containment on would

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ctrlyoke.dev/schema/v1/settings.json",
+  "$id": "https://ctrlyoke.dev/schema/v2/settings.json",
   "title": "ctrlyoke Global Settings",
   "description": "Configuration schema for .ctrlyoke/settings.json",
   "type": "object",
@@ -69,7 +69,7 @@
         "harness": {
           "anyOf": [
             {
-              "$ref": "workflow.json#/$defs/harnessId"
+              "$ref": "../v1/workflow.json#/$defs/harnessId"
             },
             {
               "const": ""
@@ -135,17 +135,17 @@
           "additionalProperties": false
         },
         "agent": {
-          "$ref": "workflow.json#/$defs/agent",
+          "$ref": "../v1/workflow.json#/$defs/agent",
           "description": "Default portable ctrlyoke workflow agent attachment for new workflows. Native harness agent discovery is managed separately by the Agents & Skills settings page.",
           "default": ""
         },
         "skills": {
-          "$ref": "workflow.json#/$defs/skills",
+          "$ref": "../v1/workflow.json#/$defs/skills",
           "description": "Default portable ctrlyoke workflow skill attachments for new workflows. Native harness skill discovery is managed separately by the Agents & Skills settings page and does not determine workflow skill support.",
           "default": []
         },
         "secrets": {
-          "$ref": "workflow.json#/$defs/secrets",
+          "$ref": "../v1/workflow.json#/$defs/secrets",
           "description": "Default secret environment-variable names granted to new workflows. Values are resolved by the execution host and never stored in workflow definitions.",
           "default": []
         },
@@ -163,13 +163,13 @@
         "priorContext": {
           "oneOf": [
             {
-              "$ref": "workflow.json#/$defs/priorContextKeyword"
+              "$ref": "../v1/workflow.json#/$defs/priorContextKeyword"
             },
             {
-              "$ref": "workflow.json#/$defs/priorContextPromptNumbers"
+              "$ref": "../v1/workflow.json#/$defs/priorContextPromptNumbers"
             },
             {
-              "$ref": "workflow.json#/$defs/priorContextPreviousCount"
+              "$ref": "../v1/workflow.json#/$defs/priorContextPreviousCount"
             }
           ],
           "description": "Default priorContext for every step that doesn't set its own.",
@@ -179,7 +179,7 @@
           "type": "array",
           "description": "Default MCP servers to attach to each prompt execution. A workspace-scope entry that launches a command takes effect only after you approve that exact entry on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies.",
           "items": {
-            "$ref": "workflow.json#/$defs/mcpServerEntry"
+            "$ref": "../v1/workflow.json#/$defs/mcpServerEntry"
           },
           "default": []
         },
@@ -187,21 +187,27 @@
           "type": "array",
           "description": "User-defined hooks to run at various execution lifecycle points. A workspace-scope hook takes effect only after you approve that exact hook on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies.",
           "items": {
-            "$ref": "workflow.json#/$defs/userHookConfig"
+            "$ref": "../v1/workflow.json#/$defs/userHookConfig"
           },
           "default": []
         },
         "errorBehavior": {
-          "$ref": "workflow.json#/$defs/errorBehaviorDefault",
+          "$ref": "../v1/workflow.json#/$defs/errorBehaviorDefault",
           "description": "Default policy for internal errors in any step phase. `null` (the default) stops the workflow unless the workflow or step sets its own policy.",
           "default": null
         },
         "sandbox": {
-          "$ref": "workflow.json#/$defs/executionProperties/properties/sandbox",
-          "description": "Default terminal-command write containment for workflows and steps that omit sandbox. A workspace-scope value takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies."
+          "$ref": "../v1/workflow.json#/$defs/executionProperties/properties/sandbox",
+          "description": "Default terminal-command containment for workflows and steps that omit sandbox. `false` (the default) turns each harness's sandbox off, `true` turns it on where the harness supports it and skips the others with a warning, and `null` passes no sandbox flags so each harness's own settings apply. A workspace-scope value that is less contained than your user value (`false` or `null` while yours is `true`, or `false` while yours is `null`) takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies.",
+          "default": false
+        },
+        "sandboxMode": {
+          "$ref": "../v1/workflow.json#/$defs/executionProperties/properties/sandboxMode",
+          "description": "How strict `sandbox: true` is for workflows and steps that omit sandboxMode. Replaces `permissions.codexSandboxMode`. A workspace-scope `workspace-write` while your user value is `read-only` takes effect only after you approve it on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies.",
+          "default": "workspace-write"
         },
         "toolPermissions": {
-          "$ref": "workflow.json#/$defs/toolPermissions",
+          "$ref": "../v1/workflow.json#/$defs/toolPermissions",
           "description": "Default tool permission settings for prompt execution. Allowed Tools and Denied Tools are currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline granular support and OpenCode uses OPENCODE_CONFIG_CONTENT without writing a workspace opencode.json. Codex and Antigravity only support an overall permission mode, not individual tool patterns, and do NOT ENFORCE these lists, except that Codex enforces denied `mcp__<server>__<tool>` entries for MCP servers the workflow attaches. While a list is still the shipped default, a harness that can't enforce it reports an information note rather than a compatibility warning. A workspace-scope value that grants more than your user value (a broader mode, an allowed tool your custom list lacks, a denied tool removed, or `none`/`null` while yours is managed) takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies. A workspace value that only narrows permissions applies without asking.",
           "default": {
             "mode": "allowAll",
@@ -236,17 +242,17 @@
           }
         },
         "endCondition": {
-          "$ref": "workflow.json#/$defs/endConditionDefault",
+          "$ref": "../v1/workflow.json#/$defs/endConditionDefault",
           "description": "Default end condition for new workflows. `null` (the default) means new workflows have no end condition. A workspace-scope value takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies.",
           "default": null
         },
         "preCondition": {
-          "$ref": "workflow.json#/$defs/preConditionDefault",
+          "$ref": "../v1/workflow.json#/$defs/preConditionDefault",
           "description": "Default pre-condition for new workflows. `null` (the default) means new workflows have no pre-condition. A workspace-scope value takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies.",
           "default": null
         },
         "worktree": {
-          "$ref": "workflow.json#/$defs/worktreeConfig",
+          "$ref": "../v1/workflow.json#/$defs/worktreeConfig",
           "description": "Default worktree behavior for workflows that omit a root worktree value. Uses the same false, shorthand, and object forms as workflow worktree; an inherited value degrades to ordinary execution when the workspace is not eligible. A workspace-scope value with a `setup` command takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies. A value without `setup`, or one whose `setup` matches your user value's, applies without asking.",
           "default": false
         }
@@ -379,21 +385,9 @@
     },
     "permissions": {
       "type": "object",
-      "description": "Harness-specific path and sandbox permission settings.",
+      "description": "Path trust and secret redaction settings.",
       "additionalProperties": false,
       "properties": {
-        "codexSandboxMode": {
-          "type": "string",
-          "enum": ["read-only", "workspace-write", "danger-full-access"],
-          "description": "Sandbox mode for Codex CLI. A workspace-scope value that is less restrictive than your user value takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies. A workspace value that only narrows permissions applies without asking.",
-          "default": "workspace-write"
-        },
-        "codexApprovalPolicy": {
-          "type": "string",
-          "enum": ["untrusted", "on-request", "never"],
-          "description": "Approval policy for Codex CLI tool calls. The untrusted value is deprecated and maps to on-request in Codex 0.149.0 and newer. A workspace-scope value that is less restrictive than your user value takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies. A workspace value that only narrows permissions applies without asking.",
-          "default": "on-request"
-        },
         "trustedExternalRoots": {
           "type": "array",
           "items": {
@@ -448,7 +442,7 @@
       "type": "object",
       "description": "Optional per-harness/per-model USD pricing overrides. User and workspace scopes merge per model, with workspace rates taking precedence for the same model. Rates are USD per one million tokens.",
       "propertyNames": {
-        "$ref": "workflow.json#/$defs/harnessId"
+        "$ref": "../v1/workflow.json#/$defs/harnessId"
       },
       "additionalProperties": {
         "type": "object",
@@ -510,7 +504,7 @@
         "maxPromptTimeoutSec": {
           "oneOf": [
             {
-              "$ref": "workflow.json#/$defs/unlimitedValue"
+              "$ref": "../v1/workflow.json#/$defs/unlimitedValue"
             },
             {
               "type": "integer",
@@ -546,7 +540,7 @@
       "additionalProperties": false,
       "properties": {
         "maxSteps": {
-          "$ref": "workflow.json#/$defs/maxStepsValue",
+          "$ref": "../v1/workflow.json#/$defs/maxStepsValue",
           "description": "Maximum number of entries in the run's steps array, including disabled steps and each member of a parallel group. Checked before execution starts and after steps are appended; retries and final-step passes do not add entries. A workflow's own `maxSteps` replaces this value for that workflow, so a workflow `maxSteps: -1` lifts this cap. Dashboard appends, MCP `append_step`, and run continuation enforce the same resolved limit. `-1` disables the queue-size limit.",
           "default": 100
         },
@@ -559,7 +553,7 @@
         "maxWorkflowExecutionTimeSec": {
           "oneOf": [
             {
-              "$ref": "workflow.json#/$defs/unlimitedValue"
+              "$ref": "../v1/workflow.json#/$defs/unlimitedValue"
             },
             {
               "type": "integer",
@@ -579,7 +573,7 @@
         "maxRuns": {
           "oneOf": [
             {
-              "$ref": "workflow.json#/$defs/unlimitedValue"
+              "$ref": "../v1/workflow.json#/$defs/unlimitedValue"
             },
             {
               "type": "integer",
@@ -776,7 +770,7 @@
         "outputVirtualizationRowThreshold": {
           "oneOf": [
             {
-              "$ref": "workflow.json#/$defs/unlimitedValue"
+              "$ref": "../v1/workflow.json#/$defs/unlimitedValue"
             },
             {
               "type": "integer",
@@ -1166,7 +1160,7 @@
         "harness": {
           "anyOf": [
             {
-              "$ref": "workflow.json#/$defs/harnessId"
+              "$ref": "../v1/workflow.json#/$defs/harnessId"
             },
             {
               "const": ""

@@ -1,5 +1,8 @@
 import { SANDBOX_CAVEAT_CODE } from "../../../types/CompatibilityTypes";
-import { unsupportedSandboxCapabilities } from "../shared/SandboxCapabilities";
+import {
+  UnsupportedSandboxMapper,
+  unsupportedSandboxCapabilities,
+} from "../shared/SandboxCapabilities";
 import * as path from "path";
 import * as os from "os";
 import * as fs from "fs/promises";
@@ -189,12 +192,14 @@ export class AntigravityCliProvider implements ICliProvider {
     new AntigravityNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new AntigravityToolPermissionMapper();
+  readonly sandboxMapper = new UnsupportedSandboxMapper(
+    HARNESS_IDS.ANTIGRAVITY_CLI,
+    unsupportedSandboxCapabilities(SANDBOX_CAVEAT_CODE.ANTIGRAVITY_UNUSABLE)
+  );
   get capabilities(): HarnessCapabilityFacts {
     return {
       permissions: this.toolPermissionMapper.capabilities,
-      sandbox: unsupportedSandboxCapabilities(
-        SANDBOX_CAVEAT_CODE.ANTIGRAVITY_UNUSABLE
-      ),
+      sandbox: this.sandboxMapper.capabilities,
       hooks: AntigravityNotificationMonitor.CAPABILITIES,
       mcp: {
         perServerToolFiltering: ANTIGRAVITY_MCP_FILTERING_CAPABILITY,

@@ -50,6 +50,8 @@ const globalSettings: GlobalSettings = {
   defaultErrorBehavior: null,
   defaultEndCondition: null,
   defaultPreCondition: null,
+  sandbox: false,
+  sandboxMode: "workspace-write",
   settingSources: {},
 };
 

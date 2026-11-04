@@ -66,7 +66,7 @@ add a `$schema` key in VS Code: a `$schema` URL replaces the extension's
 bundled schema, so VS Code downloads the published copy instead, which fails
 offline and needs `ctrlyoke.dev` in `json.schemaDownload.trustedDomains`. In
 other editors, set `$schema` to
-`https://ctrlyoke.dev/schema/v1/settings.json`. Every key is optional, and a
+`https://ctrlyoke.dev/schema/v2/settings.json`. Every key is optional, and a
 key you leave out keeps the default shown below.
 
 ```json
@@ -95,7 +95,7 @@ fields.
 | [`coordination`](#coordination) | Retention and participant settings for the execution-root coordination board. |
 | [`languageServers`](#languageservers) | Managed language server definitions and language selections for the workspace editor. |
 | [`storage`](#storage) | User-only storage location configuration. |
-| [`permissions`](#permissions) | Harness-specific path and sandbox permission settings. |
+| [`permissions`](#permissions) | Path trust and secret redaction settings. |
 | [`usageTracking`](#usagetracking) | Controls provider quota and observed-usage collection. |
 | [`execution`](#execution) | Execution settings. |
 | [`queue`](#queue) | Queue management settings. |
@@ -329,10 +329,19 @@ Fields:
 
 ### `defaults.sandbox` {#defaults-sandbox}
 
-- **Type:** `boolean`
+- **Type:** `boolean` or `null`
+- **Default:** `false`
 - **Workflow field:** [`sandbox`](/reference/workflow-schema#execution-properties-sandbox) — a workflow or step value overrides this default
 
-Default terminal-command write containment for workflows and steps that omit sandbox. A workspace-scope value takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies.
+Default terminal-command containment for workflows and steps that omit sandbox. `false` (the default) turns each harness's sandbox off, `true` turns it on where the harness supports it and skips the others with a warning, and `null` passes no sandbox flags so each harness's own settings apply. A workspace-scope value that is less contained than your user value (`false` or `null` while yours is `true`, or `false` while yours is `null`) takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies.
+
+### `defaults.sandboxMode` {#defaults-sandboxmode}
+
+- **Type:** `"workspace-write" | "read-only"`
+- **Default:** `"workspace-write"`
+- **Workflow field:** [`sandboxMode`](/reference/workflow-schema#execution-properties-sandboxmode) — a workflow or step value overrides this default
+
+How strict `sandbox: true` is for workflows and steps that omit sandboxMode. Replaces `permissions.codexSandboxMode`. A workspace-scope `workspace-write` while your user value is `read-only` takes effect only after you approve it on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies.
 
 ### `defaults.toolPermissions` {#defaults-toolpermissions}
 
@@ -610,7 +619,7 @@ Days a deleted run or workflow stays in Recently deleted before it is permanentl
 
 ## `permissions` {#permissions}
 
-Harness-specific path and sandbox permission settings.
+Path trust and secret redaction settings.
 
 ### External file roots
 
@@ -640,20 +649,6 @@ A single workflow can inherit, replace, or disable this set with its
 [`trustedExternalRoots`](/reference/workflow-schema#workflow-file-trustedexternalroots)
 field. To approve the new roots a workflow declares, use
 `ctrlyoke trust-workflow-external-roots <file>`.
-
-### `permissions.codexSandboxMode` {#permissions-codexsandboxmode}
-
-- **Type:** `"read-only" | "workspace-write" | "danger-full-access"`
-- **Default:** `"workspace-write"`
-
-Sandbox mode for Codex CLI. A workspace-scope value that is less restrictive than your user value takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies. A workspace value that only narrows permissions applies without asking.
-
-### `permissions.codexApprovalPolicy` {#permissions-codexapprovalpolicy}
-
-- **Type:** `"untrusted" | "on-request" | "never"`
-- **Default:** `"on-request"`
-
-Approval policy for Codex CLI tool calls. The untrusted value is deprecated and maps to on-request in Codex 0.149.0 and newer. A workspace-scope value that is less restrictive than your user value takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies. A workspace value that only narrows permissions applies without asking.
 
 ### `permissions.trustedExternalRoots` {#permissions-trustedexternalroots}
 

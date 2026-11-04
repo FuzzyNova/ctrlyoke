@@ -111,6 +111,7 @@ function applyPromptProperties(
     additionalArgs: properties.additionalArgs,
     toolPermissions: properties.toolPermissions,
     sandbox: properties.sandbox,
+    sandboxMode: properties.sandboxMode,
   };
 }
 

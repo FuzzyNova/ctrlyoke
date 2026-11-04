@@ -34,6 +34,8 @@ import {
   type ToastLevelMode,
   type PriorContextDetail,
   type RerunConfirmationMode,
+  type SandboxMode,
+  type SandboxRequest,
 } from "@root/types/DashboardConstants";
 import type {
   CommitMessageGenerationRecord,
@@ -133,7 +135,8 @@ export interface GlobalSettings {
     allowedTools: string[];
     deniedTools: string[];
   };
-  sandbox?: boolean;
+  sandbox: SandboxRequest;
+  sandboxMode: SandboxMode;
   respectGitignore: boolean;
   autoExpandEditorWhenTyping: boolean;
   atomicContextReferences: boolean;
@@ -203,7 +206,8 @@ export interface WorkflowProperties {
     allowedTools?: string[];
     deniedTools?: string[];
   } | null;
-  sandbox?: boolean;
+  sandbox?: SandboxRequest;
+  sandboxMode?: SandboxMode;
   worktree?: WorktreeConfig;
   trustedExternalRoots?: string[] | null;
 }
@@ -453,6 +457,7 @@ const initialGlobalSettings: GlobalSettings = {
     deniedTools: [],
   },
   sandbox: CTRLYOKE_SETTINGS_DEFAULTS.defaults.sandbox,
+  sandboxMode: CTRLYOKE_SETTINGS_DEFAULTS.defaults.sandboxMode,
   respectGitignore: true,
   autoExpandEditorWhenTyping: true,
   atomicContextReferences: false,

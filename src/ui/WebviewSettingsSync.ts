@@ -778,6 +778,11 @@ export class WebviewSettingsSync {
         CONFIG_KEYS.DEFAULTS_SANDBOX,
         value
       );
+    } else if (property === PROMPT_PROPERTIES.SANDBOX_MODE) {
+      await ConfigurationUtils.updateSetting(
+        CONFIG_KEYS.DEFAULTS_SANDBOX_MODE,
+        value
+      );
     } else if (property === PROMPT_PROPERTIES.WORKTREE) {
       const authored = value as WorktreeConfig;
       await ConfigurationUtils.setDefaultWorktree(authored);
@@ -948,6 +953,7 @@ export class WebviewSettingsSync {
         deniedTools: ConfigurationUtils.getCliDeniedTools(),
       },
       sandbox: ConfigurationUtils.getDefaultSandbox(),
+      sandboxMode: ConfigurationUtils.getDefaultSandboxMode(),
       respectGitignore,
       autoExpandEditorWhenTyping:
         ConfigurationUtils.shouldAutoExpandEditorWhenTyping(),

@@ -424,111 +424,21 @@ suite("ToolPermissionMappers", () => {
     const mapper = new CodexToolPermissionMapper();
 
     suite("prepare", () => {
-      test("dangerouslyAllowAll → --dangerously-bypass-approvals-and-sandbox", async () => {
+      // Approval only; the full table is in HarnessToolPermissionMappers.test.ts.
+      test("dangerouslyAllowAll → -a never, without the bypass flag", async () => {
         const args = await mapperArgs(
           mapper,
           cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)
         );
-        assert.deepStrictEqual(args, [
-          "--dangerously-bypass-approvals-and-sandbox",
-        ]);
+        assert.deepStrictEqual(args, ["-a", "never"]);
       });
 
-      test("allowAll → explicit Auto preset flags", async () => {
-        const args = await mapperArgs(mapper, cfg(PERMISSION_MODES.ALLOW_ALL));
-        assert.deepStrictEqual(args, [
-          "--sandbox",
-          "workspace-write",
-          "--ask-for-approval",
-          "on-request",
-        ]);
-      });
-
-      test("custom without sandbox/approval config → fallback to explicit Auto preset flags", async () => {
-        const args = await mapperArgs(
-          mapper,
-          cfg(PERMISSION_MODES.CUSTOM, [], [])
-        );
-        assert.deepStrictEqual(args, [
-          "--sandbox",
-          "workspace-write",
-          "--ask-for-approval",
-          "on-request",
-        ]);
-      });
-
-      test("custom mode with only allowed patterns → still Auto preset flags (Codex doesn't support granular patterns)", async () => {
-        const args = await mapperArgs(
-          mapper,
-          cfg(PERMISSION_MODES.CUSTOM, ["write"], [])
-        );
-        assert.deepStrictEqual(args, [
-          "--sandbox",
-          "workspace-write",
-          "--ask-for-approval",
-          "on-request",
-        ]);
-      });
-
-      test("custom mode denying shell → read-only sandbox (the only way Codex can enforce it)", async () => {
+      test("custom mode with allowed patterns → -a on-request (Codex doesn't support granular patterns)", async () => {
         const args = await mapperArgs(
           mapper,
           cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"])
         );
-        assert.deepStrictEqual(args, ["--sandbox", "read-only"]);
-      });
-    });
-
-    suite("buildCodexSpecificArgs", () => {
-      test("dangerouslyAllowAll → --dangerously-bypass-approvals-and-sandbox regardless of sandbox/approval args", async () => {
-        const args = mapper.buildCodexSpecificArgs(
-          cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL),
-          "read-only",
-          "on-request"
-        );
-        assert.deepStrictEqual(args, [
-          "--dangerously-bypass-approvals-and-sandbox",
-        ]);
-      });
-
-      test("allowAll → explicit Auto preset flags", async () => {
-        const args = mapper.buildCodexSpecificArgs(
-          cfg(PERMISSION_MODES.ALLOW_ALL),
-          "read-only",
-          "never"
-        );
-        assert.deepStrictEqual(args, [
-          "--sandbox",
-          "workspace-write",
-          "--ask-for-approval",
-          "on-request",
-        ]);
-      });
-
-      test("custom with sandboxMode and approvalPolicy → -s <mode> -a <policy>", async () => {
-        const args = mapper.buildCodexSpecificArgs(
-          cfg(PERMISSION_MODES.CUSTOM),
-          "workspace-write",
-          "on-request"
-        );
-        assert.deepStrictEqual(args, [
-          "-s",
-          "workspace-write",
-          "-a",
-          "on-request",
-        ]);
-      });
-
-      test("custom without sandboxMode/approvalPolicy → fallback to explicit Auto preset flags", async () => {
-        const args = mapper.buildCodexSpecificArgs(
-          cfg(PERMISSION_MODES.CUSTOM)
-        );
-        assert.deepStrictEqual(args, [
-          "--sandbox",
-          "workspace-write",
-          "--ask-for-approval",
-          "on-request",
-        ]);
+        assert.deepStrictEqual(args, ["-a", "on-request"]);
       });
     });
 

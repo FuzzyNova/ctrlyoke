@@ -1,4 +1,5 @@
 import type { ResolvedProperties } from "./ExecutionPropertyTypes";
+import { DEFAULT_SANDBOX_MODE } from "./DashboardConstants";
 
 /** Spawn-time properties that determine whether an existing process is reusable. */
 export const SPAWN_IDENTITY_FIELDS = {
@@ -6,6 +7,7 @@ export const SPAWN_IDENTITY_FIELDS = {
   MODEL: "model",
   TOOL_PERMISSIONS: "toolPermissions",
   SANDBOX: "sandbox",
+  SANDBOX_MODE: "sandboxMode",
   HOOKS: "hooks",
   MCP_SERVERS: "mcpServers",
   ADDITIONAL_ARGS: "additionalArgs",
@@ -51,7 +53,14 @@ export function spawnIdentityFields(
     [SPAWN_IDENTITY_FIELDS.TOOL_PERMISSIONS]: canonicalSerialize(
       props.toolPermissions
     ),
-    [SPAWN_IDENTITY_FIELDS.SANDBOX]: canonicalSerialize(props.sandbox),
+    // Unset and null both pass no sandbox flags.
+    [SPAWN_IDENTITY_FIELDS.SANDBOX]: canonicalSerialize(props.sandbox ?? null),
+    // The mode only reaches the harness under `sandbox: true`.
+    [SPAWN_IDENTITY_FIELDS.SANDBOX_MODE]: canonicalSerialize(
+      props.sandbox === true
+        ? (props.sandboxMode ?? DEFAULT_SANDBOX_MODE)
+        : null
+    ),
     [SPAWN_IDENTITY_FIELDS.HOOKS]: canonicalSerialize(props.hooks),
     [SPAWN_IDENTITY_FIELDS.MCP_SERVERS]: canonicalSerialize(props.mcpServers),
     [SPAWN_IDENTITY_FIELDS.ADDITIONAL_ARGS]: canonicalSerialize(

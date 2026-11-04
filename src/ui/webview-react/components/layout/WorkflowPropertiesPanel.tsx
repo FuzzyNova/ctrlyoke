@@ -86,6 +86,9 @@ import {
   WORKTREE_MODES,
   PERMISSION_MODES,
   SANDBOX_UI_LABELS,
+  sandboxModeSelectOptions,
+  sandboxModeSelectionFromValue,
+  sandboxModeValueFromSelection,
   sandboxSelectOptions,
   sandboxSelectionFromValue,
   sandboxValueFromSelection,
@@ -141,11 +144,11 @@ const WORKFLOW_VARS_EDITOR_ID = "settings-vars";
 
 type WorktreeField = "branch" | "base" | "setup" | "keep" | "merge";
 type WorktreeObjectConfig = Exclude<WorktreeConfig, false | true | string>;
-// `sandbox` is in the shared execution contract, but UI carry-through is a
-// later phase; keep this panel's current property guard scoped to its shape.
+// The sandbox pair has its own controls on the Permissions page; keep this
+// panel's generic property guard scoped to the other execution properties.
 type ExecutionPropertyKey = Exclude<
   (typeof EXECUTION_PROPERTY_KEYS)[number],
-  "sandbox"
+  "sandbox" | "sandboxMode"
 >;
 type TrustedRootsMode =
   (typeof TRUSTED_ROOTS_MODES)[keyof typeof TRUSTED_ROOTS_MODES];
@@ -1482,6 +1485,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       preCondition:
         globalSettings.defaultPreCondition as WorkflowProperties["preCondition"],
       sandbox: undefined,
+      sandboxMode: undefined,
       worktree: globalSettings.worktree,
       trustedExternalRoots: undefined,
     } satisfies Record<keyof WorkflowProperties, unknown>;
@@ -2509,6 +2513,27 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       className="mt-1"
                     />
                   )}
+                </FormField>
+                <FormField
+                  label={SANDBOX_UI_LABELS.MODE_FIELD}
+                  schemaPath="sandboxMode"
+                  htmlFor="settings-sandbox-mode"
+                >
+                  <CustomSelect
+                    id="settings-sandbox-mode"
+                    schemaPath="sandboxMode"
+                    triggerAriaLabel={SANDBOX_UI_LABELS.MODE_FIELD}
+                    value={sandboxModeSelectionFromValue(
+                      workflowProperties.sandboxMode
+                    )}
+                    onChange={(value) => {
+                      const sandboxMode = sandboxModeValueFromSelection(value);
+                      postWorkflowPropertiesUpdate({ sandboxMode });
+                    }}
+                    options={sandboxModeSelectOptions(
+                      globalSettings.sandboxMode
+                    )}
+                  />
                 </FormField>
                 {/* Permission Mode */}
                 <FormField

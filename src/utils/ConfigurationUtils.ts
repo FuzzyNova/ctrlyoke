@@ -53,6 +53,11 @@ import {
   type StepColorMode,
   type SettingWriteScope,
   type TemplateVariableDefaultSource,
+  DEFAULT_SANDBOX_MODE,
+  isSandboxMode,
+  isSandboxRequest,
+  type SandboxMode,
+  type SandboxRequest,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
 import { isUnlimited } from "./LimitUtils";
@@ -159,6 +164,7 @@ export const CONFIG_KEYS = {
   DEFAULTS_ERROR_BEHAVIOR: "defaults.errorBehavior",
   DEFAULTS_TOOL_PERMISSIONS: "defaults.toolPermissions",
   DEFAULTS_SANDBOX: SETTING_PATHS.DEFAULTS_SANDBOX,
+  DEFAULTS_SANDBOX_MODE: SETTING_PATHS.DEFAULTS_SANDBOX_MODE,
   DEFAULTS_TOOL_PERMISSIONS_MODE: "defaults.toolPermissions.mode",
   DEFAULTS_TOOL_PERMISSIONS_ALLOWED: "defaults.toolPermissions.allowedTools",
   DEFAULTS_TOOL_PERMISSIONS_DENIED: "defaults.toolPermissions.deniedTools",
@@ -528,9 +534,18 @@ export const ConfigurationUtils = {
     return configService.get(CONFIG_KEYS.DEFAULTS).errorBehavior;
   },
 
-  /** Get the default terminal-command containment setting. */
-  getDefaultSandbox(): boolean | undefined {
-    return configService.get(CONFIG_KEYS.DEFAULTS).sandbox;
+  /** Get the default terminal-command containment setting (`false` unless changed). */
+  getDefaultSandbox(): SandboxRequest {
+    const value = configService.get(CONFIG_KEYS.DEFAULTS).sandbox;
+    return isSandboxRequest(value)
+      ? value
+      : CTRLYOKE_SETTINGS_DEFAULTS.defaults.sandbox;
+  },
+
+  /** Get how strict `sandbox: true` is for workflows and steps that omit `sandboxMode`. */
+  getDefaultSandboxMode(): SandboxMode {
+    const value = configService.get(CONFIG_KEYS.DEFAULTS).sandboxMode;
+    return isSandboxMode(value) ? value : DEFAULT_SANDBOX_MODE;
   },
 
   /**
@@ -1051,22 +1066,6 @@ export const ConfigurationUtils = {
       configService.get(CONFIG_KEYS.DEFAULTS).models[HARNESS_IDS.CODEX_CLI] ??
       DEFAULT_MODELS[HARNESS_IDS.CODEX_CLI]
     );
-  },
-
-  /**
-   * Get Codex CLI sandbox mode
-   * Options: read-only, workspace-write, danger-full-access
-   */
-  getCodexSandboxMode(): string {
-    return configService.get(CONFIG_KEYS.PERMISSIONS).codexSandboxMode;
-  },
-
-  /**
-   * Get Codex CLI approval policy
-   * Options: untrusted, on-request, never
-   */
-  getCodexApprovalPolicy(): string {
-    return configService.get(CONFIG_KEYS.PERMISSIONS).codexApprovalPolicy;
   },
 
   /** Get the settings for a provider that installs a global statusline command. */

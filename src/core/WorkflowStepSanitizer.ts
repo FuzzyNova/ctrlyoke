@@ -9,6 +9,8 @@ import {
   type ExecutionMode,
   PROMPT_PROPERTIES,
   WORKFLOW_PROPERTY_KEYS,
+  isSandboxMode,
+  isSandboxRequest,
 } from "../types/DashboardConstants";
 import {
   CURRENT_SCHEMA_VERSIONS,
@@ -153,6 +155,7 @@ export const AUTHORED_STEP_FIELDS = [
   PROMPT_PROPERTIES.IGNORE_CASE,
   PROMPT_PROPERTIES.SHELL,
   PROMPT_PROPERTIES.SANDBOX,
+  PROMPT_PROPERTIES.SANDBOX_MODE,
   ...EXECUTION_PROPERTY_KEYS,
 ] as const;
 
@@ -645,7 +648,8 @@ function buildClipboardExecutionProperties(
     ...((toolPermissions !== undefined || step.toolPermissions === null) && {
       toolPermissions,
     }),
-    ...(typeof step.sandbox === "boolean" && { sandbox: step.sandbox }),
+    ...(isSandboxRequest(step.sandbox) && { sandbox: step.sandbox }),
+    ...(isSandboxMode(step.sandboxMode) && { sandboxMode: step.sandboxMode }),
   };
 }
 
@@ -978,6 +982,10 @@ export function buildPromptStepProperties(
     ...(props?.toolPermissions !== undefined && {
       toolPermissions: props.toolPermissions as ToolPermissionsOverride | null,
     }),
-    ...(typeof props?.sandbox === "boolean" && { sandbox: props.sandbox }),
+    // null (None) is an authored value: it passes no sandbox flags.
+    ...(isSandboxRequest(props?.sandbox) && { sandbox: props.sandbox }),
+    ...(isSandboxMode(props?.sandboxMode) && {
+      sandboxMode: props.sandboxMode,
+    }),
   };
 }

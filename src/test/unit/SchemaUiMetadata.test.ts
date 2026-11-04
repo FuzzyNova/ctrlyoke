@@ -3,8 +3,6 @@ import { suite, test } from "mocha";
 import {
   BROWSER_NOTIFICATION_MODE_OPTIONS_META,
   AGENT_SELECTION_OPTIONS_META,
-  CODEX_APPROVAL_POLICY_OPTIONS_META,
-  CODEX_SANDBOX_MODE_OPTIONS_META,
   COMPARE_SOURCE_OPTIONS_META,
   CONDITION_ACTION_OPTIONS_META,
   CONTEXT_RESOLUTION_FAILURE_OPTIONS_META,
@@ -26,6 +24,7 @@ import {
   TERMINAL_MOBILE_CONTROL_BAR_OPTIONS_META,
   TOAST_LEVEL_OPTIONS_META,
   WORKTREE_MODE_OPTIONS_META,
+  SANDBOX_MODE_OPTIONS_META,
   WORKTREE_SELECTION_OPTIONS_META,
   WORKFLOW_AGENT_SELECTION_OPTIONS_META,
   toSelectOptions,
@@ -33,8 +32,7 @@ import {
 } from "../../types/SchemaUiMetadata";
 import {
   BROWSER_NOTIFICATION_MODES,
-  CODEX_APPROVAL_POLICIES,
-  CODEX_SANDBOX_MODES,
+  SANDBOX_MODES,
   COMPARE_SOURCES,
   CONDITION_ACTIONS,
   CONTEXT_RESOLUTION_FAILURE_MODES,
@@ -178,14 +176,9 @@ const META_BINDINGS: Array<{
     paths: ["execution.contextResolutionFailure"],
   },
   {
-    name: "Codex sandbox modes",
-    rows: Object.values(CODEX_SANDBOX_MODE_OPTIONS_META),
-    paths: ["permissions.codexSandboxMode"],
-  },
-  {
-    name: "Codex approval policies",
-    rows: Object.values(CODEX_APPROVAL_POLICY_OPTIONS_META),
-    paths: ["permissions.codexApprovalPolicy"],
+    name: "sandbox modes",
+    rows: Object.values(SANDBOX_MODE_OPTIONS_META),
+    paths: ["sandboxMode", "defaults.sandboxMode"],
   },
   {
     name: "terminal cursor styles",
@@ -469,16 +462,10 @@ suite("Schema UI metadata", () => {
       [...new Set(schemaValues(["general.defaultFormat"]).map(String))].sort()
     );
     assert.deepStrictEqual(
-      [...Object.values(CODEX_SANDBOX_MODES)].sort(),
-      [
-        ...new Set(schemaValues(["permissions.codexSandboxMode"]).map(String)),
-      ].sort()
-    );
-    assert.deepStrictEqual(
-      [...Object.values(CODEX_APPROVAL_POLICIES)].sort(),
+      [...Object.values(SANDBOX_MODES)].sort(),
       [
         ...new Set(
-          schemaValues(["permissions.codexApprovalPolicy"]).map(String)
+          schemaValues(["sandboxMode", "defaults.sandboxMode"]).map(String)
         ),
       ].sort()
     );

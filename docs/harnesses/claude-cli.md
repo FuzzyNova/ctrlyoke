@@ -87,14 +87,17 @@ exist or you may not have access to it, run `claude update`.
 
 The `sandbox` property is separate from approval modes. `true` adds one merged
 `--settings` payload that enables Claude's Bash sandbox, refuses to run if it is
-unavailable, keeps approvals governed by `toolPermissions`, and limits writable
-paths to ctrlyoke's approved roots. `false` removes only ctrlyoke's sandbox
-settings; it does not disable a sandbox configured in Claude's own settings.
-When absent, ctrlyoke adds no sandbox settings. ctrlyoke does not set network
+unavailable and keeps approvals governed by `toolPermissions`. With
+`sandboxMode: workspace-write` Bash can write ctrlyoke's approved roots
+(`allowWrite`); with `read-only` it can't write them (`denyWrite`). `false`
+passes `sandbox.enabled: false`, which turns off a sandbox enabled in your own
+Claude settings too, unless a managed settings file enforces it. `null` adds no
+sandbox settings, so Claude's own settings decide. ctrlyoke does not set network
 access: it follows the `sandbox.network` settings in Claude's own settings
 files (`~/.claude/settings.json` and the project's `.claude/settings.json`).
 Containment is declared partial: the Bash sandbox blocks outside writes, but the
-built-in Write and Edit tools run outside it and follow tool permissions instead.
+built-in Write and Edit tools run outside it and follow tool permissions instead,
+so `read-only` doesn't stop them either.
 Verified on macOS with Claude Code 2.1.317: with `sandbox: true` and `allowAll`,
 Bash's outside write failed with `EPERM`, while Write and Edit changed outside
 files. See [Sandboxing](/workflows/permissions#sandboxing).

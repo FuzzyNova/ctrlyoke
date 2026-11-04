@@ -1922,6 +1922,8 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         { endCondition: { script: "echo pwned" } },
         { secrets: ["GITHUB_TOKEN"] },
         { sandbox: false },
+        { sandbox: null },
+        { sandboxMode: "workspace-write" },
       ]) {
         await assert.rejects(
           server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, { index: 2, updates }),
@@ -1946,6 +1948,17 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         }),
         /clearProperties\[0\].*one of/
       );
+      for (const property of ["sandbox", "sandboxMode"]) {
+        await assert.rejects(
+          server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+            index: 2,
+            updates: {},
+            clearProperties: [property],
+          }),
+          /clearProperties\[0\].*one of/,
+          property
+        );
+      }
       assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
     } finally {
       await releaseActiveRun(run, ownerToken);

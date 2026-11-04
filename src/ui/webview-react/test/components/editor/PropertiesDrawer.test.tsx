@@ -306,16 +306,16 @@ describe("PropertiesDrawer sandbox", () => {
   afterEach(cleanup);
 
   function chooseSandbox(label: string): void {
-    fireEvent.click(screen.getByRole("button", { name: /^Sandbox/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Sandbox,/ }));
     fireEvent.click(
       screen.getByRole("button", { name: new RegExp(`^${label}\\b`) })
     );
   }
 
-  it("writes On and Off as booleans and clears the override for Inherit", () => {
+  it("writes On and Off as booleans, None as null and clears the override for Inherit", () => {
     renderPermissionsDrawer();
-    expect(screen.getByRole("button", { name: /^Sandbox/ })).toHaveTextContent(
-      "Inherit (Harness default)"
+    expect(screen.getByRole("button", { name: /^Sandbox,/ })).toHaveTextContent(
+      "Inherit (Off)"
     );
 
     chooseSandbox("On");
@@ -323,6 +323,12 @@ describe("PropertiesDrawer sandbox", () => {
 
     chooseSandbox("Off");
     expect(useEditorStore.getState().properties.sandbox).toBe(false);
+
+    chooseSandbox("None");
+    expect(useEditorStore.getState().properties.sandbox).toBeNull();
+    expect(screen.getByRole("button", { name: /^Sandbox,/ })).toHaveTextContent(
+      "None"
+    );
 
     chooseSandbox("Inherit");
     expect(useEditorStore.getState().properties.sandbox).toBeUndefined();
@@ -333,7 +339,7 @@ describe("PropertiesDrawer sandbox", () => {
       globalSettings: { ...state.globalSettings, sandbox: true },
     }));
     const { unmount } = renderPermissionsDrawer();
-    expect(screen.getByRole("button", { name: /^Sandbox/ })).toHaveTextContent(
+    expect(screen.getByRole("button", { name: /^Sandbox,/ })).toHaveTextContent(
       "Inherit (On)"
     );
     unmount();
@@ -342,9 +348,18 @@ describe("PropertiesDrawer sandbox", () => {
       workflowProperties: { ...state.workflowProperties, sandbox: false },
     }));
     renderPermissionsDrawer();
-    expect(screen.getByRole("button", { name: /^Sandbox/ })).toHaveTextContent(
+    expect(screen.getByRole("button", { name: /^Sandbox,/ })).toHaveTextContent(
       "Inherit (Off)"
     );
+  });
+
+  it("writes the sandbox mode and names the mode Inherit resolves to", () => {
+    renderPermissionsDrawer();
+    const mode = () => screen.getByRole("button", { name: /^Sandbox mode,/ });
+    expect(mode()).toHaveTextContent("Inherit (Workspace write)");
+    fireEvent.click(mode());
+    fireEvent.click(screen.getByRole("button", { name: /^Read-only\b/ }));
+    expect(useEditorStore.getState().properties.sandboxMode).toBe("read-only");
   });
 });
 
@@ -378,12 +393,13 @@ describe("PropertiesDrawer reset all to inherit", () => {
     additionalArgs: "--custom",
     toolPermissions: { mode: PERMISSION_MODES.CUSTOM },
     sandbox: true,
+    sandboxMode: "read-only",
   };
 
   it("returns every step property to its inherit default", () => {
     useEditorStore.setState({ properties: { ...OVERRIDES } });
     renderPermissionsDrawer();
-    expect(screen.getByRole("button", { name: /^Sandbox/ })).toHaveTextContent(
+    expect(screen.getByRole("button", { name: /^Sandbox,/ })).toHaveTextContent(
       "On"
     );
 
@@ -395,7 +411,7 @@ describe("PropertiesDrawer reset all to inherit", () => {
     for (const key of Object.keys(OVERRIDES) as (keyof PropertyValues)[]) {
       expect(properties[key], key).toEqual(PROPERTY_DEFAULTS[key]);
     }
-    expect(screen.getByRole("button", { name: /^Sandbox/ })).toHaveTextContent(
+    expect(screen.getByRole("button", { name: /^Sandbox,/ })).toHaveTextContent(
       /^Inherit/
     );
   });

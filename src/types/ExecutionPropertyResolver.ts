@@ -9,7 +9,10 @@ import {
   type HarnessId,
   type CtrlYokeMcpMode,
   PRIOR_CONTEXT_DETAILS,
+  DEFAULT_SANDBOX_MODE,
   type PriorContextDetail,
+  type SandboxMode,
+  type SandboxRequest,
 } from "./DashboardConstants";
 import type {
   EndCondition,
@@ -59,7 +62,8 @@ export interface ExecutionPropertyDefaults {
   priorContext?: PriorContext;
   priorContextDetail?: PriorContextDetail;
   toolPermissions?: ToolPermissionsOverride | null;
-  sandbox?: boolean;
+  sandbox?: SandboxRequest;
+  sandboxMode?: SandboxMode;
   errorBehavior?: ErrorBehavior | null;
 }
 
@@ -468,6 +472,11 @@ export function resolveExecutionProperties(
     defaults.errorBehavior
   );
   const sandbox = select(prompt.sandbox, workflow.sandbox, defaults.sandbox);
+  const sandboxMode = select(
+    prompt.sandboxMode,
+    workflow.sandboxMode,
+    defaults.sandboxMode ?? DEFAULT_SANDBOX_MODE
+  );
 
   const resolvedExecutionMode = context.hostCanProvidePty
     ? executionMode.value
@@ -497,6 +506,7 @@ export function resolveExecutionProperties(
     toolPermissions: toolPermissions.value,
     errorBehavior: errorBehavior.value,
     sandbox: sandbox.value,
+    sandboxMode: sandboxMode.value,
   };
   if (ctrlyokeMcpModeIsSkill) {
     properties.ctrlyokeMcpMode = defaults.ctrlyokeMcpMode;
@@ -524,6 +534,7 @@ export function resolveExecutionProperties(
       toolPermissions: toolPermissions.source,
       errorBehavior: errorBehavior.source,
       sandbox: sandbox.source,
+      sandboxMode: sandboxMode.source,
     },
   };
 }

@@ -1,5 +1,9 @@
 import { SANDBOX_CAVEAT_CODE } from "../../../types/CompatibilityTypes";
-import { unsupportedSandboxCapabilities } from "../shared/SandboxCapabilities";
+import {
+  UnsupportedSandboxMapper,
+  unsupportedSandboxCapabilities,
+} from "../shared/SandboxCapabilities";
+import { QWEN_SANDBOX_ENV } from "./QwenProtocolConstants";
 import * as path from "path";
 import { randomUUID } from "crypto";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
@@ -180,12 +184,20 @@ export class QwenCliProvider implements ICliProvider {
     new QwenNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new QwenToolPermissionMapper();
+  readonly sandboxMapper = new UnsupportedSandboxMapper(
+    HARNESS_IDS.QWEN_CLI,
+    unsupportedSandboxCapabilities(SANDBOX_CAVEAT_CODE.QWEN_UNUSABLE),
+    {
+      // QWEN_SANDBOX outranks the flag, and the flag outranks tools.sandbox.
+      cliArgs: ["--sandbox=false"],
+      env: { [QWEN_SANDBOX_ENV]: "false" },
+      detail: "Qwen --sandbox=false",
+    }
+  );
   get capabilities(): HarnessCapabilityFacts {
     return {
       permissions: this.toolPermissionMapper.capabilities,
-      sandbox: unsupportedSandboxCapabilities(
-        SANDBOX_CAVEAT_CODE.QWEN_UNUSABLE
-      ),
+      sandbox: this.sandboxMapper.capabilities,
       hooks: QwenNotificationMonitor.CAPABILITIES,
       mcp: {
         perServerToolFiltering: QWEN_MCP_FILTERING_CAPABILITY,
@@ -407,15 +419,23 @@ export class QwenCliProvider implements ICliProvider {
     };
   }
 
+  /** Sandbox Off's QWEN_SANDBOX override for the next launch; see setSandboxSpawnEnv. */
+  private sandboxSpawnEnv: Readonly<Record<string, string>> = {};
+
+  setSandboxSpawnEnv(env: Readonly<Record<string, string>>): void {
+    this.sandboxSpawnEnv = { ...env };
+  }
+
   getInteractiveSpawnEnv(): NodeJS.ProcessEnv {
     return {
       ...CliProviderUtils.buildProcessEnv(),
       ...this.buildStatusLineSpawnEnv(),
+      ...this.sandboxSpawnEnv,
     };
   }
 
   getHeadlessSpawnEnv(): NodeJS.ProcessEnv {
-    return this.buildStatusLineSpawnEnv();
+    return { ...this.buildStatusLineSpawnEnv(), ...this.sandboxSpawnEnv };
   }
 
   private async registerStatusLine(

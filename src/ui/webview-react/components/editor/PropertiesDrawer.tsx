@@ -27,6 +27,9 @@ import {
   EXECUTION_MODE_HELP_TEXT,
   PERMISSION_MODES,
   SANDBOX_UI_LABELS,
+  sandboxModeSelectOptions,
+  sandboxModeSelectionFromValue,
+  sandboxModeValueFromSelection,
   sandboxSelectOptions,
   sandboxSelectionFromValue,
   sandboxValueFromSelection,
@@ -1348,6 +1351,32 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     className="mt-1"
                   />
                 )}
+              </div>
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="prop-sandbox-mode"
+                  className="text-xs font-semibold uppercase text-description-fg"
+                >
+                  {SANDBOX_UI_LABELS.MODE_FIELD}
+                </label>
+                <CustomSelect
+                  id="prop-sandbox-mode"
+                  schemaPath="sandboxMode"
+                  triggerAriaLabel={SANDBOX_UI_LABELS.MODE_FIELD}
+                  value={sandboxModeSelectionFromValue(
+                    displayedProperties.sandboxMode
+                  )}
+                  onChange={(value) =>
+                    setProperty(
+                      PROMPT_PROPERTIES.SANDBOX_MODE,
+                      sandboxModeValueFromSelection(value)
+                    )
+                  }
+                  options={sandboxModeSelectOptions(
+                    workflowProperties.sandboxMode ?? globalSettings.sandboxMode
+                  )}
+                  disabled={fieldDisabled(PROMPT_PROPERTIES.SANDBOX_MODE)}
+                />
               </div>
               {/* Permission Mode */}
               <div className="flex flex-col gap-1">

@@ -680,6 +680,15 @@ export class CliIntegration extends HarnessIntegration {
     }
 
     if (
+      currIdentity[SPAWN_IDENTITY_FIELDS.SANDBOX] !==
+        prevIdentity[SPAWN_IDENTITY_FIELDS.SANDBOX] ||
+      currIdentity[SPAWN_IDENTITY_FIELDS.SANDBOX_MODE] !==
+        prevIdentity[SPAWN_IDENTITY_FIELDS.SANDBOX_MODE]
+    ) {
+      return "sandbox changed";
+    }
+
+    if (
       currIdentity[SPAWN_IDENTITY_FIELDS.HOOKS] !==
       prevIdentity[SPAWN_IDENTITY_FIELDS.HOOKS]
     ) {

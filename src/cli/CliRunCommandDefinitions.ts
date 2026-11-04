@@ -9,6 +9,9 @@ import {
   PERMISSION_MODES,
   SETTING_PATHS,
   isPermissionMode,
+  isSandboxMode,
+  SANDBOX_MODES,
+  type SandboxMode,
   type PermissionMode,
 } from "../types/DashboardConstants";
 import { getVariableKeyErrors } from "../utils/KeyValueKeyKinds";
@@ -39,6 +42,9 @@ export interface CliExecutionOptions {
   headless?: boolean;
   interactive?: boolean;
   sandbox?: boolean;
+  /** `--sandbox-none`: `sandbox: null`, no sandbox flags. */
+  sandboxNone?: boolean;
+  sandboxMode?: SandboxMode;
   allowTool: string[];
   denyTool: string[];
   permissionMode?: PermissionMode;
@@ -259,14 +265,32 @@ function addExecutionOptions(command: Command, allowForce = false): Command {
     )
     .option(
       "--sandbox",
-      workflowPropertyDescription("Request terminal sandboxing", allowForce)
+      workflowPropertyDescription(
+        "Turn each harness's terminal sandbox on",
+        allowForce
+      )
     )
     .option(
       "--no-sandbox",
       workflowPropertyDescription(
-        "Disable ctrlyoke-requested terminal sandboxing",
+        "Turn each harness's terminal sandbox off",
         allowForce
       )
+    )
+    .option(
+      "--sandbox-none",
+      workflowPropertyDescription(
+        "Pass no sandbox flags, so each harness's own sandbox settings apply",
+        allowForce
+      )
+    )
+    .option(
+      "--sandbox-mode <mode>",
+      workflowPropertyDescription(
+        `Set how strict the sandbox is when it is on: ${Object.values(SANDBOX_MODES).join(", ")}`,
+        allowForce
+      ),
+      parseSandboxMode
     )
     .option(
       "--allow-tool <pattern>",
@@ -299,6 +323,18 @@ function addExecutionOptions(command: Command, allowForce = false): Command {
     .option("-q, --quiet", "Suppress all output except errors")
     .option("--verbose", "Show debug information")
     .option("--no-color", "Disable colored output");
+}
+
+function parseSandboxMode(value: string): SandboxMode {
+  if (!isSandboxMode(value)) {
+    console.error(
+      chalk.red(
+        `Error: --sandbox-mode must be one of: ${Object.values(SANDBOX_MODES).join(", ")}`
+      )
+    );
+    process.exit(2);
+  }
+  return value;
 }
 
 function parsePermissionMode(value: string): PermissionMode {

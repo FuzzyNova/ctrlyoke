@@ -1,5 +1,8 @@
 import { SANDBOX_CAVEAT_CODE } from "../../../types/CompatibilityTypes";
-import { unsupportedSandboxCapabilities } from "../shared/SandboxCapabilities";
+import {
+  UnsupportedSandboxMapper,
+  unsupportedSandboxCapabilities,
+} from "../shared/SandboxCapabilities";
 import * as path from "path";
 import * as fs from "fs";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
@@ -185,12 +188,14 @@ export class OpenCodeCliProvider implements ICliProvider {
 
   readonly notificationMonitor = new OpenCodeNotificationMonitor();
   readonly toolPermissionMapper = new OpenCodeToolPermissionMapper();
+  readonly sandboxMapper = new UnsupportedSandboxMapper(
+    HARNESS_IDS.OPENCODE_CLI,
+    unsupportedSandboxCapabilities(SANDBOX_CAVEAT_CODE.OPENCODE_UNUSABLE)
+  );
   get capabilities(): HarnessCapabilityFacts {
     return {
       permissions: this.toolPermissionMapper.capabilities,
-      sandbox: unsupportedSandboxCapabilities(
-        SANDBOX_CAVEAT_CODE.OPENCODE_UNUSABLE
-      ),
+      sandbox: this.sandboxMapper.capabilities,
       hooks: OpenCodeNotificationMonitor.CAPABILITIES,
       mcp: {
         perServerToolFiltering: OPENCODE_MCP_FILTERING_CAPABILITY,

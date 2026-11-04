@@ -1,5 +1,8 @@
 import { SANDBOX_CAVEAT_CODE } from "../../../types/CompatibilityTypes";
-import { unsupportedSandboxCapabilities } from "../shared/SandboxCapabilities";
+import {
+  UnsupportedSandboxMapper,
+  unsupportedSandboxCapabilities,
+} from "../shared/SandboxCapabilities";
 import * as path from "path";
 import * as WorkflowPaths from "../../../utils/WorkflowPaths";
 import * as fs from "fs/promises";
@@ -143,12 +146,20 @@ export class CopilotCliProvider implements ICliProvider {
     new CopilotNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new CopilotToolPermissionMapper();
+  readonly sandboxMapper = new UnsupportedSandboxMapper(
+    HARNESS_IDS.COPILOT_CLI,
+    unsupportedSandboxCapabilities(SANDBOX_CAVEAT_CODE.COPILOT_UNUSABLE),
+    {
+      // Turns off a sandbox enabled in ~/.copilot/settings.json; an
+      // organization policy that requires sandboxing still wins.
+      cliArgs: ["--no-sandbox"],
+      detail: "Copilot --no-sandbox",
+    }
+  );
   get capabilities(): HarnessCapabilityFacts {
     return {
       permissions: this.toolPermissionMapper.capabilities,
-      sandbox: unsupportedSandboxCapabilities(
-        SANDBOX_CAVEAT_CODE.COPILOT_UNUSABLE
-      ),
+      sandbox: this.sandboxMapper.capabilities,
       hooks: CopilotNotificationMonitor.CAPABILITIES,
       mcp: {
         perServerToolFiltering: COPILOT_MCP_FILTERING_CAPABILITY,

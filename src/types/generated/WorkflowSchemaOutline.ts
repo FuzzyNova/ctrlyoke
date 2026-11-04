@@ -185,8 +185,20 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "description": "Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'."
       },
       "sandbox": {
-        "valueKind": "boolean",
-        "description": "Terminal-command write containment, separate from tool approval. `true` lets terminal commands write only the workspace roots, approved external roots, temp directories and the harness's own caches; network access, harness file tools and MCP servers follow each harness's own sandbox policy. `false` removes only ctrlyoke's containment and never disables a sandbox you enabled in the harness's own settings. When absent, inherits `defaults.sandbox`, then each harness's behavior for the permission mode (Codex `allowAll` still runs in its `workspace-write` sandbox). Only Codex CLI and Claude Code support it: an explicit `true` fails the step at launch on Copilot CLI, Antigravity CLI, Qwen Code and OpenCode."
+        "valueKind": "oneOf",
+        "alternatives": [
+          "boolean",
+          "null"
+        ],
+        "description": "Terminal-command containment, separate from tool approval. `true` turns the harness's sandbox on: terminal commands may write only what `sandboxMode` allows. `false` (the shipped `defaults.sandbox`) turns the harness's sandbox off, overriding a sandbox you enabled in the harness's own settings: Codex gets `-s danger-full-access`, Claude Code `sandbox.enabled: false`, Copilot CLI `--no-sandbox` and Qwen Code `--sandbox=false` with `QWEN_SANDBOX=false`; Antigravity CLI and OpenCode have nothing to turn off. An organization or managed policy that forces a sandbox still wins. `null` (None) passes no sandbox flags, so the harness's own settings apply; with `toolPermissions` mode `none` it hands both axes to the harness. When absent, inherits the workflow, then `defaults.sandbox`. Network access, harness file tools and MCP servers follow each harness's own sandbox policy. Only Codex CLI and Claude Code support `true`: on Copilot CLI, Antigravity CLI, Qwen Code and OpenCode a `true` written in the workflow or step fails the step at launch, while one inherited from `defaults.sandbox` is skipped with a warning and the harness's own settings apply."
+      },
+      "sandboxMode": {
+        "valueKind": "string",
+        "enum": [
+          "workspace-write",
+          "read-only"
+        ],
+        "description": "How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step → workflow → the `defaults.sandboxMode` setting."
       },
       "errorBehavior": {
         "valueKind": "oneOf",
@@ -477,8 +489,20 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "description": "Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'."
       },
       "sandbox": {
-        "valueKind": "boolean",
-        "description": "Terminal-command write containment, separate from tool approval. `true` lets terminal commands write only the workspace roots, approved external roots, temp directories and the harness's own caches; network access, harness file tools and MCP servers follow each harness's own sandbox policy. `false` removes only ctrlyoke's containment and never disables a sandbox you enabled in the harness's own settings. When absent, inherits `defaults.sandbox`, then each harness's behavior for the permission mode (Codex `allowAll` still runs in its `workspace-write` sandbox). Only Codex CLI and Claude Code support it: an explicit `true` fails the step at launch on Copilot CLI, Antigravity CLI, Qwen Code and OpenCode."
+        "valueKind": "oneOf",
+        "alternatives": [
+          "boolean",
+          "null"
+        ],
+        "description": "Terminal-command containment, separate from tool approval. `true` turns the harness's sandbox on: terminal commands may write only what `sandboxMode` allows. `false` (the shipped `defaults.sandbox`) turns the harness's sandbox off, overriding a sandbox you enabled in the harness's own settings: Codex gets `-s danger-full-access`, Claude Code `sandbox.enabled: false`, Copilot CLI `--no-sandbox` and Qwen Code `--sandbox=false` with `QWEN_SANDBOX=false`; Antigravity CLI and OpenCode have nothing to turn off. An organization or managed policy that forces a sandbox still wins. `null` (None) passes no sandbox flags, so the harness's own settings apply; with `toolPermissions` mode `none` it hands both axes to the harness. When absent, inherits the workflow, then `defaults.sandbox`. Network access, harness file tools and MCP servers follow each harness's own sandbox policy. Only Codex CLI and Claude Code support `true`: on Copilot CLI, Antigravity CLI, Qwen Code and OpenCode a `true` written in the workflow or step fails the step at launch, while one inherited from `defaults.sandbox` is skipped with a warning and the harness's own settings apply."
+      },
+      "sandboxMode": {
+        "valueKind": "string",
+        "enum": [
+          "workspace-write",
+          "read-only"
+        ],
+        "description": "How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step → workflow → the `defaults.sandboxMode` setting."
       },
       "errorBehavior": {
         "valueKind": "oneOf",

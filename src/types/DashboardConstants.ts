@@ -1101,6 +1101,7 @@ export const BULK_EDITABLE_PROMPT_STEP_KEYS = [
   "additionalArgs",
   "toolPermissions",
   "sandbox",
+  "sandboxMode",
 ] as const;
 
 /** Stable action identifiers used by the license-management RPC responses. */
@@ -2079,23 +2080,31 @@ export const EFFECTIVE_SANDBOX_KINDS = {
 } as const;
 export const SANDBOX_UI_LABELS = {
   FIELD: "Sandbox",
+  MODE_FIELD: "Sandbox mode",
   INHERIT: "Inherit",
   ON: "On",
   OFF: "Off",
+  /** `sandbox: null`: ctrlyoke passes no sandbox flags. */
+  NONE: "None",
   SANDBOXED: "Sandboxed",
-  NOT_SANDBOXED: "Not sandboxed",
+  NOT_SANDBOXED: "Sandbox off",
   HARNESS_SETTING: "Harness setting",
-  /** An unset `defaults.sandbox`: each harness keeps its permission-mode behavior. */
-  HARNESS_DEFAULT: "Harness default",
 } as const;
 export const SANDBOX_SELECTIONS = {
   INHERIT: "inherit",
   ON: "on",
   OFF: "off",
+  NONE: "none",
 } as const;
 export type SandboxSelection =
   (typeof SANDBOX_SELECTIONS)[keyof typeof SANDBOX_SELECTIONS];
-/** The Inherit / On / Off choices every Sandbox control offers, in order. */
+/**
+ * An authored `sandbox` value: `true` turns the harness's sandbox on, `false`
+ * turns it off, `null` passes no sandbox flags (the harness's own settings
+ * apply). `undefined` inherits.
+ */
+export type SandboxRequest = boolean | null;
+/** The Inherit / On / Off / None choices every Sandbox control offers, in order. */
 export const SANDBOX_SELECT_OPTIONS: readonly {
   readonly value: SandboxSelection;
   readonly label: string;
@@ -2103,15 +2112,16 @@ export const SANDBOX_SELECT_OPTIONS: readonly {
   { value: SANDBOX_SELECTIONS.INHERIT, label: SANDBOX_UI_LABELS.INHERIT },
   { value: SANDBOX_SELECTIONS.ON, label: SANDBOX_UI_LABELS.ON },
   { value: SANDBOX_SELECTIONS.OFF, label: SANDBOX_UI_LABELS.OFF },
+  { value: SANDBOX_SELECTIONS.NONE, label: SANDBOX_UI_LABELS.NONE },
 ];
 
-/** Label for a resolved sandbox value; unset means each harness's own behavior. */
-export function sandboxValueLabel(value: boolean | undefined): string {
-  return value === undefined
-    ? SANDBOX_UI_LABELS.HARNESS_DEFAULT
-    : value
-      ? SANDBOX_UI_LABELS.ON
-      : SANDBOX_UI_LABELS.OFF;
+/** Label for a resolved sandbox value; `null` (or nothing at all) means no sandbox flags. */
+export function sandboxValueLabel(value: SandboxRequest | undefined): string {
+  return value === true
+    ? SANDBOX_UI_LABELS.ON
+    : value === false
+      ? SANDBOX_UI_LABELS.OFF
+      : SANDBOX_UI_LABELS.NONE;
 }
 
 /**
@@ -2119,7 +2129,7 @@ export function sandboxValueLabel(value: boolean | undefined): string {
  * "Inherit (Off)". Pass the value the level above resolves to: the workflow's
  * (else `defaults.sandbox`) for a step, `defaults.sandbox` for a workflow.
  */
-export function sandboxSelectOptions(inherited: boolean | undefined): {
+export function sandboxSelectOptions(inherited: SandboxRequest | undefined): {
   value: SandboxSelection;
   label: string;
 }[] {
@@ -2134,47 +2144,125 @@ export function sandboxSelectOptions(inherited: boolean | undefined): {
 }
 
 /**
- * Choices for `defaults.sandbox` itself: nothing sits above it, so the unset
- * option is the harnesses' own behavior rather than an Inherit.
+ * Choices for `defaults.sandbox` itself: nothing sits above it (removing the
+ * key restores the shipped `false`), so there is no Inherit option.
  */
 export function defaultSandboxSelectOptions(): {
   value: SandboxSelection;
   label: string;
 }[] {
-  return SANDBOX_SELECT_OPTIONS.map((option) =>
-    option.value === SANDBOX_SELECTIONS.INHERIT
-      ? { ...option, label: SANDBOX_UI_LABELS.HARNESS_DEFAULT }
-      : { ...option }
-  );
+  return SANDBOX_SELECT_OPTIONS.filter(
+    (option) => option.value !== SANDBOX_SELECTIONS.INHERIT
+  ).map((option) => ({ ...option }));
 }
 
 /** Convert an authored sandbox override to the dashboard's select value. */
 export function sandboxSelectionFromValue(
-  value: boolean | undefined
+  value: SandboxRequest | undefined
 ): SandboxSelection {
   return value === undefined
     ? SANDBOX_SELECTIONS.INHERIT
-    : value
-      ? SANDBOX_SELECTIONS.ON
-      : SANDBOX_SELECTIONS.OFF;
+    : value === null
+      ? SANDBOX_SELECTIONS.NONE
+      : value
+        ? SANDBOX_SELECTIONS.ON
+        : SANDBOX_SELECTIONS.OFF;
 }
 
 /** Convert the dashboard's select value back to an authored override. */
 export function sandboxValueFromSelection(
   selection: string
-): boolean | undefined {
+): SandboxRequest | undefined {
   switch (selection) {
     case SANDBOX_SELECTIONS.ON:
       return true;
     case SANDBOX_SELECTIONS.OFF:
       return false;
+    case SANDBOX_SELECTIONS.NONE:
+      return null;
     case SANDBOX_SELECTIONS.INHERIT:
     default:
       return undefined;
   }
 }
+
+/** Whether a value is an authored sandbox request (`true`, `false` or `null`). */
+export function isSandboxRequest(value: unknown): value is SandboxRequest {
+  return value === null || typeof value === "boolean";
+}
+
+/**
+ * How strict `sandbox: true` is. `workspace-write` lets terminal commands
+ * write the workspace; `read-only` lets them write none of it. Codex takes
+ * these as its `-s` values; Claude gets them as sandbox write lists.
+ */
+export const SANDBOX_MODES = {
+  WORKSPACE_WRITE: "workspace-write",
+  READ_ONLY: "read-only",
+} as const;
+export type SandboxMode = (typeof SANDBOX_MODES)[keyof typeof SANDBOX_MODES];
+export const DEFAULT_SANDBOX_MODE: SandboxMode = SANDBOX_MODES.WORKSPACE_WRITE;
+/** Narrowest first, for the workspace-settings approval gate. */
+export const SANDBOX_MODE_ORDER = [
+  SANDBOX_MODES.READ_ONLY,
+  SANDBOX_MODES.WORKSPACE_WRITE,
+] as const;
+export const SANDBOX_MODE_LABELS: Record<SandboxMode, string> = {
+  [SANDBOX_MODES.WORKSPACE_WRITE]: "Workspace write",
+  [SANDBOX_MODES.READ_ONLY]: "Read-only",
+};
+export function isSandboxMode(value: unknown): value is SandboxMode {
+  return (
+    value === SANDBOX_MODES.WORKSPACE_WRITE || value === SANDBOX_MODES.READ_ONLY
+  );
+}
+
+/** Mode choices for a workflow or step: Inherit (naming what it resolves to), then each mode. */
+export function sandboxModeSelectOptions(inherited: SandboxMode | undefined): {
+  value: string;
+  label: string;
+}[] {
+  return [
+    {
+      value: SANDBOX_SELECTIONS.INHERIT,
+      label: `${SANDBOX_UI_LABELS.INHERIT} (${SANDBOX_MODE_LABELS[inherited ?? DEFAULT_SANDBOX_MODE]})`,
+    },
+    ...Object.values(SANDBOX_MODES).map((mode) => ({
+      value: mode,
+      label: SANDBOX_MODE_LABELS[mode],
+    })),
+  ];
+}
+
+/** Select value for an authored `sandboxMode` (undefined inherits). */
+export function sandboxModeSelectionFromValue(
+  value: SandboxMode | undefined
+): string {
+  return value ?? SANDBOX_SELECTIONS.INHERIT;
+}
+
+/** Authored `sandboxMode` for a select value; Inherit clears it. */
+export function sandboxModeValueFromSelection(
+  selection: string
+): SandboxMode | undefined {
+  return isSandboxMode(selection) ? selection : undefined;
+}
 export type EffectiveSandboxKind =
   (typeof EFFECTIVE_SANDBOX_KINDS)[keyof typeof EFFECTIVE_SANDBOX_KINDS];
+
+/** Dry Run / launch-log line for an effective sandbox, e.g. "Sandboxed: Codex workspace-write". */
+export function effectiveSandboxLabel(
+  kind: EffectiveSandboxKind,
+  detail?: string
+): string {
+  const base =
+    kind === EFFECTIVE_SANDBOX_KINDS.ON
+      ? SANDBOX_UI_LABELS.SANDBOXED
+      : kind === EFFECTIVE_SANDBOX_KINDS.OFF
+        ? SANDBOX_UI_LABELS.NOT_SANDBOXED
+        : SANDBOX_UI_LABELS.HARNESS_SETTING;
+  return detail ? `${base}: ${detail}` : base;
+}
 
 export const SANDBOX_CAPABILITY_KEYS = {
   TERMINAL: "terminal",
@@ -2357,8 +2445,6 @@ export const SETTING_PATHS = {
   COORDINATION: "coordination",
   STORAGE_RUN_HISTORY_LOCATION: "storage.runHistoryLocation",
   PERMISSIONS_TRUSTED_EXTERNAL_ROOTS: "permissions.trustedExternalRoots",
-  PERMISSIONS_CODEX_SANDBOX_MODE: "permissions.codexSandboxMode",
-  PERMISSIONS_CODEX_APPROVAL_POLICY: "permissions.codexApprovalPolicy",
   EXECUTION_CONTEXT_RESOLUTION_FAILURE: "execution.contextResolutionFailure",
   UI_SHOW_COST_ESTIMATES: "ui.showCostEstimates",
   SPELLING: "spelling",
@@ -2414,6 +2500,7 @@ export const SETTING_PATHS = {
   DEFAULTS_PRE_CONDITION: "defaults.preCondition",
   DEFAULTS_TOOL_PERMISSIONS: "defaults.toolPermissions",
   DEFAULTS_SANDBOX: "defaults.sandbox",
+  DEFAULTS_SANDBOX_MODE: "defaults.sandboxMode",
   DEFAULTS_WORKTREE: "defaults.worktree",
 } as const;
 
@@ -3608,33 +3695,15 @@ export const TERMINAL_MOBILE_CONTROL_BAR = {
   NEVER: "never",
 } as const;
 
-/** Codex sandbox permission levels accepted by settings and Codex CLI. */
+/** Codex CLI `-s` values. `danger-full-access` is how ctrlyoke turns Codex's sandbox off. */
 export const CODEX_SANDBOX_MODES = {
-  READ_ONLY: "read-only",
-  WORKSPACE_WRITE: "workspace-write",
+  READ_ONLY: SANDBOX_MODES.READ_ONLY,
+  WORKSPACE_WRITE: SANDBOX_MODES.WORKSPACE_WRITE,
   DANGER_FULL_ACCESS: "danger-full-access",
 } as const;
 
-export const CODEX_SANDBOX_MODE_ORDER = [
-  CODEX_SANDBOX_MODES.READ_ONLY,
-  CODEX_SANDBOX_MODES.WORKSPACE_WRITE,
-  CODEX_SANDBOX_MODES.DANGER_FULL_ACCESS,
-] as const;
-
 export type CodexSandboxMode =
   (typeof CODEX_SANDBOX_MODES)[keyof typeof CODEX_SANDBOX_MODES];
-
-/** Codex confirmation policy accepted by settings and Codex CLI. */
-export const CODEX_APPROVAL_POLICIES = {
-  UNTRUSTED: "untrusted",
-  ON_REQUEST: "on-request",
-  NEVER: "never",
-} as const;
-
-export const CODEX_APPROVAL_POLICY_ORDER = [
-  [CODEX_APPROVAL_POLICIES.UNTRUSTED, CODEX_APPROVAL_POLICIES.ON_REQUEST],
-  CODEX_APPROVAL_POLICIES.NEVER,
-] as const;
 
 /** Whether a workspace rank is equal to or narrower than the user's rank. */
 export function isRankNoWiderThan(
@@ -3652,9 +3721,6 @@ export function isRankNoWiderThan(
   const userRank = rankOf(user);
   return workspaceRank >= 0 && userRank >= 0 && workspaceRank <= userRank;
 }
-
-export type CodexApprovalPolicy =
-  (typeof CODEX_APPROVAL_POLICIES)[keyof typeof CODEX_APPROVAL_POLICIES];
 
 export type TerminalCursorStyle =
   (typeof TERMINAL_CURSOR_STYLES)[keyof typeof TERMINAL_CURSOR_STYLES];
@@ -4377,6 +4443,7 @@ export const PROMPT_PROPERTIES = {
   EXECUTION_MODE: "executionMode",
   TOOL_PERMISSIONS: "toolPermissions",
   SANDBOX: "sandbox",
+  SANDBOX_MODE: "sandboxMode",
   ERROR_BEHAVIOR: "errorBehavior",
 
   // Template metadata (removed when a template is instantiated)
@@ -4492,6 +4559,7 @@ export const WORKFLOW_PROPERTY_KEYS = [
   PROMPT_PROPERTIES.ADDITIONAL_ARGS,
   PROMPT_PROPERTIES.TOOL_PERMISSIONS,
   PROMPT_PROPERTIES.SANDBOX,
+  PROMPT_PROPERTIES.SANDBOX_MODE,
   PROMPT_PROPERTIES.WORKTREE,
   PROMPT_PROPERTIES.TRUSTED_EXTERNAL_ROOTS,
   PROMPT_PROPERTIES.MAX_STEPS,

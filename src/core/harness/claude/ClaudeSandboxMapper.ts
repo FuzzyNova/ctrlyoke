@@ -4,7 +4,7 @@ import type {
   SandboxContext,
 } from "../shared/interfaces/ISandboxMapper";
 import {
-  effectiveSandboxKind,
+  harnessSettingSandbox,
   nativeSandboxCapabilities,
 } from "../shared/SandboxCapabilities";
 import {
@@ -17,8 +17,11 @@ import {
   CAPABILITY_MECHANISMS,
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  EFFECTIVE_SANDBOX_KINDS,
   HARNESS_IDS,
   SANDBOX_CAPABILITY_KEYS,
+  SANDBOX_MODES,
+  type SandboxRequest,
 } from "../../../types/DashboardConstants";
 import { hasCliFlag } from "../../../utils/CliArgParser";
 
@@ -30,17 +33,31 @@ export class ClaudeSandboxMapper implements ISandboxMapper {
     SANDBOX_CAVEAT_CODE.FILE_TOOLS_BEST_EFFORT
   );
 
+  /**
+   * - `true`: Bash sandbox on through the one merged `--settings` file.
+   *   `workspace-write` allows writes to the workspace roots; `read-only`
+   *   denies them (`denyWrite` outranks the default cwd write access).
+   * - `false`: `sandbox.enabled: false`. `--settings` outranks user and
+   *   project settings; a managed policy still wins.
+   * - `null`: nothing.
+   */
   async prepare(
-    request: boolean | undefined,
+    request: SandboxRequest | undefined,
     context: SandboxContext
   ): Promise<SandboxApplication> {
-    if (request !== true) {
+    if (request === false) {
       return {
         cliArgs: [],
+        settings: { sandbox: { enabled: false } },
         diagnostics: [],
-        effective: { kind: effectiveSandboxKind(request) },
+        effective: {
+          kind: EFFECTIVE_SANDBOX_KINDS.OFF,
+          detail: "Claude sandbox.enabled false",
+        },
       };
     }
+    if (request !== true) return harnessSettingSandbox("Claude settings");
+    const readOnly = context.sandboxMode === SANDBOX_MODES.READ_ONLY;
     return {
       cliArgs: [],
       settings: {
@@ -49,7 +66,9 @@ export class ClaudeSandboxMapper implements ISandboxMapper {
           failIfUnavailable: true,
           allowUnsandboxedCommands: false,
           autoAllowBashIfSandboxed: false,
-          filesystem: { allowWrite: [...context.writableRoots] },
+          filesystem: readOnly
+            ? { denyWrite: [...context.writableRoots] }
+            : { allowWrite: [...context.writableRoots] },
         },
       },
       // Repeated --settings flags replace each other, so a user's own
@@ -60,8 +79,8 @@ export class ClaudeSandboxMapper implements ISandboxMapper {
           ? [settingsOverriddenDiagnostic()]
           : [],
       effective: {
-        kind: effectiveSandboxKind(request),
-        detail: "Claude Bash sandbox, network per Claude settings",
+        kind: EFFECTIVE_SANDBOX_KINDS.ON,
+        detail: `Claude Bash ${context.sandboxMode}, network per Claude settings`,
       },
     };
   }

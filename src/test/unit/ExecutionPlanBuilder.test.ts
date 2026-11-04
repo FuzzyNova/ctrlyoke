@@ -11,7 +11,6 @@ import { QwenCliProvider } from "../../core/harness/qwen/QwenCliProvider";
 import { CliExecutionSession } from "../../core/harness/shared/CliExecutionSession";
 import { ExecutionPlanBuilder } from "../../core/harness/shared/ExecutionPlanBuilder";
 import { resolveHookNotificationPlan } from "../../core/harness/shared/HookNotificationPlan";
-import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import {
   EFFECTIVE_SANDBOX_KINDS,
@@ -19,6 +18,8 @@ import {
   HARNESS_IDS,
 } from "../../types/DashboardConstants";
 import type { ResolvedProperties } from "../../utils/PropertyResolver";
+import type { PromptFile } from "../../types/CtrlYokeTypes";
+import { COMPATIBILITY_DIAGNOSTIC_CODES } from "../../types/CompatibilityTypes";
 
 const fsPromises = require("fs/promises") as typeof import("fs/promises");
 
@@ -49,7 +50,8 @@ const mutableFsPromises = fsPromises as unknown as MutableFsPromises;
 
 function createSession(
   executionMode: "interactive" | "headless",
-  properties: ResolvedProperties = resolvedProperties
+  properties: ResolvedProperties = resolvedProperties,
+  workflowFile?: PromptFile
 ): CliExecutionSession {
   return new CliExecutionSession({
     prompt: { prompt: "prompt text" },
@@ -58,6 +60,7 @@ function createSession(
       promptIndex: 0,
       allPrompts: [],
       resolvedProperties: { ...properties, executionMode },
+      ...(workflowFile ? { workflowFile } : {}),
     },
   });
 }
@@ -146,18 +149,25 @@ suite("ExecutionPlanBuilder", () => {
     );
   });
 
-  test("refuses to launch an explicit sandbox on a harness without a sandbox mapper", async () => {
+  test("refuses an authored sandbox on a harness that can't sandbox, but only warns for defaults.sandbox", async () => {
+    const unsupported = [
+      HARNESS_IDS.COPILOT_CLI,
+      HARNESS_IDS.QWEN_CLI,
+      HARNESS_IDS.OPENCODE_CLI,
+      HARNESS_IDS.ANTIGRAVITY_CLI,
+    ];
     for (const [harnessId, create] of providers) {
+      if (!(unsupported as readonly string[]).includes(harnessId)) continue;
       const provider = create();
-      if ((provider as ICliProvider).sandboxMapper) continue;
       const properties: ResolvedProperties = {
         ...resolvedProperties,
         harness: harnessId,
         sandbox: true,
       };
+      // No workflow file: the request is treated as authored (fail closed).
       await assert.rejects(
         createBuilder(provider).plan(createSession("headless", properties)),
-        /does not support ctrlyoke terminal sandboxing/,
+        /can't sandbox commands/,
         harnessId
       );
       const preview = await createBuilder(provider).plan(
@@ -170,7 +180,75 @@ suite("ExecutionPlanBuilder", () => {
         EFFECTIVE_SANDBOX_KINDS.OFF,
         harnessId
       );
+
+      // Neither the step nor the workflow wrote it: defaults.sandbox did.
+      const inherited = await createBuilder(provider).plan(
+        createSession("headless", properties, { steps: [] })
+      );
+      assert.ok(
+        inherited.diagnostics.some(
+          (item) =>
+            item.code === COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_DEFAULT_SKIPPED
+        ),
+        harnessId
+      );
+      assert.strictEqual(
+        inherited.effectiveSandbox?.kind,
+        EFFECTIVE_SANDBOX_KINDS.HARNESS,
+        harnessId
+      );
     }
+  });
+
+  test("passes Qwen's off switch as a flag and a process environment variable", async () => {
+    const provider = new QwenCliProvider();
+    const plan = await createBuilder(provider).plan(
+      createSession("headless", {
+        ...resolvedProperties,
+        harness: HARNESS_IDS.QWEN_CLI,
+        sandbox: false,
+      })
+    );
+    assert.ok(plan.cliArgs.includes("--sandbox=false"), plan.cliArgs.join(" "));
+    const envMutation = plan.mutations.find(
+      (mutation) => mutation.description === "Set sandbox process environment"
+    );
+    assert.ok(envMutation);
+    let applied: Readonly<Record<string, string>> | undefined;
+    provider.setSandboxSpawnEnv = (env) => {
+      applied = env;
+    };
+    await envMutation.apply();
+    assert.deepStrictEqual(applied, { QWEN_SANDBOX: "false" });
+
+    // The next launch without Off clears it again.
+    const none = await createBuilder(provider).plan(
+      createSession("headless", {
+        ...resolvedProperties,
+        harness: HARNESS_IDS.QWEN_CLI,
+        sandbox: null,
+      })
+    );
+    assert.ok(!none.cliArgs.some((arg) => arg.startsWith("--sandbox")));
+    await none.mutations
+      .find(
+        (mutation) => mutation.description === "Set sandbox process environment"
+      )!
+      .apply();
+    assert.deepStrictEqual(applied, {});
+  });
+
+  test("turns Copilot's sandbox off with --no-sandbox and passes nothing for None", async () => {
+    const plan = (sandbox: boolean | null) =>
+      createBuilder(new CopilotCliProvider()).plan(
+        createSession("headless", {
+          ...resolvedProperties,
+          harness: HARNESS_IDS.COPILOT_CLI,
+          sandbox,
+        })
+      );
+    assert.ok((await plan(false)).cliArgs.includes("--no-sandbox"));
+    assert.ok(!(await plan(null)).cliArgs.includes("--no-sandbox"));
   });
 
   test("uses a stable but step-specific env file for Qwen hooks", async () => {

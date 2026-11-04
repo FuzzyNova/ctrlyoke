@@ -391,7 +391,7 @@ describe("DryRunModal", () => {
       { kind: "on", detail: "Codex workspace-write" },
       "Sandboxed: Codex workspace-write",
     ],
-    [{ kind: "off" }, "Not sandboxed"],
+    [{ kind: "off" }, "Sandbox off"],
     [{ kind: "harness" }, "Harness setting"],
   ] as const)("shows the step's effective sandbox (%o)", (sandbox, label) => {
     openPreview(

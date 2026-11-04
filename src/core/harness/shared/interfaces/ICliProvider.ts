@@ -161,6 +161,10 @@ export interface ICliProvider {
 
   /** Tool permission mapper component */
   readonly toolPermissionMapper: IToolPermissionMapper;
+  /**
+   * Maps the step's \`sandbox\` request. Every shipped harness has one; a
+   * provider without one is treated as unable to sandbox.
+   */
   readonly sandboxMapper?: ISandboxMapper;
 
   /** Log parser component (for log file monitoring in interactive mode) */
@@ -572,6 +576,13 @@ export interface ICliProvider {
    * at spawn time as well as on the spawned child.
    */
   getHeadlessSpawnEnv?(): NodeJS.ProcessEnv;
+
+  /**
+   * Receive the sandbox mapper's process environment for the next launch
+   * (\`SandboxApplication.env\`), always called with \`{}\` when there is none.
+   * A provider that implements it merges the values into both spawn envs.
+   */
+  setSandboxSpawnEnv?(env: Readonly<Record<string, string>>): void;
 
   /**
    * Extract session ID from log files (optional)

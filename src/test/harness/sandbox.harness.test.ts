@@ -17,6 +17,7 @@ import {
   HOOK_EVENT_NAMES,
   MCP_SERVER_IDS,
   PERMISSION_MODES,
+  SANDBOX_MODES,
 } from "../../types/DashboardConstants";
 import { normalizeCliEvents } from "../../utils/CliEventNormalizer";
 import { MCP_PROBE_CALLS } from "./mcpProbeContract";
@@ -247,18 +248,15 @@ suite("Harness sandbox tests", function () {
           const codexArgs = [
             ...(
               await new CodexSandboxMapper().prepare(true, {
-                toolPermissions,
                 isInteractive: false,
                 writableRoots: [],
+                sandboxMode: SANDBOX_MODES.WORKSPACE_WRITE,
+                requestFromDefaults: false,
               })
             ).cliArgs,
             ...new CodexToolPermissionMapper().buildCodexSpecificArgs(
               toolPermissions,
-              undefined,
-              undefined,
-              false,
-              undefined,
-              true
+              false
             ),
           ];
           assert.ok(

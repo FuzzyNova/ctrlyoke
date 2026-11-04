@@ -65,6 +65,7 @@ export class PropertyResolver {
       toolPermissions: undefined,
       errorBehavior: undefined,
       sandbox: ConfigurationUtils.getDefaultSandbox(),
+      sandboxMode: ConfigurationUtils.getDefaultSandboxMode(),
     };
   }
 

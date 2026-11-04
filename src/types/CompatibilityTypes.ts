@@ -12,6 +12,7 @@ import {
   MCP_CAPABILITY_KEYS,
   PERMISSION_CAPABILITY_KEYS,
   PROMPT_INPUT_CAPABILITY_KEYS,
+  SANDBOX_CAPABILITY_KEYS,
   type HarnessId,
   type HookEvent,
   type ExecutionMode,
@@ -50,6 +51,10 @@ export const COMPATIBILITY_DIAGNOSTIC_CODES = {
   IMAGE_INPUT_PARTIAL: "compatibility.promptInputs.images.partial",
   IMAGE_INPUT_UNVERIFIED: "compatibility.promptInputs.images.unverified",
   SANDBOX_UNSUPPORTED: "compatibility.sandbox.terminal.unsupported",
+  /** `defaults.sandbox: true` on a harness that can't sandbox: skipped, not refused. */
+  SANDBOX_DEFAULT_SKIPPED: "compatibility.sandbox.terminal.defaultSkipped",
+  /** `sandboxMode` set while `sandbox` does not resolve to `true`. */
+  SANDBOX_MODE_UNUSED: "compatibility.sandbox.mode.unused",
   SANDBOX_SETTINGS_OVERRIDDEN:
     "compatibility.sandbox.terminal.settingsOverridden",
   PERMISSION_TRANSLATION_LOSSY: "compatibility.permissions.translation.lossy",
@@ -438,6 +443,10 @@ export function getCompatibilityDiagnosticMessage(
       return `Image prompt input support is unverified for the installed ${harness} version.`;
     case COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED:
       return `${harness} can't sandbox commands, so this step will fail to start.`;
+    case COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_DEFAULT_SKIPPED:
+      return `${harness} can't sandbox commands, so the default Sandbox On is skipped for this step and ${harness}'s own sandbox settings apply.`;
+    case COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_MODE_UNUSED:
+      return "Sandbox mode has no effect because Sandbox is not On for this step.";
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_TRANSLATION_LOSSY:
       return `${capabilityLabel} include rules that are only partially represented by the ${harness} harness.`;
     case COMPATIBILITY_DIAGNOSTIC_CODES.MCP_SERVER_ID_SANITIZED:
@@ -495,6 +504,10 @@ export function getCompatibilityDiagnosticRemediation(
       return "Install a harness version covered by the MCP filtering evidence or review this finding manually.";
     case COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED:
       return "Turn Sandbox off or select a harness with verified terminal sandbox support.";
+    case COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_DEFAULT_SKIPPED:
+      return "Run the step on Codex or Claude Code, or set Sandbox to Off or None on the workflow or step.";
+    case COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_MODE_UNUSED:
+      return "Turn Sandbox on, or remove the Sandbox mode override.";
     case COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_UNSUPPORTED:
       return "Remove the image reference or select a harness with verified native image-input support.";
     case COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_PARTIAL:
@@ -634,4 +647,42 @@ function getDeclarationDiagnosticCode(
 
 function hookEventLabel(capability: string): string {
   return HOOK_EVENT_OPTIONS_META[capability as HookEvent]?.label ?? capability;
+}
+
+/**
+ * The diagnostic for `sandbox: true` on a harness that can't sandbox. Written
+ * in the workflow or step it is an error and the launch is refused; inherited
+ * from `defaults.sandbox` it is a warning and the step runs without ctrlyoke's
+ * sandbox flags. Shared by the analyzer and the launch-time sandbox mappers.
+ */
+export function sandboxUnsupportedDiagnostic(input: {
+  harnessId: HarnessId;
+  fromDefaults: boolean;
+  caveatCode?: CompatibilityCaveatCode;
+  state?: EffectiveCapabilityState;
+}): CompatibilityDiagnostic {
+  const code = input.fromDefaults
+    ? COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_DEFAULT_SKIPPED
+    : COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED;
+  const capability = SANDBOX_CAPABILITY_KEYS.TERMINAL;
+  const remediation = getCompatibilityDiagnosticRemediation(code);
+  return {
+    code,
+    severity: input.fromDefaults
+      ? COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+      : COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR,
+    harnessId: input.harnessId,
+    capability,
+    state: input.state ?? {
+      fidelity: CAPABILITY_FIDELITIES.UNSUPPORTED,
+      mechanism: CAPABILITY_MECHANISMS.NONE,
+      verification: CAPABILITY_VERIFICATION_STATUSES.VERIFIED,
+    },
+    message: getCompatibilityDiagnosticMessage(code, {
+      harnessId: input.harnessId,
+      capability,
+      caveatCode: input.caveatCode,
+    }),
+    ...(remediation ? { remediation } : {}),
+  };
 }

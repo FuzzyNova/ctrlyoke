@@ -73,3 +73,10 @@ export const QWEN_AGENT_ARGUMENTS = {
   TYPE: "subagent_type",
   PROMPT: "prompt",
 } as const;
+
+/**
+ * Qwen's sandbox switch. It outranks `--sandbox` and `tools.sandbox` (Qwen
+ * 0.26.0 docs, "Enable sandboxing (in order of precedence)"), so Sandbox Off
+ * sets it as well as passing `--sandbox=false`.
+ */
+export const QWEN_SANDBOX_ENV = "QWEN_SANDBOX";

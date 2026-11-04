@@ -1,13 +1,19 @@
 import type {
   ISandboxMapper,
   SandboxApplication,
+  SandboxContext,
 } from "../shared/interfaces/ISandboxMapper";
-import { CODEX_SANDBOX_MODES } from "../../../types/DashboardConstants";
+import {
+  CODEX_SANDBOX_MODES,
+  EFFECTIVE_SANDBOX_KINDS,
+  type CodexSandboxMode,
+  type SandboxMode,
+  type SandboxRequest,
+} from "../../../types/DashboardConstants";
 import type { SandboxCapabilityDescriptor } from "../shared/interfaces/ISandboxMapper";
 import { SANDBOX_CAVEAT_CODE } from "../../../types/CompatibilityTypes";
-import { resolveCodexContainment } from "./CodexToolPermissionMapper";
 import {
-  effectiveSandboxKind,
+  harnessSettingSandbox,
   nativeSandboxCapabilities,
 } from "../shared/SandboxCapabilities";
 
@@ -19,28 +25,41 @@ export const CODEX_SANDBOX_CAPABILITIES: SandboxCapabilityDescriptor =
     SANDBOX_CAVEAT_CODE.NETWORK_FOLLOWS_HARNESS_POLICY
   );
 
+/**
+ * The `-s` value ctrlyoke passes Codex, shared by the sandbox flag and the
+ * `--add-dir` filter. Approval (`-a`) follows the permission mode alone.
+ * - `true` → `sandboxMode` (`workspace-write` or `read-only`)
+ * - `false` → `danger-full-access`: the sandbox is off
+ * - `null` → nothing: `config.toml` decides
+ */
+export function codexSandboxFlag(
+  request: SandboxRequest | undefined,
+  sandboxMode: SandboxMode
+): CodexSandboxMode | undefined {
+  if (request === true) return sandboxMode;
+  if (request === false) return CODEX_SANDBOX_MODES.DANGER_FULL_ACCESS;
+  return undefined;
+}
+
 export class CodexSandboxMapper implements ISandboxMapper {
   readonly capabilities = CODEX_SANDBOX_CAPABILITIES;
 
   async prepare(
-    request: boolean | undefined,
-    context: Parameters<ISandboxMapper["prepare"]>[1]
+    request: SandboxRequest | undefined,
+    context: SandboxContext
   ): Promise<SandboxApplication> {
-    const result = resolveCodexContainment(
-      context.toolPermissions,
-      request,
-      context.codexSandboxMode ?? CODEX_SANDBOX_MODES.WORKSPACE_WRITE
-    );
+    const flag = codexSandboxFlag(request, context.sandboxMode);
+    if (!flag) return harnessSettingSandbox("Codex config.toml");
     return {
-      cliArgs:
-        request === undefined || result.bypass || !result.sandboxMode
-          ? []
-          : ["-s", result.sandboxMode],
-      diagnostics: result.diagnostic ? [result.diagnostic] : [],
+      cliArgs: ["-s", flag],
+      diagnostics: [],
       effective: {
-        kind: effectiveSandboxKind(request),
+        kind:
+          request === true
+            ? EFFECTIVE_SANDBOX_KINDS.ON
+            : EFFECTIVE_SANDBOX_KINDS.OFF,
         // No network claim: config.toml can open it under workspace-write.
-        detail: result.sandboxMode ? `Codex ${result.sandboxMode}` : undefined,
+        detail: `Codex ${flag}`,
       },
     };
   }

@@ -1,8 +1,7 @@
 import {
   AUTO_DETECT_HARNESS,
   BROWSER_NOTIFICATION_MODES,
-  CODEX_APPROVAL_POLICIES,
-  CODEX_SANDBOX_MODES,
+  DEFAULT_SANDBOX_MODE,
   CONTEXT_RESOLUTION_FAILURE_MODES,
   DEFAULT_MODELS,
   NOTIFICATION_EVENT_MODES,
@@ -14,8 +13,8 @@ import {
   type NotificationEventMode,
   type BrowserNotificationMode,
   type ContextResolutionFailureMode,
-  type CodexApprovalPolicy,
-  type CodexSandboxMode,
+  type SandboxMode,
+  type SandboxRequest,
   type HookEvent,
   type ExecutionMode,
   type PermissionMode,
@@ -194,8 +193,13 @@ export interface CtrlYokeGlobalSettings {
     mcpServers: (string | McpServerConfig)[];
     hooks: UserHookConfig[];
     errorBehavior?: ErrorBehavior | null;
-    /** Default terminal-command containment; absent preserves harness behavior. */
-    sandbox?: boolean;
+    /**
+     * Default terminal-command containment for workflows and steps that omit
+     * it: `true` on, `false` off (the shipped default), `null` no sandbox flags.
+     */
+    sandbox: SandboxRequest;
+    /** How strict `sandbox: true` is when a workflow or step omits `sandboxMode`. */
+    sandboxMode: SandboxMode;
     toolPermissions: {
       mode: PermissionMode;
       allowedTools: string[];
@@ -229,9 +233,6 @@ export interface CtrlYokeGlobalSettings {
 
   // Permissions (harness-specific advanced settings)
   permissions: {
-    // Codex CLI-specific
-    codexSandboxMode: CodexSandboxMode;
-    codexApprovalPolicy: CodexApprovalPolicy;
     /**
      * Absolute directory paths outside the workspace that ctrlyoke may read for
      * prompt attachments and open from file links. Workspace files are always
@@ -514,6 +515,8 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     mcpServers: [],
     hooks: [],
     errorBehavior: null,
+    sandbox: false,
+    sandboxMode: DEFAULT_SANDBOX_MODE,
     toolPermissions: {
       mode: "allowAll",
       // Only read in `custom` mode; `allowAll` ignores it.
@@ -579,8 +582,6 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     trashRetentionDays: DEFAULT_TRASH_RETENTION_DAYS,
   },
   permissions: {
-    codexSandboxMode: CODEX_SANDBOX_MODES.WORKSPACE_WRITE,
-    codexApprovalPolicy: CODEX_APPROVAL_POLICIES.ON_REQUEST,
     trustedExternalRoots: [],
     heuristicSecretRedactionEnabled: true,
   },

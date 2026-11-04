@@ -5,6 +5,7 @@ import {
   MCP_SERVER_IDS,
   MCP_SKILL_NAMES,
   SESSION_ID_SENTINELS,
+  sandboxValueLabel,
 } from "@root/types/DashboardConstants";
 import { PERMISSION_MODE_OPTIONS_META } from "@root/types/SchemaUiMetadata";
 import type { PromptStep as CorePromptStep } from "@root/types/CtrlYokeTypes";
@@ -233,8 +234,17 @@ const CHIP_FIELDS = {
       step.sandbox === undefined
         ? undefined
         : {
-            label: `sandbox: ${step.sandbox ? "on" : "off"}`,
+            label: `sandbox: ${sandboxValueLabel(step.sandbox).toLowerCase()}`,
             title: schemaTitle("sandbox", step.sandbox),
+          },
+  },
+  sandboxMode: {
+    chip: (step) =>
+      step.sandboxMode === undefined
+        ? undefined
+        : {
+            label: `sandbox mode: ${step.sandboxMode}`,
+            title: schemaTitle("sandboxMode", step.sandboxMode),
           },
   },
 } satisfies Partial<

@@ -10,18 +10,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Declare Codex terminal sandbox support exact; Claude remains partial because its built-in Write and Edit tools can write outside the Bash sandbox (verified on macOS with Claude Code 2.1.317).
-- A workspace `permissions.codexSandboxMode` or `codexApprovalPolicy` that is less restrictive than your own now waits for your approval before it applies.
-- Codex steps that run in the `workspace-write` sandbox (the `allowAll` permission mode) can now stage and commit: ctrlyoke grants Codex write access to the checkout's Git directory, and to a linked worktree's own Git directory, so `git add` and `git commit` no longer fail with `Operation not permitted`.
+- **Codex no longer runs in a sandbox by default.** Its sandbox now follows the new `sandbox` property, whose default is Off, instead of the permission mode. Headless and interactive `allowAll` steps that used to run in Codex's `workspace-write` sandbox now run with `-s danger-full-access`. Set `defaults.sandbox: true` (Settings → Workflow Defaults → Permissions → Sandbox) to keep them contained, or `null` (None) to let your `config.toml` decide.
+- Codex's approval flag now follows the permission mode alone: `dangerouslyAllowAll` passes `-a never` (instead of `--dangerously-bypass-approvals-and-sandbox`), and `allowAll` and `custom` pass `-a on-request`.
+- The `permissions.codexSandboxMode` and `permissions.codexApprovalPolicy` settings are removed. Settings files are migrated to format 2 when read: `codexSandboxMode` becomes the cross-harness `defaults.sandboxMode` (`danger-full-access` becomes `workspace-write`, since "no sandbox" is now `sandbox: false`), and the approval policy is dropped.
+- A Codex `custom` step that denies `write` or `shell` no longer switches Codex to its read-only sandbox; the denial is reported as not enforced. Use `sandboxMode: read-only` instead.
+- Codex steps that run in the `workspace-write` sandbox can now stage and commit: ctrlyoke grants Codex write access to the checkout's Git directory, and to a linked worktree's own Git directory, so `git add` and `git commit` no longer fail with `Operation not permitted`.
 
 ### Added
 
 - Add the workflow `sandbox` property and `defaults.sandbox` setting to control
-  terminal write containment independently of tool approval. Codex and Claude
-  Code support it; an explicit `sandbox: true` on Copilot CLI, Antigravity,
-  Qwen Code or OpenCode fails the step at launch.
-- Compatibility diagnostics, Dry Run and the Sandbox control flag an explicit
-  sandbox request on a harness that can't sandbox.
-- Add `--sandbox` and `--no-sandbox` CLI overrides for terminal sandboxing.
+  terminal write containment independently of tool approval: On (`true`), Off
+  (`false`, the default) or None (`null`, pass no sandbox flags so the
+  harness's own settings decide). Codex and Claude Code support On; a `true`
+  written in a workflow or step fails the step at launch on Copilot CLI,
+  Antigravity, Qwen Code or OpenCode, while one inherited from
+  `defaults.sandbox` only warns.
+- Off turns a harness's own sandbox off: Codex gets `-s danger-full-access`,
+  Claude Code `sandbox.enabled: false`, Copilot CLI `--no-sandbox`, and Qwen
+  Code `--sandbox=false` with `QWEN_SANDBOX=false`.
+- Add the `sandboxMode` property and `defaults.sandboxMode` setting
+  (`workspace-write` or `read-only`) to choose how strict On is, with a
+  Sandbox mode control in the dashboard.
+- Compatibility diagnostics, Dry Run and the Sandbox control flag a sandbox
+  request on a harness that can't sandbox, and note a `sandboxMode` that has no
+  effect.
+- Add `--sandbox`, `--no-sandbox`, `--sandbox-none` and `--sandbox-mode` CLI
+  overrides for terminal sandboxing.
+- A workspace `defaults.sandbox` or `defaults.sandboxMode` that is less
+  contained than your own waits for your approval before it applies.
 - The dashboard can export a settled run from its workflow menu, review the
   continuation files before export, and inspect redaction details before sharing.
 - Save Workflow and Export Run now share location, name, and browse controls.

@@ -12,7 +12,11 @@ import type {
   CtrlYokeMcpMode,
   PermissionMode,
 } from "./DashboardConstants";
-import type { PriorContextDetail } from "./DashboardConstants";
+import type {
+  PriorContextDetail,
+  SandboxMode,
+  SandboxRequest,
+} from "./DashboardConstants";
 
 /** Unified permission mode used by harness adapters and authored workflows. */
 export type ToolPermissionMode = PermissionMode;
@@ -44,7 +48,13 @@ export interface ResolvedProperties {
   priorContextDetail?: PriorContextDetail;
   additionalArgs?: string;
   toolPermissions: ToolPermissionConfig | null;
-  /** Undefined preserves each harness's current containment behavior. */
-  sandbox?: boolean;
+  /** `true` on, `false` off, `null` (or undefined) passes no sandbox flags. */
+  sandbox?: SandboxRequest;
+  /**
+   * How strict `sandbox: true` is; resolves step → workflow →
+   * `defaults.sandboxMode`. The resolver always sets it; undefined means
+   * `workspace-write`.
+   */
+  sandboxMode?: SandboxMode;
   errorBehavior?: ErrorBehavior;
 }

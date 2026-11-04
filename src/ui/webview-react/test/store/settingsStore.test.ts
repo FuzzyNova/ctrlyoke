@@ -191,6 +191,8 @@ describe("setGlobalSettings", () => {
       defaultErrorBehavior: null,
       defaultEndCondition: null,
       defaultPreCondition: null,
+      sandbox: false,
+      sandboxMode: "workspace-write",
       settingSources: {},
     };
     useSettingsStore.getState().setGlobalSettings(settings);

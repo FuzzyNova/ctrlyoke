@@ -8,8 +8,7 @@ import type { ToolPermissionConfig } from "../types/ExecutionPropertyTypes";
 import { isToolPermissionConfigNoWiderThan } from "../types/ToolPermissionUtils";
 import {
   PERMISSION_CAPABILITY_KEYS,
-  CODEX_APPROVAL_POLICY_ORDER,
-  CODEX_SANDBOX_MODE_ORDER,
+  SANDBOX_MODE_ORDER,
   SETTING_PATHS,
   WORKSPACE_MCP_REGISTRY_TRUST_PATH,
   isRankNoWiderThan,
@@ -169,13 +168,28 @@ function worktreeSetupCoveredByUser(
   );
 }
 
-function codexSettingCoveredByUser(
+function rankedSettingCoveredByUser(
   order: readonly (string | readonly string[])[],
   workspaceValue: unknown,
   userValue: unknown,
   defaultValue: string
 ): boolean {
   return isRankNoWiderThan(order, workspaceValue, userValue ?? defaultValue);
+}
+
+/** Most contained first: on, then the harness's own settings, then off. */
+const SANDBOX_CONTAINMENT_ORDER: readonly unknown[] = [true, null, false];
+
+/**
+ * A workspace `defaults.sandbox` applies without asking when it is at least
+ * as contained as the user's effective value (the shipped `false` when unset).
+ */
+function sandboxCoveredByUser(workspace: unknown, user: unknown): boolean {
+  const workspaceRank = SANDBOX_CONTAINMENT_ORDER.indexOf(workspace);
+  const userRank = SANDBOX_CONTAINMENT_ORDER.indexOf(
+    user === undefined ? CTRLYOKE_SETTINGS_DEFAULTS.defaults.sandbox : user
+  );
+  return workspaceRank >= 0 && userRank >= 0 && workspaceRank <= userRank;
 }
 
 /** Lead with the command; the generic sorted JSON can truncate it away. */
@@ -238,10 +252,25 @@ const SENSITIVE_WORKSPACE_SETTINGS: readonly SensitiveSettingDescriptor[] = [
   {
     path: SETTING_PATHS.DEFAULTS_SANDBOX,
     shape: SENSITIVE_SETTING_SHAPES.VALUE,
-    isSensitive: isPresent,
-    isCoveredByUser: (workspace, user) => workspace === true || user === false,
+    // `null` is meaningful here: it hands the sandbox to the harness's settings.
+    isSensitive: (value) => value !== undefined,
+    isCoveredByUser: sandboxCoveredByUser,
     summarize: summarizeValue,
     summaryLabel: "Default sandbox",
+  },
+  {
+    path: SETTING_PATHS.DEFAULTS_SANDBOX_MODE,
+    shape: SENSITIVE_SETTING_SHAPES.VALUE,
+    isSensitive: isPresent,
+    isCoveredByUser: (workspace, user) =>
+      rankedSettingCoveredByUser(
+        SANDBOX_MODE_ORDER,
+        workspace,
+        user,
+        CTRLYOKE_SETTINGS_DEFAULTS.defaults.sandboxMode
+      ),
+    summarize: summarizeValue,
+    summaryLabel: "Default sandbox mode",
   },
   {
     path: SETTING_PATHS.DEFAULTS_WORKTREE,
@@ -249,34 +278,6 @@ const SENSITIVE_WORKSPACE_SETTINGS: readonly SensitiveSettingDescriptor[] = [
     isSensitive: hasWorktreeSetupCommand,
     isCoveredByUser: worktreeSetupCoveredByUser,
     summarize: summarizeWorktreeSetup,
-  },
-  {
-    path: SETTING_PATHS.PERMISSIONS_CODEX_SANDBOX_MODE,
-    shape: SENSITIVE_SETTING_SHAPES.VALUE,
-    isSensitive: isPresent,
-    isCoveredByUser: (workspace, user) =>
-      codexSettingCoveredByUser(
-        CODEX_SANDBOX_MODE_ORDER,
-        workspace,
-        user,
-        CTRLYOKE_SETTINGS_DEFAULTS.permissions.codexSandboxMode
-      ),
-    summarize: summarizeValue,
-    summaryLabel: "Codex sandbox",
-  },
-  {
-    path: SETTING_PATHS.PERMISSIONS_CODEX_APPROVAL_POLICY,
-    shape: SENSITIVE_SETTING_SHAPES.VALUE,
-    isSensitive: isPresent,
-    isCoveredByUser: (workspace, user) =>
-      codexSettingCoveredByUser(
-        CODEX_APPROVAL_POLICY_ORDER,
-        workspace,
-        user,
-        CTRLYOKE_SETTINGS_DEFAULTS.permissions.codexApprovalPolicy
-      ),
-    summarize: summarizeValue,
-    summaryLabel: "Codex approval policy",
   },
 ];
 

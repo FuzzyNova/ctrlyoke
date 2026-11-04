@@ -16,6 +16,8 @@ export const ForceableFlag = {
   SESSION_ID: "session-id",
   SCRIPT_TIMEOUT: "script-timeout",
   SANDBOX: "sandbox",
+  SANDBOX_NONE: "sandbox-none",
+  SANDBOX_MODE: "sandbox-mode",
 } as const;
 
 export const FORCE_ALL_KEYWORD = "all";
@@ -44,6 +46,8 @@ export function buildCliPropertyOverrides(
     | "sessionId"
     | "scriptTimeout"
     | "sandbox"
+    | "sandboxNone"
+    | "sandboxMode"
     | "force"
   >,
   defaultHarness?: HarnessId
@@ -51,7 +55,19 @@ export function buildCliPropertyOverrides(
   const workflow: Partial<ExecutionProperties> = {};
   if (options.harness) workflow.harness = options.harness as HarnessId;
   if (options.model) workflow.model = options.model;
-  if (options.sandbox !== undefined) workflow.sandbox = options.sandbox;
+  if (options.sandboxNone) {
+    if (options.sandbox !== undefined) {
+      throw new Error(
+        "--sandbox-none cannot be combined with --sandbox or --no-sandbox"
+      );
+    }
+    workflow.sandbox = null;
+  } else if (options.sandbox !== undefined) {
+    workflow.sandbox = options.sandbox;
+  }
+  if (options.sandboxMode !== undefined) {
+    workflow.sandboxMode = options.sandboxMode;
+  }
   if (options.headless) workflow.executionMode = EXECUTION_MODES.HEADLESS;
   else if (options.interactive)
     workflow.executionMode = EXECUTION_MODES.INTERACTIVE;
@@ -130,6 +146,8 @@ export function applyCliPropertyOverrides(
   }
   if (overrides.workflow.sandbox !== undefined)
     workflow.sandbox = overrides.workflow.sandbox;
+  if (overrides.workflow.sandboxMode !== undefined)
+    workflow.sandboxMode = overrides.workflow.sandboxMode;
 
   const permissions = overrides.workflow.toolPermissions;
   if (permissions) {
@@ -244,8 +262,14 @@ function applyForcedFlagToStep(
       }
       return;
     case ForceableFlag.SANDBOX:
+    case ForceableFlag.SANDBOX_NONE:
       if (!isScriptStep(step) && overrides.workflow.sandbox !== undefined) {
         step.sandbox = overrides.workflow.sandbox;
+      }
+      return;
+    case ForceableFlag.SANDBOX_MODE:
+      if (!isScriptStep(step) && overrides.workflow.sandboxMode !== undefined) {
+        step.sandboxMode = overrides.workflow.sandboxMode;
       }
       return;
   }
@@ -266,6 +290,8 @@ function parseAndValidateForcedFlags(
     | "sessionId"
     | "scriptTimeout"
     | "sandbox"
+    | "sandboxNone"
+    | "sandboxMode"
   >
 ): Set<ForceableFlag> {
   const requested = (options.force ?? []).flatMap((value) =>
@@ -298,6 +324,8 @@ function parseAndValidateForcedFlags(
     [ForceableFlag.SESSION_ID, options.sessionId !== undefined],
     [ForceableFlag.SCRIPT_TIMEOUT, options.scriptTimeout !== undefined],
     [ForceableFlag.SANDBOX, options.sandbox !== undefined],
+    [ForceableFlag.SANDBOX_NONE, options.sandboxNone === true],
+    [ForceableFlag.SANDBOX_MODE, options.sandboxMode !== undefined],
   ]);
   const selected = requested.includes(FORCE_ALL_KEYWORD)
     ? [...passed].filter(([, wasPassed]) => wasPassed).map(([flag]) => flag)

@@ -67,6 +67,8 @@ import {
   type WorkspaceFolderPicker,
   type RunDefinitionChange,
   type RunDefinitionDecision,
+  type SandboxMode,
+  type SandboxRequest,
 } from "./DashboardConstants";
 import type { ScriptRuntimeOutput } from "./CtrlYokeTypes";
 import type { HarnessVersionAssessment } from "../utils/HarnessVersion";
@@ -440,7 +442,8 @@ export interface PromptStep extends StepDisplayProperties {
   priorContextDetail?: PriorContextDetail;
   additionalArgs?: string | null;
   toolPermissions?: ToolPermissionsOverride | null;
-  sandbox?: boolean;
+  sandbox?: SandboxRequest;
+  sandboxMode?: SandboxMode;
   errorBehavior?: ErrorBehavior | null;
   _runtime?: Pick<
     ExecutionProperties,

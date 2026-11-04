@@ -109,6 +109,7 @@ export function buildReplyPropertyValues({
         }
       : null,
     sandbox: properties.sandbox,
+    sandboxMode: properties.sandboxMode,
   };
 }
 

@@ -48,7 +48,8 @@ export function sandboxSupportDiagnostic(
 ): CompatibilityDiagnostic | undefined {
   return diagnostics.find(
     (diagnostic) =>
-      diagnostic.code === COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED
+      diagnostic.code === COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED ||
+      diagnostic.code === COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_DEFAULT_SKIPPED
   );
 }
 

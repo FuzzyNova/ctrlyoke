@@ -119,11 +119,29 @@ Edit the defaults in **Settings → Workflow Defaults → Permissions**.
 
 Tool permissions control **approval**: which actions can run without asking.
 Sandboxing controls **containment**: where terminal commands can write. They
-are separate controls. `sandbox: true` requests terminal write containment;
-`false` removes only containment ctrlyoke added and never disables a sandbox
-enabled in the harness's own settings. When absent, the value inherits from
-`defaults.sandbox`; if that is also absent, each harness keeps its existing
-behavior. New installations do not enable the default.
+are separate controls, and `sandbox` takes one of three values:
+
+| Value   | Shown as | What ctrlyoke passes the harness                                                     |
+| ------- | -------- | ------------------------------------------------------------------------------------ |
+| `true`  | On       | Its sandbox flags, set by `sandboxMode`. Fails on a harness that can't sandbox       |
+| `false` | Off      | Its off switch, which also turns off a sandbox enabled in the harness's own settings |
+| `null`  | None     | No sandbox flags at all, so the harness's own settings and `config.toml` decide      |
+
+When a step leaves `sandbox` out, it inherits the workflow's value, then the
+`defaults.sandbox` setting. The shipped default is `false` (Off).
+
+`sandboxMode` sets how strict On is:
+
+- `workspace-write` (the default) lets terminal commands write the workspace,
+  approved external roots, temp directories and the harness's own caches.
+- `read-only` lets them write none of the workspace. Codex runs
+  `-s read-only`, which covers its file edits too. Claude Code denies Bash
+  writes to the workspace; its built-in Write and Edit tools still follow
+  tool permissions.
+
+`sandboxMode` inherits like `sandbox` (step, workflow, `defaults.sandboxMode`)
+and has no effect unless `sandbox` resolves to `true`; diagnostics note a
+`sandboxMode` set where that isn't the case.
 
 Containment covers where terminal commands can write. **ctrlyoke does not
 control network access**: it is set by each harness's own sandbox settings, as
@@ -135,32 +153,42 @@ partial: its Bash commands are contained, but its built-in Write and Edit tools
 can still change outside files when tool permissions allow them (verified on
 macOS with Claude Code 2.1.317). Network policy is separate from these ratings.
 
-| Harness                              | Network when `sandbox: true`                                     | Mapping                                                                                                                                                                        |
-| ------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [Codex](/harnesses/codex-cli)        | Off unless `sandbox_workspace_write` in `config.toml` enables it | Native `-s` sandbox mode; its writable roots include the workspace, approved external roots, temp directories, caches, and the Git common and linked-worktree Git directories. |
-| [Claude Code](/harnesses/claude-cli) | Set by `sandbox.network` in Claude's settings files              | `--settings` enables the Bash sandbox, requires it to be available, and limits its writable roots.                                                                             |
-| Copilot CLI                          | Not supported                                                    | Explicit `true` fails because its per-run sandbox also blocks ctrlyoke's MCP server and hooks.                                                                                 |
-| Antigravity                          | Not supported                                                    | Explicit `true` fails because its sandbox makes the workspace read-only.                                                                                                       |
-| Qwen Code                            | Not supported                                                    | Explicit `true` fails; its available sandbox wraps the whole CLI and its helpers.                                                                                              |
-| OpenCode                             | Not supported                                                    | Explicit `true` fails because no per-run terminal sandbox mapping is available.                                                                                                |
+| Harness                                   | On (`true`)                                                                                       | Off (`false`)                              | Network when On                                                  |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------ | ---------------------------------------------------------------- |
+| [Codex](/harnesses/codex-cli)             | `-s workspace-write` or `-s read-only`, with the workspace's Git directories as writable roots    | `-s danger-full-access`                    | Off unless `sandbox_workspace_write` in `config.toml` enables it |
+| [Claude Code](/harnesses/claude-cli)      | `--settings` turns on the Bash sandbox, requires it to be available and limits where it can write | `--settings` with `sandbox.enabled: false` | Set by `sandbox.network` in Claude's settings files              |
+| [Copilot CLI](/harnesses/copilot-cli)     | Not supported: its sandbox also blocks ctrlyoke's MCP server and hooks                            | `--no-sandbox`                             | —                                                                |
+| [Qwen Code](/harnesses/qwen-cli)          | Not supported: its sandbox wraps the whole CLI and its helpers                                    | `--sandbox=false` and `QWEN_SANDBOX=false` | —                                                                |
+| [Antigravity](/harnesses/antigravity-cli) | Not supported: its sandbox makes the workspace read-only                                          | Nothing to turn off                        | —                                                                |
+| [OpenCode](/harnesses/opencode-cli)       | Not supported: no per-run terminal sandbox is available                                           | Nothing to turn off                        | —                                                                |
 
-An explicit `true` fails the step before launch whenever ctrlyoke cannot honor
-the request. This fail-closed rule applies to unsupported harnesses and any
-other unavailable sandbox. An absent value never fails for this reason.
+A `true` written in the workflow or a step fails the step before launch
+whenever ctrlyoke can't honor it, on an unsupported harness or when the
+sandbox is otherwise unavailable. A `true` inherited from `defaults.sandbox`
+only warns on those harnesses and passes nothing, so you can turn the sandbox
+on everywhere and still run steps on harnesses that can't sandbox.
 
-For example, request containment for every step by setting the workflow default;
-steps can still override it:
+Off and None can't override a policy your administrator manages: a managed
+Claude Code settings file, a Copilot organization policy, or Qwen's
+`tools.executionSandbox` setting still apply.
+
+For example, turn containment on for every step and keep one read-only:
 
 ```yaml
 sandbox: true
 steps:
+  - name: review
+    prompt: Review the code and report problems without changing anything.
+    sandboxMode: read-only
   - name: install
     prompt: Install the project dependencies.
 ```
 
-A workspace `defaults.sandbox: false` waits for your approval before it applies
-unless your own value is also `false`, because on Codex it removes the sandbox
-that inherit would apply. A workspace `true` applies without asking.
+A workspace `defaults.sandbox` that is less contained than your own value
+(`false` or `null` while yours is `true`, or `false` while yours is `null`)
+waits for your approval before it applies. So does a workspace
+`defaults.sandboxMode: workspace-write` while yours is `read-only`. A more
+contained workspace value applies without asking.
 
 ## Which level wins
 
@@ -221,14 +249,14 @@ attaches, which it receives as that server's `disabled_tools`. It can't enforce
 an entry for a server configured only in Codex's own `config.toml`, a wildcard
 tool name, or a shell pattern.
 
-| Harness                                   | `dangerouslyAllowAll`                            | `allowAll`                                                                          | `custom`                                                                                                                           |
-| ----------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| [Copilot CLI](/harnesses/copilot-cli)     | `--yolo`                                         | `--allow-all-tools` plus `--deny-tool`                                              | `--allow-tool` plus `--deny-tool`                                                                                                  |
-| [Claude Code](/harnesses/claude-cli)      | `--dangerously-skip-permissions`                 | `--permission-mode bypassPermissions --tools default` plus `--disallowedTools`      | Headless: `--permission-mode dontAsk`; interactive: `--permission-mode default`; both use `--allowedTools` and `--disallowedTools` |
-| [Codex](/harnesses/codex-cli)             | `--dangerously-bypass-approvals-and-sandbox`     | `--sandbox workspace-write --ask-for-approval on-request` plus MCP `disabled_tools` | `-s` and `-a` from the `permissions.codex*` settings, plus MCP `disabled_tools`; allow list ignored                                |
-| [OpenCode](/harnesses/opencode-cli)       | no permission block (OpenCode's own defaults)    | allow everything, plus the deny list                                                | ask for everything, allow the allow list, deny the deny list                                                                       |
-| [Qwen Code](/harnesses/qwen-cli)          | `-y`                                             | `--approval-mode auto-edit` plus `--exclude-tools`                                  | `--approval-mode default` with `--allowed-tools` and `--exclude-tools`                                                             |
-| [Antigravity](/harnesses/antigravity-cli) | `--dangerously-skip-permissions` (lists ignored) | `--settings` with `always-proceed` and the deny list                                | `--settings` with allow and deny lists; allowed command rules match the whole command line                                         |
+| Harness                                   | `dangerouslyAllowAll`                            | `allowAll`                                                                     | `custom`                                                                                                                           |
+| ----------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| [Copilot CLI](/harnesses/copilot-cli)     | `--yolo`                                         | `--allow-all-tools` plus `--deny-tool`                                         | `--allow-tool` plus `--deny-tool`                                                                                                  |
+| [Claude Code](/harnesses/claude-cli)      | `--dangerously-skip-permissions`                 | `--permission-mode bypassPermissions --tools default` plus `--disallowedTools` | Headless: `--permission-mode dontAsk`; interactive: `--permission-mode default`; both use `--allowedTools` and `--disallowedTools` |
+| [Codex](/harnesses/codex-cli)             | `-a never`                                       | `-a on-request` plus MCP `disabled_tools`                                      | `-a on-request` plus MCP `disabled_tools`; allow list ignored                                                                      |
+| [OpenCode](/harnesses/opencode-cli)       | no permission block (OpenCode's own defaults)    | allow everything, plus the deny list                                           | ask for everything, allow the allow list, deny the deny list                                                                       |
+| [Qwen Code](/harnesses/qwen-cli)          | `-y`                                             | `--approval-mode auto-edit` plus `--exclude-tools`                             | `--approval-mode default` with `--allowed-tools` and `--exclude-tools`                                                             |
+| [Antigravity](/harnesses/antigravity-cli) | `--dangerously-skip-permissions` (lists ignored) | `--settings` with `always-proceed` and the deny list                           | `--settings` with allow and deny lists; allowed command rules match the whole command line                                         |
 
 Antigravity command allow rules match the entire raw command line. A command
 chain containing an allowed command plus anything else is not allowed piecemeal.
@@ -249,12 +277,11 @@ The deny list is translated to Claude's syntax and the allow list is left out.
 
 OpenCode receives its permissions through `OPENCODE_CONFIG_CONTENT` rather than
 flags; see [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#opencode-cli).
-Codex's sandbox and approval policy for `custom` mode come from the
-`permissions.codexSandboxMode` and `permissions.codexApprovalPolicy` settings, under
-**Settings → Workflow Defaults → Permissions → Codex sandbox**. Under
-`sandbox: true` the sandbox mode sets how strict Codex is in every permission
-mode, clamped to `workspace-write`.
-A workspace value that makes either setting less restrictive than your user value waits for approval through the VS Code prompt or `ctrlyoke trust-workspace-settings`. A narrower workspace value applies without asking.
+Codex's `-a` approval flag is passed only in interactive runs; `codex exec`
+never asks. Its `-s` sandbox flag comes from [`sandbox`](#sandboxing) alone, in
+every permission mode, so a denied `write` or `shell` is reported as not
+enforced rather than turning the sandbox read-only. Use `sandboxMode: read-only`
+for that.
 
 Claude Code's `custom` mode uses `dontAsk` in headless runs, which denies tools
 that are not pre-approved, and the `default` mode in interactive runs, which
@@ -271,9 +298,10 @@ enforces each list.
 
 When a workflow's steps run on different harnesses, the Permissions tab shows a
 note under each list naming the harnesses that won't enforce it. The Sandbox row
-shows an error when the selected harness can't sandbox. An explicit
-`sandbox: true` on an unsupported harness is an error in compatibility diagnostics and in Dry Run;
-launch also fails closed. A step with a permission mismatch records a
+shows an error when the selected harness can't sandbox. A `sandbox: true`
+written in the workflow or step is an error on an unsupported harness in
+compatibility diagnostics and Dry Run, and launch fails closed; one inherited
+from `defaults.sandbox` is a warning. A step with a permission mismatch records a
 compatibility warning when it starts. A
 list the mode ignores never warns: `dangerouslyAllowAll` skips both lists, and
 `allowAll` skips the allow list.

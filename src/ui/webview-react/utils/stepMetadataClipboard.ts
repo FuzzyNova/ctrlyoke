@@ -284,6 +284,12 @@ export function buildStepMetadataClipboardText({
         (value) => String(value)
       ),
       resolvedLine(
+        "sandboxMode",
+        step.sandboxMode,
+        workflowProperties.sandboxMode ?? globalSettings.sandboxMode,
+        (value) => String(value)
+      ),
+      resolvedLine(
         "endCondition",
         step.endCondition,
         workflowProperties.endCondition ?? globalSettings.defaultEndCondition,

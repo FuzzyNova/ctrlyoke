@@ -117,7 +117,7 @@ describe("DefaultsPermissionsPage compatibility summary", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the default sandbox setting and Codex containment details", () => {
+  it("renders the default sandbox and sandbox mode settings", () => {
     render(
       <DefaultsPermissionsPage
         settings={createSettings()}
@@ -127,19 +127,17 @@ describe("DefaultsPermissionsPage compatibility summary", () => {
       />
     );
 
-    expect(screen.getByText("Codex sandbox")).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "These settings control how strict Codex is when contained."
-      )
-    ).toBeInTheDocument();
-    // Unset is its own state, not "Off": `false` changes Codex's sandbox.
+    expect(screen.queryByText("Codex sandbox")).not.toBeInTheDocument();
+    // Off is the shipped default.
     expect(
       screen.getByRole("button", { name: /property defaults\.sandbox$/ })
-    ).toHaveTextContent("Harness default");
+    ).toHaveTextContent("Off");
+    expect(
+      screen.getByRole("button", { name: /property defaults\.sandboxMode$/ })
+    ).toHaveTextContent("Workspace write");
   });
 
-  it("writes On and Off and clears the setting for Harness default", async () => {
+  it("writes On, Off and None", async () => {
     const user = userEvent.setup();
     const onUpdate = vi.fn();
     const onReset = vi.fn();
@@ -173,7 +171,8 @@ describe("DefaultsPermissionsPage compatibility summary", () => {
     expect(onUpdate).toHaveBeenLastCalledWith("defaults.sandbox", true);
     await choose("Off");
     expect(onUpdate).toHaveBeenLastCalledWith("defaults.sandbox", false);
-    await choose("Harness default");
-    expect(onReset).toHaveBeenCalledWith("defaults.sandbox");
+    await choose("None");
+    expect(onUpdate).toHaveBeenLastCalledWith("defaults.sandbox", null);
+    expect(onReset).not.toHaveBeenCalled();
   });
 });

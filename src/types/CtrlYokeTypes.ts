@@ -43,6 +43,8 @@ import {
   type WorkflowValidationWarningCode,
   type GuardrailStopCode,
   type PriorContextDetail,
+  type SandboxMode,
+  type SandboxRequest,
 } from "./DashboardConstants";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 export type {
@@ -365,8 +367,17 @@ export interface ExecutionProperties {
    */
   toolPermissions?: ToolPermissionsOverride | null;
 
-  /** Terminal-command write containment. Undefined inherits settings/harness behavior. */
-  sandbox?: boolean;
+  /**
+   * Terminal-command containment.
+   * - true: ctrlyoke turns the harness's sandbox on (strictness from sandboxMode)
+   * - false: ctrlyoke turns the harness's sandbox off
+   * - null: ctrlyoke passes no sandbox flags; the harness's own settings apply
+   * - undefined: inherit from workflow/settings
+   */
+  sandbox?: SandboxRequest;
+
+  /** How strict `sandbox: true` is. Undefined inherits from workflow/settings. */
+  sandboxMode?: SandboxMode;
 
   /**
    * Internal-error policy for every phase of the step: pre-condition,
@@ -409,6 +420,7 @@ export const EXECUTION_PROPERTY_KEYS = [
   "additionalArgs",
   "toolPermissions",
   "sandbox",
+  "sandboxMode",
   "errorBehavior",
   "hooks",
 ] as const satisfies readonly (keyof ExecutionProperties)[];

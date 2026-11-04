@@ -61,6 +61,8 @@ const globalSettings: GlobalSettings = {
   defaultErrorBehavior: null,
   defaultEndCondition: null,
   defaultPreCondition: null,
+  sandbox: false,
+  sandboxMode: "workspace-write",
   settingSources: {},
 };
 
@@ -102,7 +104,17 @@ function labels(
 describe("buildStepOverrideChips", () => {
   it("shows an explicit sandbox override", () => {
     expect(labels({ prompt: "p", sandbox: true })).toContain("sandbox: on");
-    expect(labels({ prompt: "p", sandbox: false })).toContain("sandbox: off");
+    expect(labels({ prompt: "p", sandbox: null })).toContain("sandbox: none");
+    // Off is the shipped default, so it only shows against an inherited On.
+    expect(labels({ prompt: "p", sandbox: false })).not.toContain(
+      "sandbox: off"
+    );
+    expect(
+      labels({ prompt: "p", sandbox: false }, { sandbox: true })
+    ).toContain("sandbox: off");
+    expect(labels({ prompt: "p", sandboxMode: "read-only" })).toContain(
+      "sandbox mode: read-only"
+    );
   });
   it("collapses a reply to a session chip plus the values that really differ", () => {
     const chips = buildStepOverrideChips(replyStep, {}, globalSettings);

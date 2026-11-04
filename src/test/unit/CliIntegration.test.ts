@@ -319,6 +319,41 @@ suite("CliIntegration", () => {
       );
     });
 
+    test("forces a restart when the sandbox or its mode changes", () => {
+      const reason = (
+        previous: Partial<ResolvedProperties>,
+        current: Partial<ResolvedProperties>
+      ) =>
+        getTerminalReuseIncompatibilityReason(
+          createRunningTerminalContext(createResolvedProperties(previous)),
+          createResolvedProperties(current),
+          "session-existing"
+        );
+      assert.strictEqual(
+        reason({ sandbox: false }, { sandbox: true }),
+        "sandbox changed"
+      );
+      assert.strictEqual(
+        reason({ sandbox: false }, { sandbox: null }),
+        "sandbox changed"
+      );
+      assert.strictEqual(
+        reason(
+          { sandbox: true, sandboxMode: "workspace-write" },
+          { sandbox: true, sandboxMode: "read-only" }
+        ),
+        "sandbox changed"
+      );
+      // The mode means nothing unless the sandbox is on.
+      assert.strictEqual(
+        reason(
+          { sandbox: false, sandboxMode: "workspace-write" },
+          { sandbox: false, sandboxMode: "read-only" }
+        ),
+        null
+      );
+    });
+
     test("permits terminal reuse when mcpServers changes from absent to null", () => {
       const previous = createResolvedProperties();
       delete (previous as Partial<ResolvedProperties>).mcpServers;
