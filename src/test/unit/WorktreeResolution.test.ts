@@ -153,7 +153,8 @@ suite("WorktreeResolution", () => {
 
     assert.strictEqual(
       settingsSchema.properties.defaults.properties.worktree.$ref,
-      "workflow.json#/$defs/worktreeConfig"
+      // Settings live under /schema/v2/, so the ref names the v1 workflow schema.
+      "../v1/workflow.json#/$defs/worktreeConfig"
     );
     assert.ok(
       workflowSchema.$defs.worktreeConfig.oneOf.some(

@@ -4,6 +4,10 @@ import { EventEmitter } from "events";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
+import {
+  CURRENT_SCHEMA_VERSIONS,
+  PERSISTED_STORES,
+} from "../../utils/PersistedSchemaGuard";
 import { suite, teardown, test } from "mocha";
 
 type SharedWrapper = {
@@ -1489,7 +1493,12 @@ suite("Shared statusline wrappers", function () {
       await createHome();
       const settingsPath = path.join(tempHome, ".ctrlyoke", "settings.json");
       await fs.mkdir(path.dirname(settingsPath), { recursive: true });
-      await fs.writeFile(settingsPath, JSON.stringify({ schemaVersion: 2 }));
+      await fs.writeFile(
+        settingsPath,
+        JSON.stringify({
+          schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.SETTINGS] + 1,
+        })
+      );
 
       const result = await runWrapper(
         script,

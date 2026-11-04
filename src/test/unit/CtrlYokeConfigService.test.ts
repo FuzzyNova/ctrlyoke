@@ -2,6 +2,10 @@ import * as assert from "assert";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import {
+  CURRENT_SCHEMA_VERSIONS,
+  PERSISTED_STORES,
+} from "../../utils/PersistedSchemaGuard";
 import { suite, test, setup, teardown } from "mocha";
 import {
   CtrlYokeConfigService,
@@ -1229,7 +1233,10 @@ suite("FileConfigBackend", () => {
     assert.ok(fs.existsSync(configPath), "config file should be created");
     const content = JSON.parse(fs.readFileSync(configPath, "utf-8"));
     assert.strictEqual(content.defaults?.harness, "claude-cli");
-    assert.strictEqual(content.schemaVersion, 1);
+    assert.strictEqual(
+      content.schemaVersion,
+      CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.SETTINGS]
+    );
     assert.strictEqual(content.$schema, undefined);
   });
 
@@ -1326,7 +1333,7 @@ suite("FileConfigBackend", () => {
   test("reads newer settings best-effort but refuses to write them", async () => {
     const configPath = path.join(tmpDir, "settings.json");
     const original = {
-      schemaVersion: 2,
+      schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.SETTINGS] + 1,
       defaults: { harness: "claude-cli" },
       futureSettings: { retained: true },
     };

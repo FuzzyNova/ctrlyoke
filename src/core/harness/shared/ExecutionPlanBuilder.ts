@@ -185,7 +185,6 @@ export class ExecutionPlanBuilder {
             session.resolvedProperties?.sandboxMode ??
             ConfigurationUtils.getDefaultSandboxMode(),
           requestFromDefaults,
-          cliVersion: await this.deps.provider.getVersion?.(),
           additionalArgs: session.resolvedProperties?.additionalArgs,
         })
       : sandboxRequest === true

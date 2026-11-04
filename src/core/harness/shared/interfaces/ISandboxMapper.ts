@@ -34,7 +34,6 @@ export interface SandboxContext {
    * with a warning instead of refusing to launch.
    */
   requestFromDefaults: boolean;
-  cliVersion?: string;
   additionalArgs?: string;
 }
 

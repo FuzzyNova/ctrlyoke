@@ -17,6 +17,7 @@ import {
   STATUS_LINE_HARNESS_IDS,
   PROMPT_PROPERTIES,
   PERMISSION_MODES,
+  SANDBOX_MODES,
   PANEL_CLIENT_ID,
   type SettingWriteScope,
   type StatusLineHarnessId,
@@ -2129,6 +2130,7 @@ suite("WebviewSettingsSync", () => {
       "errorBehavior",
       "toolPermissions",
       "sandbox",
+      "sandboxMode",
       "endCondition",
       "preCondition",
       "worktree",
@@ -2319,6 +2321,19 @@ suite("WebviewSettingsSync", () => {
           value: true,
           expectedKey: CONFIG_KEYS.DEFAULTS_SANDBOX,
           expectedValue: true,
+        },
+        {
+          // None is a real value, not a reset to the shipped Off.
+          property: PROMPT_PROPERTIES.SANDBOX,
+          value: null,
+          expectedKey: CONFIG_KEYS.DEFAULTS_SANDBOX,
+          expectedValue: null,
+        },
+        {
+          property: PROMPT_PROPERTIES.SANDBOX_MODE,
+          value: SANDBOX_MODES.READ_ONLY,
+          expectedKey: CONFIG_KEYS.DEFAULTS_SANDBOX_MODE,
+          expectedValue: SANDBOX_MODES.READ_ONLY,
         },
         {
           property: PROMPT_PROPERTIES.TOOL_PERMISSIONS,
