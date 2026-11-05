@@ -189,12 +189,18 @@ export class OpenCodeCliProvider implements ICliProvider {
     harnessId: HARNESS_IDS.OPENCODE_CLI,
     displayName: "OpenCode CLI",
     terminalName: "OpenCode",
+    // Fresh installs get OpenCode 2. `opencode.ai/install` and the
+    // `opencode-ai` npm package only ever install OpenCode 1 (the script
+    // refuses 2.x); OpenCode 2 has its own script and `@opencode/cli`.
     installCommand: installCommandFor({
-      posix: "curl -fsSL https://opencode.ai/install | bash",
-      // opencode has no native Windows installer script; of its Windows
-      // options (Scoop, Chocolatey, npm), npm needs no extra package manager.
-      windows: "npm install -g opencode-ai",
+      posix: "curl -fsSL https://opencode.ai/v2/install | bash",
+      // OpenCode has no native Windows installer script, and npm needs no
+      // extra package manager.
+      windows: "npm install -g @opencode/cli",
     }),
+    // Stays on the OpenCode 1 package: `versionPolicy.minimum` is a 1.x
+    // release, and the version-floor and minimum-version scripts look up
+    // and install that release from here.
     npmPackage: "opencode-ai",
     versionPolicy: {
       minimum: "1.3.16",

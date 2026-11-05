@@ -32,21 +32,21 @@ for every harness.
 
 ## Install
 
-Install OpenCode with its install script on macOS and Linux. It has no native Windows installer script, so use npm (or Scoop or Chocolatey) there; OpenCode recommends WSL for the best Windows experience.
+These commands install OpenCode 2. Install OpenCode with its install script on macOS and Linux. It has no native Windows installer script, so use npm there.
 
 macOS and Linux:
 
 ```bash
-curl -fsSL https://opencode.ai/install | bash
+curl -fsSL https://opencode.ai/v2/install | bash
 ```
 
 Windows (PowerShell):
 
 ```powershell
-npm install -g opencode-ai
+npm install -g @opencode/cli
 ```
 
-Homebrew (`brew install anomalyco/tap/opencode`), Scoop (`scoop install opencode`), and Chocolatey (`choco install opencode`) also work.
+Homebrew (`brew install anomalyco/tap/opencode-v2`) also installs OpenCode 2. ctrlyoke still supports OpenCode 1, so an existing OpenCode 1 install (from `https://opencode.ai/install`, the `opencode-ai` npm package, Scoop or Chocolatey) keeps working.
 
 See [OpenCode's install guide](https://opencode.ai/docs/) for other install methods.
 
