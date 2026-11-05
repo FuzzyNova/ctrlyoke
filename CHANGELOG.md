@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Support OpenCode 2 alongside OpenCode 1 (still from 1.3.16). On OpenCode 2,
+  ctrlyoke starts each run with its own private OpenCode server
+  (`--standalone`) instead of the shared background service, so the run's
+  permissions, MCP servers and completion plugin apply only to it. A resumed
+  interactive step passes its prompt on the command line, which OpenCode 2
+  honours.
 - Add the workflow `sandbox` property and `defaults.sandbox` setting to control
   terminal write containment independently of tool approval: On (`true`), Off
   (`false`, the default) or None (`null`, pass no sandbox flags so the

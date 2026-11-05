@@ -36,18 +36,21 @@ suite("CLI workflow property overrides", () => {
       PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`,
     };
 
+    // Only turn launches are logged: providers also probe `--version` (OpenCode
+    // does before launching, to pick its CLI generation), which says
+    // nothing about which harness ran the step.
     for (const executable of ["copilot", "opencode"]) {
       if (process.platform === "win32") {
         await fs.writeFile(
           path.join(bin, `${executable}.cmd`),
-          `@echo off\r\necho ${executable}>>"%CTRLYOKE_FAKE_HARNESS_LOG%"\r\nif /i "%~1"=="--version" (echo fake version&exit /b 0)\r\necho {"type":"result","sessionId":"fake-session","content":"ok"}\r\nexit /b 0\r\n`,
+          `@echo off\r\nif /i "%~1"=="--version" (echo fake version&exit /b 0)\r\necho ${executable}>>"%CTRLYOKE_FAKE_HARNESS_LOG%"\r\necho {"type":"result","sessionId":"fake-session","content":"ok"}\r\nexit /b 0\r\n`,
           "utf8"
         );
       } else {
         const script = path.join(bin, executable);
         await fs.writeFile(
           script,
-          `#!/bin/sh\nprintf '%s\\n' '${executable}' >> "$CTRLYOKE_FAKE_HARNESS_LOG"\ncase "$1" in --version) echo 'fake version';; *) echo '{"type":"result","sessionId":"fake-session","content":"ok"}';; esac\nexit 0\n`,
+          `#!/bin/sh\ncase "$1" in --version) echo 'fake version';; *) printf '%s\\n' '${executable}' >> "$CTRLYOKE_FAKE_HARNESS_LOG"; echo '{"type":"result","sessionId":"fake-session","content":"ok"}';; esac\nexit 0\n`,
           "utf8"
         );
         await fs.chmod(script, 0o755);

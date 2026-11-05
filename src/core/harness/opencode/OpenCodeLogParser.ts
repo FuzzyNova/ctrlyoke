@@ -23,6 +23,8 @@ import {
 import {
   mapOpenCodeToolPartToCliEvent,
   accumulateOpenCodeStepTokens,
+  normalizeOpenCodeToolPart,
+  openCodeStepTotal,
 } from "./OpenCodeEventMapper";
 import {
   OPENCODE_EVENT_TYPES,
@@ -32,7 +34,12 @@ import {
   OPENCODE_TOOL_NAMES,
   OPENCODE_TOOL_STATUS,
   OPENCODE_SUBAGENT_RECORD_TYPES,
+  OPENCODE_EXPORT_COMMANDS,
+  OPENCODE_SUBAGENT_TOOL_NAMES,
+  OPENCODE_V2_CONTENT_TYPES,
+  OPENCODE_V2_MESSAGE_TYPES,
 } from "./OpenCodeProtocolConstants";
+import { detectOpenCodeV2 } from "./OpenCodeVersion";
 import { Log } from "../../../utils/Log";
 import { resolveCliCommand } from "../shared/CliLauncherResolver";
 import { PollingFsWatcher } from "../shared/FsWatcherHandles";
@@ -78,7 +85,17 @@ async function runOpenCodeExport(
   sessionId: string,
   workspaceRoot?: string
 ): Promise<string> {
-  const command = await resolveCliCommand("opencode", ["export", sessionId]);
+  // OpenCode 2 moved the command to `session export`. It goes through the
+  // shared background service rather than --standalone: export is read-only,
+  // needs none of the launch's environment, and the service reads the same
+  // session store a standalone TUI writes, without a server spawn per poll.
+  const subcommand = (await detectOpenCodeV2())
+    ? OPENCODE_EXPORT_COMMANDS.V2
+    : OPENCODE_EXPORT_COMMANDS.V1;
+  const command = await resolveCliCommand("opencode", [
+    ...subcommand,
+    sessionId,
+  ]);
   const { stdout } = await execFileAsync(command.command, command.args, {
     cwd: workspaceRoot,
     encoding: "utf8",
@@ -96,7 +113,37 @@ async function runOpenCodeExport(
 
 interface OpenCodeExport {
   info: { id: string; [key: string]: unknown };
-  messages: OpenCodeExportMessage[];
+  messages: Array<OpenCodeExportMessage | OpenCodeV2ExportMessage>;
+}
+
+/**
+ * An OpenCode 2 `session export` message: flat, typed by `type`, with assistant
+ * output in `content[]` and the step's finish/tokens on the message itself.
+ * Content items carry no ids of their own.
+ */
+interface OpenCodeV2ExportMessage {
+  id: string;
+  type: string;
+  time?: { created?: number; completed?: number };
+  text?: string;
+  content?: Array<Record<string, any>>;
+  finish?: string;
+  tokens?: Record<string, unknown>;
+  cost?: number;
+  model?: { id?: string; providerID?: string };
+  error?: unknown;
+  retry?: { attempt?: number; error?: unknown };
+  status?: string;
+  reason?: string;
+}
+
+function isOpenCodeV2ExportMessage(
+  message: OpenCodeExportMessage | OpenCodeV2ExportMessage
+): message is OpenCodeV2ExportMessage {
+  return (
+    !("info" in message && isObject(message.info)) &&
+    typeof (message as OpenCodeV2ExportMessage).type === "string"
+  );
 }
 
 interface OpenCodeExportMessage {
@@ -361,8 +408,7 @@ export class OpenCodeLogParser extends BaseLogParser {
       const tokens = (event as Record<string, any>).part?.tokens as
         Record<string, any> | undefined;
       if (tokens !== undefined) {
-        const total =
-          typeof tokens.total === "number" ? tokens.total : undefined;
+        const total = openCodeStepTotal(tokens);
         if (total !== undefined) {
           this.liveLastStepTotal = total;
         }
@@ -553,12 +599,13 @@ export class OpenCodeLogParser extends BaseLogParser {
    * completes), never as a `subtask`.
    */
   private registerTaskSpawn(event: BaseCliEvent): void {
-    const part = (event as Record<string, any>).part as
+    const rawPart = (event as Record<string, any>).part as
       Record<string, any> | undefined;
+    const part = rawPart ? normalizeOpenCodeToolPart(rawPart) : undefined;
     const isTaskSpawn =
       event.type === OPENCODE_EVENT_TYPES.SUBTASK ||
       (event.type === OPENCODE_EVENT_TYPES.TOOL_USE &&
-        part?.tool === OPENCODE_TOOL_NAMES.TASK);
+        OPENCODE_SUBAGENT_TOOL_NAMES.has(part?.tool));
     const childSessionId = part?.state?.metadata?.sessionId;
     if (
       !isTaskSpawn ||
@@ -628,7 +675,8 @@ export class OpenCodeLogParser extends BaseLogParser {
         if (part.type === OPENCODE_PART_TYPES.STEP_FINISH) return [];
         if (part.type === OPENCODE_PART_TYPES.TOOL) {
           if (
-            part.tool === OPENCODE_TOOL_NAMES.TASK &&
+            typeof part.tool === "string" &&
+            OPENCODE_SUBAGENT_TOOL_NAMES.has(part.tool) &&
             typeof part.state?.metadata?.sessionId === "string" &&
             typeof part.callID === "string"
           ) {
@@ -898,6 +946,12 @@ export class OpenCodeLogParser extends BaseLogParser {
     const newEvents: BaseCliEvent[] = [];
 
     for (const message of exportData.messages) {
+      if (isOpenCodeV2ExportMessage(message)) {
+        newEvents.push(
+          ...this.extractNewEventsFromV2Message(message, exportData.info.id)
+        );
+        continue;
+      }
       const messageTimestamp = message.info.time?.created ?? Date.now();
 
       // User messages carry no displayable AI output, but their `text` parts
@@ -953,6 +1007,131 @@ export class OpenCodeLogParser extends BaseLogParser {
     }
 
     return newEvents;
+  }
+
+  /**
+   * Convert one OpenCode 2 export message into the same JSONL-style events
+   * `opencode run --format json` emits, skipping anything already emitted.
+   *
+   * Content items have no ids, so each is keyed by message id and position;
+   * OpenCode appends content and never reorders it. A text or reasoning item
+   * is only final once a later item follows it or the message completes, and
+   * a tool item once its state is completed or error, matching the
+   * partial-data rule isPartCompleted() applies to OpenCode 1 parts.
+   */
+  private extractNewEventsFromV2Message(
+    message: OpenCodeV2ExportMessage,
+    sessionID: string
+  ): BaseCliEvent[] {
+    const events: BaseCliEvent[] = [];
+    const created = message.time?.created ?? Date.now();
+    const claim = (key: string): boolean => {
+      if (this.seenPartIds.has(key)) return false;
+      this.seenPartIds.add(key);
+      return true;
+    };
+
+    if (message.type === OPENCODE_V2_MESSAGE_TYPES.USER) {
+      if (message.text?.trim() && claim(message.id)) {
+        events.push({
+          type: OPENCODE_EVENT_TYPES.USER_TEXT,
+          sessionID,
+          timestamp: created,
+          text: message.text.trim(),
+        });
+      }
+      return events;
+    }
+
+    if (message.type === OPENCODE_V2_MESSAGE_TYPES.COMPACTION) {
+      if (message.status === OPERATION_STATUS.COMPLETED && claim(message.id)) {
+        events.push({
+          type: OPENCODE_EVENT_TYPES.COMPACTION,
+          sessionID,
+          timestamp: created,
+          part: { auto: message.reason !== COMPACTION_TRIGGERS.MANUAL },
+        });
+      }
+      return events;
+    }
+
+    if (message.type !== OPENCODE_V2_MESSAGE_TYPES.ASSISTANT) {
+      return events;
+    }
+
+    const completed = message.time?.completed !== undefined;
+    const content = message.content ?? [];
+    content.forEach((item, index) => {
+      const key = `${message.id}:${index}`;
+      if (this.seenPartIds.has(key)) return;
+      if (item.type === OPENCODE_V2_CONTENT_TYPES.TOOL) {
+        const status = item.state?.status;
+        if (
+          status !== OPERATION_STATUS.COMPLETED &&
+          status !== OPENCODE_TOOL_STATUS.ERROR
+        ) {
+          return;
+        }
+        claim(key);
+        events.push({
+          type: OPENCODE_EVENT_TYPES.TOOL_USE,
+          sessionID,
+          timestamp: item.time?.created ?? created,
+          part: normalizeOpenCodeToolPart(item),
+        });
+        return;
+      }
+      const isText = item.type === OPENCODE_V2_CONTENT_TYPES.TEXT;
+      const isReasoning = item.type === OPENCODE_V2_CONTENT_TYPES.REASONING;
+      if (!isText && !isReasoning) return;
+      if (!completed && index === content.length - 1) return;
+      claim(key);
+      events.push({
+        type: isText ? OPENCODE_EVENT_TYPES.TEXT : CLI_EVENT_TYPES.THINKING,
+        sessionID,
+        timestamp: item.time?.created ?? created,
+        part: { text: item.text },
+      });
+    });
+
+    if (
+      message.retry &&
+      claim(`${message.id}:retry:${message.retry.attempt}`)
+    ) {
+      events.push({
+        type: OPENCODE_EVENT_TYPES.RETRY,
+        sessionID,
+        timestamp: created,
+        part: {
+          attempt: message.retry.attempt,
+          error: getOpenCodeErrorMessage(message.retry.error),
+        },
+      });
+    }
+
+    if (completed && claim(`${message.id}:finish`)) {
+      if (message.error !== undefined) {
+        events.push({
+          type: OPENCODE_EVENT_TYPES.ERROR,
+          sessionID,
+          timestamp: message.time?.completed ?? created,
+          error: message.error,
+        });
+      }
+      events.push({
+        type: OPENCODE_EVENT_TYPES.STEP_FINISH,
+        sessionID,
+        timestamp: message.time?.completed ?? created,
+        ...(message.model?.id ? { model: message.model.id } : {}),
+        part: {
+          reason: message.finish,
+          tokens: message.tokens,
+          cost: message.cost,
+        },
+      });
+    }
+
+    return events;
   }
 
   /**
@@ -1100,10 +1279,15 @@ export class OpenCodeLogParser extends BaseLogParser {
   }
 }
 
+/**
+ * OpenCode 1 errors are `{ name, data: { message } }`; OpenCode 2 errors are
+ * `{ type, message }`.
+ */
 function getOpenCodeErrorMessage(error: unknown): string | undefined {
   const details = error as
-    { name?: unknown; data?: { message?: unknown } } | undefined;
-  const message = details?.data?.message ?? details?.name;
+    | { name?: unknown; message?: unknown; data?: { message?: unknown } }
+    | undefined;
+  const message = details?.data?.message ?? details?.message ?? details?.name;
   return typeof message === "string" && message.trim()
     ? message.trim()
     : undefined;

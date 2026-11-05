@@ -27,9 +27,12 @@ import {
 } from "../../types/DashboardConstants";
 import { normalizeAntigravityMcpServerId } from "../../types/ToolPermissionUtils";
 import {
+  OPENCODE_EXPORT_COMMANDS,
   OPENCODE_MESSAGE_ROLES,
   OPENCODE_PART_TYPES,
+  OPENCODE_V2_MESSAGE_TYPES,
 } from "../../core/harness/opencode/OpenCodeProtocolConstants";
+import { detectOpenCodeV2 } from "../../core/harness/opencode/OpenCodeVersion";
 import { getAntigravitySettingsPath } from "../../core/harness/shared/StatuslineManager";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import {
@@ -143,9 +146,19 @@ function readSingleRunSessionId(runsRoot: string): string {
   return sessionId;
 }
 
-/** The first user text part OpenCode stored for `sessionId`, via export. */
-function readOpenCodeFirstUserText(sessionId: string, cwd: string): string {
-  const exported = spawnSync("opencode", ["export", sessionId], {
+/**
+ * The first user text OpenCode stored for `sessionId`, via export. OpenCode 1
+ * runs `export` and stores `{ info: { role }, parts }`; OpenCode 2 runs
+ * `session export` and stores flat `{ type: "user", text }` messages.
+ */
+async function readOpenCodeFirstUserText(
+  sessionId: string,
+  cwd: string
+): Promise<string> {
+  const subcommand = (await detectOpenCodeV2())
+    ? OPENCODE_EXPORT_COMMANDS.V2
+    : OPENCODE_EXPORT_COMMANDS.V1;
+  const exported = spawnSync("opencode", [...subcommand, sessionId], {
     cwd,
     encoding: "utf8",
     shell: process.platform === "win32",
@@ -155,13 +168,25 @@ function readOpenCodeFirstUserText(sessionId: string, cwd: string): string {
   const stdout = exported.stdout;
   const transcript = JSON.parse(stdout.slice(stdout.indexOf("{"))) as {
     messages: Array<{
-      info: { role: string };
-      parts: Array<{ type: string; text?: string }>;
+      info?: { role: string };
+      parts?: Array<{ type: string; text?: string }>;
+      type?: string;
+      text?: string;
     }>;
   };
   const text = transcript.messages
-    .find((message) => message.info.role === OPENCODE_MESSAGE_ROLES.USER)
-    ?.parts.find((part) => part.type === OPENCODE_PART_TYPES.TEXT)?.text;
+    .map((message) =>
+      message.info
+        ? message.info.role === OPENCODE_MESSAGE_ROLES.USER
+          ? message.parts?.find(
+              (part) => part.type === OPENCODE_PART_TYPES.TEXT
+            )?.text
+          : undefined
+        : message.type === OPENCODE_V2_MESSAGE_TYPES.USER
+          ? message.text
+          : undefined
+    )
+    .find((candidate) => candidate !== undefined);
   assert.ok(text !== undefined, "the exported session has no user text");
   return text;
 }
@@ -727,7 +752,7 @@ suite("Inline harness configuration regression tests", function () {
     // escapes its inner quotes, so a headless prompt passed as an argument
     // reached the model as `"…\"C:\…\work space\notes.md\"…"`. ctrlyoke pipes
     // it on stdin instead, which OpenCode stores verbatim.
-    test("delivers a headless prompt with quoted spaced paths verbatim", function () {
+    test("delivers a headless prompt with quoted spaced paths verbatim", async function () {
       const workspace = path.join(tmpDir, "work space");
       fs.mkdirSync(workspace);
       const notesPath = path.join(workspace, "notes.md");
@@ -753,7 +778,7 @@ suite("Inline harness configuration regression tests", function () {
         if (logAndMaybeSkip("opencode-cli (stdin prompt)", result)) return;
         assertSuccessfulRun("opencode-cli (stdin prompt)", result);
         const sessionId = readSingleRunSessionId(runsRootFor(workspace));
-        userText = readOpenCodeFirstUserText(sessionId, workspace);
+        userText = await readOpenCodeFirstUserText(sessionId, workspace);
       } finally {
         restore();
       }

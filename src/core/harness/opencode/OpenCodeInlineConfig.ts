@@ -19,13 +19,24 @@ import {
   OPENCODE_PROJECT_CONFIG_FILENAMES,
 } from "./OpenCodeProtocolConstants";
 
-export interface OpenCodeLocalMcpServer {
+/**
+ * OpenCode 2 only: by default it exposes MCP tools solely through its Code
+ * Mode tool, so the model never sees `<server>_<tool>` and ctrlyoke's MCP
+ * permission rules and tool-call mapping never match. `false` exposes each
+ * tool directly, as OpenCode 1 always did. Not sent to OpenCode 1, whose
+ * config schema predates the field.
+ */
+interface OpenCodeMcpCodeModeOption {
+  codemode?: false;
+}
+
+export interface OpenCodeLocalMcpServer extends OpenCodeMcpCodeModeOption {
   type: "local";
   command: string[];
   environment?: Record<string, string>;
 }
 
-export interface OpenCodeRemoteMcpServer {
+export interface OpenCodeRemoteMcpServer extends OpenCodeMcpCodeModeOption {
   type: "remote";
   url: string;
   headers?: Record<string, string>;
@@ -241,13 +252,36 @@ function sanitizeMcpStringRecord(
 
 /** The ctrlyoke-owned settings delivered through OpenCode's inline config. */
 export interface OpenCodeInlineConfig {
+  /**
+   * The V1 permission map. OpenCode 2 still accepts it and migrates its keys
+   * (`bash` → `shell`, `task` → `subagent`) in memory.
+   */
   permission?: SettingsJsonPermissionPolicy;
   mcp?: OpenCodeMcpEntries;
-  plugin: string[];
+  /** OpenCode 1: plugin entry files. */
+  plugin?: string[];
+  /**
+   * OpenCode 2: plugin directories. OpenCode 2 skips a configured local plugin
+   * path that names a file, so the V1 `plugin` key cannot carry its entry.
+   */
+  plugins?: string[];
+  /**
+   * OpenCode 2 interactive launches only: the TUI has no `-m` flag, so the
+   * model travels as config. OpenCode 1 and every headless run use `-m`.
+   */
+  model?: string;
 }
+
+/** The plugin slice of the inline config, in the shape the CLI version reads. */
+export type OpenCodeInlinePluginSlice = Pick<
+  OpenCodeInlineConfig,
+  "plugin" | "plugins"
+>;
 
 export interface OpenCodeInlineConfigBuildOptions {
   extensionPath: string;
+  /** Build the OpenCode 2 plugin slice (`plugins: [dir]`). */
+  openCodeV2?: boolean;
   toolPermissions?: ToolPermissionConfig | null;
   permissionCollisionContext?: OpenCodePermissionCollisionContext;
   mcpServerPath?: string;
@@ -272,7 +306,34 @@ export function buildOpenCodeMcpEntries(
   additionalEnv?: Record<string, string>,
   userServers: McpServerConfig[] = [],
   stateRoot?: string,
-  secretOptions?: McpSecretConfigOptions
+  secretOptions?: McpSecretConfigOptions,
+  openCodeV2 = false
+): OpenCodeMcpEntries {
+  const entries = buildMcpEntries(
+    mcpServerPath,
+    workspaceRoot,
+    workingFilePath,
+    additionalEnv,
+    userServers,
+    stateRoot,
+    secretOptions
+  );
+  if (openCodeV2) {
+    for (const entry of Object.values(entries)) {
+      entry.codemode = false;
+    }
+  }
+  return entries;
+}
+
+function buildMcpEntries(
+  mcpServerPath: string | undefined,
+  workspaceRoot: string | undefined,
+  workingFilePath: string | undefined,
+  additionalEnv: Record<string, string> | undefined,
+  userServers: McpServerConfig[],
+  stateRoot: string | undefined,
+  secretOptions: McpSecretConfigOptions | undefined
 ): OpenCodeMcpEntries {
   if (mcpServerPath && !workspaceRoot) {
     throw new Error(

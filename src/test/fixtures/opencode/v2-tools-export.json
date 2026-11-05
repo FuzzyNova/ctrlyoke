@@ -1,0 +1,339 @@
+{
+  "info": {
+    "id": "ses_e539f82b9ffeChWNlWdR7GyDE4",
+    "projectID": "global",
+    "model": {
+      "id": "big-pickle",
+      "providerID": "opencode",
+      "variant": "default"
+    },
+    "cost": 0.0000539,
+    "tokens": {
+      "input": 9706,
+      "output": 245,
+      "reasoning": 0,
+      "cache": {
+        "read": 29568,
+        "write": 0
+      }
+    },
+    "outcome": "succeeded",
+    "time": {
+      "created": 1793893367203,
+      "updated": 1793893378206,
+      "busy": 1793893367839,
+      "idle": 1793893378209
+    },
+    "title": "File editing and readback task",
+    "location": {
+      "directory": "C:/workspace"
+    }
+  },
+  "messages": [
+    {
+      "id": "msg_1ac607dac0013FEKJ1LzmF3Ya7",
+      "time": {
+        "created": 1793893367850
+      },
+      "text": "Do exactly these steps using tools, no questions: 1) run the shell command \"echo probe-ok\" 2) create file b.txt containing \"two\" 3) edit a.txt replacing hello with world 4) read a.txt. Then reply DONE.",
+      "files": [],
+      "type": "user"
+    },
+    {
+      "id": "msg_1ac6080390017nKQdcQ7GTCYSg",
+      "time": {
+        "created": 1793893367872,
+        "streamed": 1793893371487,
+        "completed": 1793893371768
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "big-pickle",
+        "providerID": "opencode",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "I'll run these steps now."
+        },
+        {
+          "type": "tool",
+          "id": "chatcmpl-tool-b14f8d7e1db5642f",
+          "name": "shell",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "command": "echo probe-ok"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "probe-ok\n"
+              }
+            ],
+            "metadata": {
+              "status": "completed",
+              "truncated": false,
+              "exit": 0
+            }
+          },
+          "time": {
+            "created": 1793893371374,
+            "ran": 1793893371477,
+            "completed": 1793893371534
+          }
+        },
+        {
+          "type": "tool",
+          "id": "chatcmpl-tool-a71a49fdbabda3f4",
+          "name": "write",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "path": "b.txt",
+              "content": "two"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Created file successfully: b.txt"
+              }
+            ],
+            "metadata": {
+              "truncated": false
+            }
+          },
+          "time": {
+            "created": 1793893371375,
+            "ran": 1793893371480,
+            "completed": 1793893371503
+          }
+        },
+        {
+          "type": "tool",
+          "id": "chatcmpl-tool-9fb4db87782ec21f",
+          "name": "read",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "path": "a.txt"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Read file a.txt, lines 1-1\n1: hello"
+              }
+            ],
+            "metadata": {
+              "truncated": false
+            }
+          },
+          "time": {
+            "created": 1793893371386,
+            "ran": 1793893371483,
+            "completed": 1793893371506
+          }
+        }
+      ],
+      "snapshot": {
+        "start": "5306007da20a11e4438c066969f1ae82461b6741",
+        "end": "c27d46c7d527d3200ebdb8cd420f4bf00b5fdf81",
+        "files": ["b.txt", "out.jsonl"]
+      },
+      "finish": "tool-calls",
+      "rawFinish": "tool_calls",
+      "cost": 0,
+      "tokens": {
+        "input": 8995,
+        "output": 119,
+        "reasoning": 0,
+        "cache": {
+          "read": 512,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1ac608f83001PTTO9gb2G7vAF6",
+      "time": {
+        "created": 1793893371783,
+        "streamed": 1793893373439,
+        "completed": 1793893373707
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "big-pickle",
+        "providerID": "opencode",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "tool",
+          "id": "chatcmpl-tool-ad813916b3b43708",
+          "name": "edit",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "path": "a.txt",
+              "oldString": "hello",
+              "newString": "world"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Edited a.txt (1 replacement)"
+              }
+            ],
+            "metadata": {
+              "files": [
+                {
+                  "file": "a.txt",
+                  "patch": "Index: a.txt\n===================================================================\n--- a.txt\n+++ a.txt\n@@ -1,1 +1,1 @@\n-hello\n+world\n",
+                  "status": "modified",
+                  "additions": 1,
+                  "deletions": 1
+                }
+              ],
+              "truncated": false
+            }
+          },
+          "time": {
+            "created": 1793893373433,
+            "ran": 1793893373437,
+            "completed": 1793893373451
+          }
+        }
+      ],
+      "snapshot": {
+        "start": "bfcc97593bc9f602a1649db4906e0059b00cfdfb",
+        "end": "fbab745f3d78b64a3300dab64aef77e4ace7c7eb",
+        "files": ["a.txt", "out.jsonl"]
+      },
+      "finish": "tool-calls",
+      "rawFinish": "tool_calls",
+      "cost": 0,
+      "tokens": {
+        "input": 78,
+        "output": 73,
+        "reasoning": 0,
+        "cache": {
+          "read": 9600,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1ac609714001ruoiLiYS1hus8G",
+      "time": {
+        "created": 1793893373720,
+        "streamed": 1793893375662,
+        "completed": 1793893375910
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "big-pickle",
+        "providerID": "opencode",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "tool",
+          "id": "chatcmpl-tool-9153b63c4d1bee43",
+          "name": "read",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "path": "a.txt"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Read file a.txt, lines 1-1\n1: world"
+              }
+            ],
+            "metadata": {
+              "truncated": false
+            }
+          },
+          "time": {
+            "created": 1793893375572,
+            "ran": 1793893375660,
+            "completed": 1793893375665
+          }
+        }
+      ],
+      "snapshot": {
+        "start": "bca9d216de6f8182b0c45c8f1ad4225a632c5f5c",
+        "end": "059ff67c34f60ac3b1f34eaf1bff83de21c951d7",
+        "files": ["out.jsonl"]
+      },
+      "finish": "tool-calls",
+      "rawFinish": "tool_calls",
+      "cost": 0,
+      "tokens": {
+        "input": 40,
+        "output": 39,
+        "reasoning": 0,
+        "cache": {
+          "read": 9728,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1ac609fad0012VcHmIsI5DfUrj",
+      "time": {
+        "created": 1793893375920,
+        "streamed": 1793893377973,
+        "completed": 1793893378206
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "big-pickle",
+        "providerID": "opencode",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "DONE"
+        }
+      ],
+      "snapshot": {
+        "start": "607d4b68098153d695cb4304383404b9eefb3a0c",
+        "end": "49ffd51f5eaca43a51479872f74bf4671d4cf36a",
+        "files": ["out.jsonl"]
+      },
+      "finish": "stop",
+      "rawFinish": "stop",
+      "cost": 0,
+      "tokens": {
+        "input": 104,
+        "output": 4,
+        "reasoning": 0,
+        "cache": {
+          "read": 9728,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1ac60a8a1001zmxYoL2PeCWICB",
+      "time": {
+        "created": 1793893378209
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    }
+  ]
+}

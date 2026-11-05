@@ -23,6 +23,7 @@ import {
 import { startEventLoopStallWatchdog } from "./eventLoopStallWatchdog";
 import { filterTestFiles, readTestSelection } from "./testSelection";
 import { vscodeGetterGuardHooks } from "./vscodeGetterGuard";
+import { setOpenCodeVersionProbe } from "../../core/harness/opencode/OpenCodeVersion";
 
 async function activateExtensionForTests(): Promise<void> {
   const extension = vscode.extensions.all.find(
@@ -67,6 +68,10 @@ function recordElapsedPerFile(
 }
 
 export function run(): Promise<void> {
+  // OpenCode 1 and 2 launch differently. Without this the OpenCode suites
+  // would follow whichever OpenCode the developer has installed; tests that
+  // cover OpenCode 2 opt in with setOpenCodeVersionProbe.
+  setOpenCodeVersionProbe(async () => undefined);
   const selection = readTestSelection(process.env);
   const narrowed = selection.grep !== undefined || selection.files.length > 0;
   // Create the mocha test

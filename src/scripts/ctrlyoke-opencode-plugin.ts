@@ -3,7 +3,15 @@
 // Source: src/scripts/ctrlyoke-opencode-plugin.ts
 // Loaded by OpenCode from the extension installation through inline config.
 //
-// This file must remain TypeScript with ESM import/export syntax.
+// This file must remain TypeScript with ESM import/export syntax. It must
+// export only CtrlYokeHook: OpenCode 1 calls every exported function as a
+// plugin, and object (default) entrypoints need OpenCode 1.18.29+, above
+// ctrlyoke's minimum.
+//
+// OpenCode 2 cannot load this file directly: its plugins are directories that
+// default-export { id, setup }. ctrlyoke-opencode-plugin-v2/index.ts is that
+// entry; it translates OpenCode 2 events and tool hooks into the OpenCode 1
+// shapes handled below, so the behaviour stays in one place.
 //
 // ctrlyoke injects environment variables into the OpenCode process:
 //   CTRLYOKE_NOTIFY_DIR      — absolute path to the notification directory
@@ -120,7 +128,8 @@ const OPENCODE_SESSION_STATUS = {
   IDLE: "idle",
 } as const;
 const OPENCODE_TOOL_PART_TYPE = "tool";
-const OPENCODE_TASK_TOOL = "task";
+/** OpenCode 1 `task` and OpenCode 2 `subagent` spawn a child session. */
+const OPENCODE_SUBAGENT_TOOLS = new Set(["task", "subagent"]);
 const OPENCODE_SUBAGENT_RECORD_TYPES = {
   PART: "part",
   TASK_RUNNING: "task-running",
@@ -666,7 +675,7 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
         } else if (
           part &&
           part?.type === OPENCODE_TOOL_PART_TYPE &&
-          part.tool === OPENCODE_TASK_TOOL &&
+          OPENCODE_SUBAGENT_TOOLS.has(part.tool) &&
           typeof part.sessionID === "string" &&
           typeof part.state?.metadata?.sessionId === "string"
         ) {

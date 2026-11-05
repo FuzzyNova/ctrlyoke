@@ -100,9 +100,10 @@ variable. To avoid permission-key collisions, ctrlyoke reads OpenCode's global c
 the workspace, their `.opencode/` counterparts, and `OPENCODE_CONFIG_DIR`. It never writes these
 files or a workspace `opencode.json`. The plugin is loaded straight from ctrlyoke's install folder.
 
-One fallback writes files: if OpenCode cannot load the plugin from the install folder, ctrlyoke
+One fallback writes files: if OpenCode 1 cannot load the plugin from the install folder, ctrlyoke
 copies it to `.opencode/plugin/ctrlyoke-completion-hook.ts` (with your hooks in
-`.opencode/plugin/ctrlyoke-hooks.json`) and deletes both when the run ends.
+`.opencode/plugin/ctrlyoke-hooks.json`) and deletes both when the run ends. OpenCode 2 has no such
+fallback and never gets workspace files.
 
 ### Qwen Code
 

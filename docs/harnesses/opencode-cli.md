@@ -73,7 +73,7 @@ ctrlyoke uses [`defaults.models["opencode-cli"]`](/reference/settings#defaults-m
 to OpenCode as is, even one the list doesn't show. A value without a `/` is replaced by your
 default, with a warning in the log.
 
-`model: none` passes no `-m` flag, so OpenCode uses the model from its own configuration. See
+`model: none` leaves the model unset, so OpenCode uses the model from its own configuration. See
 [How step properties inherit](/workflows/yaml-format#property-inheritance).
 
 ## Notes
@@ -86,7 +86,9 @@ default, with a warning in the log.
 - The workflow surface is the same as the other CLI harnesses.
 - Tool permissions (`mode`, `allowedTools`, `deniedTools`), MCP servers, and ctrlyoke's completion plugin are delivered per process through `OPENCODE_CONFIG_CONTENT`; ctrlyoke does not write a workspace `opencode.json`. OpenCode's own categories are coarser than tool patterns (for example, `write` and `edit` both map to OpenCode's `edit` permission). See [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#opencode-cli).
 - `permissions.trustedExternalRoots` is not passed to OpenCode; it has no `--add-dir` equivalent.
-- When a step resumes an OpenCode session in a newly launched terminal, OpenCode opens the session and ignores a prompt passed on its command line ([opencode#21829](https://github.com/anomalyco/opencode/issues/21829)). ctrlyoke therefore hands the prompt to its completion plugin in an environment variable, and the plugin submits it once OpenCode has started, so the session appears a moment before the prompt does. If the plugin can't submit it, the step fails with an error instead of waiting for its timeout. Steps that reuse an open terminal are not affected.
+- ctrlyoke works with OpenCode 1 and OpenCode 2. OpenCode 2 normally connects every `opencode` command to one shared background service; ctrlyoke instead starts each run with its own private server (`--standalone`), so that run's permissions, MCP servers and completion plugin don't reach your other OpenCode sessions. Its sessions are still saved where OpenCode keeps all sessions, so they appear in your other OpenCode clients afterwards. If you pass `--server` in `additionalArgs`, ctrlyoke uses that server instead, and the run's per-process settings are not applied there.
+- OpenCode 2.2.5 can start a step's first turn before its MCP servers finish connecting, so that turn may not see MCP tools, ctrlyoke's own included, and the model replies that the tool isn't available. OpenCode has fixed this upstream; until a release includes the fix, rerun the step.
+- On OpenCode 1, when a step resumes a session in a newly launched terminal, OpenCode opens the session and ignores a prompt passed on its command line ([opencode#21829](https://github.com/anomalyco/opencode/issues/21829)). ctrlyoke therefore hands the prompt to its completion plugin in an environment variable, and the plugin submits it once OpenCode has started, so the session appears a moment before the prompt does. If the plugin can't submit it, the step fails with an error instead of waiting for its timeout. OpenCode 2 honours the prompt, so ctrlyoke passes it directly. Steps that reuse an open terminal are not affected.
 - ctrlyoke checks a resumed session by asking OpenCode to export that exact ID.
   If OpenCode reports `Session not found`, the step starts a new session and
   shows a warning in its output.

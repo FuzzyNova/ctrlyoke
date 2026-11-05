@@ -52,30 +52,48 @@ import {
   resolveOpenCodePermissionCollisionContext,
   type OpenCodeInlineConfig,
   type OpenCodeInlineConfigBuildOptions,
+  type OpenCodeInlinePluginSlice,
 } from "./OpenCodeInlineConfig";
 import {
   OPENCODE_CLI_FLAGS,
+  OPENCODE_PLUGIN_PATHS,
   OPENCODE_RESUME_PROMPT_ENV,
   OPENCODE_RESUMED_PROMPT_DELIVERIES,
   type OpenCodeResumedPromptDelivery,
 } from "./OpenCodeProtocolConstants";
+import { detectOpenCodeV2, OPENCODE_VERSION_COMMAND } from "./OpenCodeVersion";
 import { type SessionProbeResult } from "../../../types/DashboardConstants";
 
 /**
- * How a resumed interactive step delivers its prompt.
+ * How a resumed interactive step delivers its prompt on OpenCode 1.
  *
- * OpenCode's TUI ignores `--prompt` when `--session` is also given: it opens
+ * OpenCode 1's TUI ignores `--prompt` when `--session` is also given: it opens
  * the session and waits for input, so the step never starts
- * (anomalyco/opencode#21829, closed "not planned"; fix proposed in
- * anomalyco/opencode#46307). Until a release honours the pair, the ctrlyoke
- * plugin submits the prompt through OpenCode's server instead. Switch this to
- * `ARGUMENT` to go back to `--session … --prompt …` once the fix ships.
+ * (anomalyco/opencode#21829, closed "not planned"). The ctrlyoke plugin submits
+ * the prompt through OpenCode's server instead. The rewritten OpenCode 2 TUI
+ * opens the session with the startup prompt and submits it, and its plugin API
+ * has no `client.session.promptAsync`, so OpenCode 2 always uses `ARGUMENT`
+ * (see resumedPromptDelivery()).
  *
  * Only relaunches are affected: terminal reuse types follow-up prompts into the
  * running TUI and never resumes by argument.
  */
-const OPENCODE_RESUMED_PROMPT_DELIVERY: OpenCodeResumedPromptDelivery =
+const OPENCODE_V1_RESUMED_PROMPT_DELIVERY: OpenCodeResumedPromptDelivery =
   OPENCODE_RESUMED_PROMPT_DELIVERIES.PLUGIN;
+
+/**
+ * Resumed-prompt delivery for a launch. planCliArgs() adds --standalone to
+ * every OpenCode 2 launch except one where the user chose --server; neither
+ * flag exists in OpenCode 1, so either marks an OpenCode 2 launch.
+ */
+function resumedPromptDelivery(
+  baseArgs: readonly string[]
+): OpenCodeResumedPromptDelivery {
+  return baseArgs.includes(OPENCODE_CLI_FLAGS.STANDALONE) ||
+    baseArgs.includes(OPENCODE_V2_SERVER_FLAG)
+    ? OPENCODE_RESUMED_PROMPT_DELIVERIES.ARGUMENT
+    : OPENCODE_V1_RESUMED_PROMPT_DELIVERY;
+}
 
 /** A resumed interactive prompt the plugin submits after OpenCode starts. */
 interface OpenCodeResumePrompt {
@@ -83,6 +101,9 @@ interface OpenCodeResumePrompt {
   model: string | undefined;
   text: string;
 }
+
+/** OpenCode 2's flag for an explicit server; it cannot combine with --standalone. */
+const OPENCODE_V2_SERVER_FLAG = "--server";
 
 /** Value that follows `flag` in `args`, if the flag is present. */
 function flagValue(args: readonly string[], flag: string): string | undefined {
@@ -123,14 +144,22 @@ const OPENCODE_IMAGE_INPUT_CAPABILITY = {
  * - OpenCodeToolPermissionMapper: Returns [] (permissions are config-file driven)
  * - OpenCodeLogParser: Maps OpenCode events for both headless and interactive modes
  *
- * Headless execution:
- *   opencode run "prompt" --format json -m provider/model [-s sessionId]
+ * Headless execution (prompt on stdin):
+ *   opencode run --format json -m provider/model [-s sessionId]               (OpenCode 1)
+ *   opencode run --standalone --format json -m provider/model [-s sessionId]  (OpenCode 2)
  *
  * Interactive execution (with plugin for completion detection):
- *   opencode --prompt "prompt text" -m provider/model
- *   opencode -m provider/model -s sessionId   (prompt submitted by the plugin;
- *                                               see OPENCODE_RESUMED_PROMPT_DELIVERY)
- *   (plugin loaded from the extension installation through inline config)
+ *   opencode --prompt "prompt text" -m provider/model                        (OpenCode 1)
+ *   opencode -m provider/model -s sessionId   (OpenCode 1; prompt submitted by the plugin;
+ *                                               see OPENCODE_V1_RESUMED_PROMPT_DELIVERY)
+ *   opencode --prompt "prompt text" --standalone [-s sessionId]              (OpenCode 2;
+ *                                               model in the inline config)
+ *   (plugin loaded from the extension installation through inline config:
+ *    `plugin: [file]` on OpenCode 1, `plugins: [directory]` on OpenCode 2)
+ *
+ * OpenCode 2 is detected from `--version` (OpenCodeVersion.ts) because these
+ * launch differences cannot be read from output. Output parsing tells the two
+ * generations apart by shape.
  *
  * Session management:
  *   -s <sessionId> — resume existing session (both modes)
@@ -152,7 +181,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     this.logParser.setSubagentSidecar(notifyDir, runId);
   }
   private static readonly CLI_COMMAND = "opencode";
-  static readonly CLI_VERSION_COMMAND = `${OpenCodeCliProvider.CLI_COMMAND} --version`;
+  static readonly CLI_VERSION_COMMAND = OPENCODE_VERSION_COMMAND;
   static readonly CLI_HELP_COMMAND = `${OpenCodeCliProvider.CLI_COMMAND} --help`;
 
   readonly config: HarnessConfig = {
@@ -274,22 +303,44 @@ export class OpenCodeCliProvider implements ICliProvider {
       options.additionalEnv,
       options.userServers,
       options.stateRoot,
-      options.secretOptions
+      options.secretOptions,
+      options.openCodeV2 === true
     );
-    const pluginPath = path.resolve(
-      options.extensionPath,
-      "out",
-      "scripts",
-      "ctrlyoke-opencode-plugin.ts"
-    );
-
     return {
       ...(permission ? { permission } : {}),
       ...(Object.keys(mcpEntries).length > 0 ? { mcp: mcpEntries } : {}),
-      // OpenCode converts absolute paths to file:// URLs itself. Keeping the
-      // path here also avoids having to escape Windows drive letters/spaces.
-      plugin: [pluginPath],
+      ...OpenCodeCliProvider.buildPluginSlice(
+        options.extensionPath,
+        options.openCodeV2 === true
+      ),
     };
+  }
+
+  /** Installed path of the ctrlyoke plugin entry for one CLI generation. */
+  static pluginEntryPath(extensionPath: string, openCodeV2: boolean): string {
+    return path.resolve(
+      extensionPath,
+      "out",
+      "scripts",
+      openCodeV2
+        ? OPENCODE_PLUGIN_PATHS.V2_DIRECTORY
+        : OPENCODE_PLUGIN_PATHS.V1_FILE
+    );
+  }
+
+  /**
+   * OpenCode converts absolute paths to file:// URLs itself. Keeping the path
+   * here also avoids having to escape Windows drive letters/spaces.
+   */
+  private static buildPluginSlice(
+    extensionPath: string,
+    openCodeV2: boolean
+  ): OpenCodeInlinePluginSlice {
+    const entry = OpenCodeCliProvider.pluginEntryPath(
+      extensionPath,
+      openCodeV2
+    );
+    return openCodeV2 ? { plugins: [entry] } : { plugin: [entry] };
   }
 
   /** Convert OpenCode's JSONL stdout into the event vocabulary of OpenCodeLogParser. */
@@ -369,14 +420,25 @@ export class OpenCodeCliProvider implements ICliProvider {
     _workspaceRoots?: readonly string[],
     _approvedExternalRoots?: readonly string[]
   ): Promise<CliProviderPreparation> {
+    const openCodeV2 = await detectOpenCodeV2();
     // The integration is reused across prompts in one workflow. Reset before
     // optional MCP or permission preparation so a later prompt cannot inherit
     // either slice when its workspace or policy is absent.
-    const inlinePlugin = this.buildInlineConfig({
+    const inlinePluginSlice = OpenCodeCliProvider.buildPluginSlice(
       extensionPath,
-    }).plugin;
+      openCodeV2
+    );
 
     const args: string[] = [];
+
+    // Extra CLI flags from additionalArgs (appended before prompt positional arg)
+    const appendTokens = parseArgString(
+      workflowContext?.resolvedProperties?.additionalArgs ?? ""
+    );
+    // OpenCode 2 rejects --standalone together with a user's --server; an
+    // explicit server is the user's choice, and its config is then theirs too.
+    const standalone =
+      openCodeV2 && !appendTokens.includes(OPENCODE_V2_SERVER_FLAG);
 
     // Use resolved properties if available (from PropertyResolver three-tier precedence)
     const resolvedModel = workflowContext?.resolvedProperties?.model;
@@ -413,14 +475,22 @@ export class OpenCodeCliProvider implements ICliProvider {
     // These must come BEFORE -m and -s
     if (!isInteractive) {
       args.push("run");
+    }
+    if (standalone) {
+      args.push(OPENCODE_CLI_FLAGS.STANDALONE);
+    }
+    if (!isInteractive) {
       args.push("--format", "json");
     }
 
-    // Model selection — use resolved property if available
+    // Model selection — use resolved property if available. The OpenCode 2
+    // TUI has no -m flag, so an interactive V2 launch carries it as config.
     const model = this.getModel(resolvedModel);
-    if (model) {
+    const modelAsConfig = openCodeV2 && isInteractive;
+    if (model && !modelAsConfig) {
       args.push(OPENCODE_CLI_FLAGS.MODEL, model);
     }
+    const inlineModel = model && modelAsConfig ? model : undefined;
 
     // Session management — resume with explicit session ID only
     // NOTE: We do NOT use -c (continue last session) because:
@@ -447,10 +517,6 @@ export class OpenCodeCliProvider implements ICliProvider {
       // the execution plan is applied immediately before process start.
     }
 
-    // Extra CLI flags from additionalArgs (appended before prompt positional arg)
-    const appendTokens = parseArgString(
-      workflowContext?.resolvedProperties?.additionalArgs ?? ""
-    );
     if (appendTokens.length > 0) {
       args.push(...appendTokens);
       Log.info(
@@ -464,7 +530,10 @@ export class OpenCodeCliProvider implements ICliProvider {
         {
           description: "Prepare OpenCode inline execution state",
           apply: async () => {
-            this.pendingInlineConfig = { plugin: inlinePlugin };
+            this.pendingInlineConfig = {
+              ...inlinePluginSlice,
+              ...(inlineModel ? { model: inlineModel } : {}),
+            };
             this.setAttachedMcpServerIds([]);
             this.pendingUserHooksEnv = this.serializeUserHooks(userHooks);
             if (model) {
@@ -480,6 +549,7 @@ export class OpenCodeCliProvider implements ICliProvider {
                   this.ensureExternalPluginIsLoadable(
                     workspaceRoot,
                     extensionPath,
+                    openCodeV2,
                     userHooks
                   ),
               },
@@ -510,11 +580,12 @@ export class OpenCodeCliProvider implements ICliProvider {
   /**
    * Build CLI arguments for interactive TUI mode.
    *
-   * opencode --prompt "prompt text" -m model
+   * opencode --prompt "prompt text" -m model          (OpenCode 1)
+   * opencode --prompt "prompt text" --standalone      (OpenCode 2; model in config)
    *
-   * A resumed session (`-s`) omits `--prompt` while
-   * OPENCODE_RESUMED_PROMPT_DELIVERY is `PLUGIN`, and hands the prompt to the
-   * plugin through getInteractiveSpawnEnv() instead.
+   * On OpenCode 1 a resumed session (`-s`) omits `--prompt` and hands the
+   * prompt to the plugin through getInteractiveSpawnEnv() instead; see
+   * OPENCODE_V1_RESUMED_PROMPT_DELIVERY.
    *
    * @param baseArgs Base arguments array (from buildCliArgs with isInteractive=true)
    * @param promptText The prompt text to include
@@ -525,7 +596,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     this.pendingResumePrompt =
       sessionId &&
       promptText &&
-      OPENCODE_RESUMED_PROMPT_DELIVERY ===
+      resumedPromptDelivery(baseArgs) ===
         OPENCODE_RESUMED_PROMPT_DELIVERIES.PLUGIN
         ? {
             sessionId,
@@ -671,7 +742,8 @@ export class OpenCodeCliProvider implements ICliProvider {
       CliProviderUtils.createMcpSecretConfigOptions(
         (name) => `{env:${name}}`,
         secretEnvironment
-      )
+      ),
+      await detectOpenCodeV2()
     );
     return {
       cliArgs: [],
@@ -722,12 +794,20 @@ export class OpenCodeCliProvider implements ICliProvider {
         diagnostics: [],
       };
     }
-    const collisionContext =
-      context.permissionCollisionContext ??
-      (await resolveOpenCodePermissionCollisionContext(
-        context.workspaceRoot,
-        context.environment
-      ));
+    // OpenCode 1 deep-merges each config layer's `permission` map, so a key the
+    // user also wrote would replace ours, and colliding keys are renamed to
+    // novel globs (`bash` → `bash*`). OpenCode 2 instead appends every layer's
+    // rules to one ordered list evaluated last-match-wins, with the inline
+    // config loaded after project files, so ours already win. It also migrates
+    // only the exact V1 keys (`bash` → `shell`), so a renamed `bash*` would
+    // never match `shell` and the rule would silently do nothing.
+    const collisionContext = (await detectOpenCodeV2())
+      ? undefined
+      : (context.permissionCollisionContext ??
+        (await resolveOpenCodePermissionCollisionContext(
+          context.workspaceRoot,
+          context.environment
+        )));
     const policy = toolPermissions
       ? this.toolPermissionMapper.buildPermissionPolicy(
           toolPermissions,
@@ -991,13 +1071,29 @@ export class OpenCodeCliProvider implements ICliProvider {
   private async ensureExternalPluginIsLoadable(
     workspaceRoot: string,
     extensionPath: string,
+    openCodeV2: boolean,
     userHooks?: UserHookConfig[]
   ): Promise<void> {
-    const sourcePath = path.resolve(
+    if (openCodeV2) {
+      // The V2 entry is a directory whose index.ts imports the V1 file beside
+      // it. The workspace fallback below copies a single V1 file, which OpenCode
+      // 2 would not load as a plugin, so there is nothing to fall back to.
+      const entry = path.join(
+        OpenCodeCliProvider.pluginEntryPath(extensionPath, true),
+        "index.ts"
+      );
+      await fs.promises
+        .access(entry, fs.constants.R_OK)
+        .catch((error) =>
+          Log.warn(
+            `[OpenCodeCliProvider] OpenCode 2 plugin entry is not readable at ${entry}; completion will not be detected: ${error}`
+          )
+        );
+      return;
+    }
+    const sourcePath = OpenCodeCliProvider.pluginEntryPath(
       extensionPath,
-      "out",
-      "scripts",
-      "ctrlyoke-opencode-plugin.ts"
+      false
     );
     try {
       await fs.promises.access(sourcePath, fs.constants.R_OK);

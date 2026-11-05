@@ -52,6 +52,7 @@
 !out/schemas/**
 !out/scripts/*.js
 !out/scripts/ctrlyoke-opencode-plugin.ts
+!out/scripts/ctrlyoke-opencode-plugin-v2/index.ts
 !out/server/standalone-shim.js
 !out/server/ctrlyoke-service-worker.js
 !out/server/hosted-error-page.html

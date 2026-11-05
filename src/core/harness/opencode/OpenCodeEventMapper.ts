@@ -22,11 +22,129 @@ import {
 import { CliParseUtils } from "../shared/CliParseUtils";
 import { CliEventMapper, type McpToolHint } from "../shared/CliEventMapper";
 import {
+  OPENCODE_SHELL_TOOL_NAMES,
+  OPENCODE_SUBAGENT_TOOL_NAMES,
   OPENCODE_TOOL_NAMES,
   OPENCODE_TOOL_STATUS,
 } from "./OpenCodeProtocolConstants";
 
 const OPEN_CODE_QUESTION_TOOL = "question";
+
+/**
+ * A step's full context occupancy. OpenCode 1 reports it as `tokens.total`;
+ * OpenCode 2 drops the field, so it is rebuilt from the same parts (input
+ * excludes cache in both generations).
+ */
+export function openCodeStepTotal(
+  tokens: Record<string, any>
+): number | undefined {
+  if (typeof tokens.total === "number") return tokens.total;
+  const parts = [
+    tokens.input,
+    tokens.output,
+    tokens.reasoning,
+    tokens.cache?.read,
+    tokens.cache?.write,
+  ];
+  if (typeof tokens.input !== "number") return undefined;
+  return parts.reduce<number>(
+    (sum, value) => sum + (typeof value === "number" ? value : 0),
+    0
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, any> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Text of an OpenCode 2 tool result's `content` array. */
+function openCodeToolContentText(content: unknown): string | undefined {
+  if (!Array.isArray(content)) return undefined;
+  const text = content
+    .filter((item) => isRecord(item) && typeof item.text === "string")
+    .map((item) => item.text as string)
+    .join("");
+  return text || undefined;
+}
+
+/**
+ * Bring an OpenCode tool part to the OpenCode 1 shape the mapper reads:
+ * `{ tool, callID, state: { status, input, output, error, metadata } }`.
+ *
+ * Three shapes reach here, told apart by their fields rather than by version:
+ * - OpenCode 1 parts: `id` is the part id, `callID` the call id, flat metadata.
+ * - OpenCode 2 `run --format json` parts: `partID` is the part id, `id` the
+ *   call id, and the tool's own metadata is nested in `state.metadata.metadata`.
+ * - OpenCode 2 export content items: `name` instead of `tool`, `id` the call
+ *   id, output in `state.content`, and `state.error` a `{ message }` object.
+ *
+ * OpenCode 2 also names file paths `path` (was `filePath`) and reports a
+ * subagent's child session as `sessionID` (was `sessionId`); both are mapped.
+ */
+export function normalizeOpenCodeToolPart(
+  part: Record<string, any>
+): Record<string, any> {
+  const state = isRecord(part.state) ? part.state : {};
+  const isV2Stream = typeof part.partID === "string";
+  const isV2Export = typeof part.name === "string" && part.tool === undefined;
+  const rawMetadata = isRecord(state.metadata) ? state.metadata : undefined;
+  const metadata =
+    isV2Stream && isRecord(rawMetadata?.metadata)
+      ? rawMetadata.metadata
+      : rawMetadata;
+  const childSessionId =
+    typeof metadata?.sessionId === "string"
+      ? metadata.sessionId
+      : typeof metadata?.sessionID === "string"
+        ? metadata.sessionID
+        : undefined;
+  const error =
+    typeof state.error === "string"
+      ? state.error
+      : isRecord(state.error) && typeof state.error.message === "string"
+        ? state.error.message
+        : undefined;
+  return {
+    ...part,
+    tool: part.tool ?? part.name,
+    callID: part.callID ?? (isV2Stream || isV2Export ? part.id : undefined),
+    state: {
+      ...state,
+      output: state.output ?? openCodeToolContentText(state.content),
+      ...(error !== undefined ? { error } : {}),
+      metadata:
+        metadata || childSessionId
+          ? {
+              ...metadata,
+              ...(childSessionId ? { sessionId: childSessionId } : {}),
+            }
+          : undefined,
+    },
+  };
+}
+
+/** The file path a file tool names, under its OpenCode 1 or 2 key. */
+function openCodeToolPath(input: Record<string, any>): string {
+  return input.filePath ?? input.path ?? input.file_path ?? "";
+}
+
+/**
+ * OpenCode 2's edit metadata lists `files[]` each with a unified `patch`;
+ * OpenCode 1 carried one `filediff.patch`.
+ */
+function openCodeEditPatch(
+  metadata: Record<string, any> | undefined,
+  filePath: string
+): string | undefined {
+  if (typeof metadata?.filediff?.patch === "string") {
+    return metadata.filediff.patch;
+  }
+  const files = Array.isArray(metadata?.files) ? metadata.files : [];
+  const match =
+    files.find((file: any) => isRecord(file) && file.file === filePath) ??
+    (files.length === 1 ? files[0] : undefined);
+  return typeof match?.patch === "string" ? match.patch : undefined;
+}
 
 /**
  * Accumulate token counts from a step_finish event's `tokens` field into a
@@ -63,23 +181,25 @@ export function accumulateOpenCodeStepTokens(
     tokenUsage.reasoningOutputTokens =
       (tokenUsage.reasoningOutputTokens ?? 0) + tokens.reasoning;
   }
-  return typeof tokens.total === "number" ? tokens.total : undefined;
+  return openCodeStepTotal(tokens);
 }
 
 /**
  * Map an OpenCode tool_use part to the appropriate CliEvent.
  *
- * Handles the four built-in OpenCode tools (bash, write, edit, read) plus a
- * catch-all for any other tool calls. Returns undefined only when `part.tool`
- * is absent.
+ * Handles the built-in OpenCode tools (bash/shell, write, edit, read,
+ * task/subagent) plus a catch-all for any other tool calls. Accepts every
+ * shape normalizeOpenCodeToolPart() does. Returns undefined only when the part
+ * names no tool.
  *
  * `timestamp` may be undefined when the event source does not carry one.
  */
 export function mapOpenCodeToolPartToCliEvent(
   timestamp: number | undefined,
-  part: Record<string, any>,
+  rawPart: Record<string, any>,
   attachedMcpServerIds: ReadonlySet<string> = new Set()
 ): CliEvent | undefined {
+  const part = normalizeOpenCodeToolPart(rawPart);
   const toolName = part.tool as string | undefined;
   if (!toolName) return undefined;
 
@@ -95,7 +215,7 @@ export function mapOpenCodeToolPartToCliEvent(
     return mapOpenCodeQuestionPartToCliEvent(timestamp, part, isCompleted);
   }
 
-  if (toolName === OPENCODE_TOOL_NAMES.TASK) {
+  if (OPENCODE_SUBAGENT_TOOL_NAMES.has(toolName)) {
     return {
       type: CLI_EVENT_TYPES.TOOL_CALL,
       timestamp,
@@ -139,34 +259,35 @@ export function mapOpenCodeToolPartToCliEvent(
     };
   }
 
-  switch (toolName) {
-    case OPENCODE_TOOL_NAMES.BASH:
-      return {
-        type: CLI_EVENT_TYPES.BASH_COMMAND,
-        timestamp,
-        data: {
-          command: input.command ?? "",
-          output: isFailed
-            ? (error ?? "")
-            : typeof output === "string"
-              ? output
-              : JSON.stringify(output),
-          exitCode: part.state?.metadata?.exit,
-          ...(isFailed
-            ? {
-                status: OPERATION_STATUS.FAILED,
-                error,
-              }
-            : {}),
-        },
-      };
+  if (OPENCODE_SHELL_TOOL_NAMES.has(toolName)) {
+    return {
+      type: CLI_EVENT_TYPES.BASH_COMMAND,
+      timestamp,
+      data: {
+        command: input.command ?? "",
+        output: isFailed
+          ? (error ?? "")
+          : typeof output === "string"
+            ? output
+            : JSON.stringify(output),
+        exitCode: part.state?.metadata?.exit,
+        ...(isFailed
+          ? {
+              status: OPERATION_STATUS.FAILED,
+              error,
+            }
+          : {}),
+      },
+    };
+  }
 
+  switch (toolName) {
     case OPENCODE_TOOL_NAMES.WRITE:
       return {
         type: CLI_EVENT_TYPES.FILE_WRITE,
         timestamp,
         data: {
-          path: input.filePath ?? input.path ?? input.file_path ?? "",
+          path: openCodeToolPath(input),
           content: input.content ?? "",
           ...(isFailed
             ? {
@@ -180,15 +301,13 @@ export function mapOpenCodeToolPartToCliEvent(
 
     case OPENCODE_TOOL_NAMES.EDIT: {
       // OpenCode's edit metadata carries a ready-made unified diff string
-      // (`filediff.patch`, e.g. `@@ -16,19 +16,19 @@`) with accurate line
-      // offsets — not a before/after content pair. Parsing it with the same
-      // unified-diff parser other harnesses use keeps this single-sourced.
-      const filediff = part.state?.metadata?.filediff;
-      const filePath = input.filePath ?? input.path ?? input.file_path ?? "";
+      // (e.g. `@@ -16,19 +16,19 @@`) with accurate line offsets — not a
+      // before/after content pair. Parsing it with the same unified-diff
+      // parser other harnesses use keeps this single-sourced.
+      const filePath = openCodeToolPath(input);
+      const patch = openCodeEditPatch(part.state?.metadata, filePath);
       const structuredPatch =
-        typeof filediff?.patch === "string"
-          ? CliParseUtils.parseUnifiedDiff(filediff.patch)
-          : undefined;
+        patch !== undefined ? CliParseUtils.parseUnifiedDiff(patch) : undefined;
       return {
         type: CLI_EVENT_TYPES.FILE_EDIT,
         timestamp,
@@ -215,7 +334,7 @@ export function mapOpenCodeToolPartToCliEvent(
         type: CLI_EVENT_TYPES.FILE_READ,
         timestamp,
         data: {
-          path: input.filePath ?? input.path ?? input.file_path ?? "",
+          path: openCodeToolPath(input),
           ...readLineRange(part.state?.metadata?.display),
           ...(isFailed
             ? {

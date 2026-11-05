@@ -35,12 +35,48 @@ export const OPENCODE_PART_TYPES = {
 
 export const OPENCODE_TOOL_NAMES = {
   BASH: TOOL_PERMISSION_CATEGORIES.BASH,
+  /** OpenCode 2 name for the shell tool (OpenCode 1 called it `bash`). */
+  SHELL: "shell",
   WRITE: TOOL_PERMISSION_CATEGORIES.WRITE,
   EDIT: TOOL_PERMISSION_CATEGORIES.EDIT,
   READ: TOOL_PERMISSION_CATEGORIES.READ,
   /** Spawns a subagent in a child session. */
   TASK: "task",
+  /** OpenCode 2 name for the subagent tool (OpenCode 1 called it `task`). */
+  SUBAGENT: "subagent",
 } as const;
+
+/** OpenCode 1 and 2 names for the shell tool. */
+export const OPENCODE_SHELL_TOOL_NAMES: ReadonlySet<string> = new Set([
+  OPENCODE_TOOL_NAMES.BASH,
+  OPENCODE_TOOL_NAMES.SHELL,
+]);
+
+/** OpenCode 1 and 2 names for the tool that spawns a child session. */
+export const OPENCODE_SUBAGENT_TOOL_NAMES: ReadonlySet<string> = new Set([
+  OPENCODE_TOOL_NAMES.TASK,
+  OPENCODE_TOOL_NAMES.SUBAGENT,
+]);
+
+/**
+ * Message `type` values in an OpenCode 2 `session export`. OpenCode 1 exports
+ * `{ info: { role }, parts }` instead; parsers tell the two apart by shape.
+ */
+export const OPENCODE_V2_MESSAGE_TYPES = {
+  USER: "user",
+  ASSISTANT: "assistant",
+  COMPACTION: "compaction",
+} as const;
+
+/** Content item types inside an OpenCode 2 assistant message. */
+export const OPENCODE_V2_CONTENT_TYPES = {
+  TEXT: "text",
+  REASONING: "reasoning",
+  TOOL: "tool",
+} as const;
+
+/** First OpenCode release with the V2 CLI, plugin API and server. */
+export const OPENCODE_V2_MIN_VERSION = "2.0.0";
 
 export const OPENCODE_STEP_FINISH_REASONS = {
   STOP: "stop",
@@ -57,6 +93,29 @@ export const OPENCODE_CLI_FLAGS = {
   MODEL: "-m",
   SESSION: "-s",
   PROMPT: "--prompt",
+  /**
+   * OpenCode 2 only. Without it the CLI attaches to a shared, long-lived
+   * background service that never sees this launch's environment, so the
+   * inline config (plugin, MCP, permissions) and `CTRLYOKE_*` variables would
+   * be lost and one plugin instance would observe every session on the machine.
+   */
+  STANDALONE: "--standalone",
+} as const;
+
+/**
+ * The ctrlyoke plugin as installed under `out/scripts/`: a single file for
+ * OpenCode 1, and a directory for OpenCode 2, whose `index.ts` adapts the V2
+ * plugin API onto the same file's handlers.
+ */
+export const OPENCODE_PLUGIN_PATHS = {
+  V1_FILE: "ctrlyoke-opencode-plugin.ts",
+  V2_DIRECTORY: "ctrlyoke-opencode-plugin-v2",
+} as const;
+
+/** OpenCode 1 `export <id>` vs OpenCode 2 `session export <id>`. */
+export const OPENCODE_EXPORT_COMMANDS = {
+  V1: ["export"],
+  V2: ["session", "export"],
 } as const;
 
 /** OpenCode config filenames, in the load order used for each config directory. */

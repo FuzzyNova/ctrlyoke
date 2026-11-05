@@ -276,14 +276,19 @@ const copyScriptsPlugin = {
         fs.mkdirSync(outScripts, { recursive: true });
       }
 
-      // Copy all script files
+      // Copy all script files, and script directories such as the OpenCode 2
+      // plugin, which OpenCode loads as a directory.
       if (fs.existsSync(srcScripts)) {
-        const files = fs.readdirSync(srcScripts);
-        files.forEach((file) => {
-          const srcFile = path.join(srcScripts, file);
-          const outFile = path.join(outScripts, file);
-          fs.copyFileSync(srcFile, outFile);
-          console.log(`[copy] ${file} -> out/scripts/${file}`);
+        const entries = fs.readdirSync(srcScripts, { withFileTypes: true });
+        entries.forEach((entry) => {
+          const srcFile = path.join(srcScripts, entry.name);
+          const outFile = path.join(outScripts, entry.name);
+          if (entry.isDirectory()) {
+            copyDirRecursive(srcFile, outFile);
+          } else {
+            fs.copyFileSync(srcFile, outFile);
+          }
+          console.log(`[copy] ${entry.name} -> out/scripts/${entry.name}`);
         });
       }
     });

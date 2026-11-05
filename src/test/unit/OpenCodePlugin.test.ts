@@ -23,23 +23,19 @@ async function loadPlugin(
     runId?: string;
     enabledEvents?: string;
     awaitingInputRule?: string;
+    /** Load the OpenCode 2 directory entry instead of the V1 factory. */
+    v2?: boolean;
   } = {}
 ): Promise<{
   plugin: Record<string, (...args: any[]) => unknown>;
   spawnCalls: SpawnCall[];
+  v2?: V2PluginHarness;
 }> {
   const scriptPath = path.resolve(
     __dirname,
     "../../../src/scripts/ctrlyoke-opencode-plugin.ts"
   );
-  const source = fs.readFileSync(scriptPath, "utf8");
-  const compiled = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2020,
-      esModuleInterop: true,
-    },
-  }).outputText;
+  const compiled = transpile(scriptPath);
   const spawnCalls: SpawnCall[] = [];
   const hookChildren: EventEmitter[] = [];
   const module = { exports: {} as Record<string, unknown> };
@@ -108,25 +104,130 @@ async function loadPlugin(
     platform: pluginOptions.platform ?? process.platform,
     cwd: () => path.resolve("."),
   };
-  vm.runInNewContext(compiled, {
+  const sandboxGlobals = {
     Buffer,
     Date,
     JSON,
     Math,
     String,
     Set,
+    Map,
+    Array,
+    AbortController,
     process: processStub,
+    setTimeout,
+    clearTimeout,
+  };
+  vm.runInNewContext(compiled, {
+    ...sandboxGlobals,
     require: mockRequire,
     exports: module.exports,
     module,
-    setTimeout,
-    clearTimeout,
   });
   const factory = module.exports.CtrlYokeHook as (
     context: Record<string, unknown>
   ) => Promise<Record<string, (...args: any[]) => unknown>>;
+  if (pluginOptions.v2) {
+    // The OpenCode 2 entry imports the V1 module above and adapts onto it.
+    const v2Module = { exports: {} as Record<string, unknown> };
+    vm.runInNewContext(transpile(V2_PLUGIN_SOURCE), {
+      ...sandboxGlobals,
+      require: (name: string) =>
+        name === "../ctrlyoke-opencode-plugin"
+          ? module.exports
+          : mockRequire(name),
+      exports: v2Module.exports,
+      module: v2Module,
+    });
+    const v2 = await startV2Plugin(
+      v2Module.exports.default as V2PluginDefinition
+    );
+    return { plugin: {}, spawnCalls, v2 };
+  }
   const plugin = await factory({});
   return { plugin, spawnCalls };
+}
+
+const V2_PLUGIN_SOURCE = path.resolve(
+  __dirname,
+  "../../../src/scripts/ctrlyoke-opencode-plugin-v2/index.ts"
+);
+
+function transpile(scriptPath: string): string {
+  return ts.transpileModule(fs.readFileSync(scriptPath, "utf8"), {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020,
+      esModuleInterop: true,
+    },
+  }).outputText;
+}
+
+interface V2PluginDefinition {
+  id: string;
+  setup(ctx: unknown): Promise<() => void>;
+}
+
+type V2ToolHook = (event: Record<string, unknown>) => unknown;
+
+/** A started OpenCode 2 plugin driven through a fake plugin context. */
+interface V2PluginHarness {
+  id: string;
+  /** Deliver one OpenCode 2 event and wait for the plugin to handle it. */
+  publish(type: string, data: Record<string, unknown>): Promise<void>;
+  toolHooks: Map<string, V2ToolHook>;
+  dispose(): void;
+}
+
+async function startV2Plugin(
+  definition: V2PluginDefinition
+): Promise<V2PluginHarness> {
+  const queue: Array<{ type: string; data: Record<string, unknown> }> = [];
+  let wake: (() => void) | undefined;
+  let signal: AbortSignal | undefined;
+  const toolHooks = new Map<string, V2ToolHook>();
+  const ctx = {
+    event: {
+      subscribe(options: { signal: AbortSignal }) {
+        signal = options.signal;
+        return {
+          async *[Symbol.asyncIterator]() {
+            while (!signal?.aborted) {
+              const next = queue.shift();
+              if (next) {
+                yield next;
+                continue;
+              }
+              await new Promise<void>((resolve) => (wake = resolve));
+            }
+          },
+        };
+      },
+    },
+    tool: {
+      async hook(name: string, callback: V2ToolHook) {
+        toolHooks.set(name, callback);
+      },
+    },
+  };
+  const dispose = await definition.setup(ctx);
+  return {
+    id: definition.id,
+    toolHooks,
+    async publish(type, data) {
+      queue.push({ type, data });
+      wake?.();
+      // Let the subscription loop and the handlers' file writes run.
+      for (let i = 0; i < 20 && queue.length > 0; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    },
+    dispose: () => {
+      dispose();
+      wake?.();
+    },
+  };
 }
 
 suite("OpenCode plugin user hooks", () => {
@@ -430,5 +531,187 @@ suite("OpenCode plugin user hooks", () => {
     } finally {
       await fsPromises.rm(tempDirectory, { recursive: true, force: true });
     }
+  });
+});
+
+suite("OpenCode 2 plugin entry", () => {
+  async function withNotifyDir(
+    run: (notifyDir: string) => Promise<void>
+  ): Promise<void> {
+    const notifyDir = await fsPromises.mkdtemp(
+      path.join(os.tmpdir(), "opencode-v2-plugin-")
+    );
+    try {
+      await run(notifyDir);
+    } finally {
+      await fsPromises.rm(notifyDir, { recursive: true, force: true });
+    }
+  }
+
+  test("default-exports an OpenCode 2 definition with an id and setup", async () => {
+    const { v2 } = await loadPlugin([], { v2: true });
+    assert.strictEqual(v2!.id, "ctrlyoke");
+    assert.deepStrictEqual([...v2!.toolHooks.keys()].sort(), [
+      "execute.after",
+      "execute.before",
+    ]);
+    v2!.dispose();
+  });
+
+  test("writes the start file and exactly one stop per main-session execution", async () => {
+    await withNotifyDir(async (notifyDir) => {
+      const { v2 } = await loadPlugin([], {
+        v2: true,
+        notifyDir,
+        runId: "run-1",
+      });
+      // OpenCode 2 publishes the main session.created before plugins subscribe.
+      await v2!.publish("session.execution.started", { sessionID: "main" });
+      await v2!.publish("session.execution.succeeded", { sessionID: "main" });
+      await v2!.publish("session.execution.interrupted", { sessionID: "main" });
+
+      const start = JSON.parse(
+        await fsPromises.readFile(
+          path.join(notifyDir, "run-1-start.json"),
+          "utf8"
+        )
+      );
+      assert.strictEqual(start.sessionId, "main");
+      const stop = JSON.parse(
+        await fsPromises.readFile(
+          path.join(notifyDir, "main-stop.json"),
+          "utf8"
+        )
+      );
+      assert.strictEqual(stop.status, "completed");
+      assert.strictEqual(stop.runId, "run-1");
+      v2!.dispose();
+    });
+  });
+
+  test("routes subagent child sessions to the sidecar instead of stopping", async () => {
+    await withNotifyDir(async (notifyDir) => {
+      const { v2 } = await loadPlugin([], {
+        v2: true,
+        notifyDir,
+        runId: "run-1",
+      });
+      await v2!.publish("session.execution.started", { sessionID: "main" });
+      await v2!.publish("session.tool.input.started", {
+        sessionID: "main",
+        assistantMessageID: "msg-1",
+        id: "call-1",
+        name: "subagent",
+      });
+      await v2!.publish("session.tool.called", {
+        sessionID: "main",
+        assistantMessageID: "msg-1",
+        id: "call-1",
+        input: { agent: "general", description: "Read", prompt: "Read a.txt" },
+      });
+      await v2!.publish("session.created", {
+        sessionID: "child-1",
+        parentID: "main",
+      });
+      await v2!.publish("session.tool.progress", {
+        sessionID: "main",
+        assistantMessageID: "msg-1",
+        id: "call-1",
+        metadata: { sessionID: "child-1", status: "running" },
+      });
+      await v2!.publish("session.execution.started", { sessionID: "child-1" });
+      await v2!.publish("session.text.ended", {
+        sessionID: "child-1",
+        assistantMessageID: "msg-c1",
+        ordinal: 0,
+        text: "child output",
+      });
+      await v2!.publish("session.execution.succeeded", {
+        sessionID: "child-1",
+      });
+
+      const lines = (
+        await fsPromises.readFile(
+          path.join(notifyDir, "run-1-subagents.jsonl"),
+          "utf8"
+        )
+      )
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+      assert.deepStrictEqual(
+        lines.map((line) => line.kind),
+        ["task-running", "part", "child-idle"]
+      );
+      assert.strictEqual(lines[0].childSessionId, "child-1");
+      assert.strictEqual(lines[0].part.callID, "call-1");
+      assert.strictEqual(lines[0].part.tool, "subagent");
+      assert.strictEqual(lines[1].part.text, "child output");
+      assert.strictEqual(
+        fs.existsSync(path.join(notifyDir, "child-1-stop.json")),
+        false
+      );
+      v2!.dispose();
+    });
+  });
+
+  test("fails the step through the error file when an execution fails", async () => {
+    await withNotifyDir(async (notifyDir) => {
+      const { v2 } = await loadPlugin([], {
+        v2: true,
+        notifyDir,
+        runId: "run-1",
+      });
+      await v2!.publish("session.execution.started", { sessionID: "main" });
+      await v2!.publish("session.execution.failed", {
+        sessionID: "main",
+        error: { type: "provider", message: "quota exceeded" },
+      });
+      const error = JSON.parse(
+        await fsPromises.readFile(
+          path.join(notifyDir, "main-error.json"),
+          "utf8"
+        )
+      );
+      assert.strictEqual(error.status, "error");
+      assert.strictEqual(error.rawHookData.error.message, "quota exceeded");
+      v2!.dispose();
+    });
+  });
+
+  test("passes OpenCode 2 tool hook events to user hooks in the documented shape", async () => {
+    const { v2, spawnCalls } = await loadPlugin(
+      [
+        { event: "preToolUse", command: "node pre.js" },
+        { event: "postToolUse", command: "node post.js" },
+      ],
+      { v2: true }
+    );
+    await v2!.toolHooks.get("execute.before")!({
+      tool: "shell",
+      sessionID: "main",
+      id: "call-1",
+      input: { command: "pwd" },
+    });
+    await v2!.toolHooks.get("execute.after")!({
+      tool: "shell",
+      sessionID: "main",
+      id: "call-1",
+      input: { command: "pwd" },
+      status: "completed",
+      result: {
+        content: [{ type: "text", text: "/repo\n" }],
+        metadata: { exit: 0 },
+      },
+    });
+    const before = JSON.parse(spawnCalls[0].options.input as string);
+    assert.strictEqual(before.hook_event_name, "preToolUse");
+    assert.strictEqual(before.tool_name, "shell");
+    assert.strictEqual(before.session_id, "main");
+    assert.deepStrictEqual(before.tool_input, { command: "pwd" });
+    const after = JSON.parse(spawnCalls[1].options.input as string);
+    assert.strictEqual(after.hook_event_name, "postToolUse");
+    assert.strictEqual(after.tool_output.output, "/repo\n");
+    v2!.dispose();
   });
 });
