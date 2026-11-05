@@ -319,15 +319,17 @@ export class CliProviderUtils {
    *
    * Collects every workspace-folder root plus every external root currently
    * authorized via `permissions.trustedExternalRoots` (see
-   * dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md) — the sole mechanism for
+   * dev/implemented/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md) — the sole mechanism for
    * granting a harness sandbox access to a directory outside the workspace.
    * Workspace roots stay distinct from external roots so external-root
    * policy can decide explicitly which roots a harness may receive.
    *
    * Single source of truth for `--add-dir` assembly — used identically by
-   * Claude, Codex, Copilot, and Antigravity. Qwen and OpenCode don't call
-   * this (no `--add-dir` equivalent); they pass external file references
-   * directly and rely on their own trust mechanisms.
+   * Claude, Codex, Copilot, and Antigravity. `ExecutionPlanBuilder` also
+   * passes the same list (minus the primary root) as
+   * `PermissionContext.externalDirectories`, which OpenCode turns into
+   * `external_directory` allow rules. Qwen has no equivalent and relies on
+   * its own trust mechanisms.
    *
    * @param workspaceRoot - Primary workspace root for resolving relative paths
    * @param workspaceRoots - Every open workspace-folder root

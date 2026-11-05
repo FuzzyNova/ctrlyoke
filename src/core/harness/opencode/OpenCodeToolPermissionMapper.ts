@@ -20,6 +20,7 @@ import {
   containsOpenCodeConfigSubstitution,
   type OpenCodePermissionCollisionContext,
 } from "./OpenCodeInlineConfig";
+import { OPENCODE_PERMISSION_KEYS } from "./OpenCodeProtocolConstants";
 
 const MAX_PERMISSION_KEY_SUFFIX_ATTEMPTS = 1000;
 
@@ -157,20 +158,38 @@ export class OpenCodeToolPermissionMapper
    * are also present.
    */
   buildPermissionPolicy(
-    config: ToolPermissionConfig,
-    collisionContext?: OpenCodePermissionCollisionContext
+    config: ToolPermissionConfig | undefined,
+    collisionContext?: OpenCodePermissionCollisionContext,
+    externalDirectories: readonly string[] = []
   ): SettingsJsonPermissionPolicy | undefined {
-    if (
-      config.mode === PERMISSION_MODES.NONE ||
-      config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL
-    ) {
-      return undefined;
-    }
-
-    const topLevelKeys = collisionContext?.topLevelKeys ?? new Set<string>();
     const emittedTopLevelKeys = new Set<string>();
     const emittedToolKeys = new Map<string, string>();
     const emittedNestedKeys = new Map<string, Map<string, string>>();
+    const appendExternalDirectories = (
+      policy: SettingsJsonPermissionPolicy
+    ): void =>
+      this.appendExternalDirectoryRules(
+        policy,
+        externalDirectories,
+        collisionContext,
+        emittedTopLevelKeys,
+        emittedToolKeys,
+        emittedNestedKeys
+      );
+
+    if (
+      !config ||
+      config.mode === PERMISSION_MODES.NONE ||
+      config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL
+    ) {
+      // These modes leave OpenCode's own rules in charge, but trusted roots are
+      // still granted, as `--add-dir` is to the other harnesses in every mode.
+      const policy: SettingsJsonPermissionPolicy = {};
+      appendExternalDirectories(policy);
+      return Object.keys(policy).length > 0 ? policy : undefined;
+    }
+
+    const topLevelKeys = collisionContext?.topLevelKeys ?? new Set<string>();
     const catchAllKey = this.allocateKey(
       "*",
       topLevelKeys,
@@ -207,6 +226,8 @@ export class OpenCodeToolPermissionMapper
         emittedNestedKeys
       );
     }
+    // Before the deny rules, so a denial still wins.
+    appendExternalDirectories(policy);
     this.appendRules(
       policy,
       config.deniedTools,
@@ -217,6 +238,42 @@ export class OpenCodeToolPermissionMapper
       emittedNestedKeys
     );
     return policy;
+  }
+
+  /**
+   * Allow OpenCode's `external_directory` check for each directory and
+   * everything below it. OpenCode matches the check's `<dir>/*` resource with
+   * `*` crossing `/`, normalizing `\` and ignoring case on Windows. It has no
+   * escape for `*` or `?`, so a directory containing either is skipped rather
+   * than widened into a pattern.
+   */
+  private appendExternalDirectoryRules(
+    policy: SettingsJsonPermissionPolicy,
+    directories: readonly string[],
+    collisionContext: OpenCodePermissionCollisionContext | undefined,
+    emittedTopLevelKeys: Set<string>,
+    emittedToolKeys: Map<string, string>,
+    emittedNestedKeys: Map<string, Map<string, string>>
+  ): void {
+    for (const directory of directories) {
+      const normalized = directory.replace(/\\/g, "/").replace(/\/+$/, "");
+      if (/[*?]/.test(normalized)) {
+        Log.warn(
+          `[OpenCodePermissionMapper] Not granting external directory containing a wildcard character: ${directory}`
+        );
+        continue;
+      }
+      this.appendRule(
+        policy,
+        OPENCODE_PERMISSION_KEYS.EXTERNAL_DIRECTORY,
+        `${normalized}/*`,
+        "allow",
+        collisionContext,
+        emittedTopLevelKeys,
+        emittedToolKeys,
+        emittedNestedKeys
+      );
+    }
   }
 
   private appendRules(

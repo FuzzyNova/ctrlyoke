@@ -391,9 +391,20 @@ export class ExecutionPlanBuilder {
           this.deps.provider.toolPermissionMapper.formatMcpToolName
         )
       : session.resolvedProperties?.toolPermissions;
+    // The same directories `--add-dir` harnesses receive, minus the launch
+    // directory itself (the first entry).
+    const externalDirectories = workspaceRoot
+      ? CliProviderUtils.getWorkspaceDirs(
+          workspaceRoot,
+          this.deps.getWorkspaceRoots(),
+          approvedExternalRoots,
+          workflowContext
+        ).slice(1)
+      : [];
     const permissionContext: PermissionContext = {
       isInteractive,
       workspaceRoot,
+      externalDirectories,
       workingFilePath: session.workflowContext?.workingFilePath,
       environment: CliProviderUtils.buildProcessEnv(),
       additionalArgs: session.resolvedProperties?.additionalArgs,

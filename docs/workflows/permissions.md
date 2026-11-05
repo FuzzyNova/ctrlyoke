@@ -320,9 +320,10 @@ is under an approved trusted external root. Links that resolve back inside the
 workspace continue to work. To allow a deliberate link to another folder, add
 its target folder to `permissions.trustedExternalRoots`.
 
-An approved root also reaches the harness. Copilot CLI, Claude Code, Codex and
-Antigravity each receive it as `--add-dir`, so the agent can read and edit
-files there. OpenCode and Qwen Code have no such option and don't receive it.
+An approved root also reaches the harness, so the agent can read and edit
+files there. Copilot CLI, Claude Code, Codex and Antigravity each receive it as
+`--add-dir`, and OpenCode as an `external_directory` allow rule. Qwen Code has
+no such option and doesn't receive it.
 
 Roots come from three places:
 

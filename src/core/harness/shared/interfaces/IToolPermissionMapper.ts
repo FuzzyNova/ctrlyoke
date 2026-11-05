@@ -41,6 +41,14 @@ export interface PermissionContext {
   readonly cliVersion?: string;
   /** The step's resolved MCP servers, for harnesses that filter MCP tools per server (Codex). */
   readonly mcpServers?: readonly (string | McpServerConfig)[] | null;
+  /**
+   * Directories outside the launch directory that the harness may use: the
+   * other workspace folders plus every approved trusted external root. The
+   * same set `--add-dir` harnesses receive (`CliProviderUtils.getWorkspaceDirs()`
+   * without the primary root), for harnesses that grant directories through
+   * permission rules instead (OpenCode's `external_directory`).
+   */
+  readonly externalDirectories?: readonly string[];
   /** Existing permission keys used by config-driven harnesses for collision safety. */
   readonly permissionCollisionContext?: {
     readonly topLevelKeys: ReadonlySet<string>;

@@ -112,6 +112,15 @@ export const OPENCODE_PLUGIN_PATHS = {
   V2_DIRECTORY: "ctrlyoke-opencode-plugin-v2",
 } as const;
 
+/**
+ * OpenCode permission keys that are not tools. `external_directory` gates any
+ * tool's access to a path outside the launch directory: OpenCode 1 asks by
+ * default, OpenCode 2 allows.
+ */
+export const OPENCODE_PERMISSION_KEYS = {
+  EXTERNAL_DIRECTORY: "external_directory",
+} as const;
+
 /** OpenCode 1 `export <id>` vs OpenCode 2 `session export <id>`. */
 export const OPENCODE_EXPORT_COMMANDS = {
   V1: ["export"],

@@ -246,6 +246,21 @@ function qwenMcpWorkflow(
   };
 }
 
+/** Run a `ctrlyoke trust-*` command non-interactively in `tmpDir`. */
+function runTrustCommand(tmpDir: string, args: string[]): void {
+  const cliPath = path.resolve(__dirname, "../../cli.js");
+  const result = spawnSync(
+    "node",
+    [cliPath, ...args, "--cwd", tmpDir, "--yes"],
+    { cwd: tmpDir, encoding: "utf8" }
+  );
+  assert.strictEqual(
+    result.status,
+    0,
+    `Could not run ${args[0]}: ${result.stderr}`
+  );
+}
+
 function trustWorkflowSecretGrants(
   workflow: PromptFile,
   tmpDir: string,
@@ -253,17 +268,22 @@ function trustWorkflowSecretGrants(
 ): void {
   const workflowPath = path.join(tmpDir, `${label}-test.ctrlyoke.json`);
   fs.writeFileSync(workflowPath, JSON.stringify(workflow, null, 2));
-  const cliPath = path.resolve(__dirname, "../../cli.js");
-  const result = spawnSync(
-    "node",
-    [cliPath, "trust-secret-grants", workflowPath, "--cwd", tmpDir, "--yes"],
-    { cwd: tmpDir, encoding: "utf8" }
+  runTrustCommand(tmpDir, ["trust-secret-grants", workflowPath]);
+}
+
+/**
+ * Request `roots` in the workspace's `permissions.trustedExternalRoots` and
+ * approve them. Workspace roots, not a workflow's own: those are not yet
+ * honoured in real runs (dev/bugs/backlog/workflow-trusted-external-roots-lost-in-real-runs.md).
+ */
+function trustWorkspaceExternalRoots(tmpDir: string, roots: string[]): void {
+  const settingsDir = path.join(tmpDir, ".ctrlyoke");
+  fs.mkdirSync(settingsDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(settingsDir, "settings.json"),
+    JSON.stringify({ permissions: { trustedExternalRoots: roots } }, null, 2)
   );
-  assert.strictEqual(
-    result.status,
-    0,
-    `Could not approve harness secret grant: ${result.stderr}`
-  );
+  runTrustCommand(tmpDir, ["trust-external-roots"]);
 }
 
 function buildStreamableHttpMcpServerScript(): string {
@@ -506,6 +526,50 @@ suite("Inline harness configuration regression tests", function () {
   });
 
   suite(OPENCODE, function () {
+    for (const trusted of [true, false]) {
+      test(`custom mode ${trusted ? "reads under" : "cannot read outside"} a trusted external root`, function () {
+        // OpenCode gates paths outside its launch directory with
+        // `external_directory`, which ctrlyoke grants for trusted roots the
+        // way it passes `--add-dir` to other harnesses.
+        const outsideDir = makeTempDir("ctrlyoke-opencode-external-");
+        try {
+          const token = `external-${Date.now().toString(36)}`;
+          const secretPath = path.join(outsideDir, "secret.txt");
+          fs.writeFileSync(secretPath, `${token}\n`);
+          const label = `opencode-external-${trusted ? "trusted" : "untrusted"}`;
+          const workflow: PromptFile = {
+            harness: OPENCODE,
+            model: HARNESS_MODELS[OPENCODE],
+            toolPermissions: {
+              mode: "custom",
+              allowedTools: [],
+              deniedTools: [],
+            },
+            steps: [
+              {
+                name: "opencode-external-read",
+                prompt: [
+                  `Use the read tool once to read ${normalizedPath(secretPath)} and reply with its exact content.`,
+                  "If the read is rejected, say so, do not retry, and do not try another tool.",
+                ].join(" "),
+              },
+            ],
+          };
+          if (trusted) trustWorkspaceExternalRoots(tmpDir, [outsideDir]);
+          const result = runWorkflowFile(workflow, tmpDir, label);
+          if (logAndMaybeSkip(`opencode-cli (${label})`, result)) return;
+          assertSuccessfulRun(`opencode-cli (${label})`, result);
+          assert.strictEqual(
+            result.stdout.includes(token),
+            trusted,
+            `opencode-cli (${label}) stdout: ${result.stdout}`
+          );
+        } finally {
+          removeTempDir(outsideDir, () => {});
+        }
+      });
+    }
+
     for (const permissionCase of [
       {
         name: "allow proceeds",

@@ -312,6 +312,54 @@ suite("ExecutionPlanBuilder", () => {
     assert.deepStrictEqual(receivedModes, [true, false]);
   });
 
+  test("grants OpenCode the --add-dir directories through external_directory", async () => {
+    const workspaceRoot = await fsPromises.mkdtemp(
+      path.join(os.tmpdir(), "plan-opencode-external-")
+    );
+    try {
+      const otherFolder = path.join(workspaceRoot, "..", "other-folder");
+      const trustedRoot = path.join(workspaceRoot, "..", "trusted-root");
+      const provider = new OpenCodeCliProvider();
+      const builder = new ExecutionPlanBuilder({
+        provider,
+        getWorkspaceRoot: () => workspaceRoot,
+        getWorkspaceRoots: () => [workspaceRoot, otherFolder],
+        getApprovedExternalRoots: () => [trustedRoot],
+        getExtensionPath: () => "extension",
+        getExecutionMode: () => "headless",
+        getInstallHookNotificationEvents: () => [],
+        resolveCliCommand: async (command, args) => ({
+          command,
+          args: [...args],
+          displayCommand: [command, ...args].join(" "),
+          launcherKind: "direct",
+        }),
+      });
+      const plan = await builder.plan(createSession("headless"));
+      const permissionMutation = plan.mutations.find(
+        (mutation) =>
+          mutation.description ===
+          "Set OpenCode inline permission configuration"
+      );
+      assert.ok(permissionMutation);
+      await permissionMutation.apply();
+
+      const config = JSON.parse(
+        provider.getHeadlessSpawnEnv().OPENCODE_CONFIG_CONTENT!
+      );
+      const slash = (dir: string) => path.resolve(dir).replace(/\\/g, "/");
+      const granted = Object.keys(config.permission.external_directory).map(
+        (pattern) => pattern.toLowerCase()
+      );
+      assert.deepStrictEqual(granted, [
+        `${slash(otherFolder)}/*`.toLowerCase(),
+        `${slash(trustedRoot)}/*`.toLowerCase(),
+      ]);
+    } finally {
+      await fsPromises.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("omits OpenCode image flags interactively and keeps them headlessly", async () => {
     const provider = new OpenCodeCliProvider();
     const plans = [];

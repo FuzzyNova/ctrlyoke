@@ -474,6 +474,59 @@ suite("ToolPermissionMappers", () => {
   suite("OpenCodeToolPermissionMapper", () => {
     const mapper = new OpenCodeToolPermissionMapper();
 
+    suite("external directories", () => {
+      const dirs = ["C:\\shared\\specs\\", "/srv/logs"];
+
+      test("custom grants each directory before the deny rules", () => {
+        const policy = mapper.buildPermissionPolicy(
+          cfg(PERMISSION_MODES.CUSTOM, [], ["shell"]),
+          undefined,
+          dirs
+        );
+        assert.deepStrictEqual(policy?.external_directory, {
+          "C:/shared/specs/*": "allow",
+          "/srv/logs/*": "allow",
+        });
+        const keys = Object.keys(policy ?? {});
+        assert.ok(keys.indexOf("external_directory") < keys.indexOf("bash"));
+      });
+
+      for (const mode of [
+        PERMISSION_MODES.NONE,
+        PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
+      ]) {
+        test(`${mode} grants only the directories`, () => {
+          assert.deepStrictEqual(
+            mapper.buildPermissionPolicy(cfg(mode), undefined, dirs),
+            {
+              external_directory: {
+                "C:/shared/specs/*": "allow",
+                "/srv/logs/*": "allow",
+              },
+            }
+          );
+          assert.strictEqual(
+            mapper.buildPermissionPolicy(cfg(mode), undefined, []),
+            undefined
+          );
+        });
+      }
+
+      test("no tool policy still grants the directories", () => {
+        assert.deepStrictEqual(
+          mapper.buildPermissionPolicy(undefined, undefined, ["/srv/logs"]),
+          { external_directory: { "/srv/logs/*": "allow" } }
+        );
+      });
+
+      test("skips a directory OpenCode would read as a wildcard", () => {
+        assert.strictEqual(
+          mapper.buildPermissionPolicy(undefined, undefined, ["/srv/log*s"]),
+          undefined
+        );
+      });
+    });
+
     suite("prepare", () => {
       test("dangerouslyAllowAll → no CLI args", async () => {
         const args = await mapperArgs(

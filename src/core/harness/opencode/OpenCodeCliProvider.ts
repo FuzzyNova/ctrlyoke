@@ -296,12 +296,11 @@ export class OpenCodeCliProvider implements ICliProvider {
   buildInlineConfig(
     options: OpenCodeInlineConfigBuildOptions
   ): OpenCodeInlineConfig {
-    const permission = options.toolPermissions
-      ? this.toolPermissionMapper.buildPermissionPolicy(
-          options.toolPermissions,
-          options.permissionCollisionContext
-        )
-      : undefined;
+    const permission = this.toolPermissionMapper.buildPermissionPolicy(
+      options.toolPermissions ?? undefined,
+      options.permissionCollisionContext,
+      options.externalDirectories
+    );
     const mcpEntries = buildOpenCodeMcpEntries(
       options.mcpServerPath,
       options.workspaceRoot,
@@ -768,7 +767,8 @@ export class OpenCodeCliProvider implements ICliProvider {
 
   /**
    * Accumulate OpenCode's permission policy before process launch.
-   * `none` and `dangerouslyAllowAll` intentionally emit no permission slice.
+   * `none` and `dangerouslyAllowAll` emit only the `external_directory`
+   * grants for trusted roots, leaving every other rule to OpenCode.
    */
   async prepareToolPermissions(
     toolPermissions: ToolPermissionConfig | null | undefined,
@@ -786,7 +786,11 @@ export class OpenCodeCliProvider implements ICliProvider {
     toolPermissions: ToolPermissionConfig | null | undefined,
     context: PermissionContext
   ): Promise<ToolPermissionApplication> {
-    if (toolPermissions === null || toolPermissions === undefined) {
+    const externalDirectories = context.externalDirectories ?? [];
+    if (
+      (toolPermissions === null || toolPermissions === undefined) &&
+      externalDirectories.length === 0
+    ) {
       return {
         cliArgs: [],
         mutations: [
@@ -814,16 +818,15 @@ export class OpenCodeCliProvider implements ICliProvider {
           context.workspaceRoot,
           context.environment
         )));
-    const policy = toolPermissions
-      ? this.toolPermissionMapper.buildPermissionPolicy(
-          toolPermissions,
-          collisionContext
-        )
-      : undefined;
-    const application = await this.toolPermissionMapper.prepare(
-      toolPermissions,
-      context
+    // Trusted roots are granted in every mode, as `--add-dir` is elsewhere.
+    const policy = this.toolPermissionMapper.buildPermissionPolicy(
+      toolPermissions ?? undefined,
+      collisionContext,
+      externalDirectories
     );
+    const application = toolPermissions
+      ? await this.toolPermissionMapper.prepare(toolPermissions, context)
+      : { cliArgs: [], diagnostics: [] };
     return {
       ...application,
       mutations: [

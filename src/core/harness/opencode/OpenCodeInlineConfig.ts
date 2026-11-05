@@ -284,6 +284,8 @@ export interface OpenCodeInlineConfigBuildOptions {
   openCodeV2?: boolean;
   toolPermissions?: ToolPermissionConfig | null;
   permissionCollisionContext?: OpenCodePermissionCollisionContext;
+  /** Directories granted through `external_directory` (see PermissionContext). */
+  externalDirectories?: readonly string[];
   mcpServerPath?: string;
   workspaceRoot?: string;
   workingFilePath?: string;
