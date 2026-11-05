@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A phone or browser that loses control of a terminal by disconnecting gets it back when it reopens the workflow, as long as no one typed in the terminal on the device that took over meanwhile (usually the VS Code panel). Reopening the app no longer means pressing **Take Control** again.
 - Declare Codex terminal sandbox support exact; Claude remains partial because its built-in Write and Edit tools can write outside the Bash sandbox (verified on macOS with Claude Code 2.1.317).
 - **Codex no longer runs in a sandbox by default.** Its sandbox now follows the new `sandbox` property, whose default is Off, instead of the permission mode. Headless and interactive `allowAll` steps that used to run in Codex's `workspace-write` sandbox now run with `-s danger-full-access`. Set `defaults.sandbox: true` (Settings → Workflow Defaults → Permissions → Sandbox) to keep them contained, or `null` (None) to let your `config.toml` decide.
 - Codex's approval flag now follows the permission mode alone: `dangerouslyAllowAll` passes `-a never` (instead of `--dangerously-bypass-approvals-and-sandbox`), and `allowAll` and `custom` pass `-a on-request`.

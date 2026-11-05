@@ -136,6 +136,12 @@ harness and its window size sets the terminal's size. The others show a
 **View Only** badge and mirror the terminal at the controller's size. Click
 **Take Control** on any device to move control there.
 
+When the controlling device disconnects, for example because you closed the app
+on your phone, a device that is showing the workflow takes control. If no one
+types in the terminal there before the first device reconnects, control goes
+back to that device when it opens the workflow again, so you don't have to
+click **Take Control** each time you reopen the app.
+
 A browser that reconnects replays the most recent output of each terminal
 (50 KB by default, `terminal.replayBufferKb`).
 

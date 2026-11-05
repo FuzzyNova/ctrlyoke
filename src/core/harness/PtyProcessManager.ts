@@ -1,6 +1,7 @@
 import { execSync } from "child_process";
 import type { IPty } from "node-pty";
 import { Log } from "../../utils/Log";
+import { isTerminalAutoResponse } from "../../utils/TerminalAutoResponse";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import {
   secretRedactionService,
@@ -500,6 +501,20 @@ export class PtyProcessManager {
    * workflowId rather than introducing per-session controllers.
    */
   private workflowRunControllers = new Map<string, string>();
+  /**
+   * workflowId → clientId that lost control of the workflow's terminals only
+   * because it disconnected (e.g. a phone PWA closed or was suspended). While an
+   * entry exists, whoever holds those terminals picked them up passively by
+   * auto-claiming the empty slot and has not used them, so the departed client
+   * gets control back when it views the workflow again (`claimOnReplay`).
+   * Workflow-scoped like `workflowRunControllers`, so a later step's PTY, which
+   * inherits the passive holder as its controller, is handed back too.
+   *
+   * Cleared by anything that shows the holder is really there: real input
+   * (`noteControllerInput`), taking control from another client, or starting a
+   * new run (`setPendingController`).
+   */
+  private disconnectedControllers = new Map<string, string>();
 
   /**
    * Per-client terminal viewport size, used as the *spawn* size for new PTYs.
@@ -593,6 +608,8 @@ export class PtyProcessManager {
    */
   setPendingController(workflowId: string, clientId: string): void {
     this.pendingControllers.set(workflowId, clientId);
+    // Starting a run is a deliberate act; the new run's controller keeps it.
+    this.clearDisconnectedController(workflowId, "new run started");
   }
 
   private consumePendingController(workflowId: string): string | undefined {
@@ -630,6 +647,21 @@ export class PtyProcessManager {
   ): PtySession | undefined {
     const session = this.sessions.get(sessionId);
     if (session) {
+      // Filling an empty slot is the passive auto-claim and leaves a pending
+      // hand-back alone. Taking a slot another client holds is "Take Control",
+      // which is deliberate, so the departed client loses its claim to it.
+      const isTakeover =
+        session.controllerClientId !== undefined &&
+        session.controllerClientId !== clientId;
+      const disconnected = this.disconnectedControllers.get(session.workflowId);
+      if (isTakeover || disconnected === clientId) {
+        this.clearDisconnectedController(
+          session.workflowId,
+          disconnected === clientId
+            ? "departed controller is back"
+            : `control taken by ${clientId.slice(0, 12)}`
+        );
+      }
       session.controllerClientId = clientId;
       this.workflowRunControllers.set(session.workflowId, clientId);
     }
@@ -637,8 +669,75 @@ export class PtyProcessManager {
   }
 
   /**
+   * Called as a workflow's terminals are replayed to a client. The client gets
+   * every session no one holds, and, when it is the departed controller that
+   * the current holder only picked them up for passively (see
+   * `disconnectedControllers`), every session of the workflow back.
+   * Returns the sessions whose controller changed so the caller broadcasts them.
+   */
+  claimOnReplay(workflowId: string, clientId: string): PtySession[] {
+    const isHandback =
+      this.disconnectedControllers.get(workflowId) === clientId;
+    const changed: PtySession[] = [];
+    for (const session of this.getSessionsForWorkflow(workflowId)) {
+      if (session.controllerClientId === clientId) continue;
+      if (session.controllerClientId !== undefined && !isHandback) continue;
+      if (session.controllerClientId !== undefined) {
+        Log.debug(
+          `[PtyProcessManager] handing ${session.id.slice(0, 8)} (wf=${workflowId.slice(0, 8)}) back from ` +
+            `${session.controllerClientId.slice(0, 12)} to returning controller ${clientId.slice(0, 12)}`
+        );
+      }
+      session.controllerClientId = clientId;
+      changed.push(session);
+    }
+    if (changed.length > 0) {
+      this.workflowRunControllers.set(workflowId, clientId);
+    }
+    if (isHandback) {
+      this.clearDisconnectedController(
+        workflowId,
+        "departed controller is back"
+      );
+    }
+    return changed;
+  }
+
+  /**
+   * Record input the controller sent to a session. Real keystrokes or clicks
+   * mean the holder is using the terminal, so a pending hand-back to a departed
+   * client is cancelled. xterm's automatic replies to TUI queries and focus
+   * changes do not count (`isTerminalAutoResponse`).
+   */
+  noteControllerInput(sessionId: string, data: string): void {
+    const session = this.sessions.get(sessionId);
+    if (!session || !this.disconnectedControllers.has(session.workflowId)) {
+      return;
+    }
+    if (isTerminalAutoResponse(data)) return;
+    this.clearDisconnectedController(
+      session.workflowId,
+      `input from ${session.controllerClientId?.slice(0, 12) ?? "unowned"}`
+    );
+  }
+
+  private clearDisconnectedController(
+    workflowId: string,
+    reason: string
+  ): void {
+    const clientId = this.disconnectedControllers.get(workflowId);
+    if (clientId === undefined) return;
+    this.disconnectedControllers.delete(workflowId);
+    Log.debug(
+      `[PtyProcessManager] dropped hand-back of wf=${workflowId.slice(0, 8)} to ${clientId.slice(0, 12)}: ${reason}`
+    );
+  }
+
+  /**
    * Clear the controller for all sessions owned by the given client (e.g. on disconnect).
    * Returns the affected sessions so callers can broadcast the change.
+   * Remembers the client per workflow so it gets control back on return if the
+   * client that auto-claims the empty slot never uses it.
    */
   releaseControllerForClient(clientId: string): PtySession[] {
     const affected: PtySession[] = [];
@@ -646,6 +745,11 @@ export class PtyProcessManager {
       if (session.controllerClientId === clientId) {
         session.controllerClientId = undefined;
         affected.push(session);
+        // Keep an earlier departed client's claim: nobody has used the
+        // terminal since it left, or the claim would already be gone.
+        if (!this.disconnectedControllers.has(session.workflowId)) {
+          this.disconnectedControllers.set(session.workflowId, clientId);
+        }
       }
     }
     // Drop the disconnected client's remembered viewport so the map doesn't grow
@@ -1032,6 +1136,7 @@ export class PtyProcessManager {
     this.sessions.clear();
     this.streamingFlushes.clear();
     this.workflowRunControllers.clear();
+    this.disconnectedControllers.clear();
     Log.debug("[PtyProcessManager] disposed — all PTY sessions killed");
   }
 }
@@ -1075,6 +1180,27 @@ export function getPtyProcessManager(): PtyProcessManager | null {
  */
 export function ptyPostMessage(msg: unknown): void {
   _postMessage?.(secretRedactionService.redactValue(msg));
+}
+
+/**
+ * Give `clientId` the workflow's terminals that are unowned or awaiting its
+ * return (`PtyProcessManager.claimOnReplay`), and broadcast each change so no
+ * other client keeps thinking it is the controller. Shared by panel reconnect
+ * and the orchestrator's per-client terminal replay.
+ */
+export function claimTerminalsOnReplay(
+  ptyManager: PtyProcessManager,
+  workflowId: string,
+  clientId: string
+): void {
+  for (const session of ptyManager.claimOnReplay(workflowId, clientId)) {
+    ptyPostMessage({
+      type: MESSAGE_TYPES.TERMINAL_CONTROLLER_CHANGED,
+      workflowId: session.workflowId,
+      sessionId: session.id,
+      controllerClientId: clientId,
+    });
+  }
 }
 
 /**

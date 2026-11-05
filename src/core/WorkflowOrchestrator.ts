@@ -120,8 +120,8 @@ import { HarnessUsageService } from "./harness/shared/usage/HarnessUsageService"
 import { WorkspaceStatsService } from "./harness/shared/usage/WorkspaceStatsService";
 import type { WorkspaceStatsSnapshot } from "../types/UsageTypes";
 import {
+  claimTerminalsOnReplay,
   getPtyProcessManager,
-  ptyPostMessage,
   setPtyPostMessage,
 } from "./harness/PtyProcessManager";
 
@@ -1152,21 +1152,12 @@ export class WorkflowOrchestrator {
         `found ${sessionsForWorkflow.length} PTY session(s): ` +
         `[${sessionsForWorkflow.map((s) => `${s.id.slice(0, 8)}(status=${s.status},kind=${s.kind})`).join(", ") || "none"}]`
     );
+    // Give this client the unowned sessions, plus every session when it is the
+    // controller that disconnected and the current holder only auto-claimed them
+    // and never used them. Runs before TERMINAL_STARTED so it names the right
+    // controller, and updates workflowRunControllers so later steps inherit it.
+    claimTerminalsOnReplay(ptyManager, workflowId, clientId);
     for (const session of sessionsForWorkflow) {
-      // Auto-assign controller to the first client to reconnect for this session.
-      // Use assignController (not direct mutation) so workflowRunControllers is
-      // updated — ensuring subsequent step PTY spawns inherit the same controller.
-      // Broadcast TERMINAL_CONTROLLER_CHANGED to all clients so no other client
-      // continues to think it is still the controller (prevents dual-controller).
-      if (session.controllerClientId === undefined) {
-        ptyManager.assignController(session.id, clientId);
-        ptyPostMessage({
-          type: MESSAGE_TYPES.TERMINAL_CONTROLLER_CHANGED,
-          workflowId: session.workflowId,
-          sessionId: session.id,
-          controllerClientId: clientId,
-        });
-      }
       Log.debug(
         `[replayTerminalSessionsTo] sending TERMINAL_STARTED for session ${session.id.slice(0, 8)} ` +
           `kind=${session.kind} controllerClientId=${session.controllerClientId?.slice(0, 12) ?? "none"} ` +

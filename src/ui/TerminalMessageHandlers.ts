@@ -7,6 +7,7 @@ import {
 } from "../types/DashboardConstants";
 import {
   buildTerminalEndedMessage,
+  claimTerminalsOnReplay,
   getPtyProcessManager,
   ptyPostMessage,
   type PtyProcessManager,
@@ -51,20 +52,13 @@ export class TerminalMessageHandlers {
     const ptyManager = this.getPtyManager();
     if (!ptyManager) return;
 
-    for (const session of ptyManager.getAllSessions()) {
-      // Auto-claim controller if the session has no owner.
-      // Use assignController (not direct mutation) so workflowRunControllers is
-      // updated, then broadcast TERMINAL_CONTROLLER_CHANGED to all clients so
-      // no other client keeps thinking it is still the controller.
-      if (session.controllerClientId === undefined) {
-        ptyManager.assignController(session.id, ctx.clientId);
-        ptyPostMessage({
-          type: MESSAGE_TYPES.TERMINAL_CONTROLLER_CHANGED,
-          workflowId: session.workflowId,
-          sessionId: session.id,
-          controllerClientId: ctx.clientId,
-        });
-      }
+    const sessions = ptyManager.getAllSessions();
+    // Claim unowned sessions (or ones awaiting this client's return) before
+    // replaying, so each TERMINAL_STARTED below names the right controller.
+    for (const workflowId of new Set(sessions.map((s) => s.workflowId))) {
+      claimTerminalsOnReplay(ptyManager, workflowId, ctx.clientId);
+    }
+    for (const session of sessions) {
       const terminalStartedMessage: TerminalStartedMessage = {
         type: MESSAGE_TYPES.TERMINAL_STARTED,
         workflowId: session.workflowId,
@@ -91,10 +85,11 @@ export class TerminalMessageHandlers {
   }
 
   handleInput(ctx: WebviewClientContext, message: any): void {
-    const ptyManager = getPtyProcessManager();
+    const ptyManager = this.getPtyManager();
     if (!ptyManager || !message.sessionId || !message.data) return;
     const session = ptyManager.getSession(message.sessionId as string);
     if (!session || !this.isController(session, ctx)) return;
+    ptyManager.noteControllerInput(session.id, message.data as string);
     ptyManager.writeToSession(
       message.sessionId as string,
       message.data as string
@@ -102,7 +97,7 @@ export class TerminalMessageHandlers {
   }
 
   handleResize(ctx: WebviewClientContext, message: any): void {
-    const ptyManager = getPtyProcessManager();
+    const ptyManager = this.getPtyManager();
     if (!ptyManager || !message.sessionId || !message.cols || !message.rows)
       return;
     const session = ptyManager.getSession(message.sessionId as string);
@@ -125,7 +120,7 @@ export class TerminalMessageHandlers {
   }
 
   handleViewportHint(ctx: WebviewClientContext, message: any): void {
-    const ptyManager = getPtyProcessManager();
+    const ptyManager = this.getPtyManager();
     if (!ptyManager || !message.cols || !message.rows) return;
     // Store the viewport under THIS client's id. spawnPty reads only the
     // resolved controller's entry, so a viewer's (or another controller's) hint
@@ -138,7 +133,7 @@ export class TerminalMessageHandlers {
   }
 
   handleSpawnShell(ctx: WebviewClientContext, message: any): void {
-    const ptyManager = getPtyProcessManager();
+    const ptyManager = this.getPtyManager();
     if (!ptyManager || !message.workflowId) return;
     const workflowId = message.workflowId as string;
     const cwd = (message.cwd as string | undefined) ?? process.cwd();
@@ -176,7 +171,7 @@ export class TerminalMessageHandlers {
   }
 
   handleRestartShell(message: any): void {
-    const ptyManager = getPtyProcessManager();
+    const ptyManager = this.getPtyManager();
     if (!ptyManager || !message.sessionId || !message.workflowId) return;
     const workflowId = message.workflowId as string;
     let newSession: PtySession | undefined;
@@ -211,7 +206,7 @@ export class TerminalMessageHandlers {
   }
 
   handleCloseShell(message: any): void {
-    const ptyManager = getPtyProcessManager();
+    const ptyManager = this.getPtyManager();
     if (ptyManager && message.sessionId) {
       ptyManager.killSession(
         message.sessionId as string,
@@ -221,7 +216,7 @@ export class TerminalMessageHandlers {
   }
 
   async handleCloseAiCli(message: any): Promise<void> {
-    const ptyManager = getPtyProcessManager();
+    const ptyManager = this.getPtyManager();
     if (!ptyManager || !message.sessionId) return;
     await ptyManager.gracefulKillAiCliSession(
       message.sessionId as string,
@@ -230,7 +225,7 @@ export class TerminalMessageHandlers {
   }
 
   handleClaimControl(ctx: WebviewClientContext, message: any): void {
-    const ptyManager = getPtyProcessManager();
+    const ptyManager = this.getPtyManager();
     if (!ptyManager || !message.sessionId || !message.workflowId) return;
     const session = ptyManager.assignController(
       message.sessionId as string,
