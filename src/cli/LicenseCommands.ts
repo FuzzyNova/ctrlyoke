@@ -1,9 +1,5 @@
-import {
-  LICENSE_SOURCES,
-  LICENSE_TIERS,
-  LicenseService,
-  type LicenseSource,
-} from "../license/LicenseService";
+import { LICENSE_TIERS, LicenseService } from "../license/LicenseService";
+import { LICENSE_SOURCES, type LicenseSource } from "../license/LicenseSources";
 import {
   createNodeSecretStore,
   type NodeSecretStore,

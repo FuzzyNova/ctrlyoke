@@ -15,8 +15,11 @@
  * A missing version is "written before versioning" and is always writable.
  * Pre-1.0 there are no migrations; only the refuse-to-write guard exists.
  *
- * Node-only and `vscode`-free: imported by the extension, CLI and MCP bundles.
+ * Free of `vscode` and Node built-ins: imported by the extension, CLI and MCP
+ * bundles, and by the dashboard through `WorkflowStepSanitizer`.
  */
+
+import { CTRLYOKE_VERSION } from "./BuildConfig";
 
 /** Shared stores guarded against writes by an older host. */
 export const PERSISTED_STORES = {
@@ -112,28 +115,11 @@ export class NewerSchemaError extends Error {
     const label = STORE_LABELS[store];
     const message =
       store === PERSISTED_STORES.WORKFLOW_DEFINITION
-        ? `${filePath ? `${filePath} ` : "This workflow file "}uses workflow format ${foundVersion}, which needs a newer ctrlyoke — this version (${getHostVersion()}) supports format ${supported}. Update ctrlyoke to open it.`
+        ? `${filePath ? `${filePath} ` : "This workflow file "}uses workflow format ${foundVersion}, which needs a newer ctrlyoke — this version (${CTRLYOKE_VERSION}) supports format ${supported}. Update ctrlyoke to open it.`
         : `This ${label} was written by a newer version of ctrlyoke (format ${foundVersion}; this version supports up to ${supported}). Update ctrlyoke to modify it.${filePath ? ` (${filePath})` : ""}`;
     super(message);
     this.name = "NewerSchemaError";
   }
-}
-
-function getHostVersion(): string {
-  const path = require("path") as typeof import("path");
-  const candidates = [
-    path.resolve(__dirname, "../package.json"),
-    path.resolve(__dirname, "../../package.json"),
-  ];
-  for (const candidate of candidates) {
-    try {
-      const packageJson = require(candidate) as { version?: unknown };
-      if (typeof packageJson.version === "string") return packageJson.version;
-    } catch {
-      // Try the next package location used by compiled and bundled consumers.
-    }
-  }
-  return "unknown";
 }
 
 export function isNewerSchemaError(error: unknown): error is NewerSchemaError {

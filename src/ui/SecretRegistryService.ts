@@ -19,13 +19,12 @@ import {
   type SecretMetadata,
 } from "../platform/SecretMetadata";
 import {
-  isValidSecretName,
   userSecretKey,
   userSecretMetadataKey,
-  validateSecretName,
   workspaceSecretKeyForRoot,
   workspaceSecretMetadataKeyForRoot,
 } from "../platform/SecretKey";
+import { isValidSecretName, validateSecretName } from "../utils/SecretName";
 import { collectSecretInterpolationNames } from "../utils/SecretResolver";
 import { parseSecretReferences } from "../utils/SecretReferenceParser";
 import { McpRegistryFileManager } from "../utils/McpRegistryFileManager";

@@ -1,4 +1,5 @@
-import { randomUUID } from "crypto";
+// The dashboard bundles this module, so it uses the global Web Crypto
+// `crypto.randomUUID()` (Node 22+ and browsers) rather than importing "crypto".
 import type {
   ParallelGroupDefinition,
   PromptFile,
@@ -259,7 +260,7 @@ export function normalizeParallelGroupTopology(topology: {
     steps: [...topology.steps],
     parallelGroups: (topology.parallelGroups ?? []).map((group) => ({
       ...group,
-      id: group.id ?? randomUUID(),
+      id: group.id ?? crypto.randomUUID(),
       failFast: group.failFast ?? true,
     })),
   };
@@ -934,7 +935,7 @@ function reorderPendingTopologyWithRanges(
     if (group.id !== undefined && !oldGroupById.has(group.id)) {
       throw new Error(`Unknown parallel group: ${group.id}`);
     }
-    const groupId = group.id ?? randomUUID();
+    const groupId = group.id ?? crypto.randomUUID();
     groupPolicies.set(groupId, group.failFast);
     for (let position = group.start; position <= group.end; position++) {
       pendingGroupAtPosition.set(position, { ...group, id: groupId });
@@ -1119,7 +1120,7 @@ export function groupParallelGroupSteps(
       "Cannot change membership of a started step while creating a parallel group"
     );
   }
-  const groupId = id ?? randomUUID();
+  const groupId = id ?? crypto.randomUUID();
   const result = {
     steps: [...normalized.steps],
     parallelGroups: [

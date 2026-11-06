@@ -1,4 +1,5 @@
-import { randomUUID } from "crypto";
+// The dashboard bundles this module, so it uses the global Web Crypto
+// `crypto.randomUUID()` (Node 22+ and browsers) rather than importing "crypto".
 import type { WorkflowStep } from "../types/CtrlYokeTypes";
 import { hasStarted } from "../utils/StepStatusDerivation";
 
@@ -65,9 +66,9 @@ export function assertStartedStepPositionsPreserved(
 export function generateStepId(
   existingIds: ReadonlySet<string> = new Set()
 ): string {
-  let stepId = randomUUID();
+  let stepId = crypto.randomUUID();
   while (existingIds.has(stepId)) {
-    stepId = randomUUID();
+    stepId = crypto.randomUUID();
   }
   return stepId;
 }

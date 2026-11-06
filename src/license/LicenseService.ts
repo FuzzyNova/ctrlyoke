@@ -14,6 +14,7 @@ import {
 import type { SecretStore } from "../platform/SecretStore";
 import { PRO_FEATURES } from "../types/DashboardConstants";
 import { TypedEmitter } from "../utils/TypedEmitter";
+import { LICENSE_SOURCES, type LicenseSource } from "./LicenseSources";
 
 export {
   CHECKOUT_ELIGIBLE_VALIDATION_CODES,
@@ -29,15 +30,6 @@ export {
   LICENSE_FILE_TTL_MS,
   LICENSE_VALIDATION_CODES,
 } from "./KeygenConstants";
-
-/** The source determines whether a license file's TTL is enforced locally. */
-export const LICENSE_SOURCES = {
-  ONLINE: "online",
-  OFFLINE_FILE: "offline-file",
-} as const;
-
-export type LicenseSource =
-  (typeof LICENSE_SOURCES)[keyof typeof LICENSE_SOURCES];
 
 /** Secret-store keys used by the licensing service. */
 export const LICENSE_FILE_SECRET_KEY = "ctrlyoke.pro.license-file";

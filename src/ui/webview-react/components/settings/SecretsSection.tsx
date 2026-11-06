@@ -11,6 +11,10 @@ import type {
   SecretRegistryState,
   SettingSource,
 } from "@root/types/WebviewMessageTypes";
+import {
+  isValidSecretName,
+  SECRET_NAME_REQUIREMENT_TEXT,
+} from "@root/utils/SecretName";
 import { formatRelativeTimeVerbose } from "@utils/time";
 import {
   Button,
@@ -34,14 +38,8 @@ interface SecretDialogState {
   name: string;
 }
 
-const SECRET_NAME_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 const SECRET_GRID_COLUMNS =
   "md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,auto)]";
-// Names are restricted to this shape so a declaration is always a legal env var name and so
-// the `!NAME` prompt-completion trigger never fires on ordinary lowercase prose or Markdown
-// `![alt]` image syntax after a `!` (see SECRETS_AND_REDACTION_PLAN.md).
-const SECRET_NAME_REQUIREMENT_TEXT =
-  "Secret name must start with a capital letter and contain only capital letters, numbers, or underscores.";
 
 const SCOPE_OPTIONS = [
   { value: SETTING_SCOPES.USER, label: "User" },
@@ -256,7 +254,7 @@ function SecretDialog({ dialog, activeScope, onClose }: SecretDialogProps) {
 
   const isReplace = dialog.mode === "replace";
   const validateName = (candidate: string): string | null => {
-    if (!SECRET_NAME_PATTERN.test(candidate)) {
+    if (!isValidSecretName(candidate)) {
       return SECRET_NAME_REQUIREMENT_TEXT;
     }
     return null;

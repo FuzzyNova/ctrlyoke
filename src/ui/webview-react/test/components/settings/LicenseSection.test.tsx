@@ -14,7 +14,7 @@ import {
   LICENSE_UI,
   MESSAGE_TYPES,
 } from "@root/types/DashboardConstants";
-import { LICENSE_SOURCES } from "../../../../../license/LicenseService";
+import { LICENSE_SOURCES } from "../../../../../license/LicenseSources";
 import { useSettingsStore } from "@store/settingsStore";
 
 const postMessage = vi.fn();

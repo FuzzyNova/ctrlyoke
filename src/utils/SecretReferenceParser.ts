@@ -1,4 +1,4 @@
-import { isValidSecretName } from "../platform/SecretKey";
+import { isValidSecretName } from "./SecretName";
 import type { WorkflowStep } from "../types/CtrlYokeTypes";
 import { NOT_AFTER_BOUNDARY, NOT_BEFORE_BOUNDARY } from "./ReferenceBoundary";
 import { maskCodeRanges } from "./FileReferenceParser";

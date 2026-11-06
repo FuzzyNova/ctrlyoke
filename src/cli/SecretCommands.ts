@@ -19,9 +19,9 @@ import {
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import {
   userSecretKey,
-  validateSecretName,
   workspaceSecretKeyForRoot,
 } from "../platform/SecretKey";
+import { validateSecretName } from "../utils/SecretName";
 import {
   SECRET_REGISTRY_STATES,
   EXECUTION_MODES,

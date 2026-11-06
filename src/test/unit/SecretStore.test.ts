@@ -5,14 +5,13 @@ import * as path from "path";
 import { suite, test } from "mocha";
 import { OsCredentialStore } from "../../platform/OsCredentialStore";
 import {
-  isValidSecretName,
   isManagedSecretStorageKey,
   userSecretKey,
-  validateSecretName,
   workspaceSecretHash,
   workspaceSecretKey,
   workspaceSecretKeyForRoot,
 } from "../../platform/SecretKey";
+import { isValidSecretName, validateSecretName } from "../../utils/SecretName";
 
 suite("SecretStore", () => {
   test("serializes concurrent OS credential index updates", async () => {

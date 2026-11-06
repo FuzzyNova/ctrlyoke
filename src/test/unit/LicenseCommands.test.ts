@@ -19,11 +19,8 @@ import {
   type LicenseStatusOptions,
 } from "../../cli/LicenseCommandDefinitions";
 import type { SecretCommandIo } from "../../cli/SecretCommands";
-import {
-  LICENSE_SOURCES,
-  LICENSE_TIERS,
-  type Entitlement,
-} from "../../license/LicenseService";
+import { LICENSE_TIERS, type Entitlement } from "../../license/LicenseService";
+import { LICENSE_SOURCES } from "../../license/LicenseSources";
 import { FileSecretStore } from "../../platform/FileSecretStore";
 import { createNodeSecretStore } from "../../platform/NodeSecretStore";
 import {

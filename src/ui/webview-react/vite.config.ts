@@ -3,11 +3,14 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import { staticCopyPlugin } from "./build/staticCopyPlugin";
+import { noNodeBuiltinsPlugin } from "./build/noNodeBuiltinsPlugin";
 import { PDFJS_STATIC_DIRS } from "./build/pdfjsStaticAssets";
 import { BUILD_MODES, HOSTED_ICON_FILES } from "../../types/DashboardConstants";
 
 export default defineConfig(({ mode }) => ({
   plugins: [
+    // Fail instead of letting Vite stub a Node built-in that ctrlyoke code imports.
+    noNodeBuiltinsPlugin(),
     react(),
     // Tailwind 4: theme, sources, and variants all live in styles/globals.css.
     tailwindcss(),

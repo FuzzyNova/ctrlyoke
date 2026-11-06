@@ -167,8 +167,8 @@ import type {
 import type {
   LicenseMachineSummary,
   LicenseSeatUsage,
-  LicenseSource,
 } from "../license/LicenseService";
+import type { LicenseSource } from "../license/LicenseSources";
 export type {
   LicenseMachineSummary,
   LicenseSeatUsage,

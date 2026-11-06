@@ -4,9 +4,8 @@ export { VsCodeFileWatcherFactory } from "./VsCodeFileWatcher";
 export { CliAdapter } from "./CliAdapter";
 export type { ResolvedCliConfig } from "./CliAdapter";
 export type { SecretStore } from "./SecretStore";
+export { isValidSecretName, validateSecretName } from "../utils/SecretName";
 export {
-  isValidSecretName,
-  validateSecretName,
   userSecretKey,
   workspaceSecretHash,
   workspaceSecretKey,

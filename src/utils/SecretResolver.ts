@@ -12,10 +12,10 @@ import {
   type SecretStore,
 } from "../platform/SecretStore";
 import {
-  isValidSecretName,
   userSecretKey,
   workspaceSecretKeyForRoot,
 } from "../platform/SecretKey";
+import { isValidSecretName } from "./SecretName";
 import {
   SecretGrantsTrustStore,
   secretGrantsTrustStore,

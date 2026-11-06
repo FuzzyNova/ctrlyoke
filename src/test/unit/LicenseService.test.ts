@@ -16,7 +16,6 @@ import {
   LICENSE_FILE_TTL_MS,
   LICENSE_REFRESH_INTERVAL_MS,
   LICENSE_REFRESH_RETRY_BASE_MS,
-  LICENSE_SOURCES,
   LICENSE_SOURCE_SECRET_KEY,
   ENTITLEMENT_CACHE_TTL_MS,
   REMOTE_ACCESS_TRIAL_START_KEY,
@@ -24,6 +23,7 @@ import {
   LicenseActivationLimitError,
   LicenseService,
 } from "../../license/LicenseService";
+import { LICENSE_SOURCES } from "../../license/LicenseSources";
 import { PRO_FEATURES } from "../../types/DashboardConstants";
 
 class InMemorySecretStore implements SecretStore {

@@ -2,7 +2,7 @@ import * as path from "path";
 import * as WorkflowPaths from "../../../utils/WorkflowPaths";
 import * as fs from "fs/promises";
 import type { McpServerConfig } from "../../../types/CtrlYokeTypes";
-import { isValidSecretName } from "../../../platform/SecretKey";
+import { isValidSecretName } from "../../../utils/SecretName";
 import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
 import type { PreparedMutation } from "./interfaces/PreparedMutation";
 import {

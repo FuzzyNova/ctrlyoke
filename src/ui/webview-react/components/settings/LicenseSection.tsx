@@ -6,7 +6,7 @@ import {
   USER_FEEDBACK_SEVERITY,
   VSCODE_COMMANDS,
 } from "@root/types/DashboardConstants";
-import { LICENSE_SOURCES } from "../../../../license/LicenseService";
+import { LICENSE_SOURCES } from "../../../../license/LicenseSources";
 import type {
   LicenseMachineSummary,
   LicenseSeatUsage,

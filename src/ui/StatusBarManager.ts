@@ -15,11 +15,11 @@ import {
   VSCODE_CONTEXT_KEYS,
 } from "../types/DashboardConstants";
 import {
-  LICENSE_SOURCES,
   LICENSE_TIERS,
   type Entitlement,
   type LicenseService,
 } from "../license/LicenseService";
+import { LICENSE_SOURCES } from "../license/LicenseSources";
 
 /**
  * The only background colors VS Code honors on a status bar item; any other
