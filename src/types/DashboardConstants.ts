@@ -5464,6 +5464,18 @@ export const SNAPSHOT_STRATEGIES = {
   FILESYSTEM: "filesystem",
 } as const;
 
+/**
+ * Why a workspace snapshot capture gave up before covering the whole tree.
+ * The first three are the filesystem walk's budget limits; `aborted` means the
+ * run was stopped while the capture was in progress.
+ */
+export const SNAPSHOT_UNAVAILABLE_REASONS = {
+  FILE_COUNT: "fileCount",
+  BYTES_READ: "bytesRead",
+  DEADLINE: "deadline",
+  ABORTED: "aborted",
+} as const;
+
 // ============================================================================
 // SNAPSHOT BASE SOURCES - Provenance for modified-file snapshot diffs
 // ============================================================================
@@ -5827,6 +5839,8 @@ export type OutputActivityKind =
   (typeof OUTPUT_ACTIVITY_KINDS)[keyof typeof OUTPUT_ACTIVITY_KINDS];
 export type SnapshotStrategy =
   (typeof SNAPSHOT_STRATEGIES)[keyof typeof SNAPSHOT_STRATEGIES];
+export type SnapshotUnavailableReason =
+  (typeof SNAPSHOT_UNAVAILABLE_REASONS)[keyof typeof SNAPSHOT_UNAVAILABLE_REASONS];
 export type SnapshotBaseSource =
   (typeof SNAPSHOT_BASE_SOURCES)[keyof typeof SNAPSHOT_BASE_SOURCES];
 export type UndoFileAction =

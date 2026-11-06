@@ -1,14 +1,23 @@
 import * as assert from "assert";
+import * as nodeFs from "fs";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { execFileSync } from "child_process";
 import { suite, test, setup, teardown } from "mocha";
-import { WorkspaceSnapshotService } from "../../utils/WorkspaceSnapshotService";
 import {
+  DEFAULT_FILESYSTEM_WALK_BUDGET,
+  SnapshotUnavailableError,
+  WorkspaceSnapshotService,
+  type FilesystemWalkBudget,
+} from "../../utils/WorkspaceSnapshotService";
+import {
+  MAX_CONTENT_SIZE,
   SNAPSHOT_STRATEGIES,
+  SNAPSHOT_UNAVAILABLE_REASONS,
   UNDO_FILE_ACTIONS,
 } from "../../types/DashboardConstants";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 suite("WorkspaceSnapshotService", function () {
   let workspaceRoot: string;
@@ -727,5 +736,203 @@ suite("WorkspaceSnapshotService — multi-root", function () {
     );
     assert.ok(appChange);
     assert.strictEqual(appChange.repo, "app");
+  });
+});
+
+suite("WorkspaceSnapshotService filesystem walk", function () {
+  let root: string;
+
+  class BudgetedSnapshotService extends WorkspaceSnapshotService {
+    protected override readonly filesystemWalkBudget: FilesystemWalkBudget;
+
+    constructor(budget: Partial<FilesystemWalkBudget>) {
+      super();
+      this.filesystemWalkBudget = {
+        ...DEFAULT_FILESYSTEM_WALK_BUDGET,
+        ...budget,
+      };
+    }
+  }
+
+  async function write(relativePath: string, content: string | Buffer) {
+    const absolutePath = path.join(root, relativePath);
+    await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+    await fs.writeFile(absolutePath, content);
+  }
+
+  async function captureError(
+    service: WorkspaceSnapshotService,
+    options?: { signal?: AbortSignal }
+  ): Promise<SnapshotUnavailableError> {
+    try {
+      await service.captureWorkspaceState(
+        root,
+        SNAPSHOT_STRATEGIES.FILESYSTEM,
+        undefined,
+        options
+      );
+    } catch (error) {
+      assert.ok(
+        error instanceof SnapshotUnavailableError,
+        `expected SnapshotUnavailableError, got ${String(error)}`
+      );
+      return error;
+    }
+    assert.fail("capture should have been unavailable");
+  }
+
+  setup(() => {
+    root = makeTempDir("cy-snapshot-fs-");
+  });
+
+  teardown(() => {
+    removeTempDir(root);
+  });
+
+  test("records a modified file between two captures", async () => {
+    await write("notes/a.txt", "before\n");
+    const service = new WorkspaceSnapshotService();
+    const before = await service.captureWorkspaceState(
+      root,
+      SNAPSHOT_STRATEGIES.FILESYSTEM
+    );
+    await write("notes/a.txt", "after\n");
+    const after = await service.captureWorkspaceState(
+      root,
+      SNAPSHOT_STRATEGIES.FILESYSTEM
+    );
+
+    const changes = await service.computeSnapshotChanges(before, after, root);
+
+    assert.strictEqual(changes.length, 1);
+    assert.strictEqual(changes[0].path, "notes/a.txt");
+    assert.strictEqual(changes[0].changeType, "modified");
+    assert.strictEqual(changes[0].beforeContent, "before\n");
+  });
+
+  test("stops at the file-count limit and skips later captures of the root", async () => {
+    for (let index = 0; index < 5; index += 1) {
+      await write(`file-${index}.txt`, `content ${index}\n`);
+    }
+    const service = new BudgetedSnapshotService({ maxFiles: 3 });
+
+    const first = await captureError(service);
+    assert.strictEqual(first.reason, SNAPSHOT_UNAVAILABLE_REASONS.FILE_COUNT);
+
+    // Shrinking the tree does not re-walk it: the root stays over budget for
+    // the rest of the run, so later steps do not pay the budget again.
+    await fs.rm(path.join(root, "file-4.txt"));
+    await fs.rm(path.join(root, "file-3.txt"));
+    const second = await captureError(service);
+    assert.strictEqual(second, first);
+  });
+
+  test("stops at the bytes-read limit before reading past it", async () => {
+    await write("a.txt", "x".repeat(40));
+    await write("b.txt", "y".repeat(40));
+    const service = new BudgetedSnapshotService({ maxBytesRead: 50 });
+
+    const error = await captureError(service);
+
+    assert.strictEqual(error.reason, SNAPSHOT_UNAVAILABLE_REASONS.BYTES_READ);
+  });
+
+  test("stops at the deadline", async () => {
+    for (let index = 0; index < 100; index += 1) {
+      await write(`dir-${index % 10}/file-${index}.txt`, `content ${index}\n`);
+    }
+    const service = new BudgetedSnapshotService({ maxDurationMs: 0 });
+
+    const error = await captureError(service);
+
+    assert.strictEqual(error.reason, SNAPSHOT_UNAVAILABLE_REASONS.DEADLINE);
+  });
+
+  test("an abort ends the capture without disabling later captures", async () => {
+    await write("a.txt", "content\n");
+    const service = new WorkspaceSnapshotService();
+    const controller = new AbortController();
+    controller.abort();
+
+    const error = await captureError(service, { signal: controller.signal });
+    assert.strictEqual(error.reason, SNAPSHOT_UNAVAILABLE_REASONS.ABORTED);
+
+    const state = await service.captureWorkspaceState(
+      root,
+      SNAPSHOT_STRATEGIES.FILESYSTEM
+    );
+    assert.strictEqual(
+      state.segments[0].files.get("a.txt")?.content,
+      "content\n"
+    );
+  });
+
+  test("an abort during the walk ends it", async () => {
+    for (let index = 0; index < 100; index += 1) {
+      await write(`dir-${index % 10}/file-${index}.txt`, `content ${index}\n`);
+    }
+    const service = new WorkspaceSnapshotService();
+    const controller = new AbortController();
+    const capture = captureError(service, { signal: controller.signal });
+    controller.abort();
+
+    const error = await capture;
+
+    assert.strictEqual(error.reason, SNAPSHOT_UNAVAILABLE_REASONS.ABORTED);
+  });
+
+  test("decides from the name and size without reading large, binary or stub files", async () => {
+    await write("small.txt", "small\n");
+    await write("big.log", "z".repeat(MAX_CONTENT_SIZE + 1));
+    await write("photos/holiday.JPG", Buffer.from([0xff, 0xd8, 0xff]));
+    await write("music/track.mp3", Buffer.from([0x49, 0x44, 0x33]));
+    await write("Budget.gsheet", '{"url":"https://example.invalid"}');
+    await write("desktop.ini", "[.ShellClassInfo]\n");
+    const service = new WorkspaceSnapshotService();
+
+    const readPaths: string[] = [];
+    const originalReadFile = nodeFs.promises.readFile;
+    nodeFs.promises.readFile = (async (
+      ...args: Parameters<typeof originalReadFile>
+    ) => {
+      readPaths.push(path.relative(root, String(args[0])));
+      return originalReadFile(...args);
+    }) as typeof originalReadFile;
+    let state;
+    try {
+      state = await service.captureWorkspaceState(
+        root,
+        SNAPSHOT_STRATEGIES.FILESYSTEM
+      );
+    } finally {
+      nodeFs.promises.readFile = originalReadFile;
+    }
+
+    assert.deepStrictEqual(readPaths, ["small.txt"]);
+    const files = state.segments[0].files;
+    assert.deepStrictEqual([...files.keys()].sort(), ["big.log", "small.txt"]);
+    const big = files.get("big.log");
+    assert.strictEqual(big?.content, undefined);
+    assert.match(big?.contentHash ?? "", /^stat:/);
+  });
+
+  test("a large file whose size changes reads as modified without being read", async () => {
+    await write("big.log", "a".repeat(MAX_CONTENT_SIZE + 1));
+    const service = new WorkspaceSnapshotService();
+    const before = await service.captureWorkspaceState(
+      root,
+      SNAPSHOT_STRATEGIES.FILESYSTEM
+    );
+    await write("big.log", "a".repeat(MAX_CONTENT_SIZE + 2));
+    const after = await service.captureWorkspaceState(
+      root,
+      SNAPSHOT_STRATEGIES.FILESYSTEM
+    );
+
+    const changes = await service.computeSnapshotChanges(before, after, root);
+
+    assert.strictEqual(changes.length, 1);
+    assert.strictEqual(changes[0].changeType, "modified");
+    assert.strictEqual(changes[0].contentCaptureSkipped, true);
   });
 });

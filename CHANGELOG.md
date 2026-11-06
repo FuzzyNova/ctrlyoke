@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Steps in a large folder that isn't a Git repository (such as a Google Drive or OneDrive root) now start straight away. ctrlyoke's before-step file snapshot used to read every file in the folder first, which could take minutes and download online-only cloud files. The snapshot now stops after 20,000 files, 64 MB of content or 5 seconds, and the step then runs without diffs or undo for changes the harness didn't report. Binary files (images, audio, video, archives, office and PDF documents) and files over 512 KB are no longer read for the snapshot, and **Stop** now ends a snapshot that is still running.
+
 - A phone or browser that loses control of a terminal by disconnecting gets it back when it reopens the workflow, as long as no one typed in the terminal on the device that took over meanwhile (usually the VS Code panel). Reopening the app no longer means pressing **Take Control** again.
 - Declare Codex terminal sandbox support exact; Claude remains partial because its built-in Write and Edit tools can write outside the Bash sandbox (verified on macOS with Claude Code 2.1.317).
 - **Codex no longer runs in a sandbox by default.** Its sandbox now follows the new `sandbox` property, whose default is Off, instead of the permission mode. Headless and interactive `allowAll` steps that used to run in Codex's `workspace-write` sandbox now run with `-s danger-full-access`. Set `defaults.sandbox: true` (Settings → Workflow Defaults → Permissions → Sandbox) to keep them contained, or `null` (None) to let your `config.toml` decide.
