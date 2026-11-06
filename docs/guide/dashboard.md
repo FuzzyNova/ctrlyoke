@@ -24,7 +24,11 @@ chips with **Collapse to sidebar**.
 
 When the dashboard is narrower than 640 px (a typical side bar, or a phone), the
 steps panel and Workflow Properties become drawers. Open them with the tabs at
-the left and right edges of the header's second row.
+the left and right edges of the header's second row. The workflow name and
+state badge fills the space between them, and the top row keeps every other
+header button. When even that row is too narrow for all three run controls
+(about 425 px in the browser, 388 px in VS Code), they show only the buttons
+you can use right now.
 
 ### The header
 

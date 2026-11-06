@@ -81,6 +81,27 @@ export const SEPARATOR_VERTICAL =
   "w-0.5 bg-panel-border hover:bg-focus-border active:bg-focus-border cursor-col-resize transition-colors";
 
 /**
+ * Narrow-header widths below which disabled Run/Pause/Stop slots are hidden.
+ * Each is the smallest viewport at which the narrow header's row 1
+ * ([New][Save·Undo·Redo] [Run·Pause·Stop] [app nav]) holds all three slots at
+ * touch sizing, measured in the hosted dashboard (Playwright, 2026-11-05):
+ * the browser's app nav carries the extra Workspace Explorer button (37px), so
+ * it needs more room than the VS Code panel. Re-measure if a row-1 button is
+ * added or removed, or --cy-touch-target / touch padding changes. Tailwind
+ * only sees literal class strings, so each class is spelled out in full.
+ */
+export const HEADER_RUN_SLOT_FIT_CLASSES = {
+  standalone: {
+    slot: "hidden min-[425px]:flex",
+    divider: "hidden min-[425px]:block",
+  },
+  vscode: {
+    slot: "hidden min-[388px]:flex",
+    divider: "hidden min-[388px]:block",
+  },
+} as const;
+
+/**
  * Header button sizing — single source of truth for button/icon size in the Header.
  * To tune the touch target HEIGHT, change --cy-touch-target in globals.css (one place).
  * To tune the icon size, change the `icon` value in the `touch` block below.

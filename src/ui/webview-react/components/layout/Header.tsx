@@ -39,7 +39,10 @@ import {
   StepContextMenu,
   type StepContextMenuState,
 } from "../shared/StepContextMenu";
-import { HEADER_BUTTON_SIZES } from "../../constants";
+import {
+  HEADER_BUTTON_SIZES,
+  HEADER_RUN_SLOT_FIT_CLASSES,
+} from "../../constants";
 import {
   getWorkflowExecutionControls,
   type WorkflowExecutionControlAction,
@@ -73,23 +76,27 @@ function nextSaveRequestId(): string {
  * Layout (three tiers):
  *   Wide (lg+):     ([WorkflowControls label][action] left) [spacer] [forward/back] [WorkflowStatus] [execution] [spacer] ([app nav] right)  ← one row
  *   Medium (sm–lg): ([WorkflowControls icon][action] left)  ([forward/back][WorkflowStatus][execution] center lane) ([app nav] right)  ← one row
- *   Narrow (< sm):  ([WorkflowControls icon] left) ([WorkflowStatus][execution] centered)                                         ← row 1
- *                   ([Steps]⟵edge [action] left)                    ([app nav] right [Workflow Properties]⟶edge)                 ← row 2
+ *   Narrow (< sm):  ([WorkflowControls icon][action] left) ([execution] evenly spaced) ([app nav] right)                         ← row 1
+ *                   ([Steps]⟵edge [WorkflowStatus, filling the row] [Workflow Properties]⟶edge)                                 ← row 2
  *
- * Grid: mobile keeps [auto · minmax(0,1fr) · auto], then from sm up the header switches to
+ * Grid: mobile uses [max-content · minmax(max-content,1fr) · max-content] with the execution group
+ * centered in the middle track, i.e. equal gaps to its neighbours rather than the true screen
+ * midpoint: the left group (New + Save/Undo/Redo) is far wider than the app nav, so a
+ * screen-centered group sat visibly closer to the left. The side tracks are max-content (not
+ * auto) because header-left is min-w-0, and an auto track let it shrink under the run group.
+ * From sm up the header switches to
  * [auto · minmax(0,1fr) · auto]. At lg+ it expands to
  * [auto · minmax(0,1fr) · auto · minmax(0,500px) · auto · minmax(0,1fr) · auto].
  * The two flexible spacer tracks isolate the centered controls from the left and right groups, while the
  * dedicated nav/status/run tracks keep the status anchored to the page center and aligned with its dropdown.
- * The action controls (Save · Undo/Redo) render inline with WorkflowControls from sm up, and only drop to
- * the row-2 left group on narrow mobile — rendered in a single location chosen by `isMobile` (one
+ * The action controls (Save · Undo/Redo) and app nav render in one location at every tier (one
  * UndoRedoControl instance). Medium and Wide share desktop button sizing (HEADER_BUTTON_SIZES.default),
  * but below lg the WorkflowControls split button stays icon-first (plus + chevron only) to preserve room
  * for the centered status. forward/back (NavHistoryControls, standalone only) is hidden below md. The
- * Steps / Workflow Properties half-pills are edge-anchored drawer pulls living at the outer ends of the
- * row-2 groups (flat edge flush to the screen, rounded toward the interior). The workflow dropdown anchors
- * to the status button's own bottom (not the header's), so it expands directly from the control even with
- * the row-2 controls beneath it.
+ * Steps / Workflow Properties half-pills are edge-anchored drawer pulls at the outer ends of row 2
+ * (flat edge flush to the screen, rounded toward the interior). The workflow dropdown anchors to the
+ * status button's own bottom and width (see WorkflowStatus.updateDropdownTop), so on narrow it opens
+ * directly below row 2, spanning the status between the two pulls.
  *
  * Features:
  * - WorkflowControls: Split button for New/Load/Queue workflow actions
@@ -440,9 +447,8 @@ export const Header: React.FC<{
     [executionState, isCancelling, isPaused, isRunning]
   );
 
-  // Action controls — mutate the workflow (Save · Undo/Redo). Rendered in a single location chosen by
-  // tier: inline with WorkflowControls from sm up, or in the row-2 group on narrow mobile. History
-  // chevron hidden below sm (handled inside UndoRedoControl).
+  // Action controls — mutate the workflow (Save · Undo/Redo). Rendered once, inline with
+  // WorkflowControls at every tier. History chevron hidden below lg (handled inside UndoRedoControl).
   const actionControls = (
     <div
       className={`cy-button-group ${btnSize.groupContainer}`}
@@ -478,10 +484,11 @@ export const Header: React.FC<{
     </div>
   );
 
-  // Below xs (380px), a slot is hidden only when it would be disabled at wider
-  // widths, so narrow never offers fewer actions than wide. If no slot is
-  // actionable, retain the disabled Run slot so the primary affordance never
-  // disappears completely. From xs upward all three fixed slots remain visible.
+  // All three slots show whenever row 1 has room for them. Below the measured
+  // fit width (HEADER_RUN_SLOT_FIT_CLASSES) a slot is hidden only when it would
+  // be disabled at wider widths, so narrow never offers fewer actions than wide.
+  // If no slot is actionable, retain the disabled Run slot so the primary
+  // affordance never disappears completely.
   const slot1Enabled =
     slot1.enabled &&
     !isExternallyManaged &&
@@ -492,9 +499,12 @@ export const Header: React.FC<{
   const slot3Enabled =
     (slot3.enabled || isExternallyManaged) && !isLineageReadOnly;
   const slot1NarrowVisible = slot1Enabled || (!slot2Enabled && !slot3Enabled);
-  const HIDDEN_UNTIL_XS = "hidden xs:flex";
+  const runSlotFit = isStandalone
+    ? HEADER_RUN_SLOT_FIT_CLASSES.standalone
+    : HEADER_RUN_SLOT_FIT_CLASSES.vscode;
+  const HIDDEN_UNTIL_FITS = runSlotFit.slot;
   const dividerClass = (bothVisible: boolean) =>
-    `cy-button-group-divider${bothVisible ? "" : " hidden xs:block"}`;
+    `cy-button-group-divider${bothVisible ? "" : ` ${runSlotFit.divider}`}`;
 
   const runControls = (
     <div className="header-run-controls flex items-center shrink-0">
@@ -509,7 +519,7 @@ export const Header: React.FC<{
           } ${
             slot1Enabled
               ? "flex bg-btn-bg text-btn-fg hover:bg-btn-hover"
-              : `${slot1NarrowVisible ? "flex" : HIDDEN_UNTIL_XS} bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed`
+              : `${slot1NarrowVisible ? "flex" : HIDDEN_UNTIL_FITS} bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed`
           }`}
           onClick={() => {
             if (!slot1Enabled) return;
@@ -545,7 +555,7 @@ export const Header: React.FC<{
           } ${
             slot2Enabled
               ? "flex bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-              : `${HIDDEN_UNTIL_XS} bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed`
+              : `${HIDDEN_UNTIL_FITS} bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed`
           }`}
           onClick={() => handleSlotAction(slot2.action)}
           disabled={!slot2.enabled || isExternallyManaged || isLineageReadOnly}
@@ -572,7 +582,7 @@ export const Header: React.FC<{
           className={`control-button h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
             slot3Enabled
               ? "flex bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-              : `${HIDDEN_UNTIL_XS} bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed`
+              : `${HIDDEN_UNTIL_FITS} bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed`
           }`}
           onClick={
             isExternallyManaged
@@ -609,20 +619,19 @@ export const Header: React.FC<{
 
   return (
     <>
-      <header className="header cy-no-select grid grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,500px)_auto_minmax(0,1fr)_auto] gap-x-1 gap-y-1.5 items-center sm:px-3 py-1.5 border-b-2 border-panel-border bg-sidebar-bg shrink-0 overflow-visible">
-        {/* Left Section: Workflow Controls — always top-left (col 1 / row 1) at every tier so the
-            workflow picker anchors the corner. From sm up the action controls sit inline here; on
-            narrow mobile they move to the combined row-2 group. */}
+      <header className="header cy-no-select grid grid-cols-[max-content_minmax(max-content,1fr)_max-content] sm:grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,500px)_auto_minmax(0,1fr)_auto] gap-x-1 gap-y-1.5 items-center sm:px-3 py-1.5 border-b-2 border-panel-border bg-sidebar-bg shrink-0 overflow-visible">
+        {/* Left Section: Workflow Controls + action controls — always top-left (col 1 / row 1) at
+            every tier so the workflow picker anchors the corner. */}
         <div className="header-left col-start-1 row-start-1 justify-self-start min-w-0 flex items-center gap-1 sm:gap-2 pl-1 sm:pl-0">
           <WorkflowControls compactUntilLg />
-          {!isMobile && actionControls}
+          {actionControls}
         </div>
 
-        {/* Row-2 (mobile only): Steps pull | combined controls | Workflow Properties pull.
-            Spans all 3 outer grid columns and uses its own 1fr·auto·1fr internal grid so the center
-            group stays at the true screen midpoint regardless of what the outer auto columns hold. */}
-        <div className="col-start-1 col-end-4 row-start-2 sm:hidden grid grid-cols-[1fr_auto_1fr] items-center">
-          {/* Left (1fr): Steps drawer pull — flat left edge to screen, rounded toward content */}
+        {/* Row-2 (mobile only): Steps pull | WorkflowStatus | Workflow Properties pull.
+            Spans all 3 outer grid columns; the status takes every pixel between the two edge pulls,
+            and its dropdown anchors to the status's own bottom, so it opens below this row. */}
+        <div className="header-status col-start-1 col-end-4 row-start-2 sm:hidden grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-1 items-center">
+          {/* Left (auto): Steps drawer pull — flat left edge to screen, rounded toward content */}
           <div className="flex items-center">
             <button
               className={`control-button flex items-center justify-center gap-0.5 pl-3.5 pr-2 ${btnSize.mobileToggleButton} rounded-r-button border-y border-r border-btn-border transition-colors ${
@@ -641,86 +650,13 @@ export const Header: React.FC<{
             </button>
           </div>
 
-          {/* Center (auto): All controls in one group — Save, Undo/Redo, Search, Explorer, Settings */}
-          <div
-            className={`cy-button-group ${btnSize.groupContainer}`}
-            role="group"
-            aria-label="Workflow controls"
-          >
-            {/* Save */}
-            <button
-              className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
-                canSave
-                  ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-                  : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
-              }`}
-              onClick={handleSave}
-              disabled={!canSave}
-              title={saveTitle}
-              aria-label="Save workflow"
-            >
-              <Icon name="save" className={`${btnSize.icon}`} />
-            </button>
-            <div className="cy-button-group-divider" />
-            {/* Undo / Redo / History */}
-            <UndoRedoControl
-              isRunning={isRunning}
-              isPaused={isPaused}
-              disabled={isLineageReadOnly}
-              embedded
-              showHistoryChevronOnDesktopOnly="lg"
-              onAction={handleUndoRedoAction}
-            />
-            <div className="cy-button-group-divider" />
-            {/* Search */}
-            <button
-              className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
-                isHistorySearchOpen ? "cy-contrast-active " : ""
-              }${
-                isHistorySearchOpen
-                  ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"
-                  : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-              }`}
-              onClick={toggleHistorySearch}
-              title={`Search History (${formatShortcut("Ctrl", "Shift", "F")})`}
-              aria-label="Search history"
-              aria-pressed={isHistorySearchOpen}
-            >
-              <Icon name="search" className={`${btnSize.icon}`} />
-            </button>
-            {isStandalone && (
-              <>
-                <div className="cy-button-group-divider" />
-                <button
-                  className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover`}
-                  onClick={openWorkspaceViewer}
-                  title="Explore files and changes"
-                  aria-label="Explore files and changes"
-                >
-                  <Icon name="files" className={`${btnSize.icon}`} />
-                </button>
-              </>
-            )}
-            <div className="cy-button-group-divider" />
-            {/* Settings */}
-            <button
-              className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
-                globalSettingsOpen ? "cy-contrast-active " : ""
-              }${
-                globalSettingsOpen
-                  ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"
-                  : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-              }`}
-              onClick={toggleGlobalSettings}
-              title="Global Settings"
-              aria-label="Open global settings"
-              aria-pressed={globalSettingsOpen}
-            >
-              <Icon name="settings-gear" className={`${btnSize.icon}`} />
-            </button>
+          {/* Center (1fr): WorkflowStatus fills the space between the pulls. Mount-gated on
+              isMobile so only one tier's (stateful) WorkflowStatus ever exists. */}
+          <div className="flex items-center min-w-0">
+            {isMobile && <WorkflowStatus className="flex-1 min-w-0" />}
           </div>
 
-          {/* Right (1fr): Workflow Properties drawer pull — rounded toward content, flat right edge to screen */}
+          {/* Right (auto): Workflow Properties drawer pull — rounded toward content, flat right edge to screen */}
           <div className="flex items-center justify-end">
             <button
               className={`control-button flex items-center justify-center gap-0.5 pl-2 pr-3.5 ${btnSize.mobileToggleButton} rounded-l-button border-y border-l border-btn-border transition-colors ${
@@ -794,13 +730,6 @@ export const Header: React.FC<{
 
         {dryRunScope && <DryRunModal scope={dryRunScope} />}
 
-        {/* Mobile status row: forward/back + WorkflowStatus. Hidden from sm up, where both controls
-            move into the shared center lane so they can negotiate width together. */}
-        <div className="header-status col-start-2 row-start-1 justify-self-stretch w-full flex items-center justify-center min-w-0 gap-0 px-1 sm:hidden">
-          {!isMobile && <NavHistoryControls className="shrink-0" />}
-          {isMobile && <WorkflowStatus className="flex-1 min-w-0" />}
-        </div>
-
         {/* Desktop center lane: medium keeps a shared flex row, while lg+ promotes the centered
             region back into dedicated tracks so WorkflowStatus stays perfectly page-centered. */}
         <div className="hidden sm:flex sm:col-start-2 sm:row-start-1 lg:hidden min-w-0 items-center justify-center gap-0">
@@ -825,14 +754,14 @@ export const Header: React.FC<{
           {isWideLayout && runControls}
         </div>
 
-        {/* Mobile run controls stay in their own grid column to keep the narrow row-1 layout compact. */}
-        <div className="col-start-3 row-start-1 justify-self-center flex items-center sm:hidden pr-1">
+        {/* Mobile run controls: centered in row 1's middle track, so equal gaps on either side. */}
+        <div className="col-start-2 row-start-1 justify-self-center flex items-center sm:hidden">
           {isMobile && runControls}
         </div>
 
-        {/* Right Section: App navigation — Search / Workspace Explorer / Settings.
-            Desktop only (sm+); on mobile these buttons live in the row-2 combined center group. */}
-        <div className="header-nav hidden sm:flex sm:col-start-3 sm:col-end-4 sm:row-start-1 lg:col-start-7 lg:col-end-8 min-w-0 items-center justify-end">
+        {/* Right Section: App navigation — Search / Workspace Explorer / Settings. Top-right at
+            every tier. */}
+        <div className="header-nav flex col-start-3 col-end-4 row-start-1 lg:col-start-7 lg:col-end-8 justify-self-end min-w-0 items-center justify-end pr-1 sm:pr-0">
           <div
             className={`cy-button-group ${btnSize.groupContainer}`}
             role="group"

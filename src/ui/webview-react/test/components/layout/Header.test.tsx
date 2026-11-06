@@ -13,7 +13,10 @@ import { useWorkflowStore } from "@store/workflowStore";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { usePauseRequestStore } from "@store/pauseRequestStore";
-import { PAUSE_REQUEST_FEEDBACK_TIMEOUT_MS } from "@/constants";
+import {
+  HEADER_RUN_SLOT_FIT_CLASSES,
+  PAUSE_REQUEST_FEEDBACK_TIMEOUT_MS,
+} from "@/constants";
 import {
   EXECUTION_STATES,
   MESSAGE_TYPES,
@@ -281,7 +284,7 @@ describe("Header execution controls", () => {
 
   // The primary Run affordance must remain discoverable even when an empty new
   // workflow cannot run yet. Saving an empty workflow is valid; secondary
-  // inactive execution slots can still collapse below xs. Assert the responsive
+  // inactive execution slots can still collapse where all three slots don't fit. Assert the responsive
   // classes because jsdom does not apply breakpoints.
   it("keeps disabled Run visible but saves an empty draft", () => {
     useUiStore.setState({
@@ -325,14 +328,16 @@ describe("Header execution controls", () => {
     });
     for (const label of ["Pause", "Stop"]) {
       expect(screen.getByRole("button", { name: label }).className).toContain(
-        "hidden xs:flex"
+        HEADER_RUN_SLOT_FIT_CLASSES.vscode.slot
       );
     }
     // Neither divider separates two visible slots here.
     const dividers = controls.querySelectorAll(".cy-button-group-divider");
     expect(dividers).toHaveLength(2);
     for (const divider of dividers) {
-      expect(divider.className).toContain("hidden xs:block");
+      expect(divider.className).toContain(
+        HEADER_RUN_SLOT_FIT_CLASSES.vscode.divider
+      );
     }
   });
 
@@ -393,7 +398,7 @@ describe("Header execution controls", () => {
     expect(rerunButton.className).toContain("flex bg-btn-bg");
     for (const label of ["Pause", "Stop"]) {
       expect(screen.getByRole("button", { name: label }).className).toContain(
-        "hidden xs:flex"
+        HEADER_RUN_SLOT_FIT_CLASSES.vscode.slot
       );
     }
   });
@@ -610,7 +615,7 @@ describe("Header execution controls", () => {
   // Narrow widths hide only the slots that would be disabled at wider widths:
   // a stopped run with steps left can be resumed, so Resume must stay visible
   // beside Re-run instead of collapsing to Re-run alone.
-  it("keeps Re-run and Resume visible below xs for a stopped run", () => {
+  it("keeps Re-run and Resume visible where all three slots don't fit, for a stopped run", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "workflow-a" as never,
@@ -633,13 +638,15 @@ describe("Header execution controls", () => {
     expect(resumeButton.className).toContain("flex bg-btn-secondary-bg");
     expect(resumeButton.className).not.toContain("hidden");
     expect(screen.getByRole("button", { name: "Stop" }).className).toContain(
-      "hidden xs:flex"
+      HEADER_RUN_SLOT_FIT_CLASSES.vscode.slot
     );
     const dividers = screen
       .getByRole("group", { name: "Workflow execution controls" })
       .querySelectorAll(".cy-button-group-divider");
     expect(dividers[0].className).not.toContain("hidden");
-    expect(dividers[1].className).toContain("hidden xs:block");
+    expect(dividers[1].className).toContain(
+      HEADER_RUN_SLOT_FIT_CLASSES.vscode.divider
+    );
   });
 
   it("keeps a divider visible when both of the slots it separates are", () => {
@@ -675,7 +682,7 @@ describe("Header execution controls", () => {
     expect(screen.getByRole("button", { name: "Pause" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Stop" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Re-run" }).className).toContain(
-      "hidden xs:flex"
+      HEADER_RUN_SLOT_FIT_CLASSES.vscode.slot
     );
     const dividers = screen
       .getByRole("group", { name: "Workflow execution controls" })
@@ -723,7 +730,7 @@ describe("Header execution controls", () => {
     expect(screen.getByRole("button", { name: "Re-run" })).toBeEnabled();
     for (const label of ["Pause", "Stop"]) {
       expect(screen.getByRole("button", { name: label }).className).toContain(
-        "hidden xs:flex"
+        HEADER_RUN_SLOT_FIT_CLASSES.vscode.slot
       );
     }
   });

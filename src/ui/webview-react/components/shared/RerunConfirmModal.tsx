@@ -25,9 +25,9 @@ const RERUN_CONFIRMATION_MODE_HINTS: Record<RerunConfirmationMode, string> = {
 };
 
 /**
- * Asks before Re-run starts a new run from the first step. Re-run sits beside
- * the workflow picker, so a stray tap on a conversation-style workflow would
- * otherwise replay every step.
+ * Asks before Re-run starts a new run from the first step. A stray tap on Re-run
+ * (it shares the header with the workflow picker and other touch-sized
+ * controls) would otherwise replay every step of a conversation-style workflow.
  *
  * The dialog shows every `ui.confirmRerunOperations` choice with the current
  * one selected, so the user can see why it appeared and change it in place.
