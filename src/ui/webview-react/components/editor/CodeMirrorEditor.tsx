@@ -95,6 +95,7 @@ import {
   checkPriorContextRefs,
   diagnoseResolvedReferences,
   getConditionOutputDiagnostics,
+  getHarnessShellEscapeDiagnostics,
   getInvalidPriorContextDiagnostics,
   resolvePromptReferences,
   type ContextReferenceResolver,
@@ -189,6 +190,8 @@ interface CodeMirrorEditorProps {
   onRevealVariable?: (name: string) => void;
   /** The undefined-variable lint's "add to workflow vars" quick fix. */
   onDefineVariable?: (name: string) => void;
+  /** Converts a leading `!` prompt into a script step. */
+  onConvertShellEscapeToScript?: (command: string) => void;
   /** Pending external insert request from VS Code context menus. */
   pendingInsertRequest?: PromptEditorInsertRequest | null;
   /** Called after a pending external insert has been applied. */
@@ -330,6 +333,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   onRevealVariableRef.current = props.onRevealVariable;
   const onDefineVariableRef = useRef(props.onDefineVariable);
   onDefineVariableRef.current = props.onDefineVariable;
+  const onConvertShellEscapeToScriptRef = useRef(
+    props.onConvertShellEscapeToScript
+  );
+  onConvertShellEscapeToScriptRef.current = props.onConvertShellEscapeToScript;
   // Only whether a handler exists is baked into the editor's extensions (it
   // decides the Ctrl+click handler, hover hint and quick fix); the handlers
   // themselves are read through the refs above.
@@ -1317,6 +1324,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
             referenceValidityRef.current
           ),
           createConditionOutputLintExtension(hasPreConditionRef, modeRef),
+          createHarnessShellEscapeLintExtension(
+            modeRef,
+            onConvertShellEscapeToScriptRef
+          ),
         ]),
         createClickHandlerExtension(
           vscode,
@@ -2536,6 +2547,30 @@ export function createConditionOutputLintExtension(
       delay: 300,
       needsRefresh: isLintRefreshUpdate,
     }
+  );
+}
+
+/** Warn about harness shell escapes in prompt text and offer dashboard fixes. */
+export function createHarnessShellEscapeLintExtension(
+  modeRef: React.RefObject<CodeMirrorEditorMode>,
+  convertToScriptRef?: React.RefObject<((command: string) => void) | undefined>
+) {
+  return linter(
+    (view): Diagnostic[] => {
+      if (
+        (modeRef.current ?? CODE_MIRROR_EDITOR_MODES.PROMPT) !==
+        CODE_MIRROR_EDITOR_MODES.PROMPT
+      ) {
+        return [];
+      }
+      return getHarnessShellEscapeDiagnostics(view.state.doc.toString()).map(
+        (diagnostic) =>
+          toCodeMirrorPromptDiagnostic(diagnostic, {
+            convertShellEscapeToScript: convertToScriptRef?.current,
+          })
+      );
+    },
+    { delay: 300, needsRefresh: isLintRefreshUpdate }
   );
 }
 

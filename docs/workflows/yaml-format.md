@@ -79,6 +79,9 @@ workflow file first, then in the workspace root, then in `.ctrlyoke/`. Anything
 else, including `prompts/review.prompt.md` without the `./`, is sent as inline
 prompt text.
 
+A leading `!` in a prompt step is sent to the AI as prompt text; ctrlyoke does
+not treat it as a harness shell escape. To run a command, use a [script step](/workflows/script-steps).
+
 ## How step properties inherit {#property-inheritance}
 
 Most step fields can also be set once at the root of the workflow. These are

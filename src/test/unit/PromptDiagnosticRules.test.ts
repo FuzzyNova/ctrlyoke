@@ -2,6 +2,7 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
   getConditionOutputDiagnostics,
+  getHarnessShellEscapeDiagnostics,
   getPriorContextDiagnostics,
   getPromptDiagnostics,
   getReferenceDiagnostics,
@@ -43,6 +44,27 @@ function summarize(
 }
 
 suite("PromptDiagnosticRules", () => {
+  suite("harness shell escape", () => {
+    test("warns when ! starts the prompt, including after leading whitespace", () => {
+      for (const text of ["! npm test", "  \t! npm test"]) {
+        const [diagnostic] = getPromptDiagnostics(text, baseContext);
+        assert.strictEqual(
+          diagnostic.code,
+          PROMPT_DIAGNOSTIC_CODES.HARNESS_SHELL_ESCAPE
+        );
+        assert.strictEqual(text.slice(diagnostic.from, diagnostic.to), "!");
+        assert.strictEqual(diagnostic.severity, "warning");
+      }
+    });
+
+    test("does not warn when ! appears later in the prompt", () => {
+      assert.deepStrictEqual(
+        getHarnessShellEscapeDiagnostics("Run this !"),
+        []
+      );
+    });
+  });
+
   suite("prior context", () => {
     test("reports $previous and $all when there are no prior steps", () => {
       for (const token of ["$previous", "$all"]) {

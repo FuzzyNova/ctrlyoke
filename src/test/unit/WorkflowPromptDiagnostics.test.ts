@@ -29,6 +29,14 @@ async function diagnose(
 }
 
 suite("getWorkflowPromptDiagnostics", () => {
+  test("does not warn on a script step beginning with !", async () => {
+    const text = 'steps:\n  - type: script\n    script: "! npm test"\n';
+    assert.deepStrictEqual(
+      await diagnose(text, CTRLYOKE_FILE_KINDS.WORKFLOW_YAML),
+      []
+    );
+  });
+
   test("flags a missing file in a .prompt.md body", async () => {
     const text = "---\nname: x\n---\nRead @missing.ts and @present.ts\n";
     assert.deepStrictEqual(

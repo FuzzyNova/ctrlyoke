@@ -45,6 +45,10 @@ import {
   findVariablePlaceholders,
   isVariableDefined,
 } from "./VariablePlaceholders";
+import {
+  HARNESS_SHELL_ESCAPE_PREFIX,
+  isHarnessShellEscape,
+} from "./HarnessShellEscape";
 
 /** What the text alone can't say about where it sits in a workflow. */
 export interface PromptDiagnosticContext {
@@ -137,6 +141,25 @@ const NO_FINAL_STEP_MESSAGE =
   "Prior context not found — no final step is configured";
 const EXPANSION_SUPPRESSED_MESSAGE =
   "Context expansion suppressed — this reference won't be expanded inside code";
+const HARNESS_SHELL_ESCAPE_MESSAGE =
+  "A leading `!` is a harness shell escape, which steps don't support. This text is sent to the AI as a prompt. To run a command, use a script step.";
+
+/** Warn when a prompt begins with a harness-native shell escape. */
+export function getHarnessShellEscapeDiagnostics(
+  text: string
+): PromptDiagnostic[] {
+  if (!isHarnessShellEscape(text)) return [];
+  const from = text.search(/\S/);
+  return [
+    {
+      from,
+      to: from + HARNESS_SHELL_ESCAPE_PREFIX.length,
+      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+      code: PROMPT_DIAGNOSTIC_CODES.HARNESS_SHELL_ESCAPE,
+      message: HARNESS_SHELL_ESCAPE_MESSAGE,
+    },
+  ];
+}
 
 /**
  * Check every `$previous`/`$all`/`$finalStep`/`$step:N` reference outside code.
@@ -383,6 +406,7 @@ export function getPromptDiagnostics(
   context: PromptDiagnosticContext
 ): PromptDiagnostic[] {
   return [
+    ...getHarnessShellEscapeDiagnostics(text),
     ...getPriorContextDiagnostics(text, context),
     ...getConditionOutputDiagnostics(text, context),
     ...(context.vars

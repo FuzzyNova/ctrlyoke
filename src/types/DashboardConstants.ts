@@ -2356,6 +2356,7 @@ export const PROMPT_DIAGNOSTIC_CODES = {
   CONDITION_END_CONDITION_OUTSIDE_RETRY:
     "prompt.condition.end-condition-outside-retry",
   CONDITION_FIELD_UNKNOWN: "prompt.condition.field-unknown",
+  HARNESS_SHELL_ESCAPE: "prompt.harness.shell-escape",
 } as const;
 
 /** Codes used by VS Code's YAML workflow schema diagnostics. */

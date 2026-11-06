@@ -188,6 +188,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     scriptShell,
     originalPromptData,
     setScriptCommand,
+    setStepType,
     setScriptTimeoutSec,
     setScriptOnPass,
     setScriptOnFail,
@@ -1352,6 +1353,14 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     [setPromptText]
   );
 
+  const convertShellEscapeToScript = useCallback(
+    (command: string) => {
+      setStepType(STEP_TYPES.SCRIPT);
+      setScriptCommand(command);
+    },
+    [setScriptCommand, setStepType]
+  );
+
   // Sync ScriptConditionEditor value to individual script store fields
   const handleScriptChange = useCallback(
     (updated: ScriptConditionValue) => {
@@ -1473,6 +1482,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             onRevealVariable={revealWorkflowVariable}
             onDefineVariable={
               isExternallyManaged ? undefined : defineAndRevealWorkflowVariable
+            }
+            onConvertShellEscapeToScript={
+              isExternallyManaged ? undefined : convertShellEscapeToScript
             }
             pendingInsertRequest={pendingPromptEditorInsert}
             onInsertApplied={consumePromptEditorInsert}

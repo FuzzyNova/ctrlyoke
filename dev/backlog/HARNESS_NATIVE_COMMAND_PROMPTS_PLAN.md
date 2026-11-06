@@ -1,7 +1,7 @@
 # Harness-Native Command Prompts Plan (`!` shell escapes and `/` TUI commands)
 
-**Status:** Phase 1 complete (2026-11-06). Remaining work is staged as a ctrlyoke workflow in
-this order: Phase 2a → Phase 4 → Phase 0 probes (two parallel halves) → Phase 3a (the `noTurnStarted`
+**Status:** Phases 1 and 2a complete (2026-11-06). Remaining work is staged as a ctrlyoke workflow in
+this order: Phase 4 → Phase 0 probes (two parallel halves) → Phase 3a (the `noTurnStarted`
 status and its consumers) → Phase 3b (the watchdog itself). Phase 2b is deferred. Each step
 ticks its own items here.
 
@@ -151,6 +151,10 @@ for every prompt. Phase 3 doesn't need its own guard for that.
   file-based plan for `! echo hello` in both spawn and reuse modes.
 
 ## Phase 2a — Lint rule and dashboard fix for a leading `!`
+
+- [x] Warn on a leading `!` in prompt text, underlining only the prefix; script steps are not warned.
+- [x] Add dashboard actions to convert to a script step or remove `!` and following whitespace.
+- [x] Document the behavior and add extension and dashboard tests, including switch-back restoration.
 
 1. **Rule.** Add a `PROMPT_DIAGNOSTIC_CODES` entry and a rule in `src/utils/PromptDiagnosticRules.ts`
    that warns when a prompt step's text starts with `!` (after trimming whitespace). Underline
