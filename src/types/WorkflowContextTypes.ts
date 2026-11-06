@@ -167,6 +167,8 @@ export interface WorkflowContext {
     message: string,
     severity: import("./DashboardConstants").StatusMessageSeverity
   ) => void;
+  /** Settle an interactive prompt whose input did not start a harness turn. */
+  markNoTurnStarted?: () => Promise<void>;
   /** Analyze resolved prompt attachments at the final execution boundary. */
   analyzeCompatibilityForPrompt?: (
     promptIndex: number,

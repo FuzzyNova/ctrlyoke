@@ -110,6 +110,9 @@ export interface INotificationMonitor {
    */
   readonly supportsSessionIdInFilename: boolean;
 
+  /** Logical hook artifact that marks the start of one submitted AI turn. */
+  getTurnStartHookEvent?(): HookEvent | undefined;
+
   /**
    * Whether this harness fires a SessionStart hook at the beginning of a session.
    *
@@ -236,6 +239,11 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
    * Override to false for harnesses that use log file discovery instead (Codex).
    */
   readonly supportsSessionStart: boolean = true;
+
+  /** Most harnesses expose a per-turn user-prompt-submit event. */
+  getTurnStartHookEvent(): HookEvent | undefined {
+    return HOOK_EVENT_NAMES.USER_PROMPT_SUBMIT;
+  }
 
   // ── Abstract (CLI-specific) ──────────────────────────────────────────────
 

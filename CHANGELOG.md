@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Interactive prompt steps now finish with a distinct **No turn started** status when the harness handles submitted input without beginning an AI turn. The step does not run retries or end conditions, and the next step starts in a fresh process while resuming the same session.
+- Interactive prompt steps now finish with a distinct **No turn started** status if the harness handles submitted input without beginning an AI turn within 25 seconds. The step does not run retries or end conditions, and the next step starts in a fresh process while resuming the same session.
 - Hyphenated and namespaced harness slash-command names are no longer cut short; simple `/command args` prompts are sent verbatim.
 - Prompt steps beginning with `!` now show a warning with dashboard actions to convert the command to a script step or remove the prefix.
 - A prompt beginning with `!` is now sent to the AI through a prompt file instead of being typed as a harness shell escape.

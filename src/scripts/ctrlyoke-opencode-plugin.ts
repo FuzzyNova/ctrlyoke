@@ -537,16 +537,34 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
     HookArtifact,
     "hookEvent" | "nativeHookEvent" | "rawHookData"
   > | null {
-    if (!NOTIFY_DIR || !RUN_ID) {
+    let turnContext: {
+      runId?: string;
+      promptIndex?: number;
+      promptName?: string;
+      workflowId?: string;
+      workflowName?: string;
+    } = {};
+    const turnContextFile = process.env.CTRLYOKE_HOOK_CONTEXT_FILE;
+    if (turnContextFile) {
+      try {
+        turnContext = JSON.parse(readFileSync(turnContextFile, "utf8"));
+      } catch {
+        // Keep hook delivery best-effort while the runner rotates turn context.
+      }
+    }
+    const runId = turnContext.runId || RUN_ID;
+    if (!NOTIFY_DIR || !runId) {
       return null;
     }
     return {
-      runId: RUN_ID,
+      runId,
       timestamp: Date.now(),
-      workflowId: process.env.CTRLYOKE_WORKFLOW_ID || "",
-      workflowName: process.env.CTRLYOKE_WORKFLOW_NAME || "",
-      promptIndex: parseInt(process.env.CTRLYOKE_PROMPT_INDEX || "0", 10),
-      promptName: process.env.CTRLYOKE_PROMPT_NAME || "",
+      workflowId: turnContext.workflowId || process.env.CTRLYOKE_WORKFLOW_ID || "",
+      workflowName: turnContext.workflowName || process.env.CTRLYOKE_WORKFLOW_NAME || "",
+      promptIndex: Number.isInteger(turnContext.promptIndex)
+        ? turnContext.promptIndex!
+        : parseInt(process.env.CTRLYOKE_PROMPT_INDEX || "0", 10),
+      promptName: turnContext.promptName || process.env.CTRLYOKE_PROMPT_NAME || "",
       harnessId: process.env.CTRLYOKE_HARNESS_ID || "",
     };
   }

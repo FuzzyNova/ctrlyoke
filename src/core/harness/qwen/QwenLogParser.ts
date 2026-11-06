@@ -684,6 +684,11 @@ export class QwenLogParser extends BaseLogParser {
     return "human-steer";
   }
 
+  override isTurnStartLogEvent(event: BaseCliEvent): boolean {
+    const e = event as QwenProviderEvent;
+    return !(e.type === "system" && e.subtype === "slash_command");
+  }
+
   override extractUserSteerText(event: BaseCliEvent): string | undefined {
     const e = event as QwenProviderEvent;
     if (e.type !== QWEN_EVENT_TYPES.USER) {

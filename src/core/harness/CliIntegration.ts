@@ -1933,11 +1933,15 @@ export class CliIntegration extends HarnessIntegration {
   private getInstallHookNotificationEvents(
     hooksDisabled: boolean
   ): HookEvent[] {
-    return resolveHookNotificationPlan(
+    const plan = resolveHookNotificationPlan(
       this.provider.config.harnessId,
       configService.getAll().notifications,
       { hooksDisabled }
-    ).installEvents;
+    );
+    const events = new Set(plan.installEvents);
+    const turnStartEvent = this.provider.notificationMonitor?.getTurnStartHookEvent?.();
+    if (!hooksDisabled && turnStartEvent) events.add(turnStartEvent);
+    return [...events];
   }
 
   // ============================================================

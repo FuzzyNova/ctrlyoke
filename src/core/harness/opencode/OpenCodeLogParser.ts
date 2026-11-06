@@ -626,6 +626,16 @@ export class OpenCodeLogParser extends BaseLogParser {
     return "human-steer";
   }
 
+  override isTurnStartLogEvent(event: BaseCliEvent): boolean {
+    return ![
+      "shell.created",
+      "session.shell.started",
+      "shell.exited",
+      "session.shell.ended",
+      "shell",
+    ].includes(event.type);
+  }
+
   override extractUserSteerText(event: BaseCliEvent): string | undefined {
     if (event.type !== OPENCODE_EVENT_TYPES.USER_TEXT) {
       return undefined;

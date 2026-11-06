@@ -86,6 +86,11 @@ export class AntigravityNotificationMonitor
     return ["PreInvocation"];
   }
 
+  override getTurnStartHookEvent(): HookEvent {
+    // Antigravity exposes per-invocation PreInvocation as its turn-start signal.
+    return "sessionStart";
+  }
+
   buildHookConfig(
     scriptPath: string,
     notifyDir: string,

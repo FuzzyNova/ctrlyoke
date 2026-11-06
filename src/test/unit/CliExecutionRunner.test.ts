@@ -6,6 +6,7 @@ import { suite, teardown, test } from "mocha";
 import {
   CTRLYOKE_ENV_VARS,
   FAILURE_KINDS,
+  HARNESS_IDS,
   INTERACTIVE_TERMINAL_MODES,
   STATUS_MESSAGE_SEVERITY,
   type InteractiveTerminalMode,
@@ -14,6 +15,7 @@ import { CliLogMonitor } from "../../core/harness/CliLogMonitor";
 import { CliExecutionSession } from "../../core/harness/shared/CliExecutionSession";
 import {
   CliExecutionRunner,
+  INTERACTIVE_TURN_START_TIMEOUT_MS,
   type RunningTerminalContext,
 } from "../../core/harness/shared/CliExecutionRunner";
 import { CliFailureTracker } from "../../core/harness/shared/CliFailureTracker";
@@ -289,6 +291,30 @@ function createRunner(options?: {
 }
 
 suite("CliExecutionRunner", () => {
+  test("does not schedule an interactive turn-start watchdog for headless runs", async () => {
+    const originalSetTimeout = globalThis.setTimeout;
+    const delays: number[] = [];
+    globalThis.setTimeout = ((callback, delay, ...args) => {
+      delays.push(Number(delay ?? 0));
+      return originalSetTimeout(callback, delay, ...args);
+    }) as typeof setTimeout;
+    try {
+      const { runner } = createRunner();
+      await runner.executeHeadless(
+        new CliExecutionSession({ prompt: { prompt: "headless prompt" } }),
+        []
+      );
+      assert.strictEqual(
+        delays.includes(
+          INTERACTIVE_TURN_START_TIMEOUT_MS[HARNESS_IDS.CLAUDE_CLI]
+        ),
+        false
+      );
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+    }
+  });
+
   test("invalidates terminal reuse while preserving the session for resume", () => {
     const { runner } = createRunner();
     const context = {

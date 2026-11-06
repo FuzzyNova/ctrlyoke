@@ -5,7 +5,11 @@ import {
   USER_STEER_ATTRIBUTIONS,
   type UserSteerAttribution,
 } from "../../../types/DashboardConstants";
-import type { BaseCliEvent, ILogParser } from "./interfaces/ILogParser";
+import {
+  USER_EVENT_CLASSIFICATIONS,
+  type BaseCliEvent,
+  type ILogParser,
+} from "./interfaces/ILogParser";
 import { McpSkillEventRewriter } from "../../../utils/McpSkillCommandRecognizer";
 
 export interface CliLogEventPumpDeps {
@@ -114,9 +118,9 @@ export class CliLogEventPump {
       dispatchedPromptText: this.deps.dispatchedPromptText,
     });
     let attribution: UserSteerAttribution;
-    if (classification === "human-steer") {
+    if (classification === USER_EVENT_CLASSIFICATIONS.HUMAN_STEER) {
       attribution = USER_STEER_ATTRIBUTIONS.USER;
-    } else if (classification === "system-message") {
+    } else if (classification === USER_EVENT_CLASSIFICATIONS.SYSTEM_MESSAGE) {
       attribution = USER_STEER_ATTRIBUTIONS.SYSTEM;
     } else {
       return undefined;

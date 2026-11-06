@@ -13,7 +13,8 @@ const POLL_INTERVAL_MS = 500;
 interface HookEventMonitorOptions {
   runId: string;
   notifyDir: string;
-  onEvent: (event: CtrlYokeNotificationEvent) => void;
+  onEvent?: (event: CtrlYokeNotificationEvent) => void;
+  onArtifact?: (artifact: HookArtifact) => void;
 }
 
 /**
@@ -76,10 +77,11 @@ export class HookEventMonitor {
       }
 
       try {
+        this.opts.onArtifact?.(artifact);
         const settings = configService.getAll().notifications;
         const event = buildHookNotificationEvent(artifact, settings);
         if (event) {
-          this.opts.onEvent(event);
+          this.opts.onEvent?.(event);
         }
       } catch (err) {
         Log.trace(

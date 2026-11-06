@@ -860,6 +860,11 @@ export class WorkflowExecutor {
         const shouldContinue =
           finalOutcome.status === PROMPT_TERMINAL_STATUS.COMPLETED;
 
+        if (finalOutcome.status === PROMPT_TERMINAL_STATUS.NO_TURN_STARTED) {
+          await this.persistInterruptedFinalStepRuntime(context);
+          break;
+        }
+
         if (!shouldContinue) {
           if (finalOutcome.status === PROMPT_TERMINAL_STATUS.FAILED) {
             runtime.fail(this.takeTargetRunStopReason(finalOutcome.target));
@@ -1971,21 +1976,29 @@ export class WorkflowExecutor {
    * The watchdog added in Phase 3b calls this single entry point.
    */
   async markNoTurnStarted(target: WorkflowAttemptTarget): Promise<void> {
-    if (target.kind !== FINAL_STEP_PHASES.QUEUE) {
-      throw new Error(
-        `${PROMPT_TERMINAL_STATUS.NO_TURN_STARTED} is only valid for queue prompt steps`
-      );
-    }
     const key = getExecutionTargetRunKey(target);
     const context = this.activeExecution?.context;
     this.noTurnStartedTargets.add(key);
     context?.markTargetIntegrationNotReusable?.(target);
-    await this.promptQueue.skipStep(
-      target.stepIndex,
-      PROMPT_TERMINAL_STATUS.NO_TURN_STARTED
-    );
-    const step = this.promptQueue.getState().steps[target.stepIndex];
-    if (step && !isScriptStep(step)) {
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+      await this.promptQueue.skipStep(
+        target.stepIndex,
+        PROMPT_TERMINAL_STATUS.NO_TURN_STARTED
+      );
+    } else {
+      await this.setFinalStepRuntime(context!, {
+        phase: FINAL_STEP_PHASES.FINAL_STEP,
+        loopCount: target.loopIndex,
+        status: STEP_STATUS.NO_TURN_STARTED,
+        startedAt: this.promptQueue.getFinalStepRuntime()?.startedAt,
+        completedAt: Date.now(),
+      });
+    }
+    const step =
+      target.kind === FINAL_STEP_PHASES.QUEUE
+        ? this.promptQueue.getState().steps[target.stepIndex]
+        : undefined;
+    if (target.kind === FINAL_STEP_PHASES.QUEUE && step && !isScriptStep(step)) {
       const resolved = PropertyResolver.resolve(
         step,
         this.promptQueue.getWorkflowFile(),
@@ -2009,16 +2022,18 @@ export class WorkflowExecutor {
         });
       }
     }
-    context?.dashboardProvider?.updateStepStatus(target.stepIndex, {
-      state: STEP_STATUS.NO_TURN_STARTED,
-      message:
-        "The harness handled this input itself, e.g. a TUI command like /config, so no AI turn started.",
-      endConditionResult: {
-        passed: false,
-        skipped: true,
-        message: "Skipped because no AI turn started",
-      },
-    });
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+      context?.dashboardProvider?.updateStepStatus(target.stepIndex, {
+        state: STEP_STATUS.NO_TURN_STARTED,
+        message:
+          "The harness handled this input itself, e.g. a TUI command like /config, so no AI turn started.",
+        endConditionResult: {
+          passed: false,
+          skipped: true,
+          message: "Skipped because no AI turn started",
+        },
+      });
+    }
     if (context) {
       const attempt = this.getRuntime().getAttempt(target);
       if (attempt) {
@@ -2159,6 +2174,9 @@ export class WorkflowExecutor {
       }
     } else {
       const finalStatus = this.promptQueue.getFinalStepRuntime()?.status;
+      if (finalStatus === STEP_STATUS.NO_TURN_STARTED) {
+        return { target, status: PROMPT_TERMINAL_STATUS.NO_TURN_STARTED };
+      }
       if (finalStatus === STEP_STATUS.SKIPPED) {
         return { target, status: PROMPT_TERMINAL_STATUS.SKIPPED };
       }
@@ -2593,6 +2611,7 @@ export class WorkflowExecutor {
             context.reportCompatibilityDiagnostics,
           reportStatusMessage: (message, severity) =>
             void this.trackStatusMessage(context, target, message, severity),
+          markNoTurnStarted: () => this.markNoTurnStarted(target),
           analyzeCompatibilityForPrompt: context.analyzeCompatibilityForPrompt,
           resolvePriorContextItems: context.resolvePriorContextItems,
           releaseConflictingAiSession: context.releaseConflictingAiSession,
@@ -4983,6 +5002,7 @@ export class WorkflowExecutor {
               context.reportCompatibilityDiagnostics,
             reportStatusMessage: (message, severity) =>
               void this.trackStatusMessage(context, target, message, severity),
+            markNoTurnStarted: () => this.markNoTurnStarted(target),
             analyzeCompatibilityForPrompt:
               context.analyzeCompatibilityForPrompt,
             resolvePriorContextItems: context.resolvePriorContextItems,

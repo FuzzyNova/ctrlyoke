@@ -982,6 +982,26 @@ export class CodexLogParser extends BaseLogParser {
     return "human-steer";
   }
 
+  override isTurnStartLogEvent(event: BaseCliEvent): boolean {
+    const e = event as CodexProviderEvent;
+    if (
+      e.type === CODEX_EVENT_TYPES.EVENT_MSG &&
+      e.payload?.type === "CommandExecution" &&
+      e.payload?.source === "user_shell"
+    ) {
+      return false;
+    }
+    if (
+      e.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
+      e.payload?.role === "user" &&
+      Array.isArray(e.payload?.content_item_kinds) &&
+      e.payload.content_item_kinds.includes("shell.user_command")
+    ) {
+      return false;
+    }
+    return true;
+  }
+
   override extractUserSteerText(event: BaseCliEvent): string | undefined {
     const e = event as CodexProviderEvent;
     if (

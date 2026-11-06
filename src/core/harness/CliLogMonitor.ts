@@ -21,6 +21,7 @@ import type {
   NotificationResult,
 } from "./shared/interfaces/INotificationMonitor";
 import { mergeSubagentOutput } from "./shared/mergeSubagentOutput";
+import { InteractiveTurnStartWatchdog } from "./shared/InteractiveTurnStartWatchdog";
 
 /** Maximum time (ms) spent draining log entries after completion. */
 export const DRAIN_DEADLINE_MS = 2000;
@@ -95,6 +96,8 @@ export interface LogMonitorResult {
   /** Set when monitoring ended because the maxPromptTimeout elapsed. Partial output (if any)
    *  is captured in parsedOutput/cliResult so it can be saved before the error is re-thrown. */
   timedOut?: boolean;
+  /** The submitted interactive input did not begin a harness turn in time. */
+  noTurnStarted?: boolean;
 }
 
 /**
@@ -106,6 +109,8 @@ export interface LogMonitorDependencies {
   logParser: ILogParser;
   /** Optional notification monitor for hook-based completion detection (Claude, Codex) */
   notificationMonitor?: INotificationMonitor;
+  /** Present only for an interactive submission with a confirmed start signal. */
+  turnStartWatchdog?: InteractiveTurnStartWatchdog;
   runtimeState: {
     /** Returns the workspace root path (needed for notification directory resolution) */
     getWorkspaceRoot: () => string | undefined;
@@ -243,6 +248,7 @@ export class CliLogMonitor {
         // (see runBackgroundWorkHold) sees it on its next poll and releases
         // instead of racing this resolve() with its own later one.
         completed = true;
+        this.deps.turnStartWatchdog?.cancel();
         clearMonitoringTimers();
         watcher?.close();
 
@@ -312,6 +318,7 @@ export class CliLogMonitor {
       const finalizeCompletion = async () => {
         if (!claimSettlement()) return;
         completed = true;
+        this.deps.turnStartWatchdog?.cancel();
         clearMonitoringTimers();
 
         // Drain any remaining log entries before final extraction (race-safe for fast prompts)
@@ -624,6 +631,9 @@ export class CliLogMonitor {
         }
 
         Log.info(`[CliLogMonitor] Completion detected via ${source}`);
+        // Stop is a completion signal even for harness-native commands that
+        // never emitted a per-turn start signal (Claude's `!` is one example).
+        this.deps.turnStartWatchdog?.cancel();
 
         // Catch up on any log content written just before this signal arrived,
         // so hasPendingBackgroundWork() below reflects the latest launch/notify
@@ -657,6 +667,13 @@ export class CliLogMonitor {
       // ──────────────────────────────────────────────────────
       const processEvent = (event: BaseCliEvent, source: string) => {
         events.push(event);
+        if (
+          this.deps.logParser.isTurnStartLogEvent?.(event, {
+            dispatchedPromptText,
+          }) ?? true
+        ) {
+          this.deps.turnStartWatchdog?.signal();
+        }
         pump.processEvent(event);
 
         // Wake a background-work hold as soon as this event's effect on
@@ -712,6 +729,22 @@ export class CliLogMonitor {
       watcher = pump.watch(logPath, startTime, (event) => {
         processEvent(event, "log file");
       });
+
+      const resolveNoTurnStarted = () => {
+        if (!claimSettlement()) return;
+        completed = true;
+        clearMonitoringTimers();
+        watcher?.close();
+        resolve({
+          success: false,
+          sessionId: sessionId ?? undefined,
+          noTurnStarted: true,
+        });
+      };
+
+      // Timer begins only once the interactive session is ready for this turn.
+      // A hook may already have arrived (and signalled the watchdog) meanwhile.
+      this.deps.turnStartWatchdog?.start(resolveNoTurnStarted);
 
       try {
         const initialEntries = await pump.readNewEntriesSince(
@@ -867,6 +900,7 @@ export class CliLogMonitor {
           Log.info("[CliLogMonitor] Log monitoring cancelled by user");
           // Same as resolveFailure — unblocks a background-work hold in progress.
           completed = true;
+          this.deps.turnStartWatchdog?.cancel();
           clearMonitoringTimers();
           watcher?.close();
           // Flush any remaining log events and extract partial output so the

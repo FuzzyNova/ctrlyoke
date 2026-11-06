@@ -234,6 +234,7 @@ export type WorkflowFileFormat =
 export const CTRLYOKE_ENV_VARS = {
   WORKING_FILE: "CTRLYOKE_WORKING_FILE",
   NOTIFY_AWAITING_INPUT: "CTRLYOKE_NOTIFY_AWAITING_INPUT",
+  HOOK_CONTEXT_FILE: "CTRLYOKE_HOOK_CONTEXT_FILE",
 } as const;
 
 /** Completion trigger discriminants shared by the extension host and webview. */

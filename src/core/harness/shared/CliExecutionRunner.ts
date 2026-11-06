@@ -5,6 +5,7 @@ import type { CliEvent } from "../../../types/CliOutputTypes";
 import {
   FAILURE_KINDS,
   CTRLYOKE_ENV_VARS,
+  HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
   INTERACTIVE_TERMINAL_MODES,
   SESSION_AVAILABILITY,
@@ -41,6 +42,8 @@ import type {
 import type { InteractiveExitResult } from "../../../utils/CliProcessManager";
 import type { CliResolvedCommand } from "./CliLauncherResolver";
 import { AsyncMutex } from "./AsyncMutex";
+import { InteractiveTurnStartWatchdog } from "./InteractiveTurnStartWatchdog";
+import type { HookArtifact } from "../../../ui/notifications/CompletionNotificationFactory";
 import { buildSessionResumeWarning } from "./SessionResumeWarning";
 import { CliTransportError } from "./CliTransportError";
 import type { ExecutionPlanBuilder } from "./ExecutionPlanBuilder";
@@ -114,6 +117,27 @@ export interface RunningTerminalContext {
   externalPermissionIdentity?: string;
   /** The terminal UI must not receive another turn after a native command/view. */
   reusable?: boolean;
+  /** Mutable run/prompt identity read by hooks in this long-lived TUI process. */
+  hookContextFile?: string;
+}
+
+/** Interactive native commands normally reveal a turn within a few seconds. */
+export const INTERACTIVE_TURN_START_TIMEOUT_MS = {
+  [HARNESS_IDS.CLAUDE_CLI]: 25_000,
+  [HARNESS_IDS.CODEX_CLI]: 25_000,
+  [HARNESS_IDS.QWEN_CLI]: 25_000,
+  [HARNESS_IDS.COPILOT_CLI]: 25_000,
+  [HARNESS_IDS.OPENCODE_CLI]: 25_000,
+  [HARNESS_IDS.ANTIGRAVITY_CLI]: 25_000,
+} as const;
+
+interface ActiveTurnStartWatchdog {
+  runId: string;
+  promptIndex?: number;
+  submittedAt: number;
+  sessionId?: string;
+  hookEvent: string;
+  watchdog: InteractiveTurnStartWatchdog;
 }
 
 export class CliExecutionRunner {
@@ -138,6 +162,7 @@ export class CliExecutionRunner {
   >();
   /** Serializes complete turn writes for the PTY owned by this runner. */
   private readonly turnWriteMutex = new AsyncMutex();
+  private activeTurnStartWatchdog?: ActiveTurnStartWatchdog;
 
   constructor(private readonly deps: CliExecutionRunnerDeps) {}
 
@@ -232,12 +257,48 @@ export class CliExecutionRunner {
       return { sent: false };
     }
 
-    const startTime = new Date();
+    const runId = crypto.randomUUID();
+    const notifyDir =
+      this.deps.runtimeState.getWorkspaceRoot() &&
+      this.deps.provider.notificationMonitor
+        ? this.deps.provider.notificationMonitor.getNotificationDirectory(
+            this.deps.runtimeState.getWorkspaceRoot()!
+          )
+        : undefined;
+    let turnStartWatchdog: ActiveTurnStartWatchdog | undefined;
+    let submittedAt: Date | undefined;
+    const hookContextFile = this.lastInteractiveContext.hookContextFile;
+    let hookMonitor: HookEventMonitor | undefined;
+    if (notifyDir && hookContextFile) {
+      this.writeHookTurnContext(hookContextFile, runId, session);
+      session.addTempFilePath(hookContextFile);
+      hookMonitor = new HookEventMonitor({
+        runId,
+        notifyDir,
+        onEvent: this.deps.hostCallbacks.onNotificationEvent,
+        onArtifact: (artifact) => this.onTurnStartArtifact(artifact),
+      });
+      hookMonitor.start();
+    }
+    this.deps.provider.setRunId?.(runId, notifyDir);
 
-    const written = await this.writeTurnToLivePty(session.promptArgument);
+    const written = await this.writeTurnToLivePty(session.promptArgument, () => {
+      submittedAt = new Date();
+      turnStartWatchdog = this.createTurnStartWatchdog(
+        session,
+        runId,
+        submittedAt,
+        this.lastInteractiveContext?.sessionId ?? undefined
+      );
+      this.activeTurnStartWatchdog = turnStartWatchdog;
+    });
     if (!written) {
+      if (turnStartWatchdog) this.clearTurnStartWatchdog(turnStartWatchdog);
+      hookMonitor?.stop();
       return { sent: false };
     }
+
+    const startTime = submittedAt ?? new Date();
 
     this.deps.transportCoordinator.updateCurrentPtySessionMetadata?.(
       session.workflowContext
@@ -258,7 +319,8 @@ export class CliExecutionRunner {
         {
           sessionId: this.lastInteractiveContext.sessionId,
           startTime,
-        }
+        },
+        turnStartWatchdog?.watchdog
       );
 
       await this.persistResolvedSessionId(
@@ -273,6 +335,8 @@ export class CliExecutionRunner {
 
       return { sent: true, success: result.success };
     } finally {
+      if (turnStartWatchdog) this.clearTurnStartWatchdog(turnStartWatchdog);
+      hookMonitor?.stop();
       await this.deps.factories.cleanupTempFiles(session.tempFilePaths);
     }
   }
@@ -283,7 +347,10 @@ export class CliExecutionRunner {
    * The mutex covers the complete focus, prompt, submit, and termination-check
    * sequence so concurrent callers cannot interleave input chunks.
    */
-  async writeTurnToLivePty(text: string): Promise<boolean> {
+  async writeTurnToLivePty(
+    text: string,
+    onSubmit?: () => void
+  ): Promise<boolean> {
     await this.turnWriteMutex.acquire();
     try {
       // Some TUIs (Copilot CLI confirmed) use focus tracking and only activate their
@@ -346,6 +413,7 @@ export class CliExecutionRunner {
         pulse < CliExecutionRunner.TERMINAL_SEND_SUBMIT_PULSE_COUNT;
         pulse += 1
       ) {
+        if (pulse === 0) onSubmit?.();
         const submitWritten =
           this.deps.transportCoordinator.writeToCurrentPtySession(submit);
 
@@ -556,9 +624,13 @@ export class CliExecutionRunner {
    * environment (the OpenCode plugin) cannot signal completion without
    * `CTRLYOKE_NOTIFY_DIR`, so a transport that omits it waits forever.
    */
-  private buildHarnessProcessEnv(session: CliExecutionSession): {
+  private buildHarnessProcessEnv(
+    session: CliExecutionSession,
+    options: { includeTurnContext?: boolean } = {}
+  ): {
     runId: string;
     notifyDir: string | undefined;
+    hookContextFile?: string;
     env: Record<string, string>;
   } {
     const runId = crypto.randomUUID();
@@ -583,7 +655,83 @@ export class CliExecutionRunner {
     if (notifyDir) {
       env.CTRLYOKE_NOTIFY_DIR = notifyDir;
     }
-    return { runId, notifyDir, env };
+    const hookContextFile = options.includeTurnContext && notifyDir
+      ? path.join(notifyDir, `${runId}-turn-context.json`)
+      : undefined;
+    if (hookContextFile) {
+      env[CTRLYOKE_ENV_VARS.HOOK_CONTEXT_FILE] = hookContextFile;
+      this.writeHookTurnContext(hookContextFile, runId, session);
+      session.addTempFilePath(hookContextFile);
+    }
+    return { runId, notifyDir, hookContextFile, env };
+  }
+
+  private writeHookTurnContext(
+    filePath: string,
+    runId: string,
+    session: CliExecutionSession
+  ): void {
+    const workflowContext = session.workflowContext;
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        runId,
+        promptIndex: workflowContext?.promptIndex ?? 0,
+        promptName:
+          workflowContext?.allPrompts[workflowContext.promptIndex]?.name ?? "",
+        workflowId: workflowContext?.instanceId ?? "",
+        workflowName: workflowContext?.workflowName ?? "",
+      })
+    );
+  }
+
+  private createTurnStartWatchdog(
+    session: CliExecutionSession,
+    runId: string,
+    submittedAt: Date,
+    sessionId?: string
+  ): ActiveTurnStartWatchdog | undefined {
+    const harnessId = this.deps.provider.config.harnessId;
+    const hookEvent =
+      this.deps.provider.notificationMonitor?.getTurnStartHookEvent?.();
+    if (!harnessId || !hookEvent) return undefined;
+
+    return {
+      runId,
+      promptIndex: session.workflowContext?.promptIndex,
+      submittedAt: submittedAt.getTime(),
+      sessionId,
+      hookEvent,
+      watchdog: new InteractiveTurnStartWatchdog(
+        INTERACTIVE_TURN_START_TIMEOUT_MS[harnessId]
+      ),
+    };
+  }
+
+  private onTurnStartArtifact(artifact: HookArtifact): void {
+    const active = this.activeTurnStartWatchdog;
+    if (
+      !active ||
+      artifact.runId !== active.runId ||
+      artifact.hookEvent !== active.hookEvent ||
+      artifact.timestamp < active.submittedAt ||
+      (active.promptIndex !== undefined &&
+        artifact.promptIndex !== active.promptIndex) ||
+      (active.sessionId &&
+        artifact.sessionId &&
+        artifact.sessionId !== active.sessionId)
+    ) {
+      return;
+    }
+    active.watchdog.signal();
+  }
+
+  private clearTurnStartWatchdog(active: ActiveTurnStartWatchdog): void {
+    active.watchdog.cancel();
+    if (this.activeTurnStartWatchdog === active) {
+      this.activeTurnStartWatchdog = undefined;
+    }
   }
 
   private buildHookEnvVars(
@@ -597,9 +745,15 @@ export class CliExecutionRunner {
       configService.getAll().notifications,
       { hooksDisabled: ctx?.resolvedProperties?.hooks === null }
     );
-    if (notificationPlan.emitRawEvents.length > 0) {
+    const emittedEvents = new Set(notificationPlan.emitRawEvents);
+    const turnStartEvent = this.deps.provider.notificationMonitor
+      ?.getTurnStartHookEvent?.();
+    if (turnStartEvent && ctx?.resolvedProperties?.hooks !== null) {
+      emittedEvents.add(turnStartEvent);
+    }
+    if (emittedEvents.size > 0) {
       env.CTRLYOKE_NOTIFY_HOOK_EVENTS =
-        notificationPlan.emitRawEvents.join(",");
+        [...emittedEvents].join(",");
     }
     if (notificationPlan.awaitingInput) {
       env[CTRLYOKE_ENV_VARS.NOTIFY_AWAITING_INPUT] = serializeAwaitingInputRule(
@@ -680,19 +834,27 @@ export class CliExecutionRunner {
       const {
         runId,
         notifyDir,
+        hookContextFile,
         env: terminalEnv,
-      } = this.buildHarnessProcessEnv(session);
+      } = this.buildHarnessProcessEnv(session, { includeTurnContext: true });
       this.deps.provider.setRunId?.(runId, notifyDir);
 
       hookMonitor =
-        notifyDir && this.deps.hostCallbacks.onNotificationEvent
+        notifyDir
           ? new HookEventMonitor({
               runId,
               notifyDir,
-              onEvent: (event) =>
-                this.deps.hostCallbacks.onNotificationEvent!(event),
+              onEvent: this.deps.hostCallbacks.onNotificationEvent,
+              onArtifact: (artifact) => this.onTurnStartArtifact(artifact),
             })
           : null;
+      const turnStartWatchdog = this.createTurnStartWatchdog(
+        session,
+        runId,
+        startTime,
+        session.resolvedSessionId
+      );
+      this.activeTurnStartWatchdog = turnStartWatchdog;
       hookMonitor?.start();
 
       if (usesInheritedStdio) {
@@ -750,6 +912,7 @@ export class CliExecutionRunner {
               spawnedWithSessionId: session.resolvedSessionId,
               externalPermissionIdentity:
                 this.deps.provider.getExternalPermissionIdentity?.(),
+              hookContextFile,
             };
       this.lastInteractiveContext = runningTerminalContext;
 
@@ -761,7 +924,7 @@ export class CliExecutionRunner {
       const result = await this.monitorLogFile(discovery.logPath, session, {
         sessionId: discovery.sessionId,
         startTime,
-      });
+      }, turnStartWatchdog?.watchdog);
 
       // Keep the running-terminal context in sync with the latest session ID in case
       // the log monitor extracted a new one during this run.
@@ -779,6 +942,9 @@ export class CliExecutionRunner {
       throw error;
     } finally {
       hookMonitor?.stop();
+      if (this.activeTurnStartWatchdog) {
+        this.clearTurnStartWatchdog(this.activeTurnStartWatchdog);
+      }
       if (standaloneProcess) {
         // The stop hook ends the turn, not the TUI. End it here and wait, so
         // the terminal is the CLI's again before the next step writes to it.
@@ -846,11 +1012,13 @@ export class CliExecutionRunner {
   private async monitorLogFile(
     logPath: string,
     session: CliExecutionSession,
-    params: { sessionId: string | null; startTime: Date }
-  ): Promise<{ success: boolean; sessionId?: string }> {
+    params: { sessionId: string | null; startTime: Date },
+    turnStartWatchdog?: InteractiveTurnStartWatchdog
+  ): Promise<{ success: boolean; sessionId?: string; noTurnStarted?: boolean }> {
     const monitor = new CliLogMonitor({
       logParser: this.deps.provider.logParser!,
       notificationMonitor: this.deps.provider.notificationMonitor,
+      turnStartWatchdog,
       runtimeState: {
         getWorkspaceRoot: this.deps.runtimeState.getWorkspaceRoot,
         isCancelling: this.deps.runtimeState.isCancelling,
@@ -878,6 +1046,11 @@ export class CliExecutionRunner {
     }
 
     await this.persistResolvedSessionId(session, result.sessionId);
+
+    if (result.noTurnStarted) {
+      this.markInteractiveContextNotReusable();
+      await session.workflowContext?.markNoTurnStarted?.();
+    }
 
     if (result.failureKind === FAILURE_KINDS.PROCESS_EXIT) {
       const exitCode = result.processExited?.exitCode ?? -1;
@@ -908,7 +1081,11 @@ export class CliExecutionRunner {
       );
     }
 
-    return { success: result.success, sessionId: result.sessionId };
+    return {
+      success: result.success,
+      sessionId: result.sessionId,
+      ...(result.noTurnStarted ? { noTurnStarted: true } : {}),
+    };
   }
 
   private buildHeadlessResponseCallback(

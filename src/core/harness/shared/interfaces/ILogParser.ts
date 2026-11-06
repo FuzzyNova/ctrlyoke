@@ -40,13 +40,17 @@ export interface BaseCliEvent {
  *   attributed to the system rather than the user.
  * - `"other"` — none of the above (default for harnesses with no ambiguity).
  */
+export const USER_EVENT_CLASSIFICATIONS = {
+  TOOL_RESULT: "tool-result",
+  INJECTED_PROMPT: "injected-prompt",
+  RESUME_SIGNAL: "resume-signal",
+  HUMAN_STEER: "human-steer",
+  SYSTEM_MESSAGE: "system-message",
+  OTHER: "other",
+} as const;
+
 export type UserEventClassification =
-  | "tool-result"
-  | "injected-prompt"
-  | "resume-signal"
-  | "human-steer"
-  | "system-message"
-  | "other";
+  (typeof USER_EVENT_CLASSIFICATIONS)[keyof typeof USER_EVENT_CLASSIFICATIONS];
 
 /**
  * Interface for CLI harness log parsers
@@ -388,6 +392,16 @@ export interface ILogParser {
    * @returns Entry timestamp, or null if not found
    */
   extractTimestamp?(entry: BaseCliEvent): Date | null;
+
+  /**
+   * Whether a parsed session-log record proves that the submitted input began
+   * a harness turn. Providers override this only for native shell/UI records
+   * that share the session log but do not start an AI turn.
+   */
+  isTurnStartLogEvent?(
+    entry: BaseCliEvent,
+    ctx: { dispatchedPromptText?: string }
+  ): boolean;
 
   /**
    * Classify a single log event to decide whether it represents genuine human input

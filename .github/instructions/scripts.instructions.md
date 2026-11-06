@@ -15,7 +15,7 @@ Runtime hook scripts used by CLI harnesses for session start/stop detection, too
 <notificationFlow>
 - There are two outputs: start/stop files for each harness notification monitor, and optional `{runId}-hook-*.json` artifacts for `HookEventMonitor`.
 - `CTRLYOKE_RUN_ID` is the important anti-race contract: start files use `{runId}-start.json` when available so parallel workflows can do direct lookups instead of wildcard scans.
-- Hook artifacts are opt-in. `CliExecutionRunner` sets `CTRLYOKE_NOTIFY_HOOK_EVENTS` plus workflow/prompt metadata env vars, and `ctrlyoke-hook-utils.js` turns those into artifact payloads consumed by `CompletionNotificationFactory`.
+- User-visible hook artifacts are opt-in. Interactive turn-start events are also emitted for watchdog arbitration. `CliExecutionRunner` sets `CTRLYOKE_NOTIFY_HOOK_EVENTS` plus workflow/prompt metadata env vars; for a reused TUI, it updates `CTRLYOKE_HOOK_CONTEXT_FILE` before each submit so artifacts keep the current run and prompt identity.
 - Keep the shared start/stop schema aligned across harnesses (`hookEvent`, `sessionId`, `status`, `timestamp`) so `NotificationMonitorBase` subclasses can reuse the same polling logic.
 </notificationFlow>
 

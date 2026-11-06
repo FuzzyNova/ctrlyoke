@@ -15,6 +15,7 @@ import { ClaudeLogParser } from "../../core/harness/claude/ClaudeLogParser";
 import { CopilotLogParser } from "../../core/harness/copilot/CopilotLogParser";
 import { AntigravityLogParser } from "../../core/harness/antigravity/AntigravityLogParser";
 import { SubagentSourceFollower } from "../../core/harness/shared/SubagentSourceFollower";
+import { InteractiveTurnStartWatchdog } from "../../core/harness/shared/InteractiveTurnStartWatchdog";
 import { CLI_EVENT_TYPES, FAILURE_KINDS } from "../../types/DashboardConstants";
 import type {
   BackgroundWorkHoldData,
@@ -73,6 +74,25 @@ async function withZeroDrainDeadline(body: () => Promise<void>): Promise<void> {
 interface FakeTimerClock {
   capture(delay: number): (() => void) | undefined;
   tickAsync(milliseconds: number): Promise<void>;
+}
+
+class ManualTurnStartClock {
+  private callback?: () => void;
+
+  setTimeout(callback: () => void, _delayMs: number): ReturnType<typeof setTimeout> {
+    this.callback = callback;
+    return 1 as unknown as ReturnType<typeof setTimeout>;
+  }
+
+  clearTimeout(_timer: ReturnType<typeof setTimeout>): void {
+    this.callback = undefined;
+  }
+
+  fire(): void {
+    const callback = this.callback;
+    this.callback = undefined;
+    callback?.();
+  }
 }
 
 async function withFakeTimers(
@@ -163,6 +183,194 @@ async function withFakeTimers(
 }
 
 suite("CliLogMonitor", () => {
+  test("expires an interactive turn when neither start signal arrives", async () => {
+    const originalTimeoutReader =
+      ConfigurationUtils.getMaxPromptExecutionTimeMs;
+    ConfigurationUtils.getMaxPromptExecutionTimeMs = () => undefined;
+    try {
+      const clock = new ManualTurnStartClock();
+      const watchdog = new InteractiveTurnStartWatchdog(25_000, clock);
+      const monitor = new CliLogMonitor({
+        logParser: createParser(),
+        turnStartWatchdog: watchdog,
+        runtimeState: {
+          getWorkspaceRoot: () => undefined,
+          isCancelling: () => false,
+        },
+        hostCallbacks: {
+          onStreamingEvents: () => {},
+          onResponseComplete: () => {},
+          logResponse: () => {},
+        },
+      });
+      const resultPromise = monitor.monitor("log", null, new Date(), "", "/config");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      clock.fire();
+
+      const result = await resultPromise;
+      assert.strictEqual(result.noTurnStarted, true);
+      assert.strictEqual(result.success, false);
+    } finally {
+      ConfigurationUtils.getMaxPromptExecutionTimeMs = originalTimeoutReader;
+    }
+  });
+
+  test("accepts a parsed log event as the only turn-start signal", async () => {
+    const originalTimeoutReader =
+      ConfigurationUtils.getMaxPromptExecutionTimeMs;
+    ConfigurationUtils.getMaxPromptExecutionTimeMs = () => undefined;
+    try {
+      await withZeroDrainDeadline(async () => {
+        {
+          const watchdog = new InteractiveTurnStartWatchdog(25_000);
+          const monitor = new CliLogMonitor({
+            logParser: createParser({
+              isComplete: (event) => event.type === "assistant",
+              readNewLines: async () => [{ type: "assistant", timestamp: 1 }],
+            }),
+            turnStartWatchdog: watchdog,
+            runtimeState: {
+              getWorkspaceRoot: () => undefined,
+              isCancelling: () => false,
+            },
+            hostCallbacks: {
+              onStreamingEvents: () => {},
+              onResponseComplete: () => {},
+              logResponse: () => {},
+            },
+          });
+          const resultPromise = monitor.monitor("log", null, new Date(0), "");
+
+          const result = await resultPromise;
+          assert.strictEqual(result.success, true);
+          assert.strictEqual(result.noTurnStarted, undefined);
+        }
+      });
+    } finally {
+      ConfigurationUtils.getMaxPromptExecutionTimeMs = originalTimeoutReader;
+    }
+  });
+
+  test("accepts a turn-start hook even when the session log stays silent", async () => {
+    const originalTimeoutReader =
+      ConfigurationUtils.getMaxPromptExecutionTimeMs;
+    ConfigurationUtils.getMaxPromptExecutionTimeMs = () => undefined;
+    try {
+      await withZeroDrainDeadline(async () => {
+        {
+          const watchdog = new InteractiveTurnStartWatchdog(25_000);
+          watchdog.signal();
+          const monitor = new CliLogMonitor({
+            logParser: createParser(),
+            notificationMonitor: createNotificationMonitor({
+              monitorForCompletion: async () => ({ completed: true }),
+            }),
+            turnStartWatchdog: watchdog,
+            runtimeState: {
+              getWorkspaceRoot: () => ".",
+              isCancelling: () => false,
+            },
+            hostCallbacks: {
+              onStreamingEvents: () => {},
+              onResponseComplete: () => {},
+              logResponse: () => {},
+            },
+          });
+          const resultPromise = monitor.monitor("log", "session", new Date(0), "");
+
+          const result = await resultPromise;
+          assert.strictEqual(result.success, true);
+          assert.strictEqual(result.noTurnStarted, undefined);
+        }
+      });
+    } finally {
+      ConfigurationUtils.getMaxPromptExecutionTimeMs = originalTimeoutReader;
+    }
+  });
+
+  test("accepts a start signal that arrives just before the watchdog expires", async () => {
+    const originalTimeoutReader =
+      ConfigurationUtils.getMaxPromptExecutionTimeMs;
+    ConfigurationUtils.getMaxPromptExecutionTimeMs = () => undefined;
+    try {
+      await withZeroDrainDeadline(async () => {
+        {
+          const clock = new ManualTurnStartClock();
+          const watchdog = new InteractiveTurnStartWatchdog(25_000, clock);
+          let complete!: (result: { completed: boolean }) => void;
+          const monitor = new CliLogMonitor({
+            logParser: createParser(),
+            notificationMonitor: createNotificationMonitor({
+              monitorForCompletion: () =>
+                new Promise((resolve) => {
+                  complete = resolve;
+                }),
+            }),
+            turnStartWatchdog: watchdog,
+            runtimeState: {
+              getWorkspaceRoot: () => ".",
+              isCancelling: () => false,
+            },
+            hostCallbacks: {
+              onStreamingEvents: () => {},
+              onResponseComplete: () => {},
+              logResponse: () => {},
+            },
+          });
+          const resultPromise = monitor.monitor("log", "session", new Date(0), "");
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          watchdog.signal();
+          clock.fire();
+          complete({ completed: true });
+
+          const result = await resultPromise;
+          assert.strictEqual(result.success, true);
+          assert.strictEqual(result.noTurnStarted, undefined);
+        }
+      });
+    } finally {
+      ConfigurationUtils.getMaxPromptExecutionTimeMs = originalTimeoutReader;
+    }
+  });
+
+  test("treats Stop without a start signal as normal completion", async () => {
+    const originalTimeoutReader =
+      ConfigurationUtils.getMaxPromptExecutionTimeMs;
+    ConfigurationUtils.getMaxPromptExecutionTimeMs = () => undefined;
+    try {
+      await withZeroDrainDeadline(async () => {
+        {
+          const clock = new ManualTurnStartClock();
+          const watchdog = new InteractiveTurnStartWatchdog(25_000, clock);
+          const monitor = new CliLogMonitor({
+            logParser: createParser(),
+            notificationMonitor: createNotificationMonitor({
+              monitorForCompletion: async () => ({ completed: true }),
+            }),
+            turnStartWatchdog: watchdog,
+            runtimeState: {
+              getWorkspaceRoot: () => ".",
+              isCancelling: () => false,
+            },
+            hostCallbacks: {
+              onStreamingEvents: () => {},
+              onResponseComplete: () => {},
+              logResponse: () => {},
+            },
+          });
+          const resultPromise = monitor.monitor("log", "session", new Date(0), "");
+
+          const result = await resultPromise;
+          clock.fire();
+          assert.strictEqual(result.success, true);
+          assert.strictEqual(result.noTurnStarted, undefined);
+        }
+      });
+    } finally {
+      ConfigurationUtils.getMaxPromptExecutionTimeMs = originalTimeoutReader;
+    }
+  });
+
   test("drains child events into interactive completion output", async () => {
     const originalTimeoutReader =
       ConfigurationUtils.getMaxPromptExecutionTimeMs;

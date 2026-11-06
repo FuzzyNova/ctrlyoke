@@ -221,17 +221,30 @@ function runDecisionHook(command, payloadJson, debugLog) {
  * @returns {object|null} Base artifact object (without hookEvent/nativeHookEvent/toolName/rawHookData)
  */
 function buildArtifactBase() {
-  const runId = process.env.CTRLYOKE_RUN_ID;
+  let turnContext;
+  const turnContextFile = process.env.CTRLYOKE_HOOK_CONTEXT_FILE;
+  if (turnContextFile) {
+    try {
+      turnContext = JSON.parse(fs.readFileSync(turnContextFile, "utf8"));
+    } catch {
+      // During startup/cleanup the runner may be replacing the context file.
+      // Fall back to the immutable spawn environment in that brief window.
+    }
+  }
+  const runId = turnContext?.runId || process.env.CTRLYOKE_RUN_ID;
   if (!runId) {
     return null;
   }
   return {
     runId,
     timestamp: Date.now(),
-    workflowId: process.env.CTRLYOKE_WORKFLOW_ID || "",
-    workflowName: process.env.CTRLYOKE_WORKFLOW_NAME || "",
-    promptIndex: parseInt(process.env.CTRLYOKE_PROMPT_INDEX || "0", 10),
-    promptName: process.env.CTRLYOKE_PROMPT_NAME || "",
+    workflowId: turnContext?.workflowId || process.env.CTRLYOKE_WORKFLOW_ID || "",
+    workflowName: turnContext?.workflowName || process.env.CTRLYOKE_WORKFLOW_NAME || "",
+    promptIndex:
+      Number.isInteger(turnContext?.promptIndex)
+        ? turnContext.promptIndex
+        : parseInt(process.env.CTRLYOKE_PROMPT_INDEX || "0", 10),
+    promptName: turnContext?.promptName || process.env.CTRLYOKE_PROMPT_NAME || "",
     harnessId: process.env.CTRLYOKE_HARNESS_ID || "",
   };
 }

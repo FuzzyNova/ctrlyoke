@@ -288,6 +288,51 @@ suite("notification hook scripts", () => {
     }
   });
 
+  test("reads mutable per-turn context when a TUI process is reused", async () => {
+    const notifyDir = path.join(tempDirectory, "reused-context");
+    const contextPath = path.join(tempDirectory, "active-turn.json");
+    const env = {
+      ...hookEnvironment("spawn-run", "userPromptSubmit"),
+      CTRLYOKE_HOOK_CONTEXT_FILE: contextPath,
+    };
+    const writeSubmit = async (
+      runId: string,
+      promptIndex: number,
+      sessionId: string
+    ) => {
+      await fs.writeFile(
+        contextPath,
+        JSON.stringify({ runId, promptIndex, promptName: `prompt ${promptIndex}` }),
+        "utf8"
+      );
+      const result = await runHook(
+        "claude",
+        notifyDir,
+        [],
+        {
+          hook_event_name: "UserPromptSubmit",
+          session_id: sessionId,
+          prompt: `prompt ${promptIndex}`,
+        },
+        env
+      );
+      assert.strictEqual(result.code, 0, result.stderr);
+      const files = await readJsonFiles(notifyDir);
+      const artifactFile = files.find((file) => file.startsWith(`${runId}-hook-`));
+      assert.ok(artifactFile, `expected artifact for ${runId}`);
+      return readArtifact(notifyDir, artifactFile!);
+    };
+
+    const first = await writeSubmit("run-first-turn", 4, "same-session");
+    const second = await writeSubmit("run-reused-turn", 5, "same-session");
+
+    assert.strictEqual(first.runId, "run-first-turn");
+    assert.strictEqual(first.promptIndex, 4);
+    assert.strictEqual(second.runId, "run-reused-turn");
+    assert.strictEqual(second.promptIndex, 5);
+    assert.strictEqual(second.sessionId, "same-session");
+  });
+
   test("writes awaiting-input artifacts for matching notification types only", async () => {
     const cases = [
       {

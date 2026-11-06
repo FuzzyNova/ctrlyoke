@@ -4,6 +4,7 @@ import { StringDecoder } from "string_decoder";
 import {
   BaseCliEvent,
   ILogParser,
+  USER_EVENT_CLASSIFICATIONS,
   UserEventClassification,
 } from "./interfaces/ILogParser";
 import {
@@ -223,6 +224,17 @@ export abstract class BaseLogParser implements ILogParser {
     _ctx: { dispatchedPromptText?: string }
   ): UserEventClassification {
     return "other";
+  }
+
+  isTurnStartLogEvent(
+    event: BaseCliEvent,
+    ctx: { dispatchedPromptText?: string }
+  ): boolean {
+    const classification = this.classifyUserEvent(event, ctx);
+    return (
+      classification !== USER_EVENT_CLASSIFICATIONS.HUMAN_STEER &&
+      classification !== USER_EVENT_CLASSIFICATIONS.SYSTEM_MESSAGE
+    );
   }
 
   /**

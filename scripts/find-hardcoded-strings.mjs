@@ -160,6 +160,9 @@ const KNOWN_UNRELATED_LITERALS = new Set([
   // "worktree": PromptFileParser.ts reads the workflow property, while
   // GitUtils.ts checks Git's top-level CLI subcommand.
   "worktree",
+  // "user": harness transcript roles in CodexLogParser.ts and QwenLogParser.test.ts
+  // are unrelated to the user settings scope in WebviewSettingsSync.test.ts.
+  "user",
 ]);
 
 const EQUALITY_OPERATORS = new Set([

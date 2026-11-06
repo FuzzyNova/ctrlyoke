@@ -1,6 +1,6 @@
 # Harness-Native Command Prompts Plan (`!` shell escapes and `/` TUI commands)
 
-**Status:** Phases 0, 1, 2a and 4 complete; Phase 3a status, consumers, and terminal invalidation are implemented (2026-11-06). Phase 3b, the watchdog itself, remains. Phase 2b is deferred. Each step ticks its own items here.
+**Status:** Implemented (2026-11-06). Phases 0, 1, 2a, 3 and 4 are complete. Phase 2b remains deferred. The watchdog covers all six interactive harnesses; headless execution is unchanged.
 
 Note for Phase 1: `HarnessIntegration.SAFE_CHARS_PATTERN` deliberately allows `!`, so today
 `! echo hello` passes `isSimplePrompt` and is sent inline on spawn too, not only on reuse. The
@@ -208,12 +208,12 @@ The rule: **the step is interactive, at least 20–30 s have passed since the pr
 submitted, and neither the per-turn start hook nor the session log has shown anything for this
 turn.**
 
-1. After the prompt is submitted (fresh spawn: once the TUI is ready and the prompt is sent;
+1. [x] After the prompt is submitted (fresh spawn: once the TUI is ready and the prompt is sent;
    reuse: after the submit pulses in `writeTurnToLivePty`), start a **turn-start timer**. Either
    signal cancels it: the Phase 0 per-turn hook, or the first parsed log event for this session
    dated after the submit. A Stop notification also cancels it. A real turn that then runs for
    20 minutes is unaffected.
-2. If the timer runs out with no signal of either kind, end the step with a **new terminal
+2. [x] If the timer runs out with no signal of either kind, end the step with a **new terminal
    status**, e.g. `noTurnStarted`. Add the name to `DashboardConstants.ts`, with no bare string
    literals. Show a notice in the output pane naming the likely cause ("the harness handled this
    input itself, e.g. a TUI command like `/config`, so no AI turn started"). It isn't a failure:
@@ -228,28 +228,29 @@ turn.**
    - [x] Add its badge and shared history/status label. Runtime status is included in run files,
      timeline events, manifests, and CLI `--json`; run-file and timeline schema versions are
      incremented, with read migrations, while prior versions remain readable.
-3. **Don't reuse that terminal again.** A UI-only command may have left a view open (`/config`).
+3. [x] **Don't reuse that terminal again.** A UI-only command may have left a view open (`/config`).
    The next step's keystrokes would land in it, and what Escape does differs by TUI. Mark the
    live context as not reusable so the next step starts a fresh process with the same session ID
    (the existing `resumeSession` path). Optionally send Escape first as best effort, but don't
    rely on it.
    - [x] Expose the no-turn completion entry point and mark the live interactive context as
      non-reusable while retaining its session ID for the next `resumeSession` spawn.
-4. Timeout: a per-harness default of roughly 20–30 s, because the turn-start hooks fire within a
+4. [x] Timeout: a per-harness default of 25 s, because the turn-start hooks fire within a
    second or two of submit. Add a setting only if a real case needs one. If one is added, it goes
    in `schemas/settings-schema.json` and `CtrlYokeSettings.ts`, not `package.json`.
-5. Fresh spawn: the existing SessionStart wait is not enough (a session can start without a
+5. [x] Fresh spawn: the existing SessionStart wait is not enough (a session can start without a
    turn). Run the same turn-start timer after the session-start wait succeeds.
-6. Headless runs never start this timer (see **Scope**).
+6. [x] Headless runs never start this timer (see **Scope**).
 
-Tests: neither the hook nor the log signals → step ends with the new status, the reuse context is
-cleared, and neither retry nor `errorBehavior` runs; only the log signals (hook missing) → normal
-completion; only the hook signals → normal completion; a signal arrives late but in time →
-normal completion; Stop arrives with no start signal → normal completion; headless → no timer.
+Tests: [x] neither signal → new status, reuse context cleared, no retry/errorBehavior;
+[x] log-only → normal completion; [x] hook-only → normal completion;
+[x] late-but-in-time signal → normal completion; [x] Stop without start → normal completion;
+[x] headless → no timer.
 
-**Phase 3a complete:** status, executor outcome handling, skipped end-condition record, output
-notice, persistence projections, CLI/dashboard labels, and terminal reuse invalidation are in
-place. Phase 3b adds the timer and signal arbitration.
+**Phase 3 complete (2026-11-06):** status, executor outcome handling, skipped end-condition
+record, output notice, persistence projections, CLI/dashboard labels, terminal reuse invalidation,
+per-turn hook/log arbitration, and the per-harness watchdog are implemented. Reused TUI hooks read a
+mutable run/prompt context file so their artifacts stay scoped to the current submission.
 
 ## Phase 4 — Slash commands with arguments
 
