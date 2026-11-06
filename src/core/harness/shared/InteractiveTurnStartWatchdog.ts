@@ -1,5 +1,8 @@
 export interface TurnStartWatchdogClock {
-  setTimeout(callback: () => void, delayMs: number): ReturnType<typeof setTimeout>;
+  setTimeout(
+    callback: () => void,
+    delayMs: number
+  ): ReturnType<typeof setTimeout>;
   clearTimeout(timer: ReturnType<typeof setTimeout>): void;
 }
 
@@ -28,7 +31,8 @@ export class InteractiveTurnStartWatchdog {
   ) {}
 
   start(onTimeout: () => void): void {
-    if (this.state !== WATCHDOG_STATE.PENDING || this.timer !== undefined) return;
+    if (this.state !== WATCHDOG_STATE.PENDING || this.timer !== undefined)
+      return;
     this.timer = this.clock.setTimeout(() => {
       this.timer = undefined;
       if (this.state !== WATCHDOG_STATE.PENDING) return;

@@ -1561,7 +1561,7 @@ suite("CliIntegration", () => {
     const formatted = integration.formatRefs(
       [],
       [],
-      ['@/workspace!/src/file.ts'],
+      ["@/workspace!/src/file.ts"],
       [],
       [],
       ["@.ctrlyoke/temp/prompt.md"]

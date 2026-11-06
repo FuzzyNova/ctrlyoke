@@ -302,7 +302,11 @@ suite("notification hook scripts", () => {
     ) => {
       await fs.writeFile(
         contextPath,
-        JSON.stringify({ runId, promptIndex, promptName: `prompt ${promptIndex}` }),
+        JSON.stringify({
+          runId,
+          promptIndex,
+          promptName: `prompt ${promptIndex}`,
+        }),
         "utf8"
       );
       const result = await runHook(
@@ -318,7 +322,9 @@ suite("notification hook scripts", () => {
       );
       assert.strictEqual(result.code, 0, result.stderr);
       const files = await readJsonFiles(notifyDir);
-      const artifactFile = files.find((file) => file.startsWith(`${runId}-hook-`));
+      const artifactFile = files.find((file) =>
+        file.startsWith(`${runId}-hook-`)
+      );
       assert.ok(artifactFile, `expected artifact for ${runId}`);
       return readArtifact(notifyDir, artifactFile!);
     };

@@ -280,18 +280,24 @@ export class CliExecutionRunner {
       });
       hookMonitor.start();
     }
-    this.deps.provider.setRunId?.(runId, notifyDir);
+    // Deliberately no provider.setRunId(runId) here: the live process keeps its
+    // spawn-time CTRLYOKE_RUN_ID, and sidecars written from that environment
+    // (OpenCode's `<runId>-subagents.jsonl`) stay under it. Only hook artifacts
+    // follow the per-turn runId, through the hook context file.
 
-    const written = await this.writeTurnToLivePty(session.promptArgument, () => {
-      submittedAt = new Date();
-      turnStartWatchdog = this.createTurnStartWatchdog(
-        session,
-        runId,
-        submittedAt,
-        this.lastInteractiveContext?.sessionId ?? undefined
-      );
-      this.activeTurnStartWatchdog = turnStartWatchdog;
-    });
+    const written = await this.writeTurnToLivePty(
+      session.promptArgument,
+      () => {
+        submittedAt = new Date();
+        turnStartWatchdog = this.createTurnStartWatchdog(
+          session,
+          runId,
+          submittedAt,
+          this.lastInteractiveContext?.sessionId ?? undefined
+        );
+        this.activeTurnStartWatchdog = turnStartWatchdog;
+      }
+    );
     if (!written) {
       if (turnStartWatchdog) this.clearTurnStartWatchdog(turnStartWatchdog);
       hookMonitor?.stop();
@@ -655,9 +661,10 @@ export class CliExecutionRunner {
     if (notifyDir) {
       env.CTRLYOKE_NOTIFY_DIR = notifyDir;
     }
-    const hookContextFile = options.includeTurnContext && notifyDir
-      ? path.join(notifyDir, `${runId}-turn-context.json`)
-      : undefined;
+    const hookContextFile =
+      options.includeTurnContext && notifyDir
+        ? path.join(notifyDir, `${runId}-turn-context.json`)
+        : undefined;
     if (hookContextFile) {
       env[CTRLYOKE_ENV_VARS.HOOK_CONTEXT_FILE] = hookContextFile;
       this.writeHookTurnContext(hookContextFile, runId, session);
@@ -746,14 +753,13 @@ export class CliExecutionRunner {
       { hooksDisabled: ctx?.resolvedProperties?.hooks === null }
     );
     const emittedEvents = new Set(notificationPlan.emitRawEvents);
-    const turnStartEvent = this.deps.provider.notificationMonitor
-      ?.getTurnStartHookEvent?.();
+    const turnStartEvent =
+      this.deps.provider.notificationMonitor?.getTurnStartHookEvent?.();
     if (turnStartEvent && ctx?.resolvedProperties?.hooks !== null) {
       emittedEvents.add(turnStartEvent);
     }
     if (emittedEvents.size > 0) {
-      env.CTRLYOKE_NOTIFY_HOOK_EVENTS =
-        [...emittedEvents].join(",");
+      env.CTRLYOKE_NOTIFY_HOOK_EVENTS = [...emittedEvents].join(",");
     }
     if (notificationPlan.awaitingInput) {
       env[CTRLYOKE_ENV_VARS.NOTIFY_AWAITING_INPUT] = serializeAwaitingInputRule(
@@ -839,15 +845,14 @@ export class CliExecutionRunner {
       } = this.buildHarnessProcessEnv(session, { includeTurnContext: true });
       this.deps.provider.setRunId?.(runId, notifyDir);
 
-      hookMonitor =
-        notifyDir
-          ? new HookEventMonitor({
-              runId,
-              notifyDir,
-              onEvent: this.deps.hostCallbacks.onNotificationEvent,
-              onArtifact: (artifact) => this.onTurnStartArtifact(artifact),
-            })
-          : null;
+      hookMonitor = notifyDir
+        ? new HookEventMonitor({
+            runId,
+            notifyDir,
+            onEvent: this.deps.hostCallbacks.onNotificationEvent,
+            onArtifact: (artifact) => this.onTurnStartArtifact(artifact),
+          })
+        : null;
       const turnStartWatchdog = this.createTurnStartWatchdog(
         session,
         runId,
@@ -921,10 +926,15 @@ export class CliExecutionRunner {
         discovery.sessionId ?? undefined
       );
 
-      const result = await this.monitorLogFile(discovery.logPath, session, {
-        sessionId: discovery.sessionId,
-        startTime,
-      }, turnStartWatchdog?.watchdog);
+      const result = await this.monitorLogFile(
+        discovery.logPath,
+        session,
+        {
+          sessionId: discovery.sessionId,
+          startTime,
+        },
+        turnStartWatchdog?.watchdog
+      );
 
       // Keep the running-terminal context in sync with the latest session ID in case
       // the log monitor extracted a new one during this run.
@@ -1014,7 +1024,11 @@ export class CliExecutionRunner {
     session: CliExecutionSession,
     params: { sessionId: string | null; startTime: Date },
     turnStartWatchdog?: InteractiveTurnStartWatchdog
-  ): Promise<{ success: boolean; sessionId?: string; noTurnStarted?: boolean }> {
+  ): Promise<{
+    success: boolean;
+    sessionId?: string;
+    noTurnStarted?: boolean;
+  }> {
     const monitor = new CliLogMonitor({
       logParser: this.deps.provider.logParser!,
       notificationMonitor: this.deps.provider.notificationMonitor,

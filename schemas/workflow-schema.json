@@ -1350,7 +1350,13 @@
             },
             "terminalStatus": {
               "type": "string",
-              "enum": ["completed", "cancelled", "failed", "skipped", "noTurnStarted"],
+              "enum": [
+                "completed",
+                "cancelled",
+                "failed",
+                "skipped",
+                "noTurnStarted"
+              ],
               "description": "Terminal state of this prompt. Absent or 'completed' means successful completion. 'noTurnStarted' means the harness handled submitted input without beginning an AI turn. Used to restore the correct visual status after a working file reload."
             },
             "retryCount": {

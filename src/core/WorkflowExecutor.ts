@@ -1998,7 +1998,11 @@ export class WorkflowExecutor {
       target.kind === FINAL_STEP_PHASES.QUEUE
         ? this.promptQueue.getState().steps[target.stepIndex]
         : undefined;
-    if (target.kind === FINAL_STEP_PHASES.QUEUE && step && !isScriptStep(step)) {
+    if (
+      target.kind === FINAL_STEP_PHASES.QUEUE &&
+      step &&
+      !isScriptStep(step)
+    ) {
       const resolved = PropertyResolver.resolve(
         step,
         this.promptQueue.getWorkflowFile(),

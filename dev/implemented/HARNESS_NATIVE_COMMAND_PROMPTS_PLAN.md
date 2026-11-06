@@ -90,14 +90,14 @@ command. The confirmed signals and parser exclusions are below.
 
 **Confirmed signals and parser exclusions (probed 2026-11-06):**
 
-| Harness | Confirmed turn-start signal | Native shell / UI-only log handling |
-| --- | --- | --- |
-| `claude-cli` | `UserPromptSubmit` hook, once on normal first and reused turns; `/init` also fires it. | Ignore user transcript records containing `<bash-input>` / `<bash-stdout>`: Claude's parser labels these as human steers. `/config` has no parser event. |
-| `codex-cli` | `UserPromptSubmit` hook; normal and `/init` fire it on first and reused turns. | Ignore `CommandExecution` events with `source: "user_shell"` and `response_item` user messages with `content_item_kinds: ["shell.user_command"]`; parser currently accepts only `event_msg:user_message`. `/permissions` has no user-message event. |
-| `qwen-cli` | `UserPromptSubmit` hook; normal and `/init` fire it on first and reused turns (multi-step `/init` may fire multiple times). | Ignore `system` transcript records with `subtype: "slash_command"`; parser accepts only `type: "user"`. Typed `!` adds no user/assistant transcript event. |
-| `copilot-cli` | `userPromptSubmitted` hook, normal and skill-backed `/probe` on first and reused turns. | Typed `!` and `/config` add no second `user.message` or model/tool event. |
-| `opencode-cli` | V2 `session.execution.started` (mapped by ctrlyoke to `session.status.busy`), normal and `/probe` on first and reused turns. | Ignore `shell.created`, `session.shell.started`, `shell.exited`, and `session.shell.ended`; exported `type: "shell"` messages are not parser events. `/config` adds no execution or user event. |
-| `antigravity-cli` | `PreInvocation`, normal and `/probe` on first and reused turns. It is per model invocation and can fire more than once in an agent turn. | Typed `!`, `/config`, and `/settings` do not add transcript turns or parser events. |
+| Harness           | Confirmed turn-start signal                                                                                                              | Native shell / UI-only log handling                                                                                                                                                                                                                 |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `claude-cli`      | `UserPromptSubmit` hook, once on normal first and reused turns; `/init` also fires it.                                                   | Ignore user transcript records containing `<bash-input>` / `<bash-stdout>`: Claude's parser labels these as human steers. `/config` has no parser event.                                                                                            |
+| `codex-cli`       | `UserPromptSubmit` hook; normal and `/init` fire it on first and reused turns.                                                           | Ignore `CommandExecution` events with `source: "user_shell"` and `response_item` user messages with `content_item_kinds: ["shell.user_command"]`; parser currently accepts only `event_msg:user_message`. `/permissions` has no user-message event. |
+| `qwen-cli`        | `UserPromptSubmit` hook; normal and `/init` fire it on first and reused turns (multi-step `/init` may fire multiple times).              | Ignore `system` transcript records with `subtype: "slash_command"`; parser accepts only `type: "user"`. Typed `!` adds no user/assistant transcript event.                                                                                          |
+| `copilot-cli`     | `userPromptSubmitted` hook, normal and skill-backed `/probe` on first and reused turns.                                                  | Typed `!` and `/config` add no second `user.message` or model/tool event.                                                                                                                                                                           |
+| `opencode-cli`    | V2 `session.execution.started` (mapped by ctrlyoke to `session.status.busy`), normal and `/probe` on first and reused turns.             | Ignore `shell.created`, `session.shell.started`, `shell.exited`, and `session.shell.ended`; exported `type: "shell"` messages are not parser events. `/config` adds no execution or user event.                                                     |
+| `antigravity-cli` | `PreInvocation`, normal and `/probe` on first and reused turns. It is per model invocation and can fire more than once in an agent turn. | Typed `!`, `/config`, and `/settings` do not add transcript turns or parser events.                                                                                                                                                                 |
 
 All six signals are run-correlated through `{runId}-hook-…` artifacts (OpenCode plugin artifacts included); session/conversation IDs remain stable on reuse. Claude's `Stop` also fires for typed `!`, so Stop is not evidence that an AI turn began. Launch-time positional prompts can behave differently from native commands typed into a fresh TUI and are not used to evaluate command silence.
 
@@ -133,24 +133,24 @@ for every prompt. Phase 3 doesn't need its own guard for that.
 ## Phase 1 — Never type a `!` that the harness would treat as a shell escape
 
 - [x] Add one shared predicate in `src/utils/`, e.g. `isHarnessShellEscape(promptText)`, which is
-   true when the trimmed text starts with `!`. Make the `!` a named constant, not a repeated
-   literal.
+      true when the trimmed text starts with `!`. Make the `!` a named constant, not a repeated
+      literal.
 - [x] In `HarnessIntegration.isSimplePrompt` and `canSendToRunningTerminal`, return `false` when the
-   predicate matches. The prompt then always goes through the prompt-file path, and the TUI sees
-   only "follow the instructions in @prompt.1.md". The step is an ordinary AI turn: hooks fire,
-   it completes, and if the model runs `echo hello` the output appears as a normal tool call.
+      predicate matches. The prompt then always goes through the prompt-file path, and the TUI sees
+      only "follow the instructions in @prompt.1.md". The step is an ordinary AI turn: hooks fire,
+      it completes, and if the model runs `echo hello` the output appears as a normal tool call.
 - [x] **OpenCode mid-prompt `!`:** the OpenCode provider rejects terminal reuse whenever the
-   text contains `!`. OpenCode 2.2.5's interactive PTY enabled bracketed paste (`?2004h`). A
-   70-repeat prompt sent inside `\x1b[200~` / `\x1b[201~` appeared in the composer as its full
-   text and was submitted; no `[pasted text]` placeholder appeared. Reused OpenCode prompts now
-   use a provider hook from `writeTurnToLivePty` for this wrapping.
+      text contains `!`. OpenCode 2.2.5's interactive PTY enabled bracketed paste (`?2004h`). A
+      70-repeat prompt sent inside `\x1b[200~` / `\x1b[201~` appeared in the composer as its full
+      text and was submitted; no `[pasted text]` placeholder appeared. Reused OpenCode prompts now
+      use a provider hook from `writeTurnToLivePty` for this wrapping.
 - [x] Check the instruction line itself: no generated categorized instruction
-   (`CliIntegration.formatCategorizedInstruction`) may contain a `!`. A workspace path containing
-   `!` could put one there. Either quote it or take the file path.
+      (`CliIntegration.formatCategorizedInstruction`) may contain a `!`. A workspace path containing
+      `!` could put one there. Either quote it or take the file path.
 
 - [x] Tests (`src/test/unit/`): the predicate; `isSimplePrompt` and `canSendToRunningTerminal` reject a
-  leading `!`; the OpenCode provider rejects a mid-prompt `!`; `CliPromptPreparer` produces a
-  file-based plan for `! echo hello` in both spawn and reuse modes.
+      leading `!`; the OpenCode provider rejects a mid-prompt `!`; `CliPromptPreparer` produces a
+      file-based plan for `! echo hello` in both spawn and reuse modes.
 
 ## Phase 2a — Lint rule and dashboard fix for a leading `!`
 
@@ -209,16 +209,16 @@ submitted, and neither the per-turn start hook nor the session log has shown any
 turn.**
 
 1. [x] After the prompt is submitted (fresh spawn: once the TUI is ready and the prompt is sent;
-   reuse: after the submit pulses in `writeTurnToLivePty`), start a **turn-start timer**. Either
-   signal cancels it: the Phase 0 per-turn hook, or the first parsed log event for this session
-   dated after the submit. A Stop notification also cancels it. A real turn that then runs for
-   20 minutes is unaffected.
+       reuse: after the submit pulses in `writeTurnToLivePty`), start a **turn-start timer**. Either
+       signal cancels it: the Phase 0 per-turn hook, or the first parsed log event for this session
+       dated after the submit. A Stop notification also cancels it. A real turn that then runs for
+       20 minutes is unaffected.
 2. [x] If the timer runs out with no signal of either kind, end the step with a **new terminal
-   status**, e.g. `noTurnStarted`. Add the name to `DashboardConstants.ts`, with no bare string
-   literals. Show a notice in the output pane naming the likely cause ("the harness handled this
-   input itself, e.g. a TUI command like `/config`, so no AI turn started"). It isn't a failure:
-   `errorBehavior` and retry loops must not run, end conditions are skipped and noted as skipped,
-   and the workflow goes on to the next step.
+       status**, e.g. `noTurnStarted`. Add the name to `DashboardConstants.ts`, with no bare string
+       literals. Show a notice in the output pane naming the likely cause ("the harness handled this
+       input itself, e.g. a TUI command like `/config`, so no AI turn started"). It isn't a failure:
+       `errorBehavior` and retry loops must not run, end conditions are skipped and noted as skipped,
+       and the workflow goes on to the next step.
    - **Compatibility:** the status is stored in `_runtime.terminalStatus`, written to
      `events.jsonl` and run manifests, and included in CLI `--json` output. Follow the
      persisted-state rules in `CLAUDE.md`: bump each affected format's `schemaVersion`, and keep
@@ -226,20 +226,20 @@ turn.**
      with a `switch` over statuses (run summary, history search, status badges, CLI exit-code
      mapping) handle it explicitly instead of falling into a failure default.
    - [x] Add its badge and shared history/status label. Runtime status is included in run files,
-     timeline events, manifests, and CLI `--json`; run-file and timeline schema versions are
-     incremented, with read migrations, while prior versions remain readable.
+         timeline events, manifests, and CLI `--json`; run-file and timeline schema versions are
+         incremented, with read migrations, while prior versions remain readable.
 3. [x] **Don't reuse that terminal again.** A UI-only command may have left a view open (`/config`).
-   The next step's keystrokes would land in it, and what Escape does differs by TUI. Mark the
-   live context as not reusable so the next step starts a fresh process with the same session ID
-   (the existing `resumeSession` path). Optionally send Escape first as best effort, but don't
-   rely on it.
+       The next step's keystrokes would land in it, and what Escape does differs by TUI. Mark the
+       live context as not reusable so the next step starts a fresh process with the same session ID
+       (the existing `resumeSession` path). Optionally send Escape first as best effort, but don't
+       rely on it.
    - [x] Expose the no-turn completion entry point and mark the live interactive context as
-     non-reusable while retaining its session ID for the next `resumeSession` spawn.
+         non-reusable while retaining its session ID for the next `resumeSession` spawn.
 4. [x] Timeout: a per-harness default of 25 s, because the turn-start hooks fire within a
-   second or two of submit. Add a setting only if a real case needs one. If one is added, it goes
-   in `schemas/settings-schema.json` and `CtrlYokeSettings.ts`, not `package.json`.
+       second or two of submit. Add a setting only if a real case needs one. If one is added, it goes
+       in `schemas/settings-schema.json` and `CtrlYokeSettings.ts`, not `package.json`.
 5. [x] Fresh spawn: the existing SessionStart wait is not enough (a session can start without a
-   turn). Run the same turn-start timer after the session-start wait succeeds.
+       turn). Run the same turn-start timer after the session-start wait succeeds.
 6. [x] Headless runs never start this timer (see **Scope**).
 
 Tests: [x] neither signal → new status, reuse context cleared, no retry/errorBehavior;
@@ -251,6 +251,9 @@ Tests: [x] neither signal → new status, reuse context cleared, no retry/errorB
 record, output notice, persistence projections, CLI/dashboard labels, terminal reuse invalidation,
 per-turn hook/log arbitration, and the per-harness watchdog are implemented. Reused TUI hooks read a
 mutable run/prompt context file so their artifacts stay scoped to the current submission.
+Only hook artifacts follow that per-turn run ID: the live process keeps its spawn-time
+`CTRLYOKE_RUN_ID`, so a reused turn must not call `provider.setRunId` with the new ID (OpenCode's
+subagent sidecar is still written under the spawn ID; fixed during review).
 
 ## Phase 4 — Slash commands with arguments
 
@@ -259,32 +262,32 @@ arguments the way a person typing them would. Long or multi-line text after a co
 goes through the prompt file.
 
 - [x] **Fix the name match.** Change `extractLeadingSlashCommand`'s `/^(\/\w+)/` to match a whole
-   command token, up to the first whitespace. Harness command names use hyphens and
-   `plugin:command` namespaces. Keep the existing check that skips ctrlyoke's own `/skill:` and
-   `/mcp:` tokens. Put the pattern in one named constant shared with `isPureSlashCommand`. Then
-   a bare `/run-tests` is also treated as a bare command.
+      command token, up to the first whitespace. Harness command names use hyphens and
+      `plugin:command` namespaces. Keep the existing check that skips ctrlyoke's own `/skill:` and
+      `/mcp:` tokens. Put the pattern in one named constant shared with `isPureSlashCommand`. Then
+      a bare `/run-tests` is also treated as a bare command.
 - [x] **Send `/command args` verbatim when it's simple enough.** Add a third case alongside "bare"
-   and "command plus file". The whole prompt is sent unchanged, with no instruction assembly,
-   when all of these hold:
-   - it is one line (no newlines);
-   - it passes the existing inline check for the current mode (`isSimplePrompt` on spawn,
-     `canSendToRunningTerminal` on reuse), so quotes, backslashes and length are handled by
-     the rules that already exist, not new ones;
-   - the step attaches nothing that would need a file: no prior context, no ctrlyoke reference
-     tokens to expand (`@`, `#`, `~`, `$`, `!SECRET`), no agent, no skills and no secrets.
-     Otherwise that context would be silently dropped, the way a bare command drops it today.
+      and "command plus file". The whole prompt is sent unchanged, with no instruction assembly,
+      when all of these hold:
+  - it is one line (no newlines);
+  - it passes the existing inline check for the current mode (`isSimplePrompt` on spawn,
+    `canSendToRunningTerminal` on reuse), so quotes, backslashes and length are handled by
+    the rules that already exist, not new ones;
+  - the step attaches nothing that would need a file: no prior context, no ctrlyoke reference
+    tokens to expand (`@`, `#`, `~`, `$`, `!SECRET`), no agent, no skills and no secrets.
+    Otherwise that context would be silently dropped, the way a bare command drops it today.
 - [x] **Otherwise, keep today's form:** `/command follow the instructions in @prompt.1.md`, with
-   the full text in the prompt file. Paragraphs, quotes and attached context reach the model
-   intact. The trade-off is that the command's argument becomes the instruction line, not the
-   user's text. That suits skills (the model reads the file), but a command that parses its
-   arguments strictly would get the wrong ones. Note this in the docs. For strict-argument
-   commands the user should keep the arguments short and on one line.
+      the full text in the prompt file. Paragraphs, quotes and attached context reach the model
+      intact. The trade-off is that the command's argument becomes the instruction line, not the
+      user's text. That suits skills (the model reads the file), but a command that parses its
+      arguments strictly would get the wrong ones. Note this in the docs. For strict-argument
+      commands the user should keep the arguments short and on one line.
 - [x] Docs: a short section on how a leading `/command` is sent in each of the three forms.
 
 - [x] Tests: `extractLeadingSlashCommand` on `/run-tests ui`, `/plugin:cmd x` and `/skill:commit`
-(still `null`); verbatim pass-through for a simple single line with arguments; the file form
-for multi-line text, for a quoted argument that fails the inline check, and for a step with
-prior context; a bare `/run-tests` is a bare command.
+      (still `null`); verbatim pass-through for a simple single line with arguments; the file form
+      for multi-line text, for a quoted argument that fails the inline check, and for a step with
+      prior context; a bare `/run-tests` is a bare command.
 - [x] Changelog: document whole hyphenated/namespaced names and verbatim simple arguments.
 
 ## Decisions (2026-11-06)

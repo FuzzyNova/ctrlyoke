@@ -785,9 +785,9 @@ export async function showHistoryCommand(
             ? `--step ${selector} was skipped`
             : state === PROMPT_TERMINAL_STATUS.NO_TURN_STARTED
               ? `--step ${selector}: ${PROMPT_TERMINAL_STATUS_LABELS[PROMPT_TERMINAL_STATUS.NO_TURN_STARTED]}`
-            : state === HISTORY_STEP_STATES.PENDING
-              ? `--step ${selector} has not started (${HISTORY_STEP_STATES.PENDING})`
-              : `--step ${selector} is ${state} but has no recorded attempt`,
+              : state === HISTORY_STEP_STATES.PENDING
+                ? `--step ${selector} has not started (${HISTORY_STEP_STATES.PENDING})`
+                : `--step ${selector} is ${state} but has no recorded attempt`,
       });
     }
   } else if (
@@ -812,9 +812,9 @@ export async function showHistoryCommand(
             ? `--step ${selector} was skipped`
             : state === PROMPT_TERMINAL_STATUS.NO_TURN_STARTED
               ? `--step ${selector}: ${PROMPT_TERMINAL_STATUS_LABELS[PROMPT_TERMINAL_STATUS.NO_TURN_STARTED]}`
-            : state === HISTORY_STEP_STATES.PENDING
-              ? `--step ${selector}: the final step has not run (${HISTORY_STEP_STATES.PENDING})`
-              : `--step ${selector}: the final step is ${state} but has no recorded pass`,
+              : state === HISTORY_STEP_STATES.PENDING
+                ? `--step ${selector}: the final step has not run (${HISTORY_STEP_STATES.PENDING})`
+                : `--step ${selector}: the final step is ${state} but has no recorded pass`,
     });
   } else if (
     targetFilter?.kind === HISTORY_SHOW_STEP_SELECTORS.RUNNING &&

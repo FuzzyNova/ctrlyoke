@@ -397,7 +397,7 @@ export class CliPromptPreparer {
       !hasExtras &&
       !hasExpandableReferences &&
       !resolvedProperties?.agent &&
-      !(resolvedProperties?.skills?.length) &&
+      !resolvedProperties?.skills?.length &&
       !attachmentResolution.agent &&
       effectiveSkills.length === 0 &&
       secretNames.length === 0

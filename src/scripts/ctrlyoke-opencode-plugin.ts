@@ -559,12 +559,15 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
     return {
       runId,
       timestamp: Date.now(),
-      workflowId: turnContext.workflowId || process.env.CTRLYOKE_WORKFLOW_ID || "",
-      workflowName: turnContext.workflowName || process.env.CTRLYOKE_WORKFLOW_NAME || "",
+      workflowId:
+        turnContext.workflowId || process.env.CTRLYOKE_WORKFLOW_ID || "",
+      workflowName:
+        turnContext.workflowName || process.env.CTRLYOKE_WORKFLOW_NAME || "",
       promptIndex: Number.isInteger(turnContext.promptIndex)
         ? turnContext.promptIndex!
         : parseInt(process.env.CTRLYOKE_PROMPT_INDEX || "0", 10),
-      promptName: turnContext.promptName || process.env.CTRLYOKE_PROMPT_NAME || "",
+      promptName:
+        turnContext.promptName || process.env.CTRLYOKE_PROMPT_NAME || "",
       harnessId: process.env.CTRLYOKE_HARNESS_ID || "",
     };
   }

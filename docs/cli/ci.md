@@ -71,19 +71,19 @@ Exit code `3` means only that the harness's executable wasn't found.
 
 `run --json` writes one object (`schemaVersion: 1`) when the run ends:
 
-| Field                      | Meaning                                                                                                                                            |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `success`                  | `true` only when the run completed and every step passed                                                                                           |
-| `status`                   | Final execution state, for example `completed`, `error` or `stopped`                                                                               |
-| `workflowFile`             | The file you ran, or `null` for `--prompt`                                                                                                         |
-| `workflowKey`, `runRef`    | Address of this run for `history show`, `rerun`, `append`, `continue` and `step`                                                                   |
-| `harness`, `model`         | What the run used                                                                                                                                  |
-| `startedAt`, `completedAt` | ISO-8601 timestamps; `durationMs` is the elapsed time                                                                                              |
-| `varNames`                 | Names of the workflow variables (never their values)                                                                                               |
-| `summary`                  | Step counts: `total`, `completed`, `failed`, `skipped`, `noTurnStarted`                                                                            |
+| Field                      | Meaning                                                                                                                                                                                                                                 |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `success`                  | `true` only when the run completed and every step passed                                                                                                                                                                                |
+| `status`                   | Final execution state, for example `completed`, `error` or `stopped`                                                                                                                                                                    |
+| `workflowFile`             | The file you ran, or `null` for `--prompt`                                                                                                                                                                                              |
+| `workflowKey`, `runRef`    | Address of this run for `history show`, `rerun`, `append`, `continue` and `step`                                                                                                                                                        |
+| `harness`, `model`         | What the run used                                                                                                                                                                                                                       |
+| `startedAt`, `completedAt` | ISO-8601 timestamps; `durationMs` is the elapsed time                                                                                                                                                                                   |
+| `varNames`                 | Names of the workflow variables (never their values)                                                                                                                                                                                    |
+| `summary`                  | Step counts: `total`, `completed`, `failed`, `skipped`, `noTurnStarted`                                                                                                                                                                 |
 | `steps[]`                  | Per step: `status` (including `noTurnStarted` when a TUI handles the input without starting an AI turn), `success`, `attempts`, `sessionId`, `preCondition`, `endCondition`, `filesChanged`, `script` output, `failureKind` and `error` |
-| `finalStep`                | The final step's result, `passCount`, and its last pass (`lastPass`), or `null`                                                                    |
-| `error`                    | `{ step, pass, attempt, message }` for the failure that ended the run, or `null`; `pass` is the 1-based final-step pass (as in `--step final:N`)   |
+| `finalStep`                | The final step's result, `passCount`, and its last pass (`lastPass`), or `null`                                                                                                                                                         |
+| `error`                    | `{ step, pass, attempt, message }` for the failure that ended the run, or `null`; `pass` is the 1-based final-step pass (as in `--step final:N`)                                                                                        |
 
 Secret values are redacted from the result. Check `success` rather than parsing `status` or
 `error.message`, since message text can change.

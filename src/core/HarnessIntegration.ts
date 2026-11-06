@@ -913,9 +913,7 @@ export abstract class HarnessIntegration {
               ? ref
               : `@"${pathRef}"`;
           }
-          return ref.startsWith('"') && ref.endsWith('"')
-            ? ref
-            : `"${ref}"`;
+          return ref.startsWith('"') && ref.endsWith('"') ? ref : `"${ref}"`;
         })
         .join(", ");
 

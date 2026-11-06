@@ -3548,7 +3548,10 @@ export type PromptTerminalStatus =
   (typeof PROMPT_TERMINAL_STATUS)[keyof typeof PROMPT_TERMINAL_STATUS];
 
 /** Shared compact labels used by step badges and history status filters. */
-export const PROMPT_TERMINAL_STATUS_LABELS: Record<PromptTerminalStatus, string> = {
+export const PROMPT_TERMINAL_STATUS_LABELS: Record<
+  PromptTerminalStatus,
+  string
+> = {
   [PROMPT_TERMINAL_STATUS.COMPLETED]: "Completed",
   [PROMPT_TERMINAL_STATUS.CANCELLED]: "Cancelled",
   [PROMPT_TERMINAL_STATUS.FAILED]: "Failed",

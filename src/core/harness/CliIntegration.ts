@@ -1939,7 +1939,8 @@ export class CliIntegration extends HarnessIntegration {
       { hooksDisabled }
     );
     const events = new Set(plan.installEvents);
-    const turnStartEvent = this.provider.notificationMonitor?.getTurnStartHookEvent?.();
+    const turnStartEvent =
+      this.provider.notificationMonitor?.getTurnStartHookEvent?.();
     if (!hooksDisabled && turnStartEvent) events.add(turnStartEvent);
     return [...events];
   }

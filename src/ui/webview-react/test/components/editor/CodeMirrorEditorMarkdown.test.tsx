@@ -340,9 +340,7 @@ describe("ctrlyoke decorations over markdown highlighting", () => {
     for (const link of links) {
       expect(getComputedStyle(link).fontStyle).toBe("normal");
       // jsdom may preserve the CSS keyword instead of normalizing it to 400.
-      expect(["normal", "400"]).toContain(
-        getComputedStyle(link).fontWeight
-      );
+      expect(["normal", "400"]).toContain(getComputedStyle(link).fontWeight);
       expect(link.classList.contains("cm-link")).toBe(true);
     }
   });

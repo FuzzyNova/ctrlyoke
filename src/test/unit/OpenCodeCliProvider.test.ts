@@ -29,7 +29,10 @@ suite("OpenCodeCliProvider", () => {
   test("uses bracketed paste and avoids terminal reuse for any exclamation mark", () => {
     const provider = new OpenCodeCliProvider();
 
-    assert.strictEqual(provider.canSendPromptToRunningTerminal("thanks!"), false);
+    assert.strictEqual(
+      provider.canSendPromptToRunningTerminal("thanks!"),
+      false
+    );
     assert.strictEqual(
       provider.canSendPromptToRunningTerminal("! echo hello"),
       false

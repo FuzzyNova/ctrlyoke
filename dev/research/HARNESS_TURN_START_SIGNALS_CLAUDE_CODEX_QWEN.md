@@ -10,11 +10,11 @@ For first-turn command checks, I also started a clean TUI with no initial prompt
 
 The candidate in each row is the native `UserPromptSubmit` hook. “First typed” means the TUI started without a prompt and the test input was the first text typed into it.
 
-| Harness | Normal first / reused | `! echo hello` first typed / reused | UI-only command first typed / reused | Prompt-backed slash first / reused |
-| --- | --- | --- | --- | --- |
-| `claude-cli` | Fires once on both | Silent on both; Claude nevertheless emits `Stop` for the shell escape | `/config`: silent on both | `/init`: fires on both; Stop also arrived on both |
-| `codex-cli` | Fires once on both | Silent on both | `/permissions`: silent on both | `/init`: fires on both; reused `/init` did not reach Stop before the 40-second kill |
-| `qwen-cli` | Fires once on both | Silent on both when typed into the TUI | `/settings`: silent on both | `/init`: fires on both; several hook invocations occurred during the command's multi-step work |
+| Harness      | Normal first / reused | `! echo hello` first typed / reused                                   | UI-only command first typed / reused | Prompt-backed slash first / reused                                                             |
+| ------------ | --------------------- | --------------------------------------------------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `claude-cli` | Fires once on both    | Silent on both; Claude nevertheless emits `Stop` for the shell escape | `/config`: silent on both            | `/init`: fires on both; Stop also arrived on both                                              |
+| `codex-cli`  | Fires once on both    | Silent on both                                                        | `/permissions`: silent on both       | `/init`: fires on both; reused `/init` did not reach Stop before the 40-second kill            |
+| `qwen-cli`   | Fires once on both    | Silent on both when typed into the TUI                                | `/settings`: silent on both          | `/init`: fires on both; several hook invocations occurred during the command's multi-step work |
 
 ### Answers to the Phase 0 questions
 

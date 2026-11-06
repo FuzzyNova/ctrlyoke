@@ -79,7 +79,10 @@ interface FakeTimerClock {
 class ManualTurnStartClock {
   private callback?: () => void;
 
-  setTimeout(callback: () => void, _delayMs: number): ReturnType<typeof setTimeout> {
+  setTimeout(
+    callback: () => void,
+    _delayMs: number
+  ): ReturnType<typeof setTimeout> {
     this.callback = callback;
     return 1 as unknown as ReturnType<typeof setTimeout>;
   }
@@ -203,7 +206,13 @@ suite("CliLogMonitor", () => {
           logResponse: () => {},
         },
       });
-      const resultPromise = monitor.monitor("log", null, new Date(), "", "/config");
+      const resultPromise = monitor.monitor(
+        "log",
+        null,
+        new Date(),
+        "",
+        "/config"
+      );
       await new Promise((resolve) => setTimeout(resolve, 0));
       clock.fire();
 
@@ -276,7 +285,12 @@ suite("CliLogMonitor", () => {
               logResponse: () => {},
             },
           });
-          const resultPromise = monitor.monitor("log", "session", new Date(0), "");
+          const resultPromise = monitor.monitor(
+            "log",
+            "session",
+            new Date(0),
+            ""
+          );
 
           const result = await resultPromise;
           assert.strictEqual(result.success, true);
@@ -317,7 +331,12 @@ suite("CliLogMonitor", () => {
               logResponse: () => {},
             },
           });
-          const resultPromise = monitor.monitor("log", "session", new Date(0), "");
+          const resultPromise = monitor.monitor(
+            "log",
+            "session",
+            new Date(0),
+            ""
+          );
           await new Promise((resolve) => setTimeout(resolve, 0));
           watchdog.signal();
           clock.fire();
@@ -358,7 +377,12 @@ suite("CliLogMonitor", () => {
               logResponse: () => {},
             },
           });
-          const resultPromise = monitor.monitor("log", "session", new Date(0), "");
+          const resultPromise = monitor.monitor(
+            "log",
+            "session",
+            new Date(0),
+            ""
+          );
 
           const result = await resultPromise;
           clock.fire();

@@ -670,7 +670,8 @@ export class CliLogMonitor {
         if (
           this.deps.logParser.isTurnStartLogEvent?.(event, {
             dispatchedPromptText,
-          }) ?? true
+          }) ??
+          true
         ) {
           this.deps.turnStartWatchdog?.signal();
         }

@@ -33,6 +33,7 @@ function createProvider(options?: {
   discoverSessionLog?: () => Promise<string | null>;
   recoverableSessionError?: boolean;
   wrapTerminalPromptForPaste?: (promptText: string) => string;
+  setRunId?: (runId: string, notifyDir: string | undefined) => void;
 }): ICliProvider {
   return {
     config: {
@@ -109,6 +110,7 @@ function createProvider(options?: {
       ...baseArgs,
     ],
     wrapTerminalPromptForPaste: options?.wrapTerminalPromptForPaste,
+    setRunId: options?.setRunId,
     checkAvailability: async () => true,
   } as unknown as ICliProvider;
 }
@@ -133,6 +135,7 @@ function createRunner(options?: {
   cleanupTempFiles?: (paths: string[]) => Promise<void>;
   recoverableSessionError?: boolean;
   wrapTerminalPromptForPaste?: (promptText: string) => string;
+  setRunId?: (runId: string, notifyDir: string | undefined) => void;
   headlessResponses?: Array<{
     stdout: string;
     stderr: string;
@@ -322,15 +325,43 @@ suite("CliExecutionRunner", () => {
       sessionId: "session-to-resume",
       reusable: true,
     } satisfies RunningTerminalContext;
-    (runner as unknown as { lastInteractiveContext: RunningTerminalContext })
-      .lastInteractiveContext = context;
+    (
+      runner as unknown as { lastInteractiveContext: RunningTerminalContext }
+    ).lastInteractiveContext = context;
 
     assert.strictEqual(runner.hasInteractiveContext(), true);
     runner.markInteractiveContextNotReusable();
 
     assert.strictEqual(runner.hasInteractiveContext(), false);
-    assert.strictEqual(runner.getLastInteractiveContext()?.sessionId, "session-to-resume");
+    assert.strictEqual(
+      runner.getLastInteractiveContext()?.sessionId,
+      "session-to-resume"
+    );
     assert.strictEqual(runner.getLastInteractiveContext()?.reusable, false);
+  });
+
+  test("keeps the spawn run ID on the provider when a turn reuses the terminal", async () => {
+    // The live TUI process keeps its spawn-time CTRLYOKE_RUN_ID, so sidecars it
+    // writes from its own environment (OpenCode's `<runId>-subagents.jsonl`)
+    // stay under that ID. Only hook artifacts follow the per-turn context file.
+    const runIds: string[] = [];
+    const { runner } = createRunner({
+      setRunId: (runId) => runIds.push(runId),
+      writeToCurrentPtySession: () => false,
+    });
+    (
+      runner as unknown as { lastInteractiveContext: RunningTerminalContext }
+    ).lastInteractiveContext = {
+      logPath: "session.jsonl",
+      sessionId: "live-session",
+    };
+
+    const result = await runner.executeInRunningTerminal(
+      new CliExecutionSession({ prompt: { prompt: "reused prompt" } })
+    );
+
+    assert.strictEqual(result.sent, false);
+    assert.deepStrictEqual(runIds, []);
   });
 
   test("keeps deferred hook env files available after a turn", async () => {

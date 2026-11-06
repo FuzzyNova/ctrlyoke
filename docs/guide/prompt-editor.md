@@ -104,7 +104,7 @@ of three forms:
   context, agent, skill or secret.
 - A command with longer or multi-line text, unsafe inline characters, or
   attached context is sent as `/run-tests follow the instructions in
-  @prompt.1.md`; the prompt file contains the complete text and attachments.
+@prompt.1.md`; the prompt file contains the complete text and attachments.
 
 In the last form, the command receives the instruction line as its arguments,
 not the original text. This works well for skills that read the prompt file,
