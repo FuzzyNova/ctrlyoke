@@ -1,9 +1,6 @@
 # Harness-Native Command Prompts Plan (`!` shell escapes and `/` TUI commands)
 
-**Status:** Phases 1, 2a and 4 complete (2026-11-06). Remaining work is staged as a ctrlyoke workflow in
-this order: Phase 0 probes (two parallel halves) → Phase 3a (the `noTurnStarted`
-status and its consumers) → Phase 3b (the watchdog itself). Phase 2b is deferred. Each step
-ticks its own items here.
+**Status:** Phases 0, 1, 2a and 4 complete; Phase 3a status, consumers, and terminal invalidation are implemented (2026-11-06). Phase 3b, the watchdog itself, remains. Phase 2b is deferred. Each step ticks its own items here.
 
 Note for Phase 1: `HarnessIntegration.SAFE_CHARS_PATTERN` deliberately allows `!`, so today
 `! echo hello` passes `isSimplePrompt` and is sent inline on spawn too, not only on reuse. The
@@ -14,8 +11,8 @@ Note for Phase 4: the verbatim `/command args` form reuses the mode's inline che
 inherits the Phase 1 OpenCode rule (`/cmd done!` on a reused OpenCode terminal takes the file
 form). Phase 4 must not bypass that check.
 
-Last reviewed against code: 2026-11-06. The workflow schema doesn't change. The new step status
-is persisted run data (see Phase 3). The editor diagnostic and the new status are user-visible,
+Last reviewed against code: 2026-11-06. Authored workflow fields are unchanged. The new runtime
+step status is persisted run data (see Phase 3). The editor diagnostic and the new status are user-visible,
 so they need a **Changed** entry in `CHANGELOG.md` when they ship.
 
 **Scope: interactive mode only.** In headless mode the process is the turn: it starts when the
@@ -86,22 +83,29 @@ Handle the two prefixes differently, because they are different kinds of problem
 
 ## Phase 0 — Find a per-turn start signal for each harness
 
-The watchdog in Phase 3 needs an event that fires **once per submitted turn**, including in a
-reused terminal. The candidates below already exist in the notification monitors. Each one needs
-checking in an interactive capture (see "Probing a harness CLI's interactive log format" in
-`.github/copilot-instructions.md`): a normal prompt, `! echo hello`, `/config` and a skill-backed
-slash command. For each, record whether the signal fires on a first turn and on a reused turn.
+The watchdog in Phase 3 needs a turn-start event, including in a reused terminal. Phase 0
+probed the existing notification-monitor candidates in fresh and reused interactive TUIs with a
+normal prompt, `! echo hello`, `/config` or its harness equivalent, and a skill-backed slash
+command. The confirmed signals and parser exclusions are below.
 
-| Harness         | Candidate per-turn signal                  | Where it's named today                               |
-| --------------- | ------------------------------------------ | ---------------------------------------------------- |
-| claude-cli      | `UserPromptSubmit` hook                    | `ClaudeNotificationMonitor` (`userPromptSubmit`)     |
-| codex-cli       | `UserPromptSubmit` hook                    | `CodexNotificationMonitor`, `CodexProtocolConstants` |
-| qwen-cli        | `UserPromptSubmit` hook                    | `QwenNotificationMonitor` (already a start event)    |
-| copilot-cli     | `userPromptSubmitted` hook                 | `CopilotNotificationMonitor`                         |
-| opencode-cli    | `session.status.busy` plugin event         | `OpenCodeNotificationMonitor` (`userPromptSubmit`)   |
-| antigravity-cli | `PreInvocation` hook (check it's per turn) | `AntigravityNotificationMonitor.getStartHookEvents`  |
+**Confirmed signals and parser exclusions (probed 2026-11-06):**
 
-Questions to answer for each harness:
+| Harness | Confirmed turn-start signal | Native shell / UI-only log handling |
+| --- | --- | --- |
+| `claude-cli` | `UserPromptSubmit` hook, once on normal first and reused turns; `/init` also fires it. | Ignore user transcript records containing `<bash-input>` / `<bash-stdout>`: Claude's parser labels these as human steers. `/config` has no parser event. |
+| `codex-cli` | `UserPromptSubmit` hook; normal and `/init` fire it on first and reused turns. | Ignore `CommandExecution` events with `source: "user_shell"` and `response_item` user messages with `content_item_kinds: ["shell.user_command"]`; parser currently accepts only `event_msg:user_message`. `/permissions` has no user-message event. |
+| `qwen-cli` | `UserPromptSubmit` hook; normal and `/init` fire it on first and reused turns (multi-step `/init` may fire multiple times). | Ignore `system` transcript records with `subtype: "slash_command"`; parser accepts only `type: "user"`. Typed `!` adds no user/assistant transcript event. |
+| `copilot-cli` | `userPromptSubmitted` hook, normal and skill-backed `/probe` on first and reused turns. | Typed `!` and `/config` add no second `user.message` or model/tool event. |
+| `opencode-cli` | V2 `session.execution.started` (mapped by ctrlyoke to `session.status.busy`), normal and `/probe` on first and reused turns. | Ignore `shell.created`, `session.shell.started`, `shell.exited`, and `session.shell.ended`; exported `type: "shell"` messages are not parser events. `/config` adds no execution or user event. |
+| `antigravity-cli` | `PreInvocation`, normal and `/probe` on first and reused turns. It is per model invocation and can fire more than once in an agent turn. | Typed `!`, `/config`, and `/settings` do not add transcript turns or parser events. |
+
+All six signals are run-correlated through `{runId}-hook-…` artifacts (OpenCode plugin artifacts included); session/conversation IDs remain stable on reuse. Claude's `Stop` also fires for typed `!`, so Stop is not evidence that an AI turn began. Launch-time positional prompts can behave differently from native commands typed into a fresh TUI and are not used to evaluate command silence.
+
+Phase 3's log check must count only parsed turn events newer than the submit timestamp and ignore the shell/UI record types listed above. The session log is complementary to the per-turn hook, not a substitute for a signal on any harness.
+
+**Phase 0 complete.** Full methods, versions, hook payloads, and session-log captures are recorded in `dev/research/HARNESS_TURN_START_SIGNALS_CLAUDE_CODEX_QWEN.md` and `dev/research/HARNESS_TURN_START_SIGNALS_COPILOT_OPENCODE_ANTIGRAVITY.md`.
+
+Phase 0 questions and answers:
 
 1. Does the signal fire for a skill-backed slash command (it should, since that is a real turn)?
 2. Does it stay silent for `!` and for UI-only slash commands (it must, or the watchdog can never
@@ -111,11 +115,9 @@ Questions to answer for each harness:
 
 The session log is the second signal for every harness, not only a fallback for one that lacks a
 hook. During a turn, `CliLogMonitor` already streams the session log for this session ID (the
-path is in `lastInteractiveContext.logPath`). Any parsed event dated after the submit shows that
-a turn started. Phase 0 should also confirm that `!` and UI-only slash commands write nothing
-the log parser turns into an event. If they do (for example, a "shell command ran" record), the
-Phase 3 log check must ignore that event type. Record the results in this doc before starting
-Phase 3.
+path is in `lastInteractiveContext.logPath`). Any parsed turn event dated after the submit shows
+that a turn started. The per-harness shell/UI parser exclusions above are part of the Phase 3
+log check; raw shell lifecycle records and native slash-command records do not count as turn starts.
 
 Note on what exists today: the start wait that has a timeout
 (`NotificationMonitorBase`, `{runId}-start.json`) runs only on a fresh spawn and waits for a
@@ -223,13 +225,16 @@ turn.**
      reading older files. A new enum value is additive for `--json`, but check that consumers
      with a `switch` over statuses (run summary, history search, status badges, CLI exit-code
      mapping) handle it explicitly instead of falling into a failure default.
-   - Give it its own badge and history filter label, built from the same place as the other
-     status labels.
+   - [x] Add its badge and shared history/status label. Runtime status is included in run files,
+     timeline events, manifests, and CLI `--json`; run-file and timeline schema versions are
+     incremented, with read migrations, while prior versions remain readable.
 3. **Don't reuse that terminal again.** A UI-only command may have left a view open (`/config`).
    The next step's keystrokes would land in it, and what Escape does differs by TUI. Mark the
    live context as not reusable so the next step starts a fresh process with the same session ID
    (the existing `resumeSession` path). Optionally send Escape first as best effort, but don't
    rely on it.
+   - [x] Expose the no-turn completion entry point and mark the live interactive context as
+     non-reusable while retaining its session ID for the next `resumeSession` spawn.
 4. Timeout: a per-harness default of roughly 20–30 s, because the turn-start hooks fire within a
    second or two of submit. Add a setting only if a real case needs one. If one is added, it goes
    in `schemas/settings-schema.json` and `CtrlYokeSettings.ts`, not `package.json`.
@@ -241,6 +246,10 @@ Tests: neither the hook nor the log signals → step ends with the new status, t
 cleared, and neither retry nor `errorBehavior` runs; only the log signals (hook missing) → normal
 completion; only the hook signals → normal completion; a signal arrives late but in time →
 normal completion; Stop arrives with no start signal → normal completion; headless → no timer.
+
+**Phase 3a complete:** status, executor outcome handling, skipped end-condition record, output
+notice, persistence projections, CLI/dashboard labels, and terminal reuse invalidation are in
+place. Phase 3b adds the timer and signal arbitration.
 
 ## Phase 4 — Slash commands with arguments
 

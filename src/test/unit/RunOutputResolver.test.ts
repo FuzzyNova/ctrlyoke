@@ -20,6 +20,7 @@ import {
 } from "../../types/DashboardConstants";
 import {
   TIMELINE_EVENT_TYPES,
+  TIMELINE_SCHEMA_VERSION,
   TIMELINE_STORAGE_FILES,
   type WorkflowDefinitionSnapshot,
   type WorkflowRunManifest,
@@ -186,7 +187,7 @@ suite("RunOutputResolver", () => {
     );
     assert.strictEqual(
       (await recorder.readManifest(manifestPath)).schemaVersion,
-      2
+      TIMELINE_SCHEMA_VERSION
     );
     const storedEvents = await recorder.readEvents(manifestPath);
     const appendedOutput = storedEvents[1];

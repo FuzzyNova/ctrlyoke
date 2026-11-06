@@ -2119,6 +2119,12 @@ export class WorkflowInstance
         this.registerTargetPtySession(target, sessionId),
       clearTargetPtySession: (target) => this.clearTargetPtySession(target),
       unregisterActiveTarget: (target) => this.unregisterActiveTarget(target),
+      markTargetIntegrationNotReusable: (target) => {
+        const integration = this.activeTargetResources.get(
+          this.getExecutionTargetRunKey(target)
+        )?.integration;
+        integration?.markInteractiveContextNotReusable();
+      },
       cancelTarget: (target) => this.cancelTarget(target),
       releaseTargetResources: (target) => this.releaseTargetResources(target),
       closeCoordinationParticipant: (target) =>

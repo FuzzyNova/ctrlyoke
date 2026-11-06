@@ -585,6 +585,9 @@ export abstract class HarnessIntegration {
     return false;
   }
 
+  /** Prevent the next prompt from typing into a TUI view left open by a native command. */
+  markInteractiveContextNotReusable(): void {}
+
   /**
    * Returns true if this integration should be kept alive across workflow
    * runs so its own session-activity watcher can keep tailing for

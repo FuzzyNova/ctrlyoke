@@ -2115,6 +2115,10 @@ export class CliIntegration extends HarnessIntegration {
     return reuseRunningTerminal && hasCtx && hasPty;
   }
 
+  override markInteractiveContextNotReusable(): void {
+    this.executionRunner.markInteractiveContextNotReusable();
+  }
+
   /**
    * Reset per-run mutable state before this integration is reused for a new workflow
    * execution. Clears cancellation/failure flags and the failure tracker so the new

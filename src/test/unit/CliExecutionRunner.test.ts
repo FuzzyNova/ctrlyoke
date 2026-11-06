@@ -289,6 +289,24 @@ function createRunner(options?: {
 }
 
 suite("CliExecutionRunner", () => {
+  test("invalidates terminal reuse while preserving the session for resume", () => {
+    const { runner } = createRunner();
+    const context = {
+      logPath: "session.jsonl",
+      sessionId: "session-to-resume",
+      reusable: true,
+    } satisfies RunningTerminalContext;
+    (runner as unknown as { lastInteractiveContext: RunningTerminalContext })
+      .lastInteractiveContext = context;
+
+    assert.strictEqual(runner.hasInteractiveContext(), true);
+    runner.markInteractiveContextNotReusable();
+
+    assert.strictEqual(runner.hasInteractiveContext(), false);
+    assert.strictEqual(runner.getLastInteractiveContext()?.sessionId, "session-to-resume");
+    assert.strictEqual(runner.getLastInteractiveContext()?.reusable, false);
+  });
+
   test("keeps deferred hook env files available after a turn", async () => {
     const tempPath = require("path").join(
       require("os").tmpdir(),

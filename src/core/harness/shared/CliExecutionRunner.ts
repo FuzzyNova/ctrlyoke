@@ -112,6 +112,8 @@ export interface RunningTerminalContext {
   spawnedWithSessionId?: string;
   /** External permission state captured when this process was spawned. */
   externalPermissionIdentity?: string;
+  /** The terminal UI must not receive another turn after a native command/view. */
+  reusable?: boolean;
 }
 
 export class CliExecutionRunner {
@@ -177,7 +179,10 @@ export class CliExecutionRunner {
    * Callers should also check `getLastInteractiveContext()` to verify spawn-arg compatibility.
    */
   hasInteractiveContext(): boolean {
-    return this.lastInteractiveContext !== undefined;
+    return (
+      this.lastInteractiveContext !== undefined &&
+      this.lastInteractiveContext.reusable !== false
+    );
   }
 
   /**
@@ -195,6 +200,13 @@ export class CliExecutionRunner {
    */
   clearInteractiveContext(): void {
     this.lastInteractiveContext = undefined;
+  }
+
+  /** Preserve the session identity for resumeSession while forcing a fresh PTY. */
+  markInteractiveContextNotReusable(): void {
+    if (this.lastInteractiveContext) {
+      this.lastInteractiveContext.reusable = false;
+    }
   }
 
   /**

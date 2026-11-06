@@ -156,7 +156,9 @@ Hover a disabled option to see why it's unavailable.
 
 Each row shows the step's number, status, name or prompt, and any per-step
 overrides. A step's status is one of pending, running, completed, failed,
-cancelled or skipped; disabled steps are greyed out. Parallel groups appear as a
+cancelled, skipped or no turn started. “No turn started” means the harness
+handled the submitted input itself (for example, a TUI command such as
+`/config`) before an AI turn began. Disabled steps are greyed out. Parallel groups appear as a
 boxed group with a **Fail Fast** toggle, and the final step sits in its own
 footer at the bottom.
 

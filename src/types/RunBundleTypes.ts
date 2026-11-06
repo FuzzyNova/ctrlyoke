@@ -11,7 +11,7 @@ import type { ExecutionState } from "./DashboardConstants";
  * (`src/utils/RunBundlePaths.ts`) and its identity is provenance only.
  */
 export const RUN_BUNDLE_KIND = "ctrlyoke.run.bundle" as const;
-export const RUN_BUNDLE_SCHEMA_VERSION = 1 as const;
+export const RUN_BUNDLE_SCHEMA_VERSION = 2 as const;
 export const RUN_BUNDLE_DIR_SUFFIX = ".ctrlyokerun";
 
 export const RUN_BUNDLE_FILES = {

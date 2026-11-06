@@ -108,7 +108,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "_runtime.stopReason.observed": "Observed value in the unit named by `unit`.",
   "_runtime.stopReason.threshold": "Configured guardrail threshold in the unit named by `unit`.",
   "_runtime.terminalFailure": "Whether a failed member remains terminal for its parallel group. False when a per-step continue policy resolved the failure.",
-  "_runtime.terminalStatus": "Terminal state of this prompt. Absent or 'completed' means successful completion. Used to restore the correct visual status after a working file reload.",
+  "_runtime.terminalStatus": "Terminal state of this prompt. Absent or 'completed' means successful completion. 'noTurnStarted' means the harness handled submitted input without beginning an AI turn. Used to restore the correct visual status after a working file reload.",
   "_runtime.tokenTotals": "Latest run-scoped token aggregate projected from timeline history (working files only, written automatically during execution)",
   "_runtime.tokenTotals.byHarness": "Same aggregate partitioned by the harness recorded on each immutable attempt output.",
   "_runtime.tokenTotals.byHarness.*": "Per-harness token subtotal within a run aggregate.",
@@ -364,7 +364,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "finalStep._runtime.startedAt": "Timestamp when the executor claimed this step for dispatch",
   "finalStep._runtime.stepId": "Stable internal identity for this queue step within its run",
   "finalStep._runtime.terminalFailure": "Whether a failed member remains terminal for its parallel group. False when a per-step continue policy resolved the failure.",
-  "finalStep._runtime.terminalStatus": "Terminal state of this prompt. Absent or 'completed' means successful completion. Used to restore the correct visual status after a working file reload.",
+  "finalStep._runtime.terminalStatus": "Terminal state of this prompt. Absent or 'completed' means successful completion. 'noTurnStarted' means the harness handled submitted input without beginning an AI turn. Used to restore the correct visual status after a working file reload.",
   "finalStep._runtime.toolPermissions": "Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'.",
   "finalStep._runtime.toolPermissions.allowedTools": "Tool patterns to allow (used in custom mode). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Codex and Antigravity only support an overall permission mode, not individual tool patterns; Allowed Tools are NOT ENFORCED by those harnesses.",
   "finalStep._runtime.toolPermissions.deniedTools": "Tool patterns to deny (takes precedence over allow list). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity only supports an overall permission mode and does NOT ENFORCE Denied Tools. Codex enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT ENFORCE shell or other tool patterns.",
@@ -682,7 +682,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[]._runtime.startedAt": "Timestamp when the executor claimed this step for dispatch",
   "steps[]._runtime.stepId": "Stable internal identity for this queue step within its run",
   "steps[]._runtime.terminalFailure": "Whether a failed member remains terminal for its parallel group. False when a per-step continue policy resolved the failure.",
-  "steps[]._runtime.terminalStatus": "Terminal state of this prompt. Absent or 'completed' means successful completion. Used to restore the correct visual status after a working file reload.",
+  "steps[]._runtime.terminalStatus": "Terminal state of this prompt. Absent or 'completed' means successful completion. 'noTurnStarted' means the harness handled submitted input without beginning an AI turn. Used to restore the correct visual status after a working file reload.",
   "steps[]._runtime.toolPermissions": "Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'.",
   "steps[]._runtime.toolPermissions.allowedTools": "Tool patterns to allow (used in custom mode). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Codex and Antigravity only support an overall permission mode, not individual tool patterns; Allowed Tools are NOT ENFORCED by those harnesses.",
   "steps[]._runtime.toolPermissions.deniedTools": "Tool patterns to deny (takes precedence over allow list). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity only supports an overall permission mode and does NOT ENFORCE Denied Tools. Codex enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT ENFORCE shell or other tool patterns.",
@@ -819,7 +819,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[].parallel[]._runtime.startedAt": "Timestamp when the executor claimed this step for dispatch",
   "steps[].parallel[]._runtime.stepId": "Stable internal identity for this queue step within its run",
   "steps[].parallel[]._runtime.terminalFailure": "Whether a failed member remains terminal for its parallel group. False when a per-step continue policy resolved the failure.",
-  "steps[].parallel[]._runtime.terminalStatus": "Terminal state of this prompt. Absent or 'completed' means successful completion. Used to restore the correct visual status after a working file reload.",
+  "steps[].parallel[]._runtime.terminalStatus": "Terminal state of this prompt. Absent or 'completed' means successful completion. 'noTurnStarted' means the harness handled submitted input without beginning an AI turn. Used to restore the correct visual status after a working file reload.",
   "steps[].parallel[]._runtime.toolPermissions": "Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'.",
   "steps[].parallel[]._runtime.toolPermissions.allowedTools": "Tool patterns to allow (used in custom mode). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Codex and Antigravity only support an overall permission mode, not individual tool patterns; Allowed Tools are NOT ENFORCED by those harnesses.",
   "steps[].parallel[]._runtime.toolPermissions.deniedTools": "Tool patterns to deny (takes precedence over allow list). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity only supports an overall permission mode and does NOT ENFORCE Denied Tools. Codex enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT ENFORCE shell or other tool patterns.",
@@ -1223,7 +1223,8 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "completed",
     "cancelled",
     "failed",
-    "skipped"
+    "skipped",
+    "noTurnStarted"
   ],
   "_runtime.tokenTotals.byHarness.*.costSources[]": [
     "harness-reported",
@@ -1665,7 +1666,8 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "completed",
     "cancelled",
     "failed",
-    "skipped"
+    "skipped",
+    "noTurnStarted"
   ],
   "finalStep._runtime.toolPermissions.mode": [
     "dangerouslyAllowAll",
@@ -2222,7 +2224,8 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "completed",
     "cancelled",
     "failed",
-    "skipped"
+    "skipped",
+    "noTurnStarted"
   ],
   "steps[]._runtime.toolPermissions.mode": [
     "dangerouslyAllowAll",
@@ -2447,7 +2450,8 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "completed",
     "cancelled",
     "failed",
-    "skipped"
+    "skipped",
+    "noTurnStarted"
   ],
   "steps[].parallel[]._runtime.toolPermissions.mode": [
     "dangerouslyAllowAll",

@@ -442,9 +442,9 @@ Timestamp when this prompt completed execution (set for all terminal states, not
 
 ### `terminalStatus` {#step-runtime-terminalstatus}
 
-- **Type:** `"completed" | "cancelled" | "failed" | "skipped"`
+- **Type:** `"completed" | "cancelled" | "failed" | "skipped" | "noTurnStarted"`
 
-Terminal state of this prompt. Absent or 'completed' means successful completion. Used to restore the correct visual status after a working file reload.
+Terminal state of this prompt. Absent or 'completed' means successful completion. 'noTurnStarted' means the harness handled submitted input without beginning an AI turn. Used to restore the correct visual status after a working file reload.
 
 ### `retryCount` {#step-runtime-retrycount}
 

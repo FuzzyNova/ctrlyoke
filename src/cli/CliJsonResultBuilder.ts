@@ -119,6 +119,7 @@ export function buildCliValidationJsonResult(
 
 export interface CliJsonCondition {
   passed: boolean;
+  skipped?: boolean;
   action: ConditionAction | null;
   script: string;
   actual: string;
@@ -181,6 +182,7 @@ export interface CliJsonSummary {
   completed: number;
   failed: number;
   skipped: number;
+  noTurnStarted: number;
 }
 
 export interface CliJsonFinalPass {
@@ -340,7 +342,8 @@ function buildStepResult(
       ? projection.attempts > 0
       : runtime?.startedAt !== undefined ||
         status === STEP_STATUS.COMPLETED ||
-        status === STEP_STATUS.FAILED;
+        status === STEP_STATUS.FAILED ||
+        status === STEP_STATUS.NO_TURN_STARTED;
   const metadata = getEffectiveMetadata(runtime, input, hasRun, isScript);
   const startedAt = toIso(runtime?.startedAt);
   const completedAt = toIso(runtime?.completedAt);
@@ -530,6 +533,7 @@ function toCondition(
   }
   return {
     passed: summary.passed,
+    ...(summary.skipped ? { skipped: true } : {}),
     action: summary.action ?? null,
     script: summary.script,
     actual: summary.actual,
@@ -614,11 +618,14 @@ function buildSummary(
       (step, index) =>
         step.enabled === false || results[index]?.status === STEP_STATUS.SKIPPED
     ).length,
+    noTurnStarted: results.filter(
+      (result) => result.status === STEP_STATUS.NO_TURN_STARTED
+    ).length,
   };
 }
 
 function emptySummary(): CliJsonSummary {
-  return { total: 0, completed: 0, failed: 0, skipped: 0 };
+  return { total: 0, completed: 0, failed: 0, skipped: 0, noTurnStarted: 0 };
 }
 
 function getStepSuccess(status: StepStatus, enabled: boolean): boolean | null {

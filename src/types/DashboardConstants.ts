@@ -1573,6 +1573,8 @@ export const ACTION_TYPES = {
 // ============================================================================
 // STEP STATUS - PromptResult.status values
 // ============================================================================
+export const NO_TURN_STARTED_STATUS = "noTurnStarted" as const;
+
 export const STEP_STATUS = {
   PENDING: "pending",
   SENT: "sent",
@@ -1581,6 +1583,7 @@ export const STEP_STATUS = {
   FAILED: "failed",
   CANCELLED: "cancelled",
   SKIPPED: "skipped",
+  NO_TURN_STARTED: NO_TURN_STARTED_STATUS,
 } as const;
 
 // ============================================================================
@@ -3537,10 +3540,20 @@ export const PROMPT_TERMINAL_STATUS = {
   CANCELLED: "cancelled",
   FAILED: "failed",
   SKIPPED: "skipped",
+  NO_TURN_STARTED: NO_TURN_STARTED_STATUS,
 } as const;
 
 export type PromptTerminalStatus =
   (typeof PROMPT_TERMINAL_STATUS)[keyof typeof PROMPT_TERMINAL_STATUS];
+
+/** Shared compact labels used by step badges and history status filters. */
+export const PROMPT_TERMINAL_STATUS_LABELS: Record<PromptTerminalStatus, string> = {
+  [PROMPT_TERMINAL_STATUS.COMPLETED]: "Completed",
+  [PROMPT_TERMINAL_STATUS.CANCELLED]: "Cancelled",
+  [PROMPT_TERMINAL_STATUS.FAILED]: "Failed",
+  [PROMPT_TERMINAL_STATUS.SKIPPED]: "Skipped",
+  [PROMPT_TERMINAL_STATUS.NO_TURN_STARTED]: "No turn started",
+};
 
 /** Outcomes returned by the lock-held run-step dispatch claim. */
 export const STEP_CLAIM_OUTCOMES = {

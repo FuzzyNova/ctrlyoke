@@ -3,6 +3,7 @@ import {
   HISTORY_MATCH_FIELDS,
   HISTORY_SEARCH_COUNT_STATES,
   HISTORY_SEARCH_INDEX_STATES,
+  NO_TURN_STARTED_STATUS,
   type ExecutionPhase,
   type ExecutionState,
 } from "./DashboardConstants";
@@ -31,7 +32,7 @@ export const TIMELINE_STORAGE_FILES = {
 } as const;
 
 export const TIMELINE_STORAGE_KIND = "timeline" as const;
-export const TIMELINE_SCHEMA_VERSION = 2 as const;
+export const TIMELINE_SCHEMA_VERSION = 3 as const;
 
 /** Timeline-v1 output shape retained only for per-line legacy reads. */
 export type LegacyCliOutputV1 = CliOutput & {
@@ -93,6 +94,7 @@ export const TIMELINE_ATTEMPT_TERMINAL_STATES = {
   FAILED: "failed",
   CANCELLED: "cancelled",
   STOPPED: "stopped",
+  NO_TURN_STARTED: NO_TURN_STARTED_STATUS,
 } as const;
 
 export type TimelineAttemptTerminalState =

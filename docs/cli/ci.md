@@ -80,8 +80,8 @@ Exit code `3` means only that the harness's executable wasn't found.
 | `harness`, `model`         | What the run used                                                                                                                                  |
 | `startedAt`, `completedAt` | ISO-8601 timestamps; `durationMs` is the elapsed time                                                                                              |
 | `varNames`                 | Names of the workflow variables (never their values)                                                                                               |
-| `summary`                  | Step counts: `total`, `completed`, `failed`, `skipped`                                                                                             |
-| `steps[]`                  | Per step: `status`, `success`, `attempts`, `sessionId`, `preCondition`, `endCondition`, `filesChanged`, `script` output, `failureKind` and `error` |
+| `summary`                  | Step counts: `total`, `completed`, `failed`, `skipped`, `noTurnStarted`                                                                            |
+| `steps[]`                  | Per step: `status` (including `noTurnStarted` when a TUI handles the input without starting an AI turn), `success`, `attempts`, `sessionId`, `preCondition`, `endCondition`, `filesChanged`, `script` output, `failureKind` and `error` |
 | `finalStep`                | The final step's result, `passCount`, and its last pass (`lastPass`), or `null`                                                                    |
 | `error`                    | `{ step, pass, attempt, message }` for the failure that ended the run, or `null`; `pass` is the 1-based final-step pass (as in `--step final:N`)   |
 

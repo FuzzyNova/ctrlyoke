@@ -253,6 +253,8 @@ export interface WorkflowExecutionContext {
   ) => void;
   clearTargetPtySession?: (target: ExecutionTarget) => void;
   unregisterActiveTarget?: (target: ExecutionTarget) => void;
+  /** Mark the target's interactive context unavailable for later terminal reuse. */
+  markTargetIntegrationNotReusable?: (target: ExecutionTarget) => void;
   cancelTarget?: (target: ExecutionTarget) => Promise<void>;
   releaseTargetResources?: (target: ExecutionTarget) => Promise<void>;
   /** Close the addressed coordination participant when a target settles. */
@@ -500,6 +502,7 @@ export class WorkflowExecutor {
   private readonly waitingResponseTargets = new Set<string>();
   private readonly targetExecutionErrors = new Map<string, unknown>();
   private readonly targetRunStopReasons = new Map<string, WorkflowStopReason>();
+  private readonly noTurnStartedTargets = new Set<string>();
   private readonly scriptExecutionReporter: ScriptExecutionReporter;
   private activeParallelGroupRun:
     ParallelGroupRun<WorkflowExecutionContext> | undefined;
@@ -1886,6 +1889,7 @@ export class WorkflowExecutor {
   ): Promise<boolean> {
     const settlement =
       await this.promptQueue.commitStepOutcomeAndAdvance(outcome);
+    this.noTurnStartedTargets.delete(getExecutionTargetRunKey(outcome.target));
     await this.settleCoordinationParticipant(outcome.target, context);
     this.broadcastProgress(context);
 
@@ -1960,6 +1964,80 @@ export class WorkflowExecutor {
       return false;
     }
     return true;
+  }
+
+  /**
+   * Settle an interactive prompt whose submitted input never began an AI turn.
+   * The watchdog added in Phase 3b calls this single entry point.
+   */
+  async markNoTurnStarted(target: WorkflowAttemptTarget): Promise<void> {
+    if (target.kind !== FINAL_STEP_PHASES.QUEUE) {
+      throw new Error(
+        `${PROMPT_TERMINAL_STATUS.NO_TURN_STARTED} is only valid for queue prompt steps`
+      );
+    }
+    const key = getExecutionTargetRunKey(target);
+    const context = this.activeExecution?.context;
+    this.noTurnStartedTargets.add(key);
+    context?.markTargetIntegrationNotReusable?.(target);
+    await this.promptQueue.skipStep(
+      target.stepIndex,
+      PROMPT_TERMINAL_STATUS.NO_TURN_STARTED
+    );
+    const step = this.promptQueue.getState().steps[target.stepIndex];
+    if (step && !isScriptStep(step)) {
+      const resolved = PropertyResolver.resolve(
+        step,
+        this.promptQueue.getWorkflowFile(),
+        { hostCanProvidePty: context?.hostCanProvidePty }
+      );
+      if (resolved.endCondition) {
+        this.promptQueue.recordEndConditionSummary(target.stepIndex, {
+          passed: false,
+          skipped: true,
+          script: resolved.endCondition.script,
+          expected:
+            resolved.endCondition.expected === undefined
+              ? undefined
+              : String(resolved.endCondition.expected),
+          compareSource: resolved.endCondition.compareSource,
+          operator: resolved.endCondition.operator,
+          actual: "",
+          stdout: "",
+          stderr: "",
+          durationMs: 0,
+        });
+      }
+    }
+    context?.dashboardProvider?.updateStepStatus(target.stepIndex, {
+      state: STEP_STATUS.NO_TURN_STARTED,
+      message:
+        "The harness handled this input itself, e.g. a TUI command like /config, so no AI turn started.",
+      endConditionResult: {
+        passed: false,
+        skipped: true,
+        message: "Skipped because no AI turn started",
+      },
+    });
+    if (context) {
+      const attempt = this.getRuntime().getAttempt(target);
+      if (attempt) {
+        this.getRuntime().completeAttempt(target, attempt.attemptIndex);
+        await this.recordAttemptTerminal(
+          context,
+          target,
+          attempt.attemptIndex,
+          TIMELINE_ATTEMPT_TERMINAL_STATES.NO_TURN_STARTED
+        );
+      }
+      await this.trackStatusMessage(
+        context,
+        target,
+        "The harness handled this input itself, e.g. a TUI command like /config, so no AI turn started.",
+        STATUS_MESSAGE_SEVERITY.WARNING
+      );
+      await context.cancelTarget?.(target);
+    }
   }
 
   /**
@@ -2062,6 +2140,9 @@ export class WorkflowExecutor {
     }
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {
       const result = this.promptQueue.getState().results[target.stepIndex];
+      if (result?.status === STEP_STATUS.NO_TURN_STARTED) {
+        return { target, status: PROMPT_TERMINAL_STATUS.NO_TURN_STARTED };
+      }
       if (result?.status === STEP_STATUS.SKIPPED) {
         return { target, status: PROMPT_TERMINAL_STATUS.SKIPPED };
       }
@@ -2541,6 +2622,10 @@ export class WorkflowExecutor {
         false
       );
 
+      if (this.noTurnStartedTargets.has(getExecutionTargetRunKey(target))) {
+        return true;
+      }
+
       // A harness can still report success after the user stopped this step,
       // e.g. when a completion signal that was held back arrives as the
       // process dies. stop() has already cancelled the step and advanced past
@@ -2550,6 +2635,9 @@ export class WorkflowExecutor {
       }
 
       if (!result) {
+        if (this.noTurnStartedTargets.has(getExecutionTargetRunKey(target))) {
+          return true;
+        }
         const failureDisposition = await this.handlePromptSendFailure(
           integration,
           context,

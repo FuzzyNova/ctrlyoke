@@ -31,6 +31,7 @@ import {
 
 export interface EndConditionResult {
   passed: boolean;
+  skipped?: boolean;
   message?: string;
 }
 

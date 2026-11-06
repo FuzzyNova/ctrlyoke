@@ -64,6 +64,7 @@ export function usePromptStatus() {
           case STEP_STATUS.FAILED:
           case STEP_STATUS.CANCELLED:
           case STEP_STATUS.SKIPPED:
+          case STEP_STATUS.NO_TURN_STARTED:
           case STEP_STATUS.COMPLETED:
             return status;
           default:

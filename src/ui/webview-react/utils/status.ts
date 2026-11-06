@@ -5,6 +5,7 @@
 
 import {
   STEP_STATUS,
+  PROMPT_TERMINAL_STATUS_LABELS,
   EXECUTION_STATES,
   type StepStatus,
   type ExecutionState,
@@ -31,6 +32,7 @@ export const STATUS_ICONS: Record<StepStatus, string> = {
   [STEP_STATUS.FAILED]: "codicon-error",
   [STEP_STATUS.CANCELLED]: "codicon-circle-slash",
   [STEP_STATUS.SKIPPED]: "codicon-debug-step-over",
+  [STEP_STATUS.NO_TURN_STARTED]: "codicon-debug-pause",
 };
 
 /**
@@ -92,6 +94,7 @@ export const STATUS_COLORS: Record<StepStatus, string> = {
   [STEP_STATUS.FAILED]: "text-indicator-error",
   [STEP_STATUS.CANCELLED]: "text-indicator-running",
   [STEP_STATUS.SKIPPED]: "text-indicator-running",
+  [STEP_STATUS.NO_TURN_STARTED]: "text-indicator-running",
 };
 
 /**
@@ -111,10 +114,11 @@ const STATUS_LABELS: Record<StepStatus, string> = {
   [STEP_STATUS.PENDING]: "Pending",
   [STEP_STATUS.SENT]: "Sent",
   [STEP_STATUS.RUNNING]: "Running",
-  [STEP_STATUS.COMPLETED]: "Completed",
-  [STEP_STATUS.FAILED]: "Failed",
-  [STEP_STATUS.CANCELLED]: "Cancelled",
-  [STEP_STATUS.SKIPPED]: "Skipped",
+  [STEP_STATUS.COMPLETED]: PROMPT_TERMINAL_STATUS_LABELS[STEP_STATUS.COMPLETED],
+  [STEP_STATUS.FAILED]: PROMPT_TERMINAL_STATUS_LABELS[STEP_STATUS.FAILED],
+  [STEP_STATUS.CANCELLED]: PROMPT_TERMINAL_STATUS_LABELS[STEP_STATUS.CANCELLED],
+  [STEP_STATUS.SKIPPED]: PROMPT_TERMINAL_STATUS_LABELS[STEP_STATUS.SKIPPED],
+  [STEP_STATUS.NO_TURN_STARTED]: PROMPT_TERMINAL_STATUS_LABELS[STEP_STATUS.NO_TURN_STARTED],
 };
 
 /**
@@ -142,6 +146,7 @@ export function getStepAccentClass(status: StepStatus): string {
       return "bg-charts-blue";
     case STEP_STATUS.CANCELLED:
     case STEP_STATUS.SKIPPED:
+    case STEP_STATUS.NO_TURN_STARTED:
       return "bg-indicator-running";
     case STEP_STATUS.FAILED:
       return "bg-indicator-error";

@@ -548,7 +548,8 @@ function isTerminalStepStatus(status: unknown): boolean {
     status === STEP_STATUS.COMPLETED ||
     status === STEP_STATUS.FAILED ||
     status === STEP_STATUS.CANCELLED ||
-    status === STEP_STATUS.SKIPPED
+    status === STEP_STATUS.SKIPPED ||
+    status === STEP_STATUS.NO_TURN_STARTED
   );
 }
 
@@ -1475,6 +1476,7 @@ export function createMessageHandlers(
       STEP_STATUS.COMPLETED,
       STEP_STATUS.FAILED,
       STEP_STATUS.CANCELLED,
+      STEP_STATUS.NO_TURN_STARTED,
     ];
     const resolvedStatus = status?.state || status;
     if (terminalStatuses.includes(resolvedStatus)) {

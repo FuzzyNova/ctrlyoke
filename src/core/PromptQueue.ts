@@ -643,7 +643,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
                 ? STEP_STATUS.CANCELLED
                 : terminal === PROMPT_TERMINAL_STATUS.FAILED
                   ? STEP_STATUS.FAILED
-                  : STEP_STATUS.COMPLETED;
+                  : terminal === PROMPT_TERMINAL_STATUS.NO_TURN_STARTED
+                    ? STEP_STATUS.NO_TURN_STARTED
+                    : STEP_STATUS.COMPLETED;
         }
         // Check if this is the current prompt (always PENDING or SENT — never CANCELLED)
         else if (index === this.state.currentIndex) {
@@ -1213,7 +1215,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         result.status === STEP_STATUS.COMPLETED ||
         result.status === STEP_STATUS.SKIPPED ||
         result.status === STEP_STATUS.CANCELLED ||
-        result.status === STEP_STATUS.FAILED
+        result.status === STEP_STATUS.FAILED ||
+        result.status === STEP_STATUS.NO_TURN_STARTED
     ).length;
   }
 
@@ -1222,7 +1225,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     return this.state.results.filter(
       (result) =>
         result.status === STEP_STATUS.COMPLETED ||
-        result.status === STEP_STATUS.SKIPPED
+        result.status === STEP_STATUS.SKIPPED ||
+        result.status === STEP_STATUS.NO_TURN_STARTED
     ).length;
   }
 
@@ -1428,7 +1432,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
           outcome === PROMPT_TERMINAL_STATUS.FAILED
             ? prompt._runtime.failureKind
             : undefined,
-        endConditionUsed: !isScript && prompt.endCondition != null,
+        endConditionUsed:
+          !isScript &&
+          prompt.endCondition != null &&
+          outcome !== PROMPT_TERMINAL_STATUS.NO_TURN_STARTED,
         resumeSession: Boolean(
           prompt._runtime.resumeSession ??
           (isScript ? false : prompt.resumeSession)
@@ -1559,6 +1566,12 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         this.skipStepState(
           outcome.target.stepIndex,
           PROMPT_TERMINAL_STATUS.SKIPPED
+        );
+        break;
+      case PROMPT_TERMINAL_STATUS.NO_TURN_STARTED:
+        this.skipStepState(
+          outcome.target.stepIndex,
+          PROMPT_TERMINAL_STATUS.NO_TURN_STARTED
         );
         break;
       case PROMPT_TERMINAL_STATUS.FAILED:
@@ -3626,7 +3639,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
           ? STEP_STATUS.CANCELLED
           : terminal === PROMPT_TERMINAL_STATUS.FAILED
             ? STEP_STATUS.FAILED
-            : STEP_STATUS.COMPLETED;
+            : terminal === PROMPT_TERMINAL_STATUS.NO_TURN_STARTED
+              ? STEP_STATUS.NO_TURN_STARTED
+              : STEP_STATUS.COMPLETED;
     }
 
     return index === currentIndex &&

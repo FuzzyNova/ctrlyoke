@@ -1105,6 +1105,8 @@ export const DEFAULT_SCRIPT_VERDICT_EXPECTED_TEXT =
  */
 export interface ConditionEvaluationSummary {
   passed: boolean;
+  /** True when execution never reached this condition phase. */
+  skipped?: boolean;
   action?: ConditionAction;
   script: string;
   expected?: string;

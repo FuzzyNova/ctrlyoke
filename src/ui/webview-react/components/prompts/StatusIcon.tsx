@@ -1,6 +1,6 @@
 import React from "react";
 import { STEP_STATUS, type StepStatus } from "../../types/messages";
-import { getStatusColorClass } from "@utils/status";
+import { getStatusColorClass, getStatusIconClass } from "@utils/status";
 import { Icon } from "../shared/Icon";
 
 interface StatusIconProps {
@@ -72,6 +72,11 @@ export const StatusIcon: React.FC<StatusIconProps> = ({
         return {
           icon: "codicon-debug-step-over",
           colorClass: getStatusColorClass(STEP_STATUS.SKIPPED),
+        };
+      case STEP_STATUS.NO_TURN_STARTED:
+        return {
+          icon: getStatusIconClass(STEP_STATUS.NO_TURN_STARTED),
+          colorClass: getStatusColorClass(STEP_STATUS.NO_TURN_STARTED),
         };
       default:
         return {

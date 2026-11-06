@@ -90,6 +90,7 @@ describe("getStatusLabel", () => {
     [STEP_STATUS.FAILED, "Failed"],
     [STEP_STATUS.CANCELLED, "Cancelled"],
     [STEP_STATUS.SKIPPED, "Skipped"],
+    [STEP_STATUS.NO_TURN_STARTED, "No turn started"],
   ])("maps %s → %s", (status, label) => {
     expect(getStatusLabel(status)).toBe(label);
   });

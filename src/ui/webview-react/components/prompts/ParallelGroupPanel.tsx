@@ -63,6 +63,7 @@ const terminalStatuses: StepStatus[] = [
   STEP_STATUS.FAILED,
   STEP_STATUS.CANCELLED,
   STEP_STATUS.SKIPPED,
+  STEP_STATUS.NO_TURN_STARTED,
 ];
 
 export function deriveParallelGroupStatus(

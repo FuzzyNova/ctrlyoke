@@ -110,6 +110,8 @@ function deriveStatusFromRuntime(
 
   return terminalStatus === PROMPT_TERMINAL_STATUS.CANCELLED
     ? STEP_STATUS.CANCELLED
+    : terminalStatus === PROMPT_TERMINAL_STATUS.NO_TURN_STARTED
+      ? STEP_STATUS.NO_TURN_STARTED
     : terminalStatus === PROMPT_TERMINAL_STATUS.FAILED
       ? STEP_STATUS.FAILED
       : STEP_STATUS.COMPLETED;

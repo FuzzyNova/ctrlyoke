@@ -424,7 +424,7 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
 
     expect(
       screen.getByTitle(
-        "Completed: 1 | Failed: 1 | Skipped: 1 | Cancelled: 0 | Running: 1 | Sent: 0 | Pending: 1"
+        "Completed: 1 | Failed: 1 | Skipped: 1 | No turn started: 0 | Cancelled: 0 | Running: 1 | Sent: 0 | Pending: 1"
       )
     ).toBeInTheDocument();
     expect(

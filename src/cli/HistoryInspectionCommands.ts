@@ -57,6 +57,7 @@ import {
   HISTORY_SHOW_ATTEMPT_SELECTORS,
   StepOutputTextMode,
   PROMPT_TERMINAL_STATUS,
+  PROMPT_TERMINAL_STATUS_LABELS,
   RUN_OUTPUT_RESOLVER_EVENT_KINDS,
   SCRIPT_OUTPUT_SOURCES,
   STATUS_MESSAGE_SEVERITY,
@@ -782,6 +783,8 @@ export async function showHistoryCommand(
         line:
           state === PROMPT_TERMINAL_STATUS.SKIPPED
             ? `--step ${selector} was skipped`
+            : state === PROMPT_TERMINAL_STATUS.NO_TURN_STARTED
+              ? `--step ${selector}: ${PROMPT_TERMINAL_STATUS_LABELS[PROMPT_TERMINAL_STATUS.NO_TURN_STARTED]}`
             : state === HISTORY_STEP_STATES.PENDING
               ? `--step ${selector} has not started (${HISTORY_STEP_STATES.PENDING})`
               : `--step ${selector} is ${state} but has no recorded attempt`,
@@ -807,6 +810,8 @@ export async function showHistoryCommand(
           ? `--step ${selector}: the final step's state is unknown (no working file)`
           : state === PROMPT_TERMINAL_STATUS.SKIPPED
             ? `--step ${selector} was skipped`
+            : state === PROMPT_TERMINAL_STATUS.NO_TURN_STARTED
+              ? `--step ${selector}: ${PROMPT_TERMINAL_STATUS_LABELS[PROMPT_TERMINAL_STATUS.NO_TURN_STARTED]}`
             : state === HISTORY_STEP_STATES.PENDING
               ? `--step ${selector}: the final step has not run (${HISTORY_STEP_STATES.PENDING})`
               : `--step ${selector}: the final step is ${state} but has no recorded pass`,

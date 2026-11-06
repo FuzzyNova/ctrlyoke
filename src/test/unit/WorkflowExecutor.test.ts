@@ -37,6 +37,7 @@ import {
   PROMPT_DIAGNOSTIC_CODES,
   isContextResolutionDiagnostic,
   STEP_STATUS,
+  PROMPT_TERMINAL_STATUS,
   CTRLYOKE_ENV_VARS,
   CONDITION_ACTIONS,
   TOKEN_TOTAL_CONFIDENCE,
@@ -497,6 +498,62 @@ suite("WorkflowExecutor token totals", () => {
 });
 
 suite("WorkflowExecutor condition shell reporting", () => {
+  test("marks a no-turn target terminally, skips its end condition, and continues", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      shellEvaluationResult(false),
+    ]);
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "/config",
+          endCondition: { script: "must-not-run" },
+          errorBehavior: { onError: CONDITION_ACTIONS.RETRY, maxRetries: 2 },
+        },
+        { prompt: "next step" },
+      ],
+    });
+    let settleSend!: (outcome: { success: boolean }) => void;
+    integration.onSend = (prompt) =>
+      prompt.prompt === "/config"
+        ? new Promise((resolve) => {
+            settleSend = resolve;
+          })
+        : Promise.resolve({ success: true, responseText: "ok" });
+    const context = makeContext(integration);
+    let reuseInvalidated = false;
+    context.markTargetIntegrationNotReusable = () => {
+      reuseInvalidated = true;
+    };
+    context.cancelTarget = async () => settleSend({ success: false });
+    const executor = makeExecutor(queue, evaluator);
+    const execution = executor.execute(integration, context);
+    while (!settleSend) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    await executor.markNoTurnStarted({
+      kind: FINAL_STEP_PHASES.QUEUE,
+      stepIndex: 0,
+    });
+    await execution;
+
+    assert.strictEqual(reuseInvalidated, true);
+    assert.strictEqual(
+      queue.getState().steps[0]._runtime?.terminalStatus,
+      PROMPT_TERMINAL_STATUS.NO_TURN_STARTED
+    );
+    assert.strictEqual(
+      queue.getState().results[0].status,
+      PROMPT_TERMINAL_STATUS.NO_TURN_STARTED
+    );
+    assert.strictEqual(queue.getState().results[0].endCondition?.skipped, true);
+    assert.strictEqual(evaluator.shells.length, 0);
+    assert.deepStrictEqual(integration.sentPrompts, ["/config", "next step"]);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+  });
+
   test("routes a regex timeout through errorBehavior instead of onFail retry", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);

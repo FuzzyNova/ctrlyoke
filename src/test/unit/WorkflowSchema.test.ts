@@ -11,6 +11,7 @@ import {
   HARNESS_IDS,
   PERMISSION_MODES,
   STATUS_LINE_HARNESS_IDS,
+  PROMPT_TERMINAL_STATUS,
 } from "../../types/DashboardConstants";
 import { VARIABLE_NAME_PATTERN_SOURCE } from "../../utils/KeyValueKeyKinds";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
@@ -1061,7 +1062,7 @@ suite("Workflow template schema", () => {
               sessionId: "session",
               startedAt: 1,
               completedAt: 2,
-              terminalStatus: "completed",
+              terminalStatus: PROMPT_TERMINAL_STATUS.NO_TURN_STARTED,
             },
           },
         ],

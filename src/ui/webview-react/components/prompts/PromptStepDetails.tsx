@@ -174,11 +174,14 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
           className={`mt-1 pl-5 flex items-center gap-1.5 text-xs ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
         >
           <span>End condition:</span>
-          {details.endConditionResult.passed ? (
+          {details.endConditionResult.skipped ? (
+            <Icon name="debug-step-over" className="text-indicator-running" />
+          ) : details.endConditionResult.passed ? (
             <Icon name="pass" className="text-indicator-success" />
           ) : (
             <Icon name="error" className="text-indicator-error" />
           )}
+          {details.endConditionResult.skipped && <span>Skipped</span>}
           {details.endConditionResult.message && (
             <span className="truncate">
               {details.endConditionResult.message}

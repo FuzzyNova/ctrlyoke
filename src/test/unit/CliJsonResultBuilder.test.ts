@@ -305,6 +305,7 @@ suite("CliJsonResultBuilder", () => {
       completed: 0,
       failed: 0,
       skipped: 2,
+      noTurnStarted: 0,
     });
   });
 
