@@ -1479,6 +1479,15 @@ export class WorkflowInstance
   }
 
   /**
+   * The path workflow-scoped trust approvals are keyed by: the authored file.
+   * Once a run starts, the current prompt file is the run's working copy, so
+   * it is only the fallback for workflows with no authored file.
+   */
+  getWorkflowTrustSourcePath(): string | undefined {
+    return this.sourceDefinitionPath ?? this.currentPromptFile?.filePath;
+  }
+
+  /**
    * Keep the in-memory prompt file aligned with the queue after dashboard/appends.
    * This avoids relying on the working-file watcher for local writes, which is
    * intentionally muted in idle/completed states to preserve the dashboard view.

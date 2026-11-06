@@ -271,11 +271,13 @@ function trustWorkflowSecretGrants(
   runTrustCommand(tmpDir, ["trust-secret-grants", workflowPath]);
 }
 
-/**
- * Request `roots` in the workspace's `permissions.trustedExternalRoots` and
- * approve them. Workspace roots, not a workflow's own: those are not yet
- * honoured in real runs (dev/bugs/backlog/workflow-trusted-external-roots-lost-in-real-runs.md).
- */
+/** Where an external root's approval is recorded. */
+const EXTERNAL_ROOT_TRUST_SCOPES = {
+  WORKSPACE: "workspace",
+  WORKFLOW: "workflow",
+} as const;
+
+/** Request `roots` in the workspace's `permissions.trustedExternalRoots` and approve them. */
 function trustWorkspaceExternalRoots(tmpDir: string, roots: string[]): void {
   const settingsDir = path.join(tmpDir, ".ctrlyoke");
   fs.mkdirSync(settingsDir, { recursive: true });
@@ -284,6 +286,20 @@ function trustWorkspaceExternalRoots(tmpDir: string, roots: string[]): void {
     JSON.stringify({ permissions: { trustedExternalRoots: roots } }, null, 2)
   );
   runTrustCommand(tmpDir, ["trust-external-roots"]);
+}
+
+/**
+ * Approve a workflow's own `trustedExternalRoots`, writing it where
+ * `runWorkflowFile` will run it from: the approval is keyed by that path.
+ */
+function trustWorkflowExternalRoots(
+  workflow: PromptFile,
+  tmpDir: string,
+  label: string
+): void {
+  const workflowPath = path.join(tmpDir, `${label}-test.ctrlyoke.json`);
+  fs.writeFileSync(workflowPath, JSON.stringify(workflow, null, 2));
+  runTrustCommand(tmpDir, ["trust-workflow-external-roots", workflowPath]);
 }
 
 function buildStreamableHttpMcpServerScript(): string {
@@ -526,20 +542,30 @@ suite("Inline harness configuration regression tests", function () {
   });
 
   suite(OPENCODE, function () {
-    for (const trusted of [true, false]) {
-      test(`custom mode ${trusted ? "reads under" : "cannot read outside"} a trusted external root`, function () {
+    for (const trustScope of [
+      EXTERNAL_ROOT_TRUST_SCOPES.WORKSPACE,
+      EXTERNAL_ROOT_TRUST_SCOPES.WORKFLOW,
+      undefined,
+    ]) {
+      const trusted = trustScope !== undefined;
+      test(`custom mode ${trusted ? `reads under a ${trustScope}-trusted` : "cannot read outside an untrusted"} external root`, function () {
         // OpenCode gates paths outside its launch directory with
         // `external_directory`, which ctrlyoke grants for trusted roots the
-        // way it passes `--add-dir` to other harnesses.
+        // way it passes `--add-dir` to other harnesses. A workflow's own roots
+        // are approved against the authored file, but a real run executes
+        // its working copy, so the workflow case checks that lookup.
         const outsideDir = makeTempDir("ctrlyoke-opencode-external-");
         try {
           const token = `external-${Date.now().toString(36)}`;
           const secretPath = path.join(outsideDir, "secret.txt");
           fs.writeFileSync(secretPath, `${token}\n`);
-          const label = `opencode-external-${trusted ? "trusted" : "untrusted"}`;
+          const label = `opencode-external-${trustScope ?? "untrusted"}`;
           const workflow: PromptFile = {
             harness: OPENCODE,
             model: HARNESS_MODELS[OPENCODE],
+            ...(trustScope === EXTERNAL_ROOT_TRUST_SCOPES.WORKFLOW
+              ? { trustedExternalRoots: [outsideDir] }
+              : {}),
             toolPermissions: {
               mode: "custom",
               allowedTools: [],
@@ -555,7 +581,11 @@ suite("Inline harness configuration regression tests", function () {
               },
             ],
           };
-          if (trusted) trustWorkspaceExternalRoots(tmpDir, [outsideDir]);
+          if (trustScope === EXTERNAL_ROOT_TRUST_SCOPES.WORKSPACE) {
+            trustWorkspaceExternalRoots(tmpDir, [outsideDir]);
+          } else if (trustScope === EXTERNAL_ROOT_TRUST_SCOPES.WORKFLOW) {
+            trustWorkflowExternalRoots(workflow, tmpDir, label);
+          }
           const result = runWorkflowFile(workflow, tmpDir, label);
           if (logAndMaybeSkip(`opencode-cli (${label})`, result)) return;
           assertSuccessfulRun(`opencode-cli (${label})`, result);

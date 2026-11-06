@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-05 by Claude Code, while granting OpenCode trusted roots through `external_directory`
 - **Area:** `src/core/harness/shared/CliProviderUtils.ts`, `src/core/HarnessIntegration.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

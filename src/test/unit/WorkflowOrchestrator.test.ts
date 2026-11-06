@@ -608,7 +608,8 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
             trustedExternalRoots: ["C:\\external"],
           }),
         },
-        getCurrentPromptFilePath: () => "C:\\workspace\\workflow.ctrlyoke.json",
+        getWorkflowTrustSourcePath: () =>
+          "C:\\workspace\\workflow.ctrlyoke.json",
         getQueueState: () => ({ status: "idle" }),
       };
       internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
@@ -4975,7 +4976,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
     // This suite's instance doubles (sourceInstance/resident/executionInstance/etc.)
     // are narrow fakes scoped to each test's own assertions; none implement the
     // full WorkflowInstance surface the external-roots approval guard reads
-    // (promptQueue, getCurrentPromptFilePath). Roots approval itself is covered
+    // (promptQueue, getWorkflowTrustSourcePath). Roots approval itself is covered
     // separately by the dedicated "WorkflowOrchestrator workflow-root approval"
     // suite, so stub the guard here rather than growing every double.
     internal.assertNoPendingWorkflowExternalRoots = async () => undefined;

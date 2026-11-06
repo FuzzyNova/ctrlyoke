@@ -72,6 +72,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A workflow's own approved `trustedExternalRoots` now reach the harness in a
+  real run: `--add-dir` for Claude, Codex, Copilot and Antigravity, and an
+  `external_directory` grant for OpenCode. Only a dry run included them before.
+  Roots from user or workspace settings were not affected.
 - Harness flag completions for OpenCode 2 no longer start a flag's description
   with its value type, as in "string Session ID to continue".
 - Undo and redo requests for outputs before an imported run's boundary are now

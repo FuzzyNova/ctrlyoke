@@ -2703,7 +2703,7 @@ export class WorkflowOrchestrator {
         ? this.getInstanceForClient(clientId)
         : this.getBoundInstance(clientId);
     const workflow = instance?.promptQueue?.getWorkflowFile();
-    const workflowSourcePath = instance?.getCurrentPromptFilePath();
+    const workflowSourcePath = instance?.getWorkflowTrustSourcePath();
     const requestedRoots = workflow?.trustedExternalRoots;
     let pendingRoots: string[] = [];
 
@@ -2790,7 +2790,7 @@ export class WorkflowOrchestrator {
         : this.getBoundInstance(clientId);
     const requestedRoots =
       instance?.promptQueue?.getWorkflowFile().trustedExternalRoots;
-    const workflowSourcePath = instance?.getCurrentPromptFilePath();
+    const workflowSourcePath = instance?.getWorkflowTrustSourcePath();
     if (
       !workspaceRoot ||
       !workflowSourcePath ||

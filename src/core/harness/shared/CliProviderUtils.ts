@@ -51,6 +51,7 @@ interface GetCliVersionOptions extends CliCommandOptions {
 
 export interface CliProviderWorkflowContext {
   filePath?: string;
+  sourceDefinitionPath?: string;
   stateRoot?: string;
   workflowFile?: Pick<PromptFile, "trustedExternalRoots">;
 }
@@ -388,7 +389,10 @@ export class CliProviderUtils {
     workspaceRoot: string,
     workflowContext: CliProviderWorkflowContext
   ): WorkflowExternalRootsContext | undefined {
-    const workflowSourcePath = workflowContext.filePath;
+    // Approvals are recorded against the authored file. In a real run
+    // `filePath` is the run's working copy, which has none of them.
+    const workflowSourcePath =
+      workflowContext.sourceDefinitionPath ?? workflowContext.filePath;
     if (
       !workflowSourcePath ||
       workflowSourcePath.startsWith("<") ||

@@ -32,6 +32,11 @@ Top-level ctrlyoke core orchestration only: workflow registry, per-workflow runt
   resolved just before execution/preview. The semantic base is the input
   definition path for direct loads or the lineage descriptor's `originalFile`
   for dashboard views; never derive it from a run-storage working-copy path.
+  The same goes for workflow-scoped trust (`trustedExternalRoots` approvals):
+  it is keyed by the authored file, but `promoteFreshRun` repoints
+  `currentPromptFile.filePath`, and so `WorkflowContext.filePath`, at the
+  run's working copy, so look it up through `WorkflowContext.sourceDefinitionPath`
+  / `WorkflowInstance.getWorkflowTrustSourcePath()`.
   The descriptor is also the sole owner of lineage-wide `workflowName`,
   `isFavorite`, and `lastModifiedAt`; run files hold per-run `startedAt` only.
   An authored file's root `name` is not a second copy: it only seeds a new

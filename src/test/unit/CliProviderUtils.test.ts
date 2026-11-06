@@ -4,6 +4,7 @@ import * as path from "path";
 import { suite, test, setup, teardown } from "mocha";
 import { parse } from "smol-toml";
 import { configService } from "../../config/CtrlYokeConfigService";
+import { ExternalRootsTrustStore } from "../../config/ExternalRootsTrustStore";
 import { AntigravityCliProvider } from "../../core/harness/antigravity/AntigravityCliProvider";
 import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
 import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
@@ -183,6 +184,48 @@ suite("CliProviderUtils", () => {
     } finally {
       ConfigurationUtils.getEffectiveApprovedExternalFileRoots = original;
     }
+  });
+
+  test("keys workflow trust by the authored file, not the run's working copy", () => {
+    const primaryRoot = path.join(os.tmpdir(), "ctrlyoke-workspace-primary");
+    const authoredFile = path.join(primaryRoot, "workflow.ctrlyoke.yaml");
+    const runWorkingCopy = path.join(
+      os.tmpdir(),
+      "ctrlyoke-state",
+      ".runs",
+      "workflow",
+      "run-20261105",
+      "workflow.ctrlyoke.json"
+    );
+    const workflowFile = { trustedExternalRoots: ["/shared"] };
+
+    const duringRun = CliProviderUtils.getWorkflowExternalRootsContext(
+      primaryRoot,
+      {
+        filePath: runWorkingCopy,
+        sourceDefinitionPath: authoredFile,
+        stateRoot: primaryRoot,
+        workflowFile,
+      }
+    );
+    const asApproved = ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
+      primaryRoot,
+      authoredFile
+    );
+    assert.strictEqual(duringRun?.identity, asApproved);
+
+    // No authored file (a workflow loaded only from its working copy).
+    const workingCopyOnly = CliProviderUtils.getWorkflowExternalRootsContext(
+      primaryRoot,
+      { filePath: runWorkingCopy, stateRoot: primaryRoot, workflowFile }
+    );
+    assert.strictEqual(
+      workingCopyOnly?.identity,
+      ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
+        primaryRoot,
+        runWorkingCopy
+      )
+    );
   });
 
   test("shares successful probes and retries a failed probe", async () => {

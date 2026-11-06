@@ -118,6 +118,12 @@ export interface WorkflowContext {
   terminalStepIndex?: number;
   allPrompts: WorkflowStep[];
   filePath?: string;
+  /**
+   * The authored workflow file, before any worktree mapping. Workflow-scoped
+   * trust approvals (`trustedExternalRoots`) are keyed by this path; during a
+   * real run `filePath` names the run's working copy instead.
+   */
+  sourceDefinitionPath?: string;
   /** Human-readable workflow name (derived from file basename or first prompt text).
    *  Used for temp file naming — avoids ISO timestamps embedded in working file paths. */
   workflowName?: string;

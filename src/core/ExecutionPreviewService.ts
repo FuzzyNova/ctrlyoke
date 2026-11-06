@@ -590,6 +590,7 @@ export class ExecutionPreviewService {
       promptIndex: target.stepIndex,
       allPrompts: allSteps,
       filePath: request.sourcePath,
+      sourceDefinitionPath: request.sourceDefinitionPath,
       workflowName: request.workflowName,
       workingFilePath: request.workingFilePath,
       resolvedProperties: properties,
