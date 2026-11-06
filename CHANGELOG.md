@@ -76,6 +76,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Continue** works again on a stopped run, and so does adding a prompt to a
+  stopped run with **Run Next**. Both used to do nothing at all.
+- **Stop** now kills a running worktree `setup` command, the same way it
+  already kills a running pre-condition or script step. Previously the setup
+  ran to completion first. The step that never ran stays pending, instead of
+  being marked cancelled and skipped on the next **Continue**.
+- **Continue**, **Run Next** and **Start** now show the run as running as soon
+  as you click, including while a worktree `setup` command runs, so **Stop**
+  and **Pause** are available during setup. A continuation used to keep
+  showing **Continue** until setup finished. Pausing during setup pauses
+  before the first step starts.
 - A workflow's own approved `trustedExternalRoots` now reach the harness in a
   real run: `--add-dir` for Claude, Codex, Copilot and Antigravity, and an
   `external_directory` grant for OpenCode. Only a dry run included them before.

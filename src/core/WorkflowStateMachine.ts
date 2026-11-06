@@ -48,6 +48,7 @@ export class WorkflowStateMachine {
   private _totalPausedDuration: number = 0;
   private _executionEndTime: number | undefined = undefined;
   private _stopReason: WorkflowStopReason | undefined = undefined;
+  private _stopRequestCount = 0;
   private readonly onTransitionEmitter =
     new TypedEmitter<WorkflowRuntimeTransition>();
   private readonly onAttemptTransitionEmitter =
@@ -67,6 +68,16 @@ export class WorkflowStateMachine {
 
   get stopped(): boolean {
     return this._stopped;
+  }
+
+  /**
+   * Monotonic count of `requestStop()` calls over this runtime's lifetime.
+   * Startup code snapshots it before a pre-dispatch phase (worktree setup)
+   * and compares afterwards: `status === STOPPED` cannot answer "was a stop
+   * requested meanwhile?" when the run was already STOPPED before startup.
+   */
+  get stopRequestCount(): number {
+    return this._stopRequestCount;
   }
 
   get startTime(): number | undefined {
@@ -553,6 +564,7 @@ export class WorkflowStateMachine {
    * Call confirmStopped() once the CLI process actually terminates.
    */
   requestStop(): boolean {
+    this._stopRequestCount += 1;
     if (this._status === EXECUTION_STATES.CANCELLING && this._stopped) {
       return false;
     }

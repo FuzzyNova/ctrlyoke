@@ -3025,10 +3025,17 @@ suite("WorkflowInstance append-and-continue", () => {
       undefined,
       "interactive",
     ]);
+    // A continuation is announced before setup too, so the header flips to
+    // running (and offers Stop) for the whole worktree setup.
     assert.deepStrictEqual(lifecycle, [
-      "prepare-worktree",
       "execution-started",
+      "prepare-worktree",
     ]);
+    assert.strictEqual(
+      instance.promptQueue.getRuntimeStateMachine().status,
+      EXECUTION_STATES.RUNNING,
+      "the runtime is RUNNING before setup, not only once a step dispatches"
+    );
   });
 
   test("keeps a completed run completed when deleting its pending step after a skipped step", async () => {
@@ -3138,6 +3145,75 @@ suite("WorkflowInstance append-and-continue", () => {
       "execution-started",
       "prepare-worktree",
     ]);
+  });
+
+  // A stop pressed during a long worktree setup must (1) stop the start
+  // before the step dispatches, (2) leave that never-run step pending rather
+  // than cancelled/skipped, and (3) leave the run continuable — the earlier
+  // `status === STOPPED` guard refused every later continuation of it.
+  test("stop during worktree setup leaves the step pending and the run continuable", async () => {
+    const platform = new MockPlatform();
+    const dashboardSink: any = {
+      updateFileSelected: async () => {},
+      updateSessionRestored: async () => {},
+      updateExecutionStarted: () => {},
+      updateProgress: () => {},
+      updateExecutionState: () => {},
+      updateStepStatus: () => {},
+      updateRetryAttempt: () => {},
+      updateCliOutput: () => {},
+      updateCliStreamingChunk: () => {},
+      updateCliStreamingEvents: () => {},
+      updateStepsExtended: () => {},
+      updatePromptDeleted: () => {},
+      updateFinalStep: () => {},
+      updateFinalStepStatus: () => {},
+      updateFinalStepOutput: () => {},
+      updateFinalStepStreamingChunk: () => {},
+      updateFinalStepStreamingEvents: () => {},
+      updateStatusMessage: () => {},
+      notifyPromptsReordered: () => {},
+    };
+    const instance = new WorkflowInstance(
+      platform,
+      dashboardSink,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    instance.promptQueue.loadPrompts({ steps: [{ prompt: "setup prompt" }] });
+    await loadPromptFileForTest(instance, "workflow.prompt.md", {
+      steps: [{ prompt: "setup prompt" }],
+    });
+
+    let stopDuringSetup = true;
+    (instance as any).prepareExecutionWorktree = async () => {
+      if (stopDuringSetup) {
+        await instance.stop();
+      }
+    };
+    let dispatchCount = 0;
+    (instance as any).startWorkflowExecution = async () => {
+      dispatchCount += 1;
+    };
+
+    await (instance as any).executeLoadedPromptFile();
+
+    const runtime = instance.promptQueue.getRuntimeStateMachine();
+    assert.strictEqual(dispatchCount, 0);
+    assert.strictEqual(runtime.status, EXECUTION_STATES.STOPPED);
+    assert.strictEqual(instance.promptQueue.getState().currentIndex, 0);
+    assert.strictEqual(
+      instance.promptQueue.getState().results[0].status,
+      STEP_STATUS.PENDING
+    );
+
+    stopDuringSetup = false;
+    await (instance as any).executeLoadedPromptFile(undefined, true);
+
+    assert.strictEqual(dispatchCount, 1);
   });
 
   // finalizeFailedInFlightPrompt advances currentIndex past the step it just
@@ -3508,6 +3584,7 @@ suite("WorkflowInstance append-and-continue", () => {
     }> = [];
     const dashboardSink: any = {
       updateExecutionStarted: () => {},
+      updateExecutionState: () => {},
       updateStepsExtended: () => {},
       updateProgress: () => {},
       updateStatusMessage: (
@@ -3589,6 +3666,7 @@ suite("WorkflowInstance append-and-continue", () => {
     }> = [];
     const dashboardSink: any = {
       updateExecutionStarted: () => {},
+      updateExecutionState: () => {},
       updateStepsExtended: () => {},
       updateProgress: () => {},
       updateStatusMessage: (

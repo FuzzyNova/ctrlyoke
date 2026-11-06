@@ -141,8 +141,15 @@ class TestExecution implements WorkflowStartupExecutionPort {
     return this.currentPrompt;
   }
 
+  executionState: QueueState["status"] = EXECUTION_STATES.IDLE;
+  stopRequestCount = 0;
+
   getAuthoritativeExecutionState(): QueueState["status"] {
-    return EXECUTION_STATES.IDLE;
+    return this.executionState;
+  }
+
+  getStopRequestCount(): number {
+    return this.stopRequestCount;
   }
 
   async closeRetainedTerminalsForFreshRun(): Promise<void> {}
@@ -464,6 +471,146 @@ suite("WorkflowStartupPipeline", () => {
 
     assert.strictEqual(port.execution.preparedWorktree, "");
     assert.strictEqual(port.execution.started, true);
+  });
+
+  async function prepareStartup(pipeline: WorkflowStartupPipeline) {
+    return pipeline.promoteRunAndInitializeHistory(
+      undefined,
+      false,
+      true,
+      pipeline.classifyContinuation(false, { steps: [{ prompt: "one" }] })
+    );
+  }
+
+  // Continuing a stopped run stays STOPPED until the executor flips it to
+  // RUNNING at dispatch. A setup-stop guard keyed on that state silently
+  // refused every Continue / appended prompt on a stopped run.
+  test("dispatches a run that was already STOPPED before startup began", async () => {
+    const { pipeline, port } = createPipeline();
+    port.execution.executionState = EXECUTION_STATES.STOPPED;
+    const startup = await prepareStartup(pipeline);
+
+    await pipeline.prepareWorktreeAndDispatch(
+      undefined,
+      false,
+      "workflow.prompt.md",
+      startup
+    );
+
+    assert.strictEqual(port.execution.started, true);
+    assert.strictEqual(port.worktree.releaseCalls, 0);
+  });
+
+  test("does not dispatch when stop is requested during worktree setup", async () => {
+    const { pipeline, port } = createPipeline();
+    port.execution.executionState = EXECUTION_STATES.STOPPED;
+    port.execution.duringSetup = () => {
+      port.execution.stopRequestCount += 1;
+    };
+    const startup = await prepareStartup(pipeline);
+
+    await pipeline.prepareWorktreeAndDispatch(
+      undefined,
+      false,
+      "workflow.prompt.md",
+      startup
+    );
+
+    assert.strictEqual(port.execution.started, false);
+    assert.strictEqual(port.worktree.releaseCalls, 1);
+  });
+
+  // The header shows Stop only for a running run, and Stop/Pause resolve the
+  // executing instance by its RUNNING registration — so a long setup must
+  // already be RUNNING, for continuations as well as fresh starts.
+  test("is RUNNING for the whole worktree setup", async () => {
+    const { pipeline, port } = createPipeline();
+    let statusDuringSetup: string | undefined;
+    port.execution.duringSetup = () => {
+      statusDuringSetup = port.queue.getRuntimeStateMachine().status;
+    };
+    const startup = await prepareStartup(pipeline);
+
+    await pipeline.prepareWorktreeAndDispatch(
+      undefined,
+      false,
+      "workflow.prompt.md",
+      startup
+    );
+
+    assert.strictEqual(statusDuringSetup, EXECUTION_STATES.RUNNING);
+    assert.strictEqual(port.execution.started, true);
+  });
+
+  test("a pause during worktree setup takes effect before any step dispatches", async () => {
+    const { pipeline, port } = createPipeline();
+    port.execution.duringSetup = () => {
+      port.queue.getRuntimeStateMachine().pause();
+    };
+    const startup = await prepareStartup(pipeline);
+
+    await pipeline.prepareWorktreeAndDispatch(
+      undefined,
+      false,
+      "workflow.prompt.md",
+      startup
+    );
+
+    assert.strictEqual(port.execution.started, false);
+    assert.strictEqual(
+      port.queue.getRuntimeStateMachine().status,
+      EXECUTION_STATES.PAUSED
+    );
+    // A paused run keeps its reservations for Resume.
+    assert.strictEqual(port.worktree.releaseCalls, 0);
+  });
+
+  test("announces a continuation before setup and re-announces only for terminal reuse", async () => {
+    const { pipeline, port } = createPipeline();
+    const announcements: Array<{ order: string; reuse: unknown }> = [];
+    (port as any).dashboardSink = {
+      updateExecutionStarted: (...args: unknown[]) =>
+        announcements.push({ order: "announce", reuse: args[5] }),
+    };
+    port.execution.duringSetup = () => {
+      announcements.push({ order: "setup", reuse: undefined });
+    };
+    port.execution.integration.canReuseRunningTerminal = () => true;
+    const startup = await prepareStartup(pipeline);
+
+    await pipeline.prepareWorktreeAndDispatch(
+      undefined,
+      false,
+      "workflow.prompt.md",
+      { ...startup, isAppendContinuation: true, prevSettledStepCount: 0 }
+    );
+
+    assert.deepStrictEqual(announcements, [
+      { order: "announce", reuse: undefined },
+      { order: "setup", reuse: undefined },
+      { order: "announce", reuse: true },
+    ]);
+  });
+
+  test("skips worktree setup when stop is requested before it starts", async () => {
+    const { pipeline, port } = createPipeline();
+    const startup = await prepareStartup(pipeline);
+    port.execution.stopRequestCount += 1;
+    let setupRan = false;
+    port.execution.duringSetup = () => {
+      setupRan = true;
+    };
+
+    await pipeline.prepareWorktreeAndDispatch(
+      undefined,
+      false,
+      "workflow.prompt.md",
+      startup
+    );
+
+    assert.strictEqual(setupRan, false);
+    assert.strictEqual(port.execution.started, false);
+    assert.strictEqual(port.worktree.releaseCalls, 1);
   });
 
   test("reports the failed step before the queue status advances", () => {

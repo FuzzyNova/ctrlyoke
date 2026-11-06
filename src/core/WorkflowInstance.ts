@@ -319,6 +319,29 @@ export class WorkflowInstance
   private currentPromptFile?: { filePath: string; promptFile: PromptFile };
   /** Race-condition guard: prevents duplicate workflow starts */
   startPending: boolean = false;
+  /**
+   * Set while a start or resume is preflighting / running worktree setup and
+   * has not dispatched a step yet (cleared by `beginExecution`). A stop in
+   * this window must not cancel or skip the current step, which never ran,
+   * and the next start waits on `settled` so it cannot interleave with the
+   * stopped startup's reservation release. `stopRequestBaseline` is the
+   * `stopRequestCount` the startup began with (see
+   * `isStopRequestedDuringStartup`).
+   */
+  private preDispatchStartup:
+    | {
+        readonly settled: Promise<void>;
+        readonly settle: () => void;
+        readonly stopRequestBaseline: number;
+      }
+    | undefined;
+  /**
+   * The worktree `setup` command's process runner while it runs. It is not a
+   * target resource (no step has been dispatched), so `stop()` cancels it
+   * explicitly: Stop kills setup the same way it kills a pre-condition or a
+   * script step.
+   */
+  private activeWorktreeSetupRunner: ScriptProcessRunner | undefined;
   /** Deduplicates overlapping eager working-file creation requests */
   private ensureWorkingFilePromise: Promise<void> | undefined;
   /** Tracks prompt count to detect MCP-triggered merges */
@@ -1793,6 +1816,7 @@ export class WorkflowInstance
         currentPromptFile: () => this.currentPromptFile,
         getAuthoritativeExecutionState: () =>
           this.getAuthoritativeExecutionState(),
+        getStopRequestCount: () => this.workflowRuntime.stopRequestCount,
         closeRetainedTerminalsForFreshRun: () =>
           this.closeRetainedTerminalsForFreshRun(),
         syncCurrentPromptFileFromQueue: (filePath) =>
@@ -2161,6 +2185,7 @@ export class WorkflowInstance
     return {
       isStartPending: () => this.startPending,
       beginExecution: (historyFilePath) => {
+        this.endPreDispatchStartup();
         this.startPending = true;
         // An executing run cannot have a pending continuation.
         this.promptQueue.clearPendingRewind();
@@ -2361,16 +2386,72 @@ export class WorkflowInstance
     prePromotedFreshStart: boolean = false,
     onPrepared?: () => Promise<void>
   ): Promise<void> {
-    const pipeline = new WorkflowStartupPipeline({
-      ...this.createWorkflowStartupPipelinePort(),
-      onPrepared,
+    const startup = await this.beginPreDispatchStartup();
+    try {
+      const pipeline = new WorkflowStartupPipeline({
+        ...this.createWorkflowStartupPipelinePort(),
+        onPrepared,
+      });
+      await pipeline.execute(
+        modeOverride,
+        continueFromCurrent,
+        preinitializedHistoryFilePath,
+        prePromotedFreshStart
+      );
+    } finally {
+      this.endPreDispatchStartup(startup);
+    }
+  }
+
+  /**
+   * Waits out any startup still in its pre-dispatch phase (e.g. one the user
+   * stopped mid-setup, which is still releasing its lock and worktree), then
+   * marks a new one as begun. Returns its token for `endPreDispatchStartup`.
+   */
+  private async beginPreDispatchStartup(
+    stopRequestBaseline?: number
+  ): Promise<NonNullable<WorkflowInstance["preDispatchStartup"]>> {
+    while (this.preDispatchStartup) {
+      await this.preDispatchStartup.settled;
+    }
+    let settle!: () => void;
+    const settled = new Promise<void>((resolve) => {
+      settle = resolve;
     });
-    await pipeline.execute(
-      modeOverride,
-      continueFromCurrent,
-      preinitializedHistoryFilePath,
-      prePromotedFreshStart
+    const startup = {
+      settled,
+      settle,
+      stopRequestBaseline:
+        stopRequestBaseline ?? this.workflowRuntime.stopRequestCount,
+    };
+    this.preDispatchStartup = startup;
+    return startup;
+  }
+
+  /** A stop was requested since the current pre-dispatch startup began. */
+  private isStopRequestedDuringStartup(): boolean {
+    const startup = this.preDispatchStartup;
+    return (
+      startup !== undefined &&
+      this.workflowRuntime.stopRequestCount !== startup.stopRequestBaseline
     );
+  }
+
+  /**
+   * Ends the pre-dispatch phase. With a token, only that startup's phase is
+   * ended: a run's own `finally` executes long after its dispatch, by which
+   * time a later startup may hold the phase. Without one (dispatch itself,
+   * `beginExecution`) it ends whichever startup is current.
+   */
+  private endPreDispatchStartup(
+    token?: NonNullable<WorkflowInstance["preDispatchStartup"]>
+  ): void {
+    const startup = this.preDispatchStartup;
+    if (!startup || (token && startup !== token)) {
+      return;
+    }
+    this.preDispatchStartup = undefined;
+    startup.settle();
   }
   /**
    * Pause current execution.
@@ -2426,6 +2507,7 @@ export class WorkflowInstance
     if (!this.workflowRuntime.resume()) {
       return;
     }
+    const stopRequestBaseline = this.workflowRuntime.stopRequestCount;
 
     this.promptQueue.clearPendingRewind();
     await this.promptQueue.commitRuntimeTransition();
@@ -2458,6 +2540,25 @@ export class WorkflowInstance
     const resolvedHistoryFilePath =
       historyFilePath ?? this.resolveHistoryFilePath();
     const workingFilePath = this.promptQueue.getState().workingFilePath;
+    const startup = await this.beginPreDispatchStartup(stopRequestBaseline);
+    try {
+      await this.resumeAfterSetup(
+        stopRequestBaseline,
+        resolvedHistoryFilePath,
+        workingFilePath,
+        targetRunIndices
+      );
+    } finally {
+      this.endPreDispatchStartup(startup);
+    }
+  }
+
+  private async resumeAfterSetup(
+    stopRequestBaseline: number,
+    resolvedHistoryFilePath: string,
+    workingFilePath: string | undefined,
+    targetRunIndices: Map<string, number> | undefined
+  ): Promise<void> {
     try {
       await this.ensureRunnerLock(workingFilePath);
       const state = this.promptQueue.getState();
@@ -2475,7 +2576,8 @@ export class WorkflowInstance
         this.platform.getNamedWorkspaceRoots()
       );
       await this.prepareExecutionWorktree(resolvedHistoryFilePath);
-      if (this.promptQueue.getState().status === EXECUTION_STATES.STOPPED) {
+      // Same contract as WorkflowStartupPipeline.stopRequestedSinceStart.
+      if (this.workflowRuntime.stopRequestCount !== stopRequestBaseline) {
         await this.abandonActiveWorktree();
         await this.releaseRunnerLock();
         return;
@@ -2498,6 +2600,15 @@ export class WorkflowInstance
           releaseError
         )
       );
+      // Stop kills a running setup, which then surfaces here as a setup
+      // failure. The run is already STOPPED; failing it would turn the
+      // user's Stop into an error.
+      if (this.workflowRuntime.stopRequestCount !== stopRequestBaseline) {
+        Log.info(
+          `[inst:${this.id.slice(0, 8)}] Resume setup ended by stop: ${getErrorMessage(error)}`
+        );
+        return;
+      }
       // The runtime is already RUNNING; rethrowing would leave it there with
       // nothing dispatched. Fail it the way a failed start does instead.
       await new WorkflowStartupPipeline(
@@ -2522,6 +2633,27 @@ export class WorkflowInstance
     const stopReason = "Workflow stopped by user";
 
     Log.info(`[WorkflowInstance] stop() - stopping active target resources`);
+
+    // Worktree setup is not a target resource, so the loop below would never
+    // reach it. Kill its process tree first, whichever stop path follows.
+    void this.activeWorktreeSetupRunner?.cancel();
+
+    // Stopped while a start/resume is still in setup: no step has been
+    // dispatched, so nothing is cancelled and nothing is skipped. The current
+    // step stays pending for the next Continue; the startup sees the stop
+    // request and releases its own reservations.
+    if (this.preDispatchStartup && this.activeTargetResources.size === 0) {
+      Log.info(
+        `[inst:${this.id.slice(0, 8)}] stop() during startup setup - no step dispatched, leaving the current step pending`
+      );
+      if (this.workflowRuntime.requestStop()) {
+        await this.promptQueue.commitRuntimeTransition({ persist: false });
+      }
+      if (this.workflowRuntime.confirmStopped()) {
+        await this.promptQueue.commitRuntimeTransition();
+      }
+      return;
+    }
 
     this.promptQueue.markInFlightPromptCancelled();
     const activeAttempts = this.workflowRuntime.getActiveAttempts();
@@ -4455,6 +4587,7 @@ export class WorkflowInstance
         const processRunner = this.integrationFactory.createScriptProcessRunner(
           args.executionRoot
         );
+        this.activeWorktreeSetupRunner = processRunner;
         const reporter = new ScriptExecutionReporter(
           this.endConditionEvaluator
         );
@@ -4499,14 +4632,28 @@ export class WorkflowInstance
             evaluate: async (onOutput): Promise<EvaluationResult> => {
               const startedAt = Date.now();
               const invocation = resolveScriptInvocation(args.command);
-              processResult = await processRunner.run({
-                cwd: args.executionRoot,
-                timeout: args.timeoutMs,
-                argv: invocation.argv,
-                vars: args.vars,
-                onOutput,
-                windowsVerbatimArguments: invocation.windowsVerbatimArguments,
-              });
+              // A cancel before the process exists kills nothing, so a stop
+              // that already arrived (e.g. during `git worktree add`) has to
+              // be honored here instead of spawning the setup anyway.
+              processResult = this.isStopRequestedDuringStartup()
+                ? {
+                    success: false,
+                    result: "",
+                    stdout: "",
+                    stderr: "",
+                    error: "Worktree setup cancelled: workflow stopped",
+                    cancelled: true,
+                    errored: false,
+                  }
+                : await processRunner.run({
+                    cwd: args.executionRoot,
+                    timeout: args.timeoutMs,
+                    argv: invocation.argv,
+                    vars: args.vars,
+                    onOutput,
+                    windowsVerbatimArguments:
+                      invocation.windowsVerbatimArguments,
+                  });
               const comparison =
                 await this.endConditionEvaluator.evaluateResult(
                   {
@@ -4526,6 +4673,7 @@ export class WorkflowInstance
                 result: comparison.result,
                 error: processResult.error,
                 timeout: processResult.timeout,
+                cancelled: processResult.cancelled,
                 duration: Date.now() - startedAt,
                 exitCode: processResult.exitCode,
               };
@@ -4536,6 +4684,9 @@ export class WorkflowInstance
           }
           return processResult;
         } finally {
+          if (this.activeWorktreeSetupRunner === processRunner) {
+            this.activeWorktreeSetupRunner = undefined;
+          }
           processRunner.dispose();
         }
       },

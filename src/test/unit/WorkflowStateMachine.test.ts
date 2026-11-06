@@ -74,6 +74,25 @@ suite("WorkflowStateMachine", () => {
     assert.deepStrictEqual(runtime.getSnapshot().stopReason, stopReason);
   });
 
+  // Startup snapshots this before worktree setup: a stopped run being
+  // continued is STOPPED both before and after setup, so only a counter can
+  // tell whether a stop arrived in between.
+  test("counts every stop request and never resets the count", () => {
+    const runtime = new WorkflowStateMachine();
+    assert.strictEqual(runtime.stopRequestCount, 0);
+
+    runtime.startExecution();
+    runtime.requestStop();
+    runtime.requestStop();
+    runtime.confirmStopped();
+    assert.strictEqual(runtime.stopRequestCount, 2);
+
+    assert.strictEqual(runtime.resume(), true);
+    assert.strictEqual(runtime.stopRequestCount, 2);
+    runtime.requestStop();
+    assert.strictEqual(runtime.stopRequestCount, 3);
+  });
+
   test("emits ordered runtime transitions with previous and current snapshots", () => {
     const runtime = new WorkflowStateMachine();
     const transitions: Array<{

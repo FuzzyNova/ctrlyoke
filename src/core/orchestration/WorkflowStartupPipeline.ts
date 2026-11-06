@@ -100,6 +100,7 @@ export type WorkflowStartupQueuePort = Pick<
   | "finalizeFailedInFlightPrompt"
   | "commitRuntimeTransition"
   | "getProgress"
+  | "getRuntimeStateMachine"
   | "getFinalStepRuntime"
   | "hasNext"
   | "prepareFinalStepContinuation"
@@ -128,6 +129,8 @@ export interface WorkflowStartupExecutionPort {
   readonly currentPromptFile: () =>
     { filePath: string; promptFile: PromptFile } | undefined;
   readonly getAuthoritativeExecutionState: () => QueueState["status"];
+  /** `WorkflowStateMachine.stopRequestCount` — see `stopRequestedSinceStart`. */
+  readonly getStopRequestCount: () => number;
   readonly closeRetainedTerminalsForFreshRun: () => Promise<void>;
   readonly syncCurrentPromptFileFromQueue: (filePath?: string) => void;
   readonly setExecutionRunRef: (runRef: RunRef | undefined) => void;
@@ -265,9 +268,29 @@ export class WorkflowStartupPipeline {
   private missingSecretNames: string[] = [];
   private compatibilityDiagnostics: CompatibilityDiagnostic[] = [];
   private readonly lineageRepository = new WorkflowLineageRepository();
+  /**
+   * Stop-request count when this startup began. One pipeline serves exactly
+   * one execution call, so the constructor is that call's start.
+   */
+  private readonly stopRequestBaseline: number;
 
   constructor(private readonly port: WorkflowStartupPipelinePort) {
     this.historyFilePath = "";
+    this.stopRequestBaseline = port.execution.getStopRequestCount();
+  }
+
+  /**
+   * Whether the user asked to stop after this startup began, i.e. while it
+   * was still preflighting or running worktree setup and nothing had been
+   * dispatched. Comparing the authoritative state against STOPPED cannot
+   * answer this: continuing a STOPPED run (Continue, or an appended prompt)
+   * is still STOPPED until the executor flips it to RUNNING at dispatch, so
+   * that check refused every continuation from a stopped run.
+   */
+  private stopRequestedSinceStart(): boolean {
+    return (
+      this.port.execution.getStopRequestCount() !== this.stopRequestBaseline
+    );
   }
 
   async execute(
@@ -353,6 +376,16 @@ export class WorkflowStartupPipeline {
         startup
       );
     } catch (error) {
+      // Stop kills a running worktree setup, which then throws out of
+      // prepareExecutionWorktree as a setup failure. The run is already
+      // STOPPED; failing it would turn the user's Stop into an error.
+      if (this.stopRequestedSinceStart()) {
+        Log.info(
+          `[inst:${this.port.id.slice(0, 8)}] Startup ended by stop: ${getErrorMessage(error)}`
+        );
+        await this.releaseReservationsAfterSetupStop();
+        return;
+      }
       await this.finalizeFailure(error);
     }
   }
@@ -898,48 +931,80 @@ export class WorkflowStartupPipeline {
       );
     }
 
-    await this.port.execution.prepareExecutionWorktree(this.historyFilePath);
-    if (
-      this.port.execution.getAuthoritativeExecutionState() ===
-      EXECUTION_STATES.STOPPED
-    ) {
+    // A continuation's settled-step boundary; undefined for a fresh start.
+    const continuationPreserveStepCount =
+      continueFromCurrent || startup.isIdleContinuation
+        ? startup.currentQueueState.currentIndex
+        : startup.isAppendContinuation
+          ? startup.prevSettledStepCount
+          : undefined;
+    const announceContinuation = (reusesRunningTerminal: boolean) => {
+      if (
+        !this.port.dashboardSink ||
+        startup.totalSteps === 0 ||
+        continuationPreserveStepCount === undefined
+      ) {
+        return;
+      }
+      Log.debug(
+        `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true, preserveStepCount=${continuationPreserveStepCount}, totalSteps=${startup.totalSteps}, reusesRunningTerminal=${reusesRunningTerminal}`
+      );
+      this.port.dashboardSink.updateExecutionStarted(
+        this.port.id,
+        fileName,
+        startup.totalSteps,
+        true,
+        continuationPreserveStepCount,
+        reusesRunningTerminal ? true : undefined,
+        startup.executionMode
+      );
+    };
+
+    // Without these checks a stop during startup is silently undone: the
+    // executor's startExecution() turns STOPPED back into RUNNING and the
+    // step the user just stopped runs anyway once setup finishes.
+    if (this.stopRequestedSinceStart()) {
       await this.releaseReservationsAfterSetupStop();
+      return;
+    }
+
+    // Announce the run and make it RUNNING *before* worktree setup, so the
+    // click visibly took effect and the header offers Stop for the whole
+    // setup. RUNNING is also what registers a parked (retired) instance as
+    // the executing one, which is how Stop/Pause resolve it by address. The
+    // executor's own startExecution() is then a no-op. Whether a
+    // continuation reuses a live terminal is only known once the
+    // integration exists (after setup); see the re-announce below.
+    announceContinuation(false);
+    const runtime = this.port.queue.getRuntimeStateMachine();
+    if (runtime.startExecution()) {
+      await this.port.queue.commitRuntimeTransition();
+    }
+
+    await this.port.execution.prepareExecutionWorktree(this.historyFilePath);
+    if (this.stopRequestedSinceStart()) {
+      await this.releaseReservationsAfterSetupStop();
+      return;
+    }
+    // Paused during setup: no step has started, so the pause takes effect at
+    // this boundary. The run keeps its lock and worktree like any paused run
+    // and Resume dispatches through the paused-run resume path.
+    if (runtime.status === EXECUTION_STATES.PAUSING) {
+      runtime.confirmPaused();
+      await this.port.queue.commitRuntimeTransition();
+      Log.info(
+        `[inst:${this.port.id.slice(0, 8)}] Paused during startup setup; the current step stays pending`
+      );
       return;
     }
     const integration =
       this.port.execution.createIntegrationForMode(modeOverride);
 
-    if (this.port.dashboardSink && startup.totalSteps > 0) {
-      if (continueFromCurrent || startup.isIdleContinuation) {
-        const currentIndex = startup.currentQueueState.currentIndex;
-        const willReuseTerminal = integration.canReuseRunningTerminal();
-        Log.debug(
-          `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true, preserveStepCount=${currentIndex}, totalSteps=${startup.totalSteps}, reusesRunningTerminal=${willReuseTerminal}`
-        );
-        this.port.dashboardSink.updateExecutionStarted(
-          this.port.id,
-          fileName,
-          startup.totalSteps,
-          true,
-          currentIndex,
-          willReuseTerminal ? true : undefined,
-          startup.executionMode
-        );
-      } else if (startup.isAppendContinuation) {
-        const willReuseTerminal = integration.canReuseRunningTerminal();
-        Log.debug(
-          `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true (append-to-completed), preserveStepCount=${startup.prevSettledStepCount}, totalSteps=${startup.totalSteps}, reusesRunningTerminal=${willReuseTerminal}`
-        );
-        this.port.dashboardSink.updateExecutionStarted(
-          this.port.id,
-          fileName,
-          startup.totalSteps,
-          true,
-          startup.prevSettledStepCount,
-          willReuseTerminal ? true : undefined,
-          startup.executionMode
-        );
-      }
+    // Terminal reuse keeps the existing PTY, which the client only resumes
+    // when told. A reused terminal means the worktree was already provisioned,
+    // so no setup output was published for this re-announce to disturb.
+    if (integration.canReuseRunningTerminal()) {
+      announceContinuation(true);
     }
 
     this.port.execution.reportCompatibilityDiagnostics?.(
