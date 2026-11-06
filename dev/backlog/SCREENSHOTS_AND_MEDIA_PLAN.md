@@ -38,7 +38,10 @@ this doc stays the shot list). All assets are in `images/screenshots/`.
    the landing take-control clip (`ctrlyoke-take-control-1080p.mp4`, from 2026-09-11, before
    the October UI changes, and the only landing video without a poster or AV1 version). Follow
    `media/phone/SHOOTING_SCRIPT.md`, then `npm run media -- phone` frames the recordings in
-   the iPhone 13 mockup.
+   the iPhone 13 mockup. **2026-11-05:** the narrow (< 640 px) header was reworked (`7de77627f`;
+   row 1: New, Save/Undo/Redo, run controls, Search/Workspace/Settings; row 2: the workflow
+   status between the Steps and Workflow Properties pulls), so any phone-width dashboard capture
+   taken before then shows the old header; retake those in the same session.
 4. #3 still composite, only if a page needs a still rather than the video.
 5. #12: add #13a (`walkthrough-open-panel-*`) to the top of `docs/workflows/properties-panel.md`.
 6. #13: D9's walkthrough-page capture (`<!-- SHOT D9 -->` marker in
