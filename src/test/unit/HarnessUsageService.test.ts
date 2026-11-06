@@ -367,8 +367,13 @@ suite("HarnessUsageService", () => {
     const service = new HarnessUsageService(workspaceRoot, [provider]);
 
     const pending = service.refreshHarnessUsage(HARNESS_IDS.COPILOT_CLI);
-    // Let the debounce timer fire so the probe is genuinely in flight.
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    // Wait for the debounce timer to fire so the probe is genuinely in
+    // flight. Poll rather than sleep a fixed interval: under `npm test`'s
+    // concurrent suites a 150 ms sleep lost the race to the timer.
+    const deadline = Date.now() + 10_000;
+    while (!provider.sawSignal && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
     assert.ok(provider.sawSignal, "the provider must receive an AbortSignal");
     assert.strictEqual(provider.aborted, false);
 
