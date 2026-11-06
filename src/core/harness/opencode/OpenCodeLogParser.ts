@@ -354,6 +354,7 @@ export class OpenCodeLogParser extends BaseLogParser {
   override trackBackgroundWorkState(event: BaseCliEvent): void {
     const e = event as Record<string, any>;
     this.childSessions.track(event);
+    this.syncSubagentOutput(event);
     switch (event.type) {
       case OPENCODE_EVENT_TYPES.BACKGROUND_LAUNCH:
         if (typeof e.taskId === "string") {
@@ -367,6 +368,29 @@ export class OpenCodeLogParser extends BaseLogParser {
         break;
       case OPENCODE_EVENT_TYPES.IDLE:
         this.backgroundFollowUpState.resumedTurnClosed();
+        break;
+    }
+  }
+
+  /**
+   * Keep a child's sidecar output following its export-tracked lifecycle.
+   * The sidecar marks a child done at any idle (see `registerSubagentSource`),
+   * but an OpenCode 2 child can wake again for its own background job. A
+   * notice or a new execution reopens it, and the idle that leaves it nothing
+   * pending is what finally ends it, whichever side is read first.
+   */
+  private syncSubagentOutput(event: BaseCliEvent): void {
+    const childSessionId = (event as Record<string, any>).childSessionID;
+    if (typeof childSessionId !== "string") return;
+    switch (event.type) {
+      case OPENCODE_EVENT_TYPES.CHILD_BACKGROUND_NOTICE:
+      case OPENCODE_EVENT_TYPES.CHILD_BUSY:
+        this.subagentFollower.reopenChild(childSessionId);
+        break;
+      case OPENCODE_EVENT_TYPES.CHILD_IDLE:
+        if (!this.childSessions.isHolding(childSessionId)) {
+          this.subagentFollower.markChildComplete(childSessionId);
+        }
         break;
     }
   }
@@ -739,11 +763,15 @@ export class OpenCodeLogParser extends BaseLogParser {
       (event.type === OPENCODE_EVENT_TYPES.TOOL_USE &&
         OPENCODE_SUBAGENT_TOOL_NAMES.has(part?.tool));
     const childSessionId = part?.state?.metadata?.sessionId;
+    // OpenCode 2 export content items carry no session id of their own; the
+    // event names the session they came from.
+    const parentSessionId =
+      part?.sessionID ?? (event as Record<string, any>).sessionID;
     if (
       !isTaskSpawn ||
       typeof childSessionId !== "string" ||
       typeof part?.callID !== "string" ||
-      typeof part?.sessionID !== "string"
+      typeof parentSessionId !== "string"
     ) {
       return;
     }
@@ -820,6 +848,16 @@ export class OpenCodeLogParser extends BaseLogParser {
             const taskEvent = mapOpenCodeToolPartToCliEvent(undefined, part);
             return taskEvent ? [taskEvent] : [];
           }
+          // The plugin records a tool part as it starts and again when it
+          // ends; these events carry no id to merge on, so only the finished
+          // part is shown.
+          const status = part.state?.status;
+          if (
+            status !== OPERATION_STATUS.COMPLETED &&
+            status !== OPENCODE_TOOL_STATUS.ERROR
+          ) {
+            return [];
+          }
           const event = mapOpenCodeToolPartToCliEvent(undefined, part);
           return event ? [event] : [];
         }
@@ -861,10 +899,14 @@ export class OpenCodeLogParser extends BaseLogParser {
           cacheReadInputTokens: usage.cachedInputTokens,
         };
       },
+      // A child the export tracker is holding the step on is not done at its
+      // idle or when its subagent call returns: it will wake for its own
+      // background job (see syncSubagentOutput).
       isComplete: (record) =>
-        record.kind === OPENCODE_SUBAGENT_RECORD_TYPES.CHILD_IDLE ||
-        (record.kind === OPENCODE_SUBAGENT_RECORD_TYPES.TASK_RUNNING &&
-          record.part?.state?.status === OPERATION_STATUS.COMPLETED),
+        (record.kind === OPENCODE_SUBAGENT_RECORD_TYPES.CHILD_IDLE ||
+          (record.kind === OPENCODE_SUBAGENT_RECORD_TYPES.TASK_RUNNING &&
+            record.part?.state?.status === OPERATION_STATUS.COMPLETED)) &&
+        !this.childSessions.isHolding(record.childSessionId),
     });
   }
 

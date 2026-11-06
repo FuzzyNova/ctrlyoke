@@ -1,7 +1,8 @@
 import * as assert from "assert";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
-import { suite, test } from "mocha";
+import { setup, suite, teardown, test } from "mocha";
 import { OpenCodeLogParser } from "../../core/harness/opencode/OpenCodeLogParser";
 import { OPENCODE_V2_MESSAGE_TYPES } from "../../core/harness/opencode/OpenCodeProtocolConstants";
 import type { BaseCliEvent } from "../../core/harness/shared/interfaces/ILogParser";
@@ -82,22 +83,12 @@ class ExportReplay {
   childThrough(childId: string, type: string, n: number): number {
     const child = this.children.find((c) => c.info.id === childId);
     assert.ok(child, `no child fixture ${childId}`);
-    let seen = 0;
-    const index = child.messages.findIndex(
-      (message) => message.type === type && ++seen === n
-    );
-    assert.ok(index >= 0, `child has ${n} ${type} messages`);
-    return index + 1;
+    return replayIndexOf(child, type, n);
   }
 
   /** Index just past the `n`th (1-based) message of `type`. */
   through(type: string, n: number): number {
-    let seen = 0;
-    const index = this.fixture.messages.findIndex(
-      (message) => message.type === type && ++seen === n
-    );
-    assert.ok(index >= 0, `fixture has ${n} ${type} messages`);
-    return index + 1;
+    return replayIndexOf(this.fixture, type, n);
   }
 
   async poll(messageCount: number): Promise<BaseCliEvent[]> {
@@ -106,6 +97,20 @@ class ExportReplay {
     for (const event of events) this.parser.trackBackgroundWorkState(event);
     return events;
   }
+}
+
+/** Index just past the `n`th (1-based) message of `type` in `fixture`. */
+function replayIndexOf(
+  fixture: ExportFixture,
+  type: string,
+  n: number
+): number {
+  let seen = 0;
+  const index = fixture.messages.findIndex(
+    (message) => message.type === type && ++seen === n
+  );
+  assert.ok(index >= 0, `fixture has ${n} ${type} messages`);
+  return index + 1;
 }
 
 const IDLE = OPENCODE_V2_MESSAGE_TYPES.IDLE;
@@ -467,5 +472,184 @@ suite("OpenCodeLogParser subagent child sessions (OpenCode 2)", () => {
     assert.strictEqual(replay.parser.hasPendingBackgroundWork(), true);
     await replay.parser.beginMonitoringTurn();
     assert.strictEqual(replay.parser.hasPendingBackgroundWork(), false);
+  });
+});
+
+/**
+ * The child's text reaches the output through the plugin's subagent sidecar,
+ * not the export. These tests write the sidecar by hand, in the record shapes
+ * the plugin appends, beside the same real export capture.
+ */
+suite("OpenCodeLogParser subagent follow-up output (OpenCode 2)", () => {
+  const parentFixture = readExport(
+    "v2-interactive-subagent-parent-export.json"
+  );
+  const childFixture = readExport("v2-interactive-subagent-child-export.json");
+  const parentId = parentFixture.info.id;
+  const childId = childFixture.info.id;
+  const RUN_ID = "run-follow-up";
+  let dir: string;
+
+  setup(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-oc-sidecar-"));
+  });
+  teardown(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const append = (...records: object[]): void =>
+    fs.appendFileSync(
+      path.join(dir, `${RUN_ID}-subagents.jsonl`),
+      records.map((record) => `${JSON.stringify(record)}\n`).join("")
+    );
+  const childText = (id: string, text: string) => ({
+    kind: "part",
+    childSessionId: childId,
+    part: { type: "text", id, sessionID: childId, messageID: id, text },
+  });
+  const childIdle = { kind: "child-idle", childSessionId: childId };
+  const callReturned = {
+    kind: "task-running",
+    childSessionId: childId,
+    part: {
+      type: "tool",
+      id: "tool:call",
+      sessionID: parentId,
+      messageID: "msg_parent",
+      callID: "call",
+      tool: "subagent",
+      state: { status: "completed", metadata: { sessionId: childId } },
+    },
+  };
+
+  /** Replay that also registers spawns with the follower, as the pump does. */
+  function startReplay(child: ExportFixture = childFixture): {
+    replay: ExportReplay;
+    streamed: string[];
+    poll: () => Promise<void>;
+  } {
+    const replay = new ExportReplay(parentFixture, [child]);
+    replay.parser.setSubagentSidecar(dir, RUN_ID);
+    const streamed: string[] = [];
+    replay.parser.getSubagentFollower().start((events) => {
+      for (const event of events) {
+        if (event.type === CLI_EVENT_TYPES.TEXT && event.subagent) {
+          streamed.push((event.data as { text: string }).text);
+        }
+      }
+    }, 5);
+    return {
+      replay,
+      streamed,
+      poll: async () => {
+        const events = await replay.poll(Number.MAX_SAFE_INTEGER);
+        for (const event of events) {
+          replay.parser.extractStructuredEventsFromEvent(event);
+        }
+      },
+    };
+  }
+
+  /** Let the follower's interval poll catch up with the sidecar. */
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 60));
+
+  async function assertFollowUpShown(
+    replay: ExportReplay,
+    streamed: string[]
+  ): Promise<void> {
+    await settle();
+    assert.deepStrictEqual(streamed, ["LAUNCHED", "CHILD-DONE"]);
+    const drain = await replay.parser
+      .getSubagentFollower()
+      .drainToEof(500, { retainUnfinished: true });
+    assert.strictEqual(drain.partial, false, "the child ended, not timed out");
+  }
+
+  test("keeps the child's output flowing when the export sees its job first", async () => {
+    const { replay, streamed, poll } = startReplay();
+    // The export tracker has the child's running shell before the sidecar's
+    // idle is read, so that idle does not end the child.
+    replay.childVisible.set(childId, replay.childThrough(childId, IDLE, 1));
+    await poll();
+    append(childText("m1", "LAUNCHED"), childIdle, callReturned);
+    await settle();
+
+    append(childText("m2", "CHILD-DONE"), childIdle);
+    replay.childVisible.delete(childId);
+    await poll();
+    await assertFollowUpShown(replay, streamed);
+  });
+
+  test("reopens a child the sidecar already ended when its job's notice arrives", async () => {
+    const { replay, streamed, poll } = startReplay();
+    // The sidecar is read first: nothing is known to hold the child yet, so
+    // its first idle ends it.
+    append(childText("m1", "LAUNCHED"), childIdle, callReturned);
+    replay.childVisible.set(childId, 0);
+    await poll();
+    await settle();
+
+    // The notice wakes the child: its output must be followed again.
+    replay.childVisible.set(
+      childId,
+      replay.childThrough(childId, SYNTHETIC, 1)
+    );
+    await poll();
+    append(childText("m2", "CHILD-DONE"), childIdle);
+    replay.childVisible.delete(childId);
+    await poll();
+    await assertFollowUpShown(replay, streamed);
+  });
+
+  test("shows a child's tool call once, when it finishes", async () => {
+    const { replay, poll } = startReplay();
+    const commands: string[] = [];
+    replay.parser.getSubagentFollower().start((events) => {
+      for (const event of events) {
+        if (event.subagent && event.type !== CLI_EVENT_TYPES.TEXT) {
+          commands.push(event.type);
+        }
+      }
+    }, 5);
+    const shellPart = (status: string) => ({
+      kind: "part",
+      childSessionId: childId,
+      part: {
+        type: "tool",
+        id: "tool:call_shell",
+        sessionID: childId,
+        messageID: "m1",
+        callID: "call_shell",
+        tool: "shell",
+        state: { status, input: { command: "ping -n 31 127.0.0.1" } },
+      },
+    });
+    append(shellPart("running"), shellPart("completed"), callReturned);
+    await poll();
+    await settle();
+    assert.strictEqual(commands.length, 1, JSON.stringify(commands));
+  });
+
+  test("a child with no background work ends at its idle as before", async () => {
+    // The same child without its shell: one execution, ended by one idle.
+    const plain: ExportFixture = {
+      info: childFixture.info,
+      messages: childFixture.messages
+        .slice(0, replayIndexOf(childFixture, IDLE, 1))
+        .filter(
+          (message) =>
+            !(message.content as any[] | undefined)?.some(
+              (item) => item.name === "shell"
+            )
+        ),
+    };
+    const { replay, streamed, poll } = startReplay(plain);
+    append(childText("m1", "LAUNCHED"), childIdle, callReturned);
+    await poll();
+    await settle();
+    assert.deepStrictEqual(streamed, ["LAUNCHED"]);
+    assert.strictEqual(replay.parser.hasPendingBackgroundWork(), false);
+    const drain = await replay.parser
+      .getSubagentFollower()
+      .drainToEof(500, { retainUnfinished: true });
+    assert.strictEqual(drain.partial, false);
   });
 });

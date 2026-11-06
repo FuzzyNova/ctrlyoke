@@ -49,6 +49,51 @@ suite("SubagentSourceFollower", () => {
     assert.strictEqual(drain.partial, false);
   });
 
+  test("a reopened child streams what it writes after its completion record", async () => {
+    const follower = new SubagentSourceFollower();
+    const live: string[] = [];
+    const records: RecordItem[] = [{ id: "one", text: "first", done: true }];
+    follower.register<RecordItem>({
+      key: "child",
+      attribution: { parentToolCallId: "spawn", agentId: "agent-1" },
+      read: async (offset) => ({
+        records: records.slice(offset),
+        nextOffset: records.length,
+      }),
+      map: (record) => [
+        { type: CLI_EVENT_TYPES.TEXT, data: { text: record.text } },
+      ],
+      isComplete: (record) => record.done === true,
+    });
+    follower.start((events) => {
+      for (const event of events) {
+        if (event.type === CLI_EVENT_TYPES.TEXT) {
+          live.push((event.data as { text: string }).text);
+        }
+      }
+    }, 5);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.strictEqual(follower.reopenChild("unknown"), false);
+
+    // Written after the completion record: unread until the child reopens.
+    records.push({ id: "two", text: "second" });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.deepStrictEqual(live, ["first"]);
+
+    assert.strictEqual(follower.reopenChild("agent-1"), true);
+    assert.strictEqual(follower.reopenChild("agent-1"), false, "still open");
+    records.push({ id: "three", text: "third", done: true });
+    const drain = await follower.drainToEof(200);
+    assert.deepStrictEqual(live, ["first", "second", "third"]);
+    assert.strictEqual(drain.partial, false);
+    // Each completion updates the spawn card, the reopened one included.
+    assert.strictEqual(
+      drain.events.filter((event) => event.type === CLI_EVENT_TYPES.TOOL_CALL)
+        .length,
+      2
+    );
+  });
+
   test("deduplicates reread records and ignores unregistered sources", async () => {
     const follower = new SubagentSourceFollower();
     let calls = 0;

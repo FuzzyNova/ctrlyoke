@@ -295,9 +295,20 @@ parent or any child is blocked or busy.
 
 A child stops being read once an `idle` leaves it nothing pending, until a later
 `subagent` call names it again. Child text and tool calls are not taken from the
-export; they reach the output through the plugin's subagent sidecar, which
-treats the child's first `idle` as its end. So a child's follow-up execution
-holds the step but its output is not shown. The real capture is
+export; they reach the output through the plugin's subagent sidecar
+(`SubagentSourceFollower`). The sidecar would end a child at its first
+`child-idle` record or when its `subagent` call returns, so the parser keeps the
+two in step (`syncSubagentOutput`):
+
+- Neither record ends a child the export tracker is holding the step on
+  (`OpenCodeChildSessions.isHolding`).
+- A `child_background_notice` or `child_busy` reopens a child the sidecar already
+  ended (`SubagentSourceFollower.reopenChild`), and reading resumes from its
+  offset. This covers a sidecar read that happens before the export shows the
+  job.
+- The `child_idle` that leaves a child nothing pending marks it complete.
+
+The real capture is
 `v2-interactive-subagent-{parent,child}-export.json`: the parent idles, and the
 child finishes its own shell 30 s later.
 

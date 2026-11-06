@@ -45,6 +45,18 @@ export class OpenCodeChildSessions {
       .map(([id]) => id);
   }
 
+  /**
+   * Whether this child is holding the step: background work pending, a
+   * notice awaiting its follow-up execution, or an execution running.
+   * Side-effect free, unlike `isBlocked()`.
+   */
+  isHolding(sessionId: string): boolean {
+    const child = this.children.get(sessionId);
+    if (!child) return false;
+    const { pendingTasks, awaitingResumedTurn } = child.followUp.snapshot();
+    return child.busy || pendingTasks.length > 0 || awaitingResumedTurn;
+  }
+
   /** Whether the child is already known to be mid-execution. */
   isBusy(sessionId: string): boolean {
     return this.children.get(sessionId)?.busy ?? false;

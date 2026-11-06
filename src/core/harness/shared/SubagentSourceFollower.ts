@@ -120,6 +120,25 @@ export class SubagentSourceFollower {
   }
 
   /**
+   * Resume following a child that already reported completion, because its
+   * harness has woken it for another execution (an OpenCode 2 subagent
+   * picking up its own background job's result). Reading continues from the
+   * stored offset, so nothing written since is lost, and the child's next
+   * completion record ends it again. Returns whether a source was reopened.
+   */
+  reopenChild(agentId: string): boolean {
+    const source = [...this.sources.values()].find(
+      (candidate) => candidate.attribution.agentId === agentId
+    );
+    if (!source?.complete) return false;
+    source.complete = false;
+    source.childComplete = false;
+    // Let the spawn card receive a fresh completion update afterwards.
+    this.completedSpawns.delete(source.attribution.parentToolCallId);
+    return true;
+  }
+
+  /**
    * Stream a spawn-card update discovered while following a child source,
    * such as a newly started workflow agent. It is kept for the final output
    * like the follower's own completion updates.
