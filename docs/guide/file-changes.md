@@ -84,7 +84,19 @@ In **Step changes**, files can be listed under two headings:
 The headings appear only when a step has both kinds.
 
 Files your `.gitignore` excludes aren't compared, so changes to them appear
-only when the harness reported them.
+only when the harness reported them. Images, audio, video, archives, office and
+PDF documents, and other binary files aren't compared either.
+
+### Workspaces that aren't Git repositories
+
+In a Git repository the snapshot only reads the files Git reports as changed.
+Outside one, ctrlyoke has to read the whole folder, so it gives up when the
+folder is too large to read quickly: more than 20,000 files, more than 64 MB of
+file content, or more than 5 seconds. The step then runs without a snapshot, and
+only the edits the harness reported appear. The snapshot stays off for that
+folder for the rest of the run, so later steps don't wait either. To get
+snapshots back, run `git init` in the folder or open a smaller folder as the
+workspace.
 
 ### Files you can't undo
 

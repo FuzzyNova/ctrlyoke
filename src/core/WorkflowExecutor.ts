@@ -588,6 +588,56 @@ export class WorkflowExecutor {
     return this.promptQueue.getRuntimeStateMachine();
   }
 
+  /** Call `onStop` when the run starts cancelling or stops. */
+  private subscribeToRuntimeStop(onStop: () => void): { dispose(): void } {
+    return this.getRuntime().onDidTransition((transition) => {
+      if (
+        transition.current.status === EXECUTION_STATES.CANCELLING ||
+        transition.current.status === EXECUTION_STATES.STOPPED
+      ) {
+        onStop();
+      }
+    });
+  }
+
+  /**
+   * Capture the workspace state, ending the capture at once if the run is
+   * stopped (or the group's signal aborts) while it is in progress. A stop
+   * that happened before the call does not abort it, so a stopped step still
+   * records the after-state for its undo.
+   *
+   * @throws SnapshotUnavailableError when the capture is aborted or its
+   *   filesystem walk exceeds its budget.
+   */
+  private async captureWorkspaceStateUntilStopped(
+    snapshotService: WorkspaceSnapshotService,
+    strategy: "git" | "filesystem",
+    context: WorkflowExecutionContext
+  ): Promise<RawWorkspaceState> {
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    const status = this.getRuntime().status;
+    // A run already stopping keeps moving (CANCELLING → STOPPED) while the
+    // after-state is captured; that transition is not a new stop.
+    const stopSubscription =
+      status === EXECUTION_STATES.CANCELLING ||
+      status === EXECUTION_STATES.STOPPED
+        ? undefined
+        : this.subscribeToRuntimeStop(abort);
+    context.abortSignal?.addEventListener("abort", abort, { once: true });
+    try {
+      return await snapshotService.captureWorkspaceState(
+        context.executionWorkspace.executionRoot,
+        strategy,
+        context.executionWorkspace.namedWorkspaceRoots,
+        { signal: controller.signal }
+      );
+    } finally {
+      stopSubscription?.dispose();
+      context.abortSignal?.removeEventListener("abort", abort);
+    }
+  }
+
   private takeTargetRunStopReason(
     target: ExecutionTarget
   ): WorkflowStopReason | undefined {
@@ -1052,14 +1102,13 @@ export class WorkflowExecutor {
         const hasSettledMember = state.steps
           .slice(group.startIndex, group.endIndex + 1)
           .some((step) => step._runtime?.completedAt !== undefined);
-        if (!hasSettledMember) {
+        if (!hasSettledMember && context.snapshotService) {
           try {
-            groupBeforeState =
-              await context.snapshotService?.captureWorkspaceState(
-                context.executionWorkspace.executionRoot,
-                snapshotStrategy,
-                context.executionWorkspace.namedWorkspaceRoots
-              );
+            groupBeforeState = await this.captureWorkspaceStateUntilStopped(
+              context.snapshotService,
+              snapshotStrategy,
+              context
+            );
           } catch (error) {
             Log.warn(
               "[WorkflowExecutor] Failed to capture parallel group workspace snapshot:",
@@ -1266,15 +1315,7 @@ export class WorkflowExecutor {
       cancelTarget: context.cancelTarget,
       releaseTargetResources: context.releaseTargetResources,
       getRuntimeStatus: () => this.getRuntime().status,
-      subscribeToStop: (onStop) =>
-        this.getRuntime().onDidTransition((transition) => {
-          if (
-            transition.current.status === EXECUTION_STATES.CANCELLING ||
-            transition.current.status === EXECUTION_STATES.STOPPED
-          ) {
-            onStop();
-          }
-        }),
+      subscribeToStop: (onStop) => this.subscribeToRuntimeStop(onStop),
       getCurrentGroup: (groupId) =>
         this.promptQueue
           .getState()
@@ -3084,12 +3125,10 @@ export class WorkflowExecutor {
     }
 
     const executionRoot = context.executionWorkspace.executionRoot;
-    const namedRoots = context.executionWorkspace.namedWorkspaceRoots;
-
-    const afterState = await context.snapshotService.captureWorkspaceState(
-      executionRoot,
+    const afterState = await this.captureWorkspaceStateUntilStopped(
+      context.snapshotService,
       strategy,
-      namedRoots
+      context
     );
 
     const changedFiles = await context.snapshotService.computeSnapshotChanges(
@@ -3282,13 +3321,15 @@ export class WorkflowExecutor {
     let beforeState: RawWorkspaceState | undefined;
     if (context.snapshotService && snapshotStrategy) {
       try {
-        beforeState = await context.snapshotService.captureWorkspaceState(
-          context.executionWorkspace.executionRoot,
+        beforeState = await this.captureWorkspaceStateUntilStopped(
+          context.snapshotService,
           snapshotStrategy,
-          context.executionWorkspace.namedWorkspaceRoots
+          context
         );
       } catch {
-        // ignore
+        // No before-state (capture failed, was stopped, or its filesystem
+        // walk exceeded its budget, which the service logs): the step runs
+        // without a diff/undo snapshot.
       }
     }
 

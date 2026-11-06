@@ -22,9 +22,11 @@ import {
   FILE_OPERATION_KINDS,
   SNAPSHOT_BASE_SOURCES,
   SNAPSHOT_STRATEGIES,
+  SNAPSHOT_UNAVAILABLE_REASONS,
   UNDO_FILE_ACTIONS,
   MAX_CONTENT_SIZE,
   type SnapshotStrategy,
+  type SnapshotUnavailableReason,
 } from "../types/DashboardConstants";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import {
@@ -76,7 +78,276 @@ const EXCLUDED_DIRS = new Set([
   ".git",
 ]);
 
-const EXCLUDED_EXTENSIONS = new Set([".pyc", ".class", ".o", ".obj"]);
+/**
+ * Files never opened by a snapshot: compiled artifacts, and formats that are
+ * binary by definition (media, archives, office/PDF documents, fonts,
+ * executables), plus cloud-drive and shell stubs. Each would either be read in
+ * full only to be dropped by `isBinary()`, or, on a sync client such as Google
+ * Drive for Desktop or OneDrive Files On-Demand, downloaded by the read.
+ */
+const SKIPPED_FILE_EXTENSIONS = new Set([
+  // Compiled artifacts
+  ".pyc",
+  ".class",
+  ".o",
+  ".obj",
+  // Images
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".bmp",
+  ".ico",
+  ".webp",
+  ".tif",
+  ".tiff",
+  ".heic",
+  ".heif",
+  ".avif",
+  ".psd",
+  ".raw",
+  ".cr2",
+  ".nef",
+  ".dng",
+  // Audio
+  ".mp3",
+  ".wav",
+  ".flac",
+  ".aac",
+  ".ogg",
+  ".m4a",
+  ".wma",
+  ".opus",
+  // Video
+  ".mp4",
+  ".mov",
+  ".avi",
+  ".mkv",
+  ".wmv",
+  ".webm",
+  ".m4v",
+  ".flv",
+  // Archives and disk images
+  ".zip",
+  ".7z",
+  ".rar",
+  ".tar",
+  ".gz",
+  ".tgz",
+  ".bz2",
+  ".xz",
+  ".zst",
+  ".iso",
+  ".dmg",
+  ".jar",
+  ".war",
+  // Office and PDF documents
+  ".pdf",
+  ".doc",
+  ".docx",
+  ".xls",
+  ".xlsx",
+  ".ppt",
+  ".pptx",
+  ".odt",
+  ".ods",
+  ".odp",
+  ".pages",
+  ".numbers",
+  // Fonts
+  ".ttf",
+  ".otf",
+  ".woff",
+  ".woff2",
+  ".eot",
+  // Executables and libraries
+  ".exe",
+  ".dll",
+  ".so",
+  ".dylib",
+  ".msi",
+  // Databases
+  ".sqlite",
+  ".db",
+  // Cloud-drive document stubs (Google Drive for Desktop) and shell links
+  ".gdoc",
+  ".gsheet",
+  ".gslides",
+  ".gdraw",
+  ".gform",
+  ".gmap",
+  ".gsite",
+  ".gjam",
+  ".lnk",
+  ".url",
+]);
+
+/** Lowercased file names that are never opened by a snapshot. */
+const SKIPPED_FILE_NAMES = new Set(["desktop.ini", "thumbs.db", ".ds_store"]);
+
+/** True when a file is skipped by name alone, before any `stat` or read. */
+function isSkippedByName(fileName: string): boolean {
+  const lower = fileName.toLowerCase();
+  return (
+    SKIPPED_FILE_NAMES.has(lower) ||
+    SKIPPED_FILE_EXTENSIONS.has(path.extname(lower))
+  );
+}
+
+/**
+ * Limits on one filesystem-strategy walk. The walk is a best-effort aid for
+ * the diff/undo view on the step's critical path, so it gives up rather than
+ * delay the step: see {@link SnapshotUnavailableError}.
+ */
+export interface FilesystemWalkBudget {
+  /** Most files the walk will consider (each costs at least a `stat`). */
+  readonly maxFiles: number;
+  /** Most file content bytes the walk will read. */
+  readonly maxBytesRead: number;
+  /** Longest the walk may run, in milliseconds. */
+  readonly maxDurationMs: number;
+}
+
+export const DEFAULT_FILESYSTEM_WALK_BUDGET: FilesystemWalkBudget = {
+  maxFiles: 20_000,
+  maxBytesRead: 64 * 1024 * 1024,
+  maxDurationMs: 5_000,
+};
+
+/** Options for {@link WorkspaceSnapshotService.captureWorkspaceState}. */
+export interface SnapshotCaptureOptions {
+  /** Aborting it ends the capture at once with an `aborted` error. */
+  readonly signal?: AbortSignal;
+}
+
+/**
+ * Thrown when a capture cannot produce a complete state: the filesystem walk
+ * hit a budget limit, or the capture was aborted. Callers treat it like any
+ * other capture failure and skip the snapshot for that step. A partial state is
+ * never returned, because a missing before-state file would read as created by
+ * the step and its undo would delete it.
+ */
+export class SnapshotUnavailableError extends Error {
+  constructor(
+    readonly reason: SnapshotUnavailableReason,
+    message: string
+  ) {
+    super(message);
+    this.name = "SnapshotUnavailableError";
+  }
+}
+
+function abortedCaptureError(): SnapshotUnavailableError {
+  return new SnapshotUnavailableError(
+    SNAPSHOT_UNAVAILABLE_REASONS.ABORTED,
+    "Workspace snapshot capture was stopped"
+  );
+}
+
+function throwIfCaptureAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw abortedCaptureError();
+  }
+}
+
+/**
+ * Enforces a {@link FilesystemWalkBudget} over one walk. The deadline and the
+ * caller's abort both abort `signal`, which also cancels an in-flight
+ * `readFile`, so a slow (e.g. downloading) file cannot outlast either.
+ */
+class FilesystemWalkTracker {
+  private readonly controller = new AbortController();
+  private readonly startedAt = Date.now();
+  private readonly timer: ReturnType<typeof setTimeout>;
+  private readonly onCallerAbort = () => this.stop(abortedCaptureError());
+  private stopError: SnapshotUnavailableError | undefined;
+  files = 0;
+  bytesRead = 0;
+
+  constructor(
+    private readonly budget: FilesystemWalkBudget,
+    private readonly callerSignal: AbortSignal | undefined
+  ) {
+    this.timer = setTimeout(
+      () =>
+        this.stop(
+          this.limitError(SNAPSHOT_UNAVAILABLE_REASONS.DEADLINE, "time")
+        ),
+      budget.maxDurationMs
+    );
+    if (callerSignal?.aborted) {
+      this.stop(abortedCaptureError());
+    } else {
+      callerSignal?.addEventListener("abort", this.onCallerAbort, {
+        once: true,
+      });
+    }
+  }
+
+  get signal(): AbortSignal {
+    return this.controller.signal;
+  }
+
+  get elapsedMs(): number {
+    return Date.now() - this.startedAt;
+  }
+
+  /** Throw the error that stopped the walk, if anything has. */
+  throwIfStopped(): void {
+    if (this.stopError) {
+      throw this.stopError;
+    }
+  }
+
+  /** Count one more file, throwing if that exceeds the file limit. */
+  countFile(): void {
+    this.throwIfStopped();
+    this.files += 1;
+    if (this.files > this.budget.maxFiles) {
+      this.stop(
+        this.limitError(SNAPSHOT_UNAVAILABLE_REASONS.FILE_COUNT, "file-count")
+      );
+      this.throwIfStopped();
+    }
+  }
+
+  /** Reserve `bytes` of reading before it happens, throwing if over budget. */
+  reserveBytes(bytes: number): void {
+    this.throwIfStopped();
+    this.bytesRead += bytes;
+    if (this.bytesRead > this.budget.maxBytesRead) {
+      this.stop(
+        this.limitError(SNAPSHOT_UNAVAILABLE_REASONS.BYTES_READ, "bytes-read")
+      );
+      this.throwIfStopped();
+    }
+  }
+
+  dispose(): void {
+    clearTimeout(this.timer);
+    this.callerSignal?.removeEventListener("abort", this.onCallerAbort);
+  }
+
+  private stop(error: SnapshotUnavailableError): void {
+    if (this.stopError) {
+      return;
+    }
+    this.stopError = error;
+    this.controller.abort(error);
+  }
+
+  private limitError(
+    reason: SnapshotUnavailableReason,
+    label: string
+  ): SnapshotUnavailableError {
+    return new SnapshotUnavailableError(
+      reason,
+      `filesystem walk hit its ${label} limit after ${this.files} files, ` +
+        `${this.bytesRead} bytes read and ${this.elapsedMs} ms ` +
+        `(limits: ${this.budget.maxFiles} files, ${this.budget.maxBytesRead} bytes, ${this.budget.maxDurationMs} ms)`
+    );
+  }
+}
 
 interface RawFileState {
   contentHash: string; // SHA-256
@@ -155,29 +426,63 @@ function isBinary(buffer: Buffer): boolean {
   return false;
 }
 
+/**
+ * Cheap change fingerprint for a file too large to capture. It never equals a
+ * SHA-256 content hash, so a file crossing the size limit reads as changed.
+ */
+function statFingerprint(stat: fs.Stats): string {
+  return `stat:${stat.size}:${stat.mtimeMs}`;
+}
+
+interface ReadFileForSnapshotOptions {
+  /** Aborts an in-flight read; an abort is rethrown, never read as "skip". */
+  readonly signal?: AbortSignal;
+  /** Called with the byte count before content is read; may throw to refuse. */
+  readonly reserveBytes?: (bytes: number) => void;
+}
+
+/**
+ * Read a file for a snapshot, deciding from its name and `stat` before
+ * opening it: skipped names return null, and files over `MAX_CONTENT_SIZE` get
+ * a size + mtime fingerprint without being read. Only small, possibly-text
+ * files are read, and those that turn out binary return null.
+ */
 async function readFileForSnapshot(
-  filePath: string
+  filePath: string,
+  options: ReadFileForSnapshotOptions = {}
 ): Promise<{ content?: string; hash: string } | null> {
+  if (isSkippedByName(path.basename(filePath))) {
+    return null;
+  }
+  let stat: fs.Stats;
   try {
-    const stat = await fs.promises.stat(filePath);
-    if (stat.size > MAX_CONTENT_SIZE) {
-      // Too large — hash only
-      const buffer = await fs.promises.readFile(filePath);
-      if (isBinary(buffer)) {
-        return null;
-      }
-      const content = buffer.toString("utf8");
-      return { hash: computeHash(content) };
-    }
-    const buffer = await fs.promises.readFile(filePath);
-    if (isBinary(buffer)) {
-      return null;
-    }
-    const content = buffer.toString("utf8");
-    return { content, hash: computeHash(content) };
+    stat = await fs.promises.stat(filePath);
   } catch {
     return null;
   }
+  if (!stat.isFile()) {
+    return null;
+  }
+  if (stat.size > MAX_CONTENT_SIZE) {
+    return { hash: statFingerprint(stat) };
+  }
+  options.reserveBytes?.(stat.size);
+  let buffer: Buffer;
+  try {
+    buffer = await fs.promises.readFile(filePath, { signal: options.signal });
+  } catch {
+    if (options.signal?.aborted) {
+      throw options.signal.reason instanceof SnapshotUnavailableError
+        ? options.signal.reason
+        : abortedCaptureError();
+    }
+    return null;
+  }
+  if (isBinary(buffer)) {
+    return null;
+  }
+  const content = buffer.toString("utf8");
+  return { content, hash: computeHash(content) };
 }
 
 async function getSnapshotFileData(
@@ -271,8 +576,10 @@ async function walkDirectory(
   dir: string,
   workspacePath: string,
   gitignoreMatcher: (relPosix: string, isDir: boolean) => boolean,
-  result: Map<string, RawFileState>
+  result: Map<string, RawFileState>,
+  tracker: FilesystemWalkTracker
 ): Promise<void> {
+  tracker.throwIfStopped();
   let entries: fs.Dirent[];
   try {
     entries = await fs.promises.readdir(dir, { withFileTypes: true });
@@ -281,6 +588,7 @@ async function walkDirectory(
   }
 
   for (const entry of entries) {
+    tracker.throwIfStopped();
     const fullPath = path.join(dir, entry.name);
     const relNative = path.relative(workspacePath, fullPath);
     const relPosix = relNative.replace(/\\/g, "/");
@@ -292,16 +600,25 @@ async function walkDirectory(
       if (gitignoreMatcher(relPosix, true)) {
         continue;
       }
-      await walkDirectory(fullPath, workspacePath, gitignoreMatcher, result);
+      await walkDirectory(
+        fullPath,
+        workspacePath,
+        gitignoreMatcher,
+        result,
+        tracker
+      );
     } else if (entry.isFile()) {
-      const ext = path.extname(entry.name).toLowerCase();
-      if (EXCLUDED_EXTENSIONS.has(ext)) {
+      if (isSkippedByName(entry.name)) {
         continue;
       }
       if (gitignoreMatcher(relPosix, false)) {
         continue;
       }
-      const fileData = await readFileForSnapshot(fullPath);
+      tracker.countFile();
+      const fileData = await readFileForSnapshot(fullPath, {
+        signal: tracker.signal,
+        reserveBytes: (bytes) => tracker.reserveBytes(bytes),
+      });
       if (!fileData) {
         continue;
       }
@@ -355,6 +672,21 @@ function buildReversePatchString(hunks: UnifiedDiffHunk[]): string {
 }
 
 export class WorkspaceSnapshotService {
+  /** Limits on each filesystem-strategy walk; tests shrink it in a subclass. */
+  protected readonly filesystemWalkBudget: FilesystemWalkBudget =
+    DEFAULT_FILESYSTEM_WALK_BUDGET;
+
+  /**
+   * Filesystem roots whose walk exceeded the budget, with the error it threw.
+   * One service lives for one workflow run, so later captures of the same root
+   * fail at once instead of paying the budget again on every step, and the
+   * warning is logged once per run.
+   */
+  private readonly overBudgetFilesystemRoots = new Map<
+    string,
+    SnapshotUnavailableError
+  >();
+
   private buildModifiedChange(
     viewerPath: string,
     repo: string | undefined,
@@ -643,12 +975,22 @@ export class WorkspaceSnapshotService {
     }
   }
 
+  /**
+   * Capture the workspace state for a later {@link computeSnapshotChanges}.
+   *
+   * @throws SnapshotUnavailableError when the filesystem walk exceeds
+   *   {@link filesystemWalkBudget} or `options.signal` aborts. No partial
+   *   state is returned.
+   */
   async captureWorkspaceState(
     executionRoot: string,
     strategy: SnapshotStrategy,
-    executionNamedRoots?: readonly ResolverWorkspaceFolder[]
+    executionNamedRoots?: readonly ResolverWorkspaceFolder[],
+    options: SnapshotCaptureOptions = {}
   ): Promise<RawWorkspaceState> {
     const capturedAt = Date.now();
+    const { signal } = options;
+    throwIfCaptureAborted(signal);
 
     // Single-root (0/1 named roots): keep unprefixed viewer paths, while
     // scoping git commands to the workspace subtree when it is nested in a repo.
@@ -677,7 +1019,7 @@ export class WorkspaceSnapshotService {
           }
         }
       }
-      const seg = await this.captureSegment(root, strategy, pathspec);
+      const seg = await this.captureSegment(root, strategy, pathspec, signal);
       return {
         capturedAt,
         strategy,
@@ -696,7 +1038,10 @@ export class WorkspaceSnapshotService {
       };
     }
 
-    const segments = await this.captureMultiRootSegments(executionNamedRoots);
+    const segments = await this.captureMultiRootSegments(
+      executionNamedRoots,
+      signal
+    );
     const primary = this.primarySegment(segments, executionRoot);
     return {
       capturedAt,
@@ -714,7 +1059,8 @@ export class WorkspaceSnapshotService {
   private async captureSegment(
     root: string,
     strategy: SnapshotStrategy,
-    pathspec: string
+    pathspec: string,
+    signal: AbortSignal | undefined
   ): Promise<{
     git?: WorkspaceSnapshotGitInfo;
     dirty?: boolean;
@@ -741,9 +1087,11 @@ export class WorkspaceSnapshotService {
           const result = await execGit(args, {
             cwd: root,
             timeout: getGitWholeRepoTimeoutMs(),
+            signal,
           });
           stdout = result.stdout;
         } catch (err) {
+          throwIfCaptureAborted(signal);
           // `dirty` stays undefined: that is how `computeSegmentChanges`
           // knows this segment's file map is unknown rather than clean.
           Log.warn(`[WorkspaceSnapshotService] git status failed: ${err}`);
@@ -753,6 +1101,7 @@ export class WorkspaceSnapshotService {
         const entries = parseGitPorcelainV1Z(stdout);
         dirty = entries.length > 0;
         for (const entry of entries) {
+          throwIfCaptureAborted(signal);
           const { x, y, path: filePath, originalPath } = entry;
           if (!filePath) {
             continue;
@@ -788,7 +1137,7 @@ export class WorkspaceSnapshotService {
           }
 
           const absPath = path.join(root, filePath);
-          const fileData = await readFileForSnapshot(absPath);
+          const fileData = await readFileForSnapshot(absPath, { signal });
           if (fileData) {
             files.set(filePath, {
               contentHash: fileData.hash,
@@ -812,17 +1161,61 @@ export class WorkspaceSnapshotService {
           }
         }
       } else {
-        // filesystem strategy
-        const gitignorePath = path.join(root, ".gitignore");
-        const gitignoreMatcher = buildGitignoreMatcher(gitignorePath);
-        await walkDirectory(root, root, gitignoreMatcher, files);
+        await this.walkFilesystemRoot(root, files, signal);
       }
     } catch (err) {
+      // An incomplete capture must surface: an empty file map would read as
+      // "nothing existed before the step" and turn undo into deletion.
+      if (err instanceof SnapshotUnavailableError) {
+        throw err;
+      }
       Log.warn(`[WorkspaceSnapshotService] captureSegment error: ${err}`);
       return { git, files: new Map() };
     }
 
     return { git, dirty, files };
+  }
+
+  /**
+   * Walk a non-git root into `files` within {@link filesystemWalkBudget}. A
+   * root that already exceeded the budget in this run fails at once.
+   */
+  private async walkFilesystemRoot(
+    root: string,
+    files: Map<string, RawFileState>,
+    signal: AbortSignal | undefined
+  ): Promise<void> {
+    const rootKey = path.resolve(root);
+    const overBudget = this.overBudgetFilesystemRoots.get(rootKey);
+    if (overBudget) {
+      throw overBudget;
+    }
+    const gitignoreMatcher = buildGitignoreMatcher(
+      path.join(root, ".gitignore")
+    );
+    const tracker = new FilesystemWalkTracker(
+      this.filesystemWalkBudget,
+      signal
+    );
+    try {
+      await walkDirectory(root, root, gitignoreMatcher, files, tracker);
+      // The deadline may have fired during the last read of the walk.
+      tracker.throwIfStopped();
+    } catch (err) {
+      if (
+        err instanceof SnapshotUnavailableError &&
+        err.reason !== SNAPSHOT_UNAVAILABLE_REASONS.ABORTED
+      ) {
+        this.overBudgetFilesystemRoots.set(rootKey, err);
+        Log.warn(
+          `[WorkspaceSnapshotService] skipping the diff/undo snapshot for ${root}: ${err.message}. ` +
+            "It stays off for this folder for the rest of the run; run `git init` there or open a narrower workspace folder to enable it."
+        );
+      }
+      throw err;
+    } finally {
+      tracker.dispose();
+    }
   }
 
   /**
@@ -832,12 +1225,14 @@ export class WorkspaceSnapshotService {
    * their respective pathspecs, so files never double-count.
    */
   private async captureMultiRootSegments(
-    namedRoots: readonly ResolverWorkspaceFolder[]
+    namedRoots: readonly ResolverWorkspaceFolder[],
+    signal: AbortSignal | undefined
   ): Promise<RawWorkspaceSegment[]> {
     const repos = await discoverRepos([...namedRoots]);
     const segments: RawWorkspaceSegment[] = [];
 
     for (const root of namedRoots) {
+      throwIfCaptureAborted(signal);
       const rootAbs = path.resolve(root.fsPath);
       const repo = repos.find(
         (r) =>
@@ -851,7 +1246,8 @@ export class WorkspaceSnapshotService {
         const seg = await this.captureSegment(
           repo.rootPath,
           SNAPSHOT_STRATEGIES.GIT,
-          pathspec
+          pathspec,
+          signal
         );
         segments.push({
           prefix: root.name,
@@ -866,7 +1262,8 @@ export class WorkspaceSnapshotService {
         const seg = await this.captureSegment(
           rootAbs,
           SNAPSHOT_STRATEGIES.FILESYSTEM,
-          ""
+          "",
+          signal
         );
         segments.push({
           prefix: root.name,

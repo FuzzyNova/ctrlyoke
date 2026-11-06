@@ -45,6 +45,7 @@ import {
   WORKFLOW_ATTEMPT_STATUS,
   StepOutputTextMode,
   SNAPSHOT_STRATEGIES,
+  SNAPSHOT_UNAVAILABLE_REASONS,
 } from "../../types/DashboardConstants";
 import {
   TIMELINE_ATTEMPT_START_REASONS,
@@ -64,8 +65,10 @@ import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { ScriptProcessRunner } from "../../core/orchestration/ScriptProcessRunner";
 import { calculateAttemptCost } from "../../utils/ModelPricing";
 import {
+  SnapshotUnavailableError,
   WorkspaceSnapshotService,
   type RawWorkspaceState,
+  type SnapshotCaptureOptions,
 } from "../../utils/WorkspaceSnapshotService";
 import type { WorkspaceSnapshot } from "../../types/OutputHistoryTypes";
 import { MockHarnessIntegration, MockPlatform } from "../helpers/mockHarness";
@@ -5428,5 +5431,97 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       queue.getState().results[1].status,
       STEP_STATUS.COMPLETED
     );
+  });
+});
+
+suite("WorkflowExecutor workspace snapshot capture", () => {
+  class UnavailableSnapshotService extends WorkspaceSnapshotService {
+    captureCount = 0;
+
+    override async selectStrategy(): Promise<"filesystem"> {
+      return SNAPSHOT_STRATEGIES.FILESYSTEM;
+    }
+
+    override async captureWorkspaceState(): Promise<RawWorkspaceState> {
+      this.captureCount += 1;
+      throw new SnapshotUnavailableError(
+        SNAPSHOT_UNAVAILABLE_REASONS.FILE_COUNT,
+        "filesystem walk hit its file-count limit"
+      );
+    }
+  }
+
+  class BlockingSnapshotService extends WorkspaceSnapshotService {
+    readonly started = deferred();
+    receivedSignal: AbortSignal | undefined;
+
+    override async selectStrategy(): Promise<"filesystem"> {
+      return SNAPSHOT_STRATEGIES.FILESYSTEM;
+    }
+
+    override captureWorkspaceState(
+      _executionRoot: string,
+      _strategy: "git" | "filesystem",
+      _namedRoots?: unknown,
+      options: SnapshotCaptureOptions = {}
+    ): Promise<RawWorkspaceState> {
+      this.receivedSignal = options.signal;
+      this.started.resolve();
+      return new Promise<RawWorkspaceState>((_resolve, reject) => {
+        options.signal?.addEventListener(
+          "abort",
+          () =>
+            reject(
+              new SnapshotUnavailableError(
+                SNAPSHOT_UNAVAILABLE_REASONS.ABORTED,
+                "stopped"
+              )
+            ),
+          { once: true }
+        );
+      });
+    }
+  }
+
+  test("runs the step without a snapshot when the before-state is unavailable", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    queue.loadPrompts({ steps: [{ prompt: "one" }] });
+    const context = makeContext(integration);
+    const snapshotService = new UnavailableSnapshotService();
+    const captured: WorkspaceSnapshot[] = [];
+    context.snapshotService = snapshotService;
+    context.onSnapshotCaptured = (_target, snapshot) => {
+      captured.push(snapshot);
+    };
+
+    await makeExecutor(queue).execute(integration, context);
+
+    assert.deepStrictEqual(integration.sentPrompts, ["one"]);
+    assert.strictEqual(
+      queue.getState().results[0].status,
+      STEP_STATUS.COMPLETED
+    );
+    // No before-state, so no after-state walk and no snapshot.
+    assert.strictEqual(snapshotService.captureCount, 1);
+    assert.deepStrictEqual(captured, []);
+  });
+
+  test("stopping the run aborts an in-flight before-state capture", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    queue.loadPrompts({ steps: [{ prompt: "one" }] });
+    const context = makeContext(integration);
+    const snapshotService = new BlockingSnapshotService();
+    context.snapshotService = snapshotService;
+
+    const execution = makeExecutor(queue).execute(integration, context);
+    await snapshotService.started.promise;
+    assert.strictEqual(snapshotService.receivedSignal?.aborted, false);
+
+    queue.getRuntimeStateMachine().requestStop();
+    await execution;
+
+    assert.strictEqual(snapshotService.receivedSignal?.aborted, true);
   });
 });

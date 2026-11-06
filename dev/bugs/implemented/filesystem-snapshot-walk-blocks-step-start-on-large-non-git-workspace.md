@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-05 by user (claude-cli run in a `G:\My Drive` workspace), diagnosed by Claude
 - **Area:** `src/utils/WorkspaceSnapshotService.ts`, `src/core/WorkflowExecutor.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -81,3 +81,24 @@ slow walk looks like a harness that never launched.
 Add tests in `src/test/unit/WorkspaceSnapshotService.test.ts` for budget exhaustion (capture
 returns incomplete, step still runs), large-file/binary skipping without content reads, and abort
 on stop.
+
+## Fix
+
+- `walkDirectory()` runs under a `FilesystemWalkBudget` (20,000 files, 64 MB read, 5 s).
+  Exceeding any limit throws `SnapshotUnavailableError` rather than returning a partial
+  state, because a missing before-state file would read as created by the step and its
+  undo would delete it. `executeWithSnapshot()` already skipped the snapshot on a throw.
+  The service remembers an over-budget root for the rest of the run, so later steps fail
+  at once, and logs one `WARN` naming the limit. No dashboard notice was added.
+- `readFileForSnapshot()` decides from the name and `stat` first. Known binary and
+  cloud-stub extensions and `desktop.ini` are never opened. Files over `MAX_CONTENT_SIZE`
+  get a `stat:<size>:<mtimeMs>` fingerprint without being read.
+- `WorkflowExecutor.captureWorkspaceStateUntilStopped()` aborts a capture when the run
+  starts cancelling during it. The abort also cancels an in-flight `readFile` and
+  `git status`.
+- Not done: Windows file-attribute checks (`RECALL_ON_DATA_ACCESS` and the others). Node's
+  `fs.Stats` does not expose attributes without a native addon. The extension skip list
+  and the bytes budget bound how much a sync client can be asked to download.
+- Not done: starting the harness while the before-state is captured. The before-state has
+  to be complete before the harness starts editing, so the wait is capped by the deadline
+  instead.
