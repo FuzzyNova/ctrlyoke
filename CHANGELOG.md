@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Hyphenated and namespaced harness slash-command names are no longer cut short; simple `/command args` prompts are sent verbatim.
 - Prompt steps beginning with `!` now show a warning with dashboard actions to convert the command to a script step or remove the prefix.
 - A prompt beginning with `!` is now sent to the AI through a prompt file instead of being typed as a harness shell escape.
 - Steps in a large folder that isn't a Git repository (such as a Google Drive or OneDrive root) now start straight away. ctrlyoke's before-step file snapshot used to read every file in the folder first, which could take minutes and download online-only cloud files. The snapshot now stops after 20,000 files, 64 MB of content or 5 seconds, and the step then runs without diffs or undo for changes the harness didn't report. Binary files (images, audio, video, archives, office and PDF documents) and files over 512 KB are no longer read for the snapshot, and **Stop** now ends a snapshot that is still running.

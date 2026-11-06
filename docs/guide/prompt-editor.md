@@ -93,6 +93,24 @@ work. Hover an underline to see why, and use its quick fix where there is one:
 A reference that fails at run time warns and the step runs anyway, unless
 `execution.contextResolutionFailure` is `fail`.
 
+## Slash commands
+
+A prompt beginning with a harness command such as `/run-tests` is sent in one
+of three forms:
+
+- A bare command, such as `/run-tests`, is sent as written.
+- A short, single-line command with arguments, such as `/run-tests ui`, is sent
+  verbatim when it passes the harness's inline-input check and the step adds no
+  context, agent, skill or secret.
+- A command with longer or multi-line text, unsafe inline characters, or
+  attached context is sent as `/run-tests follow the instructions in
+  @prompt.1.md`; the prompt file contains the complete text and attachments.
+
+In the last form, the command receives the instruction line as its arguments,
+not the original text. This works well for skills that read the prompt file,
+but a command that parses arguments strictly may not accept it. Keep arguments
+short and on one line when the command needs them verbatim.
+
 ### Spelling {#spelling}
 
 The editor spell checks prose in US English. References, placeholders, code,

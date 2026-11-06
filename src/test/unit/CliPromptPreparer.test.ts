@@ -7,6 +7,7 @@ import {
   HEADLESS_EXECUTION_NOTE,
 } from "../../core/harness/shared/CliPromptPreparer";
 import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
+import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
 import {
   HarnessIntegration,
   HarnessStatus,
@@ -1710,7 +1711,7 @@ suite("CliPromptPreparer", () => {
         buildSectionsCalled = true;
         return createSections();
       },
-      extractLeadingSlashCommand: () => "/handoff",
+      extractLeadingSlashCommand: () => "/run-tests",
       isSimplePrompt: () => true,
       buildPriorContextXmlFromItems: () => "",
       getWorkspaceRoot: () => process.cwd(),
@@ -1721,20 +1722,160 @@ suite("CliPromptPreparer", () => {
     });
 
     const result = await preparer.preparePrompt(
-      { prompt: "/handoff" } as PromptStep,
+      { prompt: "/run-tests" } as PromptStep,
       undefined,
       undefined,
       undefined
     );
 
     assert.deepStrictEqual(result, {
-      promptWithInstruction: "/handoff",
+      promptWithInstruction: "/run-tests",
       tempFilePaths: [],
       diagnostics: [],
       imageFileRefs: [],
       attachedSkills: [],
     });
     assert.strictEqual(buildSectionsCalled, false);
+  });
+
+  test("sends simple slash-command arguments verbatim", async () => {
+    const promptText = "/run-tests ui";
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async (prompt) =>
+        createSections({ userPromptText: prompt.prompt }),
+      extractLeadingSlashCommand: () => "/run-tests",
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: () => "",
+      formatTempFileRef: () => "",
+      formatCategorizedReferences: () => "",
+    });
+
+    const plan = await preparer.planPrompt(
+      { prompt: promptText } as PromptStep,
+      undefined,
+      undefined,
+      undefined
+    );
+
+    assert.strictEqual(plan.promptWithInstruction, promptText);
+    assert.deepStrictEqual(plan.files, []);
+  });
+
+  test("uses the prompt file form for multiline slash-command arguments", async () => {
+    const promptText = "/handoff summarize\nthe session";
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async (prompt) =>
+        createSections({ userPromptText: prompt.prompt }),
+      extractLeadingSlashCommand: () => "/handoff",
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: () => "",
+      formatTempFileRef: () => "@prompt-file.md",
+      formatCategorizedReferences: () => "@prompt-file.md",
+    });
+
+    const plan = await preparer.planPrompt(
+      { prompt: promptText } as PromptStep,
+      undefined,
+      undefined,
+      undefined
+    );
+
+    assert.ok(plan.promptWithInstruction.startsWith("/handoff "));
+    assert.notStrictEqual(plan.promptWithInstruction, promptText);
+    assert.ok(plan.files.some((file) => file.content.includes(promptText)));
+  });
+
+  test("uses the prompt file form when slash-command arguments fail the inline check", async () => {
+    const promptText = '/handoff "short note"';
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async (prompt) =>
+        createSections({ userPromptText: prompt.prompt }),
+      extractLeadingSlashCommand: () => "/handoff",
+      isSimplePrompt: (text) => !text.includes('"'),
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: () => "",
+      formatTempFileRef: () => "@prompt-file.md",
+      formatCategorizedReferences: () => "@prompt-file.md",
+    });
+
+    const plan = await preparer.planPrompt(
+      { prompt: promptText } as PromptStep,
+      undefined,
+      undefined,
+      undefined
+    );
+
+    assert.ok(plan.promptWithInstruction.startsWith("/handoff "));
+    assert.notStrictEqual(plan.promptWithInstruction, promptText);
+  });
+
+  test("uses the prompt file form when the step has prior context", async () => {
+    const promptText = "/handoff short note";
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async (prompt) =>
+        createSections({ userPromptText: prompt.prompt }),
+      extractLeadingSlashCommand: () => "/handoff",
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "<priorContext />",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: () => "",
+      formatTempFileRef: () => "@prompt-file.md",
+      formatCategorizedReferences: () => "@prompt-file.md",
+    });
+
+    const plan = await preparer.planPrompt(
+      { prompt: promptText } as PromptStep,
+      undefined,
+      { priorContext: "all" } as ResolvedProperties,
+      undefined
+    );
+
+    assert.ok(plan.promptWithInstruction.startsWith("/handoff "));
+    assert.notStrictEqual(plan.promptWithInstruction, promptText);
+  });
+
+  test("uses the prompt file form for reused OpenCode commands containing !", async () => {
+    const promptText = "/cmd done!";
+    const provider = new OpenCodeCliProvider();
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async (prompt) =>
+        createSections({ userPromptText: prompt.prompt }),
+      extractLeadingSlashCommand: () => "/cmd",
+      isSimplePrompt: () => true,
+      canSendToRunningTerminal: (text) =>
+        provider.canSendPromptToRunningTerminal(text),
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: () => "",
+      formatTempFileRef: () => "@prompt-file.md",
+      formatCategorizedReferences: () => "@prompt-file.md",
+    });
+
+    const plan = await preparer.planPrompt(
+      { prompt: promptText } as PromptStep,
+      undefined,
+      undefined,
+      undefined,
+      true
+    );
+
+    assert.ok(plan.promptWithInstruction.startsWith("/cmd "));
+    assert.notStrictEqual(plan.promptWithInstruction, promptText);
   });
 
   test("should not duplicate slash command prefixes on inline simple prompts", async () => {

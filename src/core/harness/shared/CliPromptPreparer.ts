@@ -59,7 +59,13 @@ import type {
   PriorContextItem,
   PromptSections,
 } from "../../HarnessIntegration";
+import { SLASH_COMMAND_TOKEN_PATTERN } from "../../HarnessIntegration";
 import { inlinePriorContextRefToSelection } from "../../../utils/PriorContextMerge";
+import {
+  findConditionOutputRefs,
+  findContextReferenceMatches,
+  findInlinePriorContextRefs,
+} from "../../../utils/PromptReferenceScanner";
 import type {
   CategorizedPromptPreview,
   CategorizedPromptSectionPreview,
@@ -195,11 +201,14 @@ export class CliPromptPreparer {
       );
     const slashCommand =
       this.deps.extractLeadingSlashCommand(originalPromptText);
+    const slashCommandMatch = originalPromptText.match(
+      SLASH_COMMAND_TOKEN_PATTERN
+    );
     const isPureSlashCommand =
-      slashCommand !== null && /^\/\w+\s*$/.test(originalPromptText);
+      slashCommand !== null &&
+      slashCommandMatch?.[0] === slashCommand &&
+      originalPromptText.slice(slashCommand.length).trim() === "";
 
-    // Keep colon-containing ctrlyoke references out of this native-command
-    // bypass; the regex intentionally recognizes only plain slash commands.
     if (isPureSlashCommand) {
       Log.debug(
         `[CliPromptPreparer] Slash command detected ("${slashCommand}") — skipping instruction assembly`
@@ -370,7 +379,37 @@ export class CliPromptPreparer {
       secretNames.length > 0;
     const inlineCheck = this.makeInlineCheck(reuseRunningTerminal);
 
-    if (!hasExtras && inlineCheck(outgoingSections.userPromptText)) {
+    const hasExpandableReferences =
+      findContextReferenceMatches(originalPromptText).length > 0 ||
+      findInlinePriorContextRefs(originalPromptText).length > 0 ||
+      findConditionOutputRefs(originalPromptText).length > 0 ||
+      scanCtrlYokeSlashTokens(originalPromptText).length > 0;
+    const hasSlashCommandArguments =
+      slashCommand !== null &&
+      slashCommandMatch?.[0] === slashCommand &&
+      originalPromptText.slice(slashCommand.length).trim().length > 0;
+
+    if (
+      hasSlashCommandArguments &&
+      !/[\r\n]/.test(originalPromptText) &&
+      originalPromptText === outgoingSections.userPromptText &&
+      inlineCheck(originalPromptText) &&
+      !hasExtras &&
+      !hasExpandableReferences &&
+      !resolvedProperties?.agent &&
+      !(resolvedProperties?.skills?.length) &&
+      !attachmentResolution.agent &&
+      effectiveSkills.length === 0 &&
+      secretNames.length === 0
+    ) {
+      return this.createInlinePlan(originalPromptText, promptDiagnostics);
+    }
+
+    if (
+      slashCommand === null &&
+      !hasExtras &&
+      inlineCheck(outgoingSections.userPromptText)
+    ) {
       return {
         ...this.createInlinePlan(
           outgoingSections.userPromptText,
@@ -397,6 +436,7 @@ export class CliPromptPreparer {
     // Preserve the live fast path: direct references remain inline when the
     // rest of the prompt is safe to send as-is.
     if (
+      slashCommand === null &&
       outgoingSections.directFileRefs.length > 0 &&
       !outgoingSections.agentContent &&
       !outgoingSections.skillContent &&

@@ -59,6 +59,9 @@ import type { CtrlYokeNotificationEvent } from "../ui/notifications/CompletionNo
 import { CliProviderUtils } from "./harness/shared/CliProviderUtils";
 import type { DisposableRegistry } from "./HostPorts";
 
+/** Match a complete leading harness slash-command token. */
+export const SLASH_COMMAND_TOKEN_PATTERN = /^\/[^\s]+(?=\s|$)/;
+
 /** A single context item ready for XML serialization by insertPriorContext. */
 export type PriorContextItem = {
   index: number;
@@ -1052,16 +1055,16 @@ export abstract class HarnessIntegration {
    * Returns the slash command token (e.g., "/handoff") if the text starts with
    * one, or null if no leading slash command is present.
    *
-   * A slash command is "/" followed by one or more word characters (\w+).
-   * Examples: "/handoff", "/compact", "/context".
+   * A slash command is the first non-whitespace token, including namespaced
+   * and hyphenated command names such as "/plugin:run-tests".
    */
   protected extractLeadingSlashCommand(text: string): string | null {
     const leadingCtrlYokeToken = scanCtrlYokeSlashTokens(text)[0];
     if (leadingCtrlYokeToken?.index === 0) {
       return null;
     }
-    const match = text.match(/^(\/\w+)/);
-    return match ? match[1] : null;
+    const match = text.match(SLASH_COMMAND_TOKEN_PATTERN);
+    return match ? match[0] : null;
   }
 
   /**

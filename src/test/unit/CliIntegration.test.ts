@@ -429,6 +429,14 @@ suite("CliIntegration", () => {
     const integration = createTestIntegration();
 
     assert.strictEqual(integration.extractSlashCommand("/commit"), "/commit");
+    assert.strictEqual(
+      integration.extractSlashCommand("/run-tests ui"),
+      "/run-tests"
+    );
+    assert.strictEqual(
+      integration.extractSlashCommand("/plugin:cmd x"),
+      "/plugin:cmd"
+    );
     assert.strictEqual(integration.extractSlashCommand("/mcp"), "/mcp");
     assert.strictEqual(integration.extractSlashCommand("/skill:commit"), null);
     assert.strictEqual(

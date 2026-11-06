@@ -1,7 +1,7 @@
 # Harness-Native Command Prompts Plan (`!` shell escapes and `/` TUI commands)
 
-**Status:** Phases 1 and 2a complete (2026-11-06). Remaining work is staged as a ctrlyoke workflow in
-this order: Phase 4 → Phase 0 probes (two parallel halves) → Phase 3a (the `noTurnStarted`
+**Status:** Phases 1, 2a and 4 complete (2026-11-06). Remaining work is staged as a ctrlyoke workflow in
+this order: Phase 0 probes (two parallel halves) → Phase 3a (the `noTurnStarted`
 status and its consumers) → Phase 3b (the watchdog itself). Phase 2b is deferred. Each step
 ticks its own items here.
 
@@ -248,12 +248,12 @@ Goal: `/run-tests ui` and `/handoff short note` reach the harness verbatim, so t
 arguments the way a person typing them would. Long or multi-line text after a command still
 goes through the prompt file.
 
-1. **Fix the name match.** Change `extractLeadingSlashCommand`'s `/^(\/\w+)/` to match a whole
+- [x] **Fix the name match.** Change `extractLeadingSlashCommand`'s `/^(\/\w+)/` to match a whole
    command token, up to the first whitespace. Harness command names use hyphens and
    `plugin:command` namespaces. Keep the existing check that skips ctrlyoke's own `/skill:` and
    `/mcp:` tokens. Put the pattern in one named constant shared with `isPureSlashCommand`. Then
    a bare `/run-tests` is also treated as a bare command.
-2. **Send `/command args` verbatim when it's simple enough.** Add a third case alongside "bare"
+- [x] **Send `/command args` verbatim when it's simple enough.** Add a third case alongside "bare"
    and "command plus file". The whole prompt is sent unchanged, with no instruction assembly,
    when all of these hold:
    - it is one line (no newlines);
@@ -263,18 +263,19 @@ goes through the prompt file.
    - the step attaches nothing that would need a file: no prior context, no ctrlyoke reference
      tokens to expand (`@`, `#`, `~`, `$`, `!SECRET`), no agent, no skills and no secrets.
      Otherwise that context would be silently dropped, the way a bare command drops it today.
-3. **Otherwise, keep today's form:** `/command follow the instructions in @prompt.1.md`, with
+- [x] **Otherwise, keep today's form:** `/command follow the instructions in @prompt.1.md`, with
    the full text in the prompt file. Paragraphs, quotes and attached context reach the model
    intact. The trade-off is that the command's argument becomes the instruction line, not the
    user's text. That suits skills (the model reads the file), but a command that parses its
    arguments strictly would get the wrong ones. Note this in the docs. For strict-argument
    commands the user should keep the arguments short and on one line.
-4. Docs: a short section on how a leading `/command` is sent in each of the three forms.
+- [x] Docs: a short section on how a leading `/command` is sent in each of the three forms.
 
-Tests: `extractLeadingSlashCommand` on `/run-tests ui`, `/plugin:cmd x` and `/skill:commit`
+- [x] Tests: `extractLeadingSlashCommand` on `/run-tests ui`, `/plugin:cmd x` and `/skill:commit`
 (still `null`); verbatim pass-through for a simple single line with arguments; the file form
 for multi-line text, for a quoted argument that fails the inline check, and for a step with
 prior context; a bare `/run-tests` is a bare command.
+- [x] Changelog: document whole hyphenated/namespaced names and verbatim simple arguments.
 
 ## Decisions (2026-11-06)
 
