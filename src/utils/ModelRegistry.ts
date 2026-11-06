@@ -210,13 +210,14 @@ async function queryCopilotCliModels(): Promise<void> {
 }
 
 /**
- * Query available models from `opencode models`.
+ * Query available models from OpenCode.
  *
- * OpenCode 1 is queried with `--verbose`, whose output alternates between a
- * model-ID line (e.g. "opencode/big-pickle") and a multi-line JSON block
- * containing `limit.context` (context window size in tokens). OpenCode 2 has
- * no `--verbose` (it prints its help text instead), so it is queried without
- * it and lists bare model IDs, with no context window sizes.
+ * OpenCode 1 is queried with `opencode models --verbose`, whose output
+ * alternates between a model-ID line (e.g. "opencode/big-pickle") and a
+ * multi-line JSON block containing `limit.context` (context window size in
+ * tokens). OpenCode 2 has no `--verbose` (it prints its help text instead), so
+ * it is asked through its public `model.list` API operation, which is what its
+ * own `opencode models` command lists and also carries `limit.context`.
  * Populates both `cachedOpenCodeModelIds` and `cachedOpenCodeContextWindows`.
  */
 async function queryOpenCodeModels(): Promise<void> {
@@ -236,7 +237,8 @@ async function queryOpenCodeModels(): Promise<void> {
       return;
     }
 
-    const modelsCommand = isOpenCodeV2Version(versionOutput.trim())
+    const isV2 = isOpenCodeV2Version(versionOutput.trim());
+    const modelsCommand = isV2
       ? OPENCODE_MODELS_COMMANDS.V2
       : OPENCODE_MODELS_COMMANDS.V1;
     Log.debug(
@@ -268,7 +270,9 @@ async function queryOpenCodeModels(): Promise<void> {
         `[ModelRegistry] ${modelsCommand} exited non-zero but stdout has content — attempting parse`
       );
     }
-    const ids = parseOpenCodeModelsOutput(stdout);
+    const ids = isV2
+      ? parseOpenCodeModelListResponse(stdout)
+      : parseOpenCodeModelsOutput(stdout);
     if (ids.length > 0) {
       cachedOpenCodeModelIds = ids;
       Log.debug(
@@ -330,6 +334,46 @@ function isRecoverableNonZeroExit(error: unknown): boolean {
     execError.killed !== true &&
     !isMaxBufferError(execError)
   );
+}
+
+/**
+ * Parse OpenCode 2's `model.list` API response (`{ data: Model[] }`) into
+ * fully-qualified `providerID/id` model IDs, sorted the way `opencode models`
+ * prints them. As a side effect, populates `cachedOpenCodeContextWindows` from
+ * each model's `limit.context`. Anything that is not that shape (an HTTP error
+ * printed by `opencode api`, for instance) yields no IDs.
+ */
+function parseOpenCodeModelListResponse(stdout: string): string[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return [];
+  }
+  const data = (parsed as { data?: unknown } | null)?.data;
+  if (!Array.isArray(data)) {
+    return [];
+  }
+  const modelIds: string[] = [];
+  for (const entry of data as Array<{
+    id?: unknown;
+    providerID?: unknown;
+    limit?: { context?: unknown };
+  }>) {
+    if (typeof entry?.id !== "string" || typeof entry.providerID !== "string") {
+      continue;
+    }
+    const modelId = `${entry.providerID}/${entry.id}`;
+    if (!OPENCODE_MODEL_ID_PATTERN.test(modelId)) {
+      continue;
+    }
+    modelIds.push(modelId);
+    const contextSize = entry.limit?.context;
+    if (typeof contextSize === "number" && contextSize > 0) {
+      cachedOpenCodeContextWindows.set(modelId, contextSize);
+    }
+  }
+  return modelIds.sort((a, b) => a.localeCompare(b));
 }
 
 /**

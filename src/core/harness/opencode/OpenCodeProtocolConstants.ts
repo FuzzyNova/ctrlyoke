@@ -148,12 +148,15 @@ export const OPENCODE_VERSION_COMMAND = "opencode --version";
 
 /**
  * Model discovery commands. OpenCode 1 prints each model ID followed by a JSON
- * block carrying `limit.context`; OpenCode 2 dropped `--verbose` (it exits 1
- * and prints the help text) and only lists bare model IDs.
+ * block carrying `limit.context`. OpenCode 2 dropped `--verbose` (it exits 1
+ * and prints the help text), and its `opencode models` prints bare IDs only,
+ * so it is asked through the public `model.list` API operation instead: the
+ * same list `opencode models` prints (`providerID/id` of each entry), with each
+ * model's `limit.context`, for the same cost.
  */
 export const OPENCODE_MODELS_COMMANDS = {
   V1: "opencode models --verbose",
-  V2: "opencode models",
+  V2: "opencode api model.list",
 } as const;
 
 /**

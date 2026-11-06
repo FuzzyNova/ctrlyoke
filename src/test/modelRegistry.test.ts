@@ -197,18 +197,33 @@ suite("ModelRegistry discovery", () => {
     ]);
   });
 
-  test("lists OpenCode 2 models without --verbose", async () => {
+  test("lists OpenCode 2 models and context windows through the model.list API", async () => {
     const commands: string[] = [];
+    // Trimmed from a real `opencode api model.list` response (OpenCode 2.2.5).
+    const response = JSON.stringify({
+      location: { directory: "C:\\Users\\dev" },
+      data: [
+        {
+          id: "big-pickle",
+          providerID: "opencode",
+          type: "chat",
+          limit: { context: 200000, output: 32000 },
+        },
+        {
+          id: "anthropic/claude-haiku-5.5",
+          providerID: "openrouter",
+          type: "chat",
+          limit: { context: 1000000 },
+        },
+        { id: "no-limit", providerID: "anthropic", type: "chat" },
+      ],
+    });
     const registry = loadRegistry((command, callback) => {
       commands.push(command);
       if (command === "opencode --version") {
         callback(null, "opencode v2.2.5\n", "");
-      } else if (command === "opencode models") {
-        callback(
-          null,
-          "anthropic/claude-opus-5-5\nopenai/gpt-5.5\nopencode/big-pickle\n",
-          ""
-        );
+      } else if (command === "opencode api model.list") {
+        callback(null, response, "");
       } else {
         callback(
           Object.assign(new Error("absent"), { code: "ENOENT" }),
@@ -221,14 +236,49 @@ suite("ModelRegistry discovery", () => {
     await registry.initializeModelRegistry();
     assert.strictEqual(commands.includes("opencode models --verbose"), false);
     assert.deepStrictEqual(registry.getOpenCodeModelIdsSync(), [
-      "anthropic/claude-opus-5-5",
-      "openai/gpt-5.5",
+      "anthropic/no-limit",
       "opencode/big-pickle",
+      "openrouter/anthropic/claude-haiku-5.5",
     ]);
     assert.strictEqual(
-      registry.getOpenCodeContextWindowSize("openai/gpt-5.5"),
+      registry.getOpenCodeContextWindowSize("opencode/big-pickle"),
+      200000
+    );
+    assert.strictEqual(
+      registry.getOpenCodeContextWindowSize(
+        "openrouter/anthropic/claude-haiku-5.5"
+      ),
+      1000000
+    );
+    assert.strictEqual(
+      registry.getOpenCodeContextWindowSize("anthropic/no-limit"),
       undefined
     );
+  });
+
+  test("falls back when the OpenCode 2 model.list request fails", async () => {
+    const registry = loadRegistry((command, callback) => {
+      if (command === "opencode --version") {
+        callback(null, "opencode v2.2.5\n", "");
+      } else if (command === "opencode api model.list") {
+        const failure = Object.assign(new Error("exit 1"), {
+          code: 1,
+          stdout: "HTTP 404 Not Found\n",
+        });
+        callback(failure, failure.stdout, "");
+      } else {
+        callback(
+          Object.assign(new Error("absent"), { code: "ENOENT" }),
+          "",
+          ""
+        );
+      }
+    });
+
+    await registry.initializeModelRegistry();
+    assert.deepStrictEqual(registry.getOpenCodeModelIdsSync(), [
+      ...OPENCODE_CLI_FALLBACK_MODELS,
+    ]);
   });
 
   test("never lists OpenCode help text as models", async () => {
