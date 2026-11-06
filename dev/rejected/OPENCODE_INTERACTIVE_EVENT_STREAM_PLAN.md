@@ -393,3 +393,9 @@ TUI to actually emit `session.next.*` for its own prompt submissions, or
 expose an equivalent event source that does) — no client-side polling
 strategy against `history` can work around a server that never publishes the
 events being polled for.
+
+**OpenCode 2 (2026-11-05):** revisited and not revived: the `history` route is
+gone, and its experimental `log` successor retains no payloads by default. The
+goal (no full-transcript re-fetch per poll) is now tracked in
+`dev/backlog/OPENCODE_V2_INCREMENTAL_SESSION_POLLING_PLAN.md`, using the
+stable `session.message.list` operation instead.
