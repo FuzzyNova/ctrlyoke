@@ -1,9 +1,10 @@
-import { versionSatisfies } from "../../../utils/HarnessVersion";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
-import { OPENCODE_V2_MIN_VERSION } from "./OpenCodeProtocolConstants";
+import {
+  isOpenCodeV2Version,
+  OPENCODE_VERSION_COMMAND,
+} from "./OpenCodeProtocolConstants";
 
-/** `opencode --version`: `1.19.5` on OpenCode 1, `opencode v2.2.5` on OpenCode 2. */
-export const OPENCODE_VERSION_COMMAND = "opencode --version";
+export { isOpenCodeV2Version, OPENCODE_VERSION_COMMAND };
 
 /** Returns the raw `opencode --version` output, or undefined when unknown. */
 export type OpenCodeVersionProbe = () => Promise<string | undefined>;
@@ -27,14 +28,6 @@ export function setOpenCodeVersionProbe(
   return () => {
     versionProbe = previous;
   };
-}
-
-/** Whether a raw `opencode --version` string is an OpenCode 2 release. */
-export function isOpenCodeV2Version(rawVersion: string | undefined): boolean {
-  return (
-    rawVersion !== undefined &&
-    versionSatisfies(rawVersion, `>=${OPENCODE_V2_MIN_VERSION}`)
-  );
 }
 
 /**

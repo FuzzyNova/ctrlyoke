@@ -33,6 +33,11 @@ import { retryWithBackoff, stopRetrying } from "./RetryUtils";
 import { attachStreamTextDecoder } from "./StreamTextDecoder";
 import { CLI_VERSION_CHECK_TIMEOUT_MS } from "../core/harness/shared/interfaces/ICliProvider";
 import { isSubprocessTimeoutError } from "./SubprocessUtils";
+import {
+  isOpenCodeV2Version,
+  OPENCODE_MODELS_COMMANDS,
+  OPENCODE_VERSION_COMMAND,
+} from "../core/harness/opencode/OpenCodeProtocolConstants";
 
 const execAsync = promisify(exec);
 
@@ -205,20 +210,24 @@ async function queryCopilotCliModels(): Promise<void> {
 }
 
 /**
- * Query available models from `opencode models --verbose`.
+ * Query available models from `opencode models`.
  *
- * The verbose output alternates between a model-ID line (e.g. "opencode/big-pickle")
- * and a multi-line JSON block containing `limit.context` (context window size in tokens).
+ * OpenCode 1 is queried with `--verbose`, whose output alternates between a
+ * model-ID line (e.g. "opencode/big-pickle") and a multi-line JSON block
+ * containing `limit.context` (context window size in tokens). OpenCode 2 has
+ * no `--verbose` (it prints its help text instead), so it is queried without
+ * it and lists bare model IDs, with no context window sizes.
  * Populates both `cachedOpenCodeModelIds` and `cachedOpenCodeContextWindows`.
  */
 async function queryOpenCodeModels(): Promise<void> {
   try {
     // Check availability before querying models to avoid a noisy error when OpenCode is not installed
+    let versionOutput: string;
     try {
-      await execDiscoveryCommand(
-        "opencode --version",
+      ({ stdout: versionOutput } = await execDiscoveryCommand(
+        OPENCODE_VERSION_COMMAND,
         CLI_VERSION_CHECK_TIMEOUT_MS
-      );
+      ));
     } catch {
       Log.debug(
         "[ModelRegistry] OpenCode CLI not available, skipping model query — using fallback list"
@@ -227,13 +236,16 @@ async function queryOpenCodeModels(): Promise<void> {
       return;
     }
 
+    const modelsCommand = isOpenCodeV2Version(versionOutput.trim())
+      ? OPENCODE_MODELS_COMMANDS.V2
+      : OPENCODE_MODELS_COMMANDS.V1;
     Log.debug(
-      "[ModelRegistry] Querying OpenCode for available models via 'opencode models --verbose'..."
+      `[ModelRegistry] Querying OpenCode for available models via '${modelsCommand}'...`
     );
     let stdout = "";
     try {
       ({ stdout } = await execDiscoveryCommand(
-        "opencode models --verbose",
+        modelsCommand,
         CLI_VERSION_CHECK_TIMEOUT_MS
       ));
     } catch (execError) {
@@ -253,10 +265,10 @@ async function queryOpenCodeModels(): Promise<void> {
         throw execError;
       }
       Log.debug(
-        `[ModelRegistry] opencode models --verbose exited non-zero but stdout has content — attempting parse`
+        `[ModelRegistry] ${modelsCommand} exited non-zero but stdout has content — attempting parse`
       );
     }
-    const ids = parseOpenCodeVerboseOutput(stdout);
+    const ids = parseOpenCodeModelsOutput(stdout);
     if (ids.length > 0) {
       cachedOpenCodeModelIds = ids;
       Log.debug(
@@ -264,7 +276,7 @@ async function queryOpenCodeModels(): Promise<void> {
       );
     } else {
       Log.info(
-        "[ModelRegistry] opencode models --verbose returned empty list, using fallback"
+        `[ModelRegistry] ${modelsCommand} returned no model IDs, using fallback`
       );
       cachedOpenCodeModelIds = [...OPENCODE_CLI_FALLBACK_MODELS];
     }
@@ -321,13 +333,20 @@ function isRecoverableNonZeroExit(error: unknown): boolean {
 }
 
 /**
- * Parse `opencode models --verbose` stdout into a list of model IDs.
+ * OpenCode model IDs are always `provider/model` with no whitespace. Anything
+ * else on a non-JSON line (help text, warnings) is not a model.
+ */
+const OPENCODE_MODEL_ID_PATTERN = /^[^\s/]+\/\S+$/;
+
+/**
+ * Parse `opencode models` stdout into a list of model IDs.
  * As a side effect, populates `cachedOpenCodeContextWindows` with context window sizes.
  *
- * Output format: alternating model-ID lines (e.g. "opencode/big-pickle") and
- * multi-line JSON blocks containing `limit.context`.
+ * Output format: one model-ID line per model (e.g. "opencode/big-pickle"),
+ * each followed on OpenCode 1's `--verbose` by a multi-line JSON block
+ * containing `limit.context`.
  */
-function parseOpenCodeVerboseOutput(stdout: string): string[] {
+function parseOpenCodeModelsOutput(stdout: string): string[] {
   const modelIds: string[] = [];
   const lines = stdout.split("\n");
   let currentModelId: string | undefined;
@@ -345,10 +364,12 @@ function parseOpenCodeVerboseOutput(stdout: string): string[] {
         jsonBuffer = line + "\n";
         braceDepth +=
           (line.match(/{/g) ?? []).length - (line.match(/}/g) ?? []).length;
-      } else {
+      } else if (OPENCODE_MODEL_ID_PATTERN.test(trimmed)) {
         currentModelId = trimmed;
         modelIds.push(currentModelId);
         jsonBuffer = "";
+      } else {
+        currentModelId = undefined;
       }
     } else {
       jsonBuffer += line + "\n";

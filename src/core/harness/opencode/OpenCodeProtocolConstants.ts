@@ -1,4 +1,5 @@
 import { TOOL_PERMISSION_CATEGORIES } from "../../../types/DashboardConstants";
+import { versionSatisfies } from "../../../utils/HarnessVersion";
 
 /** Wire-level values from OpenCode's exported message/part protocol. */
 export const OPENCODE_MESSAGE_ROLES = {
@@ -141,6 +142,31 @@ export const OPENCODE_V2_CONTENT_TYPES = {
 
 /** First OpenCode release with the V2 CLI, plugin API and server. */
 export const OPENCODE_V2_MIN_VERSION = "2.0.0";
+
+/** `opencode --version`: `1.19.5` on OpenCode 1, `opencode v2.2.5` on OpenCode 2. */
+export const OPENCODE_VERSION_COMMAND = "opencode --version";
+
+/**
+ * Model discovery commands. OpenCode 1 prints each model ID followed by a JSON
+ * block carrying `limit.context`; OpenCode 2 dropped `--verbose` (it exits 1
+ * and prints the help text) and only lists bare model IDs.
+ */
+export const OPENCODE_MODELS_COMMANDS = {
+  V1: "opencode models --verbose",
+  V2: "opencode models",
+} as const;
+
+/**
+ * Whether a raw `opencode --version` string is an OpenCode 2 release. Lives
+ * here rather than in `OpenCodeVersion.ts` so `vscode`-free code such as
+ * `ModelRegistry` can use it without loading the CLI provider utilities.
+ */
+export function isOpenCodeV2Version(rawVersion: string | undefined): boolean {
+  return (
+    rawVersion !== undefined &&
+    versionSatisfies(rawVersion, `>=${OPENCODE_V2_MIN_VERSION}`)
+  );
+}
 
 export const OPENCODE_STEP_FINISH_REASONS = {
   STOP: "stop",

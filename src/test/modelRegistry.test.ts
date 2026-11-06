@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import { promisify } from "util";
+import { OPENCODE_CLI_FALLBACK_MODELS } from "../utils/ModelConstants";
 const childProcess = require("child_process") as {
   exec: typeof import("child_process").exec;
 };
@@ -193,6 +194,77 @@ suite("ModelRegistry discovery", () => {
     await registry.initializeModelRegistry();
     assert.deepStrictEqual(registry.getOpenCodeModelIdsSync(), [
       "opencode/recovered-model",
+    ]);
+  });
+
+  test("lists OpenCode 2 models without --verbose", async () => {
+    const commands: string[] = [];
+    const registry = loadRegistry((command, callback) => {
+      commands.push(command);
+      if (command === "opencode --version") {
+        callback(null, "opencode v2.2.5\n", "");
+      } else if (command === "opencode models") {
+        callback(
+          null,
+          "anthropic/claude-opus-5-5\nopenai/gpt-5.5\nopencode/big-pickle\n",
+          ""
+        );
+      } else {
+        callback(
+          Object.assign(new Error("absent"), { code: "ENOENT" }),
+          "",
+          ""
+        );
+      }
+    });
+
+    await registry.initializeModelRegistry();
+    assert.strictEqual(commands.includes("opencode models --verbose"), false);
+    assert.deepStrictEqual(registry.getOpenCodeModelIdsSync(), [
+      "anthropic/claude-opus-5-5",
+      "openai/gpt-5.5",
+      "opencode/big-pickle",
+    ]);
+    assert.strictEqual(
+      registry.getOpenCodeContextWindowSize("openai/gpt-5.5"),
+      undefined
+    );
+  });
+
+  test("never lists OpenCode help text as models", async () => {
+    // OpenCode 2 answers an unknown flag with exit 1 and its help on stdout.
+    const help = [
+      "DESCRIPTION",
+      "  List all available models",
+      "",
+      "USAGE",
+      "  opencode models [flags]",
+      "",
+      "GLOBAL FLAGS",
+      "  --help, -h     Show help information",
+      "  --server string     Connect to a server URL instead of the background service",
+    ].join("\n");
+    const registry = loadRegistry((command, callback) => {
+      if (command === "opencode --version") {
+        callback(null, "1.0.0", "");
+      } else if (command === "opencode models --verbose") {
+        const failure = Object.assign(new Error("exit 1"), {
+          code: 1,
+          stdout: help,
+        });
+        callback(failure, help, "");
+      } else {
+        callback(
+          Object.assign(new Error("absent"), { code: "ENOENT" }),
+          "",
+          ""
+        );
+      }
+    });
+
+    await registry.initializeModelRegistry();
+    assert.deepStrictEqual(registry.getOpenCodeModelIdsSync(), [
+      ...OPENCODE_CLI_FALLBACK_MODELS,
     ]);
   });
 });
