@@ -43,17 +43,17 @@ What ctrlyoke does today:
     the text is sent verbatim (`createInlinePlan`). This is what lets `/handoff` work.
   - **Command plus more text:** the normal categorized prompt file is built, and the command is
     put in front of the instruction line: `/handoff using these … follow the instructions in
-    @prompt.1.md`. The prompt file still contains the full original text.
+@prompt.1.md`. The prompt file still contains the full original text.
 - **Bug: names with hyphens are cut short.** `\w` excludes `-`, so `/run-tests ui` is read as the
   command `/run`. It isn't a bare command, so the outgoing line becomes `/run follow the
-  instructions in @prompt.1.md` and runs the wrong command. A plugin-namespaced command
+instructions in @prompt.1.md` and runs the wrong command. A plugin-namespaced command
   (`/plugin:cmd`) is cut short the same way. Fixed in Phase 4.
 - When the terminal is reused, `HarnessIntegration.canSendToRunningTerminal` sends any prompt
   without control characters inline, so `! echo hello` and mid-prompt `!` are typed raw.
 - When the terminal is reused, ctrlyoke waits only for the Stop notification
   (`CliExecutionRunner.monitorLogFile`). The start wait in
   `NotificationMonitorBase` (`getStartHookEvents`, `{runId}-start.json`) applies only to a fresh
-  spawn. Even there it is a *session* start. A session can start (SessionStart fires) while the
+  spawn. Even there it is a _session_ start. A session can start (SessionStart fires) while the
   first input is a `!` or `/config` that never produces a turn.
 
 ## Decision
@@ -80,14 +80,14 @@ checking in an interactive capture (see "Probing a harness CLI's interactive log
 `.github/copilot-instructions.md`): a normal prompt, `! echo hello`, `/config` and a skill-backed
 slash command. For each, record whether the signal fires on a first turn and on a reused turn.
 
-| Harness         | Candidate per-turn signal                  | Where it's named today                              |
-| --------------- | ------------------------------------------ | --------------------------------------------------- |
-| claude-cli      | `UserPromptSubmit` hook                    | `ClaudeNotificationMonitor` (`userPromptSubmit`)    |
+| Harness         | Candidate per-turn signal                  | Where it's named today                               |
+| --------------- | ------------------------------------------ | ---------------------------------------------------- |
+| claude-cli      | `UserPromptSubmit` hook                    | `ClaudeNotificationMonitor` (`userPromptSubmit`)     |
 | codex-cli       | `UserPromptSubmit` hook                    | `CodexNotificationMonitor`, `CodexProtocolConstants` |
-| qwen-cli        | `UserPromptSubmit` hook                    | `QwenNotificationMonitor` (already a start event)   |
-| copilot-cli     | `userPromptSubmitted` hook                 | `CopilotNotificationMonitor`                        |
-| opencode-cli    | `session.status.busy` plugin event         | `OpenCodeNotificationMonitor` (`userPromptSubmit`)  |
-| antigravity-cli | `PreInvocation` hook (check it's per turn) | `AntigravityNotificationMonitor.getStartHookEvents` |
+| qwen-cli        | `UserPromptSubmit` hook                    | `QwenNotificationMonitor` (already a start event)    |
+| copilot-cli     | `userPromptSubmitted` hook                 | `CopilotNotificationMonitor`                         |
+| opencode-cli    | `session.status.busy` plugin event         | `OpenCodeNotificationMonitor` (`userPromptSubmit`)   |
+| antigravity-cli | `PreInvocation` hook (check it's per turn) | `AntigravityNotificationMonitor.getStartHookEvents`  |
 
 Questions to answer for each harness:
 
@@ -107,7 +107,7 @@ Phase 3.
 
 Note on what exists today: the start wait that has a timeout
 (`NotificationMonitorBase`, `{runId}-start.json`) runs only on a fresh spawn and waits for a
-*session* start. The log-file fallbacks in the log parsers find the session ID and log file;
+_session_ start. The log-file fallbacks in the log parsers find the session ID and log file;
 they don't detect the start of a turn. So when a terminal is reused, nothing currently detects
 "this turn started". Phase 3 adds that, built from the hook plus the log stream described above.
 
