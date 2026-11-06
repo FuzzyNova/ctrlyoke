@@ -1,12 +1,14 @@
 # Terminal Follow-up Tracking
 
-**Status: Implemented (Claude CLI, Copilot CLI, Antigravity CLI, and Qwen CLI)**
+**Status: Implemented (Claude CLI, Copilot CLI, Antigravity CLI, Qwen CLI, and OpenCode 2)**
 
 This document records the shipped architecture for detecting background work and
-resumed turns in the four CLI harnesses that expose structured session logs.
-Codex and OpenCode continue to use the ordinary Layer-1 activity path; they do
+resumed turns in the CLI harnesses that expose structured session records.
+Codex and OpenCode 1 continue to use the ordinary Layer-1 activity path; they do
 not have provider-specific follow-up completion signals here. Qwen was added
-after its CLI gained asynchronous background waits (verified on 0.26.0).
+after its CLI gained asynchronous background waits (verified on 0.26.0), and
+OpenCode 2 after its rewrite added background shells and subagents (verified
+on 2.2.5).
 
 ## Architecture
 
@@ -225,6 +227,54 @@ because Qwen writes one log file per session. The real capture is
 `src/test/fixtures/qwen/interactive-background-shells.session.jsonl`: three
 concurrent shells (10/20/30 s), one notification and one resumed turn each.
 
+## OpenCode 2
+
+OpenCode has no session log; `OpenCodeLogParser` polls `opencode session
+export` and turns new messages into events. Three of the events it synthesises
+from the export drive the shared state machine and carry no display content:
+
+- `background_launch`, emitted beside the `tool_use` event of a completed tool
+  call that left a job running. A `shell` call (`background: true`, or a
+  foreground command moved to the background mid-run) and a `subagent` call
+  with `background: true` report `state.metadata.status: "running"`; the job id
+  is the shell's `metadata.shellID` or the subagent's child session id
+  (`metadata.sessionID`). `experimental_image_generate` always runs as a job and
+  reports `metadata.jobID` (read from source, not captured). A failed call
+  launches nothing.
+- `background_notice`, for a `synthetic` message whose `metadata` names the
+  job (`jobID`, `shellID`, or a subagent's `childID`). OpenCode writes one when
+  the job completes, fails or is cancelled. Synthetic messages from other
+  sources (plans, goals, instructions) name no job and are skipped. The parser
+  classifies the notice as `resume-signal`, so it never shows as a user steer.
+- `idle`, for the `idle` message that ends every session execution, whatever
+  its `outcome`. It closes the resumed-turn latch.
+
+The `idle` message is the closing signal, not the next assistant step: a notice
+that arrives while an execution is still running is drained into that execution
+instead of starting another, so one `idle` covers both. The real captures,
+driven through node-pty, are
+`src/test/fixtures/opencode/v2-interactive-background-export.json` (two shells
+and a subagent, each with its own resumed execution) and
+`v2-interactive-background-midturn-export.json` (a notice absorbed by the
+running execution).
+
+The Stop signal comes from ctrlyoke's V2 plugin, which reports one Stop per
+execution (`session.execution.succeeded`/`failed`/`interrupted`), so every
+resumed execution produces a further Stop for the hold loop to re-check. Like
+Copilot, Antigravity and Qwen, OpenCode runs with no stale-stop guard: the
+export poller keeps running during a hold, independent of Stop timing. State
+resets in `beginMonitoringTurn()`, since every OpenCode prompt, launched or sent
+to a running TUI, starts a monitored turn and the previous hold has settled by
+then.
+
+Only the interactive export is tracked. Headless `opencode run --format json`
+reports neither notices nor idles, so its launches would stay pending forever;
+in OpenCode 2.2.5 `run` exits at the first idle anyway, and its private
+`--standalone` server takes the jobs with it. OpenCode fixed `run` to wait for
+background jobs after 2.2.5 (anomalyco/opencode ffe6fed583, #60699). A
+subagent's own background shells are not tracked: their notices wake the
+child session, not the parent.
+
 ## User-steer and completion flow
 
 The provider parser classifies genuine user-steer records separately from the
@@ -240,6 +290,7 @@ The implementation and regressions are covered by:
 - `src/test/unit/BackgroundFollowUpState.test.ts`
 - `src/test/unit/AntigravityLogParser.test.ts`
 - `src/test/unit/QwenLogParser.test.ts`
+- `src/test/unit/OpenCodeBackgroundWork.test.ts`
 - `src/test/unit/CliLogMonitor.test.ts`
 - `src/test/suite/harness/LogParsers.test.ts`
 

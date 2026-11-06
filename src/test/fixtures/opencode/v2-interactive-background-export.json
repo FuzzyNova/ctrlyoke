@@ -1,0 +1,485 @@
+{
+  "info": {
+    "id": "ses_e51f21b60ffe7JULFr2oHm2Vhw",
+    "projectID": "global",
+    "agent": "build",
+    "model": {
+      "id": "big-pickle",
+      "providerID": "opencode",
+      "variant": "default"
+    },
+    "cost": 0.0000633,
+    "tokens": {
+      "input": 13775,
+      "output": 442,
+      "reasoning": 16,
+      "cache": {
+        "read": 52096,
+        "write": 0
+      }
+    },
+    "outcome": "succeeded",
+    "time": {
+      "created": 1793921508525,
+      "updated": 1793921542527,
+      "busy": 1793921541208,
+      "idle": 1793921542529
+    },
+    "title": "Background ping tasks test",
+    "location": {
+      "directory": "C:\\work\\project"
+    }
+  },
+  "messages": [
+    {
+      "id": "msg_1ae0de4a3001jLRdWerLjv5DoB",
+      "time": {
+        "created": 1793921508666
+      },
+      "text": "This is a test of background tasks. Using the shell tool with background set to true, start these two commands at the same time, each as its own background shell: first \"ping -n 16 127.0.0.1\" and second \"ping -n 31 127.0.0.1\". Also launch one subagent in the background (background true) with the instruction: \"Run the shell command ping -n 21 127.0.0.1 in the foreground, then reply with the single word FINISHED\". Do not poll or sleep. End your turn right after launching all three. When each one finishes and you are notified, reply with one short line naming which one finished. After all three have finished, reply ALL DONE.",
+      "files": [],
+      "agents": [],
+      "type": "user"
+    },
+    {
+      "id": "msg_1ae0de550001lnW6kZ4kHm3cyq",
+      "time": {
+        "created": 1793921508696,
+        "streamed": 1793921510846,
+        "completed": 1793921510923
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "big-pickle",
+        "providerID": "opencode",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "I'll launch all three now: two background shells and one background subagent."
+        },
+        {
+          "type": "tool",
+          "id": "call_a611e5c3db04418692e2e717",
+          "name": "shell",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "command": "ping -n 16 127.0.0.1",
+              "background": true
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Command moved to the background (shell ID: sh_1ae0dedc4001BoWU0nHTyixNwG).\nOutput is streaming to: C:\\Users\\user\\.local\\share\\opencode\\shell\\global\\sh_1ae0dedc4001BoWU0nHTyixNwG.out"
+              },
+              {
+                "type": "text",
+                "text": "You will be notified automatically when the command finishes. The notification will include the command's output. Unless the user explicitly asks otherwise, DO NOT poll for completion, even if you need the final result to continue. Repeatedly sleeping and reading or searching the output file is polling, not useful work. You may read the current output if it lets you do useful work now, but do not repeatedly check it while waiting for the command to finish. Keep working on anything that does not depend on the result. If you have nothing else to do, end your response; you will be resumed automatically when the command finishes."
+              }
+            ],
+            "metadata": {
+              "status": "running",
+              "truncated": false,
+              "shellID": "sh_1ae0dedc4001BoWU0nHTyixNwG"
+            }
+          },
+          "time": {
+            "created": 1793921509980,
+            "ran": 1793921510831,
+            "completed": 1793921510871
+          }
+        },
+        {
+          "type": "tool",
+          "id": "call_62fd1f1873244f91a306b8f2",
+          "name": "shell",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "command": "ping -n 31 127.0.0.1",
+              "background": true
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Command moved to the background (shell ID: sh_1ae0dedc4002Grw0PxwUPDEQCl).\nOutput is streaming to: C:\\Users\\user\\.local\\share\\opencode\\shell\\global\\sh_1ae0dedc4002Grw0PxwUPDEQCl.out"
+              },
+              {
+                "type": "text",
+                "text": "You will be notified automatically when the command finishes. The notification will include the command's output. Unless the user explicitly asks otherwise, DO NOT poll for completion, even if you need the final result to continue. Repeatedly sleeping and reading or searching the output file is polling, not useful work. You may read the current output if it lets you do useful work now, but do not repeatedly check it while waiting for the command to finish. Keep working on anything that does not depend on the result. If you have nothing else to do, end your response; you will be resumed automatically when the command finishes."
+              }
+            ],
+            "metadata": {
+              "status": "running",
+              "truncated": false,
+              "shellID": "sh_1ae0dedc4002Grw0PxwUPDEQCl"
+            }
+          },
+          "time": {
+            "created": 1793921510156,
+            "ran": 1793921510834,
+            "completed": 1793921510874
+          }
+        },
+        {
+          "type": "tool",
+          "id": "call_4d5ca86f19b94e649a258c07",
+          "name": "subagent",
+          "executed": false,
+          "state": {
+            "status": "error",
+            "input": {
+              "description": "Ping test subagent",
+              "prompt": "Run the shell command ping -n 21 127.0.0.1 in the foreground, then reply with the single word FINISHED",
+              "background": true
+            },
+            "error": {
+              "type": "tool.execution",
+              "message": "Invalid arguments for tool \"subagent\":\n- agent: Missing key\n\nArguments provided:\n{\n  \"description\": \"Ping test subagent\",\n  \"prompt\": \"Run the shell command ping -n 21 127.0.0.1 in the foreground, then reply with the single word FINISHED\",\n  \"background\": true\n}\n\nUpdate the arguments and call the tool again."
+            }
+          },
+          "time": {
+            "created": 1793921510388,
+            "ran": 1793921510837,
+            "completed": 1793921510850
+          }
+        }
+      ],
+      "snapshot": {
+        "start": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "end": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "files": []
+      },
+      "finish": "tool-calls",
+      "rawFinish": "tool_calls",
+      "cost": 0,
+      "tokens": {
+        "input": 9615,
+        "output": 230,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1ae0dee14001a4wf37XVRP8eNm",
+      "time": {
+        "created": 1793921510937,
+        "streamed": 1793921512529,
+        "completed": 1793921512617
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "big-pickle",
+        "providerID": "opencode",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "reasoning",
+          "text": "The subagent tool needs an agent key. Launch with agent: \"general\".",
+          "native": {
+            "reasoningField": "reasoning_content"
+          },
+          "time": {
+            "created": 1793921511724,
+            "completed": 1793921512524
+          }
+        },
+        {
+          "type": "text",
+          "text": "The subagent call needed an `agent` field — retrying it now."
+        },
+        {
+          "type": "tool",
+          "id": "call_57dbd173b49c4a80a221a897",
+          "name": "subagent",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "agent": "general",
+              "background": true,
+              "description": "Ping test subagent",
+              "prompt": "Run the shell command ping -n 21 127.0.0.1 in the foreground, then reply with the single word FINISHED"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "The subagent is working in the background (sessionID: ses_e51f20babffeAGVcLXZHUuNRCh). You will be notified automatically when it finishes.\nDO NOT sleep, poll for progress, ask the subagent for status, or duplicate this subagent's work; avoid working with the same files or topics it is using.\nWork on non-overlapping tasks, or briefly tell the user what you launched and end your response.\nTo send it follow-ups or change its instructions while it runs, call subagent again with this sessionID."
+              }
+            ],
+            "metadata": {
+              "sessionID": "ses_e51f20babffeAGVcLXZHUuNRCh",
+              "status": "running",
+              "truncated": false
+            }
+          },
+          "time": {
+            "created": 1793921512101,
+            "ran": 1793921512526,
+            "completed": 1793921512549
+          }
+        }
+      ],
+      "snapshot": {
+        "start": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "end": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "files": []
+      },
+      "finish": "tool-calls",
+      "rawFinish": "tool_calls",
+      "cost": 0,
+      "tokens": {
+        "input": 897,
+        "output": 136,
+        "reasoning": 16,
+        "cache": {
+          "read": 9472,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1ae0df4b20019B34bHf493O5jF",
+      "time": {
+        "created": 1793921512631,
+        "streamed": 1793921513841,
+        "completed": 1793921513884
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "big-pickle",
+        "providerID": "opencode",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "All three launched: two background shell pings (16 and 31 counts) and one background subagent (21-count ping). Ending my turn now — I'll report each as it finishes."
+        }
+      ],
+      "snapshot": {
+        "start": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "end": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "files": []
+      },
+      "finish": "stop",
+      "rawFinish": "stop",
+      "cost": 0,
+      "tokens": {
+        "input": 533,
+        "output": 41,
+        "reasoning": 0,
+        "cache": {
+          "read": 10112,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1ae0df9a0001YK4j4tLtgKcFCl",
+      "time": {
+        "created": 1793921513888
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    },
+    {
+      "id": "msg_1ae0dedd6001zNS689xgtEqpD5",
+      "metadata": {
+        "source": "shell",
+        "shellID": "sh_1ae0dedc4001BoWU0nHTyixNwG",
+        "jobID": "sh_1ae0dedc4001BoWU0nHTyixNwG",
+        "state": "completed",
+        "truncated": false,
+        "exit": 0
+      },
+      "time": {
+        "created": 1793921526049
+      },
+      "text": "<shell id=\"sh_1ae0dedc4001BoWU0nHTyixNwG\" state=\"completed\" command=\"ping -n 16 127.0.0.1\">\n\r\nPinging 127.0.0.1 with 32 bytes of data:\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\n\r\nPing statistics for 127.0.0.1:\r\n    Packets: Sent = 16, Received = 16, Lost = 0 (0% loss),\r\nApproximate round trip times in milli-seconds:\r\n    Minimum = 0ms, Maximum = 0ms, Average = 0ms\r\n\n</shell>",
+      "description": "ping -n 16 127.0.0.1",
+      "type": "synthetic"
+    },
+    {
+      "id": "msg_1ae0e2925001g281Al6IlcNts3",
+      "time": {
+        "created": 1793921526057,
+        "streamed": 1793921527264,
+        "completed": 1793921527308
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "big-pickle",
+        "providerID": "opencode",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Shell 16-count ping finished."
+        }
+      ],
+      "snapshot": {
+        "start": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "end": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "files": []
+      },
+      "finish": "stop",
+      "rawFinish": "stop",
+      "cost": 0,
+      "tokens": {
+        "input": 719,
+        "output": 9,
+        "reasoning": 0,
+        "cache": {
+          "read": 10496,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1ae0e2e0f001jh22D5ZnZHhbmk",
+      "time": {
+        "created": 1793921527311
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    },
+    {
+      "id": "msg_1ae0df465001rCHraiz23lj2Kg",
+      "metadata": {
+        "source": "subagent",
+        "childID": "ses_e51f20babffeAGVcLXZHUuNRCh",
+        "agent": "General",
+        "state": "completed"
+      },
+      "time": {
+        "created": 1793921535553
+      },
+      "text": "<subagent sessionID=\"ses_e51f20babffeAGVcLXZHUuNRCh\" state=\"completed\" description=\"Ping test subagent\">\nFINISHED\n</subagent>",
+      "description": "Ping test subagent",
+      "type": "synthetic"
+    },
+    {
+      "id": "msg_1ae0e4e46001RO1ltF4KnIQtmZ",
+      "time": {
+        "created": 1793921535564,
+        "streamed": 1793921536327,
+        "completed": 1793921536369
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "big-pickle",
+        "providerID": "opencode",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Subagent finished."
+        }
+      ],
+      "snapshot": {
+        "start": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "end": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "files": []
+      },
+      "finish": "stop",
+      "rawFinish": "stop",
+      "cost": 0,
+      "tokens": {
+        "input": 262,
+        "output": 6,
+        "reasoning": 0,
+        "cache": {
+          "read": 11008,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1ae0e5174001jteCyv0YwNO04k",
+      "time": {
+        "created": 1793921536372
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    },
+    {
+      "id": "msg_1ae0dedda002WMIsPpBZgXhEUx",
+      "metadata": {
+        "source": "shell",
+        "shellID": "sh_1ae0dedc4002Grw0PxwUPDEQCl",
+        "jobID": "sh_1ae0dedc4002Grw0PxwUPDEQCl",
+        "state": "completed",
+        "truncated": false,
+        "exit": 0
+      },
+      "time": {
+        "created": 1793921541212
+      },
+      "text": "<shell id=\"sh_1ae0dedc4002Grw0PxwUPDEQCl\" state=\"completed\" command=\"ping -n 31 127.0.0.1\">\n\r\nPinging 127.0.0.1 with 32 bytes of data:\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\n\r\nPing statistics for 127.0.0.1:\r\n    Packets: Sent = 31, Received = 31, Lost = 0 (0% loss),\r\nApproximate round trip times in milli-seconds:\r\n    Minimum = 0ms, Maximum = 0ms, Average = 0ms\r\n\n</shell>",
+      "description": "ping -n 31 127.0.0.1",
+      "type": "synthetic"
+    },
+    {
+      "id": "msg_1ae0e64610012XgVKSZegyGvHJ",
+      "time": {
+        "created": 1793921541222,
+        "streamed": 1793921542480,
+        "completed": 1793921542527
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "big-pickle",
+        "providerID": "opencode",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Shell 31-count ping finished.\n\nALL DONE"
+        }
+      ],
+      "snapshot": {
+        "start": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "end": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "files": []
+      },
+      "finish": "stop",
+      "rawFinish": "stop",
+      "cost": 0,
+      "tokens": {
+        "input": 1156,
+        "output": 12,
+        "reasoning": 0,
+        "cache": {
+          "read": 11008,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1ae0e6981001YsJsFGzjhbx5UR",
+      "time": {
+        "created": 1793921542529
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    }
+  ]
+}

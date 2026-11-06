@@ -432,9 +432,9 @@ export interface ILogParser {
    * `hasPendingBackgroundWork()`.
    *
    * Default (`BaseLogParser`) is a no-op. Harnesses confirmed to background a
-   * task and auto-resume the same session (Claude, Copilot, Antigravity, Qwen)
-   * override this to track their own launch/completion markers — see each
-   * harness's implementation for its specific rule.
+   * task and auto-resume the same session (Claude, Copilot, Antigravity, Qwen,
+   * OpenCode 2) override this to track their own launch/completion markers —
+   * see each harness's implementation for its specific rule.
    *
    * **Session-reset contract:** each `ILogParser` implementation is a single
    * long-lived instance reused across every session/step run through that

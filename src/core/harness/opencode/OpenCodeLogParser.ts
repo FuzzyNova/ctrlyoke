@@ -13,6 +13,8 @@ import {
   CliEvent,
   TokenUsage,
   CompactionData,
+  type BackgroundTaskSummary,
+  type BackgroundWorkHoldSnapshot,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -38,8 +40,12 @@ import {
   OPENCODE_SUBAGENT_TOOL_NAMES,
   OPENCODE_V2_CONTENT_TYPES,
   OPENCODE_V2_MESSAGE_TYPES,
+  OPENCODE_BACKGROUND_TOOL_STATUS,
+  OPENCODE_IMAGE_TOOL_NAME,
+  OPENCODE_SHELL_TOOL_NAMES,
 } from "./OpenCodeProtocolConstants";
 import { detectOpenCodeV2 } from "./OpenCodeVersion";
+import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
 import { Log } from "../../../utils/Log";
 import { resolveCliCommand } from "../shared/CliLauncherResolver";
 import { PollingFsWatcher } from "../shared/FsWatcherHandles";
@@ -135,6 +141,54 @@ interface OpenCodeV2ExportMessage {
   retry?: { attempt?: number; error?: unknown };
   status?: string;
   reason?: string;
+  /** A `synthetic` message's origin; background jobs name themselves here. */
+  metadata?: Record<string, unknown>;
+}
+
+/** A background job a completed tool call started, keyed by its job id. */
+interface OpenCodeBackgroundLaunch {
+  taskId: string;
+  summary: BackgroundTaskSummary;
+}
+
+/**
+ * The background job a completed OpenCode 2 tool call left running, if any.
+ * The job id is the id OpenCode's completion notice names: a shell's
+ * `shellID`, a subagent's child session id, an image job's `jobID`.
+ */
+function openCodeBackgroundLaunch(
+  rawItem: Record<string, any>
+): OpenCodeBackgroundLaunch | undefined {
+  const part = normalizeOpenCodeToolPart(rawItem);
+  if (part.state?.status !== OPERATION_STATUS.COMPLETED) return undefined;
+  const tool = typeof part.tool === "string" ? part.tool : undefined;
+  const input = isObject(part.state.input) ? part.state.input : {};
+  const metadata = isObject(part.state.metadata) ? part.state.metadata : {};
+  const running = metadata.status === OPENCODE_BACKGROUND_TOOL_STATUS;
+  const stringField = (value: unknown): string | undefined =>
+    typeof value === "string" && value ? value : undefined;
+
+  let taskId: string | undefined;
+  const summary: BackgroundTaskSummary = { toolName: tool };
+  if (tool && OPENCODE_SHELL_TOOL_NAMES.has(tool) && running) {
+    taskId = stringField(metadata.shellID);
+    summary.command = stringField(input.command);
+  } else if (tool && OPENCODE_SUBAGENT_TOOL_NAMES.has(tool) && running) {
+    taskId = stringField(metadata.sessionId);
+    summary.description = stringField(input.description);
+  } else if (tool === OPENCODE_IMAGE_TOOL_NAME) {
+    taskId = stringField(metadata.jobID);
+    summary.description = stringField(input.prompt);
+  }
+  return taskId ? { taskId, summary: { ...summary, taskId } } : undefined;
+}
+
+/** The job a `synthetic` completion notice reports, if it is one. */
+function openCodeBackgroundNoticeTaskId(
+  metadata: Record<string, unknown> | undefined
+): string | undefined {
+  const id = metadata?.jobID ?? metadata?.shellID ?? metadata?.childID;
+  return typeof id === "string" && id ? id : undefined;
 }
 
 function isOpenCodeV2ExportMessage(
@@ -262,8 +316,57 @@ export class OpenCodeLogParser extends BaseLogParser {
     }
   }
 
+  /**
+   * OpenCode 2 background jobs (shells, subagents, image jobs) that wake the
+   * session again when they finish. See `trackBackgroundWorkState`.
+   */
+  private readonly backgroundFollowUpState = new BackgroundFollowUpState();
+
   async beginMonitoringTurn(): Promise<void> {
     this.subagentFollower.reset();
+    // See ILogParser.trackBackgroundWorkState's session-reset contract. Every
+    // OpenCode prompt, launched or sent to a running TUI, starts a monitored
+    // turn here, and the previous turn's hold has already settled.
+    this.backgroundFollowUpState.reset();
+  }
+
+  /**
+   * Track OpenCode 2 background jobs from the export-derived lifecycle
+   * events (`extractNewEventsFromV2Message`). A job is pending from its
+   * launching tool call until its `synthetic` completion notice; the notice
+   * starts a resumed execution (or joins the one running), and the next
+   * `idle` closes it. Every execution ends with exactly one `idle`, whatever
+   * its outcome, so it is the closing signal rather than an assistant step.
+   *
+   * Only the interactive export carries notices and idles. Headless
+   * `opencode run --format json` reports neither, so its events never reach
+   * here: tracking its launches would leave them pending forever.
+   */
+  override trackBackgroundWorkState(event: BaseCliEvent): void {
+    const e = event as Record<string, any>;
+    switch (event.type) {
+      case OPENCODE_EVENT_TYPES.BACKGROUND_LAUNCH:
+        if (typeof e.taskId === "string") {
+          this.backgroundFollowUpState.launch(e.taskId, e.summary);
+        }
+        break;
+      case OPENCODE_EVENT_TYPES.BACKGROUND_NOTICE:
+        if (typeof e.taskId === "string") {
+          this.backgroundFollowUpState.consumeNotification(e.taskId);
+        }
+        break;
+      case OPENCODE_EVENT_TYPES.IDLE:
+        this.backgroundFollowUpState.resumedTurnClosed();
+        break;
+    }
+  }
+
+  override hasPendingBackgroundWork(): boolean {
+    return this.backgroundFollowUpState.isCompletionBlocked();
+  }
+
+  override getBackgroundWorkHoldSnapshot(): BackgroundWorkHoldSnapshot {
+    return this.backgroundFollowUpState.snapshot();
   }
 
   /** Part IDs already emitted — prevents re-emitting on re-poll */
@@ -445,6 +548,9 @@ export class OpenCodeLogParser extends BaseLogParser {
     event: BaseCliEvent,
     ctx: { dispatchedPromptText?: string }
   ): UserEventClassification {
+    if (event.type === OPENCODE_EVENT_TYPES.BACKGROUND_NOTICE) {
+      return "resume-signal";
+    }
     if (event.type !== OPENCODE_EVENT_TYPES.USER_TEXT) {
       return "other";
     }
@@ -1055,6 +1161,32 @@ export class OpenCodeLogParser extends BaseLogParser {
       return events;
     }
 
+    // A background job's completion notice. Synthetic messages from other
+    // sources (plans, goals, instructions) name no job and are skipped.
+    if (message.type === OPENCODE_V2_MESSAGE_TYPES.SYNTHETIC) {
+      const taskId = openCodeBackgroundNoticeTaskId(message.metadata);
+      if (taskId && claim(message.id)) {
+        events.push({
+          type: OPENCODE_EVENT_TYPES.BACKGROUND_NOTICE,
+          sessionID,
+          timestamp: created,
+          taskId,
+        });
+      }
+      return events;
+    }
+
+    if (message.type === OPENCODE_V2_MESSAGE_TYPES.IDLE) {
+      if (claim(message.id)) {
+        events.push({
+          type: OPENCODE_EVENT_TYPES.IDLE,
+          sessionID,
+          timestamp: created,
+        });
+      }
+      return events;
+    }
+
     if (message.type !== OPENCODE_V2_MESSAGE_TYPES.ASSISTANT) {
       return events;
     }
@@ -1073,12 +1205,22 @@ export class OpenCodeLogParser extends BaseLogParser {
           return;
         }
         claim(key);
+        const timestamp = item.time?.created ?? created;
         events.push({
           type: OPENCODE_EVENT_TYPES.TOOL_USE,
           sessionID,
-          timestamp: item.time?.created ?? created,
+          timestamp,
           part: normalizeOpenCodeToolPart(item),
         });
+        const launch = openCodeBackgroundLaunch(item);
+        if (launch) {
+          events.push({
+            type: OPENCODE_EVENT_TYPES.BACKGROUND_LAUNCH,
+            sessionID,
+            timestamp,
+            ...launch,
+          });
+        }
         return;
       }
       const isText = item.type === OPENCODE_V2_CONTENT_TYPES.TEXT;

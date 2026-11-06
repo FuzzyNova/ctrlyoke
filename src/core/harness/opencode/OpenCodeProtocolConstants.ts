@@ -16,6 +16,16 @@ export const OPENCODE_EVENT_TYPES = {
   STEP_FINISH: "step_finish",
   COMPACTION: "compaction",
   SUBTASK: "subtask",
+  /**
+   * ctrlyoke-synthesised from an OpenCode 2 export: a tool call started a
+   * background job (`background_launch`), that job's completion notice was
+   * delivered to the session (`background_notice`), or a session execution
+   * ended (`idle`). They carry no display content; they drive
+   * `OpenCodeLogParser.trackBackgroundWorkState`.
+   */
+  BACKGROUND_LAUNCH: "background_launch",
+  BACKGROUND_NOTICE: "background_notice",
+  IDLE: "idle",
 } as const;
 
 /** Terminal states reported by OpenCode for tool parts. */
@@ -66,7 +76,29 @@ export const OPENCODE_V2_MESSAGE_TYPES = {
   USER: "user",
   ASSISTANT: "assistant",
   COMPACTION: "compaction",
+  /**
+   * Text OpenCode injects into the session itself. A finished background job
+   * (shell, subagent, image) reports through one, naming the job in
+   * `metadata`, and wakes the session for a resumed turn.
+   */
+  SYNTHETIC: "synthetic",
+  /** Ends every session execution, whatever its `outcome`. */
+  IDLE: "idle",
 } as const;
+
+/**
+ * `state.metadata.status` of a tool call whose work continues as a background
+ * job after the call returns (OpenCode 2 `shell` with `background: true` or
+ * moved to the background mid-run, and `subagent` with `background: true`).
+ */
+export const OPENCODE_BACKGROUND_TOOL_STATUS = "running";
+
+/**
+ * OpenCode 2's experimental image tool. It always runs as a background job
+ * and reports `metadata.jobID` with no running status (read from source,
+ * packages/core/src/tool/plugin/image-generate.ts; not yet captured).
+ */
+export const OPENCODE_IMAGE_TOOL_NAME = "experimental_image_generate";
 
 /** Content item types inside an OpenCode 2 assistant message. */
 export const OPENCODE_V2_CONTENT_TYPES = {

@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   permissions, MCP servers and completion plugin apply only to it. A resumed
   interactive step passes its prompt on the command line, which OpenCode 2
   honours.
+- Interactive OpenCode 2 steps wait for background work. When OpenCode starts
+  a background shell command or subagent and ends its turn, the step keeps
+  running until each one finishes and OpenCode has replied to its result,
+  instead of moving on at the first turn's end.
 - Add the workflow `sandbox` property and `defaults.sandbox` setting to control
   terminal write containment independently of tool approval: On (`true`), Off
   (`false`, the default) or None (`null`, pass no sandbox flags so the

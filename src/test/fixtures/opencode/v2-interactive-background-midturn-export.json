@@ -1,0 +1,216 @@
+{
+  "info": {
+    "id": "ses_e51ecf579ffekFJUgTr9a6Qf3C",
+    "projectID": "global",
+    "agent": "build",
+    "model": {
+      "id": "big-pickle",
+      "providerID": "opencode",
+      "variant": "default"
+    },
+    "cost": 0.000058,
+    "tokens": {
+      "input": 11496,
+      "output": 191,
+      "reasoning": 210,
+      "cache": {
+        "read": 9344,
+        "write": 0
+      }
+    },
+    "outcome": "succeeded",
+    "time": {
+      "created": 1793921845908,
+      "updated": 1793921861486,
+      "busy": 1793921845993,
+      "idle": 1793921861490
+    },
+    "title": "Background shell notification test",
+    "location": {
+      "directory": "C:\\work\\project"
+    }
+  },
+  "messages": [
+    {
+      "id": "msg_1ae130a89001VI8kPT8S7qbEto",
+      "time": {
+        "created": 1793921846004
+      },
+      "text": "This is a test of background tasks. First, using the shell tool with background set to true, start \"ping -n 4 127.0.0.1\" as a background shell. Then, in the same turn and without waiting, run \"ping -n 12 127.0.0.1\" in the foreground (background false) and wait for it to finish. Then reply with one line saying whether you have been notified about the background shell yet. Do not poll the background shell.",
+      "files": [],
+      "agents": [],
+      "type": "user"
+    },
+    {
+      "id": "msg_1ae130b01001Z849iXs3bpVprS",
+      "time": {
+        "created": 1793921846022,
+        "streamed": 1793921849026,
+        "completed": 1793921860247
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "big-pickle",
+        "providerID": "opencode",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "reasoning",
+          "text": "The user wants me to start a background ping, then run a foreground ping, then reply whether I've been notified about the background shell. These are dependent in the sense that they should be in the same turn but I need to call them sequentially? Actually they say \"in the same turn and without waiting\" - I should call both. The foreground one waits. I can issue both tool calls in one block? They're independent, but the instruction says start background then run foreground. Parallel calls in the same block would accomplish \"without waiting\". Let me do both in one block.\n\nBackground command `ping -n 4 127.0.0.1` takes ~3 seconds. Foreground `ping -n 12` takes ~11 seconds. So background likely finishes before foreground, and I'd be notified... The notification arrives automatically when it completes. Since I must not poll, and I need to reply after the foreground finishes, I should check whether I got notified in the meantime.\n\nLet me issue both calls in one message.",
+          "native": {
+            "reasoningField": "reasoning_content"
+          },
+          "time": {
+            "created": 1793921847137,
+            "completed": 1793921849017
+          }
+        },
+        {
+          "type": "tool",
+          "id": "call_03d6e7dc0ffe429aa0cd1175",
+          "name": "shell",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "command": "ping -n 4 127.0.0.1",
+              "background": true
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Command moved to the background (shell ID: sh_1ae1316c8001yjghfxK3fdFb8R).\nOutput is streaming to: C:\\Users\\user\\.local\\share\\opencode\\shell\\global\\sh_1ae1316c8001yjghfxK3fdFb8R.out"
+              },
+              {
+                "type": "text",
+                "text": "You will be notified automatically when the command finishes. The notification will include the command's output. Unless the user explicitly asks otherwise, DO NOT poll for completion, even if you need the final result to continue. Repeatedly sleeping and reading or searching the output file is polling, not useful work. You may read the current output if it lets you do useful work now, but do not repeatedly check it while waiting for the command to finish. Keep working on anything that does not depend on the result. If you have nothing else to do, end your response; you will be resumed automatically when the command finishes."
+              }
+            ],
+            "metadata": {
+              "status": "running",
+              "truncated": false,
+              "shellID": "sh_1ae1316c8001yjghfxK3fdFb8R"
+            }
+          },
+          "time": {
+            "created": 1793921848576,
+            "ran": 1793921849021,
+            "completed": 1793921849050
+          }
+        },
+        {
+          "type": "tool",
+          "id": "call_217584198e9146de8c28dd6a",
+          "name": "shell",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "command": "ping -n 12 127.0.0.1",
+              "background": false,
+              "timeout": 60000
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "\r\nPinging 127.0.0.1 with 32 bytes of data:\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\n\r\nPing statistics for 127.0.0.1:\r\n    Packets: Sent = 12, Received = 12, Lost = 0 (0% loss),\r\nApproximate round trip times in milli-seconds:\r\n    Minimum = 0ms, Maximum = 0ms, Average = 0ms\r\n"
+              }
+            ],
+            "metadata": {
+              "status": "completed",
+              "truncated": false,
+              "exit": 0
+            }
+          },
+          "time": {
+            "created": 1793921848746,
+            "ran": 1793921849024,
+            "completed": 1793921860202
+          }
+        }
+      ],
+      "snapshot": {
+        "start": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "end": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "files": []
+      },
+      "finish": "tool-calls",
+      "rawFinish": "tool_calls",
+      "cost": 0,
+      "tokens": {
+        "input": 9560,
+        "output": 139,
+        "reasoning": 210,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1ae1316d90026L1w1fwXW3K1Eu",
+      "metadata": {
+        "source": "shell",
+        "shellID": "sh_1ae1316c8001yjghfxK3fdFb8R",
+        "jobID": "sh_1ae1316c8001yjghfxK3fdFb8R",
+        "state": "completed",
+        "truncated": false,
+        "exit": 0
+      },
+      "time": {
+        "created": 1793921860253
+      },
+      "text": "<shell id=\"sh_1ae1316c8001yjghfxK3fdFb8R\" state=\"completed\" command=\"ping -n 4 127.0.0.1\">\n\r\nPinging 127.0.0.1 with 32 bytes of data:\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\n\r\nPing statistics for 127.0.0.1:\r\n    Packets: Sent = 4, Received = 4, Lost = 0 (0% loss),\r\nApproximate round trip times in milli-seconds:\r\n    Minimum = 0ms, Maximum = 0ms, Average = 0ms\r\n\n</shell>",
+      "description": "ping -n 4 127.0.0.1",
+      "type": "synthetic"
+    },
+    {
+      "id": "msg_1ae1342a3001VwGKG4YF345XW7",
+      "time": {
+        "created": 1793921860263,
+        "streamed": 1793921861439,
+        "completed": 1793921861486
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "big-pickle",
+        "providerID": "opencode",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Yes — I was notified that the background shell (sh_1ae1316c8001yjghfxK3fdFb8R) finished, and its ping output came through before I replied."
+        }
+      ],
+      "snapshot": {
+        "start": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "end": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "files": []
+      },
+      "finish": "stop",
+      "rawFinish": "stop",
+      "cost": 0,
+      "tokens": {
+        "input": 1396,
+        "output": 44,
+        "reasoning": 0,
+        "cache": {
+          "read": 9344,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1ae134772001Rdvw0IGN9nD9qu",
+      "time": {
+        "created": 1793921861490
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    }
+  ]
+}

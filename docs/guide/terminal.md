@@ -118,8 +118,8 @@ to type into. Both settings are on the **Execution** tab of Settings.
 
 ### Background work
 
-In interactive mode, Claude Code, Copilot, Antigravity and Qwen Code can start
-work in the background, such as a long test run, a background subagent or a
+In interactive mode, Claude Code, Copilot, Antigravity, Qwen Code and OpenCode 2
+can start work in the background, such as a long test run, a background subagent or a
 Claude Code workflow, and end their turn while it runs. ctrlyoke notices this and
 keeps the step running until the background work finishes and the harness has
 dealt with its result, instead of moving on to the next step too early. While

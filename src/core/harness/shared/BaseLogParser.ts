@@ -237,7 +237,8 @@ export abstract class BaseLogParser implements ILogParser {
 
   /**
    * Default no-op — most harnesses have no background-task auto-resume signal
-   * to track. Overridden by Claude/Copilot/Antigravity parsers.
+   * to track. Overridden by the Claude, Copilot, Antigravity, Qwen and
+   * OpenCode parsers.
    */
   trackBackgroundWorkState(_event: BaseCliEvent): void {
     // no-op by default
