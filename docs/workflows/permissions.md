@@ -277,6 +277,9 @@ The deny list is translated to Claude's syntax and the allow list is left out.
 
 OpenCode receives its permissions through `OPENCODE_CONFIG_CONTENT` rather than
 flags; see [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#opencode-cli).
+In `none` and `dangerouslyAllowAll`, OpenCode's own setting decides whether it
+may use folders outside the workspace: OpenCode 1 asks and OpenCode 2 allows.
+See [Folders outside the workspace](/harnesses/opencode-cli#outside-the-workspace).
 Codex's `-a` approval flag is passed only in interactive runs; `codex exec`
 never asks. Its `-s` sandbox flag comes from [`sandbox`](#sandboxing) alone, in
 every permission mode, so a denied `write` or `shell` is reported as not
