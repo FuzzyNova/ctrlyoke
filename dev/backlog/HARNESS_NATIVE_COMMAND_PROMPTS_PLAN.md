@@ -1,6 +1,18 @@
 # Harness-Native Command Prompts Plan (`!` shell escapes and `/` TUI commands)
 
-**Status:** Not started.
+**Status:** Not started. Staged as a ctrlyoke workflow (2026-11-06) in this order: Phase 1 →
+Phase 2a → Phase 4 → Phase 0 probes (two parallel halves) → Phase 3a (the `noTurnStarted`
+status and its consumers) → Phase 3b (the watchdog itself). Phase 2b is deferred. Each step
+ticks its own items here.
+
+Note for Phase 1: `HarnessIntegration.SAFE_CHARS_PATTERN` deliberately allows `!`, so today
+`! echo hello` passes `isSimplePrompt` and is sent inline on spawn too, not only on reuse. The
+new predicate must be checked before that pattern, and `!` stays allowed mid-prompt for every
+harness except OpenCode on reuse.
+
+Note for Phase 4: the verbatim `/command args` form reuses the mode's inline check, so it
+inherits the Phase 1 OpenCode rule (`/cmd done!` on a reused OpenCode terminal takes the file
+form). Phase 4 must not bypass that check.
 
 Last reviewed against code: 2026-11-06. The workflow schema doesn't change. The new step status
 is persisted run data (see Phase 3). The editor diagnostic and the new status are user-visible,
