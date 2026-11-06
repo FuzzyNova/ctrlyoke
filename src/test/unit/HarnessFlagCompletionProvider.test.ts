@@ -22,6 +22,8 @@ const FIXTURE_CASES: Array<{ harnessId: HarnessId; fileName: string }> = [
   { harnessId: HARNESS_IDS.CODEX_CLI, fileName: "codex-cli.txt" },
   { harnessId: HARNESS_IDS.COPILOT_CLI, fileName: "copilot-cli.txt" },
   { harnessId: HARNESS_IDS.OPENCODE_CLI, fileName: "opencode-cli.txt" },
+  // OpenCode 1 is still supported, and its yargs help has a different shape.
+  { harnessId: HARNESS_IDS.OPENCODE_CLI, fileName: "opencode-cli-v1.txt" },
   { harnessId: HARNESS_IDS.QWEN_CLI, fileName: "qwen-cli.txt" },
 ].filter(({ fileName }) =>
   fs.existsSync(path.join(FIXTURE_DIRECTORY, fileName))
@@ -42,7 +44,7 @@ function findCompletion(
 
 suite("HarnessFlagCompletionProvider", () => {
   for (const { harnessId, fileName } of FIXTURE_CASES) {
-    test(`parses captured ${harnessId} help output`, () => {
+    test(`parses captured ${harnessId} help output (${fileName})`, () => {
       const completions = getHarnessFlagCompletions(
         harnessId,
         readFixture(fileName)
@@ -98,6 +100,36 @@ suite("HarnessFlagCompletionProvider", () => {
       findCompletion(completions, "--continue").detail,
       "Continue the session across multiple turns"
     );
+  });
+
+  test("parses OpenCode 2 help: trailing aliases and bare type words", () => {
+    const completions = getHarnessFlagCompletions(
+      HARNESS_IDS.OPENCODE_CLI,
+      readFixture("opencode-cli.txt")
+    );
+
+    assert.deepStrictEqual(findCompletion(completions, "--session"), {
+      flag: "--session",
+      alias: "-s",
+      detail: "Session ID to continue, or to create if it does not exist",
+    });
+    assert.strictEqual(
+      findCompletion(completions, "--standalone").detail,
+      "Run with a private server instead of the background service"
+    );
+    assert.deepStrictEqual(
+      findCompletion(completions, "--completions").valueHints,
+      ["bash", "zsh", "fish", "powershell", "sh", "pwsh"]
+    );
+  });
+
+  test("keeps a description that starts with a type word", () => {
+    const [completion] = getHarnessFlagCompletions(
+      HARNESS_IDS.CLAUDE_CLI,
+      "  --raw      string output is printed unquoted"
+    );
+
+    assert.strictEqual(completion.detail, "string output is printed unquoted");
   });
 
   test("parses a flag without a value placeholder", () => {

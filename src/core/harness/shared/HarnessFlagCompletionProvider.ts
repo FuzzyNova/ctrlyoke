@@ -25,6 +25,14 @@ interface ParsedOptionLine {
 }
 
 const OPTION_LINE_INDENT_MAX = 8;
+/**
+ * A bare value-type word between a flag and its description, as OpenCode 2
+ * prints it (`--session, -s string    Session ID to continue`).  It counts
+ * only when the column gap (two or more spaces) follows it, so an ordinary
+ * description that happens to start with one of these words is kept whole.
+ */
+const BARE_TYPE_PLACEHOLDER =
+  /^(?:string|number|integer|int|float|boolean|bool|path|file|directory|duration|date)\s{2,}/;
 const OPTION_TOKEN = /--?[A-Za-z][A-Za-z0-9-]*(?:\[[^\]\r\n]*\]|<[^>\r\n]*>)?/g;
 const OPTION_LINE = new RegExp(
   `^(?<indent>\\s*)(?<options>${OPTION_TOKEN.source}(?:\\s*,\\s*${OPTION_TOKEN.source})*)(?<remainder>.*)$`
@@ -58,7 +66,7 @@ function parseOptionLine(line: string): ParsedOptionLine | undefined {
   const placeholder = placeholderMatch?.[1];
   const description = placeholder
     ? remainder.slice(placeholderMatch[0].length).trim()
-    : remainder;
+    : remainder.replace(BARE_TYPE_PLACEHOLDER, "");
   const placeholderHints = placeholder
     ? extractValueHints(placeholder.slice(1, -1))
     : [];
