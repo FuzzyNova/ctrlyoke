@@ -1,0 +1,216 @@
+{
+  "info": {
+    "id": "ses_e51a6729fffeDVqfuOx4Dzy6wF",
+    "parentID": "ses_e51a67c92ffewYxmgCDKMaoOaN",
+    "projectID": "184bd0b4bd212b99ebc267ea0b42f5bcc1cf2bfe",
+    "agent": "general",
+    "model": {
+      "id": "glm-5.3-flash-free",
+      "providerID": "opencode",
+      "variant": "low"
+    },
+    "cost": 0,
+    "tokens": {
+      "input": 10942,
+      "output": 39,
+      "reasoning": 7,
+      "cache": {
+        "read": 15232,
+        "write": 0
+      }
+    },
+    "outcome": "succeeded",
+    "time": {
+      "created": 1793926466915,
+      "updated": 1793926500028,
+      "busy": 1793926498746,
+      "idle": 1793926500031
+    },
+    "title": "Child background ping",
+    "location": {
+      "directory": "C:\\work\\project"
+    }
+  },
+  "messages": [
+    {
+      "id": "msg_1ae598d65001dLsNeWUaaWahev",
+      "time": {
+        "created": 1793926466926
+      },
+      "text": "You are a subagent spawned by another session.\nUse the shell tool with background set to true to run: ping -n 31 127.0.0.1 . Do not wait for it and do not poll it. After launching it, end your turn by replying with the single word LAUNCHED. When you are later notified that the shell finished, reply with the single word CHILD-DONE.",
+      "type": "user"
+    },
+    {
+      "id": "msg_1ae598d720012RkqBPCm9Xydkf",
+      "time": {
+        "created": 1793926466934,
+        "streamed": 1793926468364,
+        "completed": 1793926468378
+      },
+      "type": "assistant",
+      "agent": "general",
+      "model": {
+        "id": "glm-5.3-flash-free",
+        "providerID": "opencode",
+        "variant": "low"
+      },
+      "content": [
+        {
+          "type": "reasoning",
+          "text": "Just launch the ping in background.",
+          "native": {
+            "reasoningField": "reasoning_content"
+          },
+          "time": {
+            "created": 1793926468356,
+            "completed": 1793926468360
+          }
+        },
+        {
+          "type": "tool",
+          "id": "chatcmpl-tool-8bd8fea8122f0035",
+          "name": "shell",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "command": "ping -n 31 127.0.0.1",
+              "background": true
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Command moved to the background (shell ID: sh_1ae59930f0010YMDav12tr7Okn).\nOutput is streaming to: C:\\Users\\user\\.local\\share\\opencode\\shell\\184bd0b4bd212b99ebc267ea0b42f5bcc1cf2bfe\\sh_1ae59930f0010YMDav12tr7Okn.out"
+              },
+              {
+                "type": "text",
+                "text": "You will be notified automatically when the command finishes. The notification will include the command's output. Unless the user explicitly asks otherwise, DO NOT poll for completion, even if you need the final result to continue. Repeatedly sleeping and reading or searching the output file is polling, not useful work. You may read the current output if it lets you do useful work now, but do not repeatedly check it while waiting for the command to finish. Keep working on anything that does not depend on the result. If you have nothing else to do, end your response; you will be resumed automatically when the command finishes."
+              }
+            ],
+            "metadata": {
+              "status": "running",
+              "truncated": false,
+              "shellID": "sh_1ae59930f0010YMDav12tr7Okn"
+            }
+          },
+          "time": {
+            "created": 1793926468358,
+            "ran": 1793926468363,
+            "completed": 1793926468376
+          }
+        }
+      ],
+      "finish": "tool-calls",
+      "rawFinish": "tool_calls",
+      "cost": 0,
+      "tokens": {
+        "input": 8281,
+        "output": 29,
+        "reasoning": 7,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1ae599322001Q1rJbQ793daCVC",
+      "time": {
+        "created": 1793926468389,
+        "streamed": 1793926469636,
+        "completed": 1793926469637
+      },
+      "type": "assistant",
+      "agent": "general",
+      "model": {
+        "id": "glm-5.3-flash-free",
+        "providerID": "opencode",
+        "variant": "low"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "LAUNCHED"
+        }
+      ],
+      "finish": "stop",
+      "rawFinish": "stop",
+      "cost": 0,
+      "tokens": {
+        "input": 922,
+        "output": 5,
+        "reasoning": 0,
+        "cache": {
+          "read": 7616,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1ae599807001rBB3NcGayXBMBg",
+      "time": {
+        "created": 1793926469639
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    },
+    {
+      "id": "msg_1ae59931700312sXW6aUIGQXoD",
+      "metadata": {
+        "source": "shell",
+        "shellID": "sh_1ae59930f0010YMDav12tr7Okn",
+        "jobID": "sh_1ae59930f0010YMDav12tr7Okn",
+        "state": "completed",
+        "truncated": false,
+        "exit": 0
+      },
+      "time": {
+        "created": 1793926498751
+      },
+      "text": "<shell id=\"sh_1ae59930f0010YMDav12tr7Okn\" state=\"completed\" command=\"ping -n 31 127.0.0.1\">\n\r\nPinging 127.0.0.1 with 32 bytes of data:\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\r\n\r\nPing statistics for 127.0.0.1:\r\n    Packets: Sent = 31, Received = 31, Lost = 0 (0% loss),\r\nApproximate round trip times in milli-seconds:\r\n    Minimum = 0ms, Maximum = 0ms, Average = 0ms\r\n\n</shell>",
+      "description": "ping -n 31 127.0.0.1",
+      "type": "synthetic"
+    },
+    {
+      "id": "msg_1ae5a09c4001XJXRKhMJo2S0AZ",
+      "time": {
+        "created": 1793926498761,
+        "streamed": 1793926500027,
+        "completed": 1793926500028
+      },
+      "type": "assistant",
+      "agent": "general",
+      "model": {
+        "id": "glm-5.3-flash-free",
+        "providerID": "opencode",
+        "variant": "low"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "CHILD-DONE"
+        }
+      ],
+      "finish": "stop",
+      "rawFinish": "stop",
+      "cost": 0,
+      "tokens": {
+        "input": 1739,
+        "output": 5,
+        "reasoning": 0,
+        "cache": {
+          "read": 7616,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1ae5a0ebf0018zawbnw2LH8y1h",
+      "time": {
+        "created": 1793926500031
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    }
+  ]
+}

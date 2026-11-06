@@ -271,9 +271,35 @@ Only the interactive export is tracked. Headless `opencode run --format json`
 reports neither notices nor idles, so its launches would stay pending forever;
 in OpenCode 2.2.5 `run` exits at the first idle anyway, and its private
 `--standalone` server takes the jobs with it. OpenCode fixed `run` to wait for
-background jobs after 2.2.5 (anomalyco/opencode ffe6fed583, #60699). A
-subagent's own background shells are not tracked: their notices wake the
-child session, not the parent.
+background jobs after 2.2.5 (anomalyco/opencode ffe6fed583, #60699).
+
+### Subagent child sessions
+
+A subagent's job (`SubagentJob.start` in OpenCode's core) ends at the child's
+first `idle`. If the child started a background shell and ended its turn, the
+subagent call returns (or its background notice arrives) and the parent can go
+idle while the child still has a job running. That job's notice later wakes the
+child for another execution, and nothing tells the parent. The parent's export
+never shows it.
+
+So the parser follows the children too (`OpenCodeChildSessions`). A completed
+`subagent` call emits `subagent_session` naming the child. Each poll then reads
+the export of every child that can still be working, plus any child named in the
+same poll. A child named just before the parent's Stop is therefore read before
+completion is decided. Each read yields that child's lifecycle under child event
+types (`child_background_launch`, `child_background_notice`, `child_idle`, and
+`child_busy` when the latest non-`system` message isn't an `idle`). These feed a
+per-child `BackgroundFollowUpState`. A child named in a child's export (a nested
+subagent) is read in the same poll. `hasPendingBackgroundWork()` holds while the
+parent or any child is blocked or busy.
+
+A child stops being read once an `idle` leaves it nothing pending, until a later
+`subagent` call names it again. Child text and tool calls are not taken from the
+export; they reach the output through the plugin's subagent sidecar, which
+treats the child's first `idle` as its end. So a child's follow-up execution
+holds the step but its output is not shown. The real capture is
+`v2-interactive-subagent-{parent,child}-export.json`: the parent idles, and the
+child finishes its own shell 30 s later.
 
 ## User-steer and completion flow
 

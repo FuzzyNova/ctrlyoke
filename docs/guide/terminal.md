@@ -128,6 +128,12 @@ until 1 background task finishes**, with each task's name and command. There
 is no time limit on the wait; `execution.maxPromptTimeoutSec` still applies,
 and **Stop** ends it.
 
+On OpenCode 2, the wait also covers a subagent's own work. A subagent can
+start a background command and finish its reply while the command runs, and
+OpenCode then tells the main session the subagent is done. ctrlyoke keeps the
+step running until the subagent has picked up that command's result and
+finished its follow-up turn too.
+
 ## Several devices on one terminal
 
 When the same workflow is open in more than one place, such as VS Code and a

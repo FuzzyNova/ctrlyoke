@@ -26,7 +26,34 @@ export const OPENCODE_EVENT_TYPES = {
   BACKGROUND_LAUNCH: "background_launch",
   BACKGROUND_NOTICE: "background_notice",
   IDLE: "idle",
+  /**
+   * ctrlyoke-synthesised, for subagent child sessions. A completed `subagent`
+   * call names its child (`subagent_session`); the child's own export then
+   * yields the same lifecycle as above, renamed so it never reads as the
+   * parent's (`child_background_launch`, `child_background_notice`,
+   * `child_idle`), plus `child_busy` when a read finds the child mid-execution.
+   * A child wakes again for its own background work without telling its
+   * parent, so the parent step has to watch it directly.
+   */
+  SUBAGENT_SESSION: "subagent_session",
+  CHILD_BACKGROUND_LAUNCH: "child_background_launch",
+  CHILD_BACKGROUND_NOTICE: "child_background_notice",
+  CHILD_IDLE: "child_idle",
+  CHILD_BUSY: "child_busy",
 } as const;
+
+/** Lifecycle events from a child's export, renamed to their child form. */
+export const OPENCODE_CHILD_LIFECYCLE_EVENT_TYPES: Readonly<
+  Record<string, string>
+> = {
+  [OPENCODE_EVENT_TYPES.BACKGROUND_LAUNCH]:
+    OPENCODE_EVENT_TYPES.CHILD_BACKGROUND_LAUNCH,
+  [OPENCODE_EVENT_TYPES.BACKGROUND_NOTICE]:
+    OPENCODE_EVENT_TYPES.CHILD_BACKGROUND_NOTICE,
+  [OPENCODE_EVENT_TYPES.IDLE]: OPENCODE_EVENT_TYPES.CHILD_IDLE,
+  [OPENCODE_EVENT_TYPES.SUBAGENT_SESSION]:
+    OPENCODE_EVENT_TYPES.SUBAGENT_SESSION,
+};
 
 /** Terminal states reported by OpenCode for tool parts. */
 export const OPENCODE_TOOL_STATUS = {
@@ -84,6 +111,11 @@ export const OPENCODE_V2_MESSAGE_TYPES = {
   SYNTHETIC: "synthetic",
   /** Ends every session execution, whatever its `outcome`. */
   IDLE: "idle",
+  /**
+   * A notice OpenCode records itself, such as a changed tool catalog. It is
+   * not tied to an execution, so it says nothing about whether one is running.
+   */
+  SYSTEM: "system",
 } as const;
 
 /**

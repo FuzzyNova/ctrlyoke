@@ -43,7 +43,9 @@ import {
   OPENCODE_BACKGROUND_TOOL_STATUS,
   OPENCODE_IMAGE_TOOL_NAME,
   OPENCODE_SHELL_TOOL_NAMES,
+  OPENCODE_CHILD_LIFECYCLE_EVENT_TYPES,
 } from "./OpenCodeProtocolConstants";
+import { OpenCodeChildSessions } from "./OpenCodeChildSessions";
 import { detectOpenCodeV2 } from "./OpenCodeVersion";
 import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
 import { Log } from "../../../utils/Log";
@@ -321,6 +323,8 @@ export class OpenCodeLogParser extends BaseLogParser {
    * session again when they finish. See `trackBackgroundWorkState`.
    */
   private readonly backgroundFollowUpState = new BackgroundFollowUpState();
+  /** Subagent child sessions that can still be working after the parent idles. */
+  private readonly childSessions = new OpenCodeChildSessions();
 
   async beginMonitoringTurn(): Promise<void> {
     this.subagentFollower.reset();
@@ -328,6 +332,7 @@ export class OpenCodeLogParser extends BaseLogParser {
     // OpenCode prompt, launched or sent to a running TUI, starts a monitored
     // turn here, and the previous turn's hold has already settled.
     this.backgroundFollowUpState.reset();
+    this.childSessions.reset();
   }
 
   /**
@@ -341,9 +346,14 @@ export class OpenCodeLogParser extends BaseLogParser {
    * Only the interactive export carries notices and idles. Headless
    * `opencode run --format json` reports neither, so its events never reach
    * here: tracking its launches would leave them pending forever.
+   *
+   * Subagent child sessions are tracked alongside (see
+   * `OpenCodeChildSessions`), from the child events `fetchNewEvents` reads
+   * out of each child's own export.
    */
   override trackBackgroundWorkState(event: BaseCliEvent): void {
     const e = event as Record<string, any>;
+    this.childSessions.track(event);
     switch (event.type) {
       case OPENCODE_EVENT_TYPES.BACKGROUND_LAUNCH:
         if (typeof e.taskId === "string") {
@@ -362,11 +372,27 @@ export class OpenCodeLogParser extends BaseLogParser {
   }
 
   override hasPendingBackgroundWork(): boolean {
-    return this.backgroundFollowUpState.isCompletionBlocked();
+    // Both are evaluated: isCompletionBlocked() is a consuming read.
+    const parentBlocked = this.backgroundFollowUpState.isCompletionBlocked();
+    const childBlocked = this.childSessions.isBlocked();
+    return parentBlocked || childBlocked;
   }
 
   override getBackgroundWorkHoldSnapshot(): BackgroundWorkHoldSnapshot {
-    return this.backgroundFollowUpState.snapshot();
+    const parent = this.backgroundFollowUpState.snapshot();
+    const children = this.childSessions.snapshot();
+    // A background subagent is both the parent's pending job and a busy child.
+    const parentIds = new Set(parent.pendingTasks.map((task) => task.taskId));
+    return {
+      pendingTasks: [
+        ...parent.pendingTasks,
+        ...children.pendingTasks.filter(
+          (task) => !task.taskId || !parentIds.has(task.taskId)
+        ),
+      ],
+      awaitingResumedTurn:
+        parent.awaitingResumedTurn || children.awaitingResumedTurn,
+    };
   }
 
   /** Part IDs already emitted — prevents re-emitting on re-poll */
@@ -1023,10 +1049,11 @@ export class OpenCodeLogParser extends BaseLogParser {
    * Updates seenPartIds so repeated calls are incremental.
    */
   private async fetchNewEvents(sessionId: string): Promise<BaseCliEvent[]> {
+    let events: BaseCliEvent[];
     try {
       const stdout = await this.runExport(sessionId);
       const exportData = JSON.parse(stdout) as OpenCodeExport;
-      return this.extractNewEventsFromExport(exportData);
+      events = this.extractNewEventsFromExport(exportData);
     } catch (error) {
       // Every failed poll here means the session's events since the last
       // successful export are silently dropped (the next successful export
@@ -1035,6 +1062,103 @@ export class OpenCodeLogParser extends BaseLogParser {
       Log.warn(`[OpenCodeLogParser] opencode export failed: ${error}`);
       return [];
     }
+    return [...events, ...(await this.fetchChildSessionEvents(events))];
+  }
+
+  /**
+   * Read the export of every subagent child that may still be working: the
+   * ones already followed, and any `parentEvents` just named (so a child
+   * spawned right before the parent's Stop is read before completion is
+   * decided), then any grandchild those reads name.
+   */
+  private async fetchChildSessionEvents(
+    parentEvents: readonly BaseCliEvent[]
+  ): Promise<BaseCliEvent[]> {
+    const spawnedChildren = (events: readonly BaseCliEvent[]): string[] =>
+      events.flatMap((event) => {
+        const id = (event as Record<string, any>).childSessionID;
+        return event.type === OPENCODE_EVENT_TYPES.SUBAGENT_SESSION &&
+          typeof id === "string"
+          ? [id]
+          : [];
+      });
+    const queue = [
+      ...new Set([
+        ...this.childSessions.liveSessionIds(),
+        ...spawnedChildren(parentEvents),
+      ]),
+    ];
+    const read = new Set<string>();
+    const events: BaseCliEvent[] = [];
+    while (queue.length > 0) {
+      const batch = queue.splice(0).filter((id) => !read.has(id));
+      batch.forEach((id) => read.add(id));
+      const results = await Promise.all(
+        batch.map((id) => this.fetchChildSessionLifecycle(id))
+      );
+      for (const childEvents of results) {
+        events.push(...childEvents);
+        queue.push(...spawnedChildren(childEvents));
+      }
+    }
+    return events;
+  }
+
+  /**
+   * One child's lifecycle events since the last read. Its text and tool calls
+   * are not emitted: they reach the output pane through the plugin's subagent
+   * sidecar (`registerSubagentSource`).
+   */
+  private async fetchChildSessionLifecycle(
+    childSessionId: string
+  ): Promise<BaseCliEvent[]> {
+    let exportData: OpenCodeExport;
+    try {
+      exportData = JSON.parse(
+        await this.runExport(childSessionId)
+      ) as OpenCodeExport;
+    } catch (error) {
+      Log.trace(
+        `[OpenCodeLogParser] Subagent session ${childSessionId} export failed: ${error}`
+      );
+      return [];
+    }
+    const messages = exportData.messages.filter(isOpenCodeV2ExportMessage);
+    const events: BaseCliEvent[] = [];
+    for (const message of messages) {
+      for (const event of this.extractNewEventsFromV2Message(
+        message,
+        childSessionId
+      )) {
+        const type = OPENCODE_CHILD_LIFECYCLE_EVENT_TYPES[event.type];
+        if (!type) continue;
+        const { sessionID: _sessionID, ...rest } = event as Record<string, any>;
+        events.push({
+          ...rest,
+          type,
+          // A nested spawn names its own child; everything else is this one's.
+          childSessionID:
+            type === OPENCODE_EVENT_TYPES.SUBAGENT_SESSION
+              ? rest.childSessionID
+              : childSessionId,
+        });
+      }
+    }
+    const latest = messages
+      .filter((message) => message.type !== OPENCODE_V2_MESSAGE_TYPES.SYSTEM)
+      .at(-1);
+    if (
+      latest &&
+      latest.type !== OPENCODE_V2_MESSAGE_TYPES.IDLE &&
+      !this.childSessions.isBusy(childSessionId)
+    ) {
+      events.push({
+        type: OPENCODE_EVENT_TYPES.CHILD_BUSY,
+        childSessionID: childSessionId,
+        timestamp: Date.now(),
+      });
+    }
+    return events;
   }
 
   /**
@@ -1206,12 +1330,27 @@ export class OpenCodeLogParser extends BaseLogParser {
         }
         claim(key);
         const timestamp = item.time?.created ?? created;
+        const part = normalizeOpenCodeToolPart(item);
         events.push({
           type: OPENCODE_EVENT_TYPES.TOOL_USE,
           sessionID,
           timestamp,
-          part: normalizeOpenCodeToolPart(item),
+          part,
         });
+        const childSessionID = part.state?.metadata?.sessionId;
+        if (
+          status === OPERATION_STATUS.COMPLETED &&
+          OPENCODE_SUBAGENT_TOOL_NAMES.has(part.tool) &&
+          typeof childSessionID === "string"
+        ) {
+          events.push({
+            type: OPENCODE_EVENT_TYPES.SUBAGENT_SESSION,
+            sessionID,
+            timestamp,
+            childSessionID,
+            description: part.state?.input?.description,
+          });
+        }
         const launch = openCodeBackgroundLaunch(item);
         if (launch) {
           events.push({

@@ -31,7 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Interactive OpenCode 2 steps wait for background work. When OpenCode starts
   a background shell command or subagent and ends its turn, the step keeps
   running until each one finishes and OpenCode has replied to its result,
-  instead of moving on at the first turn's end.
+  instead of moving on at the first turn's end. This includes background work
+  a subagent starts itself, which OpenCode doesn't report to the main session.
 - Add the workflow `sandbox` property and `defaults.sandbox` setting to control
   terminal write containment independently of tool approval: On (`true`), Off
   (`false`, the default) or None (`null`, pass no sandbox flags so the

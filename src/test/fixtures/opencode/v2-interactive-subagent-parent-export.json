@@ -1,0 +1,160 @@
+{
+  "info": {
+    "id": "ses_e51a67c92ffewYxmgCDKMaoOaN",
+    "projectID": "184bd0b4bd212b99ebc267ea0b42f5bcc1cf2bfe",
+    "agent": "build",
+    "model": {
+      "id": "glm-5.3-flash-free",
+      "providerID": "opencode",
+      "variant": "low"
+    },
+    "cost": 0.0000612,
+    "tokens": {
+      "input": 12096,
+      "output": 114,
+      "reasoning": 0,
+      "cache": {
+        "read": 7616,
+        "write": 0
+      }
+    },
+    "outcome": "succeeded",
+    "time": {
+      "created": 1793926464376,
+      "updated": 1793926470599,
+      "busy": 1793926464509,
+      "idle": 1793926470601
+    },
+    "title": "Subagent background ping task",
+    "location": {
+      "directory": "C:\\work\\project"
+    }
+  },
+  "messages": [
+    {
+      "id": "msg_1ae5983710012eCW0azBMO3G8E",
+      "time": {
+        "created": 1793926464595
+      },
+      "text": "Call the subagent tool once, in the foreground (do not set background), with agent \"general\", description \"Child background ping\", and this prompt: \"Use the shell tool with background set to true to run: ping -n 31 127.0.0.1 . Do not wait for it and do not poll it. After launching it, end your turn by replying with the single word LAUNCHED. When you are later notified that the shell finished, reply with the single word CHILD-DONE.\" When the subagent tool returns, reply with the single word PARENT-DONE and end your turn. Do not do anything else.",
+      "files": [],
+      "agents": [],
+      "type": "user"
+    },
+    {
+      "id": "msg_1ae5984bd001JGaNxD6Y27A3GC",
+      "time": {
+        "created": 1793926464709,
+        "streamed": 1793926466909,
+        "completed": 1793926469644
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "glm-5.3-flash-free",
+        "providerID": "opencode",
+        "variant": "low"
+      },
+      "content": [
+        {
+          "type": "tool",
+          "id": "chatcmpl-tool-a193fceafc4214d6",
+          "name": "subagent",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "agent": "general",
+              "description": "Child background ping",
+              "prompt": "Use the shell tool with background set to true to run: ping -n 31 127.0.0.1 . Do not wait for it and do not poll it. After launching it, end your turn by replying with the single word LAUNCHED. When you are later notified that the shell finished, reply with the single word CHILD-DONE."
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "<subagent sessionID=\"ses_e51a6729fffeDVqfuOx4Dzy6wF\" state=\"completed\">\nLAUNCHED\n</subagent>"
+              }
+            ],
+            "metadata": {
+              "sessionID": "ses_e51a6729fffeDVqfuOx4Dzy6wF",
+              "status": "completed",
+              "truncated": false
+            }
+          },
+          "time": {
+            "created": 1793926466077,
+            "ran": 1793926466908,
+            "completed": 1793926469642
+          }
+        }
+      ],
+      "finish": "tool-calls",
+      "rawFinish": "tool_calls",
+      "cost": 0,
+      "tokens": {
+        "input": 8407,
+        "output": 99,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1ae59980f001CiO63THDAZWsoU",
+      "metadata": {
+        "notice": "instructions",
+        "instructionSources": [
+          "core/codemode"
+        ]
+      },
+      "time": {
+        "created": 1793926469647
+      },
+      "type": "system",
+      "text": "The Code Mode tool catalog has changed. This catalog supersedes the previous Code Mode tool catalog.\n\n# Code Mode\n\nThe tools listed below, and `search`, cannot be called directly: they only work as JavaScript inside the `execute` tool. Every other tool you have is a normal tool call: call it directly, never inside `execute`.\n\nThe catalog is partial. Before calling a tool that is not listed below, find it with the global `search(...)` function. Do not guess tool names. Each result's `path` is the complete call expression: write it out as code, for example `await tools.ns.tool_name({ ... })`. Do not use it as a key such as `tools[path]`.\n\n- search({\n  query?: string,\n  namespace?: string,\n  /** @integer @exclusiveMinimum 0 */\n  limit?: number,\n  /** @integer @minimum 0 */\n  offset?: number,\n}): {\n  items: Array<{\n      path: string,\n      description: string,\n      signature: string,\n    }>,\n  /** @integer @minimum 0 */\n  remaining: number,\n  next: {\n      /** @integer @minimum 0 */\n      offset: number,\n    } | null,\n}\n\n## Code Mode tools (call only inside `execute`)\n\n- cclsp (12 tools, 9 shown)\n  - tools.cclsp.find_definition({\n  /** The path to the file */\n  file_path: string,\n  /** The name of the symbol */\n  symbol_name: string,\n  /** The kind of symbol (function, class, variable, method, etc.) */\n  symbol_kind?: string,\n}): Promise<unknown> // Find the definition of a symbol by name and kind in a file. Returns definitions for all matching symbols.\n  - tools.cclsp.find_implementation({\n  /** The path to the file */\n  file_path: string,\n  /** The line number (1-indexed) */\n  line: number,\n  /** The character position in the line (1-indexed) */\n  character: number,\n}): Promise<unknown> // Find implementations of an interface or abstract method. Returns locations of all implementations.\n  - tools.cclsp.find_workspace_symbols({\n  /** The symbol name or pattern to search for */\n  query: string,\n}): Promise<unknown> // Search for symbols across the entire workspace by name. Returns matching symbols from all files.\n  - tools.cclsp.get_diagnostics({\n  /** The path to the file to get diagnostics for */\n  file_path: string,\n}): Promise<unknown> // Get language diagnostics (errors, warnings, hints) for a file. Uses LSP textDocument/diagnostic to pull current diagn...\n  - tools.cclsp.get_hover({\n  /** The path to the file */\n  file_path: string,\n  /** The line number (1-indexed) */\n  line: number,\n  /** The character position in the line (1-indexed) */\n  character: number,\n}): Promise<unknown> // Get hover information (documentation, type info) for a symbol at a specific position in a file.\n  - tools.cclsp.get_incoming_calls({\n  /** The path to the file */\n  file_path: string,\n  /** The line number (1-indexed) */\n  line: number,\n  /** The character position in the line (1-indexed) */\n  character: number,\n}): Promise<unknown> // Find all functions/methods that call the function at a position. Requires prepare_call_hierarchy first.\n  - tools.cclsp.get_outgoing_calls({\n  /** The path to the file */\n  file_path: string,\n  /** The line number (1-indexed) */\n  line: number,\n  /** The character position in the line (1-indexed) */\n  character: number,\n}): Promise<unknown> // Find all functions/methods called by the function at a position. Requires prepare_call_hierarchy first.\n  - tools.cclsp.prepare_call_hierarchy({\n  /** The path to the file */\n  file_path: string,\n  /** The line number (1-indexed) */\n  line: number,\n  /** The character position in the line (1-indexed) */\n  character: number,\n}): Promise<unknown> // Get call hierarchy item at a position. Use this to prepare for incoming_calls or outgoing_calls.\n  - tools.cclsp.restart_server({\n  /**\n   * Array of file extensions to restart servers for (e.g., [\"ts\", \"tsx\"]). If not provided, all servers will be restarted.\n   */\n  extensions?: Array<string>,\n}): Promise<unknown> // Manually restart LSP servers. Can restart servers for specific file extensions or all running servers.\n- opencode (8 tools) // Tools for managing OpenCode itself, such as working with sessions and worktrees, searching the available models, and reading MCP resources.\n  - tools.opencode.list_mcp_resources({\n  /** MCP server name as configured. Omit to list every server. */\n  server?: string,\n}): Promise<{\n  resources: Array<{\n      server: string,\n      name: string,\n      uri: string,\n      description?: string,\n      mimeType?: string,\n    }>,\n  templates: Array<{\n      server: string,\n      name: string,\n      uriTemplate: string,\n      description?: string,\n      mimeType?: string,\n    }>,\n}> // List documents, records, and other data exposed by MCP servers. Use this when the user refers to something that is no...\n  - tools.opencode.models({\n  /** Text to search for in model names and IDs. */\n  query?: string,\n  /** Provider ID or name to filter by. Try your own provider first. */\n  provider?: string,\n  /**\n   * Which kind of model to list. Defaults to \"chat\".\n   * \"chat\": a language model (LLM). Powers sessions, agents and subagents, and can call tools.\n   * \"image\": generates or edits images from a prompt. It can't chat or call tools.\n   */\n  type?: \"chat\" | \"image\",\n  /** Include older versions of each model family. By default only the newest version is listed. */\n  all?: boolean,\n  /** Maximum number of models to return. Defaults to 20. @integer @minimum 1 @maximum 100 */\n  limit?: number,\n  /** Number of models to skip, for paging through results. @integer @minimum 0 */\n  offset?: number,\n}): Promise<{\n  /** Matching models grouped by provider. Your own provider comes first. */\n  providers: Array<{\n      id: string,\n      name: string,\n      /** Newest first. */\n      models: Array<{\n          /** providerID/modelID */\n          id: string,\n          name: string,\n          /** Release date as a Unix timestamp in milliseconds, or 0 when unknown. */\n          released: number,\n          variants: Array<string>,\n          /** Pricing in USD per million tokens. */\n          cost: Array<{\n              tier?: {\n                type: \"context\",\n                /** @integer */\n                size: number,\n              },\n              input: number,\n              output: number,\n              cache: {\n                read: number,\n                write: number,\n              },\n            }>,\n          status: \"alpha\" | \"beta\" | \"deprecated\" | \"active\",\n        }>,\n    }>,\n  /** Number of matching models across all pages. @integer */\n  total: number,\n  /** Offset of the next page, or null on the last page. */\n  next: number | null,\n}> // Search the models available to use. Use this to turn a model name the user mentions into an exact reference for a too...\n  - tools.opencode.read_mcp_resource({\n  /** The server field of the discovered resource. */\n  server: string,\n  /** Exact resource URI from discovery, an expanded uriTemplate, or the user. */\n  uri: string,\n}): Promise<{\n  server: string,\n  uri: string,\n  contents: Array<{\n        type: \"text\",\n        uri: string,\n        text: string,\n        mimeType?: string,\n      } | {\n        type: \"blob\",\n        uri: string,\n        blob: string,\n        mimeType?: string,\n      }>,\n}> // Read one MCP resource by server and URI. Not for local files. Always return the full contents rather than slicing or ...\n  - tools.opencode.session_move({\n  /** Omit to move the current session. @pattern ^ses */\n  sessionID?: string,\n  /** Destination directory, relative to the target session's directory or absolute. Supports ~. @minLength 1 */\n  directory: string,\n}): Promise<{\n  /** @pattern ^ses */\n  sessionID: string,\n  directory: string,\n}> // Move a session to another directory, or omit sessionID to move the current session. The current session moves at the ...\n  - tools.opencode.session_rename({\n  /** Omit to rename the current session. @pattern ^ses */\n  sessionID?: string,\n  /** New session title. @minLength 1 */\n  title: string,\n}): Promise<{\n  /** @pattern ^ses */\n  sessionID: string,\n  title: string,\n}> // Rename a session, or omit sessionID to rename the current session. Use a short, specific title that summarizes the wo...\n  - tools.opencode.worktree_create({\n  name: string,\n}): Promise<{\n  directory: string,\n}> // Create a named worktree. Returns its directory.\n  - tools.opencode.worktree_list(): Promise<{\n  worktrees: Array<{\n      directory: string,\n      strategy?: string,\n    }>,\n}> // List a repository's worktrees.\n  - tools.opencode.worktree_remove({\n  /** Absolute path of the worktree to remove. @minLength 1 */\n  directory: string,\n  /** Discard modified and untracked files. Only set this when the user has confirmed forced removal. */\n  force?: boolean,\n}): Promise<{\n  directory: string,\n  removed: boolean,\n}> // Remove a worktree. The repository location selects configuration; directory identifies the worktree to remove.",
+      "description": "Instructions updated: core/codemode"
+    },
+    {
+      "id": "msg_1ae599814001Mn2iDGY9ICLl5j",
+      "time": {
+        "created": 1793926469655,
+        "streamed": 1793926470598,
+        "completed": 1793926470599
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "glm-5.3-flash-free",
+        "providerID": "opencode",
+        "variant": "low"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "PARENT-DONE"
+        }
+      ],
+      "finish": "stop",
+      "rawFinish": "stop",
+      "cost": 0,
+      "tokens": {
+        "input": 3122,
+        "output": 6,
+        "reasoning": 0,
+        "cache": {
+          "read": 7616,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1ae599bc9001nufarfzwFyk07N",
+      "time": {
+        "created": 1793926470601
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    }
+  ]
+}
