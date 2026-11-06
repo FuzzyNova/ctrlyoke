@@ -63,6 +63,7 @@ import {
 } from "./OpenCodeProtocolConstants";
 import { detectOpenCodeV2, OPENCODE_VERSION_COMMAND } from "./OpenCodeVersion";
 import { type SessionProbeResult } from "../../../types/DashboardConstants";
+import { HARNESS_SHELL_ESCAPE_PREFIX } from "../../../utils/HarnessShellEscape";
 
 /**
  * How a resumed interactive step delivers its prompt on OpenCode 1.
@@ -172,6 +173,14 @@ const OPENCODE_IMAGE_INPUT_CAPABILITY = {
  * ```
  */
 export class OpenCodeCliProvider implements ICliProvider {
+  canSendPromptToRunningTerminal(promptText: string): boolean {
+    return !promptText.includes(HARNESS_SHELL_ESCAPE_PREFIX);
+  }
+
+  wrapTerminalPromptForPaste(promptText: string): string {
+    return `\x1b[200~${promptText}\x1b[201~`;
+  }
+
   /**
    * The plugin writes subagent records to `<notifyDir>/<runId>-subagents.jsonl`
    * in both modes, so the parser must know where on every launch, not only

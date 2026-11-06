@@ -38,6 +38,10 @@ class SimplePromptTestIntegration extends HarnessIntegration {
     return this.isSimplePrompt(promptText);
   }
 
+  isSafeForReuse(promptText: string): boolean {
+    return super.canSendToRunningTerminal(promptText);
+  }
+
   async initialize(): Promise<void> {}
 
   async sendPrompt(): Promise<boolean> {
@@ -152,6 +156,47 @@ suite("CliPromptPreparer", () => {
     assert.ok(prepared.promptWithInstruction.startsWith("@"));
     assert.ok(!argv.includes("- fix the tests"));
     assert.ok(!argv.some((argument) => argument.startsWith("- fix")));
+  });
+
+  test("routes a leading harness shell escape through a prompt file in spawn and reuse modes", async () => {
+    const workspaceRoot = makeTempDir("ctrlyoke-shell-escape-");
+    const integration = new SimplePromptTestIntegration(undefined, false);
+    const promptText = "! echo hello";
+
+    try {
+      assert.strictEqual(integration.isSimple(promptText), false);
+      assert.strictEqual(integration.isSafeForReuse(promptText), false);
+
+      for (const reuseRunningTerminal of [false, true]) {
+        const preparer = new CliPromptPreparer({
+          shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+          buildPromptSections: async (prompt) =>
+            createSections({ userPromptText: prompt.prompt }),
+          extractLeadingSlashCommand: () => null,
+          isSimplePrompt: (text) => integration.isSimple(text),
+          canSendToRunningTerminal: (text) => integration.isSafeForReuse(text),
+          buildPriorContextXmlFromItems: () => "",
+          getWorkspaceRoot: () => workspaceRoot,
+          getTempFileSplitConfig: () => undefined,
+          formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+          formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+          formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+        });
+
+        const plan = await preparer.planPrompt(
+          { prompt: promptText } as PromptStep,
+          undefined,
+          { harness: HARNESS_IDS.CLAUDE_CLI } as ResolvedProperties,
+          undefined,
+          reuseRunningTerminal
+        );
+
+        assert.strictEqual(plan.tempFilePaths.length, 1);
+        assert.notStrictEqual(plan.promptWithInstruction, promptText);
+      }
+    } finally {
+      removeTempDir(workspaceRoot);
+    }
   });
 
   test("gives same-step plans unique categorized temp paths and applies those paths", async () => {

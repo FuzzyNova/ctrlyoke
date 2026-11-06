@@ -287,12 +287,14 @@ export class CliExecutionRunner {
       // while an occasional dropped submit is not.
       const focusIn = "\x1b[I";
       const submit = "\r";
+      const terminalPrompt =
+        this.deps.provider.wrapTerminalPromptForPaste?.(text) ?? text;
       const promptChunks = this.chunkTerminalPrompt(
-        text,
+        terminalPrompt,
         CliExecutionRunner.TERMINAL_SEND_PROMPT_CHUNK_SIZE
       );
       Log.trace(
-        `[reuse] writing focus-in pulses, ${promptChunks.length} prompt chunk(s), then submit pulses to PTY: ${JSON.stringify([focusIn, ...promptChunks, submit, submit])} hex=${Buffer.from(focusIn.repeat(CliExecutionRunner.TERMINAL_SEND_FOCUS_PULSE_COUNT) + text + submit.repeat(CliExecutionRunner.TERMINAL_SEND_SUBMIT_PULSE_COUNT)).toString("hex")}`
+        `[reuse] writing focus-in pulses, ${promptChunks.length} prompt chunk(s), then submit pulses to PTY: ${JSON.stringify([focusIn, ...promptChunks, submit, submit])} hex=${Buffer.from(focusIn.repeat(CliExecutionRunner.TERMINAL_SEND_FOCUS_PULSE_COUNT) + terminalPrompt + submit.repeat(CliExecutionRunner.TERMINAL_SEND_SUBMIT_PULSE_COUNT)).toString("hex")}`
       );
 
       for (

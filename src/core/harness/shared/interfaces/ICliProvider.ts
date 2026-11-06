@@ -467,6 +467,15 @@ export interface ICliProvider {
   shouldRetainWorkflowArtifactsForReuse?(): boolean;
 
   /**
+   * Whether prompt text is safe to type into this harness's reused TUI.
+   * Providers use this for native input bindings that differ by harness.
+   */
+  canSendPromptToRunningTerminal?(promptText: string): boolean;
+
+  /** Wrap reused-terminal input in the harness's native bracketed-paste protocol. */
+  wrapTerminalPromptForPaste?(promptText: string): string;
+
+  /**
    * Delete hook artifacts written for the previous prompt before building hooks for the next.
    * Called by CliIntegration at the start of each prompt's hook setup phase.
    *

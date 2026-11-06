@@ -1,7 +1,7 @@
 # Harness-Native Command Prompts Plan (`!` shell escapes and `/` TUI commands)
 
-**Status:** Not started. Staged as a ctrlyoke workflow (2026-11-06) in this order: Phase 1 →
-Phase 2a → Phase 4 → Phase 0 probes (two parallel halves) → Phase 3a (the `noTurnStarted`
+**Status:** Phase 1 complete (2026-11-06). Remaining work is staged as a ctrlyoke workflow in
+this order: Phase 2a → Phase 4 → Phase 0 probes (two parallel halves) → Phase 3a (the `noTurnStarted`
 status and its consumers) → Phase 3b (the watchdog itself). Phase 2b is deferred. Each step
 ticks its own items here.
 
@@ -130,28 +130,25 @@ for every prompt. Phase 3 doesn't need its own guard for that.
 
 ## Phase 1 — Never type a `!` that the harness would treat as a shell escape
 
-1. Add one shared predicate in `src/utils/`, e.g. `isHarnessShellEscape(promptText)`, which is
+- [x] Add one shared predicate in `src/utils/`, e.g. `isHarnessShellEscape(promptText)`, which is
    true when the trimmed text starts with `!`. Make the `!` a named constant, not a repeated
    literal.
-2. In `HarnessIntegration.isSimplePrompt` and `canSendToRunningTerminal`, return `false` when the
+- [x] In `HarnessIntegration.isSimplePrompt` and `canSendToRunningTerminal`, return `false` when the
    predicate matches. The prompt then always goes through the prompt-file path, and the TUI sees
    only "follow the instructions in @prompt.1.md". The step is an ordinary AI turn: hooks fire,
    it completes, and if the model runs `echo hello` the output appears as a normal tool call.
-3. **OpenCode mid-prompt `!`:** override `canSendToRunningTerminal` in the OpenCode integration
-   to return `false` whenever the text contains `!` anywhere. Better if it works: send the
-   reused-terminal prompt wrapped in bracketed paste (`\x1b[200~` … `\x1b[201~`) so OpenCode
-   receives one paste event instead of separate keypresses. First check that OpenCode's input
-   enables bracketed paste through the PTY. Also check whether a long paste turns into a
-   "[pasted text]" placeholder, which would change what the model receives. Keep any
-   paste-wrapping as a per-harness hook on `writeTurnToLivePty`, not a global change. Copilot's
-   focus-pulse handling shows these TUIs differ.
-4. Check the instruction line itself: no generated categorized instruction
+- [x] **OpenCode mid-prompt `!`:** the OpenCode provider rejects terminal reuse whenever the
+   text contains `!`. OpenCode 2.2.5's interactive PTY enabled bracketed paste (`?2004h`). A
+   70-repeat prompt sent inside `\x1b[200~` / `\x1b[201~` appeared in the composer as its full
+   text and was submitted; no `[pasted text]` placeholder appeared. Reused OpenCode prompts now
+   use a provider hook from `writeTurnToLivePty` for this wrapping.
+- [x] Check the instruction line itself: no generated categorized instruction
    (`CliIntegration.formatCategorizedInstruction`) may contain a `!`. A workspace path containing
    `!` could put one there. Either quote it or take the file path.
 
-Tests (`src/test/unit/`): the predicate; `isSimplePrompt` and `canSendToRunningTerminal` reject a
-leading `!`; the OpenCode override rejects a mid-prompt `!`; `CliPromptPreparer` produces a
-file-based plan for `! echo hello` in both spawn and reuse modes.
+- [x] Tests (`src/test/unit/`): the predicate; `isSimplePrompt` and `canSendToRunningTerminal` reject a
+  leading `!`; the OpenCode provider rejects a mid-prompt `!`; `CliPromptPreparer` produces a
+  file-based plan for `! echo hello` in both spawn and reuse modes.
 
 ## Phase 2a — Lint rule and dashboard fix for a leading `!`
 

@@ -7,6 +7,7 @@ import { IntegrationFactory } from "../../core/IntegrationFactory";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import { suite, test, setup, teardown } from "mocha";
 import { CliIntegration } from "../../core/harness/CliIntegration";
+import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
 import { quoteReferenceField } from "../../completions/ContextReferenceBuilder";
 import { HarnessStatus } from "../../core/HarnessIntegration";
 import {
@@ -76,6 +77,10 @@ class TestCliIntegration extends CliIntegration {
 
   public configuredExecutionMode(): string {
     return this.getExecutionMode();
+  }
+
+  public canSendPromptToRunningTerminal(promptText: string): boolean {
+    return super.canSendToRunningTerminal(promptText);
   }
 
   public formatRefs(
@@ -1540,6 +1545,52 @@ suite("CliIntegration", () => {
       "using these file references @src/ui/webview-react/components/output/CliOutput.tsx, follow the instructions in @.ctrlyoke/temp/example.prompt.md "
     );
     assert.strictEqual(/[\r\n]/u.test(formatted), false);
+  });
+
+  test("quotes categorized workspace references containing an exclamation mark", () => {
+    const integration = createTestIntegration();
+
+    const formatted = integration.formatRefs(
+      [],
+      [],
+      ['@/workspace!/src/file.ts'],
+      [],
+      [],
+      ["@.ctrlyoke/temp/prompt.md"]
+    );
+
+    assert.strictEqual(
+      formatted,
+      'using these file references @"/workspace!/src/file.ts", follow the instructions in @.ctrlyoke/temp/prompt.md '
+    );
+
+    const alreadyQuoted = integration.formatRefs(
+      [],
+      [],
+      ['@"/workspace root!/src/file.ts"'],
+      [],
+      [],
+      ["@.ctrlyoke/temp/prompt.md"]
+    );
+    assert.ok(alreadyQuoted.includes('@"/workspace root!/src/file.ts"'));
+    assert.ok(!alreadyQuoted.includes('!"'));
+  });
+
+  test("delegates harness-specific terminal reuse checks to its provider", () => {
+    const integration = new TestCliIntegration(
+      new OpenCodeCliProvider(),
+      new MockVsCodePlatform(),
+      false
+    );
+
+    assert.strictEqual(
+      integration.canSendPromptToRunningTerminal("thank you!"),
+      false
+    );
+    assert.strictEqual(
+      integration.canSendPromptToRunningTerminal("thank you"),
+      true
+    );
   });
 
   test("places available secrets after agents and before skills", () => {

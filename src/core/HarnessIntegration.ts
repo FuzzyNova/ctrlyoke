@@ -51,6 +51,10 @@ import { boundPriorContextText } from "./PriorContextTranscript";
 import { operatorTakesNoValue } from "../utils/ScriptComparison";
 import { ctrlYokeDeniedToolNames } from "../types/ExecutionPropertyResolver";
 import { scanCtrlYokeSlashTokens } from "../utils/CtrlYokeSlashTokens";
+import {
+  HARNESS_SHELL_ESCAPE_PREFIX,
+  isHarnessShellEscape,
+} from "../utils/HarnessShellEscape";
 import type { CtrlYokeNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
 import { CliProviderUtils } from "./harness/shared/CliProviderUtils";
 import type { DisposableRegistry } from "./HostPorts";
@@ -891,38 +895,56 @@ export abstract class HarnessIntegration {
     joinSeparator = ",\n",
     secretRefs: string[] = []
   ): string {
+    const formatRefs = (refs: string[]) =>
+      refs
+        .map((ref) => {
+          if (!ref.includes(HARNESS_SHELL_ESCAPE_PREFIX)) {
+            return ref;
+          }
+          if (ref.startsWith("@")) {
+            const pathRef = ref.slice(1);
+            return pathRef.startsWith('"') && pathRef.endsWith('"')
+              ? ref
+              : `@"${pathRef}"`;
+          }
+          return ref.startsWith('"') && ref.endsWith('"')
+            ? ref
+            : `"${ref}"`;
+        })
+        .join(", ");
+
     const clauses: string[] = [];
 
     if (agentRefs.length > 0) {
       clauses.push(
-        `Following these agent instructions ${agentRefs.join(", ")}`
+        `Following these agent instructions ${formatRefs(agentRefs)}`
       );
     }
     if (secretRefs.length > 0) {
-      clauses.push(`using these secrets ${secretRefs.join(", ")}`);
+      clauses.push(`using these secrets ${formatRefs(secretRefs)}`);
     }
     if (skillRefs.length > 0) {
-      clauses.push(`using these available skills ${skillRefs.join(", ")}`);
+      clauses.push(`using these available skills ${formatRefs(skillRefs)}`);
     }
     if (directRefs.length > 0) {
-      clauses.push(`using these file references ${directRefs.join(", ")}`);
+      clauses.push(`using these file references ${formatRefs(directRefs)}`);
     }
     if (contextRefs.length > 0) {
       clauses.push(
-        `with this prior conversation context ${contextRefs.join(", ")}`
+        `with this prior conversation context ${formatRefs(contextRefs)}`
       );
     }
     if (excerptRefs.length > 0) {
       const excerptPrefix = clauses.length === 0 ? "using" : "and";
       clauses.push(
-        `${excerptPrefix} these attachment excerpts ${excerptRefs.join(", ")}`
+        `${excerptPrefix} these attachment excerpts ${formatRefs(excerptRefs)}`
       );
     }
 
-    const followClause = `follow the instructions in ${promptRefs.join(", ")}`;
+    const followClause = `follow the instructions in ${formatRefs(promptRefs)}`;
 
     if (clauses.length === 0) {
-      return `Follow instructions in ${promptRefs.join(", ")} `;
+      return `Follow instructions in ${formatRefs(promptRefs)} `;
     }
 
     return clauses.join(joinSeparator) + `${joinSeparator}${followClause} `;
@@ -1061,6 +1083,13 @@ export abstract class HarnessIntegration {
    * @returns true if prompt can be passed directly
    */
   protected isSimplePrompt(promptText: string): boolean {
+    if (isHarnessShellEscape(promptText)) {
+      Log.debug(
+        "[HarnessIntegration] Prompt starts with a harness shell escape, using file-based passing"
+      );
+      return false;
+    }
+
     if (promptText.length > HarnessIntegration.MAX_SIMPLE_PROMPT_LENGTH) {
       return false;
     }
@@ -1110,6 +1139,13 @@ export abstract class HarnessIntegration {
    * @returns true if the prompt can be sent directly to the running TUI
    */
   protected canSendToRunningTerminal(promptText: string): boolean {
+    if (isHarnessShellEscape(promptText)) {
+      Log.debug(
+        "[HarnessIntegration] Prompt starts with a harness shell escape, using file-based passing for terminal reuse"
+      );
+      return false;
+    }
+
     if (/[\x00-\x1f\x7f]/.test(promptText)) {
       Log.debug(
         "[HarnessIntegration] Prompt contains control characters, using file-based passing for terminal reuse"

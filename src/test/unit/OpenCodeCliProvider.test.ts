@@ -26,6 +26,24 @@ import {
 } from "../../types/DashboardConstants";
 
 suite("OpenCodeCliProvider", () => {
+  test("uses bracketed paste and avoids terminal reuse for any exclamation mark", () => {
+    const provider = new OpenCodeCliProvider();
+
+    assert.strictEqual(provider.canSendPromptToRunningTerminal("thanks!"), false);
+    assert.strictEqual(
+      provider.canSendPromptToRunningTerminal("! echo hello"),
+      false
+    );
+    assert.strictEqual(
+      provider.canSendPromptToRunningTerminal("please continue"),
+      true
+    );
+    assert.strictEqual(
+      provider.wrapTerminalPromptForPaste("hello!"),
+      "\x1b[200~hello!\x1b[201~"
+    );
+  });
+
   test("probes OpenCode export by exact session ID and recognizes its missing-session error", async () => {
     const parser = new OpenCodeLogParser(
       () => undefined,

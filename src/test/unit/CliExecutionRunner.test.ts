@@ -30,6 +30,7 @@ function createProvider(options?: {
   ) => Promise<{ completed: boolean; error?: string; data?: unknown }>;
   discoverSessionLog?: () => Promise<string | null>;
   recoverableSessionError?: boolean;
+  wrapTerminalPromptForPaste?: (promptText: string) => string;
 }): ICliProvider {
   return {
     config: {
@@ -105,6 +106,7 @@ function createProvider(options?: {
       promptText,
       ...baseArgs,
     ],
+    wrapTerminalPromptForPaste: options?.wrapTerminalPromptForPaste,
     checkAvailability: async () => true,
   } as unknown as ICliProvider;
 }
@@ -128,6 +130,7 @@ function createRunner(options?: {
   headlessError?: Error;
   cleanupTempFiles?: (paths: string[]) => Promise<void>;
   recoverableSessionError?: boolean;
+  wrapTerminalPromptForPaste?: (promptText: string) => string;
   headlessResponses?: Array<{
     stdout: string;
     stderr: string;
@@ -732,6 +735,26 @@ suite("CliExecutionRunner", () => {
 
     assert.strictEqual(success, false);
     assert.deepStrictEqual(writes, ["\x1b[I"]);
+  });
+
+  test("uses a provider-specific bracketed-paste wrapper for reused terminal input", async () => {
+    const writes: string[] = [];
+    const { runner } = createRunner({
+      writeToCurrentPtySession: (text) => {
+        writes.push(text);
+        return true;
+      },
+      wrapTerminalPromptForPaste: (text) => `\x1b[200~${text}\x1b[201~`,
+    });
+
+    assert.strictEqual(await runner.writeTurnToLivePty("prompt"), true);
+    assert.deepStrictEqual(writes, [
+      "\x1b[I",
+      "\x1b[I",
+      "\x1b[200~prompt\x1b[201~",
+      "\r",
+      "\r",
+    ]);
   });
 
   test("should return false when the PTY terminates after writing", async function () {

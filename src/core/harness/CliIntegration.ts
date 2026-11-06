@@ -153,6 +153,13 @@ export class CliIntegration extends HarnessIntegration {
   /** Provider instance that encapsulates all CLI-specific logic */
   private readonly provider: ICliProvider;
 
+  protected override canSendToRunningTerminal(promptText: string): boolean {
+    return (
+      super.canSendToRunningTerminal(promptText) &&
+      (this.provider.canSendPromptToRunningTerminal?.(promptText) ?? true)
+    );
+  }
+
   /** Platform adapter (VS Code or standalone CLI) */
   private readonly platform: PlatformAdapter;
 
