@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The Codex **Model** picker lists `gpt-6.1-terra`.
 - Support OpenCode 2 alongside OpenCode 1 (still from 1.3.16). On OpenCode 2,
   ctrlyoke starts each run with its own private OpenCode server
   (`--standalone`) instead of the shared background service, so the run's

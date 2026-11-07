@@ -60,8 +60,8 @@ steps:
 ## Model selection {#model-selection}
 
 Codex has no command that lists its models, so the **Model** picker shows a fixed list:
-`gpt-6.1-sol`, `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra` and
-`gpt-5.6-luna`.
+`gpt-6.1-sol`, `gpt-6.1-terra`, `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol`,
+`gpt-5.6-terra` and `gpt-5.6-luna`.
 
 Set `model` on the workflow or on a step. Without one, ctrlyoke uses
 [`defaults.models["codex-cli"]`](/reference/settings#defaults-models), which is `gpt-6-luna` out of
