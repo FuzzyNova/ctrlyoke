@@ -153,14 +153,19 @@ partial: its Bash commands are contained, but its built-in Write and Edit tools
 can still change outside files when tool permissions allow them (verified on
 macOS with Claude Code 2.1.317). Network policy is separate from these ratings.
 
-| Harness                                   | On (`true`)                                                                                       | Off (`false`)                              | Network when On                                                  |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------ | ---------------------------------------------------------------- |
-| [Codex](/harnesses/codex-cli)             | `-s workspace-write` or `-s read-only`, with the workspace's Git directories as writable roots    | `-s danger-full-access`                    | Off unless `sandbox_workspace_write` in `config.toml` enables it |
-| [Claude Code](/harnesses/claude-cli)      | `--settings` turns on the Bash sandbox, requires it to be available and limits where it can write | `--settings` with `sandbox.enabled: false` | Set by `sandbox.network` in Claude's settings files              |
-| [Copilot CLI](/harnesses/copilot-cli)     | Not supported: its sandbox also blocks ctrlyoke's MCP server and hooks                            | `--no-sandbox`                             | —                                                                |
-| [Qwen Code](/harnesses/qwen-cli)          | Not supported: its sandbox wraps the whole CLI and its helpers                                    | `--sandbox=false` and `QWEN_SANDBOX=false` | —                                                                |
-| [Antigravity](/harnesses/antigravity-cli) | Not supported: its sandbox makes the workspace read-only                                          | Nothing to turn off                        | —                                                                |
-| [OpenCode](/harnesses/opencode-cli)       | Not supported: no per-run terminal sandbox is available                                           | Nothing to turn off                        | —                                                                |
+On Windows, Claude Code has no Bash sandbox, so it is treated like a harness
+that can't sandbox: a `true` written in the workflow or a step fails before
+launch, and one inherited from `defaults.sandbox` only warns. Codex's Windows
+sandbox contains writes but does not block network access.
+
+| Harness                                   | On (`true`)                                                                                       | Off (`false`)                              | Network when On                                                                           |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| [Codex](/harnesses/codex-cli)             | `-s workspace-write` or `-s read-only`, with the workspace's Git directories as writable roots    | `-s danger-full-access`                    | Off unless `sandbox_workspace_write` in `config.toml` enables it; always on under Windows |
+| [Claude Code](/harnesses/claude-cli)      | `--settings` turns on the Bash sandbox, requires it to be available and limits where it can write | `--settings` with `sandbox.enabled: false` | Set by `sandbox.network` in Claude's settings files                                       |
+| [Copilot CLI](/harnesses/copilot-cli)     | Not supported: its sandbox also blocks ctrlyoke's MCP server and hooks                            | `--no-sandbox`                             | —                                                                                         |
+| [Qwen Code](/harnesses/qwen-cli)          | Not supported: its sandbox wraps the whole CLI and its helpers                                    | `--sandbox=false` and `QWEN_SANDBOX=false` | —                                                                                         |
+| [Antigravity](/harnesses/antigravity-cli) | Not supported: its sandbox makes the workspace read-only                                          | Nothing to turn off                        | —                                                                                         |
+| [OpenCode](/harnesses/opencode-cli)       | Not supported: no per-run terminal sandbox is available                                           | Nothing to turn off                        | —                                                                                         |
 
 A `true` written in the workflow or a step fails the step before launch
 whenever ctrlyoke can't honor it, on an unsupported harness or when the

@@ -17,6 +17,7 @@ import {
 import { CliPromptPreparer } from "../../core/harness/shared/CliPromptPreparer";
 import { ExecutionPlanBuilder } from "../../core/harness/shared/ExecutionPlanBuilder";
 import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
+import { PosixClaudeCliProvider } from "../helpers/posixClaudeProvider";
 import { QwenCliProvider } from "../../core/harness/qwen/QwenCliProvider";
 import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
 import {
@@ -153,7 +154,7 @@ function createPromptPreparer(
 function createHarness(
   workspaceRoot?: string,
   buildPromptSections?: (prompt: PromptStep) => Promise<PromptSections>,
-  provider: ICliProvider = new ClaudeCliProvider()
+  provider: ICliProvider = new PosixClaudeCliProvider()
 ): ExecutionPreviewHarness {
   return {
     provider,

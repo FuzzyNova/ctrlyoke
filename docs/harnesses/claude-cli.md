@@ -95,6 +95,9 @@ Claude settings too, unless a managed settings file enforces it. `null` adds no
 sandbox settings, so Claude's own settings decide. ctrlyoke does not set network
 access: it follows the `sandbox.network` settings in Claude's own settings
 files (`~/.claude/settings.json` and the project's `.claude/settings.json`).
+On Windows Claude Code has no Bash sandbox (checked with Claude Code 2.1.319),
+so ctrlyoke refuses a written `sandbox: true` before launch instead of letting
+Claude exit, and skips one inherited from `defaults.sandbox` with a warning.
 Containment is declared partial: the Bash sandbox blocks outside writes, but the
 built-in Write and Edit tools run outside it and follow tool permissions instead,
 so `read-only` doesn't stop them either.

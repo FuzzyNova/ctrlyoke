@@ -4,6 +4,7 @@ import * as path from "path";
 import { suite, test } from "mocha";
 import { AntigravityCliProvider } from "../../core/harness/antigravity/AntigravityCliProvider";
 import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
+import { PosixClaudeCliProvider } from "../helpers/posixClaudeProvider";
 import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
 import { CopilotCliProvider } from "../../core/harness/copilot/CopilotCliProvider";
 import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
@@ -87,7 +88,7 @@ function createBuilder(
 
 suite("ExecutionPlanBuilder", () => {
   test("merges Claude sandbox settings into its single hook settings file in both modes", async () => {
-    const provider = new ClaudeCliProvider();
+    const provider = new PosixClaudeCliProvider();
     provider.getVersion = async () => "2.1.316";
     const properties: ResolvedProperties = {
       ...resolvedProperties,
@@ -122,7 +123,7 @@ suite("ExecutionPlanBuilder", () => {
   });
 
   test("refuses a Claude sandbox that additionalArgs --settings would replace", async () => {
-    const provider = new ClaudeCliProvider();
+    const provider = new PosixClaudeCliProvider();
     provider.getVersion = async () => "2.1.317";
     const properties: ResolvedProperties = {
       ...resolvedProperties,
@@ -139,7 +140,7 @@ suite("ExecutionPlanBuilder", () => {
   });
 
   test("refuses a Claude sandbox with no workspace to write its settings to", async () => {
-    const provider = new ClaudeCliProvider();
+    const provider = new PosixClaudeCliProvider();
     provider.getVersion = async () => "2.1.317";
     await assert.rejects(
       createBuilder(provider).plan(

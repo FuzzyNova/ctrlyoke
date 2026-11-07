@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenCode now receives approved trusted external roots and the other folders of a multi-root workspace, as `external_directory` allow rules, the way the other harnesses receive `--add-dir`. A `custom` step can read and edit there without an approval prompt, which a headless step could never answer.
 - A phone or browser that loses control of a terminal by disconnecting gets it back when it reopens the workflow, as long as no one typed in the terminal on the device that took over meanwhile (usually the VS Code panel). Reopening the app no longer means pressing **Take Control** again.
 - Declare Codex terminal sandbox support exact; Claude remains partial because its built-in Write and Edit tools can write outside the Bash sandbox (verified on macOS with Claude Code 2.1.317).
+- On Windows, Claude Code has no Bash sandbox, so a `sandbox: true` written in a Claude workflow or step now fails before launch, and one inherited from `defaults.sandbox` is skipped with a warning. Claude used to refuse to start, which ended the step with only "Claude reported an error". Codex's Windows sandbox contains writes but does not block network access, whatever `sandbox_workspace_write.network_access` says; the docs now say so.
 - **Codex no longer runs in a sandbox by default.** Its sandbox now follows the new `sandbox` property, whose default is Off, instead of the permission mode. Headless and interactive `allowAll` steps that used to run in Codex's `workspace-write` sandbox now run with `-s danger-full-access`. Set `defaults.sandbox: true` (Settings → Workflow Defaults → Permissions → Sandbox) to keep them contained, or `null` (None) to let your `config.toml` decide.
 - Codex's approval flag now follows the permission mode alone: `dangerouslyAllowAll` passes `-a never` (instead of `--dangerously-bypass-approvals-and-sandbox`), and `allowAll` and `custom` pass `-a on-request`.
 - The `permissions.codexSandboxMode` and `permissions.codexApprovalPolicy` settings are removed. Settings files are migrated to format 2 when read: `codexSandboxMode` becomes the cross-harness `defaults.sandboxMode` (`danger-full-access` becomes `workspace-write`, since "no sandbox" is now `sandbox: false`), and the approval policy is dropped.
@@ -81,6 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The first Antigravity step on a machine with no `~/.gemini/config/` folder, such as a fresh Antigravity install, no longer fails with `ENOENT … hooks.json.lock`.
 - **Continue** works again on a stopped run, and so does adding a prompt to a
   stopped run with **Run Next**. Both used to do nothing at all.
 - **Stop** now kills a running worktree `setup` command, the same way it

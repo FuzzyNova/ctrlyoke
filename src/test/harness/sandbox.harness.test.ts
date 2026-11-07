@@ -50,11 +50,18 @@ function declaresSandbox(entry: (typeof facts.harnesses)[number]): boolean {
   const fidelity = entry.capabilities.sandbox?.terminal.fidelity;
   return fidelity !== undefined && fidelity !== "unsupported";
 }
+// Claude has no Bash sandbox on Windows, so ClaudeSandboxMapper refuses
+// `sandbox: true` there the way an unsupported harness does.
+function hostCannotSandbox(entry: (typeof facts.harnesses)[number]): boolean {
+  return (
+    process.platform === "win32" && entry.harnessId === HARNESS_IDS.CLAUDE_CLI
+  );
+}
 const SANDBOXED_HARNESSES = facts.harnesses
-  .filter(declaresSandbox)
+  .filter((entry) => declaresSandbox(entry) && !hostCannotSandbox(entry))
   .map((entry) => entry.harnessId as HarnessId);
 const UNSUPPORTED_HARNESSES = facts.harnesses
-  .filter((entry) => !declaresSandbox(entry))
+  .filter((entry) => !declaresSandbox(entry) || hostCannotSandbox(entry))
   .map((entry) => entry.harnessId as HarnessId);
 
 function workflow(
@@ -336,10 +343,16 @@ suite("Harness sandbox tests", function () {
             )
           );
           if (logAndMaybeSkip(harness, result)) return;
+          // Codex's Windows sandbox (a restricted token) contains writes but
+          // never filters network, whatever network_access says; the docs say
+          // so. Asserting it flags the day Codex starts blocking it.
+          const networkBlocked = process.platform !== "win32";
           assert.strictEqual(
             fs.existsSync(marker),
-            false,
-            `Codex reached the network under sandbox=true\nstdout: ${result.stdout}\nstderr: ${result.stderr}`
+            !networkBlocked,
+            networkBlocked
+              ? `Codex reached the network under sandbox=true\nstdout: ${result.stdout}\nstderr: ${result.stderr}`
+              : `Codex now blocks network under sandbox=true on Windows: update docs/harnesses/codex-cli.md and the network caveat\nstdout: ${result.stdout}`
           );
         });
       }

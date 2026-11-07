@@ -10,6 +10,7 @@ import {
 import {
   SANDBOX_CAVEAT_CODE,
   sandboxOverriddenDiagnostic,
+  sandboxUnsupportedDiagnostic,
 } from "../../../types/CompatibilityTypes";
 import {
   EFFECTIVE_SANDBOX_KINDS,
@@ -27,10 +28,17 @@ export class ClaudeSandboxMapper implements ISandboxMapper {
     SANDBOX_CAVEAT_CODE.FILE_TOOLS_BEST_EFFORT
   );
 
+  /** `platform` is injectable for tests; production uses the host's. */
+  constructor(private readonly platform: NodeJS.Platform = process.platform) {}
+
   /**
    * - `true`: Bash sandbox on through the one merged `--settings` file.
    *   `workspace-write` allows writes to the workspace roots; `read-only`
    *   denies them (`denyWrite` outranks the default cwd write access).
+   *   On Windows Claude has no Bash sandbox (2.1.319: "the Windows sandbox is
+   *   not active on this session") and `failIfUnavailable` makes it exit, so
+   *   `true` is treated as on a harness that can't sandbox: refused before
+   *   launch when written, skipped with a warning when inherited.
    * - `false`: `sandbox.enabled: false`. `--settings` outranks user and
    *   project settings; a managed policy still wins.
    * - `null`: nothing.
@@ -39,6 +47,19 @@ export class ClaudeSandboxMapper implements ISandboxMapper {
     request: SandboxRequest | undefined,
     context: SandboxContext
   ): Promise<SandboxApplication> {
+    if (request === true && this.platform === "win32") {
+      return {
+        cliArgs: [],
+        diagnostics: [
+          sandboxUnsupportedDiagnostic({
+            harnessId: HARNESS_IDS.CLAUDE_CLI,
+            fromDefaults: context.requestFromDefaults,
+            caveatCode: SANDBOX_CAVEAT_CODE.CLAUDE_WINDOWS_UNAVAILABLE,
+          }),
+        ],
+        effective: { kind: EFFECTIVE_SANDBOX_KINDS.HARNESS },
+      };
+    }
     if (request === false) {
       return {
         cliArgs: [],

@@ -29,7 +29,7 @@ const context: SandboxContext = {
 suite("sandbox mappers", () => {
   test("Codex declares exact terminal containment; Claude records its verified file-tool gap", () => {
     const codex = new CodexSandboxMapper().capabilities.terminal;
-    const claude = new ClaudeSandboxMapper().capabilities.terminal;
+    const claude = new ClaudeSandboxMapper("darwin").capabilities.terminal;
     assert.strictEqual(codex.fidelity, "exact");
     assert.strictEqual(
       codex.caveatCode,
@@ -51,7 +51,10 @@ suite("sandbox mappers", () => {
   });
 
   test("Claude workspace-write allows writes to the workspace roots without another CLI flag", async () => {
-    const result = await new ClaudeSandboxMapper().prepare(true, context);
+    const result = await new ClaudeSandboxMapper("darwin").prepare(
+      true,
+      context
+    );
     assert.deepStrictEqual(result.cliArgs, []);
     assert.deepStrictEqual(result.diagnostics, []);
     assert.deepStrictEqual(result.settings, {
@@ -66,7 +69,7 @@ suite("sandbox mappers", () => {
   });
 
   test("Claude read-only denies Bash writes to the workspace roots", async () => {
-    const result = await new ClaudeSandboxMapper().prepare(true, {
+    const result = await new ClaudeSandboxMapper("darwin").prepare(true, {
       ...context,
       sandboxMode: SANDBOX_MODES.READ_ONLY,
     });
@@ -81,16 +84,58 @@ suite("sandbox mappers", () => {
   });
 
   test("Claude Off turns the sandbox off through settings; None contributes nothing", async () => {
-    const off = await new ClaudeSandboxMapper().prepare(false, context);
+    const off = await new ClaudeSandboxMapper("darwin").prepare(false, context);
     assert.deepStrictEqual(off.settings, { sandbox: { enabled: false } });
     assert.deepStrictEqual(off.cliArgs, []);
     assert.strictEqual(off.effective.kind, EFFECTIVE_SANDBOX_KINDS.OFF);
     for (const request of [undefined, null]) {
-      const none = await new ClaudeSandboxMapper().prepare(request, context);
+      const none = await new ClaudeSandboxMapper("darwin").prepare(
+        request,
+        context
+      );
       assert.strictEqual(none.settings, undefined);
       assert.deepStrictEqual(none.cliArgs, []);
       assert.strictEqual(none.effective.kind, EFFECTIVE_SANDBOX_KINDS.HARNESS);
     }
+  });
+
+  test("Claude on Windows refuses a written sandbox true and skips an inherited one", async () => {
+    const mapper = new ClaudeSandboxMapper("win32");
+    const written = await mapper.prepare(true, context);
+    assert.strictEqual(written.settings, undefined);
+    assert.strictEqual(written.effective.kind, EFFECTIVE_SANDBOX_KINDS.HARNESS);
+    assert.strictEqual(
+      written.diagnostics[0]?.code,
+      COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_UNSUPPORTED
+    );
+    assert.strictEqual(
+      written.diagnostics[0]?.severity,
+      COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
+    );
+    assert.match(written.diagnostics[0]?.message ?? "", /Claude Code/);
+    assert.match(
+      getCompatibilityCaveatMessage(
+        SANDBOX_CAVEAT_CODE.CLAUDE_WINDOWS_UNAVAILABLE
+      ) ?? "",
+      /not available on Windows/
+    );
+
+    const inherited = await mapper.prepare(true, {
+      ...context,
+      requestFromDefaults: true,
+    });
+    assert.strictEqual(
+      inherited.diagnostics[0]?.code,
+      COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_DEFAULT_SKIPPED
+    );
+    assert.strictEqual(
+      inherited.diagnostics[0]?.severity,
+      COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+    );
+
+    // Off still turns a sandbox from Claude's own settings off.
+    const off = await mapper.prepare(false, context);
+    assert.deepStrictEqual(off.settings, { sandbox: { enabled: false } });
   });
 
   test("Claude reports an error when additionalArgs passes its own --settings", async () => {
@@ -98,7 +143,7 @@ suite("sandbox mappers", () => {
       "--settings user.json",
       "--settings=a.json",
     ]) {
-      const result = await new ClaudeSandboxMapper().prepare(true, {
+      const result = await new ClaudeSandboxMapper("darwin").prepare(true, {
         ...context,
         additionalArgs,
       });
@@ -109,7 +154,7 @@ suite("sandbox mappers", () => {
       );
     }
     // Without sandbox: true the user's --settings is none of our business.
-    const none = await new ClaudeSandboxMapper().prepare(null, {
+    const none = await new ClaudeSandboxMapper("darwin").prepare(null, {
       ...context,
       additionalArgs: "--settings user.json",
     });

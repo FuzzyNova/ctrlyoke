@@ -161,6 +161,7 @@ export interface CapabilityDomainDescriptorMap {
 export const SANDBOX_CAVEAT_CODE = {
   NETWORK_FOLLOWS_HARNESS_POLICY: "network-follows-harness-policy",
   FILE_TOOLS_BEST_EFFORT: "file-tools-best-effort",
+  CLAUDE_WINDOWS_UNAVAILABLE: "claude-sandbox-windows-unavailable",
   MCP_SERVERS_NOT_CONTAINED: "mcp-servers-not-contained",
   COPILOT_UNUSABLE: "copilot-sandbox-unusable",
   ANTIGRAVITY_UNUSABLE: "antigravity-sandbox-unusable",
@@ -340,9 +341,11 @@ export function getCompatibilityCaveatMessage(
     case HOOK_CAVEAT_CODES.DECISION_UNSUPPORTED:
       return "because OpenCode delivers this event as notification-only; allow and deny decisions are not supported";
     case SANDBOX_CAVEAT_CODE.NETWORK_FOLLOWS_HARNESS_POLICY:
-      return "because network access is set by the harness's own sandbox settings, not by ctrlyoke";
+      return "because network access is set by the harness's own sandbox settings, not by ctrlyoke, and Codex's Windows sandbox does not block network access at all";
     case SANDBOX_CAVEAT_CODE.FILE_TOOLS_BEST_EFFORT:
       return "because built-in Write and Edit tools run outside the terminal sandbox and follow tool permissions instead";
+    case SANDBOX_CAVEAT_CODE.CLAUDE_WINDOWS_UNAVAILABLE:
+      return "because Claude Code's Bash sandbox is not available on Windows, and Claude refuses to start when a required sandbox is unavailable";
     case SANDBOX_CAVEAT_CODE.MCP_SERVERS_NOT_CONTAINED:
       return "because MCP servers run outside the terminal sandbox";
     case SANDBOX_CAVEAT_CODE.COPILOT_UNUSABLE:
