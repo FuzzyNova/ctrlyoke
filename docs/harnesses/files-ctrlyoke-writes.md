@@ -107,19 +107,22 @@ fallback and never gets workspace files.
 
 ### Qwen Code
 
-| What       | Where                          | Removed                                                   |
-| ---------- | ------------------------------ | --------------------------------------------------------- |
-| Hooks      | `.qwen/settings.json`, `hooks` | restored when the last ctrlyoke run in the workspace ends |
-| Hook trust | `~/.qwen/trusted_hooks.json`   | kept on purpose                                           |
+| What  | Where                                           | Removed           |
+| ----- | ----------------------------------------------- | ----------------- |
+| Hooks | `.ctrlyoke/temp/qwen-system-settings-<id>.json` | when the run ends |
 
-Qwen reads hooks only from its settings file, so ctrlyoke adds its hooks to the workspace
-`.qwen/settings.json` ahead of your own. When the last ctrlyoke run in that workspace finishes,
-the file's original `hooks` section is restored. If ctrlyoke created the file, it deletes it,
-together with a temporary `.qwen/.gitignore` it writes to hide the file while it exists.
+Qwen reads hooks only from settings files, and since Qwen 0.26.9 it holds hooks in the workspace
+`.qwen/settings.json` back until you approve them in its terminal UI, which a ctrlyoke step can't
+do. So each Qwen launch gets its own copy of Qwen's system settings file (`C:\ProgramData\qwen-code\settings.json`,
+`/Library/Application Support/QwenCode/settings.json` or `/etc/qwen-code/settings.json`, or the
+file `QWEN_CODE_SYSTEM_SETTINGS_PATH` names) with ctrlyoke's hooks and the workflow's `hooks`
+appended, and ctrlyoke points Qwen at it with `QWEN_CODE_SYSTEM_SETTINGS_PATH`. Everything else in
+the system file is kept, and your own `.qwen/settings.json` is not changed. If the system file
+exists but can't be read, the step fails rather than run without the settings it holds.
 
-ctrlyoke also marks its own hooks as trusted in `~/.qwen/trusted_hooks.json` so that Qwen doesn't
-ask you to approve them. Those entries stay after the run: removing them would make Qwen ask again
-next time. Entries you added are never removed.
+ctrlyoke 0.4 and earlier added hooks to `.qwen/settings.json` instead. A launch removes any of
+those that an interrupted run left behind (only groups whose ctrlyoke process has exited), and
+deletes the file and its `.qwen/.gitignore` if ctrlyoke had created them.
 
 MCP servers are passed as inline JSON with `--mcp-config` and are not written anywhere.
 
@@ -149,8 +152,7 @@ Several workflows can run at once in one workspace, so cleanup never resets a wh
 
 - Per-step files are named after the workflow file and the step, so parallel workflows never write
   the same file.
-- For shared files (`.qwen/settings.json`, `.agents/mcp_config.json`,
-  `~/.gemini/config/hooks.json`, `~/.qwen/trusted_hooks.json`), ctrlyoke records which entries
+- For shared files (`.agents/mcp_config.json`, `~/.gemini/config/hooks.json`), ctrlyoke records which entries
   belong to which running workflow. A finishing run removes only its own entries. The file's
   original content comes back only when the last ctrlyoke run using it ends.
 - The `.github/hooks/.gitignore` for Copilot stays while any workflow still has a hook file in that

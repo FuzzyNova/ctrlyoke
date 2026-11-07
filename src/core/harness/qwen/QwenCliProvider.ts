@@ -4,6 +4,7 @@ import {
   unsupportedSandboxCapabilities,
 } from "../shared/SandboxCapabilities";
 import { QWEN_SANDBOX_ENV } from "./QwenProtocolConstants";
+import * as fs from "fs/promises";
 import * as path from "path";
 import { randomUUID } from "crypto";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
@@ -28,10 +29,13 @@ import {
   ToolPermissionApplication,
   ToolPermissionConfig,
 } from "../shared/interfaces/IToolPermissionMapper";
+import { QwenNotificationMonitor } from "./QwenNotificationMonitor";
 import {
-  isCtrlYokeQwenHookGroup,
-  QwenNotificationMonitor,
-} from "./QwenNotificationMonitor";
+  buildQwenSystemSettings,
+  defaultQwenSystemSettingsPath,
+  QWEN_SYSTEM_SETTINGS_PATH_ENV,
+  removeOrphanedProjectHooks,
+} from "./QwenSystemSettings";
 import { QwenToolPermissionMapper } from "./QwenToolPermissionMapper";
 import { QwenLogParser } from "./QwenLogParser";
 import {
@@ -47,8 +51,6 @@ import {
   StatuslineManager,
   type StatuslineInstallResult,
 } from "../shared/StatuslineManager";
-import { SettingsJsonHooksTracker } from "../shared/SettingsJsonHooksTracker";
-import { QwenTrustedHooksTracker } from "../shared/QwenTrustedHooksTracker";
 import { parseArgString } from "../../../utils/CliArgParser";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import type {
@@ -66,6 +68,7 @@ import {
 import {
   applyPreparedMutations,
   type CliProviderPreparation,
+  type PreparedMutation,
 } from "../shared/interfaces/PreparedMutation";
 import { type SessionProbeResult } from "../../../types/DashboardConstants";
 
@@ -125,11 +128,12 @@ export class QwenCliProvider implements ICliProvider {
     STATUS_LINE_HARNESS_IDS.QWEN
   );
 
-  /** Tracker for parallel-safe hooks management in .qwen/settings.json. */
-  private readonly hooksTracker: SettingsJsonHooksTracker;
+  /** The real system settings each launch's hook settings file copies. */
+  private readonly systemSettingsBasePath: string;
 
-  /** Tracker for Qwen's persistent global hook approvals. */
-  private readonly trustedHooksTracker: QwenTrustedHooksTracker;
+  /** System settings file for the next launch; see QwenSystemSettings.ts. */
+  private hookSettingsPath: string | undefined;
+  private readonly hookSettingsPaths = new Set<string>();
 
   private statusLineToken: string | undefined;
   private readonly statusLineSnapshotPaths = new Set<string>();
@@ -144,12 +148,12 @@ export class QwenCliProvider implements ICliProvider {
     return result;
   }
 
-  constructor(
-    hooksTracker = SettingsJsonHooksTracker.getInstance("qwen"),
-    trustedHooksTracker = QwenTrustedHooksTracker.getInstance()
-  ) {
-    this.hooksTracker = hooksTracker;
-    this.trustedHooksTracker = trustedHooksTracker;
+  /**
+   * @param systemSettingsBasePath The system settings Qwen would read without
+   *   ctrlyoke; injectable for tests.
+   */
+  constructor(systemSettingsBasePath = defaultQwenSystemSettingsPath()) {
+    this.systemSettingsBasePath = systemSettingsBasePath;
   }
 
   readonly config: HarnessConfig = {
@@ -430,12 +434,23 @@ export class QwenCliProvider implements ICliProvider {
     return {
       ...CliProviderUtils.buildProcessEnv(),
       ...this.buildStatusLineSpawnEnv(),
+      ...this.buildHookSettingsSpawnEnv(),
       ...this.sandboxSpawnEnv,
     };
   }
 
   getHeadlessSpawnEnv(): NodeJS.ProcessEnv {
-    return { ...this.buildStatusLineSpawnEnv(), ...this.sandboxSpawnEnv };
+    return {
+      ...this.buildStatusLineSpawnEnv(),
+      ...this.buildHookSettingsSpawnEnv(),
+      ...this.sandboxSpawnEnv,
+    };
+  }
+
+  private buildHookSettingsSpawnEnv(): NodeJS.ProcessEnv {
+    return this.hookSettingsPath
+      ? { [QWEN_SYSTEM_SETTINGS_PATH_ENV]: this.hookSettingsPath }
+      : {};
   }
 
   private async registerStatusLine(
@@ -531,7 +546,7 @@ export class QwenCliProvider implements ICliProvider {
     extensionPath: string,
     workspaceRoot: string,
     _promptIndex: number,
-    workingFilePath: string | undefined,
+    _workingFilePath: string | undefined,
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<CliProviderPreparation> {
@@ -568,36 +583,12 @@ export class QwenCliProvider implements ICliProvider {
         ...enabledNotificationHookEvents,
       ]),
     ];
-    const ctrlyokeHookKeys = this.buildTrustedHookKeys(ctrlyokeHooksSection);
-    const ownedKeys = [
-      ...new Set([...Object.keys(ctrlyokeHooksSection), ...ctrlyokeHookKeys]),
-    ];
-
-    const workflowKey = workingFilePath ?? workspaceRoot;
-    return {
-      cliArgs: [],
-      mutations: [
-        {
-          path: path.join(workspaceRoot, ".qwen", "settings.json"),
-          ownedKeys,
-          description: "Register Qwen notification hooks and trust keys",
-          apply: async () => {
-            await this.registerHooksInSettings(
-              workspaceRoot,
-              workflowKey,
-              ctrlyokeHooksSection,
-              ctrlyokeHookKeys,
-              userHooks,
-              wrappedCtrlYokeEvents
-            );
-            Log.debug(
-              `[QwenCliProvider] Configured Stop hook for Qwen completion detection`
-            );
-          },
-        },
-      ],
-      diagnostics: [],
-    };
+    return this.planHookSettings(
+      workspaceRoot,
+      ctrlyokeHooksSection,
+      this.buildUserHooksSection(userHooks, wrappedCtrlYokeEvents),
+      "Write Qwen notification hook settings"
+    );
   }
 
   /**
@@ -629,11 +620,10 @@ export class QwenCliProvider implements ICliProvider {
     extensionPath: string,
     workspaceRoot: string,
     _promptIndex: number,
-    workingFilePath: string | undefined,
+    _workingFilePath: string | undefined,
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<CliProviderPreparation> {
-    const workflowKey = workingFilePath ?? workspaceRoot;
     const ctrlyokeHooksSection =
       enabledNotificationHookEvents.length > 0
         ? (
@@ -654,29 +644,69 @@ export class QwenCliProvider implements ICliProvider {
             }
           ).config.hooks
         : {};
-    const ctrlyokeHookKeys = this.buildTrustedHookKeys(ctrlyokeHooksSection);
-    const ownedKeys = [
-      ...new Set([...Object.keys(ctrlyokeHooksSection), ...ctrlyokeHookKeys]),
-    ];
+    return this.planHookSettings(
+      workspaceRoot,
+      ctrlyokeHooksSection,
+      this.buildUserHooksSection(userHooks, enabledNotificationHookEvents),
+      "Write Qwen headless hook settings"
+    );
+  }
+
+  /**
+   * One launch's hooks go in their own system settings file, passed through
+   * QWEN_CODE_SYSTEM_SETTINGS_PATH: Qwen 0.26.9 holds project hooks back for
+   * an approval a step can't give (see QwenSystemSettings.ts). A per-launch
+   * file also keeps parallel workflows' hooks out of each other's processes.
+   */
+  private async planHookSettings(
+    workspaceRoot: string,
+    ctrlyokeHooks: Record<string, unknown[]>,
+    userHooks: Record<string, unknown[]>,
+    description: string
+  ): Promise<CliProviderPreparation> {
+    const orphanCleanup: PreparedMutation = {
+      path: path.join(workspaceRoot, ".qwen", "settings.json"),
+      ownedKeys: ["hooks"],
+      description:
+        "Remove hooks left in .qwen/settings.json by an interrupted ctrlyoke 0.4 run",
+      apply: () => removeOrphanedProjectHooks(workspaceRoot),
+    };
+    const hooks: Record<string, unknown[]> = { ...ctrlyokeHooks };
+    for (const [event, groups] of Object.entries(userHooks)) {
+      hooks[event] = [...(hooks[event] ?? []), ...groups];
+    }
+    if (Object.keys(hooks).length === 0) {
+      this.hookSettingsPath = undefined;
+      return { cliArgs: [], mutations: [orphanCleanup], diagnostics: [] };
+    }
+
+    const settingsPath = path.join(
+      workspaceRoot,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
+      PATH_CONSTANTS.TEMP_DIR,
+      `qwen-system-settings-${randomUUID()}.json`
+    );
+    const content = await buildQwenSystemSettings(
+      hooks,
+      this.systemSettingsBasePath
+    );
+    this.hookSettingsPath = settingsPath;
     return {
       cliArgs: [],
       mutations: [
+        orphanCleanup,
         {
-          path: path.join(workspaceRoot, ".qwen", "settings.json"),
-          ownedKeys,
-          description: "Register Qwen headless hooks and trust keys",
+          path: settingsPath,
+          intendedContent: content,
+          description,
           apply: async () => {
-            await this.registerHooksInSettings(
-              workspaceRoot,
-              workflowKey,
-              ctrlyokeHooksSection,
-              ctrlyokeHookKeys,
-              userHooks,
-              enabledNotificationHookEvents
-            );
-            Log.debug(
-              `[QwenCliProvider] Configured user hooks for Qwen headless mode`
-            );
+            await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+            await fs.writeFile(settingsPath, content, "utf-8");
+            this.hookSettingsPaths.add(settingsPath);
+            Log.debug(`[QwenCliProvider] ${description}: ${settingsPath}`);
+          },
+          restore: async () => {
+            await fs.unlink(settingsPath).catch(() => undefined);
           },
         },
       ],
@@ -698,44 +728,6 @@ export class QwenCliProvider implements ICliProvider {
       return { cliArgs: [], diagnostics: [] };
     }
     return this.toolPermissionMapper.prepare(config, context);
-  }
-
-  /**
-   * Shared helper: merge hooks into .qwen/settings.json and pre-trust them.
-   *
-   * Uses SettingsJsonHooksTracker for parallel-safe ref-counted hook management.
-   * Pass an empty ctrlyokeHooksSection + undefined ctrlyokeHookKey for headless (user-only) mode.
-   */
-  private async registerHooksInSettings(
-    workspaceRoot: string,
-    workflowKey: string,
-    ctrlyokeHooksSection: Record<string, unknown[]>,
-    ctrlyokeHookKeys: string[],
-    userHooks: UserHookConfig[] | undefined,
-    wrappedCtrlYokeEvents: HookEvent[] = []
-  ): Promise<void> {
-    const workflowUserHooks = this.buildUserHooksSection(
-      userHooks,
-      wrappedCtrlYokeEvents
-    );
-
-    // Register hooks via ref-counted tracker under its own mutation lock.
-    await this.hooksTracker.withLock(async () => {
-      await this.hooksTracker.registerWorkflow(
-        workflowKey,
-        workspaceRoot,
-        ctrlyokeHooksSection,
-        workflowUserHooks,
-        { discardHookGroup: isCtrlYokeQwenHookGroup }
-      );
-    });
-
-    await this.trustedHooksTracker.registerWorkflow(
-      workflowKey,
-      workspaceRoot,
-      ctrlyokeHookKeys,
-      (userHooks ?? []).map((uh) => `:${uh.command}`)
-    );
   }
 
   private buildUserHooksSection(
@@ -771,55 +763,20 @@ export class QwenCliProvider implements ICliProvider {
     return section;
   }
 
-  private buildTrustedHookKeys(
-    hooksSection: Record<string, unknown[]>
-  ): string[] {
-    const keys = new Set<string>();
-    for (const groups of Object.values(hooksSection)) {
-      for (const group of groups) {
-        if (!group || typeof group !== "object") {
-          continue;
-        }
-        const hooks = (group as { hooks?: unknown[] }).hooks;
-        if (!Array.isArray(hooks)) {
-          continue;
-        }
-        for (const hook of hooks) {
-          if (!hook || typeof hook !== "object") {
-            continue;
-          }
-          const command = (hook as { command?: unknown }).command;
-          if (typeof command === "string" && command.length > 0) {
-            keys.add(`:${command}`);
-          }
-        }
-      }
-    }
-    return [...keys];
-  }
-
-  /**
-   * Clean up workflow hook artifacts from .qwen/settings.json.
-   *
-   * Hooks remain workspace-backed until Qwen provides an inline hook mechanism.
-   *
-   * @param workspaceRoot Workspace root directory
-   * @param workingFilePath Unique workflow key for the hooks tracker
-   */
+  /** Delete this workflow's per-launch hook settings files. */
   async cleanupWorkspaceArtifacts(
-    workspaceRoot: string,
-    workingFilePath?: string
+    _workspaceRoot: string,
+    _workingFilePath?: string
   ): Promise<void> {
-    // Unregister hooks via ref-counted tracker (serialized to avoid file races)
-    const hookKey = workingFilePath ?? workspaceRoot;
-    await this.hooksTracker.withLock(async () => {
-      await this.hooksTracker.unregisterWorkflow(hookKey, workspaceRoot);
-    });
-    await this.trustedHooksTracker.unregisterWorkflow(hookKey);
+    for (const settingsPath of this.hookSettingsPaths) {
+      await fs.unlink(settingsPath).catch(() => undefined);
+    }
+    this.hookSettingsPaths.clear();
+    this.hookSettingsPath = undefined;
   }
 
   getAdditionalCleanupFilePaths(_workspaceRoot: string): string[] {
-    return [...this.statusLineSnapshotPaths];
+    return [...this.hookSettingsPaths, ...this.statusLineSnapshotPaths];
   }
 
   /**

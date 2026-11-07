@@ -5,8 +5,6 @@ import * as path from "path";
 import { suite, test } from "mocha";
 import { QwenCliProvider } from "../../core/harness/qwen/QwenCliProvider";
 import { TEMP_FILE_CATEGORIES } from "../../types/DashboardConstants";
-import { SettingsJsonHooksTracker } from "../../core/harness/shared/SettingsJsonHooksTracker";
-import { QwenTrustedHooksTracker } from "../../core/harness/shared/QwenTrustedHooksTracker";
 import { Log } from "../../utils/Log";
 import type {
   McpServerConfig,
@@ -126,7 +124,13 @@ suite("QwenCliProvider", () => {
   });
 
   suite("hook registration", () => {
-    test("discards stale ctrlyoke groups while preserving user hook groups", async () => {
+    /** A provider whose "real" system settings live in the temp workspace. */
+    function providerWithSystemSettings(workspaceRoot: string) {
+      const basePath = path.join(workspaceRoot, "system", "settings.json");
+      return { basePath, provider: new QwenCliProvider(basePath) };
+    }
+
+    test("removes orphaned ctrlyoke groups from .qwen/settings.json and keeps user groups", async () => {
       const workspaceRoot = await createTempWorkspace();
       const settingsPath = path.join(workspaceRoot, ".qwen", "settings.json");
       await fs.mkdir(path.dirname(settingsPath), { recursive: true });
@@ -152,14 +156,7 @@ suite("QwenCliProvider", () => {
           },
         })
       );
-      SettingsJsonHooksTracker.resetAll();
-      QwenTrustedHooksTracker.resetAll();
-      const provider = new QwenCliProvider(
-        SettingsJsonHooksTracker.getInstance("qwen"),
-        QwenTrustedHooksTracker.getInstance({
-          trustedHooksPath: path.join(workspaceRoot, "global", "trusted.json"),
-        })
-      );
+      const { provider } = providerWithSystemSettings(workspaceRoot);
       const workflowPath = path.join(workspaceRoot, "workflow.yaml");
 
       try {
@@ -171,7 +168,6 @@ suite("QwenCliProvider", () => {
           undefined,
           []
         );
-        await provider.cleanupWorkspaceArtifacts(workspaceRoot, workflowPath);
 
         const settings = JSON.parse(
           await fs.readFile(settingsPath, "utf-8")
@@ -179,8 +175,6 @@ suite("QwenCliProvider", () => {
         assert.deepStrictEqual(settings.hooks.SessionStart, [userGroup]);
       } finally {
         await provider.cleanupWorkspaceArtifacts(workspaceRoot, workflowPath);
-        SettingsJsonHooksTracker.resetAll();
-        QwenTrustedHooksTracker.resetAll();
         await removeTempWorkspace(workspaceRoot);
       }
     });
@@ -213,14 +207,7 @@ suite("QwenCliProvider", () => {
         gitignorePath,
         "# ctrlyoke temp files (auto-managed, do not commit)\nsettings.json\n.gitignore\n"
       );
-      SettingsJsonHooksTracker.resetAll();
-      QwenTrustedHooksTracker.resetAll();
-      const provider = new QwenCliProvider(
-        SettingsJsonHooksTracker.getInstance("qwen"),
-        QwenTrustedHooksTracker.getInstance({
-          trustedHooksPath: path.join(workspaceRoot, "global", "trusted.json"),
-        })
-      );
+      const { provider } = providerWithSystemSettings(workspaceRoot);
       const workflowPath = path.join(workspaceRoot, "workflow.yaml");
 
       try {
@@ -232,72 +219,134 @@ suite("QwenCliProvider", () => {
           undefined,
           []
         );
-        await provider.cleanupWorkspaceArtifacts(workspaceRoot, workflowPath);
 
         await assert.rejects(fs.access(settingsPath), /ENOENT/);
         await assert.rejects(fs.access(gitignorePath), /ENOENT/);
       } finally {
         await provider.cleanupWorkspaceArtifacts(workspaceRoot, workflowPath);
-        SettingsJsonHooksTracker.resetAll();
-        QwenTrustedHooksTracker.resetAll();
         await removeTempWorkspace(workspaceRoot);
       }
     });
 
-    test("registers workspace hooks with the hooks tracker lock owner", async () => {
+    test("writes hooks to a per-launch system settings file passed through the environment", async () => {
       const workspaceRoot = await createTempWorkspace();
-      const trustedHooksPath = path.join(
-        workspaceRoot,
-        "global",
-        "trusted_hooks.json"
+      const { basePath, provider } = providerWithSystemSettings(workspaceRoot);
+      const adminGroup = {
+        hooks: [{ type: "command", command: "node admin-audit.js" }],
+      };
+      await fs.mkdir(path.dirname(basePath), { recursive: true });
+      await fs.writeFile(
+        basePath,
+        `// managed by IT\n${JSON.stringify({
+          security: { folderTrust: { enabled: true } },
+          hooks: { Stop: [adminGroup] },
+        })}`
       );
-      SettingsJsonHooksTracker.resetAll();
-      QwenTrustedHooksTracker.resetAll();
-      const provider = new QwenCliProvider(
-        SettingsJsonHooksTracker.getInstance("qwen"),
-        QwenTrustedHooksTracker.getInstance({ trustedHooksPath })
-      );
+      const workflowPath = path.join(workspaceRoot, "workflow.yaml");
 
       try {
         await provider.buildNotificationHookArgs(
           "C:\\extension",
           workspaceRoot,
           0,
-          path.join(workspaceRoot, "workflow.yaml"),
-          undefined,
+          workflowPath,
+          [{ event: "stop", command: "node user-stop.js" }],
           ["notification"]
         );
 
+        const settingsPath =
+          provider.getInteractiveSpawnEnv().QWEN_CODE_SYSTEM_SETTINGS_PATH;
+        assert.ok(settingsPath, "interactive launch gets the settings path");
+        assert.strictEqual(
+          provider.getHeadlessSpawnEnv().QWEN_CODE_SYSTEM_SETTINGS_PATH,
+          settingsPath
+        );
         const settings = JSON.parse(
-          await fs.readFile(
-            path.join(workspaceRoot, ".qwen", "settings.json"),
-            "utf-8"
-          )
-        ) as { hooks?: Record<string, unknown[]> };
-        assert.ok(settings.hooks?.Notification);
-        assert.ok(
-          (
-            JSON.parse(await fs.readFile(trustedHooksPath, "utf-8")) as Record<
-              string,
-              string[]
-            >
-          )[workspaceRoot]
+          await fs.readFile(settingsPath, "utf-8")
+        ) as {
+          security?: unknown;
+          hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+        };
+        // The administrator's settings and hooks are kept, ahead of ctrlyoke's.
+        assert.deepStrictEqual(settings.security, {
+          folderTrust: { enabled: true },
+        });
+        assert.deepStrictEqual(settings.hooks.Stop[0], adminGroup);
+        const stopCommands = settings.hooks.Stop.map(
+          (group) => group.hooks[0].command
         );
         assert.ok(
-          (
-            JSON.parse(await fs.readFile(trustedHooksPath, "utf-8")) as Record<
-              string,
-              string[]
-            >
-          )[workspaceRoot].some((key) => key.includes("ctrlyoke-qwen-hook.js"))
+          stopCommands.some((c) => c.includes("ctrlyoke-qwen-hook.js"))
+        );
+        assert.ok(stopCommands.includes("node user-stop.js"));
+        assert.ok(settings.hooks.Notification);
+        // Nothing is written to the project settings Qwen gates.
+        await assert.rejects(
+          fs.access(path.join(workspaceRoot, ".qwen", "settings.json")),
+          /ENOENT/
+        );
+        assert.ok(
+          provider
+            .getAdditionalCleanupFilePaths(workspaceRoot)
+            .includes(settingsPath)
+        );
+
+        await provider.cleanupWorkspaceArtifacts(workspaceRoot, workflowPath);
+        await assert.rejects(fs.access(settingsPath), /ENOENT/);
+        assert.strictEqual(
+          provider.getHeadlessSpawnEnv().QWEN_CODE_SYSTEM_SETTINGS_PATH,
+          undefined
         );
       } finally {
-        await provider.cleanupWorkspaceArtifacts(
+        await provider.cleanupWorkspaceArtifacts(workspaceRoot, workflowPath);
+        await removeTempWorkspace(workspaceRoot);
+      }
+    });
+
+    test("passes no settings path to a headless launch without hooks", async () => {
+      const workspaceRoot = await createTempWorkspace();
+      const { provider } = providerWithSystemSettings(workspaceRoot);
+      try {
+        const preparation = await provider.planHeadlessUserHookArgs(
+          "extension",
           workspaceRoot,
-          path.join(workspaceRoot, "workflow.yaml")
+          0,
+          undefined,
+          undefined,
+          []
         );
-        SettingsJsonHooksTracker.resetAll();
-        QwenTrustedHooksTracker.resetAll();
+        assert.ok(
+          preparation.mutations.every(
+            (mutation) => !mutation.path?.includes("qwen-system-settings")
+          )
+        );
+        assert.strictEqual(
+          provider.getHeadlessSpawnEnv().QWEN_CODE_SYSTEM_SETTINGS_PATH,
+          undefined
+        );
+      } finally {
+        await removeTempWorkspace(workspaceRoot);
+      }
+    });
+
+    test("refuses to launch when the real system settings cannot be parsed", async () => {
+      const workspaceRoot = await createTempWorkspace();
+      const { basePath, provider } = providerWithSystemSettings(workspaceRoot);
+      await fs.mkdir(path.dirname(basePath), { recursive: true });
+      await fs.writeFile(basePath, "{ not json");
+      try {
+        await assert.rejects(
+          provider.planNotificationHookArgs(
+            "extension",
+            workspaceRoot,
+            0,
+            undefined,
+            undefined,
+            []
+          ),
+          /Cannot read Qwen system settings/
+        );
+      } finally {
         await removeTempWorkspace(workspaceRoot);
       }
     });

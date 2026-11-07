@@ -104,7 +104,7 @@ export class CodexNotificationMonitor
    * Registers SessionStart and Stop for ctrlyoke's completion detection.
    *
    * User hooks (from the workflow `hooks:` property) are handled by
-   * CodexCliProvider via SettingsJsonHooksTracker — not here. The
+   * CodexCliProvider — not here. The
    * _userHooks parameter is intentionally unused (mirrors Qwen pattern).
    */
   buildHookConfig(
@@ -123,7 +123,7 @@ export class CodexNotificationMonitor
       command,
       CodexNotificationMonitor.EVENT_MAP,
       selectedEvents,
-      undefined, // user hooks are merged by CodexCliProvider via SettingsJsonHooksTracker, not here
+      undefined, // user hooks are merged by CodexCliProvider, not here
       encodedDecisionHook,
       (nativeEvent, command, userHook) =>
         createCodexCommandHookGroup(nativeEvent, command, userHook)

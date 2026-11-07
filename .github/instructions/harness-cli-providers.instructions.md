@@ -16,7 +16,7 @@ Harness-specific adapters for CLI execution. Provider directories should contain
 
 <statefulProviders>
 - Copilot, Claude, and Codex may write temp config/hook artifacts; clean those through `getAdditionalCleanupFilePaths()` and `cleanupWorkspaceArtifacts()` rather than ad hoc deletes in parser/monitor code.
-- Qwen mutates shared `.qwen/settings.json` hook state through the shared hooks tracker; register/unregister per workflow. MCP is process-local through `--mcp-config`, so do not reintroduce a settings-file MCP union or an `--allowed-mcp-server-names` workaround.
+- Qwen hooks go in a per-launch system settings file (`QwenSystemSettings.ts`, passed by `QWEN_CODE_SYSTEM_SETTINGS_PATH`), never `.qwen/settings.json`: Qwen 0.26.9 holds project hooks back until the user approves them in its TUI, while system-scope hooks are never gated (checked back to 0.15.5). The copy keeps the real system file's other keys, so a parse failure there must fail the launch rather than drop managed settings. MCP is process-local through `--mcp-config`, so do not reintroduce a settings-file MCP union or an `--allowed-mcp-server-names` workaround.
 - OpenCode is intentionally different: MCP, permissions, and the normal completion plugin are delivered through process-local inline configuration/environment. A near-empty CLI permission mapper is expected there; the provider's collision-aware mapper builds the inline permission block.
 </statefulProviders>
 

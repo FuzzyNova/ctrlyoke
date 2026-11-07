@@ -83,6 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Qwen Code 0.26.9 and later work again.** Qwen 0.26.9 holds hooks in a workspace's `.qwen/settings.json` back until you approve them in its terminal UI, so ctrlyoke's completion hooks never ran: interactive Qwen steps never finished, and workflow `hooks` were skipped in every mode. Each Qwen launch now gets its own copy of Qwen's system settings file with the hooks added, passed with `QWEN_CODE_SYSTEM_SETTINGS_PATH`, and ctrlyoke no longer writes `.qwen/settings.json` or `~/.qwen/trusted_hooks.json`. Hooks of workflows running in parallel in one workspace also no longer run in each other's Qwen processes. A launch removes hooks that an interrupted ctrlyoke 0.4 run left in `.qwen/settings.json`.
 - The first Antigravity step on a machine with no `~/.gemini/config/` folder, such as a fresh Antigravity install, no longer fails with `ENOENT … hooks.json.lock`.
 - **Continue** works again on a stopped run, and so does adding a prompt to a
   stopped run with **Run Next**. Both used to do nothing at all.
