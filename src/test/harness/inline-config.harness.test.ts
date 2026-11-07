@@ -14,6 +14,7 @@
 import * as assert from "assert";
 import { spawn, spawnSync } from "child_process";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import type {
   McpServerConfig,
@@ -511,6 +512,62 @@ async function withIsolatedAntigravityHome<T>(
   process.env.HOME = home;
   try {
     return await fn(settingsPath);
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    removeTempDir(home);
+  }
+}
+
+/** Files of the real `~/.qwen` an isolated home needs to sign in and pick its model. */
+const QWEN_HOME_AUTH_FILES = [
+  "settings.json",
+  "oauth_creds.json",
+  "installation_id",
+] as const;
+
+/**
+ * Runs `fn` with `USERPROFILE`/`HOME` pointing at a throwaway home whose
+ * `~/.qwen` holds copies of the real sign-in files, and whose user
+ * `settings.json` has `hooks` added. Qwen and ctrlyoke's Qwen log reader both
+ * resolve `~/.qwen` from the home directory, so the run stays consistent, and
+ * the developer's real `~/.qwen` is only read.
+ */
+async function withIsolatedQwenHome<T>(
+  hooks: Record<string, unknown[]>,
+  fn: () => T | Promise<T>
+): Promise<T> {
+  const realQwenDir = path.join(os.homedir(), ".qwen");
+  const home = makeTempDir("ctrlyoke-qwen-home-");
+  const qwenDir = path.join(home, ".qwen");
+  fs.mkdirSync(qwenDir, { recursive: true });
+  for (const file of QWEN_HOME_AUTH_FILES) {
+    const source = path.join(realQwenDir, file);
+    if (fs.existsSync(source)) {
+      fs.copyFileSync(source, path.join(qwenDir, file));
+    }
+  }
+  const settingsPath = path.join(qwenDir, "settings.json");
+  const settings = fs.existsSync(settingsPath)
+    ? (JSON.parse(fs.readFileSync(settingsPath, "utf8")) as Record<
+        string,
+        unknown
+      >)
+    : {};
+  fs.writeFileSync(
+    settingsPath,
+    JSON.stringify({ ...settings, hooks }, null, 2)
+  );
+  const previous = {
+    USERPROFILE: process.env.USERPROFILE,
+    HOME: process.env.HOME,
+  };
+  process.env.USERPROFILE = home;
+  process.env.HOME = home;
+  try {
+    return await fn();
   } finally {
     for (const [key, value] of Object.entries(previous)) {
       if (value === undefined) delete process.env[key];
@@ -1345,6 +1402,49 @@ suite("Inline harness configuration regression tests", function () {
       assert.ok(
         fs.existsSync(markerPath),
         "the permissionRequest hook's allow decision did not let the command run"
+      );
+    });
+
+    // ctrlyoke's hooks reach Qwen through a per-launch system settings file
+    // (QWEN_CODE_SYSTEM_SETTINGS_PATH). Qwen loads system, user and project
+    // hooks as separate lists, so a user's own ~/.qwen/settings.json hooks must
+    // still run beside ctrlyoke's, and ctrlyoke's Stop hook must still finish
+    // the interactive step.
+    test("hooks in the user's ~/.qwen/settings.json run beside ctrlyoke's in interactive mode", async function () {
+      const outputPath = path.join(tmpDir, "qwen-user-scope-hooks.jsonl");
+      // Qwen launches this one itself, so it stays unquoted (see the case above).
+      const userHook = (event: string) => ({
+        hooks: [
+          {
+            type: "command",
+            command: `node ${normalizedPath(recorderScript)} ${event} ${normalizedPath(outputPath)}`,
+          },
+        ],
+      });
+      const workflow: PromptFile = {
+        harness: QWEN,
+        model: HARNESS_MODELS[QWEN],
+        executionMode: EXECUTION_MODES.INTERACTIVE,
+        steps: [{ name: "qwen-user-scope-hooks", prompt: "Reply with OK." }],
+      };
+      const result = await withIsolatedQwenHome(
+        {
+          UserPromptSubmit: [userHook("userPromptSubmit")],
+          Stop: [userHook("stop")],
+        },
+        () =>
+          runInteractiveWorkflowFile(workflow, tmpDir, "qwen-user-scope-hooks")
+      );
+      if (logAndMaybeSkip("qwen-cli (user-scope hooks)", result)) return;
+      // Exit 0 means ctrlyoke's own Stop hook completed the interactive step.
+      assertSuccessfulRun("qwen-cli (user-scope hooks)", result);
+      assert.ok(
+        hasRecordedEvent(outputPath, "userPromptSubmit"),
+        "the user's UserPromptSubmit hook did not run"
+      );
+      assert.ok(
+        hasRecordedEvent(outputPath, "stop"),
+        "the user's Stop hook did not run"
       );
     });
   });
