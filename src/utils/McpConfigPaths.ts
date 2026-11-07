@@ -1,7 +1,13 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { getCodexHomeDir } from "./CodexHome";
+import {
+  getClaudeGlobalConfigPath,
+  getCodexHomeDir,
+  getCopilotHomeDir,
+  getOpenCodeGlobalConfigDir,
+  getQwenHomeDir,
+} from "./HarnessHome";
 import { PATH_CONSTANTS } from "./ConfigurationUtils";
 
 function getHomeDir(): string {
@@ -52,11 +58,12 @@ export function getVscodeUserMcpConfigPath(): string {
 }
 
 /**
- * Returns the path to the Claude Code user config file (~/.claude.json).
- * This file stores user-scope MCP servers at the top-level `mcpServers` key.
+ * Returns the path to the Claude Code user config file (`~/.claude.json`,
+ * or `$CLAUDE_CONFIG_DIR/.claude.json`). This file stores user-scope MCP
+ * servers at the top-level `mcpServers` key.
  */
 export function getClaudeUserConfigPath(): string {
-  return path.join(getHomeDir(), ".claude.json");
+  return getClaudeGlobalConfigPath();
 }
 
 /**
@@ -85,11 +92,7 @@ export function getPreferredCopilotWorkspaceMcpConfigPath(
  * overriding the base directory with `COPILOT_HOME`.
  */
 export function getCopilotUserMcpConfigPath(): string {
-  const configuredHome = process.env.COPILOT_HOME?.trim();
-  if (configuredHome) {
-    return path.join(configuredHome, "mcp-config.json");
-  }
-  return path.join(getHomeDir(), ".copilot", "mcp-config.json");
+  return path.join(getCopilotHomeDir(), "mcp-config.json");
 }
 
 /**
@@ -138,7 +141,7 @@ export function getOpenCodeUserMcpConfigPath(): string {
     return path.join(configuredDir, "opencode.json");
   }
 
-  return path.join(getHomeDir(), ".config", "opencode", "opencode.json");
+  return path.join(getOpenCodeGlobalConfigDir(), "opencode.json");
 }
 
 /**
@@ -149,10 +152,11 @@ export function getQwenWorkspaceMcpConfigPath(workspaceRoot: string): string {
 }
 
 /**
- * Returns the Qwen Code user MCP settings path (`~/.qwen/settings.json`).
+ * Returns the Qwen Code user MCP settings path (`~/.qwen/settings.json`,
+ * moved by `QWEN_HOME`).
  */
 export function getQwenUserMcpConfigPath(): string {
-  return path.join(getHomeDir(), ".qwen", "settings.json");
+  return path.join(getQwenHomeDir(), "settings.json");
 }
 
 /**

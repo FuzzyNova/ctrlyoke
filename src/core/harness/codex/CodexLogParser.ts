@@ -6,7 +6,7 @@ import {
   UserEventClassification,
 } from "../shared/interfaces/ILogParser";
 import { Log } from "../../../utils/Log";
-import { getCodexHomeDir } from "../../../utils/CodexHome";
+import { getCodexHomeDir } from "../../../utils/HarnessHome";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import { CodexToolBuilder } from "./CodexToolBuilder";
 import {

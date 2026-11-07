@@ -39,6 +39,8 @@ export interface McpManagerState {
   localServers: LocalMcpServerEntry[];
   isLoadingLocal: boolean;
   localError: string | undefined;
+  /** Display path of each harness's user-scope config file, from the last scan. */
+  userConfigPaths: Partial<Record<AnyTargetId, string>>;
 
   remoteServers: RegistryMcpEntry[] | undefined;
   isLoadingRemote: boolean;
@@ -52,7 +54,11 @@ export interface McpManagerState {
   discoveryTab: McpManagerDiscoveryTab;
 
   setManagedServers: (servers: ManagedMcpServer[]) => void;
-  setLocalScanResult: (servers: LocalMcpServerEntry[], error?: string) => void;
+  setLocalScanResult: (
+    servers: LocalMcpServerEntry[],
+    error?: string,
+    userConfigPaths?: Partial<Record<AnyTargetId, string>>
+  ) => void;
   setRemoteSearchResult: (
     requestId: number,
     servers: RegistryMcpEntry[],
@@ -117,6 +123,7 @@ export const useMcpManagerStore = create<McpManagerState>((set, get) => ({
   localServers: [],
   isLoadingLocal: false,
   localError: undefined,
+  userConfigPaths: {},
 
   remoteServers: undefined,
   isLoadingRemote: false,
@@ -135,12 +142,13 @@ export const useMcpManagerStore = create<McpManagerState>((set, get) => ({
       isLoadingRegistry: false,
     }),
 
-  setLocalScanResult: (servers, error) =>
-    set({
+  setLocalScanResult: (servers, error, userConfigPaths) =>
+    set((state) => ({
       localServers: servers,
       localError: error,
       isLoadingLocal: false,
-    }),
+      userConfigPaths: userConfigPaths ?? state.userConfigPaths,
+    })),
 
   setRemoteSearchResult: (requestId, servers, error, nextCursor) =>
     set((state) =>

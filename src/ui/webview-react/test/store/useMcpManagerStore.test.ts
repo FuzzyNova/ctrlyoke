@@ -16,6 +16,7 @@ describe("useMcpManagerStore", () => {
       localServers: [],
       isLoadingLocal: false,
       localError: undefined,
+      userConfigPaths: {},
       remoteServers: undefined,
       isLoadingRemote: false,
       remoteError: undefined,
@@ -26,6 +27,15 @@ describe("useMcpManagerStore", () => {
       remoteSort: "a-z",
       discoveryTab: "local",
     });
+  });
+
+  it("keeps the last reported user config paths when a scan omits them", () => {
+    const paths = { "copilot-cli": "D:/alt/copilot/mcp-config.json" } as const;
+    useMcpManagerStore.getState().setLocalScanResult([], undefined, paths);
+    expect(useMcpManagerStore.getState().userConfigPaths).toEqual(paths);
+
+    useMcpManagerStore.getState().setLocalScanResult([], "scan failed");
+    expect(useMcpManagerStore.getState().userConfigPaths).toEqual(paths);
   });
 
   it("ignores stale registry replies and keeps the latest cursor", () => {

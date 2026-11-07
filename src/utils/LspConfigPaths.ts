@@ -1,8 +1,12 @@
-import * as os from "node:os";
 import * as path from "node:path";
+import {
+  getClaudeConfigDir,
+  getCopilotHomeDir,
+  getOpenCodeGlobalConfigDir,
+} from "./HarnessHome";
 
 export function getHomeLspConfigPath(): string {
-  return path.join(os.homedir(), ".copilot", "lsp-config.json");
+  return path.join(getCopilotHomeDir(), "lsp-config.json");
 }
 
 export function getQwenWorkspaceLspConfigPath(root: string): string {
@@ -23,7 +27,7 @@ export function getOpenCodeUserLspConfigPath(): string {
   const configuredDir = process.env.OPENCODE_CONFIG_DIR?.trim();
   return configuredDir
     ? path.join(configuredDir, "opencode.json")
-    : path.join(os.homedir(), ".config", "opencode", "opencode.json");
+    : path.join(getOpenCodeGlobalConfigDir(), "opencode.json");
 }
 
 export function getCclspConfigPaths(root: string): string[] {
@@ -42,10 +46,5 @@ export function getCclspConfigPaths(root: string): string[] {
 
 /** Claude Code records concrete plugin install directories in this manifest. */
 export function getClaudeInstalledPluginsManifestPath(): string {
-  return path.join(
-    os.homedir(),
-    ".claude",
-    "plugins",
-    "installed_plugins.json"
-  );
+  return path.join(getClaudeConfigDir(), "plugins", "installed_plugins.json");
 }

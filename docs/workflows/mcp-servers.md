@@ -56,6 +56,11 @@ editing.
   | Qwen Code   | `.qwen/settings.json`     | `~/.qwen/settings.json`            |
   | Antigravity | `.agents/mcp_config.json` | `~/.gemini/config/mcp_config.json` |
 
+  The user files are the defaults. A harness whose folder you moved with an
+  environment variable gets the file in the moved folder (see
+  [Moved harness folders](/harnesses/files-ctrlyoke-writes#moved-harness-folders)),
+  and the **Save** menu shows that path.
+
   **Delete** removes the server from the registry or from one of those files.
   ctrlyoke never needs these copies itself; it attaches registry servers on
   its own at run time.

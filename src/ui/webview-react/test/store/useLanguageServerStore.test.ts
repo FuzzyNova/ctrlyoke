@@ -21,12 +21,23 @@ describe("useLanguageServerStore", () => {
       approvedWorkspaceDefinitionIds: [],
       localServers: [],
       localError: undefined,
+      userConfigPaths: {},
       loading: false,
       scanning: false,
       query: "",
       tab: LANGUAGE_SERVER_TABS.CATALOG,
       installing: {},
     });
+  });
+
+  it("keeps the last reported user config paths when a scan omits them", () => {
+    const paths = { "copilot-user-lsp": "D:/alt/lsp-config.json" } as const;
+    useLanguageServerStore.getState().setLocalScan([], undefined, paths);
+    expect(useLanguageServerStore.getState().userConfigPaths).toEqual(paths);
+    expect(useLanguageServerStore.getState().scanning).toBe(false);
+
+    useLanguageServerStore.getState().setLocalScan([]);
+    expect(useLanguageServerStore.getState().userConfigPaths).toEqual(paths);
   });
 
   it("requests server data and local scans", () => {

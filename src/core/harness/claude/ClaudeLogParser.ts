@@ -1,6 +1,5 @@
 import * as fs from "fs";
 import * as path from "path";
-import * as os from "os";
 import { BaseLogParser } from "../shared/BaseLogParser";
 import {
   BaseCliEvent,
@@ -8,6 +7,7 @@ import {
   UserEventClassification,
 } from "../shared/interfaces/ILogParser";
 import { Log } from "../../../utils/Log";
+import { getClaudeConfigDir } from "../../../utils/HarnessHome";
 import { getClaudeContextWindowSize } from "../../../utils/ModelConstants";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import {
@@ -245,7 +245,7 @@ export function normalizeClaudeWorkspacePath(workspacePath: string): string {
 
 export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   probeSessionId(sessionId: string): SessionProbeResult {
-    const projectsDir = path.join(os.homedir(), ".claude", "projects");
+    const projectsDir = path.join(getClaudeConfigDir(), "projects");
     try {
       return this.findSessionLogAcrossProjectDirectories(projectsDir, [
         `${sessionId}.jsonl`,
@@ -2208,15 +2208,6 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     const workspacePath = this.workspaceRoot ?? process.cwd();
     const normalizedPath = normalizeClaudeWorkspacePath(workspacePath);
 
-    // Build Claude project directory path
-    const homeDir = os.homedir();
-    const projectDir = path.join(
-      homeDir,
-      ".claude",
-      "projects",
-      normalizedPath
-    );
-
-    return projectDir;
+    return path.join(getClaudeConfigDir(), "projects", normalizedPath);
   }
 }

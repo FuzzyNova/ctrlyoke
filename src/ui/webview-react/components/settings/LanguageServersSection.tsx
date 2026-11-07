@@ -10,6 +10,7 @@ import {
   LANGUAGE_SERVER_SELECTIONS,
   LANGUAGE_SERVER_STATUSES,
   LSP_EXPORT_TARGET_IDS,
+  type LspExportTargetId,
 } from "@root/types/DashboardConstants";
 import {
   useLanguageServerStore,
@@ -136,6 +137,7 @@ export function LanguageServersSection({ activeScope }: Props) {
   );
   const probes = useLanguageServerStore((s) => s.probes);
   const statuses = useLanguageServerStore((s) => s.statuses);
+  const userConfigPaths = useLanguageServerStore((s) => s.userConfigPaths);
   const hostPlatform = useLanguageServerStore((s) => s.hostPlatform);
   const localServers = useLanguageServerStore((s) => s.localServers);
   const localError = useLanguageServerStore((s) => s.localError);
@@ -424,8 +426,11 @@ export function LanguageServersSection({ activeScope }: Props) {
                     [LSP_EXPORT_TARGET_IDS.CCLSP_WORKSPACE]: "cclsp",
                   })[id] ?? id,
                 presentKeys: new Set(exportedTargets[row.id] ?? []),
+                // The backend reports where a user-scope target really is,
+                // since an environment variable can move a harness's home.
                 descriptionForTarget: (id) =>
-                  ({
+                  userConfigPaths[id as LspExportTargetId] ??
+                  {
                     [LSP_EXPORT_TARGET_IDS.QWEN_WORKSPACE]: ".lsp.json",
                     [LSP_EXPORT_TARGET_IDS.COPILOT_WORKSPACE]:
                       ".github/lsp.json",
@@ -435,7 +440,8 @@ export function LanguageServersSection({ activeScope }: Props) {
                     [LSP_EXPORT_TARGET_IDS.OPENCODE_USER]:
                       "~/.config/opencode/opencode.json",
                     [LSP_EXPORT_TARGET_IDS.CCLSP_WORKSPACE]: "cclsp.json",
-                  })[id] ?? id,
+                  }[id] ??
+                  id,
               });
               const envKeys = row.managed?.definition.env
                 ? Object.keys(row.managed.definition.env)

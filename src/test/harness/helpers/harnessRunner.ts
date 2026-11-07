@@ -18,7 +18,14 @@ import {
   type HarnessId,
 } from "../../../types/DashboardConstants";
 import { TIMELINE_EVENT_TYPES } from "../../../types/WorkflowTimelineTypes";
-import { getCodexHomeDir } from "../../../utils/CodexHome";
+import {
+  HARNESS_HOME_ENV_VARS,
+  getClaudeConfigDir,
+  getClaudeGlobalConfigPath,
+  getCodexHomeDir,
+  getCopilotHomeDir,
+  getQwenHomeDir,
+} from "../../../utils/HarnessHome";
 import { makeTempDir } from "../../helpers/tempWorkspace";
 import { projectStateRoot } from "../../../utils/ProjectStatePaths";
 import { runsRootForProjectState } from "../../../utils/WorkflowPaths";
@@ -341,8 +348,108 @@ export function runWorkflowFileAsync(
 }
 
 // ---------------------------------------------------------------------------
-// Codex home isolation
+// Harness home isolation
 // ---------------------------------------------------------------------------
+
+/** An environment variable a harness CLI reads to move its home directory. */
+export type HarnessHomeEnvVar =
+  (typeof HARNESS_HOME_ENV_VARS)[keyof typeof HARNESS_HOME_ENV_VARS];
+
+export interface MovedHarnessHomeOptions {
+  /** The variable that moves the home, set for the duration of `fn`. */
+  readonly variable: HarnessHomeEnvVar;
+  /**
+   * Files of the developer's real home to copy in (sign-in, settings), as
+   * `name inside the moved home` → `absolute source path`. Missing sources
+   * are skipped. The real files are only read.
+   */
+  readonly copy: Readonly<Record<string, string>>;
+  /** Folder to create the moved home in; the OS temp folder by default. */
+  readonly parentDir?: string;
+}
+
+/** Copy the named files of `realHome` into a moved home under the same names. */
+function copyFromHome(
+  realHome: string,
+  files: readonly string[]
+): Record<string, string> {
+  return Object.fromEntries(
+    files.map((file) => [file, path.join(realHome, file)])
+  );
+}
+
+/**
+ * A moved Claude home (`CLAUDE_CONFIG_DIR`) signed in as the developer. The
+ * moved home also holds `.claude.json` (onboarding state, folder trust), which
+ * otherwise lives beside `~/.claude`.
+ */
+export function claudeHomeCopy(): MovedHarnessHomeOptions {
+  return {
+    variable: HARNESS_HOME_ENV_VARS.CLAUDE_CONFIG_DIR,
+    copy: {
+      ...copyFromHome(getClaudeConfigDir(), [
+        ".credentials.json",
+        "settings.json",
+      ]),
+      ".claude.json": getClaudeGlobalConfigPath(),
+    },
+  };
+}
+
+/** A moved Qwen home (`QWEN_HOME`) that can sign in and pick its model. */
+export function qwenHomeCopy(): MovedHarnessHomeOptions {
+  return {
+    variable: HARNESS_HOME_ENV_VARS.QWEN_HOME,
+    copy: copyFromHome(getQwenHomeDir(), [
+      "settings.json",
+      "oauth_creds.json",
+      "installation_id",
+    ]),
+  };
+}
+
+/**
+ * A moved Copilot home (`COPILOT_HOME`). `config.json` names the signed-in
+ * account, whose token stays in the OS credential store, and the trusted
+ * folders.
+ */
+export function copilotHomeCopy(): MovedHarnessHomeOptions {
+  return {
+    variable: HARNESS_HOME_ENV_VARS.COPILOT_HOME,
+    copy: copyFromHome(getCopilotHomeDir(), ["config.json", "settings.json"]),
+  };
+}
+
+/**
+ * Run `fn` with `options.variable` pointing at a throwaway home directory.
+ * The ctrlyoke CLI the case starts inherits `process.env`, and so does the
+ * harness it spawns, so both resolve the same moved home.
+ */
+export async function withMovedHarnessHome<T>(
+  options: MovedHarnessHomeOptions,
+  fn: (home: string) => T | Promise<T>
+): Promise<T> {
+  const home = fs.mkdtempSync(
+    path.join(options.parentDir ?? os.tmpdir(), ".cy-harness-home-")
+  );
+  for (const [name, source] of Object.entries(options.copy)) {
+    if (fs.existsSync(source)) {
+      fs.copyFileSync(source, path.join(home, name));
+    }
+  }
+  const previous = process.env[options.variable];
+  process.env[options.variable] = home;
+  try {
+    return await fn(home);
+  } finally {
+    if (previous === undefined) {
+      delete process.env[options.variable];
+    } else {
+      process.env[options.variable] = previous;
+    }
+    fs.rmSync(home, { recursive: true, force: true, maxRetries: 3 });
+  }
+}
 
 /**
  * Run `fn` with `CODEX_HOME` pointing at a throwaway Codex home in which each
@@ -363,37 +470,29 @@ export async function withIsolatedCodexHome<T>(
   fn: () => Promise<T>
 ): Promise<T> {
   const realHome = getCodexHomeDir();
-  // Codex refuses to create its PATH helper aliases when CODEX_HOME itself is
-  // under the Windows temp directory. Keep the isolated home under the user's
-  // home directory, where it is still unique and removed after the case.
-  const isolatedHome = fs.mkdtempSync(
-    path.join(os.homedir(), ".cy-codex-home-")
+  return withMovedHarnessHome(
+    {
+      variable: HARNESS_HOME_ENV_VARS.CODEX_HOME,
+      copy: {
+        "auth.json": path.join(realHome, "auth.json"),
+        "config.toml": path.join(realHome, "config.toml"),
+      },
+      // Codex refuses to create its PATH helper aliases when CODEX_HOME itself
+      // is under the Windows temp directory. Keep the isolated home under the
+      // user's home directory, where it is still unique and removed after the
+      // case.
+      parentDir: os.homedir(),
+    },
+    (isolatedHome) => {
+      // TOML literal-string keys hold a Windows path without escaping, matching
+      // how Codex itself records trust.
+      const trustEntries = trustedDirs
+        .map((dir) => `\n[projects.'${dir}']\ntrust_level = "trusted"\n`)
+        .join("");
+      fs.appendFileSync(path.join(isolatedHome, "config.toml"), trustEntries);
+      return fn();
+    }
   );
-  for (const file of ["auth.json", "config.toml"]) {
-    const source = path.join(realHome, file);
-    if (fs.existsSync(source)) {
-      fs.copyFileSync(source, path.join(isolatedHome, file));
-    }
-  }
-  // TOML literal-string keys hold a Windows path without escaping, matching
-  // how Codex itself records trust.
-  const trustEntries = trustedDirs
-    .map((dir) => `\n[projects.'${dir}']\ntrust_level = "trusted"\n`)
-    .join("");
-  fs.appendFileSync(path.join(isolatedHome, "config.toml"), trustEntries);
-
-  const previousHome = process.env.CODEX_HOME;
-  process.env.CODEX_HOME = isolatedHome;
-  try {
-    return await fn();
-  } finally {
-    if (previousHome === undefined) {
-      delete process.env.CODEX_HOME;
-    } else {
-      process.env.CODEX_HOME = previousHome;
-    }
-    fs.rmSync(isolatedHome, { recursive: true, force: true, maxRetries: 3 });
-  }
 }
 
 // ---------------------------------------------------------------------------

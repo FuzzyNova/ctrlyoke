@@ -28,6 +28,7 @@ import {
   ANTIGRAVITY_CLI_MODELS,
 } from "./ModelConstants";
 import { Log } from "./Log";
+import { getQwenHomeDir } from "./HarnessHome";
 import { TypedEmitter } from "./TypedEmitter";
 import { retryWithBackoff, stopRetrying } from "./RetryUtils";
 import { attachStreamTextDecoder } from "./StreamTextDecoder";
@@ -444,13 +445,14 @@ function parseOpenCodeModelsOutput(stdout: string): string[] {
 }
 
 /**
- * Query available models from `~/.qwen/settings.json`.
+ * Query available models from Qwen's user `settings.json` (`~/.qwen`, or
+ * `QWEN_HOME`).
  *
  * Reads the `modelProviders` section and collects all provider model IDs.
  * Falls back to `["qwen3.5-plus"]` when the file is absent or malformed.
  */
 async function queryQwenModels(): Promise<void> {
-  const settingsPath = path.join(os.homedir(), ".qwen", "settings.json");
+  const settingsPath = path.join(getQwenHomeDir(), "settings.json");
   try {
     const content = await fsPromises.readFile(settingsPath, "utf-8");
     const settings = JSON.parse(content) as {
@@ -470,17 +472,17 @@ async function queryQwenModels(): Promise<void> {
     if (ids.length > 0) {
       cachedQwenModelIds = ids;
       Log.debug(
-        `[ModelRegistry] Discovered ${ids.length} Qwen models from ~/.qwen/settings.json: ${ids.join(", ")}`
+        `[ModelRegistry] Discovered ${ids.length} Qwen models from ${settingsPath}: ${ids.join(", ")}`
       );
     } else {
       Log.debug(
-        "[ModelRegistry] No models found in ~/.qwen/settings.json, using fallback model"
+        `[ModelRegistry] No models found in ${settingsPath}, using fallback model`
       );
       cachedQwenModelIds = [QWEN_CLI_FALLBACK_MODEL];
     }
   } catch {
     Log.debug(
-      "[ModelRegistry] Could not read ~/.qwen/settings.json, using fallback Qwen model"
+      `[ModelRegistry] Could not read ${settingsPath}, using fallback Qwen model`
     );
     cachedQwenModelIds = [QWEN_CLI_FALLBACK_MODEL];
   }

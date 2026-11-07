@@ -1,12 +1,12 @@
 import * as fs from "fs";
 import * as path from "path";
-import * as os from "os";
 import { BaseLogParser } from "../shared/BaseLogParser";
 import {
   BaseCliEvent,
   UserEventClassification,
 } from "../shared/interfaces/ILogParser";
 import { Log } from "../../../utils/Log";
+import { getQwenRuntimeDir } from "../../../utils/HarnessHome";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import {
   UniversalCliOutput,
@@ -206,7 +206,7 @@ function isQwenProviderEvent(value: unknown): value is QwenProviderEvent {
 
 export class QwenLogParser extends BaseLogParser {
   probeSessionId(sessionId: string): SessionProbeResult {
-    const projectsDir = path.join(os.homedir(), ".qwen", "projects");
+    const projectsDir = path.join(getQwenRuntimeDir(), "projects");
     try {
       return this.findSessionLogAcrossProjectDirectories(projectsDir, [
         "chats",
@@ -748,7 +748,7 @@ export class QwenLogParser extends BaseLogParser {
       // workspace-scoped Qwen project. Resuming after an execution-worktree
       // switch continues writing to the session's original project directory.
       if (sessionId) {
-        const projectsDirectory = path.join(os.homedir(), ".qwen", "projects");
+        const projectsDirectory = path.join(getQwenRuntimeDir(), "projects");
         const expectedLogPath = path.join(chatsDir, `${sessionId}.jsonl`);
         let discoveredLogPath: string | null = null;
 
@@ -1594,7 +1594,7 @@ export class QwenLogParser extends BaseLogParser {
     // non-alphanumeric character (including separators) with a dash.
     const sanitizedPath = sanitizeQwenProjectPath(workspacePath);
 
-    const baseDir = path.join(os.homedir(), ".qwen", "projects");
+    const baseDir = path.join(getQwenRuntimeDir(), "projects");
     const projectDir = path.join(baseDir, sanitizedPath);
 
     Log.debug(

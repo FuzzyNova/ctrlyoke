@@ -2161,7 +2161,11 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.MCP_LOCAL_SCAN_RESULT] = (message) => {
     useMcpManagerStore
       .getState()
-      .setLocalScanResult(message.servers ?? [], message.error);
+      .setLocalScanResult(
+        message.servers ?? [],
+        message.error,
+        message.userConfigPaths
+      );
   };
 
   handlers[MESSAGE_TYPES.LSP_SERVERS_UPDATE] = (message) => {
@@ -2179,7 +2183,11 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.LSP_LOCAL_SCAN_RESULT] = (message) => {
     useLanguageServerStore
       .getState()
-      .setLocalScan(message.servers ?? [], message.error);
+      .setLocalScan(
+        message.servers ?? [],
+        message.error,
+        message.userConfigPaths
+      );
   };
   handlers[MESSAGE_TYPES.LSP_INSTALL_PROGRESS] = (message) => {
     useLanguageServerStore

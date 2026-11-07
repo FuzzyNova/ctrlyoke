@@ -77,6 +77,7 @@ function renderSection(servers: ManagedMcpServer[]) {
     requestLocalScan: vi.fn(),
     isLoadingLocal: false,
     localError: undefined,
+    userConfigPaths: {},
     remoteServers: undefined,
     isLoadingRemote: false,
     remoteError: undefined,
@@ -101,6 +102,7 @@ describe("McpManagerSection", () => {
       requestLocalScan: vi.fn(),
       isLoadingLocal: false,
       localError: undefined,
+      userConfigPaths: {},
       remoteServers: undefined,
       isLoadingRemote: false,
       remoteError: undefined,
@@ -306,6 +308,36 @@ describe("McpManagerSection", () => {
         scope: SETTING_SCOPES.USER,
       }
     );
+  });
+
+  it("labels user-scope export targets with the paths the backend resolved", async () => {
+    const user = userEvent.setup();
+    renderSection([createManagedServer("server-a")]);
+    useMcpManagerStore.setState({
+      userConfigPaths: {
+        [HARNESS_IDS.COPILOT_CLI]: "D:/alt/copilot/mcp-config.json",
+      },
+    });
+    const bulkBar = screen.getByText(/Select all \(1\/1\)/).closest("div")!;
+
+    await user.click(
+      within(bulkBar).getAllByRole("button", { name: "Save" })[0]
+    );
+    await user.click(
+      within(bulkBar).getByRole("button", { name: "Claude Code" })
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: /^Copilot CLI.*D:\/alt\/copilot\/mcp-config\.json/,
+      })
+    ).toBeTruthy();
+    // A target the backend has not reported keeps its default label.
+    expect(
+      screen.getByRole("button", {
+        name: /^Qwen Code.*~\/\.qwen\/settings\.json/,
+      })
+    ).toBeTruthy();
   });
 
   it("uses equal columns for managed servers and discovery on wide screens", () => {

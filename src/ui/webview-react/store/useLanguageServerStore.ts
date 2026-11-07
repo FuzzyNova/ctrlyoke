@@ -40,6 +40,8 @@ interface State {
   approvedWorkspaceDefinitionIds: string[];
   localServers: LocalLanguageServerEntry[];
   localError?: string;
+  /** Display path of each user-scope export target, from the last scan. */
+  userConfigPaths: Partial<Record<LspExportTargetId, string>>;
   loading: boolean;
   scanning: boolean;
   query: string;
@@ -65,7 +67,11 @@ interface State {
         Pick<State, "detectedLanguages" | "approvedWorkspaceDefinitionIds">
       >
   ) => void;
-  setLocalScan: (servers: LocalLanguageServerEntry[], error?: string) => void;
+  setLocalScan: (
+    servers: LocalLanguageServerEntry[],
+    error?: string,
+    userConfigPaths?: Partial<Record<LspExportTargetId, string>>
+  ) => void;
   setInstallProgress: (
     id: string,
     output?: string,
@@ -99,6 +105,7 @@ export const useLanguageServerStore = create<State>((set) => ({
   detectedLanguages: [],
   approvedWorkspaceDefinitionIds: [],
   localServers: [],
+  userConfigPaths: {},
   loading: false,
   scanning: false,
   query: "",
@@ -128,8 +135,13 @@ export const useLanguageServerStore = create<State>((set) => ({
         payload.approvedWorkspaceDefinitionIds ?? [],
       loading: false,
     }),
-  setLocalScan: (localServers, localError) =>
-    set({ localServers, localError, scanning: false }),
+  setLocalScan: (localServers, localError, userConfigPaths) =>
+    set((state) => ({
+      localServers,
+      localError,
+      scanning: false,
+      userConfigPaths: userConfigPaths ?? state.userConfigPaths,
+    })),
   setInstallProgress: (id, output, error, complete, copyableCommand) =>
     set((state) => ({
       installing: {

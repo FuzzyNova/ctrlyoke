@@ -29,6 +29,7 @@ import {
 } from "./McpConfigPaths";
 import { detectFormattingOptions } from "./WorkflowSourceEditor";
 import { readFileForEdit, writeTextFileAtomic } from "./AtomicFileUtils";
+import { formatDiscoveryPath } from "./DiscoveryUtils";
 import {
   findTomlMcpServerAssignments,
   findTomlTableHeaderLines,
@@ -427,6 +428,22 @@ function removeCodexTomlDefinitions(
 
 export class HarnessMcpExporter {
   constructor(private readonly workspaceRoot?: string) {}
+
+  /**
+   * Where each harness's user-scope export writes, shortened for display. The
+   * dashboard shows these instead of fixed `~/...` labels because a harness's
+   * home can be moved by an environment variable.
+   */
+  describeUserConfigPaths(): Partial<Record<AnyTargetId, string>> {
+    return Object.fromEntries(
+      Object.values(HARNESS_IDS).map((harnessId) => [
+        harnessId,
+        formatDiscoveryPath(
+          this.resolveTargetPath(harnessId, SETTING_SCOPES.USER)
+        ),
+      ])
+    );
+  }
 
   async export(
     servers: McpServerConfig[],

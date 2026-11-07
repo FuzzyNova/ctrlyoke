@@ -4,6 +4,13 @@ import * as fs from "fs";
 import { HARNESS_IDS } from "../types/DashboardConstants";
 import type { HarnessId } from "../types/DashboardConstants";
 import { PATH_CONSTANTS } from "./ConfigurationUtils";
+import {
+  getClaudeConfigDir,
+  getCodexHomeDir,
+  getCopilotHomeDir,
+  getOpenCodeGlobalConfigDir,
+  getQwenHomeDir,
+} from "./HarnessHome";
 
 // ============================================================================
 // Harness Directory Maps — Single Source of Truth
@@ -18,13 +25,27 @@ const HARNESS_WORKSPACE_AGENT_DIRS: Record<HarnessId, string[]> = {
   [HARNESS_IDS.QWEN_CLI]: [".qwen/agents"],
 };
 
+/**
+ * Each harness's user-level directory. The user agent and skill folders below
+ * are relative to it. It is resolved on every call, because several harnesses
+ * let an environment variable move it (see `HarnessHome.ts`).
+ */
+const HARNESS_USER_HOME: Record<HarnessId, () => string> = {
+  [HARNESS_IDS.CLAUDE_CLI]: () => getClaudeConfigDir(),
+  [HARNESS_IDS.COPILOT_CLI]: () => getCopilotHomeDir(),
+  [HARNESS_IDS.CODEX_CLI]: () => getCodexHomeDir(),
+  [HARNESS_IDS.ANTIGRAVITY_CLI]: () => path.join(os.homedir(), ".gemini"),
+  [HARNESS_IDS.OPENCODE_CLI]: () => getOpenCodeGlobalConfigDir(),
+  [HARNESS_IDS.QWEN_CLI]: () => getQwenHomeDir(),
+};
+
 const HARNESS_USER_AGENT_DIRS: Record<HarnessId, string[]> = {
-  [HARNESS_IDS.CLAUDE_CLI]: ["~/.claude/agents"],
-  [HARNESS_IDS.COPILOT_CLI]: ["~/.copilot/agents"],
-  [HARNESS_IDS.CODEX_CLI]: ["~/.codex/agents"],
-  [HARNESS_IDS.ANTIGRAVITY_CLI]: ["~/.gemini/agents"],
-  [HARNESS_IDS.OPENCODE_CLI]: ["~/.config/opencode/agents"],
-  [HARNESS_IDS.QWEN_CLI]: ["~/.qwen/agents"],
+  [HARNESS_IDS.CLAUDE_CLI]: ["agents"],
+  [HARNESS_IDS.COPILOT_CLI]: ["agents"],
+  [HARNESS_IDS.CODEX_CLI]: ["agents"],
+  [HARNESS_IDS.ANTIGRAVITY_CLI]: ["agents"],
+  [HARNESS_IDS.OPENCODE_CLI]: ["agents"],
+  [HARNESS_IDS.QWEN_CLI]: ["agents"],
 };
 
 const HARNESS_WORKSPACE_SKILL_DIRS: Record<HarnessId, string[]> = {
@@ -37,15 +58,12 @@ const HARNESS_WORKSPACE_SKILL_DIRS: Record<HarnessId, string[]> = {
 };
 
 const HARNESS_USER_SKILL_DIRS: Record<HarnessId, string[]> = {
-  [HARNESS_IDS.CLAUDE_CLI]: ["~/.claude/skills"],
-  [HARNESS_IDS.COPILOT_CLI]: ["~/.copilot/skills"],
-  [HARNESS_IDS.CODEX_CLI]: ["~/.codex/skills"],
-  [HARNESS_IDS.ANTIGRAVITY_CLI]: [
-    "~/.gemini/skills",
-    "~/.gemini/antigravity-cli/skills",
-  ],
-  [HARNESS_IDS.OPENCODE_CLI]: ["~/.config/opencode/skills"],
-  [HARNESS_IDS.QWEN_CLI]: ["~/.qwen/skills"],
+  [HARNESS_IDS.CLAUDE_CLI]: ["skills"],
+  [HARNESS_IDS.COPILOT_CLI]: ["skills"],
+  [HARNESS_IDS.CODEX_CLI]: ["skills"],
+  [HARNESS_IDS.ANTIGRAVITY_CLI]: ["skills", "antigravity-cli/skills"],
+  [HARNESS_IDS.OPENCODE_CLI]: ["skills"],
+  [HARNESS_IDS.QWEN_CLI]: ["skills"],
 };
 
 /**
@@ -66,11 +84,16 @@ export const HARNESS_AGENT_EXTENSION: Record<HarnessId, string> = {
 // Path Expansion
 // ============================================================================
 
-function expandTilde(p: string): string {
-  if (p.startsWith("~")) {
-    return path.join(os.homedir(), p.slice(1));
+function resolveUserDirs(
+  harnessId: HarnessId,
+  relativeDirs: Record<HarnessId, string[]>
+): string[] {
+  const resolveHome = HARNESS_USER_HOME[harnessId];
+  if (!resolveHome) {
+    return [];
   }
-  return p;
+  const home = resolveHome();
+  return (relativeDirs[harnessId] ?? []).map((rel) => path.join(home, rel));
 }
 
 function resolveRelativeToWorkspace(
@@ -100,7 +123,7 @@ export function getHarnessAgentDirs(
  * Returns all user-level agent directories for a harness (absolute paths).
  */
 export function getHarnessUserAgentDirs(harnessId: HarnessId): string[] {
-  return (HARNESS_USER_AGENT_DIRS[harnessId] ?? []).map(expandTilde);
+  return resolveUserDirs(harnessId, HARNESS_USER_AGENT_DIRS);
 }
 
 /**
@@ -119,7 +142,7 @@ export function getHarnessSkillDirs(
  * Returns all user-level skill directories for a harness (absolute paths).
  */
 export function getHarnessUserSkillDirs(harnessId: HarnessId): string[] {
-  return (HARNESS_USER_SKILL_DIRS[harnessId] ?? []).map(expandTilde);
+  return resolveUserDirs(harnessId, HARNESS_USER_SKILL_DIRS);
 }
 
 /**

@@ -10,6 +10,7 @@ import {
   type McpSecretConfigOptions,
 } from "../shared/CliMcpConfigGenerator";
 import { Log } from "../../../utils/Log";
+import { getOpenCodeGlobalConfigDir } from "../../../utils/HarnessHome";
 import {
   CTRLYOKE_ENV_VARS,
   MCP_SECRET_CONFIG_MODES,
@@ -137,10 +138,7 @@ export async function resolveOpenCodePermissionCollisionContext(
   workspaceRoot?: string,
   environment: NodeJS.ProcessEnv = process.env
 ): Promise<OpenCodePermissionCollisionContext> {
-  const globalConfigDir = path.join(
-    environment.XDG_CONFIG_HOME?.trim() || path.join(os.homedir(), ".config"),
-    "opencode"
-  );
+  const globalConfigDir = getOpenCodeGlobalConfigDir(environment);
   const configPaths = OPENCODE_CONFIG_FILENAMES.map((filename) =>
     path.join(globalConfigDir, filename)
   );

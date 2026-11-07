@@ -9,6 +9,26 @@ it added, and removes it again.
 This page lists every file, per harness, so that nothing in `git status` or your home folder comes
 as a surprise.
 
+## Moved harness folders {#moved-harness-folders}
+
+The paths on this page and elsewhere in these docs are the defaults. Several harnesses let you move
+their global folder with an environment variable, and ctrlyoke reads and writes the moved folder
+instead, so it finds the same transcripts, settings, MCP servers, agents and skills the harness
+does:
+
+| Harness     | Variable            | Replaces                                                |
+| ----------- | ------------------- | ------------------------------------------------------- |
+| Claude Code | `CLAUDE_CONFIG_DIR` | `~/.claude`, and `~/.claude.json` moves into the folder |
+| Codex       | `CODEX_HOME`        | `~/.codex`                                              |
+| Copilot     | `COPILOT_HOME`      | `~/.copilot`                                            |
+| OpenCode    | `XDG_CONFIG_HOME`   | `~/.config` (OpenCode's global config)                  |
+| Qwen Code   | `QWEN_HOME`         | `~/.qwen`                                               |
+| Qwen Code   | `QWEN_RUNTIME_DIR`  | The Qwen folder that holds session transcripts          |
+
+Set the variable in the environment you start VS Code or the `ctrlyoke` CLI from. The harness
+inherits it from ctrlyoke, so both use the same folder. ctrlyoke doesn't read Qwen's
+`advanced.runtimeOutputDir` setting; use `QWEN_RUNTIME_DIR` to move Qwen's transcripts.
+
 ## Every harness: `.ctrlyoke/temp/` {#ctrlyoke-temp}
 
 Each run writes working files into the workspace's `.ctrlyoke/temp/` folder: prompt files,

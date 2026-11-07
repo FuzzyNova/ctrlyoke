@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-07 by Claude during the 0.5.0 release (Qwen user-scope hooks review)
 - **Area:** `src/core/harness/{claude,qwen,copilot}/`, `src/core/harness/shared/StatuslineManager.ts`, `src/utils/{McpConfigPaths,LspConfigPaths,ModelRegistry}.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -79,3 +79,43 @@ and add a grep-style lint test that fails on new `os.homedir()` + `.claude`/`.qw
 No compatibility path is needed: this changes no stored format and alters behaviour
 only for users who set these variables, whose runs are broken today. It still needs a
 **Fixed** entry in `CHANGELOG.md` when it lands.
+
+## Fix
+
+`src/utils/HarnessHome.ts` (which absorbed `CodexHome.ts`) resolves every harness
+home, and every path listed above now goes through it. The user agent and skill
+folders in `HarnessDirectoryUtils.ts` are relative to the resolved home, Codex's
+included, which also ignored `CODEX_HOME` before. OpenCode's user MCP/LSP paths and
+`OpenCodeInlineConfig` share `getOpenCodeGlobalConfigDir`, so `XDG_CONFIG_HOME` is
+honoured everywhere. The dashboard's MCP and LSP export menus show the user-scope
+paths the backend resolved (`userConfigPaths` on the two local-scan result messages),
+falling back to the `~/...` literals until the first scan arrives.
+`HarnessHome.test.ts` covers each resolver and lints `src/` for new
+`homedir()` + `.claude`/`.qwen`/`.copilot`/`.codex` joins and `~/.<harness>/...` path
+strings. `harness-home.harness.test.ts` runs Claude, Qwen and Copilot with their homes
+moved, in both modes, and checks the transcript, session ID and response text.
+
+### Corrections to the findings above (verified 2026-11-07)
+
+- **Copilot 1.0.107 honours `COPILOT_HOME`, not `XDG_*`.** `copilot help environment`
+  documents "`COPILOT_HOME`: override the directory where configuration and state files
+  are stored; defaults to `$HOME/.copilot`". The string was missing from the npm package
+  only because the app lives in `~/.copilot/pkg/<platform>/<version>/` (the npm package
+  is a launcher). Its changelog says it now _migrates_ an older `$XDG_CONFIG_HOME/.copilot`
+  into `~/.copilot`. Probed: `COPILOT_HOME=<dir> copilot mcp add` wrote
+  `<dir>/mcp-config.json`, while `XDG_CONFIG_HOME`/`XDG_STATE_HOME` changed nothing.
+  So the existing `COPILOT_HOME` branch in `McpConfigPaths` was right, and the fix
+  extends it to the other Copilot paths.
+- **Claude:** probed `CLAUDE_CONFIG_DIR=<dir> claude mcp add --scope user`, which wrote
+  `<dir>/.claude.json`, confirming the `.claude.json` move.
+- **Qwen:** probed `QWEN_HOME=<dir> qwen mcp add --scope user`, which wrote
+  `<dir>/settings.json`. Session data follows `QWEN_RUNTIME_DIR`, then the
+  `advanced.runtimeOutputDir` setting, then `QWEN_HOME`. ctrlyoke does not read
+  `advanced.runtimeOutputDir`; the docs say to use `QWEN_RUNTIME_DIR` instead.
+- **Spawn env:** none of the providers' `getHeadlessSpawnEnv`/`getInteractiveSpawnEnv`
+  sets a home variable, and `env:` exists only on script steps, which never launch a
+  harness. A prompt step's harness therefore always inherits these variables from
+  ctrlyoke's `process.env`, which is what the resolvers read. (A managed secret granted
+  under one of these names would also be passed to the harness without being followed.)
+- `SettingsJsonMcpTracker`'s default `userConfigPath` (`~/.<toolName>/settings.json`) has
+  no production caller; every tracker for a moved-home harness passes its own path.

@@ -3024,6 +3024,11 @@ export interface McpLocalScanResultMessage {
   type: typeof MESSAGE_TYPES.MCP_LOCAL_SCAN_RESULT;
   servers: LocalMcpServerEntry[];
   error?: string;
+  /**
+   * Display path of each harness's user-scope MCP config file, resolved the
+   * way the harness resolves it (an environment variable can move it).
+   */
+  userConfigPaths?: Partial<Record<AnyTargetId, string>>;
 }
 
 export interface McpRegistrySearchResultMessage {
@@ -3135,6 +3140,11 @@ export interface LspLocalScanResultMessage {
   type: typeof MESSAGE_TYPES.LSP_LOCAL_SCAN_RESULT;
   servers: LocalLanguageServerEntry[];
   error?: string;
+  /**
+   * Display path of each user-scope LSP export target, resolved the way the
+   * harness resolves it (an environment variable can move it).
+   */
+  userConfigPaths?: Partial<Record<LspExportTargetId, string>>;
 }
 
 export interface LspInstallProgressMessage {

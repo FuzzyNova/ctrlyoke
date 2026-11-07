@@ -1,6 +1,5 @@
 import * as fs from "fs";
 import * as path from "path";
-import * as os from "os";
 import { StringDecoder } from "string_decoder";
 import { BaseLogParser } from "../shared/BaseLogParser";
 import {
@@ -10,6 +9,7 @@ import {
 import { CopilotToolBuilder } from "./CopilotToolBuilder";
 import { CliEventMapper, type McpToolHint } from "../shared/CliEventMapper";
 import { Log } from "../../../utils/Log";
+import { getCopilotHomeDir } from "../../../utils/HarnessHome";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import {
   UniversalCliOutput,
@@ -254,7 +254,7 @@ const COPILOT_OTEL_CURRENT_TOKENS_ATTRIBUTE = "github.copilot.current_tokens";
 export class CopilotLogParser extends BaseLogParser {
   /** Check the Copilot session store by ID without prompt matching. */
   probeSessionId(sessionId: string): SessionProbeResult {
-    const logDir = path.join(os.homedir(), ".copilot", "session-state");
+    const logDir = path.join(getCopilotHomeDir(), "session-state");
     try {
       if (!fs.existsSync(logDir)) return SESSION_AVAILABILITY.MISSING;
       const directoryLog = path.join(logDir, sessionId, "events.jsonl");
@@ -1382,7 +1382,7 @@ export class CopilotLogParser extends BaseLogParser {
         return null;
       }
 
-      const logDir = path.join(os.homedir(), ".copilot", "session-state");
+      const logDir = path.join(getCopilotHomeDir(), "session-state");
       if (!fs.existsSync(logDir)) {
         Log.debug("[CopilotLogParser] Session state directory not found");
         return null;
@@ -1911,7 +1911,7 @@ export class CopilotLogParser extends BaseLogParser {
    * - Old: `/home/user/.copilot/session-state/abc-123.jsonl`
    */
   static async getLogPath(sessionId: string): Promise<string | null> {
-    const logDir = path.join(os.homedir(), ".copilot", "session-state");
+    const logDir = path.join(getCopilotHomeDir(), "session-state");
 
     // Try new format first (v0.0.384+)
     const newFormatPath = path.join(logDir, sessionId, "events.jsonl");
@@ -2065,7 +2065,7 @@ export class CopilotLogParser extends BaseLogParser {
     sessionId: string
   ): Promise<{ used: number; size: number } | undefined> {
     try {
-      const logsDir = path.join(os.homedir(), ".copilot", "logs");
+      const logsDir = path.join(getCopilotHomeDir(), "logs");
       if (!fs.existsSync(logsDir)) {
         return undefined;
       }

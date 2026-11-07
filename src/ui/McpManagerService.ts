@@ -92,6 +92,7 @@ export class McpManagerService {
     ctx.emit({
       type: MESSAGE_TYPES.MCP_LOCAL_SCAN_RESULT,
       servers: result.servers,
+      userConfigPaths: this.getHarnessExporter().describeUserConfigPaths(),
       ...(result.error ? { error: result.error } : {}),
     });
   }

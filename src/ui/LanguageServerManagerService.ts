@@ -23,7 +23,10 @@ import { LANGUAGE_SERVER_CATALOG } from "../server/lsp/LanguageServerCatalog";
 import type { LanguageIntelligenceHost } from "../server/lsp/LanguageIntelligenceHost";
 import type { LanguageServerStatusChange } from "../server/lsp/ManagedLanguageServerBackend";
 import { safeDiscoverLocalLanguageServers } from "../utils/LspDiscoveryUtils";
-import { HarnessLspExporter } from "../utils/HarnessLspExporter";
+import {
+  HarnessLspExporter,
+  describeLspUserConfigPaths,
+} from "../utils/HarnessLspExporter";
 import { ctrlyokeStateHome } from "../utils/ProjectStatePaths";
 import type { WebviewClientContext } from "./WebviewClientContext";
 
@@ -179,6 +182,7 @@ export class LanguageServerManagerService {
     ctx.emit({
       type: MESSAGE_TYPES.LSP_LOCAL_SCAN_RESULT,
       servers: result.servers,
+      userConfigPaths: describeLspUserConfigPaths(),
       ...(result.error ? { error: result.error } : {}),
     });
   }

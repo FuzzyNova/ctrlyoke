@@ -17,6 +17,7 @@ import {
 } from "./LspConfigPaths";
 import { detectFormattingOptions } from "./WorkflowSourceEditor";
 import { readFileForEdit, writeTextFileAtomic } from "./AtomicFileUtils";
+import { formatDiscoveryPath } from "./DiscoveryUtils";
 
 type JsonObject = Record<string, unknown>;
 export interface HarnessLspExportResult {
@@ -152,6 +153,27 @@ function resolvePath(
     case LSP_EXPORT_TARGET_IDS.CCLSP_WORKSPACE:
       return getCclspConfigPaths(root!)[0]!;
   }
+}
+
+const LSP_USER_EXPORT_TARGET_IDS = [
+  LSP_EXPORT_TARGET_IDS.COPILOT_USER,
+  LSP_EXPORT_TARGET_IDS.OPENCODE_USER,
+] as const;
+
+/**
+ * Where each user-scope LSP export target writes, shortened for display. The
+ * dashboard shows these instead of fixed `~/...` labels because a harness's
+ * home can be moved by an environment variable.
+ */
+export function describeLspUserConfigPaths(): Partial<
+  Record<LspExportTargetId, string>
+> {
+  return Object.fromEntries(
+    LSP_USER_EXPORT_TARGET_IDS.map((id) => [
+      id,
+      formatDiscoveryPath(resolvePath(id, SETTING_SCOPES.USER)),
+    ])
+  );
 }
 
 export class HarnessLspExporter {

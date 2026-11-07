@@ -13,6 +13,11 @@ import { configService } from "../../../config/CtrlYokeConfigService";
 import type { StatusLineHarnessSettings } from "../../../types/CtrlYokeSettings";
 import { countLiveInstallationRoots } from "../../../utils/CtrlyokeInstallations";
 import { pathsEqual } from "../../../utils/PathCasing";
+import {
+  getClaudeConfigDir,
+  getCopilotHomeDir,
+  getQwenHomeDir,
+} from "../../../utils/HarnessHome";
 import { SettingsJsonMcpTracker } from "./SettingsJsonMcpTracker";
 import {
   removeStatuslineLauncher,
@@ -129,28 +134,26 @@ export class StatuslineManager implements StatuslineManagerLike {
       return existing;
     }
 
+    // The statusline lives in the harness's global settings.json, so both
+    // scopes resolve to the same file. The home is resolved on every access,
+    // because the harness CLIs let an environment variable move it.
+    const globalSettings = (
+      trackerName: string,
+      resolveHome: () => string
+    ): SettingsJsonMcpTracker => {
+      const settingsPath = () => path.join(resolveHome(), "settings.json");
+      return SettingsJsonMcpTracker.getInstance(trackerName, {
+        projectConfigPath: settingsPath,
+        userConfigPath: settingsPath,
+      });
+    };
     const tracker =
       provider === STATUS_LINE_HARNESS_IDS.CLAUDE
-        ? SettingsJsonMcpTracker.getInstance("claude-cli-settings", {
-            projectConfigPath: () =>
-              path.join(os.homedir(), ".claude", "settings.json"),
-            userConfigPath: () =>
-              path.join(os.homedir(), ".claude", "settings.json"),
-          })
+        ? globalSettings("claude-cli-settings", () => getClaudeConfigDir())
         : provider === STATUS_LINE_HARNESS_IDS.COPILOT
-          ? SettingsJsonMcpTracker.getInstance("copilot-cli-settings", {
-              projectConfigPath: () =>
-                path.join(os.homedir(), ".copilot", "settings.json"),
-              userConfigPath: () =>
-                path.join(os.homedir(), ".copilot", "settings.json"),
-            })
+          ? globalSettings("copilot-cli-settings", () => getCopilotHomeDir())
           : provider === STATUS_LINE_HARNESS_IDS.QWEN
-            ? SettingsJsonMcpTracker.getInstance("qwen-cli-settings", {
-                projectConfigPath: () =>
-                  path.join(os.homedir(), ".qwen", "settings.json"),
-                userConfigPath: () =>
-                  path.join(os.homedir(), ".qwen", "settings.json"),
-              })
+            ? globalSettings("qwen-cli-settings", () => getQwenHomeDir())
             : SettingsJsonMcpTracker.getInstance("antigravity-cli-settings", {
                 projectConfigPath: () => getAntigravitySettingsPath(),
               });

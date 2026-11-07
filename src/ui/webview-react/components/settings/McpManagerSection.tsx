@@ -282,10 +282,21 @@ function getExportTargetLabel(id: AnyTargetId): string {
   return id;
 }
 
+/**
+ * The file an export target writes. A harness's user-scope file comes from the
+ * backend when it has reported one, because an environment variable can move
+ * the harness's home; the literals are the defaults until the first scan.
+ */
 function getExportTargetDescription(
   id: AnyTargetId,
-  scope: SettingWriteScope
+  scope: SettingWriteScope,
+  userConfigPaths: Partial<Record<AnyTargetId, string>>
 ): string {
+  const reportedUserPath =
+    scope === SETTING_SCOPES.USER ? userConfigPaths[id] : undefined;
+  if (reportedUserPath) {
+    return reportedUserPath;
+  }
   if (id === SPECIAL_TARGET_IDS.CTRLYOKE) {
     return scope === SETTING_SCOPES.WORKSPACE
       ? ".ctrlyoke/mcp/servers.json"
@@ -471,6 +482,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
   const localServers = useMcpManagerStore((state) => state.localServers);
   const isLoadingLocal = useMcpManagerStore((state) => state.isLoadingLocal);
   const localError = useMcpManagerStore((state) => state.localError);
+  const userConfigPaths = useMcpManagerStore((state) => state.userConfigPaths);
   const discoveryTab = useMcpManagerStore((state) => state.discoveryTab);
   const setDiscoveryTab = useMcpManagerStore((state) => state.setDiscoveryTab);
   const remoteServers = useMcpManagerStore((state) => state.remoteServers);
@@ -897,7 +909,9 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
             availableActions={["save", "delete", "setDefault"]}
             getTargetsForScope={getMcpTargetsForScope}
             getTargetLabel={getExportTargetLabel}
-            getTargetDescription={getExportTargetDescription}
+            getTargetDescription={(id, scope) =>
+              getExportTargetDescription(id, scope, userConfigPaths)
+            }
             defaultTargetId={HARNESS_IDS.CLAUDE_CLI as HarnessId}
             defaultScope={activeScope}
             activeScope={activeScope}
@@ -952,7 +966,11 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
               userTargetIds: EXPORT_TARGET_IDS,
               labelForTarget: (id) => getExportTargetLabel(id as AnyTargetId),
               descriptionForTarget: (id, scope) =>
-                getExportTargetDescription(id as AnyTargetId, scope),
+                getExportTargetDescription(
+                  id as AnyTargetId,
+                  scope,
+                  userConfigPaths
+                ),
               presentKeys: exportPresentKeys,
             });
             const deleteItems: ActionDropdownItem[] = allLocations.map(

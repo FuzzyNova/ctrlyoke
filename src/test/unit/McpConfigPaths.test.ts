@@ -2,7 +2,7 @@ import * as assert from "assert";
 import * as os from "os";
 import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
-import { getCodexHomeDir } from "../../utils/CodexHome";
+import { getCodexHomeDir } from "../../utils/HarnessHome";
 import { getCodexUserMcpConfigPath } from "../../utils/McpConfigPaths";
 
 suite("McpConfigPaths", () => {

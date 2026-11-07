@@ -14,7 +14,6 @@
 import * as assert from "assert";
 import { spawn, spawnSync } from "child_process";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import type {
   McpServerConfig,
@@ -49,8 +48,10 @@ import {
   runInteractiveWorkflowFile,
   runWorkflowFile,
   runWorkflowFileAsync,
+  qwenHomeCopy,
   runsRootFor,
   withIsolatedCodexHome,
+  withMovedHarnessHome,
 } from "./helpers/harnessRunner";
 
 const OPENCODE = "opencode-cli" as const;
@@ -521,60 +522,31 @@ async function withIsolatedAntigravityHome<T>(
   }
 }
 
-/** Files of the real `~/.qwen` an isolated home needs to sign in and pick its model. */
-const QWEN_HOME_AUTH_FILES = [
-  "settings.json",
-  "oauth_creds.json",
-  "installation_id",
-] as const;
-
 /**
- * Runs `fn` with `USERPROFILE`/`HOME` pointing at a throwaway home whose
- * `~/.qwen` holds copies of the real sign-in files, and whose user
- * `settings.json` has `hooks` added. Qwen and ctrlyoke's Qwen log reader both
- * resolve `~/.qwen` from the home directory, so the run stays consistent, and
- * the developer's real `~/.qwen` is only read.
+ * Runs `fn` with `QWEN_HOME` pointing at a throwaway Qwen home that holds
+ * copies of the real sign-in files, and whose user `settings.json` has
+ * `hooks` added. Qwen and ctrlyoke's Qwen log reader both follow `QWEN_HOME`,
+ * so the run stays consistent, and the developer's real `~/.qwen` is only
+ * read.
  */
 async function withIsolatedQwenHome<T>(
   hooks: Record<string, unknown[]>,
   fn: () => T | Promise<T>
 ): Promise<T> {
-  const realQwenDir = path.join(os.homedir(), ".qwen");
-  const home = makeTempDir("ctrlyoke-qwen-home-");
-  const qwenDir = path.join(home, ".qwen");
-  fs.mkdirSync(qwenDir, { recursive: true });
-  for (const file of QWEN_HOME_AUTH_FILES) {
-    const source = path.join(realQwenDir, file);
-    if (fs.existsSync(source)) {
-      fs.copyFileSync(source, path.join(qwenDir, file));
-    }
-  }
-  const settingsPath = path.join(qwenDir, "settings.json");
-  const settings = fs.existsSync(settingsPath)
-    ? (JSON.parse(fs.readFileSync(settingsPath, "utf8")) as Record<
-        string,
-        unknown
-      >)
-    : {};
-  fs.writeFileSync(
-    settingsPath,
-    JSON.stringify({ ...settings, hooks }, null, 2)
-  );
-  const previous = {
-    USERPROFILE: process.env.USERPROFILE,
-    HOME: process.env.HOME,
-  };
-  process.env.USERPROFILE = home;
-  process.env.HOME = home;
-  try {
-    return await fn();
-  } finally {
-    for (const [key, value] of Object.entries(previous)) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-    removeTempDir(home);
-  }
+  return withMovedHarnessHome(qwenHomeCopy(), (qwenDir) => {
+    const settingsPath = path.join(qwenDir, "settings.json");
+    const settings = fs.existsSync(settingsPath)
+      ? (JSON.parse(fs.readFileSync(settingsPath, "utf8")) as Record<
+          string,
+          unknown
+        >)
+      : {};
+    fs.writeFileSync(
+      settingsPath,
+      JSON.stringify({ ...settings, hooks }, null, 2)
+    );
+    return fn();
+  });
 }
 
 suite("Inline harness configuration regression tests", function () {
