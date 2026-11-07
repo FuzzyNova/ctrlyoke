@@ -17,7 +17,7 @@ import {
   EFFECTIVE_SANDBOX_KINDS,
   SANDBOX_MODES,
 } from "../../types/DashboardConstants";
-import { hasCliFlag } from "../../utils/CliArgParser";
+import { getCliFlagValues, hasCliFlag } from "../../utils/CliArgParser";
 
 const context: SandboxContext = {
   isInteractive: true,
@@ -139,6 +139,57 @@ suite("sandbox mappers", () => {
     }
   });
 
+  test("Codex reports an error when additionalArgs would replace or widen sandbox true", async () => {
+    const mapper = new CodexSandboxMapper();
+    for (const [additionalArgs, named] of [
+      ["--dangerously-bypass-approvals-and-sandbox", "--dangerously-bypass"],
+      ["--model m --yolo", "--yolo"],
+      ["-s danger-full-access", "-s danger-full-access"],
+      ["--sandbox=danger-full-access", "-s danger-full-access"],
+      ["-sdanger-full-access", "-s danger-full-access"],
+      ['-c sandbox_mode="danger-full-access"', "sandbox_mode"],
+      [
+        "--config sandbox_workspace_write.network_access=true",
+        "network_access",
+      ],
+      [
+        `--config='sandbox_workspace_write.writable_roots=["/"]'`,
+        "writable_roots",
+      ],
+      ["-csandbox_workspace_write.network_access=true", "network_access"],
+      [`-c 'sandbox_permissions=["disk-full-read-access"]'`, "sandbox_perm"],
+    ] as const) {
+      const result = await mapper.prepare(true, { ...context, additionalArgs });
+      const diagnostic = result.diagnostics[0];
+      assert.strictEqual(
+        diagnostic?.code,
+        COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_SETTINGS_OVERRIDDEN,
+        additionalArgs
+      );
+      assert.strictEqual(
+        diagnostic?.severity,
+        COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
+      );
+      assert.ok(diagnostic?.message.includes(named), diagnostic?.message);
+    }
+    // Unrelated config and flags, and any request other than true, pass.
+    for (const additionalArgs of [
+      '-c model="o3" --search',
+      "-c shell_environment_policy.inherit=all",
+      "-C sub -c sandbox_modes_note=1",
+    ]) {
+      const ok = await mapper.prepare(true, { ...context, additionalArgs });
+      assert.deepStrictEqual(ok.diagnostics, [], additionalArgs);
+    }
+    for (const request of [false, null]) {
+      const other = await mapper.prepare(request, {
+        ...context,
+        additionalArgs: "--dangerously-bypass-approvals-and-sandbox",
+      });
+      assert.deepStrictEqual(other.diagnostics, []);
+    }
+  });
+
   test("Copilot and Qwen emit their off switches for Off", async () => {
     const copilot = await new CopilotCliProvider().sandboxMapper.prepare(
       false,
@@ -211,5 +262,20 @@ suite("sandbox mappers", () => {
     assert.ok(!hasCliFlag("--settings-file x", ["--settings"]));
     assert.ok(!hasCliFlag('"--settings is text"', ["--settings"]));
     assert.ok(!hasCliFlag("", ["--settings"]));
+  });
+
+  test("getCliFlagValues reads separate, inline and attached short values", () => {
+    assert.deepStrictEqual(
+      getCliFlagValues('-c a=1 --config=b=2 -cc=3 --config "d = 4" -c', [
+        "-c",
+        "--config",
+      ]),
+      ["a=1", "b=2", "c=3", "d = 4"]
+    );
+    // Attached values are only read for one-letter short flags.
+    assert.deepStrictEqual(
+      getCliFlagValues("-settingsx --configx", ["-settings", "--config"]),
+      []
+    );
   });
 });

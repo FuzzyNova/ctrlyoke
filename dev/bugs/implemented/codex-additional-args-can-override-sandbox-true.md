@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-03 by the harness sandbox follow-up review
 - **Area:** `src/core/harness/codex/CodexSandboxMapper.ts`, `src/core/harness/codex/CodexCliProvider.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -39,7 +39,35 @@ and the launch is refused.
 checks for conflicting containment flags. `SandboxContext.additionalArgs` is
 passed to the mapper but `CodexSandboxMapper.prepare` ignores it.
 
-## Suggested Fix
+## Probe Results (Codex 0.166.0, Windows, 2026-11-06)
+
+`codex exec` launch header for each form, with ctrlyoke's `-s workspace-write`:
+
+- `--dangerously-bypass-approvals-and-sandbox -s workspace-write` →
+  `sandbox: danger-full-access`. **Unsafe:** the bypass wins. The hidden
+  alias `--yolo` is accepted too.
+- `-s danger-full-access -s workspace-write` → rejected: "the argument
+  '--sandbox <SANDBOX_MODE>' cannot be used multiple times".
+- `-c sandbox_mode="danger-full-access"` before or after `-s` → still
+  `workspace-write`: `-s` wins.
+- `-c sandbox_workspace_write.network_access=true` plus
+  `-c 'sandbox_workspace_write.writable_roots=["C:/"]'` →
+  `workspace-write [workdir, /tmp, $TMPDIR, C:\] (network access enabled)`.
+  **Unsafe:** both widen containment.
+
+## Fix
+
+`CodexSandboxMapper.prepare` refuses `sandbox: true` with an error
+`SANDBOX_SETTINGS_OVERRIDDEN` diagnostic (now built by the shared
+`sandboxOverriddenDiagnostic`, which Claude uses too) when `additionalArgs`
+passes the bypass flag or `--yolo`, any `-s`/`--sandbox`, or a `-c`/`--config`
+whose key is `sandbox_mode`, `sandbox_workspace_write[.*]` or
+`sandbox_permissions`. The harmless-but-contradictory forms (duplicate `-s`,
+`-c sandbox_mode`) are refused too, with a clearer message than Codex's own.
+`getCliFlagValues` in `src/utils/CliArgParser.ts` reads flag values in the
+separate, `=` and attached short (`-cvalue`) forms.
+
+## Original Suggested Fix
 
 First probe Codex 0.166.0 with each conflicting form: duplicate `-s`, bypass
 plus `-s`, and the `-c` overrides. Then, in `CodexSandboxMapper.prepare`, when

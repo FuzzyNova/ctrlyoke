@@ -84,6 +84,43 @@ export function hasCliFlag(input: string, flags: readonly string[]): boolean {
 }
 
 /**
+ * The values an `additionalArgs` string gives any of the given flags, in order:
+ * `--flag value`, `--flag=value` and, for a one-letter short flag, the attached
+ * `-fvalue` form most CLI parsers also accept. A flag with no value after it
+ * contributes nothing.
+ */
+export function getCliFlagValues(
+  input: string,
+  flags: readonly string[]
+): string[] {
+  const args = parseArgString(input);
+  const values: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    for (const flag of flags) {
+      if (arg === flag) {
+        if (i + 1 < args.length) values.push(args[++i]);
+        break;
+      }
+      if (arg.startsWith(`${flag}=`)) {
+        values.push(arg.slice(flag.length + 1));
+        break;
+      }
+      if (isShortFlag(flag) && arg.startsWith(flag)) {
+        values.push(arg.slice(flag.length));
+        break;
+      }
+    }
+  }
+  return values;
+}
+
+/** `-c`, not `--config` or Antigravity's single-dash `-settings`. */
+function isShortFlag(flag: string): boolean {
+  return flag.length === 2 && flag[0] === "-" && flag[1] !== "-";
+}
+
+/**
  * Formats argument tokens as a string that {@link parseArgString} can recover.
  * Tokens containing whitespace or quote characters are double-quoted, with
  * backslashes and double quotes escaped for the parser.

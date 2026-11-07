@@ -686,3 +686,26 @@ export function sandboxUnsupportedDiagnostic(input: {
     ...(remediation ? { remediation } : {}),
   };
 }
+
+/**
+ * `sandbox: true` that the step's own `additionalArgs` would replace or widen.
+ * It is an error, so the launch is refused rather than run less contained
+ * than Dry Run reports.
+ */
+export function sandboxOverriddenDiagnostic(
+  harnessId: HarnessId,
+  message: string
+): CompatibilityDiagnostic {
+  return {
+    code: COMPATIBILITY_DIAGNOSTIC_CODES.SANDBOX_SETTINGS_OVERRIDDEN,
+    severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR,
+    harnessId,
+    capability: SANDBOX_CAPABILITY_KEYS.TERMINAL,
+    state: {
+      fidelity: CAPABILITY_FIDELITIES.UNSUPPORTED,
+      mechanism: CAPABILITY_MECHANISMS.NATIVE,
+      verification: CAPABILITY_VERIFICATION_STATUSES.VERIFIED,
+    },
+    message,
+  };
+}

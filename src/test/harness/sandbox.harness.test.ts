@@ -290,6 +290,39 @@ suite("Harness sandbox tests", function () {
           );
         });
 
+        // Codex 0.166.0 lets the bypass flag win over `-s` and runs with
+        // danger-full-access, so ctrlyoke must refuse before the CLI starts.
+        test("codex-cli: sandbox true with a bypass in additionalArgs fails at launch", async function () {
+          const outside = path.join(outsideDir, "outside-additional-args.txt");
+          const result = await withIsolatedCodexHome([workspace], () =>
+            Promise.resolve(
+              runWorkflowFile(
+                workflow(harness, prepareOutsideWrite(workspace, outside), {
+                  sandbox: true,
+                  additionalArgs: "--dangerously-bypass-approvals-and-sandbox",
+                }),
+                workspace,
+                "sandbox-additional-args-bypass"
+              )
+            )
+          );
+          if (logAndMaybeSkip(harness, result)) return;
+          assert.notStrictEqual(
+            result.exitCode,
+            0,
+            `Codex ran with a bypassed sandbox: true\n${result.stdout}`
+          );
+          assert.ok(
+            /additionalArgs/.test(`${result.stdout}\n${result.stderr}`),
+            `failure did not name additionalArgs\n${result.stdout}\n${result.stderr}`
+          );
+          assert.ok(
+            !shellCommandAttempted(workspace, WRITE_SCRIPT),
+            "Codex started despite the sandbox failure"
+          );
+          assert.strictEqual(fs.existsSync(outside), false);
+        });
+
         test("codex-cli: sandbox true closes outbound network", async function () {
           const marker = path.join(workspace, "network-reached.txt");
           const prompt = `Run exactly: node -e "fetch('https://example.com').then(()=>require('fs').writeFileSync('${marker.replace(/\\/g, "/")}','reached')).catch(()=>process.exit(1))". Then stop.`;
