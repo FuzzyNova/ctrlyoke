@@ -1144,6 +1144,29 @@ suite("AntigravityCliProvider", () => {
     assert.strictEqual(owners[liveGroup]?.workspaceRoot, workspaceRoot);
   });
 
+  test("creates the global hooks directory when it does not exist yet", async () => {
+    const provider = new AntigravityCliProvider();
+    await fs.rm(path.dirname(hooksPath()), { recursive: true, force: true });
+
+    await provider.buildNotificationHookArgs(
+      extensionPath,
+      workspaceRoot,
+      0,
+      path.join(workspaceRoot, "workflow.md"),
+      undefined,
+      ["stop"]
+    );
+
+    const hooks = JSON.parse(await fs.readFile(hooksPath(), "utf8")) as Record<
+      string,
+      unknown
+    >;
+    assert.strictEqual(
+      Object.keys(hooks).filter((name) => name.startsWith("ctrlyoke-")).length,
+      1
+    );
+  });
+
   test("logs invalid global hooks JSON during cleanup and resolves", async () => {
     const provider = new AntigravityCliProvider();
     const invalidContent = "not json";

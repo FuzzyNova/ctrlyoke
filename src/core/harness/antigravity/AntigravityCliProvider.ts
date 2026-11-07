@@ -1151,6 +1151,9 @@ export class AntigravityCliProvider implements ICliProvider {
     }
     const groupName = this.getHookGroupName(workflowKey);
 
+    // The lock file sits beside hooks.json, so its directory has to exist
+    // before the lock is taken (a fresh Antigravity install has no config/).
+    await fs.mkdir(path.dirname(hooksPath), { recursive: true });
     await withFileLock(hooksPath, async () => {
       const current = await this.readHooksFile();
       const owners = await this.readHookOwners();
