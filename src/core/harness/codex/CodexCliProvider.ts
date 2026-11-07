@@ -286,7 +286,7 @@ export class CodexCliProvider implements ICliProvider {
       // `--enable hooks`, which older releases reject at startup) and added
       // the `hooks.state` trust hash CodexInlineHooksBuilder writes.
       minimum: "0.129.0",
-      testedWith: "0.166.0",
+      testedWith: "0.167.0",
       updateCommand: "codex update",
     },
     shouldStreamHeadlessOutput: true,

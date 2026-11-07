@@ -213,7 +213,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     npmPackage: "opencode-ai",
     versionPolicy: {
       minimum: "1.3.16",
-      testedWith: "2.2.5",
+      testedWith: "2.2.6",
       updateCommand: "opencode upgrade",
     },
     shouldStreamHeadlessOutput: true,

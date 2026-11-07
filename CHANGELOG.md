@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-07
+
 ### Changed
 
 - Interactive prompt steps now finish with a distinct **No turn started** status if the harness handles submitted input without beginning an AI turn within 25 seconds. The step does not run retries or end conditions, and the next step starts in a fresh process while resuming the same session.
@@ -26,6 +28,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A Codex step with `sandbox: true` now fails at launch if its `additionalArgs` would replace or widen the sandbox: `--dangerously-bypass-approvals-and-sandbox` (or `--yolo`), its own `-s`/`--sandbox`, or a `-c` override of `sandbox_mode`, `sandbox_workspace_write.*` or `sandbox_permissions`. Codex 0.166.0 lets the bypass flag win over `-s`, and the `sandbox_workspace_write` overrides add writable roots or turn on network access, so these steps previously ran less contained than Dry Run reported.
 - On narrow screens (under 640 px, such as a phone) the dashboard header keeps the same button groups as the wide layout. The top row holds **New**, Save/Undo/Redo, the run controls and Search/Workspace/Settings. The workflow name and its dropdown take the whole second row, between the **Steps** and **Workflow Properties** pulls. Run, Pause and Stop buttons that can't be used are hidden only when the top row is too narrow for all three: below 425 px in the browser dashboard and 388 px in VS Code (previously 380 px for both).
 - Codex steps that run in the `workspace-write` sandbox can now stage and commit: ctrlyoke grants Codex write access to the checkout's Git directory, and to a linked worktree's own Git directory, so `git add` and `git commit` no longer fail with `Operation not permitted`.
+- Every error, warning and information message ctrlyoke shows, in VS Code or
+  the dashboard, is now also written to the session log in
+  `.ctrlyoke/logs/` as a `[Toast]` line. Command errors that have no buttons,
+  such as "No file selected", now follow your `notifications.toastLevel`
+  setting like ctrlyoke's other messages.
+- A workspace `.ctrlyoke/settings.json` whose `defaults.worktree` names a
+  `setup` command now needs your approval before that value applies, like
+  other workspace settings that run programs. Until you approve it, workflows
+  that omit `worktree` use your user value. A value without `setup` still
+  applies without asking.
+- Continuing a view-only imported run now reports why it cannot continue.
+- Run exports now collapse streaming text deltas into sealed attempt output by
+  default; `ctrlyoke export --with-stream-deltas` keeps every chunk for replay.
+- `ctrlyoke import` can now place exported workspace changes in a managed
+  worktree or clean checkout, and explicitly continue the imported run.
+- `ctrlyoke import` now prints a workspace-specific preview before writing a
+  bundle to history, and includes that preview in its JSON result.
+- Imported runs show bundle provenance, and output recorded before import is
+  read-only.
+- A resume whose session can't be found, or whose ID is badly formatted, now
+  warns and starts a new session on every harness. Before, Copilot, Codex,
+  OpenCode and Antigravity failed the step, and Claude/Qwen and badly formatted
+  IDs started a new session without telling the user.
+- **Add Commit to ctrlyoke** has been removed from VS Code's Timeline view
+  context menu. Current VS Code versions no longer tell other extensions which
+  timeline commit was right-clicked, so the item always failed with "Could not
+  resolve a commit hash". Click the commit to open its diff and use **Add
+  Commit to ctrlyoke** there, or right-click a commit in the dashboard's
+  **History**. The Timeline menu item will return if VS Code makes this
+  available again.
+- The **Spec-Driven Loop** template now asks for a test command and for a
+  harness and model for the orchestrator (the plan and review steps) and for
+  the implementer (every step the orchestrator queues). Workflows it creates
+  now name these explicitly instead of inheriting your default harness and
+  execution mode: the orchestrator runs `opus` on Claude Code in interactive
+  mode, and queued steps run `sonnet` on Claude Code headless, unless you pick
+  others. Steps are told to pass the test command, which defaults to
+  `npm test`. Workflows already created from it are unchanged.
+- The **Spec-Driven Loop**, **Feature-Driven Loop**, **Bug Hunt Loop**, and
+  **Bug Drain Loop** templates now require their planning, review, and
+  bug-hunting steps to leave a clean git working tree. A step with
+  uncommitted changes is asked to finish and commit, and the workflow stops
+  after two failed retries. Steps the loop queues for itself get the same
+  check through the `committed` condition preset, which the orchestrator now
+  attaches to every queued step except members of a parallel group, because
+  those steps share one working tree. The check previously passed without
+  complaint outside a git repository. These loops now also stop before they
+  start unless the folder is a git repository with no uncommitted changes, and
+  the bug loops re-check that at the start of every pass. Workflows already
+  created from them are unchanged.
+- **Tested with the latest harness CLIs.** The compatibility docs' "Tested with" row now lists
+  Copilot CLI 1.0.107, Claude Code 2.1.319, Codex 0.167.0, OpenCode 2.2.6, Qwen Code 0.26.9 and
+  Antigravity 1.5.3.
 
 ### Added
 
@@ -107,70 +162,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refused by the extension, even when a client bypasses the dashboard gate.
 - Run export now preserves patch paths and binary or non-UTF-8 content, and only
   redacts matching values on added text lines; import previews report patch redactions.
-
 - Exporting a run executed in a managed or named worktree now writes its paths
   as `${workspaceFolder}/…`, so those paths remain portable with the bundle.
 - **Reset all to defaults** in Workflow Properties now also resets Max Steps
   and Trusted External Roots to Inherit.
-
-### Changed
-
-- Every error, warning and information message ctrlyoke shows, in VS Code or
-  the dashboard, is now also written to the session log in
-  `.ctrlyoke/logs/` as a `[Toast]` line. Command errors that have no buttons,
-  such as "No file selected", now follow your `notifications.toastLevel`
-  setting like ctrlyoke's other messages.
-- A workspace `.ctrlyoke/settings.json` whose `defaults.worktree` names a
-  `setup` command now needs your approval before that value applies, like
-  other workspace settings that run programs. Until you approve it, workflows
-  that omit `worktree` use your user value. A value without `setup` still
-  applies without asking.
-- Continuing a view-only imported run now reports why it cannot continue.
-- Run exports now collapse streaming text deltas into sealed attempt output by
-  default; `ctrlyoke export --with-stream-deltas` keeps every chunk for replay.
-
-- `ctrlyoke import` can now place exported workspace changes in a managed
-  worktree or clean checkout, and explicitly continue the imported run.
-- `ctrlyoke import` now prints a workspace-specific preview before writing a
-  bundle to history, and includes that preview in its JSON result.
-- Imported runs show bundle provenance, and output recorded before import is
-  read-only.
-
-- A resume whose session can't be found, or whose ID is badly formatted, now
-  warns and starts a new session on every harness. Before, Copilot, Codex,
-  OpenCode and Antigravity failed the step, and Claude/Qwen and badly formatted
-  IDs started a new session without telling the user.
-
-- **Add Commit to ctrlyoke** has been removed from VS Code's Timeline view
-  context menu. Current VS Code versions no longer tell other extensions which
-  timeline commit was right-clicked, so the item always failed with "Could not
-  resolve a commit hash". Click the commit to open its diff and use **Add
-  Commit to ctrlyoke** there, or right-click a commit in the dashboard's
-  **History**. The Timeline menu item will return if VS Code makes this
-  available again.
-- The **Spec-Driven Loop** template now asks for a test command and for a
-  harness and model for the orchestrator (the plan and review steps) and for
-  the implementer (every step the orchestrator queues). Workflows it creates
-  now name these explicitly instead of inheriting your default harness and
-  execution mode: the orchestrator runs `opus` on Claude Code in interactive
-  mode, and queued steps run `sonnet` on Claude Code headless, unless you pick
-  others. Steps are told to pass the test command, which defaults to
-  `npm test`. Workflows already created from it are unchanged.
-- The **Spec-Driven Loop**, **Feature-Driven Loop**, **Bug Hunt Loop**, and
-  **Bug Drain Loop** templates now require their planning, review, and
-  bug-hunting steps to leave a clean git working tree. A step with
-  uncommitted changes is asked to finish and commit, and the workflow stops
-  after two failed retries. Steps the loop queues for itself get the same
-  check through the `committed` condition preset, which the orchestrator now
-  attaches to every queued step except members of a parallel group, because
-  those steps share one working tree. The check previously passed without
-  complaint outside a git repository. These loops now also stop before they
-  start unless the folder is a git repository with no uncommitted changes, and
-  the bug loops re-check that at the start of every pass. Workflows already
-  created from them are unchanged.
-
-### Fixed
-
 - Resuming a paused workflow no longer leaves it stuck as running with
   nothing executing when the resume cannot set up, for example when its
   worktree or runner lock cannot be prepared. The workflow now stops with an

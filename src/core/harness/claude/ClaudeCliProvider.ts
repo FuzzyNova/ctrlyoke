@@ -162,7 +162,7 @@ export class ClaudeCliProvider implements ICliProvider {
     npmPackage: "@anthropic-ai/claude-code",
     versionPolicy: {
       minimum: "2.1.94",
-      testedWith: "2.1.316",
+      testedWith: "2.1.319",
       updateCommand: "claude update",
     },
     shouldStreamHeadlessOutput: true,
