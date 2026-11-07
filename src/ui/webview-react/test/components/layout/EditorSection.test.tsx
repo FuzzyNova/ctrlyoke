@@ -156,6 +156,19 @@ describe("EditorSection", () => {
     expect(useUiStore.getState().editorCollapsed).toBe(true);
   });
 
+  it("marks the whole header as non-selectable chrome", () => {
+    render(<EditorSection />);
+
+    const collapseButton = screen.getByRole("button", {
+      name: "Collapse editor",
+    });
+    const header = collapseButton.parentElement;
+    expect(header).toHaveClass("cy-no-select");
+    expect(
+      header?.contains(screen.getByRole("button", { name: "Set prompt name" }))
+    ).toBe(true);
+  });
+
   it("activates the step-name editor from Space", async () => {
     const user = userEvent.setup();
     render(<EditorSection />);

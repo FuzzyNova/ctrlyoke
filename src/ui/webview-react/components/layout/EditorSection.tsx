@@ -267,8 +267,11 @@ const EditorSectionInner: React.FC = () => {
       id="editor-section"
       className="editor-section flex flex-col h-full min-h-0 bg-editor-bg"
     >
-      {/* Section Header */}
-      <div className="flex items-center h-[30px] pl-2 pr-1 border-b border-panel-border bg-sidebar-bg">
+      {/* Section Header. cy-no-select: all controls, same as the other
+          headers — on iOS a stray selection here can swallow the collapse
+          tap. The name input stays selectable (see .cy-no-select in
+          globals.css). */}
+      <div className="cy-no-select flex items-center h-[30px] pl-2 pr-1 border-b border-panel-border bg-sidebar-bg">
         {/* Left: Collapse trigger (chevron + icon + label) */}
         <button
           type="button"
@@ -289,7 +292,7 @@ const EditorSectionInner: React.FC = () => {
         </button>
 
         <div
-          className="cy-mode-switch mx-2 cy-no-select"
+          className="cy-mode-switch mx-2"
           role="group"
           aria-label="Step type"
         >
