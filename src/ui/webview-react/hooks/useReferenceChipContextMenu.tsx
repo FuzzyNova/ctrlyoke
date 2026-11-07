@@ -8,7 +8,9 @@ import {
 export type ReferenceChipMenuOpener = (
   x: number,
   y: number,
-  items: StepContextMenuEntry[]
+  items: StepContextMenuEntry[],
+  /** True for a long press, which must leave focus (and the keyboard) in the editor. */
+  keepInvokerFocus?: boolean
 ) => void;
 
 interface UseReferenceChipContextMenuResult {
@@ -21,7 +23,8 @@ interface UseReferenceChipContextMenuResult {
 export function useReferenceChipContextMenu(): UseReferenceChipContextMenuResult {
   const [menu, setMenu] = useState<StepContextMenuState | null>(null);
   const openReferenceChipMenu = useCallback<ReferenceChipMenuOpener>(
-    (x, y, items) => setMenu({ x, y, items }),
+    (x, y, items, keepInvokerFocus) =>
+      setMenu({ x, y, items, keepInvokerFocus }),
     []
   );
   const close = useCallback(() => setMenu(null), []);

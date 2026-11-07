@@ -8,6 +8,7 @@ import type {
 import {
   buildEditorEditMenuItems,
   findWordRangeAt,
+  isTouchOnSelectionHandle,
 } from "@utils/editorEditMenuItems";
 
 const views: EditorView[] = [];
@@ -126,5 +127,37 @@ describe("buildEditorEditMenuItems", () => {
     expect(item(empty, "Select Word").disabled).toBe(true);
     expect(item(empty, "Select Line").disabled).toBe(true);
     expect(item(empty, "Select All").disabled).toBe(true);
+  });
+});
+
+describe("isTouchOnSelectionHandle", () => {
+  // jsdom has no layout, so give each document position a fixed line box:
+  // x = 10px per character, line from y=100 to y=120.
+  function withCoords(view: EditorView): EditorView {
+    vi.spyOn(view, "coordsAtPos").mockImplementation((pos: number) => ({
+      left: pos * 10,
+      right: pos * 10,
+      top: 100,
+      bottom: 120,
+    }));
+    return view;
+  }
+
+  it("is false with no selection, wherever the touch lands", () => {
+    const view = withCoords(createView("hello world", 3));
+    expect(isTouchOnSelectionHandle(view, 30, 110)).toBe(false);
+  });
+
+  it("is true on either end of a selection, including the knob outside the line", () => {
+    const view = withCoords(createView("hello world", 2, 8));
+    expect(isTouchOnSelectionHandle(view, 20, 110)).toBe(true);
+    expect(isTouchOnSelectionHandle(view, 80, 145)).toBe(true);
+    expect(isTouchOnSelectionHandle(view, 15, 75)).toBe(true);
+  });
+
+  it("is false in the middle of a selection or away from it", () => {
+    const view = withCoords(createView("hello world", 1, 10));
+    expect(isTouchOnSelectionHandle(view, 55, 110)).toBe(false);
+    expect(isTouchOnSelectionHandle(view, 10, 200)).toBe(false);
   });
 });

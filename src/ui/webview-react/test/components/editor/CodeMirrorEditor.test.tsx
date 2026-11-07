@@ -3027,7 +3027,12 @@ describe("CodeMirrorEditor atomic reference chip context menu", () => {
       touch("touchend", editor.chip());
 
       expect(hostTouch).not.toHaveBeenCalled();
-      expect(editor.openChipMenu).toHaveBeenCalledWith(5, 6, expect.any(Array));
+      expect(editor.openChipMenu).toHaveBeenCalledWith(
+        5,
+        6,
+        expect.any(Array),
+        true
+      );
       expect(editor.postMessage).not.toHaveBeenCalled();
     } finally {
       editor.cleanup();

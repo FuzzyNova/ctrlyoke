@@ -95,7 +95,8 @@ interface UseWorkspaceEditorContextMenuOptions {
 }
 
 interface UseWorkspaceEditorContextMenuResult {
-  openContextMenu: (x: number, y: number) => void;
+  /** `fromTouch` keeps focus (and the on-screen keyboard) in the editor. */
+  openContextMenu: (x: number, y: number, fromTouch?: boolean) => void;
   editorContextMenuPortal: ReactNode;
   editorLongPressHandlers: ReturnType<typeof useLongPress>;
 }
@@ -110,7 +111,7 @@ export function useWorkspaceEditorContextMenu({
   );
 
   const openContextMenu = useCallback(
-    (x: number, y: number) => {
+    (x: number, y: number, fromTouch = false) => {
       editorRef.current?.placeCaretAtCoords(x, y);
       const selectionText = editorRef.current?.getSelectionText() ?? "";
       const selectionRange = editorRef.current?.getSelectionRange();
@@ -158,12 +159,27 @@ export function useWorkspaceEditorContextMenu({
         ...buildWorkflowFileMenuItems(filePath),
       ];
 
-      setContextMenu({ x, y, items });
+      setContextMenu({ x, y, items, keepInvokerFocus: fromTouch });
     },
     [editorRef, filePath, buildWorkflowFileMenuItems]
   );
 
-  const editorLongPressHandlers = useLongPress((x, y) => openContextMenu(x, y));
+  const openContextMenuFromTouch = useCallback(
+    (x: number, y: number) => openContextMenu(x, y, true),
+    [openContextMenu]
+  );
+  // A long press on a selection handle is the user dragging the selection.
+  const canStartLongPress = useCallback(
+    (x: number, y: number) =>
+      !editorRef.current?.isTouchOnSelectionHandle(x, y),
+    [editorRef]
+  );
+  const editorLongPressHandlers = useLongPress(
+    openContextMenuFromTouch,
+    undefined,
+    false,
+    canStartLongPress
+  );
 
   const editorContextMenuPortal = contextMenu ? (
     <StepContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />

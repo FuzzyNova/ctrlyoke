@@ -116,9 +116,10 @@ import {
   type ReferenceChipMenuOpener,
 } from "@hooks/useReferenceChipContextMenu";
 import type { StepContextMenuEntry } from "@components/shared/StepContextMenu";
-import { useLongPress } from "@hooks/useLongPress";
+import { isTouchContextMenuEvent, useLongPress } from "@hooks/useLongPress";
 import {
   buildEditorEditMenuItems,
+  isTouchOnSelectionHandle,
   placeCaretForContextMenu,
 } from "@utils/editorEditMenuItems";
 import { createPromptCompletionClient } from "@utils/promptCompletion/createPromptCompletionClient";
@@ -1557,9 +1558,11 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     .join(" ");
 
   // Right-click or long press anywhere but a chip (whose own handler stops
-  // the event) opens Cut/Copy/Paste and Select Word/Line/All.
+  // the event) opens Cut/Copy/Paste and Select Word/Line/All. A long press
+  // keeps focus in the editor so the on-screen keyboard stays up, and never
+  // arms on a selection handle, where it is the user dragging the selection.
   const openEditMenu = useCallback(
-    (x: number, y: number) => {
+    (x: number, y: number, fromTouch: boolean) => {
       const view = viewRef.current;
       if (!view) return;
       placeCaretForContextMenu(view, x, y);
@@ -1569,12 +1572,27 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         buildEditorEditMenuItems(
           view,
           readOnlyRef.current || view.state.readOnly
-        )
+        ),
+        fromTouch
       );
     },
     [openReferenceChipMenu]
   );
-  const editMenuLongPressHandlers = useLongPress(openEditMenu);
+  const openEditMenuFromTouch = useCallback(
+    (x: number, y: number) => openEditMenu(x, y, true),
+    [openEditMenu]
+  );
+  const canStartEditMenuLongPress = useCallback(
+    (x: number, y: number) =>
+      !viewRef.current || !isTouchOnSelectionHandle(viewRef.current, x, y),
+    []
+  );
+  const editMenuLongPressHandlers = useLongPress(
+    openEditMenuFromTouch,
+    undefined,
+    false,
+    canStartEditMenuLongPress
+  );
 
   return (
     <>
@@ -1585,7 +1603,9 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         role="presentation"
         onContextMenu={(event) => {
           event.preventDefault();
-          openEditMenu(event.clientX, event.clientY);
+          // A touch long press is handled by editMenuLongPressHandlers.
+          if (isTouchContextMenuEvent(event.nativeEvent)) return;
+          openEditMenu(event.clientX, event.clientY, false);
         }}
         {...editMenuLongPressHandlers}
       />
@@ -2756,6 +2776,8 @@ export function createReferenceLinkHandlerExtension(
       // Cut/Copy/... menu on the editor wrapper) doesn't open as well.
       event.preventDefault();
       event.stopPropagation();
+      // A touch long press is handled by the touchstart timer below.
+      if (isTouchContextMenuEvent(event)) return true;
       openChipMenu(
         event.clientX,
         event.clientY,
@@ -2787,7 +2809,8 @@ export function createReferenceLinkHandlerExtension(
           openChipMenu(
             clientX,
             clientY,
-            buildEditorReferenceChipMenuItems(target, view, openLink)
+            buildEditorReferenceChipMenuItems(target, view, openLink),
+            true
           );
         }, LINK_TOUCH_LONG_PRESS_MS);
       }

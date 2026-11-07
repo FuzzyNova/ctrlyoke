@@ -31,6 +31,38 @@ export function placeCaretForContextMenu(
 }
 
 /**
+ * How far from a selection end a touch still counts as grabbing its handle.
+ * iOS draws the start knob above the line and the end knob below it; Android
+ * hangs both below. Both use touch targets around 44px.
+ */
+const SELECTION_HANDLE_SLOP_PX = 32;
+
+/**
+ * True when a touch at the given client coordinates is on (or next to) one
+ * of the native selection handles of a non-empty selection. A long press
+ * there is the user dragging the handle, not asking for a menu: iOS takes
+ * over the drag and may not deliver the `touchmove` that would otherwise
+ * cancel the long-press timer.
+ */
+export function isTouchOnSelectionHandle(
+  view: EditorView,
+  x: number,
+  y: number
+): boolean {
+  const { from, to } = view.state.selection.main;
+  if (from === to) return false;
+  return [from, to].some((pos) => {
+    const rect = view.coordsAtPos(pos);
+    if (!rect) return false;
+    return (
+      Math.abs(x - rect.left) <= SELECTION_HANDLE_SLOP_PX &&
+      y >= rect.top - SELECTION_HANDLE_SLOP_PX &&
+      y <= rect.bottom + SELECTION_HANDLE_SLOP_PX
+    );
+  });
+}
+
+/**
  * The run of non-whitespace text touching the caret on either side: a whole
  * reference such as `@src/a/b.ts`, where CodeMirror's own `wordAt` would stop
  * at `b`.

@@ -31,6 +31,13 @@ export type StepContextMenuState = {
   items: StepContextMenuEntry[];
   /** Accessible name of the menu; defaults to {@link DEFAULT_MENU_LABEL}. */
   label?: string;
+  /**
+   * Leave focus where it is instead of moving it into the menu, and keep taps
+   * on the menu from taking it. Set when a long press opens the menu over a
+   * text editor: on a phone, moving focus out of the editor dismisses the
+   * on-screen keyboard, which reflows the layout out from under the menu.
+   */
+  keepInvokerFocus?: boolean;
 };
 
 type StepContextMenuProps = StepContextMenuState & { onClose: () => void };
@@ -89,12 +96,18 @@ function nextMenuItemIndex(
  * items and Home/End jump to the ends. Escape, Tab and choosing an item return
  * focus to whatever held it when the menu opened, before the item's action
  * runs — editor actions such as Cut depend on the editor having focus again.
+ * With `keepInvokerFocus` the menu takes no focus at all (see that prop), and
+ * a resize of the window or visual viewport closes it: if the on-screen
+ * keyboard closes anyway, the menu's fixed position no longer points at the
+ * editor it was opened on. Menus that take focus can't close on resize, since
+ * taking focus is itself what dismisses the keyboard.
  */
 export function StepContextMenu({
   x,
   y,
   items,
   label = DEFAULT_MENU_LABEL,
+  keepInvokerFocus = false,
   onClose,
 }: StepContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -117,9 +130,9 @@ export function StepContextMenu({
   // measured position before focusing the first item.
   const isVisible = pos !== null;
   useEffect(() => {
-    if (!isVisible || !menuRef.current) return;
+    if (!isVisible || !menuRef.current || keepInvokerFocus) return;
     enabledMenuItems(menuRef.current)[0]?.focus({ preventScroll: true });
-  }, [isVisible]);
+  }, [isVisible, keepInvokerFocus]);
 
   const restoreFocusAndClose = useCallback(() => {
     if (invoker?.isConnected && invoker !== document.body) {
@@ -135,13 +148,18 @@ export function StepContextMenu({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === KEYBOARD_KEYS.ESCAPE) onClose();
     };
+    const resizeTargets: EventTarget[] = keepInvokerFocus
+      ? [window, ...(window.visualViewport ? [window.visualViewport] : [])]
+      : [];
     document.addEventListener("pointerdown", close);
     document.addEventListener("keydown", onKey);
+    resizeTargets.forEach((t) => t.addEventListener("resize", close));
     return () => {
       document.removeEventListener("pointerdown", close);
       document.removeEventListener("keydown", onKey);
+      resizeTargets.forEach((t) => t.removeEventListener("resize", close));
     };
-  }, [onClose]);
+  }, [onClose, keepInvokerFocus]);
 
   const handleMenuKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     if (e.key === KEYBOARD_KEYS.ESCAPE || e.key === KEYBOARD_KEYS.TAB) {
@@ -178,6 +196,9 @@ export function StepContextMenu({
       className="step-context-menu bg-editor-bg border border-panel-border rounded-sm shadow-lg py-0.5 min-w-[160px] outline-none"
       onKeyDown={handleMenuKeyDown}
       onPointerDown={(e) => e.stopPropagation()}
+      // Focus moves on mousedown (a tap's emulated one, too); cancelling it
+      // keeps the editor focused, and the click still fires.
+      onMouseDown={keepInvokerFocus ? (e) => e.preventDefault() : undefined}
       onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => {
         e.preventDefault();

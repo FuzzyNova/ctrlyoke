@@ -121,4 +121,53 @@ describe("StepContextMenu", () => {
     expect(focusedDuringAction).toBe(invoker);
     invoker.remove();
   });
+
+  describe("keepInvokerFocus (long press over an editor)", () => {
+    function renderKeepingFocus(items: StepContextMenuEntry[]) {
+      const editor = document.createElement("div");
+      editor.contentEditable = "true";
+      editor.tabIndex = 0;
+      document.body.appendChild(editor);
+      editor.focus();
+      const onClose = vi.fn();
+      render(
+        <StepContextMenu
+          x={10}
+          y={10}
+          items={items}
+          keepInvokerFocus
+          onClose={onClose}
+        />
+      );
+      return { editor, onClose };
+    }
+
+    it("leaves focus in the editor when it opens", () => {
+      const { editor } = renderKeepingFocus([item("Copy")]);
+      expect(editor).toHaveFocus();
+      editor.remove();
+    });
+
+    it("cancels the mousedown of a tap so the editor keeps focus", () => {
+      const { editor } = renderKeepingFocus([item("Copy")]);
+      const notCancelled = fireEvent.mouseDown(
+        screen.getByRole("menuitem", { name: "Copy" })
+      );
+      expect(notCancelled).toBe(false);
+      editor.remove();
+    });
+
+    it("closes when the viewport resizes", () => {
+      const { editor, onClose } = renderKeepingFocus([item("Copy")]);
+      fireEvent(window, new Event("resize"));
+      expect(onClose).toHaveBeenCalled();
+      editor.remove();
+    });
+  });
+
+  it("does not close on resize when it took focus", () => {
+    const { onClose } = renderMenu([item("Copy")]);
+    fireEvent(window, new Event("resize"));
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });
