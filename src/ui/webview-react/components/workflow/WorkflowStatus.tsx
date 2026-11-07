@@ -52,6 +52,7 @@ import {
   viewedRunLabel,
 } from "../../utils/runNavigation";
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
+import { startNewBlankWorkflow } from "../../utils/newWorkflow";
 import type {
   WorkflowKey,
   RunRef,
@@ -777,13 +778,49 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     (state) => state.requestPromptEditorFocus
   );
 
-  // Focus input when editing starts
-  useEffect(() => {
+  // Focus input when editing starts. A layout effect, not a passive one: when
+  // a tap on New starts naming (below), the focus() must land while that tap
+  // is still being handled or iOS never raises the keyboard, and a passive
+  // effect is not guaranteed to run before the gesture ends.
+  useLayoutEffect(() => {
     if (isEditing && inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select();
     }
   }, [isEditing]);
+
+  // Naming started by a New gesture before the blank workflow exists. Holds
+  // the workflow key on screen at the time, so the blank workflow's arrival
+  // is recognised even when the previous workflow was also a blank one.
+  const awaitingNewWorkflowRef = useRef<{
+    previousWorkflowKey: WorkflowKey | undefined;
+    pendingName: string | null;
+  } | null>(null);
+  const newWorkflowNamingRequest = useUiStore(
+    (s) => s.newWorkflowNamingRequest
+  );
+  const displayedWorkflowKey = displayedViewAddress?.workflowKey;
+  const displayedWorkflowKeyRef = useRef(displayedWorkflowKey);
+  displayedWorkflowKeyRef.current = displayedWorkflowKey;
+
+  // A layout effect so its setState renders synchronously, inside the tap
+  // that bumped the request (see startNewBlankWorkflow). Only a request made
+  // while mounted counts: a header tier change remounts this component, and
+  // an earlier request must not restart naming then.
+  const handledNamingRequestRef = useRef(newWorkflowNamingRequest);
+  useLayoutEffect(() => {
+    if (newWorkflowNamingRequest === handledNamingRequestRef.current) {
+      return;
+    }
+    handledNamingRequestRef.current = newWorkflowNamingRequest;
+    awaitingNewWorkflowRef.current = {
+      previousWorkflowKey: displayedWorkflowKeyRef.current,
+      pendingName: null,
+    };
+    setEditValue("");
+    namingNewWorkflowRef.current = true;
+    setIsEditing(true);
+  }, [newWorkflowNamingRequest]);
 
   // The backend represents a fresh blank workflow as "New Workflow" with no
   // custom name or steps. Focus it when that state arrives from the header's
@@ -793,10 +830,30 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       return;
     }
 
+    const awaiting = awaitingNewWorkflowRef.current;
+    if (awaiting) {
+      if (displayedWorkflowKey === awaiting.previousWorkflowKey) {
+        // Still the workflow that was on screen when New was tapped.
+        return;
+      }
+      // The blank workflow the gesture asked for has arrived. Naming has
+      // been under way since the tap, so keep what was typed rather than
+      // clearing it, and apply a name already committed before the workflow
+      // existed (it would otherwise have renamed the previous workflow).
+      awaitingNewWorkflowRef.current = null;
+      if (awaiting.pendingName !== null) {
+        postWorkflowDefinitionMutation(vscode, {
+          type: MESSAGE_TYPES.UPDATE_WORKFLOW_NAME,
+          workflowName: awaiting.pendingName,
+        });
+      }
+      return;
+    }
+
     setEditValue("");
     namingNewWorkflowRef.current = true;
     setIsEditing(true);
-  }, [isNewWorkflow]);
+  }, [displayedWorkflowKey, isNewWorkflow, vscode]);
 
   // Start editing workflow name
   const startEditing = useCallback(() => {
@@ -805,6 +862,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     // displayed address already targets the new one — a rename here would pair
     // the old name with the new address. Wait for the snapshot.
     if (pendingRunViewSwitch) return;
+    awaitingNewWorkflowRef.current = null;
     setEditValue(workflowName || getWorkflowNameFromPath(fileName));
     namingNewWorkflowRef.current = false;
     setIsEditing(true);
@@ -813,6 +871,14 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // Save edited workflow name
   const saveEdit = useCallback(() => {
     const newName = editValue.trim();
+    const awaiting = awaitingNewWorkflowRef.current;
+    if (awaiting) {
+      // The blank workflow hasn't arrived yet; the rename is posted when it
+      // does (see the isNewWorkflow effect above).
+      awaiting.pendingName = newName || null;
+      setIsEditing(false);
+      return;
+    }
     if (!newName) {
       setIsEditing(false);
       return;
@@ -1825,9 +1891,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               isLoadingRecent={!recentWorkflowsLoaded}
               onNewWorkflow={() => {
                 setActiveWorkflowWorkingFilePath(null);
-                setEditValue("");
-                setIsEditing(true);
-                vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW });
+                startNewBlankWorkflow(vscode);
                 closeDropdown();
               }}
             />

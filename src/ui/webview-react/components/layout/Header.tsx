@@ -13,6 +13,7 @@ import { useIsDisplayedWorkflowFavorite } from "@hooks/useIsDisplayedWorkflowFav
 import { sendMessage } from "@hooks/useMessageHandler";
 import { WebviewLog } from "@utils/logger";
 import { openWorkflowDryRun } from "@utils/executionPreview";
+import { startNewBlankWorkflow } from "@utils/newWorkflow";
 import { useIsViewedRunUnstarted } from "@hooks/useIsViewedRunUnstarted";
 import { getExternalRunnerLabel } from "@utils/externalRunner";
 import { formatShortcut } from "@utils/platform";
@@ -395,7 +396,7 @@ export const Header: React.FC<{
   // REMOVE_WORKFLOW_HISTORY already hard-deleted the backing files by the
   // time this banner appears.
   const handleCloseDeletedWorkflow = useCallback(() => {
-    vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW });
+    startNewBlankWorkflow(vscode);
   }, [vscode]);
 
   const handleCancelSuffixEditConfirmation = useCallback(() => {

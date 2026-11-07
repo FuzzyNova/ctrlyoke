@@ -36,6 +36,7 @@ import {
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 import { getWorkflowNameFromPath } from "@utils/workflowDisplayName";
+import { startNewBlankWorkflow } from "@utils/newWorkflow";
 
 // The copy assertion covers the standalone queue branch of notifyUser().
 vi.hoisted(() => {
@@ -301,6 +302,108 @@ describe("WorkflowStatus — loaded state", () => {
       screen.queryByPlaceholderText("Name your workflow...")
     ).not.toBeInTheDocument();
     expect(screen.getAllByText("New Workflow").length).toBeGreaterThan(0);
+  });
+
+  describe("naming started by a New gesture", () => {
+    const previousAddress = {
+      workflowKey: "previous-workflow" as never,
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+    } as const;
+
+    beforeEach(() => {
+      useUiStore.setState({ displayedViewAddress: previousAddress });
+    });
+
+    function arriveBlankWorkflow(): void {
+      act(() => {
+        useUiStore.setState({
+          displayedViewAddress: {
+            workflowKey: "blank-workflow" as never,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+          },
+        });
+        useWorkflowStore.setState({
+          fileName: DEFAULT_WORKFLOW_NAME,
+          workflowName: null,
+          totalSteps: 0,
+        });
+      });
+    }
+
+    // iOS raises the keyboard only for a focus() made inside the tap, so the
+    // field must be focused before the backend's blank workflow arrives.
+    it("focuses the name field inside the gesture, before the blank workflow arrives", () => {
+      render(<WorkflowStatus />);
+
+      act(() => {
+        startNewBlankWorkflow(window.vscodeApi);
+      });
+
+      const input = screen.getByPlaceholderText("Name your workflow...");
+      expect(input).toHaveValue("");
+      expect(input).toHaveFocus();
+      expect(postMessageSpy).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.CLEAR_WORKFLOW,
+      });
+    });
+
+    it("keeps what was typed when the blank workflow arrives", () => {
+      render(<WorkflowStatus />);
+      act(() => {
+        startNewBlankWorkflow(window.vscodeApi);
+      });
+      const input = screen.getByPlaceholderText("Name your workflow...");
+      fireEvent.change(input, { target: { value: "Fix lo" } });
+
+      arriveBlankWorkflow();
+
+      expect(screen.getByPlaceholderText("Name your workflow...")).toHaveValue(
+        "Fix lo"
+      );
+    });
+
+    it("applies a name committed early to the blank workflow, not the previous one", () => {
+      render(<WorkflowStatus />);
+      act(() => {
+        startNewBlankWorkflow(window.vscodeApi);
+      });
+      const input = screen.getByPlaceholderText("Name your workflow...");
+      fireEvent.change(input, { target: { value: "Fix login" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+
+      expect(postMessageSpy).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: MESSAGE_TYPES.UPDATE_WORKFLOW_NAME })
+      );
+
+      arriveBlankWorkflow();
+
+      expect(postMessageSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: MESSAGE_TYPES.UPDATE_WORKFLOW_NAME,
+          workflowName: "Fix login",
+        })
+      );
+      expect(
+        screen.queryByPlaceholderText("Name your workflow...")
+      ).not.toBeInTheDocument();
+    });
+
+    it("does not restart naming when it remounts after an earlier request", () => {
+      const { unmount } = render(<WorkflowStatus />);
+      act(() => {
+        startNewBlankWorkflow(window.vscodeApi);
+      });
+      fireEvent.keyDown(screen.getByPlaceholderText("Name your workflow..."), {
+        key: "Escape",
+      });
+      unmount();
+
+      render(<WorkflowStatus />);
+
+      expect(
+        screen.queryByPlaceholderText("Name your workflow...")
+      ).not.toBeInTheDocument();
+    });
   });
 
   describe("handing focus on to the prompt editor", () => {
