@@ -650,17 +650,12 @@
             "claude-sonnet-5",
             "claude-sonnet-5.5",
             "fable",
-            "gemini-3.7-flash",
             "gemini-3.8-flash",
             "gemini-3.8-flash-high",
             "gemini-3.8-flash-low",
             "gemini-3.8-flash-medium",
             "gemini-4-argon",
-            "gpt-5-mini",
             "gpt-5.3-codex",
-            "gpt-5.4",
-            "gpt-5.4-mini",
-            "gpt-5.5",
             "gpt-5.6-luna",
             "gpt-5.6-sol",
             "gpt-5.6-terra",
@@ -668,8 +663,8 @@
             "gpt-6-luna",
             "gpt-6-sol",
             "gpt-6.1-sol",
+            "gpt-6.1-terra",
             "gpt-oss-120b-medium",
-            "grok-4.5",
             "grok-4.6",
             "grok-4.7",
             "haiku",
@@ -799,13 +794,20 @@
           "$ref": "#/$defs/toolPermissions"
         },
         "sandbox": {
-          "oneOf": [{ "type": "boolean" }, { "type": "null" }],
+          "oneOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
           "description": "Terminal-command containment, separate from tool approval. `true` turns the harness's sandbox on: terminal commands may write only what `sandboxMode` allows. `false` (the shipped `defaults.sandbox`) turns the harness's sandbox off, overriding a sandbox you enabled in the harness's own settings: Codex gets `-s danger-full-access`, Claude Code `sandbox.enabled: false`, Copilot CLI `--no-sandbox` and Qwen Code `--sandbox=false` with `QWEN_SANDBOX=false`; Antigravity CLI and OpenCode have nothing to turn off. An organization or managed policy that forces a sandbox still wins. `null` (None) passes no sandbox flags, so the harness's own settings apply; with `toolPermissions` mode `none` it hands both axes to the harness. When absent, inherits the workflow, then `defaults.sandbox`. Network access, harness file tools and MCP servers follow each harness's own sandbox policy. Only Codex CLI and Claude Code support `true`: on Copilot CLI, Antigravity CLI, Qwen Code and OpenCode a `true` written in the workflow or step fails the step at launch, while one inherited from `defaults.sandbox` is skipped with a warning and the harness's own settings apply."
         },
         "sandboxMode": {
           "type": "string",
           "enum": ["workspace-write", "read-only"],
-          "description": "How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step \u2192 workflow \u2192 the `defaults.sandboxMode` setting."
+          "description": "How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step → workflow → the `defaults.sandboxMode` setting."
         },
         "errorBehavior": {
           "description": "Internal-error policy for every step phase: pre-conditions, prompts/harnesses, end-conditions, and script steps. Resolves prompt → workflow → the `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is the recovery gesture. Use null to explicitly disable an inherited policy.",
@@ -1133,22 +1135,36 @@
         }
       ],
       "properties": {
-        "script": { "$ref": "#/$defs/scriptProperties/properties/script" },
-        "env": { "$ref": "#/$defs/scriptProperties/properties/env" },
+        "script": {
+          "$ref": "#/$defs/scriptProperties/properties/script"
+        },
+        "env": {
+          "$ref": "#/$defs/scriptProperties/properties/env"
+        },
         "compareSource": {
           "$ref": "#/$defs/scriptProperties/properties/compareSource"
         },
-        "returns": { "$ref": "#/$defs/scriptProperties/properties/returns" },
+        "returns": {
+          "$ref": "#/$defs/scriptProperties/properties/returns"
+        },
         "timeoutSec": {
           "$ref": "#/$defs/scriptProperties/properties/timeoutSec"
         },
-        "shell": { "$ref": "#/$defs/scriptProperties/properties/shell" },
-        "operator": { "$ref": "#/$defs/scriptProperties/properties/operator" },
-        "expected": { "$ref": "#/$defs/scriptProperties/properties/expected" },
+        "shell": {
+          "$ref": "#/$defs/scriptProperties/properties/shell"
+        },
+        "operator": {
+          "$ref": "#/$defs/scriptProperties/properties/operator"
+        },
+        "expected": {
+          "$ref": "#/$defs/scriptProperties/properties/expected"
+        },
         "ignoreCase": {
           "$ref": "#/$defs/scriptProperties/properties/ignoreCase"
         },
-        "maxRetries": { "$ref": "#/$defs/endCondition/properties/maxRetries" },
+        "maxRetries": {
+          "$ref": "#/$defs/endCondition/properties/maxRetries"
+        },
         "retryPrompt": {
           "$ref": "#/$defs/endCondition/properties/retryPrompt"
         },
@@ -1171,7 +1187,10 @@
         "params": {
           "type": "array",
           "description": "Environment-variable names whose values MCP agents may supply when attaching this preset.",
-          "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          },
           "uniqueItems": true
         }
       },
