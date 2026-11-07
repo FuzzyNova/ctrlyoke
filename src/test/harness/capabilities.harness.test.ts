@@ -62,6 +62,8 @@ import {
 import {
   HARNESS_MODELS,
   HARNESS_TIMEOUT_MS,
+  MCP_STARTUP_WAIT_INSTRUCTION,
+  imageInputModel,
   buildHookRecorderScript,
   buildMcpProbeServerScript,
   findRunFiles,
@@ -188,9 +190,6 @@ const APPROVAL_EXECUTION_MODE: Record<HarnessId, ExecutionMode> = {
   "qwen-cli": EXECUTION_MODES.HEADLESS,
   "antigravity-cli": EXECUTION_MODES.HEADLESS,
 };
-
-/** How long an interactive case may wait on a person before it is a failure. */
-const INTERACTIVE_APPROVAL_TIMEOUT_MS = 240_000;
 
 /** OpenCode takes `provider/model`; every other harness a bare model id. */
 const UNKNOWN_MODEL: Record<HarnessId, string> = {
@@ -340,6 +339,7 @@ function mcpCalls(workspace: Workspace): string[] {
 const MCP_PROMPT = [
   `Call the MCP tool ${MCP_OPEN_TOOL} from the ${MCP_SERVER_ID} server once.`,
   `Then call the MCP tool ${MCP_BLOCKED_TOOL} from the ${MCP_SERVER_ID} server once.`,
+  MCP_STARTUP_WAIT_INSTRUCTION,
   "If a tool is unavailable or refused, skip it. Do not use any other tool. Then reply DONE.",
 ].join(" ");
 
@@ -538,8 +538,7 @@ suite("Harness capability tests", function () {
               ]
             ),
             workspace,
-            `${harness}-permission-request`,
-            { timeoutMs: INTERACTIVE_APPROVAL_TIMEOUT_MS }
+            `${harness}-permission-request`
           );
           if (logAndMaybeSkip(harness, result)) return;
           assertSucceeded(harness, result);
@@ -578,7 +577,6 @@ suite("Harness capability tests", function () {
             workspace,
             `${harness}-notification`,
             {
-              timeoutMs: INTERACTIVE_APPROVAL_TIMEOUT_MS,
               stopWhen: () =>
                 readRecordedHookEvents(workspace.hookLog).has(
                   HOOK_EVENT_NAMES.NOTIFICATION
@@ -739,18 +737,22 @@ suite("Harness capability tests", function () {
 
       test(`${harness}: ${CASES.imageAndResume}`, async function () {
         const result = (await runInMode(
-          workflowFor(harness, { resumeSession: true }, [
-            {
-              name: "count-dots",
-              prompt:
-                'How many black dots are in @dots.png? Answer with only "DOTS=" followed by the number in digits.',
-            },
-            {
-              name: "recall",
-              prompt:
-                'What number did you give in your previous answer? Answer with only "RECALL=" followed by that number in digits.',
-            },
-          ]),
+          workflowFor(
+            harness,
+            { resumeSession: true, model: imageInputModel(harness) },
+            [
+              {
+                name: "count-dots",
+                prompt:
+                  'How many black dots are in @dots.png? Answer with only "DOTS=" followed by the number in digits.',
+              },
+              {
+                name: "recall",
+                prompt:
+                  'What number did you give in your previous answer? Answer with only "RECALL=" followed by that number in digits.',
+              },
+            ]
+          ),
           workspace,
           `${harness}-image-resume`
         )) as JsonRunResult;
@@ -784,8 +786,7 @@ suite("Harness capability tests", function () {
             ]
           ),
           workspace,
-          `${harness}-interactive-resume`,
-          { timeoutMs: INTERACTIVE_APPROVAL_TIMEOUT_MS }
+          `${harness}-interactive-resume`
         );
         if (logAndMaybeSkip(harness, result)) return;
         assertSucceeded(harness, result);

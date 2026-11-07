@@ -30,6 +30,7 @@ import { removeTempDir } from "../helpers/tempWorkspace";
 import {
   HARNESS_MODELS,
   HARNESS_TIMEOUT_MS,
+  MCP_STARTUP_WAIT_INSTRUCTION,
   buildHookRecorderScript,
   findRunFiles,
   initGitRepo,
@@ -192,7 +193,7 @@ suite("Harness sandbox tests", function () {
         ];
         const definition = workflow(
           harness,
-          `/mcp:ctrlyoke\nCall the ctrlyoke MCP tool ${MCP_PROBE_CALLS[0].tool} once with no arguments, then reply OK.`,
+          `/mcp:ctrlyoke\nCall the ctrlyoke MCP tool ${MCP_PROBE_CALLS[0].tool} once with no arguments, then reply OK. ${MCP_STARTUP_WAIT_INSTRUCTION}`,
           { sandbox: true, hooks, mcpServers: [MCP_SERVER_IDS.CTRLYOKE] }
         );
         const run = async () =>

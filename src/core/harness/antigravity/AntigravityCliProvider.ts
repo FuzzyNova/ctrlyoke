@@ -209,6 +209,14 @@ export class AntigravityCliProvider implements ICliProvider {
   }
   readonly logParser = new AntigravityLogParser();
 
+  /**
+   * Some agy models resolve a relative `.ctrlyoke/temp/...` reference against
+   * the wrong folder (gpt-oss-120b dropped the working directory's last path
+   * segment), then search the disk for the file and never reach the prompt.
+   * An absolute path leaves nothing to resolve, as for OpenCode.
+   */
+  readonly requiresAbsoluteFileReferences = true;
+
   probeResumableSession(
     sessionId: string,
     _workspaceRoot: string

@@ -12,11 +12,23 @@ import {
   MCP_SERVER_IDS,
 } from "../../types/DashboardConstants";
 import { normalizeCliEvents } from "../../utils/CliEventNormalizer";
+import { ANTIGRAVITY_TOOL_NAMES } from "../../core/harness/antigravity/AntigravityProtocolConstants";
 import { MCP_PROBE_CALLS } from "./mcpProbeContract";
+
+/**
+ * Discovery operations a model may run to check that an MCP server has loaded
+ * (the prompt tells it to wait for one). They are recorded as MCP rows but are
+ * not tool calls, so they are left out of the exactly-once count.
+ */
+const MCP_DISCOVERY_OPERATIONS: readonly string[] = [
+  ANTIGRAVITY_TOOL_NAMES.LIST_RESOURCES,
+  ANTIGRAVITY_TOOL_NAMES.READ_RESOURCE,
+];
 import {
   HARNESS_MODELS,
   HARNESS_TIMEOUT_MS,
   KEEP_WORKSPACES_ENV,
+  MCP_STARTUP_WAIT_INSTRUCTION,
   findRunFiles,
   isolateRunState,
   logAndMaybeSkip,
@@ -33,7 +45,11 @@ function assertProbeCalls(
 ): void {
   const normalized = normalizeCliEvents(events);
   const mcpCalls = normalized.filter(
-    (event) => event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL
+    (event) =>
+      event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL &&
+      !MCP_DISCOVERY_OPERATIONS.includes(
+        (event.data as { tool?: string }).tool ?? ""
+      )
   );
   assert.strictEqual(
     mcpCalls.length,
@@ -129,6 +145,7 @@ suite("MCP event pipeline harness probe", function () {
             name: "mcp-event-probe",
             prompt: [
               "/mcp:ctrlyoke",
+              MCP_STARTUP_WAIT_INSTRUCTION,
               "Call each ctrlyoke MCP tool exactly once, in this order:",
               "1. workflow_status with no arguments.",
               '2. post_note with {"text":"mcp probe note"}.',

@@ -297,6 +297,13 @@ suite("AntigravityCliProvider", () => {
     assert.ok(provider.extractSessionIdFromLogs);
   });
 
+  test("requires absolute file references", () => {
+    assert.strictEqual(
+      new AntigravityCliProvider().requiresAbsoluteFileReferences,
+      true
+    );
+  });
+
   test("uses stream-json only for headless arguments", () => {
     const provider = new AntigravityCliProvider();
 

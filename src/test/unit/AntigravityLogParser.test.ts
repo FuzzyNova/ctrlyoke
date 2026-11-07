@@ -944,6 +944,25 @@ suite("AntigravityLogParser", () => {
       );
     });
 
+    test("attributes a server-only resource call to that server", () => {
+      const events = AntigravityToolEventBuilder.build({
+        call: { name: "list_resources", args: { ServerName: "ctrlyoke" } },
+        result: {
+          source: "MODEL",
+          type: "GENERIC",
+          status: "DONE",
+          content: "MCP server ctrlyoke does not have any resources",
+        },
+        timestamp: 1,
+      });
+      assert.strictEqual(events[0].type, CLI_EVENT_TYPES.MCP_TOOL_CALL);
+      const data = events[0].data as { server: string; tool: string };
+      assert.deepStrictEqual(
+        { server: data.server, tool: data.tool },
+        { server: "ctrlyoke", tool: "list_resources" }
+      );
+    });
+
     test("maps text, thinking, user messages, and checkpoints in arrival order", async () => {
       await withTemporaryHome(async (homeDir) => {
         const parser = new AntigravityLogParser();

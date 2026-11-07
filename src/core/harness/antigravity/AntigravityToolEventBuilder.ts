@@ -728,16 +728,19 @@ export class AntigravityToolEventBuilder {
     result: AntigravityTranscriptEntry
   ): { server: string; tool: string } {
     const args = call?.args ?? {};
-    const target = this.stringArg(args, [
-      "Target",
-      "target",
-      "tool",
-      "ServerName",
-    ]);
+    const target = this.stringArg(args, ["Target", "target", "tool"]);
     const serverName = this.stringArg(args, ["ServerName"]);
     const toolName = this.stringArg(args, ["ToolName"]);
     if (serverName && toolName) {
       return { server: serverName, tool: toolName };
+    }
+    // `list_resources` / `read_resource` name only the server: the call itself
+    // is the operation, so it must not be read as a tool on an unknown server.
+    if (serverName && !target) {
+      return {
+        server: serverName,
+        tool: call?.name || result.type.toLowerCase(),
+      };
     }
     if (target) {
       const match = target.match(/^([^/().]+)[/.]([^/().]+)$/);

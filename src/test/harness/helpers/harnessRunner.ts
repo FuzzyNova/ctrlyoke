@@ -38,16 +38,28 @@ import { runsRootForProjectState } from "../../../utils/WorkflowPaths";
 const CLI_PATH = path.resolve(__dirname, "../../../cli.js");
 
 /**
- * Per-harness wall-clock timeout in ms.
+ * Per-prompt timeout, in seconds, passed to `ctrlyoke run --timeout`.
  *
- * These tests exercise real AI CLI processes end-to-end — they are correctness
- * checks, not performance checks.  Copilot-cli can take 90-120 s per LLM call
- * and multi-step / retry / MCP workflows involve two calls.  The generous limit
- * avoids flaky SIGTERM kills without any need for per-test multipliers.
- *
- * Total suite wall time is typically 10-15 minutes.
+ * These tests are correctness checks, not performance checks: the cheap models
+ * in {@link HARNESS_MODELS} can be slow, and a slow model that gets there must
+ * not fail a case. A model that is stuck still ends at this limit.
  */
-export const HARNESS_TIMEOUT_MS = 900_000; // 15 minutes
+const PROMPT_TIMEOUT_SECONDS = 3600; // 1 hour
+
+/**
+ * Wall-clock timeout in ms for one test and for each ctrlyoke CLI process it
+ * spawns. It leaves room above {@link PROMPT_TIMEOUT_SECONDS} for a second
+ * step, a retry, or an MCP-appended step.
+ */
+export const HARNESS_TIMEOUT_MS = 7_200_000; // 2 hours
+
+/**
+ * Appended to every prompt that calls an MCP tool. Several harnesses (agy,
+ * OpenCode 2.2.5) can start the first turn before their MCP servers finish
+ * connecting, and a model that sees no tool then reports it as missing.
+ */
+export const MCP_STARTUP_WAIT_INSTRUCTION =
+  "MCP servers can take up to a minute to load. If an MCP tool named here is not available yet, wait up to one minute for it to appear before deciding it is unavailable.";
 
 export type { HarnessId };
 
@@ -61,17 +73,44 @@ export type { HarnessId };
  * - opencode-cli uses Claude Haiku through OpenCode Zen, a paid model: the free
  *   big-pickle tier has a usage cap that a full suite run can exhaust, after
  *   which every OpenCode case times out. claude-cli uses the haiku alias.
+ * - antigravity-cli uses GPT-OSS 120B: a full run costs about 1% of a free
+ *   agy weekly quota, where Gemini 3.8 Flash runs it out in two. Its shared
+ *   capacity sometimes answers 503, which the runners retry. It is text-only,
+ *   so image cases use {@link HARNESS_IMAGE_MODELS}.
+ *
+ * `CTRLYOKE_HARNESS_MODEL_<HARNESS>` (e.g. `CTRLYOKE_HARNESS_MODEL_ANTIGRAVITY_CLI`)
+ * replaces a harness's model for a whole run, image cases included — for an
+ * occasional full check on the model most users pick.
  *
  * Every file under src/test/harness/ reads this map — change models here only.
  */
 export const HARNESS_MODELS: Record<HarnessId, string | undefined> = {
-  "copilot-cli": "gpt-6-luna",
-  "claude-cli": "haiku",
-  "codex-cli": "gpt-6-luna",
-  "opencode-cli": "opencode/claude-haiku-5-5",
-  "qwen-cli": "qwen3.5-plus",
-  "antigravity-cli": "gemini-3.8-flash-low",
+  "copilot-cli": modelFor("copilot-cli", "gpt-6-luna"),
+  "claude-cli": modelFor("claude-cli", "haiku"),
+  "codex-cli": modelFor("codex-cli", "gpt-6-luna"),
+  "opencode-cli": modelFor("opencode-cli", "opencode/claude-haiku-5-5"),
+  "qwen-cli": modelFor("qwen-cli", "qwen3.5-plus"),
+  "antigravity-cli": modelFor("antigravity-cli", "gpt-oss-120b-medium"),
 };
+
+/**
+ * Models for cases that send an image, where a harness's default model cannot
+ * read one. A harness not listed here uses its {@link HARNESS_MODELS} entry.
+ */
+export const HARNESS_IMAGE_MODELS: Partial<Record<HarnessId, string>> = {
+  "antigravity-cli": modelFor("antigravity-cli", "gemini-3.8-flash-low"),
+};
+
+/** The model a case that sends an image should run `harness` with. */
+export function imageInputModel(harness: HarnessId): string | undefined {
+  return HARNESS_IMAGE_MODELS[harness] ?? HARNESS_MODELS[harness];
+}
+
+/** `fallback`, unless `CTRLYOKE_HARNESS_MODEL_<HARNESS>` names another model. */
+function modelFor(harness: HarnessId, fallback: string): string {
+  const envName = `CTRLYOKE_HARNESS_MODEL_${harness.toUpperCase().replace(/-/g, "_")}`;
+  return process.env[envName]?.trim() || fallback;
+}
 
 // ---------------------------------------------------------------------------
 // Result type
@@ -119,29 +158,145 @@ function prepareRun(
     workflowFile,
     modeFlag,
     "--timeout",
-    "180",
+    String(PROMPT_TIMEOUT_SECONDS),
     ...extraArgs,
     ...varArgs,
   ];
 }
 
+// ---------------------------------------------------------------------------
+// Transient-failure retry
+// ---------------------------------------------------------------------------
+
+/** Retries after the first attempt when the harness reports a transient error. */
+const TRANSIENT_RETRY_LIMIT = 3;
+/** Wait before each retry; capacity errors usually clear within a minute or two. */
+const TRANSIENT_RETRY_DELAY_MS = 90_000;
+
+/**
+ * agy prints `AGY_ERROR: {...}` when a request fails, with `"retryable": true`
+ * for server-side errors such as `UNAVAILABLE (code 503): No capacity
+ * available for model ...`. Only that flag triggers a retry, so a model or
+ * ctrlyoke failure still fails the case on its first attempt.
+ */
+const AGY_ERROR_LINE = /AGY_ERROR: (\{[^\r\n]*\})/g;
+
+function isTransientHarnessFailure(result: RunResult): boolean {
+  if (result.skipped || result.exitCode === 0) return false;
+  for (const match of `${result.stdout}\n${result.stderr}`.matchAll(
+    AGY_ERROR_LINE
+  )) {
+    try {
+      if ((JSON.parse(match[1]) as { retryable?: unknown }).retryable === true)
+        return true;
+    } catch {
+      // Not a complete JSON object; ignore this line.
+    }
+  }
+  return false;
+}
+
+/**
+ * The run lineages under `tmpDir` created for `label` (workflow file
+ * `<label>-test.ctrlyoke.json`, lineage `<label>-test-<timestamp>`).
+ */
+function runLineagesFor(tmpDir: string, label: string): Set<string> {
+  const root = runsRootFor(tmpDir);
+  if (!fs.existsSync(root)) return new Set();
+  const prefix = `${label}-test-`;
+  return new Set(
+    fs
+      .readdirSync(root)
+      .filter((name) => name.startsWith(prefix))
+      .map((name) => path.join(root, name))
+  );
+}
+
+/**
+ * Decide whether to retry `result`. When it does, the failed attempt's run
+ * lineage is deleted first, so a case that reads `events.jsonl` sees only the
+ * attempt that finished. Matching by label keeps concurrent runs in the same
+ * workspace apart.
+ */
+function prepareTransientRetry(
+  result: RunResult,
+  retry: number,
+  tmpDir: string,
+  label: string,
+  before: ReadonlySet<string>
+): boolean {
+  if (retry >= TRANSIENT_RETRY_LIMIT || !isTransientHarnessFailure(result)) {
+    return false;
+  }
+  for (const lineage of runLineagesFor(tmpDir, label)) {
+    if (!before.has(lineage))
+      fs.rmSync(lineage, { recursive: true, force: true });
+  }
+  console.log(
+    `  ↻  ${label}: transient harness error, retry ${retry + 1}/${TRANSIENT_RETRY_LIMIT} in ${TRANSIENT_RETRY_DELAY_MS / 1000}s`
+  );
+  return true;
+}
+
+/** Run `attempt`, retrying while it fails with a transient harness error. */
+function withTransientRetry(
+  tmpDir: string,
+  label: string,
+  attempt: () => RunResult
+): RunResult {
+  for (let retry = 0; ; retry++) {
+    const before = runLineagesFor(tmpDir, label);
+    const result = attempt();
+    if (!prepareTransientRetry(result, retry, tmpDir, label, before)) {
+      return result;
+    }
+    // A synchronous wait: the sync runner's callers are synchronous tests.
+    Atomics.wait(
+      new Int32Array(new SharedArrayBuffer(4)),
+      0,
+      0,
+      TRANSIENT_RETRY_DELAY_MS
+    );
+  }
+}
+
+/** {@link withTransientRetry} for runners that return a promise. */
+async function withTransientRetryAsync(
+  tmpDir: string,
+  label: string,
+  attempt: () => Promise<RunResult>
+): Promise<RunResult> {
+  for (let retry = 0; ; retry++) {
+    const before = runLineagesFor(tmpDir, label);
+    const result = await attempt();
+    if (!prepareTransientRetry(result, retry, tmpDir, label, before)) {
+      return result;
+    }
+    await new Promise((resolve) =>
+      setTimeout(resolve, TRANSIENT_RETRY_DELAY_MS)
+    );
+  }
+}
+
 function runPrepared(
   args: string[],
   tmpDir: string,
+  label: string,
   timeoutMs: number
 ): RunResult {
-  const result = spawnSync("node", args, {
-    encoding: "utf8",
-    timeout: timeoutMs,
-    cwd: tmpDir,
+  return withTransientRetry(tmpDir, label, () => {
+    const result = spawnSync("node", args, {
+      encoding: "utf8",
+      timeout: timeoutMs,
+      cwd: tmpDir,
+    });
+    return {
+      skipped: result.status === 3,
+      exitCode: result.status,
+      stdout: result.stdout ?? "",
+      stderr: result.stderr ?? "",
+    };
   });
-
-  return {
-    skipped: result.status === 3,
-    exitCode: result.status,
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
-  };
 }
 
 /**
@@ -163,6 +318,7 @@ export function runWorkflowFile(
   return runPrepared(
     prepareRun(workflow, tmpDir, label, "--headless", vars),
     tmpDir,
+    label,
     timeoutMs
   );
 }
@@ -188,6 +344,7 @@ export function runWorkflowFileJson(
   const result = runPrepared(
     prepareRun(workflow, tmpDir, label, "--headless", vars, ["--json"]),
     tmpDir,
+    label,
     timeoutMs
   );
   return { ...result, json: parseJsonResultLine(result.stdout) };
@@ -245,6 +402,18 @@ export function runInteractiveWorkflowFile(
 ): Promise<RunResult> {
   const args = prepareRun(workflow, tmpDir, label, "--interactive", vars);
 
+  return withTransientRetryAsync(tmpDir, label, () =>
+    spawnInteractive(args, tmpDir, timeoutMs, stopWhen)
+  );
+}
+
+/** One interactive attempt of {@link runInteractiveWorkflowFile}. */
+function spawnInteractive(
+  args: string[],
+  tmpDir: string,
+  timeoutMs: number,
+  stopWhen: (() => boolean) | undefined
+): Promise<RunResult> {
   return new Promise<RunResult>((resolve) => {
     const terminal = nodePty.spawn(process.execPath, args, {
       name: "xterm-256color",
@@ -315,6 +484,17 @@ export function runWorkflowFileAsync(
 ): Promise<RunResult> {
   const args = prepareRun(workflow, tmpDir, label, "--headless", vars);
 
+  return withTransientRetryAsync(tmpDir, label, () =>
+    spawnHeadless(args, tmpDir, timeoutMs)
+  );
+}
+
+/** One attempt of {@link runWorkflowFileAsync}. */
+function spawnHeadless(
+  args: string[],
+  tmpDir: string,
+  timeoutMs: number
+): Promise<RunResult> {
   return new Promise<RunResult>((resolve) => {
     const child = spawn("node", args, {
       cwd: tmpDir,

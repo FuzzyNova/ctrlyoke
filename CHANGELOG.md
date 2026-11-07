@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Antigravity steps now always get absolute file paths, as OpenCode steps already do, whatever `ui.useAbsolutePathReferences` says. Some agy models resolved a relative path such as `.ctrlyoke/temp/...` against the wrong folder, searched the disk for the file and never read the step's prompt.
+
 ### Fixed
 
+- When an Antigravity model lists or reads an MCP server's resources, the output pane now shows that server and the operation. Before, it showed a call to a tool named after the server, on an `unknown` server.
 - ctrlyoke now follows the environment variables that move a harness's home directory: `CLAUDE_CONFIG_DIR` for Claude Code, `QWEN_HOME` and `QWEN_RUNTIME_DIR` for Qwen Code, `COPILOT_HOME` for Copilot CLI, and `XDG_CONFIG_HOME` for OpenCode's global config. Before, a step on a harness whose home you had moved streamed no output and never resolved its session ID, because ctrlyoke read the transcript from the default folder. The statusline was installed into a settings file the harness didn't read, and your user MCP servers, language servers, agents, skills and Qwen models were missing from the dashboard. The dashboard's MCP and language server export menus now show where each user-scope file really is.
 - Qwen steps now find their transcript when Qwen's `advanced.runtimeOutputDir` setting moves it, and Copilot steps find their session state when the step's `additionalArgs` pass `--config-dir`. Both used to stream no output and leave the session ID unresolved.
 - Qwen steps now read your Qwen `system-defaults.json`. ctrlyoke launches Qwen with its own system settings file, and Qwen looks for the defaults file beside that one, so it never found yours.
