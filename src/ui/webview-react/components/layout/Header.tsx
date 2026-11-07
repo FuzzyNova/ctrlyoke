@@ -84,6 +84,8 @@ function nextSaveRequestId(): string {
  * midpoint: the left group (New + Save/Undo/Redo) is far wider than the app nav, so a
  * screen-centered group sat visibly closer to the left. The side tracks are max-content (not
  * auto) because header-left is min-w-0, and an auto track let it shrink under the run group.
+ * Row 2 spans those max-content tracks, so it uses contain:inline-size to keep a long workflow
+ * name from contributing its full width to them (which pushed the header past the screen).
  * From sm up the header switches to
  * [auto · minmax(0,1fr) · auto]. At lg+ it expands to
  * [auto · minmax(0,1fr) · auto · minmax(0,500px) · auto · minmax(0,1fr) · auto].
@@ -629,8 +631,11 @@ export const Header: React.FC<{
 
         {/* Row-2 (mobile only): Steps pull | WorkflowStatus | Workflow Properties pull.
             Spans all 3 outer grid columns; the status takes every pixel between the two edge pulls,
-            and its dropdown anchors to the status's own bottom, so it opens below this row. */}
-        <div className="header-status col-start-1 col-end-4 row-start-2 sm:hidden grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-1 items-center">
+            and its dropdown anchors to the status's own bottom, so it opens below this row.
+            contain:inline-size is load-bearing: this row spans the outer max-content tracks, so
+            without it the workflow name's full max-content width is distributed into those tracks
+            and a long name widens the whole header past the screen instead of truncating. */}
+        <div className="header-status col-start-1 col-end-4 row-start-2 sm:hidden grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-1 items-center [contain:inline-size]">
           {/* Left (auto): Steps drawer pull — flat left edge to screen, rounded toward content */}
           <div className="flex items-center">
             <button
