@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-This product includes third-party software and assets. This inventory was audited on **2026-10-31** from the production dependency tree and the extension and webview bundles shipped in the VSIX.
+This product includes third-party software and assets. This inventory was audited on **2026-11-07** from the production dependency tree and the extension and webview bundles shipped in the VSIX.
 
 ## Commercial Distribution
 
@@ -38,435 +38,433 @@ Commercial distribution is subject to the terms of each component license. The p
 
 ## Special Attention
 
-| Package | Version | License   | Copyright | Source                            |
-| ------- | ------- | --------- | --------- | --------------------------------- |
-| `elkjs` | `0.9.3` | `EPL-2.0` | Ulf Rüegg | <https://github.com/kieler/elkjs> |
+| Package | Version  | License   | Copyright | Source                            |
+| ------- | -------- | --------- | --------- | --------------------------------- |
+| `elkjs` | `0.12.1` | `EPL-2.0` | Ulf Rüegg | <https://github.com/kieler/elkjs> |
 
 EPL-2.0 license: <https://www.eclipse.org/legal/epl-2.0/>
 
 ## Production Dependency Inventory
 
-The production dependency tree contains **417 packages**. Each package is listed with its installed version, declared license, and copyright line. Full license texts are grouped below only when the package files contain identical text.
+The production dependency tree contains **415 packages**. Each package is listed with its installed version, declared license, and copyright line. Full license texts are grouped below only when the package files contain identical text.
 
-| Package                                     | Version         | License                   | Copyright                                                                                                                                                                   |
-| ------------------------------------------- | --------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@antfu/install-pkg`                        | `2.1.0`         | `MIT`                     | Copyright (c) 2021 Anthony Fu <https://github.com/antfu>                                                                                                                    |
-| `@braintree/sanitize-url`                   | `7.1.2`         | `MIT`                     | Copyright (c) 2017 Braintree                                                                                                                                                |
-| `@chevrotain/cst-dts-gen`                   | `13.2.0`        | `Apache-2.0`              | Not stated in package metadata or license file                                                                                                                              |
-| `@chevrotain/gast`                          | `13.2.0`        | `Apache-2.0`              | Not stated in package metadata or license file                                                                                                                              |
-| `@chevrotain/regexp-to-ast`                 | `13.2.0`        | `Apache-2.0`              | Not stated in package metadata or license file                                                                                                                              |
-| `@chevrotain/types`                         | `13.2.0`        | `Apache-2.0`              | Shahar Soel                                                                                                                                                                 |
-| `@chevrotain/utils`                         | `13.2.0`        | `Apache-2.0`              | Shahar Soel                                                                                                                                                                 |
-| `@codemirror/autocomplete`                  | `6.20.4`        | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
-| `@codemirror/commands`                      | `6.11.1`        | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
-| `@codemirror/lang-cpp`                      | `6.0.3`         | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
-| `@codemirror/lang-css`                      | `6.3.1`         | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
-| `@codemirror/lang-html`                     | `6.4.12`        | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
-| `@codemirror/lang-java`                     | `6.0.2`         | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
-| `@codemirror/lang-javascript`               | `6.2.5`         | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
-| `@codemirror/lang-json`                     | `6.0.2`         | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
-| `@codemirror/lang-markdown`                 | `6.5.2`         | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
-| `@codemirror/lang-php`                      | `6.0.2`         | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
-| `@codemirror/lang-python`                   | `6.2.1`         | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
-| `@codemirror/lang-rust`                     | `6.0.2`         | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
-| `@codemirror/lang-yaml`                     | `6.1.3`         | `MIT`                     | Copyright (C) 2024 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
-| `@codemirror/language`                      | `6.13.1`        | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
-| `@codemirror/lint`                          | `6.9.7`         | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
-| `@codemirror/lsp-client`                    | `6.3.0`         | `MIT`                     | Copyright (C) 2025 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
-| `@codemirror/search`                        | `6.7.2`         | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
-| `@codemirror/state`                         | `6.7.6`         | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
-| `@codemirror/view`                          | `6.43.15`       | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
-| `@dnd-kit/accessibility`                    | `3.1.1`         | `MIT`                     | Copyright (c) 2021, Claudéric Demers                                                                                                                                        |
-| `@dnd-kit/core`                             | `6.3.1`         | `MIT`                     | Copyright (c) 2021, Claudéric Demers                                                                                                                                        |
-| `@dnd-kit/sortable`                         | `10.0.0`        | `MIT`                     | Copyright (c) 2021, Claudéric Demers                                                                                                                                        |
-| `@dnd-kit/utilities`                        | `3.2.2`         | `MIT`                     | Copyright (c) 2021, Claudéric Demers                                                                                                                                        |
-| `@hono/node-server`                         | `2.1.5`         | `MIT`                     | Copyright (c) 2022 - present, Yusuke Wada and Hono contributors                                                                                                             |
-| `@iconify/types`                            | `2.0.0`         | `MIT`                     | Copyright (c) 2021 - 2022 Vjacheslav Trushkin / Iconify OÜ                                                                                                                  |
-| `@iconify/utils`                            | `3.1.7`         | `MIT`                     | Copyright (c) 2021-PRESENT Vjacheslav Trushkin                                                                                                                              |
-| `@lezer/common`                             | `1.5.3`         | `MIT`                     | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
-| `@lezer/cpp`                                | `1.1.6`         | `MIT`                     | Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
-| `@lezer/css`                                | `1.3.9`         | `MIT`                     | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
-| `@lezer/highlight`                          | `1.2.5`         | `MIT`                     | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
-| `@lezer/html`                               | `1.3.13`        | `MIT`                     | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
-| `@lezer/java`                               | `1.1.5`         | `MIT`                     | Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
-| `@lezer/json`                               | `1.0.3`         | `MIT`                     | Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin>, Arun Srinivasan <rulfzid@gmail.com>, and others                                                           |
-| `@lezer/lr`                                 | `1.4.11`        | `MIT`                     | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
-| `@lezer/markdown`                           | `1.8.0`         | `MIT`                     | Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
-| `@lezer/php`                                | `1.0.6`         | `MIT`                     | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
-| `@lezer/python`                             | `1.1.19`        | `MIT`                     | Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
-| `@lezer/rust`                               | `1.0.3`         | `MIT`                     | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
-| `@lezer/yaml`                               | `1.0.4`         | `MIT`                     | Copyright (C) 2024 by Marijn Haverbeke <marijnh@gmail.com> and others                                                                                                       |
-| `@mermaid-js/parser`                        | `2.0.1`         | `MIT`                     | Copyright (c) 2023 Yokozuna59                                                                                                                                               |
-| `@microsoft/1ds-core-js`                    | `4.4.5`         | `MIT`                     | Copyright (c) Microsoft Corporation                                                                                                                                         |
-| `@microsoft/1ds-post-js`                    | `4.4.5`         | `MIT`                     | Copyright (c) Microsoft Corporation                                                                                                                                         |
-| `@microsoft/applicationinsights-channel-js` | `3.4.5`         | `MIT`                     | Copyright (c) Microsoft Corporation                                                                                                                                         |
-| `@microsoft/applicationinsights-common`     | `3.4.5`         | `MIT`                     | Copyright (c) Microsoft Corporation                                                                                                                                         |
-| `@microsoft/applicationinsights-core-js`    | `3.4.5`         | `MIT`                     | Copyright (c) Microsoft Corporation                                                                                                                                         |
-| `@microsoft/applicationinsights-shims`      | `3.0.1`         | `MIT`                     | Copyright (c) Microsoft Corporation                                                                                                                                         |
-| `@microsoft/applicationinsights-web-basic`  | `3.4.5`         | `MIT`                     | Copyright (c) Microsoft Corporation                                                                                                                                         |
-| `@microsoft/dynamicproto-js`                | `2.0.5`         | `MIT`                     | Microsoft Application Insights Team                                                                                                                                         |
-| `@modelcontextprotocol/sdk`                 | `1.32.2`        | `MIT`                     | Copyright (c) 2024 Anthropic, PBC                                                                                                                                           |
-| `@napi-rs/canvas`                           | `1.1.0`         | `MIT`                     | Copyright (c) 2020 lynweklm@gmail.com                                                                                                                                       |
-| `@nevware21/ts-async`                       | `0.5.5`         | `MIT`                     | Copyright (c) 2022 NevWare21 Solutions LLC                                                                                                                                  |
-| `@nevware21/ts-utils`                       | `0.16.0`        | `MIT`                     | Copyright (c) 2022 NevWare21 Solutions LLC                                                                                                                                  |
-| `@noble/hashes`                             | `1.8.0`         | `MIT`                     | Copyright (c) 2022 Paul Miller (https://paulmillr.com)                                                                                                                      |
-| `@peculiar/asn1-cms`                        | `2.11.0`        | `MIT`                     | Copyright (c) 2020                                                                                                                                                          |
-| `@peculiar/asn1-csr`                        | `2.11.0`        | `MIT`                     | Copyright (c) 2020                                                                                                                                                          |
-| `@peculiar/asn1-ecc`                        | `2.11.0`        | `MIT`                     | Copyright (c) 2020                                                                                                                                                          |
-| `@peculiar/asn1-pfx`                        | `2.11.0`        | `MIT`                     | Copyright (c) 2020                                                                                                                                                          |
-| `@peculiar/asn1-pkcs8`                      | `2.11.0`        | `MIT`                     | Copyright (c) 2020                                                                                                                                                          |
-| `@peculiar/asn1-pkcs9`                      | `2.11.0`        | `MIT`                     | Copyright (c) 2020                                                                                                                                                          |
-| `@peculiar/asn1-rsa`                        | `2.11.0`        | `MIT`                     | Copyright (c) 2020                                                                                                                                                          |
-| `@peculiar/asn1-schema`                     | `2.11.0`        | `MIT`                     | Copyright (c) 2020                                                                                                                                                          |
-| `@peculiar/asn1-x509`                       | `2.11.0`        | `MIT`                     | Copyright (c) 2020                                                                                                                                                          |
-| `@peculiar/asn1-x509-attr`                  | `2.11.0`        | `MIT`                     | Copyright (c) 2020                                                                                                                                                          |
-| `@peculiar/x509`                            | `1.14.3`        | `MIT`                     | Copyright (c) Peculiar Ventures. All rights reserved.                                                                                                                       |
-| `@pushforge/builder`                        | `2.0.5`         | `MIT`                     | Copyright (c) 2025 David Raphi                                                                                                                                              |
-| `@resvg/resvg-wasm`                         | `2.6.2`         | `MPL-2.0`                 | resvg-js contributors                                                                                                                                                       |
-| `@tanstack/react-virtual`                   | `3.14.24`       | `MIT`                     | Copyright (c) 2021-present Tanner Linsley                                                                                                                                   |
-| `@tanstack/virtual-core`                    | `3.19.9`        | `MIT`                     | Copyright (c) 2021-present Tanner Linsley                                                                                                                                   |
-| `@types/body-parser`                        | `1.19.6`        | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/connect`                            | `3.4.38`        | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3`                                 | `7.4.3`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-array`                           | `3.2.2`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-axis`                            | `3.0.6`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-brush`                           | `3.0.6`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-chord`                           | `3.0.6`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-color`                           | `3.1.3`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-contour`                         | `3.0.6`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-delaunay`                        | `6.0.4`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-dispatch`                        | `3.0.7`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-drag`                            | `3.0.7`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-dsv`                             | `3.0.7`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-ease`                            | `3.0.2`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-fetch`                           | `3.0.7`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-force`                           | `3.0.10`        | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-format`                          | `3.0.4`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-geo`                             | `3.1.1`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-hierarchy`                       | `3.1.7`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-interpolate`                     | `3.0.4`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-path`                            | `3.1.1`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-polygon`                         | `3.0.2`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-quadtree`                        | `3.0.6`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-random`                          | `3.0.4`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-scale`                           | `4.0.9`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-scale-chromatic`                 | `3.1.0`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-selection`                       | `3.0.12`        | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-shape`                           | `3.2.0`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-time`                            | `3.0.4`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-time-format`                     | `4.0.3`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-timer`                           | `3.0.2`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-transition`                      | `3.0.9`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/d3-zoom`                            | `3.0.9`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/estree`                             | `1.0.9`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/estree-jsx`                         | `1.0.5`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/express`                            | `5.0.6`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/express-serve-static-core`          | `5.1.3`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/geojson`                            | `7946.0.16`     | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/hast`                               | `3.0.5`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/http-errors`                        | `2.0.5`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/mdast`                              | `4.0.4`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/node`                               | `26.6.6`        | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/prismjs`                            | `1.26.6`        | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/qs`                                 | `6.15.1`        | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/range-parser`                       | `1.2.7`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/react`                              | `19.3.0`        | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/send`                               | `1.2.1`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/serve-static`                       | `2.2.0`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/trusted-types`                      | `2.0.7`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/unist`                              | `2.0.11`        | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/unist`                              | `3.0.3`         | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@types/ws`                                 | `8.18.2`        | `MIT`                     | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@ungap/structured-clone`                   | `1.4.0`         | `ISC`                     | Copyright (c) 2021, Andrea Giammarchi, @WebReflection                                                                                                                       |
-| `@upsetjs/venn.js`                          | `2.0.0`         | `MIT`                     | Copyright (c) 2013 Ben Frederickson                                                                                                                                         |
-| `@vscode/codicons`                          | `0.0.46-24`     | `CC-BY-4.0`               | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `@vscode/extension-telemetry`               | `1.5.2`         | `MIT`                     | Copyright (c) Microsoft Corporation                                                                                                                                         |
-| `@xterm/addon-fit`                          | `0.11.0`        | `MIT`                     | Copyright (c) 2019, The xterm.js authors (https://github.com/xtermjs/xterm.js)                                                                                              |
-| `@xterm/addon-webgl`                        | `0.19.0`        | `MIT`                     | Copyright (c) 2018, The xterm.js authors (https://github.com/xtermjs/xterm.js)                                                                                              |
-| `@xterm/xterm`                              | `6.0.0`         | `MIT`                     | Copyright (c) 2017-2019, The xterm.js authors (https://github.com/xtermjs/xterm.js)                                                                                         |
-| `ajv`                                       | `8.20.0`        | `MIT`                     | Copyright (c) 2015-2021 Evgeny Poberezkin                                                                                                                                   |
-| `ajv-formats`                               | `3.0.1`         | `MIT`                     | Copyright (c) 2020 Evgeny Poberezkin                                                                                                                                        |
-| `ansi-regex`                                | `5.0.1`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
-| `ansi-styles`                               | `4.3.0`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
-| `argparse`                                  | `3.0.3`         | `PSF-2.0`                 | Not stated in package metadata or license file                                                                                                                              |
-| `asn1js`                                    | `3.0.10`        | `BSD-3-Clause`            | Copyright (c) 2014, GMO GlobalSign                                                                                                                                          |
-| `bytes`                                     | `3.1.2`         | `MIT`                     | Copyright (c) 2012-2014 TJ Holowaychuk <tj@vision-media.ca>                                                                                                                 |
-| `bytestreamjs`                              | `2.0.1`         | `BSD-3-Clause`            | Copyright (c) 2016-2022, Peculiar Ventures                                                                                                                                  |
-| `camelcase`                                 | `5.3.1`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
-| `ccount`                                    | `2.0.1`         | `MIT`                     | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `chalk`                                     | `6.0.1`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)                                                                                             |
-| `character-entities`                        | `2.0.2`         | `MIT`                     | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `character-entities-html4`                  | `2.1.0`         | `MIT`                     | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `character-entities-legacy`                 | `3.0.0`         | `MIT`                     | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `character-reference-invalid`               | `2.0.1`         | `MIT`                     | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `chevrotain`                                | `13.2.0`        | `Apache-2.0`              | Shahar Soel                                                                                                                                                                 |
-| `chokidar`                                  | `5.0.0`         | `MIT`                     | Copyright (c) 2012 Paul Miller (https://paulmillr.com), Elan Shanker                                                                                                        |
-| `classnames`                                | `2.5.1`         | `MIT`                     | Copyright (c) 2018 Jed Watson                                                                                                                                               |
-| `cliui`                                     | `6.0.0`         | `ISC`                     | Copyright (c) 2015, Contributors                                                                                                                                            |
-| `clsx`                                      | `2.1.1`         | `MIT`                     | Copyright (c) Luke Edwards <luke.edwards05@gmail.com> (lukeed.com)                                                                                                          |
-| `codemirror`                                | `6.0.2`         | `MIT`                     | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
-| `color-convert`                             | `2.0.1`         | `MIT`                     | Copyright (c) 2011-2016 Heather Arthur <fayearthur@gmail.com>                                                                                                               |
-| `color-name`                                | `1.1.4`         | `MIT`                     | Copyright (c) 2015 Dmitry Ivanov                                                                                                                                            |
-| `comma-separated-tokens`                    | `2.0.3`         | `MIT`                     | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `commander`                                 | `15.0.0`        | `MIT`                     | Copyright (c) 2011 TJ Holowaychuk <tj@vision-media.ca>                                                                                                                      |
-| `commander`                                 | `7.2.0`         | `MIT`                     | Copyright (c) 2011 TJ Holowaychuk <tj@vision-media.ca>                                                                                                                      |
-| `content-type`                              | `1.0.5`         | `MIT`                     | Copyright (c) 2015 Douglas Christopher Wilson                                                                                                                               |
-| `cors`                                      | `2.8.6`         | `MIT`                     | Copyright (c) 2013 Troy Goode <troygoode@gmail.com>                                                                                                                         |
-| `cose-base`                                 | `1.0.3`         | `MIT`                     | Copyright (c) 2019 - present, iVis@Bilkent.                                                                                                                                 |
-| `cose-base`                                 | `2.2.0`         | `MIT`                     | Copyright (c) 2019 - present, iVis@Bilkent.                                                                                                                                 |
-| `crelt`                                     | `1.0.7`         | `MIT`                     | Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin>                                                                                                            |
-| `cross-spawn`                               | `7.0.6`         | `MIT`                     | Copyright (c) 2018 Made With MOXY Lda <hello@moxy.studio>                                                                                                                   |
-| `csstype`                                   | `3.2.3`         | `MIT`                     | Copyright (c) 2017-2018 Fredrik Nicol                                                                                                                                       |
-| `cytoscape`                                 | `3.34.3`        | `MIT`                     | Copyright (c) 2016-2026, The Cytoscape Consortium.                                                                                                                          |
-| `cytoscape-cose-bilkent`                    | `4.1.0`         | `MIT`                     | Copyright (c) 2016-2018, The Cytoscape Consortium.                                                                                                                          |
-| `cytoscape-fcose`                           | `2.2.0`         | `MIT`                     | Copyright (c) 2018 - present, iVis-at-Bilkent.                                                                                                                              |
-| `d3`                                        | `7.9.0`         | `ISC`                     | Copyright 2010-2023 Mike Bostock                                                                                                                                            |
-| `d3-array`                                  | `2.12.1`        | `BSD-3-Clause`            | Copyright 2010-2020 Mike Bostock                                                                                                                                            |
-| `d3-array`                                  | `3.2.4`         | `ISC`                     | Copyright 2010-2023 Mike Bostock                                                                                                                                            |
-| `d3-axis`                                   | `3.0.0`         | `ISC`                     | Copyright 2010-2021 Mike Bostock                                                                                                                                            |
-| `d3-brush`                                  | `3.0.0`         | `ISC`                     | Copyright 2010-2021 Mike Bostock                                                                                                                                            |
-| `d3-chord`                                  | `3.0.1`         | `ISC`                     | Copyright 2010-2021 Mike Bostock                                                                                                                                            |
-| `d3-color`                                  | `3.1.0`         | `ISC`                     | Copyright 2010-2022 Mike Bostock                                                                                                                                            |
-| `d3-contour`                                | `4.0.2`         | `ISC`                     | Copyright 2012-2023 Mike Bostock                                                                                                                                            |
-| `d3-delaunay`                               | `6.0.4`         | `ISC`                     | Copyright 2018-2021 Observable, Inc.                                                                                                                                        |
-| `d3-dispatch`                               | `3.0.1`         | `ISC`                     | Copyright 2010-2021 Mike Bostock                                                                                                                                            |
-| `d3-drag`                                   | `3.0.0`         | `ISC`                     | Copyright 2010-2021 Mike Bostock                                                                                                                                            |
-| `d3-dsv`                                    | `3.0.1`         | `ISC`                     | Copyright 2013-2021 Mike Bostock                                                                                                                                            |
-| `d3-ease`                                   | `3.0.1`         | `BSD-3-Clause`            | Copyright 2010-2021 Mike Bostock                                                                                                                                            |
-| `d3-fetch`                                  | `3.0.1`         | `ISC`                     | Copyright 2016-2021 Mike Bostock                                                                                                                                            |
-| `d3-force`                                  | `3.0.0`         | `ISC`                     | Copyright 2010-2021 Mike Bostock                                                                                                                                            |
-| `d3-format`                                 | `3.1.2`         | `ISC`                     | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
-| `d3-geo`                                    | `3.1.1`         | `ISC`                     | Copyright 2010-2024 Mike Bostock                                                                                                                                            |
-| `d3-hierarchy`                              | `3.1.2`         | `ISC`                     | Copyright 2010-2021 Mike Bostock                                                                                                                                            |
-| `d3-interpolate`                            | `3.0.1`         | `ISC`                     | Copyright 2010-2021 Mike Bostock                                                                                                                                            |
-| `d3-path`                                   | `1.0.9`         | `BSD-3-Clause`            | Copyright 2015-2016 Mike Bostock                                                                                                                                            |
-| `d3-path`                                   | `3.1.0`         | `ISC`                     | Copyright 2015-2022 Mike Bostock                                                                                                                                            |
-| `d3-polygon`                                | `3.0.1`         | `ISC`                     | Copyright 2010-2021 Mike Bostock                                                                                                                                            |
-| `d3-quadtree`                               | `3.0.1`         | `ISC`                     | Copyright 2010-2021 Mike Bostock                                                                                                                                            |
-| `d3-random`                                 | `3.0.1`         | `ISC`                     | Copyright 2010-2021 Mike Bostock                                                                                                                                            |
-| `d3-sankey`                                 | `0.12.3`        | `BSD-3-Clause`            | Copyright 2015, Mike Bostock                                                                                                                                                |
-| `d3-scale`                                  | `4.0.2`         | `ISC`                     | Copyright 2010-2021 Mike Bostock                                                                                                                                            |
-| `d3-scale-chromatic`                        | `3.1.0`         | `ISC`                     | Copyright 2010-2024 Mike Bostock                                                                                                                                            |
-| `d3-selection`                              | `3.0.0`         | `ISC`                     | Copyright 2010-2021 Mike Bostock                                                                                                                                            |
-| `d3-shape`                                  | `1.3.7`         | `BSD-3-Clause`            | Copyright 2010-2015 Mike Bostock                                                                                                                                            |
-| `d3-shape`                                  | `3.2.0`         | `ISC`                     | Copyright 2010-2022 Mike Bostock                                                                                                                                            |
-| `d3-time`                                   | `3.1.0`         | `ISC`                     | Copyright 2010-2022 Mike Bostock                                                                                                                                            |
-| `d3-time-format`                            | `4.1.0`         | `ISC`                     | Copyright 2010-2021 Mike Bostock                                                                                                                                            |
-| `d3-timer`                                  | `3.0.1`         | `ISC`                     | Copyright 2010-2021 Mike Bostock                                                                                                                                            |
-| `d3-transition`                             | `3.0.1`         | `ISC`                     | Copyright 2010-2021 Mike Bostock                                                                                                                                            |
-| `d3-zoom`                                   | `3.0.0`         | `ISC`                     | Copyright 2010-2021 Mike Bostock                                                                                                                                            |
-| `dagre-d3-es`                               | `7.0.14`        | `MIT`                     | Copyright (c) 2022-2024 Thibaut Lassalle, David Newell, Alois Klink, Sidharth Vinod and dagre-es contributors                                                               |
-| `dayjs`                                     | `1.11.23`       | `MIT`                     | Copyright (c) 2018-present, iamkun                                                                                                                                          |
-| `debug`                                     | `4.4.3`         | `MIT`                     | Copyright (c) 2014-2017 TJ Holowaychuk <tj@vision-media.ca>                                                                                                                 |
-| `decamelize`                                | `1.2.0`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
-| `decode-named-character-reference`          | `1.3.0`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `delaunator`                                | `5.1.0`         | `ISC`                     | Copyright (c) 2026, Mapbox                                                                                                                                                  |
-| `dequal`                                    | `2.0.3`         | `MIT`                     | Copyright (c) Luke Edwards <luke.edwards05@gmail.com> (lukeed.com)                                                                                                          |
-| `devlop`                                    | `1.1.0`         | `MIT`                     | Copyright (c) 2023 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `diff`                                      | `9.0.0`         | `BSD-3-Clause`            | Copyright (c) 2009-2015, Kevin Decker <kpdecker@gmail.com>                                                                                                                  |
-| `diff-match-patch`                          | `1.0.5`         | `Apache-2.0`              | Not stated in package metadata or license file                                                                                                                              |
-| `dijkstrajs`                                | `1.0.3`         | `MIT`                     | Copyright (C) 2008                                                                                                                                                          |
-| `dompurify`                                 | `3.4.17`        | `(MPL-2.0 OR Apache-2.0)` | Dr.-Ing. Mario Heiderich, Cure53 <mario@cure53.de> (https://cure53.de/)                                                                                                     |
-| `elkjs`                                     | `0.9.3`         | `EPL-2.0`                 | Ulf Rüegg                                                                                                                                                                   |
-| `entities`                                  | `6.0.1`         | `BSD-2-Clause`            | Copyright (c) Felix Böhm                                                                                                                                                    |
-| `es-toolkit`                                | `1.52.0`        | `MIT`                     | Copyright (c) 2024 Viva Republica, Inc.                                                                                                                                     |
-| `escape-string-regexp`                      | `5.0.0`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)                                                                                             |
-| `estree-util-is-identifier-name`            | `3.0.0`         | `MIT`                     | Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `eventsource`                               | `3.0.7`         | `MIT`                     | Copyright (c) EventSource GitHub organisation                                                                                                                               |
-| `eventsource-parser`                        | `3.1.1`         | `MIT`                     | Copyright (c) 2026 Espen Hovlandsdal <espen@hovlandsdal.com>                                                                                                                |
-| `express`                                   | `5.3.0`         | `MIT`                     | Copyright (c) 2009-2014 TJ Holowaychuk <tj@vision-media.ca>                                                                                                                 |
-| `express-rate-limit`                        | `8.7.1`         | `MIT`                     | Copyright 2023 Nathan Friedly, Vedant K                                                                                                                                     |
-| `find-up`                                   | `4.1.0`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
-| `fuzzysort`                                 | `4.0.2`         | `MIT`                     | Copyright (c) 2018 Stephen Kamenar                                                                                                                                          |
-| `get-caller-file`                           | `2.0.5`         | `ISC`                     | Copyright 2018 Stefan Penner                                                                                                                                                |
-| `gitdiff-parser`                            | `0.3.1`         | `MIT`                     | Copyright (c) 2020 Baidu EFE                                                                                                                                                |
-| `glob`                                      | `14.0.3`        | `BlueOak-1.0.0`           | Isaac Z. Schlueter <i@izs.me> (https://blog.izs.me/)                                                                                                                        |
-| `gpt-tokenizer`                             | `4.1.0`         | `MIT`                     | Copyright (c) 2023-2024 Bazyli Brzoska                                                                                                                                      |
-| `hachure-fill`                              | `0.5.2`         | `MIT`                     | Copyright (c) 2023 Preet Shihn                                                                                                                                              |
-| `hast-util-from-parse5`                     | `8.0.3`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `hast-util-parse-selector`                  | `4.0.0`         | `MIT`                     | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `hast-util-raw`                             | `9.1.0`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `hast-util-sanitize`                        | `5.0.2`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `hast-util-to-jsx-runtime`                  | `2.3.6`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `hast-util-to-parse5`                       | `8.0.1`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `hast-util-whitespace`                      | `3.0.0`         | `MIT`                     | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `hastscript`                                | `9.0.1`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `hono`                                      | `4.13.13`       | `MIT`                     | Copyright (c) 2021 - present, Yusuke Wada and Hono contributors                                                                                                             |
-| `html-url-attributes`                       | `3.0.1`         | `MIT`                     | Copyright (c) Titus Wormer                                                                                                                                                  |
-| `html-void-elements`                        | `3.0.0`         | `MIT`                     | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `http-errors`                               | `2.0.1`         | `MIT`                     | Copyright (c) 2014 Jonathan Ong me@jongleberry.com                                                                                                                          |
-| `iconv-lite`                                | `0.6.3`         | `MIT`                     | Copyright (c) 2011 Alexander Shtuchkin                                                                                                                                      |
-| `iconv-lite`                                | `0.7.3`         | `MIT`                     | Copyright (c) 2011 Alexander Shtuchkin                                                                                                                                      |
-| `import-meta-resolve`                       | `4.2.0`         | `MIT`                     | Copyright (c) Titus Wormer <mailto:tituswormer@gmail.com>                                                                                                                   |
-| `inline-style-parser`                       | `0.2.7`         | `MIT`                     | Copyright (c) 2012 TJ Holowaychuk <tj@vision-media.ca>                                                                                                                      |
-| `internmap`                                 | `1.0.1`         | `ISC`                     | Copyright 2021 Mike Bostock                                                                                                                                                 |
-| `internmap`                                 | `2.0.3`         | `ISC`                     | Copyright 2021 Mike Bostock                                                                                                                                                 |
-| `ip-address`                                | `10.7.4`        | `MIT`                     | Copyright (C) 2011 by Beau Gunderson                                                                                                                                        |
-| `is-alphabetical`                           | `2.0.1`         | `MIT`                     | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `is-alphanumerical`                         | `2.0.1`         | `MIT`                     | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `is-decimal`                                | `2.0.1`         | `MIT`                     | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `is-hexadecimal`                            | `2.0.1`         | `MIT`                     | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `isexe`                                     | `2.0.0`         | `ISC`                     | Copyright (c) Isaac Z. Schlueter and Contributors                                                                                                                           |
-| `jose`                                      | `6.2.12`        | `MIT`                     | Copyright (c) 2018 Filip Skokan                                                                                                                                             |
-| `js-tokens`                                 | `4.0.0`         | `MIT`                     | Copyright (c) 2014, 2015, 2016, 2017, 2018 Simon Lydell                                                                                                                     |
-| `js-yaml`                                   | `5.5.0`         | `MIT`                     | Copyright (C) 2011-2015 by Vitaly Puzrin                                                                                                                                    |
-| `json-schema-typed`                         | `8.0.2`         | `BSD-2-Clause`            | Remy Rylan                                                                                                                                                                  |
-| `jsonc-parser`                              | `3.3.1`         | `MIT`                     | Copyright (c) Microsoft                                                                                                                                                     |
-| `katex`                                     | `0.18.10`       | `MIT`                     | Copyright (c) 2013-2020 Khan Academy and other contributors                                                                                                                 |
-| `khroma`                                    | `2.1.0`         | `MIT`                     | Copyright (c) 2019-present Fabio Spampinato, Andrew Maney                                                                                                                   |
-| `layout-base`                               | `1.0.2`         | `MIT`                     | Copyright (c) 2019 iVis@Bilkent                                                                                                                                             |
-| `layout-base`                               | `2.0.1`         | `MIT`                     | Copyright (c) 2019 iVis@Bilkent                                                                                                                                             |
-| `locate-path`                               | `5.0.0`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
-| `lodash`                                    | `4.18.1`        | `MIT`                     | John-David Dalton <john.david.dalton@gmail.com>                                                                                                                             |
-| `lodash-es`                                 | `4.18.1`        | `MIT`                     | John-David Dalton <john.david.dalton@gmail.com>                                                                                                                             |
-| `longest-streak`                            | `3.1.0`         | `MIT`                     | Copyright (c) 2015 Titus Wormer <mailto:tituswormer@gmail.com>                                                                                                              |
-| `loose-envify`                              | `1.4.0`         | `MIT`                     | Copyright (c) 2015 Andres Suarez <zertosh@gmail.com>                                                                                                                        |
-| `lru-cache`                                 | `11.5.3`        | `BlueOak-1.0.0`           | Isaac Z. Schlueter <i@izs.me>                                                                                                                                               |
-| `lucide-react`                              | `1.66.0`        | `ISC`                     | Copyright (c) 2026 Lucide Icons and Contributors                                                                                                                            |
-| `markdown-table`                            | `3.0.4`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `marked`                                    | `15.0.12`       | `MIT`                     | Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/)                                                                                                                |
-| `marked`                                    | `16.4.2`        | `MIT`                     | Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/)                                                                                                                |
-| `marked`                                    | `18.1.1`        | `MIT`                     | Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/)                                                                                                                |
-| `mdast-util-find-and-replace`               | `3.0.4`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `mdast-util-from-markdown`                  | `2.1.0`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `mdast-util-gfm`                            | `3.1.0`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `mdast-util-gfm-autolink-literal`           | `2.0.1`         | `MIT`                     | Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `mdast-util-gfm-footnote`                   | `2.1.0`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `mdast-util-gfm-strikethrough`              | `2.0.1`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `mdast-util-gfm-table`                      | `2.0.0`         | `MIT`                     | Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `mdast-util-gfm-task-list-item`             | `2.0.0`         | `MIT`                     | Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `mdast-util-mdx-expression`                 | `2.0.1`         | `MIT`                     | Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `mdast-util-mdx-jsx`                        | `3.2.0`         | `MIT`                     | Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `mdast-util-mdxjs-esm`                      | `2.0.1`         | `MIT`                     | Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `mdast-util-phrasing`                       | `4.1.0`         | `MIT`                     | Copyright (c) 2017 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `mdast-util-to-hast`                        | `13.2.1`        | `MIT`                     | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `mdast-util-to-markdown`                    | `2.2.0`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `mdast-util-to-string`                      | `4.0.0`         | `MIT`                     | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `mermaid`                                   | `12.2.0`        | `MIT`                     | Copyright (c) 2014 - 2022 Knut Sveidqvist                                                                                                                                   |
-| `micromark-core-commonmark`                 | `2.0.4`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `micromark-extension-gfm`                   | `3.0.0`         | `MIT`                     | Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `micromark-extension-gfm-autolink-literal`  | `2.1.0`         | `MIT`                     | Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `micromark-extension-gfm-footnote`          | `2.1.0`         | `MIT`                     | Copyright (c) 2021 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `micromark-extension-gfm-strikethrough`     | `2.1.0`         | `MIT`                     | Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `micromark-extension-gfm-table`             | `2.1.2`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `micromark-extension-gfm-tagfilter`         | `2.0.0`         | `MIT`                     | Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `micromark-extension-gfm-task-list-item`    | `2.1.0`         | `MIT`                     | Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `micromark-factory-destination`             | `2.0.1`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `micromark-factory-label`                   | `2.0.1`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `micromark-factory-space`                   | `2.1.0`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `micromark-factory-title`                   | `2.0.1`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `micromark-factory-whitespace`              | `2.0.1`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `micromark-util-character`                  | `2.1.1`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `micromark-util-chunked`                    | `2.0.1`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `micromark-util-classify-character`         | `2.0.1`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `micromark-util-combine-extensions`         | `2.0.1`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `micromark-util-decode-string`              | `2.0.1`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `micromark-util-edit-map`                   | `1.0.0`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `micromark-util-html-tag-name`              | `2.0.1`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `micromark-util-normalize-identifier`       | `2.0.1`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `micromark-util-resolve-all`                | `2.0.1`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `micromark-util-sanitize-uri`               | `2.0.1`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `micromark-util-subtokenize`                | `2.1.0`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `micromark-util-symbol`                     | `2.0.1`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `micromark-util-types`                      | `2.0.3`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `minimatch`                                 | `11.0.3`        | `BlueOak-1.0.0`           | Isaac Z. Schlueter <i@izs.me> (http://blog.izs.me)                                                                                                                          |
-| `minipass`                                  | `7.1.3`         | `BlueOak-1.0.0`           | Isaac Z. Schlueter <i@izs.me> (http://blog.izs.me/)                                                                                                                         |
-| `node-addon-api`                            | `7.1.1`         | `MIT`                     | Copyright (c) 2017 [Node.js API collaborators](https://github.com/nodejs/node-addon-api#collaborators)                                                                      |
-| `node-pty`                                  | `1.2.0-beta.15` | `MIT`                     | Copyright (c) 2012-2015, Christopher Jeffrey (https://github.com/chjj/)                                                                                                     |
-| `object-assign`                             | `4.1.1`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
-| `p-limit`                                   | `2.3.0`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
-| `p-locate`                                  | `4.1.0`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
-| `p-try`                                     | `2.2.0`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
-| `package-manager-detector`                  | `1.9.0`         | `MIT`                     | Copyright (c) 2020-PRESENT Anthony Fu <https://github.com/antfu>                                                                                                            |
-| `parse-entities`                            | `4.0.2`         | `MIT`                     | Copyright (c) Titus Wormer <mailto:tituswormer@gmail.com>                                                                                                                   |
-| `parse5`                                    | `7.3.0`         | `MIT`                     | Copyright (c) 2013-2019 Ivan Nikulin (ifaaan@gmail.com, https://github.com/inikulin)                                                                                        |
-| `path-data-parser`                          | `0.1.0`         | `MIT`                     | Copyright (c) 2020 Preet Shihn                                                                                                                                              |
-| `path-exists`                               | `4.0.0`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
-| `path-key`                                  | `3.1.1`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
-| `path-scurry`                               | `3.0.0`         | `BlueOak-1.0.0`           | Isaac Z. Schlueter <i@izs.me> (https://blog.izs.me)                                                                                                                         |
-| `pdfjs-dist`                                | `6.4.299`       | `Apache-2.0`              | Not stated in package metadata or license file                                                                                                                              |
-| `pkce-challenge`                            | `5.0.1`         | `MIT`                     | Copyright (c) 2019                                                                                                                                                          |
-| `pkijs`                                     | `3.4.1`         | `BSD-3-Clause`            | Copyright (c) 2014, GlobalSign                                                                                                                                              |
-| `pngjs`                                     | `5.0.0`         | `MIT`                     | Alexandre Paré, Gaurav Mali, Gusts Kaksis, Kuba Niegowski, Luke Page, Pietajan De Potter, Steven Sojka, liangzeng, Michael Vogt, Xin-Xin Wang, toriningen, Eugene Kulabuhov |
-| `points-on-curve`                           | `0.2.0`         | `MIT`                     | Copyright (c) 2020 Preet Shihn                                                                                                                                              |
-| `points-on-path`                            | `0.2.1`         | `MIT`                     | Copyright (c) 2020 Preet                                                                                                                                                    |
-| `property-information`                      | `7.2.0`         | `MIT`                     | Copyright (c) Titus Wormer <mailto:tituswormer@gmail.com>                                                                                                                   |
-| `pvtsutils`                                 | `1.3.6`         | `MIT`                     | Copyright (c) 2017-2024 Peculiar Ventures, LLC                                                                                                                              |
-| `pvutils`                                   | `1.2.0`         | `MIT`                     | Copyright (c) 2016-2019, Peculiar Ventures                                                                                                                                  |
-| `qrcode`                                    | `1.5.4`         | `MIT`                     | Copyright (c) 2012 Ryan Day                                                                                                                                                 |
-| `raw-body`                                  | `3.0.2`         | `MIT`                     | Copyright (c) 2013-2014 Jonathan Ong <me@jongleberry.com>                                                                                                                   |
-| `react`                                     | `19.3.1`        | `MIT`                     | Copyright (c) Meta Platforms, Inc. and affiliates.                                                                                                                          |
-| `react-diff-view`                           | `3.3.3`         | `MIT`                     | Copyright (c) 2017 Gray Zhang                                                                                                                                               |
-| `react-dom`                                 | `19.3.1`        | `MIT`                     | Copyright (c) Meta Platforms, Inc. and affiliates.                                                                                                                          |
-| `react-resizable-panels`                    | `4.16.0`        | `MIT`                     | Copyright (c) 2018 Brian Vaughn                                                                                                                                             |
-| `readdirp`                                  | `5.1.1`         | `MIT`                     | Copyright (c) 2012-2019 Thorsten Lorenz, Paul Miller (https://paulmillr.com)                                                                                                |
-| `reflect-metadata`                          | `0.2.2`         | `Apache-2.0`              | Ron Buckton                                                                                                                                                                 |
-| `refractor`                                 | `5.0.0`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `rehype-harden`                             | `1.1.8`         | `MIT`                     | Copyright (c) 2025 Vercel Inc.                                                                                                                                              |
-| `rehype-raw`                                | `7.0.0`         | `MIT`                     | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `rehype-sanitize`                           | `6.0.0`         | `MIT`                     | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `remark-gfm`                                | `4.0.1`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `remark-parse`                              | `11.0.0`        | `MIT`                     | Copyright (c) 2014 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `remark-rehype`                             | `11.1.2`        | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `remark-stringify`                          | `11.0.0`        | `MIT`                     | Copyright (c) 2014 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `remend`                                    | `1.4.0`         | `Apache-2.0`              | Copyright 2023 Vercel, Inc.                                                                                                                                                 |
-| `require-directory`                         | `2.1.1`         | `MIT`                     | Copyright (c) 2011 Troy Goode <troygoode@gmail.com>                                                                                                                         |
-| `require-main-filename`                     | `2.0.0`         | `ISC`                     | Copyright (c) 2016, Contributors                                                                                                                                            |
-| `robust-predicates`                         | `3.0.3`         | `Unlicense`               | Vladimir Agafonkin                                                                                                                                                          |
-| `roughjs`                                   | `4.6.6`         | `MIT`                     | Copyright (c) 2019 Preet Shihn                                                                                                                                              |
-| `rw`                                        | `1.3.3`         | `BSD-3-Clause`            | Copyright (c) 2014-2016, Michael Bostock                                                                                                                                    |
-| `safer-buffer`                              | `2.1.2`         | `MIT`                     | Copyright (c) 2018 Nikita Skovoroda <chalkerx@gmail.com>                                                                                                                    |
-| `selfsigned`                                | `5.5.0`         | `MIT`                     | Copyright (c) 2013 José F. Romaniello                                                                                                                                       |
-| `set-blocking`                              | `2.0.0`         | `ISC`                     | Copyright (c) 2016, Contributors                                                                                                                                            |
-| `shallow-equal`                             | `3.1.0`         | `MIT`                     | Copyright © 2023 Misha Moroshko and Philip Su                                                                                                                               |
-| `shebang-command`                           | `2.0.0`         | `MIT`                     | Copyright (c) Kevin Mårtensson <kevinmartensson@gmail.com> (github.com/kevva)                                                                                               |
-| `shebang-regex`                             | `3.0.0`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
-| `space-separated-tokens`                    | `2.0.2`         | `MIT`                     | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `streamdown`                                | `2.7.1`         | `Apache-2.0`              | Copyright 2023 Vercel, Inc.                                                                                                                                                 |
-| `string-width`                              | `4.2.3`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
-| `stringify-entities`                        | `4.0.4`         | `MIT`                     | Copyright (c) 2015 Titus Wormer <mailto:tituswormer@gmail.com>                                                                                                              |
-| `strip-ansi`                                | `6.0.1`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
-| `style-to-js`                               | `1.1.21`        | `MIT`                     | Copyright (c) 2020 Menglin "Mark" Xu <mark@remarkablemark.org>                                                                                                              |
-| `style-to-object`                           | `1.0.14`        | `MIT`                     | Copyright (c) 2017 Menglin "Mark" Xu <mark@remarkablemark.org>                                                                                                              |
-| `stylis`                                    | `4.4.0`         | `MIT`                     | Copyright (c) 2016-present Sultan Tarimo                                                                                                                                    |
-| `tailwind-merge`                            | `3.7.0`         | `MIT`                     | Copyright (c) 2021 Dany Castillo                                                                                                                                            |
-| `tinyexec`                                  | `1.3.1`         | `MIT`                     | Copyright (c) 2024 Tinylibs                                                                                                                                                 |
-| `tree-kill`                                 | `1.2.2`         | `MIT`                     | Copyright (c) 2018 Peter Krumins                                                                                                                                            |
-| `ts-dedent`                                 | `2.3.0`         | `MIT`                     | Copyright (c) 2018 Tamino Martinius                                                                                                                                         |
-| `tslib`                                     | `1.14.1`        | `0BSD`                    | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `tslib`                                     | `2.8.1`         | `0BSD`                    | Copyright (c) Microsoft Corporation.                                                                                                                                        |
-| `tsyringe`                                  | `4.10.0`        | `MIT`                     | Copyright (c) Microsoft Corporation. All rights reserved.                                                                                                                   |
-| `typo-js`                                   | `1.4.0`         | `BSD-3-Clause`            | Christopher Finke <cfinke@gmail.com> (http://www.chrisfinke.com/)                                                                                                           |
-| `unified`                                   | `11.0.5`        | `MIT`                     | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `unist-util-is`                             | `6.0.1`         | `MIT`                     | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `unist-util-position`                       | `5.0.0`         | `MIT`                     | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `unist-util-stringify-position`             | `4.0.0`         | `MIT`                     | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `unist-util-visit`                          | `5.2.0`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `unist-util-visit-parents`                  | `6.1.0`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `unpipe`                                    | `1.0.0`         | `MIT`                     | Copyright (c) 2015 Douglas Christopher Wilson <doug@somethingdoug.com>                                                                                                      |
-| `uuid`                                      | `14.0.3`        | `MIT`                     | Copyright (c) 2010-2020 Robert Kieffer and other contributors                                                                                                               |
-| `vary`                                      | `1.1.2`         | `MIT`                     | Copyright (c) 2014-2017 Douglas Christopher Wilson                                                                                                                          |
-| `vfile`                                     | `6.0.3`         | `MIT`                     | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `vfile-location`                            | `5.0.3`         | `MIT`                     | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `vfile-message`                             | `4.0.3`         | `MIT`                     | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
-| `vscode-jsonrpc`                            | `9.0.3`         | `MIT`                     | Copyright (c) Microsoft Corporation                                                                                                                                         |
-| `vscode-languageserver-protocol`            | `3.18.4`        | `MIT`                     | Copyright (c) Microsoft Corporation                                                                                                                                         |
-| `vscode-languageserver-types`               | `3.18.4`        | `MIT`                     | Copyright (c) Microsoft Corporation                                                                                                                                         |
-| `warning`                                   | `4.0.3`         | `MIT`                     | Copyright (c) 2013-present, Facebook, Inc.                                                                                                                                  |
-| `web-namespaces`                            | `2.0.1`         | `MIT`                     | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
-| `which`                                     | `2.0.2`         | `ISC`                     | Copyright (c) Isaac Z. Schlueter and Contributors                                                                                                                           |
-| `which-module`                              | `2.0.1`         | `ISC`                     | Copyright (c) 2016, Contributors                                                                                                                                            |
-| `wrap-ansi`                                 | `6.2.0`         | `MIT`                     | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
-| `ws`                                        | `8.22.1`        | `MIT`                     | Copyright (c) 2011 Einar Otto Stangvik <einaros@gmail.com>                                                                                                                  |
-| `y18n`                                      | `4.0.3`         | `ISC`                     | Copyright (c) 2015, Contributors                                                                                                                                            |
-| `yaml`                                      | `2.9.1`         | `ISC`                     | Eemeli Aro <eemeli@gmail.com>                                                                                                                                               |
-| `yargs`                                     | `15.4.1`        | `MIT`                     | Copyright 2010 James Halliday (mail@substack.net); Modified work Copyright 2014 Contributors (ben@npmjs.com)                                                                |
-| `yargs-parser`                              | `18.1.3`        | `ISC`                     | Copyright (c) 2016, Contributors                                                                                                                                            |
-| `zod`                                       | `4.6.7`         | `MIT`                     | Copyright (c) 2025 Colin McDonnell                                                                                                                                          |
-| `zod-to-json-schema`                        | `3.25.2`        | `ISC`                     | Copyright (c) 2020, Stefan Terdell                                                                                                                                          |
-| `zundo`                                     | `2.3.0`         | `MIT`                     | Copyright (c) 2021 Charles Kornoelje                                                                                                                                        |
-| `zustand`                                   | `5.0.16`        | `MIT`                     | Copyright (c) 2019 Paul Henschel                                                                                                                                            |
-| `zwitch`                                    | `2.0.4`         | `MIT`                     | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| Package                                     | Version         | License                       | Copyright                                                                                                                                                                   |
+| ------------------------------------------- | --------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@antfu/install-pkg`                        | `2.1.0`         | `MIT`                         | Copyright (c) 2021 Anthony Fu <https://github.com/antfu>                                                                                                                    |
+| `@braintree/sanitize-url`                   | `7.1.2`         | `MIT`                         | Copyright (c) 2017 Braintree                                                                                                                                                |
+| `@chevrotain/cst-dts-gen`                   | `13.2.0`        | `Apache-2.0`                  | Not stated in package metadata or license file                                                                                                                              |
+| `@chevrotain/gast`                          | `13.2.0`        | `Apache-2.0`                  | Not stated in package metadata or license file                                                                                                                              |
+| `@chevrotain/regexp-to-ast`                 | `13.2.0`        | `Apache-2.0`                  | Not stated in package metadata or license file                                                                                                                              |
+| `@chevrotain/types`                         | `13.2.0`        | `Apache-2.0`                  | Shahar Soel                                                                                                                                                                 |
+| `@chevrotain/utils`                         | `13.2.0`        | `Apache-2.0`                  | Shahar Soel                                                                                                                                                                 |
+| `@codemirror/autocomplete`                  | `6.20.4`        | `MIT`                         | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
+| `@codemirror/commands`                      | `6.11.1`        | `MIT`                         | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
+| `@codemirror/lang-cpp`                      | `6.0.3`         | `MIT`                         | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
+| `@codemirror/lang-css`                      | `6.3.1`         | `MIT`                         | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
+| `@codemirror/lang-html`                     | `6.4.12`        | `MIT`                         | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
+| `@codemirror/lang-java`                     | `6.0.2`         | `MIT`                         | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
+| `@codemirror/lang-javascript`               | `6.2.5`         | `MIT`                         | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
+| `@codemirror/lang-json`                     | `6.0.2`         | `MIT`                         | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
+| `@codemirror/lang-markdown`                 | `6.5.2`         | `MIT`                         | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
+| `@codemirror/lang-php`                      | `6.0.2`         | `MIT`                         | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
+| `@codemirror/lang-python`                   | `6.2.1`         | `MIT`                         | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
+| `@codemirror/lang-rust`                     | `6.0.2`         | `MIT`                         | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
+| `@codemirror/lang-yaml`                     | `6.1.3`         | `MIT`                         | Copyright (C) 2024 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
+| `@codemirror/language`                      | `6.13.1`        | `MIT`                         | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
+| `@codemirror/lint`                          | `6.9.7`         | `MIT`                         | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
+| `@codemirror/lsp-client`                    | `6.3.0`         | `MIT`                         | Copyright (C) 2025 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
+| `@codemirror/search`                        | `6.7.2`         | `MIT`                         | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
+| `@codemirror/state`                         | `6.7.6`         | `MIT`                         | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
+| `@codemirror/view`                          | `6.43.15`       | `MIT`                         | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
+| `@dnd-kit/accessibility`                    | `3.1.1`         | `MIT`                         | Copyright (c) 2021, Claudéric Demers                                                                                                                                        |
+| `@dnd-kit/core`                             | `6.3.1`         | `MIT`                         | Copyright (c) 2021, Claudéric Demers                                                                                                                                        |
+| `@dnd-kit/sortable`                         | `10.0.0`        | `MIT`                         | Copyright (c) 2021, Claudéric Demers                                                                                                                                        |
+| `@dnd-kit/utilities`                        | `3.2.2`         | `MIT`                         | Copyright (c) 2021, Claudéric Demers                                                                                                                                        |
+| `@hono/node-server`                         | `2.1.6`         | `MIT`                         | Copyright (c) 2022 - present, Yusuke Wada and Hono contributors                                                                                                             |
+| `@iconify/types`                            | `2.0.0`         | `MIT`                         | Copyright (c) 2021 - 2022 Vjacheslav Trushkin / Iconify OÜ                                                                                                                  |
+| `@iconify/utils`                            | `3.1.7`         | `MIT`                         | Copyright (c) 2021-PRESENT Vjacheslav Trushkin                                                                                                                              |
+| `@lezer/common`                             | `1.5.5`         | `MIT`                         | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
+| `@lezer/cpp`                                | `1.1.6`         | `MIT`                         | Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
+| `@lezer/css`                                | `1.3.9`         | `MIT`                         | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
+| `@lezer/highlight`                          | `1.2.5`         | `MIT`                         | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
+| `@lezer/html`                               | `1.3.13`        | `MIT`                         | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
+| `@lezer/java`                               | `1.1.5`         | `MIT`                         | Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
+| `@lezer/json`                               | `1.0.3`         | `MIT`                         | Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin>, Arun Srinivasan <rulfzid@gmail.com>, and others                                                           |
+| `@lezer/lr`                                 | `1.4.12`        | `MIT`                         | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
+| `@lezer/markdown`                           | `1.8.1`         | `MIT`                         | Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
+| `@lezer/php`                                | `1.0.6`         | `MIT`                         | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
+| `@lezer/python`                             | `1.1.19`        | `MIT`                         | Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
+| `@lezer/rust`                               | `1.0.3`         | `MIT`                         | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                                 |
+| `@lezer/yaml`                               | `1.0.4`         | `MIT`                         | Copyright (C) 2024 by Marijn Haverbeke <marijnh@gmail.com> and others                                                                                                       |
+| `@mermaid-js/parser`                        | `2.0.1`         | `MIT`                         | Copyright (c) 2023 Yokozuna59                                                                                                                                               |
+| `@microsoft/1ds-core-js`                    | `4.4.6`         | `MIT`                         | Copyright (c) Microsoft Corporation                                                                                                                                         |
+| `@microsoft/1ds-post-js`                    | `4.4.6`         | `MIT`                         | Copyright (c) Microsoft Corporation                                                                                                                                         |
+| `@microsoft/applicationinsights-channel-js` | `3.4.6`         | `MIT`                         | Copyright (c) Microsoft Corporation                                                                                                                                         |
+| `@microsoft/applicationinsights-common`     | `3.4.6`         | `MIT`                         | Copyright (c) Microsoft Corporation                                                                                                                                         |
+| `@microsoft/applicationinsights-core-js`    | `3.4.6`         | `MIT`                         | Copyright (c) Microsoft Corporation                                                                                                                                         |
+| `@microsoft/applicationinsights-shims`      | `3.0.1`         | `MIT`                         | Copyright (c) Microsoft Corporation                                                                                                                                         |
+| `@microsoft/applicationinsights-web-basic`  | `3.4.6`         | `MIT`                         | Copyright (c) Microsoft Corporation                                                                                                                                         |
+| `@microsoft/dynamicproto-js`                | `2.0.5`         | `MIT`                         | Microsoft Application Insights Team                                                                                                                                         |
+| `@modelcontextprotocol/sdk`                 | `1.32.2`        | `MIT`                         | Copyright (c) 2024 Anthropic, PBC                                                                                                                                           |
+| `@napi-rs/canvas`                           | `1.1.0`         | `MIT`                         | Copyright (c) 2020 lynweklm@gmail.com                                                                                                                                       |
+| `@nevware21/ts-async`                       | `0.5.5`         | `MIT`                         | Copyright (c) 2022 NevWare21 Solutions LLC                                                                                                                                  |
+| `@nevware21/ts-utils`                       | `0.16.0`        | `MIT`                         | Copyright (c) 2022 NevWare21 Solutions LLC                                                                                                                                  |
+| `@noble/hashes`                             | `1.8.0`         | `MIT`                         | Copyright (c) 2022 Paul Miller (https://paulmillr.com)                                                                                                                      |
+| `@peculiar/asn1-cms`                        | `2.11.1`        | `MIT`                         | Copyright (c) 2020                                                                                                                                                          |
+| `@peculiar/asn1-csr`                        | `2.11.1`        | `MIT`                         | Copyright (c) 2020                                                                                                                                                          |
+| `@peculiar/asn1-ecc`                        | `2.11.1`        | `MIT`                         | Copyright (c) 2020                                                                                                                                                          |
+| `@peculiar/asn1-pfx`                        | `2.11.1`        | `MIT`                         | Copyright (c) 2020                                                                                                                                                          |
+| `@peculiar/asn1-pkcs8`                      | `2.11.1`        | `MIT`                         | Copyright (c) 2020                                                                                                                                                          |
+| `@peculiar/asn1-pkcs9`                      | `2.11.1`        | `MIT`                         | Copyright (c) 2020                                                                                                                                                          |
+| `@peculiar/asn1-rsa`                        | `2.11.1`        | `MIT`                         | Copyright (c) 2020                                                                                                                                                          |
+| `@peculiar/asn1-schema`                     | `2.11.1`        | `MIT`                         | Copyright (c) 2020                                                                                                                                                          |
+| `@peculiar/asn1-x509`                       | `2.11.1`        | `MIT`                         | Copyright (c) 2020                                                                                                                                                          |
+| `@peculiar/asn1-x509-attr`                  | `2.11.1`        | `MIT`                         | Copyright (c) 2020                                                                                                                                                          |
+| `@peculiar/x509`                            | `1.14.3`        | `MIT`                         | Copyright (c) Peculiar Ventures. All rights reserved.                                                                                                                       |
+| `@pushforge/builder`                        | `2.0.5`         | `MIT`                         | Copyright (c) 2025 David Raphi                                                                                                                                              |
+| `@resvg/resvg-wasm`                         | `2.6.2`         | `MPL-2.0`                     | resvg-js contributors                                                                                                                                                       |
+| `@tanstack/react-virtual`                   | `3.14.26`       | `MIT`                         | Copyright (c) 2021-present Tanner Linsley                                                                                                                                   |
+| `@tanstack/virtual-core`                    | `3.19.11`       | `MIT`                         | Copyright (c) 2021-present Tanner Linsley                                                                                                                                   |
+| `@types/body-parser`                        | `1.19.6`        | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/connect`                            | `3.4.38`        | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3`                                 | `7.4.3`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-array`                           | `3.2.2`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-axis`                            | `3.0.6`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-brush`                           | `3.0.6`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-chord`                           | `3.0.6`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-color`                           | `3.1.3`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-contour`                         | `3.0.6`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-delaunay`                        | `6.0.4`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-dispatch`                        | `3.0.7`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-drag`                            | `3.0.7`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-dsv`                             | `3.0.7`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-ease`                            | `3.0.2`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-fetch`                           | `3.0.7`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-force`                           | `3.0.10`        | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-format`                          | `3.0.4`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-geo`                             | `3.1.1`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-hierarchy`                       | `3.1.7`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-interpolate`                     | `3.0.4`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-path`                            | `3.1.1`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-polygon`                         | `3.0.2`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-quadtree`                        | `3.0.6`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-random`                          | `3.0.4`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-scale`                           | `4.0.9`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-scale-chromatic`                 | `3.1.0`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-selection`                       | `3.0.12`        | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-shape`                           | `3.2.0`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-time`                            | `3.0.4`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-time-format`                     | `4.0.3`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-timer`                           | `3.0.2`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-transition`                      | `3.0.9`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/d3-zoom`                            | `3.0.9`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/estree`                             | `1.0.10`        | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/estree-jsx`                         | `1.0.5`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/express`                            | `5.0.6`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/express-serve-static-core`          | `5.1.3`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/geojson`                            | `7946.0.16`     | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/hast`                               | `3.0.5`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/http-errors`                        | `2.0.5`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/mdast`                              | `4.0.4`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/node`                               | `26.6.6`        | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/prismjs`                            | `1.26.6`        | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/qs`                                 | `6.15.1`        | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/range-parser`                       | `1.2.7`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/react`                              | `19.3.0`        | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/send`                               | `1.2.1`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/serve-static`                       | `2.2.0`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/trusted-types`                      | `2.0.7`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/unist`                              | `2.0.11`        | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/unist`                              | `3.0.3`         | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@types/ws`                                 | `8.18.2`        | `MIT`                         | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@ungap/structured-clone`                   | `1.4.0`         | `ISC`                         | Copyright (c) 2021, Andrea Giammarchi, @WebReflection                                                                                                                       |
+| `@upsetjs/venn.js`                          | `2.0.0`         | `MIT`                         | Copyright (c) 2013 Ben Frederickson                                                                                                                                         |
+| `@vscode/codicons`                          | `0.0.46-24`     | `CC-BY-4.0`                   | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `@vscode/extension-telemetry`               | `1.5.2`         | `MIT`                         | Copyright (c) Microsoft Corporation                                                                                                                                         |
+| `@xterm/addon-fit`                          | `0.11.0`        | `MIT`                         | Copyright (c) 2019, The xterm.js authors (https://github.com/xtermjs/xterm.js)                                                                                              |
+| `@xterm/addon-webgl`                        | `0.19.0`        | `MIT`                         | Copyright (c) 2018, The xterm.js authors (https://github.com/xtermjs/xterm.js)                                                                                              |
+| `@xterm/xterm`                              | `6.0.0`         | `MIT`                         | Copyright (c) 2017-2019, The xterm.js authors (https://github.com/xtermjs/xterm.js)                                                                                         |
+| `ajv`                                       | `8.20.0`        | `MIT`                         | Copyright (c) 2015-2021 Evgeny Poberezkin                                                                                                                                   |
+| `ajv-formats`                               | `3.0.1`         | `MIT`                         | Copyright (c) 2020 Evgeny Poberezkin                                                                                                                                        |
+| `ansi-regex`                                | `5.0.1`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
+| `ansi-styles`                               | `4.3.0`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
+| `argparse`                                  | `3.0.4`         | `PSF-2.0`                     | Not stated in package metadata or license file                                                                                                                              |
+| `asn1js`                                    | `3.1.0`         | `BSD-3-Clause`                | Copyright (c) 2014, GMO GlobalSign                                                                                                                                          |
+| `bytes`                                     | `3.1.2`         | `MIT`                         | Copyright (c) 2012-2014 TJ Holowaychuk <tj@vision-media.ca>                                                                                                                 |
+| `bytestreamjs`                              | `2.0.1`         | `BSD-3-Clause`                | Copyright (c) 2016-2022, Peculiar Ventures                                                                                                                                  |
+| `camelcase`                                 | `5.3.1`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
+| `ccount`                                    | `2.0.1`         | `MIT`                         | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `chalk`                                     | `6.0.1`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)                                                                                             |
+| `character-entities`                        | `2.0.2`         | `MIT`                         | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `character-entities-html4`                  | `2.1.0`         | `MIT`                         | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `character-entities-legacy`                 | `3.0.0`         | `MIT`                         | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `character-reference-invalid`               | `2.0.1`         | `MIT`                         | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `chevrotain`                                | `13.2.0`        | `Apache-2.0`                  | Shahar Soel                                                                                                                                                                 |
+| `chokidar`                                  | `5.0.0`         | `MIT`                         | Copyright (c) 2012 Paul Miller (https://paulmillr.com), Elan Shanker                                                                                                        |
+| `classnames`                                | `2.5.1`         | `MIT`                         | Copyright (c) 2018 Jed Watson                                                                                                                                               |
+| `cliui`                                     | `6.0.0`         | `ISC`                         | Copyright (c) 2015, Contributors                                                                                                                                            |
+| `clsx`                                      | `2.1.1`         | `MIT`                         | Copyright (c) Luke Edwards <luke.edwards05@gmail.com> (lukeed.com)                                                                                                          |
+| `codemirror`                                | `6.0.2`         | `MIT`                         | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others                                                                                            |
+| `color-convert`                             | `2.0.1`         | `MIT`                         | Copyright (c) 2011-2016 Heather Arthur <fayearthur@gmail.com>                                                                                                               |
+| `color-name`                                | `1.1.4`         | `MIT`                         | Copyright (c) 2015 Dmitry Ivanov                                                                                                                                            |
+| `comma-separated-tokens`                    | `2.0.3`         | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `commander`                                 | `15.1.0`        | `MIT`                         | Copyright (c) 2011 TJ Holowaychuk <tj@vision-media.ca>                                                                                                                      |
+| `commander`                                 | `7.2.0`         | `MIT`                         | Copyright (c) 2011 TJ Holowaychuk <tj@vision-media.ca>                                                                                                                      |
+| `content-type`                              | `1.0.5`         | `MIT`                         | Copyright (c) 2015 Douglas Christopher Wilson                                                                                                                               |
+| `cors`                                      | `2.8.6`         | `MIT`                         | Copyright (c) 2013 Troy Goode <troygoode@gmail.com>                                                                                                                         |
+| `cose-base`                                 | `1.0.3`         | `MIT`                         | Copyright (c) 2019 - present, iVis@Bilkent.                                                                                                                                 |
+| `cose-base`                                 | `2.2.0`         | `MIT`                         | Copyright (c) 2019 - present, iVis@Bilkent.                                                                                                                                 |
+| `crelt`                                     | `1.0.7`         | `MIT`                         | Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin>                                                                                                            |
+| `cross-spawn`                               | `7.0.6`         | `MIT`                         | Copyright (c) 2018 Made With MOXY Lda <hello@moxy.studio>                                                                                                                   |
+| `csstype`                                   | `3.2.3`         | `MIT`                         | Copyright (c) 2017-2018 Fredrik Nicol                                                                                                                                       |
+| `cytoscape`                                 | `3.34.4`        | `MIT`                         | Copyright (c) 2016-2026, The Cytoscape Consortium.                                                                                                                          |
+| `cytoscape-cose-bilkent`                    | `4.1.0`         | `MIT`                         | Copyright (c) 2016-2018, The Cytoscape Consortium.                                                                                                                          |
+| `cytoscape-fcose`                           | `2.2.0`         | `MIT`                         | Copyright (c) 2018 - present, iVis-at-Bilkent.                                                                                                                              |
+| `d3`                                        | `7.9.2`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-array`                                  | `2.12.1`        | `BSD-3-Clause`                | Copyright 2010-2020 Mike Bostock                                                                                                                                            |
+| `d3-array`                                  | `3.2.5`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-axis`                                   | `3.0.1`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-brush`                                  | `3.0.1`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-chord`                                  | `3.0.2`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-color`                                  | `3.1.1`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-contour`                                | `4.0.3`         | `ISC`                         | Copyright 2012-2026 Mike Bostock                                                                                                                                            |
+| `d3-delaunay`                               | `6.0.6`         | `ISC`                         | Copyright 2018-2026 Observable, Inc.                                                                                                                                        |
+| `d3-dispatch`                               | `3.0.2`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-drag`                                   | `3.0.1`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-dsv`                                    | `3.0.2`         | `ISC`                         | Copyright 2013-2026 Mike Bostock                                                                                                                                            |
+| `d3-ease`                                   | `3.0.2`         | `BSD-3-Clause`                | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-fetch`                                  | `3.0.2`         | `ISC`                         | Copyright 2016-2026 Mike Bostock                                                                                                                                            |
+| `d3-force`                                  | `3.0.1`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-format`                                 | `3.1.3`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-geo`                                    | `3.1.2`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-hierarchy`                              | `3.1.3`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-interpolate`                            | `3.0.2`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-path`                                   | `1.0.9`         | `BSD-3-Clause`                | Copyright 2015-2016 Mike Bostock                                                                                                                                            |
+| `d3-path`                                   | `3.1.1`         | `ISC`                         | Copyright 2015-2026 Mike Bostock                                                                                                                                            |
+| `d3-polygon`                                | `3.0.2`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-quadtree`                               | `3.0.2`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-random`                                 | `3.0.2`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-sankey`                                 | `0.12.3`        | `BSD-3-Clause`                | Copyright 2015, Mike Bostock                                                                                                                                                |
+| `d3-scale`                                  | `4.0.3`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-scale-chromatic`                        | `3.1.1`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-selection`                              | `3.0.1`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-shape`                                  | `1.3.7`         | `BSD-3-Clause`                | Copyright 2010-2015 Mike Bostock                                                                                                                                            |
+| `d3-shape`                                  | `3.2.1`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-time`                                   | `3.1.1`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-time-format`                            | `4.1.1`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-timer`                                  | `3.0.2`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-transition`                             | `3.0.2`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `d3-zoom`                                   | `3.0.1`         | `ISC`                         | Copyright 2010-2026 Mike Bostock                                                                                                                                            |
+| `dagre-d3-es`                               | `7.0.14`        | `MIT`                         | Copyright (c) 2022-2024 Thibaut Lassalle, David Newell, Alois Klink, Sidharth Vinod and dagre-es contributors                                                               |
+| `dayjs`                                     | `1.11.23`       | `MIT`                         | Copyright (c) 2018-present, iamkun                                                                                                                                          |
+| `debug`                                     | `4.4.3`         | `MIT`                         | Copyright (c) 2014-2017 TJ Holowaychuk <tj@vision-media.ca>                                                                                                                 |
+| `decamelize`                                | `1.2.0`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
+| `decode-named-character-reference`          | `1.3.0`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `delaunator`                                | `5.1.0`         | `ISC`                         | Copyright (c) 2026, Mapbox                                                                                                                                                  |
+| `dequal`                                    | `2.0.3`         | `MIT`                         | Copyright (c) Luke Edwards <luke.edwards05@gmail.com> (lukeed.com)                                                                                                          |
+| `devlop`                                    | `1.1.0`         | `MIT`                         | Copyright (c) 2023 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `diff`                                      | `9.0.0`         | `BSD-3-Clause`                | Copyright (c) 2009-2015, Kevin Decker <kpdecker@gmail.com>                                                                                                                  |
+| `diff-match-patch`                          | `1.0.5`         | `Apache-2.0`                  | Not stated in package metadata or license file                                                                                                                              |
+| `dijkstrajs`                                | `1.0.3`         | `MIT`                         | Copyright (C) 2008                                                                                                                                                          |
+| `dompurify`                                 | `3.4.17`        | `(MPL-2.0 OR Apache-2.0)`     | Dr.-Ing. Mario Heiderich, Cure53 <mario@cure53.de> (https://cure53.de/)                                                                                                     |
+| `elkjs`                                     | `0.12.1`        | `EPL-2.0 OR GPL-3.0-or-later` | Ulf Rüegg                                                                                                                                                                   |
+| `entities`                                  | `9.0.0`         | `BSD-2-Clause`                | Copyright (c) Felix Böhm                                                                                                                                                    |
+| `es-toolkit`                                | `1.53.2`        | `MIT`                         | Copyright (c) 2024 Viva Republica, Inc.                                                                                                                                     |
+| `escape-string-regexp`                      | `5.0.0`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)                                                                                             |
+| `estree-util-is-identifier-name`            | `3.0.0`         | `MIT`                         | Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `eventsource`                               | `3.0.7`         | `MIT`                         | Copyright (c) EventSource GitHub organisation                                                                                                                               |
+| `eventsource-parser`                        | `3.1.1`         | `MIT`                         | Copyright (c) 2026 Espen Hovlandsdal <espen@hovlandsdal.com>                                                                                                                |
+| `express`                                   | `5.3.0`         | `MIT`                         | Copyright (c) 2009-2014 TJ Holowaychuk <tj@vision-media.ca>                                                                                                                 |
+| `express-rate-limit`                        | `8.7.3`         | `MIT`                         | Copyright 2023 Nathan Friedly, Vedant K                                                                                                                                     |
+| `find-up`                                   | `4.1.0`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
+| `fuzzysort`                                 | `4.0.2`         | `MIT`                         | Copyright (c) 2018 Stephen Kamenar                                                                                                                                          |
+| `get-caller-file`                           | `2.0.5`         | `ISC`                         | Copyright 2018 Stefan Penner                                                                                                                                                |
+| `gitdiff-parser`                            | `0.3.1`         | `MIT`                         | Copyright (c) 2020 Baidu EFE                                                                                                                                                |
+| `glob`                                      | `14.0.4`        | `BlueOak-1.0.0`               | Isaac Z. Schlueter <i@izs.me> (https://blog.izs.me/)                                                                                                                        |
+| `gpt-tokenizer`                             | `4.1.0`         | `MIT`                         | Copyright (c) 2023-2024 Bazyli Brzoska                                                                                                                                      |
+| `hachure-fill`                              | `0.5.2`         | `MIT`                         | Copyright (c) 2023 Preet Shihn                                                                                                                                              |
+| `hast-util-from-parse5`                     | `8.0.4`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `hast-util-parse-selector`                  | `4.0.0`         | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `hast-util-raw`                             | `9.2.0`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `hast-util-sanitize`                        | `5.0.2`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `hast-util-to-jsx-runtime`                  | `2.3.7`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `hast-util-to-parse5`                       | `8.0.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `hast-util-whitespace`                      | `3.0.0`         | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `hastscript`                                | `9.0.3`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `hono`                                      | `4.13.16`       | `MIT`                         | Copyright (c) 2021 - present, Yusuke Wada and Hono contributors                                                                                                             |
+| `html-url-attributes`                       | `3.0.1`         | `MIT`                         | Copyright (c) Titus Wormer                                                                                                                                                  |
+| `html-void-elements`                        | `3.0.0`         | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `http-errors`                               | `2.0.1`         | `MIT`                         | Copyright (c) 2014 Jonathan Ong me@jongleberry.com                                                                                                                          |
+| `iconv-lite`                                | `0.6.3`         | `MIT`                         | Copyright (c) 2011 Alexander Shtuchkin                                                                                                                                      |
+| `iconv-lite`                                | `0.7.3`         | `MIT`                         | Copyright (c) 2011 Alexander Shtuchkin                                                                                                                                      |
+| `import-meta-resolve`                       | `4.2.0`         | `MIT`                         | Copyright (c) Titus Wormer <mailto:tituswormer@gmail.com>                                                                                                                   |
+| `inline-style-parser`                       | `0.2.9`         | `MIT`                         | Copyright (c) 2012 TJ Holowaychuk <tj@vision-media.ca>                                                                                                                      |
+| `internmap`                                 | `1.0.1`         | `ISC`                         | Copyright 2021 Mike Bostock                                                                                                                                                 |
+| `internmap`                                 | `2.0.3`         | `ISC`                         | Copyright 2021 Mike Bostock                                                                                                                                                 |
+| `ip-address`                                | `10.7.6`        | `MIT`                         | Copyright (C) 2011 by Beau Gunderson                                                                                                                                        |
+| `is-alphabetical`                           | `2.0.1`         | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `is-alphanumerical`                         | `2.0.1`         | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `is-decimal`                                | `2.0.1`         | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `is-hexadecimal`                            | `2.0.1`         | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `isexe`                                     | `2.0.0`         | `ISC`                         | Copyright (c) Isaac Z. Schlueter and Contributors                                                                                                                           |
+| `jose`                                      | `6.2.15`        | `MIT`                         | Copyright (c) 2018 Filip Skokan                                                                                                                                             |
+| `js-tokens`                                 | `4.0.0`         | `MIT`                         | Copyright (c) 2014, 2015, 2016, 2017, 2018 Simon Lydell                                                                                                                     |
+| `js-yaml`                                   | `5.5.0`         | `MIT`                         | Copyright (C) 2011-2015 by Vitaly Puzrin                                                                                                                                    |
+| `json-schema-typed`                         | `8.0.2`         | `BSD-2-Clause`                | Remy Rylan                                                                                                                                                                  |
+| `jsonc-parser`                              | `3.3.1`         | `MIT`                         | Copyright (c) Microsoft                                                                                                                                                     |
+| `katex`                                     | `0.18.10`       | `MIT`                         | Copyright (c) 2013-2020 Khan Academy and other contributors                                                                                                                 |
+| `khroma`                                    | `2.1.0`         | `MIT`                         | Copyright (c) 2019-present Fabio Spampinato, Andrew Maney                                                                                                                   |
+| `layout-base`                               | `1.0.2`         | `MIT`                         | Copyright (c) 2019 iVis@Bilkent                                                                                                                                             |
+| `layout-base`                               | `2.0.1`         | `MIT`                         | Copyright (c) 2019 iVis@Bilkent                                                                                                                                             |
+| `locate-path`                               | `5.0.0`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
+| `lodash`                                    | `4.18.1`        | `MIT`                         | John-David Dalton <john.david.dalton@gmail.com>                                                                                                                             |
+| `lodash-es`                                 | `4.18.1`        | `MIT`                         | John-David Dalton <john.david.dalton@gmail.com>                                                                                                                             |
+| `longest-streak`                            | `3.1.0`         | `MIT`                         | Copyright (c) 2015 Titus Wormer <mailto:tituswormer@gmail.com>                                                                                                              |
+| `loose-envify`                              | `1.4.0`         | `MIT`                         | Copyright (c) 2015 Andres Suarez <zertosh@gmail.com>                                                                                                                        |
+| `lru-cache`                                 | `11.5.3`        | `BlueOak-1.0.0`               | Isaac Z. Schlueter <i@izs.me>                                                                                                                                               |
+| `lucide-react`                              | `1.70.0`        | `ISC`                         | Copyright (c) 2026 Lucide Icons and Contributors                                                                                                                            |
+| `markdown-table`                            | `3.1.0`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `marked`                                    | `15.0.12`       | `MIT`                         | Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/)                                                                                                                |
+| `marked`                                    | `16.4.2`        | `MIT`                         | Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/)                                                                                                                |
+| `marked`                                    | `18.1.3`        | `MIT`                         | Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/)                                                                                                                |
+| `mdast-util-find-and-replace`               | `3.0.4`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `mdast-util-from-markdown`                  | `2.1.0`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `mdast-util-gfm`                            | `3.1.0`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `mdast-util-gfm-autolink-literal`           | `2.1.0`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `mdast-util-gfm-footnote`                   | `2.1.0`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `mdast-util-gfm-strikethrough`              | `2.0.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `mdast-util-gfm-table`                      | `2.0.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `mdast-util-gfm-task-list-item`             | `2.0.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `mdast-util-mdx-expression`                 | `2.0.1`         | `MIT`                         | Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `mdast-util-mdx-jsx`                        | `3.2.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `mdast-util-mdxjs-esm`                      | `2.0.1`         | `MIT`                         | Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `mdast-util-phrasing`                       | `4.1.0`         | `MIT`                         | Copyright (c) 2017 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `mdast-util-to-hast`                        | `13.2.1`        | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `mdast-util-to-markdown`                    | `2.2.3`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `mdast-util-to-string`                      | `4.0.0`         | `MIT`                         | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `mermaid`                                   | `12.3.0`        | `MIT`                         | Copyright (c) 2014 - 2022 Knut Sveidqvist                                                                                                                                   |
+| `micromark-core-commonmark`                 | `2.0.4`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `micromark-extension-gfm`                   | `3.0.0`         | `MIT`                         | Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `micromark-extension-gfm-autolink-literal`  | `2.1.0`         | `MIT`                         | Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `micromark-extension-gfm-footnote`          | `2.1.0`         | `MIT`                         | Copyright (c) 2021 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `micromark-extension-gfm-strikethrough`     | `2.1.0`         | `MIT`                         | Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `micromark-extension-gfm-table`             | `2.1.2`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `micromark-extension-gfm-tagfilter`         | `2.0.0`         | `MIT`                         | Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `micromark-extension-gfm-task-list-item`    | `2.1.0`         | `MIT`                         | Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `micromark-factory-destination`             | `2.0.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `micromark-factory-label`                   | `2.0.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `micromark-factory-space`                   | `2.1.0`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `micromark-factory-title`                   | `2.0.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `micromark-factory-whitespace`              | `2.0.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `micromark-util-character`                  | `2.1.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `micromark-util-chunked`                    | `2.0.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `micromark-util-classify-character`         | `2.0.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `micromark-util-combine-extensions`         | `2.0.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `micromark-util-decode-string`              | `2.0.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `micromark-util-edit-map`                   | `1.0.0`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `micromark-util-html-tag-name`              | `2.0.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `micromark-util-normalize-identifier`       | `2.0.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `micromark-util-resolve-all`                | `2.0.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `micromark-util-sanitize-uri`               | `2.0.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `micromark-util-subtokenize`                | `2.1.0`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `micromark-util-symbol`                     | `2.0.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `micromark-util-types`                      | `2.0.3`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `minimatch`                                 | `11.0.5`        | `BlueOak-1.0.0`               | Isaac Z. Schlueter <i@izs.me> (http://blog.izs.me)                                                                                                                          |
+| `minipass`                                  | `7.1.3`         | `BlueOak-1.0.0`               | Isaac Z. Schlueter <i@izs.me> (http://blog.izs.me/)                                                                                                                         |
+| `node-addon-api`                            | `7.1.1`         | `MIT`                         | Copyright (c) 2017 [Node.js API collaborators](https://github.com/nodejs/node-addon-api#collaborators)                                                                      |
+| `node-pty`                                  | `1.2.0-beta.18` | `MIT`                         | Copyright (c) 2012-2015, Christopher Jeffrey (https://github.com/chjj/)                                                                                                     |
+| `object-assign`                             | `4.1.1`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
+| `p-limit`                                   | `2.3.0`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
+| `p-locate`                                  | `4.1.0`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
+| `p-try`                                     | `2.2.0`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
+| `package-manager-detector`                  | `1.9.0`         | `MIT`                         | Copyright (c) 2020-PRESENT Anthony Fu <https://github.com/antfu>                                                                                                            |
+| `parse-entities`                            | `4.0.2`         | `MIT`                         | Copyright (c) Titus Wormer <mailto:tituswormer@gmail.com>                                                                                                                   |
+| `parse5`                                    | `8.1.0`         | `MIT`                         | Copyright (c) 2013-2019 Ivan Nikulin (ifaaan@gmail.com, https://github.com/inikulin)                                                                                        |
+| `path-data-parser`                          | `0.1.0`         | `MIT`                         | Copyright (c) 2020 Preet Shihn                                                                                                                                              |
+| `path-exists`                               | `4.0.0`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
+| `path-key`                                  | `3.1.1`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
+| `path-scurry`                               | `3.0.0`         | `BlueOak-1.0.0`               | Isaac Z. Schlueter <i@izs.me> (https://blog.izs.me)                                                                                                                         |
+| `pdfjs-dist`                                | `6.4.299`       | `Apache-2.0`                  | Not stated in package metadata or license file                                                                                                                              |
+| `pkce-challenge`                            | `5.0.1`         | `MIT`                         | Copyright (c) 2019                                                                                                                                                          |
+| `pkijs`                                     | `3.4.3`         | `BSD-3-Clause`                | Copyright (c) 2014, GlobalSign                                                                                                                                              |
+| `pngjs`                                     | `5.0.0`         | `MIT`                         | Alexandre Paré, Gaurav Mali, Gusts Kaksis, Kuba Niegowski, Luke Page, Pietajan De Potter, Steven Sojka, liangzeng, Michael Vogt, Xin-Xin Wang, toriningen, Eugene Kulabuhov |
+| `points-on-curve`                           | `0.2.0`         | `MIT`                         | Copyright (c) 2020 Preet Shihn                                                                                                                                              |
+| `points-on-path`                            | `0.2.1`         | `MIT`                         | Copyright (c) 2020 Preet                                                                                                                                                    |
+| `property-information`                      | `7.2.0`         | `MIT`                         | Copyright (c) Titus Wormer <mailto:tituswormer@gmail.com>                                                                                                                   |
+| `pvtsutils`                                 | `1.3.6`         | `MIT`                         | Copyright (c) 2017-2024 Peculiar Ventures, LLC                                                                                                                              |
+| `pvutils`                                   | `1.2.0`         | `MIT`                         | Copyright (c) 2016-2019, Peculiar Ventures                                                                                                                                  |
+| `qrcode`                                    | `1.5.4`         | `MIT`                         | Copyright (c) 2012 Ryan Day                                                                                                                                                 |
+| `raw-body`                                  | `3.0.2`         | `MIT`                         | Copyright (c) 2013-2014 Jonathan Ong <me@jongleberry.com>                                                                                                                   |
+| `react`                                     | `19.3.1`        | `MIT`                         | Copyright (c) Meta Platforms, Inc. and affiliates.                                                                                                                          |
+| `react-diff-view`                           | `3.3.3`         | `MIT`                         | Copyright (c) 2017 Gray Zhang                                                                                                                                               |
+| `react-dom`                                 | `19.3.1`        | `MIT`                         | Copyright (c) Meta Platforms, Inc. and affiliates.                                                                                                                          |
+| `react-resizable-panels`                    | `4.19.1`        | `MIT`                         | Copyright (c) 2018 Brian Vaughn                                                                                                                                             |
+| `readdirp`                                  | `5.1.1`         | `MIT`                         | Copyright (c) 2012-2019 Thorsten Lorenz, Paul Miller (https://paulmillr.com)                                                                                                |
+| `reflect-metadata`                          | `0.2.2`         | `Apache-2.0`                  | Ron Buckton                                                                                                                                                                 |
+| `refractor`                                 | `5.0.0`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `rehype-harden`                             | `1.1.9`         | `MIT`                         | Copyright (c) 2025 Vercel Inc.                                                                                                                                              |
+| `rehype-raw`                                | `7.0.0`         | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `rehype-sanitize`                           | `6.0.0`         | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `remark-gfm`                                | `4.0.1`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `remark-parse`                              | `11.0.0`        | `MIT`                         | Copyright (c) 2014 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `remark-rehype`                             | `11.1.2`        | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `remark-stringify`                          | `11.0.0`        | `MIT`                         | Copyright (c) 2014 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `remend`                                    | `1.4.0`         | `Apache-2.0`                  | Copyright 2023 Vercel, Inc.                                                                                                                                                 |
+| `require-directory`                         | `2.1.1`         | `MIT`                         | Copyright (c) 2011 Troy Goode <troygoode@gmail.com>                                                                                                                         |
+| `require-main-filename`                     | `2.0.0`         | `ISC`                         | Copyright (c) 2016, Contributors                                                                                                                                            |
+| `robust-predicates`                         | `3.0.3`         | `Unlicense`                   | Vladimir Agafonkin                                                                                                                                                          |
+| `roughjs`                                   | `4.6.6`         | `MIT`                         | Copyright (c) 2019 Preet Shihn                                                                                                                                              |
+| `rw`                                        | `1.3.3`         | `BSD-3-Clause`                | Copyright (c) 2014-2016, Michael Bostock                                                                                                                                    |
+| `safer-buffer`                              | `2.1.2`         | `MIT`                         | Copyright (c) 2018 Nikita Skovoroda <chalkerx@gmail.com>                                                                                                                    |
+| `selfsigned`                                | `5.5.0`         | `MIT`                         | Copyright (c) 2013 José F. Romaniello                                                                                                                                       |
+| `set-blocking`                              | `2.0.0`         | `ISC`                         | Copyright (c) 2016, Contributors                                                                                                                                            |
+| `shallow-equal`                             | `3.1.0`         | `MIT`                         | Copyright © 2023 Misha Moroshko and Philip Su                                                                                                                               |
+| `shebang-command`                           | `2.0.0`         | `MIT`                         | Copyright (c) Kevin Mårtensson <kevinmartensson@gmail.com> (github.com/kevva)                                                                                               |
+| `shebang-regex`                             | `3.0.0`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
+| `space-separated-tokens`                    | `2.0.2`         | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `streamdown`                                | `2.7.1`         | `Apache-2.0`                  | Copyright 2023 Vercel, Inc.                                                                                                                                                 |
+| `string-width`                              | `4.2.3`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
+| `stringify-entities`                        | `4.0.4`         | `MIT`                         | Copyright (c) 2015 Titus Wormer <mailto:tituswormer@gmail.com>                                                                                                              |
+| `strip-ansi`                                | `6.0.1`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
+| `style-to-object`                           | `2.0.2`         | `MIT`                         | Copyright (c) 2017 Menglin "Mark" Xu <mark@remarkablemark.org>                                                                                                              |
+| `stylis`                                    | `4.4.0`         | `MIT`                         | Copyright (c) 2016-present Sultan Tarimo                                                                                                                                    |
+| `tailwind-merge`                            | `3.7.0`         | `MIT`                         | Copyright (c) 2021 Dany Castillo                                                                                                                                            |
+| `tinyexec`                                  | `1.3.1`         | `MIT`                         | Copyright (c) 2024 Tinylibs                                                                                                                                                 |
+| `tree-kill`                                 | `1.2.2`         | `MIT`                         | Copyright (c) 2018 Peter Krumins                                                                                                                                            |
+| `ts-dedent`                                 | `2.3.0`         | `MIT`                         | Copyright (c) 2018 Tamino Martinius                                                                                                                                         |
+| `tslib`                                     | `1.14.1`        | `0BSD`                        | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `tslib`                                     | `2.9.1`         | `0BSD`                        | Copyright (c) Microsoft Corporation.                                                                                                                                        |
+| `tsyringe`                                  | `4.10.0`        | `MIT`                         | Copyright (c) Microsoft Corporation. All rights reserved.                                                                                                                   |
+| `typo-js`                                   | `1.4.0`         | `BSD-3-Clause`                | Christopher Finke <cfinke@gmail.com> (http://www.chrisfinke.com/)                                                                                                           |
+| `unified`                                   | `11.0.5`        | `MIT`                         | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `unist-util-is`                             | `6.0.1`         | `MIT`                         | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `unist-util-position`                       | `5.0.0`         | `MIT`                         | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `unist-util-stringify-position`             | `4.0.0`         | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `unist-util-visit`                          | `5.2.0`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `unist-util-visit-parents`                  | `6.1.0`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `unpipe`                                    | `1.0.0`         | `MIT`                         | Copyright (c) 2015 Douglas Christopher Wilson <doug@somethingdoug.com>                                                                                                      |
+| `vary`                                      | `1.1.2`         | `MIT`                         | Copyright (c) 2014-2017 Douglas Christopher Wilson                                                                                                                          |
+| `vfile`                                     | `6.0.3`         | `MIT`                         | Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `vfile-location`                            | `5.0.4`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `vfile-message`                             | `4.0.4`         | `MIT`                         | Copyright (c) Titus Wormer <tituswormer@gmail.com>                                                                                                                          |
+| `vscode-jsonrpc`                            | `10.0.0`        | `MIT`                         | Copyright (c) Microsoft Corporation                                                                                                                                         |
+| `vscode-languageserver-protocol`            | `3.18.5`        | `MIT`                         | Copyright (c) Microsoft Corporation                                                                                                                                         |
+| `vscode-languageserver-types`               | `3.18.5`        | `MIT`                         | Copyright (c) Microsoft Corporation                                                                                                                                         |
+| `warning`                                   | `4.0.3`         | `MIT`                         | Copyright (c) 2013-present, Facebook, Inc.                                                                                                                                  |
+| `web-namespaces`                            | `2.0.1`         | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
+| `which`                                     | `2.0.2`         | `ISC`                         | Copyright (c) Isaac Z. Schlueter and Contributors                                                                                                                           |
+| `which-module`                              | `2.0.1`         | `ISC`                         | Copyright (c) 2016, Contributors                                                                                                                                            |
+| `wrap-ansi`                                 | `6.2.0`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
+| `ws`                                        | `8.22.1`        | `MIT`                         | Copyright (c) 2011 Einar Otto Stangvik <einaros@gmail.com>                                                                                                                  |
+| `y18n`                                      | `4.0.3`         | `ISC`                         | Copyright (c) 2015, Contributors                                                                                                                                            |
+| `yaml`                                      | `2.9.1`         | `ISC`                         | Eemeli Aro <eemeli@gmail.com>                                                                                                                                               |
+| `yargs`                                     | `15.4.1`        | `MIT`                         | Copyright 2010 James Halliday (mail@substack.net); Modified work Copyright 2014 Contributors (ben@npmjs.com)                                                                |
+| `yargs-parser`                              | `18.1.3`        | `ISC`                         | Copyright (c) 2016, Contributors                                                                                                                                            |
+| `zod`                                       | `4.6.7`         | `MIT`                         | Copyright (c) 2025 Colin McDonnell                                                                                                                                          |
+| `zod-to-json-schema`                        | `3.25.2`        | `ISC`                         | Copyright (c) 2020, Stefan Terdell                                                                                                                                          |
+| `zundo`                                     | `2.3.0`         | `MIT`                         | Copyright (c) 2021 Charles Kornoelje                                                                                                                                        |
+| `zustand`                                   | `5.1.0`         | `MIT`                         | Copyright (c) 2019 Paul Henschel                                                                                                                                            |
+| `zwitch`                                    | `2.0.4`         | `MIT`                         | Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>                                                                                                                     |
 
 ## Bundled Components
 
@@ -863,7 +861,7 @@ SOFTWARE.
 
 ### License text 8: MIT
 
-Packages: @hono/node-server@2.1.5
+Packages: @hono/node-server@2.1.6
 
 ```text
 MIT License
@@ -947,7 +945,7 @@ SOFTWARE.
 
 ### License text 11: MIT
 
-Packages: @lezer/common@1.5.3, @lezer/css@1.3.9, @lezer/highlight@1.2.5, @lezer/html@1.3.13, @lezer/lr@1.4.11, @lezer/php@1.0.6, @lezer/rust@1.0.3
+Packages: @lezer/common@1.5.5, @lezer/css@1.3.9, @lezer/highlight@1.2.5, @lezer/html@1.3.13, @lezer/lr@1.4.12, @lezer/php@1.0.6, @lezer/rust@1.0.3
 
 ```text
 MIT License
@@ -975,7 +973,7 @@ THE SOFTWARE.
 
 ### License text 12: MIT
 
-Packages: @lezer/cpp@1.1.6, @lezer/java@1.1.5, @lezer/markdown@1.8.0, @lezer/python@1.1.19
+Packages: @lezer/cpp@1.1.6, @lezer/java@1.1.5, @lezer/markdown@1.8.1, @lezer/python@1.1.19
 
 ```text
 MIT License
@@ -1087,7 +1085,7 @@ SOFTWARE.
 
 ### License text 16: MIT
 
-Packages: @microsoft/1ds-core-js@4.4.5, @microsoft/1ds-post-js@4.4.5, @microsoft/applicationinsights-channel-js@3.4.5, @microsoft/applicationinsights-common@3.4.5, @microsoft/applicationinsights-core-js@3.4.5, @microsoft/applicationinsights-shims@3.0.1, @microsoft/applicationinsights-web-basic@3.4.5
+Packages: @microsoft/1ds-core-js@4.4.6, @microsoft/1ds-post-js@4.4.6, @microsoft/applicationinsights-channel-js@3.4.6, @microsoft/applicationinsights-common@3.4.6, @microsoft/applicationinsights-core-js@3.4.6, @microsoft/applicationinsights-shims@3.0.1, @microsoft/applicationinsights-web-basic@3.4.6
 
 ```text
 The MIT License (MIT)
@@ -1289,7 +1287,7 @@ THE SOFTWARE.
 
 ### License text 22: MIT
 
-Packages: @peculiar/asn1-cms@2.11.0, @peculiar/asn1-csr@2.11.0, @peculiar/asn1-ecc@2.11.0, @peculiar/asn1-pfx@2.11.0, @peculiar/asn1-pkcs8@2.11.0, @peculiar/asn1-pkcs9@2.11.0, @peculiar/asn1-rsa@2.11.0, @peculiar/asn1-schema@2.11.0, @peculiar/asn1-x509@2.11.0, @peculiar/asn1-x509-attr@2.11.0
+Packages: @peculiar/asn1-cms@2.11.1, @peculiar/asn1-csr@2.11.1, @peculiar/asn1-ecc@2.11.1, @peculiar/asn1-pfx@2.11.1, @peculiar/asn1-pkcs8@2.11.1, @peculiar/asn1-pkcs9@2.11.1, @peculiar/asn1-rsa@2.11.1, @peculiar/asn1-schema@2.11.1, @peculiar/asn1-x509@2.11.1, @peculiar/asn1-x509-attr@2.11.1
 
 ```text
 MIT License
@@ -1379,7 +1377,7 @@ No license text file was present in the package. Declared license: `MPL-2.0`.
 
 ### License text 26: MIT
 
-Packages: @tanstack/react-virtual@3.14.24, @tanstack/virtual-core@3.19.9
+Packages: @tanstack/react-virtual@3.14.26, @tanstack/virtual-core@3.19.11
 
 ```text
 MIT License
@@ -1407,7 +1405,7 @@ SOFTWARE.
 
 ### License text 27: MIT
 
-Packages: @types/body-parser@1.19.6, @types/connect@3.4.38, @types/d3@7.4.3, @types/d3-array@3.2.2, @types/d3-axis@3.0.6, @types/d3-brush@3.0.6, @types/d3-chord@3.0.6, @types/d3-color@3.1.3, @types/d3-contour@3.0.6, @types/d3-delaunay@6.0.4, @types/d3-dispatch@3.0.7, @types/d3-drag@3.0.7, @types/d3-dsv@3.0.7, @types/d3-ease@3.0.2, @types/d3-fetch@3.0.7, @types/d3-force@3.0.10, @types/d3-format@3.0.4, @types/d3-geo@3.1.1, @types/d3-hierarchy@3.1.7, @types/d3-interpolate@3.0.4, @types/d3-path@3.1.1, @types/d3-polygon@3.0.2, @types/d3-quadtree@3.0.6, @types/d3-random@3.0.4, @types/d3-scale@4.0.9, @types/d3-scale-chromatic@3.1.0, @types/d3-selection@3.0.12, @types/d3-shape@3.2.0, @types/d3-time@3.0.4, @types/d3-time-format@4.0.3, @types/d3-timer@3.0.2, @types/d3-transition@3.0.9, @types/d3-zoom@3.0.9, @types/estree@1.0.9, @types/estree-jsx@1.0.5, @types/express@5.0.6, @types/express-serve-static-core@5.1.3, @types/geojson@7946.0.16, @types/hast@3.0.5, @types/http-errors@2.0.5, @types/mdast@4.0.4, @types/node@26.6.6, @types/prismjs@1.26.6, @types/qs@6.15.1, @types/range-parser@1.2.7, @types/react@19.3.0, @types/send@1.2.1, @types/serve-static@2.2.0, @types/trusted-types@2.0.7, @types/unist@2.0.11, @types/unist@3.0.3, @types/ws@8.18.2
+Packages: @types/body-parser@1.19.6, @types/connect@3.4.38, @types/d3@7.4.3, @types/d3-array@3.2.2, @types/d3-axis@3.0.6, @types/d3-brush@3.0.6, @types/d3-chord@3.0.6, @types/d3-color@3.1.3, @types/d3-contour@3.0.6, @types/d3-delaunay@6.0.4, @types/d3-dispatch@3.0.7, @types/d3-drag@3.0.7, @types/d3-dsv@3.0.7, @types/d3-ease@3.0.2, @types/d3-fetch@3.0.7, @types/d3-force@3.0.10, @types/d3-format@3.0.4, @types/d3-geo@3.1.1, @types/d3-hierarchy@3.1.7, @types/d3-interpolate@3.0.4, @types/d3-path@3.1.1, @types/d3-polygon@3.0.2, @types/d3-quadtree@3.0.6, @types/d3-random@3.0.4, @types/d3-scale@4.0.9, @types/d3-scale-chromatic@3.1.0, @types/d3-selection@3.0.12, @types/d3-shape@3.2.0, @types/d3-time@3.0.4, @types/d3-time-format@4.0.3, @types/d3-timer@3.0.2, @types/d3-transition@3.0.9, @types/d3-zoom@3.0.9, @types/estree@1.0.10, @types/estree-jsx@1.0.5, @types/express@5.0.6, @types/express-serve-static-core@5.1.3, @types/geojson@7946.0.16, @types/hast@3.0.5, @types/http-errors@2.0.5, @types/mdast@4.0.4, @types/node@26.6.6, @types/prismjs@1.26.6, @types/qs@6.15.1, @types/range-parser@1.2.7, @types/react@19.3.0, @types/send@1.2.1, @types/serve-static@2.2.0, @types/trusted-types@2.0.7, @types/unist@2.0.11, @types/unist@3.0.3, @types/ws@8.18.2
 
 ```text
     MIT License
@@ -2096,7 +2094,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### License text 38: PSF-2.0
 
-Packages: argparse@3.0.3
+Packages: argparse@3.0.4
 
 ```text
 PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2
@@ -2150,7 +2148,7 @@ Agreement.
 
 ### License text 39: BSD-3-Clause
 
-Packages: asn1js@3.0.10
+Packages: asn1js@3.1.0
 
 ```text
 Copyright (c) 2014, GMO GlobalSign
@@ -2433,7 +2431,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### License text 50: MIT
 
-Packages: comma-separated-tokens@2.0.3, hast-util-parse-selector@4.0.0, hast-util-whitespace@3.0.0, html-void-elements@3.0.0, is-alphabetical@2.0.1, is-alphanumerical@2.0.1, is-decimal@2.0.1, is-hexadecimal@2.0.1, mdast-util-to-hast@13.2.1, rehype-raw@7.0.0, rehype-sanitize@6.0.0, space-separated-tokens@2.0.2, unist-util-stringify-position@4.0.0, vfile-location@5.0.3, web-namespaces@2.0.1, zwitch@2.0.4
+Packages: comma-separated-tokens@2.0.3, hast-util-parse-selector@4.0.0, hast-util-whitespace@3.0.0, html-void-elements@3.0.0, is-alphabetical@2.0.1, is-alphanumerical@2.0.1, is-decimal@2.0.1, is-hexadecimal@2.0.1, mdast-util-to-hast@13.2.1, rehype-raw@7.0.0, rehype-sanitize@6.0.0, space-separated-tokens@2.0.2, unist-util-stringify-position@4.0.0, web-namespaces@2.0.1, zwitch@2.0.4
 
 ```text
 (The MIT License)
@@ -2462,7 +2460,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### License text 51: MIT
 
-Packages: commander@15.0.0, commander@7.2.0
+Packages: commander@15.1.0, commander@7.2.0
 
 ```text
 (The MIT License)
@@ -2657,7 +2655,7 @@ SOFTWARE.
 
 ### License text 58: MIT
 
-Packages: cytoscape@3.34.3
+Packages: cytoscape@3.34.4
 
 ```text
 Copyright (c) 2016-2026, The Cytoscape Consortium.
@@ -2735,10 +2733,10 @@ SOFTWARE.
 
 ### License text 61: ISC
 
-Packages: d3@7.9.0, d3-array@3.2.4
+Packages: d3@7.9.2, d3-array@3.2.5, d3-axis@3.0.1, d3-brush@3.0.1, d3-chord@3.0.2, d3-color@3.1.1, d3-dispatch@3.0.2, d3-drag@3.0.1, d3-force@3.0.1, d3-format@3.1.3, d3-hierarchy@3.1.3, d3-interpolate@3.0.2, d3-polygon@3.0.2, d3-quadtree@3.0.2, d3-random@3.0.2, d3-scale@4.0.3, d3-selection@3.0.1, d3-shape@3.2.1, d3-time@3.1.1, d3-time-format@4.1.1, d3-timer@3.0.2, d3-transition@3.0.2, d3-zoom@3.0.1
 
 ```text
-Copyright 2010-2023 Mike Bostock
+Copyright 2010-2026 Mike Bostock
 
 Permission to use, copy, modify, and/or distribute this software for any purpose
 with or without fee is hereby granted, provided that the above copyright notice
@@ -2789,10 +2787,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ### License text 63: ISC
 
-Packages: d3-axis@3.0.0, d3-brush@3.0.0, d3-chord@3.0.1, d3-dispatch@3.0.1, d3-drag@3.0.0, d3-force@3.0.0, d3-hierarchy@3.1.2, d3-interpolate@3.0.1, d3-polygon@3.0.1, d3-quadtree@3.0.1, d3-random@3.0.1, d3-scale@4.0.2, d3-selection@3.0.0, d3-time-format@4.1.0, d3-timer@3.0.1, d3-transition@3.0.1, d3-zoom@3.0.0
+Packages: d3-contour@4.0.3
 
 ```text
-Copyright 2010-2021 Mike Bostock
+Copyright 2012-2026 Mike Bostock
 
 Permission to use, copy, modify, and/or distribute this software for any purpose
 with or without fee is hereby granted, provided that the above copyright notice
@@ -2809,10 +2807,11 @@ THIS SOFTWARE.
 
 ### License text 64: ISC
 
-Packages: d3-color@3.1.0, d3-shape@3.2.0, d3-time@3.1.0
+Packages: d3-delaunay@6.0.6
 
 ```text
-Copyright 2010-2022 Mike Bostock
+Copyright 2018-2026 Observable, Inc.
+Copyright 2021 Mapbox
 
 Permission to use, copy, modify, and/or distribute this software for any purpose
 with or without fee is hereby granted, provided that the above copyright notice
@@ -2829,10 +2828,10 @@ THIS SOFTWARE.
 
 ### License text 65: ISC
 
-Packages: d3-contour@4.0.2
+Packages: d3-dsv@3.0.2
 
 ```text
-Copyright 2012-2023 Mike Bostock
+Copyright 2013-2026 Mike Bostock
 
 Permission to use, copy, modify, and/or distribute this software for any purpose
 with or without fee is hereby granted, provided that the above copyright notice
@@ -2847,53 +2846,12 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### License text 66: ISC
+### License text 66: BSD-3-Clause
 
-Packages: d3-delaunay@6.0.4
-
-```text
-Copyright 2018-2021 Observable, Inc.
-Copyright 2021 Mapbox
-
-Permission to use, copy, modify, and/or distribute this software for any purpose
-with or without fee is hereby granted, provided that the above copyright notice
-and this permission notice appear in all copies.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
-REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
-FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
-INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
-OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
-TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
-THIS SOFTWARE.
-```
-
-### License text 67: ISC
-
-Packages: d3-dsv@3.0.1
+Packages: d3-ease@3.0.2
 
 ```text
-Copyright 2013-2021 Mike Bostock
-
-Permission to use, copy, modify, and/or distribute this software for any purpose
-with or without fee is hereby granted, provided that the above copyright notice
-and this permission notice appear in all copies.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
-REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
-FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
-INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
-OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
-TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
-THIS SOFTWARE.
-```
-
-### License text 68: BSD-3-Clause
-
-Packages: d3-ease@3.0.1
-
-```text
-Copyright 2010-2021 Mike Bostock
+Copyright 2010-2026 Mike Bostock
 Copyright 2001 Robert Penner
 All rights reserved.
 
@@ -2923,12 +2881,12 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 69: ISC
+### License text 67: ISC
 
-Packages: d3-fetch@3.0.1
+Packages: d3-fetch@3.0.2
 
 ```text
-Copyright 2016-2021 Mike Bostock
+Copyright 2016-2026 Mike Bostock
 
 Permission to use, copy, modify, and/or distribute this software for any purpose
 with or without fee is hereby granted, provided that the above copyright notice
@@ -2943,32 +2901,12 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### License text 70: ISC
+### License text 68: ISC
 
-Packages: d3-format@3.1.2
+Packages: d3-geo@3.1.2
 
 ```text
 Copyright 2010-2026 Mike Bostock
-
-Permission to use, copy, modify, and/or distribute this software for any purpose
-with or without fee is hereby granted, provided that the above copyright notice
-and this permission notice appear in all copies.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
-REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
-FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
-INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
-OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
-TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
-THIS SOFTWARE.
-```
-
-### License text 71: ISC
-
-Packages: d3-geo@3.1.1
-
-```text
-Copyright 2010-2024 Mike Bostock
 
 Permission to use, copy, modify, and/or distribute this software for any purpose
 with or without fee is hereby granted, provided that the above copyright notice
@@ -3004,7 +2942,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 72: BSD-3-Clause
+### License text 69: BSD-3-Clause
 
 Packages: d3-path@1.0.9
 
@@ -3038,12 +2976,12 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 73: ISC
+### License text 70: ISC
 
-Packages: d3-path@3.1.0
+Packages: d3-path@3.1.1
 
 ```text
-Copyright 2015-2022 Mike Bostock
+Copyright 2015-2026 Mike Bostock
 
 Permission to use, copy, modify, and/or distribute this software for any purpose
 with or without fee is hereby granted, provided that the above copyright notice
@@ -3058,7 +2996,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### License text 74: BSD-3-Clause
+### License text 71: BSD-3-Clause
 
 Packages: d3-sankey@0.12.3
 
@@ -3092,12 +3030,12 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 75: ISC
+### License text 72: ISC
 
-Packages: d3-scale-chromatic@3.1.0
+Packages: d3-scale-chromatic@3.1.1
 
 ```text
-Copyright 2010-2024 Mike Bostock
+Copyright 2010-2026 Mike Bostock
 
 Permission to use, copy, modify, and/or distribute this software for any purpose
 with or without fee is hereby granted, provided that the above copyright notice
@@ -3127,7 +3065,7 @@ CONDITIONS OF ANY KIND, either express or implied. See the License for the
 specific language governing permissions and limitations under the License.
 ```
 
-### License text 76: BSD-3-Clause
+### License text 73: BSD-3-Clause
 
 Packages: d3-shape@1.3.7
 
@@ -3161,7 +3099,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 77: MIT
+### License text 74: MIT
 
 Packages: dagre-d3-es@7.0.14
 
@@ -3191,7 +3129,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 78: MIT
+### License text 75: MIT
 
 Packages: dayjs@1.11.23
 
@@ -3219,7 +3157,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 79: MIT
+### License text 76: MIT
 
 Packages: debug@4.4.3
 
@@ -3245,7 +3183,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN 
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 80: MIT
+### License text 77: MIT
 
 Packages: decamelize@1.2.0, object-assign@4.1.1
 
@@ -3273,9 +3211,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 81: MIT
+### License text 78: MIT
 
-Packages: decode-named-character-reference@1.3.0, hast-util-from-parse5@8.0.3, hast-util-raw@9.1.0, hast-util-sanitize@5.0.2, hast-util-to-jsx-runtime@2.3.6, hast-util-to-parse5@8.0.1, hastscript@9.0.1, markdown-table@3.0.4, mdast-util-find-and-replace@3.0.4, mdast-util-from-markdown@2.1.0, mdast-util-gfm@3.1.0, mdast-util-gfm-footnote@2.1.0, mdast-util-gfm-strikethrough@2.0.1, mdast-util-to-markdown@2.2.0, micromark-core-commonmark@2.0.4, micromark-extension-gfm-table@2.1.2, micromark-factory-destination@2.0.1, micromark-factory-label@2.0.1, micromark-factory-space@2.1.0, micromark-factory-title@2.0.1, micromark-factory-whitespace@2.0.1, micromark-util-character@2.1.1, micromark-util-chunked@2.0.1, micromark-util-classify-character@2.0.1, micromark-util-combine-extensions@2.0.1, micromark-util-decode-string@2.0.1, micromark-util-edit-map@1.0.0, micromark-util-html-tag-name@2.0.1, micromark-util-normalize-identifier@2.0.1, micromark-util-resolve-all@2.0.1, micromark-util-sanitize-uri@2.0.1, micromark-util-subtokenize@2.1.0, micromark-util-symbol@2.0.1, micromark-util-types@2.0.3, remark-gfm@4.0.1, remark-rehype@11.1.2, unist-util-visit@5.2.0, unist-util-visit-parents@6.1.0, vfile-message@4.0.3
+Packages: decode-named-character-reference@1.3.0, hast-util-from-parse5@8.0.4, hast-util-raw@9.2.0, hast-util-sanitize@5.0.2, hast-util-to-jsx-runtime@2.3.7, hast-util-to-parse5@8.0.1, hastscript@9.0.3, markdown-table@3.1.0, mdast-util-find-and-replace@3.0.4, mdast-util-from-markdown@2.1.0, mdast-util-gfm@3.1.0, mdast-util-gfm-autolink-literal@2.1.0, mdast-util-gfm-footnote@2.1.0, mdast-util-gfm-strikethrough@2.0.1, mdast-util-gfm-table@2.0.1, mdast-util-gfm-task-list-item@2.0.1, mdast-util-mdx-jsx@3.2.1, mdast-util-to-markdown@2.2.3, micromark-core-commonmark@2.0.4, micromark-extension-gfm-table@2.1.2, micromark-factory-destination@2.0.1, micromark-factory-label@2.0.1, micromark-factory-space@2.1.0, micromark-factory-title@2.0.1, micromark-factory-whitespace@2.0.1, micromark-util-character@2.1.1, micromark-util-chunked@2.0.1, micromark-util-classify-character@2.0.1, micromark-util-combine-extensions@2.0.1, micromark-util-decode-string@2.0.1, micromark-util-edit-map@1.0.0, micromark-util-html-tag-name@2.0.1, micromark-util-normalize-identifier@2.0.1, micromark-util-resolve-all@2.0.1, micromark-util-sanitize-uri@2.0.1, micromark-util-subtokenize@2.1.0, micromark-util-symbol@2.0.1, micromark-util-types@2.0.3, remark-gfm@4.0.1, remark-rehype@11.1.2, unist-util-visit@5.2.0, unist-util-visit-parents@6.1.0, vfile-location@5.0.4, vfile-message@4.0.4
 
 ```text
 (The MIT License)
@@ -3302,7 +3240,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 82: ISC
+### License text 79: ISC
 
 Packages: delaunator@5.1.0
 
@@ -3324,7 +3262,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### License text 83: MIT
+### License text 80: MIT
 
 Packages: dequal@2.0.3
 
@@ -3352,7 +3290,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 84: MIT
+### License text 81: MIT
 
 Packages: devlop@1.1.0
 
@@ -3381,7 +3319,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 85: BSD-3-Clause
+### License text 82: BSD-3-Clause
 
 Packages: diff@9.0.0
 
@@ -3417,7 +3355,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 86: MIT
+### License text 83: MIT
 
 Packages: dijkstrajs@1.0.3
 
@@ -3443,9 +3381,9 @@ THE SOFTWARE.
 ```
 ````
 
-### License text 87: EPL-2.0
+### License text 84: EPL-2.0 OR GPL-3.0-or-later
 
-Packages: elkjs@0.9.3
+Packages: elkjs@0.12.1
 
 ```text
 # Eclipse Public License - v 2.0
@@ -3700,8 +3638,7 @@ No third-party beneficiary rights are created under this Agreement.
 
 “This Source Code may also be made available under the following
 Secondary Licenses when the conditions for such availability set forth
-in the Eclipse Public License, v. 2.0 are satisfied: {name license(s),
-version(s), and exceptions or additional permissions here}.”
+in the Eclipse Public License, v. 2.0 are satisfied: GNU General Public License v3.0 or later”
 
 > Simply including a copy of this Agreement, including this Exhibit A is
 > not sufficient to license the Source Code under Secondary Licenses.
@@ -3714,9 +3651,9 @@ version(s), and exceptions or additional permissions here}.”
 > You may add additional accurate notices of copyright ownership.
 ```
 
-### License text 88: BSD-2-Clause
+### License text 85: BSD-2-Clause
 
-Packages: entities@6.0.1
+Packages: entities@9.0.0
 
 ```text
 Copyright (c) Felix Böhm
@@ -3732,9 +3669,9 @@ THIS IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRE
 EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 89: MIT
+### License text 86: MIT
 
-Packages: es-toolkit@1.52.0
+Packages: es-toolkit@1.53.2
 
 ```text
 MIT License
@@ -3760,9 +3697,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 90: MIT
+### License text 87: MIT
 
-Packages: estree-util-is-identifier-name@3.0.0, mdast-util-gfm-autolink-literal@2.0.1, mdast-util-gfm-table@2.0.0, mdast-util-gfm-task-list-item@2.0.0, mdast-util-mdx-expression@2.0.1, mdast-util-mdx-jsx@3.2.0, mdast-util-mdxjs-esm@2.0.1, micromark-extension-gfm@3.0.0, micromark-extension-gfm-autolink-literal@2.1.0, micromark-extension-gfm-strikethrough@2.1.0, micromark-extension-gfm-tagfilter@2.0.0, micromark-extension-gfm-task-list-item@2.1.0
+Packages: estree-util-is-identifier-name@3.0.0, mdast-util-mdx-expression@2.0.1, mdast-util-mdxjs-esm@2.0.1, micromark-extension-gfm@3.0.0, micromark-extension-gfm-autolink-literal@2.1.0, micromark-extension-gfm-strikethrough@2.1.0, micromark-extension-gfm-tagfilter@2.0.0, micromark-extension-gfm-task-list-item@2.1.0
 
 ```text
 (The MIT License)
@@ -3789,7 +3726,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 91: MIT
+### License text 88: MIT
 
 Packages: eventsource@3.0.7
 
@@ -3818,7 +3755,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 92: MIT
+### License text 89: MIT
 
 Packages: eventsource-parser@3.1.1
 
@@ -3846,7 +3783,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 93: MIT
+### License text 90: MIT
 
 Packages: express@5.3.0
 
@@ -3877,9 +3814,9 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 94: MIT
+### License text 91: MIT
 
-Packages: express-rate-limit@8.7.1
+Packages: express-rate-limit@8.7.3
 
 ```text
 MIT License
@@ -3905,7 +3842,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 95: MIT
+### License text 92: MIT
 
 Packages: fuzzysort@4.0.2
 
@@ -3933,7 +3870,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 96: ISC
+### License text 93: ISC
 
 Packages: get-caller-file@2.0.5
 
@@ -3946,7 +3883,7 @@ Permission to use, copy, modify, and/or distribute this software for any purpose
 THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### License text 97: MIT
+### License text 94: MIT
 
 Packages: gitdiff-parser@0.3.1
 
@@ -3974,9 +3911,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 98: BlueOak-1.0.0
+### License text 95: BlueOak-1.0.0
 
-Packages: glob@14.0.3
+Packages: glob@14.0.4
 
 ```text
 All packages under `src/` are licensed according to the terms in
@@ -4044,7 +3981,7 @@ will be liable to anyone for any damages related to this
 software or this license, under any kind of legal claim.***
 ```
 
-### License text 99: MIT
+### License text 96: MIT
 
 Packages: gpt-tokenizer@4.1.0
 
@@ -4072,7 +4009,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 100: MIT
+### License text 97: MIT
 
 Packages: hachure-fill@0.5.2
 
@@ -4100,9 +4037,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 101: MIT
+### License text 98: MIT
 
-Packages: hono@4.13.13
+Packages: hono@4.13.16
 
 ```text
 MIT License
@@ -4128,7 +4065,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 102: MIT
+### License text 99: MIT
 
 Packages: html-url-attributes@3.0.1
 
@@ -4156,7 +4093,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 103: MIT
+### License text 100: MIT
 
 Packages: http-errors@2.0.1
 
@@ -4185,7 +4122,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 104: MIT
+### License text 101: MIT
 
 Packages: iconv-lite@0.6.3, iconv-lite@0.7.3
 
@@ -4212,7 +4149,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 105: MIT
+### License text 102: MIT
 
 Packages: import-meta-resolve@4.2.0
 
@@ -4293,9 +4230,9 @@ IN THE SOFTWARE.
 """
 ```
 
-### License text 106: MIT
+### License text 103: MIT
 
-Packages: inline-style-parser@0.2.7
+Packages: inline-style-parser@0.2.9
 
 ```text
 (The MIT License)
@@ -4309,7 +4246,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 107: ISC
+### License text 104: ISC
 
 Packages: internmap@1.0.1, internmap@2.0.3
 
@@ -4329,9 +4266,9 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### License text 108: MIT
+### License text 105: MIT
 
-Packages: ip-address@10.7.4
+Packages: ip-address@10.7.6
 
 ```text
 Copyright (C) 2011 by Beau Gunderson
@@ -4355,7 +4292,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 109: ISC
+### License text 106: ISC
 
 Packages: isexe@2.0.0, which@2.0.2
 
@@ -4377,9 +4314,9 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR
 IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### License text 110: MIT
+### License text 107: MIT
 
-Packages: jose@6.2.12
+Packages: jose@6.2.15
 
 ```text
 The MIT License (MIT)
@@ -4405,7 +4342,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 111: MIT
+### License text 108: MIT
 
 Packages: js-tokens@4.0.0
 
@@ -4433,7 +4370,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 112: MIT
+### License text 109: MIT
 
 Packages: js-yaml@5.5.0
 
@@ -4461,7 +4398,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 113: BSD-2-Clause
+### License text 110: BSD-2-Clause
 
 Packages: json-schema-typed@8.0.2
 
@@ -4525,7 +4462,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 114: MIT
+### License text 111: MIT
 
 Packages: jsonc-parser@3.3.1
 
@@ -4553,7 +4490,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 115: MIT
+### License text 112: MIT
 
 Packages: katex@0.18.10
 
@@ -4581,7 +4518,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 116: MIT
+### License text 113: MIT
 
 Packages: khroma@2.1.0
 
@@ -4609,7 +4546,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 117: MIT
+### License text 114: MIT
 
 Packages: layout-base@1.0.2, layout-base@2.0.1
 
@@ -4637,7 +4574,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 118: MIT
+### License text 115: MIT
 
 Packages: lodash@4.18.1, lodash-es@4.18.1
 
@@ -4691,7 +4628,7 @@ licenses; we recommend you read them, as their terms may differ from the
 terms above.
 ```
 
-### License text 119: MIT
+### License text 116: MIT
 
 Packages: longest-streak@3.1.0, stringify-entities@4.0.4
 
@@ -4720,7 +4657,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 120: MIT
+### License text 117: MIT
 
 Packages: loose-envify@1.4.0
 
@@ -4748,7 +4685,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 121: BlueOak-1.0.0
+### License text 118: BlueOak-1.0.0
 
 Packages: lru-cache@11.5.3, minipass@7.1.3, path-scurry@3.0.0
 
@@ -4810,9 +4747,9 @@ will be liable to anyone for any damages related to this
 software or this license, under any kind of legal claim.***
 ```
 
-### License text 122: ISC
+### License text 119: ISC
 
-Packages: lucide-react@1.66.0
+Packages: lucide-react@1.70.0
 
 ```text
 ISC License
@@ -4860,9 +4797,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 123: MIT
+### License text 120: MIT
 
-Packages: marked@15.0.12, marked@16.4.2, marked@18.1.1
+Packages: marked@15.0.12, marked@16.4.2, marked@18.1.3
 
 ```text
 # License information
@@ -4911,7 +4848,7 @@ Redistribution and use in source and binary forms, with or without modification,
 This software is provided by the copyright holders and contributors “as is” and any express or implied warranties, including, but not limited to, the implied warranties of merchantability and fitness for a particular purpose are disclaimed. In no event shall the copyright owner or contributors be liable for any direct, indirect, incidental, special, exemplary, or consequential damages (including, but not limited to, procurement of substitute goods or services; loss of use, data, or profits; or business interruption) however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence or otherwise) arising in any way out of the use of this software, even if advised of the possibility of such damage.
 ```
 
-### License text 124: MIT
+### License text 121: MIT
 
 Packages: mdast-util-phrasing@4.1.0
 
@@ -4941,9 +4878,9 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 125: MIT
+### License text 122: MIT
 
-Packages: mermaid@12.2.0
+Packages: mermaid@12.3.0
 
 ```text
 The MIT License (MIT)
@@ -4969,7 +4906,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 126: MIT
+### License text 123: MIT
 
 Packages: micromark-extension-gfm-footnote@2.1.0
 
@@ -4998,9 +4935,9 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 127: BlueOak-1.0.0
+### License text 124: BlueOak-1.0.0
 
-Packages: minimatch@11.0.3
+Packages: minimatch@11.0.5
 
 ```text
 # Blue Oak Model License
@@ -5060,7 +4997,7 @@ will be liable to anyone for any damages related to this
 software or this license, under any kind of legal claim._**
 ```
 
-### License text 128: MIT
+### License text 125: MIT
 
 Packages: node-addon-api@7.1.1
 
@@ -5076,9 +5013,9 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 129: MIT
+### License text 126: MIT
 
-Packages: node-pty@1.2.0-beta.15
+Packages: node-pty@1.2.0-beta.18
 
 ```text
 Copyright (c) 2012-2015, Christopher Jeffrey (https://github.com/chjj/)
@@ -5152,7 +5089,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 130: MIT
+### License text 127: MIT
 
 Packages: package-manager-detector@1.9.0
 
@@ -5180,7 +5117,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 131: MIT
+### License text 128: MIT
 
 Packages: parse-entities@4.0.2, property-information@7.2.0
 
@@ -5209,9 +5146,9 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 132: MIT
+### License text 129: MIT
 
-Packages: parse5@7.3.0
+Packages: parse5@8.1.0
 
 ```text
 Copyright (c) 2013-2019 Ivan Nikulin (ifaaan@gmail.com, https://github.com/inikulin)
@@ -5235,7 +5172,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 133: MIT
+### License text 130: MIT
 
 Packages: path-data-parser@0.1.0, points-on-curve@0.2.0
 
@@ -5263,7 +5200,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 134: Apache-2.0
+### License text 131: Apache-2.0
 
 Packages: pdfjs-dist@6.4.299
 
@@ -5446,7 +5383,7 @@ Packages: pdfjs-dist@6.4.299
    END OF TERMS AND CONDITIONS
 ```
 
-### License text 135: MIT
+### License text 132: MIT
 
 Packages: pkce-challenge@5.0.1
 
@@ -5474,9 +5411,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 136: BSD-3-Clause
+### License text 133: BSD-3-Clause
 
-Packages: pkijs@3.4.1
+Packages: pkijs@3.4.3
 
 ```text
 Copyright (c) 2014, GlobalSign
@@ -5511,7 +5448,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 137: MIT
+### License text 134: MIT
 
 Packages: pngjs@5.0.0
 
@@ -5538,7 +5475,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 138: MIT
+### License text 135: MIT
 
 Packages: points-on-path@0.2.1
 
@@ -5566,7 +5503,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 139: MIT
+### License text 136: MIT
 
 Packages: pvtsutils@1.3.6
 
@@ -5594,7 +5531,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 140: MIT
+### License text 137: MIT
 
 Packages: pvutils@1.2.0
 
@@ -5625,7 +5562,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 141: MIT
+### License text 138: MIT
 
 Packages: qrcode@1.5.4
 
@@ -5641,7 +5578,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 142: MIT
+### License text 139: MIT
 
 Packages: raw-body@3.0.2
 
@@ -5670,7 +5607,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 143: MIT
+### License text 140: MIT
 
 Packages: react@19.3.1, react-dom@19.3.1
 
@@ -5698,7 +5635,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 144: MIT
+### License text 141: MIT
 
 Packages: react-diff-view@3.3.3
 
@@ -5726,9 +5663,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 145: MIT
+### License text 142: MIT
 
-Packages: react-resizable-panels@4.16.0
+Packages: react-resizable-panels@4.19.1
 
 ```text
 The MIT License (MIT)
@@ -5754,7 +5691,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 146: MIT
+### License text 143: MIT
 
 Packages: readdirp@5.1.1
 
@@ -5782,7 +5719,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 147: Apache-2.0
+### License text 144: Apache-2.0
 
 Packages: reflect-metadata@0.2.2
 
@@ -5844,7 +5781,7 @@ If the Work includes a "NOTICE" text file as part of its distribution, then any 
 END OF TERMS AND CONDITIONS
 ```
 
-### License text 148: MIT
+### License text 145: MIT
 
 Packages: refractor@5.0.0
 
@@ -5874,9 +5811,9 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 149: MIT
+### License text 146: MIT
 
-Packages: rehype-harden@1.1.8
+Packages: rehype-harden@1.1.9
 
 ```text
 MIT License
@@ -5902,7 +5839,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 150: MIT
+### License text 147: MIT
 
 Packages: remark-parse@11.0.0, remark-stringify@11.0.0
 
@@ -5930,7 +5867,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 151: Apache-2.0
+### License text 148: Apache-2.0
 
 Packages: remend@1.4.0, streamdown@2.7.1
 
@@ -5950,7 +5887,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### License text 152: MIT
+### License text 149: MIT
 
 Packages: require-directory@2.1.1
 
@@ -5979,7 +5916,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 153: ISC
+### License text 150: ISC
 
 Packages: require-main-filename@2.0.0, set-blocking@2.0.0, yargs-parser@18.1.3
 
@@ -6000,7 +5937,7 @@ WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
 ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### License text 154: Unlicense
+### License text 151: Unlicense
 
 Packages: robust-predicates@3.0.3
 
@@ -6031,7 +5968,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 For more information, please refer to <http://unlicense.org>
 ```
 
-### License text 155: MIT
+### License text 152: MIT
 
 Packages: roughjs@4.6.6
 
@@ -6059,7 +5996,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 156: BSD-3-Clause
+### License text 153: BSD-3-Clause
 
 Packages: rw@1.3.3
 
@@ -6092,7 +6029,7 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
 EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 157: MIT
+### License text 154: MIT
 
 Packages: safer-buffer@2.1.2
 
@@ -6120,7 +6057,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 158: MIT
+### License text 155: MIT
 
 Packages: selfsigned@5.5.0
 
@@ -6148,7 +6085,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 159: MIT
+### License text 156: MIT
 
 Packages: shallow-equal@3.1.0
 
@@ -6176,7 +6113,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 160: MIT
+### License text 157: MIT
 
 Packages: shebang-command@2.0.0
 
@@ -6192,38 +6129,9 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 161: MIT
+### License text 158: MIT
 
-Packages: style-to-js@1.1.21
-
-```text
-The MIT License (MIT)
-
-Copyright (c) 2020 Menglin "Mark" Xu <mark@remarkablemark.org>
-
-Permission is hereby granted, free of charge, to any person obtaining
-a copy of this software and associated documentation files (the
-"Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
-
-The above copyright notice and this permission notice shall be
-included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-```
-
-### License text 162: MIT
-
-Packages: style-to-object@1.0.14
+Packages: style-to-object@2.0.2
 
 ```text
 The MIT License (MIT)
@@ -6250,7 +6158,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 163: MIT
+### License text 159: MIT
 
 Packages: stylis@4.4.0
 
@@ -6278,7 +6186,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 164: MIT
+### License text 160: MIT
 
 Packages: tailwind-merge@3.7.0
 
@@ -6306,7 +6214,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 165: MIT
+### License text 161: MIT
 
 Packages: tinyexec@1.3.1
 
@@ -6334,7 +6242,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 166: MIT
+### License text 162: MIT
 
 Packages: tree-kill@1.2.2
 
@@ -6362,7 +6270,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 167: MIT
+### License text 163: MIT
 
 Packages: ts-dedent@2.3.0
 
@@ -6390,9 +6298,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 168: 0BSD
+### License text 164: 0BSD
 
-Packages: tslib@1.14.1, tslib@2.8.1
+Packages: tslib@1.14.1, tslib@2.9.1
 
 ```text
 Copyright (c) Microsoft Corporation.
@@ -6409,7 +6317,7 @@ OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### License text 169: MIT
+### License text 165: MIT
 
 Packages: tsyringe@4.10.0
 
@@ -6437,7 +6345,7 @@ Packages: tsyringe@4.10.0
     SOFTWARE
 ```
 
-### License text 170: BSD-3-Clause
+### License text 166: BSD-3-Clause
 
 Packages: typo-js@1.4.0
 
@@ -6472,7 +6380,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 171: MIT
+### License text 167: MIT
 
 Packages: unified@11.0.5, vfile@6.0.3
 
@@ -6500,7 +6408,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 172: MIT
+### License text 168: MIT
 
 Packages: unist-util-is@6.0.1
 
@@ -6529,7 +6437,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 173: MIT
+### License text 169: MIT
 
 Packages: unpipe@1.0.0
 
@@ -6558,23 +6466,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 174: MIT
-
-Packages: uuid@14.0.3
-
-```text
-The MIT License (MIT)
-
-Copyright (c) 2010-2020 Robert Kieffer and other contributors
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-```
-
-### License text 175: MIT
+### License text 170: MIT
 
 Packages: vary@1.1.2
 
@@ -6603,9 +6495,9 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 176: MIT
+### License text 171: MIT
 
-Packages: vscode-jsonrpc@9.0.3, vscode-languageserver-protocol@3.18.4, vscode-languageserver-types@3.18.4
+Packages: vscode-jsonrpc@10.0.0, vscode-languageserver-protocol@3.18.5, vscode-languageserver-types@3.18.5
 
 ```text
 Copyright (c) Microsoft Corporation
@@ -6621,7 +6513,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED *AS IS*, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 177: MIT
+### License text 172: MIT
 
 Packages: warning@4.0.3
 
@@ -6649,7 +6541,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 178: ISC
+### License text 173: ISC
 
 Packages: which-module@2.0.1
 
@@ -6669,7 +6561,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### License text 179: MIT
+### License text 174: MIT
 
 Packages: ws@8.22.1
 
@@ -6696,7 +6588,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### License text 180: ISC
+### License text 175: ISC
 
 Packages: y18n@4.0.3
 
@@ -6716,7 +6608,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### License text 181: ISC
+### License text 176: ISC
 
 Packages: yaml@2.9.1
 
@@ -6736,7 +6628,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### License text 182: MIT
+### License text 177: MIT
 
 Packages: yargs@15.4.1
 
@@ -6764,7 +6656,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### License text 183: MIT
+### License text 178: MIT
 
 Packages: zod@4.6.7
 
@@ -6792,7 +6684,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 184: ISC
+### License text 179: ISC
 
 Packages: zod-to-json-schema@3.25.2
 
@@ -6814,7 +6706,7 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### License text 185: MIT
+### License text 180: MIT
 
 Packages: zundo@2.3.0
 
@@ -6842,9 +6734,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 186: MIT
+### License text 181: MIT
 
-Packages: zustand@5.0.16
+Packages: zustand@5.1.0
 
 ```text
 MIT License
@@ -6870,7 +6762,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### License text 187: BSD-3-Clause
+### License text 182: BSD-3-Clause
 
 Packages: pdfjs-dist: Adobe CMaps
 
@@ -6913,7 +6805,7 @@ Packages: pdfjs-dist: Adobe CMaps
 %%Copyright: -----------------------------------------------------------
 ```
 
-### License text 188: BSD-3-Clause
+### License text 183: BSD-3-Clause
 
 Packages: pdfjs-dist: Foxit Symbol and Dingbats fonts
 
@@ -6947,7 +6839,7 @@ Packages: pdfjs-dist: Foxit Symbol and Dingbats fonts
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 189: CC0-1.0
+### License text 184: CC0-1.0
 
 Packages: pdfjs-dist: CGATS001Compat ICC profile
 
@@ -7070,7 +6962,7 @@ For more information, please see
 http://creativecommons.org/publicdomain/zero/1.0/
 ```
 
-### License text 190: BSD-2-Clause
+### License text 185: BSD-2-Clause
 
 Packages: pdfjs-dist: OpenJPEG decoder
 
@@ -7139,7 +7031,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### License text 191: BSD-3-Clause AND Apache-2.0
+### License text 186: BSD-3-Clause AND Apache-2.0
 
 Packages: pdfjs-dist: PDFium JBIG2 decoder
 
@@ -7356,7 +7248,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### License text 192: MIT
+### License text 187: MIT
 
 Packages: pdfjs-dist: qcms color management
 
