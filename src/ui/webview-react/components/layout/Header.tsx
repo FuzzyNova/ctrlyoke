@@ -635,7 +635,7 @@ export const Header: React.FC<{
             contain:inline-size is load-bearing: this row spans the outer max-content tracks, so
             without it the workflow name's full max-content width is distributed into those tracks
             and a long name widens the whole header past the screen instead of truncating. */}
-        <div className="header-status col-start-1 col-end-4 row-start-2 sm:hidden grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-1 items-center [contain:inline-size]">
+        <div className="header-status col-start-1 col-end-4 row-start-2 sm:hidden grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-1 items-center contain-[inline-size]">
           {/* Left (auto): Steps drawer pull — flat left edge to screen, rounded toward content */}
           <div className="flex items-center">
             <button
