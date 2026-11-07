@@ -107,6 +107,22 @@ const SESSION_ID_REGEX =
   /\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/i;
 
 /**
+ * Go-log lines that name the process's own conversation. agy 1.5.2 logs only
+ * these for the main conversation; a subagent's conversation gets just the
+ * update-stream line below.
+ */
+const MAIN_SESSION_MARKERS = [
+  "Created conversation ",
+  "Print mode: conversation=",
+] as const;
+/**
+ * Logged for the main conversation (also when it is resumed, which has no
+ * "Created" line) and, since agy 1.5.2, for every subagent conversation too,
+ * so it may only seed a session that is not known yet.
+ */
+const UPDATE_STREAM_MARKER = "Starting conversation update stream for";
+
+/**
  * `{{ CHECKPOINT 0 }}` is agy's baseline context scaffold, not a compaction.
  * It is written a few entries into *every* conversation — confirmed in a
  * 14-entry session where nothing could have been truncated — yet it carries
@@ -221,14 +237,15 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
         if (!line) {
           continue;
         }
-        const sessionId = this.extractSessionIdFromLine(line);
+        const sessionId = this.mainSessionIdFromGoLogLine(line);
         if (sessionId) {
           this.setCachedSessionId(sessionId);
         }
 
         if (
-          line.includes("Starting conversation update stream for") ||
-          line.includes("Print mode: conversation=")
+          sessionId &&
+          (line.includes(UPDATE_STREAM_MARKER) ||
+            line.includes("Print mode: conversation="))
         ) {
           events.push({
             type: ANTIGRAVITY_LOG_EVENT_TYPES.SESSION_CREATED,
@@ -385,7 +402,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       for (const rawLine of content.split(/\r?\n/)) {
         const line = rawLine.trim();
         if (
-          !line.includes("Starting conversation update stream for") &&
+          !line.includes(UPDATE_STREAM_MARKER) &&
           !line.includes("Print mode: conversation=")
         ) {
           continue;
@@ -1205,6 +1222,25 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   private extractSessionIdFromLine(line: string): string | undefined {
     const match = line.match(SESSION_ID_REGEX);
     return match?.[1];
+  }
+
+  /**
+   * The main conversation's ID when `line` names it. Any other UUID in the log
+   * (a workspace path, a subagent's conversation) is not the session: taking
+   * one switched the session mid-run, reset the subagent follower and tailed
+   * a child transcript as if it were the parent's.
+   */
+  private mainSessionIdFromGoLogLine(line: string): string | undefined {
+    if (MAIN_SESSION_MARKERS.some((marker) => line.includes(marker))) {
+      return this.extractSessionIdFromLine(line);
+    }
+    if (line.includes(UPDATE_STREAM_MARKER)) {
+      const current =
+        this.cachedSessionId ?? this.cachedLastConversationsSessionId;
+      const id = this.extractSessionIdFromLine(line);
+      return current === undefined || current === id ? id : undefined;
+    }
+    return undefined;
   }
 
   private extractTokenUsage(events: BaseCliEvent[]): TokenUsage | undefined {

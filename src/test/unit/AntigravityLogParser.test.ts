@@ -635,13 +635,67 @@ suite("AntigravityLogParser", () => {
         assert.strictEqual(parser.hasPendingBackgroundWork(), true);
 
         fs.mkdirSync(secondTranscriptDir, { recursive: true });
+        // A new conversation in the same process is logged as "Created".
         fs.appendFileSync(
           logPath,
-          `Starting conversation update stream for ${secondSessionId}\n`,
+          `Created conversation ${secondSessionId} (backend=BACKEND_TYPE_UNSPECIFIED)\nStarting conversation update stream for ${secondSessionId}\n`,
           "utf8"
         );
         await parser.readNewLines(logPath);
         assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+      });
+    });
+
+    test("keeps the main session when a workspace path or a subagent conversation shows a UUID", async () => {
+      await withTemporaryHome(async (homeDir) => {
+        const parser = new AntigravityLogParser();
+        const pathId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+        const mainId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+        const childId = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+        const logDir = path.join(homeDir, ".gemini", "antigravity-cli", "log");
+        const transcriptDir = path.join(
+          homeDir,
+          ".gemini",
+          "antigravity-cli",
+          "brain",
+          mainId,
+          ".system_generated",
+          "logs"
+        );
+        const logPath = path.join(logDir, "cli-20261107_073112.log");
+        fs.mkdirSync(logDir, { recursive: true });
+        fs.mkdirSync(transcriptDir, { recursive: true });
+        // agy 1.5.2: the workspace path comes first, the child's update
+        // stream after the parent's own markers.
+        fs.writeFileSync(
+          logPath,
+          [
+            `E1107 07:31:12.322526 1 errorreport.go:273] failed to get git info for workspace C:\\tmp\\${pathId}\\ws: reference not found`,
+            `I1107 07:31:13.441069 1 server.go:1233] Created conversation ${mainId} (backend=BACKEND_TYPE_UNSPECIFIED)`,
+            `I1107 07:31:13.442625 1 server.go:1251] Starting conversation update stream for ${mainId}`,
+            `I1107 07:31:13.442625 1 session.go:201] Print mode: conversation=${mainId}, sending message`,
+            "",
+          ].join("\n"),
+          "utf8"
+        );
+        fs.writeFileSync(
+          path.join(transcriptDir, "transcript_full.jsonl"),
+          JSON.stringify(backgroundLaunch("session/task-1")) + "\n",
+          "utf8"
+        );
+        const first = await parser.readNewLines(logPath);
+        assert.strictEqual(parser.extractSessionId(first), mainId);
+        assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+        fs.appendFileSync(
+          logPath,
+          `I1107 07:31:20.268747 335 server.go:1251] Starting conversation update stream for ${childId}\n`,
+          "utf8"
+        );
+        const later = await parser.readNewLines(logPath);
+        // The child did not take over: the parent's state is intact.
+        assert.strictEqual(parser.extractSessionId(later), mainId);
+        assert.strictEqual(parser.hasPendingBackgroundWork(), true);
       });
     });
   });
