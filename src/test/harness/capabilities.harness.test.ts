@@ -234,10 +234,12 @@ const RUN_MARKER_OR_STOP_PROMPT = orStop(RUN_MARKER_PROMPT);
  *
  * - Claude applies the developer's own allow rules even in `default` mode, and
  *   `Bash(node:*)` is a common one, so it writes the file with its file tool.
- * - Codex's default sandbox lets a workspace write through without asking, so
- *   its command writes outside the workspace, which needs an escalation
- *   request. (A read-only sandbox would ask for any write, but Codex 0.163 will
- *   not start in one: dev/bugs/backlog/codex-read-only-sandbox-refuses-add-dir.md.)
+ * - Codex runs unsandboxed unless the step sets `sandbox: true`
+ *   ({@link approvalSandbox}), and its workspace-write sandbox lets a workspace
+ *   write through without asking, so its command writes outside the workspace,
+ *   which needs an escalation request. (A read-only sandbox would ask for any
+ *   write, but Codex 0.163 will not start in one:
+ *   dev/bugs/backlog/codex-read-only-sandbox-refuses-add-dir.md.)
  */
 function approvalPrompt(harness: HarnessId, workspace: Workspace): string {
   if (harness === HARNESS_IDS.CLAUDE_CLI) {
@@ -250,6 +252,14 @@ function approvalPrompt(harness: HarnessId, workspace: Workspace): string {
   // Asking for escalation up front: a model that first hits the sandbox and
   // then reads "do not retry" never asks at all.
   return `Run exactly one shell command, with escalated permissions (request approval to run it outside the sandbox, because it writes outside the workspace): ${MARKER_COMMAND} ${outside}. Do not run it inside the sandbox first. If approval is refused, stop.`;
+}
+
+/**
+ * Codex asks for approval only for what its sandbox blocks, and ctrlyoke runs
+ * it with no sandbox by default, so an approval case has to turn it on.
+ */
+function approvalSandbox(harness: HarnessId): Pick<PromptFile, "sandbox"> {
+  return harness === HARNESS_IDS.CODEX_CLI ? { sandbox: true } : {};
 }
 
 interface Workspace {
@@ -511,6 +521,7 @@ suite("Harness capability tests", function () {
               harness,
               {
                 executionMode,
+                ...approvalSandbox(harness),
                 toolPermissions: {
                   mode: PERMISSION_MODES.CUSTOM,
                   allowedTools: [],
@@ -549,6 +560,7 @@ suite("Harness capability tests", function () {
               harness,
               {
                 executionMode: EXECUTION_MODES.INTERACTIVE,
+                ...approvalSandbox(harness),
                 toolPermissions: {
                   mode: PERMISSION_MODES.CUSTOM,
                   allowedTools: [],
