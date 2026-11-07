@@ -57,6 +57,26 @@ suite("PromptDiagnosticRules", () => {
       }
     });
 
+    test("does not warn when the prompt starts with a secret grant", () => {
+      for (const text of [
+        "!API_TOKEN deploy the preview",
+        "  !API_TOKEN, then deploy",
+        "!UNREGISTERED_NAME deploy",
+      ]) {
+        assert.deepStrictEqual(getHarnessShellEscapeDiagnostics(text), []);
+      }
+    });
+
+    test("still warns when a leading ! is not a valid secret grant", () => {
+      for (const text of ["!api_token deploy", "!_X deploy", "!", "!!X"]) {
+        assert.strictEqual(
+          getHarnessShellEscapeDiagnostics(text).length,
+          1,
+          text
+        );
+      }
+    });
+
     test("does not warn when ! appears later in the prompt", () => {
       assert.deepStrictEqual(
         getHarnessShellEscapeDiagnostics("Run this !"),

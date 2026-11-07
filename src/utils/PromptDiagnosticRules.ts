@@ -33,6 +33,7 @@ import {
   type ContextReferenceMatch,
 } from "./PromptReferenceScanner";
 import { formatRangeNotation } from "./RangeNotationParser";
+import { parseSecretReferences } from "./SecretReferenceParser";
 import {
   createInlinePriorContextReferencePattern,
   createLegacySummaryPrefixPattern,
@@ -144,12 +145,27 @@ const EXPANSION_SUPPRESSED_MESSAGE =
 const HARNESS_SHELL_ESCAPE_MESSAGE =
   "A leading `!` is a harness shell escape, which steps don't support. This text is sent to the AI as a prompt. To run a command, use a script step.";
 
-/** Warn when a prompt begins with a harness-native shell escape. */
+/**
+ * Warn when a prompt begins with a harness-native shell escape.
+ *
+ * A leading `!NAME` secret grant is not warned: it is a ctrlyoke reference,
+ * and the runtime already sends every prompt with a leading `!` (grant or not)
+ * through the prompt file. An unregistered but well-formed name is reported by
+ * the unknown-secret diagnostic and blocks the run at secret preflight, so it
+ * never reaches the harness either.
+ */
 export function getHarnessShellEscapeDiagnostics(
   text: string
 ): PromptDiagnostic[] {
   if (!isHarnessShellEscape(text)) return [];
   const from = text.search(/\S/);
+  if (
+    parseSecretReferences(text).some(
+      (reference) => reference.startOffset === from
+    )
+  ) {
+    return [];
+  }
   return [
     {
       from,

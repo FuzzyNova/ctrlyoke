@@ -81,6 +81,8 @@ prompt text.
 
 A leading `!` in a prompt step is sent to the AI as prompt text; ctrlyoke does
 not treat it as a harness shell escape. To run a command, use a [script step](/workflows/script-steps).
+A prompt that starts with a secret grant such as `!API_TOKEN` is not affected: the
+grant works as usual and the editor doesn't warn about it.
 
 ## How step properties inherit {#property-inheritance}
 
