@@ -68,6 +68,15 @@ export const UNPROVEN_CLAIMS: Partial<
 };
 
 /**
+ * Claims a sibling harness suite proves for every harness that declares them,
+ * so `capabilities.harness.test.ts` has no case of its own for them. Each
+ * value is the suite that generates the cases.
+ */
+export const OTHER_SUITE_CLAIMS: Readonly<Record<CapabilityPath, string>> = {
+  "sandbox.terminal": "src/test/harness/sandbox.harness.test.ts",
+};
+
+/**
  * Claims the suite proves wrong today. The suite still asserts them, so it
  * stays red until the bug is fixed; their declarations stay `kind: "manual"`
  * meanwhile. Each value is the bug document.

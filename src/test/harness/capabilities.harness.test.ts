@@ -54,6 +54,7 @@ import {
 import { MODEL_NONE } from "../../utils/ModelConstants";
 import { removeTempDir } from "../helpers/tempWorkspace";
 import {
+  OTHER_SUITE_CLAIMS,
   UNPROVEN_CLAIMS,
   collectClaims,
   type CapabilityPath,
@@ -431,7 +432,10 @@ suite("Harness capability tests", function () {
   this.timeout(HARNESS_TIMEOUT_MS);
 
   test("every claimed capability has a case", function () {
-    const covered = new Set(Object.values(CASE_CLAIMS).flat());
+    const covered = new Set([
+      ...Object.values(CASE_CLAIMS).flat(),
+      ...Object.keys(OTHER_SUITE_CLAIMS),
+    ]);
     const uncovered = Object.values(HARNESS_IDS).flatMap((harness) =>
       [...claimsFor(harness).keys()]
         .filter((claim) => !covered.has(claim))
