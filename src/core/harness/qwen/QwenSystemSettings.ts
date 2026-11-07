@@ -22,6 +22,9 @@ import { isCtrlYokeQwenHookGroup } from "./QwenNotificationMonitor";
  */
 export const QWEN_SYSTEM_SETTINGS_PATH_ENV = "QWEN_CODE_SYSTEM_SETTINGS_PATH";
 
+/** The settings key Qwen reads hooks from, in every scope. */
+const HOOKS_KEY = "hooks";
+
 type HooksSection = Record<string, unknown[]>;
 
 /**
@@ -147,7 +150,9 @@ export async function removeOrphanedProjectHooks(
       if (kept.length > 0) hooks[event] = kept;
     }
     if (!removed) return;
-    const remainingKeys = Object.keys(parsed).filter((key) => key !== "hooks");
+    const remainingKeys = Object.keys(parsed).filter(
+      (key) => key !== HOOKS_KEY
+    );
     if (Object.keys(hooks).length === 0 && remainingKeys.length === 0) {
       // Nothing of the user's is left: ctrlyoke created this file.
       await fs.unlink(settingsPath);
@@ -156,7 +161,7 @@ export async function removeOrphanedProjectHooks(
     }
     const edits = modify(
       content,
-      ["hooks"],
+      [HOOKS_KEY],
       Object.keys(hooks).length > 0 ? hooks : undefined,
       { formattingOptions: { insertSpaces: true, tabSize: 2 } }
     );

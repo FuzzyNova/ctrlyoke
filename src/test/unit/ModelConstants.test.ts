@@ -22,7 +22,7 @@ import {
 suite("ModelConstants", () => {
   suite("getModelDisplayName", () => {
     test("returns display name for known Copilot model", () => {
-      assert.strictEqual(getModelDisplayName("gpt-5-mini"), "GPT 5 Mini");
+      assert.strictEqual(getModelDisplayName("gpt-6.1-terra"), "GPT 6.1 Terra");
     });
 
     test("returns display name for another known model", () => {
