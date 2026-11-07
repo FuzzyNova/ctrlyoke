@@ -254,7 +254,7 @@ const COPILOT_OTEL_CURRENT_TOKENS_ATTRIBUTE = "github.copilot.current_tokens";
 export class CopilotLogParser extends BaseLogParser {
   /** Check the Copilot session store by ID without prompt matching. */
   probeSessionId(sessionId: string): SessionProbeResult {
-    const logDir = path.join(getCopilotHomeDir(), "session-state");
+    const logDir = path.join(this.getHomeDir(), "session-state");
     try {
       if (!fs.existsSync(logDir)) return SESSION_AVAILABILITY.MISSING;
       const directoryLog = path.join(logDir, sessionId, "events.jsonl");
@@ -306,6 +306,8 @@ export class CopilotLogParser extends BaseLogParser {
   private otelDecoder = new StringDecoder("utf8");
   /** Path set by CopilotCliProvider once it generates a per-invocation OTel export path. */
   private otelFilePath: string | undefined;
+  /** The step's `--config-dir`, which Copilot prefers over `COPILOT_HOME`. */
+  private configDir: string | undefined;
   /** Running total of input tokens across all chat spans seen this invocation. */
   private otelCumulativeInputTokens = 0;
   /** Running total of output tokens across all chat spans seen this invocation. */
@@ -329,6 +331,21 @@ export class CopilotLogParser extends BaseLogParser {
   private otelContextWindowUsedTokens: number | undefined;
   /** Exact effective limit after Copilot resolves the selected context tier. */
   private otelContextWindowSize: number | undefined;
+
+  /**
+   * Register (or clear) the `--config-dir` the next invocation passes. Copilot
+   * resolves its home as `--config-dir`, then `COPILOT_HOME`, then `~/.copilot`,
+   * and keeps its session state and process logs there. Like the OTel path,
+   * set once per invocation so one step's directory never leaks into the next.
+   */
+  setConfigDir(configDir: string | undefined): void {
+    this.configDir = configDir;
+  }
+
+  /** The Copilot home the current invocation uses. */
+  getHomeDir(): string {
+    return this.configDir ?? getCopilotHomeDir();
+  }
 
   /**
    * Register (or clear) the OTel export file for this invocation.
@@ -1382,7 +1399,7 @@ export class CopilotLogParser extends BaseLogParser {
         return null;
       }
 
-      const logDir = path.join(getCopilotHomeDir(), "session-state");
+      const logDir = path.join(this.getHomeDir(), "session-state");
       if (!fs.existsSync(logDir)) {
         Log.debug("[CopilotLogParser] Session state directory not found");
         return null;
@@ -1910,8 +1927,8 @@ export class CopilotLogParser extends BaseLogParser {
    * - New: `/home/user/.copilot/session-state/abc-123/events.jsonl`
    * - Old: `/home/user/.copilot/session-state/abc-123.jsonl`
    */
-  static async getLogPath(sessionId: string): Promise<string | null> {
-    const logDir = path.join(getCopilotHomeDir(), "session-state");
+  async getLogPath(sessionId: string): Promise<string | null> {
+    const logDir = path.join(this.getHomeDir(), "session-state");
 
     // Try new format first (v0.0.384+)
     const newFormatPath = path.join(logDir, sessionId, "events.jsonl");
@@ -1942,10 +1959,10 @@ export class CopilotLogParser extends BaseLogParser {
    * @param sessionId - Session UUID from the `result` event in JSONL stdout
    * @returns Persisted context data if found, undefined if log unavailable or unreadable
    */
-  static async extractContextDataFromLog(
+  async extractContextDataFromLog(
     sessionId: string
   ): Promise<{ currentTokens: number; tokenLimit?: number } | undefined> {
-    const logPath = await CopilotLogParser.getLogPath(sessionId);
+    const logPath = await this.getLogPath(sessionId);
     if (!logPath) {
       return undefined;
     }
@@ -2065,7 +2082,7 @@ export class CopilotLogParser extends BaseLogParser {
     sessionId: string
   ): Promise<{ used: number; size: number } | undefined> {
     try {
-      const logsDir = path.join(getCopilotHomeDir(), "logs");
+      const logsDir = path.join(this.getHomeDir(), "logs");
       if (!fs.existsSync(logsDir)) {
         return undefined;
       }

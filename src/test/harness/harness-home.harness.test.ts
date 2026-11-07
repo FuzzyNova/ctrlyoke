@@ -42,28 +42,104 @@ import {
   type RunResult,
 } from "./helpers/harnessRunner";
 
+interface CasePreparation {
+  /** Folder where the CLI should write this case's session transcripts. */
+  readonly transcriptRoot: string;
+  /** A folder the transcript must not be in: the location the case moves it away from. */
+  readonly notIn?: string;
+  readonly additionalArgs?: string;
+}
+
 interface MovedHomeCase {
   readonly harness: HarnessId;
+  /** What the case moves, shown in its title. */
+  readonly moves: string;
   readonly home: () => MovedHarnessHomeOptions;
-  /** Folder inside the moved home where the CLI writes session transcripts. */
-  readonly transcriptDir: string;
+  readonly prepare: (home: string, workspace: string) => CasePreparation;
+}
+
+/** Add `advanced.runtimeOutputDir` to a Qwen settings file. */
+function setQwenRuntimeOutputDir(settingsPath: string, value: string): void {
+  const settings = fs.existsSync(settingsPath)
+    ? (JSON.parse(fs.readFileSync(settingsPath, "utf8")) as Record<
+        string,
+        unknown
+      >)
+    : {};
+  fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+  fs.writeFileSync(
+    settingsPath,
+    JSON.stringify({ ...settings, advanced: { runtimeOutputDir: value } })
+  );
 }
 
 const CASES: readonly MovedHomeCase[] = [
   {
     harness: HARNESS_IDS.CLAUDE_CLI,
+    moves: "CLAUDE_CONFIG_DIR",
     home: claudeHomeCopy,
-    transcriptDir: "projects",
+    prepare: (home) => ({ transcriptRoot: path.join(home, "projects") }),
   },
   {
     harness: HARNESS_IDS.QWEN_CLI,
+    moves: "QWEN_HOME",
     home: qwenHomeCopy,
-    transcriptDir: "projects",
+    prepare: (home) => ({ transcriptRoot: path.join(home, "projects") }),
+  },
+  {
+    harness: HARNESS_IDS.QWEN_CLI,
+    moves: "user advanced.runtimeOutputDir",
+    home: qwenHomeCopy,
+    prepare: (home) => {
+      const runtimeDir = path.join(home, "runtime-out");
+      setQwenRuntimeOutputDir(path.join(home, "settings.json"), runtimeDir);
+      return {
+        transcriptRoot: path.join(runtimeDir, "projects"),
+        notIn: path.join(home, "projects"),
+      };
+    },
+  },
+  {
+    harness: HARNESS_IDS.QWEN_CLI,
+    moves: "workspace advanced.runtimeOutputDir",
+    home: qwenHomeCopy,
+    prepare: (home, workspace) => {
+      // Relative to the workspace, the way Qwen resolves it.
+      setQwenRuntimeOutputDir(
+        path.join(workspace, ".qwen", "settings.json"),
+        "qwen-runtime"
+      );
+      return {
+        transcriptRoot: path.join(workspace, "qwen-runtime", "projects"),
+        notIn: path.join(home, "projects"),
+      };
+    },
   },
   {
     harness: HARNESS_IDS.COPILOT_CLI,
+    moves: "COPILOT_HOME",
     home: copilotHomeCopy,
-    transcriptDir: "session-state",
+    prepare: (home) => ({ transcriptRoot: path.join(home, "session-state") }),
+  },
+  {
+    harness: HARNESS_IDS.COPILOT_CLI,
+    moves: "--config-dir",
+    home: copilotHomeCopy,
+    prepare: (home) => {
+      // A second signed-in home that --config-dir picks over COPILOT_HOME.
+      const configDir = path.join(home, "config-dir");
+      fs.mkdirSync(configDir);
+      for (const file of ["config.json", "settings.json"]) {
+        if (fs.existsSync(path.join(home, file))) {
+          fs.copyFileSync(path.join(home, file), path.join(configDir, file));
+        }
+      }
+      return {
+        transcriptRoot: path.join(configDir, "session-state"),
+        notIn: path.join(home, "session-state"),
+        additionalArgs: `--config-dir "${configDir}"`,
+      };
+    },
   },
 ];
 
@@ -96,9 +172,9 @@ suite("Moved harness home regression tests", function () {
       EXECUTION_MODES.INTERACTIVE,
       EXECUTION_MODES.HEADLESS,
     ] as const satisfies readonly ExecutionMode[]) {
-      const label = `${movedCase.harness} (${mode}, moved home)`;
+      const label = `${movedCase.harness} (${mode}, ${movedCase.moves})`;
 
-      test(`${movedCase.harness}: ${mode} run follows the moved home`, async function () {
+      test(`${movedCase.harness}: ${mode} run follows ${movedCase.moves}`, async function () {
         const workspace = makeHarnessWorkspaceDir(
           movedCase.harness,
           "cy-moved-home-"
@@ -107,20 +183,24 @@ suite("Moved harness home regression tests", function () {
         const restoreRunState = isolateRunState(workspace);
         try {
           const token = `moved-home-${Date.now().toString(36)}`;
-          const workflow: PromptFile = {
-            harness: movedCase.harness,
-            model: HARNESS_MODELS[movedCase.harness],
-            executionMode: mode,
-            steps: [
-              {
-                name: "moved-home",
-                prompt: `Reply with exactly this word and nothing else: ${token}`,
-              },
-            ],
-          };
-          const { result, transcripts } = await withMovedHarnessHome(
+          const { result, transcripts, misplaced } = await withMovedHarnessHome(
             movedCase.home(),
             async (home) => {
+              const preparation = movedCase.prepare(home, workspace);
+              const workflow: PromptFile = {
+                harness: movedCase.harness,
+                model: HARNESS_MODELS[movedCase.harness],
+                executionMode: mode,
+                ...(preparation.additionalArgs
+                  ? { additionalArgs: preparation.additionalArgs }
+                  : {}),
+                steps: [
+                  {
+                    name: "moved-home",
+                    prompt: `Reply with exactly this word and nothing else: ${token}`,
+                  },
+                ],
+              };
               const run: RunResult =
                 mode === EXECUTION_MODES.INTERACTIVE
                   ? await runInteractiveWorkflowFile(
@@ -131,9 +211,10 @@ suite("Moved harness home regression tests", function () {
                   : runWorkflowFile(workflow, workspace, "moved-home");
               return {
                 result: run,
-                transcripts: listFilesRecursively(
-                  path.join(home, movedCase.transcriptDir)
-                ),
+                transcripts: listFilesRecursively(preparation.transcriptRoot),
+                misplaced: preparation.notIn
+                  ? listFilesRecursively(preparation.notIn)
+                  : [],
               };
             }
           );
@@ -148,13 +229,17 @@ suite("Moved harness home regression tests", function () {
           // variable and wrote its session under the moved home.
           assert.ok(
             transcripts.length > 0,
-            `${label}: the CLI wrote no session files under the moved home's ${movedCase.transcriptDir}/`
+            `${label}: the CLI wrote no session files where ${movedCase.moves} points`
           );
           const sessionId = readRecordedSessionId(workspace);
           assert.ok(sessionId, `${label}: ctrlyoke resolved no session ID`);
           assert.ok(
             transcripts.some((file) => file.includes(sessionId)),
-            `${label}: the session ${sessionId} has no transcript under the moved home:\n${transcripts.join("\n")}`
+            `${label}: the session ${sessionId} has no transcript where ${movedCase.moves} points:\n${transcripts.join("\n")}`
+          );
+          assert.ok(
+            !misplaced.some((file) => file.includes(sessionId)),
+            `${label}: the session ${sessionId} was written to the location ${movedCase.moves} should replace`
           );
           assert.ok(
             readResponseText(workspace).includes(token),

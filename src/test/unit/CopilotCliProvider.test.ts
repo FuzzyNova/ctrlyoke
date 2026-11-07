@@ -9,6 +9,7 @@ import { EXECUTION_MODES, HARNESS_IDS } from "../../types/DashboardConstants";
 import type { PromptStep } from "../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
+import { getCopilotHomeDir } from "../../utils/HarnessHome";
 
 function createProperties(
   mcpServers: ResolvedProperties["mcpServers"] = ["ctrlyoke"]
@@ -171,6 +172,45 @@ suite("CopilotCliProvider", () => {
         /github/.test(diagnostic.message)
       )
     );
+  });
+
+  test("reads session state from the --config-dir a step passes", async () => {
+    const provider = new CopilotCliProvider();
+    const workspaceRoot = process.cwd();
+    const plan = (additionalArgs?: string) =>
+      provider.planCliArgs(
+        { prompt: "moved home" } as PromptStep,
+        false,
+        workspaceRoot,
+        workspaceRoot,
+        undefined,
+        {
+          promptIndex: 0,
+          allPrompts: [],
+          workingFilePath: "workflow.ctrlyoke.json",
+          resolvedProperties: { ...createProperties(), additionalArgs },
+        }
+      );
+    const apply = async (additionalArgs?: string) => {
+      const preparation = await plan(additionalArgs);
+      for (const mutation of preparation.mutations) await mutation.apply();
+      return preparation;
+    };
+
+    const absolute = path.join(os.tmpdir(), "copilot-config-dir");
+    const preparation = await apply(`--config-dir "${absolute}"`);
+    assert.ok(preparation.cliArgs.includes("--config-dir"));
+    assert.strictEqual(provider.logParser.getHomeDir(), absolute);
+
+    await apply("--config-dir=relative/home --config-dir=last/home");
+    assert.strictEqual(
+      provider.logParser.getHomeDir(),
+      path.resolve(workspaceRoot, "last/home")
+    );
+
+    // The next step without the flag goes back to COPILOT_HOME / ~/.copilot.
+    await apply();
+    assert.strictEqual(provider.logParser.getHomeDir(), getCopilotHomeDir());
   });
 
   test("uses a unique OTel path per invocation and cleans up every path", async () => {

@@ -110,8 +110,7 @@ moved, in both modes, and checks the transcript, session ID and response text.
   `<dir>/.claude.json`, confirming the `.claude.json` move.
 - **Qwen:** probed `QWEN_HOME=<dir> qwen mcp add --scope user`, which wrote
   `<dir>/settings.json`. Session data follows `QWEN_RUNTIME_DIR`, then the
-  `advanced.runtimeOutputDir` setting, then `QWEN_HOME`. ctrlyoke does not read
-  `advanced.runtimeOutputDir`; the docs say to use `QWEN_RUNTIME_DIR` instead.
+  `advanced.runtimeOutputDir` setting, then `QWEN_HOME`.
 - **Spawn env:** none of the providers' `getHeadlessSpawnEnv`/`getInteractiveSpawnEnv`
   sets a home variable, and `env:` exists only on script steps, which never launch a
   harness. A prompt step's harness therefore always inherits these variables from
@@ -119,3 +118,27 @@ moved, in both modes, and checks the transcript, session ID and response text.
   under one of these names would also be passed to the harness without being followed.)
 - `SettingsJsonMcpTracker`'s default `userConfigPath` (`~/.<toolName>/settings.json`) has
   no production caller; every tracker for a moved-home harness passes its own path.
+
+### Follow-up: per-step moves
+
+The first fix left two moves unfollowed. The follow-up commit covers both:
+
+- **Qwen `advanced.runtimeOutputDir`.** `QwenRuntimeDir.ts` copies Qwen 0.26.9's
+  `loadSettings` merge for that one key: system defaults < user < workspace (trusted
+  folders only) < system, with `$VAR`/`${VAR}` substitution and `~`/relative paths
+  resolved against the workspace. When `security.folderTrust.enabled` is on, trust
+  depends on Qwen's trusted-folder rules (precedence, path variants, IDE trust). Those
+  are not reproduced. Instead the log parser searches both the trusted and untrusted
+  candidates, which is safe because session IDs are unique.
+- **Copilot `--config-dir`.** `resolveCopilotHome(configDir, COPILOT_HOME, homedir)`
+  puts the flag first. `CopilotCliProvider` reads it from the step's `additionalArgs`
+  (last one wins) and gives it to the log parser in the per-prompt runtime mutation.
+  The parser's two former static helpers are instance methods now, so they see it too.
+  The statusline and the dashboard's user MCP/LSP paths stay on `COPILOT_HOME`, because
+  they are machine-wide and not tied to one step.
+- **Found while doing this:** Qwen finds `system-defaults.json` in
+  `dirname(getSystemSettingsPath())` unless `QWEN_CODE_SYSTEM_DEFAULTS_PATH` is set
+  (Qwen 0.26.9 source). ctrlyoke's per-launch `QWEN_CODE_SYSTEM_SETTINGS_PATH` points
+  into `.ctrlyoke/temp/`, so every ctrlyoke Qwen launch silently dropped the user's
+  system defaults. The provider now also sets `QWEN_CODE_SYSTEM_DEFAULTS_PATH` to the
+  real file.

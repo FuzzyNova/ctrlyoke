@@ -26,8 +26,18 @@ does:
 | Qwen Code   | `QWEN_RUNTIME_DIR`  | The Qwen folder that holds session transcripts          |
 
 Set the variable in the environment you start VS Code or the `ctrlyoke` CLI from. The harness
-inherits it from ctrlyoke, so both use the same folder. ctrlyoke doesn't read Qwen's
-`advanced.runtimeOutputDir` setting; use `QWEN_RUNTIME_DIR` to move Qwen's transcripts.
+inherits it from ctrlyoke, so both use the same folder.
+
+Two per-step moves are followed as well:
+
+- Qwen's `advanced.runtimeOutputDir` setting, in any settings file Qwen reads (system, workspace
+  `.qwen/settings.json`, user or system defaults), moves its session transcripts.
+  `QWEN_RUNTIME_DIR` still wins over it. If you turned on Qwen's folder trust, ctrlyoke can't tell
+  whether Qwen applied a workspace value, so it looks for the transcript in both folders.
+- A Copilot step whose `additionalArgs` pass `--config-dir <folder>` keeps that step's session
+  state there. A relative folder is resolved against the workspace. The status line and the
+  dashboard's MCP and language server files stay in `COPILOT_HOME` (or `~/.copilot`), because they
+  aren't tied to one step.
 
 ## Every harness: `.ctrlyoke/temp/` {#ctrlyoke-temp}
 

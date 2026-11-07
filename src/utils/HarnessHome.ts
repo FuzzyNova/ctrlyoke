@@ -49,24 +49,28 @@ const CODEX_DIR = ".codex";
 const OPENCODE_DIR = "opencode";
 
 /**
+ * Resolve a configured directory the way Qwen's `Storage.resolvePath` does: a
+ * leading `~` is expanded and a relative value resolved against `cwd`. The
+ * other CLIs normally receive a value the shell already expanded, which this
+ * leaves unchanged.
+ */
+export function resolveConfiguredDir(value: string, cwd?: string): string {
+  if (value === "~" || value.startsWith("~/") || value.startsWith("~\\")) {
+    return path.join(os.homedir(), value.slice(1));
+  }
+  return cwd ? path.resolve(cwd, value) : path.resolve(value);
+}
+
+/**
  * A configured directory override, or `undefined` when the variable is unset
- * or blank (every CLI treats an empty value as unset). A leading `~` is
- * expanded and a relative value resolved, matching Qwen's
- * `Storage.resolvePath`; the other CLIs normally receive a value the shell
- * already expanded, which this leaves unchanged.
+ * or blank (every CLI treats an empty value as unset).
  */
 function readDirOverride(
   env: HarnessHomeEnv,
   name: (typeof HARNESS_HOME_ENV_VARS)[keyof typeof HARNESS_HOME_ENV_VARS]
 ): string | undefined {
   const value = env[name]?.trim();
-  if (!value) {
-    return undefined;
-  }
-  if (value === "~" || value.startsWith("~/") || value.startsWith("~\\")) {
-    return path.join(os.homedir(), value.slice(1));
-  }
-  return path.resolve(value);
+  return value ? resolveConfiguredDir(value) : undefined;
 }
 
 /** Claude Code's config directory: `CLAUDE_CONFIG_DIR`, else `~/.claude`. */
@@ -108,7 +112,8 @@ export function getQwenHomeDir(env: HarnessHomeEnv = process.env): string {
  * Qwen Code's runtime output directory (`Storage.getRuntimeBaseDir`), which
  * holds session transcripts under `projects/`: `QWEN_RUNTIME_DIR`, else the
  * Qwen home. Qwen's `advanced.runtimeOutputDir` setting ranks between the
- * two; it is not read here.
+ * two; it depends on the workspace, so `resolveQwenRuntimeDirs` in
+ * `core/harness/qwen/QwenRuntimeDir.ts` adds it. Read transcripts through that.
  */
 export function getQwenRuntimeDir(env: HarnessHomeEnv = process.env): string {
   return (
@@ -127,6 +132,23 @@ export function getCopilotHomeDir(env: HarnessHomeEnv = process.env): string {
     readDirOverride(env, HARNESS_HOME_ENV_VARS.COPILOT_HOME) ??
     path.join(os.homedir(), COPILOT_DIR)
   );
+}
+
+/** Copilot's flag that moves its home for one launch, ahead of `COPILOT_HOME`. */
+export const COPILOT_CONFIG_DIR_FLAG = "--config-dir";
+
+/**
+ * Copilot's home for a launch that passes `--config-dir <dir>` (deprecated in
+ * favour of `COPILOT_HOME`, still honoured by 1.0.x and preferred over it). A
+ * relative directory is resolved against the launch's working directory.
+ * `undefined` when the launch passes none.
+ */
+export function getCopilotConfigDirArg(
+  configDirArg: string | undefined,
+  cwd: string | undefined
+): string | undefined {
+  const value = configDirArg?.trim();
+  return value ? resolveConfiguredDir(value, cwd) : undefined;
 }
 
 /** Codex's home directory: `CODEX_HOME`, else `~/.codex`. */

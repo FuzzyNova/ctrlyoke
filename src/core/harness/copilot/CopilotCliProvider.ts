@@ -58,7 +58,11 @@ import {
   type CompatibilityDiagnostic,
   type HarnessCapabilityFacts,
 } from "../../../types/CompatibilityTypes";
-import { parseArgString } from "../../../utils/CliArgParser";
+import { getCliFlagValues, parseArgString } from "../../../utils/CliArgParser";
+import {
+  COPILOT_CONFIG_DIR_FLAG,
+  getCopilotConfigDirArg,
+} from "../../../utils/HarnessHome";
 import type {
   HookEvent,
   PromptFile,
@@ -412,8 +416,14 @@ export class CopilotCliProvider implements ICliProvider {
     }
 
     // Extra CLI flags from additionalArgs (injected before tool permission args)
-    const appendTokens = parseArgString(
-      workflowContext?.resolvedProperties?.additionalArgs ?? ""
+    const additionalArgs =
+      workflowContext?.resolvedProperties?.additionalArgs ?? "";
+    const appendTokens = parseArgString(additionalArgs);
+    // A `--config-dir` there moves Copilot's session state for this launch, so
+    // the log parser has to read it from the same folder. The last one wins.
+    const configDir = getCopilotConfigDirArg(
+      getCliFlagValues(additionalArgs, [COPILOT_CONFIG_DIR_FLAG]).at(-1),
+      workspaceRoot
     );
     if (appendTokens.length > 0) {
       args.push(...appendTokens);
@@ -501,6 +511,7 @@ export class CopilotCliProvider implements ICliProvider {
               this.otelFilePaths.push(otelFilePath);
             }
             this.logParser.setOtelFilePath(otelFilePath);
+            this.logParser.setConfigDir(configDir);
           },
         },
         ...mcpPreparation.mutations,
@@ -1382,7 +1393,7 @@ export class CopilotCliProvider implements ICliProvider {
     }
 
     const contextData =
-      await CopilotLogParser.extractContextDataFromLog(sessionId);
+      await this.logParser.extractContextDataFromLog(sessionId);
     const outputTokens = enrichedOutput.metadata.usage?.outputTokens ?? 0;
 
     if (contextData) {

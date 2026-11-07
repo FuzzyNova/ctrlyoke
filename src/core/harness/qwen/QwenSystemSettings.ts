@@ -44,6 +44,32 @@ export function defaultQwenSystemSettingsPath(
   return "/etc/qwen-code/settings.json";
 }
 
+/**
+ * Qwen's system defaults path override. Without it Qwen looks for
+ * `system-defaults.json` beside the system settings file, which for a ctrlyoke
+ * launch is the per-run copy in `.ctrlyoke/temp/`, so `QwenCliProvider` sets it
+ * to the file Qwen would otherwise read.
+ */
+export const QWEN_SYSTEM_DEFAULTS_PATH_ENV = "QWEN_CODE_SYSTEM_DEFAULTS_PATH";
+
+/**
+ * The system defaults file Qwen would read without ctrlyoke, resolved the way
+ * Qwen 0.26.9's `getSystemDefaultsPath()` does.
+ */
+export function defaultQwenSystemDefaultsPath(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): string {
+  const configured = env[QWEN_SYSTEM_DEFAULTS_PATH_ENV];
+  if (configured) return configured;
+  // Qwen derives the folder with the host's path module.
+  const pathApi = platform === "win32" ? path.win32 : path.posix;
+  return pathApi.join(
+    pathApi.dirname(defaultQwenSystemSettingsPath(env, platform)),
+    "system-defaults.json"
+  );
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

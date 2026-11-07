@@ -32,7 +32,9 @@ import {
 import { QwenNotificationMonitor } from "./QwenNotificationMonitor";
 import {
   buildQwenSystemSettings,
+  defaultQwenSystemDefaultsPath,
   defaultQwenSystemSettingsPath,
+  QWEN_SYSTEM_DEFAULTS_PATH_ENV,
   QWEN_SYSTEM_SETTINGS_PATH_ENV,
   removeOrphanedProjectHooks,
 } from "./QwenSystemSettings";
@@ -448,8 +450,14 @@ export class QwenCliProvider implements ICliProvider {
   }
 
   private buildHookSettingsSpawnEnv(): NodeJS.ProcessEnv {
+    // Qwen finds system-defaults.json beside the system settings file unless
+    // told otherwise, so moving that file to .ctrlyoke/temp/ would drop the
+    // real defaults. Point Qwen back at them.
     return this.hookSettingsPath
-      ? { [QWEN_SYSTEM_SETTINGS_PATH_ENV]: this.hookSettingsPath }
+      ? {
+          [QWEN_SYSTEM_SETTINGS_PATH_ENV]: this.hookSettingsPath,
+          [QWEN_SYSTEM_DEFAULTS_PATH_ENV]: defaultQwenSystemDefaultsPath(),
+        }
       : {};
   }
 

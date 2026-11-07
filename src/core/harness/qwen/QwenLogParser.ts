@@ -6,7 +6,7 @@ import {
   UserEventClassification,
 } from "../shared/interfaces/ILogParser";
 import { Log } from "../../../utils/Log";
-import { getQwenRuntimeDir } from "../../../utils/HarnessHome";
+import { resolveQwenRuntimeDirs } from "./QwenRuntimeDir";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import {
   UniversalCliOutput,
@@ -206,18 +206,43 @@ function isQwenProviderEvent(value: unknown): value is QwenProviderEvent {
 
 export class QwenLogParser extends BaseLogParser {
   probeSessionId(sessionId: string): SessionProbeResult {
-    const projectsDir = path.join(getQwenRuntimeDir(), "projects");
     try {
-      return this.findSessionLogAcrossProjectDirectories(projectsDir, [
-        "chats",
-        `${sessionId}.jsonl`,
-      ])
+      return this.findFirstSessionLogAcrossProjects(
+        this.getRuntimeDirectories().map((dir) => path.join(dir, "projects")),
+        ["chats", `${sessionId}.jsonl`]
+      )
         ? SESSION_AVAILABILITY.AVAILABLE
         : SESSION_AVAILABILITY.MISSING;
     } catch {
       return SESSION_AVAILABILITY.UNKNOWN;
     }
   }
+
+  /**
+   * Every folder this workspace's Qwen sessions can be in, most likely first
+   * (see `resolveQwenRuntimeDirs`). Read on every call: a step can change the
+   * settings between runs, and Qwen reads them at launch.
+   */
+  private getRuntimeDirectories(): string[] {
+    return resolveQwenRuntimeDirs(this.workspaceRoot || process.cwd());
+  }
+
+  private findFirstSessionLogAcrossProjects(
+    projectsDirectories: readonly string[],
+    relativeLogPath: readonly string[]
+  ): string | null {
+    for (const projectsDirectory of projectsDirectories) {
+      const found = this.findSessionLogAcrossProjectDirectories(
+        projectsDirectory,
+        relativeLogPath
+      );
+      if (found) return found;
+    }
+    return null;
+  }
+
+  /** Project folder of the session found by the last `discoverSessionLog`. */
+  private discoveredProjectDirectory: string | undefined;
   private readonly subagentFollower = new SubagentSourceFollower();
   private subagentUsageEnabled = true;
 
@@ -726,6 +751,27 @@ export class QwenLogParser extends BaseLogParser {
     sessionId?: string,
     signal?: AbortSignal
   ): Promise<string | null> {
+    this.discoveredProjectDirectory = undefined;
+    const logPath = await this.findSessionLogPath(
+      promptText,
+      startTime,
+      sessionId,
+      signal
+    );
+    if (logPath) {
+      // `<runtime>/projects/<workspace>/chats/<id>.jsonl`; subagent logs sit
+      // beside `chats/` in the same project directory.
+      this.discoveredProjectDirectory = path.dirname(path.dirname(logPath));
+    }
+    return logPath;
+  }
+
+  private async findSessionLogPath(
+    promptText: string,
+    startTime: Date,
+    sessionId?: string,
+    signal?: AbortSignal
+  ): Promise<string | null> {
     // See ILogParser.trackBackgroundWorkState's session-reset contract.
     this.resetSessionTrackingState();
 
@@ -734,34 +780,43 @@ export class QwenLogParser extends BaseLogParser {
         return null;
       }
 
-      const projectDir = this.getQwenProjectDirectory();
-      const chatsDir = path.join(projectDir, "chats");
+      const runtimeDirs = this.getRuntimeDirectories();
+      const chatsDirs = runtimeDirs.map((runtimeDir) =>
+        path.join(this.getQwenProjectDirectory(runtimeDir), "chats")
+      );
 
-      if (!sessionId && !fs.existsSync(chatsDir)) {
+      if (!sessionId && !chatsDirs.some((dir) => fs.existsSync(dir))) {
         Log.debug("[QwenLogParser] No chats directory found");
         return null;
       }
 
-      Log.debug(`[QwenLogParser] Searching for session logs in: ${chatsDir}`);
+      Log.debug(
+        `[QwenLogParser] Searching for session logs in: ${chatsDirs.join(", ")}`
+      );
 
       // FAST PATH: session ID → current project first, then every other
       // workspace-scoped Qwen project. Resuming after an execution-worktree
       // switch continues writing to the session's original project directory.
       if (sessionId) {
-        const projectsDirectory = path.join(getQwenRuntimeDir(), "projects");
-        const expectedLogPath = path.join(chatsDir, `${sessionId}.jsonl`);
+        const projectsDirectories = runtimeDirs.map((runtimeDir) =>
+          path.join(runtimeDir, "projects")
+        );
+        const expectedLogPaths = chatsDirs.map((dir) =>
+          path.join(dir, `${sessionId}.jsonl`)
+        );
+        const expectedLogPath = expectedLogPaths[0]!;
+        const projectsDirectory = projectsDirectories.join(", ");
         let discoveredLogPath: string | null = null;
 
         const result = await retryWithBackoff(
           async () => {
             const logPath =
               discoveredLogPath ??
-              (fs.existsSync(expectedLogPath)
-                ? expectedLogPath
-                : this.findSessionLogAcrossProjectDirectories(
-                    projectsDirectory,
-                    ["chats", `${sessionId}.jsonl`]
-                  ));
+              expectedLogPaths.find((candidate) => fs.existsSync(candidate)) ??
+              this.findFirstSessionLogAcrossProjects(projectsDirectories, [
+                "chats",
+                `${sessionId}.jsonl`,
+              ]);
 
             if (logPath && fs.existsSync(logPath)) {
               discoveredLogPath = logPath;
@@ -804,7 +859,9 @@ export class QwenLogParser extends BaseLogParser {
       }
 
       // FALLBACK: scan recently modified files and match by prompt text
-      const candidates = this.findModifiedSessionLogs(chatsDir, startTime);
+      const candidates = chatsDirs.flatMap((dir) =>
+        this.findModifiedSessionLogs(dir, startTime)
+      );
       if (candidates.length === 0) {
         Log.debug("[QwenLogParser] No candidate log files found");
         return null;
@@ -1575,9 +1632,12 @@ export class QwenLogParser extends BaseLogParser {
   /**
    * Get Qwen project directory for current workspace
    *
-   * Resolves to `~/.qwen/projects/<sanitized-workspace-path>/`
+   * Resolves to `<runtime>/projects/<sanitized-workspace-path>/`, where
+   * `<runtime>` is `runtimeDir` when given. Otherwise it is the folder the
+   * last discovered session log was in, or failing that the most likely
+   * runtime folder.
    *
-   * @returns Absolute path to Qwen project directory, or null if no workspace
+   * @returns Absolute path to Qwen project directory
    *
    * @remarks
    * **Path Sanitization:**
@@ -1586,7 +1646,10 @@ export class QwenLogParser extends BaseLogParser {
    * - Example: `/home/user/dev/ctrlyoke` → `-home-user-dev-ctrlyoke`
    * - Windows: `C:\dev\ctrlyoke` → `c--dev-ctrlyoke`
    */
-  private getQwenProjectDirectory(): string {
+  private getQwenProjectDirectory(runtimeDir?: string): string {
+    if (!runtimeDir && this.discoveredProjectDirectory) {
+      return this.discoveredProjectDirectory;
+    }
     // Use stored workspaceRoot (set by CliIntegration) or fall back to process.cwd()
     const workspacePath = this.workspaceRoot || process.cwd();
 
@@ -1594,7 +1657,10 @@ export class QwenLogParser extends BaseLogParser {
     // non-alphanumeric character (including separators) with a dash.
     const sanitizedPath = sanitizeQwenProjectPath(workspacePath);
 
-    const baseDir = path.join(getQwenRuntimeDir(), "projects");
+    const baseDir = path.join(
+      runtimeDir ?? this.getRuntimeDirectories()[0]!,
+      "projects"
+    );
     const projectDir = path.join(baseDir, sanitizedPath);
 
     Log.debug(
