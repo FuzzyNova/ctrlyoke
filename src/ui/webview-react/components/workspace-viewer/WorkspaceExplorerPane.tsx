@@ -74,6 +74,7 @@ import {
 import { getCtrlYokeFileKind } from "@root/completions/CtrlYokeFileKind";
 import { getPromptMarkdownText } from "@root/utils/MarkdownFrontmatter";
 import { useAttachmentTokenCount } from "@hooks/useAttachmentTokenCount";
+import { isTouchContextMenuEvent } from "@hooks/useLongPress";
 import { Icon } from "../shared/Icon";
 import { PromptTokenCount } from "../shared/PromptTokenCount";
 
@@ -1156,6 +1157,8 @@ export const WorkspaceExplorerPane: React.FC = () => {
                 role="presentation"
                 onContextMenu={(e) => {
                   e.preventDefault();
+                  // A touch long press is handled by editorLongPressHandlers.
+                  if (isTouchContextMenuEvent(e.nativeEvent)) return;
                   openEditorContextMenu(e.clientX, e.clientY);
                 }}
                 {...editorLongPressHandlers}

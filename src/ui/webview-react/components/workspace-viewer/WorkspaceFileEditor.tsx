@@ -55,6 +55,7 @@ import {
 import type { StepContextMenuEntry } from "@components/shared/StepContextMenu";
 import {
   buildEditorEditMenuItems,
+  isTouchOnSelectionHandle,
   placeCaretForContextMenu,
 } from "@utils/editorEditMenuItems";
 import { getCtrlYokeFileKind } from "@root/completions/CtrlYokeFileKind";
@@ -106,6 +107,8 @@ export interface WorkspaceFileEditorHandle {
   getLanguageCapabilities: () => Record<string, unknown>;
   /** See {@link placeCaretForContextMenu}. */
   placeCaretAtCoords: (x: number, y: number) => void;
+  /** See {@link isTouchOnSelectionHandle}. */
+  isTouchOnSelectionHandle: (x: number, y: number) => boolean;
   /** Cut/Copy/Paste and Select Word/Line/All, shared with the prompt editor. */
   getEditMenuItems: () => StepContextMenuEntry[];
   /** True when the caret touches a word the symbol actions can act on. */
@@ -366,6 +369,8 @@ export const WorkspaceFileEditor = forwardRef<
         placeCaretAtCoords: (x: number, y: number) => {
           if (viewRef.current) placeCaretForContextMenu(viewRef.current, x, y);
         },
+        isTouchOnSelectionHandle: (x: number, y: number) =>
+          !!viewRef.current && isTouchOnSelectionHandle(viewRef.current, x, y),
         getEditMenuItems: () => {
           const view = viewRef.current;
           return view

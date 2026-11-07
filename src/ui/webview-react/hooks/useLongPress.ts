@@ -12,6 +12,19 @@ export function getContextMenuOpener(
     : null;
 }
 
+/**
+ * True for a `contextmenu` event raised by a touch long press (Android
+ * Chrome fires one; iOS Safari does not). Elements that also spread
+ * {@link useLongPress} handlers should ignore it, so the long press opens
+ * their menu once and through one path. Chromium dispatches `contextmenu` as a
+ * PointerEvent carrying `pointerType`.
+ */
+export function isTouchContextMenuEvent(event: MouseEvent): boolean {
+  return (
+    "pointerType" in event && (event as PointerEvent).pointerType === "touch"
+  );
+}
+
 /** Pixels the touch point must travel before cancelling the long-press timer. */
 const MOVE_THRESHOLD = 10;
 
@@ -32,6 +45,10 @@ const MOVE_THRESHOLD = 10;
  * Set `requireSelf = true` to only fire when the touch begins directly on the
  * element (not on a descendant). Useful for background containers where child
  * elements have their own long-press handlers.
+ *
+ * `shouldStart` vetoes arming the timer for a touch at the given point, for
+ * touches that belong to a native gesture (such as grabbing a text-selection
+ * handle) whose finger may never report a `touchmove`.
  */
 export function useLongPress(
   callback:
@@ -39,7 +56,8 @@ export function useLongPress(
     | null
     | undefined,
   delay = 500,
-  requireSelf = false
+  requireSelf = false,
+  shouldStart?: (x: number, y: number) => boolean
 ) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startPosRef = useRef<{ x: number; y: number } | null>(null);
@@ -63,6 +81,7 @@ export function useLongPress(
       const touch = e.touches[0];
       const x = touch.clientX;
       const y = touch.clientY;
+      if (shouldStart && !shouldStart(x, y)) return;
       const opener = getContextMenuOpener(e.currentTarget, e.target);
       startPosRef.current = { x, y };
       timerRef.current = setTimeout(() => {
@@ -71,7 +90,7 @@ export function useLongPress(
         callback(x, y, opener);
       }, delay);
     },
-    [callback, cancel, delay, requireSelf]
+    [callback, cancel, delay, requireSelf, shouldStart]
   );
 
   const onTouchMove = useCallback(

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- On a phone, long-pressing in the prompt editor or the workspace file editor no longer closes the on-screen keyboard. Its menu used to take focus, so the keyboard closed and the layout moved out from under the menu, and Paste no longer reached the editor. If the keyboard closes anyway, the menu now closes too. Dragging a text-selection handle no longer opens the menu and clears the selection. On Android, a long press opens the menu once instead of twice.
+
 ## [0.5.0] - 2026-11-07
 
 ### Changed
