@@ -13,6 +13,7 @@ import {
 } from "@components/shared/SplitButton";
 import { WorkflowFilePickerModal } from "@components/workflow/WorkflowFilePickerModal";
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
+import { startNewBlankWorkflow } from "../../utils/newWorkflow";
 import {
   BUTTON_VARIANTS,
   WORKFLOW_FILE_PICKER_MODES,
@@ -81,7 +82,7 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
 
   // Handle new workflow (clear current)
   const handleNewWorkflow = useCallback(() => {
-    vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW });
+    startNewBlankWorkflow(vscode);
   }, [vscode]);
 
   // Handle from template action

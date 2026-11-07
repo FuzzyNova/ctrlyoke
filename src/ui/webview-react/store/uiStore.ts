@@ -580,6 +580,14 @@ interface UiState {
   hiddenOutputTargets: Record<string, HiddenOutputTargetsEntry>;
   outputStepFilterVersion: number;
   pendingFindRequest: PendingOutputFindRequest | null;
+  /**
+   * Bumped by a user gesture that starts a blank workflow (see
+   * `startNewBlankWorkflow`), so `WorkflowStatus` enters name editing inside
+   * that same gesture. iOS raises the on-screen keyboard only for a focus()
+   * made during a user gesture; waiting for the backend's new-workflow
+   * snapshot leaves the field focused with no keyboard. 0 = never requested.
+   */
+  newWorkflowNamingRequest: number;
 
   // History search drawer state (transient, not persisted)
   isHistorySearchOpen: boolean;
@@ -995,6 +1003,7 @@ interface UiActions {
     presentTargetKeys: ReadonlySet<string>
   ) => void;
   setPendingFindRequest: (request: PendingOutputFindRequest | null) => void;
+  requestNewWorkflowNaming: () => void;
   openHistorySearch: () => void;
   closeHistorySearch: () => void;
   toggleHistorySearch: () => void;
@@ -1342,6 +1351,7 @@ const initialState: UiState = {
   hiddenOutputTargets: {},
   outputStepFilterVersion: 0,
   pendingFindRequest: null,
+  newWorkflowNamingRequest: 0,
   isHistorySearchOpen: false,
   historySearchResults: [],
   historySearchQuery: "",
@@ -1664,6 +1674,11 @@ export const useUiStore = create<UiState & UiActions>()(
         }),
 
       setPendingFindRequest: (request) => set({ pendingFindRequest: request }),
+
+      requestNewWorkflowNaming: () =>
+        set((state) => ({
+          newWorkflowNamingRequest: state.newWorkflowNamingRequest + 1,
+        })),
 
       openHistorySearch: () =>
         set({ isHistorySearchOpen: true, globalSettingsOpen: false }),

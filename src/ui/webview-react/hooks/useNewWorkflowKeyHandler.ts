@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { MESSAGE_TYPES } from "../types/messages";
 import { getVsCodeApi } from "./useVsCodeApi";
 import { WebviewLog } from "@utils/logger";
+import { startNewBlankWorkflow } from "@utils/newWorkflow";
 
 /**
  * Global "new workflow" shortcuts, scoped to the webview only (no VS Code
@@ -41,7 +42,7 @@ export function useNewWorkflowKeyHandler() {
         vscode.postMessage({ type: MESSAGE_TYPES.NEW_WORKFLOW });
       } else {
         WebviewLog.info("[NewWorkflow] Ctrl+N — new blank workflow");
-        vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW });
+        startNewBlankWorkflow(vscode);
       }
     };
 

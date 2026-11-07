@@ -49,6 +49,16 @@ describe("WorkflowControls — New button", () => {
       type: MESSAGE_TYPES.CLEAR_WORKFLOW,
     });
   });
+
+  // The name field must be focused inside the tap for iOS to raise the
+  // keyboard, so the click itself asks WorkflowStatus to start naming.
+  it("requests workflow naming within the click", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowControls />);
+    const before = useUiStore.getState().newWorkflowNamingRequest;
+    await user.click(screen.getByRole("button", { name: /New/i }));
+    expect(useUiStore.getState().newWorkflowNamingRequest).toBe(before + 1);
+  });
 });
 
 describe("WorkflowControls — dropdown options", () => {
