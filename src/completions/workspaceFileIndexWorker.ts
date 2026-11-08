@@ -7,6 +7,7 @@ import {
   type WorkspaceFileIndexRequest,
   type WorkspaceFileIndexResponse,
 } from "./WorkspaceFileIndex";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 const port = parentPort;
 if (!isMainThread && port) {
@@ -86,7 +87,7 @@ if (!isMainThread && port) {
         status: index.getStatus(),
       });
     } catch (error) {
-      const text = error instanceof Error ? error.message : String(error);
+      const text = getErrorMessage(error);
       post({
         type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.LOG,
         level: WORKSPACE_FILE_INDEX_LOG_LEVELS.WARN,

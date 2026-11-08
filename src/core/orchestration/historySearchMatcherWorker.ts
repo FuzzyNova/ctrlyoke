@@ -5,6 +5,7 @@ import {
   type HistorySearchMatch,
   type HistorySearchMatcherWorkerMessage,
 } from "./HistorySearchMatcher";
+import { getErrorMessage } from "../../utils/ErrorUtils";
 
 const port = parentPort;
 
@@ -21,7 +22,7 @@ if (!isMainThread && port) {
       } catch (error) {
         port.postMessage({
           type: HISTORY_SEARCH_MATCHER_MESSAGE_TYPES.ERROR,
-          message: error instanceof Error ? error.message : String(error),
+          message: getErrorMessage(error),
         });
       }
       return;

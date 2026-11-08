@@ -17,6 +17,7 @@ import {
   getQwenWorkspaceLspConfigPath,
 } from "./LspConfigPaths";
 import { Log } from "./Log";
+import { getErrorMessage } from "./ErrorUtils";
 
 type JsonRecord = Record<string, unknown>;
 interface Descriptor {
@@ -271,7 +272,7 @@ export async function safeDiscoverLocalLanguageServers(
     }
     return { servers: results };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = getErrorMessage(error);
     Log.warn("[LspDiscovery] Local scan failed:", message);
     return { servers: [], error: message };
   }

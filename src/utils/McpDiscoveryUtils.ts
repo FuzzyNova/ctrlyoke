@@ -43,6 +43,7 @@ import {
   getVscodeUserMcpConfigPath,
   getVscodeWorkspaceMcpConfigPath,
 } from "./McpConfigPaths";
+import { getErrorMessage } from "./ErrorUtils";
 
 type LocalSource = LocalMcpServerEntry["source"];
 
@@ -1224,7 +1225,7 @@ export async function safeDiscoverLocalMcpServers(
     const servers = await discoverLocalMcpServers(workspaceRoot);
     return { servers };
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
+    const msg = getErrorMessage(error);
     Log.warn("[McpDiscovery] local scan failed:", msg);
     return { servers: [], error: msg };
   }
@@ -1245,7 +1246,7 @@ export async function safeFetchMcpRegistry(
     });
     return result;
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
+    const msg = getErrorMessage(error);
     Log.warn("[McpDiscovery] registry fetch failed:", msg);
     return { servers: [], error: msg };
   }

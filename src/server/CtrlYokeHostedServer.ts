@@ -137,6 +137,7 @@ import type { HarnessAvailabilityReport } from "../types/WebviewMessageTypes";
 import { LanguageIntelligenceHost } from "./lsp/LanguageIntelligenceHost";
 import { EmptyLanguageServerBackend } from "./lsp/LanguageServerBackend";
 import type { JsonRpcMessage } from "./lsp/LspProtocol";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 const THEME_VAR_KEY_PATTERN = /^--[A-Za-z0-9_-]+$/;
 const SIBLING_SERVER_PROBE_TIMEOUT_MS = 1000;
@@ -1858,7 +1859,7 @@ export class CtrlYokeHostedServer
         );
         res.json({ modifiedAt });
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = getErrorMessage(err);
         if (message === "Path not allowed") {
           res.status(403).json({ error: message });
         } else if (err instanceof WorkspaceFileConflictError) {
@@ -1889,7 +1890,7 @@ export class CtrlYokeHostedServer
           await this.viewerService.deleteEntry(deleteRequest.path);
           res.status(204).send();
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = getErrorMessage(err);
           Log.warn(
             `[CtrlYokeHostedServer] workspace-viewer DELETE /entry error: ${message}`
           );
@@ -1921,7 +1922,7 @@ export class CtrlYokeHostedServer
           });
           res.status(204).send();
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = getErrorMessage(err);
           Log.warn(
             `[CtrlYokeHostedServer] workspace-viewer POST /copy error: ${message}`
           );
@@ -1954,7 +1955,7 @@ export class CtrlYokeHostedServer
           });
           res.status(204).send();
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = getErrorMessage(err);
           Log.warn(
             `[CtrlYokeHostedServer] workspace-viewer POST /move error: ${message}`
           );
@@ -1990,7 +1991,7 @@ export class CtrlYokeHostedServer
           res.json(await this.viewerService.getStatus(repo));
         } catch (err) {
           // The message is shown in the SCM pane in place of a file list.
-          const message = err instanceof Error ? err.message : String(err);
+          const message = getErrorMessage(err);
           Log.error(
             `[CtrlYokeHostedServer] workspace-viewer /status error: ${message}`
           );
@@ -2012,7 +2013,7 @@ export class CtrlYokeHostedServer
         try {
           res.json(await this.viewerService.getDiff(filePath));
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = getErrorMessage(err);
           if (message === "Path not allowed") {
             res.status(403).json({ error: message });
           } else {
@@ -2263,7 +2264,7 @@ export class CtrlYokeHostedServer
             truncated: result.truncated,
           } satisfies WorkspaceGenerateCommitMessageResponse);
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = getErrorMessage(err);
           Log.error(
             `[CtrlYokeHostedServer] workspace-viewer /generate-commit-message error: ${message}`
           );
@@ -2537,7 +2538,7 @@ export class CtrlYokeHostedServer
             await this.viewerService.checkoutCommit(body.hash.trim(), repo)
           );
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = getErrorMessage(err);
           Log.error(
             `[CtrlYokeHostedServer] workspace-viewer /checkout-commit error: ${message}`
           );
@@ -2561,7 +2562,7 @@ export class CtrlYokeHostedServer
             await this.viewerService.checkoutBranch(body.branch.trim(), repo)
           );
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = getErrorMessage(err);
           Log.error(
             `[CtrlYokeHostedServer] workspace-viewer /checkout-branch error: ${message}`
           );
@@ -2940,7 +2941,7 @@ export class CtrlYokeHostedServer
     route: string,
     error: unknown
   ): void {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = getErrorMessage(error);
     if (message === "Path not allowed") {
       res.status(403).json({ error: message });
       return;
@@ -3132,7 +3133,7 @@ export class CtrlYokeHostedServer
         this.terminateSocket(
           ws,
           "new-connection-probe-send-failed",
-          `triggeredBy=${newClientTag} error=${error instanceof Error ? error.message : String(error)}`
+          `triggeredBy=${newClientTag} error=${getErrorMessage(error)}`
         );
       }
     }
@@ -3203,7 +3204,7 @@ export class CtrlYokeHostedServer
         this.terminateSocket(
           ws,
           "heartbeat-send-failed",
-          `error=${error instanceof Error ? error.message : String(error)}`
+          `error=${getErrorMessage(error)}`
         );
       }
     }

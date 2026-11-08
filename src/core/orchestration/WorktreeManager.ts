@@ -491,7 +491,7 @@ export class WorktreeSetupError extends Error {
   readonly worktreePath: string;
 
   constructor(worktreePath: string, cause: unknown) {
-    const causeText = cause instanceof Error ? cause.message : String(cause);
+    const causeText = getErrorMessage(cause);
     super(
       `Worktree setup failed in ${worktreePath}: ${summarizeStatusError(causeText)}`
     );
@@ -919,7 +919,7 @@ export class WorktreeManager {
         );
       });
     } catch (error) {
-      return blocked(error instanceof Error ? error.message : String(error));
+      return blocked(getErrorMessage(error));
     } finally {
       await info.lease?.release().catch(() => undefined);
     }
@@ -969,7 +969,7 @@ export class WorktreeManager {
     } catch (error) {
       return {
         mergeOutcome: "blocked",
-        message: `Merge blocked: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Merge blocked: ${getErrorMessage(error)}`,
       };
     }
 
@@ -1016,8 +1016,7 @@ export class WorktreeManager {
         .getUnmergedPaths(dir)
         .catch(() => []);
       const mergeInProgress = await hasGitOperationInProgress(dir);
-      const failureMessage =
-        error instanceof Error ? error.message : String(error);
+      const failureMessage = getErrorMessage(error);
       if (!mergeInProgress && conflictFiles.length === 0) {
         return {
           mergeOutcome: "blocked",
@@ -1031,7 +1030,7 @@ export class WorktreeManager {
         return {
           mergeOutcome: "abort-failed",
           conflictFiles,
-          message: `Merge conflict abort failed: ${abortError instanceof Error ? abortError.message : String(abortError)}`,
+          message: `Merge conflict abort failed: ${getErrorMessage(abortError)}`,
         };
       }
 
@@ -1134,9 +1133,7 @@ export class WorktreeManager {
         git
       );
     } catch (error) {
-      throw new Error(
-        `Sync blocked: ${error instanceof Error ? error.message : String(error)}`
-      );
+      throw new Error(`Sync blocked: ${getErrorMessage(error)}`);
     }
 
     try {
@@ -1300,9 +1297,9 @@ export class WorktreeManager {
     try {
       await this.removeCheckout(repositoryRoot, info.worktreePath);
     } catch (error) {
-      const message = `Managed worktree removal failed: ${
-        error instanceof Error ? error.message : String(error)
-      }`;
+      const message = `Managed worktree removal failed: ${getErrorMessage(
+        error
+      )}`;
       await this.writeRecord(recordPath, {
         ...record,
         lifecycleState: WORKTREE_LIFECYCLE_STATES.SETTLED,
@@ -1361,9 +1358,9 @@ export class WorktreeManager {
           await deleteLocalBranch(repositoryRoot, info.branchName);
           branchState = WORKTREE_BRANCH_STATES.DELETED;
         } catch (error) {
-          message = `Managed no-change branch deletion failed: ${
-            error instanceof Error ? error.message : String(error)
-          }`;
+          message = `Managed no-change branch deletion failed: ${getErrorMessage(
+            error
+          )}`;
         }
       }
     }

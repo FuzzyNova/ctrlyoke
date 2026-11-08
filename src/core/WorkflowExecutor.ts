@@ -181,6 +181,7 @@ import { ParallelGroupRun } from "./ParallelGroupRun";
 import { RecordedTargetFailureError } from "./RecordedTargetFailureError";
 import { formatFinalPassPhrase } from "../utils/FinalStepLabels";
 import { getTargetStreamingStepName } from "../utils/TargetStreamingStepName";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 /** Live harness output of one attempt, with the target that produced it. */
 interface TargetStreamingOutput {
@@ -1487,9 +1488,9 @@ export class WorkflowExecutor {
     } catch (error: unknown) {
       return {
         accepted: false,
-        diagnostic: `Parallel-group promotion failed to resolve the running step: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        diagnostic: `Parallel-group promotion failed to resolve the running step: ${getErrorMessage(
+          error
+        )}`,
       };
     }
     const liveAnchorSessionId = anchor._runtime?.sessionId;
@@ -1516,9 +1517,9 @@ export class WorkflowExecutor {
       );
       return {
         accepted: false,
-        diagnostic: `Parallel step ${memberIndex + 1} failed preflight: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        diagnostic: `Parallel step ${memberIndex + 1} failed preflight: ${getErrorMessage(
+          error
+        )}`,
       };
     }
     if (preflight.issues.length > 0) {
@@ -1648,9 +1649,7 @@ export class WorkflowExecutor {
     );
     return join.catch((error: unknown) => ({
       accepted: false,
-      diagnostic: `Parallel-group join failed: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+      diagnostic: `Parallel-group join failed: ${getErrorMessage(error)}`,
     }));
   }
 
@@ -1802,9 +1801,9 @@ export class WorkflowExecutor {
       );
       return {
         accepted: false,
-        diagnostic: `Parallel step ${stepIndex + 1} failed preflight: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        diagnostic: `Parallel step ${stepIndex + 1} failed preflight: ${getErrorMessage(
+          error
+        )}`,
       };
     }
 
@@ -2105,8 +2104,7 @@ export class WorkflowExecutor {
         preflightMember
       );
     } catch (error) {
-      const failureReason =
-        error instanceof Error ? error.message : String(error);
+      const failureReason = getErrorMessage(error);
       if (
         context.abortSignal?.aborted ||
         this.getRuntime().status === EXECUTION_STATES.CANCELLING ||

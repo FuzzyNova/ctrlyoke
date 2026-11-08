@@ -5,6 +5,7 @@ import { Log } from "../../../utils/Log";
 import { writeFileAtomic } from "../../../utils/AtomicFileUtils";
 import { withFileLock } from "../../../utils/FileLockUtils";
 import { AsyncMutex } from "./AsyncMutex";
+import { getErrorMessage } from "../../../utils/ErrorUtils";
 
 /**
  * Options for customizing where a tracker reads/writes its MCP config.
@@ -728,9 +729,7 @@ export class SettingsJsonMcpTracker {
         return {};
       }
       throw new Error(
-        `Cannot safely update ${settingsPath}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        `Cannot safely update ${settingsPath}: ${getErrorMessage(error)}`
       );
     }
   }

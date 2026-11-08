@@ -9,6 +9,7 @@ import { foldPathForCompare } from "./PathCasing";
 import { sanitizeTerminalOutput } from "./TerminalOutputSanitizer";
 import { isSubprocessTimeoutError } from "./SubprocessUtils";
 import { Log } from "./Log";
+import { getErrorMessage } from "./ErrorUtils";
 
 export const GIT_DIFF_NO_EXT_DIFF_OPTION = "--no-ext-diff";
 
@@ -367,7 +368,7 @@ export function describeGitFailure(error: unknown): string {
   const message =
     outputText(output.stderr) ||
     outputText(output.stdout) ||
-    (error instanceof Error ? error.message : String(error));
+    getErrorMessage(error);
   return message.length > GIT_FAILURE_MESSAGE_MAX_CHARS
     ? `…${message.slice(-GIT_FAILURE_MESSAGE_MAX_CHARS)}`
     : message;

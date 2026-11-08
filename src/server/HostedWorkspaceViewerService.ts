@@ -153,6 +153,7 @@ import {
   WorkspaceTreeBadRequestError,
   WorkspaceTreeExpiredError,
 } from "./WorkspaceTreeErrors";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 const execFileAsync = promisify(execFile);
 
@@ -1853,7 +1854,7 @@ export class HostedWorkspaceViewerService {
         { timeout: getGitWholeRepoTimeoutMs() }
       ).catch((err: unknown) => {
         throw new Error(
-          `git status failed in ${repoRoot}: ${err instanceof Error ? err.message : String(err)}`
+          `git status failed in ${repoRoot}: ${getErrorMessage(err)}`
         );
       }),
       // Never rejects: an unknown upstream reads as nothing to sync.
@@ -3757,7 +3758,7 @@ export class HostedWorkspaceViewerService {
         );
       } catch (err) {
         Log.warn(
-          `[HostedWorkspaceViewerService] Failed to list untracked files for streamed diff in ${repoRoot}: ${err instanceof Error ? err.message : String(err)}`
+          `[HostedWorkspaceViewerService] Failed to list untracked files for streamed diff in ${repoRoot}: ${getErrorMessage(err)}`
         );
       }
     } else if (resolution.kind === GIT_CHANGE_KINDS.STAGED) {

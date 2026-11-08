@@ -1,3 +1,4 @@
+import { getErrorMessage } from "./ErrorUtils";
 /**
  * Retry utility for operations that may need multiple attempts with backoff
  *
@@ -37,7 +38,7 @@ export class PermanentFailureError extends Error {
 
 /** Stop retrying and propagate the original error after it reaches the retry loop. */
 export function stopRetrying(error: unknown): never {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = getErrorMessage(error);
   throw new PermanentFailureError(message, error);
 }
 

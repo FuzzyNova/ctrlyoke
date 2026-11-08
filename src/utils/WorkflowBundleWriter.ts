@@ -8,6 +8,7 @@ import {
 } from "./WorkflowBundleAnalyzer";
 import { renameWithTransientRetry, writeFileAtomic } from "./AtomicFileUtils";
 import { foldPathForCompare } from "./PathCasing";
+import { getErrorMessage } from "./ErrorUtils";
 
 export interface WorkflowBundleWriteOptions {
   workflowPath: string;
@@ -349,8 +350,4 @@ async function removeDirectoryWhenEmpty(
       );
     }
   }
-}
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

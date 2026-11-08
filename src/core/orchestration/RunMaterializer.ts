@@ -19,6 +19,7 @@ import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import { OutputHistoryManager } from "./OutputHistoryManager";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { WorkingFileManager } from "../WorkingFileManager";
+import { getErrorMessage } from "../../utils/ErrorUtils";
 
 export interface RunMaterializationInput {
   workspaceRoot: string;
@@ -202,7 +203,7 @@ export class RunMaterializer {
         .catch(() => undefined);
       if (rollbackError) {
         throw new Error(
-          `${error instanceof Error ? error.message : String(error)}; imported workspace rollback failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`
+          `${getErrorMessage(error)}; imported workspace rollback failed: ${getErrorMessage(rollbackError)}`
         );
       }
       throw error;

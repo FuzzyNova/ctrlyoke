@@ -20,6 +20,7 @@ import {
 } from "../../utils/WorkingFileMetadata";
 import { readWorkflowLockInspection } from "../../utils/WorkflowLockInspector";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
+import { getErrorMessage } from "../../utils/ErrorUtils";
 
 export const MAX_GLOBAL_STATUS_RESULTS = 100;
 
@@ -263,5 +264,5 @@ export class GlobalWorkflowStatusService {
 }
 
 function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return getErrorMessage(error);
 }

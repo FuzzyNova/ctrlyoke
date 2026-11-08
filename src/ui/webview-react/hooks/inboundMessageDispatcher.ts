@@ -8,6 +8,7 @@ import type {
   MessageBatchMessage,
 } from "@root/types/WebviewMessageTypes";
 import { WebviewLog } from "@utils/logger";
+import { getErrorMessage } from "../../../utils/ErrorUtils";
 
 /**
  * Coalesces inbound extension → webview messages so a burst costs one React
@@ -150,7 +151,7 @@ function createTaskScheduler(): TaskScheduler {
 }
 
 function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return getErrorMessage(error);
 }
 
 export function createInboundMessageDispatcher(

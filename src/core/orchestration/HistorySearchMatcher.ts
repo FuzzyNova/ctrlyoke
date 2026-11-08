@@ -1,6 +1,7 @@
 import * as path from "path";
 import { Worker } from "worker_threads";
 import { findExistingWorkerPath } from "../../utils/WorkerPath";
+import { getErrorMessage } from "../../utils/ErrorUtils";
 
 export interface HistorySearchMatch {
   index: number;
@@ -34,7 +35,7 @@ export class InvalidHistorySearchPatternError extends Error {
   readonly pattern: string;
 
   constructor(pattern: string, cause: unknown) {
-    const message = cause instanceof Error ? cause.message : String(cause);
+    const message = getErrorMessage(cause);
     super(
       `Invalid history search pattern ${JSON.stringify(pattern)}: ${message}`
     );

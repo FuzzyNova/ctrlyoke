@@ -33,6 +33,7 @@ import {
   resolvePromptTextWithVariables,
   type PromptTextFileResolver,
 } from "./PromptTextResolver";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 export interface ParallelGroupPreflightIssue {
   readonly code: ParallelGroupPreflightDiagnosticCode;
@@ -340,7 +341,7 @@ export async function preflightParallelGroupMember(
       issues.push({
         code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.INTEGRATION_CREATION,
         memberIndices: [options.stepIndex],
-        message: `${memberLabel(workflow, options.stepIndex)} could not create an isolated ${resolvedProperties.harness} integration: ${error instanceof Error ? error.message : String(error)}`,
+        message: `${memberLabel(workflow, options.stepIndex)} could not create an isolated ${resolvedProperties.harness} integration: ${getErrorMessage(error)}`,
       });
     }
   }

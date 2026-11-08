@@ -124,6 +124,7 @@ import {
   parseHistoryStateFilter,
 } from "./HistoryFilterParsing";
 import { formatFinalPassLabel } from "../utils/FinalStepLabels";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 export interface HistoryInspectionCommandIo {
   writeOut(message: string): void;
@@ -606,7 +607,7 @@ export async function showHistoryCommand(
   try {
     targetFilter = parseHistoryShowStep(options.step);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = getErrorMessage(error);
     // Queue indices say nothing about a final pass number, so only a
     // queue-style selector gets the valid index range appended.
     throw new Error(

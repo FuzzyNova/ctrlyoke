@@ -89,6 +89,7 @@ import {
   type CliProviderPreparation,
 } from "../shared/interfaces/PreparedMutation";
 import { type SessionProbeResult } from "../../../types/DashboardConstants";
+import { getErrorMessage } from "../../../utils/ErrorUtils";
 
 const ANTIGRAVITY_MCP_FILTERING_CAPABILITY = {
   fidelity: "exact",
@@ -1222,9 +1223,7 @@ export class AntigravityCliProvider implements ICliProvider {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
       throw new Error(
-        `Cannot safely update ${ownersPath}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        `Cannot safely update ${ownersPath}: ${getErrorMessage(error)}`
       );
     }
     try {
@@ -1235,9 +1234,7 @@ export class AntigravityCliProvider implements ICliProvider {
       throw new Error("Expected a JSON object");
     } catch (error) {
       throw new Error(
-        `Cannot safely update ${ownersPath}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        `Cannot safely update ${ownersPath}: ${getErrorMessage(error)}`
       );
     }
   }
@@ -1258,9 +1255,7 @@ export class AntigravityCliProvider implements ICliProvider {
         return {};
       }
       throw new Error(
-        `Cannot safely update ${hooksPath}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        `Cannot safely update ${hooksPath}: ${getErrorMessage(error)}`
       );
     }
 
@@ -1272,9 +1267,7 @@ export class AntigravityCliProvider implements ICliProvider {
       throw new Error("Expected a JSON object");
     } catch (error) {
       throw new Error(
-        `Cannot safely update ${hooksPath}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        `Cannot safely update ${hooksPath}: ${getErrorMessage(error)}`
       );
     }
   }

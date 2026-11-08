@@ -19,6 +19,7 @@ import type {
   ParallelGroupPreflightMember,
 } from "./ParallelGroupPreflight";
 import type { RawWorkspaceState } from "../utils/WorkspaceSnapshotService";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 type ExecutionTarget = WorkflowAttemptTarget;
 
@@ -559,7 +560,7 @@ export class ParallelGroupRun<TContext extends object> {
         outcome = {
           target,
           status: PROMPT_TERMINAL_STATUS.FAILED,
-          failureReason: error instanceof Error ? error.message : String(error),
+          failureReason: getErrorMessage(error),
         };
       }
       if (

@@ -6,6 +6,7 @@
  * one "Add to dictionary" clears the squiggle in every open editor at once.
  */
 import { WebviewLog } from "./logger";
+import { getErrorMessage } from "../../../utils/ErrorUtils";
 
 // Typo.js is loaded as a global <script> (see `vite.config.ts`).
 declare global {
@@ -94,7 +95,7 @@ export class SpellCheckService {
       this.notify();
     } catch (error) {
       WebviewLog.error(
-        `[SpellCheck] Failed to load Typo.js dictionaries: ${error instanceof Error ? error.message : String(error)}`
+        `[SpellCheck] Failed to load Typo.js dictionaries: ${getErrorMessage(error)}`
       );
     } finally {
       if (this.loadingKey === key) this.loadingKey = null;

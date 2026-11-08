@@ -10,6 +10,7 @@ import { secretRedactionService } from "../utils/SecretRedactionService";
 import { stripLeadingBom } from "../utils/TextUtils";
 import type { CompletionNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
 import { LICENSE_UI } from "../types/DashboardConstants";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 const PRIVATE_DIRECTORY_MODE = 0o700;
 const PRIVATE_FILE_MODE = 0o600;
@@ -648,13 +649,6 @@ async function safeReadResponseText(response: Response): Promise<string> {
   } catch {
     return response.statusText;
   }
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
 }
 
 function getErrorCode(error: unknown): string | undefined {

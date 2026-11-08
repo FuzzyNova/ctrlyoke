@@ -78,6 +78,7 @@ import {
 } from "../utils/PersistedSchemaGuard";
 import { migrateToCurrent } from "../utils/FormatMigrations";
 import { loadYamlDocument, WORKFLOW_YAML_SCHEMA } from "./WorkflowYamlSchema";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 type ParallelValidationProperties = Pick<
   PromptFile,
@@ -421,7 +422,7 @@ export class PromptFileParser {
           error instanceof WorkflowStructureValidationError
             ? error.instancePath
             : "",
-        message: error instanceof Error ? error.message : String(error),
+        message: getErrorMessage(error),
         severity: "error",
       };
       const mark = (error as { mark?: { line?: number; column?: number } })
@@ -508,7 +509,7 @@ export class PromptFileParser {
           error instanceof WorkflowStructureValidationError
             ? error.instancePath
             : "",
-        message: error instanceof Error ? error.message : String(error),
+        message: getErrorMessage(error),
         severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR,
       });
     }
@@ -1485,7 +1486,7 @@ export class PromptFileParser {
           parallelGroups: options.parallelGroups,
         });
       } catch (error) {
-        errors.push(error instanceof Error ? error.message : String(error));
+        errors.push(getErrorMessage(error));
       }
       errors.push(
         ...this.getParallelReferenceErrors(

@@ -26,6 +26,7 @@ import {
   PROMPT_FILE_RESOLUTION_STATUSES,
   STEP_TYPES,
 } from "../types/DashboardConstants";
+import { getErrorMessage } from "./ErrorUtils";
 
 export { BUNDLE_MANIFEST_FILE_NAME } from "../types/DashboardConstants";
 export const BUNDLE_MANIFEST_VERSION = 2;
@@ -1252,8 +1253,4 @@ function addBlocker(
   token?: string
 ): void {
   plan.blockers.push({ code, message, fieldPath, token });
-}
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

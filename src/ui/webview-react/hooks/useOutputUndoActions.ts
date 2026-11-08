@@ -58,6 +58,7 @@ import { WebviewLog } from "@utils/logger";
 import { formatFinalPassLabel } from "@root/utils/FinalStepLabels";
 import { getQueueStepLabel } from "@utils/stepLabels";
 import { useWorkflowStore } from "@store/workflowStore";
+import { getErrorMessage } from "../../../utils/ErrorUtils";
 
 type OutputHistoryView = {
   orderedEntries: OrderedHistoryEntry[];
@@ -281,7 +282,7 @@ export function useOutputUndoActions({
     } catch (error) {
       WebviewLog.error(
         "[undo] Failed to build workflow change data; disabling workflow undo",
-        error instanceof Error ? error.message : String(error)
+        getErrorMessage(error)
       );
       return emptyWorkflowChangeData();
     }

@@ -16,6 +16,7 @@ import {
   CTRLYOKE_FILE_KINDS,
   PROMPT_FILE_RESOLUTION_STATUSES,
 } from "../types/DashboardConstants";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 export interface PromptFileResolverOptions {
   workspaceRoot?: string;
@@ -525,10 +526,6 @@ export function getLegacyRunHistoryReferenceGuidance(
   }
 
   return "run history is not a workspace file; use priorContext: { workflow, run } to reference a completed run";
-}
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function isMissingPathError(error: unknown): boolean {

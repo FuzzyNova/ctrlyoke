@@ -88,6 +88,7 @@ export type PriorContextItem = {
 
 export type { PriorContextDetail } from "../types/DashboardConstants";
 import type { PriorContextDetail } from "../types/DashboardConstants";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 export interface PriorContextFileChange {
   path: string;
@@ -682,7 +683,7 @@ export abstract class HarnessIntegration {
     } catch (error) {
       return {
         cleaned: false,
-        failures: [error instanceof Error ? error.message : String(error)],
+        failures: [getErrorMessage(error)],
       };
     }
   }

@@ -42,6 +42,7 @@ import type {
 } from "./SecretCommandDefinitions";
 import { resolveCliFileArgument } from "./CliFileArgument";
 import { promptYesNo } from "./CliPrompt";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 export interface SecretCommandIo {
   writeOut(message: string): void;
@@ -200,7 +201,7 @@ export async function checkSecretsCommand(
           filePath
         );
   } catch (error) {
-    io.writeErr(`Error: ${errorMessage(error)}`);
+    io.writeErr(`Error: ${getErrorMessage(error)}`);
     return 2;
   }
   if (!workflow) {
@@ -220,7 +221,7 @@ export async function checkSecretsCommand(
       }
     );
   } catch (error) {
-    io.writeErr(`Secret check failed: ${errorMessage(error)}`);
+    io.writeErr(`Secret check failed: ${getErrorMessage(error)}`);
     return error instanceof MissingSecretsError ? 1 : 2;
   }
 
@@ -249,7 +250,7 @@ export async function trustSecretGrantsCommand(
           filePath
         );
   } catch (error) {
-    io.writeErr(`Error: ${errorMessage(error)}`);
+    io.writeErr(`Error: ${getErrorMessage(error)}`);
     return 2;
   }
   if (!workflow) {
@@ -466,8 +467,4 @@ async function readHiddenSecret(prompt: string): Promise<string> {
 
 function redactOutput(message: string): string {
   return secretRedactionService.redactText(message);
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

@@ -35,6 +35,7 @@ import {
   notifyUserFeedback,
   type UserFeedbackSink,
 } from "../core/UserFeedbackSink";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 export interface WorkspaceFileIndexStatus {
   readonly state: WorkspaceFileIndexState;
@@ -182,7 +183,7 @@ function defaultMemoryBudgetBytes(): number {
 }
 
 function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return getErrorMessage(error);
 }
 
 function isWorkerOutOfMemory(error: unknown): boolean {

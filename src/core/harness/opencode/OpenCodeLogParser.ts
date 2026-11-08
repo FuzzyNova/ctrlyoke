@@ -57,6 +57,7 @@ import {
   SESSION_AVAILABILITY,
   type SessionProbeResult,
 } from "../../../types/DashboardConstants";
+import { getErrorMessage } from "../../../utils/ErrorUtils";
 
 const execFileAsync = promisify(execFile);
 
@@ -446,7 +447,7 @@ export class OpenCodeLogParser extends BaseLogParser {
         ? SESSION_AVAILABILITY.AVAILABLE
         : SESSION_AVAILABILITY.MISSING;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = getErrorMessage(error);
       if (message.includes("Session not found"))
         return SESSION_AVAILABILITY.MISSING;
       return SESSION_AVAILABILITY.UNKNOWN;

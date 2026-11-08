@@ -1,5 +1,6 @@
 import { encode } from "gpt-tokenizer";
 import { WebviewLog } from "./logger";
+import { getErrorMessage } from "../../../utils/ErrorUtils";
 
 /**
  * Count tokens in text using GPT tokenizer
@@ -11,7 +12,7 @@ export function countTokens(text: string): number {
     return tokens.length;
   } catch (error) {
     WebviewLog.error(
-      `[tokenizer] Token counting failed: ${error instanceof Error ? error.message : String(error)}`
+      `[tokenizer] Token counting failed: ${getErrorMessage(error)}`
     );
     return 0;
   }

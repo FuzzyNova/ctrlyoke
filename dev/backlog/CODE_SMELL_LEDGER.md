@@ -9,9 +9,10 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
 - **2026-11-08, pass 1** — hunted the harness layer and shared helpers. Fixed directly:
   `CopilotNotificationMonitor.buildHookConfig` re-implemented the base class's
   `encodePermissionRequestHook`; single-sourced matching JSON type guards and number
-  parsers in `src/utils/JsonTypeGuards.ts`. Still queued: routing inline
-  `instanceof Error ? … : String(…)` copies through `getErrorMessage` in
-  `src/utils/ErrorUtils.ts`.
+  parsers in `src/utils/JsonTypeGuards.ts`. Also routed exact inline
+  `instanceof Error ? … : String(…)` source copies through `getErrorMessage` in
+  `src/utils/ErrorUtils.ts`, removing five private copies across CLI, core, server and
+  utilities while updating source call sites across workers and UI.
 
 ## Deferred
 
@@ -34,3 +35,8 @@ _None yet._
   `src/license/LicenseService.ts` — their local `JsonRecord` aliases carry readonly or
   required fields; replacing them with `Record<string, unknown>` would widen/change the
   type guard contract.
+- `instanceof Error` message handling outside the exact shared pattern — stack-preserving
+  branches, literal fallbacks, error normalization and type checks have different output
+  or purpose. Exact matches in `scripts/recover-runs-from-search-index.mjs` and test files
+  were left outside this source refactor's scope; `src/utils/ErrorUtils.ts` retains the
+  shared helper's own implementation.

@@ -21,6 +21,7 @@ import {
 } from "../types/DashboardConstants";
 import type { WorkflowKey } from "../types/CtrlYokeTypes";
 import * as WorkflowPaths from "./WorkflowPaths";
+import { getErrorMessage } from "./ErrorUtils";
 
 export type ProjectStatePathStatus =
   (typeof PROJECT_STATE_PATH_STATUSES)[keyof typeof PROJECT_STATE_PATH_STATUSES];
@@ -303,7 +304,7 @@ async function inspectUserProjectsUnderLock(
         reason = "project.json is missing";
       }
     } catch (error) {
-      reason = error instanceof Error ? error.message : String(error);
+      reason = getErrorMessage(error);
     }
 
     if (!metadata) {
@@ -321,14 +322,14 @@ async function inspectUserProjectsUnderLock(
     try {
       statePathStatus = await classifyStatePath(metadata.statePath);
     } catch (error) {
-      reason = error instanceof Error ? error.message : String(error);
+      reason = getErrorMessage(error);
     }
 
     let runnerStatus: ProjectRunnerStatus = PROJECT_RUNNER_STATUSES.UNKNOWN;
     try {
       runnerStatus = (await inspectRunner(projectRoot)).status;
     } catch (error) {
-      reason = error instanceof Error ? error.message : String(error);
+      reason = getErrorMessage(error);
     }
 
     inspections.push({

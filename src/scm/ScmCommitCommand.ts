@@ -16,6 +16,7 @@ import {
   showInformationMessage,
   showWarningMessage,
 } from "../platform/VsCodeMessages";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 interface GitRepository {
   rootUri: vscode.Uri;
@@ -164,7 +165,7 @@ export class ScmCommitCommand {
             ) {
               return;
             }
-            const message = err instanceof Error ? err.message : String(err);
+            const message = getErrorMessage(err);
             void showErrorMessageFor(err, `ctrlyoke: ${message}`);
           }
         }

@@ -91,6 +91,7 @@ import {
   type HarnessVersionAssessment,
 } from "../../utils/HarnessVersion";
 import type { HarnessAvailabilityReport } from "../../types/WebviewMessageTypes";
+import { getErrorMessage } from "../../utils/ErrorUtils";
 
 /** Timeout (ms) for waiting for SessionStart hook from CLI harness */
 /**
@@ -2239,7 +2240,7 @@ export class CliIntegration extends HarnessIntegration {
         false
       );
     } catch (error) {
-      failures.push(error instanceof Error ? error.message : String(error));
+      failures.push(getErrorMessage(error));
     }
 
     for (const artifactPath of paths) {

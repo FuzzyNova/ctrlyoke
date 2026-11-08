@@ -52,6 +52,7 @@ import {
   normalizeCodexAbsPath,
 } from "@utils/filePathPatterns";
 import { Icon } from "../shared/Icon";
+import { getErrorMessage } from "../../../../utils/ErrorUtils";
 
 const MARKDOWN_NODE_TYPES = {
   LINK: "link",
@@ -1136,7 +1137,7 @@ function MermaidBlock({ code }: { code: string }) {
         setState(MERMAID_RENDER_STATES.DONE);
       } catch (e) {
         if (cancelled) return;
-        setErrorMsg(e instanceof Error ? e.message : String(e));
+        setErrorMsg(getErrorMessage(e));
         setState(MERMAID_RENDER_STATES.ERROR);
       }
     })();

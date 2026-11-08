@@ -180,6 +180,7 @@ import { PromptFileParser } from "./core/PromptFileParser";
 import { RunMetadataScanner } from "./core/orchestration/RunMetadataScanner";
 import type { WorkflowValidationWarning } from "./types/CtrlYokeTypes";
 import type { WorkspaceSnapshot } from "./types/OutputHistoryTypes";
+import { getErrorMessage } from "./utils/ErrorUtils";
 
 export { MCP_TOOL_DEFINITIONS } from "./utils/McpToolDefinitions";
 
@@ -237,7 +238,7 @@ const MCP_CLI_MODE_ENV = "CTRLYOKE_MCP_CLI_MODE";
 const MCP_CLI_MODE_VALUE = "true";
 
 function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return getErrorMessage(error);
 }
 
 /**
@@ -737,7 +738,7 @@ export class CtrlYokeMCPServer {
         await fs.readFile(selected.filePath, "utf8")
       ) as WorkingFile;
     } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
+      const detail = getErrorMessage(error);
       if (cliMode) {
         throw new Error(
           `CLI coordination address is not a valid live run: ${detail}`
@@ -1778,7 +1779,7 @@ export class CtrlYokeMCPServer {
       return JSON.parse(content) as CapabilitiesFile;
     } catch (error) {
       throw new Error(
-        `capabilities.json is invalid JSON: ${error instanceof Error ? error.message : String(error)}`
+        `capabilities.json is invalid JSON: ${getErrorMessage(error)}`
       );
     }
   }
@@ -2427,9 +2428,7 @@ if (require.main === module) {
   const cliArgs = process.argv.slice(2);
   if (cliArgs.includes("--tool")) {
     runMcpToolCli(cliArgs).catch((error) => {
-      process.stderr.write(
-        `${error instanceof Error ? error.message : String(error)}\n`
-      );
+      process.stderr.write(`${getErrorMessage(error)}\n`);
       process.exit(1);
     });
   } else {

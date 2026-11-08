@@ -42,6 +42,7 @@ import { safeResolveWorkspacePath } from "./WorkspacePathContainment";
 import { LANGUAGE_SERVER_CATALOG } from "./LanguageServerCatalog";
 import { ctrlyokeStateHome } from "../../utils/ProjectStatePaths";
 import { Log } from "../../utils/Log";
+import { getErrorMessage } from "../../utils/ErrorUtils";
 
 export type LanguageServerStatus =
   (typeof LANGUAGE_SERVER_STATUSES)[keyof typeof LANGUAGE_SERVER_STATUSES];
@@ -927,11 +928,7 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
     this.servers.set(key, server);
     connection.onError((errors) => {
       if (server.intentionalStop || this.disposed) return;
-      const detail = errors
-        .map((error) =>
-          error instanceof Error ? error.message : String(error)
-        )
-        .join("; ");
+      const detail = errors.map((error) => getErrorMessage(error)).join("; ");
       this.crashed(
         server,
         new Error(detail || "Language server JSON-RPC connection failed.")
@@ -1108,7 +1105,7 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
             id: server.resolved.id,
             rootPath: server.descriptor.rootPath,
             status: LANGUAGE_SERVER_STATUSES.STOPPED,
-            detail: `Not restarted: ${error instanceof Error ? error.message : String(error)}`,
+            detail: `Not restarted: ${getErrorMessage(error)}`,
           });
         });
       }, delay);

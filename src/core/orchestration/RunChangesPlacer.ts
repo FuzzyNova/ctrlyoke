@@ -20,6 +20,7 @@ import {
 import { isPathWithinDirectory } from "../../utils/PathSecurity";
 import { execGit, resolveCommit } from "../../utils/GitUtils";
 import { WorktreeManager, type ActiveWorktreeInfo } from "./WorktreeManager";
+import { getErrorMessage } from "../../utils/ErrorUtils";
 
 export type { RunChangesTarget };
 
@@ -197,7 +198,7 @@ export class RunChangesPlacer {
           await rollbackTree(targetRoot, options.baseCommit);
         } catch (rollbackError) {
           cleanupErrors.push(
-            `tree/index rollback failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`
+            `tree/index rollback failed: ${getErrorMessage(rollbackError)}`
           );
         }
       }
@@ -206,7 +207,7 @@ export class RunChangesPlacer {
           await releaseWorktreeHandles();
         } catch (cleanupError) {
           cleanupErrors.push(
-            `managed worktree lease cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`
+            `managed worktree lease cleanup failed: ${getErrorMessage(cleanupError)}`
           );
         }
         try {
@@ -215,7 +216,7 @@ export class RunChangesPlacer {
           );
         } catch (cleanupError) {
           cleanupErrors.push(
-            `managed worktree cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`
+            `managed worktree cleanup failed: ${getErrorMessage(cleanupError)}`
           );
         }
       }
@@ -227,7 +228,7 @@ export class RunChangesPlacer {
         target: options.target,
         applied: false,
         canContinue: false,
-        warning: `Workspace changes were not applied; the imported run is view-only. ${error instanceof Error ? error.message : String(error)}`,
+        warning: `Workspace changes were not applied; the imported run is view-only. ${getErrorMessage(error)}`,
       };
     } finally {
       await releaseWorktreeHandles();

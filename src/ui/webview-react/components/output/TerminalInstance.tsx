@@ -12,6 +12,7 @@ import "@xterm/xterm/css/xterm.css";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 import { WebviewLog } from "@/utils/logger";
 import { getTerminalEndedLabel } from "@utils/terminalPresentation";
+import { getErrorMessage } from "../../../../utils/ErrorUtils";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` in useSyncExternalStore.
 const EMPTY_SESSIONS: TerminalSession[] = [];
@@ -531,7 +532,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       if (cancelled) return;
       WebviewLog.error(
         `[TerminalInstance] mount failed wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)}: ` +
-          `${err instanceof Error ? err.message : String(err)}`
+          `${getErrorMessage(err)}`
       );
     });
 
@@ -691,7 +692,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       } catch (error) {
         WebviewLog.trace(
           `[TerminalInstance] visible refresh ${phase} failed wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
-            `${error instanceof Error ? error.message : String(error)}`
+            `${getErrorMessage(error)}`
         );
       }
     };

@@ -84,6 +84,7 @@ import {
   writeAnchoredRunDefinition,
 } from "../../utils/RunDefinitionAnchor";
 import { assertStepIndex } from "./StepIndexValidation";
+import { getErrorMessage } from "../../utils/ErrorUtils";
 
 export const RUN_CONTINUATION_ACTIONS = {
   APPEND: "append",
@@ -1301,7 +1302,7 @@ export class RunContinuationService {
       ) as WorkingFile;
     } catch (error) {
       throw new Error(
-        `Failed to read run ${workflowKey}/${runRef}: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to read run ${workflowKey}/${runRef}: ${getErrorMessage(error)}`
       );
     }
   }
@@ -1490,9 +1491,7 @@ async function writeWorkingFileAtomic(
     if (isRunDefinitionChangedError(error) || isNewerSchemaError(error)) {
       throw error;
     }
-    throw new Error(
-      `Failed to write working file: ${error instanceof Error ? error.message : String(error)}`
-    );
+    throw new Error(`Failed to write working file: ${getErrorMessage(error)}`);
   } finally {
     invalidateRunSummaryFor(filePath);
   }
