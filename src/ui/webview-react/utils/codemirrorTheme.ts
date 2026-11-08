@@ -1,3 +1,4 @@
+import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { SYMBOL_ICON_COLORS } from "@utils/atomicReferences";
 import {
@@ -21,6 +22,19 @@ export function createAtomicReferenceWidgetTheme() {
     },
   });
 }
+
+/**
+ * `.cm-content` class while the main selection is a non-empty range. It sits
+ * on the content element, not the editor root, because a theme rule nested in
+ * an at-rule cannot use `&` (style-mod substitutes the at-rule text for it).
+ */
+const RANGE_SELECTED_CLASS = "cm-cy-rangeSelected";
+
+const rangeSelectedAttributes = EditorView.contentAttributes.compute(
+  ["selection"],
+  (state): Record<string, string> =>
+    state.selection.main.empty ? {} : { class: RANGE_SELECTED_CLASS }
+);
 
 type ThemeSurface =
   (typeof CODEMIRROR_THEME_SURFACES)[keyof typeof CODEMIRROR_THEME_SURFACES];
@@ -85,7 +99,7 @@ function buildChipAccentShadowRules(): Record<string, { boxShadow: string }> {
 export function createThemeExtension(
   surface: ThemeSurface = CODEMIRROR_THEME_SURFACES.EDITOR,
   options: ThemeExtensionOptions = {}
-) {
+): Extension {
   const backgroundColor =
     surface === CODEMIRROR_THEME_SURFACES.INPUT
       ? "var(--vscode-input-background)"
@@ -102,7 +116,7 @@ export function createThemeExtension(
   const autocompleteSelectedOutlineColor =
     "var(--vscode-listFilterWidget-outline, transparent)";
 
-  return EditorView.theme(
+  const theme = EditorView.theme(
     {
       "&": {
         color: foregroundColor,
@@ -154,17 +168,24 @@ export function createThemeExtension(
         color: `${selectionForegroundColor} !important`,
       },
       // On iOS, drawSelection() leaves the main range to the native selection
-      // (so the OS keeps its own handles and magnifier) and draws no
-      // .cm-selectionBackground for it. A ::selection rule that sets only a
-      // color makes WebKit drop its system highlight, leaving the selection
-      // nearly invisible, so give the native selection the theme's background
-      // there. `-webkit-touch-callout` is supported only by iOS/iPadOS WebKit,
-      // which is the same set of browsers CodeMirror treats as iOS; elsewhere
-      // CodeMirror hides the native selection and draws its own layer, and a
-      // native background on top would double the tint.
+      // and draws no .cm-selectionBackground for it. iOS paints that native
+      // highlight (and its handles) itself, ignoring ::selection and tinting
+      // it with the editable's caret-color — which drawSelection() forces to
+      // transparent to hide the native caret, so the selection was nearly
+      // invisible. While a range is selected there is no caret to hide, so
+      // tint the native selection with the theme's selection color, made
+      // opaque because iOS applies its own highlight alpha. The native
+      // handles become visible too, so CodeMirror's cosmetic stand-ins for
+      // them are hidden. `-webkit-touch-callout` is supported only by
+      // iOS/iPadOS WebKit, the browsers CodeMirror treats as iOS.
       "@supports (-webkit-touch-callout: none)": {
-        ".cm-line::selection, .cm-line ::selection": {
-          backgroundColor: `${selectionBackgroundColor} !important`,
+        [`.cm-content.${RANGE_SELECTED_CLASS}, .cm-content.${RANGE_SELECTED_CLASS} .cm-line`]:
+          {
+            caretColor_fallback: `${selectionBackgroundColor} !important`,
+            caretColor: `rgb(from ${selectionBackgroundColor} r g b) !important`,
+          },
+        ".cm-selectionHandle": {
+          display: "none",
         },
       },
       ".cm-activeLine":
@@ -283,6 +304,7 @@ export function createThemeExtension(
         !isForwardedThemeLight(),
     }
   );
+  return [theme, rangeSelectedAttributes];
 }
 
 /** True only when the forwarded theme kind names a light theme. */
