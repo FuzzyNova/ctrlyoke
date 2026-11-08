@@ -35,6 +35,7 @@ import {
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   type HookEvent,
+  NODE_ERROR_CODES,
 } from "../../../types/DashboardConstants";
 import type {
   McpServerConfig,
@@ -89,7 +90,7 @@ import {
   type CliProviderPreparation,
 } from "../shared/interfaces/PreparedMutation";
 import { type SessionProbeResult } from "../../../types/DashboardConstants";
-import { getErrorMessage } from "../../../utils/ErrorUtils";
+import { getErrorMessage, hasErrnoCode } from "../../../utils/ErrorUtils";
 
 const ANTIGRAVITY_MCP_FILTERING_CAPABILITY = {
   fidelity: "exact",
@@ -1221,7 +1222,7 @@ export class AntigravityCliProvider implements ICliProvider {
     try {
       content = await fs.readFile(ownersPath, "utf8");
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return {};
       throw new Error(
         `Cannot safely update ${ownersPath}: ${getErrorMessage(error)}`
       );
@@ -1251,7 +1252,7 @@ export class AntigravityCliProvider implements ICliProvider {
     try {
       content = await fs.readFile(hooksPath, "utf8");
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
         return {};
       }
       throw new Error(

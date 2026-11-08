@@ -8,6 +8,7 @@ import {
   HARNESS_USAGE_REFRESH_DEBOUNCE_MS,
   type HarnessObservedPeriod,
   type HarnessId,
+  NODE_ERROR_CODES,
 } from "../../../../types/DashboardConstants";
 import type {
   HarnessObservedTokens,
@@ -17,7 +18,7 @@ import type {
 } from "../../../../types/UsageTypes";
 import { defaultStaleAfterMs } from "../../../../types/UsageTypes";
 import { renameWithTransientRetry } from "../../../../utils/AtomicFileUtils";
-import { getErrorMessage } from "../../../../utils/ErrorUtils";
+import { getErrorMessage, hasErrnoCode } from "../../../../utils/ErrorUtils";
 import { withFileLock } from "../../../../utils/FileLockUtils";
 import { Log } from "../../../../utils/Log";
 import { providerSnapshotsPath } from "../../../../utils/UsagePaths";
@@ -464,7 +465,7 @@ export class HarnessUsageService {
         this.publish();
       }
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return;
       // A newer ctrlyoke's file is left for it; this host starts empty.
       if (isNewerSchemaError(error)) return;
       await this.quarantineProviderSnapshotFile();

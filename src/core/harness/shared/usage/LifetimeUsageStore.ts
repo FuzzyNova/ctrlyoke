@@ -11,6 +11,7 @@ import {
   type AttemptCostSource,
   type HarnessId,
   type RunOutcomeBucket,
+  NODE_ERROR_CODES,
 } from "../../../../types/DashboardConstants";
 import type {
   LifetimeHarnessContribution,
@@ -40,6 +41,7 @@ import {
   PERSISTED_STORES,
 } from "../../../../utils/PersistedSchemaGuard";
 import { migrateToCurrent } from "../../../../utils/FormatMigrations";
+import { hasErrnoCode } from "../../../../utils/ErrorUtils";
 
 export const LIFETIME_USAGE_SCHEMA_VERSION =
   CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.LIFETIME_USAGE];
@@ -1115,7 +1117,7 @@ export class LifetimeUsageStore {
     try {
       parsed = JSON.parse(await fs.readFile(this.filePath, "utf8"));
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return undefined;
       throw error;
     }
     if (hasNewerSchema(PERSISTED_STORES.LIFETIME_USAGE, parsed)) {

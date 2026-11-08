@@ -62,6 +62,7 @@ import {
   STEP_TYPES,
   STEP_STATUS,
   type ExecutionState,
+  NODE_ERROR_CODES,
 } from "./types/DashboardConstants";
 import type { CapabilitiesFile } from "./types/CapabilitiesTypes";
 import * as WorkflowPaths from "./utils/WorkflowPaths";
@@ -180,7 +181,7 @@ import { PromptFileParser } from "./core/PromptFileParser";
 import { RunMetadataScanner } from "./core/orchestration/RunMetadataScanner";
 import type { WorkflowValidationWarning } from "./types/CtrlYokeTypes";
 import type { WorkspaceSnapshot } from "./types/OutputHistoryTypes";
-import { getErrorMessage } from "./utils/ErrorUtils";
+import { getErrorMessage, hasErrnoCode } from "./utils/ErrorUtils";
 
 export { MCP_TOOL_DEFINITIONS } from "./utils/McpToolDefinitions";
 
@@ -1768,7 +1769,7 @@ export class CtrlYokeMCPServer {
     try {
       content = await fs.readFile(capabilitiesPath, "utf8");
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return null;
       throw error;
     }
     try {
@@ -2037,7 +2038,7 @@ export class CtrlYokeMCPServer {
         error !== null &&
         typeof error === "object" &&
         "code" in error &&
-        error.code === "ENOENT"
+        hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)
       ) {
         return {
           content: [

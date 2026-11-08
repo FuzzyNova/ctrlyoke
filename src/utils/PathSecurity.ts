@@ -1,6 +1,8 @@
 import * as path from "path";
 import { promises as fs } from "fs";
 import { foldPathForCompare } from "./PathCasing";
+import { NODE_ERROR_CODES } from "../types/DashboardConstants";
+import { hasErrnoCode } from "./ErrorUtils";
 
 export interface RealpathContainmentResult {
   resolvedPath: string;
@@ -23,7 +25,7 @@ export class RealpathContainmentChecker {
         try {
           return path.resolve(await fs.realpath(root));
         } catch (error) {
-          if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
+          if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
             return path.resolve(root);
           }
           throw error;
@@ -37,7 +39,7 @@ export class RealpathContainmentChecker {
     try {
       resolvedPath = path.resolve(await fs.realpath(candidate));
     } catch (error) {
-      if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
         // Preserve the existing missing-file behaviour. A lexical in-root
         // missing path cannot expose content; its caller's stat/read keeps
         // producing the existing not-found skip. Traversal is still denied.

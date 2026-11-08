@@ -4,6 +4,8 @@ import type { KeyValueStore } from "../core/HostPorts";
 import { writeFileAtomic } from "../utils/AtomicFileUtils";
 import { projectStateRoot } from "../utils/ProjectStatePaths";
 import { getFrozenRunHistoryLocation } from "../utils/RunHistoryStoragePolicy";
+import { NODE_ERROR_CODES } from "../types/DashboardConstants";
+import { hasErrnoCode } from "../utils/ErrorUtils";
 
 /** Stores host-only dashboard state in the user's project state directory. */
 export class FileKeyValueStore implements KeyValueStore {
@@ -49,7 +51,7 @@ export class FileKeyValueStore implements KeyValueStore {
       }
       return parsed as Record<string, unknown>;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return {};
       throw error;
     }
   }

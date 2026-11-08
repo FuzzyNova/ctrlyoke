@@ -7,6 +7,8 @@ import { Log } from "../../utils/Log";
 import { pathsEqual } from "../../utils/PathCasing";
 import { isPathWithinAnyDirectory } from "../../utils/PathSecurity";
 import type { FileWatcher, FileWatcherFactory } from "../HostPorts";
+import { NODE_ERROR_CODES } from "../../types/DashboardConstants";
+import { getErrnoCode } from "../../utils/ErrorUtils";
 
 /**
  * PromptFileWatcher
@@ -167,8 +169,8 @@ export class PromptFileWatcher {
         await this.onFileChanged(filePath, this.onFileChangedCallback);
       }
     } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code !== "ENOENT") {
+      const code = getErrnoCode(error);
+      if (code !== NODE_ERROR_CODES.ENOENT) {
         Log.trace(
           `[PromptFileWatcher] Unable to poll external working file ${filePath}:`,
           error

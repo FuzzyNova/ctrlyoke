@@ -67,6 +67,7 @@ import {
   SERVER_BIND_ADDRESSES,
   WORKSPACE_MEDIA_GIT_INDEX_REF,
   WORKSPACE_MEDIA_KINDS,
+  NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
@@ -137,7 +138,7 @@ import type { HarnessAvailabilityReport } from "../types/WebviewMessageTypes";
 import { LanguageIntelligenceHost } from "./lsp/LanguageIntelligenceHost";
 import { EmptyLanguageServerBackend } from "./lsp/LanguageServerBackend";
 import type { JsonRpcMessage } from "./lsp/LspProtocol";
-import { getErrorMessage } from "../utils/ErrorUtils";
+import { getErrorMessage, hasErrnoCode } from "../utils/ErrorUtils";
 
 const THEME_VAR_KEY_PATTERN = /^--[A-Za-z0-9_-]+$/;
 const SIBLING_SERVER_PROBE_TIMEOUT_MS = 1000;
@@ -3428,7 +3429,7 @@ export class CtrlYokeHostedServer
           }
           const onError = (err: NodeJS.ErrnoException) => {
             this.httpServer.removeListener("listening", onListening);
-            if (err.code === "EADDRINUSE") {
+            if (hasErrnoCode(err, NODE_ERROR_CODES.EADDRINUSE)) {
               if (candidateIndex >= candidatePorts.length - 1) {
                 reject(err);
                 return;

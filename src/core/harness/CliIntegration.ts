@@ -48,6 +48,7 @@ import {
   TEMP_FILE_CATEGORIES,
   USER_FEEDBACK_SEVERITY,
   type TerminalEndReason,
+  NODE_ERROR_CODES,
 } from "../../types/DashboardConstants";
 import { configService } from "../../config/CtrlYokeConfigService";
 import { resolveHookNotificationPlan } from "./shared/HookNotificationPlan";
@@ -91,7 +92,7 @@ import {
   type HarnessVersionAssessment,
 } from "../../utils/HarnessVersion";
 import type { HarnessAvailabilityReport } from "../../types/WebviewMessageTypes";
-import { getErrorMessage } from "../../utils/ErrorUtils";
+import { getErrorMessage, hasErrnoCode } from "../../utils/ErrorUtils";
 
 /** Timeout (ms) for waiting for SessionStart hook from CLI harness */
 /**
@@ -2250,7 +2251,7 @@ export class CliIntegration extends HarnessIntegration {
           `Provider artifact remains after cleanup: ${artifactPath}`
         );
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
           failures.push(
             `Could not prove provider artifact cleanup: ${artifactPath}`
           );

@@ -27,6 +27,7 @@ import {
   MAX_CONTENT_SIZE,
   type SnapshotStrategy,
   type SnapshotUnavailableReason,
+  NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import {
@@ -42,6 +43,7 @@ import {
   parseGitNameStatusZ,
   parseGitPorcelainV1Z,
 } from "./GitUtils";
+import { hasErrnoCode } from "./ErrorUtils";
 
 /** Blob and metadata reads; whole-repo listings go through `execGit`. */
 const execFileAsync = promisify(execFile);
@@ -1620,7 +1622,7 @@ export class WorkspaceSnapshotService {
           try {
             await fs.promises.unlink(absPath);
           } catch (err: unknown) {
-            if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+            if (!hasErrnoCode(err, NODE_ERROR_CODES.ENOENT)) {
               throw err;
             }
             // Missing file is a no-op success

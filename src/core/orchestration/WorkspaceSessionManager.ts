@@ -8,7 +8,10 @@ import type {
   WorkflowStep,
   WorkingFile,
 } from "../../types/CtrlYokeTypes";
-import { EXECUTION_STATES } from "../../types/DashboardConstants";
+import {
+  EXECUTION_STATES,
+  NODE_ERROR_CODES,
+} from "../../types/DashboardConstants";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
@@ -17,6 +20,7 @@ import {
   getLineageLastModifiedUpperBound,
   stripLegacyWorkingFileLineageMetadata,
 } from "../../utils/WorkingFileMetadata";
+import { hasErrnoCode } from "../../utils/ErrorUtils";
 
 /**
  * WorkspaceSessionManager
@@ -149,7 +153,7 @@ export class WorkspaceSessionManager {
       }
       return best?.filePath;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
         return undefined;
       }
       Log.error(

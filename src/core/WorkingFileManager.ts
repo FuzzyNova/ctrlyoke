@@ -29,11 +29,12 @@ import {
   type RunDefinitionChange,
   type RunDefinitionDecision,
   type RunDefinitionIntegrity,
+  NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
 import { pathsEqual } from "../utils/PathCasing";
 import type { ExecutionState } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
-import { getErrorMessage } from "../utils/ErrorUtils";
+import { getErrorMessage, hasErrnoCode } from "../utils/ErrorUtils";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { withFileLock } from "../utils/FileLockUtils";
 import { writeFileAtomic } from "../utils/AtomicFileUtils";
@@ -369,7 +370,7 @@ async function readWorkingFileForWriteDiagnostics(
       JSON.parse(content) as WorkingFile
     );
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+    if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
       Log.trace(
         `[WorkingFileManager] Unable to read the previous working file for write diagnostics: ${workingFilePath}`
       );
@@ -2340,7 +2341,10 @@ export class WorkingFileManager {
                 )
               )
               .catch((error: NodeJS.ErrnoException) => {
-                if (error.code !== "ENOTEMPTY" && error.code !== "ENOENT")
+                if (
+                  !hasErrnoCode(error, NODE_ERROR_CODES.ENOTEMPTY) &&
+                  !hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)
+                )
                   throw error;
               });
             return {
@@ -2516,7 +2520,10 @@ export class WorkingFileManager {
           )
         )
         .catch((error: NodeJS.ErrnoException) => {
-          if (error.code !== "ENOTEMPTY" && error.code !== "ENOENT")
+          if (
+            !hasErrnoCode(error, NODE_ERROR_CODES.ENOTEMPTY) &&
+            !hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)
+          )
             throw error;
         });
       return currentRevision;

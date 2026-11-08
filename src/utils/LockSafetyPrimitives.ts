@@ -1,4 +1,6 @@
 import * as crypto from "crypto";
+import { NODE_ERROR_CODES } from "../types/DashboardConstants";
+import { hasErrnoCode } from "./ErrorUtils";
 
 /** Shared heartbeat cadence for process-owned coordination records. */
 export const HEARTBEAT_INTERVAL_MS = 5_000;
@@ -28,7 +30,7 @@ export function isProcessAlive(pid: number): boolean {
     process.kill(pid, 0);
     return true;
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "EPERM";
+    return hasErrnoCode(error, NODE_ERROR_CODES.EPERM);
   }
 }
 

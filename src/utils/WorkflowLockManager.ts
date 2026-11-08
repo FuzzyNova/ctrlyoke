@@ -9,6 +9,7 @@ import {
   ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
   WORKFLOW_LOCK_LIVENESS,
+  NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
 import type { ExecutionState } from "../types/DashboardConstants";
 import { settleInterruptedRun } from "./InterruptedRunSettlement";
@@ -28,6 +29,7 @@ import {
   PERSISTED_STORES,
 } from "./PersistedSchemaGuard";
 import { generateOwnerToken, isOwnerStale } from "./LockSafetyPrimitives";
+import { hasErrnoCode, getErrnoCode } from "./ErrorUtils";
 
 export {
   HEARTBEAT_INTERVAL_MS,
@@ -58,7 +60,7 @@ async function reclaimIfStale(
     }
 
     await fs.promises.unlink(lockPath).catch((error) => {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) throw error;
     });
     return true;
   });
@@ -131,7 +133,7 @@ export class WorkflowLockManager {
           );
           return true;
         } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+          if (!hasErrnoCode(error, NODE_ERROR_CODES.EEXIST)) {
             throw error;
           }
           return false;
@@ -178,8 +180,8 @@ export class WorkflowLockManager {
         Log.debug(`[WorkflowLockManager] releaseLock: ${workflowKey}`);
       });
     } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (code !== "ENOENT") {
+      const code = getErrnoCode(err);
+      if (code !== NODE_ERROR_CODES.ENOENT) {
         Log.warn(
           `[WorkflowLockManager] releaseLock: failed to delete ${workflowKey}:`,
           err
@@ -224,8 +226,8 @@ export class WorkflowLockManager {
         await fs.promises.rename(tmpPath, lockPath);
       });
     } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (code !== "ENOENT") {
+      const code = getErrnoCode(err);
+      if (code !== NODE_ERROR_CODES.ENOENT) {
         Log.warn(
           `[WorkflowLockManager] updateHeartbeat: failed for ${workflowKey}:`,
           err

@@ -25,8 +25,9 @@ import {
   BUNDLE_MANIFEST_FILE_NAME,
   PROMPT_FILE_RESOLUTION_STATUSES,
   STEP_TYPES,
+  NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
-import { getErrorMessage } from "./ErrorUtils";
+import { getErrorMessage, hasErrnoCode, getErrnoCode } from "./ErrorUtils";
 
 export { BUNDLE_MANIFEST_FILE_NAME } from "../types/DashboardConstants";
 export const BUNDLE_MANIFEST_VERSION = 2;
@@ -658,8 +659,11 @@ async function findReferenceCandidate(
         return candidate;
       }
     } catch (error) {
-      const code = (error as NodeJS.ErrnoException | undefined)?.code;
-      if (code !== "ENOENT" && code !== "ENOTDIR") {
+      const code = getErrnoCode(error);
+      if (
+        code !== NODE_ERROR_CODES.ENOENT &&
+        code !== NODE_ERROR_CODES.ENOTDIR
+      ) {
         return undefined;
       }
     }
@@ -974,7 +978,7 @@ async function validateExportDirectory(
       }
       return true;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException | undefined)?.code !== "ENOENT") {
+      if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
         addBlocker(
           plan,
           "assets-directory-unreadable",
@@ -1050,7 +1054,7 @@ async function loadExistingManifest(
       ...(typeof value.owner === "string" ? { owner: value.owner } : {}),
     };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
       return { files: new Set(), valid: false };
     }
     return { files: new Set(), valid: false, error };
@@ -1080,7 +1084,7 @@ async function findSameStemWorkflowSibling(
       );
     })?.name;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException | undefined)?.code !== "ENOENT") {
+    if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
       throw error;
     }
     return undefined;

@@ -23,6 +23,7 @@ import {
   WORKFLOW_LOCK_LOCALITIES,
   type FinalStepPhase,
   type StepStatus,
+  NODE_ERROR_CODES,
 } from "../../types/DashboardConstants";
 import type { CliOutput } from "../../types/WebviewMessageTypes";
 import type { IDashboardSink } from "../../types/IDashboardSink";
@@ -54,6 +55,7 @@ import { WorktreeManager } from "./WorktreeManager";
 import { WorkingFileManager } from "../WorkingFileManager";
 import { stripLegacyWorkingFileLineageMetadata } from "../../utils/WorkingFileMetadata";
 import type { RunViewPublisherExternalRunWatchPort } from "./RunViewPublisher";
+import { getErrnoCode } from "../../utils/ErrorUtils";
 
 const RUNNER_JSON_DISCOVERY_POLL_INTERVAL_MS = 10_000;
 const RUNNER_JSON_DISCOVERY_STAT_CONCURRENCY = 4;
@@ -1177,8 +1179,8 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
     try {
       process.kill(lock.pid, "SIGTERM");
     } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (code !== "ESRCH") {
+      const code = getErrnoCode(err);
+      if (code !== NODE_ERROR_CODES.ESRCH) {
         Log.warn(
           `[WorkflowOrchestrator] stopExternalRunSession: process.kill(${lock.pid}) failed:`,
           err

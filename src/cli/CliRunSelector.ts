@@ -11,6 +11,8 @@ import {
   WORKFLOW_SELECTOR_MATCH_KINDS,
   type WorkflowLineageLookup,
 } from "../core/orchestration/WorkflowRunSelector";
+import { NODE_ERROR_CODES } from "../types/DashboardConstants";
+import { hasErrnoCode } from "../utils/ErrorUtils";
 
 export {
   formatCliStepSelector,
@@ -144,7 +146,7 @@ export async function resolveCliRunRefAtLineage(
       WorkflowPaths.lineageDir(workspaceRoot, workflowKey)
     );
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
       throw createWorkflowLineageNotFoundError(workflowKey);
     }
     throw error;

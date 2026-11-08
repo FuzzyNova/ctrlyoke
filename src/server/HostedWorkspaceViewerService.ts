@@ -52,6 +52,7 @@ import {
   workspaceMediaInfoForPath,
   WORKSPACE_MEDIA_GIT_INDEX_REF,
   type WorkspaceMediaInfo,
+  NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
 import {
@@ -153,7 +154,11 @@ import {
   WorkspaceTreeBadRequestError,
   WorkspaceTreeExpiredError,
 } from "./WorkspaceTreeErrors";
-import { getErrorMessage } from "../utils/ErrorUtils";
+import {
+  getErrorMessage,
+  hasErrnoCode,
+  getErrnoCode,
+} from "../utils/ErrorUtils";
 
 const execFileAsync = promisify(execFile);
 
@@ -1789,8 +1794,8 @@ export class HostedWorkspaceViewerService {
       await fs.promises.access(destPath);
       throw new Error("Destination already exists");
     } catch (err) {
-      const code = (err as NodeJS.ErrnoException | undefined)?.code;
-      if (code === "ENOENT") {
+      const code = getErrnoCode(err);
+      if (code === NODE_ERROR_CODES.ENOENT) {
         return;
       }
       throw err;
@@ -3291,7 +3296,7 @@ export class HostedWorkspaceViewerService {
       if (
         error instanceof Error &&
         "code" in error &&
-        (error as NodeJS.ErrnoException).code === "ENOENT"
+        hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)
       ) {
         return null;
       }

@@ -5,14 +5,21 @@ import { once } from "events";
 import { isMainThread, parentPort, workerData } from "worker_threads";
 import type { RunHistoryLocation } from "../../types/CtrlYokeSettings";
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
-import { HISTORY_SEARCH_REBUILD_MESSAGE_TYPES } from "../../types/DashboardConstants";
+import {
+  HISTORY_SEARCH_REBUILD_MESSAGE_TYPES,
+  NODE_ERROR_CODES,
+} from "../../types/DashboardConstants";
 import {
   type HistorySearchDocument,
   type WorkflowRunManifest,
   type WorkflowTimelineEvent,
 } from "../../types/WorkflowTimelineTypes";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
-import { getErrorMessage } from "../../utils/ErrorUtils";
+import {
+  getErrorMessage,
+  hasErrnoCode,
+  getErrnoCode,
+} from "../../utils/ErrorUtils";
 import { withFileLock } from "../../utils/FileLockUtils";
 import { Log } from "../../utils/Log";
 import { logMemoryUsage } from "../../utils/MemoryDiagnostics";
@@ -362,8 +369,8 @@ export async function runHistorySearchRebuild(
           onDiskManifest = manifest;
         }
       } catch (error) {
-        const code = (error as NodeJS.ErrnoException).code;
-        if (code !== "ENOENT") {
+        const code = getErrnoCode(error);
+        if (code !== NODE_ERROR_CODES.ENOENT) {
           fullRebuildFallbackReason = "manifest load failure";
           Log.warn(
             `[HistorySearchIndexService] Failed to load search index: ${getErrorMessage(error)}`
@@ -674,7 +681,7 @@ export async function listRunSources(
       withFileTypes: true,
     });
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
       return [];
     }
     throw error;

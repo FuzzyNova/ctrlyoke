@@ -63,6 +63,7 @@ import {
   STATUS_MESSAGE_SEVERITY,
   type HistoryListSortOrder,
   type ScriptOutputSource,
+  NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
 import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
 import type {
@@ -124,7 +125,7 @@ import {
   parseHistoryStateFilter,
 } from "./HistoryFilterParsing";
 import { formatFinalPassLabel } from "../utils/FinalStepLabels";
-import { getErrorMessage } from "../utils/ErrorUtils";
+import { getErrorMessage, hasErrnoCode } from "../utils/ErrorUtils";
 
 export interface HistoryInspectionCommandIo {
   writeOut(message: string): void;
@@ -2174,7 +2175,7 @@ async function readRunWorkingDefinition(
       ? (candidate as RunWorkingDefinition)
       : undefined;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return undefined;
     throw error;
   }
 }

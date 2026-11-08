@@ -5,6 +5,35 @@
  * pattern that would otherwise be duplicated across the codebase.
  */
 
+import type { NodeErrorCode } from "../types/DashboardConstants";
+
+/** Read a string Node.js error code from an unknown caught value. */
+export function getErrnoCode(error: unknown): string | undefined {
+  if (error === null || typeof error !== "object") {
+    return undefined;
+  }
+
+  const candidate = error as { code?: unknown };
+  return typeof candidate.code === "string" ? candidate.code : undefined;
+}
+
+/** Check whether an unknown caught value has one of the supplied errno codes. */
+export function hasErrnoCode(
+  error: unknown,
+  ...codes: readonly NodeErrorCode[]
+): boolean {
+  const code = getErrnoCode(error);
+  return code !== undefined && codes.some((candidate) => candidate === code);
+}
+
+/** Check a missing-file error using the caller's shared ENOENT constant. */
+export function isFileNotFoundError(
+  error: unknown,
+  notFoundCode: NodeErrorCode
+): boolean {
+  return hasErrnoCode(error, notFoundCode);
+}
+
 /**
  * Extract a readable message string from an unknown caught value.
  * Works with Error instances, strings, and anything else that can be stringified.

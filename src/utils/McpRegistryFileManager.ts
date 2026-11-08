@@ -4,6 +4,7 @@ import { uniqueAtomicTempPath } from "../config/AtomicFileWrite";
 import type { SettingWriteScope } from "../types/DashboardConstants";
 import {
   MCP_TRANSPORTS,
+  NODE_ERROR_CODES,
   SETTING_SCOPES,
   SPECIAL_TARGET_IDS,
   TRUST_DECISIONS,
@@ -31,6 +32,7 @@ import {
   MCP_APPEND_STEP_TOOL_NAME,
   MCP_WORKFLOW_STATUS_TOOL_NAME,
 } from "./McpToolDefinitions";
+import { hasErrnoCode } from "./ErrorUtils";
 
 function isStringArray(value: unknown): value is string[] {
   return (
@@ -151,7 +153,7 @@ async function readRawArrayForMutation(filePath: string): Promise<unknown[]> {
   try {
     content = await fs.promises.readFile(filePath, "utf-8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return [];
     throw error;
   }
 

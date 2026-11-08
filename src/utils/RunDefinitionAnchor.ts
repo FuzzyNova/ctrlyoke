@@ -12,6 +12,7 @@ import {
   RUN_DEFINITION_CHANGE_SCOPES,
   RUN_DEFINITION_INTEGRITY,
   type RunDefinitionChange,
+  NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
 import { writeFileAtomic } from "./AtomicFileUtils";
 import { withFileLock } from "./FileLockUtils";
@@ -28,6 +29,7 @@ export { describeRunDefinitionChanges };
 import { stableStringify } from "./StableJson";
 import * as WorkflowPaths from "./WorkflowPaths";
 import { definitionAnchorPath } from "./WorkflowPaths";
+import { hasErrnoCode } from "./ErrorUtils";
 
 /**
  * Run definition anchors: proof, kept where no harness sandbox can write, of
@@ -364,7 +366,7 @@ async function readAnchorAt(
   try {
     raw = await fs.promises.readFile(anchorPath, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
       return undefined;
     }
     throw error;
@@ -544,7 +546,7 @@ async function readDirIfPresent(dir: string): Promise<fs.Dirent[]> {
   try {
     return await fs.promises.readdir(dir, { withFileTypes: true });
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
       return [];
     }
     throw error;
@@ -620,7 +622,7 @@ export async function verifyRunDefinitionFile(
     try {
       raw = await fs.promises.readFile(workingFilePath, "utf8");
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
         return undefined;
       }
       throw error;
@@ -852,7 +854,7 @@ async function readJsonIfPresent(filePath: string): Promise<unknown> {
   try {
     raw = await fs.promises.readFile(filePath, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
       return undefined;
     }
     throw error;

@@ -43,8 +43,9 @@ import {
   MAX_CONTENT_SIZE,
   MAX_EXCERPT_BYTES,
   NO_UNSTAGED_CHANGES_MESSAGE,
+  NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
-import { getErrorMessage } from "./ErrorUtils";
+import { getErrorMessage, getErrnoCode } from "./ErrorUtils";
 import { isWorkflowRelativeReferencePath } from "./promptPathUtils";
 import { quoteReferenceField } from "../completions/ContextReferenceBuilder";
 import { LineTooLongError, splitLines, streamFileLines } from "./TextLines";
@@ -925,12 +926,12 @@ export class ContextExpander {
    * logs, while preserving warnings for unexpected attachment failures.
    */
   private logAttachmentBuildFailure(reference: string, error: unknown): void {
-    const errorCode = (error as NodeJS.ErrnoException | undefined)?.code;
+    const errorCode = getErrnoCode(error);
     const message = getErrorMessage(error);
     const isUnreadableReference =
-      errorCode === "ENOENT" ||
-      errorCode === "ENOTDIR" ||
-      errorCode === "EISDIR";
+      errorCode === NODE_ERROR_CODES.ENOENT ||
+      errorCode === NODE_ERROR_CODES.ENOTDIR ||
+      errorCode === NODE_ERROR_CODES.EISDIR;
 
     if (isUnreadableReference) {
       Log.debug(

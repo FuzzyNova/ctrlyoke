@@ -15,8 +15,9 @@ import { getPromptMarkdownText } from "../utils/MarkdownFrontmatter";
 import {
   CTRLYOKE_FILE_KINDS,
   PROMPT_FILE_RESOLUTION_STATUSES,
+  NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
-import { getErrorMessage } from "../utils/ErrorUtils";
+import { getErrorMessage, hasErrnoCode } from "../utils/ErrorUtils";
 
 export interface PromptFileResolverOptions {
   workspaceRoot?: string;
@@ -274,7 +275,9 @@ export class PromptFileResolver {
       try {
         stats = fs.statSync(candidate);
       } catch (error) {
-        if (isMissingPathError(error)) {
+        if (
+          hasErrnoCode(error, NODE_ERROR_CODES.ENOENT, NODE_ERROR_CODES.ENOTDIR)
+        ) {
           continue;
         }
         return {
@@ -395,7 +398,9 @@ export class PromptFileResolver {
       try {
         stats = await fsp.stat(candidate);
       } catch (error) {
-        if (isMissingPathError(error)) {
+        if (
+          hasErrnoCode(error, NODE_ERROR_CODES.ENOENT, NODE_ERROR_CODES.ENOTDIR)
+        ) {
           continue;
         }
         return {
@@ -526,9 +531,4 @@ export function getLegacyRunHistoryReferenceGuidance(
   }
 
   return "run history is not a workspace file; use priorContext: { workflow, run } to reference a completed run";
-}
-
-function isMissingPathError(error: unknown): boolean {
-  const code = (error as NodeJS.ErrnoException | undefined)?.code;
-  return code === "ENOENT" || code === "ENOTDIR";
 }

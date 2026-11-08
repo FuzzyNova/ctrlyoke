@@ -14,8 +14,11 @@ import {
   renameWithTransientRetry,
   writeFileAtomic,
 } from "../../utils/AtomicFileUtils";
-import { getErrorMessage } from "../../utils/ErrorUtils";
-import { WORKTREE_EDIT_KINDS } from "../../types/DashboardConstants";
+import { getErrorMessage, hasErrnoCode } from "../../utils/ErrorUtils";
+import {
+  WORKTREE_EDIT_KINDS,
+  NODE_ERROR_CODES,
+} from "../../types/DashboardConstants";
 import { assertDescriptorRevision } from "./RevisionPrecondition";
 import {
   assertWritableSchema,
@@ -285,7 +288,7 @@ export class WorkflowLineageRepository {
           await fs.promises.access(candidateDir);
           continue;
         } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+          if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
             throw error;
           }
         }
@@ -301,7 +304,7 @@ export class WorkflowLineageRepository {
           stagingRunDir = candidateStagingDir;
           break;
         } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+          if (!hasErrnoCode(error, NODE_ERROR_CODES.EEXIST)) {
             throw error;
           }
         }
@@ -387,7 +390,7 @@ export class WorkflowLineageRepository {
           `Run ref collision while publishing ${allocation.runRef}`
         );
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
           throw error;
         }
       }
@@ -400,7 +403,7 @@ export class WorkflowLineageRepository {
           allocation.runDir
         );
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+        if (hasErrnoCode(error, NODE_ERROR_CODES.EEXIST)) {
           throw new Error(
             `Run ref collision while publishing ${allocation.runRef}`
           );
@@ -483,7 +486,7 @@ export class WorkflowLineageRepository {
       try {
         await removeRunDir(runDir);
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
           throw error;
         }
         throw new Error(

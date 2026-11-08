@@ -3,7 +3,11 @@ import * as fs from "fs";
 import * as os from "os";
 import { execFile, spawn } from "child_process";
 import { Log } from "../utils/Log";
-import { getErrorMessage } from "../utils/ErrorUtils";
+import {
+  getErrorMessage,
+  hasErrnoCode,
+  getErrnoCode,
+} from "../utils/ErrorUtils";
 import { type ScriptProperties } from "../types/CtrlYokeTypes";
 import {
   CTRLYOKE_ENV_VARS,
@@ -17,6 +21,7 @@ import {
   type ScriptFileExtension,
   type ScriptFileInterpreterKind,
   type EndConditionScriptType,
+  NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
 import {
   ConfigurationUtils,
@@ -1094,9 +1099,9 @@ export class EndConditionEvaluator {
           (error: unknown) => {
             const errorCode =
               error && typeof error === "object" && "code" in error
-                ? (error as NodeJS.ErrnoException).code
+                ? getErrnoCode(error)
                 : undefined;
-            const isNotFound = errorCode === "ENOENT";
+            const isNotFound = errorCode === NODE_ERROR_CODES.ENOENT;
             const isTimeout = isSubprocessTimeoutError(error);
             const reason = isTimeout
               ? "probe timed out"
@@ -1267,7 +1272,7 @@ export class EndConditionEvaluator {
         error &&
         typeof error === "object" &&
         "code" in error &&
-        error.code === "EEXIST"
+        hasErrnoCode(error, NODE_ERROR_CODES.EEXIST)
       ) {
         throw new Error(
           `A script named "${destinationFileName}" already exists in .ctrlyoke/scripts. Choose a different name.`

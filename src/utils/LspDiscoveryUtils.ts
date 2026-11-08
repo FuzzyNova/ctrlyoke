@@ -6,6 +6,7 @@ import type { LocalLanguageServerEntry } from "../types/WebviewMessageTypes";
 import {
   LSP_DISCOVERY_FORMATS,
   LSP_DISCOVERY_SOURCES,
+  NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
 import {
   getCclspConfigPaths,
@@ -17,7 +18,7 @@ import {
   getQwenWorkspaceLspConfigPath,
 } from "./LspConfigPaths";
 import { Log } from "./Log";
-import { getErrorMessage } from "./ErrorUtils";
+import { getErrorMessage, hasErrnoCode } from "./ErrorUtils";
 
 type JsonRecord = Record<string, unknown>;
 interface Descriptor {
@@ -107,7 +108,7 @@ async function readJson(filePath: string): Promise<JsonRecord | undefined> {
     const parsed: unknown = JSON.parse(await fs.readFile(filePath, "utf8"));
     return isRecord(parsed) ? parsed : undefined;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT")
+    if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT))
       Log.warn(`[LspDiscovery] Could not read ${filePath}: ${String(error)}`);
     return undefined;
   }

@@ -2,7 +2,7 @@ import * as path from "path";
 import * as crypto from "crypto";
 import * as fs from "fs/promises";
 import { Log } from "../../utils/Log";
-import { getErrorMessage } from "../../utils/ErrorUtils";
+import { getErrorMessage, hasErrnoCode } from "../../utils/ErrorUtils";
 import {
   addWorktree,
   abortMerge,
@@ -55,6 +55,7 @@ import {
   WORKTREE_SETUP_OUTCOMES,
   WORKFLOW_LOCK_LIVENESS,
   type WorktreeManagementAction,
+  NODE_ERROR_CODES,
 } from "../../types/DashboardConstants";
 import { isPathWithinDirectory } from "../../utils/PathSecurity";
 import { pathsEqual } from "../../utils/PathCasing";
@@ -1395,7 +1396,7 @@ export class WorktreeManager {
       // are durably recorded as gone. A crash before this unlink leaves the
       // record as a safe reconciliation tombstone.
       await fs.unlink(recordPath).catch((error: unknown) => {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) throw error;
       });
     }
 
@@ -2723,7 +2724,7 @@ export class WorktreeManager {
     try {
       entries = await fs.readdir(directory, { withFileTypes: true });
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return [];
       throw error;
     }
     const records: ManagedWorktreeOwnershipRecord[] = [];
@@ -2807,7 +2808,7 @@ export class WorktreeManager {
       }
       return validate(migrateToCurrent(store, parsed).doc as Partial<T>);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return undefined;
       // A partially written/corrupt record is not ownership or setup evidence.
       return undefined;
     }
@@ -2839,7 +2840,7 @@ export class WorktreeManager {
       assertWritableSchema(store, current, recordPath);
     } catch (error) {
       if (
-        (error as NodeJS.ErrnoException).code !== "ENOENT" &&
+        !hasErrnoCode(error, NODE_ERROR_CODES.ENOENT) &&
         !(error instanceof SyntaxError)
       ) {
         throw error;
@@ -2882,7 +2883,7 @@ export class WorktreeManager {
       }
       throw new Error(`Managed worktree path collision: ${worktreePath}`);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) throw error;
     }
   }
 
@@ -3042,7 +3043,7 @@ export class WorktreeManager {
         // resources have been observed gone. A crash before this unlink is
         // therefore safe to reconcile again.
         await fs.unlink(recordPath).catch((error: unknown) => {
-          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+          if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) throw error;
         });
       }
     }

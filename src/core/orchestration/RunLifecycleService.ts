@@ -36,12 +36,13 @@ import {
   WORKFLOW_VIEW_ADDRESS_KIND,
   WORKTREE_EDIT_KINDS,
   type RunDefinitionDecision,
+  NODE_ERROR_CODES,
 } from "../../types/DashboardConstants";
 import type { DefinitionRollbackInvalidation } from "./RunViewPublisher";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 import { buildDefinitionSnapshot } from "../WorkflowStepSanitizer";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
-import { getErrorMessage } from "../../utils/ErrorUtils";
+import { getErrorMessage, hasErrnoCode } from "../../utils/ErrorUtils";
 import { isUnstartedRunFile } from "../../utils/StepStatusDerivation";
 import { Log } from "../../utils/Log";
 import { readWorkflowLockOwnershipInspection } from "../../utils/WorkflowLockInspector";
@@ -581,7 +582,7 @@ export class RunLifecycleService {
       Log.warn(
         `[WorkflowOrchestrator] Failed to switch ${clientId} to run ${address.runRef}: ${getErrorMessage(error)}`
       );
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
         this.host.registry
           .getViewAddressRegistry()
           .set(clientId, previousAddress);

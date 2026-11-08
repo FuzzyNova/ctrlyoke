@@ -6,6 +6,7 @@ import {
   WORKTREE_MODES,
   WORKTREE_DIRECTORY_STATES,
   WORKTREE_BRANCH_STATES,
+  NODE_ERROR_CODES,
 } from "../../types/DashboardConstants";
 import type {
   RunRef,
@@ -20,7 +21,7 @@ import {
 import { isPathWithinDirectory } from "../../utils/PathSecurity";
 import { execGit, resolveCommit } from "../../utils/GitUtils";
 import { WorktreeManager, type ActiveWorktreeInfo } from "./WorktreeManager";
-import { getErrorMessage } from "../../utils/ErrorUtils";
+import { getErrorMessage, hasErrnoCode } from "../../utils/ErrorUtils";
 
 export type { RunChangesTarget };
 
@@ -302,7 +303,7 @@ async function validatePatchPaths(root: string, patch: string): Promise<void> {
           );
         break;
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) throw error;
         const parent = path.dirname(existing);
         if (parent === existing) throw error;
         existing = parent;

@@ -2,6 +2,8 @@ import * as crypto from "crypto";
 import * as fs from "fs/promises";
 import { isTransientSharingError } from "./AtomicFileUtils";
 import { Log } from "./Log";
+import { NODE_ERROR_CODES } from "../types/DashboardConstants";
+import { getErrnoCode, isFileNotFoundError, hasErrnoCode } from "./ErrorUtils";
 
 const LOCK_FILE_EXTENSION = ".lock";
 const RELEASED_LOCK_SUFFIX = ".released";
@@ -31,7 +33,7 @@ export class FileLockUnavailableError extends Error {
   readonly code: string | undefined;
 
   constructor(lockPath: string, cause: unknown) {
-    const code = (cause as NodeJS.ErrnoException | undefined)?.code;
+    const code = getErrnoCode(cause);
     super(
       `Cannot create lock file ${lockPath} (${code ?? "unknown error"}). ` +
         `Nothing holds the lock, but the file cannot be opened: either its ` +
@@ -76,10 +78,6 @@ interface LockFileOperations {
 /** The lock file {@link withFileLock} uses for `targetPath`. */
 export function lockFilePath(targetPath: string): string {
   return `${targetPath}${LOCK_FILE_EXTENSION}`;
-}
-
-function isMissing(error: unknown): boolean {
-  return (error as NodeJS.ErrnoException).code === "ENOENT";
 }
 
 async function acquireLock(
@@ -128,7 +126,7 @@ async function acquireLock(
         await sleep(LOCK_RETRY_DELAY_MS);
         continue;
       }
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+      if (!hasErrnoCode(error, NODE_ERROR_CODES.EEXIST)) {
         throw error;
       }
       sawHeldLock = true;
@@ -147,7 +145,8 @@ async function acquireLock(
           try {
             await ops.rename(lockPath, tombstone);
           } catch (renameError) {
-            if (!isMissing(renameError)) throw renameError;
+            if (!isFileNotFoundError(renameError, NODE_ERROR_CODES.ENOENT))
+              throw renameError;
             continue;
           }
           const [renamedStats, renamedPayload] = await Promise.all([
@@ -188,7 +187,7 @@ async function acquireLock(
         }
       } catch (statError) {
         // Lock might have been deleted between EEXIST and stat - retry
-        if (isMissing(statError)) {
+        if (isFileNotFoundError(statError, NODE_ERROR_CODES.ENOENT)) {
           continue;
         }
         // Other stat errors shouldn't happen, but continue trying
@@ -213,7 +212,7 @@ async function releaseLock(
 ): Promise<void> {
   try {
     const currentToken = await ops.readFile(lockPath, "utf8").catch((error) => {
-      if (isMissing(error)) return undefined;
+      if (isFileNotFoundError(error, NODE_ERROR_CODES.ENOENT)) return undefined;
       throw error;
     });
     if (currentToken === undefined) return;
@@ -227,7 +226,7 @@ async function releaseLock(
     try {
       await ops.rename(lockPath, tombstone);
     } catch (error) {
-      if (!isMissing(error)) throw error;
+      if (!isFileNotFoundError(error, NODE_ERROR_CODES.ENOENT)) throw error;
       return;
     }
     const renamedToken = await ops

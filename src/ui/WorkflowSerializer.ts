@@ -15,6 +15,7 @@ import {
   WORKFLOW_VIEW_ADDRESS_KIND,
   PATH_SELECTION_KINDS,
   DASHBOARD_ACTION_RESULT_STATUSES,
+  NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
 import {
   ConfigurationUtils,
@@ -26,7 +27,7 @@ import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import { AsyncWriteQueue } from "../config/AsyncWriteQueue";
 import { Log } from "../utils/Log";
 import { readJsonFile } from "../utils/FileSystemUtils";
-import { getErrorMessage } from "../utils/ErrorUtils";
+import { getErrorMessage, hasErrnoCode } from "../utils/ErrorUtils";
 import type {
   TemplateManager,
   TemplateInfo,
@@ -227,7 +228,7 @@ export class WorkflowSerializer {
         await fs.lstat(ancestor);
         break;
       } catch (error: any) {
-        if (error?.code !== "ENOENT") throw error;
+        if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) throw error;
         const parent = path.dirname(ancestor);
         if (parent === ancestor) {
           throw new Error("Save location has no existing ancestor.");
@@ -251,7 +252,7 @@ export class WorkflowSerializer {
         throw new Error("Save destination must be a file.");
       }
     } catch (error: any) {
-      if (error?.code !== "ENOENT") throw error;
+      if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) throw error;
     }
     return resolved;
   }

@@ -9,6 +9,7 @@ import {
   TERMINAL_END_REASONS,
   TERMINAL_SESSION_STATUS,
   type TerminalEndReason,
+  NODE_ERROR_CODES,
 } from "../../../types/DashboardConstants";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import type {
@@ -18,7 +19,7 @@ import type {
 } from "../../../utils/CliProcessManager";
 import { CliProcessTimeoutError } from "../../../utils/CliProcessManager";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
-import { getErrorMessage } from "../../../utils/ErrorUtils";
+import { getErrorMessage, hasErrnoCode } from "../../../utils/ErrorUtils";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "./CliProviderUtils";
 import {
@@ -774,7 +775,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           { cause: error }
         );
       }
-      if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
         throw new CliTransportError(
           `Harness CLI could not be started: ${getErrorMessage(error)}`,
           FAILURE_KINDS.HARNESS_NOT_INSTALLED,

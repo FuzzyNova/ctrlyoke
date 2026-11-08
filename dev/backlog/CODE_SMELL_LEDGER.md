@@ -21,6 +21,8 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   and webview imports of `ErrorUtils` now use the `@root/utils` alias. Hunted Node errno
   handling, webview step guards and the webview paged-listing hooks; queued three steps
   (errno-code helpers, `isScriptStep` copies, paged-hook helpers + `toError`).
+  The errno-code refactor landed in `src/types/DashboardConstants.ts` and
+  `src/utils/ErrorUtils.ts`, with source call sites and coverage updated.
 
 ## Deferred
 

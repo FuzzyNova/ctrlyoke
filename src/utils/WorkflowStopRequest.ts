@@ -2,6 +2,8 @@ import * as fs from "fs/promises";
 import { writeFileAtomic } from "./AtomicFileUtils";
 import * as WorkflowPaths from "./WorkflowPaths";
 import type { WorkflowKey } from "../types/CtrlYokeTypes";
+import { NODE_ERROR_CODES } from "../types/DashboardConstants";
+import { hasErrnoCode } from "./ErrorUtils";
 
 export interface WorkflowStopRequest {
   ownerToken: string;
@@ -53,7 +55,7 @@ export async function readWorkflowStopRequest(
     }
     return request as WorkflowStopRequest;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return undefined;
     throw error;
   }
 }
@@ -69,7 +71,7 @@ export async function deleteWorkflowStopRequest(
     ownerToken
   );
   await fs.unlink(requestPath).catch((error: NodeJS.ErrnoException) => {
-    if (error.code !== "ENOENT") throw error;
+    if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) throw error;
   });
 }
 
@@ -84,7 +86,7 @@ export async function waitForWorkflowStopRequestPickup(
     try {
       await fs.stat(requestPath);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return true;
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return true;
       throw error;
     }
     await new Promise((resolve) => setTimeout(resolve, pollMs));

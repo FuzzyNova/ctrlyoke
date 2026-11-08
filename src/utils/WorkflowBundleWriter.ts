@@ -8,7 +8,8 @@ import {
 } from "./WorkflowBundleAnalyzer";
 import { renameWithTransientRetry, writeFileAtomic } from "./AtomicFileUtils";
 import { foldPathForCompare } from "./PathCasing";
-import { getErrorMessage } from "./ErrorUtils";
+import { getErrorMessage, hasErrnoCode, getErrnoCode } from "./ErrorUtils";
+import { NODE_ERROR_CODES } from "../types/DashboardConstants";
 
 export interface WorkflowBundleWriteOptions {
   workflowPath: string;
@@ -161,7 +162,7 @@ export async function writeWorkflowBundle(
         try {
           await fs.unlink(manifestPath);
         } catch (error) {
-          if ((error as NodeJS.ErrnoException | undefined)?.code !== "ENOENT") {
+          if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
             warnings.push(
               `Could not remove obsolete bundle manifest "${manifestPath}": ${getErrorMessage(error)}.`
             );
@@ -236,8 +237,8 @@ async function pruneManagedAssets(
         }
       }
     } catch (error) {
-      const code = (error as NodeJS.ErrnoException | undefined)?.code;
-      if (code !== "ENOENT") {
+      const code = getErrnoCode(error);
+      if (code !== NODE_ERROR_CODES.ENOENT) {
         warnings.push(
           `Could not prune managed asset "${target}": ${getErrorMessage(error)}.`
         );
@@ -315,7 +316,7 @@ async function hasSymlinkAncestor(
         return true;
       }
     } catch (error) {
-      if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
         return false;
       }
       throw error;
@@ -343,8 +344,11 @@ async function removeDirectoryWhenEmpty(
       await fs.rmdir(directory);
     }
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException | undefined)?.code;
-    if (code !== "ENOENT" && code !== "ENOTEMPTY") {
+    const code = getErrnoCode(error);
+    if (
+      code !== NODE_ERROR_CODES.ENOENT &&
+      code !== NODE_ERROR_CODES.ENOTEMPTY
+    ) {
       warnings.push(
         `Could not remove empty bundle assets directory "${directory}": ${getErrorMessage(error)}.`
       );

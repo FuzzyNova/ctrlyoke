@@ -9,9 +9,10 @@ import {
   type ParseError,
 } from "jsonc-parser";
 import { writeFileAtomic } from "../../../utils/AtomicFileUtils";
-import { getErrorMessage } from "../../../utils/ErrorUtils";
+import { getErrorMessage, hasErrnoCode } from "../../../utils/ErrorUtils";
 import { withFileLock } from "../../../utils/FileLockUtils";
 import { isCtrlYokeQwenHookGroup } from "./QwenNotificationMonitor";
+import { NODE_ERROR_CODES } from "../../../types/DashboardConstants";
 
 /**
  * Qwen's system settings path override. Qwen reads hooks from its system,
@@ -84,7 +85,7 @@ async function readBaseSettings(
   try {
     content = await fs.readFile(settingsPath, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return {};
     throw new Error(
       `Cannot read Qwen system settings at ${settingsPath}: ${getErrorMessage(error)}`
     );
