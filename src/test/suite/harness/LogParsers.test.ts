@@ -3310,6 +3310,21 @@ suite("ClaudeLogParser", () => {
       );
     });
 
+    test("should classify a compaction summary as a system message", () => {
+      const summary =
+        "This session is being continued from a previous conversation that ran out of context.";
+      const event = {
+        type: "user",
+        isCompactSummary: true,
+        isVisibleInTranscriptOnly: true,
+        turnOrigin: "human",
+        message: { role: "user", content: summary },
+      };
+
+      assert.strictEqual(parser.classifyUserEvent(event, {}), "system-message");
+      assert.strictEqual(parser.extractUserSteerText(event), summary);
+    });
+
     test("should not classify a subagent's prompt as a human steer", () => {
       const prompt = "You are bug-hunting in the ctrlyoke repo.";
       const subagentPrompt = {

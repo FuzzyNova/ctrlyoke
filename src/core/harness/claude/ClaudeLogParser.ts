@@ -147,6 +147,12 @@ interface ClaudeProviderEvent extends BaseCliEvent {
    * follows a screenshot read, or a loaded skill's body.
    */
   isMeta?: boolean;
+  /**
+   * Set on the `user` message that carries a compaction's summary, logged
+   * right after a `compact_boundary`. The CLI writes it in the user role (and
+   * may mark it `turnOrigin: "human"`) but without `isMeta`; nobody typed it.
+   */
+  isCompactSummary?: boolean;
   usage?: {
     input_tokens?: number;
     output_tokens?: number;
@@ -863,7 +869,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * Classify a `user` log event per the four-way rule (see `UserEventClassification`):
    * Claude's log uses the `user` role for tool results, ctrlyoke's own injected
    * prompts echoed back, its own `<task-notification>` resume signal, notices the
-   * CLI injects itself (flagged `isMeta`, shown as system messages), and genuine
+   * CLI injects itself (flagged `isMeta` or `isCompactSummary`, shown as system
+   * messages), and genuine
    * human follow-ups typed into the live TUI — only the last is a "user steer".
    *
    * A message typed while a turn is still running never becomes a `user` event:
@@ -909,7 +916,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       return "resume-signal";
     }
 
-    if (e.isMeta === true) {
+    if (e.isMeta === true || e.isCompactSummary === true) {
       return "system-message";
     }
 

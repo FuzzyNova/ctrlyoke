@@ -1,8 +1,10 @@
 import React from "react";
 import type { HarnessId } from "../../types/messages";
-import type { CliOutput } from "../../store/workflowStore";
 import type { ContextWindowSnapshot } from "@utils/tokenUtils";
-import { buildAttemptTokenTooltipLines } from "@root/utils/TokenFormatting";
+import {
+  buildAttemptTokenTooltipLines,
+  type AttemptTokenSnapshot,
+} from "@root/utils/TokenFormatting";
 import { useSettingsStore } from "@store/settingsStore";
 import { getUsageBarColorClass } from "@utils/usageBarColor";
 import { Icon } from "../shared/Icon";
@@ -11,7 +13,7 @@ interface ContextWindowBarProps {
   /** Effective context window (see `resolveEffectiveContextWindow`). */
   contextWindow?: ContextWindowSnapshot;
   /** Token metadata of the attempt the bar describes. */
-  attemptTokens?: CliOutput["tokens"];
+  attemptTokens?: AttemptTokenSnapshot;
   /** Harness used for token/cost tooltip lines. */
   harnessId?: HarnessId;
 }

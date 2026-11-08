@@ -38,15 +38,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- When an Antigravity model lists or reads an MCP server's resources, the output pane now shows that server and the operation. Before, it showed a call to a tool named after the server, on an `unknown` server.
-- ctrlyoke now follows the environment variables that move a harness's home directory: `CLAUDE_CONFIG_DIR` for Claude Code, `QWEN_HOME` and `QWEN_RUNTIME_DIR` for Qwen Code, `COPILOT_HOME` for Copilot CLI, and `XDG_CONFIG_HOME` for OpenCode's global config. Before, a step on a harness whose home you had moved streamed no output and never resolved its session ID, because ctrlyoke read the transcript from the default folder. The statusline was installed into a settings file the harness didn't read, and your user MCP servers, language servers, agents, skills and Qwen models were missing from the dashboard. The dashboard's MCP and language server export menus now show where each user-scope file really is.
-- Qwen steps now find their transcript when Qwen's `advanced.runtimeOutputDir` setting moves it, and Copilot steps find their session state when the step's `additionalArgs` pass `--config-dir`. Both used to stream no output and leave the session ID unresolved.
-- Qwen steps now read your Qwen `system-defaults.json`. ctrlyoke launches Qwen with its own system settings file, and Qwen looks for the defaults file beside that one, so it never found yours.
-- On a phone, long-pressing in the prompt editor or the workspace file editor no longer closes the on-screen keyboard. Its menu used to take focus, so the keyboard closed and the layout moved out from under the menu, and Paste no longer reached the editor. If the keyboard closes anyway, the menu now closes too. Dragging a text-selection handle no longer opens the menu and clears the selection. On Android, a long press opens the menu once instead of twice.
-- On an iPhone or iPad, selected text in the prompt editor, the workspace file editor and every other code editor now shows your theme's selection color. Before, the selection handles appeared but the highlight between them was almost invisible.
-- On an iPhone, tapping New now opens the on-screen keyboard so you can name the workflow. Before, the name field became editable but the keyboard never appeared. A name you type before the new workflow finishes loading is now kept, and is no longer applied to the workflow you left.
-
-## [0.5.0] - 2026-11-07
+- Undo and redo requests for outputs before an imported run's boundary are now
+  refused by the extension, even when a client bypasses the dashboard gate.
+- Run export now preserves patch paths and binary or non-UTF-8 content, and only
+  redacts matching values on added text lines; import previews report patch redactions.
+- Exporting a run executed in a managed or named worktree now writes its paths
+  as `${workspaceFolder}/…`, so those paths remain portable with the bundle.
+- **Reset all to defaults** in Workflow Properties now also resets Max Steps
+  and Trusted External Roots to Inherit.
 
 ### Changed
 

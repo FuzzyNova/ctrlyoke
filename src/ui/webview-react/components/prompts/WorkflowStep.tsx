@@ -19,6 +19,7 @@ import {
 } from "@root/utils/TokenFormatting";
 import { useSettingsStore } from "@store/settingsStore";
 import { resolveEffectiveContextWindow } from "@utils/tokenUtils";
+import { resolveDisplayedAttemptTokens } from "@root/utils/TokenUsage";
 import { getStepKindIconClass } from "@utils/status";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
@@ -194,7 +195,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
     latestOutputTokens: latestOutput?.tokens,
     runtimeContextWindow: runtimeMeta,
   });
-  const attemptTokens = latestOutput?.tokens;
+  const attemptTokens = resolveDisplayedAttemptTokens(latestOutput);
   const attemptTotalLabel = formatTokenCount(
     resolveTokenTotal(
       attemptTokens?.total,

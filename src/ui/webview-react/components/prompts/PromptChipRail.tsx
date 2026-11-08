@@ -58,6 +58,7 @@ import {
   resolveEffectiveContextWindow,
 } from "@utils/tokenUtils";
 import { buildStepHoverTooltip } from "@root/utils/TokenFormatting";
+import { resolveDisplayedAttemptTokens } from "@root/utils/TokenUsage";
 import type { StepHarnessModel } from "./WorkflowStepRow";
 import {
   buildWorkflowStepEnabledState,
@@ -554,7 +555,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
       primaryAction: `${isScriptStep(step) ? "Script" : "Prompt"} ${index + 1} — click to edit, right-click for options`,
       contextWindow: ctx,
       harness: getChipHarnessId(step, status),
-      attemptTokens: latestOutput?.tokens,
+      attemptTokens: resolveDisplayedAttemptTokens(latestOutput),
       showCostEstimates,
     });
   };

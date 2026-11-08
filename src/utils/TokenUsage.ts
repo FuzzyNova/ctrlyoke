@@ -1,5 +1,7 @@
 import { CLI_EVENT_TYPES } from "../types/DashboardConstants";
 import type { CliEvent, CompactionData } from "../types/CliOutputTypes";
+import type { CliOutput } from "../types/WebviewMessageTypes";
+import type { AttemptTokenSnapshot } from "./TokenFormatting";
 
 export interface CompactionSummary {
   /** Number of compaction events present in the completed parser output. */
@@ -41,4 +43,23 @@ export function summarizeCompactionEvents(
     compactionCount,
     ...(hasKnownPreTokens ? { compactedContextTokens } : {}),
   };
+}
+
+/**
+ * An attempt's token snapshot with `compactionCount` raised to the number of
+ * compaction events streamed into its output so far. `tokens` is written only
+ * when the attempt completes, so without this a running step (or one that
+ * compacts again during post-completion follow-up activity) shows no
+ * compaction even though the output pane already displays the marker.
+ */
+export function resolveDisplayedAttemptTokens(
+  output: Pick<CliOutput, "tokens" | "structured"> | null | undefined
+): AttemptTokenSnapshot | undefined {
+  const tokens = output?.tokens;
+  const streamedCount =
+    summarizeCompactionEvents(output?.structured?.events)?.compactionCount ?? 0;
+  if (streamedCount <= (tokens?.compactionCount ?? 0)) {
+    return tokens;
+  }
+  return { ...tokens, compactionCount: streamedCount };
 }
