@@ -38,6 +38,11 @@ updates:
       # and 15.x writes a byte-identical font. Unblocked when the floor reaches 24.
       - dependency-name: svgicons2svgfont
         update-types: ["version-update:semver-major"]
+      # Blocked: 6.x requires Node >=22.22, above our engines.node floor
+      # (>=22.12). The CLI and MCP server watch files with it on the user's
+      # own Node. See dev/backlog/CHOKIDAR_6_UPGRADE.md.
+      - dependency-name: chokidar
+        update-types: ["version-update:semver-major"]
     groups:
       minor-and-patch:
         applies-to: version-updates
