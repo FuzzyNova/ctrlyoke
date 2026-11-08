@@ -193,7 +193,10 @@ export function StepContextMenu({
       role="menu"
       aria-label={label}
       tabIndex={-1}
-      className="step-context-menu bg-editor-bg border border-panel-border rounded-sm shadow-lg py-0.5 min-w-[160px] outline-none"
+      // cy-no-select: the menu is portaled to body, outside any chrome that
+      // carries the class, and the long press that opened it otherwise lands
+      // in an iOS text selection of the item labels.
+      className="step-context-menu cy-no-select bg-editor-bg border border-panel-border rounded-sm shadow-lg py-0.5 min-w-[160px] outline-none"
       onKeyDown={handleMenuKeyDown}
       onPointerDown={(e) => e.stopPropagation()}
       // Focus moves on mousedown (a tap's emulated one, too); cancelling it

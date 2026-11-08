@@ -362,7 +362,6 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
               isOpen={moreOpen}
               popupPos={morePopupPos}
               role="menu"
-              className="cy-no-select"
             >
               <div
                 role="presentation"

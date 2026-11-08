@@ -53,6 +53,11 @@ describe("StepContextMenu", () => {
     expect(screen.getByRole("separator")).toBeInTheDocument();
   });
 
+  it("is non-selectable so a long press does not select item labels on iOS", () => {
+    renderMenu([item("Copy")]);
+    expect(screen.getByRole("menu")).toHaveClass("cy-no-select");
+  });
+
   it("falls back to a generic accessible name", () => {
     renderMenu([item("Copy")]);
     expect(

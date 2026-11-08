@@ -1,5 +1,5 @@
 import React, { useRef } from "react";
-import { createPortal } from "react-dom";
+import { DropdownPortal } from "@components/shared/DropdownPortal";
 import { useClickOutside } from "@hooks/useClickOutside";
 import { useAnchoredPopupPosition } from "@hooks/useAnchoredPopupPosition";
 import { usePickerShortcutRequest } from "@hooks/usePickerShortcutRequest";
@@ -134,32 +134,20 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
         )}
       </button>
 
-      {isOpen &&
-        !disabled &&
-        popupPos &&
-        createPortal(
-          <div
-            ref={popupRef}
-            className="cy-dropdown-popup fixed bg-dropdown-bg border border-dropdown-border z-popover flex flex-col"
-            style={{
-              bottom: popupPos.bottom,
-              left: popupPos.left,
-              minWidth: popupPos.minWidth,
-              maxWidth: popupPos.maxWidth,
-              maxHeight: popupPos.maxHeight,
-            }}
-          >
-            {heading && (
-              <div className="flex items-center px-3 py-2 border-b border-dropdown-border bg-editor-bg shrink-0">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground">
-                  {heading}
-                </h3>
-              </div>
-            )}
-            {children}
-          </div>,
-          document.body
+      <DropdownPortal
+        ref={popupRef}
+        isOpen={isOpen && !disabled}
+        popupPos={popupPos}
+      >
+        {heading && (
+          <div className="flex items-center px-3 py-2 border-b border-dropdown-border bg-editor-bg shrink-0">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground">
+              {heading}
+            </h3>
+          </div>
         )}
+        {children}
+      </DropdownPortal>
     </>
   );
 };

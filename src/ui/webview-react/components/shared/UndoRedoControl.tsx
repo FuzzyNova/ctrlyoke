@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { createPortal } from "react-dom";
+import type { PopupPosition } from "@utils/dropdownUtils";
+import { DropdownPortal } from "./DropdownPortal";
 import {
   useWorkflowStore,
   useWorkflowTemporalStore,
@@ -311,13 +312,9 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
-  const [popupPos, setPopupPos] = useState<{
-    top: number;
-    left: number;
-    maxHeight: number;
-  } | null>(null);
+  const [popupPos, setPopupPos] = useState<PopupPosition | null>(null);
 
-  const getPopupPosition = useCallback(() => {
+  const getPopupPosition = useCallback((): PopupPosition | null => {
     if (!containerRef.current) {
       return null;
     }
@@ -639,60 +636,56 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
       )}
 
       {/* Dropdown */}
-      {isOpen &&
-        historyEntries.length > 0 &&
-        popupPos &&
-        createPortal(
-          <div
-            ref={popupRef}
-            role="listbox"
-            className="fixed min-w-[220px] overflow-y-auto bg-dropdown-bg border border-dropdown-border rounded-sm shadow-lg z-popover"
-            style={{
-              top: popupPos.top,
-              left: popupPos.left,
-              maxHeight: Math.min(popupPos.maxHeight, 280),
+      <DropdownPortal
+        ref={popupRef}
+        isOpen={isOpen && historyEntries.length > 0}
+        popupPos={
+          popupPos && {
+            ...popupPos,
+            maxHeight: Math.min(popupPos.maxHeight, 280),
+          }
+        }
+        role="listbox"
+        className="min-w-[220px] overflow-y-auto"
+      >
+        {historyEntries.map(({ label, stepCount, direction }) => (
+          <button
+            key={`${direction}-${stepCount}`}
+            type="button"
+            role="option"
+            aria-selected={false}
+            onClick={() => {
+              onAction?.(
+                "history-jump",
+                getDebugDetails({ stepCount, direction, isOpen: false })
+              );
+              handleJumpTo(stepCount, direction);
             }}
+            className={`cy-dropdown-row w-full text-left px-3 py-1.5 text-sm hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer flex items-center gap-2 ${
+              direction === UNDO_REDO_DIRECTIONS.REDO
+                ? "text-dropdown-fg opacity-80"
+                : "text-dropdown-fg"
+            }`}
           >
-            {historyEntries.map(({ label, stepCount, direction }) => (
-              <button
-                key={`${direction}-${stepCount}`}
-                type="button"
-                role="option"
-                aria-selected={false}
-                onClick={() => {
-                  onAction?.(
-                    "history-jump",
-                    getDebugDetails({ stepCount, direction, isOpen: false })
-                  );
-                  handleJumpTo(stepCount, direction);
-                }}
-                className={`cy-dropdown-row w-full text-left px-3 py-1.5 text-sm hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer flex items-center gap-2 ${
-                  direction === UNDO_REDO_DIRECTIONS.REDO
-                    ? "text-dropdown-fg opacity-80"
-                    : "text-dropdown-fg"
-                }`}
-              >
-                <Icon
-                  name={
-                    direction === UNDO_REDO_DIRECTIONS.REDO
-                      ? "codicon-redo"
-                      : "codicon-discard"
-                  }
-                  className="text-description-fg text-xs shrink-0"
-                />
-                <span className="flex-1 truncate">{label}</span>
-                {stepCount === 1 && (
-                  <kbd className="text-xs text-description-fg bg-keybinding-bg px-1.5 py-0.5 rounded-sm font-mono shrink-0">
-                    {direction === UNDO_REDO_DIRECTIONS.REDO
-                      ? formatShortcut("Ctrl", "Y")
-                      : formatShortcut("Ctrl", "Z")}
-                  </kbd>
-                )}
-              </button>
-            ))}
-          </div>,
-          document.body
-        )}
+            <Icon
+              name={
+                direction === UNDO_REDO_DIRECTIONS.REDO
+                  ? "codicon-redo"
+                  : "codicon-discard"
+              }
+              className="text-description-fg text-xs shrink-0"
+            />
+            <span className="flex-1 truncate">{label}</span>
+            {stepCount === 1 && (
+              <kbd className="text-xs text-description-fg bg-keybinding-bg px-1.5 py-0.5 rounded-sm font-mono shrink-0">
+                {direction === UNDO_REDO_DIRECTIONS.REDO
+                  ? formatShortcut("Ctrl", "Y")
+                  : formatShortcut("Ctrl", "Z")}
+              </kbd>
+            )}
+          </button>
+        ))}
+      </DropdownPortal>
     </div>
   );
 };
