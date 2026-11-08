@@ -6,6 +6,10 @@ Choose **Spec-Driven Loop** when you already have a spec or design document. **F
 
 Spec-Driven Loop asks for a `testCommand` (default `npm test`), which every queued step is told to pass and the review uses as its main gate, and a harness and model for each of two roles. The orchestrator runs the plan step and the review final step, which resumes the plan step's session, so both always use the same harness. Both run in interactive mode so you can watch and steer them. The implementer runs every step the orchestrator queues, each in a fresh headless session. The defaults are `opus` and `sonnet`, both on Claude Code, so the template works with only Claude Code installed. To use a different pairing, such as `gpt-6-luna` on Codex CLI for the implementer, pick it in the dialog and save it as the variable default.
 
+Feature-Driven Loop asks for the same `testCommand` and the same two harness and model pairs, with the same defaults. Its orchestrator also runs the step that writes the plan, interactively like the plan and review steps.
+
+Full Feature Pipeline asks for a harness and model for its two review steps, which give a second opinion on the plan and on the implementation. The default is `gpt-6.1-sol` on Codex CLI. Pick a different harness from the one that runs the rest of the workflow, so the reviewer is not the model that wrote the work.
+
 ### Loops commit every step {#loops-commit-every-step}
 
 Spec-Driven Loop, Feature-Driven Loop, Bug Hunt Loop, and Bug Drain Loop need a git repository, because each step commits its own work. The commits are how a review sees what each step did, and how you roll back a step that went wrong.

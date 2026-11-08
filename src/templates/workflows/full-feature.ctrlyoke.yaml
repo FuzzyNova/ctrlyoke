@@ -15,6 +15,11 @@ _templateMeta:
       type: harness
       default: codex-cli
       description: Second opinion. Pick a different harness than the one running the rest of the workflow — the model reviewing the plan and the implementation should not be the one that wrote them.
+    reviewModel:
+      type: model
+      harness: reviewHarness
+      default: gpt-6.1-sol
+      description: Use a capable model; catching what the author missed in the plan and the implementation takes judgment.
     testCommand:
       type: text
       default: npm test
@@ -45,6 +50,7 @@ steps:
 
   - name: review-plan
     harness: "{reviewHarness}"
+    model: "{reviewModel}"
     prompt: |
       Review the implementation plan in @{planDocument} as a second opinion — you did not write it.
 
@@ -77,6 +83,7 @@ steps:
 
   - name: review
     harness: "{reviewHarness}"
+    model: "{reviewModel}"
     prompt: |
       Review the finished implementation against @{planDocument} — again as a second opinion.
 

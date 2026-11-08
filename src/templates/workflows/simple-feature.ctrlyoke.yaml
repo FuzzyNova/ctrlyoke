@@ -23,5 +23,6 @@ steps:
 
   - name: commit
     prompt: |
-      Generate a conventional commit message for the changes. Format: feat(scope): description
+      Review the working tree changes, then commit them with a conventional commit message
+      (`feat(scope): description`). No attribution or generated-by trailers.
     resumeSession: true

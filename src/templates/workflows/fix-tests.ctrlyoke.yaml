@@ -11,12 +11,30 @@ _templateMeta:
 # prompts
 steps:
   - name: fix-tests
-    agent: test-repair
     prompt: |
-      There are currently failing tests. Run {testCommand} to see which tests are failing, then fix them.
+      There are currently failing tests. Run {testCommand} to see which tests are failing, then
+      make them genuinely pass by fixing the underlying problem.
+
+      1. Read the failure output first: which tests failed, and the actual error (assertion diff,
+         thrown exception, type error, timeout).
+      2. Trace each failure to its root cause. Usually the production code under test is wrong;
+         sometimes the test is.
+      3. Fix the production code when it is broken. Change a test only when the test itself is
+         demonstrably wrong (it asserts outdated behavior or has bad setup), and say why.
+      4. Make the smallest correct change, following the codebase's existing patterns. Don't
+         refactor unrelated code.
+
+      Never mask a failure to get a green run: don't skip, delete, comment out, or mark tests
+      as only/skip/pending, don't weaken or delete assertions, and don't wrap the failing path
+      in a try/catch or loosen a comparison. If a failure is environmental (a missing
+      dependency, a misconfigured command) rather than a code defect, say so instead of forcing
+      an unrelated code change.
+
+      End with a short summary: what failed, the root cause, and what you changed.
     endCondition:
       script: "{testCommand}"
       maxRetries: 5
       retryPrompt: |
-        Tests are still failing. Please fix the remaining issues:
+        Tests are still failing. Fix the remaining issues at their root cause, without
+        skipping tests or weakening assertions:
         $endCondition:stdout

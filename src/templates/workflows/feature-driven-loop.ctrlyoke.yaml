@@ -12,12 +12,37 @@ _templateMeta:
       type: text
       default: .ctrlyoke/plans/plan.md
       description: Where the plan is written. Rename it per feature so runs do not overwrite each other.
+    testCommand:
+      type: text
+      default: npm test
+      description: Your test suite. Every queued step must pass it, and the review uses it as the main gate.
+    orchestratorHarness:
+      type: harness
+      default: claude-cli
+      description: Runs the planning steps (write-plan and plan) and the review final step, which resumes the plan step's session.
+    orchestratorModel:
+      type: model
+      harness: orchestratorHarness
+      default: opus
+      description: Use your most capable model; writing the plan, splitting it into steps, and reviewing the result take judgment.
+    implementerHarness:
+      type: harness
+      default: claude-cli
+      description: Runs every step the orchestrator queues.
+    implementerModel:
+      type: model
+      harness: implementerHarness
+      default: sonnet
+      description: Each queued step gets a self-contained chunk of the plan, so a faster, cheaper model is often enough.
 
-# Every queued step is its own island: a fresh session that gets all the context
-# it needs from its own prompt and the repo. The plan step and finalStep are the
-# exception — the finalStep resumes the plan step's orchestrator session.
+# Every queued step is its own island: a fresh, headless session that gets all
+# the context it needs from its own prompt and the repo. Chaining them into one
+# session just drives that session into repeated compaction as it tries to hold
+# every step at once. The orchestrator steps are the exception — they run
+# interactively, and the finalStep resumes the plan step's session, see below.
 resumeSession: false
 priorContext: none
+executionMode: headless
 
 # First write a durable plan, then let the orchestrator stage visible work and
 # review it repeatedly until the goal is met.
@@ -43,13 +68,21 @@ steps:
         consumers, keep related tests beside each behavior change, and identify any
         independent work only when it can truly proceed in parallel.
       - A test strategy with focused tests for each requirement and the relevant type,
-        lint, and broader test commands. Do not claim tests passed unless you ran them.
+        lint, and broader test commands. Every step must pass `{testCommand}`. Do not
+        claim tests passed unless you ran them.
       - Open questions, assumptions, and risks. Resolve what repository evidence can
         answer; clearly flag anything that still needs a decision.
 
       Keep the plan concise, grounded in the current code, and free of speculative
       implementation details. Do not modify implementation files. When the plan is
       written, commit it with a plain conventional commit message.
+    # The orchestrator's settings sit after the prompt so the template dialog
+    # asks for the feature, plan path and test command first. The orchestrator
+    # steps run interactively so you can watch and steer the planning and
+    # review sessions.
+    harness: "{orchestratorHarness}"
+    model: "{orchestratorModel}"
+    executionMode: interactive
     # Stop before any work unless this is a git repository with a clean tree:
     # otherwise the commit gates would fail on changes that aren't the agent's,
     # and their retry would push the agent to commit them.
@@ -81,25 +114,36 @@ steps:
       clear problem with it; if the plan needs more thought than you can give it here,
       make finalizing the plan the first queued step. Use your judgment on how to split
       the work — that judgment is the point of this workflow. Every queued step must be
-      self-contained, must keep the planning docs current, and must commit its own work
-      before finishing.
+      self-contained, must keep the planning docs current, must pass `{testCommand}`,
+      and must commit its own work before finishing.
 
       Once you've queued the plan, end your turn. A review pass will run automatically
       after everything you queued has completed.
+    harness: "{orchestratorHarness}"
+    model: "{orchestratorModel}"
+    executionMode: interactive
     # The orchestrator steps never run alongside other steps, so they can
     # require a clean tree when they end. A dirty tree resumes the step's
-    # session to finish and commit; after two retries the workflow stops.
-    # stderr is folded into stdout so a git error fails the check instead of
-    # leaving stdout empty and passing it.
+    # session to finish and commit; after two retries the workflow stops. The
+    # test command stays in the prompt rather than here: agents run it anyway,
+    # so gating on it too would run the suite twice per step. stderr is folded
+    # into stdout so a git error fails the check instead of leaving stdout
+    # empty and passing it.
     endCondition: &committed
       script: git status --porcelain 2>&1
       compareSource: stdout
       operator: isEmpty
       maxRetries: 2
       retryPrompt: |
-        You left uncommitted changes. Finish the work, make sure the tests pass, and
-        commit your own files with a plain conventional commit message.
+        You left uncommitted changes. Finish the work, make sure `{testCommand}`
+        passes, and commit your own files with a plain conventional commit message.
         $endCondition:stdout
+
+# Queued steps inherit these workflow defaults; the planning steps and finalStep
+# override them with the orchestrator's harness and model. They sit after the
+# steps so the template dialog asks for the feature and plan path first.
+harness: "{implementerHarness}"
+model: "{implementerModel}"
 
 # The plan step's clean-tree gate, offered to the orchestrator as the
 # `committed` preset. It attaches the preset (`endCondition: { use:
@@ -112,6 +156,11 @@ conditions:
 finalStep:
   name: review
   agent: workflow-orchestrator
+  # Same harness as the plan step: a session can only be resumed on the harness
+  # that started it.
+  harness: "{orchestratorHarness}"
+  model: "{orchestratorModel}"
+  executionMode: interactive
   mcpServers:
     - ctrlyoke
   # Resume the orchestrator session started by the plan step (step 2 above), so
@@ -124,10 +173,10 @@ finalStep:
     @{planDoc}
 
     All the steps you queued should have run by now. Verify the work is actually
-    complete, inspect it, fix any errors you find, and commit your cleanup. If a large
-    chunk is still missing or wrong, use edit_step/remove_step/reorder_steps for
-    pending work or append_step to add more steps and
-    let the loop continue. Once everything is done, give me a real summary of what was
+    complete, inspect it, fix any errors you find, and commit your cleanup.
+    `{testCommand}` is the main gate. If a large chunk is still missing or wrong,
+    use edit_step/remove_step/reorder_steps for pending work or append_step to add
+    more steps and let the loop continue. Once everything is done, give me a real summary of what was
     built and end your turn.
 
     You don't need to work out whether this is your first review pass — you're

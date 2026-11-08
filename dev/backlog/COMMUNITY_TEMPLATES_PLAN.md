@@ -256,6 +256,21 @@ from the drawer's active scope.
 
 ---
 
+## Seed templates
+
+Templates to have in `community-templates/` when Phase 1 ships, so the gallery
+isn't empty on day one and contributors have real examples to copy. These are
+ideas that were deliberately kept out of the built-ins to keep that set lean.
+
+- **Review Branch.** Review the current branch against its base (`~diff` and
+  the branch's commits), fix what it finds, and gate on the test command. It
+  runs on a capable model, because reviewing takes judgment. No built-in shows
+  the diff or commit references, and reviewing work an agent already did is one
+  of the most common things people do with one. Proposed 2026-11-07, during the
+  built-in template trim.
+
+---
+
 ## Decisions
 
 - **Repo-hosted, PR-reviewed sharing**, not Gists or a hosted DB — reuses

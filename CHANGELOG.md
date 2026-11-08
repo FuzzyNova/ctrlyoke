@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The Feature-Driven Loop template now works like Spec-Driven Loop. It asks for a `testCommand`, which every queued step is told to pass and the review uses as its main gate. It also asks for a harness and model for the orchestrator and for the implementer. The orchestrator writes the plan, queues the work and reviews it, on `opus` by default, in interactive mode so you can watch and steer it. Queued steps run headless on the implementer, on `sonnet` by default. Both default to Claude Code. Before, every step ran on your default harness, model and execution mode.
+- The bundled `test-repair` agent is gone. Its instructions are now part of the Fix Tests template's prompt. A workflow you created from Fix Tests earlier still runs, but it logs that the agent was not found and runs without those instructions. Delete its `agent: test-repair` line, or recreate the workflow from the template to get the new prompt.
+- The Simple Feature template's last step now commits the changes. Before, it only wrote a commit message.
+- The Full Feature Pipeline template now asks for a model next to its review harness, defaulting to `gpt-6.1-sol` on Codex CLI. Before, the review steps ran on that harness's default model.
 - Antigravity steps now always get absolute file paths, as OpenCode steps already do, whatever `ui.useAbsolutePathReferences` says. Some agy models resolved a relative path such as `.ctrlyoke/temp/...` against the wrong folder, searched the disk for the file and never read the step's prompt.
 
 ### Fixed

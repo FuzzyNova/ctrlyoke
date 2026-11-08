@@ -37,7 +37,7 @@ in order, and the first agent with a matching name wins:
 5. workspace harness directories: `.github/agents/`, `.claude/agents/`,
    `.agents/`, `.opencode/agents/`, and `.qwen/agents/`
 6. the agents bundled with ctrlyoke, such as `ctrlyoke-workflow-composer`,
-   `ctrlyoke-tech-support`, `workflow-orchestrator`, and `test-repair`
+   `ctrlyoke-tech-support`, and `workflow-orchestrator`
 
 Put an agent with the same name in any of the earlier locations to override a
 bundled one. See [Same name in more than one place](#duplicates) for how to

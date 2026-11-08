@@ -821,6 +821,11 @@ suite("TemplateManager variable metadata", () => {
         [
           ["featureDescription", true, undefined],
           ["planDoc", undefined, ".ctrlyoke/plans/plan.md"],
+          ["testCommand", undefined, "npm test"],
+          ["orchestratorHarness", undefined, "claude-cli"],
+          ["orchestratorModel", undefined, "opus"],
+          ["implementerHarness", undefined, "claude-cli"],
+          ["implementerModel", undefined, "sonnet"],
         ]
       );
       assert.strictEqual(
@@ -846,6 +851,26 @@ suite("TemplateManager variable metadata", () => {
       assert.strictEqual(workflow.steps?.[1].name, "plan");
       assert.strictEqual(workflow.finalStep?.name, "review");
       assert.strictEqual(workflow.finalStep?.sessionId, 2);
+      // Planning and review run on the orchestrator pair; the review resumes
+      // the plan step's session, so they must share a harness. Queued steps
+      // inherit the implementer pair from the workflow defaults.
+      assert.strictEqual(workflow.harness, "claude-cli");
+      assert.strictEqual(workflow.model, "sonnet");
+      for (const step of [
+        workflow.steps?.[0],
+        workflow.steps?.[1],
+        workflow.finalStep,
+      ]) {
+        assert.strictEqual(step?.harness, "claude-cli");
+        assert.strictEqual(step?.model, "opus");
+        assert.strictEqual(step?.executionMode, "interactive");
+      }
+      assert.strictEqual(workflow.executionMode, "headless");
+      assert.ok(workflow.steps?.[1].prompt.includes("`npm test`"));
+      assert.ok(workflow.finalStep?.prompt.includes("`npm test`"));
+      assert.ok(
+        workflow.conditions?.committed?.retryPrompt?.includes("`npm test`")
+      );
       assert.ok(
         workflow.steps?.[1].prompt.includes("@.ctrlyoke/plans/plan.md")
       );
@@ -1023,6 +1048,46 @@ suite("TemplateManager variable metadata", () => {
           assert.ok(
             extracted.has(name),
             `${fileName} declares ${name} in _templateMeta but never uses it`
+          );
+        }
+      }
+    });
+
+    // A step whose agent is missing only logs a warning and runs without its
+    // instructions, so a dangling name in a built-in would fail silently.
+    // Checked against the source agents: a removed agent can linger in out/.
+    test("names only agents that ship with ctrlyoke", () => {
+      const workflowsDirectory = path.resolve(
+        __dirname,
+        "../../templates/workflows"
+      );
+      const agentsDirectory = path.resolve(
+        __dirname,
+        "../../../src/templates/agents"
+      );
+      for (const fileName of fs
+        .readdirSync(workflowsDirectory)
+        .filter((name) => name.endsWith(".ctrlyoke.yaml"))) {
+        const workflow = jsYaml.load(
+          fs.readFileSync(path.join(workflowsDirectory, fileName), "utf-8")
+        ) as {
+          steps?: Array<{
+            agent?: string;
+            parallel?: Array<{ agent?: string }>;
+          }>;
+          finalStep?: { agent?: string };
+        };
+        const agents = [
+          ...(workflow.steps ?? []).flatMap((step) => [
+            step.agent,
+            ...(step.parallel ?? []).map((member) => member.agent),
+          ]),
+          workflow.finalStep?.agent,
+        ].filter((agent): agent is string => agent !== undefined);
+        for (const agent of agents) {
+          assert.ok(
+            fs.existsSync(path.join(agentsDirectory, `${agent}.agent.md`)),
+            `${fileName} names agent ${agent}, which is not bundled`
           );
         }
       }
