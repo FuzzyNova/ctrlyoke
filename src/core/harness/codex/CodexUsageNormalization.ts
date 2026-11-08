@@ -1,3 +1,4 @@
+import { isRecord, parseFiniteNumber as asFiniteNumber } from "../../../utils/JsonTypeGuards";
 import {
   HARNESS_IDS,
   HARNESS_QUOTA_SOURCES,
@@ -19,21 +20,6 @@ interface CodexRateLimitBucket {
   secondary?: unknown;
   planType?: unknown;
   plan_type?: unknown;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function asFiniteNumber(value: unknown): number | undefined {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  return undefined;
 }
 
 function asNonEmptyString(value: unknown): string | undefined {

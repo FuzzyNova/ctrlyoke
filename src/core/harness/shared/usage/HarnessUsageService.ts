@@ -1,3 +1,4 @@
+import { isRecord } from "../../../../utils/JsonTypeGuards";
 import * as fs from "fs/promises";
 import * as path from "path";
 import {
@@ -58,10 +59,6 @@ interface PersistedProviderUsage {
 
 const HARNESS_ID_LIST = Object.values(HARNESS_IDS) as HarnessId[];
 const VALID_HARNESS_IDS = new Set<HarnessId>(HARNESS_ID_LIST);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function localDayKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;

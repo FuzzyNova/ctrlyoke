@@ -1,3 +1,4 @@
+import { isRecord as isPlainObject } from "./JsonTypeGuards";
 /**
  * skills.sh registry client for the Agent & Skills Manager.
  *
@@ -35,7 +36,6 @@ import { isSafePathSegment } from "./PathSecurity";
 import topSkillsSnapshotData from "./generated/skillsShTopSkills.json";
 
 type FetchFn = typeof fetch;
-type JsonRecord = Record<string, unknown>;
 
 /** Dev override for the skills.sh base URL, like the CLI's `SKILLS_API_URL`. */
 export const SKILLS_API_URL_ENV = "CTRLYOKE_SKILLS_API_URL";
@@ -224,10 +224,6 @@ export function toSkillRelativePath(
   if (!relative || relative.startsWith("/")) return null;
   const segments = relative.split("/");
   return segments.every(isSafePathSegment) ? relative : null;
-}
-
-function isPlainObject(value: unknown): value is JsonRecord {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function optionalText(value: unknown): string | undefined {

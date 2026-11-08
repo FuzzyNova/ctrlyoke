@@ -1,3 +1,4 @@
+import { isRecord } from "../../utils/JsonTypeGuards";
 import * as fs from "fs/promises";
 import type {
   RunnerHostIdentity,
@@ -310,10 +311,6 @@ function isWorkingFile(value: unknown): value is WorkingFile {
     return false;
   }
   return true;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isExecutionState(value: unknown): value is ExecutionState {

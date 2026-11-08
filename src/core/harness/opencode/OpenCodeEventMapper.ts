@@ -1,3 +1,4 @@
+import { isRecord } from "../../../utils/JsonTypeGuards";
 /**
  * Shared event-mapping utilities for OpenCode harness parsers.
  *
@@ -51,10 +52,6 @@ export function openCodeStepTotal(
     (sum, value) => sum + (typeof value === "number" ? value : 0),
     0
   );
-}
-
-function isRecord(value: unknown): value is Record<string, any> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /** Text of an OpenCode 2 tool result's `content` array. */

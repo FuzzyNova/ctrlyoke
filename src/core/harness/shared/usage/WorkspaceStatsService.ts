@@ -1,3 +1,4 @@
+import { isRecord } from "../../../../utils/JsonTypeGuards";
 import * as fs from "fs/promises";
 import type { Dirent } from "fs";
 import {
@@ -84,10 +85,6 @@ function emptyData(now: number): LifetimeUsageStoreData {
     skippedRunCount: 0,
     lineages: {},
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isManifest(value: unknown): value is WorkflowRunManifest {

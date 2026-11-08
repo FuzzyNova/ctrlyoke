@@ -1,3 +1,4 @@
+import { isRecord } from "../utils/JsonTypeGuards";
 import {
   END_CONDITION_PROPERTIES,
   PROMPT_PROPERTIES,
@@ -104,9 +105,7 @@ export function getTextRole(
   );
 }
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+export { isRecord };
 
 export function valueAt(root: unknown, path: WorkflowPath): unknown {
   let node = root;

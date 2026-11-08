@@ -1,3 +1,4 @@
+import { isRecord as isPlainObject } from "../utils/JsonTypeGuards";
 import { createHash } from "crypto";
 import {
   CTRLYOKE_SETTINGS_DEFAULTS,
@@ -71,10 +72,6 @@ function isNonEmptyString(value: unknown): boolean {
 
 function isPresent(value: unknown): boolean {
   return value !== null && value !== undefined;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 /**

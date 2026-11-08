@@ -1,3 +1,4 @@
+import { isRecord } from "../../../utils/JsonTypeGuards";
 import type { CapabilitiesModel } from "../../../types/CapabilitiesTypes";
 import { isPinnedClaudeModelId } from "../../../utils/ModelConstants";
 import { resolveCliCommand } from "../shared/CliLauncherResolver";
@@ -50,10 +51,6 @@ export interface ClaudeModelCatalogClientOptions {
   spawnProcess?: StdioProbeSpawn;
   resolveCommand?: typeof resolveCliCommand;
   timeoutMs?: number;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /**

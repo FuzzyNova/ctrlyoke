@@ -1,3 +1,4 @@
+import { isRecord as isPlainObject } from "./JsonTypeGuards";
 /**
  * MCP server discovery utilities.
  *
@@ -64,10 +65,6 @@ interface LocalConfigDescriptor {
     | "antigravity-json"
     | "opencode-json"
     | "codex-toml";
-}
-
-function isPlainObject(value: unknown): value is JsonRecord {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function isStringArray(value: unknown): value is string[] {

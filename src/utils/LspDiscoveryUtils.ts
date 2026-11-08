@@ -1,3 +1,4 @@
+import { isRecord } from "./JsonTypeGuards";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { LanguageServerDefinition } from "../types/CtrlYokeSettings";
@@ -25,9 +26,6 @@ interface Descriptor {
   pluginRoot?: string;
 }
 
-function isRecord(value: unknown): value is JsonRecord {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
-}
 function strings(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")

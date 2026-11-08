@@ -1,3 +1,4 @@
+import { isRecord } from "./JsonTypeGuards";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { type FileLockOptions, withFileLock } from "./FileLockUtils";
@@ -452,8 +453,4 @@ async function lstatIfExists(
 
 async function pathExists(filePath: string): Promise<boolean> {
   return (await lstatIfExists(filePath)) !== undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

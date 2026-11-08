@@ -1,3 +1,4 @@
+import { isRecord } from "../../../utils/JsonTypeGuards";
 /**
  * Strictly typed subset of Antigravity's transcript_full.jsonl vocabulary.
  * Unknown provider variants remain representable through the string fields,
@@ -22,9 +23,7 @@ export interface AntigravityTranscriptEntry {
   [key: string]: unknown;
 }
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+export { isRecord };
 
 function isAntigravityPlannerToolCall(
   value: unknown

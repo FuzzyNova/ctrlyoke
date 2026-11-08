@@ -1,3 +1,4 @@
+import { isRecord } from "./JsonTypeGuards";
 import * as crypto from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
@@ -1231,10 +1232,6 @@ function cloneWorkflowValue(value: unknown): unknown {
     );
   }
   return value;
-}
-
-function isRecord(value: unknown): value is Record<string, any> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function addWarning(

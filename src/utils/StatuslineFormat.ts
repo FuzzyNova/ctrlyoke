@@ -1,3 +1,4 @@
+import { isRecord, finiteNumber } from "./JsonTypeGuards";
 // Keep this standalone statusline module dependent only on import-free leaves.
 import { formatCompactTokenMagnitude } from "./CompactMagnitude";
 
@@ -348,16 +349,6 @@ type StatusLineContextBand =
   (typeof STATUS_LINE_CONTEXT_BANDS)[keyof typeof STATUS_LINE_CONTEXT_BANDS];
 
 const ANSI_RESET = "\u001b[0m";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function finiteNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
-}
 
 function safeLabel(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length > 0

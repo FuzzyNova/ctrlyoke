@@ -1,3 +1,4 @@
+import { isRecord } from "../utils/JsonTypeGuards";
 import {
   STEP_TYPES,
   BULK_EDITABLE_PROMPT_STEP_KEYS,
@@ -315,10 +316,6 @@ export function stripTimelineDuplicatedWorkingFileOutput(
         }
       : {}),
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function cloneStringArray(value: unknown): string[] | undefined {

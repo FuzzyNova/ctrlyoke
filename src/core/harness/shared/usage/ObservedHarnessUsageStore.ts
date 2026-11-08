@@ -1,3 +1,4 @@
+import { isRecord } from "../../../../utils/JsonTypeGuards";
 import * as fs from "fs/promises";
 import * as path from "path";
 import type { Dirent } from "fs";
@@ -88,10 +89,6 @@ function emptyStore(now: number): ObservedHarnessUsageStoreData {
     runs: {},
     buckets: EMPTY_BUCKETS(),
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isLocalDayKey(value: string): boolean {

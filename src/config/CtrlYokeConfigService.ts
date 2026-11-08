@@ -1,3 +1,4 @@
+import { isRecord as isPlainObject } from "../utils/JsonTypeGuards";
 import type {
   CtrlYokeGlobalSettings,
   PartialCtrlYokeSettings,
@@ -150,10 +151,6 @@ function getSettingSchema(settingPath: string): JsonSchema | undefined {
     current = resolveSchemaRef(current).properties?.[part];
   }
   return current;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function cloneSettingsValue<T>(value: T): T {

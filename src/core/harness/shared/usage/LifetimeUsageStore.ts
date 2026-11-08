@@ -1,3 +1,4 @@
+import { isRecord } from "../../../../utils/JsonTypeGuards";
 import * as fs from "fs/promises";
 import type { Dirent } from "fs";
 import * as path from "path";
@@ -97,10 +98,6 @@ export interface LifetimeBackfillBatch {
   contributions: readonly LifetimeRunContribution[];
   skippedRunCount: number;
   dirMtimeMs?: number;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function numeric(value: unknown): number {

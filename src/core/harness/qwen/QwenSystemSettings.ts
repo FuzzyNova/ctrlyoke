@@ -1,3 +1,4 @@
+import { isRecord } from "../../../utils/JsonTypeGuards";
 import * as fs from "fs/promises";
 import * as path from "path";
 import {
@@ -68,10 +69,6 @@ export function defaultQwenSystemDefaultsPath(
     pathApi.dirname(defaultQwenSystemSettingsPath(env, platform)),
     "system-defaults.json"
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /**

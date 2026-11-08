@@ -1,3 +1,4 @@
+import { isRecord as isPlainObject } from "./JsonTypeGuards";
 import { modify, applyEdits, parse } from "jsonc-parser";
 import type {
   AnyTargetId,
@@ -48,10 +49,6 @@ export interface HarnessMcpExportResult {
 export interface HarnessMcpDeleteResult {
   filePath: string;
   removedCount: number;
-}
-
-function isPlainObject(value: unknown): value is JsonObject {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function toVsCodeEntry(server: McpServerConfig): JsonObject | null {

@@ -8,9 +8,10 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
 
 - **2026-11-08, pass 1** — hunted the harness layer and shared helpers. Fixed directly:
   `CopilotNotificationMonitor.buildHookConfig` re-implemented the base class's
-  `encodePermissionRequestHook`. Queued: single-sourced JSON type guards
-  (`isRecord`/`asFiniteNumber`), and routing inline `instanceof Error ? … : String(…)`
-  copies through `getErrorMessage` in `src/utils/ErrorUtils.ts`.
+  `encodePermissionRequestHook`; single-sourced matching JSON type guards and number
+  parsers in `src/utils/JsonTypeGuards.ts`. Still queued: routing inline
+  `instanceof Error ? … : String(…)` copies through `getErrorMessage` in
+  `src/utils/ErrorUtils.ts`.
 
 ## Deferred
 
@@ -29,3 +30,7 @@ _None yet._
 - `QwenNotificationMonitor` building its node command without quotes while Copilot inlines
   quoted bash/PowerShell commands — intentional: each harness's hook runner parses the
   command differently (comments in both files explain why).
+- `isRecord` in `src/core/harness/antigravity/AntigravityStreamJsonUsage.ts` and
+  `src/license/LicenseService.ts` — their local `JsonRecord` aliases carry readonly or
+  required fields; replacing them with `Record<string, unknown>` would widen/change the
+  type guard contract.

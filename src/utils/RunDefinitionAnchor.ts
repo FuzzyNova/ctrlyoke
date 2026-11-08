@@ -1,3 +1,4 @@
+import { isRecord } from "./JsonTypeGuards";
 import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
@@ -170,10 +171,6 @@ export function isRunDefinitionChangedError(
 
 /** Re-reads before concluding a definition changed; see {@link verifyRunDefinitionFile}. */
 const VERIFY_READ_ATTEMPTS = 3;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
