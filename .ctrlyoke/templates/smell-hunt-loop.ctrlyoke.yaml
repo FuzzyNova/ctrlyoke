@@ -1,0 +1,206 @@
+schemaVersion: 1
+_templateMeta:
+  name: smell-hunt-loop
+  description: Never-ending final-step-only loop. Each pass reviews the last round of refactors, finds at least two behavior-preserving code-smell fixes (DRY violations first), and queues them. Stop it manually or with maxSteps.
+  variables:
+    orchestratorHarness:
+      type: harness
+      default: claude-cli
+      description: Harness that runs the smell hunter (the final step).
+    orchestratorModel:
+      type: text
+      default: opus
+      description: Smell hunter model, as named by the orchestrator harness.
+    implementerHarness:
+      type: harness
+      default: codex-cli
+      description: Harness that runs every queued refactor step.
+    implementerModel:
+      type: text
+      default: gpt-6-luna
+      description: Implementer model, as named by the implementer harness.
+
+# Queued refactor steps inherit these workflow defaults, so the implementer
+# harness/model live here and the orchestrator overrides them on finalStep.
+# Every queued step is a fresh, self-contained session.
+resumeSession: false
+priorContext: none
+harness: "{implementerHarness}"
+model: "{implementerModel}"
+executionMode: headless
+agent: null
+skills:
+  - commit
+
+# No up-front steps: the first pass finds an empty history, skips the review,
+# and goes straight to hunting. The loop only ends when a pass queues nothing,
+# so in practice it runs until you stop it or it hits maxSteps.
+steps: []
+
+finalStep:
+  name: hunt-smells
+  harness: "{orchestratorHarness}"
+  model: "{orchestratorModel}"
+  executionMode: headless
+  agent: workflow-orchestrator
+  mcpServers:
+    - ctrlyoke
+  # Each pass is a fresh session; the previous pass's output is attached so
+  # it can pick a different area to hunt in or follow up on the last round.
+  resumeSession: false
+  priorContext: finalStepPrevious
+  # Each pass starts only with a clean tree, so the commit gate never pushes the
+  # agent to commit changes that aren't its own.
+  preCondition:
+    script: git status --porcelain 2>&1
+    compareSource: stdout
+    operator: isEmpty
+    onFail: stopWorkflow
+  prompt: |
+    Your goal is to review the refactors that landed since the previous final-step pass,
+    then find at least two new code smells in ctrlyoke that can be fixed without changing
+    behavior, and queue their fixes.
+
+    You run as this workflow's final step. Every pass is a new session, so you have no
+    memory of earlier passes; the previous pass's output (if any) is attached above. Use
+    it to hunt in a different part of the codebase, or to queue follow-up work if the
+    last round of refactors needs it. Use workflow_status and read_output for more
+    detail. The durable record across passes is dev/backlog/CODE_SMELL_LEDGER.md (see
+    section 3); create it if it doesn't exist.
+
+    ## 1. Review the last round of refactors
+
+    Use workflow_status to find the steps that ran since the previous final-step pass. If
+    there are none, skip to section 2. Steps named like "merge from main" are merges I
+    added to bring in work from main; don't review them as refactors, but do account for
+    what they brought in (a merge can reintroduce a duplicate a refactor just removed).
+
+    Review every refactor that landed in that window (git log and the diffs). Confirm each
+    one:
+    - Preserves behavior. Look hard at edge cases the old copies handled differently: an
+      extra null check, a different default, a different error message, a different
+      ordering. A merged helper that quietly drops one copy's special case is a
+      regression.
+    - Actually removed every copy it set out to replace, and didn't leave a
+      near-duplicate behind.
+    - Didn't change a public contract (see "Hard limits" below).
+    - Kept or added test coverage for the shared code, and `npm test` passes.
+    - Is simpler than what it replaced. An abstraction with more parameters and flags than
+      the copies had lines is a worse smell than the duplication; revert or simplify it.
+
+    Fix the problems you find and commit them. If a follow-up is too big for this session,
+    use append_step to queue it.
+
+    ## 2. Hunt for new smells
+
+    Find at least two new smells worth fixing. In priority order, look for:
+
+    1. **Duplicated logic (DRY).** The same algorithm, parsing, validation, path handling,
+       error formatting, retry loop or UI pattern written out in more than one place,
+       across files or layers (core, CLI, MCP server, extension, hosted server, React
+       dashboard). Prefer duplication that has already drifted, or is likely to: copies
+       that differ only in a bug fix one of them got are the best finds.
+    2. **Duplicated or hardcoded strings.** A string used for flow control (`==`, `!=`,
+       `switch`/`case`) that isn't a constant in src/types/DashboardConstants.ts or
+       src/types/CtrlYokeTypes.ts, or the same literal (message type, setting key, file
+       name, docs URL) spelled out in several files instead of coming from its single
+       source.
+    3. **Structural casts and untyped dispatch.** `as unknown as { ... }` casts, test
+       doubles without an `implements` clause, and string-keyed dynamic dispatch, as
+       described under "Make structural relationships nominal" in
+       .github/copilot-instructions.md.
+    4. **Dead code.** Unused exports, methods, parameters and files. `npm run knip` and
+       `node scripts/find-dead-methods.mjs` are starting points, not verdicts: confirm
+       nothing reaches the code dynamically (command IDs, message routers, MCP tool
+       tables, webview message handlers, tests) before calling it dead.
+    5. **Separation of concerns (SOLID).** Only concrete, local cases: a function doing two
+       unrelated jobs that callers need separately, a module reaching into another
+       layer's internals, a class that every unrelated change has to touch. Skip anything
+       whose fix is "redesign this subsystem"; ledger it instead (section 3).
+
+    Ways to find them:
+    - Read the source code, especially areas that grew fast. Recent git history is a good
+      guide: a feature built in a hurry often copied an existing pattern instead of
+      reusing it.
+    - Search for distinctive lines from one copy to find the others.
+    - Compare parallel implementations that should share code: the six harness providers
+      under src/core/harness/, the CLI vs MCP server vs extension adapters, the VS Code
+      dashboard bridge vs the hosted server.
+
+    Before you queue anything:
+    - Check dev/backlog/CODE_SMELL_LEDGER.md so you don't re-propose something already
+      deferred or ruled out.
+    - Rule out intentional duplication. Some copies are deliberate: code that must stay
+      dependency-free (webview vs extension bundles, standalone scripts, generated files),
+      copies kept separate because they are expected to diverge, and coincidental
+      similarity between things that mean different things. Check the instruction file
+      for the area (routing table in CLAUDE.md), the comments next to the code, and
+      dev/implemented/ before calling it a smell.
+    - Confirm the fix is safe: the code it touches has test coverage, or the queued step
+      can add characterization tests first that pin the current behavior of every copy.
+
+    Hard limits. Never queue a change that:
+    - Changes anything a user writes, stores or scripts against: workflow and settings
+      schemas, persisted run files, CLI `--json` envelopes, exit codes and flags, MCP
+      tools, command IDs, setting keys. Internal code behind those contracts is fair game.
+    - Hand-edits generated files (see "Generated docs" in .github/copilot-instructions.md).
+    - Is purely cosmetic: formatting, naming preferences, comment style, reordering.
+    - Introduces a speculative abstraction for duplication that doesn't exist yet.
+
+    ## 3. Queue and record
+
+    For each smell worth fixing with a clear, behavior-preserving fix, use append_step to
+    queue a step that:
+    - Names every file and line range involved, and states exactly what the single source
+      should be and where it lives.
+    - Lists every behavioral difference between the copies and says how each is preserved
+      (a parameter, a caller-side branch, or an explicit note that the difference was a
+      bug, in which case it's a bug fix: file it in dev/bugs/ per dev/bugs/README.md and
+      have the step fix it too).
+    - Adds characterization tests first where coverage is thin, then refactors, then
+      passes `npm test`, then commits its own work with a plain conventional `refactor:`
+      commit message.
+    Every queued step runs in a fresh session, so make it self-contained. Keep each step to
+    one smell (group closely related copies into one step), and queue at most five steps
+    per pass so the next review stays tractable.
+
+    Record what you won't queue in dev/backlog/CODE_SMELL_LEDGER.md, one bullet each with
+    the files involved and a one-line reason, under one of two headings:
+    - **Deferred**: real smells whose fix needs a design change or touches a public
+      contract. Flag each in your summary.
+    - **Ruled out**: intentional or coincidental duplication, so later passes skip it.
+
+    Commit the ledger before you end your turn.
+
+    In the rare case that you find no smell worth fixing and truly believe this part of
+    the codebase is clean, say so and end your turn without queuing anything (that ends
+    the workflow).
+
+    End with a short summary: what you reviewed and fixed, which smells you queued, and
+    everything flagged for me (deferred smells needing a design or contract change, and
+    any bugs you found along the way).
+
+    Note: you are running headless, so you can't ask questions. Use your best judgment,
+    and if you truly need my input, say so in your summary and end your turn without
+    queuing steps. When your turn ends your process stops and kills any subprocesses you
+    started, so don't end your turn to wait on a task; block on long-running commands
+    such as `npm test` instead.
+  # The final step never runs alongside other steps, so each pass can require a
+  # clean tree when it ends. A dirty tree resumes the step's session to finish
+  # and commit; after two retries the workflow stops. stderr is folded into
+  # stdout so a git error fails the check instead of leaving stdout empty.
+  endCondition: &committed
+    script: git status --porcelain 2>&1
+    compareSource: stdout
+    operator: isEmpty
+    maxRetries: 2
+    retryPrompt: |
+      You left uncommitted changes. Finish the work, make sure `npm test` passes,
+      and commit your own files with a plain conventional commit message.
+      $endCondition:stdout
+
+# The same gate, offered to the orchestrator as the `committed` preset for each
+# refactor step that runs on its own. Not a workflow-level endCondition: parallel
+# steps share one working tree, so a member would fail it on a sibling's edits.
+conditions:
+  committed: *committed
