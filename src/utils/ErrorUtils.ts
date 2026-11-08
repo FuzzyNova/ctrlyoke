@@ -42,6 +42,11 @@ export function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** Normalize an unknown caught value to an Error while preserving Error identity. */
+export function toError(value: unknown): Error {
+  return value instanceof Error ? value : new Error(String(value));
+}
+
 /**
  * `Error.cause` is ES2022 and the webview tsconfig targets an older lib, so
  * this file declares the shape rather than relying on the ambient `Error`.

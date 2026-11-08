@@ -5,6 +5,7 @@ import {
   getErrnoCode,
   hasErrnoCode,
   isFileNotFoundError,
+  toError,
 } from "../../utils/ErrorUtils";
 import { NODE_ERROR_CODES } from "../../types/DashboardConstants";
 
@@ -116,6 +117,28 @@ suite("ErrorUtils", () => {
 
     test("converts zero", () => {
       assert.strictEqual(getErrorMessage(0), "0");
+    });
+  });
+
+  suite("toError", () => {
+    test("returns an Error instance unchanged", () => {
+      const error = new Error("boom");
+      assert.strictEqual(toError(error), error);
+    });
+
+    test("wraps a string", () => {
+      assert.strictEqual(toError("boom").message, "boom");
+    });
+
+    test("wraps a non-Error object", () => {
+      assert.strictEqual(
+        toError({ message: "boom" }).message,
+        "[object Object]"
+      );
+    });
+
+    test("wraps null as the string null", () => {
+      assert.strictEqual(toError(null).message, "null");
     });
   });
 });

@@ -20,6 +20,7 @@ import {
   type WorkflowValidationWarning,
 } from "../types/CtrlYokeTypes";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
+import { toError } from "../utils/ErrorUtils";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { stripLegacyWorkingFileLineageMetadata } from "../utils/WorkingFileMetadata";
 import { Log } from "../utils/Log";
@@ -286,8 +287,7 @@ export class PromptFileParser {
         });
         return null;
       }
-      this.lastParseError =
-        error instanceof Error ? error : new Error(String(error));
+      this.lastParseError = toError(error);
       Log.debug(`[PromptFileParser] Failed to parse file ${filePath}`);
       notifyUserFeedback(
         this.userFeedbackSink,
@@ -952,8 +952,7 @@ export class PromptFileParser {
         });
         return null;
       }
-      this.lastParseError =
-        error instanceof Error ? error : new Error(String(error));
+      this.lastParseError = toError(error);
       Log.debug(
         `[PromptFileParser] Failed to read markdown prompt file ${filePath}`
       );

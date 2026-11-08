@@ -24,7 +24,11 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   The errno-code refactor landed in `src/types/DashboardConstants.ts` and
   `src/utils/ErrorUtils.ts`, with source call sites and coverage updated.
   The six webview `isScriptStep` copies now use the generic core guard from
-  `src/types/CtrlYokeTypes.ts`; focused guard coverage was added.
+  `src/types/CtrlYokeTypes.ts`; focused guard coverage was added. Completed the
+  queued paged-listing leaf-helper extraction in `utils/pagedListing.ts` and
+  routed all nine exact error-normalization copies through `toError` in
+  `src/utils/ErrorUtils.ts`; helper and unit coverage was added without changing
+  hook state machines or response usability checks.
 
 ## Deferred
 

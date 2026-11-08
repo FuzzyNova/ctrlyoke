@@ -16,6 +16,7 @@
  */
 
 import { ensureMinFsThreadpoolSize } from "./utils/ThreadPoolBootstrap";
+import { toError } from "./utils/ErrorUtils";
 ensureMinFsThreadpoolSize(64);
 
 // Use require with CJS paths - package.json has wildcard export "./*" mapping to "./dist/cjs/*"
@@ -588,8 +589,7 @@ export class CtrlYokeMCPServer {
         try {
           return await this.invokeTool(name, args);
         } catch (error) {
-          const normalizedError =
-            error instanceof Error ? error : new Error(String(error));
+          const normalizedError = toError(error);
           log("ERROR in tool invocation:", error);
           log("Error stack:", normalizedError.stack);
           return {

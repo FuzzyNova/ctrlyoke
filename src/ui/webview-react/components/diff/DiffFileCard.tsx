@@ -24,6 +24,7 @@ import type {
   WorkspaceFileHistoryDiffResponse,
   WorkspaceMediaDiffSides,
 } from "@root/types/HostedWorkspaceViewerTypes";
+import { toError } from "@root/utils/ErrorUtils";
 import { MediaDiffView } from "./MediaDiffView";
 import { workspaceFileHistoryDiff } from "@utils/hostedApi";
 import { Icon } from "../shared/Icon";
@@ -287,8 +288,7 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
           );
         },
         (value: unknown) => {
-          const error =
-            value instanceof Error ? value : new Error(String(value));
+          const error = toError(value);
           setDeferredState((current) =>
             current && current.commit === deferredState.commit
               ? { ...current, state: DEFERRED_DIFF_STATES.ERROR, error }

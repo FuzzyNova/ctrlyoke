@@ -1,6 +1,7 @@
 import { spawn } from "child_process";
 import * as readline from "readline";
 import { resolveCliCommand } from "./CliLauncherResolver";
+import { toError } from "../../../utils/ErrorUtils";
 
 /**
  * The slice of a child process a short-lived stdio probe uses. Tests pass a
@@ -166,7 +167,7 @@ function createSession(
             selected = select(message);
           } catch (error) {
             cleanup();
-            reject(error instanceof Error ? error : new Error(String(error)));
+            reject(toError(error));
             return;
           }
           if (selected === undefined) return;

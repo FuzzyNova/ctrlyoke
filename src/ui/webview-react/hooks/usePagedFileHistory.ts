@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { WorkspaceFileHistoryPageResponse } from "@root/types/HostedWorkspaceViewerTypes";
-import { ERROR_NAMES } from "@root/types/DashboardConstants";
 import { WORKSPACE_FILE_HISTORY_DEFAULT_PAGE_SIZE } from "@root/types/HostedWorkspaceViewerTypes";
 import { workspaceFileHistory } from "@utils/hostedApi";
+import {
+  isAbortError,
+  listingKey,
+  loadedRowCount,
+  normalizePagedPath,
+  normalizeRepo,
+  pageOffset,
+} from "@utils/pagedListing";
+import { toError } from "@root/utils/ErrorUtils";
 import type { VirtualizedListRange } from "@components/shared/VirtualizedListFoundation";
 import type { WorkspaceFileHistoryEntry } from "@root/types/HostedWorkspaceViewerTypes";
 
@@ -105,40 +113,6 @@ const EMPTY_STATE = (
   error: null,
 });
 
-function normalizePath(path: string): string {
-  return path.replace(/\\/g, "/").replace(/^\.\//, "");
-}
-
-function normalizeRepo(repo: string | undefined): string | undefined {
-  const normalized = repo?.trim();
-  return normalized ? normalized : undefined;
-}
-
-function listingKey(path: string, repo: string | undefined): string {
-  return `${repo ?? ""}\u0000${path}`;
-}
-
-function pageOffset(index: number, pageSize: number): number {
-  return Math.floor(Math.max(0, index) / pageSize) * pageSize;
-}
-
-function loadedRowCount(
-  pages: ReadonlyMap<number, readonly WorkspaceFileHistoryEntry[]>,
-  minimum = 0
-): number {
-  let count = 0;
-  for (const entries of pages.values()) count += entries.length;
-  return Math.max(minimum, count);
-}
-
-function errorFrom(value: unknown): Error {
-  return value instanceof Error ? value : new Error(String(value));
-}
-
-function isAbortError(value: unknown): boolean {
-  return value instanceof Error && value.name === ERROR_NAMES.ABORT;
-}
-
 function responseIsUsable(
   response: WorkspaceFileHistoryPageResponse,
   expectedOffset: number,
@@ -191,7 +165,7 @@ function defaultFetcher(
 export function usePagedFileHistory(
   options: PagedFileHistoryOptions
 ): PagedFileHistoryController {
-  const normalizedOptionPath = normalizePath(options.path);
+  const normalizedOptionPath = normalizePagedPath(options.path);
   const normalizedOptionRepo = normalizeRepo(options.repo);
   const requestedPageSize = Math.max(
     1,
@@ -286,7 +260,7 @@ export function usePagedFileHistory(
 
   const startListing = useCallback(
     (path: string, repo?: string): void => {
-      const normalizedPath = normalizePath(path);
+      const normalizedPath = normalizePagedPath(path);
       const normalizedRepo = normalizeRepo(repo);
       const generation = generationRef.current + 1;
       generationRef.current = generation;
@@ -361,7 +335,7 @@ export function usePagedFileHistory(
           updateState((current) => ({
             ...current,
             initialLoading: false,
-            error: errorFrom(value),
+            error: toError(value),
           }));
         })
         .finally(() => {
@@ -491,7 +465,7 @@ export function usePagedFileHistory(
           ) {
             return;
           }
-          const error = errorFrom(value);
+          const error = toError(value);
           updateState((previous) => {
             const failedRanges = new Map(previous.failedRanges);
             failedRanges.set(offset, {
@@ -544,7 +518,7 @@ export function usePagedFileHistory(
 
   const navigate = useCallback(
     (path: string, repo?: string): void => {
-      const normalizedPath = normalizePath(path);
+      const normalizedPath = normalizePagedPath(path);
       const normalizedRepo = normalizeRepo(repo ?? configRef.current.repo);
       skipOptionStartRef.current = listingKey(normalizedPath, normalizedRepo);
       configRef.current = {
