@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-08
+
 ### Changed
 
 - The Feature-Driven Loop template now works like Spec-Driven Loop. It asks for a `testCommand`, which every queued step is told to pass and the review uses as its main gate. It also asks for a harness and model for the orchestrator and for the implementer. The orchestrator writes the plan, queues the work and reviews it, on `opus` by default, in interactive mode so you can watch and steer it. Queued steps run headless on the implementer, on `sonnet` by default. Both default to Claude Code. Before, every step ran on your default harness, model and execution mode.
