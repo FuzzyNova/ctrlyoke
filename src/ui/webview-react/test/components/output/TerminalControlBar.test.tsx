@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TerminalControlBar } from "@components/output/TerminalControlBar";
@@ -170,6 +176,59 @@ describe("TerminalControlBar", () => {
     expect(screen.getByRole("menu")).toBeInTheDocument();
     fireEvent.mouseDown(document.body);
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("keeps terminal focus (and the on-screen keyboard) when a bar button or menu item is pressed", async () => {
+    const user = userEvent.setup();
+    renderBar({
+      bar: [...DEFAULT_TERMINAL_BAR_LAYOUT.bar],
+      popup: [...DEFAULT_TERMINAL_BAR_LAYOUT.popup],
+      hidden: [],
+    });
+
+    // fireEvent returns false when a handler called preventDefault.
+    expect(
+      fireEvent.mouseDown(screen.getByRole("button", { name: "Esc" }))
+    ).toBe(false);
+    expect(
+      fireEvent.mouseDown(screen.getByRole("button", { name: "Ctrl" }))
+    ).toBe(false);
+    expect(
+      fireEvent.mouseDown(
+        screen.getByRole("button", { name: "More shortcuts" })
+      )
+    ).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: "More shortcuts" }));
+    expect(
+      fireEvent.mouseDown(screen.getByRole("menuitem", { name: "Ctrl+C" }))
+    ).toBe(false);
+    expect(fireEvent.mouseDown(screen.getByText("Add shortcuts..."))).toBe(
+      false
+    );
+  });
+
+  it("closes the More menu when the visual viewport resizes", async () => {
+    const user = userEvent.setup();
+    const viewport = new EventTarget();
+    vi.stubGlobal("visualViewport", viewport);
+    try {
+      renderBar({
+        bar: [...DEFAULT_TERMINAL_BAR_LAYOUT.bar],
+        popup: [...DEFAULT_TERMINAL_BAR_LAYOUT.popup],
+        hidden: [],
+      });
+
+      await user.click(screen.getByRole("button", { name: "More shortcuts" }));
+      expect(screen.getByRole("menu")).toBeInTheDocument();
+
+      act(() => {
+        viewport.dispatchEvent(new Event("resize"));
+      });
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("renders custom popup items in the configured popup order", async () => {

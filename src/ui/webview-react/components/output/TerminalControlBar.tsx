@@ -122,6 +122,17 @@ function ctrlSequenceFromKey(key: string): string | null {
   return String.fromCharCode(code - 64);
 }
 
+/**
+ * Keeps focus in the terminal when a bar button or menu item is pressed.
+ * Focus moves on mousedown (a tap's emulated one, too); on a phone, losing
+ * it from xterm's textarea dismisses the on-screen keyboard, which reflows
+ * the layout out from under the bar and its menu. Cancelling the mousedown
+ * leaves focus where it was, and the click still fires.
+ */
+function keepTerminalFocus(event: React.MouseEvent): void {
+  event.preventDefault();
+}
+
 export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
   workflowId,
   sessionId,
@@ -246,6 +257,17 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
     setMoreOpen(false)
   );
 
+  // If the on-screen keyboard opens or closes anyway, the layout moves and
+  // the menu's fixed position no longer points at the bar: close it rather
+  // than leave it dangling (same rule as StepContextMenu's keepInvokerFocus).
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!moreOpen || !viewport) return;
+    const close = () => setMoreOpen(false);
+    viewport.addEventListener("resize", close);
+    return () => viewport.removeEventListener("resize", close);
+  }, [moreOpen]);
+
   const openShortcutSettings = () => {
     setMoreOpen(false);
     setGlobalSettingsTab("terminal");
@@ -256,7 +278,10 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
 
   return (
     <div
+      role="toolbar"
+      aria-label="Terminal keys"
       className="relative z-header cy-no-select w-full shrink-0 border-t border-panel-border"
+      onMouseDown={keepTerminalFocus}
       style={{
         background:
           "color-mix(in srgb, var(--vscode-terminal-background, var(--vscode-editor-background)) 92%, transparent)",
@@ -321,29 +346,35 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
               role="menu"
               className="cy-no-select"
             >
-              <div className="min-h-0 overflow-y-auto">
-                <div className="p-1 space-y-1">
-                  {resolvedPopupItems.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      role="menuitem"
-                      className="w-full px-2 py-1.5 text-left text-xs rounded-sm text-foreground hover:bg-list-hover-bg"
-                      onClick={() => sendKey(item.sequence)}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <button
-                type="button"
-                className="w-full shrink-0 border-t border-dropdown-border px-2 py-1.5 text-left text-xs text-link-fg hover:bg-list-hover-bg"
-                onClick={openShortcutSettings}
+              <div
+                role="presentation"
+                className="flex min-h-0 flex-col"
+                onMouseDown={keepTerminalFocus}
               >
-                Add shortcuts...
-              </button>
+                <div className="min-h-0 overflow-y-auto">
+                  <div className="p-1 space-y-1">
+                    {resolvedPopupItems.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        role="menuitem"
+                        className="w-full px-2 py-1.5 text-left text-xs rounded-sm text-foreground hover:bg-list-hover-bg"
+                        onClick={() => sendKey(item.sequence)}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="w-full shrink-0 border-t border-dropdown-border px-2 py-1.5 text-left text-xs text-link-fg hover:bg-list-hover-bg"
+                  onClick={openShortcutSettings}
+                >
+                  Add shortcuts...
+                </button>
+              </div>
             </DropdownPortal>
           </div>
         )}
