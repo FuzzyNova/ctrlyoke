@@ -139,6 +139,7 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
 }) => {
   const [ctrlActive, setCtrlActive] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const barRef = useRef<HTMLDivElement>(null);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   const morePopupRef = useRef<HTMLDivElement>(null);
   const customShortcuts = useSettingsStore(
@@ -195,8 +196,24 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
     [reconciledBarLayout, usableCustomShortcuts]
   );
 
-  const focusTerminal = useCallback(() => {
-    terminalRegistry.get(workflowId, sessionId)?.term.focus();
+  // Hand focus back to the terminal only when a bar control took it, i.e. it
+  // was activated from the keyboard. A pointer press never moves focus
+  // (keepTerminalFocus), so a tap leaves it wherever it was: in the terminal
+  // if the on-screen keyboard is up, elsewhere if not. Focusing the terminal
+  // after a tap would be what collapses the editor on mobile (useMobileLayout
+  // collapses it when an editable inside #output-section gains focus), and
+  // that must only follow a tap on the terminal itself. Checked
+  // synchronously: choosing a menu item unmounts the menu before the frame.
+  const restoreTerminalFocus = useCallback(() => {
+    const active = document.activeElement;
+    const barControlHasFocus =
+      active instanceof Node &&
+      (barRef.current?.contains(active) ||
+        morePopupRef.current?.contains(active));
+    if (!barControlHasFocus) return;
+    requestAnimationFrame(() =>
+      terminalRegistry.get(workflowId, sessionId)?.term.focus()
+    );
   }, [sessionId, workflowId]);
 
   const sendKey = useCallback(
@@ -206,11 +223,11 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
         sessionId,
         data: sequence,
       });
+      restoreTerminalFocus();
       setCtrlActive(false);
       setMoreOpen(false);
-      requestAnimationFrame(focusTerminal);
     },
-    [focusTerminal, sessionId, workflowId]
+    [restoreTerminalFocus, sessionId, workflowId]
   );
 
   useEffect(() => {
@@ -278,6 +295,7 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
 
   return (
     <div
+      ref={barRef}
       role="toolbar"
       aria-label="Terminal keys"
       className="relative z-header cy-no-select w-full shrink-0 border-t border-panel-border"
@@ -301,7 +319,7 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
               aria-pressed={ctrlActive}
               onClick={() => {
                 setCtrlActive((active) => !active);
-                requestAnimationFrame(focusTerminal);
+                restoreTerminalFocus();
               }}
             >
               Ctrl

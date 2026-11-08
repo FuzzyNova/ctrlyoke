@@ -22,6 +22,7 @@ import {
   TERMINAL_BAR_SHORTCUT_IDS,
 } from "@root/utils/TerminalControlBarFormat";
 import { MESSAGE_TYPES } from "@/types/messages";
+import { terminalRegistry, type RegistryEntry } from "@/terminalRegistry";
 
 const { sendMessageMock } = vi.hoisted(() => ({
   sendMessageMock: vi.fn(),
@@ -206,6 +207,57 @@ describe("TerminalControlBar", () => {
     expect(fireEvent.mouseDown(screen.getByText("Add shortcuts..."))).toBe(
       false
     );
+  });
+
+  it("does not focus the terminal after a tap, so mobile does not collapse the editor", async () => {
+    const user = userEvent.setup();
+    const focus = vi.fn();
+    const getSpy = vi
+      .spyOn(terminalRegistry, "get")
+      .mockReturnValue({ term: { focus } } as unknown as RegistryEntry);
+    try {
+      renderBar({
+        bar: [...DEFAULT_TERMINAL_BAR_LAYOUT.bar],
+        popup: [...DEFAULT_TERMINAL_BAR_LAYOUT.popup],
+        hidden: [],
+      });
+
+      await user.click(screen.getByRole("button", { name: "Esc" }));
+      await user.click(screen.getByRole("button", { name: "Ctrl" }));
+      await user.click(screen.getByRole("button", { name: "More shortcuts" }));
+      await user.click(screen.getByRole("menuitem", { name: "Ctrl+C" }));
+
+      expect(sendMessageMock).toHaveBeenCalledTimes(2);
+      expect(focus).not.toHaveBeenCalled();
+    } finally {
+      getSpy.mockRestore();
+    }
+  });
+
+  it("returns focus to the terminal when a bar key is activated from the keyboard", async () => {
+    const user = userEvent.setup();
+    const focus = vi.fn();
+    const getSpy = vi
+      .spyOn(terminalRegistry, "get")
+      .mockReturnValue({ term: { focus } } as unknown as RegistryEntry);
+    try {
+      renderBar({
+        bar: [...DEFAULT_TERMINAL_BAR_LAYOUT.bar],
+        popup: [...DEFAULT_TERMINAL_BAR_LAYOUT.popup],
+        hidden: [],
+      });
+
+      screen.getByRole("button", { name: "Esc" }).focus();
+      await user.keyboard("{Enter}");
+
+      expect(sendMessageMock).toHaveBeenCalledWith(
+        MESSAGE_TYPES.TERMINAL_INPUT,
+        { workflowId: "workflow-1", sessionId: "session-1", data: "\x1b" }
+      );
+      expect(focus).toHaveBeenCalledTimes(1);
+    } finally {
+      getSpy.mockRestore();
+    }
   });
 
   it("closes the More menu when the visual viewport resizes", async () => {

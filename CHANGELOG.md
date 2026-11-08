@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The terminal control bar's **...** button now opens its shortcut menu. Before, the menu opened but was cut off by the bar, so nothing appeared. You also can no longer drag-select the bar's buttons as text.
 - On a phone, tapping a terminal control bar key or a shortcut in its **...** menu no longer closes the on-screen keyboard. The terminal keeps focus, so the layout stays put. If the keyboard closes anyway, the menu closes too, instead of being left where the bar used to be.
+- On a phone, tapping a terminal control bar key while the keyboard is closed no longer collapses the prompt editor. Only tapping into the terminal itself, which opens the keyboard, collapses it.
+- On an iPhone or iPad, dropdown menus such as the terminal control bar's **...** menu now open above their button when the on-screen keyboard leaves no room below it. Before, they opened downward behind the keyboard.
 - A subagent's last output in Claude Code, OpenCode and Antigravity steps no longer goes missing from the output pane now and then. When the parent session reported the subagent finished while ctrlyoke was partway through reading the subagent's log, ctrlyoke stopped following it without reading what it had written just before finishing.
 - Looking up the Claude Code and Codex model lists no longer raises an uncaught `write after end` or `EPIPE` error in the extension host when the CLI answers after the lookup timed out, or exits before answering.
 
