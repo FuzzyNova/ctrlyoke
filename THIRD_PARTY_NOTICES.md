@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-This product includes third-party software and assets. This inventory was audited on **2026-11-07** from the production dependency tree and the extension and webview bundles shipped in the VSIX.
+This product includes third-party software and assets. This inventory was audited on **2026-11-08** from the production dependency tree and the extension and webview bundles shipped in the VSIX.
 
 ## Commercial Distribution
 
@@ -30,7 +30,7 @@ Commercial distribution is subject to the terms of each component license. The p
 
 ### pdfjs-dist (pdf.js)
 
-- Version: `6.4.299`
+- Version: `6.5.438`
 - License: `Apache-2.0`
 - Copyright: Mozilla Foundation
 - Source: <https://github.com/mozilla/pdf.js>
@@ -384,7 +384,7 @@ The production dependency tree contains **415 packages**. Each package is listed
 | `path-exists`                               | `4.0.0`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
 | `path-key`                                  | `3.1.1`         | `MIT`                         | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)                                                                                                     |
 | `path-scurry`                               | `3.0.0`         | `BlueOak-1.0.0`               | Isaac Z. Schlueter <i@izs.me> (https://blog.izs.me)                                                                                                                         |
-| `pdfjs-dist`                                | `6.4.299`       | `Apache-2.0`                  | Not stated in package metadata or license file                                                                                                                              |
+| `pdfjs-dist`                                | `6.5.438`       | `Apache-2.0`                  | Not stated in package metadata or license file                                                                                                                              |
 | `pkce-challenge`                            | `5.0.1`         | `MIT`                         | Copyright (c) 2019                                                                                                                                                          |
 | `pkijs`                                     | `3.4.3`         | `BSD-3-Clause`                | Copyright (c) 2014, GlobalSign                                                                                                                                              |
 | `pngjs`                                     | `5.0.0`         | `MIT`                         | Alexandre Paré, Gaurav Mali, Gusts Kaksis, Kuba Niegowski, Luke Page, Pietajan De Potter, Steven Sojka, liangzeng, Michael Vogt, Xin-Xin Wang, toriningen, Eugene Kulabuhov |
@@ -5202,7 +5202,7 @@ SOFTWARE.
 
 ### License text 131: Apache-2.0
 
-Packages: pdfjs-dist@6.4.299
+Packages: pdfjs-dist@6.5.438
 
 ```text
                                  Apache License

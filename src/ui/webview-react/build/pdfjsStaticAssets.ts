@@ -39,7 +39,9 @@ export const PDFJS_STATIC_DIRS: readonly PdfjsStaticDir[] = [
   { dir: "iccs" },
   {
     dir: "wasm",
-    // QuickJS is only for PDF scripting, which the viewer leaves off.
-    ships: (relativePath) => !/^quickjs-eval\./i.test(relativePath),
+    // QuickJS is only for PDF scripting, which the viewer leaves off, so
+    // neither the engine nor its licenses ship.
+    ships: (relativePath) =>
+      !/^(?:quickjs-eval\.|LICENSE_(?:PDFJS_)?QUICKJS$)/i.test(relativePath),
   },
 ];
