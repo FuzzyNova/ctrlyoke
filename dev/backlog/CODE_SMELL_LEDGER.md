@@ -41,6 +41,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   (`escapeRegExp` copies, provider statusline registration, drifted effective-model
   resolution in MCP/CLI/OutputHistoryManager).
   The six regex-escaping copies now use the import-free `src/utils/TextUtils.ts` helper.
+  Per-prompt statusline registration now lives in one shared harness helper, and declined installs no longer start idle sidecars.
 
 ## Deferred
 

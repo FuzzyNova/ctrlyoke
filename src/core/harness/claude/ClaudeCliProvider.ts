@@ -36,11 +36,11 @@ import {
 import { normalizeClaudeMcpServerId } from "../../../types/ToolPermissionUtils";
 import type { PromptFile } from "../../../types/CtrlYokeTypes";
 import { CliParseUtils } from "../shared/CliParseUtils";
-import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import {
   StatuslineManager,
   type StatuslineInstallResult,
 } from "../shared/StatuslineManager";
+import { ProviderStatuslineRegistration } from "../shared/ProviderStatuslineRegistration";
 import { ClaudeStatuslineSidecar } from "./ClaudeStatuslineSidecar";
 import {
   CLAUDE_EVENT_TYPES,
@@ -128,18 +128,18 @@ export class ClaudeCliProvider implements ICliProvider {
 
   /** Tracks per-prompt hook settings files for cleanup */
   private hookSettingsPaths: string[] = [];
-  private readonly statusLineSnapshotPaths = new Set<string>();
-  private statusLineToken: string | undefined;
-  private statusLineDirectory: string | undefined;
-  private statusLineWorkspaceRoot: string | undefined;
-  private statusLineEnabledForPrompt = false;
+  private readonly statuslineRegistration = new ProviderStatuslineRegistration({
+    manager: ClaudeCliProvider.statuslineManager,
+    logPrefix: "ClaudeCliProvider",
+    harnessLabel: "Claude",
+    snapshotPrefix: "claude",
+    tokenEnvironmentVariable: "CTRLYOKE_CLAUDE_STATUSLINE_TOKEN",
+    directoryEnvironmentVariable: "CTRLYOKE_CLAUDE_STATUSLINE_DIR",
+  });
   private statusLineSidecar: ClaudeStatuslineSidecar | undefined;
-  private statuslineInstallResult: StatuslineInstallResult | undefined;
 
   consumeStatuslineInstallResult(): StatuslineInstallResult | undefined {
-    const result = this.statuslineInstallResult;
-    this.statuslineInstallResult = undefined;
-    return result;
+    return this.statuslineRegistration.consumeInstallResult();
   }
 
   shouldRetainWorkflowArtifactsForReuse(): boolean {
@@ -444,21 +444,16 @@ export class ClaudeCliProvider implements ICliProvider {
           apply: async () => {
             this.statusLineSidecar?.stop();
             this.statusLineSidecar = undefined;
-            this.statusLineToken = statusLineToken;
-            this.statusLineDirectory = undefined;
-            this.statusLineWorkspaceRoot = undefined;
-            this.statusLineEnabledForPrompt = false;
-            this.statuslineInstallResult = undefined;
+            this.statuslineRegistration.reset(statusLineToken);
             if (
               workspaceRoot &&
               ConfigurationUtils.getStatusLineHarnessSettings(
                 STATUS_LINE_HARNESS_IDS.CLAUDE
               ).enabled
             ) {
-              this.statuslineInstallResult = await this.registerStatusLine(
+              await this.statuslineRegistration.register(
                 extensionPath,
-                workspaceRoot,
-                workflowContext?.workingFilePath ?? workspaceRoot
+                workspaceRoot
               );
             }
           },
@@ -473,16 +468,16 @@ export class ClaudeCliProvider implements ICliProvider {
     deps: CliExecutionSidecarDeps
   ): CliExecutionSidecar | undefined {
     if (
-      !this.statusLineEnabledForPrompt ||
-      !this.statusLineToken ||
-      !this.statusLineDirectory
+      !this.statuslineRegistration.enabled ||
+      !this.statuslineRegistration.token ||
+      !this.statuslineRegistration.directory
     ) {
       return undefined;
     }
     this.statusLineSidecar = new ClaudeStatuslineSidecar({
       snapshotPath: path.join(
-        this.statusLineDirectory,
-        `claude-statusline-${this.statusLineToken}.json`
+        this.statuslineRegistration.directory,
+        `claude-statusline-${this.statuslineRegistration.token}.json`
       ),
       onProviderUsageUpdate: deps.onProviderUsageUpdate,
     });
@@ -765,7 +760,10 @@ export class ClaudeCliProvider implements ICliProvider {
    * Includes all per-prompt hook settings files created during interactive and headless sessions.
    */
   getAdditionalCleanupFilePaths(_workspaceRoot: string): string[] {
-    return [...this.hookSettingsPaths, ...this.statusLineSnapshotPaths];
+    return [
+      ...this.hookSettingsPaths,
+      ...this.statuslineRegistration.snapshotPaths,
+    ];
   }
 
   async cleanupWorkspaceArtifacts(
@@ -774,7 +772,7 @@ export class ClaudeCliProvider implements ICliProvider {
   ): Promise<void> {
     this.statusLineSidecar?.stop();
     this.statusLineSidecar = undefined;
-    for (const snapshotPath of this.statusLineSnapshotPaths) {
+    for (const snapshotPath of this.statuslineRegistration.snapshotPaths) {
       await fs.unlink(snapshotPath).catch(() => undefined);
     }
   }
@@ -956,7 +954,7 @@ export class ClaudeCliProvider implements ICliProvider {
   getInteractiveSpawnEnv(): NodeJS.ProcessEnv {
     const env = {
       ...CliProviderUtils.buildProcessEnv(),
-      ...this.buildStatusLineSpawnEnv(),
+      ...this.statuslineRegistration.buildSpawnEnv(),
     };
     delete env.CLAUDECODE;
     delete env.CLAUDE_CODE_CHILD_SESSION;
@@ -969,72 +967,7 @@ export class ClaudeCliProvider implements ICliProvider {
   }
 
   getHeadlessSpawnEnv(): NodeJS.ProcessEnv {
-    return this.buildStatusLineSpawnEnv();
-  }
-
-  private async registerStatusLine(
-    extensionPath: string,
-    workspaceRoot: string,
-    _workflowKey: string
-  ): Promise<StatuslineInstallResult> {
-    const scriptPath =
-      await ClaudeCliProvider.statuslineManager.resolveScriptPath(
-        extensionPath
-      );
-    if (!scriptPath) {
-      Log.warn(
-        `[ClaudeCliProvider] Skipping Claude statusline: no statusline script under ${extensionPath}`
-      );
-      return { kind: "no-op", captured: false };
-    }
-    const command = CliNotificationMonitor.buildNodeCommand(scriptPath, [
-      "",
-    ]).trim();
-    const snapshotDirectory = path.join(
-      workspaceRoot,
-      PATH_CONSTANTS.CTRLYOKE_DIR,
-      PATH_CONSTANTS.TEMP_DIR
-    );
-    const snapshotPath = path.join(
-      snapshotDirectory,
-      `claude-statusline-${this.statusLineToken}.json`
-    );
-    this.statusLineSnapshotPaths.add(snapshotPath);
-
-    try {
-      const result = await ClaudeCliProvider.statuslineManager.install(
-        workspaceRoot,
-        command
-      );
-      this.statusLineDirectory = snapshotDirectory;
-      this.statusLineWorkspaceRoot = workspaceRoot;
-      this.statusLineEnabledForPrompt = true;
-      return result;
-    } catch (error) {
-      // A statusline failure must never prevent Claude itself from running.
-      Log.warn(
-        `[ClaudeCliProvider] Failed to register Claude statusline: ${error}`
-      );
-      return { kind: "no-op", captured: false };
-    }
-  }
-
-  private buildStatusLineSpawnEnv(): NodeJS.ProcessEnv {
-    if (
-      !this.statusLineEnabledForPrompt ||
-      !this.statusLineToken ||
-      !this.statusLineDirectory
-    ) {
-      return {};
-    }
-    const env: NodeJS.ProcessEnv = {
-      CTRLYOKE_CLAUDE_STATUSLINE_TOKEN: this.statusLineToken,
-      CTRLYOKE_CLAUDE_STATUSLINE_DIR: this.statusLineDirectory,
-      ...(this.statusLineWorkspaceRoot
-        ? { CTRLYOKE_STATUSLINE_WORKSPACE_ROOT: this.statusLineWorkspaceRoot }
-        : {}),
-    };
-    return env;
+    return this.statuslineRegistration.buildSpawnEnv();
   }
 
   /**
