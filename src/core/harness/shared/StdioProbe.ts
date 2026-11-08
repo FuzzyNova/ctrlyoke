@@ -10,6 +10,7 @@ export interface StdioProbeProcess {
   stdin: {
     write(data: string): boolean;
     end(): void;
+    on(event: "error", listener: (error: Error) => void): unknown;
   };
   stdout: NodeJS.ReadableStream;
   once(event: "error" | "close", listener: (...args: unknown[]) => void): this;
@@ -95,9 +96,13 @@ export async function runStdioProbe<T>(
       resolved.args,
       resolved.requiresShellVerbatimArgs
     );
+    // A CLI that exits early fails the next stdin write (EPIPE). The probe
+    // learns of the exit from the process's own `close`, so the stdin error
+    // only needs a listener to keep it from becoming an uncaught exception.
+    child.stdin.on("error", () => undefined);
     const input = readline.createInterface({ input: child.stdout });
     try {
-      return await body(createSession(child, input, label));
+      return await body(createSession(child, input, label, () => probeSettled));
     } finally {
       input.close();
     }
@@ -135,9 +140,14 @@ export async function runStdioProbe<T>(
 function createSession(
   child: StdioProbeProcess,
   input: readline.Interface,
-  label: string
+  label: string,
+  isSettled: () => boolean
 ): StdioProbeSession {
   const send = (message: Record<string, unknown>) => {
+    // The body keeps running after a timeout or abort settles the probe, and
+    // teardown has ended stdin by then: writing would fail with "write after
+    // end". Throwing ends the body instead; its rejection is already ignored.
+    if (isSettled()) throw new Error(`${label} probe ended`);
     child.stdin.write(`${JSON.stringify(message)}\n`);
   };
   return {

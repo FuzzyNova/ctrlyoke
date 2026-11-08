@@ -18,6 +18,7 @@ import type { resolveCliCommand } from "../../core/harness/shared/CliLauncherRes
  * A stand-in CLI: every JSON line written to stdin is handed to `reply`,
  * whose returned messages are written back on stdout. With `closeOnInput`
  * the process exits on the first line instead, like a CLI rejecting a flag.
+ * `replyDelayMs` holds each reply back, like a CLI slow to answer.
  */
 class FakeStdioProcess extends EventEmitter implements StdioProbeProcess {
   readonly stdout = new PassThrough();
@@ -27,19 +28,28 @@ class FakeStdioProcess extends EventEmitter implements StdioProbeProcess {
 
   constructor(
     reply: (message: Record<string, unknown>) => unknown[],
-    closeOnInput = false
+    closeOnInput = false,
+    replyDelayMs = 0
   ) {
     super();
     this.stdin = new Writable({
+      // Like a child's stdin pipe, which stays open after end(): a later
+      // write emits "write after end" instead of failing silently.
+      autoDestroy: false,
       write: (chunk, _encoding, callback) => {
         const message = JSON.parse(String(chunk)) as Record<string, unknown>;
         this.received.push(message);
         if (closeOnInput) {
           setImmediate(() => this.emit("close", 1));
         } else {
-          for (const line of reply(message)) {
-            this.stdout.write(JSON.stringify(line) + "\n");
-          }
+          const lines = reply(message);
+          const writeReply = () => {
+            for (const line of lines) {
+              this.stdout.write(JSON.stringify(line) + "\n");
+            }
+          };
+          if (replyDelayMs > 0) setTimeout(writeReply, replyDelayMs);
+          else writeReply();
         }
         callback();
       },
@@ -152,6 +162,49 @@ suite("Harness model discovery", () => {
           ),
       });
       await assert.rejects(client.listModels(), /rejected model\/list/);
+    });
+
+    test("stops writing once a slow Codex outlives the probe's timeout", async () => {
+      // Codex answers initialize after the probe timed out and tore it down.
+      // The probe must not then send `initialized` on the ended stdin: that
+      // write fails with "write after end" as an uncaught error.
+      let process: FakeStdioProcess | undefined;
+      const client = new CodexAppServerClient({
+        resolveCommand: directResolve,
+        timeoutMs: 20,
+        spawnProcess: () => {
+          process = new FakeStdioProcess(
+            (message) =>
+              message.id === undefined ? [] : [{ id: message.id, result: {} }],
+            false,
+            60
+          );
+          return process;
+        },
+      });
+      await assert.rejects(client.listModels(), /timed out/);
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      assert.deepStrictEqual(
+        process!.received.map((message) => message.method),
+        ["initialize"]
+      );
+    });
+
+    test("survives a stdin write error from a CLI that exited", async () => {
+      // A CLI that exits early makes the next stdin write fail (EPIPE). The
+      // probe fails through the process's own close, never an uncaught error.
+      const client = new CodexAppServerClient({
+        resolveCommand: directResolve,
+        spawnProcess: () => {
+          const process = new FakeStdioProcess(() => []);
+          setImmediate(() => {
+            process.stdin.emit("error", new Error("write EPIPE"));
+            process.emit("close", 1);
+          });
+          return process;
+        },
+      });
+      await assert.rejects(client.listModels(), /closed before replying/);
     });
   });
 
