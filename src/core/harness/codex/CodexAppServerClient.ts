@@ -1,29 +1,29 @@
-import { spawn } from "child_process";
-import * as readline from "readline";
 import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
+import type { CapabilitiesModel } from "../../../types/CapabilitiesTypes";
 import { HARNESS_USAGE_STATUS_CODES } from "../../../types/DashboardConstants";
 import { normalizeCodexAppServerQuota } from "./CodexUsageNormalization";
 import { CTRLYOKE_VERSION } from "../../../utils/BuildConfig";
 import { resolveCliCommand } from "../shared/CliLauncherResolver";
+import {
+  defaultStdioProbeSpawn,
+  runStdioProbe,
+  type StdioProbeProcess,
+  type StdioProbeSession,
+  type StdioProbeSpawn,
+} from "../shared/StdioProbe";
 
 export const CODEX_APP_SERVER_PROBE_TIMEOUT_MS = 5_000;
 
 /** Codex app-server `account.type` value for a ChatGPT-authenticated session. */
 const CODEX_ACCOUNT_TYPE_CHATGPT = "chatgpt";
 
-export interface CodexAppServerProcess {
-  stdin: {
-    write(data: string): boolean;
-    end(): void;
-  };
-  stdout: NodeJS.ReadableStream;
-  once(event: "error" | "close", listener: (...args: unknown[]) => void): this;
-  removeListener(
-    event: "error" | "close",
-    listener: (...args: unknown[]) => void
-  ): this;
-  kill(signal?: NodeJS.Signals | number): boolean;
-}
+/**
+ * `model/list` is paginated. Codex returns every model in one page today; the
+ * cap only stops a misbehaving server that keeps handing back a cursor.
+ */
+const CODEX_MODEL_LIST_MAX_PAGES = 20;
+
+export type CodexAppServerProcess = StdioProbeProcess;
 
 export interface CodexAppServerProbeResult {
   quota?: HarnessQuotaSnapshot;
@@ -31,14 +31,15 @@ export interface CodexAppServerProbeResult {
 }
 
 export interface CodexAppServerClientOptions {
-  spawnProcess?: (
-    command: string,
-    args: readonly string[],
-    windowsVerbatimArguments?: boolean
-  ) => CodexAppServerProcess;
+  spawnProcess?: StdioProbeSpawn;
   resolveCommand?: typeof resolveCliCommand;
   timeoutMs?: number;
   now?: () => number;
+}
+
+export interface CodexModelListPage {
+  models: CapabilitiesModel[];
+  nextCursor?: string;
 }
 
 interface JsonRpcMessage {
@@ -51,135 +52,134 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function defaultSpawnProcess(
-  command: string,
-  args: readonly string[],
-  windowsVerbatimArguments?: boolean
-): CodexAppServerProcess {
-  return spawn(command, [...args], {
-    stdio: ["pipe", "pipe", "ignore"],
-    windowsHide: true,
-    windowsVerbatimArguments,
-  }) as unknown as CodexAppServerProcess;
-}
-
-function abortError(): Error {
-  return new Error("Codex app-server probe aborted");
+/**
+ * Normalize one `model/list` response page (`{ data: Model[], nextCursor }`).
+ * `model` is the value `codex -m` takes (it equals `id` in every release seen
+ * so far); `displayName` is Codex's own label and `hidden` marks a model Codex
+ * leaves out of its default picker. Entries without a usable ID are skipped.
+ */
+export function normalizeCodexModelListPage(
+  result: unknown
+): CodexModelListPage {
+  if (!isRecord(result) || !Array.isArray(result.data)) {
+    return { models: [] };
+  }
+  const models: CapabilitiesModel[] = [];
+  for (const entry of result.data) {
+    if (!isRecord(entry)) continue;
+    const value =
+      typeof entry.model === "string" && entry.model
+        ? entry.model
+        : typeof entry.id === "string"
+          ? entry.id
+          : "";
+    if (!value) continue;
+    const label =
+      typeof entry.displayName === "string" && entry.displayName
+        ? entry.displayName
+        : value;
+    models.push(
+      entry.hidden === true ? { value, label, hidden: true } : { value, label }
+    );
+  }
+  const nextCursor =
+    typeof result.nextCursor === "string" && result.nextCursor
+      ? result.nextCursor
+      : undefined;
+  return nextCursor ? { models, nextCursor } : { models };
 }
 
 /**
- * Short-lived, read-only stdio client for Codex's documented account surface.
- * It never starts a thread or turn and never retains the account response.
+ * Short-lived, read-only stdio client for Codex's app-server: the account
+ * surface (rate limits) and the model catalog. It never starts a thread or
+ * turn and never retains the account response.
  */
 export class CodexAppServerClient {
-  private readonly spawnProcess: (
-    command: string,
-    args: readonly string[],
-    windowsVerbatimArguments?: boolean
-  ) => CodexAppServerProcess;
+  private readonly spawnProcess: StdioProbeSpawn;
   private readonly timeoutMs: number;
   private readonly now: () => number;
   private readonly resolveCommand: typeof resolveCliCommand;
 
   constructor(options: CodexAppServerClientOptions = {}) {
-    this.spawnProcess = options.spawnProcess ?? defaultSpawnProcess;
+    this.spawnProcess = options.spawnProcess ?? defaultStdioProbeSpawn;
     this.resolveCommand = options.resolveCommand ?? resolveCliCommand;
     this.timeoutMs = options.timeoutMs ?? CODEX_APP_SERVER_PROBE_TIMEOUT_MS;
     this.now = options.now ?? Date.now;
   }
 
-  async readRateLimits(
-    signal?: AbortSignal
-  ): Promise<CodexAppServerProbeResult> {
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    let abortListener: (() => void) | undefined;
-    let process: CodexAppServerProcess | undefined;
-    let probeSettled = false;
-
-    const operation = this.performProbe(async () => {
-      const resolved = await this.resolveCommand("codex", [
-        "app-server",
-        "--listen",
-        "stdio://",
-      ]);
-      if (probeSettled || signal?.aborted) throw abortError();
-      process = this.spawnProcess(
-        resolved.command,
-        resolved.args,
-        resolved.requiresShellVerbatimArgs
-      );
-      return process;
-    });
-
-    const interruption = new Promise<never>((_, reject) => {
-      const rejectAborted = () => reject(abortError());
-      abortListener = rejectAborted;
-      if (signal?.aborted) {
-        rejectAborted();
-        return;
-      }
-      signal?.addEventListener("abort", rejectAborted, { once: true });
-      timeoutId = setTimeout(
-        () => reject(new Error("Codex app-server probe timed out")),
-        this.timeoutMs
-      );
-    });
-
-    try {
-      return await Promise.race([operation, interruption]);
-    } finally {
-      probeSettled = true;
-      if (timeoutId) clearTimeout(timeoutId);
-      if (signal && abortListener) {
-        signal.removeEventListener("abort", abortListener);
-      }
-      this.teardown(process);
-    }
-  }
-
-  private async performProbe(
-    createProcess: () => Promise<CodexAppServerProcess>
-  ): Promise<CodexAppServerProbeResult> {
-    const process = await createProcess();
-    const input = readline.createInterface({ input: process.stdout });
-    try {
-      await this.request(process, input, 1, "initialize", {
-        clientInfo: {
-          name: "ctrlyoke",
-          title: "ctrlyoke harness usage",
-          version: CTRLYOKE_VERSION,
-        },
-      });
-      this.send(process, { method: "initialized", params: {} });
-
+  readRateLimits(signal?: AbortSignal): Promise<CodexAppServerProbeResult> {
+    return this.runSession(signal, async (session) => {
       // Read only the auth mode discriminator. Any account identity returned
       // by this sibling method is deliberately discarded.
-      const accountResult = await this.request(
-        process,
-        input,
-        2,
-        "account/read",
-        {
-          refreshToken: false,
-        }
-      );
+      const accountResult = await this.request(session, 2, "account/read", {
+        refreshToken: false,
+      });
       const authErrorCode = this.getAuthErrorCode(accountResult);
       if (authErrorCode) {
         return { errorCode: authErrorCode };
       }
 
       const rateLimitResult = await this.request(
-        process,
-        input,
+        session,
         3,
         "account/rateLimits/read",
         undefined
       );
       const quota = normalizeCodexAppServerQuota(rateLimitResult, this.now());
       return quota ? { quota } : {};
-    } finally {
-      input.close();
-    }
+    });
+  }
+
+  /**
+   * Every model the signed-in account can use, hidden ones included (flagged
+   * `hidden`), in Codex's own picker order. Rejects when Codex is missing,
+   * times out or refuses the request; callers fall back to a static list.
+   */
+  listModels(signal?: AbortSignal): Promise<CapabilitiesModel[]> {
+    return this.runSession(signal, async (session) => {
+      const models: CapabilitiesModel[] = [];
+      let cursor: string | undefined;
+      for (let page = 0; page < CODEX_MODEL_LIST_MAX_PAGES; page++) {
+        const result = await this.request(session, 2 + page, "model/list", {
+          includeHidden: true,
+          ...(cursor ? { cursor } : {}),
+        });
+        const normalized = normalizeCodexModelListPage(result);
+        models.push(...normalized.models);
+        cursor = normalized.nextCursor;
+        if (!cursor) break;
+      }
+      return models;
+    });
+  }
+
+  /** Spawn `codex app-server`, complete the `initialize` handshake, run `body`. */
+  private runSession<T>(
+    signal: AbortSignal | undefined,
+    body: (session: StdioProbeSession) => Promise<T>
+  ): Promise<T> {
+    return runStdioProbe(
+      {
+        label: "Codex app-server",
+        commandName: "codex",
+        args: ["app-server", "--listen", "stdio://"],
+        timeoutMs: this.timeoutMs,
+        spawnProcess: this.spawnProcess,
+        resolveCommand: this.resolveCommand,
+        signal,
+      },
+      async (session) => {
+        await this.request(session, 1, "initialize", {
+          clientInfo: {
+            name: "ctrlyoke",
+            title: "ctrlyoke",
+            version: CTRLYOKE_VERSION,
+          },
+        });
+        session.send({ method: "initialized", params: {} });
+        return body(session);
+      }
+    );
   }
 
   private getAuthErrorCode(accountResult: unknown): string | undefined {
@@ -198,73 +198,29 @@ export class CodexAppServerClient {
       : undefined;
   }
 
-  private send(
-    process: CodexAppServerProcess,
-    message: Record<string, unknown>
-  ): void {
-    process.stdin.write(`${JSON.stringify(message)}\n`);
-  }
-
   private request(
-    process: CodexAppServerProcess,
-    input: readline.Interface,
+    session: StdioProbeSession,
     id: number,
     method: string,
     params: Record<string, unknown> | undefined
   ): Promise<unknown> {
-    return new Promise((resolve, reject) => {
-      const onLine = (line: string) => {
-        let message: JsonRpcMessage;
-        try {
-          message = JSON.parse(line) as JsonRpcMessage;
-        } catch {
-          return;
-        }
-        if (message.id !== id) return;
-        cleanup();
-        if (message.error !== undefined) {
-          reject(new Error(`Codex app-server rejected ${method}`));
-        } else {
-          resolve(message.result);
-        }
-      };
-      const onError = () => {
-        cleanup();
-        reject(new Error("Codex app-server process failed"));
-      };
-      const onClose = () => {
-        cleanup();
-        reject(new Error("Codex app-server process closed before replying"));
-      };
-      const cleanup = () => {
-        input.removeListener("line", onLine);
-        process.removeListener("error", onError);
-        process.removeListener("close", onClose);
-      };
-
-      input.on("line", onLine);
-      process.once("error", onError);
-      process.once("close", onClose);
-      try {
-        this.send(process, { id, method, ...(params ? { params } : {}) });
-      } catch {
-        cleanup();
-        reject(new Error(`Codex app-server request failed: ${method}`));
+    const reply = session.awaitMessage((message) => {
+      const rpc = message as JsonRpcMessage | null;
+      if (rpc?.id !== id) return undefined;
+      if (rpc.error !== undefined) {
+        throw new Error(`Codex app-server rejected ${method}`);
       }
+      // A missing result is still this request's reply.
+      return { result: rpc.result };
     });
-  }
-
-  private teardown(process: CodexAppServerProcess | undefined): void {
-    if (!process) return;
     try {
-      process.stdin.end();
+      session.send({ id, method, ...(params ? { params } : {}) });
     } catch {
-      // The process may already have closed its input.
+      reply.catch(() => undefined);
+      return Promise.reject(
+        new Error(`Codex app-server request failed: ${method}`)
+      );
     }
-    try {
-      process.kill();
-    } catch {
-      // Teardown is best effort after a failed capability probe.
-    }
+    return reply.then(({ result }) => result);
   }
 }

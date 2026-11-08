@@ -63,15 +63,14 @@ import {
   type WorktreeDefaultConfig,
 } from "@root/types/CtrlYokeSettings";
 import type { WorktreeObjectConfig } from "@root/types/CtrlYokeTypes";
+import type { CapabilitiesModel } from "@root/types/CapabilitiesTypes";
 import { DEFAULT_TERMINAL_BAR_LAYOUT } from "@root/utils/TerminalControlBarFormat";
 
 /**
- * Model option for dropdowns
+ * Model option for dropdowns: the same shape the host builds and writes to
+ * capabilities.json, including the harness's `hidden` flag.
  */
-export interface ModelOption {
-  value: string;
-  label: string;
-}
+export type ModelOption = CapabilitiesModel;
 
 /**
  * Agent option for dropdowns

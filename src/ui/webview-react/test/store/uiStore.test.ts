@@ -1374,6 +1374,25 @@ describe("hideDropdownOption / unhideDropdownOption", () => {
       store().hiddenDropdownOptions["harness"].filter((v) => v === "codex-cli")
     ).toHaveLength(1);
   });
+
+  it("records an unhide so it outranks a hidden-by-default option", () => {
+    // Persisted fields survive resetUi(), so start this namespace clean.
+    useUiStore.setState({
+      hiddenDropdownOptions: {},
+      shownDropdownOptions: {},
+    });
+    store().unhideDropdownOption("model:codex-cli", "gpt-reserve");
+    expect(store().shownDropdownOptions["model:codex-cli"]).toEqual([
+      "gpt-reserve",
+    ]);
+
+    // Hiding it again moves it back: the latest choice wins.
+    store().hideDropdownOption("model:codex-cli", "gpt-reserve");
+    expect(store().shownDropdownOptions["model:codex-cli"]).toEqual([]);
+    expect(store().hiddenDropdownOptions["model:codex-cli"]).toEqual([
+      "gpt-reserve",
+    ]);
+  });
 });
 
 describe("clearHiddenDropdownOptions", () => {
@@ -1382,6 +1401,12 @@ describe("clearHiddenDropdownOptions", () => {
     store().hideDropdownOption("harness", "qwen-cli");
     store().clearHiddenDropdownOptions("harness");
     expect(store().hiddenDropdownOptions["harness"]).toHaveLength(0);
+  });
+
+  it("also forgets unhides, restoring hidden-by-default options", () => {
+    store().unhideDropdownOption("model:codex-cli", "gpt-reserve");
+    store().clearHiddenDropdownOptions("model:codex-cli");
+    expect(store().shownDropdownOptions["model:codex-cli"]).toHaveLength(0);
   });
 });
 

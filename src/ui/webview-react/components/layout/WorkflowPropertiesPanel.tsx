@@ -40,9 +40,9 @@ import {
 } from "../../types/messages";
 import {
   DROPDOWN_NAMESPACES,
-  modelNamespaceForHarness,
   getResumeSessionOptions,
 } from "../../types/dropdownNamespaces";
+import { useModelDropdownHiding } from "../../hooks/useModelDropdownHiding";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { defaultModelForHarness } from "@utils/harnessChangeCascade";
 import {
@@ -631,11 +631,12 @@ const WorkflowPropertiesPanelInner: React.FC<{
     effectiveHarness
   );
 
-  // Derive the active model namespace from the current harness
-  const modelNamespace = modelNamespaceForHarness(effectiveHarness);
-
   // Get models for current harness
   const currentHarnessModels = getModelsForHarness(effectiveHarness);
+  const modelHiding = useModelDropdownHiding(
+    effectiveHarness,
+    currentHarnessModels
+  );
   const modelWarn = modelWarning(
     workflowProperties.model,
     effectiveHarness,
@@ -1790,12 +1791,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                             label: m.label,
                           }))
                     }
-                    namespace={modelNamespace}
-                    hiddenValues={hiddenDropdownOptions[modelNamespace] ?? []}
-                    onHideOption={(v) => hideDropdownOption(modelNamespace, v)}
-                    onUnhideOption={(v) =>
-                      unhideDropdownOption(modelNamespace, v)
-                    }
+                    {...modelHiding}
                     nonHideableValues={["default", ""]}
                     warning={modelWarn ?? undefined}
                   />

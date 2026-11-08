@@ -8,9 +8,11 @@ import {
 } from "@root/types/DashboardConstants";
 import type { TemplateVariable } from "@store/uiStore";
 import { modelWarning } from "@utils/dropdownValidation";
+import type { CapabilitiesModel } from "@root/types/CapabilitiesTypes";
 import {
   DROPDOWN_NAMESPACES,
   modelNamespaceForHarness,
+  resolveHiddenDropdownValues,
 } from "../../types/dropdownNamespaces";
 import {
   CustomSelect,
@@ -25,9 +27,11 @@ export interface TemplateVariableFieldProps {
   values?: Record<string, string>;
   onChange: (name: string, value: string) => void;
   pairedModels?: TemplateVariable[];
-  modelOptions?: Record<string, Array<{ value: string; label: string }>>;
+  modelOptions?: Record<string, CapabilitiesModel[]>;
   harnessStatus?: React.ComponentProps<typeof HarnessDropdown>["harnessStatus"];
   hiddenDropdownOptions?: Record<string, string[]>;
+  /** Values the user unhid; overrides a model's hidden-by-default flag. */
+  shownDropdownOptions?: Record<string, string[]>;
   onHideOption?: (namespace: string, value: string) => void;
   onUnhideOption?: (namespace: string, value: string) => void;
   onBrowse?: (variable: TemplateVariable) => void;
@@ -59,6 +63,7 @@ export const TemplateVariableField: React.FC<TemplateVariableFieldProps> = ({
   modelOptions = {},
   harnessStatus = {},
   hiddenDropdownOptions = {},
+  shownDropdownOptions = {},
   onHideOption,
   onUnhideOption,
   onBrowse,
@@ -137,7 +142,11 @@ export const TemplateVariableField: React.FC<TemplateVariableFieldProps> = ({
                 }))
           }
           namespace={namespace}
-          hiddenValues={hiddenDropdownOptions[namespace] ?? []}
+          hiddenValues={resolveHiddenDropdownValues(
+            hiddenDropdownOptions[namespace],
+            shownDropdownOptions[namespace],
+            models
+          )}
           onHideOption={(next) => onHideOption?.(namespace, next)}
           onUnhideOption={(next) => onUnhideOption?.(namespace, next)}
           warning={modelWarning(modelValue, harness, models) ?? undefined}

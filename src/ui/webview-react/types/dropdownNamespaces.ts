@@ -39,6 +39,27 @@ export function modelNamespaceForHarness(harness: string): string {
 }
 
 /**
+ * The values a hideable dropdown shows in its hidden section: what the user
+ * hid, plus options flagged hidden by default (a model the harness hides
+ * from its own picker) that the user has not unhidden. The single source for
+ * that rule, shared by every model picker.
+ */
+export function resolveHiddenDropdownValues(
+  hiddenValues: readonly string[] | undefined,
+  shownValues: readonly string[] | undefined,
+  options: ReadonlyArray<{ value: string; hidden?: boolean }>
+): string[] {
+  const shown = new Set(shownValues ?? []);
+  const resolved = new Set(hiddenValues ?? []);
+  for (const option of options) {
+    if (option.hidden && !shown.has(option.value)) {
+      resolved.add(option.value);
+    }
+  }
+  return [...resolved];
+}
+
+/**
  * Generate Resume Session dropdown options.
  * PropertiesDrawer includes a "Default" option with dynamic label.
  * WorkflowPropertiesPanel uses only Yes/No (computes effective value separately).

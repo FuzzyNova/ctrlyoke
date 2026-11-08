@@ -34,7 +34,11 @@ import {
   type CodexInlineHooksArgs,
 } from "./CodexInlineHooksBuilder";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
-import { CODEX_CLI_MODELS, MODEL_NONE } from "../../../utils/ModelConstants";
+import { MODEL_NONE } from "../../../utils/ModelConstants";
+import {
+  isKnownCodexModel,
+  isRegistryInitialized,
+} from "../../../utils/ModelRegistry";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { moveGreedyOptionArgsAfterPrompt } from "../shared/CliArgumentUtils";
@@ -806,8 +810,15 @@ export class CodexCliProvider implements ICliProvider {
       return undefined;
     }
 
-    // Check if model is in the supported list
-    if (CODEX_CLI_MODELS.includes(requestedModel as any)) {
+    // Discovered models (hidden ones included), or the static list
+    if (isKnownCodexModel(requestedModel)) {
+      return requestedModel;
+    }
+
+    // Planning must stay side-effect free, so the standalone CLI never runs
+    // discovery. Without it, trust the requested model the way Copilot does
+    // rather than swapping in the default for a model we never asked about.
+    if (!isRegistryInitialized()) {
       return requestedModel;
     }
 

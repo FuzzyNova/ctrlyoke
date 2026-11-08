@@ -59,22 +59,26 @@ steps:
 
 ## Model selection {#model-selection}
 
-Codex has no command that lists its models, so the **Model** picker shows a fixed list:
-`gpt-6.1-sol`, `gpt-6.1-terra`, `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol`,
+When ctrlyoke starts, it asks the installed Codex which models your account can use, so the
+**Model** picker shows the same models, names and order as Codex's own `/model` picker. Models
+Codex hides from its picker are listed too, but they start out in the picker's hidden section:
+click **Show hidden** to see them, and unhide one to keep it in the list. ctrlyoke asks without
+starting a session, so the lookup uses none of your quota.
+
+If Codex isn't installed or doesn't answer, the picker falls back to the list built into ctrlyoke:
+`gpt-6.1-sol`, `gpt-6-astra`, `gpt-6.1-terra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol`,
 `gpt-5.6-terra` and `gpt-5.6-luna`.
 
 Set `model` on the workflow or on a step. Without one, ctrlyoke uses
 [`defaults.models["codex-cli"]`](/reference/settings#defaults-models), which is `gpt-6-luna` out of
-the box. A model that isn't on the list is replaced by that default, with a warning in the log.
+the box. A model Codex didn't list is replaced by that default, with a warning in the log. The
+`ctrlyoke` CLI doesn't look the list up, so it passes the model to Codex as you wrote it.
 
-`model: none` passes no `--model` flag, so Codex uses the model from its own configuration. To use
-a model the list doesn't have, set `model: none` and put `--model <id>` in `additionalArgs`. See
+`model: none` passes no `--model` flag, so Codex uses the model from its own configuration. See
 [How step properties inherit](/workflows/yaml-format#property-inheritance).
 
-The list matches the **Tested with** Codex release in
-[Supported versions](/harnesses/compatibility#supported-versions). A newer model can need a newer
-Codex than ctrlyoke's minimum. If a step fails because the model is not supported, run
-`codex update`.
+A newer model can need a newer Codex than ctrlyoke's minimum. If a model you expect is missing, or
+a step fails because the model is not supported, run `codex update` and restart ctrlyoke.
 
 ## Notes
 

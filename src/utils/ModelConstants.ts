@@ -7,25 +7,22 @@
  *
  * package.json enums are synced via: `npm run sync-models`
  *
- * IMPORTANT: There are THREE different model sets:
- * 1. COPILOT_CLI_MODEL_IDS - Models supported by `copilot` CLI
- * 2. CLAUDE_CLI_MODELS - Models for Anthropic's `claude` CLI (separate)
- * 3. CODEX_CLI_MODELS - Models for OpenAI's `codex` CLI (separate)
+ * Every harness's list here is the offline fallback and the source of the
+ * schema's `model` examples. At runtime ModelRegistry asks each installed CLI
+ * for its own list and the dashboard shows that instead.
  *
- * To add a new model:
- * 1. Add entry to COPILOT_CLI_MODEL_IDS and its matching COPILOT_CLI_MODEL_LABELS entry
- * 2. Run `npm run sync-models` to update package.json
- * 3. Commit both files
- *
- * To discover new CLI models:
- * - Run `copilot help config` and look for model options
+ * To refresh the Copilot, Claude, Codex and Antigravity lists from the CLIs
+ * installed on this machine:
+ * 1. Run `npm run sync-models:discover` (rewrites the arrays and labels below)
+ * 2. Run `npm run sync-models` to update package.json and the schema
+ * 3. Commit the results
  */
 
 /**
  * Copilot CLI supported models.
  *
  * This list comes from `copilot help config` output and is rewritten wholesale
- * by `npm run sync-models -- --discover` (git history records when). That
+ * by `npm run sync-models:discover` (git history records when). That
  * output can lag what Copilot actually accepts — `--model gpt-6-luna` worked
  * on 2026-09-23 while `copilot help config` (CLI 1.0.88) did not list it — so a
  * missing ID here does not by itself mean Copilot cannot run it.
@@ -97,46 +94,42 @@ export const COPILOT_CLI_MODEL_LABELS: Record<string, string> = {
 };
 
 /**
- * Claude Code CLI models (Anthropic's direct CLI)
+ * Claude Code CLI model aliases, in Claude's `/model` picker order.
  *
- * These are simpler aliases used by the `claude` CLI.
- * Unlike Copilot models, these are not discovered dynamically.
+ * Each alias floats to the newest model of its family. Rewritten by
+ * `npm run sync-models:discover` from the `initialize` reply of Claude's
+ * stream-json control protocol (`ClaudeModelCatalogClient`), keeping only the
+ * aliases: the pinned versions in that reply (`claude-opus-4-6`, …) depend
+ * on the account, so they appear in the dashboard from live discovery only.
  *
- * See: https://github.com/anthropics/claude-code
+ * The old `sonnet[1m]`/`opus[1m]` aliases are gone because Sonnet and Opus
+ * now always run with a 1M context. Claude Code still accepts them.
  */
-export const CLAUDE_CLI_MODELS = [
-  "fable",
-  "sonnet",
-  "sonnet[1m]",
-  "opus",
-  "opus[1m]",
-  "haiku",
-] as const;
+export const CLAUDE_CLI_MODELS = ["opus", "fable", "sonnet", "haiku"] as const;
 
 /**
- * Claude CLI model display names
+ * Claude CLI model display names, verbatim from Claude's `displayName`.
+ * Written by `--discover` alongside CLAUDE_CLI_MODELS.
  */
 export const CLAUDE_CLI_MODEL_LABELS: Record<string, string> = {
-  fable: "Fable",
-  sonnet: "Sonnet",
-  "sonnet[1m]": "Sonnet 1M Context",
-  opus: "Opus",
-  "opus[1m]": "Opus 1M Context",
-  haiku: "Haiku",
+  opus: "Opus 5.5",
+  fable: "Fable 5.1",
+  sonnet: "Sonnet 5.5",
+  haiku: "Haiku 5.5",
 };
 
 /**
- * Codex CLI models (OpenAI's code-specialized CLI)
+ * Codex CLI models, in Codex's own picker order.
  *
- * These are the primary models supported by the `codex` CLI.
- * List sourced from `codex /model` command output.
- *
- * See: https://docs.openai.com/codex
+ * Rewritten by `npm run sync-models:discover` from the app-server's
+ * `model/list` (`CodexAppServerClient.listModels`), keeping the models Codex
+ * shows by default. Models Codex marks hidden appear in the dashboard from
+ * live discovery only, hidden until the user unhides them.
  */
 export const CODEX_CLI_MODELS = [
   "gpt-6.1-sol",
-  "gpt-6.1-terra",
   "gpt-6-astra",
+  "gpt-6.1-terra",
   "gpt-6-sol",
   "gpt-6-luna",
   "gpt-5.6-sol",
@@ -145,17 +138,18 @@ export const CODEX_CLI_MODELS = [
 ] as const;
 
 /**
- * Codex CLI model display names
+ * Codex CLI model display names, verbatim from Codex's `displayName`.
+ * Written by `--discover` alongside CODEX_CLI_MODELS.
  */
 export const CODEX_CLI_MODEL_LABELS: Record<string, string> = {
-  "gpt-6.1-sol": "GPT 6.1 Sol",
-  "gpt-6.1-terra": "GPT 6.1 Terra",
-  "gpt-6-astra": "GPT 6 Astra",
-  "gpt-6-sol": "GPT 6 Sol",
-  "gpt-6-luna": "GPT 6 Luna",
-  "gpt-5.6-sol": "GPT 5.6 Sol",
-  "gpt-5.6-terra": "GPT 5.6 Terra",
-  "gpt-5.6-luna": "GPT 5.6 Luna",
+  "gpt-6.1-sol": "GPT-6.1-Sol",
+  "gpt-6-astra": "GPT-6-Astra",
+  "gpt-6.1-terra": "GPT-6.1 Terra",
+  "gpt-6-sol": "GPT-6-Sol",
+  "gpt-6-luna": "GPT-6-Luna",
+  "gpt-5.6-sol": "GPT-5.6-Sol",
+  "gpt-5.6-terra": "GPT-5.6-Terra",
+  "gpt-5.6-luna": "GPT-5.6-Luna",
 };
 
 /**
@@ -283,27 +277,42 @@ export function isValidClaudeModel(modelId: string): boolean {
 }
 
 /**
- * Get the Claude CLI model alias for a given model identifier
- * Claude CLI accepts short aliases directly (fable, sonnet, opus, haiku)
- *
- * @param model The model identifier (alias or Copilot-style name like "claude-sonnet-4.5")
- * @returns The Claude CLI alias, or undefined if not recognized
+ * A pinned Claude model ID in Anthropic's dashed form, e.g. `claude-opus-4-6`
+ * or `claude-haiku-4-5-20251001`, optionally with the legacy `[1m]` suffix.
+ * Copilot's dotted IDs (`claude-sonnet-4.6`) are not.
  */
-export function getClaudeModelName(
-  model: string
-): ClaudeCliModelAlias | undefined {
+const PINNED_CLAUDE_MODEL_ID_PATTERN = /^claude-[a-z]+(?:-\d+)+(?:\[1m\])?$/;
+
+/** Whether a Claude model value is a pinned model ID rather than an alias. */
+export function isPinnedClaudeModelId(model: string): boolean {
+  return PINNED_CLAUDE_MODEL_ID_PATTERN.test(model);
+}
+
+/**
+ * Get the value to pass to `claude --model` for a given model identifier.
+ * Aliases (fable, sonnet, opus, haiku) and pinned model IDs
+ * (`claude-opus-4-6`) pass through unchanged.
+ *
+ * @param model The model identifier (alias, pinned ID, or Copilot-style name like "claude-sonnet-4.5")
+ * @returns The Claude CLI model value, or undefined if not recognized
+ */
+export function getClaudeModelName(model: string): string | undefined {
   // Direct match for aliases
   if (CLAUDE_CLI_MODELS.includes(model as ClaudeCliModelAlias)) {
-    return model as ClaudeCliModelAlias;
+    return model;
   }
 
   // Try lowercase normalization
   const normalized = model.toLowerCase();
   if (CLAUDE_CLI_MODELS.includes(normalized as ClaudeCliModelAlias)) {
-    return normalized as ClaudeCliModelAlias;
+    return normalized;
   }
 
-  // Map Copilot-style names to aliases
+  if (isPinnedClaudeModelId(normalized)) {
+    return normalized;
+  }
+
+  // Map Copilot-style names and legacy aliases (`sonnet[1m]`) to aliases
   if (normalized.includes("fable")) return "fable";
   if (normalized.includes("sonnet")) return "sonnet";
   if (normalized.includes("opus")) return "opus";
@@ -347,7 +356,7 @@ export function getQwenContextWindowSize(_modelId: string): number {
  * models — it never silently falls back to the default.
  *
  * Last verified against `agy models` + `agy --model <id>` validation: 2026-08-21.
- * Command: npm run sync-models -- --discover
+ * Command: npm run sync-models:discover
  */
 export const ANTIGRAVITY_CLI_MODELS = [
   "gemini-3.8-flash-high",

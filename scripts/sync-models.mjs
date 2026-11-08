@@ -14,35 +14,41 @@
  * - Copilot CLI models come from `copilot help config` (only source — there is
  *   no separate Chat-model superset; ctrlyoke doesn't query VS Code's Language
  *   Model API or support a chat harness)
- * - Claude CLI models come from Anthropic's Claude Code CLI (separate)
- * - Codex CLI models come from OpenAI's Codex CLI (separate)
- * - Antigravity CLI models come from `agy models` (separate; also the only
- *   source that gives verbatim display labels, so --discover writes both
- *   ANTIGRAVITY_CLI_MODELS and ANTIGRAVITY_CLI_MODEL_LABELS directly instead
- *   of auto-deriving labels by title-casing the ID)
+ * - Claude CLI models come from the `initialize` reply of Claude Code's
+ *   stream-json control protocol (aliases only; pinned versions depend on
+ *   the account and are left to runtime discovery)
+ * - Codex CLI models come from the Codex app-server's `model/list` (models
+ *   Codex shows by default; hidden ones are left to runtime discovery)
+ * - Antigravity CLI models come from `agy models`
+ * Claude, Codex and Antigravity report their own display labels, so
+ * --discover writes their `*_MODEL_LABELS` verbatim; only Copilot's labels
+ * are auto-derived by title-casing the ID.
  *
  * Usage:
  *   node scripts/sync-models.mjs             # Sync all models from ModelConstants.ts
  *   node scripts/sync-models.mjs --check     # Check if in sync (CI mode)
- *   node scripts/sync-models.mjs --discover  # Query `copilot help config` and `agy models`
- *                                             # directly and update COPILOT_CLI_MODEL_IDS /
- *                                             # ANTIGRAVITY_CLI_MODELS(+LABELS) from them
+ *   node scripts/sync-models.mjs --discover  # Query every installed CLI above and
+ *                                             # rewrite its model list (+ labels).
+ *                                             # Claude and Codex use the compiled
+ *                                             # clients in out/, so run it through
+ *                                             # `npm run sync-models:discover`.
  *
  * Workflow for updating CLI models (authoritative, no extension needed):
- *   1. Run: npm run sync-models -- --discover  (updates COPILOT_CLI_MODEL_IDS and
- *      ANTIGRAVITY_CLI_MODELS/ANTIGRAVITY_CLI_MODEL_LABELS)
+ *   1. Run: npm run sync-models:discover
  *   2. Run: npm run sync-models (to update package.json and schema)
  *
  * The script preserves formatting and only updates the enum arrays and schema examples.
  */
 
-import { readFileSync, writeFileSync } from "fs";
+import { existsSync, readFileSync, writeFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
+import { createRequire } from "module";
 import { exec, spawn } from "child_process";
 import { promisify } from "util";
 
 const execAsync = promisify(exec);
+const require = createRequire(import.meta.url);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = resolve(__dirname, "..");
@@ -607,60 +613,169 @@ async function discoverAntigravityFromCli() {
   console.log(`Found ${modelPairs.length} Antigravity-supported models:`);
   modelPairs.forEach(([id, label]) => console.log(`  - "${id}" -> "${label}"`));
 
+  writeModelsAndLabels(
+    "Antigravity",
+    "ANTIGRAVITY_CLI_MODELS",
+    "ANTIGRAVITY_CLI_MODEL_LABELS",
+    modelPairs
+  );
+}
+
+/**
+ * Replace a `<X>_MODELS` array and its `<X>_MODEL_LABELS` map in
+ * ModelConstants.ts with `modelPairs` ([id, label] tuples, in the harness's
+ * own order), and report what was added and removed. Used for every harness
+ * whose CLI reports its own display labels (Antigravity, Claude, Codex), so
+ * the labels are written verbatim instead of derived from the ID.
+ */
+function writeModelsAndLabels(
+  harnessName,
+  modelsConstantName,
+  labelsConstantName,
+  modelPairs
+) {
   const content = readFileSync(MODEL_CONSTANTS_PATH, "utf-8");
-  const {
-    content: updatedContent,
-    added,
-    removed,
-  } = updateAntigravityModelsAndLabels(content, modelPairs);
+  const currentIds = parseStringArrayConstant(content, modelsConstantName);
+
+  const modelIds = modelPairs.map(([id]) => id);
+  const idEntries = modelIds.map((id) => `  "${id}"`);
+  const newIdsBlock = `export const ${modelsConstantName} = [\n${idEntries.join(",\n")},\n] as const`;
+
+  let updatedContent = content.replace(
+    new RegExp(
+      `export\\s+const\\s+${modelsConstantName}\\s*=\\s*\\[[\\s\\S]*?\\]\\s*as\\s+const`
+    ),
+    newIdsBlock
+  );
+
+  // Prettier writes plain identifiers unquoted; quoting them all is still
+  // valid TS, and `npm run format` restores the house style.
+  const labelEntries = modelPairs.map(([id, label]) => `  "${id}": "${label}"`);
+  const newLabelsBlock = `export const ${labelsConstantName}: Record<string, string> = {\n${labelEntries.join(",\n")},\n}`;
+
+  updatedContent = updatedContent.replace(
+    new RegExp(`export\\s+const\\s+${labelsConstantName}[^=]*=\\s*\\{[^}]+\\}`),
+    newLabelsBlock
+  );
   writeFileSync(MODEL_CONSTANTS_PATH, updatedContent);
 
+  const added = modelIds.filter((id) => !currentIds.includes(id));
+  const removed = currentIds.filter((id) => !modelIds.includes(id));
+
   console.log(
-    `\n✓ Updated ANTIGRAVITY_CLI_MODELS/ANTIGRAVITY_CLI_MODEL_LABELS with ${modelPairs.length} models`
+    `\n✓ Updated ${modelsConstantName}/${labelsConstantName} with ${modelPairs.length} models`
   );
   if (added.length > 0) {
-    console.log("  New Antigravity models:");
+    console.log(`  New ${harnessName} models:`);
     added.forEach((id) => console.log(`    + ${id}`));
   }
   if (removed.length > 0) {
-    console.log("  Removed Antigravity models:");
+    console.log(`  Removed ${harnessName} models:`);
     removed.forEach((id) => console.log(`    - ${id}`));
   }
 }
 
 /**
- * Replace the ANTIGRAVITY_CLI_MODELS and ANTIGRAVITY_CLI_MODEL_LABELS blocks in
- * ModelConstants.ts source content with `modelPairs` ([id, label] tuples,
- * in `agy models` order), returning the updated content plus the added/removed
- * model IDs relative to what was previously there.
+ * Load a compiled module from `out/`. `sync-models:discover` runs
+ * `compile-tests` first, so the discovery clients here are the exact code the
+ * extension runs, not a copy of their protocol handling.
  */
-function updateAntigravityModelsAndLabels(content, modelPairs) {
-  const currentIds = parseStringArrayConstant(
-    content,
-    "ANTIGRAVITY_CLI_MODELS"
+function requireCompiled(relativePath) {
+  const fullPath = resolve(ROOT_DIR, "out", relativePath);
+  if (!existsSync(fullPath)) {
+    console.error(
+      `Missing ${fullPath}. Run 'npm run sync-models:discover', which compiles first.`
+    );
+    process.exit(1);
+  }
+  return require(fullPath);
+}
+
+/**
+ * Discover Claude Code's models from the `initialize` reply of its stream-json
+ * control protocol (no turn, no tokens) and write the aliases, with Claude's
+ * own labels, into CLAUDE_CLI_MODELS + CLAUDE_CLI_MODEL_LABELS. Pinned
+ * versions (`claude-opus-4-6`) come back flagged hidden, as in Claude's own
+ * picker, and depend on the account, so they are left to runtime discovery.
+ */
+async function discoverClaudeFromCli() {
+  console.log(
+    "\nDiscovering models from Claude Code (initialize request)...\n"
+  );
+  const { ClaudeModelCatalogClient } = requireCompiled(
+    "core/harness/claude/ClaudeModelCatalogClient.js"
   );
 
-  const modelIds = modelPairs.map(([id]) => id);
-  const idEntries = modelIds.map((id) => `  "${id}"`);
-  const newIdsBlock = `export const ANTIGRAVITY_CLI_MODELS = [\n${idEntries.join(",\n")},\n] as const`;
+  let models;
+  try {
+    models = await new ClaudeModelCatalogClient().listModels();
+  } catch (error) {
+    console.error("Failed to query Claude Code:", error.message);
+    console.log(
+      "\nMake sure Claude Code is installed, signed in and on your PATH."
+    );
+    process.exit(1);
+  }
 
-  let updatedContent = content.replace(
-    /export\s+const\s+ANTIGRAVITY_CLI_MODELS\s*=\s*\[[\s\S]*?\]\s*as\s+const/,
-    newIdsBlock
+  console.log(`Claude Code reports ${models.length} models:`);
+  models.forEach((m) =>
+    console.log(
+      `  - "${m.value}" -> "${m.label}"${m.hidden ? " (hidden)" : ""}`
+    )
   );
 
-  const labelEntries = modelPairs.map(([id, label]) => `  "${id}": "${label}"`);
-  const newLabelsBlock = `export const ANTIGRAVITY_CLI_MODEL_LABELS: Record<string, string> = {\n${labelEntries.join(",\n")},\n}`;
+  const aliases = models.filter((m) => !m.hidden);
+  if (aliases.length === 0) {
+    console.error("Claude Code reported no model aliases");
+    process.exit(1);
+  }
+  writeModelsAndLabels(
+    "Claude",
+    "CLAUDE_CLI_MODELS",
+    "CLAUDE_CLI_MODEL_LABELS",
+    aliases.map((m) => [m.value, m.label])
+  );
+}
 
-  updatedContent = updatedContent.replace(
-    /export\s+const\s+ANTIGRAVITY_CLI_MODEL_LABELS[^=]*=\s*\{[^}]+\}/,
-    newLabelsBlock
+/**
+ * Discover Codex's models from the app-server's `model/list` and write the
+ * ones Codex shows by default, with Codex's own labels, into
+ * CODEX_CLI_MODELS + CODEX_CLI_MODEL_LABELS. Hidden models are left to
+ * runtime discovery, where they start in the picker's hidden section.
+ */
+async function discoverCodexFromCli() {
+  console.log("\nDiscovering models from Codex (app-server model/list)...\n");
+  const { CodexAppServerClient } = requireCompiled(
+    "core/harness/codex/CodexAppServerClient.js"
   );
 
-  const added = modelIds.filter((id) => !currentIds.includes(id));
-  const removed = currentIds.filter((id) => !modelIds.includes(id));
+  let models;
+  try {
+    models = await new CodexAppServerClient().listModels();
+  } catch (error) {
+    console.error("Failed to query Codex app-server:", error.message);
+    console.log("\nMake sure Codex is installed, signed in and on your PATH.");
+    process.exit(1);
+  }
 
-  return { content: updatedContent, added, removed };
+  console.log(`Codex reports ${models.length} models:`);
+  models.forEach((m) =>
+    console.log(
+      `  - "${m.value}" -> "${m.label}"${m.hidden ? " (hidden)" : ""}`
+    )
+  );
+
+  const visible = models.filter((m) => !m.hidden);
+  if (visible.length === 0) {
+    console.error("Codex reported no visible models");
+    process.exit(1);
+  }
+  writeModelsAndLabels(
+    "Codex",
+    "CODEX_CLI_MODELS",
+    "CODEX_CLI_MODEL_LABELS",
+    visible.map((m) => [m.value, m.label])
+  );
 }
 
 // Main
@@ -674,6 +789,8 @@ async function main() {
   if (discover) {
     await discoverFromCli();
     await discoverAntigravityFromCli();
+    await discoverClaudeFromCli();
+    await discoverCodexFromCli();
     console.log(
       "\nNext step: Run 'npm run sync-models' to update package.json"
     );
@@ -681,13 +798,9 @@ async function main() {
   }
 
   try {
-    // First, auto-derive the Codex and Copilot label maps from their model ID arrays
-    // This ensures you only need to update the CODEX_CLI_MODELS / COPILOT_CLI_MODEL_IDS arrays
-    updateDerivedLabels(
-      "CODEX_CLI_MODELS",
-      "CODEX_CLI_MODEL_LABELS",
-      checkOnly
-    );
+    // First, auto-derive the Copilot label map from its model ID array.
+    // Claude, Codex and Antigravity labels come verbatim from their CLIs
+    // via --discover, so they are not derived here.
     updateDerivedLabels(
       "COPILOT_CLI_MODEL_IDS",
       "COPILOT_CLI_MODEL_LABELS",

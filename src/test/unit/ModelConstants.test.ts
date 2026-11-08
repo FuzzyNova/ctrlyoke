@@ -4,6 +4,7 @@ import {
   getModelDisplayName,
   isKnownCopilotModel,
   getClaudeModelName,
+  isPinnedClaudeModelId,
   isValidClaudeModel,
   getClaudeContextWindowSize,
   getQwenModelName,
@@ -83,8 +84,30 @@ suite("ModelConstants", () => {
       assert.strictEqual(getClaudeModelName("claude-opus-4.6"), "opus");
     });
 
-    test("maps Copilot-style fable name to alias", () => {
-      assert.strictEqual(getClaudeModelName("claude-fable-5"), "fable");
+    test("maps Copilot-style dotted fable name to alias", () => {
+      assert.strictEqual(getClaudeModelName("claude-fable-5.1"), "fable");
+    });
+
+    test("passes pinned model IDs through instead of collapsing to the alias", () => {
+      // `claude-fable-5` is a real pinned Claude model; mapping it to
+      // `fable` would silently run the newest Fable instead.
+      assert.strictEqual(
+        getClaudeModelName("claude-fable-5"),
+        "claude-fable-5"
+      );
+      assert.strictEqual(
+        getClaudeModelName("claude-opus-4-6"),
+        "claude-opus-4-6"
+      );
+      assert.strictEqual(
+        getClaudeModelName("claude-haiku-4-5-20251001"),
+        "claude-haiku-4-5-20251001"
+      );
+    });
+
+    test("maps the legacy [1m] aliases to their family alias", () => {
+      assert.strictEqual(getClaudeModelName("sonnet[1m]"), "sonnet");
+      assert.strictEqual(getClaudeModelName("opus[1m]"), "opus");
     });
 
     test("returns undefined for unrecognized model", () => {
@@ -93,6 +116,23 @@ suite("ModelConstants", () => {
 
     test("handles case-insensitive matching", () => {
       assert.strictEqual(getClaudeModelName("Sonnet"), "sonnet");
+    });
+  });
+
+  suite("isPinnedClaudeModelId", () => {
+    test("recognizes Anthropic's dashed model IDs", () => {
+      assert.strictEqual(isPinnedClaudeModelId("claude-opus-4-6"), true);
+      assert.strictEqual(isPinnedClaudeModelId("claude-sonnet-5"), true);
+      assert.strictEqual(
+        isPinnedClaudeModelId("claude-haiku-4-5-20251001"),
+        true
+      );
+    });
+
+    test("rejects aliases and Copilot's dotted IDs", () => {
+      assert.strictEqual(isPinnedClaudeModelId("opus"), false);
+      assert.strictEqual(isPinnedClaudeModelId("claude-sonnet-4.6"), false);
+      assert.strictEqual(isPinnedClaudeModelId("claude-opus"), false);
     });
   });
 
@@ -105,8 +145,9 @@ suite("ModelConstants", () => {
       assert.strictEqual(isValidClaudeModel("sonnet"), true);
     });
 
-    test("returns true for 1m context variant", () => {
-      assert.strictEqual(isValidClaudeModel("sonnet[1m]"), true);
+    test("no longer lists the legacy 1m context aliases", () => {
+      assert.strictEqual(isValidClaudeModel("sonnet[1m]"), false);
+      assert.strictEqual(isValidClaudeModel("opus[1m]"), false);
     });
 
     test("returns false for Copilot-style name", () => {

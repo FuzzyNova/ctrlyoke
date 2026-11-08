@@ -546,6 +546,11 @@ interface UiState {
   hostCapabilities: DashboardHostCapability[];
   // Dropdown hide feature — persisted to vscode state
   hiddenDropdownOptions: Record<string, string[]>; // namespace → hidden value[]
+  /**
+   * namespace → values the user unhid. Overrides an option's hidden-by-default
+   * flag (a model the harness hides); see `resolveHiddenDropdownValues`.
+   */
+  shownDropdownOptions: Record<string, string[]>;
   // Section collapse states
   stepsCollapsed: boolean;
   finalStepFooterExpanded: boolean;
@@ -1323,6 +1328,7 @@ interface UiActions {
 const initialState: UiState = {
   hostCapabilities: [],
   hiddenDropdownOptions: {},
+  shownDropdownOptions: {},
   saveWorkflowDialogOpen: false,
   saveWorkflowDialogData: null,
   savePathCheck: null,
@@ -1442,6 +1448,33 @@ const initialState: UiState = {
   uxSnapshotStatus: "idle",
 };
 
+/** Append `value` to a namespace's list (moved to the end if already there). */
+function addNamespaceValue(
+  lists: Record<string, string[]>,
+  namespace: string,
+  value: string
+): Record<string, string[]> {
+  return {
+    ...lists,
+    [namespace]: [
+      ...(lists[namespace] ?? []).filter((v) => v !== value),
+      value,
+    ],
+  };
+}
+
+/** Drop `value` from a namespace's list. */
+function removeNamespaceValue(
+  lists: Record<string, string[]>,
+  namespace: string,
+  value: string
+): Record<string, string[]> {
+  return {
+    ...lists,
+    [namespace]: (lists[namespace] ?? []).filter((v) => v !== value),
+  };
+}
+
 // Fields to persist via vscode.getState()/setState()
 const persistedFields = [
   "stepsCollapsed",
@@ -1451,6 +1484,7 @@ const persistedFields = [
   "defaultTemplateId",
   "lastSavedTemplateScope",
   "hiddenDropdownOptions",
+  "shownDropdownOptions",
   "lastDesktopSizes",
   "lastMobileSizes",
   "diffsCollapsed",
@@ -2603,33 +2637,45 @@ export const useUiStore = create<UiState & UiActions>()(
       // DROPDOWN HIDE FEATURE
       // ============================================================================
 
+      // Hiding and unhiding each move the value between the two lists, so
+      // the latest choice wins over the option's hidden-by-default flag.
       hideDropdownOption: (namespace, value) =>
         set((state) => ({
-          hiddenDropdownOptions: {
-            ...state.hiddenDropdownOptions,
-            [namespace]: [
-              ...(state.hiddenDropdownOptions[namespace] ?? []).filter(
-                (v) => v !== value
-              ),
-              value,
-            ],
-          },
+          hiddenDropdownOptions: addNamespaceValue(
+            state.hiddenDropdownOptions,
+            namespace,
+            value
+          ),
+          shownDropdownOptions: removeNamespaceValue(
+            state.shownDropdownOptions,
+            namespace,
+            value
+          ),
         })),
 
       unhideDropdownOption: (namespace, value) =>
         set((state) => ({
-          hiddenDropdownOptions: {
-            ...state.hiddenDropdownOptions,
-            [namespace]: (state.hiddenDropdownOptions[namespace] ?? []).filter(
-              (v) => v !== value
-            ),
-          },
+          hiddenDropdownOptions: removeNamespaceValue(
+            state.hiddenDropdownOptions,
+            namespace,
+            value
+          ),
+          shownDropdownOptions: addNamespaceValue(
+            state.shownDropdownOptions,
+            namespace,
+            value
+          ),
         })),
 
+      // Back to defaults: nothing the user hid, nothing they unhid.
       clearHiddenDropdownOptions: (namespace) =>
         set((state) => ({
           hiddenDropdownOptions: {
             ...state.hiddenDropdownOptions,
+            [namespace]: [],
+          },
+          shownDropdownOptions: {
+            ...state.shownDropdownOptions,
             [namespace]: [],
           },
         })),

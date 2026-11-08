@@ -81,6 +81,46 @@ describe("ModelQuickPicker — Alt+Shift+M", () => {
     expect(editor).toHaveFocus();
   });
 
+  it("starts a model the harness hides in the hidden section until unhidden", async () => {
+    useUiStore.setState({
+      hiddenDropdownOptions: {},
+      shownDropdownOptions: {},
+    });
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("harness", HARNESS_IDS.CODEX_CLI);
+    useSettingsStore.getState().setModelOptions({
+      [HARNESS_IDS.CODEX_CLI]: [
+        { value: "gpt-6.1-sol", label: "GPT-6.1-Sol" },
+        { value: "gpt-reserve", label: "GPT-Reserve", hidden: true },
+      ],
+    });
+    render(<ModelQuickPicker isNarrow={false} showLabel={true} />);
+
+    act(() => {
+      useUiStore
+        .getState()
+        .requestPickerShortcut(PICKER_SHORTCUT_TARGETS.STEP_MODEL, {
+          mobile: false,
+        });
+    });
+    await screen.findByRole("listbox");
+    const row = (value: string) =>
+      document.querySelector(`[data-listbox-value="${value}"]`);
+    expect(row("gpt-6.1-sol")).not.toBeNull();
+    expect(row("gpt-reserve")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /Show hidden/i })
+    ).toBeInTheDocument();
+
+    act(() => {
+      useUiStore
+        .getState()
+        .unhideDropdownOption("model:codex-cli", "gpt-reserve");
+    });
+    await waitFor(() => expect(row("gpt-reserve")).not.toBeNull());
+  });
+
   it("closes the popup on Escape without changing the model", async () => {
     render(<ModelQuickPicker isNarrow={false} showLabel={true} />);
 

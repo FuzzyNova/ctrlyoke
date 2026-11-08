@@ -2,6 +2,8 @@ import { HARNESS_IDS, MODEL_OPTION_VALUES } from "../types/DashboardConstants";
 import type { CapabilitiesModel } from "../types/CapabilitiesTypes";
 import {
   getCliSupportedModelIdsSync,
+  getClaudeModelsSync,
+  getCodexModelsSync,
   getOpenCodeModelIdsSync,
   getQwenModelIdsSync,
   getAntigravityModelIdsSync,
@@ -9,14 +11,13 @@ import {
 } from "./ModelRegistry";
 import {
   getModelDisplayName,
-  CLAUDE_CLI_MODEL_LABELS,
-  CODEX_CLI_MODEL_LABELS,
   ANTIGRAVITY_CLI_MODEL_LABELS,
 } from "./ModelConstants";
 
 /**
  * Model options for every harness, `None` first. The dashboard's model
  * pickers and VS Code's workflow-file `model` completions read this one list.
+ * An option the harness hides from its own picker carries `hidden: true`.
  */
 export function buildHarnessModelOptions(): Record<
   string,
@@ -37,21 +38,9 @@ export function buildHarnessModelOptions(): Record<
       })),
   ];
 
-  const claudeCliOptions = [
-    noneOption,
-    ...Object.entries(CLAUDE_CLI_MODEL_LABELS).map(([value, label]) => ({
-      value,
-      label,
-    })),
-  ];
+  const claudeCliOptions = [noneOption, ...getClaudeModelsSync()];
 
-  const codexCliOptions = [
-    noneOption,
-    ...Object.entries(CODEX_CLI_MODEL_LABELS).map(([value, label]) => ({
-      value,
-      label,
-    })),
-  ];
+  const codexCliOptions = [noneOption, ...getCodexModelsSync()];
 
   const openCodeCliOptions = [
     noneOption,

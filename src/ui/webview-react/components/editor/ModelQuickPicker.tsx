@@ -14,7 +14,7 @@ import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
 import { type HarnessId } from "../../types/messages";
 import { FOOTER_PICKERS } from "../../types/messages";
-import { modelNamespaceForHarness } from "../../types/dropdownNamespaces";
+import { useModelDropdownHiding } from "../../hooks/useModelDropdownHiding";
 import { CustomSelect } from "../shared";
 import { FooterQuickPicker } from "./FooterQuickPicker";
 import { harnessScopedFallbackLabel } from "../../utils/harnessScopedFallback";
@@ -48,17 +48,13 @@ export const ModelQuickPicker: React.FC<ModelQuickPickerProps> = ({
   const getEffectiveModel = useSettingsStore((s) => s.getEffectiveModel);
   const footerOpenPicker = useUiStore((s) => s.footerOpenPicker);
   const setFooterOpenPicker = useUiStore((s) => s.setFooterOpenPicker);
-  const hiddenDropdownOptions = useUiStore((s) => s.hiddenDropdownOptions);
-  const hideDropdownOption = useUiStore((s) => s.hideDropdownOption);
-  const unhideDropdownOption = useUiStore((s) => s.unhideDropdownOption);
-
   const isOpen = footerOpenPicker === FOOTER_PICKERS.MODEL;
 
   const workflowHarness = (workflowProperties.harness ??
     globalSettings.harness) as HarnessId;
   const resolvedHarness = (properties.harness ?? workflowHarness) as HarnessId;
   const models = getModelsForHarness(resolvedHarness);
-  const modelNamespace = modelNamespaceForHarness(resolvedHarness);
+  const modelHiding = useModelDropdownHiding(resolvedHarness, models);
 
   const resolvedModelValue = getEffectiveModel(resolvedHarness);
   const resolvedModelLabel =
@@ -123,10 +119,7 @@ export const ModelQuickPicker: React.FC<ModelQuickPickerProps> = ({
             ? [{ value: "", label: "Loading models...", disabled: true }]
             : models.map((m) => ({ value: m.value, label: m.label }))),
         ]}
-        namespace={modelNamespace}
-        hiddenValues={hiddenDropdownOptions[modelNamespace] ?? []}
-        onHideOption={(v) => hideDropdownOption(modelNamespace, v)}
-        onUnhideOption={(v) => unhideDropdownOption(modelNamespace, v)}
+        {...modelHiding}
         nonHideableValues={[INHERIT_DEFAULT_OPTION, ""]}
         dropdownMaxHeight="300px"
         inline={true}

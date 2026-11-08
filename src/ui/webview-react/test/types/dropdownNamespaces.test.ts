@@ -1,11 +1,43 @@
 import { describe, expect, it } from "vitest";
 import {
   getResumeSessionOptions,
+  resolveHiddenDropdownValues,
   resumeSessionSelection,
 } from "@/types/dropdownNamespaces";
 import { SESSION_ID_SENTINELS } from "@root/types/DashboardConstants";
 
 const GUID = "63017930-45b0-4ec4-8094-8a57751e905b";
+
+describe("resolveHiddenDropdownValues", () => {
+  const models = [
+    { value: "gpt-6.1-sol", label: "GPT-6.1-Sol" },
+    { value: "gpt-reserve", label: "GPT-Reserve", hidden: true },
+    { value: "codex-auto-review", label: "Codex Auto Review", hidden: true },
+  ];
+
+  it("starts models the harness hides in the hidden section", () => {
+    expect(resolveHiddenDropdownValues(undefined, undefined, models)).toEqual([
+      "gpt-reserve",
+      "codex-auto-review",
+    ]);
+  });
+
+  it("keeps a hidden-by-default model visible once the user unhides it", () => {
+    expect(resolveHiddenDropdownValues([], ["gpt-reserve"], models)).toEqual([
+      "codex-auto-review",
+    ]);
+  });
+
+  it("adds what the user hid, without duplicates", () => {
+    expect(
+      resolveHiddenDropdownValues(
+        ["gpt-6.1-sol", "codex-auto-review"],
+        undefined,
+        models
+      )
+    ).toEqual(["gpt-6.1-sol", "codex-auto-review", "gpt-reserve"]);
+  });
+});
 
 describe("resumeSessionSelection", () => {
   it("uses schema UI labels and writes the Final Step sentinel", () => {

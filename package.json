@@ -823,7 +823,7 @@
     "sync-models": "node scripts/sync-models.mjs",
     "sync-models:check": "node scripts/sync-models.mjs --check",
     "sync-models:import": "node scripts/sync-models.mjs --import",
-    "sync-models:discover": "node scripts/sync-models.mjs --discover",
+    "sync-models:discover": "npm run compile-tests && node scripts/sync-models.mjs --discover",
     "sync-model-pricing": "node scripts/sync-model-pricing.mjs",
     "sync-skills-snapshot": "node scripts/sync-skills-snapshot.mjs",
     "manual-test:large-directory": "node scripts/generate-large-directory.mjs",

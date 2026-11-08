@@ -63,25 +63,32 @@ steps:
 
 ## Model selection {#model-selection}
 
-Claude Code has no command that lists its models, so the **Model** picker shows a fixed list of
-Claude's short aliases: `fable`, `sonnet`, `sonnet[1m]`, `opus`, `opus[1m]` and `haiku`. Claude Code
-resolves each alias to its current model.
+When ctrlyoke starts, it asks the installed Claude Code which models your account can use, so the
+**Model** picker shows the same models and names as Claude's own `/model` picker. That list has
+Claude's aliases (`opus`, `fable`, `sonnet` and `haiku`), each of which always runs the newest model
+of its family. The older versions your account still offers, such as `claude-opus-4-6`, start out in
+the picker's hidden section, as they sit behind **More models** in Claude's picker: click **Show
+hidden** to see them, and unhide one to keep it in the list. Pick an alias to move to new models
+automatically, or a version to stay on it. ctrlyoke asks without starting a session, so the lookup
+uses no tokens.
+
+If Claude Code isn't installed or doesn't answer, the picker falls back to the four aliases.
 
 Set `model` on the workflow or on a step. Without one, ctrlyoke uses
 [`defaults.models["claude-cli"]`](/reference/settings#defaults-models), which is `sonnet` out of
-the box. A Copilot-style ID such as `claude-sonnet-4.6` is mapped to the alias for its family
-(`sonnet`), so it loses any version or `[1m]` suffix. Any other value is replaced by your default,
-with a warning in the log. Keep model overrides harness-specific.
+the box. A full model ID such as `claude-opus-4-6` is passed to Claude Code as written. A
+Copilot-style ID such as `claude-sonnet-4.6` is mapped to the alias for its family (`sonnet`), and
+so is the old `sonnet[1m]` or `opus[1m]`: Sonnet and Opus now always run with a 1M context. Any
+other value is replaced by your default, with a warning in the log. Keep model overrides
+harness-specific.
 
-`model: none` passes no `--model` flag, so Claude Code uses its own default model. To pass a model
-the list doesn't have, such as a full model ID, set `model: none` and put `--model <id>` in
-`additionalArgs`. See [How step properties inherit](/workflows/yaml-format#property-inheritance).
+`model: none` passes no `--model` flag, so Claude Code uses its own default model. See
+[How step properties inherit](/workflows/yaml-format#property-inheritance).
 
-The list matches the **Tested with** Claude Code release in
-[Supported versions](/harnesses/compatibility#supported-versions). A newer model can need a newer
-Claude Code than ctrlyoke's minimum (Fable needs 2.1.170 or later), and an older release resolves
-`sonnet`, `opus` and `haiku` to older models. If a step fails because the selected model may not
-exist or you may not have access to it, run `claude update`.
+A newer model can need a newer Claude Code than ctrlyoke's minimum (Fable needs 2.1.170 or later),
+and an older release resolves `sonnet`, `opus` and `haiku` to older models. If a model you expect is
+missing, or a step fails because the selected model may not exist or you may not have access to it,
+run `claude update` and restart ctrlyoke.
 
 ## Permissions {#permissions}
 

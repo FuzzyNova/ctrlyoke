@@ -1,13 +1,15 @@
 /**
  * ModelRegistry - Dynamic model discovery and caching
  *
- * Queries available models via:
- * 1. `copilot help config` output (for Copilot CLI models) - Parsed dynamically
- *
- * Claude Code CLI models are maintained as a static list because:
- * - Claude CLI has no `claude model list` command (feature request: github.com/anthropics/claude-code/issues/12612)
- * - The `/model` command in interactive mode requires starting a session and consumes tokens
- * - Models are: sonnet (4.5), opus (4/4.5), haiku (4.5) with dated full names
+ * Queries available models from each installed harness:
+ * - Copilot: `copilot help config`
+ * - Claude Code: the `initialize` reply of its stream-json control protocol
+ *   (`ClaudeModelCatalogClient`); no turn, no tokens
+ * - Codex: the app-server's `model/list`, hidden models included
+ *   (`CodexAppServerClient.listModels`)
+ * - OpenCode: `opencode models --verbose` / its `model.list` API
+ * - Qwen: `~/.qwen/settings.json` `modelProviders`
+ * - Antigravity: `agy models`
  *
  * Provides runtime access to the model list for:
  * - IntelliSense completions in prompt files
@@ -26,7 +28,14 @@ import {
   COPILOT_CLI_MODEL_IDS,
   OPENCODE_CLI_FALLBACK_MODELS,
   ANTIGRAVITY_CLI_MODELS,
+  CLAUDE_CLI_MODELS,
+  CLAUDE_CLI_MODEL_LABELS,
+  CODEX_CLI_MODELS,
+  CODEX_CLI_MODEL_LABELS,
 } from "./ModelConstants";
+import type { CapabilitiesModel } from "../types/CapabilitiesTypes";
+import { CodexAppServerClient } from "../core/harness/codex/CodexAppServerClient";
+import { ClaudeModelCatalogClient } from "../core/harness/claude/ClaudeModelCatalogClient";
 import { Log } from "./Log";
 import { getQwenHomeDir } from "./HarnessHome";
 import { TypedEmitter } from "./TypedEmitter";
@@ -93,6 +102,27 @@ const COPILOT_TIMEOUT_RETRY_LIMIT = 2;
 // Fallback model list - imported from ModelConstants (single source of truth)
 const FALLBACK_COPILOT_CLI_MODELS = [...COPILOT_CLI_MODEL_IDS];
 
+function staticModelOptions(
+  ids: readonly string[],
+  labels: Record<string, string>
+): CapabilitiesModel[] {
+  return ids.map((value) => ({ value, label: labels[value] ?? value }));
+}
+
+const FALLBACK_CLAUDE_CLI_MODELS = staticModelOptions(
+  CLAUDE_CLI_MODELS,
+  CLAUDE_CLI_MODEL_LABELS
+);
+const FALLBACK_CODEX_CLI_MODELS = staticModelOptions(
+  CODEX_CLI_MODELS,
+  CODEX_CLI_MODEL_LABELS
+);
+
+// Seeded with the static lists so callers before (or without) discovery,
+// such as the standalone CLI, still get a usable list.
+let cachedClaudeModels: CapabilitiesModel[] = FALLBACK_CLAUDE_CLI_MODELS;
+let cachedCodexModels: CapabilitiesModel[] = FALLBACK_CODEX_CLI_MODELS;
+
 /**
  * Initialize the model registry by querying available models
  * Safe to call multiple times - only queries once
@@ -113,6 +143,8 @@ export async function initializeModelRegistry(): Promise<void> {
   copilotDiscoveryTimedOut = false;
   initializationPromise = (async () => {
     await queryCopilotCliModels();
+    await queryClaudeModels();
+    await queryCodexModels();
     await queryOpenCodeModels();
     await queryQwenModels();
     await queryAntigravityModels();
@@ -207,6 +239,53 @@ async function queryCopilotCliModels(): Promise<void> {
     }
     Log.warn(`[ModelRegistry] Failed to query Copilot CLI models: ${error}`);
     cachedCopilotCliModelIds = [...FALLBACK_COPILOT_CLI_MODELS];
+  }
+}
+
+/**
+ * Query Claude Code for the models the signed-in account can use: its
+ * aliases plus whichever pinned versions it offers. Keeps the static alias
+ * list when Claude Code is missing or does not answer.
+ */
+async function queryClaudeModels(): Promise<void> {
+  try {
+    Log.debug(
+      "[ModelRegistry] Querying Claude Code for available models via its initialize control request..."
+    );
+    cachedClaudeModels = await new ClaudeModelCatalogClient().listModels();
+    Log.debug(
+      `[ModelRegistry] Claude Code reports ${cachedClaudeModels.length} models: ${cachedClaudeModels.map((m) => m.value).join(", ")}`
+    );
+  } catch (error) {
+    Log.debug(
+      `[ModelRegistry] Claude Code model discovery unavailable (${String(error)}), using fallback list`
+    );
+    cachedClaudeModels = FALLBACK_CLAUDE_CLI_MODELS;
+  }
+}
+
+/**
+ * Query Codex's app-server `model/list`, hidden models included. Keeps the
+ * static list when Codex is missing, signed out, or does not answer.
+ */
+async function queryCodexModels(): Promise<void> {
+  try {
+    Log.debug(
+      "[ModelRegistry] Querying Codex for available models via app-server model/list..."
+    );
+    const models = await new CodexAppServerClient().listModels();
+    if (models.length === 0) {
+      throw new Error("model/list returned no models");
+    }
+    cachedCodexModels = models;
+    Log.debug(
+      `[ModelRegistry] Codex reports ${models.length} models: ${models.map((m) => (m.hidden ? `${m.value} (hidden)` : m.value)).join(", ")}`
+    );
+  } catch (error) {
+    Log.debug(
+      `[ModelRegistry] Codex model discovery unavailable (${String(error)}), using fallback list`
+    );
+    cachedCodexModels = FALLBACK_CODEX_CLI_MODELS;
   }
 }
 
@@ -640,6 +719,32 @@ export function getCliSupportedModelIdsSync(): string[] {
  */
 export function isCliModelSupported(modelId: string): boolean {
   return cachedCopilotCliModelIds.includes(modelId);
+}
+
+/**
+ * Claude Code models from the cache: discovered at startup, or the static
+ * alias list until (or unless) discovery succeeds.
+ */
+export function getClaudeModelsSync(): readonly CapabilitiesModel[] {
+  return cachedClaudeModels;
+}
+
+/**
+ * Codex models from the cache, hidden ones flagged: discovered at startup,
+ * or the static list until (or unless) discovery succeeds.
+ */
+export function getCodexModelsSync(): readonly CapabilitiesModel[] {
+  return cachedCodexModels;
+}
+
+/** Whether Claude Code reported (or the static list holds) this model value. */
+export function isKnownClaudeModel(modelId: string): boolean {
+  return cachedClaudeModels.some((model) => model.value === modelId);
+}
+
+/** Whether Codex reported (or the static list holds) this model, hidden or not. */
+export function isKnownCodexModel(modelId: string): boolean {
+  return cachedCodexModels.some((model) => model.value === modelId);
 }
 
 /**

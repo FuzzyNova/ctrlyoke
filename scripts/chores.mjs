@@ -278,17 +278,17 @@ async function updateClis() {
 /**
  * Task: Sync models
  *
- * `--discover` queries `copilot help config` live and updates
- * COPILOT_CLI_MODEL_IDS — the sole source of truth for Copilot models
- * (ctrlyoke does not query VS Code's Language Model API or support a chat
- * harness). `npm run sync-models` then auto-derives COPILOT_CLI_MODEL_LABELS
- * from that array and propagates everything to package.json/schema.
+ * `--discover` asks each installed CLI for its models (`copilot help config`,
+ * `agy models`, Claude Code's `initialize` control request, Codex's
+ * app-server `model/list`) and rewrites their lists in ModelConstants.ts.
+ * `npm run sync-models` then auto-derives COPILOT_CLI_MODEL_LABELS and
+ * propagates everything to package.json/schema.
  */
 async function syncModels() {
   logHeader("Syncing Model Registry");
 
   try {
-    logInfo("Discovering Copilot CLI models from `copilot help config`...");
+    logInfo("Discovering models from the installed harness CLIs...");
     await runCommand("npm", ["run", "sync-models:discover"]);
 
     console.log();
@@ -403,7 +403,7 @@ ${colors.cyan}Available Tasks:${colors.reset}
   ${colors.green}update-deps${colors.reset}     Update dependencies and run npm audit
   ${colors.green}update-clis${colors.reset}     Update CLI tools (copilot, claude, codex, qwen, opencode, antigravity)
   ${colors.green}check-clis${colors.reset}      Check installed CLI tool versions
-  ${colors.green}sync-models${colors.reset}     Discover Copilot CLI models + sync registry
+  ${colors.green}sync-models${colors.reset}     Discover harness CLI models + sync registry
   ${colors.green}sync-model-pricing${colors.reset}  Re-download the models.dev pricing registry for all harnesses
   ${colors.green}sync-skills-snapshot${colors.reset}  Snapshot the skills.sh leaderboard (needs a Vercel OIDC token)
   ${colors.green}check-all${colors.reset}       Run all checks (lint, format, tests)

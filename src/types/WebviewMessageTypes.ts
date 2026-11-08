@@ -133,6 +133,7 @@ import type {
   RunSummary,
 } from "./WorkflowTimelineTypes";
 import type { WorkflowOutputHistory } from "./OutputHistoryTypes";
+import type { CapabilitiesModel } from "./CapabilitiesTypes";
 import type { ScriptCompletionItem } from "../completions/ScriptCommandCompletionHelpers";
 import type { PermissionCompletionItem } from "../completions/PermissionListCompletionHelpers";
 import type { PlainCompletionItem } from "../completions/CompletionCore";
@@ -604,7 +605,7 @@ export interface InitMessageData {
     terminal?: TerminalSettings;
   };
   workflowProperties: Record<string, any>;
-  modelOptions: Record<HarnessId, Array<{ value: string; label: string }>>;
+  modelOptions: Record<HarnessId, CapabilitiesModel[]>;
   harnessStatus: Record<string, HarnessStatusInfo>;
   coordinationScope?: CoordinationScopeSnapshot;
   availableAgents: Array<{
@@ -1066,7 +1067,7 @@ export interface FinalStepStreamingEventsMessage {
 export interface ModelOptionsUpdateMessage {
   type: typeof MESSAGE_TYPES.MODEL_OPTIONS_UPDATE;
   data: {
-    modelOptions: Record<HarnessId, Array<{ value: string; label: string }>>;
+    modelOptions: Record<HarnessId, CapabilitiesModel[]>;
   };
 }
 

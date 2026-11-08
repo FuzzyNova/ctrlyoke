@@ -42,7 +42,6 @@ import {
 } from "../../../../types/DashboardConstants";
 import {
   DROPDOWN_NAMESPACES,
-  modelNamespaceForHarness,
   getResumeSessionOptions,
   resumeSessionSelection,
 } from "../../types/dropdownNamespaces";
@@ -116,6 +115,7 @@ import {
 } from "../../store/editorStore";
 import { BULK_EDITABLE_PROMPT_STEP_KEYS } from "@root/types/DashboardConstants";
 import { useBulkSelectionGates } from "../../hooks/useBulkSelectionGates";
+import { useModelDropdownHiding } from "../../hooks/useModelDropdownHiding";
 
 /** Drawer fields whose own controls render a "(mixed)" state; others show inherit. */
 const MIXED_AWARE_DRAWER_KEYS: ReadonlySet<string> = new Set([
@@ -254,6 +254,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   );
 
   const models = getModelsForHarness(currentHarness);
+  const modelHiding = useModelDropdownHiding(currentHarness, models);
   const resolvedModelValue = getEffectiveModel(currentHarness);
   const resolvedModelLabel =
     models.find((m) => m.value === resolvedModelValue)?.label ??
@@ -469,7 +470,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     ].label
   })`;
 
-  const modelNamespace = modelNamespaceForHarness(currentHarness);
   const modelWarn =
     (displayedProperties.model as unknown) === MIXED_VALUE
       ? null
@@ -734,12 +734,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                           label: m.label,
                         }))),
                   ]}
-                  namespace={modelNamespace}
-                  hiddenValues={hiddenDropdownOptions[modelNamespace] ?? []}
-                  onHideOption={(v) => hideDropdownOption(modelNamespace, v)}
-                  onUnhideOption={(v) =>
-                    unhideDropdownOption(modelNamespace, v)
-                  }
+                  {...modelHiding}
                   nonHideableValues={[INHERIT_DEFAULT_OPTION, ""]}
                   warning={modelWarn ?? undefined}
                   disabled={

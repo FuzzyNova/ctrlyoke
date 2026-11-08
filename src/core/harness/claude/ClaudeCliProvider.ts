@@ -26,6 +26,7 @@ import {
   PATH_CONSTANTS,
 } from "../../../utils/ConfigurationUtils";
 import { getClaudeModelName, MODEL_NONE } from "../../../utils/ModelConstants";
+import { isKnownClaudeModel } from "../../../utils/ModelRegistry";
 import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import {
@@ -504,7 +505,12 @@ export class ClaudeCliProvider implements ICliProvider {
       return undefined;
     }
 
-    // Try to look up the model in our comprehensive map
+    // Anything Claude Code itself listed (a new alias, a pinned version)
+    if (isKnownClaudeModel(requestedModel)) {
+      return requestedModel;
+    }
+
+    // Static aliases, pinned IDs, and Copilot-style names mapped to aliases
     const fullModelName = getClaudeModelName(requestedModel);
     if (fullModelName) {
       return fullModelName;
@@ -512,7 +518,7 @@ export class ClaudeCliProvider implements ICliProvider {
 
     // Model not recognized - warn user and fallback
     const supportedFormats =
-      "aliases (sonnet, opus, haiku), generic names (claude-sonnet-4.5), or full names";
+      "aliases (sonnet, opus, haiku), full model IDs (claude-opus-4-6), or Copilot-style names (claude-sonnet-4.5)";
     const message = `Model "${requestedModel}" not recognized for Claude CLI. Using default: ${defaultModel}`;
     Log.warn(`[ClaudeCliProvider] ${message}`);
     Log.warn(`[ClaudeCliProvider]    Accepted formats: ${supportedFormats}`);

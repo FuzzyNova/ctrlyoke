@@ -182,6 +182,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   );
   const setTemplates = useUiStore((s) => s.setTemplates);
   const hiddenDropdownOptions = useUiStore((s) => s.hiddenDropdownOptions);
+  const shownDropdownOptions = useUiStore((s) => s.shownDropdownOptions);
   const hideDropdownOption = useUiStore((s) => s.hideDropdownOption);
   const unhideDropdownOption = useUiStore((s) => s.unhideDropdownOption);
   const fileBrowserState = useUiStore((s) => s.fileBrowserState);
@@ -971,6 +972,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                     modelOptions={modelOptions}
                     harnessStatus={harnessStatus}
                     hiddenDropdownOptions={hiddenDropdownOptions}
+                    shownDropdownOptions={shownDropdownOptions}
                     onHideOption={hideDropdownOption}
                     onUnhideOption={unhideDropdownOption}
                     onBrowse={(selected) =>
