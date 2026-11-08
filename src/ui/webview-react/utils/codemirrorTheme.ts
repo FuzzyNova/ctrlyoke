@@ -97,6 +97,8 @@ export function createThemeExtension(
   const contentFontSize = options.fontSize ?? EDITOR_FONT_SIZE;
   const selectionForegroundColor =
     "var(--vscode-editor-selectionForeground, var(--vscode-editor-foreground))";
+  const selectionBackgroundColor =
+    "var(--vscode-editor-selectionBackground, rgba(57, 148, 188, 0.55))";
   const autocompleteSelectedOutlineColor =
     "var(--vscode-listFilterWidget-outline, transparent)";
 
@@ -143,15 +145,27 @@ export function createThemeExtension(
         borderLeftColor: "var(--vscode-editorCursor-foreground)",
       },
       ".cm-selectionBackground": {
-        backgroundColor:
-          "var(--vscode-editor-selectionBackground, rgba(57, 148, 188, 0.55)) !important",
+        backgroundColor: `${selectionBackgroundColor} !important`,
       },
       "&.cm-focused .cm-selectionBackground": {
-        backgroundColor:
-          "var(--vscode-editor-selectionBackground, rgba(57, 148, 188, 0.55)) !important",
+        backgroundColor: `${selectionBackgroundColor} !important`,
       },
       ".cm-line::selection, .cm-line ::selection": {
         color: `${selectionForegroundColor} !important`,
+      },
+      // On iOS, drawSelection() leaves the main range to the native selection
+      // (so the OS keeps its own handles and magnifier) and draws no
+      // .cm-selectionBackground for it. A ::selection rule that sets only a
+      // color makes WebKit drop its system highlight, leaving the selection
+      // nearly invisible, so give the native selection the theme's background
+      // there. `-webkit-touch-callout` is supported only by iOS/iPadOS WebKit,
+      // which is the same set of browsers CodeMirror treats as iOS; elsewhere
+      // CodeMirror hides the native selection and draws its own layer, and a
+      // native background on top would double the tint.
+      "@supports (-webkit-touch-callout: none)": {
+        ".cm-line::selection, .cm-line ::selection": {
+          backgroundColor: `${selectionBackgroundColor} !important`,
+        },
       },
       ".cm-activeLine":
         surface === CODEMIRROR_THEME_SURFACES.INPUT

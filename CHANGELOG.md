@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Qwen steps now find their transcript when Qwen's `advanced.runtimeOutputDir` setting moves it, and Copilot steps find their session state when the step's `additionalArgs` pass `--config-dir`. Both used to stream no output and leave the session ID unresolved.
 - Qwen steps now read your Qwen `system-defaults.json`. ctrlyoke launches Qwen with its own system settings file, and Qwen looks for the defaults file beside that one, so it never found yours.
 - On a phone, long-pressing in the prompt editor or the workspace file editor no longer closes the on-screen keyboard. Its menu used to take focus, so the keyboard closed and the layout moved out from under the menu, and Paste no longer reached the editor. If the keyboard closes anyway, the menu now closes too. Dragging a text-selection handle no longer opens the menu and clears the selection. On Android, a long press opens the menu once instead of twice.
+- On an iPhone or iPad, selected text in the prompt editor, the workspace file editor and every other code editor now shows your theme's selection color. Before, the selection handles appeared but the highlight between them was almost invisible.
 - On an iPhone, tapping New now opens the on-screen keyboard so you can name the workflow. Before, the name field became editable but the keyboard never appeared. A name you type before the new workflow finishes loading is now kept, and is no longer applied to the workflow you left.
 
 ## [0.5.0] - 2026-11-07
