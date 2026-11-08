@@ -4,7 +4,6 @@ import {
   getErrorMessage,
   getErrnoCode,
   hasErrnoCode,
-  isFileNotFoundError,
   toError,
 } from "../../utils/ErrorUtils";
 import { NODE_ERROR_CODES } from "../../types/DashboardConstants";
@@ -17,10 +16,6 @@ suite("ErrorUtils", () => {
       });
       assert.strictEqual(getErrnoCode(error), NODE_ERROR_CODES.ENOENT);
       assert.strictEqual(hasErrnoCode(error, NODE_ERROR_CODES.ENOENT), true);
-      assert.strictEqual(
-        isFileNotFoundError(error, NODE_ERROR_CODES.ENOENT),
-        true
-      );
     });
 
     test("reads an errno code from a plain object", () => {
@@ -53,10 +48,6 @@ suite("ErrorUtils", () => {
       test(`returns no code for ${String(value)}`, () => {
         assert.strictEqual(getErrnoCode(value), undefined);
         assert.strictEqual(hasErrnoCode(value, NODE_ERROR_CODES.ENOENT), false);
-        assert.strictEqual(
-          isFileNotFoundError(value, NODE_ERROR_CODES.ENOENT),
-          false
-        );
       });
     }
   });

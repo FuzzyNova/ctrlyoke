@@ -2342,8 +2342,11 @@ export class WorkingFileManager {
               )
               .catch((error: NodeJS.ErrnoException) => {
                 if (
-                  !hasErrnoCode(error, NODE_ERROR_CODES.ENOTEMPTY) &&
-                  !hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)
+                  !hasErrnoCode(
+                    error,
+                    NODE_ERROR_CODES.ENOTEMPTY,
+                    NODE_ERROR_CODES.ENOENT
+                  )
                 )
                   throw error;
               });
@@ -2521,8 +2524,11 @@ export class WorkingFileManager {
         )
         .catch((error: NodeJS.ErrnoException) => {
           if (
-            !hasErrnoCode(error, NODE_ERROR_CODES.ENOTEMPTY) &&
-            !hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)
+            !hasErrnoCode(
+              error,
+              NODE_ERROR_CODES.ENOTEMPTY,
+              NODE_ERROR_CODES.ENOENT
+            )
           )
             throw error;
         });

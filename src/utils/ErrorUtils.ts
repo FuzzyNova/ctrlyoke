@@ -26,14 +26,6 @@ export function hasErrnoCode(
   return code !== undefined && codes.some((candidate) => candidate === code);
 }
 
-/** Check a missing-file error using the caller's shared ENOENT constant. */
-export function isFileNotFoundError(
-  error: unknown,
-  notFoundCode: NodeErrorCode
-): boolean {
-  return hasErrnoCode(error, notFoundCode);
-}
-
 /**
  * Extract a readable message string from an unknown caught value.
  * Works with Error instances, strings, and anything else that can be stringified.

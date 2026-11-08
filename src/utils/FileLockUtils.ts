@@ -3,7 +3,7 @@ import * as fs from "fs/promises";
 import { isTransientSharingError } from "./AtomicFileUtils";
 import { Log } from "./Log";
 import { NODE_ERROR_CODES } from "../types/DashboardConstants";
-import { getErrnoCode, isFileNotFoundError, hasErrnoCode } from "./ErrorUtils";
+import { getErrnoCode, hasErrnoCode } from "./ErrorUtils";
 
 const LOCK_FILE_EXTENSION = ".lock";
 const RELEASED_LOCK_SUFFIX = ".released";
@@ -145,7 +145,7 @@ async function acquireLock(
           try {
             await ops.rename(lockPath, tombstone);
           } catch (renameError) {
-            if (!isFileNotFoundError(renameError, NODE_ERROR_CODES.ENOENT))
+            if (!hasErrnoCode(renameError, NODE_ERROR_CODES.ENOENT))
               throw renameError;
             continue;
           }
@@ -187,7 +187,7 @@ async function acquireLock(
         }
       } catch (statError) {
         // Lock might have been deleted between EEXIST and stat - retry
-        if (isFileNotFoundError(statError, NODE_ERROR_CODES.ENOENT)) {
+        if (hasErrnoCode(statError, NODE_ERROR_CODES.ENOENT)) {
           continue;
         }
         // Other stat errors shouldn't happen, but continue trying
@@ -212,7 +212,7 @@ async function releaseLock(
 ): Promise<void> {
   try {
     const currentToken = await ops.readFile(lockPath, "utf8").catch((error) => {
-      if (isFileNotFoundError(error, NODE_ERROR_CODES.ENOENT)) return undefined;
+      if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) return undefined;
       throw error;
     });
     if (currentToken === undefined) return;
@@ -226,7 +226,7 @@ async function releaseLock(
     try {
       await ops.rename(lockPath, tombstone);
     } catch (error) {
-      if (!isFileNotFoundError(error, NODE_ERROR_CODES.ENOENT)) throw error;
+      if (!hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) throw error;
       return;
     }
     const renamedToken = await ops
