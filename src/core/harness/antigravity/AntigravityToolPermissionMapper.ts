@@ -24,6 +24,7 @@ import {
 import { normalizeAntigravityMcpServerId } from "../../../types/ToolPermissionUtils";
 import { hasCliFlag } from "../../../utils/CliArgParser";
 import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
+import { escapeRegExp } from "../../../utils/TextUtils";
 import { getAntigravitySettingsPath } from "../shared/StatuslineManager";
 
 export const ANTIGRAVITY_RULE_LIST_KINDS = {
@@ -68,10 +69,6 @@ const READ_ONLY_LIST_TOOLS = new Set([
 ]);
 const SHELL_ALLOW_TAIL = "(?:[ \\t][^;&|`$()<>\\r\\n]*)?";
 
-function escapeRegexWord(word: string): string {
-  return word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 /** Only a trailing `:*` is the prefix marker; any other colon is command text. */
 const SHELL_PREFIX_MARKER = /^([\s\S]*?)\s*:\s*\*\s*$/;
 /** Characters the deny regex's word boundaries treat as part of a word. */
@@ -101,7 +98,7 @@ function parseShellCommand(
       return kind === ANTIGRAVITY_RULE_LIST_KINDS.ALLOW
         ? "[^\\s;&|`$()<>\\r\\n]+"
         : String.raw`\S+`;
-    return escapeRegexWord(word);
+    return escapeRegExp(word);
   });
   const wordJoiner =
     kind === ANTIGRAVITY_RULE_LIST_KINDS.ALLOW ? "[ \\t]+" : String.raw`\s+`;

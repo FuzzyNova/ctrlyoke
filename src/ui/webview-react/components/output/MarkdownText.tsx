@@ -53,6 +53,7 @@ import {
 } from "@utils/filePathPatterns";
 import { Icon } from "../shared/Icon";
 import { getErrorMessage } from "@root/utils/ErrorUtils";
+import { escapeRegExp } from "@root/utils/TextUtils";
 
 const MARKDOWN_NODE_TYPES = {
   LINK: "link",
@@ -140,11 +141,6 @@ const FILE_PATH_SOURCE =
 /** Escapes HTML special characters for use in raw HTML node text content. */
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-/** Escapes regex special characters so a search query can be used as a literal pattern. */
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function getNodeText(node: React.ReactNode): string {
