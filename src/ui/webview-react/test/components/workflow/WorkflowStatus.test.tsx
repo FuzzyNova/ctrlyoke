@@ -314,6 +314,14 @@ describe("WorkflowStatus — loaded state", () => {
       useUiStore.setState({ displayedViewAddress: previousAddress });
     });
 
+    function startNaming(): void {
+      const vscodeApi = window.vscodeApi;
+      if (!vscodeApi) throw new Error("test setup installs window.vscodeApi");
+      act(() => {
+        startNewBlankWorkflow(vscodeApi);
+      });
+    }
+
     function arriveBlankWorkflow(): void {
       act(() => {
         useUiStore.setState({
@@ -335,9 +343,7 @@ describe("WorkflowStatus — loaded state", () => {
     it("focuses the name field inside the gesture, before the blank workflow arrives", () => {
       render(<WorkflowStatus />);
 
-      act(() => {
-        startNewBlankWorkflow(window.vscodeApi);
-      });
+      startNaming();
 
       const input = screen.getByPlaceholderText("Name your workflow...");
       expect(input).toHaveValue("");
@@ -349,9 +355,7 @@ describe("WorkflowStatus — loaded state", () => {
 
     it("keeps what was typed when the blank workflow arrives", () => {
       render(<WorkflowStatus />);
-      act(() => {
-        startNewBlankWorkflow(window.vscodeApi);
-      });
+      startNaming();
       const input = screen.getByPlaceholderText("Name your workflow...");
       fireEvent.change(input, { target: { value: "Fix lo" } });
 
@@ -364,9 +368,7 @@ describe("WorkflowStatus — loaded state", () => {
 
     it("applies a name committed early to the blank workflow, not the previous one", () => {
       render(<WorkflowStatus />);
-      act(() => {
-        startNewBlankWorkflow(window.vscodeApi);
-      });
+      startNaming();
       const input = screen.getByPlaceholderText("Name your workflow...");
       fireEvent.change(input, { target: { value: "Fix login" } });
       fireEvent.keyDown(input, { key: "Enter" });
@@ -390,9 +392,7 @@ describe("WorkflowStatus — loaded state", () => {
 
     it("does not restart naming when it remounts after an earlier request", () => {
       const { unmount } = render(<WorkflowStatus />);
-      act(() => {
-        startNewBlankWorkflow(window.vscodeApi);
-      });
+      startNaming();
       fireEvent.keyDown(screen.getByPlaceholderText("Name your workflow..."), {
         key: "Escape",
       });

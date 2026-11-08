@@ -197,7 +197,7 @@ async function discoverWorkflowFiles(root: string): Promise<string[]> {
       if (entry.isDirectory()) {
         if (
           entry.name === ".git" ||
-          entry.name === "node_modules" ||
+          entry.name === PATH_CONSTANTS.NODE_MODULES_DIR ||
           entry.name === PATH_CONSTANTS.OUT_DIR ||
           entry.name === "dist" ||
           entry.name === "coverage" ||

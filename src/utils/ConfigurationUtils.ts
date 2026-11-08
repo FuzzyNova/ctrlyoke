@@ -250,6 +250,9 @@ export const PATH_CONSTANTS = {
   /** Compiled extension output directory name. */
   OUT_DIR: "out",
 
+  /** npm's installed-packages directory name. */
+  NODE_MODULES_DIR: "node_modules",
+
   /** Temp directory name (subdirectory of CTRLYOKE_DIR) */
   TEMP_DIR: "temp",
 
