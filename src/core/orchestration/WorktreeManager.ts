@@ -56,6 +56,7 @@ import {
   WORKFLOW_LOCK_LIVENESS,
   type WorktreeManagementAction,
   NODE_ERROR_CODES,
+  WORKTREE_MERGE_OUTCOMES,
 } from "../../types/DashboardConstants";
 import { isPathWithinDirectory } from "../../utils/PathSecurity";
 import { pathsEqual } from "../../utils/PathCasing";
@@ -953,7 +954,10 @@ export class WorktreeManager {
 
     const initialGuardFailure = await guard();
     if (initialGuardFailure) {
-      return { mergeOutcome: "blocked", message: initialGuardFailure };
+      return {
+        mergeOutcome: WORKTREE_MERGE_OUTCOMES.BLOCKED,
+        message: initialGuardFailure,
+      };
     }
 
     let sourceLease: ExecutionLeaseHandle | undefined;
@@ -969,7 +973,7 @@ export class WorktreeManager {
       });
     } catch (error) {
       return {
-        mergeOutcome: "blocked",
+        mergeOutcome: WORKTREE_MERGE_OUTCOMES.BLOCKED,
         message: `Merge blocked: ${getErrorMessage(error)}`,
       };
     }
@@ -977,7 +981,10 @@ export class WorktreeManager {
     try {
       const postLeaseGuardFailure = await guard();
       if (postLeaseGuardFailure) {
-        return { mergeOutcome: "blocked", message: postLeaseGuardFailure };
+        return {
+          mergeOutcome: WORKTREE_MERGE_OUTCOMES.BLOCKED,
+          message: postLeaseGuardFailure,
+        };
       }
       return await this.attemptGuardedMerge(
         info.sourceCheckoutRoot,
@@ -1003,7 +1010,7 @@ export class WorktreeManager {
   ): Promise<WorktreeMergeResult> {
     try {
       await this.mergeOperations.fastForward(dir, ref);
-      return { mergeOutcome: "fast-forward" };
+      return { mergeOutcome: WORKTREE_MERGE_OUTCOMES.FAST_FORWARD };
     } catch {
       // A fast-forward refusal is the expected signal for a divergent
       // target. The guarded non-ff attempt below handles that case.
@@ -1011,7 +1018,7 @@ export class WorktreeManager {
 
     try {
       await this.mergeOperations.noFastForward(dir, ref);
-      return { mergeOutcome: "merge-commit" };
+      return { mergeOutcome: WORKTREE_MERGE_OUTCOMES.MERGE_COMMIT };
     } catch (error) {
       const conflictFiles = await this.mergeOperations
         .getUnmergedPaths(dir)
@@ -1020,7 +1027,7 @@ export class WorktreeManager {
       const failureMessage = getErrorMessage(error);
       if (!mergeInProgress && conflictFiles.length === 0) {
         return {
-          mergeOutcome: "blocked",
+          mergeOutcome: WORKTREE_MERGE_OUTCOMES.BLOCKED,
           message: `Merge blocked: ${failureMessage}`,
         };
       }
@@ -1029,7 +1036,7 @@ export class WorktreeManager {
         await this.mergeOperations.abort(dir);
       } catch (abortError) {
         return {
-          mergeOutcome: "abort-failed",
+          mergeOutcome: WORKTREE_MERGE_OUTCOMES.ABORT_FAILED,
           conflictFiles,
           message: `Merge conflict abort failed: ${getErrorMessage(abortError)}`,
         };
@@ -1040,14 +1047,14 @@ export class WorktreeManager {
         !(await hasUncommittedChanges(dir));
       if (!abortRestoredCleanState) {
         return {
-          mergeOutcome: "abort-failed",
+          mergeOutcome: WORKTREE_MERGE_OUTCOMES.ABORT_FAILED,
           conflictFiles,
           message:
             "Merge conflict abort did not restore a clean, non-merging checkout.",
         };
       }
 
-      return { mergeOutcome: "conflict", conflictFiles };
+      return { mergeOutcome: WORKTREE_MERGE_OUTCOMES.CONFLICT, conflictFiles };
     }
   }
 
@@ -1162,19 +1169,19 @@ export class WorktreeManager {
     const checkedOutBranch = await currentBranch(dir);
     if (checkedOutBranch !== expectedCheckedOutBranch) {
       return {
-        mergeOutcome: "blocked",
+        mergeOutcome: WORKTREE_MERGE_OUTCOMES.BLOCKED,
         message: `Merge blocked: "${dir}" is on "${checkedOutBranch ?? "detached HEAD"}", expected "${expectedCheckedOutBranch}".`,
       };
     }
     if (await hasGitOperationInProgress(dir)) {
       return {
-        mergeOutcome: "blocked",
+        mergeOutcome: WORKTREE_MERGE_OUTCOMES.BLOCKED,
         message: `Merge blocked: a Git operation is already in progress in "${dir}".`,
       };
     }
     if (await hasUncommittedChanges(dir)) {
       return {
-        mergeOutcome: "blocked",
+        mergeOutcome: WORKTREE_MERGE_OUTCOMES.BLOCKED,
         message: `Merge blocked: "${dir}" has uncommitted changes.`,
       };
     }
