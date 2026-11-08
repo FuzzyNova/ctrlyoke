@@ -932,7 +932,7 @@
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "chalk": "^6.0.1",
-    "chokidar": "^5.0.0",
+    "chokidar": "^6.0.0",
     "codemirror": "^6.0.2",
     "commander": "^15.0.0",
     "diff": "^9.0.0",
