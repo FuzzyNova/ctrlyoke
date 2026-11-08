@@ -84,11 +84,9 @@ import {
 import {
   assertWritableSchema,
   isNewerSchemaError,
-  isNewerSchemaVersion,
   isNewerRunFile,
   PERSISTED_STORES,
   prepareRunFileForWrite,
-  readSchemaVersion,
   refuseNewerSchema,
 } from "../utils/PersistedSchemaGuard";
 import {
@@ -192,16 +190,11 @@ function normalizeParsedWorkingFile(
   parsed: WorkingFile,
   workingFilePath: string
 ): WorkingFile {
-  const schemaVersion = readSchemaVersion(parsed);
-  if (
-    isNewerSchemaVersion(PERSISTED_STORES.WORKFLOW_DEFINITION, schemaVersion)
-  ) {
-    refuseNewerSchema(
-      PERSISTED_STORES.WORKFLOW_DEFINITION,
-      schemaVersion as number,
-      `${workingFilePath.split(/[\\/]/).pop()} (JSON)`
-    );
-  }
+  assertWritableSchema(
+    PERSISTED_STORES.WORKFLOW_DEFINITION,
+    parsed,
+    `${workingFilePath.split(/[\\/]/).pop()} (JSON)`
+  );
   const workingFile = stripLegacyWorkingFileLineageMetadata(parsed);
   return stripTimelineDuplicatedWorkingFileOutput(workingFile);
 }

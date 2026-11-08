@@ -70,11 +70,9 @@ import {
 } from "./ParallelGroupTopology";
 import {
   CURRENT_SCHEMA_VERSIONS,
+  assertWritableSchema,
   isNewerSchemaError,
-  isNewerSchemaVersion,
   PERSISTED_STORES,
-  readSchemaVersion,
-  refuseNewerSchema,
   type NewerSchemaError,
 } from "../utils/PersistedSchemaGuard";
 import { migrateToCurrent } from "../utils/FormatMigrations";
@@ -600,16 +598,11 @@ export class PromptFileParser {
     contentPath: string,
     format: string
   ): void {
-    const schemaVersion = readSchemaVersion(parsed);
-    if (
-      isNewerSchemaVersion(PERSISTED_STORES.WORKFLOW_DEFINITION, schemaVersion)
-    ) {
-      refuseNewerSchema(
-        PERSISTED_STORES.WORKFLOW_DEFINITION,
-        schemaVersion as number,
-        `${path.basename(contentPath)} (${format})`
-      );
-    }
+    assertWritableSchema(
+      PERSISTED_STORES.WORKFLOW_DEFINITION,
+      parsed,
+      `${path.basename(contentPath)} (${format})`
+    );
   }
 
   private static createRelaxedSchema(schema: Record<string, unknown>): any {

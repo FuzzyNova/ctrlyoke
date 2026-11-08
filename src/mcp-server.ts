@@ -128,11 +128,9 @@ import {
 } from "./utils/ProjectStateRegistry";
 import { ctrlyokeStateHome } from "./utils/ProjectStatePaths";
 import {
+  assertWritableSchema,
   isNewerSchemaError,
-  isNewerSchemaVersion,
   PERSISTED_STORES,
-  readSchemaVersion,
-  refuseNewerSchema,
 } from "./utils/PersistedSchemaGuard";
 import {
   initializeRunHistoryLocation,
@@ -2213,19 +2211,11 @@ export class CtrlYokeMCPServer {
     }
     try {
       const workingFile = JSON.parse(content) as WorkingFile;
-      const schemaVersion = readSchemaVersion(workingFile);
-      if (
-        isNewerSchemaVersion(
-          PERSISTED_STORES.WORKFLOW_DEFINITION,
-          schemaVersion
-        )
-      ) {
-        refuseNewerSchema(
-          PERSISTED_STORES.WORKFLOW_DEFINITION,
-          schemaVersion as number,
-          `${path.basename(filePath)} (JSON)`
-        );
-      }
+      assertWritableSchema(
+        PERSISTED_STORES.WORKFLOW_DEFINITION,
+        workingFile,
+        `${path.basename(filePath)} (JSON)`
+      );
       return workingFile;
     } catch (error) {
       if (isNewerSchemaError(error)) throw error;
