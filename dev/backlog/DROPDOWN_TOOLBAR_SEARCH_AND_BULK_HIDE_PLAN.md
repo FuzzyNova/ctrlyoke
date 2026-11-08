@@ -19,12 +19,12 @@ The hide feature is implemented four times. Each one renders `DropdownHiddenTogg
 partitions with `useHideableOptions`, and all four should get the same toolbar so they
 stay identical:
 
-| Component | Used by |
-| --- | --- |
-| `components/shared/CustomSelect.tsx` | Model, Agent, Permissions, Context, Execution-mode footer pickers (inline); PropertiesDrawer, WorkflowPropertiesPanel, settings (trigger) |
-| `components/shared/MultiCheckboxDropdown.tsx` | Workflow- and prompt-level skills (trigger only) |
-| `components/shared/SkillsSelect.tsx` | SkillsQuickPicker (inline) and its trigger mode |
-| `components/shared/HarnessDropdown.tsx` | HarnessQuickPicker (inline) and its trigger mode |
+| Component                                     | Used by                                                                                                                                   |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `components/shared/CustomSelect.tsx`          | Model, Agent, Permissions, Context, Execution-mode footer pickers (inline); PropertiesDrawer, WorkflowPropertiesPanel, settings (trigger) |
+| `components/shared/MultiCheckboxDropdown.tsx` | Workflow- and prompt-level skills (trigger only)                                                                                          |
+| `components/shared/SkillsSelect.tsx`          | SkillsQuickPicker (inline) and its trigger mode                                                                                           |
+| `components/shared/HarnessDropdown.tsx`       | HarnessQuickPicker (inline) and its trigger mode                                                                                          |
 
 The user named the first two, plus the footer versions. Those footer versions are
 `CustomSelect`, `SkillsSelect` and `HarnessDropdown` in `inline` mode. Leaving
@@ -176,10 +176,10 @@ config:
 
 ```ts
 useHideableOptions(options, getKey, hiddenValues, namespace, {
-  query,                 // string, default ""
-  getLabel,              // (o) => string, for matching
-  isPinned,              // (o) => boolean: sentinels + selected, always listed
-})
+  query, // string, default ""
+  getLabel, // (o) => string, for matching
+  isPinned, // (o) => boolean: sentinels + selected, always listed
+});
 ```
 
 and return `visible`, `hidden`, `listedVisible`, `listedHidden` (filtered), and
@@ -238,15 +238,16 @@ interface DropdownToolbarProps {
   onQueryChange: (q: string) => void;
   showSearch: boolean;
   onSearchKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
-  hide?: {                       // omitted when hide is disabled
+  hide?: {
+    // omitted when hide is disabled
     hiddenCount: number;
     showHidden: boolean;
     onToggleShowHidden: () => void;
-    hideAllCount: number;        // 0 → disabled
-    unhideAllCount: number;      // 0 → disabled
+    hideAllCount: number; // 0 → disabled
+    unhideAllCount: number; // 0 → disabled
     onHideAll: () => void;
     onUnhideAll: () => void;
-    filtered: boolean;           // switches tooltip wording to "matching"
+    filtered: boolean; // switches tooltip wording to "matching"
   };
 }
 ```
