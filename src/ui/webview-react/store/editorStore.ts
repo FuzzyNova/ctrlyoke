@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import type { VsCodeApi } from "../types/vscode";
-import type { ErrorBehavior, UserHookConfig } from "@root/types/CtrlYokeTypes";
+import {
+  isScriptStep,
+  type ErrorBehavior,
+  type UserHookConfig,
+} from "@root/types/CtrlYokeTypes";
 import type { PromptStep } from "./workflowStore";
 import { getVsCodeApi } from "../hooks/useVsCodeApi";
 import type {
@@ -25,10 +29,7 @@ import {
   type SandboxMode,
   type SandboxRequest,
 } from "@root/types/DashboardConstants";
-import type {
-  PromptEditorInsertRequest,
-  ScriptStep,
-} from "@root/types/WebviewMessageTypes";
+import type { PromptEditorInsertRequest } from "@root/types/WebviewMessageTypes";
 import { useUiStore } from "./uiStore";
 import { isStepContentEqual, type WorkflowStep } from "./workflowStore";
 import { useWorkflowStore } from "./workflowStore";
@@ -39,11 +40,6 @@ import {
   selectStepRange,
   toggleStepIndex,
 } from "../utils/stepMultiSelection";
-
-/** Type guard for script steps (webview-local version) */
-function isScriptStep(step: WorkflowStep): step is ScriptStep {
-  return step.type === STEP_TYPES.SCRIPT;
-}
 
 /** Property is inherited from workflow/settings when undefined. */
 export type Inheritable<T> = T | undefined;

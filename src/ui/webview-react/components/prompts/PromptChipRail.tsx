@@ -10,7 +10,10 @@
  */
 import React, { useCallback, useMemo } from "react";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
-import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
+import {
+  isScriptStep,
+  type ParallelGroupDefinition,
+} from "@root/types/CtrlYokeTypes";
 import { useEditorStore, useIsStepMultiSelected } from "@store/editorStore";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
@@ -43,7 +46,6 @@ import {
   STEP_COLOR_MODES,
   STEP_TYPES,
 } from "@root/types/DashboardConstants";
-import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import {
   getStepAccentClass,
   getStepKindIconClass,
@@ -85,10 +87,6 @@ import {
 import { formatFinalPassRangeCompact } from "@root/utils/FinalStepLabels";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function isScriptStep(step: WorkflowStep): step is ScriptStep {
-  return step.type === STEP_TYPES.SCRIPT;
-}
 
 /**
  * Chip-specific override of `getStepAccentClass`: RUNNING gets a pulsing

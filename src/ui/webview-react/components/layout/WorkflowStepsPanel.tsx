@@ -6,14 +6,13 @@ import React, {
   useState,
 } from "react";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
+import { isScriptStep } from "@root/types/CtrlYokeTypes";
 import {
   DOCS_URLS,
   KEYBOARD_KEYS,
   SELECT_ALL_SCOPE_ATTRIBUTE,
   SELECT_ALL_SCOPES,
-  STEP_TYPES,
 } from "@root/types/DashboardConstants";
-import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
@@ -814,9 +813,6 @@ const PendingTailDropSlot: React.FC = () => {
   );
 };
 
-function isScriptStep(step: WorkflowStep): step is ScriptStep {
-  return step.type === STEP_TYPES.SCRIPT;
-}
 /**
  * WorkflowStepsPanel - Left panel showing the list of steps in the workflow
  *

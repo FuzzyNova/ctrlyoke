@@ -23,6 +23,8 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   (errno-code helpers, `isScriptStep` copies, paged-hook helpers + `toError`).
   The errno-code refactor landed in `src/types/DashboardConstants.ts` and
   `src/utils/ErrorUtils.ts`, with source call sites and coverage updated.
+  The six webview `isScriptStep` copies now use the generic core guard from
+  `src/types/CtrlYokeTypes.ts`; focused guard coverage was added.
 
 ## Deferred
 
@@ -37,6 +39,8 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
 - `isRecord` in `src/core/harness/copilot/CopilotQuotaClient.ts` — deliberately accepts
   arrays (it only probes RPC error objects for `.code`); different meaning from the shared
   plain-object guard.
+- `isScriptStep` in `src/completions/WorkflowFileCompletionCore.ts` — checks raw parsed
+  YAML/JSON nodes, not typed workflow steps; keep it separate from the core type guard.
 - `isPlainObject` in `src/core/harness/opencode/OpenCodeInlineConfig.ts` and
   `src/ui/webview-react/utils/structuralSharing.ts` — also check the prototype
   (`Object.prototype` or `null`), which the generic guard does not; those callers need it.
