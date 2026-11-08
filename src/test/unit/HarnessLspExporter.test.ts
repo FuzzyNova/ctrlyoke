@@ -10,12 +10,12 @@ import {
 import type { LanguageServerDefinition } from "../../types/CtrlYokeSettings";
 import { safeDiscoverLocalLanguageServers } from "../../utils/LspDiscoveryUtils";
 import { HarnessLspExporter } from "../../utils/HarnessLspExporter";
+import { useFakeUserHome } from "../helpers/fakeUserHome";
 
 suite("HarnessLspExporter", () => {
   let root: string;
   let home: string;
-  let oldHome: string | undefined;
-  let oldUserProfile: string | undefined;
+  let restoreEnv: () => void;
   const definition: LanguageServerDefinition = {
     command: ["node", "server.js", "--stdio"],
     languages: ["typescript", "typescriptreact", "javascript"],
@@ -28,16 +28,10 @@ suite("HarnessLspExporter", () => {
     root = await fs.mkdtemp(path.join(os.tmpdir(), "cy-lsp-export-"));
     home = path.join(root, "home");
     await fs.mkdir(home, { recursive: true });
-    oldHome = process.env.HOME;
-    oldUserProfile = process.env.USERPROFILE;
-    process.env.HOME = home;
-    process.env.USERPROFILE = home;
+    restoreEnv = useFakeUserHome(home);
   });
   teardown(async () => {
-    if (oldHome === undefined) delete process.env.HOME;
-    else process.env.HOME = oldHome;
-    if (oldUserProfile === undefined) delete process.env.USERPROFILE;
-    else process.env.USERPROFILE = oldUserProfile;
+    restoreEnv();
     await fs.rm(root, { recursive: true, force: true });
   });
 

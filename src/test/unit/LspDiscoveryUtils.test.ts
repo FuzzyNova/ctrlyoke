@@ -5,16 +5,13 @@ import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
 import { safeDiscoverLocalLanguageServers } from "../../utils/LspDiscoveryUtils";
 import { LSP_DISCOVERY_FORMATS } from "../../types/DashboardConstants";
+import { useFakeUserHome } from "../helpers/fakeUserHome";
 
 suite("LspDiscoveryUtils", () => {
   let tempRoot: string;
   let workspace: string;
   let home: string;
-  let originalHome: string | undefined;
-  let originalUserProfile: string | undefined;
-  let originalCclspPath: string | undefined;
-  let originalOpenCodeConfig: string | undefined;
-  let originalOpenCodeConfigDir: string | undefined;
+  let restoreEnv: () => void;
 
   setup(async () => {
     tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "cy-lsp-discovery-"));
@@ -24,31 +21,11 @@ suite("LspDiscoveryUtils", () => {
     await fs.mkdir(path.join(home, ".copilot"), { recursive: true });
     await fs.mkdir(path.join(home, ".config", "opencode"), { recursive: true });
     await fs.mkdir(path.join(home, ".claude", "plugins"), { recursive: true });
-    originalHome = process.env.HOME;
-    originalUserProfile = process.env.USERPROFILE;
-    originalCclspPath = process.env.CCLSP_CONFIG_PATH;
-    originalOpenCodeConfig = process.env.OPENCODE_CONFIG;
-    originalOpenCodeConfigDir = process.env.OPENCODE_CONFIG_DIR;
-    process.env.HOME = home;
-    process.env.USERPROFILE = home;
-    delete process.env.CCLSP_CONFIG_PATH;
-    delete process.env.OPENCODE_CONFIG;
-    delete process.env.OPENCODE_CONFIG_DIR;
+    restoreEnv = useFakeUserHome(home, { CCLSP_CONFIG_PATH: undefined });
   });
 
   teardown(async () => {
-    if (originalHome === undefined) delete process.env.HOME;
-    else process.env.HOME = originalHome;
-    if (originalUserProfile === undefined) delete process.env.USERPROFILE;
-    else process.env.USERPROFILE = originalUserProfile;
-    if (originalCclspPath === undefined) delete process.env.CCLSP_CONFIG_PATH;
-    else process.env.CCLSP_CONFIG_PATH = originalCclspPath;
-    if (originalOpenCodeConfig === undefined)
-      delete process.env.OPENCODE_CONFIG;
-    else process.env.OPENCODE_CONFIG = originalOpenCodeConfig;
-    if (originalOpenCodeConfigDir === undefined)
-      delete process.env.OPENCODE_CONFIG_DIR;
-    else process.env.OPENCODE_CONFIG_DIR = originalOpenCodeConfigDir;
+    restoreEnv();
     await fs.rm(tempRoot, { recursive: true, force: true });
   });
 

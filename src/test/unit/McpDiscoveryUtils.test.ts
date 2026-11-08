@@ -14,6 +14,7 @@ import {
   getTomlMcpServerSectionId,
   safeDiscoverLocalMcpServers,
 } from "../../utils/McpDiscoveryUtils";
+import { useFakeUserHome } from "../helpers/fakeUserHome";
 
 const REMOTE_SERVER_ID = "remote";
 
@@ -22,12 +23,7 @@ suite("McpDiscoveryUtils", () => {
   let workspaceRoot: string;
   let userHome: string;
   let appDataRoot: string;
-  let originalHome: string | undefined;
-  let originalUserProfile: string | undefined;
-  let originalAppData: string | undefined;
-  let originalCodeXHome: string | undefined;
-  let originalOpenCodeConfig: string | undefined;
-  let originalOpenCodeConfigDir: string | undefined;
+  let restoreEnv: () => void;
 
   setup(async () => {
     tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "cy-mcp-discovery-"));
@@ -47,58 +43,11 @@ suite("McpDiscoveryUtils", () => {
       recursive: true,
     });
 
-    originalHome = process.env.HOME;
-    originalUserProfile = process.env.USERPROFILE;
-    originalAppData = process.env.APPDATA;
-    originalCodeXHome = process.env.CODEX_HOME;
-    originalOpenCodeConfig = process.env.OPENCODE_CONFIG;
-    originalOpenCodeConfigDir = process.env.OPENCODE_CONFIG_DIR;
-
-    process.env.HOME = userHome;
-    process.env.USERPROFILE = userHome;
-    process.env.APPDATA = appDataRoot;
-    delete process.env.CODEX_HOME;
-    delete process.env.OPENCODE_CONFIG;
-    delete process.env.OPENCODE_CONFIG_DIR;
+    restoreEnv = useFakeUserHome(userHome, { APPDATA: appDataRoot });
   });
 
   teardown(async () => {
-    if (originalHome === undefined) {
-      delete process.env.HOME;
-    } else {
-      process.env.HOME = originalHome;
-    }
-
-    if (originalUserProfile === undefined) {
-      delete process.env.USERPROFILE;
-    } else {
-      process.env.USERPROFILE = originalUserProfile;
-    }
-
-    if (originalAppData === undefined) {
-      delete process.env.APPDATA;
-    } else {
-      process.env.APPDATA = originalAppData;
-    }
-
-    if (originalCodeXHome === undefined) {
-      delete process.env.CODEX_HOME;
-    } else {
-      process.env.CODEX_HOME = originalCodeXHome;
-    }
-
-    if (originalOpenCodeConfig === undefined) {
-      delete process.env.OPENCODE_CONFIG;
-    } else {
-      process.env.OPENCODE_CONFIG = originalOpenCodeConfig;
-    }
-
-    if (originalOpenCodeConfigDir === undefined) {
-      delete process.env.OPENCODE_CONFIG_DIR;
-    } else {
-      process.env.OPENCODE_CONFIG_DIR = originalOpenCodeConfigDir;
-    }
-
+    restoreEnv();
     await fs.rm(tempRoot, { recursive: true, force: true });
   });
 
