@@ -238,7 +238,10 @@ suite("HarnessHome", () => {
         const filePath = path.join(directory, entry.name);
         if (entry.isDirectory()) {
           const top = path.relative(sourceRoot, filePath).split(path.sep)[0];
-          if (top !== "test" && entry.name !== PATH_CONSTANTS.NODE_MODULES_DIR) {
+          if (
+            top !== "test" &&
+            entry.name !== PATH_CONSTANTS.NODE_MODULES_DIR
+          ) {
             listSources(filePath, files);
           }
         } else if (/\.(ts|tsx|js|mjs)$/.test(entry.name)) {
