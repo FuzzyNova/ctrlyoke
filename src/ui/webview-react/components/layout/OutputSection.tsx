@@ -329,7 +329,6 @@ const OutputSectionInner: React.FC = () => {
   const setPendingFindRequest = useUiStore((s) => s.setPendingFindRequest);
 
   // Terminal tab state
-  const workspaceRoot = useSettingsStore((s) => s.globalSettings.workspaceRoot);
   const activeWorkflowId = useUiStore((s) => s.activeWorkflowId);
   // Use a stable fallback key so standalone shells work even with no active workflow.
   const terminalWorkflowId = activeWorkflowId ?? SHELL_WORKFLOW_ID;
@@ -1553,9 +1552,8 @@ const OutputSectionInner: React.FC = () => {
     getVsCodeApi()?.postMessage({
       type: MESSAGE_TYPES.TERMINAL_SPAWN_SHELL,
       workflowId: terminalWorkflowId,
-      cwd: workspaceRoot || "",
     });
-  }, [terminalWorkflowId, workspaceRoot]);
+  }, [terminalWorkflowId]);
 
   const handleSelectTerminalTab = useCallback(() => {
     setActiveOutputTab(terminalWorkflowId, OUTPUT_TABS.TERMINAL);

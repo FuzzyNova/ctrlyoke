@@ -6,7 +6,10 @@ import type {
   DashboardHostActions,
   NamedRoot,
 } from "../core/HostPorts";
-import { resolveNamedRelativePath } from "../platform/WorkspaceRootResolver";
+import {
+  isExistingDirectory,
+  resolveNamedRelativePath,
+} from "../platform/WorkspaceRootResolver";
 import {
   MESSAGE_TYPES,
   FINAL_STEP_PHASES,
@@ -471,8 +474,10 @@ export class WebviewMessageRouter {
     this.languageServerManager = new LanguageServerManagerService(() =>
       this.getWorkspaceRoot()
     );
-    this.terminalHandlers = new TerminalMessageHandlers(() =>
-      this.getOrchestrator()?.getUserFeedbackSink()
+    this.terminalHandlers = new TerminalMessageHandlers(
+      () => this.getOrchestrator()?.getUserFeedbackSink(),
+      undefined,
+      (workflowId) => this.resolveShellCwd(workflowId)
     );
     this.workflowStepHandlers = new WorkflowStepHandlers(
       getOrchestrator,
@@ -3671,6 +3676,22 @@ export class WebviewMessageRouter {
 
   private getWorkspaceRoot(): string {
     return this.hostDependencies.getNamedRoots()[0]?.fsPath ?? "";
+  }
+
+  /**
+   * A user shell opened for a workflow starts in that workflow's execution
+   * root, so it sits in the worktree its steps run in. A worktree that has
+   * since been removed (an unkept managed checkout keeps its path as the
+   * execution root after cleanup) falls back to the workspace root.
+   */
+  private resolveShellCwd(workflowId: string): string | undefined {
+    const executionRoot = this.getOrchestrator()
+      ?.getWorkflow(workflowId)
+      ?.getExecutionRoot();
+    if (executionRoot && isExistingDirectory(executionRoot)) {
+      return executionRoot;
+    }
+    return this.getWorkspaceRoot() || undefined;
   }
 
   private async sendRunImportPreview(

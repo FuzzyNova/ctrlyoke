@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- A shell opened from a workflow's **Terminal** tab now starts in the worktree that workflow runs in, the same folder its steps and scripts use, so you can resolve a merge or check `git status` there without changing directory. Workflows without a worktree still open shells in the workspace folder.
+
 ### Fixed
 
 - The terminal control bar's **...** button now opens its shortcut menu. Before, the menu opened but was cut off by the bar, so nothing appeared. You also can no longer drag-select the bar's buttons as text.

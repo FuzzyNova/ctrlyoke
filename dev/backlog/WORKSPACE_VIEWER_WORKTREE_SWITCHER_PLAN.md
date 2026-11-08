@@ -22,6 +22,21 @@ Two pieces of work:
 2. In the **browser**, the worktree buttons that open a VS Code window instead
    open the viewer with that worktree already selected.
 
+### Already covered: shells open in the workflow's worktree
+
+Since 2026-11-08 a user shell opened from a workflow's Terminal tab starts in
+that workflow's execution root (`WorkflowInstance.getExecutionRoot()`,
+resolved host-side in `WebviewMessageRouter.resolveShellCwd`; the client no
+longer sends a `cwd`). That already handles the quick-check cases that
+motivated part of this plan, in both VS Code and the browser: `git status`,
+`git log`, resolving a merge, or running a build in the worktree a run is
+using. It does this through a shell, with no file-boundary change.
+
+What only this plan provides: browsing and editing a worktree's files in
+Explorer/Source Control/Search, looking at a worktree no open workflow is
+using, and doing it without a terminal (on a phone, for example). Weigh that
+narrower remaining value when this is prioritized.
+
 ## How things work today
 
 - **The viewer exists only in the hosted browser.** `WorkspaceViewerModal` and
