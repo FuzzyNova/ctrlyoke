@@ -15,3 +15,23 @@ export async function promptYesNo(question: string): Promise<boolean> {
     rl.close();
   }
 }
+
+/** Terminal access needed to confirm a mutating CLI command. */
+export interface CliConfirmIo {
+  readonly isInteractive: boolean;
+  confirm(question: string): Promise<boolean>;
+}
+
+/**
+ * Confirm a mutating command: `--yes` approves it, a non-interactive terminal
+ * declines it, and otherwise the user is asked.
+ */
+export async function confirmMutation(
+  yes: boolean,
+  io: CliConfirmIo,
+  question: string
+): Promise<boolean> {
+  if (yes) return true;
+  if (!io.isInteractive) return false;
+  return io.confirm(question);
+}

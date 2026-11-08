@@ -5,6 +5,7 @@ import {
   type UserProjectInspection,
 } from "../utils/ProjectStateLifecycle";
 import { repoToplevel } from "../utils/GitUtils";
+import { confirmMutation, type CliConfirmIo } from "./CliPrompt";
 import * as path from "node:path";
 import type {
   HistoryPruneOptions,
@@ -15,11 +16,9 @@ import {
   PROJECT_STATE_PATH_STATUSES,
 } from "../types/DashboardConstants";
 
-export interface HistoryCommandIo {
+export interface HistoryCommandIo extends CliConfirmIo {
   writeOut(message: string): void;
   writeErr(message: string): void;
-  isInteractive: boolean;
-  confirm(question: string): Promise<boolean>;
 }
 
 export async function pruneHistoryCommand(
@@ -132,18 +131,4 @@ function renderPrunePlan(
     }
     io.writeOut(`KEEP ${project.projectRoot} (statePath: ${state})`);
   }
-}
-
-async function confirmMutation(
-  yes: boolean,
-  io: HistoryCommandIo,
-  question: string
-): Promise<boolean> {
-  if (yes) {
-    return true;
-  }
-  if (!io.isInteractive) {
-    return false;
-  }
-  return io.confirm(question);
 }

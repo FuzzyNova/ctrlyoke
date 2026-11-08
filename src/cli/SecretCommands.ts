@@ -41,14 +41,12 @@ import type {
   TrustSecretGrantsOptions,
 } from "./SecretCommandDefinitions";
 import { resolveCliFileArgument } from "./CliFileArgument";
-import { promptYesNo } from "./CliPrompt";
+import { confirmMutation, promptYesNo, type CliConfirmIo } from "./CliPrompt";
 import { getErrorMessage } from "../utils/ErrorUtils";
 
-export interface SecretCommandIo {
+export interface SecretCommandIo extends CliConfirmIo {
   writeOut(message: string): void;
   writeErr(message: string): void;
-  readonly isInteractive: boolean;
-  confirm(question: string): Promise<boolean>;
   readHidden(prompt: string): Promise<string>;
   readStdin(): Promise<string>;
 }
@@ -402,16 +400,6 @@ async function readHiddenValue(io: SecretCommandIo): Promise<string> {
     throw new Error("No TTY is available; use --stdin to provide the secret.");
   }
   return io.readHidden("Secret value: ");
-}
-
-async function confirmMutation(
-  yes: boolean,
-  io: SecretCommandIo,
-  question: string
-): Promise<boolean> {
-  if (yes) return true;
-  if (!io.isInteractive) return false;
-  return io.confirm(question);
 }
 
 async function readSecretFromStdin(): Promise<string> {
