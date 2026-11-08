@@ -139,6 +139,62 @@ suite("CLI property overrides", () => {
     );
   });
 
+  test("--force script-timeout updates workflow and step conditions", () => {
+    const workflow: PromptFile = {
+      preCondition: { script: "pre", timeoutSec: 500 },
+      endCondition: { script: "workflow end", timeoutSec: 600 },
+      steps: [
+        { prompt: "inherits" },
+        {
+          prompt: "explicit",
+          endCondition: { script: "step end", timeoutSec: 700 },
+        },
+        { prompt: "null condition", endCondition: null },
+      ],
+    };
+    const overrides = buildCliPropertyOverrides({
+      allowTool: [],
+      denyTool: [],
+      scriptTimeout: 5,
+      force: [ForceableFlag.SCRIPT_TIMEOUT],
+    });
+
+    applyCliPropertyOverrides(workflow, overrides);
+
+    assert.strictEqual(workflow.preCondition?.timeoutSec, 5);
+    assert.strictEqual(workflow.endCondition?.timeoutSec, 5);
+    assert.strictEqual(
+      (workflow.steps![1] as PromptStep).endCondition?.timeoutSec,
+      5
+    );
+    assert.strictEqual((workflow.steps![2] as PromptStep).endCondition, null);
+
+    const unchangedWorkflow: PromptFile = {
+      preCondition: { script: "pre", timeoutSec: 500 },
+      endCondition: { script: "workflow end", timeoutSec: 600 },
+      steps: [
+        {
+          prompt: "explicit",
+          endCondition: { script: "step end", timeoutSec: 700 },
+        },
+      ],
+    };
+    applyCliPropertyOverrides(
+      unchangedWorkflow,
+      buildCliPropertyOverrides({
+        allowTool: [],
+        denyTool: [],
+        scriptTimeout: 5,
+      })
+    );
+    assert.strictEqual(unchangedWorkflow.preCondition?.timeoutSec, 500);
+    assert.strictEqual(unchangedWorkflow.endCondition?.timeoutSec, 600);
+    assert.strictEqual(
+      (unchangedWorkflow.steps![0] as PromptStep).endCondition?.timeoutSec,
+      700
+    );
+  });
+
   test("--force resume-session false removes step session IDs", () => {
     const workflow: PromptFile = {
       steps: [{ prompt: "one", sessionId: "drop-me" }],

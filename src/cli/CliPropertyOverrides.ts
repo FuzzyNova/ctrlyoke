@@ -157,6 +157,18 @@ export function applyCliPropertyOverrides(
     };
   }
 
+  if (
+    overrides.forced.has(ForceableFlag.SCRIPT_TIMEOUT) &&
+    overrides.scriptTimeout !== undefined
+  ) {
+    if (workflow.preCondition && typeof workflow.preCondition === "object") {
+      workflow.preCondition.timeoutSec = overrides.scriptTimeout;
+    }
+    if (workflow.endCondition && typeof workflow.endCondition === "object") {
+      workflow.endCondition.timeoutSec = overrides.scriptTimeout;
+    }
+  }
+
   for (const step of getWorkflowSteps(workflow)) {
     for (const flag of overrides.forced) {
       applyForcedFlagToStep(
