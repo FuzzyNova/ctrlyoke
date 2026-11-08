@@ -33,6 +33,11 @@ updates:
       # See dev/backlog/TYPESCRIPT_7_UPGRADE.md.
       - dependency-name: typescript
         update-types: ["version-update:semver-major"]
+      # Blocked: 16.x requires Node >=24.14, above our engines.node floor
+      # (>=22.12) and CI's Node 22. Only scripts/generate-icon-font.mjs uses it,
+      # and 15.x writes a byte-identical font. Unblocked when the floor reaches 24.
+      - dependency-name: svgicons2svgfont
+        update-types: ["version-update:semver-major"]
     groups:
       minor-and-patch:
         applies-to: version-updates
