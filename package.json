@@ -891,7 +891,34 @@
   ],
   "overrides": {
     "brace-expansion": "^5.0.8",
-    "mocha": "$mocha",
+    "mocha": {
+      ".": "$mocha",
+      "glob": "$glob",
+      "minimatch": "$minimatch"
+    },
+    "@vscode/test-cli": {
+      "glob": "$glob",
+      "minimatch": "$minimatch"
+    },
+    "test-exclude": {
+      "glob": "$glob",
+      "minimatch": "$minimatch"
+    },
+    "svgicons2svgfont": {
+      "glob": "$glob"
+    },
+    "eslint": {
+      "minimatch": "$minimatch"
+    },
+    "@eslint/config-array": {
+      "minimatch": "$minimatch"
+    },
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "$minimatch"
+    },
+    "@vscode/vsce": {
+      "minimatch": "$minimatch"
+    },
     "eslint-plugin-jsx-a11y": {
       "eslint": "$eslint"
     }
