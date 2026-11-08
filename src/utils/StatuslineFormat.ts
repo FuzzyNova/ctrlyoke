@@ -1,5 +1,5 @@
-import { isRecord, finiteNumber } from "./JsonTypeGuards";
 // Keep this standalone statusline module dependent only on import-free leaves.
+import { isRecord, finiteNumber } from "./JsonTypeGuards";
 import { formatCompactTokenMagnitude } from "./CompactMagnitude";
 
 /** Claude rate-limit payload keys paired with normalized usage-window ids. */

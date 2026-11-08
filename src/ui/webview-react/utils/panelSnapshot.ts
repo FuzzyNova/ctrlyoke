@@ -1,7 +1,7 @@
 import type { MutableRefObject } from "react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { WebviewLog } from "@utils/logger";
-import { getErrorMessage } from "../../../utils/ErrorUtils";
+import { getErrorMessage } from "@root/utils/ErrorUtils";
 
 interface PanelSnapshot {
   collapsed: boolean | null;

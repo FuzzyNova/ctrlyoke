@@ -58,7 +58,7 @@ import { WebviewLog } from "@utils/logger";
 import { formatFinalPassLabel } from "@root/utils/FinalStepLabels";
 import { getQueueStepLabel } from "@utils/stepLabels";
 import { useWorkflowStore } from "@store/workflowStore";
-import { getErrorMessage } from "../../../utils/ErrorUtils";
+import { getErrorMessage } from "@root/utils/ErrorUtils";
 
 type OutputHistoryView = {
   orderedEntries: OrderedHistoryEntry[];

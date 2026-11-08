@@ -10,7 +10,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { installPerformanceProfiler } from "@utils/performanceProfiler";
 import "./styles/globals.css";
-import { getErrorMessage } from "../../utils/ErrorUtils";
+import { getErrorMessage } from "@root/utils/ErrorUtils";
 
 const root = document.getElementById("root");
 window.__ctrlyokeReactMounted = true;

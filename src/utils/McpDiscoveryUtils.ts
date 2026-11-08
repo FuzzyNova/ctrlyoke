@@ -1,4 +1,3 @@
-import { isRecord as isPlainObject } from "./JsonTypeGuards";
 /**
  * MCP server discovery utilities.
  *
@@ -7,6 +6,7 @@ import { isRecord as isPlainObject } from "./JsonTypeGuards";
  *
  * All I/O runs in the extension host (Node.js) — never in the webview.
  */
+import { isRecord as isPlainObject } from "./JsonTypeGuards";
 
 import * as fs from "fs/promises";
 import { parse, type ParseError } from "jsonc-parser";

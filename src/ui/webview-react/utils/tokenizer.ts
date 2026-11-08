@@ -1,6 +1,6 @@
 import { encode } from "gpt-tokenizer";
 import { WebviewLog } from "./logger";
-import { getErrorMessage } from "../../../utils/ErrorUtils";
+import { getErrorMessage } from "@root/utils/ErrorUtils";
 
 /**
  * Count tokens in text using GPT tokenizer

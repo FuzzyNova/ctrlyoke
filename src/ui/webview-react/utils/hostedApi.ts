@@ -32,7 +32,7 @@ import type {
 import { WORKSPACE_GIT_REF_DIFF_DEFAULT_PAGE_SIZE } from "@root/types/HostedWorkspaceViewerTypes";
 import type { LanguageIntelligenceSessionLookupResponse } from "@root/types/HostedWorkspaceViewerTypes";
 import { WebviewLog } from "@utils/logger";
-import { getErrorMessage } from "../../../utils/ErrorUtils";
+import { getErrorMessage } from "@root/utils/ErrorUtils";
 
 export class HostedHttpError extends Error {
   constructor(

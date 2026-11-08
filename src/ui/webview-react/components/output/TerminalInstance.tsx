@@ -12,7 +12,7 @@ import "@xterm/xterm/css/xterm.css";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 import { WebviewLog } from "@/utils/logger";
 import { getTerminalEndedLabel } from "@utils/terminalPresentation";
-import { getErrorMessage } from "../../../../utils/ErrorUtils";
+import { getErrorMessage } from "@root/utils/ErrorUtils";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` in useSyncExternalStore.
 const EMPTY_SESSIONS: TerminalSession[] = [];

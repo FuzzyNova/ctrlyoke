@@ -6,7 +6,7 @@
  * one "Add to dictionary" clears the squiggle in every open editor at once.
  */
 import { WebviewLog } from "./logger";
-import { getErrorMessage } from "../../../utils/ErrorUtils";
+import { getErrorMessage } from "@root/utils/ErrorUtils";
 
 // Typo.js is loaded as a global <script> (see `vite.config.ts`).
 declare global {

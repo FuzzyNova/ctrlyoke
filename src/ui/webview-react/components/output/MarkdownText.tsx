@@ -52,7 +52,7 @@ import {
   normalizeCodexAbsPath,
 } from "@utils/filePathPatterns";
 import { Icon } from "../shared/Icon";
-import { getErrorMessage } from "../../../../utils/ErrorUtils";
+import { getErrorMessage } from "@root/utils/ErrorUtils";
 
 const MARKDOWN_NODE_TYPES = {
   LINK: "link",

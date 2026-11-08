@@ -13,10 +13,22 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   `instanceof Error ? … : String(…)` source copies through `getErrorMessage` in
   `src/utils/ErrorUtils.ts`, removing five private copies across CLI, core, server and
   utilities while updating source call sites across workers and UI.
+- **2026-11-08, pass 2** — reviewed pass 1's two refactors (behavior preserved). Cleaned
+  up: four files failed Prettier, five imports had landed above file-header comments,
+  two cross-module `export { isRecord }` re-exports (`WorkflowLocationTypes.ts`,
+  `AntigravityTranscriptTypes.ts`) were replaced by direct `JsonTypeGuards` imports,
+  four one-line `getErrorMessage` wrappers (`errorText`/`describeError`) were inlined,
+  and webview imports of `ErrorUtils` now use the `@root/utils` alias. Hunted Node errno
+  handling, webview step guards and the webview paged-listing hooks; queued three steps
+  (errno-code helpers, `isScriptStep` copies, paged-hook helpers + `toError`).
 
 ## Deferred
 
-_None yet._
+- `src/ui/webview-react/hooks/usePaged{CommitHistory,FileHistory,GitRefDiff,WorkspaceDirectory}.ts`
+  — the four hooks re-implement the same page cache / abort / in-flight / expiry state
+  machine around per-hook `responseIsUsable` checks. Collapsing them into one generic
+  `usePagedListing` hook is a design change; only their identical leaf helpers were
+  queued in pass 2.
 
 ## Ruled out
 
@@ -40,3 +52,12 @@ _None yet._
   or purpose. Exact matches in `scripts/recover-runs-from-search-index.mjs` and test files
   were left outside this source refactor's scope; `src/utils/ErrorUtils.ts` retains the
   shared helper's own implementation.
+- `export { isRecord }` in `src/utils/ctrlyokeToolViews/shared.ts` — kept on purpose:
+  that file is the tool-views module's shared barrel and ten sibling models import
+  `isRecord` alongside `tryParseJson` from it.
+- `normalizePath` in `src/ui/webview-react/utils/promptUndo.ts`,
+  `src/core/orchestration/HistorySearchFilters.ts` and `src/utils/CliEventNormalizer.ts`
+  — each normalizes differently (lower-casing, trailing-slash trimming, optional input);
+  same name, different meaning from the paged hooks' `./`-stripping copy.
+- Inline `new Promise((resolve) => setTimeout(resolve, ms))` sleeps (about 15 sites across
+  core, harness and utils) — one-line idiom; a shared helper would save nothing.

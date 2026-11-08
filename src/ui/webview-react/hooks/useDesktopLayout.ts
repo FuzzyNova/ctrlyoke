@@ -30,7 +30,7 @@ import {
   PANEL_MIN_SIZE_CENTER,
   PANEL_MIN_SIZE_EDITOR_PX,
 } from "../constants";
-import { getErrorMessage } from "../../../utils/ErrorUtils";
+import { getErrorMessage } from "@root/utils/ErrorUtils";
 
 interface DesktopLayoutParams {
   isMobile: boolean;

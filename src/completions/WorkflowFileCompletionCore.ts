@@ -19,8 +19,8 @@ import { escapeJsonStringFragment } from "../utils/JsonStringEscape";
 import type { PlainCompletionItem } from "./CompletionCore";
 import { isAfterJsonValue } from "./WorkflowLocationJson";
 import { getWorkflowPropertySnippet } from "./WorkflowPropertySnippets";
+import { isRecord } from "../utils/JsonTypeGuards";
 import {
-  isRecord,
   splitValuePath,
   valueAt,
   YAML_SCALAR_STYLES,

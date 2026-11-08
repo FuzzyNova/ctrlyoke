@@ -162,7 +162,7 @@ export class GlobalWorkflowStatusService {
         } catch (error) {
           if (narrowed) {
             throw new Error(
-              `${surface}: no workflow '${workflowKey}' was found under ${this.workspaceRoot} (${describeError(error)}). ${this.wording.listWorkflowsHint}`
+              `${surface}: no workflow '${workflowKey}' was found under ${this.workspaceRoot} (${getErrorMessage(error)}). ${this.wording.listWorkflowsHint}`
             );
           }
           return null;
@@ -237,7 +237,7 @@ export class GlobalWorkflowStatusService {
         } catch (error) {
           if (narrowed) {
             throw new Error(
-              `${surface}: workflow '${workflowKey}'${runRef ? ` run '${runRef}'` : ""} could not be read from ${filePath} (${describeError(error)}).`
+              `${surface}: workflow '${workflowKey}'${runRef ? ` run '${runRef}'` : ""} could not be read from ${filePath} (${getErrorMessage(error)}).`
             );
           }
           return null;
@@ -261,8 +261,4 @@ export class GlobalWorkflowStatusService {
       ...(notes.length > 0 ? { note: notes.join(" ") } : {}),
     };
   }
-}
-
-function describeError(error: unknown): string {
-  return getErrorMessage(error);
 }

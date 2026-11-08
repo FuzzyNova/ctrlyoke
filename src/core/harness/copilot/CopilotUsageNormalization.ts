@@ -1,4 +1,7 @@
-import { isRecord, parseFiniteNumber as asFiniteNumber } from "../../../utils/JsonTypeGuards";
+import {
+  isRecord,
+  parseFiniteNumber as asFiniteNumber,
+} from "../../../utils/JsonTypeGuards";
 import {
   HARNESS_IDS,
   HARNESS_QUOTA_SOURCES,

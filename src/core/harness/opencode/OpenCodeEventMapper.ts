@@ -1,4 +1,3 @@
-import { isRecord } from "../../../utils/JsonTypeGuards";
 /**
  * Shared event-mapping utilities for OpenCode harness parsers.
  *
@@ -6,6 +5,7 @@ import { isRecord } from "../../../utils/JsonTypeGuards";
  * stdout and interactive polling and produces the shared CliEvent types.
  * This module is the single source of truth for tool and token mapping.
  */
+import { isRecord } from "../../../utils/JsonTypeGuards";
 import {
   type CliEvent,
   type AskUserQuestionData,

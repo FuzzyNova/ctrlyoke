@@ -20,8 +20,8 @@ import { CliParseUtils } from "../shared/CliParseUtils";
 import {
   AntigravityPlannerToolCall,
   AntigravityTranscriptEntry,
-  isRecord,
 } from "./AntigravityTranscriptTypes";
+import { isRecord } from "../../../utils/JsonTypeGuards";
 import {
   ANTIGRAVITY_ENTRY_TYPES,
   ANTIGRAVITY_TOOL_NAMES,

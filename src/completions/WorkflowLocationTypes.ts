@@ -105,8 +105,6 @@ export function getTextRole(
   );
 }
 
-export { isRecord };
-
 export function valueAt(root: unknown, path: WorkflowPath): unknown {
   let node = root;
   for (const segment of path) {

@@ -1,4 +1,3 @@
-import { isRecord as isPlainObject } from "./JsonTypeGuards";
 /**
  * skills.sh registry client for the Agent & Skills Manager.
  *
@@ -15,6 +14,7 @@ import { isRecord as isPlainObject } from "./JsonTypeGuards";
  * All I/O runs in the extension host — never in the webview. Every request is
  * user-initiated and sends only the search text or a public `owner/repo`.
  */
+import { isRecord as isPlainObject } from "./JsonTypeGuards";
 
 import type {
   RegistrySkillAudit,

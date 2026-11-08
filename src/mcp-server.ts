@@ -237,10 +237,6 @@ function participantAttribution(participant: {
 const MCP_CLI_MODE_ENV = "CTRLYOKE_MCP_CLI_MODE";
 const MCP_CLI_MODE_VALUE = "true";
 
-function describeError(error: unknown): string {
-  return getErrorMessage(error);
-}
-
 /**
  * The caller-facing view of a participant: who it is and where it runs. Lease
  * mechanics (PID, heartbeat, expiry) and per-reader board state are left out;
@@ -2097,7 +2093,7 @@ export class CtrlYokeMCPServer {
       await fs.writeFile(outputPath, message.trim(), "utf8");
     } catch (error) {
       throw new Error(
-        `${MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME}: the message was not submitted — writing it to ${outputPath} failed (${describeError(error)}).`
+        `${MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME}: the message was not submitted — writing it to ${outputPath} failed (${getErrorMessage(error)}).`
       );
     }
     log("Commit message written to:", outputPath);
@@ -2173,7 +2169,7 @@ export class CtrlYokeMCPServer {
       await fs.access(filePath);
     } catch (error) {
       throw new Error(
-        `${operation}: the attached ctrlyoke run file no longer exists at ${filePath}, so nothing was done (${describeError(error)}). Its run history may have been deleted, or this harness session may have outlived the workspace it was launched from.`
+        `${operation}: the attached ctrlyoke run file no longer exists at ${filePath}, so nothing was done (${getErrorMessage(error)}). Its run history may have been deleted, or this harness session may have outlived the workspace it was launched from.`
       );
     }
     // Mutations resolve here before reaching the shared continuation service;
@@ -2186,7 +2182,7 @@ export class CtrlYokeMCPServer {
       ).revision;
     } catch (error) {
       throw new Error(
-        `${operation}: could not read the workflow lineage '${workflowKey}' under ${this.workspaceRoot}, so nothing was done (${describeError(error)}).`
+        `${operation}: could not read the workflow lineage '${workflowKey}' under ${this.workspaceRoot}, so nothing was done (${getErrorMessage(error)}).`
       );
     }
     return {
@@ -2211,7 +2207,7 @@ export class CtrlYokeMCPServer {
       content = await fs.readFile(filePath, "utf8");
     } catch (error) {
       throw new Error(
-        `${operation}: could not read the attached ctrlyoke run file ${filePath}, so nothing was done (${describeError(error)}).`
+        `${operation}: could not read the attached ctrlyoke run file ${filePath}, so nothing was done (${getErrorMessage(error)}).`
       );
     }
     try {
@@ -2233,7 +2229,7 @@ export class CtrlYokeMCPServer {
     } catch (error) {
       if (isNewerSchemaError(error)) throw error;
       throw new Error(
-        `${operation}: the attached ctrlyoke run file ${filePath} is not valid JSON, so nothing was done (${describeError(error)}).`
+        `${operation}: the attached ctrlyoke run file ${filePath} is not valid JSON, so nothing was done (${getErrorMessage(error)}).`
       );
     }
   }

@@ -10,7 +10,7 @@ import { WebviewLog } from "@utils/logger";
 import { markFreshPageReadySent } from "@hooks/reconnectWatchdog";
 import { startPanelInboundBuffer } from "@hooks/panelInboundBuffer";
 import { installPanelHandshakeRetry } from "@hooks/panelHandshake";
-import { getErrorMessage } from "../../utils/ErrorUtils";
+import { getErrorMessage } from "@root/utils/ErrorUtils";
 
 type DashboardAppComponent = ComponentType;
 
