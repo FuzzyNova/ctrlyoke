@@ -1,4 +1,4 @@
-import * as path from "path";
+import { extractWorkflowName } from "../utils/WorkflowName";
 import { TypedEmitter } from "../utils/TypedEmitter";
 import { isDeepStrictEqual } from "util";
 import { isUnlimited } from "../utils/LimitUtils";
@@ -225,9 +225,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    * PromptQueue.extractWorkflowName("/path/prompt.prompt.md") // "prompt"
    */
   static extractWorkflowName(filePath: string): string {
-    const fileName = path.basename(filePath);
-    // Remove ctrlyoke extensions: .ctrlyoke.json, .ctrlyoke.yaml, .ctrlyoke.yml, .prompt.md
-    return fileName.replace(/\.(ctrlyoke\.(json|yaml|yml)|prompt\.md)$/, "");
+    return extractWorkflowName(filePath);
   }
 
   /**

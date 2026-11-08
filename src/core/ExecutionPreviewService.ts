@@ -104,6 +104,7 @@ import { PromptFileResolver } from "./PromptFileResolver";
 import { resolvePromptTextWithVariables } from "./PromptTextResolver";
 import { resolveRetryBudget } from "./RetryBudget";
 import { resolveWorktreeSelection } from "../utils/WorktreeResolution";
+import { extractWorkflowName } from "../utils/WorkflowName";
 import {
   evaluateWorkspaceEligibility,
   previewWorktreePlacement,
@@ -425,8 +426,11 @@ export class ExecutionPreviewService {
     ];
     const workflowSummary: WorkflowPreviewSummary = {
       name:
-        request.workflowName ??
-        this.getWorkflowName(workflow) ??
+        request.workflowName?.trim() ||
+        this.getWorkflowName(workflow) ||
+        (request.sourcePath
+          ? extractWorkflowName(request.sourcePath)
+          : undefined) ||
         "Unnamed workflow",
       stepCount: steps.length,
       ...(request.sourcePath ? { sourcePath: request.sourcePath } : {}),
@@ -1460,9 +1464,8 @@ export class ExecutionPreviewService {
   }
 
   private getWorkflowName(workflow: PromptFile): string | undefined {
-    return "workflowName" in workflow &&
-      typeof workflow.workflowName === "string"
-      ? workflow.workflowName
+    return typeof workflow.name === "string"
+      ? workflow.name.trim() || undefined
       : undefined;
   }
 }

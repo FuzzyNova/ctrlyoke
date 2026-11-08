@@ -275,6 +275,30 @@ suite("ExecutionPreviewService", () => {
     }
   });
 
+  test("uses workflow name or source filename in previews, with inline fallback", async () => {
+    const named = await createService().build({
+      workflow: { name: "  Release workflow  ", steps: [] },
+      sourcePath: "/workspace/release.ctrlyoke.yaml",
+    });
+    assert.strictEqual(named.workflow.name, "Release workflow");
+
+    const emptyRequestName = await createService().build({
+      workflow: { name: "Workflow from file", steps: [] },
+      workflowName: "   ",
+      sourcePath: "/workspace/release.ctrlyoke.yaml",
+    });
+    assert.strictEqual(emptyRequestName.workflow.name, "Workflow from file");
+
+    const unnamed = await createService().build({
+      workflow: { name: "   ", steps: [] },
+      sourcePath: "/workspace/deploy.ctrlyoke.yaml",
+    });
+    assert.strictEqual(unnamed.workflow.name, "deploy");
+
+    const inline = await createService().build({ workflow: { steps: [] } });
+    assert.strictEqual(inline.workflow.name, "Unnamed workflow");
+  });
+
   test("reports inherited session collisions and group metadata on every offending step", async () => {
     const preview = await createService().build({
       workflow: {
