@@ -54,6 +54,30 @@ suite("CopilotNotificationMonitor", () => {
     );
   });
 
+  test("passes the base64 permission-request user hook to ctrlyoke's hook", () => {
+    const config = new CopilotNotificationMonitor().buildHookConfig(
+      "script.js",
+      "notify-dir",
+      "workspace",
+      [{ event: "permissionRequest", command: "node decide.js" }],
+      ["permissionRequest"]
+    );
+    const hooks = (
+      config as {
+        config: { hooks: Record<string, Array<{ bash: string }>> };
+      }
+    ).config.hooks;
+    const encoded = Buffer.from("node decide.js", "utf8").toString("base64");
+
+    // The decision hook rides on ctrlyoke's own entry; it is not appended as
+    // a separate user entry.
+    assert.strictEqual(hooks.permissionRequest.length, 1);
+    assert.strictEqual(
+      hooks.permissionRequest[0].bash,
+      `node "script.js" "notify-dir" "permissionRequest" "${encoded}"`
+    );
+  });
+
   test("preserves per-hook timeoutSec in seconds", () => {
     const config = CopilotNotificationMonitor.buildUserOnlyConfig(
       [{ event: "stop", command: "node slow.js", timeoutSec: 13 }],
