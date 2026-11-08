@@ -335,12 +335,15 @@ function resolveWorkspaceOrNamedPath(
   // rather than silently attaching a root-level namesake. Otherwise the
   // prefix names the root itself, so a reference authored in a multi-root
   // workspace keeps resolving when the same folder is opened on its own.
-  return isDirectory(path.resolve(primaryRoot, normalized.slice(0, firstSlash)))
+  return isExistingDirectory(
+    path.resolve(primaryRoot, normalized.slice(0, firstSlash))
+  )
     ? workspaceResolution
     : namedResolution;
 }
 
-function isDirectory(candidate: string): boolean {
+/** True when `candidate` exists and is a directory; never throws. */
+export function isExistingDirectory(candidate: string): boolean {
   try {
     return fs.statSync(candidate).isDirectory();
   } catch {

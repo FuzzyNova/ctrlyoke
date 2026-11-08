@@ -1,4 +1,6 @@
 import * as assert from "assert";
+import * as os from "os";
+import * as path from "path";
 import type { IEvent, IPty } from "node-pty";
 import { suite, teardown, test } from "mocha";
 import {
@@ -83,6 +85,39 @@ suite("TerminalMessageHandlers panel reconnect", () => {
     assert.deepStrictEqual(session.reconnectBuffer, [
       "buffered terminal output",
     ]);
+  });
+});
+
+suite("TerminalMessageHandlers shell spawn cwd", () => {
+  teardown(() => setPtyPostMessage(() => {}));
+
+  test("starts the shell where the host resolver says, ignoring a client cwd", () => {
+    const manager = new FakePtyProcessManager();
+    const worktreeRoot = os.tmpdir();
+    const resolvedFor: string[] = [];
+    const handlers = new TerminalMessageHandlers(
+      () => undefined,
+      () => manager,
+      (workflowId) => {
+        resolvedFor.push(workflowId);
+        return worktreeRoot;
+      }
+    );
+
+    handlers.handleSpawnShell(
+      createWebviewClientContext("panel", () => {}),
+      {
+        workflowId: "workflow-1",
+        cwd: path.join(worktreeRoot, "client-chosen"),
+      }
+    );
+
+    const [session] = manager.getAllSessions();
+    assert.deepStrictEqual(resolvedFor, ["workflow-1"]);
+    assert.strictEqual(
+      path.resolve(session.cwd ?? "").toLowerCase(),
+      path.resolve(worktreeRoot).toLowerCase()
+    );
   });
 });
 

@@ -41,8 +41,11 @@ There are two kinds of terminal:
 
 - **AI terminals** run a step's harness. ctrlyoke opens one when an interactive
   step starts, labelled with the step's number and name.
-- **Shells** are ordinary terminals in the workspace folder. **New Terminal**
-  in the tab's toolbar opens one. Opening the **Terminal** tab when the
+- **Shells** are ordinary terminals. A shell starts in the folder the
+  workflow's steps run in: its [worktree](../workflows/worktrees.md) when the
+  run uses one, otherwise the workspace folder. If that worktree has since been
+  removed, the shell starts in the workspace folder. **New Terminal** in the
+  tab's toolbar opens one. Opening the **Terminal** tab when the
   workflow has no terminal at all starts a shell for you. The shell is your
   system default unless `terminal.shellExecutable` names another.
 

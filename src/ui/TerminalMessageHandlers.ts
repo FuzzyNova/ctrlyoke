@@ -25,6 +25,13 @@ import type { TerminalStartedMessage } from "../types/WebviewMessageTypes";
 type SessionCallbacks = Pick<SpawnPtyOptions, "onData" | "onExit">;
 
 /**
+ * Resolves the directory a user shell for `workflowId` starts in: the
+ * workflow's execution root (its worktree while one is active), falling back
+ * to the workspace root. Returns `undefined` when neither is known.
+ */
+export type ShellCwdResolver = (workflowId: string) => string | undefined;
+
+/**
  * Embedded-terminal message handlers and panel reconnect replay.
  *
  * PTY messages that represent shared terminal state are broadcast through
@@ -34,7 +41,8 @@ type SessionCallbacks = Pick<SpawnPtyOptions, "onData" | "onExit">;
 export class TerminalMessageHandlers {
   constructor(
     private readonly getUserFeedbackSink: () => UserFeedbackSink | undefined,
-    private readonly getPtyManager: () => PtyProcessManager | null = getPtyProcessManager
+    private readonly getPtyManager: () => PtyProcessManager | null = getPtyProcessManager,
+    private readonly resolveShellCwd: ShellCwdResolver = () => undefined
   ) {}
 
   /**
@@ -136,7 +144,10 @@ export class TerminalMessageHandlers {
     const ptyManager = this.getPtyManager();
     if (!ptyManager || !message.workflowId) return;
     const workflowId = message.workflowId as string;
-    const cwd = (message.cwd as string | undefined) ?? process.cwd();
+    // The host picks the directory; a client never supplies a path. A shell
+    // opened for a workflow starts where its steps run (the worktree, when
+    // the run uses one).
+    const cwd = this.resolveShellCwd(workflowId) ?? process.cwd();
     let session: PtySession;
     try {
       session = ptyManager.spawnShell({
