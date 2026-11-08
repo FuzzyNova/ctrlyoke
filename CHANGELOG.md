@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The terminal control bar's **...** button now opens its shortcut menu. Before, the menu opened but was cut off by the bar, so nothing appeared. You also can no longer drag-select the bar's buttons as text.
 - A subagent's last output in Claude Code, OpenCode and Antigravity steps no longer goes missing from the output pane now and then. When the parent session reported the subagent finished while ctrlyoke was partway through reading the subagent's log, ctrlyoke stopped following it without reading what it had written just before finishing.
 - Looking up the Claude Code and Codex model lists no longer raises an uncaught `write after end` or `EPIPE` error in the extension host when the CLI answers after the lookup timed out, or exits before answering.
 
