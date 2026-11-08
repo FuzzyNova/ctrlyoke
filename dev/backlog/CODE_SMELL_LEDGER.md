@@ -29,6 +29,17 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   routed all nine exact error-normalization copies through `toError` in
   `src/utils/ErrorUtils.ts`; helper and unit coverage was added without changing
   hook state machines or response usability checks.
+- **2026-11-08, pass 3** — reviewed pass 2's three refactors (behavior preserved). Cleaned
+  up: removed `isFileNotFoundError(error, code)`, a pure alias of `hasErrnoCode`, and
+  folded paired `!hasErrnoCode(e, A) && !hasErrnoCode(e, B)` checks into the variadic
+  form. Fixed directly: merge-outcome literals in `WorktreeManager`/`WebviewMessageRouter`
+  now use `WORKTREE_MERGE_OUTCOMES`; `confirmMutation` copied in `HistoryCommands` and
+  `SecretCommands` now lives in `src/cli/CliPrompt.ts` (with a `CliConfirmIo` base
+  interface); three inline newer-schema refusals (`mcp-server.ts`,
+  `WorkingFileManager.ts`, `PromptFileParser.ts`) now call `assertWritableSchema`.
+  Hunted the harness providers and the CLI/MCP/extension adapters; queued three steps
+  (`escapeRegExp` copies, provider statusline registration, drifted effective-model
+  resolution in MCP/CLI/OutputHistoryManager).
 
 ## Deferred
 
@@ -37,6 +48,29 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   machine around per-hook `responseIsUsable` checks. Collapsing them into one generic
   `usePagedListing` hook is a design change; only their identical leaf helpers were
   queued in pass 2.
+- Ask-user-question parsing in all six providers (`antigravity/AntigravityToolEventBuilder.ts`
+  `parseQuestions`/`parseOptions`, `qwen/QwenLogParser.ts` `parseAskUserQuestionEntries`,
+  `copilot/CopilotToolBuilder.ts` `parseQuestionEntries`/`parseChoice(s)`,
+  `claude/ClaudeToolBuilder.ts`, `codex/CodexToolBuilder.ts`
+  `parseRequestUserInputQuestions`, `opencode/OpenCodeEventMapper.ts`
+  `parseOpenCodeQuestions`) — same output shape, but each harness has its own field
+  aliases, string-option formats and preview heuristics; a shared parser needs a design
+  for per-harness alias tables rather than a mechanical merge.
+- `validateAndGetModel` in five `*CliProvider.ts` files — same skeleton, but the "none"
+  sentinel, registry-not-loaded handling and validation strictness differ per harness on
+  purpose or by accident; needs a decision on the intended rule before merging.
+- Run-history/project-state bootstrap in `src/cli.ts` (`runCommand`),
+  `src/mcp-server.ts` (`initializeMcpStorage`), `src/extension.ts` and
+  `src/cli/CliWorkspaceBootstrap.ts` — drifted (MCP reads the location from
+  `CTRLYOKE_RUN_HISTORY_LOCATION` instead of settings; `CliWorkspaceBootstrap` never logs
+  the state-home warning). Unifying changes where MCP reads its storage location, which
+  needs a decision on whether the env handoff is intentional.
+- Internal `CTRLYOKE_*` env-var names (`CTRLYOKE_PROMPT_INDEX`, `CTRLYOKE_EXECUTION_ROOT`,
+  `CTRLYOKE_WORKSPACE`, ...) written by `CliExecutionRunner.ts`, `CliMcpConfigGenerator.ts`,
+  `CommitMessageGenerator.ts`, `CliProviderUtils.ts` and read in `mcp-server.ts` as raw
+  names; `CTRLYOKE_ENV_VARS` has only three keys. Needs a sweep that separates documented
+  script-facing variables (a user contract) from internal parent→child plumbing and from
+  standalone `src/scripts/` that cannot import.
 
 ## Ruled out
 
@@ -71,3 +105,16 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   same name, different meaning from the paged hooks' `./`-stripping copy.
 - Inline `new Promise((resolve) => setTimeout(resolve, ms))` sleeps (about 15 sites across
   core, harness and utils) — one-line idiom; a shared helper would save nothing.
+- `extractSessionIdFromStdout` in the six `*CliProvider.ts` files — each is a few lines
+  matching that harness's own event shape and parser; similarity is coincidental.
+- `basename` helpers in `src/ui/webview-react/navigation/navTitle.ts`,
+  `src/ui/webview-react/utils/stepOverrideChips.ts`, `src/utils/McpSkillCommandRecognizer.ts`
+  and `src/utils/StatuslineFormat.ts` — they differ on separators and trailing slashes,
+  and each matches its input (route paths vs Windows-or-POSIX paths).
+- `confirmDestructive` in `src/cli/HistoryTrashCommands.ts` — throws without `--yes`
+  instead of declining, so it is not a copy of `confirmMutation`.
+- `parseOtherWorkflowSelector` in `src/mcp-server.ts` vs `GlobalWorkflowStatusService.getStatus`
+  — the MCP pre-check produces the MCP tool's own error wording (part of the tool's
+  contract); the service's wording is customized for the CLI.
+- Antigravity's statusline sidecar not calling `stop()` in its provider — not a leak:
+  `CliIntegration` stops every execution sidecar it starts.
