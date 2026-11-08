@@ -30,6 +30,10 @@ import {
 } from "@root/utils/TerminalControlBarFormat";
 import { generateId } from "@utils/string";
 import { DRAG_HANDLE_TOUCH_ACTION_STYLE } from "@utils/dndKit";
+import {
+  keyEventToCapture,
+  sequenceToHumanLabel,
+} from "@utils/terminalKeyCapture";
 import { useSortableDndSensors } from "@hooks/useSortableDndSensors";
 import { Button } from "../shared/Button";
 import { LocalTextInput } from "../shared/LocalInputs";
@@ -138,166 +142,6 @@ function updateShortcut(
   return shortcuts.map((shortcut) =>
     shortcut.id === id ? { ...shortcut, ...patch } : shortcut
   );
-}
-
-// xterm modifier number: shift=1, alt=2, ctrl=4 → sum + 1
-function xtermModNum(e: KeyboardEvent): number {
-  return (e.shiftKey ? 1 : 0) + (e.altKey ? 2 : 0) + (e.ctrlKey ? 4 : 0) + 1;
-}
-
-// Human labels here ("Ctrl+C" etc.) describe literal PTY control-key byte
-// sequences, not app-level shortcuts — terminals never remap these to Cmd on
-// macOS, so do not run them through @utils/platform's formatShortcut.
-function keyEventToCapture(
-  e: KeyboardEvent
-): { sequence: string; humanLabel: string } | null {
-  if (["Control", "Alt", "Shift", "Meta"].includes(e.key)) return null;
-
-  const ctrl = e.ctrlKey;
-  const alt = e.altKey;
-  const shift = e.shiftKey;
-
-  const modParts: string[] = [];
-  if (ctrl) modParts.push("Ctrl");
-  if (alt) modParts.push("Alt");
-  if (shift) modParts.push("Shift");
-
-  const label = (...extra: string[]) =>
-    [...modParts, ...extra].join("+") || extra.join("+");
-
-  const ARROWS: Record<string, [string, string]> = {
-    ArrowUp: ["A", "↑"],
-    ArrowDown: ["B", "↓"],
-    ArrowRight: ["C", "→"],
-    ArrowLeft: ["D", "←"],
-  };
-  if (e.key in ARROWS) {
-    const [code, glyph] = ARROWS[e.key];
-    const mod = xtermModNum(e);
-    const sequence = mod > 1 ? `\\x1b[1;${mod}${code}` : `\\x1b[${code}`;
-    return { sequence, humanLabel: label(glyph) };
-  }
-
-  if (e.key === KEYBOARD_KEYS.ESCAPE && !ctrl && !alt && !shift)
-    return { sequence: "\\x1b", humanLabel: "Esc" };
-  if (e.key === KEYBOARD_KEYS.TAB && !ctrl && !alt)
-    return shift
-      ? { sequence: "\\x1b[Z", humanLabel: "Shift+Tab" }
-      : { sequence: "\\t", humanLabel: "Tab" };
-  if (e.key === KEYBOARD_KEYS.ENTER && !ctrl && !alt && !shift)
-    return { sequence: "\\r", humanLabel: "Enter" };
-  if (e.key === "Backspace" && !ctrl && !alt && !shift)
-    return { sequence: "\\x7f", humanLabel: "Backspace" };
-  if (e.key === "Delete") {
-    const mod = xtermModNum(e);
-    return {
-      sequence: mod > 1 ? `\\x1b[3;${mod}~` : "\\x1b[3~",
-      humanLabel: label("Del"),
-    };
-  }
-  if (e.key === "Insert")
-    return { sequence: "\\x1b[2~", humanLabel: label("Ins") };
-  if (e.key === "Home")
-    return { sequence: "\\x1b[H", humanLabel: label("Home") };
-  if (e.key === "End") return { sequence: "\\x1b[F", humanLabel: label("End") };
-  if (e.key === "PageUp")
-    return { sequence: "\\x1b[5~", humanLabel: label("PgUp") };
-  if (e.key === "PageDown")
-    return { sequence: "\\x1b[6~", humanLabel: label("PgDn") };
-
-  if (e.key.length === 1) {
-    const upper = e.key.toUpperCase();
-    const charCode = upper.charCodeAt(0) - 64;
-
-    if (ctrl && alt && charCode >= 1 && charCode <= 26) {
-      return {
-        sequence: `\\x1b\\x${charCode.toString(16).padStart(2, "0")}`,
-        humanLabel: `Ctrl+Alt+${upper}`,
-      };
-    }
-    if (ctrl && !alt && charCode >= 1 && charCode <= 26) {
-      return {
-        sequence: `\\x${charCode.toString(16).padStart(2, "0")}`,
-        humanLabel: `Ctrl+${upper}`,
-      };
-    }
-    if (alt && !ctrl) {
-      return { sequence: `\\x1b${e.key}`, humanLabel: `Alt+${upper}` };
-    }
-    if (!ctrl && !alt) {
-      return { sequence: e.key, humanLabel: e.key };
-    }
-  }
-
-  return null;
-}
-
-function sequenceToHumanLabel(sequence: string): string | null {
-  if (!sequence) return null;
-  if (sequence === "\\t") return "Tab";
-  if (sequence === "\\r") return "Enter";
-  if (sequence === "\\x1b") return "Esc";
-  if (sequence === "\\x7f") return "Backspace";
-  if (sequence === "\\x1b[3~") return "Del";
-  if (sequence === "\\x1b[2~") return "Ins";
-  if (sequence === "\\x1b[H") return "Home";
-  if (sequence === "\\x1b[F") return "End";
-  if (sequence === "\\x1b[5~") return "PgUp";
-  if (sequence === "\\x1b[6~") return "PgDn";
-  if (sequence === "\\x1b[Z") return "Shift+Tab";
-
-  const ctrlMatch = sequence.match(/^\\x([01][0-9a-fA-F])$/);
-  if (ctrlMatch) {
-    const code = Number.parseInt(ctrlMatch[1], 16);
-    if (code >= 1 && code <= 26)
-      return `Ctrl+${String.fromCharCode(code + 64)}`;
-  }
-
-  const ctrlAlt = sequence.match(/^\\x1b\\x([01][0-9a-fA-F])$/);
-  if (ctrlAlt) {
-    const code = Number.parseInt(ctrlAlt[1], 16);
-    if (code >= 1 && code <= 26)
-      return `Ctrl+Alt+${String.fromCharCode(code + 64)}`;
-  }
-
-  const ARROW_GLYPHS: Record<string, string> = {
-    A: "↑",
-    B: "↓",
-    C: "→",
-    D: "←",
-  };
-  const arrow = sequence.match(/^\\x1b\[([ABCD])$/);
-  if (arrow) return ARROW_GLYPHS[arrow[1]] ?? null;
-
-  const arrowMod = sequence.match(/^\\x1b\[1;(\d+)([ABCD])$/);
-  if (arrowMod) {
-    const mod = Number.parseInt(arrowMod[1]) - 1;
-    const glyph = ARROW_GLYPHS[arrowMod[2]];
-    if (glyph) {
-      const parts: string[] = [];
-      if (mod & 4) parts.push("Ctrl");
-      if (mod & 2) parts.push("Alt");
-      if (mod & 1) parts.push("Shift");
-      parts.push(glyph);
-      return parts.join("+");
-    }
-  }
-
-  const delMod = sequence.match(/^\\x1b\[3;(\d+)~$/);
-  if (delMod) {
-    const mod = Number.parseInt(delMod[1]) - 1;
-    const parts: string[] = [];
-    if (mod & 4) parts.push("Ctrl");
-    if (mod & 2) parts.push("Alt");
-    if (mod & 1) parts.push("Shift");
-    parts.push("Del");
-    return parts.join("+");
-  }
-
-  const altChar = sequence.match(/^\\x1b([!-~])$/);
-  if (altChar) return `Alt+${altChar[1].toUpperCase()}`;
-
-  return null;
 }
 
 function KeyCaptureInput({

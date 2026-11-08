@@ -174,7 +174,13 @@ Customise it under **Settings → Terminal → Mobile Control Bar**:
   every ID.
 - **+ Add shortcut** creates your own: give it a label, then click the
   keyboard button and press the key combination, or type the sequence in
-  escape notation such as `\x1b[1;5A` or `\t`. Custom shortcuts are saved in
+  escape notation such as `\x1b[1;5A` or `\t`. Pressing a key captures any
+  combination of Ctrl, Alt and Shift with letters, Enter, Tab, Backspace,
+  Space, the arrow and navigation keys, and F1 to F12. A combination that
+  older terminals cannot send, such as Shift+Enter or Ctrl+Shift+C, is
+  captured in the CSI u form (`\x1b[13;2u`) that modern terminal apps read.
+  Cmd and Windows-key combinations are not captured, because terminals have
+  no way to send them. Custom shortcuts are saved in
   `terminal.mobileCustomShortcuts`.
 
 ## Terminal settings
