@@ -138,6 +138,40 @@ describe("TerminalControlBar", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("portals the More menu out of the clipping scroll row and closes on outside click", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBar({
+      bar: [...DEFAULT_TERMINAL_BAR_LAYOUT.bar],
+      popup: [...DEFAULT_TERMINAL_BAR_LAYOUT.popup],
+      hidden: [],
+    });
+
+    expect(container.firstElementChild).toHaveClass("cy-no-select");
+
+    await user.click(screen.getByRole("button", { name: "More shortcuts" }));
+    const menu = screen.getByRole("menu");
+    // An absolutely positioned menu inside the `overflow-x-auto` row is
+    // clipped to invisibility, so the menu must not live inside the bar.
+    expect(container.contains(menu)).toBe(false);
+    expect(menu).toHaveClass("fixed");
+    expect(
+      screen.getByRole("menuitem", { name: "Ctrl+C" })
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("menuitem", { name: "Ctrl+C" }));
+    expect(sendMessageMock).toHaveBeenCalledWith(MESSAGE_TYPES.TERMINAL_INPUT, {
+      workflowId: "workflow-1",
+      sessionId: "session-1",
+      data: "\x03",
+    });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "More shortcuts" }));
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
   it("renders custom popup items in the configured popup order", async () => {
     const user = userEvent.setup();
     const customId = "custom-terminal-shortcut";

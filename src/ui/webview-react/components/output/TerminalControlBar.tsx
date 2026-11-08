@@ -6,6 +6,10 @@ import React, {
   useState,
 } from "react";
 import { sendMessage } from "@hooks/useMessageHandler";
+import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
+import { useClickOutside } from "@hooks/useClickOutside";
+import { constrainPopupToViewport } from "@utils/dropdownUtils";
+import { DropdownPortal } from "../shared/DropdownPortal";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { MESSAGE_TYPES } from "@/types/messages";
@@ -35,6 +39,8 @@ const EMPTY_BAR_LAYOUT: TerminalMobileBarLayout = {
   popup: [],
   hidden: [],
 };
+
+const MORE_POPUP_WIDTH = 192;
 
 type ResolvedTerminalBarItem =
   | { kind: "ctrl"; id: typeof TERMINAL_BAR_CTRL_ID }
@@ -122,7 +128,8 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
 }) => {
   const [ctrlActive, setCtrlActive] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const moreRef = useRef<HTMLDivElement>(null);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+  const morePopupRef = useRef<HTMLDivElement>(null);
   const customShortcuts = useSettingsStore(
     (s) =>
       s.fullGlobalSettings?.settings.terminal.mobileCustomShortcuts ??
@@ -215,16 +222,29 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
     return () => document.removeEventListener("keydown", handleKeyDown, true);
   }, [ctrlActive, sessionId, workflowId]);
 
-  useEffect(() => {
-    if (!moreOpen) return;
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!moreRef.current?.contains(event.target as Node)) {
-        setMoreOpen(false);
-      }
+  // The bar row scrolls horizontally, and `overflow-x: auto` forces
+  // `overflow-y` to clip as well, so an absolutely positioned menu inside it
+  // is cut off and never shows. Portal it out with fixed coordinates instead,
+  // right-aligned to the "..." button (which sits at the row's right edge).
+  const rawMorePos = useDropdownPortalPosition(moreButtonRef, moreOpen);
+  const morePopupPos = useMemo(() => {
+    if (!rawMorePos || !moreButtonRef.current) return null;
+    const rect = moreButtonRef.current.getBoundingClientRect();
+    const constrained = constrainPopupToViewport({
+      left: rect.right - MORE_POPUP_WIDTH,
+      width: MORE_POPUP_WIDTH,
+    });
+    return {
+      ...rawMorePos,
+      left: constrained.left,
+      width: constrained.width,
+      maxWidth: constrained.maxWidth,
     };
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [moreOpen]);
+  }, [rawMorePos]);
+
+  useClickOutside([moreButtonRef, morePopupRef], moreOpen, () =>
+    setMoreOpen(false)
+  );
 
   const openShortcutSettings = () => {
     setMoreOpen(false);
@@ -236,7 +256,7 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
 
   return (
     <div
-      className="relative z-header w-full shrink-0 border-t border-panel-border"
+      className="relative z-header cy-no-select w-full shrink-0 border-t border-panel-border"
       style={{
         background:
           "color-mix(in srgb, var(--vscode-terminal-background, var(--vscode-editor-background)) 92%, transparent)",
@@ -276,8 +296,9 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
         )}
 
         {resolvedPopupItems.length > 0 && (
-          <div ref={moreRef} className="relative ml-auto shrink-0">
+          <div className="ml-auto shrink-0">
             <button
+              ref={moreButtonRef}
               type="button"
               className={`h-8 min-w-10 px-2 rounded-sm border text-xs shrink-0 transition-colors ${
                 moreOpen
@@ -293,11 +314,14 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
               ...
             </button>
 
-            {moreOpen && (
-              <div
-                role="menu"
-                className="absolute right-0 bottom-full mb-1 w-48 max-h-[60vh] overflow-y-auto rounded-sm border border-panel-border bg-editor-bg shadow-lg"
-              >
+            <DropdownPortal
+              ref={morePopupRef}
+              isOpen={moreOpen}
+              popupPos={morePopupPos}
+              role="menu"
+              className="cy-no-select"
+            >
+              <div className="min-h-0 overflow-y-auto">
                 <div className="p-1 space-y-1">
                   {resolvedPopupItems.map((item) => (
                     <button
@@ -311,16 +335,16 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
                     </button>
                   ))}
                 </div>
-
-                <button
-                  type="button"
-                  className="w-full border-t border-panel-border px-2 py-1.5 text-left text-xs text-link-fg hover:bg-list-hover-bg"
-                  onClick={openShortcutSettings}
-                >
-                  Add shortcuts...
-                </button>
               </div>
-            )}
+
+              <button
+                type="button"
+                className="w-full shrink-0 border-t border-dropdown-border px-2 py-1.5 text-left text-xs text-link-fg hover:bg-list-hover-bg"
+                onClick={openShortcutSettings}
+              >
+                Add shortcuts...
+              </button>
+            </DropdownPortal>
           </div>
         )}
       </div>
