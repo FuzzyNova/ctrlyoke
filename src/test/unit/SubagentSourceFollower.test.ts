@@ -196,6 +196,52 @@ suite("SubagentSourceFollower", () => {
     assert.strictEqual(drain.partial, false);
   });
 
+  test("a completion report during an in-flight read still gets a final read", async () => {
+    // The parent stream can report the child done while a read that started
+    // before the child's last record is still running. That read must not
+    // count as the final one, or the last record is never read.
+    const follower = new SubagentSourceFollower();
+    const live: string[] = [];
+    const records: RecordItem[] = [{ id: "one", text: "first" }];
+    let releaseFirstRead!: () => void;
+    const firstReadGate = new Promise<void>((resolve) => {
+      releaseFirstRead = resolve;
+    });
+    let reads = 0;
+    follower.register<RecordItem>({
+      key: "child",
+      attribution: { parentToolCallId: "spawn", agentId: "agent-1" },
+      read: async (offset) => {
+        reads += 1;
+        const snapshot = records.slice(offset);
+        const nextOffset = records.length;
+        if (reads === 1) await firstReadGate;
+        return { records: snapshot, nextOffset };
+      },
+      map: (record) => [
+        { type: CLI_EVENT_TYPES.TEXT, data: { text: record.text } },
+      ],
+      isComplete: () => false,
+    });
+    // A long interval: only start()'s immediate poll runs on its own.
+    follower.start((events) => {
+      for (const event of events) {
+        if (event.type === CLI_EVENT_TYPES.TEXT) {
+          live.push((event.data as { text: string }).text);
+        }
+      }
+    }, 60_000);
+    assert.strictEqual(reads, 1, "the first read is in flight");
+
+    records.push({ id: "two", text: "last" });
+    follower.markChildComplete("agent-1");
+    releaseFirstRead();
+
+    const drain = await follower.drainToEof(500);
+    assert.deepStrictEqual(live, ["first", "last"]);
+    assert.strictEqual(drain.partial, false);
+  });
+
   test("keeps streaming children registered after a reset", async () => {
     // Antigravity resets its follower when it first learns the session ID,
     // which is after the headless tail has started streaming.

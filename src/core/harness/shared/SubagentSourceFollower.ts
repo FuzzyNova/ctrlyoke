@@ -273,14 +273,31 @@ export class SubagentSourceFollower {
     }
   }
 
+  /**
+   * Read a source, and read it once more straight away if a parent report
+   * (`markChildComplete`) landed while the read was in flight: that read may
+   * have stopped short of records the child appended just before the report,
+   * so only a read that starts after the report can be the final one.
+   */
   private async readSource(
     source: RegisteredSource,
     generation: number
   ): Promise<void> {
-    if (source.complete) return;
+    while (await this.readSourceOnce(source, generation)) {
+      // The follow-up read sees the report, so the loop ends after it.
+    }
+  }
+
+  /** One read of a source. Returns whether a report landed during it. */
+  private async readSourceOnce(
+    source: RegisteredSource,
+    generation: number
+  ): Promise<boolean> {
+    if (source.complete) return false;
+    const reportedBeforeRead = source.childComplete;
     try {
       const result = await source.read(source.offset);
-      if (generation !== this.generation) return;
+      if (generation !== this.generation) return false;
       source.offset = result.nextOffset;
       source.complete = result.complete ?? false;
       const emitted: CliEvent[] = [];
@@ -303,9 +320,10 @@ export class SubagentSourceFollower {
           source.complete = true;
         }
       }
-      // A parent report is the child's completion signal; take one final read
-      // after observing it so records appended just before the report are kept.
-      if (source.childComplete) source.complete = true;
+      // A parent report is the child's completion signal, but only a read that
+      // started after it is the final one. A reopen during the read cancels
+      // the report.
+      if (reportedBeforeRead && source.childComplete) source.complete = true;
       if (source.complete) {
         const parentId = source.attribution.parentToolCallId;
         const siblings = [...this.sources.values()].filter(
@@ -324,10 +342,12 @@ export class SubagentSourceFollower {
         }
       }
       if (emitted.length) this.callback?.(emitted);
+      return !source.complete && source.childComplete;
     } catch {
-      if (generation !== this.generation) return;
+      if (generation !== this.generation) return false;
       if (!source.carried) this.partial = true;
       source.complete = true;
+      return false;
     }
   }
 

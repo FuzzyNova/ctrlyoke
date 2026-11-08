@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A subagent's last output in Claude Code, OpenCode and Antigravity steps no longer goes missing from the output pane now and then. When the parent session reported the subagent finished while ctrlyoke was partway through reading the subagent's log, ctrlyoke stopped following it without reading what it had written just before finishing.
+
 ## [0.5.1] - 2026-11-08
 
 ### Changed
