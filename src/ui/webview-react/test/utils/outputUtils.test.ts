@@ -141,7 +141,7 @@ describe("getStepAssistantTextForCopy", () => {
 
   it("copies a script step's stdout and stderr", () => {
     expect(
-      extractCliOutputText({
+      getStepAssistantTextForCopy({
         isStreaming: false,
         elapsed: 1,
         source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
