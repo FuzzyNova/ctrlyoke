@@ -90,6 +90,70 @@ suite("PromptFileLoader Tests", () => {
       assert.strictEqual(queue.getState().steps.length, 1);
     });
 
+    test("suggests only useful public workflow keys", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-schema-warning-suggestions-")
+      );
+      tempDirs.push(tempDir);
+      const filePath = path.join(tempDir, "workflow.ctrlyoke.yaml");
+      await fs.writeFile(
+        filePath,
+        [
+          "steps:",
+          "  - type: script",
+          "    script: echo hi",
+          "    retruns: 0",
+          "  - prompt: runs normally",
+          "    qqqqqqqqqqqqqq: typo",
+          "    harnes: typo",
+          "    endCondtion: typo",
+        ].join("\n"),
+        "utf8"
+      );
+      const messages: Array<Record<string, unknown>> = [];
+      const dashboard = new PostMessageDashboardSink((message) =>
+        messages.push(message as Record<string, unknown>)
+      );
+      const loader = new PromptFileLoader(
+        new PromptFileParser(),
+        new PromptQueue(),
+        () => dashboard
+      );
+
+      await loader.loadPromptFile(filePath);
+
+      const fileSelected = messages.find(
+        (message) => message.type === MESSAGE_TYPES.FILE_SELECTED
+      );
+      assert.ok(fileSelected);
+      const warnings = fileSelected.schemaWarnings as Array<{
+        propertyPointer: string;
+        message: string;
+      }>;
+      assert.ok(warnings.find((warning) => warning.propertyPointer.endsWith("/retruns")));
+      assert.ok(warnings.find((warning) => warning.propertyPointer.endsWith("/qqqqqqqqqqqqqq")));
+      assert.ok(
+        warnings
+          .find((warning) => warning.propertyPointer.endsWith("/retruns"))
+          ?.message.includes("Did you mean") === false
+      );
+      assert.ok(
+        warnings
+          .find((warning) => warning.propertyPointer.endsWith("/qqqqqqqqqqqqqq"))
+          ?.message.includes("Did you mean") === false
+      );
+      assert.ok(
+        warnings
+          .find((warning) => warning.propertyPointer.endsWith("/harnes"))
+          ?.message.includes("Did you mean 'harness'?")
+      );
+      assert.ok(
+        warnings
+          .find((warning) => warning.propertyPointer.endsWith("/endCondtion"))
+          ?.message.includes("Did you mean 'endCondition'?")
+      );
+    });
+
     test("reports parse failures through the feedback sink", async () => {
       const feedback: UserFeedback[] = [];
       const parser = {

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Unknown workflow properties no longer suggest removed or internal fields, or unrelated keys for distant typos.
 - CLI validate summaries now count all workflow steps, including parallel
   members and the final step. Dry run guardrails omit the seconds unit for
   unlimited and unknown limits.

@@ -729,7 +729,11 @@ export class PromptFileParser {
       0,
       propertyPointer.lastIndexOf("/")
     );
-    const validKeys = this.getValidKeysAtPointer(original, parentPointer);
+    const validKeys = this.getValidKeysAtPointer(
+      original,
+      parentPointer,
+      true
+    );
     const suggestion = PromptFileParser.nearestKey(
       propertyName,
       validKeys.filter((key) => key !== propertyName)
@@ -744,7 +748,8 @@ export class PromptFileParser {
 
   private getValidKeysAtPointer(
     original: unknown,
-    instancePointer: string
+    instancePointer: string,
+    suggestionCandidatesOnly = false
   ): string[] {
     const target = PromptFileParser.getAtPointer(original, instancePointer);
     const defs = this.promptSchema?.$defs ?? {};
@@ -772,7 +777,7 @@ export class PromptFileParser {
       schemas = [defs.workflowStep];
     }
 
-    const names = new Set<string>();
+    const propertySchemas = new Map<string, unknown[]>();
     const visited = new Set<unknown>();
     const visit = (schema: unknown): void => {
       if (!isObject(schema) || visited.has(schema)) return;
@@ -787,7 +792,11 @@ export class PromptFileParser {
         visit(referenced);
       }
       if (isObject(schema.properties)) {
-        Object.keys(schema.properties).forEach((name) => names.add(name));
+        for (const [name, propertySchema] of Object.entries(schema.properties)) {
+          const schemasForName = propertySchemas.get(name) ?? [];
+          schemasForName.push(propertySchema);
+          propertySchemas.set(name, schemasForName);
+        }
       }
       for (const key of ["allOf", "anyOf", "oneOf"] as const) {
         const alternatives = schema[key];
@@ -795,7 +804,40 @@ export class PromptFileParser {
       }
     };
     schemas.forEach(visit);
-    return [...names];
+
+    const isRemovedField = (propertySchema: unknown): boolean => {
+      const visitedRefs = new Set<unknown>();
+      let current = propertySchema;
+      while (isObject(current) && !visitedRefs.has(current)) {
+        visitedRefs.add(current);
+        if (
+          isObject(current.not) &&
+          Object.keys(current.not).length === 0
+        ) {
+          return true;
+        }
+        if (typeof current.$ref !== "string" || !current.$ref.startsWith("#/")) {
+          return false;
+        }
+        const refSegments = current.$ref
+          .slice(2)
+          .split("/")
+          .map(PromptFileParser.unescapePointerSegment);
+        current = this.promptSchema;
+        for (const segment of refSegments) current = (current as any)?.[segment];
+      }
+      return false;
+    };
+
+    const entries = [...propertySchemas.entries()];
+    if (!suggestionCandidatesOnly) return entries.map(([name]) => name);
+    return entries
+      .filter(
+        ([name, propertySchemasForName]) =>
+          !name.startsWith("_") &&
+          propertySchemasForName.some((propertySchema) => !isRemovedField(propertySchema))
+      )
+      .map(([name]) => name);
   }
 
   private static getAtPointer(value: unknown, pointer: string): unknown {
@@ -815,6 +857,7 @@ export class PromptFileParser {
   ): string | undefined {
     let nearest: string | undefined;
     let nearestDistance = Number.POSITIVE_INFINITY;
+    const maximumDistance = Math.max(2, Math.floor(key.length / 3));
     for (const candidate of candidates) {
       const distance = PromptFileParser.editDistance(key, candidate);
       if (
@@ -825,7 +868,7 @@ export class PromptFileParser {
         nearestDistance = distance;
       }
     }
-    return nearest;
+    return nearestDistance <= maximumDistance ? nearest : undefined;
   }
 
   private static editDistance(left: string, right: string): number {
