@@ -134,14 +134,25 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   `{ schemaVersion: 1, success: false, error }` envelope, and integer flags use the strict
   parser in `src/cli/CliIntegerParsing.ts`. See
   `dev/implemented/ERROR_HANDLING_CONSISTENCY_PLAN.md` (§3 C1–C4, §4 R6).
+- **2026-11-09, deferred review**: investigated every Deferred entry's open question.
+  Each entry below now records its answer. Four entries hid real bugs, filed in
+  `dev/bugs/backlog/`:
+  - `mcp-skill-mode-ignores-workspace-run-history-location.md`
+  - `paged-git-hooks-never-recover-from-expired-listing.md`
+  - `prompt-completion-triggers-drift-between-editor-and-dashboard.md`
+  - `unrecognized-model-falls-back-to-literal-none.md`
+
+  Decided to fix: the duration-format convergence, plus three small cleanups (dead
+  dashboard `notify*` copies, the dead WebSocket 4401 check, OpenCode preview
+  splitting). Moved the generic paged hook and the trust-store base class to Ruled out.
+  Recommended order: the four bugs (MCP location, paged hooks, completion triggers,
+  model fallback), then the duration formats with the cleanups.
 
 ## Deferred
 
-- `src/ui/webview-react/hooks/usePaged{CommitHistory,FileHistory,GitRefDiff,WorkspaceDirectory}.ts`
-  — the four hooks re-implement the same page cache / abort / in-flight / expiry state
-  machine around per-hook `responseIsUsable` checks. Collapsing them into one generic
-  `usePagedListing` hook is a design change; only their identical leaf helpers were
-  queued in pass 2.
+Entries marked **Decided** have an agreed fix that hasn't landed yet. The others are
+still deferred.
+
 - Ask-user-question parsing in all six providers (`antigravity/AntigravityToolEventBuilder.ts`
   `parseQuestions`/`parseOptions`, `qwen/QwenLogParser.ts` `parseAskUserQuestionEntries`,
   `copilot/CopilotToolBuilder.ts` `parseQuestionEntries`/`parseChoice(s)`,
@@ -150,54 +161,134 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   `parseOpenCodeQuestions`) — same output shape, but each harness has its own field
   aliases, string-option formats and preview heuristics; a shared parser needs a design
   for per-harness alias tables rather than a mechanical merge.
-- `validateAndGetModel` in five `*CliProvider.ts` files — same skeleton, but the "none"
+  _2026-11-09:_
+  - **Plan.** The core is shareable: a question-list normalizer that takes per-harness
+    alias keys and JSON-string handling, one object-option parser, and one answer
+    matcher (Copilot and Qwen currently have copies). The plain-string option formats
+    (Copilot, Antigravity) and the description splitters (Qwen, OpenCode) stay
+    per-harness. That saves about 120 lines.
+  - **Before merging.** Add a characterization test per harness for every alias key.
+  - **Decided, small fix.** OpenCode renders every paragraph after the first as a
+    preview block (`OpenCodeEventMapper.ts:540-575`); switch it to Qwen's ASCII-art
+    check.
+- `validateAndGetModel` in five `*CliProvider.ts` files: same skeleton, but the "none"
   sentinel, registry-not-loaded handling and validation strictness differ per harness on
-  purpose or by accident; needs a decision on the intended rule before merging.
+  purpose or by accident.
+  _2026-11-09: **Decided.**_
+  - **Deliberate.** Antigravity, Qwen and OpenCode pass models through on purpose; each
+    harness's model-selection docs page says so. Copilot and Codex being strict is also
+    documented.
+  - **Accidental.** Claude lacks the unloaded-registry pass-through. The fallback can
+    return the literal `none`.
+  - **Fix.** A shared `resolveCliModel` helper that takes per-harness configuration;
+    see `dev/bugs/backlog/unrecognized-model-falls-back-to-literal-none.md`.
+  - **Still open, a product question.** Claude's substring matching turns any
+    `*sonnet*`/`*opus*` ID (for example Bedrock IDs) into the bare alias.
 - Run-history/project-state bootstrap in `src/cli.ts` (`runCommand`),
   `src/mcp-server.ts` (`initializeMcpStorage`), `src/extension.ts` and
-  `src/cli/CliWorkspaceBootstrap.ts` — drifted (MCP reads the location from
-  `CTRLYOKE_RUN_HISTORY_LOCATION` instead of settings; `CliWorkspaceBootstrap` never logs
-  the state-home warning). Unifying changes where MCP reads its storage location, which
-  needs a decision on whether the env handoff is intentional.
+  `src/cli/CliWorkspaceBootstrap.ts`: drifted. MCP reads the location from
+  `CTRLYOKE_RUN_HISTORY_LOCATION` instead of settings, and `CliWorkspaceBootstrap` never
+  logs the state-home warning.
+  _2026-11-09:_
+  - **The env handoff is intentional.** It predates settings loading in the MCP
+    process, and still carries the parent's frozen value.
+  - **The bug.** No fallback to settings when the variable is absent (skill mode,
+    standalone registration); see
+    `dev/bugs/backlog/mcp-skill-mode-ignores-workspace-run-history-location.md`.
+  - **The missing warning is harmless.** It only fires when `CTRLYOKE_HOME` is inside
+    the repo, and `ctrlyoke run` already logs it. Fold it in only if a shared
+    bootstrap helper gets written.
 - Internal `CTRLYOKE_*` env-var names (`CTRLYOKE_PROMPT_INDEX`, `CTRLYOKE_EXECUTION_ROOT`,
   `CTRLYOKE_WORKSPACE`, ...) written by `CliExecutionRunner.ts`, `CliMcpConfigGenerator.ts`,
   `CommitMessageGenerator.ts`, `CliProviderUtils.ts` and read in `mcp-server.ts` as raw
-  names; `CTRLYOKE_ENV_VARS` has only three keys. Needs a sweep that separates documented
-  script-facing variables (a user contract) from internal parent→child plumbing and from
-  standalone `src/scripts/` that cannot import.
+  names; `CTRLYOKE_ENV_VARS` has only three keys.
+  _2026-11-09: classified about 55 names. Every writer's spelling matches its readers,
+  so this is hygiene only._
+  - **User contract.** `HOME`, `WORKING_FILE`, `VAR_<KEY>`, the hook env in
+    `docs/workflows/hooks.md`, `SERVER_TOKEN`, `LICENSE_KEY*`, `PARTICIPANT_LABEL`,
+    and the MCP table in `docs/cli/ctrlyoke-mcp.md`.
+  - **Internal plumbing.** `RUN_ID`, `NOTIFY_*`, `HOOK_CONTEXT_FILE`, `WORKFLOW_ID`,
+    `PARALLEL_GROUP_ID`, `MCP_CLI_MODE`, and the per-harness `*_STATUSLINE_*` /
+    `OPENCODE_*` / `QWEN_HOOK_SCRIPT` names.
+  - **Dev/test only.** `DEV_*`, `HEAP_SNAPSHOT_MB`, `TEST_*`, and similar.
+  - **Proposed layout.** Extend `CTRLYOKE_ENV_VARS` with the contract names; add
+    `CTRLYOKE_INTERNAL_ENV_VARS`, kept in the per-harness protocol-constant files where
+    those exist. Leave dev names as local literals. For the standalone `src/scripts/`
+    literals, add a test asserting they match the constants. About 25 files; do it
+    later.
 
 - Dashboard message payloads (`WORKFLOW_ADDED`, `WORKFLOW_DISMISSED`,
   `WORKFLOW_SUMMARY_UPDATED`, `COORDINATION_SCOPE_UPDATED`, `CLI_WATCH_OUTPUT`,
   `STEPS_EXTENDED`) built separately in `src/server/CtrlYokeHostedServer.ts`,
   `src/ui/CtrlYokeWebviewProvider.ts` and `src/ui/DashboardApplication.ts`, plus the
   harness snapshot publish in `CtrlYokeHostedServer` vs `src/ui/WebviewSettingsSync.ts`
-  (delta vs full map, missing-registry guard) — comments say `PostMessageDashboardSink`
-  owns these shapes; moving them there changes the `IDashboardSink` surface every
-  client implements, so it needs a design pass.
+  (delta vs full map, missing-registry guard).
+  _2026-11-09: **Decided** as a cleanup, no bug._
+  - **Wrong interface named.** These methods belong to `IDashboardProvider`, not
+    `IDashboardSink`.
+  - **Identical payloads.** All three sites build the same messages. The webview store
+    merges both forms of the harness snapshot.
+  - **Dead copies.** `CtrlYokeWebviewProvider`'s copies look unreachable: the class
+    doesn't implement `IDashboardProvider`, and the orchestrator is given
+    `DashboardApplication`.
+  - **Fix.** Delete the dead copies and add pure message builders next to
+    `HostedServerMessageFactory.ts`. Neither interface changes.
 - Duration formats in the dashboard: `formatClockDuration` (`ui/webview-react/utils/time.ts`)
   is documented as the one format, but Copy Metadata (`stepMetadataClipboard.ts`,
   `7.4s`), Markdown export (`markdownExport.ts`, raw float), `ScriptVerdict.tsx`
   (`130.6s`) and `outputRowTiming.ts` (`1m 30s`) each use their own, with tests pinning
-  them — choosing one changes user-visible and exported text, so it needs a decision.
+  them.
+  _2026-11-09: **Decided.**_
+  - **No contract involved.** Only the numeric `_runtime.elapsed` is persisted; every
+    format is display or export text.
+  - **Fix.** Switch Copy Metadata, Markdown export and `ScriptVerdict` to
+    `formatClockDuration`. Give `ScriptVerdict`'s aria-label `formatSpokenDuration`.
+  - **Keep `outputRowTiming` as it is.** Its sub-second tooltips need ms precision.
+  - Add a **Changed** entry in `CHANGELOG.md`.
 - Access-token checks in `src/server/CtrlYokeHostedServer.ts`: `requestHasValidToken`
-  accepts the `x-ctrlyoke-token` header or `?token=`, the WebSocket upgrade and
-  connection handlers only `?token=` (the latter closes with 4401) — auth surface;
-  unifying needs a decision on which forms WebSocket clients may use.
+  accepts the `x-ctrlyoke-token` header or `?token=`, while the WebSocket upgrade and
+  connection handlers accept only `?token=` (the latter closes with 4401).
+  _2026-11-09: **Decided** as a cleanup, no security issue._
+  - **WebSocket clients can only use `?token=`.** Browsers can't set headers on a
+    WebSocket, and every client (the standalone shim, the LSP bridge, tests) uses the
+    query.
+  - **Constant-time already.** Every comparison goes through `timingSafeStringEqual`.
+  - **Dead branch.** The connection-handler check can never fail: `noServer: true`,
+    and `connection` is only emitted after the upgrade check passes.
+  - **Fix.** Delete the dead check, and share one token helper between HTTP and the
+    upgrade; accepting the header there too is additive.
+  - Optional hardening: a `Referrer-Policy: no-referrer` header.
 
 - Git invoked outside `execGit`: `GitCommitter.ts` (own spawn, no timeout),
   `GitUtils.commitAll` (5-minute mutation timeout, contradicting the `GIT_NO_TIMEOUT`
-  comment that commits run hooks), `HostedWorkspaceViewerService` commit path,
-  `CommitMessageGenerator`'s raw `execFileAsync` with its own 100 MB buffer, three
-  repo-toplevel lookups — unifying needs a timeout/buffer policy decision.
-- The three trust stores in `src/config/` (`SecretGrantsTrustStore`,
-  `ExternalRootsTrustStore`, `WorkspaceSettingsTrustStore`) — same load/set/save
-  skeleton, but canonicalization, caching, listeners and copy-before-mutate differ; a
-  shared base class is a design change (pass 6 only queued their shared file I/O).
+  comment that commits run hooks), `CommitMessageGenerator`'s raw `execFileAsync` with
+  its own 100 MB buffer, three repo-toplevel lookups.
+  _2026-11-09:_
+  - **Correction.** The hosted viewer's commit already goes through `execGit` with
+    `GIT_NO_TIMEOUT` (since 579d0ffa1). Its other calls use a private
+    `promisify(execFile)` with 10 s / 1 MiB.
+  - **Timeout-less reads.** `WorkspaceSnapshotService` reads also bypass `execGit`
+    with no timeout; their 512 KB content cap fits the 1 MiB default buffer.
+  - **The bug in `commitAll`.** Its only caller, `WorktreeManager.completeManagedRun`,
+    kills a pre-commit hook slower than 5 minutes and blocks the landing (the timeout
+    is pinned in `GitUtils.test.ts:705-748`).
+  - **Toplevel lookups.** The three differ only in normalization and null-vs-throw.
+    `RunChangesPlacer` and `GitCommitter` can become `repoToplevel` plus a throw.
+  - **Proposed policy.** Hook-running commands (commit, push, pull, checkout):
+    `GIT_NO_TIMEOUT` with `stdin: "ignore"`. Queries: 10 s. Whole-repo reads: 5 min.
+    Large diffs: stream to the cap instead of a 100 MB buffer.
+  - **Awaiting a decision on the `commitAll` timeout.** The rest is deferred.
 - Prompt completion trigger detection in `src/completions/PromptCompletionProvider.ts`
-  vs `src/ui/webview-react/utils/promptCompletion/promptCompletionResult.ts` — drifted
+  vs `src/ui/webview-react/utils/promptCompletion/promptCompletionResult.ts`: drifted
   (`#`/`~` query validation, slash-token rules, escaped-quote `@` paths exist on only one
-  side); the webview bundle can't import the VS Code completion module, so sharing it
-  needs a pure module both bundles accept and a decision on the intended rules.
+  side).
+  _2026-11-09: **Decided.**_
+  - **The drift causes visible bugs**; see
+    `dev/bugs/backlog/prompt-completion-triggers-drift-between-editor-and-dashboard.md`.
+  - **A shared home exists.** The webview already imports pure `@root/completions/*`
+    and `@root/utils/*` modules, and `CtrlYokeSlashTokens.ts` has no VS Code imports.
+  - **Fix.** A new `src/completions/PromptTriggerContext.ts` that takes the
+    runtime-matching rule from each side.
 
 ## Ruled out
 
@@ -273,3 +364,25 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   dashboard's own key over a different target shape, not the output-target key.
 - Hosted-server body `repo` reads not trimmed while query `repo` is — clients send ids
   verbatim; the one-line body idiom is left inline.
+- One generic `usePagedListing` hook for
+  `src/ui/webview-react/hooks/usePaged{CommitHistory,FileHistory,GitRefDiff,WorkspaceDirectory}.ts`.
+  The hooks share a skeleton but use three different paging models:
+  - CommitHistory and GitRefDiff fetch any page by offset, several at once.
+  - FileHistory is cursor-based and append-only, one request at a time, with
+    continuation fetches.
+  - WorkspaceDirectory adds sort settings and recovers the on-screen row after a
+    reload.
+
+  A single hook would need a hook point for each difference, at medium-high risk.
+  Shared leaf helpers in `utils/pagedListing.ts` are the right level; the missing
+  expiry recovery is a bug, filed as
+  `dev/bugs/backlog/paged-git-hooks-never-recover-from-expired-listing.md`.
+  (2026-11-09)
+
+- A shared base class for the three trust stores in `src/config/`
+  (`SecretGrantsTrustStore`, `ExternalRootsTrustStore`, `WorkspaceSettingsTrustStore`).
+  The remaining differences are deliberate: who normalizes paths, the mtime cache,
+  listeners, and copy-before-mutate exist only where needed. None is a bug: every
+  caller normalizes paths first, and the cached store copies before mutating. A
+  composed helper would save about 10 lines; the shared file I/O already landed in
+  pass 6. (2026-11-09)
