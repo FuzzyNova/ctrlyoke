@@ -1,10 +1,30 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import test from "node:test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   addPropertyTitles,
+  generateYamlSchema,
   humanizePropertyKey,
+  isYamlSchemaCurrent,
 } from "./generate-yaml-schema.mjs";
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+test("checked-in YAML matches the generator output", () => {
+  const schema = JSON.parse(
+    fs.readFileSync(path.join(root, "schemas/workflow-schema.json"), "utf8")
+  );
+  const generated = generateYamlSchema(schema);
+  const current = fs.readFileSync(
+    path.join(root, "schemas/workflow-schema.yaml"),
+    "utf8"
+  );
+  assert.equal(isYamlSchemaCurrent(generated, current), true);
+  assert.equal(isYamlSchemaCurrent(generated, `${current}stale`), false);
+});
 
 test("property keys become readable titles", () => {
   assert.equal(humanizePropertyKey("resumeSession"), "Resume Session");

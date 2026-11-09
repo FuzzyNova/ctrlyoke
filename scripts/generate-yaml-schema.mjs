@@ -18,6 +18,7 @@ const __dirname = path.dirname(__filename);
 const rootDir = path.join(__dirname, "..");
 const jsonSchemaPath = path.join(rootDir, "schemas", "workflow-schema.json");
 const yamlSchemaPath = path.join(rootDir, "schemas", "workflow-schema.yaml");
+const CHECK_MODE = process.argv.includes("--check");
 
 const TITLE_ACRONYMS = new Map([
   ["ai", "AI"],
@@ -99,21 +100,40 @@ export function addPropertyTitles(schema) {
   }
 }
 
+export function generateYamlSchema(jsonSchema) {
+  addPropertyTitles(jsonSchema);
+  return yaml.dump(jsonSchema, {
+    indent: 2,
+    lineWidth: 100,
+    noRefs: true,
+    sortKeys: false,
+  });
+}
+
+export function isYamlSchemaCurrent(generated, current) {
+  return generated === current;
+}
+
 function main() {
   try {
-    // Read JSON schema
     const jsonSchema = JSON.parse(fs.readFileSync(jsonSchemaPath, "utf8"));
-    addPropertyTitles(jsonSchema);
+    const yamlSchema = generateYamlSchema(jsonSchema);
 
-    // Convert to YAML with nice formatting
-    const yamlSchema = yaml.dump(jsonSchema, {
-      indent: 2,
-      lineWidth: 100,
-      noRefs: true,
-      sortKeys: false,
-    });
+    if (CHECK_MODE) {
+      if (
+        !fs.existsSync(yamlSchemaPath) ||
+        !isYamlSchemaCurrent(yamlSchema, fs.readFileSync(yamlSchemaPath, "utf8"))
+      ) {
+        console.error(
+          "schemas/workflow-schema.yaml is out of date. Run npm run generate-schema."
+        );
+        process.exitCode = 1;
+        return;
+      }
+      console.log("schemas/workflow-schema.yaml is up to date.");
+      return;
+    }
 
-    // Write YAML schema
     fs.writeFileSync(yamlSchemaPath, yamlSchema, "utf8");
 
     console.log("✅ Generated schemas/workflow-schema.yaml from JSON schema");

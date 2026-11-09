@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-08 by bug-hunt final step (claude-cli)
 - **Area:** `schemas/workflow-schema.yaml`, `scripts/generate-yaml-schema.mjs`, `package.json` (`check:docs`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

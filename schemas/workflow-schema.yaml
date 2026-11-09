@@ -693,10 +693,8 @@ $defs:
           - opencode/claude-haiku-4-5
           - opencode/claude-sonnet-4-6
           - opus
-          - opus[1m]
           - qwen3.5-plus
           - sonnet
-          - sonnet[1m]
         title: Model
       executionMode:
         type: string
