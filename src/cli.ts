@@ -1339,7 +1339,8 @@ async function runCommand(
           toCliOutputTarget(
             data.target,
             getCliOutputStepName(instance, data.target)
-          )
+          ),
+          data.output.scriptOutput
         );
       })
     );

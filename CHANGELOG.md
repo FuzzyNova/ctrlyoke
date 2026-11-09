@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `ctrlyoke run` now prints script and condition stdout and stderr as the scripts run.
 - Copy Metadata now resolves Sandbox None through workflow inheritance correctly and labels it as None rather than disabled.
 - Importing a run bundle now preserves its original completion time and active duration without adding a duplicate terminal event.
 - `ctrlyoke rerun`, `continue` and `append` headers now identify the workflow and run being addressed.

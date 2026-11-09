@@ -681,6 +681,16 @@ CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_S
     assert.ok(output.includes("40 more lines"));
   });
 
+  test("prints streamed stdout and completed stderr exactly once", () => {
+    const output = runFormatterScript(`
+const target = { stepIndex: 0, stepName: "script", key: "stdout-stderr" };
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, isStreaming: true, elapsed: 0, scriptOutput: { command: "check.sh", stdout: "out-marker\\n", stderr: "", exitCode: 0 } }, target);
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, isStreaming: false, elapsed: 0 }, target, { command: "check.sh", stdout: "out-marker\\n", stderr: "err-marker", exitCode: 0 });`);
+
+    assert.strictEqual((output.match(/out-marker/g) ?? []).length, 1);
+    assert.strictEqual((output.match(/err-marker/g) ?? []).length, 1);
+  });
+
   test("does not count single-character chunks as separate script lines", () => {
     const output = runFormatterScript(`
 CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: "", elapsed: 0, isStreaming: true }, { stepIndex: 0, stepName: "script", key: "single-char" });

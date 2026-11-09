@@ -895,6 +895,21 @@ export class CliTerminalFormatter {
           output.cliCommandSentToRunningTerminal
         );
       }
+      const chunk = output.scriptOutput?.stdout ?? "";
+      if (chunk) {
+        if (!state) {
+          state = {
+            shownChars: 0,
+            shownLines: 0,
+            totalChars: 0,
+            totalLines: 0,
+            endsWithNewline: true,
+          };
+          CliTerminalFormatter._scriptStreaming.set(key, state);
+          console.log(`${border} ${chalk.dim(`${sourceLabel} output:`)}`);
+        }
+        CliTerminalFormatter.writeBoundedScriptChunk(chunk, state);
+      }
       return;
     }
 
@@ -916,6 +931,13 @@ export class CliTerminalFormatter {
       const totalText = outputText;
       state.totalChars = Math.max(state.totalChars, totalText.length);
       state.totalLines = countOutputLines(totalText);
+      const stderr = scriptOutput?.stderr?.trim() ?? "";
+      if (stderr) {
+        const unstreamedText = `${state.endsWithNewline ? "" : "\n"}${stderr}`;
+        CliTerminalFormatter.writeBoundedScriptChunk(unstreamedText, state);
+        state.totalChars = Math.max(state.totalChars, totalText.length);
+        state.totalLines = countOutputLines(totalText);
+      }
       if (!state.endsWithNewline) process.stdout.write("\n");
       const omittedLines = Math.max(0, state.totalLines - state.shownLines);
       const omittedChars = Math.max(0, state.totalChars - state.shownChars);
