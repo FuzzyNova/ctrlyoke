@@ -413,6 +413,13 @@ governing user-feedback toasts only.
 Each phase is one or a few commits. Tests go with the code: `src/test/unit/**` for
 core, harness and CLI, and `src/ui/webview-react/test/**` for the step row.
 
+**Staging (orchestrator, 2026-11-08):** the live captures in §6, including R4 step 1, run
+first as their own step (Phase 0) so every later phase builds on real fixtures. Phase 3 is
+split into 3a (timeline record and step row) and 3b (R7 notifications). Phase 6 is split
+into 6a (reporter, sweep and JSON envelope) and 6b (strict integer flag parser).
+
+0. **Phase 0: live captures (§6).** Fixtures and recorded findings only, no product code.
+
 1. **Harness error text (H1, H4).** Add `describeHookError` per monitor, fix the Copilot
    no-session-ID filename, and add payload fixtures captured from real harnesses (§6).
    Highest value, smallest change, no contract impact. File a `dev/bugs/` entry for H1
