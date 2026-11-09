@@ -199,6 +199,7 @@ export class RunBundleImporter {
           : header.runManifest.executionState,
         currentIndex: (definition.steps as unknown[] | undefined)?.length ?? 0,
         startedAt: header.runManifest.startedAt,
+        activeExecutionMs: header.runManifest.activeExecutionMs,
         provenance,
         ...(header.manifest.continuation
           ? {

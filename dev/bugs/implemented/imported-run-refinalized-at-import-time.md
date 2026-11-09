@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli, CLI repro)
 - **Area:** `src/core/orchestration/RunMaterializer.ts` (`materialize`, the `history.finalizeRun(...)` call after the imported events are appended), `src/core/orchestration/OutputHistoryManager.ts` (`finalizeRun`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

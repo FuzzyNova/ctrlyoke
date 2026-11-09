@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Importing a run bundle now preserves its original completion time and active duration without adding a duplicate terminal event.
 - `ctrlyoke rerun`, `continue` and `append` headers now identify the workflow and run being addressed.
 - `ctrlyoke run` now stops before dispatching a step when interrupted during startup.
 - `ctrlyoke run` now exits with code 5 and writes its final result when interrupted by Ctrl+C or SIGTERM.

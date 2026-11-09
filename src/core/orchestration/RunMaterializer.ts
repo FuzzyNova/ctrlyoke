@@ -33,6 +33,7 @@ export interface RunMaterializationInput {
   currentIndex?: number;
   runtimeState?: Partial<WorkingFileRuntime>;
   startedAt?: number;
+  activeExecutionMs?: number;
   provenance: NonNullable<WorkflowLineageDescriptor["importedFrom"]>;
   beforeEvents?: (identity: {
     workflowKey: WorkflowKey;
@@ -144,7 +145,11 @@ export class RunMaterializer {
       if (!manifestPath)
         throw new Error("Could not initialize imported run history.");
       let batch: WorkflowTimelineEventDraft[] = [];
+      let terminalTimestamp: number | undefined;
       for await (const event of input.events) {
+        if (event.eventType === TIMELINE_EVENT_TYPES.RUN_TERMINATED) {
+          terminalTimestamp = event.timestampMs;
+        }
         batch.push(event);
         if (batch.length === 250) {
           await this.timelineRecorder.appendEvents(manifestPath, batch);
@@ -153,7 +158,18 @@ export class RunMaterializer {
       }
       if (batch.length)
         await this.timelineRecorder.appendEvents(manifestPath, batch);
-      await history.finalizeRun(manifestPath, executionState, steps.length);
+      await history.finalizeRun(
+        manifestPath,
+        executionState,
+        steps.length,
+        input.activeExecutionMs,
+        terminalTimestamp === undefined
+          ? {}
+          : {
+              appendTerminationEvent: false,
+              completedAt: terminalTimestamp,
+            }
+      );
       await this.timelineRecorder.appendEvents(manifestPath, [
         {
           eventType: TIMELINE_EVENT_TYPES.RUN_IMPORTED,

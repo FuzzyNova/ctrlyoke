@@ -103,6 +103,59 @@ suite("RunBundleImporter", () => {
     );
   });
 
+  test("preserves an existing terminal event and active duration when importing", async () => {
+    const completedAt = 200;
+    const activeExecutionMs = 115;
+    const manifestPath = path.join(bundle, "manifest.json");
+    const sourceManifest = JSON.parse(
+      await fs.readFile(manifestPath, "utf8")
+    ) as Record<string, unknown>;
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify({ ...sourceManifest, completedAt, activeExecutionMs })
+    );
+    const eventsPath = path.join(bundle, "events.jsonl");
+    const existingEvents = (await fs.readFile(eventsPath, "utf8"))
+      .trim()
+      .split("\n");
+    existingEvents.push(
+      JSON.stringify({
+        eventType: TIMELINE_EVENT_TYPES.RUN_TERMINATED,
+        timestampMs: completedAt,
+        sequence: 9,
+        payload: { executionState: EXECUTION_STATES.COMPLETED, stepCount: 1 },
+      })
+    );
+    await fs.writeFile(eventsPath, `${existingEvents.join("\n")}\n`);
+
+    const result = await importer.importRun({
+      workspaceRoot: workspace,
+      bundleDir: bundle,
+    });
+    assert.strictEqual(result.status, "imported");
+    if (result.status !== "imported") return;
+    const importedManifestPath = WorkflowPaths.manifestPath(
+      workspace,
+      result.workflowKey,
+      result.runRef
+    );
+    const timeline = new TimelineRecorder();
+    const importedManifest = await timeline.readManifest(importedManifestPath);
+    const importedEvents = await timeline.readEvents(importedManifestPath);
+    assert.strictEqual(
+      importedEvents.filter(
+        (event) => event.eventType === TIMELINE_EVENT_TYPES.RUN_TERMINATED
+      ).length,
+      1
+    );
+    assert.strictEqual(importedManifest.completedAt, completedAt);
+    assert.strictEqual(importedManifest.activeExecutionMs, activeExecutionMs);
+    assert.strictEqual(
+      importedEvents.at(-1)?.eventType,
+      TIMELINE_EVENT_TYPES.RUN_IMPORTED
+    );
+  });
+
   test("round-trips an exported fixture run through the importer", async () => {
     const sourceWorkspace = path.join(root, "source");
     await fs.mkdir(sourceWorkspace, { recursive: true });
