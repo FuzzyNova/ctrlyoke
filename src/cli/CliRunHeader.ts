@@ -12,7 +12,8 @@ export function formatCliRunHeaderLabel(
   options: CliRunHeaderLabelOptions
 ): string {
   if (options.addressed) {
-    const workflowName = options.workflowName || options.workflowKey || "workflow";
+    const workflowName =
+      options.workflowName || options.workflowKey || "workflow";
     return options.runRef
       ? `${workflowName} (${options.runRef})`
       : workflowName;

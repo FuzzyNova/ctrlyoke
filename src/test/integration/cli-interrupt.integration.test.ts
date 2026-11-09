@@ -18,7 +18,9 @@ async function interruptRun(
   root: string;
   startMarker: string;
 }> {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-cli-interrupt-"));
+  const root = await fs.mkdtemp(
+    path.join(os.tmpdir(), "ctrlyoke-cli-interrupt-")
+  );
   temporaryRoots.push(root);
   const workflowPath = path.join(root, "workflow.ctrlyoke.yaml");
   const startMarker = path.join(root, "step-started").replace(/\\/gu, "/");
@@ -31,7 +33,15 @@ async function interruptRun(
   const cliPath = path.join(__dirname, "..", "..", "cli.js");
   const child = spawn(
     "node",
-    [cliPath, "run", workflowPath, "--headless", "--cwd", root, ...(json ? ["--json"] : [])],
+    [
+      cliPath,
+      "run",
+      workflowPath,
+      "--headless",
+      "--cwd",
+      root,
+      ...(json ? ["--json"] : []),
+    ],
     {
       cwd: root,
       env: {
@@ -47,11 +57,7 @@ async function interruptRun(
   let signalSent = false;
   child.stdout.setEncoding("utf8").on("data", (chunk: string) => {
     stdout += chunk;
-    if (
-      beforeStepStarts &&
-      !signalSent &&
-      stdout.includes("Running:")
-    ) {
+    if (beforeStepStarts && !signalSent && stdout.includes("Running:")) {
       signalSent = true;
       child.kill("SIGINT");
     }
@@ -63,7 +69,9 @@ async function interruptRun(
   const startedAt = Date.now();
   while (beforeStepStarts ? !signalSent : true) {
     if (child.exitCode !== null) {
-      throw new Error(`CLI exited before script started (${child.exitCode}): ${stderr}`);
+      throw new Error(
+        `CLI exited before script started (${child.exitCode}): ${stderr}`
+      );
     }
     if (!beforeStepStarts) {
       try {
@@ -75,7 +83,9 @@ async function interruptRun(
     }
     if (Date.now() - startedAt > (beforeStepStarts ? 10_000 : 30_000)) {
       child.kill("SIGKILL");
-      throw new Error(`Timed out waiting for script start: ${stdout}\n${stderr}`);
+      throw new Error(
+        `Timed out waiting for script start: ${stdout}\n${stderr}`
+      );
     }
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
@@ -149,10 +159,13 @@ suite("CLI interrupted run", () => {
     );
     const runFiles: string[] = [];
     async function collect(directory: string): Promise<void> {
-      for (const entry of await fs.readdir(directory, { withFileTypes: true }).catch(() => [])) {
+      for (const entry of await fs
+        .readdir(directory, { withFileTypes: true })
+        .catch(() => [])) {
         const entryPath = path.join(directory, entry.name);
         if (entry.isDirectory()) await collect(entryPath);
-        else if (entry.name === "workflow.ctrlyoke.json") runFiles.push(entryPath);
+        else if (entry.name === "workflow.ctrlyoke.json")
+          runFiles.push(entryPath);
       }
     }
     await collect(result.root);
@@ -160,7 +173,11 @@ suite("CLI interrupted run", () => {
       const workflow = JSON.parse(await fs.readFile(runFile, "utf8")) as {
         _runtime?: { executionState?: string };
       };
-      assert.notStrictEqual(workflow._runtime?.executionState, "running", runFile);
+      assert.notStrictEqual(
+        workflow._runtime?.executionState,
+        "running",
+        runFile
+      );
     }
   });
 });
