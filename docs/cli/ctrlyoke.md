@@ -968,6 +968,8 @@ workflow lineage key and a run reference or numeric run ID.
 
 Edit a pending step with an inline prompt:
 
+`--prompt` applies only to prompt steps; use a one-step file to change a script step or its type.
+
 ```bash
 ctrlyoke step edit --workflow release --run 7 --index 3 --prompt "Correct the deployment target"
 ```

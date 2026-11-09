@@ -12,6 +12,7 @@ import type {
 import {
   RUN_DEFINITION_DECISIONS,
   RUNNER_IDS,
+  STEP_TYPES,
   type RunDefinitionDecision,
 } from "../types/DashboardConstants";
 import { WorkingFileManager } from "../core/WorkingFileManager";
@@ -77,6 +78,20 @@ export async function editStepCommand(
     context,
     io
   );
+  if (options.prompt !== undefined) {
+    const workingFile = await WorkingFileManager.readWorkingFileFromDisk(
+      WorkflowPaths.runFilePath(
+        context.workspaceRoot,
+        target.workflowKey,
+        target.runRef
+      )
+    );
+    if (workingFile.steps?.[index]?.type === STEP_TYPES.SCRIPT) {
+      throw new Error(
+        `step ${index} is a script step; --prompt only edits prompt steps. Pass a one-step file to change a script step or its type`
+      );
+    }
+  }
   const edited = await RunContinuationService.editStepAtRun(
     context.workspaceRoot,
     target.workflowKey,

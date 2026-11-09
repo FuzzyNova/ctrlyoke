@@ -1637,6 +1637,11 @@ export class CtrlYokeMCPServer {
     );
     const existingStep = workingFile.steps?.[index];
     if (existingStep) {
+      if (existingStep.type === STEP_TYPES.SCRIPT && "prompt" in updates) {
+        throw new Error(
+          "Script steps cannot be edited through MCP with updates.prompt; edit_step only accepts prompt steps."
+        );
+      }
       const effectiveStep = mergeWorkflowStepUpdate(
         existingStep,
         materializeConditionUpdates(workingFile, updates),

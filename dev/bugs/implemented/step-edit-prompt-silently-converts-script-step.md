@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli, CLI repro)
 - **Area:** `src/cli/StepCommands.ts` (`editStepCommand`, `parseStepChange`), `src/mcp-server.ts` (`handleStepEdit`), `src/core/WorkflowStepSanitizer.ts` (`mergeWorkflowStepUpdate`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
