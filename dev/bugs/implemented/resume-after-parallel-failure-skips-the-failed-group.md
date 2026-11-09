@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-08 during the resume-after-failure fix
 - **Area:** `src/core/PromptQueue.ts` (`applyParallelGroupJoin`), `src/core/WorkflowInstance.ts` (continuation)
-- **Severity:** medium
+- **Resolution:** fixed in this commit — continuation rewinds to the group start and resets every member that did not succeed; succeeded members keep their settlement
 
 ## Symptom
 

@@ -6,6 +6,8 @@ import {
 } from "../../types/DashboardConstants";
 import {
   deriveStepStatusesFromRuntime,
+  getResumableTerminalFailedGroup,
+  isGroupMemberRetried,
   isUnstartedRun,
   isUnstartedRunFile,
 } from "../../utils/StepStatusDerivation";
@@ -193,6 +195,88 @@ suite("StepStatusDerivation", () => {
         STEP_STATUS.SENT
       ),
       [STEP_STATUS.SENT]
+    );
+  });
+});
+
+suite("failed parallel group recovery", () => {
+  const group = { startIndex: 1, endIndex: 3 };
+  const settled = (terminalStatus: string, terminalFailure?: boolean) => ({
+    _runtime: {
+      startedAt: 1,
+      completedAt: 2,
+      terminalStatus,
+      ...(terminalFailure === undefined ? {} : { terminalFailure }),
+    },
+  });
+
+  test("finds the group a terminal member failure ended the run in", () => {
+    const steps = [
+      settled(STEP_STATUS.COMPLETED),
+      settled(STEP_STATUS.FAILED),
+      settled(STEP_STATUS.CANCELLED),
+      settled(STEP_STATUS.COMPLETED),
+    ] as never[];
+    const state = {
+      executionState: EXECUTION_STATES.ERROR,
+      currentIndex: 4,
+      steps,
+      parallelGroups: [group],
+    };
+
+    assert.strictEqual(getResumableTerminalFailedGroup(state), group);
+    assert.strictEqual(
+      getResumableTerminalFailedGroup({ ...state, currentIndex: 3 }),
+      undefined
+    );
+    assert.strictEqual(
+      getResumableTerminalFailedGroup({
+        ...state,
+        executionState: EXECUTION_STATES.COMPLETED,
+      }),
+      undefined
+    );
+  });
+
+  test("ignores a group whose only failure let the workflow continue", () => {
+    const steps = [
+      settled(STEP_STATUS.COMPLETED),
+      settled(STEP_STATUS.FAILED, false),
+      settled(STEP_STATUS.COMPLETED),
+      settled(STEP_STATUS.COMPLETED),
+    ] as never[];
+
+    assert.strictEqual(
+      getResumableTerminalFailedGroup({
+        executionState: EXECUTION_STATES.ERROR,
+        currentIndex: 4,
+        steps,
+        parallelGroups: [group],
+      }),
+      undefined
+    );
+  });
+
+  test("retries every member that did not succeed", () => {
+    assert.strictEqual(
+      isGroupMemberRetried(settled(STEP_STATUS.FAILED) as never),
+      true
+    );
+    assert.strictEqual(
+      isGroupMemberRetried(settled(STEP_STATUS.CANCELLED) as never),
+      true
+    );
+    assert.strictEqual(
+      isGroupMemberRetried({ _runtime: { startedAt: 1 } }),
+      true
+    );
+    assert.strictEqual(
+      isGroupMemberRetried(settled(STEP_STATUS.COMPLETED) as never),
+      false
+    );
+    assert.strictEqual(
+      isGroupMemberRetried(settled(STEP_STATUS.SKIPPED) as never),
+      false
     );
   });
 });

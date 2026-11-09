@@ -5,6 +5,8 @@ import {
   type UserProjectInspection,
 } from "../utils/ProjectStateLifecycle";
 import { repoToplevel } from "../utils/GitUtils";
+import { canonicalStatePath } from "../utils/ProjectStatePaths";
+import { pathsEqual } from "../utils/PathCasing";
 import { confirmMutation, type CliConfirmIo } from "./CliPrompt";
 import * as path from "node:path";
 import type {
@@ -78,6 +80,14 @@ export async function relinkHistoryCommand(
     gitToplevel: gitToplevel ?? null,
   });
 
+  for (const typed of [oldPath, newPath]) {
+    const canonical = canonicalStatePath(typed);
+    if (!pathsEqual(path.resolve(typed), canonical)) {
+      io.writeOut(
+        `Note: "${typed}" resolves to "${canonical}"; project history is keyed by the resolved path.`
+      );
+    }
+  }
   io.writeOut(
     `Would relink ${preview.oldProjectRoot} to ${preview.newProjectRoot}.`
   );

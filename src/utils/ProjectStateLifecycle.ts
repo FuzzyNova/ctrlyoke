@@ -4,30 +4,34 @@ import { renameWithTransientRetry } from "./AtomicFileUtils";
 import {
   assertProjectDirectoryIsReal,
   assertUserProjectContained,
-  PROJECT_METADATA_FILE_NAME,
+  findProjectHistory,
+  isEmptyProjectScaffold,
   readProjectStateMetadata,
+  statePathBelongsTo,
   type ProjectStateMetadata,
   withUserProjectRegistryLock,
   writeProjectStateMetadata,
 } from "./ProjectStateRegistry";
-import { projectStateRoot } from "./ProjectStatePaths";
+import { canonicalStatePath, projectStateRoot } from "./ProjectStatePaths";
 import { pathsEqual } from "./PathCasing";
-import { readWorkflowLockInspectionAtPath } from "./WorkflowLockInspector";
+import {
+  inspectProjectRunner,
+  lstatIfExists,
+  ProjectStateLifecycleError,
+} from "./ProjectStateInspection";
 import {
   PROJECT_RUNNER_STATUSES,
   PROJECT_STATE_PATH_STATUSES,
   RUN_HISTORY_LOCATIONS,
-  WORKFLOW_LOCK_LIVENESS,
   NODE_ERROR_CODES,
+  type ProjectRunnerStatus,
 } from "../types/DashboardConstants";
-import type { WorkflowKey } from "../types/CtrlYokeTypes";
-import * as WorkflowPaths from "./WorkflowPaths";
 import { getErrorMessage, hasErrnoCode, getErrnoCode } from "./ErrorUtils";
+
+export { ProjectStateLifecycleError, type ProjectRunnerStatus };
 
 export type ProjectStatePathStatus =
   (typeof PROJECT_STATE_PATH_STATUSES)[keyof typeof PROJECT_STATE_PATH_STATUSES];
-export type ProjectRunnerStatus =
-  (typeof PROJECT_RUNNER_STATUSES)[keyof typeof PROJECT_RUNNER_STATUSES];
 
 export interface UserProjectInspection {
   projectRoot: string;
@@ -53,13 +57,6 @@ export interface RelinkUserProjectResult {
   newProjectRoot: string;
   replacedEmptyScaffold: boolean;
   metadata: ProjectStateMetadata;
-}
-
-export class ProjectStateLifecycleError extends Error {
-  public constructor(message: string) {
-    super(message);
-    this.name = "ProjectStateLifecycleError";
-  }
 }
 
 /** Inspect every user-scoped project without requiring a workspace or frozen policy. */
@@ -97,7 +94,7 @@ export async function pruneUserProjects(
         ) {
           continue;
         }
-        const runner = await inspectRunner(inspection.projectRoot);
+        const runner = await inspectProjectRunner(inspection.projectRoot);
         if (runner.status === PROJECT_RUNNER_STATUSES.LIVE) {
           continue;
         }
@@ -123,18 +120,19 @@ export async function pruneUserProjects(
   });
 }
 
-/** Move one user-scoped project directory to the key for a renamed repository. */
+/**
+ * Move one user-scoped project directory to the key for a renamed repository.
+ * Both paths are canonicalized, so either may be typed through a symlink. The
+ * source is whichever directory holds the old path's history, including one
+ * that ctrlyoke 0.2.0 filed under a symlinked spelling's key.
+ */
 export async function relinkUserProject(
   oldPath: string,
   newPath: string,
   options: RelinkUserProjectOptions
 ): Promise<RelinkUserProjectResult> {
-  const resolvedOldPath = path.resolve(oldPath);
-  const resolvedNewPath = path.resolve(newPath);
-  const oldProjectRoot = projectStateRoot(
-    resolvedOldPath,
-    RUN_HISTORY_LOCATIONS.USER
-  );
+  const resolvedOldPath = canonicalStatePath(oldPath);
+  const resolvedNewPath = canonicalStatePath(newPath);
   const newProjectRoot = projectStateRoot(
     resolvedNewPath,
     RUN_HISTORY_LOCATIONS.USER
@@ -142,6 +140,9 @@ export async function relinkUserProject(
 
   return withUserProjectRegistryLock(async (projectsRoot) => {
     await assertProjectDirectoriesSafe(projectsRoot);
+    const source = await findProjectHistory(projectsRoot, oldPath);
+    const oldProjectRoot =
+      source.keep?.projectRoot ?? source.canonicalProjectRoot;
     await assertUserProjectContained(projectsRoot, oldProjectRoot);
     await assertUserProjectContained(projectsRoot, newProjectRoot);
     await assertProjectDirectoryIsReal(oldProjectRoot);
@@ -152,7 +153,7 @@ export async function relinkUserProject(
         `Source project state is missing project.json: ${oldProjectRoot}`
       );
     }
-    if (!pathsEqual(path.resolve(oldMetadata.statePath), resolvedOldPath)) {
+    if (!statePathBelongsTo(oldMetadata.statePath, resolvedOldPath)) {
       throw new ProjectStateLifecycleError(
         `Source project metadata does not belong to "${resolvedOldPath}".`
       );
@@ -177,10 +178,7 @@ export async function relinkUserProject(
           await readProjectStateMetadata(newProjectRoot);
         if (
           !destinationMetadata ||
-          !pathsEqual(
-            path.resolve(destinationMetadata.statePath),
-            resolvedNewPath
-          )
+          !statePathBelongsTo(destinationMetadata.statePath, resolvedNewPath)
         ) {
           throw new ProjectStateLifecycleError(
             `Destination project state is a collision: ${newProjectRoot}`
@@ -328,7 +326,7 @@ async function inspectUserProjectsUnderLock(
 
     let runnerStatus: ProjectRunnerStatus = PROJECT_RUNNER_STATUSES.UNKNOWN;
     try {
-      runnerStatus = (await inspectRunner(projectRoot)).status;
+      runnerStatus = (await inspectProjectRunner(projectRoot)).status;
     } catch (error) {
       reason = getErrorMessage(error);
     }
@@ -401,67 +399,11 @@ async function classifyStatePath(
   }
 }
 
-async function inspectRunner(
-  projectRoot: string
-): Promise<{ status: ProjectRunnerStatus; path?: string }> {
-  const runsRoot = WorkflowPaths.runsRootForProjectState(projectRoot);
-  const runsStats = await lstatIfExists(runsRoot);
-  if (!runsStats) {
-    return { status: PROJECT_RUNNER_STATUSES.NONE };
-  }
-  if (runsStats.isSymbolicLink()) {
-    throw new ProjectStateLifecycleError(
-      `Run storage must not be a symlink: ${runsRoot}`
-    );
-  }
-  if (!runsStats.isDirectory()) {
-    return { status: PROJECT_RUNNER_STATUSES.UNKNOWN };
-  }
-
-  const lineages = await fs.readdir(runsRoot, { withFileTypes: true });
-  for (const lineage of lineages) {
-    if (lineage.isSymbolicLink()) {
-      throw new ProjectStateLifecycleError(
-        `Run lineage must not be a symlink: ${path.join(runsRoot, lineage.name)}`
-      );
-    }
-    if (!lineage.isDirectory()) {
-      continue;
-    }
-    const workflowKey = lineage.name as WorkflowKey;
-    const runnerPath = WorkflowPaths.runnerLockPathForProjectState(
-      projectRoot,
-      workflowKey
-    );
-    const runnerStats = await lstatIfExists(runnerPath);
-    if (!runnerStats) {
-      continue;
-    }
-    if (runnerStats.isSymbolicLink() || !runnerStats.isFile()) {
-      throw new ProjectStateLifecycleError(
-        `Runner lock is not a regular file: ${runnerPath}`
-      );
-    }
-
-    const lockInspection = await readWorkflowLockInspectionAtPath(runnerPath);
-    if (lockInspection.liveness === WORKFLOW_LOCK_LIVENESS.ABSENT) {
-      throw new ProjectStateLifecycleError(
-        `Runner lock is invalid: ${runnerPath}`
-      );
-    }
-    if (lockInspection.liveness === WORKFLOW_LOCK_LIVENESS.ACTIVE) {
-      return { status: PROJECT_RUNNER_STATUSES.LIVE, path: runnerPath };
-    }
-  }
-
-  return { status: PROJECT_RUNNER_STATUSES.NONE };
-}
-
 async function refuseLiveOrUnknownRunner(
   projectRoot: string,
   label: string
 ): Promise<void> {
-  const runner = await inspectRunner(projectRoot);
+  const runner = await inspectProjectRunner(projectRoot);
   if (runner.status === PROJECT_RUNNER_STATUSES.LIVE) {
     throw new ProjectStateLifecycleError(
       `Refusing to relink ${label} project with a live runner: ${runner.path}`
@@ -471,23 +413,5 @@ async function refuseLiveOrUnknownRunner(
     throw new ProjectStateLifecycleError(
       `Refusing to relink ${label} project because runner state is unknown: ${projectRoot}`
     );
-  }
-}
-
-async function isEmptyProjectScaffold(projectRoot: string): Promise<boolean> {
-  const entries = await fs.readdir(projectRoot, { withFileTypes: true });
-  return entries.every((entry) => entry.name === PROJECT_METADATA_FILE_NAME);
-}
-
-async function lstatIfExists(
-  filePath: string
-): Promise<import("node:fs").Stats | undefined> {
-  try {
-    return await fs.lstat(filePath);
-  } catch (error) {
-    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
-      return undefined;
-    }
-    throw error;
   }
 }

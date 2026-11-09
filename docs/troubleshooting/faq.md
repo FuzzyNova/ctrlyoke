@@ -18,7 +18,7 @@ Yes. Use `ctrlyoke run <file> --headless --json`, check the [exit code](/cli/ctr
 
 ## Where is my run history?
 
-By default under `~/.ctrlyoke/projects/<slug>-<hash12>/.runs/`, outside the repository. Set `storage.runHistoryLocation` to `workspace` in your user settings (it is user-scope only) to keep it in `.ctrlyoke/.runs/` instead. See [Run storage](/troubleshooting/#run-storage). After moving or renaming a repository, run `ctrlyoke history relink <oldPath> <newPath>` to keep its history.
+By default under `~/.ctrlyoke/projects/<slug>-<hash12>/.runs/`, outside the repository. Set `storage.runHistoryLocation` to `workspace` in your user settings (it is user-scope only) to keep it in `.ctrlyoke/.runs/` instead. See [Run storage](/troubleshooting/#run-storage). After moving or renaming a repository, run `ctrlyoke history relink <oldPath> <newPath>` to keep its history. History follows the repository's real path, so opening it through a symlink (such as `/tmp` on macOS or a symlinked `~/dev`) shows the same history.
 
 ## Can I run scripts without any AI step?
 

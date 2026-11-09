@@ -6,12 +6,23 @@ import { renameWithTransientRetry } from "./AtomicFileUtils";
 import { pathsEqual } from "./PathCasing";
 import { relativePathEscapes } from "./PathSecurity";
 import {
+  canonicalStatePath,
   ctrlyokeStateHome,
+  legacyProjectKey,
+  projectKey,
+  projectKeySlug,
   projectStateRoot,
   userProjectsRoot,
 } from "./ProjectStatePaths";
+import {
+  inspectProjectRunner,
+  latestProjectRunTimestamp,
+  lstatIfExists,
+} from "./ProjectStateInspection";
+import { getErrorMessage } from "./ErrorUtils";
 import type { RunHistoryLocation } from "../types/CtrlYokeSettings";
 import {
+  PROJECT_RUNNER_STATUSES,
   RUN_HISTORY_LOCATIONS,
   NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
@@ -28,6 +39,8 @@ export const PROJECT_METADATA_FILE_NAME = "project.json";
 const PRIVATE_DIRECTORY_MODE = 0o700;
 const PRIVATE_FILE_MODE = 0o600;
 const REGISTRY_LOCK_NAME = ".registry";
+/** `<slug>-<hash12>`, the shape `projectKey` produces; group 1 is the slug. */
+const PROJECT_KEY_PATTERN = /^(.+)-[0-9a-f]{12}$/;
 
 /**
  * Every window, CLI and MCP server registers its project on startup, and a
@@ -97,6 +110,7 @@ async function registerUserProject(
   resolvedStateRoot: string,
   gitToplevel: string | undefined
 ): Promise<ProjectStateInitialization> {
+  const canonicalRoot = canonicalStatePath(resolvedStateRoot);
   const projectRoot = projectStateRoot(
     resolvedStateRoot,
     RUN_HISTORY_LOCATIONS.USER
@@ -110,6 +124,7 @@ async function registerUserProject(
   // before the directory exists. It is still inside the private projects
   // root and is removed by withFileLock after the transaction completes.
   return withUserProjectRegistryLock(async () => {
+    await adoptSplitProjectHistory(projectsRoot, resolvedStateRoot);
     return withFileLock(
       projectRoot,
       async () => {
@@ -139,7 +154,7 @@ async function registerUserProject(
         const metadata = await readOrCreateMetadata(
           projectRoot,
           metadataPath,
-          resolvedStateRoot,
+          canonicalRoot,
           gitToplevel
         );
         await writeMetadataAtomically(
@@ -226,6 +241,263 @@ export async function writeProjectStateMetadata(
   );
 }
 
+/** Whether a recorded `statePath` names the given canonical state root. */
+export function statePathBelongsTo(
+  statePath: string,
+  canonicalRoot: string
+): boolean {
+  return pathsEqual(canonicalStatePath(statePath), canonicalRoot);
+}
+
+/** Whether a project directory holds nothing but its `project.json`. */
+export async function isEmptyProjectScaffold(
+  projectRoot: string
+): Promise<boolean> {
+  const entries = await fs.readdir(projectRoot, { withFileTypes: true });
+  return entries.every((entry) => entry.name === PROJECT_METADATA_FILE_NAME);
+}
+
+export interface ProjectHistoryCandidate {
+  projectRoot: string;
+  metadata: ProjectStateMetadata;
+  /** Start time of the newest run, or `undefined` when there are no runs. */
+  latestRunAt?: number;
+  /** False for a directory holding only `project.json`. */
+  hasContent: boolean;
+}
+
+export interface ProjectHistoryLookup {
+  /** The canonical state root the lookup was made for. */
+  canonicalRoot: string;
+  /** The directory the canonical project key names. */
+  canonicalProjectRoot: string;
+  /** The canonical directory, when it exists with metadata for this root. */
+  canonical?: ProjectHistoryCandidate;
+  /**
+   * Directories left under a key that ctrlyoke 0.2.0 derived from a
+   * symlinked spelling of the same root.
+   */
+  splits: ProjectHistoryCandidate[];
+  /**
+   * The candidate to keep: the one whose newest run is most recent, the
+   * canonical directory on a tie, and an existing directory over a bare
+   * scaffold. `undefined` when no candidate exists.
+   */
+  keep?: ProjectHistoryCandidate;
+}
+
+/**
+ * Find every directory holding history for one state root: the canonical key
+ * and any key 0.2.0 derived from a symlinked spelling. Split directories are
+ * found by the spelling passed in and by scanning keys that share a slug with
+ * either spelling, and are matched on their recorded `statePath`. Read-only;
+ * call it under {@link withUserProjectRegistryLock}.
+ */
+export async function findProjectHistory(
+  projectsRoot: string,
+  stateRoot: string
+): Promise<ProjectHistoryLookup> {
+  const canonicalRoot = canonicalStatePath(stateRoot);
+  const canonicalKey = projectKey(canonicalRoot);
+  const canonicalProjectRoot = path.join(projectsRoot, canonicalKey);
+
+  const slugs = new Set([
+    projectKeySlug(stateRoot),
+    projectKeySlug(canonicalRoot),
+  ]);
+  const splitKeys = new Set<string>([legacyProjectKey(stateRoot)]);
+  for (const entry of await fs.readdir(projectsRoot, { withFileTypes: true })) {
+    const match = PROJECT_KEY_PATTERN.exec(entry.name);
+    if (match && slugs.has(match[1])) {
+      splitKeys.add(entry.name);
+    }
+  }
+  splitKeys.delete(canonicalKey);
+
+  const canonical = await readHistoryCandidate(
+    projectsRoot,
+    canonicalProjectRoot,
+    canonicalRoot
+  );
+  const splits: ProjectHistoryCandidate[] = [];
+  for (const key of splitKeys) {
+    const candidate = await readHistoryCandidate(
+      projectsRoot,
+      path.join(projectsRoot, key),
+      canonicalRoot
+    );
+    if (candidate) {
+      splits.push(candidate);
+    }
+  }
+  splits.sort(
+    (a, b) =>
+      compareRecency(b, a) ||
+      b.metadata.lastOpenedAt.localeCompare(a.metadata.lastOpenedAt)
+  );
+
+  let keep = canonical;
+  for (const split of splits) {
+    if (!keep || compareRecency(split, keep) > 0) {
+      keep = split;
+    }
+  }
+
+  return {
+    canonicalRoot,
+    canonicalProjectRoot,
+    ...(canonical ? { canonical } : {}),
+    splits,
+    ...(keep ? { keep } : {}),
+  };
+}
+
+/** Positive when `a` should be kept over `b`. */
+function compareRecency(
+  a: ProjectHistoryCandidate,
+  b: ProjectHistoryCandidate
+): number {
+  if (a.hasContent !== b.hasContent) {
+    return a.hasContent ? 1 : -1;
+  }
+  return (a.latestRunAt ?? -Infinity) - (b.latestRunAt ?? -Infinity);
+}
+
+async function readHistoryCandidate(
+  projectsRoot: string,
+  projectRoot: string,
+  canonicalRoot: string
+): Promise<ProjectHistoryCandidate | undefined> {
+  try {
+    await assertContainedByRealRoot(projectsRoot, projectRoot);
+    const stats = await lstatIfExists(projectRoot);
+    if (!stats || stats.isSymbolicLink() || !stats.isDirectory()) {
+      return undefined;
+    }
+    const metadata = await readProjectStateMetadata(projectRoot);
+    if (!metadata || !statePathBelongsTo(metadata.statePath, canonicalRoot)) {
+      return undefined;
+    }
+    const latestRunAt = await latestProjectRunTimestamp(projectRoot);
+    return {
+      projectRoot,
+      metadata,
+      ...(latestRunAt !== undefined ? { latestRunAt } : {}),
+      hasContent: !(await isEmptyProjectScaffold(projectRoot)),
+    };
+  } catch {
+    // An unreadable or newer-version directory is not adopted or replaced.
+    return undefined;
+  }
+}
+
+/** Canonical roots whose leftover split directories were already reported. */
+const reportedSplitRoots = new Set<string>();
+
+/**
+ * Move history that ctrlyoke 0.2.0 filed under a symlinked spelling's key to
+ * the canonical key, so every spelling of the project sees it. When both keys
+ * hold history, the one with the most recent run is kept at the canonical key
+ * and the other stays under the old key, untouched. Best effort: a live runner
+ * in either directory, or any filesystem failure, leaves everything in place
+ * to be retried on the next startup.
+ */
+async function adoptSplitProjectHistory(
+  projectsRoot: string,
+  stateRoot: string
+): Promise<void> {
+  try {
+    const lookup = await findProjectHistory(projectsRoot, stateRoot);
+    const { keep, canonical, canonicalProjectRoot, canonicalRoot } = lookup;
+    if (!keep || keep === canonical) {
+      if (
+        canonical?.hasContent &&
+        lookup.splits.some((split) => split.hasContent) &&
+        !reportedSplitRoots.has(canonicalRoot)
+      ) {
+        reportedSplitRoots.add(canonicalRoot);
+        console.warn(
+          `[ProjectStateRegistry] Older history for "${canonicalRoot}" stays under ${lookup.splits
+            .filter((split) => split.hasContent)
+            .map((split) => split.projectRoot)
+            .join(", ")}; ${canonicalProjectRoot} has the more recent run.`
+        );
+      }
+      return;
+    }
+
+    if (!canonical && (await lstatIfExists(canonicalProjectRoot))) {
+      // Not this project's directory (or unreadable): never displace it.
+      return;
+    }
+
+    for (const projectRoot of [keep.projectRoot, canonicalProjectRoot]) {
+      const runner = await inspectProjectRunner(projectRoot).catch(() => ({
+        status: PROJECT_RUNNER_STATUSES.UNKNOWN,
+      }));
+      if (runner.status !== PROJECT_RUNNER_STATUSES.NONE) {
+        console.warn(
+          `[ProjectStateRegistry] Not moving history for "${canonicalRoot}" from ${keep.projectRoot}: runner state in ${projectRoot} is ${runner.status}.`
+        );
+        return;
+      }
+    }
+
+    await moveProjectHistory(projectsRoot, keep, canonicalProjectRoot);
+    await writeProjectStateMetadata(projectsRoot, canonicalProjectRoot, {
+      ...keep.metadata,
+      statePath: canonicalRoot,
+    });
+    console.warn(
+      `[ProjectStateRegistry] Moved history for "${canonicalRoot}" from ${keep.projectRoot} to ${canonicalProjectRoot}.`
+    );
+  } catch (error) {
+    console.warn(
+      `[ProjectStateRegistry] Could not move split history for "${stateRoot}": ${getErrorMessage(error)}`
+    );
+  }
+}
+
+/**
+ * Put `keep` at `destination`. A bare scaffold there is replaced; a directory
+ * with content swaps places with `keep`, so it survives under keep's old key.
+ */
+async function moveProjectHistory(
+  projectsRoot: string,
+  keep: ProjectHistoryCandidate,
+  destination: string
+): Promise<void> {
+  for (const projectRoot of [keep.projectRoot, destination]) {
+    await assertContainedByRealRoot(projectsRoot, projectRoot);
+    await rejectSymlinkProjectDirectory(projectRoot);
+  }
+
+  const destinationStats = await lstatIfExists(destination);
+  if (!destinationStats) {
+    await renameWithTransientRetry(keep.projectRoot, destination);
+    return;
+  }
+  if (!destinationStats.isDirectory()) {
+    throw new Error(`Project state path is not a directory: ${destination}`);
+  }
+
+  const parked = `${destination}.adopt-${process.pid}-${Date.now()}`;
+  await assertContainedByRealRoot(projectsRoot, parked);
+  const replaceScaffold = await isEmptyProjectScaffold(destination);
+  await renameWithTransientRetry(destination, parked);
+  try {
+    await renameWithTransientRetry(keep.projectRoot, destination);
+  } catch (error) {
+    await renameWithTransientRetry(parked, destination).catch(() => undefined);
+    throw error;
+  }
+  if (replaceScaffold) {
+    await fs.rm(parked, { recursive: true, force: true });
+  } else {
+    await renameWithTransientRetry(parked, keep.projectRoot);
+  }
+}
+
 /** Return a warning when the private state home is inside a repository/state root. */
 export function getStateHomeWarning(
   stateHome: string,
@@ -293,7 +565,7 @@ async function readOrCreateMetadata(
     }
   }
 
-  if (existing && !pathsEqual(path.resolve(existing.statePath), stateRoot)) {
+  if (existing && !statePathBelongsTo(existing.statePath, stateRoot)) {
     throw new Error(
       `Project state collision: ${projectRoot} belongs to "${existing.statePath}", not "${stateRoot}".`
     );
@@ -302,7 +574,9 @@ async function readOrCreateMetadata(
   const now = new Date().toISOString();
   return {
     schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.PROJECT_METADATA],
-    statePath: existing?.statePath ?? stateRoot,
+    // Always the canonical spelling: a record written by 0.2.0 may hold the
+    // symlinked spelling the project was first opened under.
+    statePath: stateRoot,
     ...(gitToplevel !== undefined
       ? { gitToplevel: path.resolve(gitToplevel) }
       : existing?.gitToplevel !== undefined
@@ -431,19 +705,6 @@ async function assertContainedByRealRoot(
     throw new Error(
       `Project state path escapes the projects root: ${resolvedCandidate}`
     );
-  }
-}
-
-async function lstatIfExists(
-  filePath: string
-): Promise<import("node:fs").Stats | undefined> {
-  try {
-    return await fs.lstat(filePath);
-  } catch (error) {
-    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
-      return undefined;
-    }
-    throw error;
   }
 }
 

@@ -634,6 +634,11 @@ replaced automatically. Relinking operates on the user project tree even when
 `storage.runHistoryLocation` is currently `workspace`; changing that setting
 does not migrate history.
 
+Either path may be typed through a symlink. History is keyed by the project's
+real path, with symlinks resolved, so the command prints a note when a path you
+typed resolves somewhere else, and the relinked history is found however you
+open the new location.
+
 ## `ctrlyoke history list`
 
 List workflow lineages in the current workspace and discover the keys needed by

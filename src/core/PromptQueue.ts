@@ -109,6 +109,8 @@ import {
   hasInFlightStep as isStepInFlight,
   hasStarted,
   getResumableTerminalFailureIndex,
+  getResumableTerminalFailedGroup,
+  isGroupMemberRetried,
   getProtectedTerminalFailureIndex,
   terminalFailureMutationMessage,
 } from "../utils/StepStatusDerivation";
@@ -948,8 +950,40 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     return this.state.currentIndex < this.state.steps.length;
   }
 
-  /** Rewind a settled ERROR run to the terminal queue failure for continuation. */
+  /**
+   * Rewind a settled ERROR run to its terminal queue failure for continuation.
+   * A failed parallel group rewinds to the group's start and resets every
+   * member that did not succeed; the members that did keep their settlement,
+   * so the executor re-enters the group and dispatches only the reset ones.
+   */
   public async rewindTerminalFailureForContinuation(): Promise<boolean> {
+    const failedGroup = getResumableTerminalFailedGroup({
+      executionState: this.stateMachine.status,
+      currentIndex: this.state.currentIndex,
+      steps: this.state.steps,
+      parallelGroups: this.state.parallelGroups,
+    });
+    if (failedGroup) {
+      const retried: number[] = [];
+      for (
+        let index = failedGroup.startIndex;
+        index <= failedGroup.endIndex;
+        index += 1
+      ) {
+        if (isGroupMemberRetried(this.state.steps[index])) {
+          retried.push(index);
+        }
+      }
+      if (!retried.every((index) => this.state.results[index])) return false;
+      this.state.currentIndex = failedGroup.startIndex;
+      for (const index of retried) {
+        this.resetStepForRetry(index);
+      }
+      this.emitStateChange();
+      await this.updateWorkingFile();
+      return true;
+    }
+
     const failedIndex = getResumableTerminalFailureIndex({
       executionState: this.stateMachine.status,
       currentIndex: this.state.currentIndex,
@@ -959,18 +993,36 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     if (failedIndex === undefined) {
       return false;
     }
-    const result = this.state.results[failedIndex];
-    const runtime = this.state.steps[failedIndex]?._runtime;
-    if (!result || !runtime) return false;
+    if (
+      !this.state.results[failedIndex] ||
+      !this.state.steps[failedIndex]?._runtime
+    ) {
+      return false;
+    }
 
     this.state.currentIndex = failedIndex;
-    this.state.completedIndices.delete(String(failedIndex));
-    result.status = STEP_STATUS.PENDING;
-    result.timestamp = new Date();
-    delete result.error;
-    delete result.failureKind;
-    const step = this.state.steps[failedIndex];
+    this.resetStepForRetry(failedIndex);
+    this.emitStateChange();
+    await this.updateWorkingFile();
+    return true;
+  }
+
+  /**
+   * Return one settled step to pending for a retry, keeping its identity and
+   * attempt history. Its next dispatch records a new attempt.
+   */
+  private resetStepForRetry(index: number): void {
+    this.state.completedIndices.delete(String(index));
+    const result = this.state.results[index];
+    if (result) {
+      result.status = STEP_STATUS.PENDING;
+      result.timestamp = new Date();
+      delete result.error;
+      delete result.failureKind;
+    }
+    const step = this.state.steps[index];
     if (step?._runtime) {
+      const hadFailure = step._runtime.terminalStatus === STEP_STATUS.FAILED;
       const {
         startedAt: _startedAt,
         completedAt: _completedAt,
@@ -981,11 +1033,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         ...remainingRuntime
       } = step._runtime;
       step._runtime = remainingRuntime;
-      step._runtime.rewoundFailure = true;
+      if (hadFailure) {
+        step._runtime.rewoundFailure = true;
+      }
     }
-    this.emitStateChange();
-    await this.updateWorkingFile();
-    return true;
   }
 
   private getResumableTerminalFailureIndex(): number | undefined {

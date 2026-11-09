@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-08 by bug-hunt final step (claude-cli)
 - **Area:** `src/utils/ProjectStatePaths.ts` (`projectKey`), `src/utils/ProjectStateLifecycle.ts` (`relinkUserProject`), `src/cli/CliWorkspaceBootstrap.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit — keys are derived from the real path (option 1) with split history adopted on startup, and relink canonicalizes both paths
 
 ## Symptom
 

@@ -96,6 +96,7 @@ export default [
       "src/mcp-server.ts",
       "src/config/**/*.{ts,tsx}",
       "src/core/orchestration/WorkflowLineageRepository.ts",
+      "src/utils/ProjectStateRegistry.ts",
       "src/utils/FileLockUtils.ts",
       "src/utils/FileReferenceParser.ts",
       "src/utils/Log.ts",

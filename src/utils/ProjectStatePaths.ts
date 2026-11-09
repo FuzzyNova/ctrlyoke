@@ -1,7 +1,10 @@
+import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { getErrnoCode } from "./ErrorUtils";
 import { hashPathForCompare, pathsEqual } from "./PathCasing";
 import type { RunHistoryLocation } from "../types/CtrlYokeSettings";
+import { NODE_ERROR_CODES } from "../types/DashboardConstants";
 
 const CTRLYOKE_DIR = ".ctrlyoke";
 const PROJECTS_DIR = "projects";
@@ -33,9 +36,41 @@ const PROJECT_KEY_CACHE_LIMIT = 64;
 const projectKeyCache = new Map<string, string>();
 
 /**
- * Build the stable, readable directory key for a resolved ctrlyoke state root.
- * The hash is based on PathCasing's platform-aware comparison form so Windows
- * drive-letter and path casing differences do not create separate projects.
+ * The one spelling of a state root that project identity is derived from: the
+ * real path, with symlinks, junctions and substituted drives resolved, so a
+ * repository reached through `/tmp` and `/private/tmp` (or through a symlinked
+ * `~/dev`) is one project. A path that does not exist (a renamed repository
+ * named in `history relink`) resolves its nearest existing ancestor and keeps
+ * the missing tail as typed. Any other failure falls back to `path.resolve`.
+ */
+export function canonicalStatePath(stateRoot: string): string {
+  const resolved = path.resolve(stateRoot);
+  const missingTail: string[] = [];
+  let existing = resolved;
+  for (;;) {
+    try {
+      return path.join(fs.realpathSync.native(existing), ...missingTail);
+    } catch (error) {
+      const code = getErrnoCode(error);
+      const parent = path.dirname(existing);
+      if (
+        (code !== NODE_ERROR_CODES.ENOENT &&
+          code !== NODE_ERROR_CODES.ENOTDIR) ||
+        parent === existing
+      ) {
+        return resolved;
+      }
+      missingTail.unshift(path.basename(existing));
+      existing = parent;
+    }
+  }
+}
+
+/**
+ * Build the stable, readable directory key for a ctrlyoke state root. The key
+ * is derived from {@link canonicalStatePath}, and the hash from PathCasing's
+ * platform-aware comparison form, so neither symlinked spellings nor Windows
+ * drive-letter and path casing create separate projects.
  */
 export function projectKey(stateRoot: string): string {
   const resolvedStateRoot = path.resolve(stateRoot);
@@ -44,14 +79,33 @@ export function projectKey(stateRoot: string): string {
     return cached;
   }
 
-  const slug = sanitizeProjectSlug(path.basename(resolvedStateRoot));
-  const hash = hashPathForCompare(resolvedStateRoot).slice(0, HASH_LENGTH);
-  const key = `${slug}-${hash}`;
+  const key = projectKeyForSpelling(canonicalStatePath(resolvedStateRoot));
   if (projectKeyCache.size >= PROJECT_KEY_CACHE_LIMIT) {
     projectKeyCache.clear();
   }
   projectKeyCache.set(resolvedStateRoot, key);
   return key;
+}
+
+/**
+ * The key ctrlyoke 0.2.0 derived from the path exactly as spelled, before keys
+ * were canonicalized. Only the registry's migration of split history and
+ * `history relink`'s source lookup may use it; everything else uses
+ * {@link projectKey}.
+ */
+export function legacyProjectKey(stateRoot: string): string {
+  return projectKeyForSpelling(path.resolve(stateRoot));
+}
+
+/** The readable slug a project key starts with, for finding a project's keys. */
+export function projectKeySlug(stateRoot: string): string {
+  return sanitizeProjectSlug(path.basename(path.resolve(stateRoot)));
+}
+
+function projectKeyForSpelling(resolvedStateRoot: string): string {
+  const slug = projectKeySlug(resolvedStateRoot);
+  const hash = hashPathForCompare(resolvedStateRoot).slice(0, HASH_LENGTH);
+  return `${slug}-${hash}`;
 }
 
 /** Resolve the root directory for a project's selected run-history location. */

@@ -35,6 +35,12 @@ failure; `false` allows independent members to finish. `queue.maxParallelSteps`
 sets the global width for every group, and setting it to `1` deliberately makes a
 group sequential.
 
+When a member's failure stops the workflow, **Resume** (or `ctrlyoke continue`)
+runs the group again: every member that failed, was cancelled, or never
+finished runs as a new attempt, and the members that already succeeded keep
+their results and are not run again. The rest of the queue follows once the
+group settles.
+
 ## Shared workspace
 
 Group members are intended for independent work. They share the workflow's one

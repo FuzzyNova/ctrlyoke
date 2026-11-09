@@ -83,6 +83,58 @@ export function getResumableTerminalFailureIndex(state: {
     : undefined;
 }
 
+/** The bounds of a parallel group, as far as failure recovery reads them. */
+export interface ParallelGroupBounds {
+  startIndex: number;
+  endIndex: number;
+}
+
+/**
+ * The parallel group whose terminal member failure ended a settled ERROR run.
+ * A group's join moves the head past the whole group, so the step just before
+ * the head can be a member that succeeded; continuation must go back to the
+ * group's start rather than to that one step.
+ */
+export function getResumableTerminalFailedGroup<
+  G extends ParallelGroupBounds,
+>(state: {
+  executionState: string | undefined;
+  currentIndex: number | undefined;
+  steps: readonly StepWithRuntimeStatus[];
+  parallelGroups: readonly G[] | undefined;
+}): G | undefined {
+  if (state.executionState !== EXECUTION_STATES.ERROR) return undefined;
+  const lastIndex = (state.currentIndex ?? 0) - 1;
+  const group = state.parallelGroups?.find(
+    (candidate) => candidate.endIndex === lastIndex
+  );
+  if (!group) return undefined;
+  const failed = state.steps
+    .slice(group.startIndex, group.endIndex + 1)
+    .some(
+      (step) =>
+        step?._runtime?.terminalStatus === STEP_STATUS.FAILED &&
+        step._runtime.terminalFailure !== false
+    );
+  return failed ? group : undefined;
+}
+
+/**
+ * Whether a member runs again when its failed group is retried: every member
+ * that did not succeed (failed, cancelled when a sibling stopped the run, or
+ * never settled). Completed, skipped and no-turn members stay settled.
+ */
+export function isGroupMemberRetried(
+  step: StepWithRuntimeStatus | undefined
+): boolean {
+  const status = step?._runtime?.terminalStatus;
+  return (
+    step?._runtime?.completedAt === undefined ||
+    status === STEP_STATUS.FAILED ||
+    status === STEP_STATUS.CANCELLED
+  );
+}
+
 export function terminalFailureMutationMessage(
   action: "remove" | "reorder"
 ): string {

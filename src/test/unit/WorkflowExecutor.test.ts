@@ -2399,6 +2399,72 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
   });
 
+  test("continuing after a failed group retries only the members that did not succeed", async () => {
+    const queue = new PromptQueue();
+    let failing = true;
+    const integrations = new Map<number, MockHarnessIntegration>();
+    for (let stepIndex = 0; stepIndex < 4; stepIndex += 1) {
+      const integration = new MockHarnessIntegration(undefined, false);
+      integration.onSend = async () => {
+        if (stepIndex === 1 && failing) {
+          (integration as any).lastFailureReason = "member failed";
+          return { success: false };
+        }
+        return { responseText: `ok-${stepIndex}` };
+      };
+      integrations.set(stepIndex, integration);
+    }
+    queue.loadPrompts({
+      steps: [
+        { prompt: "succeeds" },
+        { prompt: "fails" },
+        { prompt: "also-succeeds" },
+        { prompt: "after" },
+      ],
+      parallelGroups: [
+        { id: "retry", startIndex: 0, endIndex: 2, failFast: false },
+      ],
+    });
+    const context = makeParallelContext(integrations);
+
+    await makeExecutor(queue).execute(integrations.get(0)!, context);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.ERROR);
+    // The join moved the head past the whole group, so the step before it
+    // is a member that succeeded.
+    assert.strictEqual(queue.getState().currentIndex, 3);
+
+    failing = false;
+    assert.strictEqual(
+      await queue.rewindTerminalFailureForContinuation(),
+      true
+    );
+    assert.strictEqual(queue.getState().currentIndex, 0);
+    assert.deepStrictEqual(
+      queue.getState().results.map((result) => result.status),
+      [
+        STEP_STATUS.COMPLETED,
+        STEP_STATUS.PENDING,
+        STEP_STATUS.COMPLETED,
+        STEP_STATUS.PENDING,
+      ]
+    );
+
+    await makeExecutor(queue).execute(integrations.get(0)!, context);
+
+    assert.deepStrictEqual(integrations.get(0)?.sentPrompts, ["succeeds"]);
+    assert.deepStrictEqual(integrations.get(1)?.sentPrompts, [
+      "fails",
+      "fails",
+    ]);
+    assert.deepStrictEqual(integrations.get(2)?.sentPrompts, ["also-succeeds"]);
+    assert.deepStrictEqual(integrations.get(3)?.sentPrompts, ["after"]);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+    assert.deepStrictEqual(
+      queue.getState().results.map((result) => result.status),
+      Array(4).fill(STEP_STATUS.COMPLETED)
+    );
+  });
+
   test("pauses at the group join and resumes only unfinished members", async () => {
     const queue = new PromptQueue();
     const integrations = new Map<number, MockHarnessIntegration>();
