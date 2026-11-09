@@ -66,7 +66,8 @@ uses its built-in list instead.
 Set `model` on the workflow or on a step. Without one, ctrlyoke uses
 [`defaults.models["copilot-cli"]`](/reference/settings#defaults-models), which is
 `claude-sonnet-4.6` out of the box. A model that isn't on the list is replaced by that default,
-with a warning in the log.
+with a warning in the log; if the default is `none`, no `--model` flag is passed. The `ctrlyoke`
+CLI doesn't look the list up, so it passes the model to Copilot as you wrote it.
 
 `model: none` passes no `--model` flag, so Copilot uses its own default model. `copilot help
 config` sometimes lags behind the models Copilot accepts; to use one it doesn't list yet, set

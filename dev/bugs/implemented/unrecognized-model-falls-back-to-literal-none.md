@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by deferred code-smell review, claude-cli
 - **Area:** `src/core/harness/{claude,copilot,codex}/*CliProvider.ts` (`validateAndGetModel`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

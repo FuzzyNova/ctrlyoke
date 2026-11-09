@@ -151,7 +151,9 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   Landed so far: the MCP location fix; the paged git hooks' expiry recovery; and the
   completion triggers, now decided once in `findPromptTriggerContext`
   (`src/completions/PromptTriggerContext.ts`), which both editors call. That last one
-  removes the completion-trigger entry from Deferred.
+  removes the completion-trigger entry from Deferred. Then the model fallback
+  (`resolveCliModelFlag`), which shrinks the `validateAndGetModel` entry to its one open
+  product question.
 
 ## Deferred
 
@@ -176,19 +178,15 @@ still deferred.
   - **Decided, small fix.** OpenCode renders every paragraph after the first as a
     preview block (`OpenCodeEventMapper.ts:540-575`); switch it to Qwen's ASCII-art
     check.
-- `validateAndGetModel` in five `*CliProvider.ts` files: same skeleton, but the "none"
-  sentinel, registry-not-loaded handling and validation strictness differ per harness on
-  purpose or by accident.
-  _2026-11-09: **Decided.**_
-  - **Deliberate.** Antigravity, Qwen and OpenCode pass models through on purpose; each
-    harness's model-selection docs page says so. Copilot and Codex being strict is also
-    documented.
-  - **Accidental.** Claude lacks the unloaded-registry pass-through. The fallback can
-    return the literal `none`.
-  - **Fix.** A shared `resolveCliModel` helper that takes per-harness configuration;
-    see `dev/bugs/backlog/unrecognized-model-falls-back-to-literal-none.md`.
-  - **Still open, a product question.** Claude's substring matching turns any
-    `*sonnet*`/`*opus*` ID (for example Bedrock IDs) into the bare alias.
+- Claude's model-name matching (`getClaudeModelName` in `src/utils/ModelConstants.ts`)
+  turns any ID containing `sonnet`/`opus`/`fable`/`haiku` (for example a Bedrock
+  `us.anthropic.claude-sonnet-…` ID) into the bare alias with no warning, losing the
+  pinned version. _2026-11-09: a product question, still open._ The rest of this entry
+  (the drifted `validateAndGetModel` copies) landed: Claude, Copilot and Codex now share
+  `resolveCliModelFlag` (`src/core/harness/shared/CliModelSelection.ts`), and a `none`
+  default never becomes `--model none`. Antigravity, Qwen and OpenCode keep their own
+  rules on purpose: their CLIs validate models themselves, as each harness's docs page
+  says.
 - Run-history/project-state bootstrap in `src/cli.ts` (`runCommand`),
   `src/mcp-server.ts` (`initializeMcpStorage`), `src/extension.ts` and
   `src/cli/CliWorkspaceBootstrap.ts`: drifted. MCP reads the location from

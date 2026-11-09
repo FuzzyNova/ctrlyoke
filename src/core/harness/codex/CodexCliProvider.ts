@@ -34,11 +34,8 @@ import {
   type CodexInlineHooksArgs,
 } from "./CodexInlineHooksBuilder";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
-import { MODEL_NONE } from "../../../utils/ModelConstants";
-import {
-  isKnownCodexModel,
-  isRegistryInitialized,
-} from "../../../utils/ModelRegistry";
+import { isKnownCodexModel } from "../../../utils/ModelRegistry";
+import { resolveCliModelFlag } from "../shared/CliModelSelection";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { moveGreedyOptionArgsAfterPrompt } from "../shared/CliArgumentUtils";
@@ -799,37 +796,14 @@ export class CodexCliProvider implements ICliProvider {
     return section;
   }
 
-  /**
-   * Validate model is supported by Codex CLI, fallback to default if not
-   */
+  /** The `--model` value for a step, or `undefined` for no flag. */
   private validateAndGetModel(requestedModel?: string): string | undefined {
-    const defaultModel = ConfigurationUtils.getCodexCliModel();
-
-    if (!requestedModel) {
-      return defaultModel;
-    }
-
-    if (requestedModel === MODEL_NONE) {
-      return undefined;
-    }
-
-    // Discovered models (hidden ones included), or the static list
-    if (isKnownCodexModel(requestedModel)) {
-      return requestedModel;
-    }
-
-    // Planning must stay side-effect free, so the standalone CLI never runs
-    // discovery. Without it, trust the requested model the way Copilot does
-    // rather than swapping in the default for a model we never asked about.
-    if (!isRegistryInitialized()) {
-      return requestedModel;
-    }
-
-    // Model not supported - warn user and fallback
-    const message = `Model "${requestedModel}" not supported by Codex CLI. Using default: ${defaultModel}`;
-    Log.warn(`[CodexCliProvider] ${message}`);
-
-    return defaultModel;
+    return resolveCliModelFlag(requestedModel, {
+      logLabel: "CodexCliProvider",
+      defaultModel: ConfigurationUtils.getCodexCliModel(),
+      // Discovered models (hidden ones included), or the static list.
+      recognize: (model) => (isKnownCodexModel(model) ? model : undefined),
+    });
   }
 
   /**

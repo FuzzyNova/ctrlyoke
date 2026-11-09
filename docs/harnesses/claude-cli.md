@@ -79,8 +79,9 @@ Set `model` on the workflow or on a step. Without one, ctrlyoke uses
 the box. A full model ID such as `claude-opus-4-6` is passed to Claude Code as written. A
 Copilot-style ID such as `claude-sonnet-4.6` is mapped to the alias for its family (`sonnet`), and
 so is the old `sonnet[1m]` or `opus[1m]`: Sonnet and Opus now always run with a 1M context. Any
-other value is replaced by your default, with a warning in the log. Keep model overrides
-harness-specific.
+other value is replaced by your default, with a warning in the log; if the default is `none`, no
+`--model` flag is passed. The `ctrlyoke` CLI doesn't look the model list up, so it passes any other
+value to Claude Code as you wrote it. Keep model overrides harness-specific.
 
 `model: none` passes no `--model` flag, so Claude Code uses its own default model. See
 [How step properties inherit](/workflows/yaml-format#property-inheritance).

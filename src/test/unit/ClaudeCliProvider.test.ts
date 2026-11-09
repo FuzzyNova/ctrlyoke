@@ -300,4 +300,42 @@ suite("ClaudeCliProvider", () => {
       "node user-statusline.js"
     );
   });
+
+  suite("with a None default model", () => {
+    const modelArgs = async (model: string) => {
+      configService.setUserBackend(
+        makeBackend({ defaults: { models: { "claude-cli": "none" } } })
+      );
+      const preparation = await new ClaudeCliProvider().planCliArgs(
+        { prompt: "hello" } as PromptStep,
+        false,
+        process.cwd(),
+        process.cwd(),
+        undefined,
+        {
+          promptIndex: 0,
+          allPrompts: [],
+          resolvedProperties: { ...createProperties([]), model },
+        }
+      );
+      const index = preparation.cliArgs.indexOf("--model");
+      return index === -1 ? [] : preparation.cliArgs.slice(index, index + 2);
+    };
+
+    test("passes no --model when the step names no model", async () => {
+      assert.deepStrictEqual(await modelArgs(""), []);
+    });
+
+    test("never falls back to a literal --model none", async () => {
+      // Unrecognised: with the model list loaded this falls back to the None
+      // default (no flag); before it loads, the model passes through unchecked.
+      const args = await modelArgs("not-a-claude-model");
+      assert.notDeepStrictEqual(args, ["--model", "none"]);
+      assert.ok(
+        args.length === 0 ||
+          (args[0] === "--model" && args[1] === "not-a-claude-model"),
+        `unexpected model args: ${JSON.stringify(args)}`
+      );
+    });
+  });
 });

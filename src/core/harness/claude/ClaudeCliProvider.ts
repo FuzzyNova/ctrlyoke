@@ -25,7 +25,8 @@ import {
   ConfigurationUtils,
   PATH_CONSTANTS,
 } from "../../../utils/ConfigurationUtils";
-import { getClaudeModelName, MODEL_NONE } from "../../../utils/ModelConstants";
+import { getClaudeModelName } from "../../../utils/ModelConstants";
+import { resolveCliModelFlag } from "../shared/CliModelSelection";
 import { isKnownClaudeModel } from "../../../utils/ModelRegistry";
 import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
@@ -478,42 +479,18 @@ export class ClaudeCliProvider implements ICliProvider {
     return this.statusLineSidecar;
   }
 
-  /**
-   * Validate model is supported by Claude CLI, fallback to default if not
-   */
+  /** The `--model` value for a step, or `undefined` for no flag. */
   private validateAndGetModel(requestedModel?: string): string | undefined {
-    const defaultModel = ConfigurationUtils.getClaudeCliModel();
-
-    if (!requestedModel) {
-      // Return full model name for default
-      const fullName = getClaudeModelName(defaultModel);
-      return fullName || defaultModel;
-    }
-
-    if (requestedModel === MODEL_NONE) {
-      return undefined;
-    }
-
-    // Anything Claude Code itself listed (a new alias, a pinned version)
-    if (isKnownClaudeModel(requestedModel)) {
-      return requestedModel;
-    }
-
-    // Static aliases, pinned IDs, and Copilot-style names mapped to aliases
-    const fullModelName = getClaudeModelName(requestedModel);
-    if (fullModelName) {
-      return fullModelName;
-    }
-
-    // Model not recognized - warn user and fallback
-    const supportedFormats =
-      "aliases (sonnet, opus, haiku), full model IDs (claude-opus-4-6), or Copilot-style names (claude-sonnet-4.5)";
-    const message = `Model "${requestedModel}" not recognized for Claude CLI. Using default: ${defaultModel}`;
-    Log.warn(`[ClaudeCliProvider] ${message}`);
-    Log.warn(`[ClaudeCliProvider]    Accepted formats: ${supportedFormats}`);
-
-    const defaultFullName = getClaudeModelName(defaultModel);
-    return defaultFullName || defaultModel;
+    return resolveCliModelFlag(requestedModel, {
+      logLabel: "ClaudeCliProvider",
+      defaultModel: ConfigurationUtils.getClaudeCliModel(),
+      // Anything Claude Code itself listed (a new alias, a pinned version),
+      // then static aliases, pinned IDs and Copilot-style names.
+      recognize: (model) =>
+        isKnownClaudeModel(model) ? model : getClaudeModelName(model),
+      acceptedFormats:
+        "aliases (sonnet, opus, haiku), full model IDs (claude-opus-4-6), or Copilot-style names (claude-sonnet-4.5)",
+    });
   }
 
   /**

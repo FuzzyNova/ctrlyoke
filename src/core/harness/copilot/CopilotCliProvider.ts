@@ -33,11 +33,8 @@ import {
   ConfigurationUtils,
   PATH_CONSTANTS,
 } from "../../../utils/ConfigurationUtils";
-import {
-  isCliModelSupported,
-  isRegistryInitialized,
-} from "../../../utils/ModelRegistry";
-import { MODEL_NONE } from "../../../utils/ModelConstants";
+import { isCliModelSupported } from "../../../utils/ModelRegistry";
+import { resolveCliModelFlag } from "../shared/CliModelSelection";
 import { Log } from "../../../utils/Log";
 import { repoToplevel } from "../../../utils/GitUtils";
 import { isPathWithinDirectory } from "../../../utils/PathSecurity";
@@ -450,7 +447,7 @@ export class CopilotCliProvider implements ICliProvider {
     }
 
     // Model selection with validation - use resolved property if available
-    const model = await this.validateAndGetModel(resolvedModel);
+    const model = this.validateAndGetModel(resolvedModel);
     if (model) {
       args.push("--model", model);
     }
@@ -515,39 +512,13 @@ export class CopilotCliProvider implements ICliProvider {
     };
   }
 
-  /**
-   * Validate model is supported by Copilot CLI, fallback to default if not.
-   * Lazily initializes the model registry if needed (e.g. CLI mode where
-   * initializeModelRegistry() is never called during extension activation).
-   */
-  private async validateAndGetModel(requestedModel?: string): Promise<string> {
-    const defaultModel = ConfigurationUtils.getCopilotCliModel();
-
-    if (!requestedModel) {
-      return defaultModel;
-    }
-
-    if (requestedModel === MODEL_NONE) {
-      return "";
-    }
-
-    // Planning must remain side-effect free. The registry is normally loaded
-    // during extension startup; when it is not, preserve the requested model
-    // rather than spawning a discovery command while assembling a plan.
-    if (!isRegistryInitialized()) {
-      return requestedModel;
-    }
-
-    // Check if model is supported by CLI (using dynamically discovered models)
-    if (isCliModelSupported(requestedModel)) {
-      return requestedModel;
-    }
-
-    // Model not supported - warn user and fallback
-    const message = `Model "${requestedModel}" not supported by Copilot CLI. Using default: ${defaultModel}`;
-    Log.warn(`[CopilotCliProvider] ${message}`);
-
-    return defaultModel;
+  /** The `--model` value for a step, or `undefined` for no flag. */
+  private validateAndGetModel(requestedModel?: string): string | undefined {
+    return resolveCliModelFlag(requestedModel, {
+      logLabel: "CopilotCliProvider",
+      defaultModel: ConfigurationUtils.getCopilotCliModel(),
+      recognize: (model) => (isCliModelSupported(model) ? model : undefined),
+    });
   }
 
   /**
