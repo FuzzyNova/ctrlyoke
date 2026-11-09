@@ -82,6 +82,7 @@ import {
 import { RunContinuationService } from "./orchestration/RunContinuationService";
 import { TimelineRecorder } from "./orchestration/TimelineRecorder";
 import {
+  getTerminalFailureRetry,
   reorderMovesProtectedFailure,
   terminalFailureMutationMessage,
 } from "../utils/StepStatusDerivation";
@@ -90,6 +91,7 @@ import {
   findStepById,
   resetStepRuntimeForRewind,
 } from "./StepIdentity";
+import { assertUndoRedoPreservesExecutedSteps } from "./UndoRedoStepGuard";
 import {
   assertWritableSchema,
   isNewerSchemaError,
@@ -2217,6 +2219,17 @@ export class WorkingFileManager {
           steps: newSteps,
           parallelGroups: parallelGroups ?? existingTopology.parallelGroups,
         });
+        const failureRetry = getTerminalFailureRetry({
+          executionState: source._runtime?.executionState,
+          currentIndex: source._runtime?.currentIndex,
+          steps: existingTopology.steps,
+          parallelGroups: existingTopology.parallelGroups,
+        });
+        assertUndoRedoPreservesExecutedSteps(
+          existingTopology.steps,
+          incomingTopology.steps,
+          new Set(failureRetry?.resetIndices ?? [])
+        );
         const identifiedSteps = ensureStepIds(
           incomingTopology.steps,
           existingTopology.steps

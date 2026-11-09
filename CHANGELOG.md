@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Dashboard undo and redo now preserve executed steps after a run stops.
+
 ### Changed
 
 - Step headers in the output pane are now always one line, shortening a long step name or model name with `…` (hover the title for the full text); a narrow pane shows the harness and model only in that tooltip. A pinned step header shows one prompt line instead of two, so it never takes more than two lines, and its bottom border is thicker.

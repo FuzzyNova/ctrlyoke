@@ -285,11 +285,11 @@ suite("WorkflowStepHandlers — success-path client echo", () => {
     ]);
   });
 
-  test("handleUndoRedoSync's failure path still forces a full refreshDefinitionMutationView resync", async () => {
+  test("handleUndoRedoSync resyncs the dashboard when an executed-step undo is rejected", async () => {
     const coordinator = new RecordingMutationCoordinator();
     const orchestrator = makeOrchestrator({
       syncStepsForUndoRedo: async () => {
-        throw new Error("Definition revision conflict: expected 3, found 4");
+        throw new Error("Cannot undo or redo a change to a step that has already run");
       },
     });
     const handlers = new WorkflowStepHandlers(

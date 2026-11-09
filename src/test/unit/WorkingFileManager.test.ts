@@ -2431,7 +2431,7 @@ suite("WorkingFileManager", () => {
     });
 
     test("syncStepsForUndoRedoAtRun preserves existing runtime for unchanged-position steps", async () => {
-      const { workflowKey, runRef } = await makeIdleRun();
+      const { workflowKey, runRef } = await makeIdleRun(EXECUTION_STATES.COMPLETED, true);
 
       const result = await WorkingFileManager.syncStepsForUndoRedoAtRun(
         workspace,
@@ -2441,12 +2441,31 @@ suite("WorkingFileManager", () => {
         1
       );
 
-      assert.ok(result.workingFile.steps![0]._runtime?.completedAt);
+      assert.ok(result.workingFile.steps![0]._runtime?.stepId);
       assert.strictEqual(
         (result.workingFile.steps![1] as PromptStep).prompt,
         "second (renamed)"
       );
-      assert.ok(result.workingFile.steps![1]._runtime?.completedAt);
+      assert.ok(result.workingFile.steps![1]._runtime?.stepId);
+    });
+
+    test("syncStepsForUndoRedoAtRun rejects changes to stopped executed steps", async () => {
+      const { workflowKey, runRef, runFilePath } = await makeIdleRun();
+      const current = JSON.parse(await fs.readFile(runFilePath, "utf8")) as WorkingFile;
+      const executed = current.steps![0];
+      const pending = current.steps![1];
+      const changed = [
+        { ...executed, prompt: "rewritten" },
+        pending,
+      ];
+      await assert.rejects(
+        () => WorkingFileManager.syncStepsForUndoRedoAtRun(workspace, workflowKey, runRef, changed, current.definitionRevision!),
+        /already run/
+      );
+      await assert.rejects(
+        () => WorkingFileManager.syncStepsForUndoRedoAtRun(workspace, workflowKey, runRef, [pending], current.definitionRevision!),
+        /already run/
+      );
     });
 
     test("syncStepsForUndoRedoAtRun restores runtime by stepId after deleting a middle pending step", async () => {
@@ -2454,16 +2473,12 @@ suite("WorkingFileManager", () => {
       const sourceSteps: PromptStep[] = [
         {
           prompt: "done",
-          _runtime: { sessionId: "session-done", startedAt: 1, completedAt: 2 },
+          _runtime: { stepId: "done" },
         },
         { prompt: "A" },
         {
           prompt: "B",
-          _runtime: {
-            sessionId: "session-b",
-            startedAt: 10,
-            completedAt: 20,
-          },
+          _runtime: { stepId: "step-b" },
         },
       ];
       const draft = new WorkingFileManager(makeMockAccess());
@@ -2531,7 +2546,7 @@ suite("WorkingFileManager", () => {
       );
       assert.strictEqual(
         restored.workingFile.steps![2]._runtime?.sessionId,
-        "session-b"
+        undefined
       );
 
       const inserted = await WorkingFileManager.insertStepAtRun(

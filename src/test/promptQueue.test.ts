@@ -3637,11 +3637,7 @@ suite("PromptQueue State Machine Tests", () => {
           { prompt: "p0" },
           {
             prompt: "p2",
-            _runtime: {
-              sessionId: "s2",
-              startedAt: 300,
-              completedAt: 400,
-            },
+            _runtime: { stepId: "p2-id" },
           },
         ])
       );
@@ -3650,25 +3646,17 @@ suite("PromptQueue State Machine Tests", () => {
         { prompt: "p0" },
         {
           prompt: "p1",
-          _runtime: {
-            sessionId: "s1",
-            startedAt: 100,
-            completedAt: 200,
-          },
+          _runtime: { stepId: "p1-id" },
         } as any,
         {
           prompt: "p2",
-          _runtime: {
-            sessionId: "s2",
-            startedAt: 300,
-            completedAt: 400,
-          },
+          _runtime: { stepId: "p2-id" },
         } as any,
       ]);
 
       const state = queue.getState();
-      assert.strictEqual(state.steps[1]._runtime?.sessionId, "s1");
-      assert.strictEqual(state.steps[2]._runtime?.sessionId, "s2");
+      assert.strictEqual(state.steps[1]._runtime?.stepId, "p1-id");
+      assert.strictEqual(state.steps[2]._runtime?.stepId, "p2-id");
     });
 
     test("refuses to delete a step that ran once the run has stopped", async () => {
@@ -3704,24 +3692,40 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(queue.getState().steps.length, 1);
     });
 
-    test("should restore completed added prompt runtime when redo snapshot lacks it", async () => {
+    test("undo/redo cannot change or remove a stopped executed step", async () => {
+      queue.loadPrompts(createPromptFile([
+        { prompt: "ran-B", _runtime: { stepId: "ran", startedAt: 100, completedAt: 200, terminalStatus: PROMPT_TERMINAL_STATUS.COMPLETED } },
+        { prompt: "pending" },
+      ]));
+      (queue as any).state.currentIndex = 1;
+      const before = queue.getState().steps[0];
+      for (const snapshot of [
+        [{ prompt: "original-A", _runtime: { stepId: "ran" } }, { prompt: "pending" }],
+        [{ prompt: "pending" }],
+      ]) {
+        await assert.rejects(() => queue.syncStepsForUndoRedo(snapshot as any), /already run/);
+        const state = queue.getState();
+        assert.strictEqual((state.steps[0] as PromptStep).prompt, "ran-B");
+        assert.deepStrictEqual(state.steps[0]._runtime, before._runtime);
+        assert.strictEqual(state.currentIndex, 1);
+      }
+      await queue.syncStepsForUndoRedo([
+        { prompt: "ran-B", _runtime: { stepId: "ran" } },
+        { prompt: "pending undone" },
+      ]);
+      assert.strictEqual((queue.getState().steps[1] as PromptStep).prompt, "pending undone");
+    });
+
+    test("should restore pending added prompt identity when redo snapshot lacks it", async () => {
       queue.loadPrompts(
         createPromptFile([
           {
             prompt: "p0",
-            _runtime: {
-              sessionId: "s0",
-              startedAt: 100,
-              completedAt: 200,
-            },
+            _runtime: { stepId: "p0-id" },
           },
           {
             prompt: "added",
-            _runtime: {
-              sessionId: "s-added",
-              startedAt: 300,
-              completedAt: 400,
-            },
+            _runtime: { stepId: "added-id" },
           },
         ])
       );
@@ -3731,33 +3735,22 @@ suite("PromptQueue State Machine Tests", () => {
       await queue.syncStepsForUndoRedo([{ prompt: "p0" }, { prompt: "added" }]);
 
       const state = queue.getState();
-      assert.strictEqual(state.steps[0]._runtime?.sessionId, "s0");
-      assert.strictEqual(state.steps[1]._runtime?.sessionId, "s-added");
-      assert.strictEqual(state.currentIndex, 2);
-      assert.strictEqual(state.results[1].status, STEP_STATUS.COMPLETED);
+      assert.strictEqual(state.steps[0]._runtime?.stepId, "p0-id");
+      assert.strictEqual(state.steps[1]._runtime?.stepId, "added-id");
+      assert.strictEqual(state.currentIndex, 0);
+      assert.strictEqual(state.results[1].status, STEP_STATUS.PENDING);
     });
 
-    test("should merge archived terminal fields and ignore history-only stats when redo snapshot has partial runtime", async () => {
+    test("should restore pending identity without history-only runtime stats", async () => {
       queue.loadPrompts(
         createPromptFile([
           {
             prompt: "p0",
-            _runtime: {
-              sessionId: "s0",
-              startedAt: 100,
-              completedAt: 200,
-            },
+            _runtime: { stepId: "p0-id" },
           },
           {
             prompt: "added",
-            _runtime: {
-              sessionId: "s-added",
-              startedAt: 300,
-              completedAt: 400,
-              elapsed: 8.7,
-              contextWindowUsed: 11424,
-              contextWindowSize: 200000,
-            },
+            _runtime: { stepId: "added-id" },
           },
         ])
       );
@@ -3770,7 +3763,7 @@ suite("PromptQueue State Machine Tests", () => {
           prompt: "added",
           status: STEP_STATUS.COMPLETED,
           _runtime: {
-            sessionId: "s-added",
+            stepId: "added-id",
             elapsed: 9.1,
             contextWindowUsed: 12000,
             contextWindowSize: 200000,
@@ -3779,14 +3772,14 @@ suite("PromptQueue State Machine Tests", () => {
       ]);
 
       const state = queue.getState();
-      assert.strictEqual(state.steps[1]._runtime?.sessionId, "s-added");
-      assert.strictEqual(state.steps[1]._runtime?.startedAt, 300);
-      assert.strictEqual(state.steps[1]._runtime?.completedAt, 400);
+      assert.strictEqual(state.steps[1]._runtime?.stepId, "added-id");
+      assert.strictEqual(state.steps[1]._runtime?.startedAt, undefined);
+      assert.strictEqual(state.steps[1]._runtime?.completedAt, undefined);
       assert.strictEqual(state.steps[1]._runtime?.elapsed, undefined);
       assert.strictEqual(state.steps[1]._runtime?.contextWindowUsed, undefined);
       assert.strictEqual(state.steps[1]._runtime?.contextWindowSize, undefined);
-      assert.strictEqual(state.currentIndex, 2);
-      assert.strictEqual(state.results[1].status, STEP_STATUS.COMPLETED);
+      assert.strictEqual(state.currentIndex, 0);
+      assert.strictEqual(state.results[1].status, STEP_STATUS.PENDING);
     });
   });
 

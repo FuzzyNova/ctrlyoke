@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli subagent review of ~281911d9c)
 - **Area:** `src/core/PromptQueue.ts` (`syncStepsForUndoRedo`), `src/core/WorkingFileManager.ts` (`syncStepsForUndoRedoAtRun`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

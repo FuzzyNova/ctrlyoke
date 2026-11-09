@@ -86,6 +86,7 @@ import type {
   RunDefinitionRejection,
 } from "./WorkingFileManager";
 import { WorkflowStateMachine } from "./WorkflowStateMachine";
+import { assertUndoRedoPreservesExecutedSteps } from "./UndoRedoStepGuard";
 import {
   assertBulkWorkflowStepUpdateAllowed,
   stripStepRuntime,
@@ -3407,6 +3408,19 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     await this.workingFileManager.runInQueue(async () => {
       const nextParallelGroups = parallelGroups ?? this.state.parallelGroups;
       this.assertPendingRewindUndoRedoSuffix(newSteps, nextParallelGroups);
+      if (!this.state.pendingRewind) {
+        const failureRetry = getTerminalFailureRetry({
+          executionState: this.stateMachine.status,
+          currentIndex: this.state.currentIndex,
+          steps: this.state.steps,
+          parallelGroups: this.state.parallelGroups,
+        });
+        assertUndoRedoPreservesExecutedSteps(
+          this.state.steps,
+          newSteps,
+          new Set(failureRetry?.resetIndices ?? [])
+        );
+      }
       let restoredFromArchive = 0;
       const incomingWithRuntime = newSteps.filter(
         (step) => step._runtime
