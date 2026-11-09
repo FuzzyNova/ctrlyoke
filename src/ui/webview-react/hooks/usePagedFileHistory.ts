@@ -410,10 +410,10 @@ export function usePagedFileHistory(
         pendingOffsetsRef.current.add(targetOffset);
         return;
       }
-      const loadedCount = loadedRowCount(
-        current.pages,
-        virtualLengthRef.current
-      );
+      const loadedCount =
+        recoveryTargetRef.current !== null
+          ? virtualLengthRef.current
+          : loadedRowCount(current.pages, virtualLengthRef.current);
       const offset = loadedCount;
       if (targetOffset < loadedCount || targetOffset >= current.totalCount) {
         return;

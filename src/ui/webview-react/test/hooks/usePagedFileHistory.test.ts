@@ -559,6 +559,64 @@ describe("usePagedFileHistory expired listings", () => {
     expect(totalCounts.every((count) => count >= previousTotalCount)).toBe(true);
   });
 
+  it("reloads every page in order when an expired listing has multiple pages", async () => {
+    let initialCalls = 0;
+    let listingBCursor = 0;
+    const fetchPage = vi.fn<PagedFileHistoryFetcher>((request) => {
+      if (!request.historyId) {
+        initialCalls += 1;
+        const historyId = initialCalls === 1 ? HISTORY_A : HISTORY_B;
+        const offset = historyId === HISTORY_B ? listingBCursor : 0;
+        const entries = Array.from(
+          { length: Math.min(3, 10 - offset) },
+          (_, index) => entry(offset + index)
+        );
+        if (historyId === HISTORY_B) listingBCursor += entries.length;
+        return Promise.resolve({
+          ...response(historyId, 0, entries),
+          nextOffset: listingBCursor,
+          hasMore: offset + entries.length < 10,
+        });
+      }
+
+      if (request.historyId === HISTORY_A && request.offset === 6) {
+        return Promise.reject(new HostedHttpError(410, "expired"));
+      }
+
+      const offset =
+        request.historyId === HISTORY_B
+          ? (request.nextOffset ?? 0)
+          : request.offset;
+      const entries = Array.from(
+        { length: Math.min(3, 10 - offset) },
+        (_, index) => entry(offset + index)
+      );
+      if (request.historyId === HISTORY_B) listingBCursor += entries.length;
+      return Promise.resolve({
+        ...response(request.historyId, request.offset, entries),
+        nextOffset: listingBCursor,
+        hasMore: offset + entries.length < 10,
+      });
+    });
+    const { result } = renderHistory(fetchPage);
+    await waitFor(() => expect(result.current.listingId).toBe(HISTORY_A));
+
+    act(() => result.current.requestRange(3));
+    await waitFor(() => expect(result.current.getEntry(3)?.hash).toBe("hash-3"));
+
+    act(() => result.current.requestRange(6));
+    await waitFor(() => expect(result.current.listingId).toBe(HISTORY_B));
+    await waitFor(() => expect(result.current.getEntry(8)?.hash).toBe("hash-8"));
+
+    const listingBRequests = fetchPage.mock.calls
+      .map(([request]) => request)
+      .filter((request) => request.historyId === HISTORY_B);
+    expect(listingBRequests.map((request) => request.offset)).toEqual([3, 6]);
+    expect(
+      Array.from({ length: 9 }, (_, index) => result.current.getEntry(index)?.hash)
+    ).toEqual(Array.from({ length: 9 }, (_, index) => `hash-${index}`));
+  });
+
   it("replaces an expired listing in place and appends back to the visible rows", async () => {
     const fresh = deferred<WorkspaceFileHistoryPageResponse>();
     let initialCalls = 0;
