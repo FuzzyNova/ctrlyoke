@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import { parse, stripComments, type ParseError } from "jsonc-parser";
 import { NODE_ERROR_CODES } from "../types/DashboardConstants";
+import { hasErrnoCode } from "../utils/ErrorUtils";
 import { stripLeadingBom } from "../utils/TextUtils";
 
 export const JSONC_OBJECT_FILE_RESULT_KIND = {
@@ -27,7 +28,7 @@ export function readJsoncObjectFile(
   try {
     content = fs.readFileSync(filePath, "utf-8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === NODE_ERROR_CODES.ENOENT) {
+    if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
       return { kind: JSONC_OBJECT_FILE_RESULT_KIND.MISSING };
     }
     return { kind: JSONC_OBJECT_FILE_RESULT_KIND.INVALID };

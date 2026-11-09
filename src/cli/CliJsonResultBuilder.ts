@@ -29,8 +29,8 @@ import type {
   WorkflowStopReason,
   WorkflowValidationWarning,
 } from "../types/CtrlYokeTypes";
+import { queueTargetKey } from "../utils/OutputTargetKeys";
 import {
-  queueTargetKey,
   type RunAttemptProjection,
   type RunFileChangeProjection,
   type RunOutputProjection,

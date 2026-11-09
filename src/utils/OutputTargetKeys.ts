@@ -7,6 +7,11 @@ import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
 
 export type OutputTargetKey = `queue:${number}` | `final:${number}`;
 
+/**
+ * The one producer of output-target keys (`queue:<stepIndex>`, `final:<loopIndex>`).
+ * These strings are looked up across modules and appear in CLI `--json` output,
+ * so a hand-built literal that drifts silently turns lookups into misses.
+ */
 export function queueTargetKey(stepIndex: number): OutputTargetKey {
   return `queue:${stepIndex}`;
 }

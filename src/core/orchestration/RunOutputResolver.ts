@@ -24,8 +24,6 @@ import {
   outputAttemptKey,
   outputTargetKey,
 } from "../../utils/OutputTargetKeys";
-/** Shared key producer re-exported for existing consumers. */
-export { queueTargetKey } from "../../utils/OutputTargetKeys";
 import type {
   CliEvent,
   FileDeleteData,

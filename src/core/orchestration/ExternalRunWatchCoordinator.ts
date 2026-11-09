@@ -1117,7 +1117,7 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
     const hasResidentExecution = this.host
       .findInstanceForWorkingFile(workingFilePath, true)
       .some((instance) =>
-        isExecutionOwnerState(instance.getQueueState().status)
+        ACTIVE_EXECUTION_STATES.has(instance.getQueueState().status)
       );
     if (hasResidentExecution) return false;
     const address =
@@ -1204,10 +1204,6 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
     }
     this.polledRunnerJsonMtimes.clear();
   }
-}
-
-function isExecutionOwnerState(status: QueueState["status"]): boolean {
-  return ACTIVE_EXECUTION_STATES.has(status);
 }
 
 function getCliOutputSignature(output: CliOutput): string {
