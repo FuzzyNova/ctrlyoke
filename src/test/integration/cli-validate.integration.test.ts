@@ -143,7 +143,9 @@ suite("ctrlyoke validate compatibility command", () => {
       errorCode: string;
     };
     assert.strictEqual(result.errorCode, "workflow-newer-format");
-    assert.strictEqual(result.error, human.stderr.trim());
+    // Text mode prefixes every CLI error with "Error: " (reportCliError); the
+    // JSON `error` field keeps the bare message, as it always has.
+    assert.strictEqual(`Error: ${result.error}`, human.stderr.trim());
   });
 
   test("analyzes one target and filters all-installed targets to available harnesses", async function () {

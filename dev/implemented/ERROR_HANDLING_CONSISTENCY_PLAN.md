@@ -1,9 +1,12 @@
 # Error Handling Consistency Plan (harnesses, scripts, CLI)
 
-**Status:** Phase 2 implemented on 2026-11-09 (H1, H2, H4, H5, H6, R1 types, R2 hook
-column, R3). Phase 7 (R4, H3) completed on 2026-11-09 for Codex, Qwen and Antigravity. Phase 0 captures completed on 2026-11-09 for every harness except OpenCode
-2.x, which is not yet released (§6). Research and recommendation done; open
-decisions settled with the user on 2026-11-08 (§7).
+**Status:** Implemented 2026-11-09 (all phases, §5). Two known limits remain:
+
+- The OpenCode 2.x plugin path is not exercised live, because no 2.x release exists (§6).
+- An interactive Qwen API error with a status Qwen retries (429, 5xx and the like) is only
+  caught by process exit or `maxPromptTimeoutSec` (§5 Phase 7).
+
+The decisions were settled with the user on 2026-11-08 (§7).
 
 **Origin:** the "CLI error reporting in `src/cli.ts`" entry under **Deferred** in
 `dev/backlog/CODE_SMELL_LEDGER.md`. While researching it, the same problem turned up in two

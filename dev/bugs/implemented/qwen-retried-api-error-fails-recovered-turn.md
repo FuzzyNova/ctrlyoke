@@ -1,6 +1,6 @@
 # Qwen session-error detection fails a turn that Qwen's retry recovered
 
-- **Found:** 2026-11-09 by the Phase 0 re-capture for `dev/backlog/ERROR_HANDLING_CONSISTENCY_PLAN.md` (Qwen Code 0.26.7)
+- **Found:** 2026-11-09 by the Phase 0 re-capture for `dev/implemented/ERROR_HANDLING_CONSISTENCY_PLAN.md` (Qwen Code 0.26.7)
 - **Area:** `src/core/harness/qwen/QwenLogParser.ts`, `src/core/harness/CliLogMonitor.ts`
 - **Resolution:** fixed in daf320ff5; detection narrowed to non-retryable statuses in the follow-up commit (see Fix)
 

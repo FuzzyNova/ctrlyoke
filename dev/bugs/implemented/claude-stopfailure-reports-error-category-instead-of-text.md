@@ -1,6 +1,6 @@
 # Claude StopFailure shows the error category instead of the error text
 
-- **Found:** 2026-11-09 by the Phase 0 re-capture for `dev/backlog/ERROR_HANDLING_CONSISTENCY_PLAN.md` (Claude Code 2.1.319)
+- **Found:** 2026-11-09 by the Phase 0 re-capture for `dev/implemented/ERROR_HANDLING_CONSISTENCY_PLAN.md` (Claude Code 2.1.319)
 - **Area:** `src/core/harness/claude/ClaudeNotificationMonitor.ts`
 - **Resolution:** fixed in this commit
 

@@ -127,6 +127,13 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   (`ProjectStateLifecycle`/`ProjectStateRegistry`), `symbolKey`
   (`FallbackSymbolIndex`/`LspSymbolIndex`), `matchesPrefix` (permission/script completion
   helpers); `truncateUtf8` in `CommitMessageGenerator` vs `CliPromptPreparer`.
+- **2026-11-09, error handling plan** — resolved the deferred "CLI error reporting in
+  `src/cli.ts`" entry: every CLI error path now goes through `reportCliError`
+  (`src/cli/CliExitCode.ts`), which owns redaction, the `Error: ` prefix, closed-pipe
+  handling and exit codes. Commands without a JSON error shape gained the additive
+  `{ schemaVersion: 1, success: false, error }` envelope, and integer flags use the strict
+  parser in `src/cli/CliIntegerParsing.ts`. See
+  `dev/implemented/ERROR_HANDLING_CONSISTENCY_PLAN.md` (§3 C1–C4, §4 R6).
 
 ## Deferred
 
@@ -177,15 +184,6 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   connection handlers only `?token=` (the latter closes with 4401) — auth surface;
   unifying needs a decision on which forms WebSocket clients may use.
 
-- CLI error reporting in `src/cli.ts` (`handleHistoryCommand`, `handleStepCommand`,
-  `handleSecretCommand`, ~20 inline `console.error(...); process.exit(2)` sites) vs
-  `handleCliError` in `src/cli/CliExitCode.ts` — drifted (only the secret path redacts,
-  only history handles closed pipes, step emits its own JSON error); stderr text, JSON
-  error shape and exit codes are a scripting contract, and `parseTimeoutSeconds`/
-  `parseScriptTimeoutSeconds` accepting `1e3`/`0x10` is flag validation — needs a
-  decision on the intended surface first. Now planned in
-  `dev/backlog/ERROR_HANDLING_CONSISTENCY_PLAN.md` (§3 C1–C4, §4 R6); note `handleCliError`
-  itself does no redaction, pipe handling or JSON output.
 - Git invoked outside `execGit`: `GitCommitter.ts` (own spawn, no timeout),
   `GitUtils.commitAll` (5-minute mutation timeout, contradicting the `GIT_NO_TIMEOUT`
   comment that commits run hooks), `HostedWorkspaceViewerService` commit path,

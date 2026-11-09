@@ -1,6 +1,6 @@
 # Antigravity headless API errors are classed as a process exit instead of a harness error
 
-- **Found:** 2026-11-09 by the Phase 0 re-capture for `dev/backlog/ERROR_HANDLING_CONSISTENCY_PLAN.md` (agy 1.5.3)
+- **Found:** 2026-11-09 by the Phase 0 re-capture for `dev/implemented/ERROR_HANDLING_CONSISTENCY_PLAN.md` (agy 1.5.3)
 - **Area:** `src/core/harness/antigravity/AntigravityLogParser.ts`, `src/core/harness/antigravity/AntigravityCliProvider.ts`
 - **Resolution:** fixed in this commit
 
