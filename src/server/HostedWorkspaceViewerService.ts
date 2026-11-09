@@ -2306,7 +2306,9 @@ export class HostedWorkspaceViewerService {
 
   async stageFile(filePath: string): Promise<void> {
     const resolved = this.safeResolve(filePath);
-    if (!resolved) throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
+    if (!resolved || this.isExactRoot(resolved)) {
+      throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
+    }
     const { repoRoot, lexicalPath } =
       await this.requireRepoRootForPath(resolved);
     const relPath = toGitPath(this.relativeToRepo(lexicalPath, repoRoot));
@@ -2318,7 +2320,9 @@ export class HostedWorkspaceViewerService {
 
   async unstageFile(filePath: string): Promise<void> {
     const resolved = this.safeResolve(filePath);
-    if (!resolved) throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
+    if (!resolved || this.isExactRoot(resolved)) {
+      throw new Error(WORKSPACE_VIEWER_PATH_NOT_ALLOWED);
+    }
     const { repoRoot, lexicalPath } =
       await this.requireRepoRootForPath(resolved);
     const relPath = toGitPath(this.relativeToRepo(lexicalPath, repoRoot));

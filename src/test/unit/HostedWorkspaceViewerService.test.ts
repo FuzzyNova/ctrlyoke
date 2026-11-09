@@ -2049,6 +2049,23 @@ suite("HostedWorkspaceViewerService", function () {
   });
 
   suite("literal pathspec SCM actions", () => {
+    test("refuses to stage the repository root without staging files", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "tracked.txt", "original\n", "initial");
+      fs.writeFileSync(path.join(root, "tracked.txt"), "edited\n");
+      fs.writeFileSync(path.join(root, "new.txt"), "new\n");
+      const service = new HostedWorkspaceViewerService(root);
+
+      await assert.rejects(service.stageFile(""), /Path not allowed/);
+      await assert.rejects(service.stageFile("."), /Path not allowed/);
+      await assert.rejects(service.unstageFile(""), /Path not allowed/);
+      await assert.rejects(service.unstageFile("."), /Path not allowed/);
+      assert.strictEqual(runGit(root, "diff", "--cached", "--name-only"), "");
+      service.dispose();
+    });
+
     test("stageFile stages only a bracketed literal path", async () => {
       const root = createWorkspace();
       runGit(root, "init");

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli subagent, reproduced in a scratch repo)
 - **Area:** `src/server/HostedWorkspaceViewerService.ts` (`stageFile`, `unstageFile`), `literalGitPathspec`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
