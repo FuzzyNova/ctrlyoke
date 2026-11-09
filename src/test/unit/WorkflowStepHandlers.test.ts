@@ -289,7 +289,9 @@ suite("WorkflowStepHandlers — success-path client echo", () => {
     const coordinator = new RecordingMutationCoordinator();
     const orchestrator = makeOrchestrator({
       syncStepsForUndoRedo: async () => {
-        throw new Error("Cannot undo or redo a change to a step that has already run");
+        throw new Error(
+          "Cannot undo or redo a change to a step that has already run"
+        );
       },
     });
     const handlers = new WorkflowStepHandlers(

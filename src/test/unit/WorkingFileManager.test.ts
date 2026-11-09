@@ -2431,7 +2431,10 @@ suite("WorkingFileManager", () => {
     });
 
     test("syncStepsForUndoRedoAtRun preserves existing runtime for unchanged-position steps", async () => {
-      const { workflowKey, runRef } = await makeIdleRun(EXECUTION_STATES.COMPLETED, true);
+      const { workflowKey, runRef } = await makeIdleRun(
+        EXECUTION_STATES.COMPLETED,
+        true
+      );
 
       const result = await WorkingFileManager.syncStepsForUndoRedoAtRun(
         workspace,
@@ -2451,19 +2454,32 @@ suite("WorkingFileManager", () => {
 
     test("syncStepsForUndoRedoAtRun rejects changes to stopped executed steps", async () => {
       const { workflowKey, runRef, runFilePath } = await makeIdleRun();
-      const current = JSON.parse(await fs.readFile(runFilePath, "utf8")) as WorkingFile;
+      const current = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as WorkingFile;
       const executed = current.steps![0];
       const pending = current.steps![1];
-      const changed = [
-        { ...executed, prompt: "rewritten" },
-        pending,
-      ];
+      const changed = [{ ...executed, prompt: "rewritten" }, pending];
       await assert.rejects(
-        () => WorkingFileManager.syncStepsForUndoRedoAtRun(workspace, workflowKey, runRef, changed, current.definitionRevision!),
+        () =>
+          WorkingFileManager.syncStepsForUndoRedoAtRun(
+            workspace,
+            workflowKey,
+            runRef,
+            changed,
+            current.definitionRevision!
+          ),
         /already run/
       );
       await assert.rejects(
-        () => WorkingFileManager.syncStepsForUndoRedoAtRun(workspace, workflowKey, runRef, [pending], current.definitionRevision!),
+        () =>
+          WorkingFileManager.syncStepsForUndoRedoAtRun(
+            workspace,
+            workflowKey,
+            runRef,
+            [pending],
+            current.definitionRevision!
+          ),
         /already run/
       );
     });

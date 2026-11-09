@@ -189,9 +189,9 @@ describe("usePromptStatus", () => {
     useWorkflowStore.getState().setStepStatus(0, STEP_STATUS.COMPLETED);
 
     const { result } = renderHook(() => usePromptStatus());
-    expect(
-      result.current(useWorkflowStore.getState().steps[0], 0)
-    ).toBe(STEP_STATUS.COMPLETED);
+    expect(result.current(useWorkflowStore.getState().steps[0], 0)).toBe(
+      STEP_STATUS.COMPLETED
+    );
   });
 
   // While the final step runs, currentStep sits one past the last queue step,

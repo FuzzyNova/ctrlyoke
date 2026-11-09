@@ -543,9 +543,7 @@ describe("usePagedFileHistory expired listings", () => {
 
     for (const offset of [3, 6, 9, 12, 15]) {
       act(() => result.current.requestRange(offset));
-      await waitFor(() =>
-        expect(result.current.loadedCount).toBe(offset + 3)
-      );
+      await waitFor(() => expect(result.current.loadedCount).toBe(offset + 3));
     }
     const previousTotalCount = result.current.totalCount;
     expect(previousTotalCount).toBe(21);
@@ -556,7 +554,9 @@ describe("usePagedFileHistory expired listings", () => {
     await waitFor(() => expect(result.current.loadedCount).toBeGreaterThan(18));
 
     expect(totalCounts).toContain(previousTotalCount);
-    expect(totalCounts.every((count) => count >= previousTotalCount)).toBe(true);
+    expect(totalCounts.every((count) => count >= previousTotalCount)).toBe(
+      true
+    );
   });
 
   it("reloads every page in order when an expired listing has multiple pages", async () => {
@@ -602,18 +602,25 @@ describe("usePagedFileHistory expired listings", () => {
     await waitFor(() => expect(result.current.listingId).toBe(HISTORY_A));
 
     act(() => result.current.requestRange(3));
-    await waitFor(() => expect(result.current.getEntry(3)?.hash).toBe("hash-3"));
+    await waitFor(() =>
+      expect(result.current.getEntry(3)?.hash).toBe("hash-3")
+    );
 
     act(() => result.current.requestRange(6));
     await waitFor(() => expect(result.current.listingId).toBe(HISTORY_B));
-    await waitFor(() => expect(result.current.getEntry(8)?.hash).toBe("hash-8"));
+    await waitFor(() =>
+      expect(result.current.getEntry(8)?.hash).toBe("hash-8")
+    );
 
     const listingBRequests = fetchPage.mock.calls
       .map(([request]) => request)
       .filter((request) => request.historyId === HISTORY_B);
     expect(listingBRequests.map((request) => request.offset)).toEqual([3, 6]);
     expect(
-      Array.from({ length: 9 }, (_, index) => result.current.getEntry(index)?.hash)
+      Array.from(
+        { length: 9 },
+        (_, index) => result.current.getEntry(index)?.hash
+      )
     ).toEqual(Array.from({ length: 9 }, (_, index) => `hash-${index}`));
   });
 

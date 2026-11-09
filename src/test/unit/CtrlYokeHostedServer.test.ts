@@ -745,7 +745,9 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
       const filePath = path.join(root, "app.env");
       fs.writeFileSync(filePath, "PORT=3000\n");
       execFileSync("git", ["init", "-q"], { cwd: root });
-      execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+      execFileSync("git", ["config", "user.email", "test@example.com"], {
+        cwd: root,
+      });
       execFileSync("git", ["config", "user.name", "Test"], { cwd: root });
       execFileSync("git", ["add", "app.env"], { cwd: root });
       execFileSync("git", ["commit", "-qm", "add env"], { cwd: root });

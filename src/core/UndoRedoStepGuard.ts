@@ -35,7 +35,9 @@ export function assertUndoRedoPreservesExecutedSteps(
         currentStepId !== incomingStepId) ||
       !isDeepStrictEqual(currentDefinition, incomingDefinition)
     ) {
-      throw new Error("Cannot undo or redo a change to a step that has already run");
+      throw new Error(
+        "Cannot undo or redo a change to a step that has already run"
+      );
     }
   });
 }

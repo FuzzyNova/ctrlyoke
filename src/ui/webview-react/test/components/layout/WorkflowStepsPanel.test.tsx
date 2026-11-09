@@ -773,7 +773,9 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
         within(row).queryByLabelText(STEP_STATUS.FAILED)
       )
     ).toHaveLength(1);
-    expect(within(stepRows[3]).getByLabelText(STEP_STATUS.PENDING)).toBeInTheDocument();
+    expect(
+      within(stepRows[3]).getByLabelText(STEP_STATUS.PENDING)
+    ).toBeInTheDocument();
   });
 
   it("only shows the failed icon on the step that errored, not the next pending step", () => {

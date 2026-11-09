@@ -31,13 +31,13 @@ output can contain nested ctrlyoke boxes that make rendered text ambiguous.
 
 ## Workflow authoring
 
-| Command                                | What it does                                                     | Shortcut (dashboard focused)   |
-| -------------------------------------- | ---------------------------------------------------------------- | ------------------------------ |
+| Command                                | What it does                                                     | Shortcut (dashboard focused)                                                                        |
+| -------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | `ctrlyoke: New Workflow from Template` | Open the template picker                                         | `Ctrl+Shift+N` / `Cmd+Shift+N` (dashboard) <!-- dashboard shortcut overrides package keybinding --> |
-| `ctrlyoke: New Blank Workflow`         | Clear the current workflow and start fresh                       | `Ctrl+N` / `Cmd+N` (dashboard) <!-- dashboard shortcut overrides package keybinding --> |
-| `ctrlyoke: Create New Custom Template` | Open the template picker's create-template form                  |                                |
-| `ctrlyoke: Select Prompt File`         | Pick a workflow or prompt file in the workspace and load it      | <!-- dashboard shortcut overrides package keybinding --> |
-| `ctrlyoke: Queue Prompt File`          | Pick a workflow or prompt file and append its steps to the queue | <!-- dashboard shortcut overrides package keybinding --> |
+| `ctrlyoke: New Blank Workflow`         | Clear the current workflow and start fresh                       | `Ctrl+N` / `Cmd+N` (dashboard) <!-- dashboard shortcut overrides package keybinding -->             |
+| `ctrlyoke: Create New Custom Template` | Open the template picker's create-template form                  |                                                                                                     |
+| `ctrlyoke: Select Prompt File`         | Pick a workflow or prompt file in the workspace and load it      | <!-- dashboard shortcut overrides package keybinding -->                                            |
+| `ctrlyoke: Queue Prompt File`          | Pick a workflow or prompt file and append its steps to the queue | <!-- dashboard shortcut overrides package keybinding -->                                            |
 
 These shortcuts work while the ctrlyoke dashboard has focus, outside a text field or editor.
 

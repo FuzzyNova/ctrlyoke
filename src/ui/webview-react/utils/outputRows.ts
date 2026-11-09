@@ -2562,8 +2562,7 @@ export function buildOutputRows(
         );
       const stampActivityFirst =
         message.isActivity &&
-        (resumesAfterOtherStep ||
-          (isInParallelGroup(target) && activityFirst));
+        (resumesAfterOtherStep || (isInParallelGroup(target) && activityFirst));
       if (message.isActivity) previousActivityTargetKey = targetKey;
       previousRowTargetKey = targetKey;
       rows.push({
@@ -2745,8 +2744,7 @@ export function buildOutputRows(
       !emitsLeadingChrome;
     const stampActivityFirst =
       message.isActivity &&
-      (resumesAfterOtherStep ||
-        (isInParallelGroup(target) && activityFirst));
+      (resumesAfterOtherStep || (isInParallelGroup(target) && activityFirst));
     if (message.isActivity) previousActivityTargetKey = targetKey;
     if (emitsLeadingChrome) {
       openedAttempts.add(

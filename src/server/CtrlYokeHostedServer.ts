@@ -331,15 +331,22 @@ function createSecretRedactingLineTransform(): Transform {
   const redactCompleteLines = (text: string): string => {
     const lines = text.split("\n");
     pending = lines.pop() ?? "";
-    return lines.map((line) => secretRedactionService.redactText(`${line}\n`)).join("");
+    return lines
+      .map((line) => secretRedactionService.redactText(`${line}\n`))
+      .join("");
   };
   return new Transform({
-    transform(chunk: Buffer, _encoding: BufferEncoding, callback: TransformCallback) {
+    transform(
+      chunk: Buffer,
+      _encoding: BufferEncoding,
+      callback: TransformCallback
+    ) {
       callback(null, redactCompleteLines(decoder.write(chunk)));
     },
     flush(callback: TransformCallback) {
       const finalText = `${pending}${decoder.end()}`;
-      if (finalText) callback(null, secretRedactionService.redactText(finalText));
+      if (finalText)
+        callback(null, secretRedactionService.redactText(finalText));
       else callback();
     },
   });
@@ -2360,9 +2367,7 @@ export class CtrlYokeHostedServer
           redactingStream.once("end", () => {
             if (!res.writableEnded && !res.destroyed) res.end();
           });
-          download.stdout
-            .pipe(redactingStream)
-            .pipe(res, { end: false });
+          download.stdout.pipe(redactingStream).pipe(res, { end: false });
         } catch (err) {
           if (this.sendKnownWorkspaceViewerError(res, err)) return;
           this.sendWorkspaceViewerInternalError(

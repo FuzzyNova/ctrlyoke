@@ -546,12 +546,16 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     const notes = responseJson(notesResult);
 
     assert.strictEqual(claim.scope.you, notes.scope.you);
-    const board = await new CoordinationParticipantRegistry(workspaceRoot).fold();
+    const board = await new CoordinationParticipantRegistry(
+      workspaceRoot
+    ).fold();
     assert.strictEqual(board.participants.length, 1);
     assert.strictEqual(board.participants[0].participantId, claim.scope.you);
 
     const released = responseJson(
-      await server.invokeTool(MCP_RELEASE_PATHS_TOOL_NAME, { paths: ["src/a.ts"] })
+      await server.invokeTool(MCP_RELEASE_PATHS_TOOL_NAME, {
+        paths: ["src/a.ts"],
+      })
     );
     assert.deepStrictEqual(released.released, ["src/a.ts"]);
   });

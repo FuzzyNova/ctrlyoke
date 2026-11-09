@@ -3693,17 +3693,33 @@ suite("PromptQueue State Machine Tests", () => {
     });
 
     test("undo/redo cannot change or remove a stopped executed step", async () => {
-      queue.loadPrompts(createPromptFile([
-        { prompt: "ran-B", _runtime: { stepId: "ran", startedAt: 100, completedAt: 200, terminalStatus: PROMPT_TERMINAL_STATUS.COMPLETED } },
-        { prompt: "pending" },
-      ]));
+      queue.loadPrompts(
+        createPromptFile([
+          {
+            prompt: "ran-B",
+            _runtime: {
+              stepId: "ran",
+              startedAt: 100,
+              completedAt: 200,
+              terminalStatus: PROMPT_TERMINAL_STATUS.COMPLETED,
+            },
+          },
+          { prompt: "pending" },
+        ])
+      );
       (queue as any).state.currentIndex = 1;
       const before = queue.getState().steps[0];
       for (const snapshot of [
-        [{ prompt: "original-A", _runtime: { stepId: "ran" } }, { prompt: "pending" }],
+        [
+          { prompt: "original-A", _runtime: { stepId: "ran" } },
+          { prompt: "pending" },
+        ],
         [{ prompt: "pending" }],
       ]) {
-        await assert.rejects(() => queue.syncStepsForUndoRedo(snapshot as any), /already run/);
+        await assert.rejects(
+          () => queue.syncStepsForUndoRedo(snapshot as any),
+          /already run/
+        );
         const state = queue.getState();
         assert.strictEqual((state.steps[0] as PromptStep).prompt, "ran-B");
         assert.deepStrictEqual(state.steps[0]._runtime, before._runtime);
@@ -3713,7 +3729,10 @@ suite("PromptQueue State Machine Tests", () => {
         { prompt: "ran-B", _runtime: { stepId: "ran" } },
         { prompt: "pending undone" },
       ]);
-      assert.strictEqual((queue.getState().steps[1] as PromptStep).prompt, "pending undone");
+      assert.strictEqual(
+        (queue.getState().steps[1] as PromptStep).prompt,
+        "pending undone"
+      );
     });
 
     test("should restore pending added prompt identity when redo snapshot lacks it", async () => {

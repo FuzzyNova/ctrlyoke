@@ -1374,26 +1374,31 @@ describe("outputRows", () => {
     });
 
     it("labels a follow-up after a non-activity step block", () => {
-      const firstAndLast = mapOrderedHistoryEntriesToMessages([], [
-        {
-          timestampMs: 1000,
-          sequence: 1,
-          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
-          runIndex: 0,
-          attemptIndex: 0,
-          kind: OUTPUT_ACTIVITY_KINDS.TEXT,
-          text: "A",
-        },
-        {
-          timestampMs: 1002,
-          sequence: 3,
-          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
-          runIndex: 0,
-          attemptIndex: 0,
-          kind: OUTPUT_ACTIVITY_KINDS.STRUCTURED,
-          events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "A-followup" } }],
-        },
-      ]);
+      const firstAndLast = mapOrderedHistoryEntriesToMessages(
+        [],
+        [
+          {
+            timestampMs: 1000,
+            sequence: 1,
+            target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+            runIndex: 0,
+            attemptIndex: 0,
+            kind: OUTPUT_ACTIVITY_KINDS.TEXT,
+            text: "A",
+          },
+          {
+            timestampMs: 1002,
+            sequence: 3,
+            target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+            runIndex: 0,
+            attemptIndex: 0,
+            kind: OUTPUT_ACTIVITY_KINDS.STRUCTURED,
+            events: [
+              { type: CLI_EVENT_TYPES.TEXT, data: { text: "A-followup" } },
+            ],
+          },
+        ]
+      );
       const middle = {
         type: "cli",
         target: { kind: FINAL_STEP_PHASES.QUEUE, index: 1 },

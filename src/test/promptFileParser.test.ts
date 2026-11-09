@@ -139,24 +139,32 @@ suite("PromptFileParser Tests", () => {
     });
 
     test("uses the authored kind for single-step root suggestions", () => {
-      const scriptWrongKind = parser.getSchemaWarnings({
-        type: "script",
-        script: "echo hi",
-        harnes: "claude-cli",
-      }).find((warning) => warning.propertyPointer === "/harnes");
-      const promptWrongKind = parser.getSchemaWarnings({
-        prompt: "hello",
-        shel: "bash",
-      }).find((warning) => warning.propertyPointer === "/shel");
-      const promptTypo = parser.getSchemaWarnings({
-        prompt: "hi",
-        harnes: "claude-cli",
-      }).find((warning) => warning.propertyPointer === "/harnes");
-      const scriptTypo = parser.getSchemaWarnings({
-        type: "script",
-        script: "x",
-        shel: "bash",
-      }).find((warning) => warning.propertyPointer === "/shel");
+      const scriptWrongKind = parser
+        .getSchemaWarnings({
+          type: "script",
+          script: "echo hi",
+          harnes: "claude-cli",
+        })
+        .find((warning) => warning.propertyPointer === "/harnes");
+      const promptWrongKind = parser
+        .getSchemaWarnings({
+          prompt: "hello",
+          shel: "bash",
+        })
+        .find((warning) => warning.propertyPointer === "/shel");
+      const promptTypo = parser
+        .getSchemaWarnings({
+          prompt: "hi",
+          harnes: "claude-cli",
+        })
+        .find((warning) => warning.propertyPointer === "/harnes");
+      const scriptTypo = parser
+        .getSchemaWarnings({
+          type: "script",
+          script: "x",
+          shel: "bash",
+        })
+        .find((warning) => warning.propertyPointer === "/shel");
 
       assert.ok(scriptWrongKind);
       assert.ok(!scriptWrongKind.message.includes("Did you mean 'harness'?"));
