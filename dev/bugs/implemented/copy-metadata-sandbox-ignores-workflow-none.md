@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli, failing Vitest probe)
 - **Area:** `src/ui/webview-react/utils/stepMetadataClipboard.ts` (`buildStepMetadataClipboardText`, the `sandbox` `resolvedLine`, and `resolvedLine`'s `null` branch)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
