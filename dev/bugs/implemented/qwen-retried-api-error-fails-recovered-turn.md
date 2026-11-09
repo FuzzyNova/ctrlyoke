@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by the Phase 0 re-capture for `dev/backlog/ERROR_HANDLING_CONSISTENCY_PLAN.md` (Qwen Code 0.26.7)
 - **Area:** `src/core/harness/qwen/QwenLogParser.ts`, `src/core/harness/CliLogMonitor.ts`
-- **Resolution:** fixed in this commit
+- **Resolution:** fixed in daf320ff5; detection narrowed to non-retryable statuses in the follow-up commit (see Fix)
 
 ## Symptom
 
@@ -23,3 +23,7 @@ An `api_error` record marks one failed attempt, not the outcome of the turn. Qwe
 ## Suggested Fix
 
 Do not resolve on `api_error` alone. Hold the error for a short grace period, or until the turn settles, and cancel it if a later `request_lifecycle` with the same `promptId` starts. With a 401 no Stop arrives and no new lifecycle starts, so failing once the grace period ends keeps the hang fix. Add tests for both captured 429 fixtures and the 401 lifecycle fixture.
+
+## Fix
+
+daf320ff5 first added a 45-second grace period for retryable statuses. That was replaced by a status rule taken from Qwen's own retry predicate: only an `api_error` on the user's turn with HTTP 401 or 403 (`QWEN_FAIL_FAST_HTTP_STATUSES`) fails the step, because Qwen never retries those. Every other `api_error` may be retried and the chat JSONL never records the turn's final outcome, so those are left to process exit and `maxPromptTimeoutSec`.

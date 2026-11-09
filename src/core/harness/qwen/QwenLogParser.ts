@@ -48,9 +48,9 @@ import {
   QWEN_EVENT_TYPES,
   QWEN_MONITOR_STOPPED_RESULT,
   QWEN_REAL_USER_PROVENANCE,
-  QWEN_REQUEST_LIFECYCLE_PHASES,
-  QWEN_REQUEST_OUTCOMES,
-  QWEN_RETRYABLE_ERROR_GRACE_MS,
+  QWEN_API_ERROR_FALLBACK,
+  QWEN_FAIL_FAST_HTTP_STATUSES,
+  QWEN_MAIN_TURN_PROMPT_ID_PATTERN,
   QWEN_TELEMETRY_EVENTS,
   QWEN_TASK_NOTIFICATION_PATTERN,
   QWEN_TERMINAL_TASK_STATUSES,
@@ -209,96 +209,47 @@ function isQwenProviderEvent(value: unknown): value is QwenProviderEvent {
   );
 }
 
-/** Qwen's default retry policy retries 429 and 5xx; an unknown status may be either. */
-function isRetryableQwenStatus(statusCode: number | undefined): boolean {
-  return statusCode === undefined || statusCode === 429 || statusCode >= 500;
+/**
+ * Whether a telemetry `prompt_id` belongs to the user's own turn. A record
+ * without one (older captures) is treated as the user's turn.
+ */
+function isQwenMainTurnPromptId(promptId: unknown): boolean {
+  return (
+    promptId === undefined ||
+    (typeof promptId === "string" &&
+      QWEN_MAIN_TURN_PROMPT_ID_PATTERN.test(promptId))
+  );
 }
 
 export class QwenLogParser extends BaseLogParser {
-  /** Latest `api_error` per main-turn prompt, read when its request ends. */
-  private readonly lastApiErrorByPrompt = new Map<
-    string,
-    { message?: string; statusCode?: number }
-  >();
-
   /**
-   * A request lifecycle that ends in error fails the turn. An `api_error`
-   * alone does not: each failed attempt is logged, and Qwen's outer retry can
-   * still recover the turn with a new lifecycle for the same `promptId`.
-   * Retryable statuses therefore wait for that retry (see
-   * `cancelsPendingSessionError`); other statuses fail at once, since Qwen
-   * neither retries them nor fires Stop.
+   * An `api_error` on the user's turn whose status Qwen never retries ends the
+   * turn without a Stop hook, so it fails the step at once. Every other
+   * `api_error` marks one failed attempt that Qwen's outer retry may still
+   * recover with a new request lifecycle for the same prompt, and the log never
+   * records the turn's final outcome; those are left to process exit and
+   * `maxPromptTimeoutSec`.
+   *
+   * The `api_error` record itself decides: a fail-fast status is terminal, and
+   * the matching `request_lifecycle` end (absent from older captures) carries
+   * no message.
    */
   getSessionError(entry: BaseCliEvent): SessionErrorSignal | undefined {
-    const telemetry = this.readMainTurnTelemetry(entry);
-    if (!telemetry) return undefined;
-    const { uiEvent, promptId } = telemetry;
-    const name = uiEvent["event.name"];
-
-    if (name === QWEN_TELEMETRY_EVENTS.API_ERROR) {
-      this.lastApiErrorByPrompt.set(promptId, {
-        message:
-          typeof uiEvent.error_message === "string"
-            ? uiEvent.error_message
-            : typeof uiEvent.error_type === "string"
-              ? uiEvent.error_type
-              : undefined,
-        statusCode:
-          typeof uiEvent.status_code === "number"
-            ? uiEvent.status_code
-            : undefined,
-      });
-      return undefined;
-    }
-
+    const uiEvent = (entry as QwenProviderEvent).systemPayload?.uiEvent as
+      Record<string, unknown> | undefined;
     if (
-      name !== QWEN_TELEMETRY_EVENTS.REQUEST_LIFECYCLE ||
-      uiEvent.phase !== QWEN_REQUEST_LIFECYCLE_PHASES.ENDED ||
-      uiEvent.outcome !== QWEN_REQUEST_OUTCOMES.ERROR
+      uiEvent?.["event.name"] !== QWEN_TELEMETRY_EVENTS.API_ERROR ||
+      uiEvent.subagentId !== undefined ||
+      !isQwenMainTurnPromptId(uiEvent.prompt_id ?? uiEvent.promptId) ||
+      typeof uiEvent.status_code !== "number" ||
+      !QWEN_FAIL_FAST_HTTP_STATUSES.has(uiEvent.status_code)
     ) {
       return undefined;
     }
-
-    const apiError = this.lastApiErrorByPrompt.get(promptId);
-    this.lastApiErrorByPrompt.delete(promptId);
-    const message = apiError?.message?.trim() || "Qwen API request failed";
-    return isRetryableQwenStatus(apiError?.statusCode)
-      ? { message, graceMs: QWEN_RETRYABLE_ERROR_GRACE_MS }
-      : { message };
-  }
-
-  /** A new main-turn request or a response means Qwen retried the failure. */
-  cancelsPendingSessionError(entry: BaseCliEvent): boolean {
-    const telemetry = this.readMainTurnTelemetry(entry);
-    if (!telemetry) return false;
-    const { uiEvent } = telemetry;
-    const name = uiEvent["event.name"];
-    return (
-      name === QWEN_TELEMETRY_EVENTS.API_RESPONSE ||
-      (name === QWEN_TELEMETRY_EVENTS.REQUEST_LIFECYCLE &&
-        uiEvent.phase === QWEN_REQUEST_LIFECYCLE_PHASES.STARTED)
+    const message = [uiEvent.error_message, uiEvent.error_type].find(
+      (value): value is string => typeof value === "string" && !!value.trim()
     );
-  }
-
-  /**
-   * Telemetry for the user's own turn. Internal requests (subagents such as
-   * the auto-memory extractor) carry `subagentId` and a `#<name>#` promptId
-   * segment, and never decide the turn's outcome.
-   */
-  private readMainTurnTelemetry(
-    entry: BaseCliEvent
-  ): { uiEvent: Record<string, unknown>; promptId: string } | undefined {
-    const uiEvent = (entry as QwenProviderEvent).systemPayload?.uiEvent as
-      Record<string, unknown> | undefined;
-    if (!uiEvent || uiEvent.subagentId !== undefined) return undefined;
-    const promptId =
-      typeof uiEvent.promptId === "string"
-        ? uiEvent.promptId
-        : typeof uiEvent.prompt_id === "string"
-          ? uiEvent.prompt_id
-          : undefined;
-    if (!promptId || /#[^#]+#/.test(promptId)) return undefined;
-    return { uiEvent, promptId };
+    return { message: message?.trim() ?? QWEN_API_ERROR_FALLBACK };
   }
 
   probeSessionId(sessionId: string): SessionProbeResult {

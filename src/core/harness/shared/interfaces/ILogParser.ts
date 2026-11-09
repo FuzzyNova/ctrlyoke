@@ -15,17 +15,15 @@ import type { SubagentSourceFollower } from "../SubagentSourceFollower";
  * All CLI events must have at least a `type` string. Providers can
  * extend this with additional fields specific to their log formats.
  */
-/** A failed turn recorded in a harness session log (see `ILogParser.getSessionError`). */
-export interface SessionErrorSignal {
-  message: string;
-  /** Wait this long for a retry before failing; omitted means fail now. */
-  graceMs?: number;
-}
-
 export interface BaseCliEvent {
   type: string;
   timestamp?: number;
   [key: string]: unknown;
+}
+
+/** A failed turn recorded in a harness session log (see `ILogParser.getSessionError`). */
+export interface SessionErrorSignal {
+  message: string;
 }
 
 /**
@@ -411,15 +409,11 @@ export interface ILogParser {
   ): boolean;
 
   /**
-   * Return a failure signal when this session-log record shows the turn
-   * failed. With `graceMs`, the harness may still retry: the monitor waits that
-   * long and fails only if no record in between satisfies
-   * `cancelsPendingSessionError`.
+   * Return a failure signal when this raw session-log record proves the turn
+   * failed for good, for a harness whose error never reaches a hook. Return
+   * undefined for a failed attempt the harness may still retry.
    */
   getSessionError?(entry: BaseCliEvent): SessionErrorSignal | undefined;
-
-  /** Whether this record shows the harness retrying after a pending session error. */
-  cancelsPendingSessionError?(entry: BaseCliEvent): boolean;
 
   /**
    * Classify a single log event to decide whether it represents genuine human input

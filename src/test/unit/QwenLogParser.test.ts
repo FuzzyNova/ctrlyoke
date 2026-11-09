@@ -22,84 +22,112 @@ function readHarnessErrorFixture(name: string): BaseCliEvent[] {
     .map((line) => JSON.parse(line) as BaseCliEvent);
 }
 
-/** Replay records as CliLogMonitor does: cancel a pending error, then check. */
-function replaySessionErrors(parser: QwenLogParser, events: BaseCliEvent[]) {
-  const signals: Array<{ index: number; message: string; graceMs?: number }> =
-    [];
-  const cancellations: number[] = [];
-  events.forEach((event, index) => {
-    if (parser.cancelsPendingSessionError(event)) cancellations.push(index);
+/** Every failure signal over a captured log, as CliLogMonitor would see it. */
+function sessionErrors(events: BaseCliEvent[]) {
+  const parser = new QwenLogParser();
+  return events.flatMap((event, index) => {
     const signal = parser.getSessionError(event);
-    if (signal) signals.push({ index, ...signal });
+    return signal ? [{ index, ...signal }] : [];
   });
-  return { signals, cancellations };
+}
+
+function apiError(uiEvent: Record<string, unknown>): BaseCliEvent {
+  return {
+    type: "system",
+    subtype: "ui_telemetry",
+    systemPayload: {
+      uiEvent: { "event.name": "qwen-code.api_error", ...uiEvent },
+    },
+  };
 }
 
 suite("Qwen session API errors", () => {
-  test("fails a non-retryable 401 when its request lifecycle ends in error", () => {
-    const events = readHarnessErrorFixture(
-      "interactive-401-lifecycle-session-log.jsonl"
-    );
-    const { signals } = replaySessionErrors(new QwenLogParser(), events);
-    assert.deepStrictEqual(signals, [
-      { index: 2, message: "401 stub: Incorrect API key provided" },
-    ]);
-  });
-
-  test("defers a retryable 429 and cancels it when Qwen's outer retry starts", () => {
-    const events = readHarnessErrorFixture(
-      "interactive-outer-retried-429-session-log.jsonl"
-    );
-    const { signals, cancellations } = replaySessionErrors(
-      new QwenLogParser(),
-      events
-    );
-    assert.strictEqual(signals.length, 1);
-    assert.strictEqual(
-      signals[0].message,
-      "429 stub: Rate limit reached (4/4)"
-    );
-    assert.ok(signals[0].graceMs && signals[0].graceMs > 30_000);
-    // The retry's own lifecycle start comes right after the failed attempt.
-    assert.ok(cancellations.some((index) => index > signals[0].index));
-  });
-
-  test("ignores an SDK-internal retry that never surfaces an api_error", () => {
-    const events = readHarnessErrorFixture(
-      "interactive-sdk-retried-429-session-log.jsonl"
-    );
+  test("fails a captured 401 on the api_error with the provider's message", () => {
     assert.deepStrictEqual(
-      replaySessionErrors(new QwenLogParser(), events).signals,
+      sessionErrors(
+        readHarnessErrorFixture("interactive-401-lifecycle-session-log.jsonl")
+      ),
+      [{ index: 1, message: "401 stub: Incorrect API key provided" }]
+    );
+  });
+
+  test("fails the original DashScope capture, which has no prompt id or lifecycle", () => {
+    assert.deepStrictEqual(
+      sessionErrors(
+        readHarnessErrorFixture("interactive-session-log.jsonl")
+      ).map((signal) => signal.message),
+      [
+        "401 Invalid API-key provided. For details, see: https://www.alibabacloud.com/help/en/model-studio/error-code#apikey-error",
+      ]
+    );
+  });
+
+  test("never fails a 429 that Qwen's outer retry recovers", () => {
+    assert.deepStrictEqual(
+      sessionErrors(
+        readHarnessErrorFixture(
+          "interactive-outer-retried-429-session-log.jsonl"
+        )
+      ),
       []
     );
   });
 
-  test("ignores internal subagent requests", () => {
-    const parser = new QwenLogParser();
-    const internal = (uiEvent: Record<string, unknown>): BaseCliEvent => ({
-      type: "system",
-      subtype: "ui_telemetry",
-      systemPayload: { uiEvent },
-    });
-    parser.getSessionError(
-      internal({
-        "event.name": "qwen-code.api_error",
-        prompt_id: "session#managed-agent#0",
-        error_message: "internal failure",
-        status_code: 401,
-      })
-    );
-    assert.strictEqual(
-      parser.getSessionError(
-        internal({
-          "event.name": "request_lifecycle",
-          promptId: "session#managed-agent#0",
-          subagentId: "managed-agent",
-          phase: "ended",
-          outcome: "error",
-        })
+  test("never fails a 429 retried inside the SDK", () => {
+    assert.deepStrictEqual(
+      sessionErrors(
+        readHarnessErrorFixture("interactive-sdk-retried-429-session-log.jsonl")
       ),
-      undefined
+      []
+    );
+  });
+
+  test("leaves retryable and status-less api_errors to process exit or timeout", () => {
+    for (const uiEvent of [
+      { prompt_id: "s########0", status_code: 429, error_message: "rate" },
+      { prompt_id: "s########0", status_code: 503, error_message: "busy" },
+      { prompt_id: "s########0", status_code: 400, error_message: "bad" },
+      { prompt_id: "s########0", status_code: 404, error_message: "no body" },
+      { prompt_id: "s########0", error_message: "socket hang up" },
+    ]) {
+      assert.deepStrictEqual(
+        sessionErrors([apiError(uiEvent)]),
+        [],
+        JSON.stringify(uiEvent)
+      );
+    }
+  });
+
+  test("ignores a subagent's 401", () => {
+    assert.deepStrictEqual(
+      sessionErrors([
+        apiError({
+          prompt_id: "s#managed-auto-memory-extractor-dfe33c71#0",
+          status_code: 401,
+          error_message: "internal failure",
+        }),
+        apiError({
+          prompt_id: "s########0",
+          subagentId: "managed-auto-memory-extractor-dfe33c71",
+          status_code: 401,
+          error_message: "internal failure",
+        }),
+      ]),
+      []
+    );
+  });
+
+  test("falls back to the error type, then a fixed message", () => {
+    assert.deepStrictEqual(
+      sessionErrors([
+        apiError({
+          prompt_id: "s########1",
+          status_code: 403,
+          error_type: "PermissionDenied",
+        }),
+        apiError({ prompt_id: "s########2", status_code: 403 }),
+      ]).map((signal) => signal.message),
+      ["PermissionDenied", "Qwen API request failed"]
     );
   });
 });

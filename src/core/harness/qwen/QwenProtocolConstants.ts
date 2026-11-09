@@ -84,24 +84,30 @@ export const QWEN_SANDBOX_ENV = "QWEN_SANDBOX";
 /** `systemPayload.uiEvent["event.name"]` values in Qwen's chat JSONL telemetry. */
 export const QWEN_TELEMETRY_EVENTS = {
   API_ERROR: "qwen-code.api_error",
-  API_RESPONSE: "qwen-code.api_response",
-  REQUEST_LIFECYCLE: "request_lifecycle",
-} as const;
-
-export const QWEN_REQUEST_LIFECYCLE_PHASES = {
-  STARTED: "started",
-  ENDED: "ended",
-} as const;
-
-export const QWEN_REQUEST_OUTCOMES = {
-  SUCCESS: "success",
-  ERROR: "error",
 } as const;
 
 /**
- * How long a retryable API failure waits for Qwen's outer retry before the
- * step fails. Qwen 0.26.7 retries 429/5xx up to 7 times with a 30 s delay cap
- * plus jitter, and a retry starts a new request lifecycle with the same
- * `promptId` (captured in src/test/fixtures/harness-errors/qwen/).
+ * HTTP statuses on a `qwen-code.api_error` that Qwen never retries, so the
+ * turn has failed. Qwen's outer retry (`retryWithBackoff`'s
+ * `shouldRetryOnError` in `packages/core/src/core/llm-chat.ts`) retries 429,
+ * 5xx and transport-wrapped 400s, and through `isRetryableUpstreamError` /
+ * `classifyRetryError` (`packages/core/src/utils/retryErrorClassification.ts`)
+ * also 408/409 and any bodyless or network-wrapped 4xx. Only 401 and 403 are
+ * classified `fail-fast` (`auth-error`) unconditionally. A user's Qwen
+ * `retryErrorCodes` setting, or a provider body code Qwen reads as a rate
+ * limit, can make even these retryable.
  */
-export const QWEN_RETRYABLE_ERROR_GRACE_MS = 45_000;
+export const QWEN_FAIL_FAST_HTTP_STATUSES: ReadonlySet<number> = new Set([
+  401, 403,
+]);
+
+/**
+ * A main-session prompt id is `<sessionId>########<n>`; a subagent's is
+ * `<sessionId>#<subagentId>#<n>` (`agent-core.ts`). Qwen's internal background
+ * prompts (`isInternalPromptId` in `packages/core/src/utils/internalPromptIds.ts`)
+ * are never written to the chat JSONL.
+ */
+export const QWEN_MAIN_TURN_PROMPT_ID_PATTERN = /^[^#]+########\d+$/;
+
+/** Failure text when a Qwen `api_error` carries neither a message nor a type. */
+export const QWEN_API_ERROR_FALLBACK = "Qwen API request failed";

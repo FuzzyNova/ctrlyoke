@@ -12,12 +12,17 @@ import type {
 } from "../../core/harness/shared/interfaces/ILogParser";
 import type { INotificationMonitor } from "../../core/harness/shared/interfaces/INotificationMonitor";
 import { ClaudeLogParser } from "../../core/harness/claude/ClaudeLogParser";
+import { CodexLogParser } from "../../core/harness/codex/CodexLogParser";
 import { CopilotLogParser } from "../../core/harness/copilot/CopilotLogParser";
 import { CopilotNotificationMonitor } from "../../core/harness/copilot/CopilotNotificationMonitor";
 import { AntigravityLogParser } from "../../core/harness/antigravity/AntigravityLogParser";
 import { SubagentSourceFollower } from "../../core/harness/shared/SubagentSourceFollower";
 import { InteractiveTurnStartWatchdog } from "../../core/harness/shared/InteractiveTurnStartWatchdog";
-import { CLI_EVENT_TYPES, FAILURE_KINDS } from "../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  FAILURE_KINDS,
+  FAILURE_SOURCES,
+} from "../../types/DashboardConstants";
 import type {
   BackgroundWorkHoldData,
   CliEvent,
@@ -851,7 +856,10 @@ suite("CliLogMonitor", () => {
     await withZeroDrainDeadline(async () => {
       const hookPayload = JSON.parse(
         fs.readFileSync(
-          path.resolve(__dirname, "../../../src/test/fixtures/harness-errors/copilot/erroroccurred-hook-input.json"),
+          path.resolve(
+            __dirname,
+            "../../../src/test/fixtures/harness-errors/copilot/erroroccurred-hook-input.json"
+          ),
           "utf8"
         )
       );
@@ -886,7 +894,44 @@ suite("CliLogMonitor", () => {
       );
 
       assert.strictEqual(result.failureKind, FAILURE_KINDS.HARNESS_ERROR);
-      assert.match(result.failureMessage ?? "", /Failed native model HTTP request/);
+      assert.match(
+        result.failureMessage ?? "",
+        /Failed native model HTTP request/
+      );
+    });
+  });
+
+  test("fails on a session-log error read through the parser's own raw reader", async () => {
+    await withZeroDrainDeadline(async () => {
+      const fixture = path.resolve(
+        __dirname,
+        "../../../src/test/fixtures/harness-errors/codex/interactive-rollout-task-error.jsonl"
+      );
+      const codex = new CodexLogParser();
+      const monitor = new CliLogMonitor({
+        // Records reach getSessionError exactly as BaseLogParser.readNewLines
+        // returns them: raw rollout lines, not normalized events.
+        logParser: createParser({
+          readNewLines: (filePath) => codex.readNewLines(filePath),
+          getSessionError: (entry) => codex.getSessionError(entry),
+        }),
+        runtimeState: {
+          getWorkspaceRoot: () => os.tmpdir(),
+          isCancelling: () => false,
+        },
+        hostCallbacks: {
+          onStreamingEvents: () => undefined,
+          onResponseComplete: () => undefined,
+          logResponse: () => undefined,
+        },
+      });
+
+      const result = await monitor.monitor(fixture, null, new Date(0), "m");
+
+      assert.strictEqual(result.success, false);
+      assert.strictEqual(result.failureKind, FAILURE_KINDS.HARNESS_ERROR);
+      assert.strictEqual(result.failureSource, FAILURE_SOURCES.SESSION_LOG);
+      assert.match(result.failureMessage ?? "", /^unexpected status 401/);
     });
   });
 
