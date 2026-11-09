@@ -573,7 +573,7 @@ suite("ExternalRunWatchCoordinator dashboard state", () => {
           executionState: EXECUTION_STATES.RUNNING,
           finalStep: {
             phase: FINAL_STEP_PHASES.FINAL_STEP,
-            loopCount: 0,
+            loopCount: 1,
             status: STEP_STATUS.RUNNING,
           },
         },
@@ -598,7 +598,14 @@ suite("ExternalRunWatchCoordinator dashboard state", () => {
           ...liveWorkingFile,
           _runtime: {
             ...liveWorkingFile._runtime,
-            executionState: EXECUTION_STATES.COMPLETED,
+            executionState: EXECUTION_STATES.ERROR,
+            finalStep: {
+              phase: FINAL_STEP_PHASES.FINAL_STEP,
+              loopCount: 1,
+              status: STEP_STATUS.FAILED,
+              failureMessage: "final pass failed",
+              failureKind: "harnessError",
+            },
           },
         }),
         "utf8"
@@ -618,6 +625,11 @@ suite("ExternalRunWatchCoordinator dashboard state", () => {
       const finishedSummary = host.broadcast.updatedSummaries.at(-1);
       assert.strictEqual(finishedSummary?.hasFinalStep, true);
       assert.strictEqual(finishedSummary?.finalStepRunning, false);
+      assert.deepStrictEqual(finishedSummary?.failure, {
+        stepLabel: "Final Step Pass 2",
+        kind: "harnessError",
+        message: "final pass failed",
+      });
     } finally {
       ExternalRunWatchSession.prototype.start = originalStart;
       await fs.rm(workspace, { recursive: true, force: true });

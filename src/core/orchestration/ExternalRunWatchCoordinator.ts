@@ -3,6 +3,10 @@ import * as path from "path";
 import { queueTargetKey } from "../../utils/OutputTargetKeys";
 import { formatStepTargetLabel } from "../../utils/FinalStepLabels";
 import {
+  selectTerminalFailure,
+  TERMINAL_FAILURE_KINDS,
+} from "../../utils/TerminalFailure";
+import {
   EXECUTION_STATES,
   deriveWorkflowFinalStepSummary,
   type QueueState,
@@ -23,6 +27,7 @@ import {
   FAILURE_KINDS,
   OUTPUT_HISTORY_KINDS,
   RUNNER_IDS,
+  STEP_STATUS,
   WORKFLOW_LOCK_LIVENESS,
   WORKFLOW_LOCK_LOCALITIES,
   type FinalStepPhase,
@@ -63,6 +68,47 @@ import { getErrnoCode } from "../../utils/ErrorUtils";
 
 const RUNNER_JSON_DISCOVERY_POLL_INTERVAL_MS = 10_000;
 const RUNNER_JSON_DISCOVERY_STAT_CONCURRENCY = 4;
+
+function deriveTerminalFailureSummary(
+  workingFile: Pick<WorkingFile, "steps" | "_runtime">,
+  executionState: WorkflowSummary["executionState"],
+  currentIndex: number
+): WorkflowSummary["failure"] {
+  const stopReason = workingFile._runtime?.stopReason;
+  const selected = selectTerminalFailure(
+    {
+      status: executionState,
+      results: (workingFile.steps ?? []).map((step) => ({
+        status: step._runtime?.terminalStatus ?? STEP_STATUS.PENDING,
+        error: step._runtime?.failureMessage,
+        failureKind: step._runtime?.failureKind,
+      })),
+    },
+    workingFile._runtime?.finalStep
+  );
+  const message =
+    selected?.kind === FINAL_STEP_PHASES.FINAL_STEP
+      ? selected.runtime.failureMessage
+      : selected?.result.error;
+  if (executionState !== EXECUTION_STATES.ERROR || (!message && (selected || !stopReason?.message))) {
+    return undefined;
+  }
+  return {
+    stepLabel: formatStepTargetLabel(
+      selected?.kind === FINAL_STEP_PHASES.FINAL_STEP,
+      selected?.kind === FINAL_STEP_PHASES.FINAL_STEP
+        ? selected.runtime.loopCount
+        : selected?.kind === TERMINAL_FAILURE_KINDS.QUEUE
+          ? selected.index
+          : currentIndex
+    ),
+    kind:
+      (selected?.kind === FINAL_STEP_PHASES.FINAL_STEP
+        ? selected.runtime.failureKind
+        : selected?.result.failureKind) ?? FAILURE_KINDS.UNKNOWN,
+    message: message ?? stopReason?.message ?? "",
+  };
+}
 
 export interface ExternalRunWatchBroadcast {
   notifyWorkflowAdded(summary: WorkflowSummary): void;
@@ -586,9 +632,6 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
       workingFile.finalStep,
       workingFile._runtime?.finalStep
     );
-    const failedRuntime = workingFile.steps?.[currentIndex]?._runtime;
-    const stopReason = workingFile._runtime?.stopReason;
-    const failureMessage = failedRuntime?.failureMessage ?? stopReason?.message;
     const summary: WorkflowSummary = {
       id: workflowId,
       workflowKey,
@@ -600,16 +643,12 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
       filePath: workingFilePath,
       workingFilePath,
       executionState,
-      stopReason,
-      ...(executionState === EXECUTION_STATES.ERROR && failureMessage
-        ? {
-            failure: {
-              stepLabel: formatStepTargetLabel(false, currentIndex),
-              kind: failedRuntime?.failureKind ?? FAILURE_KINDS.UNKNOWN,
-              message: failureMessage,
-            },
-          }
-        : {}),
+      stopReason: workingFile._runtime?.stopReason,
+      failure: deriveTerminalFailureSummary(
+        workingFile,
+        executionState,
+        currentIndex
+      ),
       currentStep: currentIndex,
       totalSteps,
       startedAt: workingFile.startedAt,
@@ -971,6 +1010,11 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
           executionState?: string;
           currentIndex?: number;
           tokenTotals?: WorkflowSummary["tokenTotals"];
+          stopReason?: WorkingFile["_runtime"] extends infer R
+            ? R extends { stopReason?: infer S }
+              ? S
+              : never
+            : never;
           finalStep?: NonNullable<WorkingFile["_runtime"]>["finalStep"];
         };
         steps?: StepWithRuntimeStatus[];
@@ -1006,6 +1050,11 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
       const finalSummary: WorkflowSummary = {
         ...entry.summary,
         executionState: finalState as WorkflowSummary["executionState"],
+        failure: deriveTerminalFailureSummary(
+          workingFile as WorkingFile,
+          finalState as WorkflowSummary["executionState"],
+          workingFile._runtime?.currentIndex ?? entry.summary.currentStep
+        ),
         currentStep:
           workingFile._runtime?.currentIndex ?? entry.summary.currentStep,
         totalSteps: workingFile.steps?.length ?? entry.summary.totalSteps,

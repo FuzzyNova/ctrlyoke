@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (pass 16), reading ~123b7eb9c
 - **Area:** `src/core/WorkflowInstance.ts` (`getSummary`), `src/core/orchestration/ExternalRunWatchCoordinator.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

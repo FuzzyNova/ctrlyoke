@@ -1091,6 +1091,52 @@ suite("WorkflowInstance replay classification", () => {
 });
 
 suite("WorkflowInstance runtime transitions", () => {
+  test("getSummary names the failed queue step after a final-step pass", async () => {
+    const instance = createSummaryTestInstance();
+    instance.promptQueue.loadPrompts({
+      steps: [{ prompt: "one" }, { prompt: "two" }],
+      finalStep: { prompt: "final" },
+    });
+    const state = instance.promptQueue.getState();
+    (instance as any).workflowRuntime.fail();
+    (state as any).results[0].status = STEP_STATUS.COMPLETED;
+    (state as any).results[1].status = STEP_STATUS.FAILED;
+    (state as any).results[1].error = "queue failed";
+    await instance.promptQueue.setFinalStepRuntime({
+      phase: FINAL_STEP_PHASES.FINAL_STEP,
+      loopCount: 1,
+      status: STEP_STATUS.COMPLETED,
+    });
+
+    assert.deepStrictEqual(instance.getSummary().failure, {
+      stepLabel: "Step 2",
+      kind: "unknown",
+      message: "queue failed",
+    });
+  });
+
+  test("getSummary labels a failed final-step pass", async () => {
+    const instance = createSummaryTestInstance();
+    instance.promptQueue.loadPrompts({
+      steps: [{ prompt: "queue" }],
+      finalStep: { prompt: "final" },
+    });
+    (instance as any).workflowRuntime.fail();
+    await instance.promptQueue.setFinalStepRuntime({
+      phase: FINAL_STEP_PHASES.FINAL_STEP,
+      loopCount: 2,
+      status: STEP_STATUS.FAILED,
+      failureMessage: "final failed",
+      failureKind: "harnessError",
+    });
+
+    assert.deepStrictEqual(instance.getSummary().failure, {
+      stepLabel: "Final Step Pass 3",
+      kind: "harnessError",
+      message: "final failed",
+    });
+  });
+
   test("getSummary reports final-step definition and runtime state", async () => {
     const instance = createSummaryTestInstance();
     instance.promptQueue.loadPrompts({
@@ -3383,6 +3429,11 @@ suite("WorkflowInstance append-and-continue", () => {
       instance.promptQueue.getState().results[1].error ?? "",
       /EPERM/
     );
+    assert.deepStrictEqual(instance.getSummary().failure, {
+      stepLabel: "Step 2",
+      kind: "unknown",
+      message: instance.promptQueue.getState().results[1].error,
+    });
   });
 
   // Publishing a run deletes the lineage's draft, so once promotion succeeds the

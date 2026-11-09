@@ -9,6 +9,10 @@ import {
 } from "./WorkingFileManager";
 import { describeRunDefinitionChanges } from "../utils/RunDefinitionAnchor";
 import { formatStepTargetLabel } from "../utils/FinalStepLabels";
+import {
+  selectTerminalFailure,
+  TERMINAL_FAILURE_KINDS,
+} from "../utils/TerminalFailure";
 import { assertDefinitionRevision } from "./orchestration/RevisionPrecondition";
 import {
   buildClearUpdates,
@@ -1451,17 +1455,16 @@ export class WorkflowInstance
   getSummary(): WorkflowSummary {
     const state = this.promptQueue.getState();
     const finalRuntime = this.promptQueue.getFinalStepRuntime();
-    const failedResult = state.results[state.currentIndex];
+    const terminalFailure = selectTerminalFailure(state, finalRuntime);
     const failureMessage =
-      finalRuntime?.failureMessage ??
-      failedResult?.error ??
-      state.stopReason?.message;
+      terminalFailure?.kind === FINAL_STEP_PHASES.FINAL_STEP
+        ? terminalFailure.runtime.failureMessage
+        : terminalFailure?.result.error;
     const failureKind =
-      finalRuntime?.failureKind ??
-      failedResult?.failureKind ??
+      (terminalFailure?.kind === FINAL_STEP_PHASES.FINAL_STEP
+        ? terminalFailure.runtime.failureKind
+        : terminalFailure?.result.failureKind) ??
       (failureMessage ? FAILURE_KINDS.UNKNOWN : undefined);
-    const failedFinalStep =
-      Boolean(finalRuntime?.failureMessage) && !failedResult?.error;
     const executionTimeUpdatedAt = Date.now();
     const finalStepSummary = deriveWorkflowFinalStepSummary(
       this.promptQueue.getWorkflowFile().finalStep,
@@ -1484,16 +1487,19 @@ export class WorkflowInstance
       executionState: this.getAuthoritativeExecutionState(),
       stopReason: state.stopReason,
       ...(this.getAuthoritativeExecutionState() === EXECUTION_STATES.ERROR &&
-      failureKind &&
-      failureMessage
+      (failureMessage || (!terminalFailure && state.stopReason?.message))
         ? {
             failure: {
               stepLabel: formatStepTargetLabel(
-                failedFinalStep,
-                finalRuntime?.loopCount ?? state.currentIndex
+                terminalFailure?.kind === FINAL_STEP_PHASES.FINAL_STEP,
+                terminalFailure?.kind === FINAL_STEP_PHASES.FINAL_STEP
+                  ? terminalFailure.runtime.loopCount
+                  : (terminalFailure?.kind === TERMINAL_FAILURE_KINDS.QUEUE
+                      ? terminalFailure.index
+                      : state.currentIndex)
               ),
-              kind: failureKind,
-              message: failureMessage,
+              kind: failureKind ?? FAILURE_KINDS.UNKNOWN,
+              message: failureMessage ?? state.stopReason?.message ?? "",
             },
           }
         : {}),
