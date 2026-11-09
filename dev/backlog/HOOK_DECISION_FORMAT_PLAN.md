@@ -24,6 +24,15 @@ Shipped:
 Remaining: Phase 1 items 1 (single-source the names in `CTRLYOKE_ENV_VARS`, which still holds
 only `WORKING_FILE`) and 4 (per-harness forwarding evidence), and all of Phase 2.
 
+Decision-hook failure handling (ERROR_HANDLING_CONSISTENCY_PLAN Phase 5) now lives in
+`src/scripts/ctrlyoke-hook-decision-format.js`. Its `noDecisionExitCode()` is the shared
+per-harness no-op exit-code lookup; Phase 2's native decision normalizer and renderer should
+build beside it. It currently returns 0 for each harness: this is an empty/no-op hook result
+for Claude, Copilot, Codex and Qwen; those harnesses treat exit 0 with empty stdout as no
+decision. Claude, Copilot and Qwen treat exit 2 as blocking, so explicit user-hook exit 2 is
+preserved. Antigravity has no permissionRequest event, and OpenCode uses a plugin without a
+decision reply channel.
+
 ## Problem
 
 A user who wants one tool-approval script for every harness cannot write one today. ctrlyoke

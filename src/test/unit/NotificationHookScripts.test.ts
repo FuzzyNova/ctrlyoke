@@ -26,6 +26,18 @@ const scriptPath = (name: string): string =>
 
 type HookScriptHarness = NotificationCase["harness"] | "antigravity" | "codex";
 
+const hookUtils = require("../../scripts/ctrlyoke-hook-utils.js") as {
+  runDecisionHook(
+    command: string,
+    payload: string,
+    debugLog: (message: string, data?: unknown) => void
+  ): number;
+};
+const decisionFormat =
+  require("../../scripts/ctrlyoke-hook-decision-format.js") as {
+    noDecisionExitCode(harnessId: string): number;
+  };
+
 const HOOK_SCRIPTS: Record<HookScriptHarness, string> = {
   claude: scriptPath("ctrlyoke-claude-hook.js"),
   copilot: scriptPath("ctrlyoke-copilot-hook.js"),
@@ -137,6 +149,170 @@ suite("notification hook scripts", () => {
 
   teardown(async () => {
     await fs.rm(tempDirectory, { recursive: true, force: true });
+  });
+
+  test("decision-hook failures emit no output, record an error artifact, and use each harness's no-decision code", async () => {
+    const childProcess =
+      require("child_process") as typeof import("child_process");
+    const mutableChildProcess = childProcess as unknown as {
+      spawnSync: typeof childProcess.spawnSync;
+    };
+    const originalSpawnSync = childProcess.spawnSync;
+    const originalEnvironment = { ...process.env };
+    const logEntries: unknown[] = [];
+    const debugLog = (_message: string, data?: unknown): void => {
+      logEntries.push(data);
+    };
+    const notifyDir = path.join(tempDirectory, "decision-failure");
+    await fs.mkdir(notifyDir, { recursive: true });
+    Object.assign(process.env, hookEnvironment("decision-run", ""), {
+      CTRLYOKE_NOTIFY_DIR: notifyDir,
+      CTRLYOKE_HARNESS_ID: "claude-cli",
+    });
+    try {
+      const cases = [
+        {
+          name: "signal kill",
+          result: {
+            status: null,
+            signal: "SIGTERM",
+            stdout: "partial",
+            stderr: "killed",
+          },
+        },
+        {
+          name: "nonzero exit",
+          result: {
+            status: 1,
+            signal: null,
+            stdout: "partial",
+            stderr: "failed",
+          },
+        },
+        {
+          name: "spawn error",
+          result: {
+            status: null,
+            signal: null,
+            error: Object.assign(new Error("missing"), { code: "ENOENT" }),
+            stdout: "",
+            stderr: "spawn stderr",
+          },
+        },
+        {
+          name: "oversized output",
+          result: {
+            status: null,
+            signal: null,
+            error: Object.assign(new Error("buffer exceeded"), {
+              code: "ENOBUFS",
+            }),
+            stdout: "partial",
+            stderr: "",
+          },
+        },
+        {
+          name: "timeout",
+          result: {
+            status: null,
+            signal: "SIGTERM",
+            error: Object.assign(new Error("timed out"), { code: "ETIMEDOUT" }),
+            stdout: "partial",
+            stderr: "",
+          },
+        },
+      ];
+      for (const testCase of cases) {
+        mutableChildProcess.spawnSync = (() =>
+          testCase.result) as unknown as typeof childProcess.spawnSync;
+        assert.strictEqual(
+          hookUtils.runDecisionHook("hook", "{}", debugLog),
+          0,
+          testCase.name
+        );
+      }
+      const artifacts = await readJsonFiles(notifyDir);
+      assert.strictEqual(artifacts.length, cases.length);
+      assert.strictEqual(
+        (await readArtifact(notifyDir, artifacts[0])).hookEvent,
+        "error"
+      );
+      assert.ok(
+        logEntries.some((entry) => JSON.stringify(entry).includes("stderr"))
+      );
+
+      mutableChildProcess.spawnSync = (() => ({
+        status: 0,
+        signal: null,
+        stdout: '{"decision":"deny"}',
+        stderr: "",
+      })) as unknown as typeof childProcess.spawnSync;
+      assert.strictEqual(hookUtils.runDecisionHook("hook", "{}", debugLog), 0);
+      mutableChildProcess.spawnSync = (() => ({
+        status: 2,
+        signal: null,
+        stdout: '{"decision":"deny"}',
+        stderr: "",
+      })) as unknown as typeof childProcess.spawnSync;
+      assert.strictEqual(hookUtils.runDecisionHook("hook", "{}", debugLog), 2);
+
+      for (const harnessId of [
+        "claude-cli",
+        "copilot-cli",
+        "codex-cli",
+        "qwen-cli",
+        "antigravity-cli",
+        "opencode-cli",
+      ]) {
+        assert.strictEqual(
+          decisionFormat.noDecisionExitCode(harnessId),
+          0,
+          harnessId
+        );
+      }
+    } finally {
+      mutableChildProcess.spawnSync = originalSpawnSync;
+      for (const name of Object.keys(process.env)) {
+        if (name.startsWith("CTRLYOKE_")) delete process.env[name];
+      }
+      Object.assign(process.env, originalEnvironment);
+    }
+  });
+
+  test("discards partial decision-hook stdout when the hook exits unsuccessfully", async () => {
+    const notifyDir = path.join(tempDirectory, "decision-hook-partial-output");
+    const userHook = path.join(tempDirectory, "decision-hook-fails.js");
+    await fs.mkdir(notifyDir, { recursive: true });
+    await fs.writeFile(
+      userHook,
+      'process.stdout.write("partial decision"); process.stderr.write("hook failed"); process.exit(1);',
+      "utf8"
+    );
+    const encodedCommand = Buffer.from(
+      `${shellQuote(process.execPath)} ${shellQuote(userHook)}`
+    ).toString("base64");
+    const result = await runHook(
+      "claude",
+      notifyDir,
+      [encodedCommand],
+      { hook_event_name: "PermissionRequest", session_id: "failed-decision" },
+      {
+        ...hookEnvironment("decision-hook-failure", ""),
+        CTRLYOKE_HARNESS_ID: "claude-cli",
+        CTRLYOKE_NOTIFY_DIR: notifyDir,
+      }
+    );
+
+    assert.strictEqual(result.code, 0, result.stderr);
+    assert.strictEqual(result.stdout, "");
+    const artifacts = await readJsonFiles(notifyDir);
+    assert.strictEqual(artifacts.length, 1);
+    const artifact = await readArtifact(notifyDir, artifacts[0]);
+    assert.strictEqual(artifact.hookEvent, "error");
+    assert.strictEqual(
+      (artifact.rawHookData as Record<string, unknown>).stderr,
+      "hook failed"
+    );
   });
 
   test("writes one normalized artifact for enabled notifications", async () => {
@@ -656,11 +832,20 @@ suite("notification hook scripts", () => {
 
   test("writes a wildcard-discoverable error filename when Copilot omits sessionId", async () => {
     const notifyDir = path.join(tempDirectory, "copilot-no-session-error");
-    await runHook("copilot", notifyDir, ["errorOccurred"], { error: { message: "failed" } }, hookEnvironment("run-copilot-no-session", ""));
+    await runHook(
+      "copilot",
+      notifyDir,
+      ["errorOccurred"],
+      { error: { message: "failed" } },
+      hookEnvironment("run-copilot-no-session", "")
+    );
     const files = await fs.readdir(notifyDir);
     assert.strictEqual(files.length, 1);
     assert.match(files[0], /-error\.json$/);
-    assert.strictEqual((await readArtifact(notifyDir, files[0])).status, "error");
+    assert.strictEqual(
+      (await readArtifact(notifyDir, files[0])).status,
+      "error"
+    );
   });
 
   test("answers agy PreToolUse with allow, in and outside its workspace", async () => {

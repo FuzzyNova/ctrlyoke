@@ -255,7 +255,11 @@ function buildWorkflowBody(
 
   if (state === EXECUTION_STATES.ERROR && summary.failure) {
     parts.push(summary.failure.stepLabel);
-    parts.push(truncateFailureMessage(secretRedactionService.redactText(summary.failure.message)));
+    parts.push(
+      truncateFailureMessage(
+        secretRedactionService.redactText(summary.failure.message)
+      )
+    );
   }
 
   if (summary.totalSteps > 0) {
@@ -378,18 +382,23 @@ export function buildHookNotificationEvent(
 ): CtrlYokeNotificationEvent | null {
   const isAwaitingInput =
     artifact.hookEvent === DERIVED_NOTIFICATION_EVENTS.AWAITING_INPUT;
+  const isDecisionHookFailure =
+    artifact.nativeHookEvent === "decisionHookFailure";
   if (
-    isAwaitingInput
+    !isDecisionHookFailure &&
+    (isAwaitingInput
       ? !settings.events.awaitingInput
-      : !settings.events.hookEvents[artifact.hookEvent as HookEvent]
+      : !settings.events.hookEvents[artifact.hookEvent as HookEvent])
   ) {
     return null;
   }
 
-  const label = isAwaitingInput
-    ? "Waiting for input"
-    : (HOOK_EVENT_OPTIONS_META[artifact.hookEvent as HookEvent]?.label ??
-      artifact.hookEvent);
+  const label = isDecisionHookFailure
+    ? "Decision hook failed"
+    : isAwaitingInput
+      ? "Waiting for input"
+      : (HOOK_EVENT_OPTIONS_META[artifact.hookEvent as HookEvent]?.label ??
+        artifact.hookEvent);
 
   const titleParts = ["ctrlyoke -", label];
   const bodyParts: string[] = [];
@@ -403,6 +412,12 @@ export function buildHookNotificationEvent(
   if (artifact.toolName) {
     bodyParts.push(artifact.toolName);
   }
+  if (isDecisionHookFailure) {
+    const message = artifact.rawHookData.message;
+    if (typeof message === "string" && message) {
+      bodyParts.push(message);
+    }
+  }
 
   if (isAwaitingInput || artifact.hookEvent === HOOK_EVENT_NAMES.NOTIFICATION) {
     bodyParts.push(...buildNativeNotificationDetails(artifact, label));
@@ -413,13 +428,17 @@ export function buildHookNotificationEvent(
   return {
     id,
     kind: NOTIFICATION_KINDS.HOOK,
-    severity: COMPLETION_NOTIFICATION_SEVERITY.INFO,
+    severity: isDecisionHookFailure
+      ? COMPLETION_NOTIFICATION_SEVERITY.ERROR
+      : COMPLETION_NOTIFICATION_SEVERITY.INFO,
     workflowId: artifact.workflowId,
-    title: isAwaitingInput
-      ? "ctrlyoke - Waiting for input"
-      : artifact.hookEvent === HOOK_EVENT_NAMES.NOTIFICATION
-        ? "ctrlyoke - Notification"
-        : titleParts.join(" "),
+    title: isDecisionHookFailure
+      ? "ctrlyoke - Decision hook failed"
+      : isAwaitingInput
+        ? "ctrlyoke - Waiting for input"
+        : artifact.hookEvent === HOOK_EVENT_NAMES.NOTIFICATION
+          ? "ctrlyoke - Notification"
+          : titleParts.join(" "),
     body: bodyParts.join(" - ") || label,
     tag: `ctrlyoke-hook-${artifact.workflowId}-${artifact.hookEvent}`,
     url,

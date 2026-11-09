@@ -329,7 +329,7 @@ Do these in order, and keep the ERROR_BEHAVIOR_PLAN's "no keyword matching" rule
   have the verdict use it.
 - PTY script spawn failures (`WorkflowInstance.spawnScriptPty`) return `errored`, not exit 1,
   so both hosts route the same way.
-- `runDecisionHook`:
+- ~~`runDecisionHook` (Phase 5, completed 2026-11-09):~~
   - Check `result.error` and `result.signal`.
   - Add a timeout.
   - Buffer stdout and forward it only after a clean exit.
@@ -467,8 +467,11 @@ into 6a (reporter, sweep and JSON envelope) and 6b (strict integer flag parser).
    PTY path, with fixtures for 126/127/SIGKILL/timeout. _CHANGELOG Changed:_ a missing
    command or killed script now counts as "could not run" (follows `errorBehavior`), and an
    errored script step with `onError: continue` now shows as failed.~~
-5. **Decision hook failures (S6).** Coordinate with HOOK_DECISION_FORMAT_PLAN Phase 2 if it
-   is in flight.
+5. ~~**Decision hook failures (S6).**~~ Implemented 2026-11-09. Decision hooks now buffer
+   stdout until a clean exit, treat spawn errors, signals, timeouts and output overflow as
+   no decision, log stderr, and emit a visible error artifact for the run timeline. No-decision
+   exit codes live beside the future format normalizer in
+   `src/scripts/ctrlyoke-hook-decision-format.js`.
 6. **CLI reporter (C1–C4).** Mechanical sweep of the 26 sites, plus the strict integer
    parser and the additive JSON envelope. Snapshot tests pin each command's stderr text,
    JSON shape and exit code before and after, so the sweep provably changes only what is

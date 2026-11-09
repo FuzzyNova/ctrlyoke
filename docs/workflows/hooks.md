@@ -135,6 +135,10 @@ that harness supports decisions. ctrlyoke pipes the request to your command on
 stdin and passes stdout back in the harness's native response format. Define
 one `permissionRequest` hook per step; when ctrlyoke is also watching the event
 for a [notification](#hooks-and-notifications), it only runs the first.
+If the hook cannot start, times out, is killed, or exceeds the output limit,
+ctrlyoke emits no decision and the harness shows its normal permission prompt.
+Partial stdout is discarded. A hook's own explicit decision exit code is
+preserved.
 OpenCode 1.19.4 sends permission requests to the plugin event handler, which
 has no decision response channel. OpenCode hooks therefore notify only; their
 output cannot allow or deny the requested action.

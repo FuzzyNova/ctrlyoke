@@ -8,6 +8,13 @@
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const { noDecisionExitCode } = require("./ctrlyoke-hook-decision-format");
+
+// Keep the inner timeout below Copilot's default 10s command-hook timeout, so
+// Copilot can apply its documented fail-open timeout behavior.
+const DECISION_HOOK_TIMEOUT_MS = 8000;
+const DECISION_HOOK_MAX_BUFFER = 1024 * 1024;
+let lastDecisionFailureTimestamp = 0;
 
 /**
  * Get debug log file path in a specified logs directory.
@@ -188,30 +195,81 @@ function readStdinJson(scriptPrefix, debugLog, callback) {
  * @param {string} command - Shell command to run as the decision hook
  * @param {string} payloadJson - JSON string to pipe to the command's stdin
  * @param {function} debugLog - Logger returned by initializeLogger or createLogger
- * @returns {number} Exit code of the child process (0 on success / error)
+ * @returns {number} Exit code of the child process, or no-decision on failure
  */
 function runDecisionHook(command, payloadJson, debugLog) {
   const { spawnSync } = require("child_process");
+  const noDecisionCode = noDecisionExitCode(process.env.CTRLYOKE_HARNESS_ID);
   try {
     debugLog("🔐 runDecisionHook: running decision hook", { command });
     const result = spawnSync(command, {
       input: payloadJson,
       encoding: "utf-8",
       shell: true,
+      timeout: DECISION_HOOK_TIMEOUT_MS,
+      maxBuffer: DECISION_HOOK_MAX_BUFFER,
     });
+    if (result.stderr) {
+      debugLog("🔐 runDecisionHook: stderr", { stderr: result.stderr });
+    }
+    // Preserve an explicit user-hook deny (exit 2); every runtime failure
+    // must instead become the harness's no-op result.
+    const failed =
+      Boolean(result.error) ||
+      Boolean(result.signal) ||
+      (result.status !== 0 && result.status !== 2);
+    if (failed) {
+      const failure = result.error
+        ? `${result.error.code || result.error.name}: ${result.error.message}`
+        : result.signal
+          ? `terminated by signal ${result.signal}`
+          : `exited with code ${result.status}`;
+      debugLog("❌ runDecisionHook: failed; returning no decision", {
+        failure,
+        stderr: result.stderr || "",
+      });
+      writeDecisionHookFailure(failure, result.stderr || "", command);
+      return noDecisionCode;
+    }
     if (result.stdout) {
       process.stdout.write(result.stdout);
       debugLog("🔐 runDecisionHook: stdout forwarded", {
         stdout: result.stdout,
       });
     }
-    const exitCode = result.status ?? 0;
+    const exitCode = result.status;
     debugLog("🔐 runDecisionHook: completed", { exitCode });
     return exitCode;
   } catch (err) {
-    debugLog("❌ runDecisionHook: error", { error: err.message });
-    return 0;
+    debugLog("❌ runDecisionHook: error", {
+      error: err.message,
+      stderr: err.stderr,
+    });
+    writeDecisionHookFailure(err.message, err.stderr || "", command);
+    return noDecisionCode;
   }
+}
+
+function writeDecisionHookFailure(message, stderr, command) {
+  const base = buildArtifactBase();
+  const notifyDir = process.env.CTRLYOKE_NOTIFY_DIR;
+  if (!base || !notifyDir) return;
+  lastDecisionFailureTimestamp = Math.max(
+    Date.now(),
+    lastDecisionFailureTimestamp + 1
+  );
+  base.timestamp = lastDecisionFailureTimestamp;
+  writeHookArtifact(notifyDir, {
+    ...base,
+    hookEvent: "error",
+    nativeHookEvent: "decisionHookFailure",
+    rawHookData: {
+      message,
+      stderr,
+      command,
+      harnessId: process.env.CTRLYOKE_HARNESS_ID || "",
+    },
+  });
 }
 
 /**

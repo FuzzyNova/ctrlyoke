@@ -58,6 +58,25 @@ suite("CompletionNotificationFactory", () => {
     assert.strictEqual(event, null);
   });
 
+  test("surfaces decision-hook failures even when hook notifications are disabled", () => {
+    const event = buildHookNotificationEvent(
+      createHookArtifact({
+        hookEvent: "error",
+        nativeHookEvent: "decisionHookFailure",
+        rawHookData: { message: "ETIMEDOUT: decision hook timed out" },
+      }),
+      CTRLYOKE_SETTINGS_DEFAULTS.notifications
+    );
+
+    assert.ok(event);
+    assert.strictEqual(event?.title, "ctrlyoke - Decision hook failed");
+    assert.strictEqual(
+      event?.body,
+      "refactor - implement - ETIMEDOUT: decision hook timed out"
+    );
+    assert.strictEqual(event?.severity, "error");
+  });
+
   test("keeps workflow and prompt context with the native message", () => {
     const event = buildHookNotificationEvent(
       createHookArtifact({ notificationMessage: "Answer needed" }),
@@ -252,11 +271,11 @@ suite("CompletionNotificationFactory", () => {
         executionState: EXECUTION_STATES.ERROR,
         currentStep: 1,
         totalSteps: 4,
-          failure: {
-            stepLabel: "Step 2",
-            kind: "harnessError",
-            message: "Failed",
-          },
+        failure: {
+          stepLabel: "Step 2",
+          kind: "harnessError",
+          message: "Failed",
+        },
       },
       settings: {
         ...CTRLYOKE_SETTINGS_DEFAULTS.notifications,
