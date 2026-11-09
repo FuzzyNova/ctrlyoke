@@ -32,6 +32,19 @@ export class ClaudeNotificationMonitor
   extends NotificationMonitorBase
   implements INotificationMonitor
 {
+  describeHookError(rawHookData: unknown): string | undefined {
+    const data = rawHookData as {
+      error?: unknown;
+      error_details?: unknown;
+      last_assistant_message?: unknown;
+    } | undefined;
+    const error = data?.error as { message?: unknown } | undefined;
+    for (const value of [error?.message, data?.error, data?.error_details, data?.last_assistant_message]) {
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+    return undefined;
+  }
+
   /** Map logical event names to Claude's native event names. */
   static readonly EVENT_MAP: Record<HookEvent, string> = {
     stop: "Stop",

@@ -20,8 +20,11 @@ import type {
   INotificationMonitor,
   NotificationResult,
 } from "./shared/interfaces/INotificationMonitor";
+import { describeHookErrorFallback } from "./shared/interfaces/INotificationMonitor";
 import { mergeSubagentOutput } from "./shared/mergeSubagentOutput";
 import { InteractiveTurnStartWatchdog } from "./shared/InteractiveTurnStartWatchdog";
+import { secretRedactionService } from "../../utils/SecretRedactionService";
+import { sanitizeTerminalOutput } from "../../utils/TerminalOutputSanitizer";
 
 /** Maximum time (ms) spent draining log entries after completion. */
 export const DRAIN_DEADLINE_MS = 2000;
@@ -66,10 +69,13 @@ function mergeObservedSyntheticEvents(
 
 /** The message an `{sessionId}-error.json` notification carries, when it carries one. */
 function describeHarnessError(
-  data: { rawHookData?: { message?: unknown } } | undefined
+  monitor: INotificationMonitor | undefined,
+  data: { rawHookData?: unknown } | undefined
 ): string | undefined {
-  const message = data?.rawHookData?.message;
-  return typeof message === "string" && message ? message : undefined;
+  const message = monitor?.describeHookError?.(data?.rawHookData);
+  const candidate = message ?? (data?.rawHookData as { message?: unknown } | undefined)?.message;
+  if (typeof candidate !== "string" || !candidate.trim()) return undefined;
+  return sanitizeTerminalOutput(secretRedactionService.redactText(candidate)).trim();
 }
 
 /**
@@ -837,9 +843,10 @@ export class CliLogMonitor {
                 await resolveFailure({
                   failureKind: FAILURE_KINDS.HARNESS_ERROR,
                   failureMessage:
-                    describeHarnessError(result.data) ||
-                    result.error ||
-                    "Harness reported an error before completion",
+                    describeHarnessError(this.deps.notificationMonitor, result.data) ||
+                    (result.error && result.error !== "Harness reported an error"
+                      ? result.error
+                      : describeHookErrorFallback(result.data?.rawHookData)),
                   sessionIdOverride: sessionIdFromNotification,
                 });
               } else if (

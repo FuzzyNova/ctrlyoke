@@ -5,6 +5,14 @@ import { HOOK_CAVEAT_CODES } from "../../types/CompatibilityTypes";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 
 suite("OpenCodeNotificationMonitor", () => {
+  test("extracts OpenCode error data through the shared error formatter", () => {
+    assert.strictEqual(
+      new OpenCodeNotificationMonitor().describeHookError({
+        error: { name: "ProviderError", data: { message: "rate limited" } },
+      }),
+      "rate limited"
+    );
+  });
   let monitor: OpenCodeNotificationMonitor;
 
   setup(() => {

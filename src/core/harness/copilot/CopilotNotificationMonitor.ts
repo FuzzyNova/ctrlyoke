@@ -42,6 +42,16 @@ export class CopilotNotificationMonitor
   extends NotificationMonitorBase
   implements INotificationMonitor
 {
+  describeHookError(rawHookData: unknown): string | undefined {
+    const data = rawHookData as { error?: unknown } | undefined;
+    const error = data?.error as { message?: unknown } | undefined;
+    return typeof error?.message === "string" && error.message.trim()
+      ? error.message.trim()
+      : typeof data?.error === "string" && data.error.trim()
+        ? data.error.trim()
+        : undefined;
+  }
+
   /** Logical → Copilot native event name mapping. */
   static readonly EVENT_MAP: Record<HookEvent, string> = {
     stop: "agentStop",

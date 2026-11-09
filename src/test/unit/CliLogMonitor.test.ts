@@ -13,6 +13,7 @@ import type {
 import type { INotificationMonitor } from "../../core/harness/shared/interfaces/INotificationMonitor";
 import { ClaudeLogParser } from "../../core/harness/claude/ClaudeLogParser";
 import { CopilotLogParser } from "../../core/harness/copilot/CopilotLogParser";
+import { CopilotNotificationMonitor } from "../../core/harness/copilot/CopilotNotificationMonitor";
 import { AntigravityLogParser } from "../../core/harness/antigravity/AntigravityLogParser";
 import { SubagentSourceFollower } from "../../core/harness/shared/SubagentSourceFollower";
 import { InteractiveTurnStartWatchdog } from "../../core/harness/shared/InteractiveTurnStartWatchdog";
@@ -846,16 +847,24 @@ suite("CliLogMonitor", () => {
 
   // The OpenCode plugin reports a failed prompt submission with the harness's
   // own message; the generic notification error says nothing about the cause.
-  test("prefers the message an error notification carries", async () => {
+  test("uses the active harness monitor to extract hook error text", async () => {
     await withZeroDrainDeadline(async () => {
+      const hookPayload = JSON.parse(
+        fs.readFileSync(
+          path.resolve(__dirname, "../../../src/test/fixtures/harness-errors/copilot/erroroccurred-hook-input.json"),
+          "utf8"
+        )
+      );
       const monitor = new CliLogMonitor({
         logParser: createParser(),
         notificationMonitor: createNotificationMonitor({
+          describeHookError: (raw) =>
+            new CopilotNotificationMonitor().describeHookError(raw),
           monitorForCompletion: async () => ({
             completed: false,
             kind: "error",
             error: "Harness reported an error",
-            data: { rawHookData: { message: "could not submit the prompt" } },
+            data: { rawHookData: hookPayload },
           }),
         }),
         runtimeState: {
@@ -877,7 +886,7 @@ suite("CliLogMonitor", () => {
       );
 
       assert.strictEqual(result.failureKind, FAILURE_KINDS.HARNESS_ERROR);
-      assert.strictEqual(result.failureMessage, "could not submit the prompt");
+      assert.match(result.failureMessage ?? "", /Failed native model HTTP request/);
     });
   });
 

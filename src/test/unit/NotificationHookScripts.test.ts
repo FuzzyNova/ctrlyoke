@@ -654,6 +654,15 @@ suite("notification hook scripts", () => {
     }
   });
 
+  test("writes a wildcard-discoverable error filename when Copilot omits sessionId", async () => {
+    const notifyDir = path.join(tempDirectory, "copilot-no-session-error");
+    await runHook("copilot", notifyDir, ["errorOccurred"], { error: { message: "failed" } }, hookEnvironment("run-copilot-no-session", ""));
+    const files = await fs.readdir(notifyDir);
+    assert.strictEqual(files.length, 1);
+    assert.match(files[0], /-error\.json$/);
+    assert.strictEqual((await readArtifact(notifyDir, files[0])).status, "error");
+  });
+
   test("answers agy PreToolUse with allow, in and outside its workspace", async () => {
     // agy blocks the tool on JSON without a decision, and hooks.json is
     // global, so the other-workspace answer matters as much as our own.

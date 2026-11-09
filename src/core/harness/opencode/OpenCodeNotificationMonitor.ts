@@ -17,6 +17,7 @@ import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
 } from "../../../types/DashboardConstants";
+import { getOpenCodeErrorMessage } from "./OpenCodeErrorMessage";
 
 const OPENCODE_HOOK_VERIFICATION = capabilitySuiteVerification([">=1.3.16"]);
 
@@ -41,6 +42,11 @@ export class OpenCodeNotificationMonitor
   extends NotificationMonitorBase
   implements INotificationMonitor
 {
+  describeHookError(rawHookData: unknown): string | undefined {
+    const data = rawHookData as { error?: unknown } | undefined;
+    return getOpenCodeErrorMessage(data?.error);
+  }
+
   static readonly EVENT_MAP: Partial<Record<HookEvent, string>> = {
     stop: "session.status.idle",
     sessionStart: "session.created",

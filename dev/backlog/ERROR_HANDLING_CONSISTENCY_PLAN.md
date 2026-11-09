@@ -1,6 +1,6 @@
 # Error Handling Consistency Plan (harnesses, scripts, CLI)
 
-**Status:** Phase 0 capture findings recorded on 2026-11-09 (§6). Several requested probes
+**Status:** Phase 1 implemented on 2026-11-09 (H1, H4, R2 hook column). Several requested probes
 remain unresolved because the bounded run could not trigger the target event or the CLI was
 unavailable. Research and recommendation done; open decisions settled with the user on
 2026-11-08 (§7).
@@ -431,10 +431,12 @@ into 6a (reporter, sweep and JSON envelope) and 6b (strict integer flag parser).
 
 0. **Phase 0: live captures (§6).** Fixtures and recorded findings only, no product code.
 
-1. **Harness error text (H1, H4).** Add `describeHookError` per monitor, fix the Copilot
+1. ~~**Harness error text (H1, H4).** Add `describeHookError` per monitor, fix the Copilot
    no-session-ID filename, and add payload fixtures captured from real harnesses (§6).
    Highest value, smallest change, no contract impact. File a `dev/bugs/` entry for H1
-   and close it in the same commit.
+   and close it in the same commit.~~ Claude and OpenCode had no real error-hook payload
+   fixture available (§6); their extraction follows the observed documented shapes. Copilot
+   extraction uses the captured fixture.
 2. **Headless extraction and classification (H2, H5, H6).** Copilot and Antigravity get
    `metadata.error`. Add the classification rules in `getHeadlessFailure`, route
    `unknown`/`sessionRejected` through `errorBehavior`, and add `FAILURE_SOURCES`.

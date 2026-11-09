@@ -7,6 +7,11 @@ import {
 import { ClaudeNotificationMonitor } from "../../core/harness/claude/ClaudeNotificationMonitor";
 
 suite("ClaudeNotificationMonitor", () => {
+  test("extracts StopFailure error details and keeps synthetic messages", () => {
+    const monitor = new ClaudeNotificationMonitor();
+    assert.strictEqual(monitor.describeHookError({ error: "rate limited" }), "rate limited");
+    assert.strictEqual(monitor.describeHookError({ message: "resume failed" }), undefined);
+  });
   test("builds native timeout options in typed units", () => {
     assert.deepStrictEqual(buildHookTimeoutOptions(undefined), {});
     assert.deepStrictEqual(buildHookTimeoutOptions(7), { timeout: 7 });

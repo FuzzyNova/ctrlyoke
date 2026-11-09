@@ -13,6 +13,16 @@ import type {
   UserHookConfig,
 } from "../../../../types/CtrlYokeTypes";
 
+/** Keep an error artifact actionable even when a harness omits its error text. */
+export function describeHookErrorFallback(rawHookData: unknown): string {
+  const data = rawHookData as { message?: unknown } | undefined;
+  if (typeof data?.message === "string" && data.message.trim()) {
+    return data.message;
+  }
+  Log.warn("[NotificationMonitorBase] Harness error hook contained no error text");
+  return "Harness reported an error";
+}
+
 export const HOOK_TIMEOUT_UNITS = {
   SECONDS: "seconds",
   MILLISECONDS: "milliseconds",
@@ -98,6 +108,8 @@ export type HookConfig =
  * in their specific format (sessionEnd hooks, notify callbacks, etc.)
  */
 export interface INotificationMonitor {
+  /** Extract the harness's own error text from a native error-hook payload. */
+  describeHookError?(rawHookData: unknown): string | undefined;
   /**
    * Whether this harness includes session IDs in notification filenames.
    *
@@ -340,7 +352,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
               return {
                 completed: false,
                 kind: NOTIFICATION_OUTCOME_KINDS.ERROR,
-                error: "Harness reported an error",
+                error: describeHookErrorFallback(data.rawHookData),
                 data,
               };
             }
@@ -403,7 +415,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
                 return {
                   completed: false,
                   kind: NOTIFICATION_OUTCOME_KINDS.ERROR,
-                  error: "Harness reported an error",
+                  error: describeHookErrorFallback(data.rawHookData),
                   data,
                 };
               }

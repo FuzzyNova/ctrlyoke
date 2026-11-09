@@ -161,7 +161,8 @@ function main() {
       //   errorOccurred → {sessionId}-error.json
       const notifyFile =
         (hookType === "errorOccurred"
-          ? buildErrorNotifyFilePath(notifyDir, sessionId)
+          ? buildErrorNotifyFilePath(notifyDir, sessionId) ||
+            path.join(notifyDir, `error-${Date.now()}-error.json`)
           : buildNotifyFilePath(
               notifyDir,
               sessionId,

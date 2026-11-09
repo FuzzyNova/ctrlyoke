@@ -1,8 +1,14 @@
 import * as assert from "assert";
+import * as fs from "fs";
+import * as path from "path";
 import { suite, test } from "mocha";
 import { CopilotNotificationMonitor } from "../../core/harness/copilot/CopilotNotificationMonitor";
 
 suite("CopilotNotificationMonitor", () => {
+  test("extracts hook error text from the captured Copilot payload", () => {
+    const fixture = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../../src/test/fixtures/harness-errors/copilot/erroroccurred-hook-input.json"), "utf8"));
+    assert.match(new CopilotNotificationMonitor().describeHookError(fixture) ?? "", /Failed native model HTTP request/);
+  });
   test("registers lowercase notification and preserves a separate user command", () => {
     const config = new CopilotNotificationMonitor().buildHookConfig(
       "script.js",

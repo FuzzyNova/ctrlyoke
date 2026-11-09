@@ -46,6 +46,7 @@ import {
   OPENCODE_CHILD_LIFECYCLE_EVENT_TYPES,
 } from "./OpenCodeProtocolConstants";
 import { OpenCodeChildSessions } from "./OpenCodeChildSessions";
+import { getOpenCodeErrorMessage } from "./OpenCodeErrorMessage";
 import { detectOpenCodeV2 } from "./OpenCodeVersion";
 import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
 import { Log } from "../../../utils/Log";
@@ -1611,18 +1612,4 @@ export class OpenCodeLogParser extends BaseLogParser {
         return null;
     }
   }
-}
-
-/**
- * OpenCode 1 errors are `{ name, data: { message } }`; OpenCode 2 errors are
- * `{ type, message }`.
- */
-function getOpenCodeErrorMessage(error: unknown): string | undefined {
-  const details = error as
-    | { name?: unknown; message?: unknown; data?: { message?: unknown } }
-    | undefined;
-  const message = details?.data?.message ?? details?.message ?? details?.name;
-  return typeof message === "string" && message.trim()
-    ? message.trim()
-    : undefined;
 }
