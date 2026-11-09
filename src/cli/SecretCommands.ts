@@ -539,7 +539,8 @@ function writeSecretError(
         error: { message: errorMessage },
         ...data,
       }),
-      writeOut: (output) => io.writeOut(output),
+      // reportCliError terminates the line itself; io.writeOut adds its own.
+      writeOut: (output) => io.writeOut(output.replace(/\n$/, "")),
       exit: () => {},
     });
   } else {

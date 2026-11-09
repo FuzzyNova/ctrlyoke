@@ -307,6 +307,11 @@ suite("Secret command JSON output", () => {
       failureIo
     );
     assert.strictEqual(failure, 1);
+    // io.writeOut adds the line terminator; the envelope must not add its own.
+    assert.ok(
+      !failureIo.output[0].endsWith("\n"),
+      "JSON error envelope must be a single line without a blank line after it"
+    );
     assert.deepStrictEqual(JSON.parse(failureIo.output[0]), {
       schemaVersion: 1,
       success: false,
