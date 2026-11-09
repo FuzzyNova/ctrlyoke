@@ -77,6 +77,7 @@ import {
   type ViewerRootContext,
 } from "../platform/WorkspaceViewerPath";
 import { safeResolveWorkspacePath } from "./lsp/WorkspacePathContainment";
+import { IdleLruSnapshotStore } from "./IdleLruSnapshotStore";
 import {
   discoverReposCached,
   findRepoForPath,
@@ -190,13 +191,9 @@ const SEARCH_CANDIDATE_CHUNK = 256;
 const SEARCH_DEFAULT_LIMIT = 100;
 const SEARCH_MAX_LIMIT = 500;
 const SEARCH_SNIPPET_MAX_LENGTH = 200;
-const FILE_HISTORY_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
-const FILE_HISTORY_SNAPSHOT_MAX_COUNT = 32;
+const VIEWER_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
+const VIEWER_SNAPSHOT_MAX_COUNT = 32;
 const FILE_HISTORY_MAX_LIVE_WALKS = 8;
-const COMMIT_LOG_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
-const COMMIT_LOG_SNAPSHOT_MAX_COUNT = 32;
-const GIT_REF_DIFF_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
-const GIT_REF_DIFF_SNAPSHOT_MAX_COUNT = 32;
 const GIT_REF_DIFF_REFS = {
   WORKING_TREE: "~diff",
   STAGED: "~staged",
@@ -538,12 +535,30 @@ export class HostedWorkspaceViewerService {
     SEARCH_SESSION_MAX_COUNT,
     SEARCH_SESSION_IDLE_TTL_MS
   );
-  private readonly fileHistorySnapshots = new Map<
-    string,
-    FileHistorySnapshot
-  >();
-  private readonly commitLogSnapshots = new Map<string, CommitLogSnapshot>();
-  private readonly gitRefDiffSnapshots = new Map<string, GitRefDiffSnapshot>();
+  private readonly fileHistorySnapshots =
+    new IdleLruSnapshotStore<FileHistorySnapshot>({
+      ttlMs: VIEWER_SNAPSHOT_TTL_MS,
+      maxCount: VIEWER_SNAPSHOT_MAX_COUNT,
+      onEvict: (snapshot) => snapshot.walk?.dispose(),
+    });
+  private readonly commitLogSnapshots =
+    new IdleLruSnapshotStore<CommitLogSnapshot>({
+      ttlMs: VIEWER_SNAPSHOT_TTL_MS,
+      maxCount: VIEWER_SNAPSHOT_MAX_COUNT,
+      refreshOnAccess: (snapshot, now) => ({
+        ...snapshot,
+        lastAccessedAt: now,
+      }),
+    });
+  private readonly gitRefDiffSnapshots =
+    new IdleLruSnapshotStore<GitRefDiffSnapshot>({
+      ttlMs: VIEWER_SNAPSHOT_TTL_MS,
+      maxCount: VIEWER_SNAPSHOT_MAX_COUNT,
+      refreshOnAccess: (snapshot, now) => ({
+        ...snapshot,
+        lastAccessedAt: now,
+      }),
+    });
 
   constructor(
     private readonly workspaceRoot: string,
@@ -2531,7 +2546,7 @@ export class HostedWorkspaceViewerService {
       if (!isValidHistoryId(historyId)) {
         throw new WorkspaceTreeBadRequestError("historyId is invalid");
       }
-      const snapshot = this.getFileHistorySnapshot(historyId);
+      const snapshot = this.fileHistorySnapshots.get(historyId);
       if (!snapshot) throw new WorkspaceTreeExpiredError();
       if (
         !pathsEqual(snapshot.repoRoot, repoRoot) ||
@@ -2564,7 +2579,7 @@ export class HostedWorkspaceViewerService {
     const gitPath = toGitPath(this.relativeToRepo(lexicalPath, repoRoot));
     const headHash = await resolveCommit(repoRoot, "HEAD");
     const snapshot: FileHistorySnapshot = {
-      historyId: this.createFileHistoryId(),
+      historyId: this.fileHistorySnapshots.createId(),
       requestedPath: viewerPath,
       gitPath,
       repoRoot,
@@ -2575,7 +2590,6 @@ export class HostedWorkspaceViewerService {
       pageCache: new Map(),
     };
     this.fileHistorySnapshots.set(snapshot.historyId, snapshot);
-    this.trimFileHistorySnapshots();
 
     try {
       return await this.materializeFileHistoryPage(
@@ -2710,41 +2724,6 @@ export class HostedWorkspaceViewerService {
     return Math.min(WORKSPACE_FILE_HISTORY_MAX_PAGE_SIZE, requestedPageSize);
   }
 
-  private createFileHistoryId(): string {
-    let historyId = randomUUID();
-    while (this.fileHistorySnapshots.has(historyId)) {
-      historyId = randomUUID();
-    }
-    return historyId;
-  }
-
-  private getFileHistorySnapshot(
-    historyId: string
-  ): FileHistorySnapshot | undefined {
-    const now = Date.now();
-    for (const [id, snapshot] of this.fileHistorySnapshots) {
-      if (now - snapshot.lastAccessedAt >= FILE_HISTORY_SNAPSHOT_TTL_MS) {
-        snapshot.walk?.dispose();
-        this.fileHistorySnapshots.delete(id);
-      }
-    }
-    const snapshot = this.fileHistorySnapshots.get(historyId);
-    if (!snapshot) return undefined;
-    snapshot.lastAccessedAt = now;
-    this.fileHistorySnapshots.delete(historyId);
-    this.fileHistorySnapshots.set(historyId, snapshot);
-    return snapshot;
-  }
-
-  private trimFileHistorySnapshots(): void {
-    while (this.fileHistorySnapshots.size > FILE_HISTORY_SNAPSHOT_MAX_COUNT) {
-      const oldest = this.fileHistorySnapshots.keys().next().value;
-      if (oldest === undefined) return;
-      this.fileHistorySnapshots.get(oldest)?.walk?.dispose();
-      this.fileHistorySnapshots.delete(oldest);
-    }
-  }
-
   private async materializeFileHistoryPage(
     snapshot: FileHistorySnapshot,
     offset: number,
@@ -2869,72 +2848,6 @@ export class HostedWorkspaceViewerService {
     return response;
   }
 
-  private createGitRefDiffId(): string {
-    let diffId = randomUUID();
-    while (this.gitRefDiffSnapshots.has(diffId)) {
-      diffId = randomUUID();
-    }
-    return diffId;
-  }
-
-  private getGitRefDiffSnapshot(
-    diffId: string
-  ): GitRefDiffSnapshot | undefined {
-    const now = Date.now();
-    for (const [id, snapshot] of this.gitRefDiffSnapshots) {
-      if (now - snapshot.lastAccessedAt >= GIT_REF_DIFF_SNAPSHOT_TTL_MS) {
-        this.gitRefDiffSnapshots.delete(id);
-      }
-    }
-    const snapshot = this.gitRefDiffSnapshots.get(diffId);
-    if (!snapshot) return undefined;
-    const refreshed = { ...snapshot, lastAccessedAt: now };
-    this.gitRefDiffSnapshots.delete(diffId);
-    this.gitRefDiffSnapshots.set(diffId, refreshed);
-    return refreshed;
-  }
-
-  private trimGitRefDiffSnapshots(): void {
-    while (this.gitRefDiffSnapshots.size > GIT_REF_DIFF_SNAPSHOT_MAX_COUNT) {
-      const oldest = this.gitRefDiffSnapshots.keys().next().value;
-      if (oldest === undefined) return;
-      this.gitRefDiffSnapshots.delete(oldest);
-    }
-  }
-
-  private createCommitLogId(): string {
-    let historyId = randomUUID();
-    while (this.commitLogSnapshots.has(historyId)) {
-      historyId = randomUUID();
-    }
-    return historyId;
-  }
-
-  private getCommitLogSnapshot(
-    historyId: string
-  ): CommitLogSnapshot | undefined {
-    const now = Date.now();
-    for (const [id, snapshot] of this.commitLogSnapshots) {
-      if (now - snapshot.lastAccessedAt >= COMMIT_LOG_SNAPSHOT_TTL_MS) {
-        this.commitLogSnapshots.delete(id);
-      }
-    }
-    const snapshot = this.commitLogSnapshots.get(historyId);
-    if (!snapshot) return undefined;
-    const refreshed = { ...snapshot, lastAccessedAt: now };
-    this.commitLogSnapshots.delete(historyId);
-    this.commitLogSnapshots.set(historyId, refreshed);
-    return refreshed;
-  }
-
-  private trimCommitLogSnapshots(): void {
-    while (this.commitLogSnapshots.size > COMMIT_LOG_SNAPSHOT_MAX_COUNT) {
-      const oldest = this.commitLogSnapshots.keys().next().value;
-      if (oldest === undefined) return;
-      this.commitLogSnapshots.delete(oldest);
-    }
-  }
-
   private async materializeCommitLogPage(
     snapshot: CommitLogSnapshot,
     offset: number
@@ -3022,7 +2935,7 @@ export class HostedWorkspaceViewerService {
       if (!isValidHistoryId(historyId)) {
         throw new WorkspaceTreeBadRequestError("historyId is invalid");
       }
-      const snapshot = this.getCommitLogSnapshot(historyId);
+      const snapshot = this.commitLogSnapshots.get(historyId);
       if (!snapshot) throw new WorkspaceTreeExpiredError();
       const { detached } = await this.getCommitLogMetadata(repoRoot);
       if (
@@ -3059,7 +2972,7 @@ export class HostedWorkspaceViewerService {
       : 0;
 
     const snapshot: CommitLogSnapshot = {
-      historyId: this.createCommitLogId(),
+      historyId: this.commitLogSnapshots.createId(),
       repoRoot,
       branchHint: safeBranch,
       tipHash,
@@ -3071,7 +2984,6 @@ export class HostedWorkspaceViewerService {
       lastAccessedAt: Date.now(),
     };
     this.commitLogSnapshots.set(snapshot.historyId, snapshot);
-    this.trimCommitLogSnapshots();
 
     if (skip % snapshot.pageSize !== 0) {
       throw new WorkspaceTreeBadRequestError(
@@ -3554,7 +3466,7 @@ export class HostedWorkspaceViewerService {
       if (!isValidHistoryId(diffId)) {
         throw new WorkspaceTreeBadRequestError("diffId is invalid");
       }
-      const existing = this.getGitRefDiffSnapshot(diffId);
+      const existing = this.gitRefDiffSnapshots.get(diffId);
       if (!existing) throw new WorkspaceTreeExpiredError();
       if (existing.ref !== ref || !pathsEqual(existing.repoRoot, repoRoot)) {
         throw new WorkspaceTreeBadRequestError(
@@ -3575,7 +3487,7 @@ export class HostedWorkspaceViewerService {
         .filter((file) => this.isVisibleGitChangedFile(repoRoot, file))
         .map((file) => Object.freeze({ ...file }));
       snapshot = Object.freeze({
-        diffId: this.createGitRefDiffId(),
+        diffId: this.gitRefDiffSnapshots.createId(),
         ref,
         repoRoot,
         pageSize: resolvedPageSize,
@@ -3585,7 +3497,6 @@ export class HostedWorkspaceViewerService {
         lastAccessedAt: Date.now(),
       });
       this.gitRefDiffSnapshots.set(snapshot.diffId, snapshot);
-      this.trimGitRefDiffSnapshots();
     }
 
     return this.getGitRefDiffSnapshotPage(snapshot, offset);
@@ -3817,7 +3728,7 @@ export class HostedWorkspaceViewerService {
       if (!isValidHistoryId(diffId)) {
         throw new WorkspaceTreeBadRequestError("diffId is invalid");
       }
-      const existing = this.getGitRefDiffSnapshot(diffId);
+      const existing = this.gitRefDiffSnapshots.get(diffId);
       if (!existing) throw new WorkspaceTreeExpiredError();
       if (existing.ref !== ref || !pathsEqual(existing.repoRoot, repoRoot)) {
         throw new WorkspaceTreeBadRequestError(
@@ -3867,7 +3778,7 @@ export class HostedWorkspaceViewerService {
         .filter((file) => this.isVisibleGitChangedFile(repoRoot, file))
         .map((file) => Object.freeze({ ...file }));
       snapshot = Object.freeze({
-        diffId: this.createGitRefDiffId(),
+        diffId: this.gitRefDiffSnapshots.createId(),
         ref,
         repoRoot,
         pageSize: resolvedPageSize,
@@ -3880,7 +3791,6 @@ export class HostedWorkspaceViewerService {
         lastAccessedAt: Date.now(),
       });
       this.gitRefDiffSnapshots.set(snapshot.diffId, snapshot);
-      this.trimGitRefDiffSnapshots();
     }
     return this.getGitRefDiffSnapshotPage(snapshot, offset);
   }

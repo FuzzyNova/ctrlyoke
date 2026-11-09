@@ -62,6 +62,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   viewer idle-LRU snapshot stores, LSP server-root containment casing + realpath
   fallback, dashboard token/context stats copies).
   Added shared hosted workspace-viewer route error mapping and corrected reachable 403/`WorkspaceTreeHttpError` statuses.
+  The viewer's file-history, commit-log, and git-ref-diff caches now share `IdleLruSnapshotStore` while retaining their existing refresh and eviction behavior.
   Candidates for a later pass: inline `HARNESS_INFO[id]?.name ?? id` lookups in about
   ten webview files instead of `getHarnessDisplayName`/`getHarnessShortName`;
   "Parallel steps X–Y" labels retyped beside `parallelGroupHeaderTitle` in
