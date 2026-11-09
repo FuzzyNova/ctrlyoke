@@ -123,8 +123,8 @@ describe("useStepContextMenu", () => {
       "Select All",
       "Copy Step",
       "Copy Prompt",
-      "Copy Output",
-      "Copy Full Output",
+      "Copy Response",
+      "Copy Transcript",
       "Copy Metadata",
       "Reply to Step",
       "Hide output",
@@ -531,7 +531,7 @@ describe("useStepContextMenu", () => {
       />
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Copy Full Output" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy Transcript" }));
 
     const copiedText = writeText.mock.calls[0][0] as string;
     expect(copiedText).toContain("### Prompt");

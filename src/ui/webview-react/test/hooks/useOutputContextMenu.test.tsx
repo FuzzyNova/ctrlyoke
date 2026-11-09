@@ -5,16 +5,19 @@ import { useOutputContextMenu } from "@hooks/useOutputContextMenu";
 import type { OutputMessage } from "@utils/outputProjection";
 import { FINAL_STEP_PHASES } from "@/types/messages";
 import { OUTPUT_MESSAGE_TYPES } from "@root/types/DashboardConstants";
+import type { WorkflowStep } from "@store/workflowStore";
 
 function makeCliMessage(
   index: number,
   response: string,
-  timestamp: number
+  timestamp: number,
+  extra: { prompt?: string; cliCommand?: string } = {}
 ): OutputMessage {
   return {
     type: OUTPUT_MESSAGE_TYPES.CLI,
     target: { kind: FINAL_STEP_PHASES.QUEUE, index },
     timestamp,
+    prompt: extra.prompt,
     data: {
       structured: {
         events: [{ type: "text", data: { text: response } }],
@@ -22,6 +25,7 @@ function makeCliMessage(
       },
       elapsed: 1,
       isStreaming: false,
+      cliCommand: extra.cliCommand,
     },
   };
 }
@@ -35,9 +39,11 @@ const messages = [
 function TestHarness({
   allMessages = messages,
   hiddenTargetKeys = ["queue:1"],
+  steps = [],
 }: {
   allMessages?: OutputMessage[];
   hiddenTargetKeys?: string[];
+  steps?: WorkflowStep[];
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const lastCliIndexPerStep = new Map(
@@ -56,6 +62,8 @@ function TestHarness({
       ])
     ),
     lastCliIndexPerStep,
+    steps,
+    finalStep: null,
     onOpenFind: vi.fn(),
   });
 
@@ -88,12 +96,12 @@ describe("useOutputContextMenu", () => {
     cleanup();
   });
 
-  it("labels filtered Copy All with the hidden step count and copies visible output only", () => {
+  it("labels filtered Copy All Responses with the hidden step count and copies visible output only", () => {
     render(<TestHarness />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
     const copyAll = screen.getByRole("menuitem", {
-      name: "Copy All (1 step hidden)",
+      name: "Copy All Responses (1 step hidden)",
     });
     expect(copyAll).toBeInTheDocument();
 
@@ -112,11 +120,15 @@ describe("useOutputContextMenu", () => {
     render(<TestHarness />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
-    fireEvent.click(screen.getByRole("menuitem", { name: "Copy Step Output" }));
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: "Copy Step Response" })
+    );
     expect(writeText).toHaveBeenLastCalledWith("visible output one");
 
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Copy Full Output" }));
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: "Copy Step Transcript" })
+    );
     expect(writeText).toHaveBeenLastCalledWith(
       expect.stringContaining("visible output one")
     );
@@ -133,12 +145,53 @@ describe("useOutputContextMenu", () => {
       />
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Copy All" }));
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: "Copy All Responses" })
+    );
 
     const copiedText = writeText.mock.calls[0][0] as string;
     expect(copiedText).toContain("=== Step 1 ===");
     expect(copiedText).toContain("=== Step 3 ===");
     expect(copiedText).not.toContain("=== Step 2 ===");
+  });
+
+  it("copies each step's sent prompt, not the harness command line", () => {
+    render(
+      <TestHarness
+        allMessages={[
+          makeCliMessage(0, "output one", 1, {
+            prompt: "Fix the parser",
+            cliCommand: "claude -p --model opus",
+          }),
+        ]}
+        hiddenTargetKeys={[]}
+        steps={[
+          { prompt: "Fix the parser", name: "Parser fix" } as WorkflowStep,
+        ]}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: "Copy All Responses" })
+    );
+
+    const copiedText = writeText.mock.calls[0][0] as string;
+    expect(copiedText).toContain("=== Step 1: Parser fix ===");
+    expect(copiedText).toContain("Prompt:\nFix the parser");
+    expect(copiedText).toContain("Response:\noutput one");
+    expect(copiedText).not.toContain("claude -p");
+  });
+
+  it("explains what each copy item includes in its tooltip", () => {
+    render(<TestHarness hiddenTargetKeys={[]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    expect(
+      screen.getByRole("menuitem", { name: "Copy All Responses" })
+    ).toHaveAttribute("title", expect.stringContaining("prompt"));
+    expect(
+      screen.getByRole("menuitem", { name: "Copy Step Transcript" })
+    ).toHaveAttribute("title", expect.stringContaining("tool calls"));
   });
 
   it("keeps real step numbers when output arrives out of order", () => {
@@ -152,7 +205,9 @@ describe("useOutputContextMenu", () => {
       />
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Copy All" }));
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: "Copy All Responses" })
+    );
 
     const copiedText = writeText.mock.calls[0][0] as string;
     expect(copiedText).toMatch(

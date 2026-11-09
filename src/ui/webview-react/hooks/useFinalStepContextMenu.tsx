@@ -32,7 +32,7 @@ interface UseFinalStepContextMenuOptions {
   isReadOnly: boolean;
   isDisabled: boolean;
   onToggleEnabled: () => void;
-  /** Response/output text to copy; undefined disables the Copy Output item. */
+  /** Response/output text to copy; undefined disables the Copy Response item. */
   outputText?: string;
   /** Latest CLI output for the final step, used to build the Copy Metadata text. */
   latestOutput?: CliOutput | null;

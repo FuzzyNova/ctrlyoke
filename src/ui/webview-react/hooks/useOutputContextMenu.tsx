@@ -9,15 +9,44 @@ import type { OutputMessage } from "@utils/outputProjection";
 import type { CliOutput as CliOutputType } from "../types/cliEvents";
 import { FINAL_STEP_PHASES } from "../types/messages";
 import { OUTPUT_MESSAGE_TYPES } from "@root/types/DashboardConstants";
-import { getTargetKey } from "@utils/outputProjection";
+import { getOutputTargetStepName, getTargetKey } from "@utils/outputProjection";
 import { formatFinalPassLabel } from "@root/utils/FinalStepLabels";
 import { generateSingleStepMarkdownExport } from "@utils/markdownExport";
-import { OUTPUT_COPY_MENU_LABELS } from "@utils/outputCopyMenuLabels";
+import {
+  OUTPUT_COPY_MENU_LABELS,
+  OUTPUT_COPY_MENU_TITLES,
+  formatCopyAllResponsesLabel,
+} from "@utils/outputCopyMenuLabels";
+import { isScriptOutput } from "@utils/outputRenderUtils";
+import type { WorkflowStep } from "@store/workflowStore";
+
+interface CopyAllResponsesSteps {
+  steps: readonly WorkflowStep[];
+  finalStep: WorkflowStep | null;
+}
+
+/**
+ * The text a prompt step sent, or a script step's command. `cliCommand` is
+ * the spawned harness command line for a prompt step, so it is never used as
+ * the prompt.
+ */
+function getCopyAllInput(
+  msg: OutputMessage,
+  output: CliOutputType
+): { label: string; text: string } | undefined {
+  if (isScriptOutput(output)) {
+    const command = output.cliCommand?.trim();
+    return command ? { label: "Command", text: command } : undefined;
+  }
+  const prompt = msg.prompt?.trim();
+  return prompt ? { label: "Prompt", text: prompt } : undefined;
+}
 
 function buildCopyAllText(
   allMessages: OutputMessage[],
   lastCliIndexPerStep: Map<string, number>,
-  hiddenTargetKeys: readonly string[]
+  hiddenTargetKeys: readonly string[],
+  { steps, finalStep }: CopyAllResponsesSteps
 ): string {
   const hiddenKeys = new Set(hiddenTargetKeys);
   const seen = new Map<string, OutputMessage["target"]>();
@@ -40,17 +69,19 @@ function buildCopyAllText(
 
     if (hiddenKeys.has(key)) continue;
 
-    const header = isFinalStep
+    const stepLabel = isFinalStep
       ? formatFinalPassLabel(target.index + 1)
       : `Step ${target.index + 1}`;
+    const stepName = getOutputTargetStepName(target, steps, finalStep);
+    const header = stepName ? `${stepLabel}: ${stepName}` : stepLabel;
 
-    const promptText = output.cliCommand?.trim();
+    const input = getCopyAllInput(msg, output);
     const outputText = getStepAssistantTextForCopy(output);
 
-    if (promptText || outputText) {
+    if (input || outputText) {
       const section: string[] = [`=== ${header} ===`];
-      if (promptText) section.push(`\nPrompt:\n${promptText}`);
-      if (outputText) section.push(`\nOutput:\n${outputText}`);
+      if (input) section.push(`\n${input.label}:\n${input.text}`);
+      if (outputText) section.push(`\nResponse:\n${outputText}`);
       parts.push(section.join("\n"));
     }
   }
@@ -64,6 +95,9 @@ interface UseOutputContextMenuOptions {
   hiddenTargetKeys: readonly string[];
   stepScrollFractions: Map<string, number>;
   lastCliIndexPerStep: Map<string, number>;
+  /** Workflow steps, used to name each section of Copy All Responses. */
+  steps: readonly WorkflowStep[];
+  finalStep: WorkflowStep | null;
   onOpenFind: () => void;
 }
 
@@ -73,6 +107,8 @@ export function useOutputContextMenu({
   hiddenTargetKeys,
   stepScrollFractions,
   lastCliIndexPerStep,
+  steps,
+  finalStep,
   onOpenFind,
 }: UseOutputContextMenuOptions) {
   const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
@@ -120,7 +156,8 @@ export function useOutputContextMenu({
       const copyAllText = buildCopyAllText(
         allMessages,
         lastCliIndexPerStep,
-        hiddenTargetKeys
+        hiddenTargetKeys,
+        { steps, finalStep }
       );
       const presentTargetKeys = new Set(
         allMessages.map((message) => getTargetKey(message.target))
@@ -146,21 +183,20 @@ export function useOutputContextMenu({
           },
           { type: "divider" },
           {
-            label:
-              hiddenStepCount > 0
-                ? `Copy All (${hiddenStepCount} step${hiddenStepCount === 1 ? "" : "s"} hidden)`
-                : "Copy All",
+            label: formatCopyAllResponsesLabel(hiddenStepCount),
             icon: "codicon-copy",
             disabled: !hasAnyOutput || copyAllText.length === 0,
+            title: OUTPUT_COPY_MENU_TITLES.ALL_RESPONSES,
             disabledTitle: "No output to copy",
             onClick: () => {
               void writeClipboardText(copyAllText);
             },
           },
           {
-            label: OUTPUT_COPY_MENU_LABELS.COPY_STEP_OUTPUT,
+            label: OUTPUT_COPY_MENU_LABELS.COPY_STEP_RESPONSE,
             icon: "codicon-copy",
             disabled: !hoveredOutputText,
+            title: OUTPUT_COPY_MENU_TITLES.RESPONSE,
             disabledTitle: hoveredStepKey
               ? "No output to copy for this step"
               : "No step under cursor",
@@ -170,9 +206,10 @@ export function useOutputContextMenu({
             },
           },
           {
-            label: OUTPUT_COPY_MENU_LABELS.COPY_FULL_OUTPUT,
+            label: OUTPUT_COPY_MENU_LABELS.COPY_STEP_TRANSCRIPT,
             icon: "codicon-copy",
             disabled: !hoveredOutput || !hoveredTarget,
+            title: OUTPUT_COPY_MENU_TITLES.TRANSCRIPT,
             disabledTitle: hoveredStepKey
               ? "No output to copy for this step"
               : "No step under cursor",
@@ -205,6 +242,8 @@ export function useOutputContextMenu({
       hiddenTargetKeys,
       stepScrollFractions,
       lastCliIndexPerStep,
+      steps,
+      finalStep,
       onOpenFind,
     ]
   );

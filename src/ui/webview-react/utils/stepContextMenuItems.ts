@@ -25,7 +25,10 @@ import {
   type StepRuntimeMetaSnapshot,
 } from "./stepMetadataClipboard";
 import { startReplyFromStep } from "./replyToStep";
-import { OUTPUT_COPY_MENU_LABELS } from "./outputCopyMenuLabels";
+import {
+  OUTPUT_COPY_MENU_LABELS,
+  OUTPUT_COPY_MENU_TITLES,
+} from "./outputCopyMenuLabels";
 import { generateSingleStepMarkdownExport } from "./markdownExport";
 
 export interface StepCopyMenuItemsInput {
@@ -34,7 +37,7 @@ export interface StepCopyMenuItemsInput {
   slotNumber?: number;
   /** True for the workflow's final step, which has no queue position. */
   isFinalStep?: boolean;
-  /** Response/output text to copy; undefined disables the Copy Output item. */
+  /** Response/output text to copy; undefined disables the Copy Response item. */
   outputText?: string;
   latestOutput?: CliOutput | null;
   latestPrompt?: string;
@@ -78,9 +81,10 @@ export function buildStepCopyMenuItems({
       },
     },
     {
-      label: OUTPUT_COPY_MENU_LABELS.COPY_OUTPUT,
+      label: OUTPUT_COPY_MENU_LABELS.COPY_RESPONSE,
       icon: "codicon-copy",
       disabled: !outputText,
+      title: OUTPUT_COPY_MENU_TITLES.RESPONSE,
       disabledTitle: "No output to copy",
       onClick: () => {
         if (!outputText) return;
@@ -88,9 +92,10 @@ export function buildStepCopyMenuItems({
       },
     },
     {
-      label: OUTPUT_COPY_MENU_LABELS.COPY_FULL_OUTPUT,
+      label: OUTPUT_COPY_MENU_LABELS.COPY_TRANSCRIPT,
       icon: "codicon-copy",
       disabled: !latestOutput,
+      title: OUTPUT_COPY_MENU_TITLES.TRANSCRIPT,
       disabledTitle: "No output to copy",
       onClick: () => {
         if (!latestOutput) return;

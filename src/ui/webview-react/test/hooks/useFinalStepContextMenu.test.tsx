@@ -124,8 +124,8 @@ describe("useFinalStepContextMenu", () => {
     expect(labels).toEqual([
       "Copy Step",
       "Copy Prompt",
-      "Copy Output",
-      "Copy Full Output",
+      "Copy Response",
+      "Copy Transcript",
       "Copy Metadata",
       "Reply to Step",
       "Hide output",
@@ -266,12 +266,12 @@ describe("useFinalStepContextMenu", () => {
     });
   });
 
-  it("disables Copy Output when there is no output yet", () => {
+  it("disables Copy Response when there is no output yet", () => {
     render(<TestHarness finalStep={{ prompt: "Final prompt" }} />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
     expect(
-      screen.getByRole("menuitem", { name: "Copy Output" })
+      screen.getByRole("menuitem", { name: "Copy Response" })
     ).toBeDisabled();
   });
 
@@ -298,7 +298,7 @@ describe("useFinalStepContextMenu", () => {
     expect(copiedText).not.toMatch(/step \d/);
   });
 
-  it("copies output text via Copy Output when present", () => {
+  it("copies output text via Copy Response when present", () => {
     render(
       <TestHarness
         finalStep={{ prompt: "Final prompt" }}
@@ -306,12 +306,12 @@ describe("useFinalStepContextMenu", () => {
       />
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Copy Output" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy Response" }));
 
     expect(writeText).toHaveBeenCalledWith("final output text");
   });
 
-  it("copies the full single-step export from Copy Full Output", () => {
+  it("copies the full single-step export from Copy Transcript", () => {
     const latestOutput: CliOutput = {
       elapsed: 1,
       isStreaming: false,
@@ -333,7 +333,7 @@ describe("useFinalStepContextMenu", () => {
       />
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Copy Full Output" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy Transcript" }));
     expect(writeText).toHaveBeenCalledWith(
       generateSingleStepMarkdownExport(latestOutput, {
         kind: FINAL_STEP_PHASES.FINAL_STEP,
@@ -370,7 +370,7 @@ describe("useFinalStepContextMenu", () => {
       />
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Copy Full Output" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy Transcript" }));
 
     const copiedText = writeText.mock.calls[0][0] as string;
     expect(copiedText).toContain("### Prompt");

@@ -114,19 +114,29 @@ marker popup or the step menu, to bring the output back.
 
 ## Copying and exporting {#copying-and-exporting}
 
-- **Copy output** at the end of each step copies the assistant's text for that
-  step. The step menu also offers **Copy Full Output**, which includes thinking,
-  tool calls and results, diffs, commands, and terminal output.
-- Right-click the output for **Copy** (the selected text), **Copy All**,
-  **Copy Step Output** (the step under the pointer), and **Copy Full Output**
-  for that step. **Copy All** leaves out hidden steps and says how many it
-  skipped.
+A step's **response** is the assistant's text. Its **transcript** is
+everything the step produced: the prompt, thinking, tool calls and results,
+diffs, commands, and terminal output.
+
+- **Copy output** at the end of each step copies that step's response. The
+  step menu offers **Copy Response** and **Copy Transcript**.
+- Right-click the output for:
+  - **Copy**: the selected text.
+  - **Copy All Responses**: every step's prompt and response, in order, so the
+    responses read in context. Tool calls, thinking and diffs are left out.
+    Hidden steps are skipped, and the item says how many.
+  - **Copy Step Response** and **Copy Step Transcript**: the step under the
+    pointer.
+- For whole-run transcripts, use **Export output to markdown**.
 - **Export output to markdown** opens **Export Output**, with these options:
   - **Include CLI command**: the command each prompt step ran.
   - **Include metadata**: step headings, token stats, session IDs and
     separators. Clear it for a clean conversation history.
   - **Step range**: for example `1,3,5-10`. Leave it blank to export every step.
     When steps are hidden, the range starts with the visible steps.
+
+  Choose **Export** to save the markdown to a file (**Download** in the
+  browser dashboard), or **Copy to Clipboard** to copy it instead.
 
   In VS Code, **Export** asks where to save the file. In the browser dashboard,
   **Download** saves it through the browser.

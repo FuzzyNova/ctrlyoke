@@ -397,3 +397,20 @@ export function toOutputMessageTarget(
 export function getTargetKey(target: OutputMessageTarget): string {
   return `${target.kind}:${target.index}`;
 }
+
+interface NamedStep {
+  name?: string;
+}
+
+/** The authored name of the step an output belongs to, if it has one. */
+export function getOutputTargetStepName(
+  target: OutputMessageTarget,
+  steps: readonly NamedStep[],
+  finalStep: NamedStep | null
+): string | undefined {
+  const step =
+    target.kind === FINAL_STEP_PHASES.FINAL_STEP
+      ? finalStep
+      : steps[target.index];
+  return step?.name?.trim() || undefined;
+}

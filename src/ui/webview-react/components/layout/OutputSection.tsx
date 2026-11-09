@@ -1462,6 +1462,8 @@ const OutputSectionInner: React.FC = () => {
     hiddenTargetKeys: hiddenOutputEntry?.keys ?? EMPTY_HIDDEN_TARGET_KEYS,
     stepScrollFractions,
     lastCliIndexPerStep,
+    steps,
+    finalStep,
     onOpenFind: handleOpenFind,
   });
 
@@ -1836,6 +1838,7 @@ const OutputSectionInner: React.FC = () => {
           totalCliSteps={outputExport.totalCliSteps}
           onClose={outputExport.closeModal}
           onConfirm={outputExport.confirmExport}
+          onCopy={outputExport.copyExport}
           onIncludeCommandChange={outputExport.setIncludeCommand}
           onIncludeMetadataChange={outputExport.setIncludeMetadata}
           onStepRangeChange={outputExport.updateStepRange}

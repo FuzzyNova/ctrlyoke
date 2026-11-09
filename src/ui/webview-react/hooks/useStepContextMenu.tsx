@@ -89,7 +89,7 @@ interface OpenContextMenuParams {
   isCurrentStep: boolean;
   isExecutionTargetLocked: boolean;
   direction: WorktreePositionDirection;
-  /** Response/output text to copy; undefined disables the Copy output item */
+  /** Response/output text to copy; undefined disables the Copy Response item */
   outputText?: string;
   /** Latest CLI output for this step, used to build the Copy Metadata text (session ID, tokens, cost) */
   latestOutput?: CliOutput | null;

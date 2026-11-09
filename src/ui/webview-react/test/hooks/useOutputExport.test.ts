@@ -184,6 +184,45 @@ describe("useOutputExport", () => {
     }
   );
 
+  it("copies the same markdown to the clipboard instead of exporting it", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    const { result } = renderExportHook({ initialHiddenTargetKeys: [] });
+
+    act(() => result.current.openModal());
+    act(() => result.current.confirmExport());
+    const exported = (postMessage.mock.calls[0][0] as { content: string })
+      .content;
+    postMessage.mockClear();
+
+    act(() => result.current.openModal());
+    await act(async () => result.current.copyExport());
+
+    expect(writeText).toHaveBeenCalledWith(exported);
+    expect(postMessage).not.toHaveBeenCalled();
+    expect(result.current.modalOpen).toBe(false);
+  });
+
+  it("keeps the modal open and copies nothing when the step range is invalid", () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    const { result } = renderExportHook();
+
+    act(() => result.current.openModal());
+    act(() => result.current.updateStepRange("1-x"));
+    act(() => result.current.copyExport());
+
+    expect(writeText).not.toHaveBeenCalled();
+    expect(result.current.stepRangeError).toBe(true);
+    expect(result.current.modalOpen).toBe(true);
+  });
+
   it("keeps history export on the aggregate ordered entries", () => {
     const { result } = renderExportHook({
       isViewingHistory: true,

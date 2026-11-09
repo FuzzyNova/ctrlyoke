@@ -11,6 +11,7 @@ interface ExportOutputModalProps {
   totalCliSteps: number;
   onClose: () => void;
   onConfirm: () => void;
+  onCopy: () => void;
   onIncludeCommandChange: (checked: boolean) => void;
   onIncludeMetadataChange: (checked: boolean) => void;
   onStepRangeChange: (value: string) => void;
@@ -25,6 +26,7 @@ export const ExportOutputModal: React.FC<ExportOutputModalProps> = ({
   totalCliSteps,
   onClose,
   onConfirm,
+  onCopy,
   onIncludeCommandChange,
   onIncludeMetadataChange,
   onStepRangeChange,
@@ -42,6 +44,14 @@ export const ExportOutputModal: React.FC<ExportOutputModalProps> = ({
           onClick={onClose}
         >
           Cancel
+        </button>
+        <button
+          type="button"
+          className="px-4 py-2 text-sm bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover rounded-sm transition-colors"
+          onClick={onCopy}
+        >
+          <Icon name="copy" className="mr-1" />
+          Copy to Clipboard
         </button>
         <button
           type="button"

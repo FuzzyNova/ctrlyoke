@@ -7,13 +7,15 @@ import {
   type ExportOptions,
 } from "@utils/markdownExport";
 import {
+  getOutputTargetStepName,
   getTargetKey,
   mapOrderedHistoryEntriesToMessages,
   type OutputMessage,
 } from "@utils/outputProjection";
+import { writeClipboardText } from "@utils/stepClipboard";
 import type { WorkflowStep } from "@store/workflowStore";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
-import { FINAL_STEP_PHASES, MESSAGE_TYPES } from "@/types/messages";
+import { MESSAGE_TYPES } from "@/types/messages";
 import { OUTPUT_MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import { WebviewLog } from "@/utils/logger";
 
@@ -131,21 +133,23 @@ export function useOutputExport({
         runIndex: msg.runIndex,
         stepName:
           msg.type === OUTPUT_MESSAGE_TYPES.CLI
-            ? msg.target.kind === FINAL_STEP_PHASES.FINAL_STEP
-              ? finalStep?.name?.trim() || undefined
-              : steps[msg.target.index]?.name?.trim() || undefined
+            ? getOutputTargetStepName(msg.target, steps, finalStep)
             : undefined,
       })),
-    [exportMessages, finalStep?.name, steps]
+    [exportMessages, finalStep, steps]
   );
 
-  const confirmExport = useCallback(() => {
+  /**
+   * Build the markdown for the modal's current options, or null when the
+   * step range is invalid (flagged in the modal) or generation fails.
+   */
+  const buildMarkdownContent = useCallback((): string | null => {
     let parsedRange: number[] | undefined;
     if (stepRange.trim()) {
       const parsed = parseRangeNotation(stepRange);
       if (!parsed) {
         setStepRangeError(true);
-        return;
+        return null;
       }
       parsedRange = parsed;
     }
@@ -156,9 +160,8 @@ export function useOutputExport({
       stepRange: parsedRange,
     };
 
-    let markdownContent: string;
     try {
-      markdownContent = generateMarkdownExport(
+      return generateMarkdownExport(
         buildExportMessages(),
         {
           fileName: fileName || "Unknown",
@@ -173,8 +176,34 @@ export function useOutputExport({
         "[useOutputExport] Failed to generate markdown export",
         error
       );
-      return;
+      return null;
     }
+  }, [
+    buildExportMessages,
+    currentStep,
+    executionState,
+    fileName,
+    includeCommand,
+    includeMetadata,
+    stepRange,
+    totalSteps,
+  ]);
+
+  const copyExport = useCallback(() => {
+    const markdownContent = buildMarkdownContent();
+    if (markdownContent === null) return;
+    setModalOpen(false);
+    writeClipboardText(markdownContent).catch((error: unknown) => {
+      WebviewLog.error(
+        "[useOutputExport] Failed to copy markdown export",
+        error
+      );
+    });
+  }, [buildMarkdownContent]);
+
+  const confirmExport = useCallback(() => {
+    const markdownContent = buildMarkdownContent();
+    if (markdownContent === null) return;
 
     setModalOpen(false);
 
@@ -194,21 +223,12 @@ export function useOutputExport({
       content: markdownContent,
       fileName,
     });
-  }, [
-    buildExportMessages,
-    currentStep,
-    executionState,
-    exportOrderedEntries,
-    fileName,
-    includeCommand,
-    includeMetadata,
-    stepRange,
-    totalSteps,
-  ]);
+  }, [buildMarkdownContent, fileName]);
 
   return {
     closeModal,
     confirmExport,
+    copyExport,
     includeCommand,
     includeMetadata,
     isStandaloneMode: isStandalone,
