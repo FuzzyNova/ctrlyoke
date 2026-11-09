@@ -108,10 +108,11 @@ import {
 import {
   hasInFlightStep as isStepInFlight,
   hasStarted,
-  getResumableTerminalFailureIndex,
-  getResumableTerminalFailedGroup,
-  isGroupMemberRetried,
-  getProtectedTerminalFailureIndex,
+  getProtectedTerminalFailure,
+  getTerminalFailureRetry,
+  reorderMovesProtectedFailure,
+  type ProtectedTerminalFailure,
+  type TerminalFailureState,
   terminalFailureMutationMessage,
 } from "../utils/StepStatusDerivation";
 import { settleInterruptedRun } from "../utils/InterruptedRunSettlement";
@@ -957,51 +958,19 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    * so the executor re-enters the group and dispatches only the reset ones.
    */
   public async rewindTerminalFailureForContinuation(): Promise<boolean> {
-    const failedGroup = getResumableTerminalFailedGroup({
-      executionState: this.stateMachine.status,
-      currentIndex: this.state.currentIndex,
-      steps: this.state.steps,
-      parallelGroups: this.state.parallelGroups,
-    });
-    if (failedGroup) {
-      const retried: number[] = [];
-      for (
-        let index = failedGroup.startIndex;
-        index <= failedGroup.endIndex;
-        index += 1
-      ) {
-        if (isGroupMemberRetried(this.state.steps[index])) {
-          retried.push(index);
-        }
-      }
-      if (!retried.every((index) => this.state.results[index])) return false;
-      this.state.currentIndex = failedGroup.startIndex;
-      for (const index of retried) {
-        this.resetStepForRetry(index);
-      }
-      this.emitStateChange();
-      await this.updateWorkingFile();
-      return true;
-    }
-
-    const failedIndex = getResumableTerminalFailureIndex({
-      executionState: this.stateMachine.status,
-      currentIndex: this.state.currentIndex,
-      steps: this.state.steps,
-      resultStatus: this.state.results[this.state.currentIndex - 1]?.status,
-    });
-    if (failedIndex === undefined) {
-      return false;
-    }
+    const retry = getTerminalFailureRetry(this.getTerminalFailureState());
     if (
-      !this.state.results[failedIndex] ||
-      !this.state.steps[failedIndex]?._runtime
+      !retry ||
+      !retry.resetIndices.every(
+        (index) => this.state.results[index] && this.state.steps[index]
+      )
     ) {
       return false;
     }
-
-    this.state.currentIndex = failedIndex;
-    this.resetStepForRetry(failedIndex);
+    this.state.currentIndex = retry.headIndex;
+    for (const index of retry.resetIndices) {
+      this.resetStepForRetry(index);
+    }
     this.emitStateChange();
     await this.updateWorkingFile();
     return true;
@@ -1022,7 +991,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     }
     const step = this.state.steps[index];
     if (step?._runtime) {
-      const hadFailure = step._runtime.terminalStatus === STEP_STATUS.FAILED;
+      // A step with recorded attempts keeps them attached to its position.
+      const hadAttempts = hasStarted(step);
       const {
         startedAt: _startedAt,
         completedAt: _completedAt,
@@ -1033,19 +1003,46 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         ...remainingRuntime
       } = step._runtime;
       step._runtime = remainingRuntime;
-      if (hadFailure) {
+      if (hadAttempts) {
         step._runtime.rewoundFailure = true;
       }
     }
   }
 
-  private getResumableTerminalFailureIndex(): number | undefined {
-    return getProtectedTerminalFailureIndex({
+  private getTerminalFailureState(): TerminalFailureState {
+    return {
       executionState: this.stateMachine.status,
       currentIndex: this.state.currentIndex,
       steps: this.state.steps,
       resultStatus: this.state.results[this.state.currentIndex - 1]?.status,
-    });
+      parallelGroups: this.state.parallelGroups,
+    };
+  }
+
+  private getProtectedTerminalFailure(): ProtectedTerminalFailure {
+    return getProtectedTerminalFailure(this.getTerminalFailureState());
+  }
+
+  /** Rewind the terminal failure first when a mutation targets a step it retries. */
+  private async rewindFailureTargetedBy(
+    indices: readonly number[]
+  ): Promise<void> {
+    const retry = getTerminalFailureRetry(this.getTerminalFailureState());
+    if (retry && indices.some((index) => retry.resetIndices.includes(index))) {
+      await this.rewindTerminalFailureForContinuation();
+    }
+  }
+
+  private assertInsertKeepsProtectedFailure(insertIndex: number): void {
+    const protectedFailure = this.getProtectedTerminalFailure();
+    if (protectedFailure.indices.includes(insertIndex)) {
+      throw new Error(
+        terminalFailureMutationMessage(
+          "reorder",
+          protectedFailure.inParallelGroup
+        )
+      );
+    }
   }
 
   /**
@@ -2190,14 +2187,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         PARALLEL_GROUP_INSERT_POSITIONS.AFTER
       );
       const insertIndex = placement.insertedIndex;
-      const protectedFailureIndex = getProtectedTerminalFailureIndex({
-        executionState: this.stateMachine.status,
-        currentIndex: this.state.currentIndex,
-        steps: this.state.steps,
-      });
-      if (protectedFailureIndex === insertIndex) {
-        throw new Error(terminalFailureMutationMessage("reorder"));
-      }
+      this.assertInsertKeepsProtectedFailure(insertIndex);
 
       // Insert steps at the specified position
       const identifiedTopology = insertParallelGroupTopology(
@@ -2479,14 +2469,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       );
       const insertIndex = placement.insertedIndex;
       this.assertPendingRewindSuffixIndex(insertIndex, "insert");
-      const protectedFailureIndex = getProtectedTerminalFailureIndex({
-        executionState: this.stateMachine.status,
-        currentIndex: this.state.currentIndex,
-        steps: this.state.steps,
-      });
-      if (protectedFailureIndex === insertIndex) {
-        throw new Error(terminalFailureMutationMessage("reorder"));
-      }
+      this.assertInsertKeepsProtectedFailure(insertIndex);
       // Validate the resolved destination: a request inside a live parallel
       // group is relocated after the group before it can shift started steps.
       this.assertEditableDuringExecution(insertIndex, "insert");
@@ -2897,9 +2880,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     index: number,
     updates: Partial<WorkflowStep>
   ): Promise<void> {
-    if (index === this.state.currentIndex - 1) {
-      await this.rewindTerminalFailureForContinuation();
-    }
+    await this.rewindFailureTargetedBy([index]);
     // Mutation and write run as one serialized operation, so no other
     // queued write can persist (or disk-merge away) the half-applied state.
     await this.workingFileManager.runInQueue(async () => {
@@ -2992,9 +2973,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     properties: Record<string, unknown>,
     clearProperties?: string[]
   ): Promise<void> {
-    if (indices.includes(this.state.currentIndex - 1)) {
-      await this.rewindTerminalFailureForContinuation();
-    }
+    await this.rewindFailureTargetedBy(indices);
     await this.workingFileManager.runInQueue(async () => {
       const unique = [...new Set(indices)];
       if (unique.length !== indices.length || unique.length === 0) {
@@ -3062,9 +3041,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    * @throws Error if index is out of range
    */
   public async replaceStep(index: number, step: WorkflowStep): Promise<void> {
-    if (index === this.state.currentIndex - 1) {
-      await this.rewindTerminalFailureForContinuation();
-    }
+    await this.rewindFailureTargetedBy([index]);
     // Mutation and write run as one serialized operation, so no other
     // queued write can persist (or disk-merge away) the half-applied state.
     await this.workingFileManager.runInQueue(async () => {
@@ -3118,13 +3095,16 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    * @returns A warning naming steps whose references the removal affected, if any.
    */
   public async deletePrompts(indices: number[]): Promise<string | undefined> {
-    const failureIndex = this.getResumableTerminalFailureIndex();
-    if (failureIndex !== undefined && indices.includes(failureIndex)) {
-      throw new Error(terminalFailureMutationMessage("remove"));
+    const protectedFailure = this.getProtectedTerminalFailure();
+    if (protectedFailure.indices.some((index) => indices.includes(index))) {
+      throw new Error(
+        terminalFailureMutationMessage(
+          "remove",
+          protectedFailure.inParallelGroup
+        )
+      );
     }
-    if (indices.includes(this.state.currentIndex - 1)) {
-      await this.rewindTerminalFailureForContinuation();
-    }
+    await this.rewindFailureTargetedBy(indices);
     let warning: string | undefined;
     // Mutation and write run as one serialized operation, so no other
     // queued write can persist (or disk-merge away) the half-applied state.
@@ -3251,12 +3231,26 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     newPendingOrder: number[],
     pendingGroups?: PendingParallelGroupRange[]
   ): Promise<string | undefined> {
-    const failureIndex = this.getResumableTerminalFailureIndex();
-    const includesFailure =
-      failureIndex !== undefined &&
-      newPendingOrder.length === this.state.steps.length - failureIndex;
-    if (includesFailure && newPendingOrder[0] !== 0) {
-      throw new Error(terminalFailureMutationMessage("reorder"));
+    // The order is relative to the pending range it covers, which starts at
+    // the rewound failure when the dashboard includes it.
+    const rangeStart = this.state.steps.length - newPendingOrder.length;
+    const protectedFailure = this.getProtectedTerminalFailure();
+    const includesFailure = protectedFailure.indices.some(
+      (index) => index >= rangeStart
+    );
+    if (
+      reorderMovesProtectedFailure(
+        protectedFailure.indices,
+        rangeStart,
+        newPendingOrder.map((position) => position + rangeStart)
+      )
+    ) {
+      throw new Error(
+        terminalFailureMutationMessage(
+          "reorder",
+          protectedFailure.inParallelGroup
+        )
+      );
     }
     if (includesFailure) {
       await this.rewindTerminalFailureForContinuation();

@@ -39,7 +39,9 @@ When a member's failure stops the workflow, **Resume** (or `ctrlyoke continue`)
 runs the group again: every member that failed, was cancelled, or never
 finished runs as a new attempt, and the members that already succeeded keep
 their results and are not run again. The rest of the queue follows once the
-group settles.
+group settles. Before resuming you can edit a failed member, or disable it to
+skip it; it can't be removed or moved because it has recorded attempts, and the
+members that succeeded can't be changed.
 
 ## Shared workspace
 

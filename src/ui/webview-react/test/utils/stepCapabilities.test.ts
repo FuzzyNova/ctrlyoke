@@ -10,6 +10,7 @@ import type { WorkflowStep } from "@store/workflowStore";
 import {
   findSelectedIndexLacking,
   getBulkPromptPropertyDisabledReason,
+  getProtectedFailureIndices,
   getSelectionCapabilities,
   getStepCapabilities,
   isStepExecutionLocked,
@@ -200,5 +201,59 @@ describe("stepCapabilities", () => {
         "canEditColor"
       )
     ).toBeUndefined();
+  });
+});
+
+describe("stepCapabilities for a run stopped by a failed parallel group", () => {
+  const settled = (
+    terminalStatus: string,
+    terminalFailure?: boolean
+  ): WorkflowStep => ({
+    ...prompt,
+    _runtime: {
+      startedAt: 1,
+      completedAt: 2,
+      terminalStatus,
+      ...(terminalFailure === undefined ? {} : { terminalFailure }),
+    } as unknown as WorkflowStep["_runtime"],
+  });
+  const steps: WorkflowStep[] = [
+    settled(PROMPT_TERMINAL_STATUS.COMPLETED),
+    settled(PROMPT_TERMINAL_STATUS.FAILED, true),
+    settled(PROMPT_TERMINAL_STATUS.COMPLETED),
+    { ...prompt },
+  ];
+  const parallelGroups: ParallelGroupDefinition[] = [
+    { id: "group", startIndex: 0, endIndex: 2, failFast: false },
+  ];
+  const base = {
+    currentStep: 3,
+    executionState: EXECUTION_STATES.ERROR,
+    totalSteps: steps.length,
+    parallelGroups,
+  };
+  const context = {
+    ...base,
+    protectedFailureIndices: getProtectedFailureIndices(steps, base),
+  };
+
+  it("lets the failed member be edited or disabled but not removed or moved", () => {
+    expect(context.protectedFailureIndices).toEqual([1]);
+    expect(getStepCapabilities(steps[1], 1, context)).toMatchObject({
+      canEditPromptProperties: true,
+      canToggleEnabled: true,
+      canDelete: false,
+      canReorder: false,
+    });
+  });
+
+  it("keeps members that succeeded locked", () => {
+    for (const index of [0, 2]) {
+      expect(getStepCapabilities(steps[index], index, context)).toMatchObject({
+        canEditPromptProperties: false,
+        canToggleEnabled: false,
+        canDelete: false,
+      });
+    }
   });
 });

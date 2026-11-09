@@ -71,6 +71,8 @@ import {
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
 import {
   assertEditableDuringExecution,
+  assertRemovableTerminalFailure,
+  protectedTerminalFailureOf,
   rewindTargetedFailure,
 } from "./orchestration/RunContinuationService";
 import {
@@ -80,7 +82,7 @@ import {
 import { RunContinuationService } from "./orchestration/RunContinuationService";
 import { TimelineRecorder } from "./orchestration/TimelineRecorder";
 import {
-  getProtectedTerminalFailureIndex,
+  reorderMovesProtectedFailure,
   terminalFailureMutationMessage,
 } from "../utils/StepStatusDerivation";
 import {
@@ -1720,13 +1722,14 @@ export class WorkingFileManager {
           PARALLEL_GROUP_INSERT_POSITIONS.AFTER
         );
         const insertIndex = placement.insertedIndex;
-        const protectedFailureIndex = getProtectedTerminalFailureIndex({
-          executionState: source._runtime?.executionState,
-          currentIndex: source._runtime?.currentIndex,
-          steps,
-        });
-        if (protectedFailureIndex === insertIndex) {
-          throw new Error(terminalFailureMutationMessage("reorder"));
+        const protectedFailure = protectedTerminalFailureOf(source, steps);
+        if (protectedFailure.indices.includes(insertIndex)) {
+          throw new Error(
+            terminalFailureMutationMessage(
+              "reorder",
+              protectedFailure.inParallelGroup
+            )
+          );
         }
         const nextTopology = insertParallelGroupSteps(
           topology,
@@ -1998,14 +2001,7 @@ export class WorkingFileManager {
           if (!Number.isInteger(index) || index < 0 || index >= steps.length) {
             throw new Error(`Invalid prompt index: ${index}`);
           }
-          const failureIndex = getProtectedTerminalFailureIndex({
-            executionState: source._runtime?.executionState,
-            currentIndex: source._runtime?.currentIndex,
-            steps,
-          });
-          if (failureIndex === index) {
-            throw new Error(terminalFailureMutationMessage("remove"));
-          }
+          assertRemovableTerminalFailure(source, steps, index);
           rewindTargetedFailure(source, steps, index);
           assertEditableDuringExecution(source, steps, index, "delete");
         }
@@ -2120,17 +2116,25 @@ export class WorkingFileManager {
           parallelGroups: source.parallelGroups,
         });
         const currentIndex = source._runtime?.currentIndex ?? 0;
-        const failureIndex = getProtectedTerminalFailureIndex({
-          executionState: source._runtime?.executionState,
-          currentIndex,
-          steps: topology.steps,
-        });
+        const protectedFailure = protectedTerminalFailureOf(
+          source,
+          topology.steps,
+          currentIndex
+        );
+        const rangeStart = topology.steps.length - newPendingOrder.length;
         if (
-          failureIndex !== undefined &&
-          newPendingOrder.length === topology.steps.length - failureIndex &&
-          newPendingOrder[0] !== 0
+          reorderMovesProtectedFailure(
+            protectedFailure.indices,
+            rangeStart,
+            newPendingOrder.map((position) => position + rangeStart)
+          )
         ) {
-          throw new Error(terminalFailureMutationMessage("reorder"));
+          throw new Error(
+            terminalFailureMutationMessage(
+              "reorder",
+              protectedFailure.inParallelGroup
+            )
+          );
         }
         const nextTopology = reorderParallelGroupPendingSteps(
           topology,

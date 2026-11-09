@@ -43,21 +43,110 @@ export interface StepWithRuntimeStatus {
   };
 }
 
-/** Queue index whose attempt history must remain attached to the failed step. */
-export function getProtectedTerminalFailureIndex(state: {
+/** The run facts terminal-failure recovery reads. */
+export interface TerminalFailureState {
   executionState: string | undefined;
   currentIndex: number | undefined;
   steps: readonly StepWithRuntimeStatus[];
+  /** The queue result status of the step before the head, when known. */
   resultStatus?: string;
-}): number | undefined {
-  const terminalIndex = getResumableTerminalFailureIndex(state);
-  if (terminalIndex !== undefined) return terminalIndex;
-  const index = state.currentIndex ?? -1;
-  return state.executionState === EXECUTION_STATES.ERROR &&
-    index >= 0 &&
-    state.steps[index]?._runtime?.rewoundFailure === true
-    ? index
-    : undefined;
+  parallelGroups?: readonly ParallelGroupBounds[];
+}
+
+/** What continuing a settled ERROR run rewinds. */
+export interface TerminalFailureRetry {
+  /** Where the head moves: the failed step, or the failed group's start. */
+  headIndex: number;
+  /** The steps returned to pending: the failed step, or every member that did not succeed. */
+  resetIndices: readonly number[];
+  inParallelGroup: boolean;
+}
+
+/**
+ * The rewind that continuation applies to a settled ERROR run's terminal queue
+ * failure, or `undefined` when there is nothing to retry. Every host (the live
+ * queue, offline run edits and the working-file writer) applies this one plan.
+ */
+export function getTerminalFailureRetry(
+  state: TerminalFailureState
+): TerminalFailureRetry | undefined {
+  const group = getResumableTerminalFailedGroup(state);
+  if (group) {
+    const resetIndices: number[] = [];
+    for (let index = group.startIndex; index <= group.endIndex; index += 1) {
+      if (isGroupMemberRetried(state.steps[index])) resetIndices.push(index);
+    }
+    return { headIndex: group.startIndex, resetIndices, inParallelGroup: true };
+  }
+  const index = getResumableTerminalFailureIndex(state);
+  return index === undefined
+    ? undefined
+    : { headIndex: index, resetIndices: [index], inParallelGroup: false };
+}
+
+/** Steps whose attempt history must stay attached to their position. */
+export interface ProtectedTerminalFailure {
+  indices: readonly number[];
+  inParallelGroup: boolean;
+}
+
+/**
+ * The queue indices of a terminal failure that continuation will run again
+ * and that already have recorded attempts: the failed step, or the failed
+ * group's members that started. They may be edited or disabled but not
+ * removed or moved. This holds both before continuation rewinds the run and
+ * after (an edit rewinds it early), when the reset steps carry
+ * `rewoundFailure`.
+ */
+export function getProtectedTerminalFailure(
+  state: TerminalFailureState
+): ProtectedTerminalFailure {
+  const retry = getTerminalFailureRetry(state);
+  if (retry) {
+    return {
+      indices: retry.resetIndices.filter((index) =>
+        hasStarted(state.steps[index])
+      ),
+      inParallelGroup: retry.inParallelGroup,
+    };
+  }
+  const head = state.currentIndex ?? -1;
+  if (state.executionState !== EXECUTION_STATES.ERROR || head < 0) {
+    return { indices: [], inParallelGroup: false };
+  }
+  const group = state.parallelGroups?.find(
+    (candidate) => candidate.startIndex === head
+  );
+  if (group) {
+    const rewound: number[] = [];
+    for (let index = group.startIndex; index <= group.endIndex; index += 1) {
+      if (state.steps[index]?._runtime?.rewoundFailure === true) {
+        rewound.push(index);
+      }
+    }
+    if (rewound.length > 0) {
+      return { indices: rewound, inParallelGroup: true };
+    }
+  }
+  return state.steps[head]?._runtime?.rewoundFailure === true
+    ? { indices: [head], inParallelGroup: false }
+    : { indices: [], inParallelGroup: false };
+}
+
+/**
+ * Whether a reorder moves a protected failure. `newOrder` lists absolute step
+ * indices in their new order for the range starting at `rangeStart`; every
+ * protected index inside that range must keep its place.
+ */
+export function reorderMovesProtectedFailure(
+  protectedIndices: readonly number[],
+  rangeStart: number,
+  newOrder: readonly number[]
+): boolean {
+  return protectedIndices.some(
+    (index) =>
+      newOrder.includes(index) && newOrder[index - rangeStart] !== index
+  );
 }
 
 /** Queue index of the failed step that continuation will run again. */
@@ -101,7 +190,7 @@ export function getResumableTerminalFailedGroup<
   executionState: string | undefined;
   currentIndex: number | undefined;
   steps: readonly StepWithRuntimeStatus[];
-  parallelGroups: readonly G[] | undefined;
+  parallelGroups?: readonly G[];
 }): G | undefined {
   if (state.executionState !== EXECUTION_STATES.ERROR) return undefined;
   const lastIndex = (state.currentIndex ?? 0) - 1;
@@ -136,14 +225,17 @@ export function isGroupMemberRetried(
 }
 
 export function terminalFailureMutationMessage(
-  action: "remove" | "reorder"
+  action: "remove" | "reorder",
+  inParallelGroup = false
 ): string {
   const operation = action === "remove" ? "remove" : "move";
   const suggestion =
     action === "remove"
       ? "disable it to skip it on continue"
       : "edit or disable it instead";
-  return `Cannot ${operation} the failed step because it has recorded history and must stay first among pending steps; ${suggestion}.`;
+  return inParallelGroup
+    ? `Cannot ${operation} a failed parallel group member because it has recorded history and must keep its place in the group; ${suggestion}.`
+    : `Cannot ${operation} the failed step because it has recorded history and must stay first among pending steps; ${suggestion}.`;
 }
 
 /**

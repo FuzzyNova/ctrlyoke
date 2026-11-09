@@ -70,11 +70,13 @@ import {
   STEP_MUTATION_ERROR_MESSAGES,
 } from "../StepIdentity";
 import {
-  getResumableTerminalFailureIndex,
-  getProtectedTerminalFailureIndex,
+  getProtectedTerminalFailure,
+  getTerminalFailureRetry,
   hasInFlightStep,
   hasStarted,
+  reorderMovesProtectedFailure,
   terminalFailureMutationMessage,
+  type ProtectedTerminalFailure,
 } from "../../utils/StepStatusDerivation";
 import {
   describeShiftedStepReferences,
@@ -1022,14 +1024,7 @@ export class RunContinuationService {
         }
         for (const index of unique) {
           assertStepIndex(topology.steps.length, index, "remove");
-          const failureIndex = getProtectedTerminalFailureIndex({
-            executionState: source._runtime?.executionState,
-            currentIndex: source._runtime?.currentIndex,
-            steps: topology.steps,
-          });
-          if (failureIndex === index) {
-            throw new Error(terminalFailureMutationMessage("remove"));
-          }
+          assertRemovableTerminalFailure(source, topology.steps, index);
           rewindTargetedFailure(source, topology.steps, index);
           assertEditableDuringExecution(
             source,
@@ -1099,24 +1094,31 @@ export class RunContinuationService {
       runRef,
       expectedDefinitionRevision,
       (source, topology, currentIndex) => {
-        const failureIndex = getProtectedTerminalFailureIndex({
-          executionState: source._runtime?.executionState,
-          currentIndex,
-          steps: topology.steps,
-        });
+        const protectedFailure = protectedTerminalFailureOf(
+          source,
+          topology.steps,
+          currentIndex
+        );
+        const reordered = protectedFailure.indices.filter((index) =>
+          absoluteOrder.includes(index)
+        );
         if (
-          failureIndex !== undefined &&
-          absoluteOrder.includes(failureIndex) &&
-          absoluteOrder[0] !== failureIndex
+          reorderMovesProtectedFailure(
+            protectedFailure.indices,
+            Math.min(...absoluteOrder),
+            absoluteOrder
+          )
         ) {
-          throw new Error(terminalFailureMutationMessage("reorder"));
+          throw new Error(
+            terminalFailureMutationMessage(
+              "reorder",
+              protectedFailure.inParallelGroup
+            )
+          );
         }
-        if (
-          failureIndex !== undefined &&
-          absoluteOrder.includes(failureIndex)
-        ) {
-          rewindTargetedFailure(source, topology.steps, failureIndex);
-          currentIndex = failureIndex;
+        if (reordered.length > 0) {
+          rewindTargetedFailure(source, topology.steps, reordered[0]);
+          currentIndex = source._runtime?.currentIndex ?? currentIndex;
         }
         if (absoluteOrder.some((index) => !Number.isInteger(index))) {
           throw new Error("Reorder indices must be integers");
@@ -1362,25 +1364,63 @@ function isInFlightExecutionState(state: ExecutionState | undefined): boolean {
 }
 
 /**
- * When `index` is the resumable terminal failure of a settled ERROR run,
- * rewind the run head to it and reset its runtime (keeping its step id), so the
- * mutation guards treat it as the pending step continuation will run again.
- * Mutates `source._runtime` and `steps` in place.
+ * When `index` is a step that continuation of a settled ERROR run will retry
+ * (the failed step, or a failed parallel group's unsuccessful member), apply
+ * that retry's rewind now: move the head and reset every step it retries
+ * (keeping their step ids), so the mutation guards treat them as the pending
+ * steps continuation will run. Mutates `source._runtime` and `steps` in place.
  */
 export function rewindTargetedFailure(
   source: WorkingFile,
   steps: WorkflowStep[],
   index: number
 ): void {
-  const failureIndex = getResumableTerminalFailureIndex({
+  const retry = getTerminalFailureRetry({
     executionState: source._runtime?.executionState,
     currentIndex: source._runtime?.currentIndex,
     steps,
+    parallelGroups: source.parallelGroups,
   });
-  if (failureIndex !== index || !source._runtime) return;
-  source._runtime = { ...source._runtime, currentIndex: index };
-  steps[index] = resetStepRuntimeForRewind(steps[index]);
-  steps[index]._runtime = { ...steps[index]._runtime, rewoundFailure: true };
+  if (!retry?.resetIndices.includes(index) || !source._runtime) return;
+  source._runtime = { ...source._runtime, currentIndex: retry.headIndex };
+  for (const resetIndex of retry.resetIndices) {
+    const hadAttempts = hasStarted(steps[resetIndex]);
+    steps[resetIndex] = resetStepRuntimeForRewind(steps[resetIndex]);
+    if (hadAttempts) {
+      steps[resetIndex]._runtime = {
+        ...steps[resetIndex]._runtime,
+        rewoundFailure: true,
+      };
+    }
+  }
+}
+
+/** The protected terminal failure of a persisted run's definition. */
+export function protectedTerminalFailureOf(
+  source: WorkingFile,
+  steps: readonly WorkflowStep[],
+  currentIndex = source._runtime?.currentIndex
+): ProtectedTerminalFailure {
+  return getProtectedTerminalFailure({
+    executionState: source._runtime?.executionState,
+    currentIndex,
+    steps,
+    parallelGroups: source.parallelGroups,
+  });
+}
+
+/** Refuse removing a step whose recorded attempts must stay at its position. */
+export function assertRemovableTerminalFailure(
+  source: WorkingFile,
+  steps: readonly WorkflowStep[],
+  index: number
+): void {
+  const protectedFailure = protectedTerminalFailureOf(source, steps);
+  if (protectedFailure.indices.includes(index)) {
+    throw new Error(
+      terminalFailureMutationMessage("remove", protectedFailure.inParallelGroup)
+    );
+  }
 }
 
 function isExecutionActiveState(state: ExecutionState | undefined): boolean {

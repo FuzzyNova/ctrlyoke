@@ -7,6 +7,7 @@ import { BULK_EDIT_DISABLED_REASONS } from "@root/types/DashboardConstants";
 import {
   findSelectedIndexLacking,
   getBulkPromptPropertyDisabledReason,
+  getProtectedFailureIndices,
   getSelectionCapabilities,
   getStepCapabilityDisabledReason,
   STEP_CAPABILITY_ACTIONS,
@@ -32,7 +33,8 @@ export function useStepCapabilityContext(
   const executionState = useWorkflowStore((s) => s.executionState);
   const finalStepPhase = useWorkflowStore((s) => s.finalStepPhase);
   const parallelGroups = useWorkflowStore((s) => s.parallelGroups);
-  const totalSteps = useWorkflowStore((s) => s.steps.length);
+  const steps = useWorkflowStore((s) => s.steps);
+  const totalSteps = steps.length;
   const pendingRewindBoundary = useUiStore(
     (s) => s.pendingRewind?.fromStepIndex
   );
@@ -55,6 +57,11 @@ export function useStepCapabilityContext(
         indices.includes(currentStep),
       totalSteps,
       parallelGroups,
+      protectedFailureIndices: getProtectedFailureIndices(steps, {
+        currentStep,
+        executionState,
+        parallelGroups,
+      }),
     }),
     [
       currentStep,
@@ -64,6 +71,7 @@ export function useStepCapabilityContext(
       isReadOnly,
       parallelGroups,
       pendingRewindBoundary,
+      steps,
       totalSteps,
     ]
   );

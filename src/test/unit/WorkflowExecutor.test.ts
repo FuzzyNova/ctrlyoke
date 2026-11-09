@@ -2399,6 +2399,114 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
   });
 
+  suite("editing a run stopped by a failed group", () => {
+    /** Members 0-2 form the group; member 1 fails until `fixed` is set. */
+    async function failGroup(): Promise<{
+      queue: PromptQueue;
+      integrations: Map<number, MockHarnessIntegration>;
+      context: WorkflowExecutionContext;
+      fix: () => void;
+    }> {
+      const queue = new PromptQueue();
+      let fixed = false;
+      const integrations = new Map<number, MockHarnessIntegration>();
+      for (let stepIndex = 0; stepIndex < 4; stepIndex += 1) {
+        const integration = new MockHarnessIntegration(undefined, false);
+        integration.onSend = async () => {
+          if (stepIndex === 1 && !fixed) {
+            (integration as any).lastFailureReason = "member failed";
+            return { success: false };
+          }
+          return { responseText: `ok-${stepIndex}` };
+        };
+        integrations.set(stepIndex, integration);
+      }
+      queue.loadPrompts({
+        steps: [
+          { prompt: "succeeds" },
+          { prompt: "fails" },
+          { prompt: "also-succeeds" },
+          { prompt: "after" },
+        ],
+        parallelGroups: [
+          { id: "edit", startIndex: 0, endIndex: 2, failFast: false },
+        ],
+      });
+      const context = makeParallelContext(integrations);
+      await makeExecutor(queue).execute(integrations.get(0)!, context);
+      assert.strictEqual(queue.getState().status, EXECUTION_STATES.ERROR);
+      assert.strictEqual(queue.getState().currentIndex, 3);
+      return { queue, integrations, context, fix: () => (fixed = true) };
+    }
+
+    test("an edited failed member rewinds the group and runs as edited", async () => {
+      const { queue, integrations, context, fix } = await failGroup();
+      await queue.updatePrompt(1, { prompt: "fixed" });
+
+      assert.strictEqual(queue.getState().currentIndex, 0);
+      assert.strictEqual(
+        queue.getState().steps[1]._runtime?.rewoundFailure,
+        true
+      );
+      await assert.rejects(
+        () => queue.deletePrompts([1]),
+        /failed parallel group member.*recorded history/i
+      );
+
+      fix();
+      await makeExecutor(queue).execute(integrations.get(0)!, context);
+      assert.deepStrictEqual(integrations.get(1)?.sentPrompts, [
+        "fails",
+        "fixed",
+      ]);
+      assert.deepStrictEqual(integrations.get(0)?.sentPrompts, ["succeeds"]);
+      assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+    });
+
+    test("a disabled failed member is skipped on continue", async () => {
+      const { queue, integrations, context } = await failGroup();
+      await queue.updateSteps([1], { enabled: false });
+
+      await queue.rewindTerminalFailureForContinuation();
+      await makeExecutor(queue).execute(integrations.get(0)!, context);
+      assert.deepStrictEqual(integrations.get(1)?.sentPrompts, ["fails"]);
+      assert.deepStrictEqual(integrations.get(3)?.sentPrompts, ["after"]);
+      assert.deepStrictEqual(
+        queue.getState().results.map((result) => result.status),
+        [
+          STEP_STATUS.COMPLETED,
+          STEP_STATUS.SKIPPED,
+          STEP_STATUS.COMPLETED,
+          STEP_STATUS.COMPLETED,
+        ]
+      );
+    });
+
+    test("the failed member cannot be removed", async () => {
+      const { queue } = await failGroup();
+      await assert.rejects(
+        () => queue.deletePrompts([1]),
+        /failed parallel group member.*recorded history.*disable it/i
+      );
+      assert.strictEqual(queue.getState().currentIndex, 3);
+      assert.strictEqual(queue.getState().steps.length, 4);
+    });
+
+    test("touching a member that succeeded does not rewind the group", async () => {
+      const { queue } = await failGroup();
+      await assert.rejects(
+        () => queue.updateSteps([2], { enabled: false }),
+        /completed step/i
+      );
+      await queue.replaceStep(2, { prompt: "also-succeeds" });
+      assert.strictEqual(queue.getState().currentIndex, 3);
+      assert.strictEqual(
+        queue.getState().results[1].status,
+        STEP_STATUS.FAILED
+      );
+    });
+  });
+
   test("continuing after a failed group retries only the members that did not succeed", async () => {
     const queue = new PromptQueue();
     let failing = true;

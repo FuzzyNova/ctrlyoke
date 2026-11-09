@@ -981,7 +981,8 @@ suite("RunContinuationService addressed step mutations", () => {
     executionState: ExecutionState,
     currentIndex: number,
     steps: Array<Record<string, unknown>>,
-    finalStepPhase?: string
+    finalStepPhase?: string,
+    parallelGroups?: ParallelGroupTopology["parallelGroups"]
   ): Promise<void> {
     const descriptorPath = WorkflowPaths.descriptorPath(workspace, workflowKey);
     await fs.mkdir(path.dirname(descriptorPath), { recursive: true });
@@ -1011,6 +1012,7 @@ suite("RunContinuationService addressed step mutations", () => {
       startedAt: 0,
       definitionRevision: 1,
       steps,
+      ...(parallelGroups ? { parallelGroups } : {}),
       _runtime: {
         currentIndex,
         executionState,
@@ -1583,6 +1585,152 @@ suite("RunContinuationService addressed step mutations", () => {
       ),
       /recorded history/i
     );
+  });
+
+  suite("a failed parallel group", () => {
+    // Members 0-2 form the group; member 1 failed and stopped the run, so the
+    // group's join left the head after the group.
+    async function seedFailedGroup(): Promise<void> {
+      workspace = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-failed-group-")
+      );
+      await seedRun(
+        EXECUTION_STATES.ERROR,
+        3,
+        [
+          {
+            prompt: "succeeded",
+            _runtime: {
+              stepId: "a",
+              startedAt: 1,
+              completedAt: 5,
+              terminalStatus: "completed",
+            },
+          },
+          {
+            prompt: "failed",
+            _runtime: {
+              stepId: "b",
+              startedAt: 1,
+              completedAt: 6,
+              terminalStatus: "failed",
+              terminalFailure: true,
+            },
+          },
+          {
+            prompt: "also succeeded",
+            _runtime: {
+              stepId: "c",
+              startedAt: 1,
+              completedAt: 7,
+              terminalStatus: "completed",
+            },
+          },
+          { prompt: "after", _runtime: { stepId: "d" } },
+        ],
+        undefined,
+        [{ id: "group", startIndex: 0, endIndex: 2, failFast: false }]
+      );
+    }
+
+    test("editing the failed member rewinds the group and keeps its history protected", async () => {
+      await seedFailedGroup();
+      const repository = new WorkflowLineageRepository();
+      const edited = await RunContinuationService.editStepAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        1,
+        { updates: { prompt: "fixed" } },
+        1,
+        repository
+      );
+      const steps = edited.workingFile.steps!;
+      assert.strictEqual(edited.workingFile._runtime?.currentIndex, 0);
+      assert.strictEqual((steps[1] as { prompt: string }).prompt, "fixed");
+      assert.strictEqual(steps[1]._runtime?.rewoundFailure, true);
+      assert.strictEqual(steps[1]._runtime?.completedAt, undefined);
+      // Succeeded members keep their settlement.
+      assert.strictEqual(steps[0]._runtime?.completedAt, 5);
+      assert.strictEqual(steps[2]._runtime?.completedAt, 7);
+
+      await assert.rejects(
+        RunContinuationService.removeStepsAtRun(
+          workspace,
+          workflowKey,
+          runRef,
+          [1],
+          edited.definitionRevision,
+          repository
+        ),
+        /failed parallel group member.*recorded history/i
+      );
+    });
+
+    test("the failed member can be disabled to skip it on continue", async () => {
+      await seedFailedGroup();
+      const toggled = await RunContinuationService.editStepAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        1,
+        { updates: { enabled: false } },
+        1,
+        new WorkflowLineageRepository()
+      );
+      assert.strictEqual(toggled.workingFile.steps![1].enabled, false);
+      assert.strictEqual(toggled.workingFile._runtime?.currentIndex, 0);
+    });
+
+    test("the failed member cannot be removed before the run is rewound", async () => {
+      await seedFailedGroup();
+      await assert.rejects(
+        RunContinuationService.removeStepsAtRun(
+          workspace,
+          workflowKey,
+          runRef,
+          [1],
+          1,
+          new WorkflowLineageRepository()
+        ),
+        /failed parallel group member.*recorded history.*disable it/i
+      );
+    });
+
+    test("succeeded members stay locked and do not rewind the group", async () => {
+      await seedFailedGroup();
+      const repository = new WorkflowLineageRepository();
+      await assert.rejects(
+        RunContinuationService.editStepAtRun(
+          workspace,
+          workflowKey,
+          runRef,
+          2,
+          { updates: { prompt: "edited" } },
+          1,
+          repository
+        ),
+        /already run/i
+      );
+      await assert.rejects(
+        RunContinuationService.removeStepsAtRun(
+          workspace,
+          workflowKey,
+          runRef,
+          [2],
+          1,
+          repository
+        ),
+        /already run/i
+      );
+      const runFile = JSON.parse(
+        await fs.readFile(
+          WorkflowPaths.runFilePath(workspace, workflowKey, runRef),
+          "utf8"
+        )
+      ) as { _runtime: { currentIndex: number } };
+      assert.strictEqual(runFile._runtime.currentIndex, 3);
+    });
   });
 
   test("reorders only the pending suffix and keeps the in-flight step fixed", async () => {

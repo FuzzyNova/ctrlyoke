@@ -52,6 +52,7 @@ import { workflowViewAddressKey } from "@utils/viewAddress";
 import { getTargetKey } from "@utils/outputProjection";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import {
+  getProtectedFailureIndices,
   getSelectionCapabilities,
   getStepCapabilities,
   getStepCapabilityDisabledReason,
@@ -292,6 +293,11 @@ export function useStepContextMenu({
         isExecutionTargetLocked,
         totalSteps,
         parallelGroups,
+        protectedFailureIndices: getProtectedFailureIndices(steps, {
+          currentStep,
+          executionState,
+          parallelGroups,
+        }),
       };
       const capabilities = getStepCapabilities(
         step,

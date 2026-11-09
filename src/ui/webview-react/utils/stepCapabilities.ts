@@ -7,7 +7,7 @@ import {
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import type { WorkflowStep } from "@store/workflowStore";
 import { isWorkflowActive } from "./status";
-import { getProtectedTerminalFailureIndex } from "@root/utils/StepStatusDerivation";
+import { getProtectedTerminalFailure } from "@root/utils/StepStatusDerivation";
 
 export interface StepCapabilities {
   canEditColor: boolean;
@@ -35,6 +35,29 @@ export interface StepCapabilityContext {
   isExecutionTargetLocked?: boolean;
   totalSteps?: number;
   parallelGroups?: readonly ParallelGroupDefinition[];
+  /**
+   * Indices of the terminal failure continuation will retry, from
+   * {@link getProtectedFailureIndices}. They stay editable after the run
+   * stops but cannot be removed or moved. Omitted, only a failed sequential
+   * step just before `currentStep` is recognised.
+   */
+  protectedFailureIndices?: readonly number[];
+}
+
+/** The protected terminal-failure indices for a capability context. */
+export function getProtectedFailureIndices(
+  steps: readonly WorkflowStep[],
+  ctx: Pick<
+    StepCapabilityContext,
+    "currentStep" | "executionState" | "parallelGroups"
+  >
+): readonly number[] {
+  return getProtectedTerminalFailure({
+    executionState: ctx.executionState,
+    currentIndex: ctx.currentStep,
+    steps,
+    parallelGroups: ctx.parallelGroups,
+  }).indices;
 }
 
 export function hasTerminalStepRuntime(step: WorkflowStep): boolean {
@@ -74,14 +97,16 @@ export function getStepCapabilities(
     runtime !== undefined &&
     (("terminalStatus" in runtime && runtime.terminalStatus !== undefined) ||
       runtime.completedAt !== undefined);
-  const editableFailure =
-    getProtectedTerminalFailureIndex({
+  const editableFailure = (
+    ctx.protectedFailureIndices ??
+    getProtectedTerminalFailure({
       executionState: ctx.executionState,
       currentIndex: ctx.currentStep,
       steps: Array.from({ length: index + 1 }, (_, itemIndex) =>
         itemIndex === index ? step : {}
       ),
-    }) === index;
+    }).indices
+  ).includes(index);
   // RunContinuationService permanently protects the executed prefix and terminal
   // statuses. PromptQueue also protects the completed prefix while executing.
   const hostLocked =
