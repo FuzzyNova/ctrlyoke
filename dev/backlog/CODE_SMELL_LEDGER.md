@@ -183,7 +183,9 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   only history handles closed pipes, step emits its own JSON error); stderr text, JSON
   error shape and exit codes are a scripting contract, and `parseTimeoutSeconds`/
   `parseScriptTimeoutSeconds` accepting `1e3`/`0x10` is flag validation — needs a
-  decision on the intended surface first.
+  decision on the intended surface first. Now planned in
+  `dev/backlog/ERROR_HANDLING_CONSISTENCY_PLAN.md` (§3 C1–C4, §4 R6); note `handleCliError`
+  itself does no redaction, pipe handling or JSON output.
 - Git invoked outside `execGit`: `GitCommitter.ts` (own spawn, no timeout),
   `GitUtils.commitAll` (5-minute mutation timeout, contradicting the `GIT_NO_TIMEOUT`
   comment that commits run hooks), `HostedWorkspaceViewerService` commit path,
