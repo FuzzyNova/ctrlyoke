@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- With `execution.ctrlyokeMcpMode` set to `skill` and `storage.runHistoryLocation` set to `workspace`, the ctrlyoke tools now find the run they were called for. Before, they looked in user-scope history and reported that the run file no longer existed. They also now use your `queue.maxSteps` and `queue.maxParallelSteps` settings in that mode, not the built-in defaults.
 - Screen readers now announce when a step ends without starting an AI turn.
 - External-roots trust prompts now display workspace-supplied control and directional characters as visible escapes.
 - Workspace language server approval prompts now show the full command, environment and executable settings covered by approval.

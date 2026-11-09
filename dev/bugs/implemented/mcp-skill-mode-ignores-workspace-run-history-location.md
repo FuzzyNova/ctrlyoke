@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by deferred code-smell review, claude-cli
 - **Area:** `src/mcp-server.ts` (`initializeMcpStorage`, `runMcpToolCli`), `src/utils/RunHistoryStoragePolicy.ts`
-- **Severity:** high (workflow tools unusable in skill mode for workspace-location users)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

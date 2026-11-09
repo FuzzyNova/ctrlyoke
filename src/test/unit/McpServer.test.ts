@@ -5,6 +5,7 @@ import * as os from "os";
 import * as path from "path";
 import { afterEach, suite, suiteSetup, suiteTeardown, test } from "mocha";
 import {
+  applyMcpSettingsFallbacks,
   CtrlYokeMCPServer,
   MAX_GLOBAL_STATUS_RESULTS,
   parseMcpToolCliArgs,
@@ -1116,26 +1117,126 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
   });
 
-  suite("CLI coordination honours coordination settings", () => {
-    async function writeSettings(root: string, settings: object) {
-      await fs.mkdir(path.join(root, ".ctrlyoke"), { recursive: true });
-      await fs.writeFile(
-        path.join(root, ".ctrlyoke", "settings.json"),
-        JSON.stringify(settings),
-        "utf8"
+  async function writeSettings(root: string, settings: object) {
+    await fs.mkdir(path.join(root, ".ctrlyoke"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, ".ctrlyoke", "settings.json"),
+      JSON.stringify(settings),
+      "utf8"
+    );
+  }
+
+  /** Spawn env whose user settings live in `home`, not the real profile. */
+  async function isolatedHomeEnv(
+    userSettings?: object
+  ): Promise<NodeJS.ProcessEnv> {
+    const home = path.join(workspaceRoot, "home");
+    await fs.mkdir(home, { recursive: true });
+    if (userSettings) await writeSettings(home, userSettings);
+    return { ...process.env, HOME: home, USERPROFILE: home };
+  }
+
+  suite("MCP settings fallbacks without the env handoff", () => {
+    const settings = {
+      runHistoryLocation: RUN_HISTORY_LOCATIONS.WORKSPACE,
+      maxSteps: 7,
+      maxParallelSteps: 3,
+    };
+
+    test("fills every missing handoff value from settings", () => {
+      const env: NodeJS.ProcessEnv = { CTRLYOKE_MAX_STEPS: "" };
+      applyMcpSettingsFallbacks(env, settings);
+      assert.strictEqual(
+        env.CTRLYOKE_RUN_HISTORY_LOCATION,
+        RUN_HISTORY_LOCATIONS.WORKSPACE
       );
+      assert.strictEqual(env.CTRLYOKE_MAX_STEPS, "7");
+      assert.strictEqual(env.CTRLYOKE_MAX_PARALLEL_STEPS, "3");
+    });
+
+    test("keeps every value the parent passed", () => {
+      const env: NodeJS.ProcessEnv = {
+        CTRLYOKE_RUN_HISTORY_LOCATION: RUN_HISTORY_LOCATIONS.USER,
+        CTRLYOKE_MAX_STEPS: "-1",
+        CTRLYOKE_MAX_PARALLEL_STEPS: "5",
+      };
+      applyMcpSettingsFallbacks(env, settings);
+      assert.strictEqual(
+        env.CTRLYOKE_RUN_HISTORY_LOCATION,
+        RUN_HISTORY_LOCATIONS.USER
+      );
+      assert.strictEqual(env.CTRLYOKE_MAX_STEPS, "-1");
+      assert.strictEqual(env.CTRLYOKE_MAX_PARALLEL_STEPS, "5");
+    });
+
+    /**
+     * Resolve a missing run through `--tool` mode and return the run-file path
+     * the refusal names, which shows which history location was frozen.
+     */
+    async function resolvedRunPath(env: NodeJS.ProcessEnv): Promise<string> {
+      const workingFile = path.join(
+        workspaceRoot,
+        "elsewhere",
+        "mcp-skill-mode-2026-01-01T00-00-00",
+        "run-2026-01-01T00-00-00-000Z",
+        WorkflowPaths.WORKING_FILE_NAME
+      );
+      const result = runMcpToolCli(
+        [
+          "--tool",
+          "workflow_status",
+          "--workspace",
+          workspaceRoot,
+          "--working-file",
+          workingFile,
+          "--execution-root",
+          workspaceRoot,
+        ],
+        env,
+        workspaceRoot
+      );
+      assert.strictEqual(result.status, 1, `stdout=${result.stdout}`);
+      const match = /run file no longer exists at (.+?), so nothing/.exec(
+        result.stderr
+      );
+      assert.ok(match, `stderr=${result.stderr}`);
+      return match[1];
     }
 
-    /** Spawn env whose user settings live in `home`, not the real profile. */
-    async function isolatedHomeEnv(
-      userSettings?: object
-    ): Promise<NodeJS.ProcessEnv> {
-      const home = path.join(workspaceRoot, "home");
-      await fs.mkdir(home, { recursive: true });
-      if (userSettings) await writeSettings(home, userSettings);
-      return { ...process.env, HOME: home, USERPROFILE: home };
-    }
+    test("a --tool call follows a workspace run-history setting", async () => {
+      await setup();
+      const env = await isolatedHomeEnv({
+        storage: { runHistoryLocation: RUN_HISTORY_LOCATIONS.WORKSPACE },
+      });
+      delete env.CTRLYOKE_RUN_HISTORY_LOCATION;
 
+      const runPath = await resolvedRunPath(env);
+
+      assert.ok(
+        runPath.startsWith(
+          path.join(workspaceRoot, ".ctrlyoke", ".runs") + path.sep
+        ),
+        runPath
+      );
+    });
+
+    test("a passed run-history location overrides the setting", async () => {
+      await setup();
+      const env = await isolatedHomeEnv({
+        storage: { runHistoryLocation: RUN_HISTORY_LOCATIONS.WORKSPACE },
+      });
+      env.CTRLYOKE_RUN_HISTORY_LOCATION = RUN_HISTORY_LOCATIONS.USER;
+
+      const runPath = await resolvedRunPath(env);
+
+      assert.ok(
+        !runPath.startsWith(path.join(workspaceRoot, ".ctrlyoke")),
+        runPath
+      );
+    });
+  });
+
+  suite("CLI coordination honours coordination settings", () => {
     test("refuses an external participant when workspace settings disable them", async () => {
       await setup();
       await writeSettings(workspaceRoot, {

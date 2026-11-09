@@ -42,7 +42,10 @@ import type {
 } from "./types/CtrlYokeTypes";
 import { isScriptStep } from "./types/CtrlYokeTypes";
 import { mergeWorkflowStepUpdate } from "./core/WorkflowStepSanitizer";
-import { CTRLYOKE_SETTINGS_DEFAULTS } from "./types/CtrlYokeSettings";
+import {
+  CTRLYOKE_SETTINGS_DEFAULTS,
+  type RunHistoryLocation,
+} from "./types/CtrlYokeSettings";
 import { resolveStepHarnessAndModel } from "./types/ExecutionPropertyResolver";
 import { configService } from "./config/CtrlYokeConfigService";
 import { PropertyResolver } from "./utils/PropertyResolver";
@@ -2332,7 +2335,38 @@ export async function initializeMcpStorage(
 async function bootstrapMcpProcess(root: string): Promise<void> {
   configService.setUserBackend(createUserConfigBackend());
   configService.setWorkspaceBackend(createWorkspaceConfigBackend(root));
+  const queue = ConfigurationUtils.getDynamicQueueConfig();
+  applyMcpSettingsFallbacks(process.env, {
+    runHistoryLocation: configService.get("storage").runHistoryLocation,
+    maxSteps: queue.maxSteps,
+    maxParallelSteps: queue.maxParallelSteps,
+  });
   await initializeMcpStorage(root);
+}
+
+/** The settings ctrlyoke hands a launched MCP server through its env. */
+export interface McpEnvSettings {
+  runHistoryLocation: RunHistoryLocation;
+  maxSteps: number;
+  maxParallelSteps: number;
+}
+
+/**
+ * Fill each env value `CliProviderUtils` would have passed from the settings
+ * files instead, for a process started without that handoff: a skill-mode
+ * `--tool` call (the harness's shell does not reliably carry ctrlyoke's env)
+ * or a standalone MCP registration. Without this, such a process freezes
+ * `user` run history even when settings say `workspace`, and cannot find the
+ * run it was pointed at. A value the parent did pass always wins: it is the
+ * parent's frozen location, which a later settings edit must not override.
+ */
+export function applyMcpSettingsFallbacks(
+  env: NodeJS.ProcessEnv,
+  settings: McpEnvSettings
+): void {
+  env.CTRLYOKE_RUN_HISTORY_LOCATION ||= settings.runHistoryLocation;
+  env.CTRLYOKE_MAX_STEPS ||= String(settings.maxSteps);
+  env.CTRLYOKE_MAX_PARALLEL_STEPS ||= String(settings.maxParallelSteps);
 }
 
 export interface McpToolCliOptions {

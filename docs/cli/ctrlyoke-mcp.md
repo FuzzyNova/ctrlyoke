@@ -15,6 +15,8 @@ When a workflow or step includes `mcpServers: ["ctrlyoke"]`, ctrlyoke launches a
 | `CTRLYOKE_HOME`, `CTRLYOKE_RUN_HISTORY_LOCATION`    | Where run history lives                                                |
 | `CTRLYOKE_DIAGNOSTIC_LOGS`                          | `true` writes `ctrlyoke-mcp-<timestamp>.log` under `.ctrlyoke/logs/`   |
 
+If `CTRLYOKE_RUN_HISTORY_LOCATION`, `CTRLYOKE_MAX_STEPS` or `CTRLYOKE_MAX_PARALLEL_STEPS` is not set, as in [one-shot tool mode](#one-shot-tool-mode), the server uses `storage.runHistoryLocation` and the `queue` settings instead.
+
 Each harness receives the server in its own configuration format:
 
 | Harness           | How the server is attached                                          |
