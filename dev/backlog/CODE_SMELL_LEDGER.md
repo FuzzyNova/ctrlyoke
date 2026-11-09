@@ -46,6 +46,29 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   `src/mcp-server.ts` and `OutputHistoryManager.ts` now use
   `resolveStepHarnessAndModel` from `src/types/ExecutionPropertyResolver.ts`.
 
+- **2026-11-08, pass 4** — reviewed pass 3's three refactors (behavior preserved; the
+  declined-install statusline change and the cross-harness model fix are filed bugs).
+  Cleaned up: `ProviderStatuslineRegistration` now exposes the current prompt's
+  `snapshotPath`, so the Claude and Antigravity providers no longer rebuild the
+  `<prefix>-statusline-<token>.json` name; dropped an orphaned doc comment and two
+  single-use temporaries around `resolveStepHarnessAndModel`. Fixed directly:
+  `StatusIcon` kept its own status-to-codicon switch that disagreed with
+  `STATUS_ICONS` on SENT (it now reads `STATUS_ICONS`, which takes the rendered
+  arrow-up); `Header.tsx` slot actions use `WORKFLOW_EXECUTION_CONTROL_ACTIONS`.
+  Hunted the hosted server, the dashboard bridge and the React dashboard; queued five
+  steps (completion-notification dedup tracker, hosted viewer route error mapping,
+  viewer idle-LRU snapshot stores, LSP server-root containment casing + realpath
+  fallback, dashboard token/context stats copies).
+  Candidates for a later pass: inline `HARNESS_INFO[id]?.name ?? id` lookups in about
+  ten webview files instead of `getHarnessDisplayName`/`getHarnessShortName`;
+  "Parallel steps X–Y" labels retyped beside `parallelGroupHeaderTitle` in
+  `utils/outputRows.ts`; `formatStepTargetLabel` re-inlined in
+  `useOutputContextMenu.tsx` and `outputRowTiming.ts`; `WebPushService.atomicWriteJson`
+  not using `uniqueAtomicTempPath`; hosted-server query parsing (`repo` trimmed from
+  the query but not the body; three page-size parsers beside `WorkspaceTreeRoute`'s
+  strict ones); `EXECUTION_STATE_ICONS` vs `EXECUTION_STATE_BADGE_ICONS` in
+  `ui/webview-react/utils/status.ts` (the former has no production consumer).
+
 ## Deferred
 
 - `src/ui/webview-react/hooks/usePaged{CommitHistory,FileHistory,GitRefDiff,WorkspaceDirectory}.ts`
@@ -76,6 +99,24 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   names; `CTRLYOKE_ENV_VARS` has only three keys. Needs a sweep that separates documented
   script-facing variables (a user contract) from internal parent→child plumbing and from
   standalone `src/scripts/` that cannot import.
+
+- Dashboard message payloads (`WORKFLOW_ADDED`, `WORKFLOW_DISMISSED`,
+  `WORKFLOW_SUMMARY_UPDATED`, `COORDINATION_SCOPE_UPDATED`, `CLI_WATCH_OUTPUT`,
+  `STEPS_EXTENDED`) built separately in `src/server/CtrlYokeHostedServer.ts`,
+  `src/ui/CtrlYokeWebviewProvider.ts` and `src/ui/DashboardApplication.ts`, plus the
+  harness snapshot publish in `CtrlYokeHostedServer` vs `src/ui/WebviewSettingsSync.ts`
+  (delta vs full map, missing-registry guard) — comments say `PostMessageDashboardSink`
+  owns these shapes; moving them there changes the `IDashboardSink` surface every
+  client implements, so it needs a design pass.
+- Duration formats in the dashboard: `formatClockDuration` (`ui/webview-react/utils/time.ts`)
+  is documented as the one format, but Copy Metadata (`stepMetadataClipboard.ts`,
+  `7.4s`), Markdown export (`markdownExport.ts`, raw float), `ScriptVerdict.tsx`
+  (`130.6s`) and `outputRowTiming.ts` (`1m 30s`) each use their own, with tests pinning
+  them — choosing one changes user-visible and exported text, so it needs a decision.
+- Access-token checks in `src/server/CtrlYokeHostedServer.ts`: `requestHasValidToken`
+  accepts the `x-ctrlyoke-token` header or `?token=`, the WebSocket upgrade and
+  connection handlers only `?token=` (the latter closes with 4401) — auth surface;
+  unifying needs a decision on which forms WebSocket clients may use.
 
 ## Ruled out
 
@@ -123,3 +164,12 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   contract); the service's wording is customized for the CLI.
 - Antigravity's statusline sidecar not calling `stop()` in its provider — not a leak:
   `CliIntegration` stops every execution sidecar it starts.
+- Bundled template loading in `src/server/HostedErrorPageTemplate.ts`,
+  `HostedServiceWorkerScript.ts`, `HostedStandaloneShimScript.ts` and
+  `HostedThemeDefaults.ts` — the shared part is a two-line candidate-path find; caching
+  (the shim stays uncached on purpose for dev rebuilds), placeholder encoding (raw vs
+  JSON) and candidate order differ by design.
+- `WorkspaceListingSnapshotCache` and `WorkspaceSearchSessionStore` vs the viewer's
+  snapshot maps — the listing cache adds a byte cap, a disposed flag and frozen copies;
+  the search store uses a strict `>` idle boundary with its own dispose. Only the three
+  identical viewer-service copies were queued in pass 4.
