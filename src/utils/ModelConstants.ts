@@ -290,11 +290,11 @@ export function isPinnedClaudeModelId(model: string): boolean {
 
 /**
  * A name ctrlyoke rewrites to a Claude alias: a Copilot-style dotted ID
- * (`claude-sonnet-4.6`) or a legacy 1M alias (`sonnet[1m]`). Group 1 or 2 is
- * the family alias.
+ * (`claude-sonnet-4.6`, optionally with variant suffixes such as `-fast`) or a
+ * legacy 1M alias (`sonnet[1m]`). Group 1 or 2 is the family alias.
  */
 const CLAUDE_ALIAS_SPELLING_PATTERN =
-  /^(?:claude-(fable|sonnet|opus|haiku)-\d+(?:\.\d+)+|(fable|sonnet|opus|haiku)\[1m\])$/;
+  /^(?:claude-(fable|sonnet|opus|haiku)-\d+(?:\.\d+)+(?:-[a-z]+)*|(fable|sonnet|opus|haiku)\[1m\])$/;
 
 /** A Bedrock model or inference-profile ARN, which never names its model. */
 const BEDROCK_ARN_PATTERN = /^arn:aws[a-z-]*:bedrock:/;
@@ -303,7 +303,8 @@ const BEDROCK_ARN_PATTERN = /^arn:aws[a-z-]*:bedrock:/;
  * Get the value to pass to `claude --model` for a given model identifier.
  *
  * - Aliases (`fable`, `sonnet`, `opus`, `haiku`) pass through, lower-cased.
- * - Copilot-style dotted IDs (`claude-sonnet-4.6`) and the legacy
+ * - Copilot-style dotted IDs (`claude-sonnet-4.6`, optionally with variant
+ *   suffixes such as `-fast`) and the legacy
  *   `sonnet[1m]`/`opus[1m]` become their family alias.
  * - Any other ID that names a Claude model passes through exactly as written,
  *   so the version it pins is kept: Anthropic's pinned IDs

@@ -88,6 +88,26 @@ suite("ModelConstants", () => {
       assert.strictEqual(getClaudeModelName("claude-fable-5.1"), "fable");
     });
 
+    test("maps Copilot fast model IDs to their family alias", () => {
+      assert.strictEqual(getClaudeModelName("claude-opus-4.8-fast"), "opus");
+    });
+
+    test("maps every dotted-version Copilot Claude ID to its family alias", () => {
+      const copilotClaudeIds = COPILOT_CLI_MODEL_IDS.filter((id) =>
+        /^claude-(?:fable|sonnet|opus|haiku)-\d+\.\d+/.test(id)
+      );
+      assert.ok(copilotClaudeIds.length > 0, "expected dotted Claude IDs");
+
+      for (const id of copilotClaudeIds) {
+        const family = /^claude-(fable|sonnet|opus|haiku)-/.exec(id)?.[1];
+        assert.strictEqual(
+          getClaudeModelName(id),
+          family,
+          `expected ${id} to map to ${family}`
+        );
+      }
+    });
+
     test("passes pinned model IDs through instead of collapsing to the alias", () => {
       // `claude-fable-5` is a real pinned Claude model; mapping it to
       // `fable` would silently run the newest Fable instead.
