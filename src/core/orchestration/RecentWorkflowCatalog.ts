@@ -1,5 +1,6 @@
 import * as path from "path";
 import {
+  ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
   MESSAGE_TYPES,
   WORKFLOW_VIEW_ADDRESS_KIND,
@@ -201,12 +202,7 @@ export class RecentWorkflowCatalog {
     return new Set<string>(
       this.host
         .getWorkflowSummaries()
-        .filter(
-          (s) =>
-            s.executionState === EXECUTION_STATES.RUNNING ||
-            s.executionState === EXECUTION_STATES.PAUSING ||
-            s.executionState === EXECUTION_STATES.PAUSED
-        )
+        .filter((s) => ACTIVE_EXECUTION_STATES.has(s.executionState))
         .map((s) => s.workingFilePath)
         .filter((p): p is string => p !== undefined)
     );

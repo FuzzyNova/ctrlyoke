@@ -106,6 +106,9 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   `src/git/`, `src/completions/`; queued five steps (shared execution-state sets with two
   drifted copies, JSONC store read/atomic write in `src/config/`, relative-path escape
   check, `queue:N`/`final:N` target keys, hosted route query-string parsing).
+  Landed the execution-state membership refactor through `ACTIVE_EXECUTION_STATES`
+  and `IN_FLIGHT_EXECUTION_STATES`; fixed and covered the PAUSING append and
+  CANCELLING ownership bugs.
   Candidates for a later pass: win32-only `toLowerCase()` path keys re-derived beside
   `PathCasing` (`RunSummaryCache.cacheKey`, `WorkspaceRepoDiscovery.pathKey` whose comment
   claims macOS folding too, `ExecutionPreviewService.normalizeComparisonPath`,

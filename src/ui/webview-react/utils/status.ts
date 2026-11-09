@@ -12,6 +12,7 @@ import {
 } from "../types/messages";
 import {
   FINAL_STEP_PHASES,
+  IN_FLIGHT_EXECUTION_STATES,
   STEP_TYPES,
   WORKFLOW_EXECUTION_CONTROL_ACTIONS,
   WORKFLOW_VIEW_ADDRESS_KIND,
@@ -149,11 +150,7 @@ export function getStepAccentClass(status: StepStatus): string {
  * Check if execution is in a "busy" state (running or cancelling)
  */
 export function isExecutionBusy(state: ExecutionState): boolean {
-  return (
-    state === EXECUTION_STATES.RUNNING ||
-    state === EXECUTION_STATES.PAUSING ||
-    state === EXECUTION_STATES.CANCELLING
-  );
+  return IN_FLIGHT_EXECUTION_STATES.has(state);
 }
 
 /**

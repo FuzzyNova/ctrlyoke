@@ -25,6 +25,7 @@ import type {
   WorkingFile,
 } from "../../types/CtrlYokeTypes";
 import {
+  IN_FLIGHT_EXECUTION_STATES,
   EXECUTION_STATES,
   type ExecutionState,
   HISTORY_TRASH_ENTRY_KINDS,
@@ -309,11 +310,7 @@ export class RunLifecycleService {
     }
     const targetState =
       target._runtime?.executionState ?? EXECUTION_STATES.IDLE;
-    if (
-      targetState === EXECUTION_STATES.RUNNING ||
-      targetState === EXECUTION_STATES.PAUSING ||
-      targetState === EXECUTION_STATES.CANCELLING
-    ) {
+    if (IN_FLIGHT_EXECUTION_STATES.has(targetState)) {
       throw new Error(
         `Cannot set start position while in state ${targetState}`
       );

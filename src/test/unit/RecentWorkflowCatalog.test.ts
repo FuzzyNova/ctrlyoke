@@ -167,6 +167,29 @@ suite("RecentWorkflowCatalog", () => {
     });
   });
 
+  test("a cancelling instance keeps its still-running working file active during a scan", async () => {
+    await withRunStorage(async (workspaceRoot, repository) => {
+      const { workflowKey } = await repository.createLineage(
+        workspaceRoot,
+        "wf-cancelling",
+        "Cancelling"
+      );
+      writeDraft(workspaceRoot, workflowKey, EXECUTION_STATES.RUNNING);
+      const host = new TestCatalogHost();
+      host.summaries = [
+        summaryFor(workspaceRoot, workflowKey, EXECUTION_STATES.CANCELLING),
+      ];
+
+      const { workflows } = await new RecentWorkflowCatalog(
+        repository,
+        host
+      ).list(workspaceRoot);
+
+      assert.strictEqual(workflows.length, 1);
+      assert.strictEqual(workflows[0].executionState, EXECUTION_STATES.RUNNING);
+    });
+  });
+
   test("concurrent list requests share one scan unless a fresh one is asked for", async () => {
     await withRunStorage(async (workspaceRoot, repository) => {
       const { workflowKey } = await repository.createLineage(

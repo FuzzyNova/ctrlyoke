@@ -1,7 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { PromptQueue } from "../PromptQueue";
-import { EXECUTION_STATES } from "../../types/CtrlYokeTypes";
+import { ACTIVE_EXECUTION_STATES } from "../../types/DashboardConstants";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import { Log } from "../../utils/Log";
 import { pathsEqual } from "../../utils/PathCasing";
@@ -192,13 +192,10 @@ export class PromptFileWatcher {
     filePath: string,
     onReload: (filePath: string) => Promise<void>
   ): Promise<void> {
-    // Reload during active execution states (RUNNING, PAUSED, CANCELLING) to support MCP appends
+    // Reload while an executor owns the queue to support MCP appends.
     // Do NOT reload when IDLE (not started), COMPLETED, or ERROR (preserve final dashboard view)
     const state = this.promptQueue.getState();
-    const shouldReload =
-      state.status === EXECUTION_STATES.RUNNING ||
-      state.status === EXECUTION_STATES.PAUSED ||
-      state.status === EXECUTION_STATES.CANCELLING;
+    const shouldReload = ACTIVE_EXECUTION_STATES.has(state.status);
 
     if (shouldReload) {
       Log.trace(

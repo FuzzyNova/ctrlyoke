@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import {
+  ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
   type ExecutionState,
 } from "../../types/DashboardConstants";
@@ -62,12 +63,7 @@ export class RunMaterializer {
       input.workingFile?._runtime?.executionState ??
       input.executionState ??
       EXECUTION_STATES.COMPLETED;
-    if (
-      executionState === EXECUTION_STATES.RUNNING ||
-      executionState === EXECUTION_STATES.PAUSED ||
-      executionState === EXECUTION_STATES.PAUSING ||
-      executionState === EXECUTION_STATES.CANCELLING
-    ) {
+    if (ACTIVE_EXECUTION_STATES.has(executionState)) {
       throw new Error("Imported runs must have a settled execution state.");
     }
     const startedAt = input.startedAt ?? Date.now();

@@ -13,6 +13,7 @@ import {
 } from "../../types/CtrlYokeTypes";
 import {
   ACTIVE_EXECUTION_STATES,
+  IN_FLIGHT_EXECUTION_STATES,
   EXECUTION_PHASES,
   EXTERNAL_EXECUTION_REASONS,
   EXTERNAL_EXECUTION_RESOLUTION_KINDS,
@@ -557,10 +558,9 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
       workingFilePath
     )) {
       const localSummary = instance.getSummary();
-      const hasInFlightStep =
-        localSummary.executionState === EXECUTION_STATES.RUNNING ||
-        localSummary.executionState === EXECUTION_STATES.PAUSING ||
-        localSummary.executionState === EXECUTION_STATES.CANCELLING;
+      const hasInFlightStep = IN_FLIGHT_EXECUTION_STATES.has(
+        localSummary.executionState
+      );
       if (hasInFlightStep) {
         Log.info(
           `[WorkflowOrchestrator] startExternalRunWatchSession: "${workflowId}" is already owned by this process's in-flight WorkflowInstance inst:${instance.id.slice(0, 8)} (executionState=${localSummary.executionState}) — skipping external watch session instead of retiring it`
@@ -1206,12 +1206,7 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
 }
 
 function isExecutionOwnerState(status: QueueState["status"]): boolean {
-  return (
-    status === EXECUTION_STATES.RUNNING ||
-    status === EXECUTION_STATES.PAUSING ||
-    status === EXECUTION_STATES.PAUSED ||
-    status === EXECUTION_STATES.CANCELLING
-  );
+  return ACTIVE_EXECUTION_STATES.has(status);
 }
 
 function getCliOutputSignature(output: CliOutput): string {
