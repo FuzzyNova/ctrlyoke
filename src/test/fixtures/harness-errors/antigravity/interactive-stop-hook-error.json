@@ -1,0 +1,12 @@
+{
+  "artifactDirectoryPath": "<HOME>/.gemini/antigravity-cli/brain/<UUID>",
+  "conversationId": "<UUID>",
+  "error": "generating and executing: Error 401, Message: stub: API key not valid. Please pass a valid API key., Status: UNAUTHENTICATED, Details: []",
+  "executionNum": 0,
+  "fullyIdle": true,
+  "lastUserInput": "Reply with just the word hi.",
+  "modelName": "gemini-3.1-pro-low",
+  "terminationReason": "ERROR",
+  "transcriptPath": "<HOME>/.gemini/antigravity-cli/brain/<UUID>/.system_generated/logs/transcript_full.jsonl",
+  "workspacePaths": ["<SCRATCH>/agy-i-err"]
+}

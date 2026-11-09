@@ -1,0 +1,29 @@
+{
+  "hookEvent": "session.error",
+  "runId": "probe-run",
+  "sessionId": "<SESSION_ID>",
+  "status": "error",
+  "timestamp": 1794210887352,
+  "rawHookData": {
+    "sessionID": "<SESSION_ID>",
+    "error": {
+      "name": "APIError",
+      "data": {
+        "message": "stub: Incorrect API key provided",
+        "statusCode": 401,
+        "isRetryable": false,
+        "responseHeaders": {
+          "connection": "keep-alive",
+          "content-type": "application/json",
+          "date": "Mon, 09 Nov 2026 07:54:47 GMT",
+          "keep-alive": "timeout=5",
+          "transfer-encoding": "chunked"
+        },
+        "responseBody": "{\"error\":{\"message\":\"stub: Incorrect API key provided\",\"type\":\"invalid_request_error\",\"code\":\"invalid_api_key\"}}",
+        "metadata": {
+          "url": "http://127.0.0.1:18403/v1/chat/completions"
+        }
+      }
+    }
+  }
+}

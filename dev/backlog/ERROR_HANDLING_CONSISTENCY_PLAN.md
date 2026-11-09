@@ -1,8 +1,8 @@
 # Error Handling Consistency Plan (harnesses, scripts, CLI)
 
 **Status:** Phase 2 implemented on 2026-11-09 (H1, H2, H4, H5, H6, R1 types, R2 hook
-column, R3). Several requested probes remain unresolved because the bounded run could not
-trigger the target event or the CLI was unavailable. Research and recommendation done; open
+column, R3). Phase 0 captures completed on 2026-11-09 for every harness except OpenCode
+2.x, which is not yet released (§6). Research and recommendation done; open
 decisions settled with the user on 2026-11-08 (§7).
 
 **Origin:** the "CLI error reporting in `src/cli.ts`" entry under **Deferred** in
@@ -93,26 +93,37 @@ captured live (see §6).
     The 1.0.105 live capture emitted `session.error` and `assistant.idle`, then exited 1;
     this probe did not reproduce the conditional exit-0 success case.
   - Antigravity's SYSTEM `ERROR_MESSAGE` becomes TEXT through `transcript.error`
-    (`AntigravityLogParser.ts:773-787,432-439`).
+    (`AntigravityLogParser.ts:773-787,432-439`). The agy 1.5.3 capture (§6) shows that
+    entry is **not written** for an API error: the text is only in the stream-json
+    `result.error`, alongside exit code 3. Phase 2's transcript-based `metadata.error`
+    therefore never fires
+    (`dev/bugs/backlog/antigravity-headless-error-not-parsed-from-stream-json.md`).
   - Neither sets `metadata.error` or implements `extractErrorFromStdout`. Only Codex and
     Qwen implement it.
   - If the process exits 0 after such an error, the step **succeeds** with the error text as
     its response. If it exits non-zero, the message falls back to a stderr summary or
     "Process exited with code N".
 - **H3 ✅ Interactive Codex, Qwen and Antigravity can hang forever on an API error.**
-  - They have no native error hook. Qwen 0.26.7 does write a typed
-    `qwen-code.api_error` event into its saved chat JSONL, but `CliLogMonitor` does not
-    currently consume that log; Codex and Antigravity remain unverified (see §6).
+  - They have no native error hook.
   - `execution.maxPromptTimeoutSec` defaults to `-1`, which means unlimited
     (`CtrlYokeSettings.ts:628`).
   - `InteractiveTurnStartWatchdog` is cancelled as soon as a turn starts, so it cannot see a
     failure in the middle of a turn.
 
-  The Qwen 0.26.7 probe returned to the interactive prompt after the API error and did not
-  write the registered Stop-hook capture before timeout. Codex and Antigravity could not be
-  driven into an API-error turn (see §6). If Stop fires for either, the step may succeed
-  silently. The ERROR_BEHAVIOR_PLAN listed this as "the actively-broken case" and fixed it
-  only for the three harnesses with hooks.
+  The 2026-11-09 captures (§6) settle the behavior. Each harness was checked against a
+  positive-control turn, and in all three the process stays in the TUI after the error:
+  - **Codex 0.166.0** hangs. Stop does not fire after a 401. The rollout records
+    `task_complete` with a typed `error`.
+  - **Qwen 0.26.7** hangs. Stop does not fire after a 401. The chat JSONL records
+    `qwen-code.api_error` and a `request_lifecycle` ending `outcome: "error"`. ~558ef85
+    consumes the `api_error`, but a turn that Qwen's retry recovers then fails
+    (`dev/bugs/backlog/qwen-retried-api-error-fails-recovered-turn.md`).
+  - **Antigravity 1.5.3** succeeds silently. Stop **does** fire, with
+    `terminationReason: "ERROR"` and the text in `error`, and `ctrlyoke-antigravity-hook.js`
+    writes a normal stop file.
+
+  The ERROR_BEHAVIOR_PLAN listed this as "the actively-broken case" and fixed it only for
+  the three harnesses with hooks.
 
 - **H4 ✅ The no-session-ID fallback would be missed; the current Copilot payload includes an ID.**
   - Without a session ID, `ctrlyoke-copilot-hook.js` falls back to writing
@@ -268,21 +279,20 @@ notification monitor interface. Make sure `extractErrorFromStdout` / `metadata.e
 for every harness. `describeHarnessError` then asks the monitor instead of guessing a single
 field:
 
-| Harness     | Hook payload → message                                                                     | Headless → message                                                             |
-| ----------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| Claude      | `error` (+ `error_details`, `last_assistant_message`) 🔎                                   | existing `result.is_error`                                                     |
-| Copilot     | `error.message` (1.0.105 capture: `error` is an object with `message`, `name`, `stack`) ✅ | **new:** `session.error` → `metadata.error` (`data.message`, `data.errorType`) |
-| OpenCode    | `error.data.message ?? error.message ?? error.name` (reuse `getOpenCodeErrorMessage`) 🔎   | existing                                                                       |
-| Codex       | n/a                                                                                        | existing `unwrapApiErrorMessage`                                               |
-| Qwen        | n/a                                                                                        | existing                                                                       |
-| Antigravity | n/a                                                                                        | **new:** SYSTEM `ERROR_MESSAGE` → `metadata.error`                             |
+| Harness     | Hook payload → message                                                                                                                                                           | Headless → message                                                                               |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Claude      | `last_assistant_message` ✅ (2.1.319 capture: `error` is a category such as `"unknown"`; no `error_details`)                                                                     | existing `result.is_error`                                                                       |
+| Copilot     | `error.message` (1.0.105 capture: `error` is an object with `message`, `name`, `stack`) ✅                                                                                       | **new:** `session.error` → `metadata.error` (`data.message`, `data.errorType`)                   |
+| OpenCode    | `error.data.message ?? error.message ?? error.name` (reuse `getOpenCodeErrorMessage`) ✅ (1.19.5 capture: `{ name: "APIError", data: { message, statusCode, isRetryable, … } }`) | existing                                                                                         |
+| Codex       | n/a                                                                                                                                                                              | existing `unwrapApiErrorMessage`                                                                 |
+| Qwen        | n/a                                                                                                                                                                              | existing                                                                                         |
+| Antigravity | n/a (but its Stop payload carries `terminationReason: "ERROR"` + `error`; see R4) ✅                                                                                             | stream-json `result` with `status: "ERROR"` → `error` ✅ (SYSTEM `ERROR_MESSAGE` is not written) |
 
-OpenCode’s live payload shape remains unverified because the bounded v1 probe did not reach
-`session.error`; see §6. The Copilot `session.error` capture confirms a session-level event
-with `data.message` and
-`data.errorType`; Antigravity `ERROR_MESSAGE` remains based on prior ERROR_BEHAVIOR_PLAN
-research because its CLI is unavailable here. Both fit the detection rules. Tool failures
-stay out. The Qwen `qwen-code.api_error` log event is newly recorded in R4 below.
+The Claude, OpenCode and Antigravity rows now rest on real captures (§6). The Claude
+monitor currently prefers the `error` category over `last_assistant_message`
+(`dev/bugs/backlog/claude-stopfailure-reports-error-category-instead-of-text.md`). The
+Copilot `session.error` capture confirms a session-level event with `data.message` and
+`data.errorType`. All of these fit the detection rules, and tool failures stay out.
 
 ### R3. Classification rules, single-sourced in `getHeadlessFailure`
 
@@ -297,17 +307,22 @@ stay out. The Qwen `qwen-code.api_error` log event is newly recorded in R4 below
 
 Do these in order, and keep the ERROR_BEHAVIOR_PLAN's "no keyword matching" rule:
 
-1. **Capture first.** Use the PTY probing recipe in `.github/copilot-instructions.md` to
-   force an API error (an invalid key or a bogus model where accepted mid-session) in
-   Codex, Qwen and Antigravity. Record (a) whether Stop fires, (b) what the session log
-   writes, and (c) whether the process exits.
-2. **Wherever a verified session-level log event exists** (Qwen 0.26.7's saved chat JSONL
-   has `qwen-code.api_error`; Antigravity's SYSTEM `ERROR_MESSAGE` remains a candidate),
-   teach the log parser to emit a typed session-error event if the event is available to the
-   monitor. `CliLogMonitor` resolves it as `HARNESS_ERROR` through the same path as the
-   `-error.json` result.
-3. **Wherever Stop fires after an error**, check the latest turn for that session-error event
-   before accepting completion, so the step fails instead of succeeding silently.
+1. ~~**Capture first.**~~ Done 2026-11-09 (§6):
+   - Codex: no Stop, no exit; rollout `task_complete.error`.
+   - Qwen: no Stop, no exit; `qwen-code.api_error` plus `request_lifecycle`
+     `outcome: "error"`.
+   - Antigravity: Stop fires with `terminationReason: "ERROR"`; no exit; no transcript
+     error entry.
+2. **Wherever a verified session-level log event exists**, teach the log parser to emit a
+   typed session-error event that the monitor can see. `CliLogMonitor` resolves it as
+   `HARNESS_ERROR` through the same path as the `-error.json` result.
+   - Codex: the rollout's `task_complete` with `error`.
+   - Qwen: done in ~558ef85. It must wait for the turn's final outcome, because a
+     retried attempt also logs `api_error` (see the Qwen bug in H3).
+3. **Wherever Stop fires after an error** (Antigravity), fail the step instead of accepting
+   completion. Antigravity's Stop payload states the failure itself: have the hook treat
+   `terminationReason: "ERROR"` as an error artifact carrying `error`. No log lookup is
+   needed.
 4. Only if neither signal exists, document the harness as "error detection: process exit /
    timeout only" in the compatibility table (`hooks.error` is already `unsupported`). Point
    users at `maxPromptTimeoutSec`. Its `-1` (unlimited) default **stays** (decided, §7); this
@@ -445,9 +460,11 @@ into 6a (reporter, sweep and JSON envelope) and 6b (strict integer flag parser).
 1. ~~**Harness error text (H1, H4).** Add `describeHookError` per monitor, fix the Copilot
    no-session-ID filename, and add payload fixtures captured from real harnesses (§6).
    Highest value, smallest change, no contract impact. File a `dev/bugs/` entry for H1
-   and close it in the same commit.~~ Claude and OpenCode had no real error-hook payload
-   fixture available (§6); their extraction follows the observed documented shapes. Copilot
-   extraction uses the captured fixture.
+   and close it in the same commit.~~ At implementation time Claude and OpenCode had no real
+   error-hook payload fixture, so their extraction followed the documented shapes. The
+   later captures (§6) confirm the OpenCode shape. The Claude payload puts a category in
+   `error`, which the extraction currently prefers (open bug, see R2). Copilot extraction
+   uses the captured fixture.
 2. ~~**Headless extraction and classification (H2, H5, H6).** Copilot and Antigravity get
    `metadata.error`. Add the classification rules in `getHeadlessFailure`, route
    `unknown`/`sessionRejected` through `errorBehavior`, and add `FAILURE_SOURCES`.
@@ -491,47 +508,101 @@ When this plan ships, move the ledger's "CLI error reporting" Deferred entry int
 
 Findings below use real local CLI runs. Fixtures are redacted under
 `src/test/fixtures/harness-errors/`; README files record capture versions and methods.
-Unresolved probes are called out with the later phase they affect rather than inferred.
+The second pass (also 2026-11-09) used a local stub server bound to 127.0.0.1 that returns
+provider-shaped, **non-retryable** errors at once. Earlier probes had stalled on
+connection errors that the CLIs retry for minutes. Every probe ran from a fresh scratch
+workspace with an isolated config home or scratch-only hooks, and the user's global
+configs were not modified. Interactive Stop results are backed by a positive-control
+turn in the same setup.
 
-- **Claude Code `StopFailure` — unresolved; Phase 1.** Claude Code 2.1.319 was run with a
-  scratch-only `StopFailure` logger and an invalid endpoint/key. It retried the connection
-  error through attempt 7/10 before the 70-second PTY cap; no hook input was written. The
-  fields `error`, `error_details`, and `last_assistant_message` remain unverified. See
-  `src/test/fixtures/harness-errors/claude/README.md`.
+- **Claude Code `StopFailure` — captured; Phase 1.** Claude Code 2.1.319, with an isolated
+  `CLAUDE_CONFIG_DIR` and the stub answering `400 invalid_request_error`.
+  - `StopFailure` fired within a second, and `Stop` did not fire. The TUI stayed open.
+  - In the payload, `error` is a category string (`"unknown"`), and the provider text is in
+    `last_assistant_message` (`"API Error: 400 …"`). There is no `error_details` field.
+  - The current `describeHookError` returns the category
+    (`dev/bugs/backlog/claude-stopfailure-reports-error-category-instead-of-text.md`).
+  - A 401 is retried (`attempt N/10`, with backoff), which is why the earlier probe never saw
+    `StopFailure`.
+  - Fixture: `src/test/fixtures/harness-errors/claude/stopfailure-hook-input.json`.
 - **Copilot CLI `errorOccurred` — captured; Phase 1 / H4.** GitHub Copilot CLI 1.0.105
   (≥1.0.19) supplied `sessionId` as a string and `error` as an object with `message`,
   `name`, and `stack`. Fixture:
   `src/test/fixtures/harness-errors/copilot/erroroccurred-hook-input.json`. This resolves
   the current-shape question in H4; the no-ID fallback filename remains a possible edge
   case, not observed in this capture.
-- **OpenCode v1 `session.error` — unresolved; Phase 1.** OpenCode 1.19.5 loaded the v1
-  plugin and emitted start plus repeated busy/user-prompt hook artifacts against the invalid
-  endpoint, but kept retrying through the 85-second cap without a `session.error` payload.
-  No error fixture was captured; error shape and the monitor ordering question remain open.
-  See `src/test/fixtures/harness-errors/opencode/README.md`.
-- **OpenCode v2 `session.error` and immediate idle — unavailable; Phase 1.** The npm
-  registry has no `opencode-ai@2` release (the exact install query returned 404). The
-  installed `latest` is 1.19.5; `@beta` installed
-  `0.0.0-beta-202608110357`, not a 2.x CLI. The v2 plugin path and its idle/error write
-  ordering therefore could not be exercised. See the OpenCode README.
-- **Codex interactive API error — unresolved; Phase 7.** Codex CLI 0.166.0 stopped at its
-  first-run sign-in screen with an isolated home. With the existing home and
-  `OPENAI_API_KEY=invalid`, the stored ChatGPT sign-in took precedence and the prompt
-  succeeded. A `gpt-5.4` attempt was rejected because that model is no longer available.
-  No API-error turn or session-error log was captured, so Stop behavior and failure logging
-  remain unknown. See `src/test/fixtures/harness-errors/codex/README.md`.
-- **Qwen interactive API error — captured; Phase 7.** Qwen Code 0.26.7 returned to its TUI
-  prompt after a 401 API error and remained interactive until the 45-second PTY timeout. A
-  registered Stop hook did not write a capture during that run; the scratch hook did not have
-  a positive-control run, so this does not prove that Stop was not fired. Its saved chat JSONL records
-  a typed `qwen-code.api_error` system telemetry event (`AuthenticationError`, status 401),
-  which is a session-level signal for R4 step 2 to evaluate. Fixtures:
-  `src/test/fixtures/harness-errors/qwen/interactive-session-log.jsonl` and
-  `src/test/fixtures/harness-errors/qwen/interactive-pty-excerpt.txt`.
-- **Antigravity interactive and headless errors — unavailable; Phases 2 and 7.** No
-  Antigravity executable is installed (`command -v antigravity` returned no path), so Stop
-  behavior, session logging, process exit, and SYSTEM `ERROR_MESSAGE` output could not be
-  captured. See `src/test/fixtures/harness-errors/antigravity/README.md`.
+- **OpenCode v1 `session.error` — captured; Phase 1.** OpenCode 1.19.5, with a scratch
+  `opencode.json` custom provider and the stub answering an OpenAI-shaped 401
+  (`isRetryable: false`).
+  - `properties.error` is `{ name: "APIError", data: { message, statusCode, isRetryable,
+responseHeaders, responseBody, metadata } }`. `getOpenCodeErrorMessage`'s
+    `error.data.message` reads it correctly.
+  - On the bus, `session.error` came first, then `session.status` idle and `session.idle` in
+    the same millisecond.
+  - ctrlyoke's real v1 plugin wrote `<session>-error.json` 2 ms before `<session>-stop.json`.
+    The process stayed in the TUI.
+  - Fixtures: `opencode/v1-session-error-event-order.jsonl` and
+    `opencode/v1-session-error-artifact.json`.
+- **OpenCode v2 `session.error` and immediate idle — unavailable; Phase 1.**
+  `npm view opencode-ai versions` still lists no 2.x release (latest 1.19.5), so the v2
+  plugin path and its idle/error write ordering remain unexercised.
+- **Codex interactive API error — captured; Phase 7.** Codex CLI 0.166.0, with an isolated
+  `CODEX_HOME` whose custom `model_provider` points at the stub (retries off, workspace
+  pre-trusted). Hooks were inline `-c hooks.*` overrides trusted by ctrlyoke's own builder.
+  - Positive control: Stop fired on a successful stub turn.
+  - On a 401: `SessionStart` and `UserPromptSubmit` fired, **Stop did not**, and the process
+    stayed in the TUI until the 45-second cap. Codex hangs (H3).
+  - The rollout writes `event_msg` `task_complete` with `last_agent_message: null` and
+    `error: { message, codex_error_info: { http_connection_failed: { http_status_code } } }`.
+    That is a typed session-level signal for R4 step 2.
+  - Fixtures: `codex/interactive-rollout-task-error.jsonl` and
+    `codex/interactive-pty-excerpt.txt`.
+- **Qwen interactive API error — captured; Phase 7.** Qwen Code 0.26.7, with an isolated
+  `HOME`, `openai` auth pointing at the stub, and hooks passed through
+  `QWEN_CODE_SYSTEM_SETTINGS_PATH`.
+  - Positive control: Stop fired.
+  - On a 401: **Stop does not fire**, and the TUI stays open. The chat JSONL records
+    `request_lifecycle` started, `qwen-code.api_error`, then `request_lifecycle` ended with
+    `outcome: "error"`. Fixture: `qwen/interactive-401-lifecycle-session-log.jsonl`.
+  - One 429, then success: the OpenAI SDK retried internally and **no `api_error` was
+    written**. One lifecycle ended `success`. Fixture:
+    `qwen/interactive-sdk-retried-429-session-log.jsonl`.
+  - Four 429s, then success: the attempt that surfaced past the SDK **was** logged as
+    `api_error` with a lifecycle ending `error`. Qwen's outer retry then started a new
+    lifecycle (new `executionId`, same `promptId`) that ended `success`, and Stop fired.
+    Fixture: `qwen/interactive-outer-retried-429-session-log.jsonl`.
+  - So `api_error` marks one failed attempt, not the turn's outcome, and the detection added
+    in ~558ef85 fails such a recovered turn
+    (`dev/bugs/backlog/qwen-retried-api-error-fails-recovered-turn.md`).
+  - The original DashScope fixtures (`qwen/interactive-session-log.jsonl`, `…-pty-excerpt.txt`)
+    are unchanged.
+- **Antigravity headless error — captured; Phase 2.** agy 1.5.3 is installed as `agy`; the
+  earlier probe looked for `antigravity`. It ran with
+  `--settings '{"modelProvider":"gemini"}'`, a dummy `GEMINI_API_KEY`, and
+  `GOOGLE_GEMINI_BASE_URL` pointing at a stub returning a Gemini-shaped 401.
+  - The process exited 3.
+  - stdout's last stream-json event is `result` with `status: "ERROR"` and the text in
+    `error`. The error step appears only as a textless `step_update` with
+    `step_type: "error_message"`.
+  - stderr has `error: …` plus an `AGY_ERROR: {…}` JSON line (`status`, `error_code`,
+    `retryable`).
+  - **No SYSTEM `ERROR_MESSAGE` entry is written to the transcript** (nor found in any
+    existing transcript), so Phase 2's transcript extraction never fires
+    (`dev/bugs/backlog/antigravity-headless-error-not-parsed-from-stream-json.md`).
+  - The synthesized `antigravity/headless-system-error.jsonl` was removed. Fixtures:
+    `antigravity/headless-stream-json-error.jsonl` and `antigravity/headless-stderr.txt`.
+  - A bogus `--model` fails client-side validation (exit 1, before any request) and is not
+    a provider error.
+- **Antigravity interactive API error — captured; Phase 7.** Same stub, with hooks in the
+  scratch workspace's `.agents/hooks.json` (trusted through `--settings`).
+  - Positive control: Stop fired with `terminationReason: "NO_TOOL_CALL"` and `error: ""`.
+  - On the 401, **Stop fires** with `terminationReason: "ERROR"` and the provider text in
+    `error`. The TUI showed `⚠ agent executor error …` and the process did not exit.
+  - The transcript again holds only the user input. With today's hook script the step
+    succeeds silently, which R4 step 3 addresses.
+  - Fixtures: `antigravity/interactive-stop-hook-error.json`,
+    `antigravity/interactive-stop-hook-success.json` and
+    `antigravity/interactive-pty-excerpt.txt`.
 - **Copilot headless `session.error` — captured; Phase 2.** With Copilot CLI 1.0.105 and a
   local OpenAI-compatible provider forced to refuse the connection, stdout contained
   `session.error` (`data.errorType: "query"`, with `data.message`) followed by

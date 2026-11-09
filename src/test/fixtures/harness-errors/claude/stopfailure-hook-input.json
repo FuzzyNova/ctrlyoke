@@ -1,0 +1,12 @@
+{
+  "session_id": "<UUID>",
+  "transcript_path": "<SCRATCH>/claude-home/projects/<SCRATCH_SLUG>-claude-i/<UUID>.jsonl",
+  "cwd": "<SCRATCH>/claude-i",
+  "prompt_id": "<UUID>",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "StopFailure",
+  "error": "unknown",
+  "last_assistant_message": "API Error: 400 stub: model: unknown-model is not a valid model"
+}

@@ -125,13 +125,13 @@ function terminalPlannerResponse(
 
 suite("AntigravityLogParser", () => {
   test("extracts session SYSTEM ERROR_MESSAGE as failure metadata and visible text", () => {
-    const fixturePath = path.resolve(
-      __dirname,
-      "../../../src/test/fixtures/harness-errors/antigravity/headless-system-error.jsonl"
-    );
-    const entry = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
-    entry.source = ANTIGRAVITY_WIRE_VALUES.SYSTEM;
-    entry.type = ANTIGRAVITY_ENTRY_TYPES.ERROR_MESSAGE;
+    // Synthetic: agy 1.5.3 was not observed writing ERROR_MESSAGE to its
+    // transcript for an API error (see fixtures/harness-errors/antigravity).
+    const entry = {
+      source: ANTIGRAVITY_WIRE_VALUES.SYSTEM,
+      type: ANTIGRAVITY_ENTRY_TYPES.ERROR_MESSAGE,
+      content: "The model request was rejected by the service.",
+    };
     const output = new AntigravityLogParser().extractResponse([
       {
         type: "transcript.error",

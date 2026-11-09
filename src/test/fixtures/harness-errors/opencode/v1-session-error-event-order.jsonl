@@ -1,0 +1,5 @@
+{"dtMs":0,"type":"session.error","properties":{"sessionID":"<SESSION_ID>","error":{"name":"APIError","data":{"message":"stub: Incorrect API key provided","statusCode":401,"isRetryable":false,"responseHeaders":{"connection":"keep-alive","content-type":"application/json","date":"<DATE>","keep-alive":"timeout=5","transfer-encoding":"chunked"},"responseBody":"{\"error\":{\"message\":\"stub: Incorrect API key provided\",\"type\":\"invalid_request_error\",\"code\":\"invalid_api_key\"}}","metadata":{"url":"http://127.0.0.1:18403/v1/chat/completions"}}}}}
+{"dtMs":0,"type":"session.status","properties":{"sessionID":"<SESSION_ID>","status":{"type":"idle"}}}
+{"dtMs":0,"type":"session.idle","properties":{"sessionID":"<SESSION_ID>"}}
+{"dtMs":2,"type":"session.status","properties":{"sessionID":"<SESSION_ID>","status":{"type":"idle"}}}
+{"dtMs":2,"type":"session.idle","properties":{"sessionID":"<SESSION_ID>"}}

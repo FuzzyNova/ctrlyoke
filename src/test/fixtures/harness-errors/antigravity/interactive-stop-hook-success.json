@@ -1,0 +1,12 @@
+{
+  "artifactDirectoryPath": "<HOME>/.gemini/antigravity-cli/brain/<UUID>",
+  "conversationId": "<UUID>",
+  "error": "",
+  "executionNum": 0,
+  "fullyIdle": true,
+  "lastUserInput": "Reply with just the word hi.",
+  "modelName": "gemini-3.8-flash-high",
+  "terminationReason": "NO_TOOL_CALL",
+  "transcriptPath": "<HOME>/.gemini/antigravity-cli/brain/<UUID>/.system_generated/logs/transcript_full.jsonl",
+  "workspacePaths": ["<SCRATCH>/agy-i-ctl"]
+}

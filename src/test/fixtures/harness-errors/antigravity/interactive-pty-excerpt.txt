@@ -1,0 +1,5 @@
+⚠ agent executor error: generating and executing: Error 401, Message: stub: API key not valid. Please pass a valid API key., Status: UNAUTHENTICATED, Details:
+[]
+Error ID: <REDACTED>
+
+──────────
