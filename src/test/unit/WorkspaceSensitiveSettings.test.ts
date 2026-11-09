@@ -179,9 +179,7 @@ suite("WorkspaceSensitiveSettings", () => {
       );
       assert.deepStrictEqual(
         requests.map((request) => request.summary),
-        [
-          `${SETTING_PATHS.DEFAULTS_HOOKS}: {"command":"./tools/evil.sh","event":"stop"}`,
-        ]
+        [`${SETTING_PATHS.DEFAULTS_HOOKS}: command: ./tools/evil.sh`]
       );
     });
 
@@ -207,6 +205,69 @@ suite("WorkspaceSensitiveSettings", () => {
         {}
       );
       assert.strictEqual(first!.fingerprint, second!.fingerprint);
+    });
+
+    test("shows complete launch fields first without changing fingerprints", () => {
+      const hook = {
+        event: "stop",
+        command: `node ${"x".repeat(180)}`,
+        args: [`--settings ${"a".repeat(180)}`],
+        env: { NODE_OPTIONS: `--require ${"e".repeat(180)}` },
+      };
+      const [request] = collectWorkspaceSensitiveSettingRequests(
+        settings({ defaults: { hooks: [hook] } }),
+        {}
+      );
+      assert.ok(request!.detail.includes(hook.command));
+      assert.ok(request!.detail.includes(hook.args[0]!));
+      assert.ok(
+        request!.detail.includes(`NODE_OPTIONS=${hook.env.NODE_OPTIONS}`)
+      );
+      assert.match(request!.summary, /command: node/);
+
+      const mcp = {
+        id: "registry-server",
+        command: `node ${"m".repeat(180)}`,
+        args: [`--settings ${"b".repeat(180)}`],
+        env: { NODE_OPTIONS: `--require ${"r".repeat(180)}` },
+      };
+      const serverRequest = collectWorkspaceSensitiveSettingRequests(
+        settings({ defaults: { mcpServers: [mcp] } }),
+        {}
+      )[0]!;
+      for (const expected of [
+        mcp.command,
+        mcp.args[0]!,
+        `NODE_OPTIONS=${mcp.env.NODE_OPTIONS}`,
+      ]) {
+        assert.ok(serverRequest!.detail.includes(expected), expected);
+      }
+      const registryRequest = collectWorkspaceMcpRegistryRequests(
+        [mcp as McpServerConfig],
+        []
+      )[0]!;
+      for (const expected of [
+        mcp.command,
+        mcp.args[0]!,
+        `NODE_OPTIONS=${mcp.env.NODE_OPTIONS}`,
+      ]) {
+        assert.ok(registryRequest!.detail.includes(expected), expected);
+      }
+      const [argumentRequest] = collectWorkspaceSensitiveSettingRequests(
+        settings({
+          defaults: {
+            additionalArgs: { "claude-cli": `--settings ${"z".repeat(240)}` },
+          },
+        }),
+        {}
+      );
+      assert.ok(argumentRequest!.detail.endsWith("z".repeat(240)));
+
+      const same = collectWorkspaceSensitiveSettingRequests(
+        settings({ defaults: { hooks: [{ event: "stop", command: "x" }] } }),
+        {}
+      )[0]!;
+      assert.strictEqual(same.fingerprint, "ff0ffee895982b7f7de28310269d7110");
     });
   });
 

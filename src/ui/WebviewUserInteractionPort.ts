@@ -52,6 +52,7 @@ export class WebviewUserInteractionPort implements UserInteractionPort {
           items: request.items.map((item): BatchApprovalItem => ({
             value: item.value,
             label: item.label,
+            detail: item.detail,
             checked: item.checked,
           })),
         },

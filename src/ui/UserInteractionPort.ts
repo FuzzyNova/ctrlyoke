@@ -1,6 +1,7 @@
 export interface BatchApprovalItem {
   value: string;
   label: string;
+  detail?: string;
   checked: boolean;
 }
 

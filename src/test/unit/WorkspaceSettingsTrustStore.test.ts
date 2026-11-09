@@ -12,6 +12,7 @@ function request(fingerprint: string): WorkspaceSensitiveSettingRequest {
     settingPath: "terminal.shellExecutable",
     fingerprint,
     summary: `terminal.shellExecutable: ${fingerprint}`,
+    detail: fingerprint,
   };
 }
 

@@ -951,8 +951,8 @@ suite("CtrlYokeConfigService workspace sensitive settings", () => {
     );
     assert.deepStrictEqual(decisions, {
       "terminal.shellExecutable: zsh": "allow",
-      'defaults.hooks: {"command":"./committed.sh","event":"stop"}': undefined,
-      'defaults.hooks: {"command":"./mine.sh","event":"stop"}': "allow",
+      "defaults.hooks: command: ./committed.sh": undefined,
+      "defaults.hooks: command: ./mine.sh": "allow",
     });
     assert.strictEqual(service.getAll().terminal.shellExecutable, "zsh");
     assert.deepStrictEqual(

@@ -72,7 +72,7 @@ export function BatchApprovalModal() {
           {request.items.map((item) => (
             <label
               key={item.value}
-              className="flex items-center gap-2 rounded-sm border border-panel-border px-2 py-1.5"
+              className="flex items-start gap-2 rounded-sm border border-panel-border px-2 py-1.5"
             >
               <input
                 type="checkbox"
@@ -80,9 +80,16 @@ export function BatchApprovalModal() {
                 onChange={() => toggle(item.value)}
                 className="h-3.5 w-3.5 shrink-0 accent-focus-border"
               />
-              <code className="break-all text-sm text-foreground">
-                {item.label}
-              </code>
+              <div className="min-w-0">
+                <code className="break-all text-sm text-foreground">
+                  {item.label}
+                </code>
+                {item.detail && (
+                  <pre className="mt-1 whitespace-pre-wrap break-all text-xs text-description-fg">
+                    {item.detail}
+                  </pre>
+                )}
+              </div>
             </label>
           ))}
         </div>

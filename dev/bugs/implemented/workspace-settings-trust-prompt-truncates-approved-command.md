@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli, node repro against `out/`)
 - **Area:** `src/config/WorkspaceSensitiveSettings.ts` (`summarizeValue`, `MAX_SUMMARY_VALUE_LENGTH`, `createRequest`, `collectWorkspaceMcpRegistryRequests`); shown by `src/ui/WorkspaceSettingsTrustPrompt.ts` and `src/cli/WorkspaceSettingsTrustCommands.ts`
-- **Severity:** high (security)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

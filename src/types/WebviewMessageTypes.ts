@@ -3230,6 +3230,7 @@ export interface SecretDeletedMessage {
 export interface BatchApprovalItemPayload {
   value: string;
   label: string;
+  detail?: string;
   checked: boolean;
 }
 

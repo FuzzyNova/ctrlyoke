@@ -30,6 +30,8 @@ export interface WorkspaceSensitiveSettingRequest {
   fingerprint: string;
   /** One-line, human-readable description for approval prompts. */
   summary: string;
+  /** Complete readable value covered by the approval decision. */
+  detail: string;
 }
 
 /**
@@ -222,11 +224,13 @@ const SENSITIVE_WORKSPACE_SETTINGS: readonly SensitiveSettingDescriptor[] = [
     path: SETTING_PATHS.DEFAULTS_HOOKS,
     shape: SENSITIVE_SETTING_SHAPES.ENTRIES,
     isSensitive: isPresent,
+    summarize: summarizeProgramValue,
   },
   {
     path: SETTING_PATHS.DEFAULTS_MCP_SERVERS,
     shape: SENSITIVE_SETTING_SHAPES.ENTRIES,
     isSensitive: isStdioMcpServer,
+    summarize: summarizeProgramValue,
   },
   {
     path: SETTING_PATHS.DEFAULTS_END_CONDITION,
@@ -298,6 +302,50 @@ function summarizeValue(value: unknown): string {
     : text;
 }
 
+const PROGRAM_ENV_FIELD = "env";
+const PROGRAM_FIELD_ORDER = ["command", "args", PROGRAM_ENV_FIELD] as const;
+
+/** Pretty-print complete values, putting executable details before metadata. */
+function formatSensitiveValue(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (!isPlainObject(value))
+    return JSON.stringify(value, null, 2) ?? String(value);
+
+  const entries = Object.entries(value);
+  const ordered = [
+    ...PROGRAM_FIELD_ORDER.flatMap((key) =>
+      entries.filter(([entryKey]) => entryKey === key)
+    ),
+    ...entries
+      .filter(
+        ([key]) =>
+          !PROGRAM_FIELD_ORDER.includes(
+            key as (typeof PROGRAM_FIELD_ORDER)[number]
+          )
+      )
+      .sort(([left], [right]) => left.localeCompare(right)),
+  ];
+  const lines = ordered.map(([key, item]) => {
+    if (key === PROGRAM_ENV_FIELD && isPlainObject(item)) {
+      return `  env: ${Object.entries(item)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([envKey, envValue]) => `${envKey}=${String(envValue)}`)
+        .join("\n       ")}`;
+    }
+    const rendered = JSON.stringify(item, null, 2) ?? String(item);
+    return `  ${key}: ${rendered.replace(/\n/g, "\n  ")}`;
+  });
+  return `{\n${lines.join(",\n")}\n}`;
+}
+
+function summarizeProgramValue(value: unknown): string {
+  const command =
+    isPlainObject(value) && typeof value.command === "string"
+      ? `command: ${value.command}`
+      : summarizeValue(value);
+  return summarizeValue(command);
+}
+
 function createRequest(
   settingPath: string,
   value: unknown,
@@ -308,6 +356,7 @@ function createRequest(
     settingPath,
     fingerprint: fingerprintOf(value),
     summary: `${label}: ${valueText}`,
+    detail: formatSensitiveValue(value),
   };
 }
 
@@ -416,7 +465,7 @@ function forEachSensitiveValue(
     for (const entry of workspaceValue) {
       if (!descriptor.isSensitive(entry)) continue;
       visit(
-        createRequest(descriptor.path, entry),
+        createDescriptorRequest(descriptor, descriptor.path, entry),
         userEntries.some((userEntry) => valuesEqual(entry, userEntry))
       );
     }
@@ -540,7 +589,8 @@ export function collectWorkspaceMcpRegistryRequests(
       createRequest(
         WORKSPACE_MCP_REGISTRY_TRUST_PATH,
         server,
-        `MCP registry server "${server.id}"`
+        `MCP registry server "${server.id}"`,
+        summarizeProgramValue(server)
       )
     );
 }

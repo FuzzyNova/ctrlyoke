@@ -78,7 +78,8 @@ after you approve them:
   setting; a stricter value applies without asking
 - `defaults.worktree`, when it names a `setup` command different from your user setting's
 
-The first time ctrlyoke finds one, it asks which values to trust. Unchecked values stay blocked,
+The first time ctrlyoke finds one, it asks which values to trust and shows each complete value,
+including the full command, arguments and environment variables. Unchecked values stay blocked,
 and your own user setting applies instead. Approval is recorded per workspace and per value, so a
 later commit that changes the value asks again. A value identical to your own user setting never
 needs approval, and a value you save at workspace scope from the Settings drawer counts as

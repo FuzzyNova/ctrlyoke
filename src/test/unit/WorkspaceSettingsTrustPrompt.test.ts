@@ -71,7 +71,12 @@ function state(
   decision?: WorkspaceSensitiveSettingState["decision"]
 ): WorkspaceSensitiveSettingState {
   return {
-    request: { settingPath: "defaults.hooks", fingerprint: summary, summary },
+    request: {
+      settingPath: "defaults.hooks",
+      fingerprint: summary,
+      summary,
+      detail: `detail: ${summary}`,
+    },
     decision,
   };
 }
@@ -131,6 +136,20 @@ suite("WorkspaceSettingsTrustPrompt", () => {
     );
     assert.deepStrictEqual(access.approved, [], "dismissing decides nothing");
     assert.deepStrictEqual(access.denied, []);
+  });
+
+  test("includes the complete request detail in each approval item", async () => {
+    const fullValue = `command: node ${"x".repeat(240)}\nargs: --settings ${"a".repeat(240)}`;
+    const requestState = state("Hook: command: node …");
+    requestState.request.detail = fullValue;
+    const port = new ScriptedPort(() => undefined);
+    await promptForWorkspaceSettingsTrust(
+      WORKSPACE,
+      port,
+      {},
+      new FakeAccess([requestState])
+    );
+    assert.strictEqual(port.requests[0]!.items[0]!.detail, fullValue);
   });
 
   test("does nothing when there is nothing to ask or nobody to ask", async () => {

@@ -22,6 +22,7 @@ function state(
       settingPath,
       fingerprint: summary,
       summary,
+      detail: `detail: ${summary}`,
     },
     decision,
   };
@@ -125,6 +126,46 @@ suite("WorkspaceSettingsTrustCommands", () => {
       assert.strictEqual(code, 0);
       assert.deepStrictEqual(dependencies.approved, ["a"]);
       assert.deepStrictEqual(io.questions, []);
+    });
+
+    test("prints complete details for --yes, non-TTY, and interactive approval", async () => {
+      const fullValue = `command: node ${"x".repeat(240)}\nargs: --settings ${"a".repeat(240)}`;
+      const approvedIo = new RecordingCliTrustIo(false);
+      const approvedState = state("Hook: command: node …");
+      approvedState.request.detail = fullValue;
+      await trustWorkspaceSettingsCommand(
+        WORKSPACE,
+        { yes: true },
+        approvedIo,
+        new RecordingDependencies([approvedState])
+      );
+      assert.ok(approvedIo.out.join("\n").includes(fullValue.split("\n")[0]!));
+      assert.ok(approvedIo.out.join("\n").includes("--settings "));
+      assert.ok(approvedIo.out.join("\n").includes("a".repeat(240)));
+
+      const listedIo = new RecordingCliTrustIo(false);
+      await trustWorkspaceSettingsCommand(
+        WORKSPACE,
+        {},
+        listedIo,
+        new RecordingDependencies([approvedState])
+      );
+      assert.ok(listedIo.err.join("\n").includes(fullValue.split("\n")[0]!));
+      assert.ok(listedIo.err.join("\n").includes("--settings "));
+      assert.ok(listedIo.err.join("\n").includes("a".repeat(240)));
+
+      const interactiveIo = new RecordingCliTrustIo(true, [true]);
+      await trustWorkspaceSettingsCommand(
+        WORKSPACE,
+        {},
+        interactiveIo,
+        new RecordingDependencies([approvedState])
+      );
+      assert.ok(
+        interactiveIo.questions[0]!.includes(fullValue.split("\n")[0]!)
+      );
+      assert.ok(interactiveIo.questions[0]!.includes("--settings "));
+      assert.ok(interactiveIo.questions[0]!.includes("a".repeat(240)));
     });
 
     test("--all re-asks about decided values, showing the current answer", async () => {
