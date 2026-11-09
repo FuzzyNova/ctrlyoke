@@ -1230,10 +1230,6 @@ export function snapParallelGroupIndex(
   );
 }
 
-export const snapParallelGroupStartPosition = snapParallelGroupIndex;
-export const validateParallelGroups = validateParallelGroupTopology;
-export const normalizeParallelGroups = normalizeParallelGroupTopology;
-
 export interface FlattenedParallelItems {
   topology: ParallelGroupTopology;
   itemCount: number;

@@ -87,7 +87,6 @@ export function createWorktreeDirectoryName(
   return `${slugifyWorktreeName(readableName)}-${hash}`;
 }
 
-export const buildWorktreeDirectoryName = createWorktreeDirectoryName;
 
 export function createRepositoryIdentity(
   repositoryName: string,
@@ -466,5 +465,3 @@ export async function withRepositoryWorktreeMutationLock<T>(
     throw new Error("Cannot resolve the repository Git common directory.");
   return withWorktreeMutationLock(common, action);
 }
-
-export const withGitWorktreeMutationLock = withRepositoryWorktreeMutationLock;

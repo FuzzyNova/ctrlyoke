@@ -672,6 +672,3 @@ export async function getScriptCommandCompletions(
     return sortA.localeCompare(sortB);
   });
 }
-
-/** Alias with a shorter name for callers that do not need the implementation name. */
-export const getScriptCompletions = getScriptCommandCompletions;

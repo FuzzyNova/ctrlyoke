@@ -98,7 +98,7 @@ import {
   type PendingParallelGroupRange,
   replaceParallelGroupStep,
   resolveParallelGroupInsertIndex,
-  snapParallelGroupStartPosition,
+  snapParallelGroupIndex,
   PARALLEL_GROUP_INSERT_POSITIONS,
   type ParallelGroupInsertPlacement,
 } from "./ParallelGroupTopology";
@@ -1376,7 +1376,7 @@ export class WorkingFileManager {
               `Invalid rewind index ${fromStepIndex}; expected a suffix within ${topology.steps.length} step(s)`
             );
           }
-          const boundary = snapParallelGroupStartPosition(
+          const boundary = snapParallelGroupIndex(
             topology,
             fromStepIndex
           );

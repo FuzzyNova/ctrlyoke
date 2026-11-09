@@ -62,7 +62,7 @@ import {
   promoteStepToParallelGroup,
   replaceParallelGroupStep,
   resolveParallelGroupInsertIndex,
-  snapParallelGroupStartPosition,
+  snapParallelGroupIndex,
 } from "./ParallelGroupTopology";
 import { Log } from "../utils/Log";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
@@ -506,7 +506,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       const pendingRewind = runtime?.pendingRewind
         ? {
             ...runtime.pendingRewind,
-            fromStepIndex: snapParallelGroupStartPosition(
+            fromStepIndex: snapParallelGroupIndex(
               topology,
               runtime.pendingRewind.fromStepIndex
             ),
@@ -786,7 +786,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       steps: this.state.steps,
       parallelGroups: this.state.parallelGroups,
     });
-    const boundary = snapParallelGroupStartPosition(topology, toIndex);
+    const boundary = snapParallelGroupIndex(topology, toIndex);
     const markedAt = Date.now();
     this.state.steps = topology.steps.map((step, index) => {
       const cleared = resetStepRuntimeForRewind(step);
@@ -1930,7 +1930,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     this.state.pendingRewind = pendingRewind
       ? {
           ...pendingRewind,
-          fromStepIndex: snapParallelGroupStartPosition(
+          fromStepIndex: snapParallelGroupIndex(
             {
               steps: this.state.steps,
               parallelGroups: this.state.parallelGroups,
@@ -2627,7 +2627,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       steps: this.state.steps,
       parallelGroups: this.state.parallelGroups,
     });
-    const boundary = snapParallelGroupStartPosition(topology, fromStepIndex);
+    const boundary = snapParallelGroupIndex(topology, fromStepIndex);
     this.state.steps.forEach((step, index) => {
       if (index >= boundary) {
         this.archiveStepRuntime(step, index, "beginPendingRewind");

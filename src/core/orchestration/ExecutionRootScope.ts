@@ -230,6 +230,3 @@ export async function sweepOrphanedScopeStorage(
   }
   return removed;
 }
-
-/** Backward-friendly name for callers that previously owned the lease resolver. */
-export const resolveLeaseScope = resolveExecutionRootScope;

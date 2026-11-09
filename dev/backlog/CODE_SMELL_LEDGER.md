@@ -85,7 +85,8 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   `useOutputContextMenu.tsx`/`outputRowTiming.ts`; hosted-server query parsing (`repo`
   trimmed from the query but not the body; page-size parsers beside
   `WorkspaceTreeRoute`'s strict ones); `src/license/LemonSqueezyConstants.ts` reported
-  as an unused file by knip.
+  as an unused file by knip. Removed the ten pure aliases reported by knip and updated
+  all source and test callers to use the canonical names.
 
 ## Deferred
 

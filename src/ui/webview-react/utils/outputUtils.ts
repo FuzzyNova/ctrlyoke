@@ -158,9 +158,6 @@ export function getStepAssistantTextForCopy(
   return text;
 }
 
-/** @deprecated Use getStepAssistantTextForCopy. */
-export const extractCliOutputText = getStepAssistantTextForCopy;
-
 /**
  * Detects user-initiated stop/cancel messages that should render as warnings
  * rather than hard errors.
