@@ -18,10 +18,22 @@ export async function parseCliPromptFile(
   const parser = new PromptFileParser(platform, userFeedbackSink);
   const parsed = await parser.parsePromptFile(resolveCliFileArgument(file));
   if (parsed) return parsed;
+  if (parser.lastParseError && isMissingFileError(parser.lastParseError)) {
+    throw new Error(`File not found: ${resolveCliFileArgument(file)}`);
+  }
   throw new Error(
     parser.lastNewerSchemaError?.message ??
       parser.lastParseError?.message ??
       `Failed to load workflow file: ${file}`
+  );
+}
+
+function isMissingFileError(error: Error): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
   );
 }
 

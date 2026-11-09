@@ -6,7 +6,6 @@ import {
 } from "../platform/SecretStore";
 import { createNodeSecretStore } from "../platform/NodeSecretStore";
 import { CliAdapter, type ResolvedCliConfig } from "../platform/CliAdapter";
-import { PromptFileParser } from "../core/PromptFileParser";
 import {
   MissingSecretsError,
   getWorkflowSecretGrants,
@@ -44,6 +43,7 @@ import { resolveCliFileArgument } from "./CliFileArgument";
 import { confirmMutation, promptYesNo, type CliConfirmIo } from "./CliPrompt";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { reportCliError } from "./CliExitCode";
+import { parseCliPromptFile } from "./CliPromptFile";
 
 export interface SecretCommandIo extends CliConfirmIo {
   writeOut(message: string): void;
@@ -212,9 +212,7 @@ export async function checkSecretsCommand(
   try {
     workflow = dependencies.parseWorkflow
       ? await dependencies.parseWorkflow(filePath)
-      : await new PromptFileParser(dependencies.platform).parsePromptFile(
-          filePath
-        );
+      : await parseCliPromptFile(filePath, dependencies.platform);
   } catch (error) {
     writeSecretError(options.json, io, getErrorMessage(error), 2);
     return 2;
@@ -277,9 +275,7 @@ export async function trustSecretGrantsCommand(
   try {
     workflow = dependencies.parseWorkflow
       ? await dependencies.parseWorkflow(filePath)
-      : await new PromptFileParser(dependencies.platform).parsePromptFile(
-          filePath
-        );
+      : await parseCliPromptFile(filePath, dependencies.platform);
   } catch (error) {
     writeSecretError(options.json, io, getErrorMessage(error), 2);
     return 2;

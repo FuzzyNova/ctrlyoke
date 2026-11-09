@@ -185,7 +185,7 @@ suite("CLI step command handlers", () => {
     await assert.rejects(
       () =>
         commandContext.parseStepFile(path.join(workspaceRoot, "missing.yaml")),
-      /ENOENT/u
+      /File not found/u
     );
 
     const invalidFile = path.join(workspaceRoot, "invalid.ctrlyoke.yaml");

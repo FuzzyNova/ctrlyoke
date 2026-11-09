@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Secret and trust commands now show the parser's reason when a workflow file cannot be loaded.
 - Workflow failure notifications now identify the failed queue step or final-step pass, including failures where the execution cursor has advanced.
 
 - `history show --attempt` now numbers attempts across resumed executions, matching `history steps` and run JSON; selecting or paging one attempt returns only that execution.

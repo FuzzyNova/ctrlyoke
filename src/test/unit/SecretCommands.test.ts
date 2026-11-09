@@ -174,6 +174,46 @@ function workflowDependencies(
 }
 
 suite("Secret command parser", () => {
+  test("check and trust-secret-grants preserve workflow load errors", async () => {
+    const tempRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-secret-load-errors-")
+    );
+    try {
+      const invalidFile = path.join(tempRoot, "invalid.ctrlyoke.yaml");
+      await fs.writeFile(invalidFile, "steps:\n  - promptt: hi\n");
+      const missingFile = path.join(tempRoot, "missing.ctrlyoke.yaml");
+      const deps = dependencies(new InMemorySecretStore(), tempRoot);
+
+      for (const [commandName, command] of [
+        ["secret check", checkSecretsCommand],
+        ["trust-secret-grants", trustSecretGrantsCommand],
+      ] as const) {
+        for (const [file, expected] of [
+          [missingFile, "File not found"],
+          [invalidFile, "Validation failed"],
+        ] as const) {
+          for (const json of [false, true]) {
+            const io = new TestIo();
+            const code = await command(
+              file,
+              { json },
+              deps,
+              io
+            );
+            assert.strictEqual(code, 2, `${commandName} exit code`);
+            const message = json
+              ? (JSON.parse(io.output[0]) as { error: { message: string } })
+                  .error.message
+              : io.errors[0];
+            assert.ok(message.includes(expected), `${commandName}: ${message}`);
+          }
+        }
+      }
+    } finally {
+      await fs.rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
   test("parses scopes and stdin without exposing a value-bearing argv option", async () => {
     const calls: Parameters<typeof createParserProgram>[0] = {};
     await createParserProgram(calls).parseAsync(

@@ -430,5 +430,19 @@ suite("ctrlyoke validate compatibility command", () => {
     const trustGrants = await runCli(["trust-secret-grants", workflow], root);
     assert.strictEqual(trustGrants.code, 2);
     assert.strictEqual(trustGrants.stdout, "");
+
+    const trustRoots = await runCli(
+      ["trust-workflow-external-roots", workflow],
+      root
+    );
+    assert.strictEqual(trustRoots.code, 2);
+    assert.match(trustRoots.stderr, /Validation failed:/u);
+
+    const missingRoots = await runCli(
+      ["trust-workflow-external-roots", "missing.ctrlyoke.yaml"],
+      root
+    );
+    assert.strictEqual(missingRoots.code, 2);
+    assert.match(missingRoots.stderr, /File not found/u);
   });
 });

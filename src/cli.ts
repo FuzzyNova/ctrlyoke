@@ -2846,13 +2846,11 @@ async function trustWorkflowExternalRootsCommand(
   configService.setUserBackend(userBackend);
   configService.setWorkspaceBackend(workspaceBackend);
 
-  const parser = new PromptFileParser();
-  const workflow = await parser.parsePromptFile(resolvedFile);
-  if (!workflow) {
-    reportCliError(
-      parser.lastNewerSchemaError ??
-        new Error(`Failed to load workflow file: ${resolvedFile}`)
-    );
+  let workflow;
+  try {
+    workflow = await parseCliPromptFile(resolvedFile);
+  } catch (error) {
+    reportCliError(error);
     return;
   }
 

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (pass 16), running the built CLI
 - **Area:** `src/cli/SecretCommands.ts`, `src/cli.ts` (`trustWorkflowExternalRootsCommand`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
