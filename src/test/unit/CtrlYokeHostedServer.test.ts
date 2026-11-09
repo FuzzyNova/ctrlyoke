@@ -37,6 +37,7 @@ import {
   type CtrlYokeNotificationEvent,
   type HookArtifact,
 } from "../../ui/notifications/CompletionNotificationFactory";
+import { CompletionNotificationTracker } from "../../ui/notifications/CompletionNotificationTracker";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import {
   REDACTION_MARKER,
@@ -1728,8 +1729,7 @@ interface HostedServerHeartbeatInternals {
 
 interface HostedServerFeedbackInternals {
   connections: Set<FakeHostedSocket>;
-  notifiedEventIds: Set<string>;
-  workflowSummaries: Map<string, WorkflowSummary>;
+  completionTracker: CompletionNotificationTracker;
   publicUrl?: string;
   webPushService: {
     sendNotification(event: unknown): Promise<{
@@ -1834,8 +1834,7 @@ suite("CtrlYokeHostedServer feedback transport", () => {
       CtrlYokeHostedServer.prototype
     ) as HostedServerFeedbackInternals;
     server.connections = new Set();
-    server.notifiedEventIds = new Set();
-    server.workflowSummaries = new Map();
+    server.completionTracker = new CompletionNotificationTracker();
     server.broadcast = (message) => {
       if (
         (message as { type?: string }).type === MESSAGE_TYPES.NOTIFICATION_EVENT
@@ -1972,7 +1971,7 @@ suite("CtrlYokeHostedServer feedback transport", () => {
         CtrlYokeHostedServer.prototype
       ) as HostedServerFeedbackInternals;
       server.connections = new Set([socket]);
-      server.notifiedEventIds = new Set();
+      server.completionTracker = new CompletionNotificationTracker();
       const event = buildTestNotificationEvent("http://localhost");
 
       configService.setCliOverlay({
@@ -2006,7 +2005,7 @@ suite("CtrlYokeHostedServer feedback transport", () => {
       CtrlYokeHostedServer.prototype
     ) as HostedServerFeedbackInternals;
     server.connections = new Set();
-    server.notifiedEventIds = new Set();
+    server.completionTracker = new CompletionNotificationTracker();
     server.publicUrl = "http://localhost:4312/?token=secret-token";
     server.broadcast = (message) => {
       broadcastPayload = message;

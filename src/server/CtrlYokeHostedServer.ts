@@ -44,8 +44,6 @@ import {
   HOSTED_CERT_DOWNLOAD,
   HOSTED_CONNECTION_LIVENESS,
   MESSAGE_TYPES,
-  EXECUTION_STATES,
-  STEP_STATUS,
   BROWSER_CLIENT_PREFIX,
   LANGUAGE_SERVER_REQUEST_ORIGINS,
   type FinalStepPhase,
@@ -81,9 +79,9 @@ import {
   buildTestNotificationEvent,
   buildWorkflowCompletionNotification,
   isWorkflowCompletionTransition,
-  notificationIdentityPrefix,
   type CtrlYokeNotificationEvent,
 } from "../ui/notifications/CompletionNotificationFactory";
+import { CompletionNotificationTracker } from "../ui/notifications/CompletionNotificationTracker";
 import { buildHostedServiceWorkerScript } from "./HostedServiceWorkerScript";
 import { buildHostedStandaloneShimScript } from "./HostedStandaloneShimScript";
 import { projectKey } from "../utils/ProjectStatePaths";
@@ -346,8 +344,7 @@ export class CtrlYokeHostedServer
   private readonly socketClientTags = new WeakMap<WebSocket, string>();
   private heartbeatInterval: ReturnType<typeof setInterval> | undefined;
   private nextApplicationHeartbeatId = 1;
-  private readonly workflowSummaries = new Map<string, WorkflowSummary>();
-  private readonly notifiedEventIds = new Set<string>();
+  private readonly completionTracker = new CompletionNotificationTracker();
   private cachedThemeVars: Record<string, string> = {};
   private nextConnectionId = 1;
   private readonly sink: PostMessageDashboardSink;
@@ -728,31 +725,18 @@ export class CtrlYokeHostedServer
   }
 
   notifyWorkflowAdded(summary: WorkflowSummary): void {
-    this.workflowSummaries.set(summary.id, summary);
+    this.completionTracker.workflowAdded(summary);
     this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_ADDED, summary });
   }
 
   notifyWorkflowDismissed(workflowId: string): void {
-    const summary = this.workflowSummaries.get(workflowId);
-    if (summary) {
-      this.clearNotificationEventIds(summary);
-    }
-    this.workflowSummaries.delete(workflowId);
+    this.completionTracker.workflowDismissed(workflowId);
     this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_DISMISSED, workflowId });
   }
 
   notifyWorkflowSummaryUpdated(summary: WorkflowSummary): void {
-    const previousSummary = this.workflowSummaries.get(summary.id);
-    this.workflowSummaries.set(summary.id, summary);
+    const previousSummary = this.completionTracker.summaryUpdated(summary);
     this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, summary });
-
-    if (
-      summary.executionState === EXECUTION_STATES.RUNNING &&
-      (previousSummary?.executionState === EXECUTION_STATES.COMPLETED ||
-        previousSummary?.executionState === EXECUTION_STATES.ERROR)
-    ) {
-      this.clearNotificationEventIds(summary);
-    }
 
     if (!isWorkflowCompletionTransition(previousSummary, summary)) {
       return;
@@ -967,13 +951,12 @@ export class CtrlYokeHostedServer
       return;
     }
 
-    const summary = this.workflowSummaries.get(workflowId);
+    const summary = this.completionTracker.stepStatusChanged(
+      workflowId,
+      status.state
+    );
     if (!summary) {
       return;
-    }
-
-    if (status.state === STEP_STATUS.RUNNING) {
-      this.clearNotificationEventIds(summary);
     }
 
     const steps = this.getOrchestrator()
@@ -2881,10 +2864,9 @@ export class CtrlYokeHostedServer
     ) {
       return;
     }
-    if (this.notifiedEventIds.has(event.id)) {
+    if (!this.completionTracker.markShown(event.id)) {
       return;
     }
-    this.notifiedEventIds.add(event.id);
 
     const notificationEvent = {
       ...event,
@@ -2910,15 +2892,6 @@ export class CtrlYokeHostedServer
         Log.warn(
           `[hosted-server] push notification dispatch failed for ${event.id}: ${error}`
         );
-      }
-    }
-  }
-
-  private clearNotificationEventIds(summary: WorkflowSummary): void {
-    const prefix = notificationIdentityPrefix(summary);
-    for (const eventId of this.notifiedEventIds) {
-      if (eventId.startsWith(prefix)) {
-        this.notifiedEventIds.delete(eventId);
       }
     }
   }

@@ -55,6 +55,8 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   `StatusIcon` kept its own status-to-codicon switch that disagreed with
   `STATUS_ICONS` on SENT (it now reads `STATUS_ICONS`, which takes the rendered
   arrow-up); `Header.tsx` slot actions use `WORKFLOW_EXECUTION_CONTROL_ACTIONS`.
+  Completion notification deduplication now shares its summary and event-id state
+  machine between the hosted server and VS Code toast manager.
   Hunted the hosted server, the dashboard bridge and the React dashboard; queued five
   steps (completion-notification dedup tracker, hosted viewer route error mapping,
   viewer idle-LRU snapshot stores, LSP server-root containment casing + realpath
