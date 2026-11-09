@@ -212,6 +212,9 @@ describe("OutputPane sticky step header", () => {
     const sticky = getByTestId("output-sticky-step");
     expect(sticky).toHaveTextContent("Make interpreter probe async");
     expect(sticky).toHaveTextContent("Replace the synchronous probes");
+    // One header line plus one prompt line, never more.
+    const previewClip = sticky.lastElementChild as HTMLElement;
+    expect(previewClip.style.maxHeight).toContain("1lh");
     expect(useUiStore.getState().outputInViewTargetKeys).toEqual([
       getTargetKey(TARGET),
     ]);

@@ -1159,10 +1159,56 @@ describe("OutputRow auto-expand on hidden active match", () => {
     ).toBeInTheDocument();
 
     const line = screen.getByTestId("cli-header-harness-model");
-    expect(line).toHaveClass("whitespace-nowrap");
     expect(line.getAttribute("title")).toBe(line.textContent);
     expect(line.textContent).toContain(" · ");
     expect(line.lastElementChild).toHaveClass("truncate");
+  });
+
+  it("keeps the whole header on one line, truncating a long step name", () => {
+    const stepName = "This is a prompt with a really ".repeat(6).trim();
+    const row: OutputRenderRow = {
+      key: "header-one-line",
+      target: TARGET,
+      estimateSize: 44,
+      rowKind: OUTPUT_ROW_KINDS.CLI_HEADER,
+      output: {
+        structured: {
+          events: [],
+          metadata: { harness: "qwen-cli", model: "qwen3.6-plus" },
+        },
+        elapsed: 0,
+        isStreaming: false,
+      },
+      stepIndex: 0,
+      isFinalStep: false,
+      stepLabel: "Step 1",
+      stepName,
+      attemptIndex: 0,
+      runIndex: 0,
+    };
+
+    const { rerender } = render(
+      <OutputRow row={row} isExecutionActive={false} />
+    );
+    const heading = screen.getByRole("heading", { level: 3 });
+    expect(heading.parentElement).toHaveClass("whitespace-nowrap");
+    expect(heading).not.toHaveClass("flex-wrap");
+    expect(screen.getByText(stepName)).toHaveClass("truncate");
+    // The tooltip carries everything the line may have truncated.
+    expect(heading.getAttribute("title")).toContain(stepName);
+    expect(heading.getAttribute("title")).toContain("qwen3.6-plus");
+
+    // A narrow pane drops harness · model from the line, not from the tooltip.
+    rerender(
+      <OutputRow
+        row={{ ...row, narrowLayout: true }}
+        isExecutionActive={false}
+      />
+    );
+    expect(screen.queryByTestId("cli-header-harness-model")).toBeNull();
+    expect(
+      screen.getByRole("heading", { level: 3 }).getAttribute("title")
+    ).toContain("qwen3.6-plus");
   });
 
   it("renders one neutral change viewer for mixed step state", () => {

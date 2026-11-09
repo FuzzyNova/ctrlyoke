@@ -30,8 +30,12 @@ run of a workflow that is running now, the banner has a **Back to Live** link.
 For a run in a [worktree](/workflows/worktrees), the banner also shows the
 worktree and whether its changes were merged.
 
+Each step header is a single line: a long step name, then the model name, is
+shortened with `…`, and hovering the title shows all of it. In a narrow pane
+the harness and model appear only in that tooltip.
+
 When one step fills the pane and you scroll past its header, the header and
-the first two lines of its prompt (or a script's directory and command) stay at
+the first line of its prompt (or a script's directory and command) stay at
 the top, under the banner. When you scroll back to the real header, the
 stuck copy is replaced by it. Scrolling up from the next step, the header slides
 down into place as that step leaves the bottom of the pane. For a parallel group, the group's header stays

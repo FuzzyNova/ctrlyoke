@@ -145,10 +145,7 @@ import type {
   ScriptOutputRow,
   StructuredEventRow,
 } from "@utils/outputRows";
-import {
-  CLI_HEADER_MAX_TITLE_LINES,
-  SUBAGENT_ROW_INDENT_PX,
-} from "@utils/outputRows";
+import { SUBAGENT_ROW_INDENT_PX } from "@utils/outputRows";
 import {
   getDisplayStructuredPatch,
   getSnapshotBeforeContent,
@@ -1396,24 +1393,41 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
 
 StructuredEventContent.displayName = "StructuredEventContent";
 
-// The row never wraps: the title column and the actions column both start at
-// their single-line width (`flex-auto`, basis auto) and shrink in proportion,
-// so a narrow pane wraps the title and the actions together instead of pushing
-// the actions onto their own line. `estimateCliHeaderHeight` models this.
+// The header is always exactly one line, in the stream and in its sticky copy,
+// so the pinned block never grows past one header line plus one prompt line.
+// Nothing wraps: the title and actions columns start at their single-line
+// width (`flex-auto`, basis auto) and shrink in proportion, and within the
+// title only the step name and the harness/model label can shrink, each
+// truncating with an ellipsis (the title's tooltip has the full text).
+// `estimateCliHeaderHeight` relies on the fixed height.
 const CLI_HEADER_ROW_CLASS =
-  "font-semibold mb-(--spacing-sm) text-(--fg-secondary) pb-(--spacing-xs) border-b border-(--border-color) text-(length:--cy-output-font-size-sm) flex min-w-0 items-start gap-x-(--spacing-sm)";
+  "font-semibold mb-(--spacing-sm) text-(--fg-secondary) pb-(--spacing-xs) border-b border-(--border-color) text-(length:--cy-output-font-size-sm) flex min-w-0 items-center gap-x-(--spacing-sm) whitespace-nowrap";
 const CLI_HEADER_TITLE_CLASS =
-  "inline-flex min-w-0 flex-auto flex-wrap items-center gap-x-1 gap-y-[2px] overflow-hidden";
-/** The `gap-y-[2px]` above. */
-const CLI_HEADER_TITLE_ROW_GAP_PX = 2;
-// Clips the title column at CLI_HEADER_MAX_TITLE_LINES of its own line height
-// plus the row gaps between them, so a narrow pane never grows the header (or
-// its pinned copy) past that many lines.
-const CLI_HEADER_TITLE_STYLE: React.CSSProperties = {
-  maxHeight: `calc(${CLI_HEADER_MAX_TITLE_LINES}lh + ${
-    (CLI_HEADER_MAX_TITLE_LINES - 1) * CLI_HEADER_TITLE_ROW_GAP_PX
-  }px)`,
-};
+  "flex min-w-0 flex-auto items-center gap-x-1 overflow-hidden";
+/** The step label (`[⌨ Step 2]`): never shrinks, so the step stays identifiable. */
+const CLI_HEADER_LABEL_CLASS = "inline-flex shrink-0 items-center gap-1";
+/** The step name: the first thing to give way, with an ellipsis. */
+const CLI_HEADER_NAME_CLASS = "ml-1 min-w-0 truncate text-foreground";
+const CLI_HEADER_FIXED_ITEM_CLASS = "shrink-0";
+
+/** Every part of the header in one string, for the title's tooltip. */
+function formatCliHeaderTooltip(parts: {
+  timestampMs?: number;
+  stepLabel: string;
+  stepName?: string;
+  executionBadge?: string;
+  harnessModel?: string;
+}): string {
+  return [
+    parts.timestampMs ? `[${formatTime(parts.timestampMs)}]` : undefined,
+    `[${parts.stepLabel}]`,
+    parts.stepName,
+    parts.executionBadge,
+    parts.harnessModel,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
 
 const CliHeaderRowView: React.FC<{
   row: CliHeaderRow;
@@ -1467,12 +1481,11 @@ const CliHeaderRowView: React.FC<{
       <Icon name="eye-closed" className="shrink-0" />
     </button>
   );
-  // The pin always ends the row's first line. When the title column and the
-  // actions can't share one line, both shrink in proportion and the actions
-  // wrap in reverse, so hide + pin stay on top and the change viewer drops
-  // below them instead of squeezing the title.
+  // The pin always ends the line. When the title and the actions can't share
+  // it at full width, the change viewer's label truncates; hide + pin never
+  // shrink.
   const renderActions = (changesButton?: React.ReactNode) => (
-    <div className="flex flex-wrap-reverse items-center justify-end gap-x-2 gap-y-1 font-normal">
+    <div className="flex min-w-0 items-center justify-end gap-x-2 font-normal">
       {changesButton}
       <span className="inline-flex shrink-0 items-center gap-x-2">
         {hideButton}
@@ -1492,7 +1505,7 @@ const CliHeaderRowView: React.FC<{
       : modelId;
   const streamingIndicator =
     output.isStreaming && isExecutionActive ? (
-      <span className="min-w-0 text-output-streaming font-normal animate-pulse-streaming">
+      <span className="shrink-0 text-output-streaming font-normal animate-pulse-streaming">
         ⬤ Streaming...
       </span>
     ) : null;
@@ -1541,18 +1554,26 @@ const CliHeaderRowView: React.FC<{
       ? (formatScriptConditionLabel(output.source, row.attemptIndex) ??
         row.stepLabel)
       : row.stepLabel;
+    const scriptTitle =
+      row.stepName?.trim() || getFirstWords(output.cliCommand, 3);
     return (
       <div className={CLI_HEADER_ROW_CLASS}>
         <span
           className={CLI_HEADER_TITLE_CLASS}
-          style={CLI_HEADER_TITLE_STYLE}
-          {...headingProps(
-            scriptHeadingLabel,
-            row.stepName?.trim() || getFirstWords(output.cliCommand, 3)
-          )}
+          title={formatCliHeaderTooltip({
+            timestampMs: output.timestampMs,
+            stepLabel: scriptHeadingLabel,
+            stepName: scriptTitle,
+            executionBadge,
+          })}
+          {...headingProps(scriptHeadingLabel, scriptTitle)}
         >
-          {timestamp && <span className="output-timestamp">[{timestamp}]</span>}
-          <span className="inline-flex min-w-0 items-center gap-1">
+          {timestamp && (
+            <span className={`output-timestamp ${CLI_HEADER_FIXED_ITEM_CLASS}`}>
+              [{timestamp}]
+            </span>
+          )}
+          <span className={CLI_HEADER_LABEL_CLASS}>
             <span>[</span>
             <Icon
               name={
@@ -1560,19 +1581,19 @@ const CliHeaderRowView: React.FC<{
               }
               className="text-xs"
             />
-            <span className="min-w-0 wrap-anywhere">{headerLabel}]</span>
+            <span>{headerLabel}]</span>
           </span>
-          {(() => {
-            const scriptTitle =
-              row.stepName?.trim() || getFirstWords(output.cliCommand, 3);
-            return scriptTitle ? (
-              <span className="ml-1 min-w-0 text-foreground wrap-anywhere">
-                {stepNameContent ?? scriptTitle}
-              </span>
-            ) : null;
-          })()}
+          {scriptTitle && (
+            <span className={CLI_HEADER_NAME_CLASS}>
+              {stepNameContent ?? scriptTitle}
+            </span>
+          )}
           {executionBadge && (
-            <span className="ml-1 text-description-fg">{executionBadge}</span>
+            <span
+              className={`ml-1 text-description-fg ${CLI_HEADER_FIXED_ITEM_CLASS}`}
+            >
+              {executionBadge}
+            </span>
           )}
           {streamingIndicator}
         </span>
@@ -1581,37 +1602,51 @@ const CliHeaderRowView: React.FC<{
     );
   }
 
+  const harnessModelLabel = [harnessShortName, modelLabel]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <div className={CLI_HEADER_ROW_CLASS}>
       <span
         className={CLI_HEADER_TITLE_CLASS}
-        style={CLI_HEADER_TITLE_STYLE}
+        title={formatCliHeaderTooltip({
+          timestampMs: output.timestampMs,
+          stepLabel: row.stepLabel,
+          stepName: stepDisplayName,
+          executionBadge,
+          harnessModel: harnessModelLabel,
+        })}
         {...headingProps(row.stepLabel, stepDisplayName)}
       >
-        {timestamp && <span className="output-timestamp">[{timestamp}]</span>}
-        <span className="inline-flex min-w-0 items-center gap-1">
+        {timestamp && (
+          <span className={`output-timestamp ${CLI_HEADER_FIXED_ITEM_CLASS}`}>
+            [{timestamp}]
+          </span>
+        )}
+        <span className={CLI_HEADER_LABEL_CLASS}>
           <span>[</span>
           <Icon name="comment" className="text-xs" />
-          <span className="min-w-0 wrap-anywhere">
-            {stepLabelContent ?? row.stepLabel}]
-          </span>
+          <span>{stepLabelContent ?? row.stepLabel}]</span>
         </span>
         {stepDisplayName && (
-          <span className="ml-1 min-w-0 text-foreground wrap-anywhere">
+          <span className={CLI_HEADER_NAME_CLASS}>
             {stepNameContent ?? stepDisplayName}
           </span>
         )}
         {executionBadge && (
-          <span className="ml-1 text-description-fg">{executionBadge}</span>
+          <span
+            className={`ml-1 text-description-fg ${CLI_HEADER_FIXED_ITEM_CLASS}`}
+          >
+            {executionBadge}
+          </span>
         )}
         {streamingIndicator}
-        {/* Last, so it is what the title's line cap clips. One line at most: a
-            long model name truncates (full name in the tooltip) instead of
-            wrapping the header taller. */}
-        {(harnessShortName || modelLabel) && (
+        {/* Shrinks alongside the step name, the model truncating; a narrow
+            pane has no room for it at all and leaves it to the tooltip. */}
+        {harnessModelLabel && !row.narrowLayout && (
           <span
-            className="flex min-w-0 max-w-full items-center whitespace-nowrap text-description-fg font-normal text-(length:--cy-output-font-size-xs)"
-            title={[harnessShortName, modelLabel].filter(Boolean).join(" · ")}
+            className="flex min-w-0 items-center overflow-hidden text-description-fg font-normal text-(length:--cy-output-font-size-xs)"
+            title={harnessModelLabel}
             data-testid="cli-header-harness-model"
           >
             {harnessShortName && (

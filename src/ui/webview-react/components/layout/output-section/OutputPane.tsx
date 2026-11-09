@@ -1,6 +1,5 @@
 import React, { memo, Profiler, useLayoutEffect, useRef } from "react";
 import {
-  OUTPUT_ROW_KINDS,
   OUTPUT_TABS,
   SELECT_ALL_SCOPE_ATTRIBUTE,
   SELECT_ALL_SCOPES,
@@ -42,22 +41,19 @@ import { Icon } from "../../shared/Icon";
 import { useOutputViewportSteps } from "@hooks/useOutputViewportSteps";
 
 /**
- * Cuts the sticky header's prompt/command block down to its first lines: the
+ * Cuts the sticky header's prompt/command block down to its first line: the
  * block's top margin (it sits right under the header, see
- * `OUTPUT_STEP_LEAD_BLOCK_BASE`) and padding plus that many line boxes. The
+ * `OUTPUT_STEP_LEAD_BLOCK_BASE`) and padding plus one line box. With the
+ * header itself always one line, the pinned block is two lines at most. The
  * edge is a hard cut; the sticky's drop shadow marks it instead of a fade,
- * which would dim the prompt itself.
+ * which would dim the prompt itself. The block is not pulled up any closer to
+ * the header: it stays exactly where the real prompt sits, so when the copy
+ * steps aside for the real header nothing moves.
  */
-function stickyPreviewClipStyle(lines: number): React.CSSProperties {
-  return {
-    maxHeight: `calc(var(--cy-output-step-lead-gap) + var(--spacing-sm) + ${lines}lh)`,
-    overflow: "hidden",
-  };
-}
-
-const STICKY_PREVIEW_CLIP_STYLE = stickyPreviewClipStyle(2);
-/** A narrow pane previews one prompt line, keeping the pinned block short. */
-const NARROW_STICKY_PREVIEW_CLIP_STYLE = stickyPreviewClipStyle(1);
+const STICKY_PREVIEW_CLIP_STYLE: React.CSSProperties = {
+  maxHeight: "calc(var(--cy-output-step-lead-gap) + var(--spacing-sm) + 1lh)",
+  overflow: "hidden",
+};
 
 interface OutputPaneProps {
   activeOutputTab: OutputTab;
@@ -411,21 +407,13 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
                 <div
                   ref={stickyContentRef}
                   data-testid="output-sticky-step"
-                  className="absolute inset-x-0 top-0 bg-(--bg-primary) border-b border-(--border-color) shadow-(--cy-output-sticky-step-shadow)"
+                  className="absolute inset-x-0 top-0 bg-(--bg-primary) border-b-2 border-(--border-color) shadow-(--cy-output-sticky-step-shadow)"
                 >
                   {/* The same rows the stream renders, so the copy lines up
                     exactly with the real header when it scrolls back in. */}
                   {renderOutputRow(stickyRows.headerRow, props, true)}
                   {stickyRows.previewRow && (
-                    <div
-                      style={
-                        stickyRows.headerRow.rowKind ===
-                          OUTPUT_ROW_KINDS.CLI_HEADER &&
-                        stickyRows.headerRow.narrowLayout
-                          ? NARROW_STICKY_PREVIEW_CLIP_STYLE
-                          : STICKY_PREVIEW_CLIP_STYLE
-                      }
-                    >
+                    <div style={STICKY_PREVIEW_CLIP_STYLE}>
                       {renderOutputRow(stickyRows.previewRow, props, true)}
                     </div>
                   )}

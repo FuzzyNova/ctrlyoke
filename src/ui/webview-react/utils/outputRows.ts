@@ -267,17 +267,11 @@ export interface CliHeaderRow extends OutputRowBase<
   promptUndo?: OutputRowPromptUndoMeta;
   /**
    * The pane is in the output section header's narrow tier: the header drops
-   * its timestamp and uses the compact change label, and a pinned copy
-   * previews one prompt line. The row's tooltip keeps all of it.
+   * its timestamp and harness/model label and uses the compact change label.
+   * The title's tooltip keeps all of it.
    */
   narrowLayout?: boolean;
 }
-
-/**
- * Most lines a step header's title column shows; anything that wraps past it
- * is clipped. The harness/model label renders last so it is what gives way.
- */
-export const CLI_HEADER_MAX_TITLE_LINES = 3;
 
 export interface PromptRow extends OutputRowBase<
   typeof OUTPUT_ROW_KINDS.PROMPT
@@ -679,13 +673,6 @@ function getStreamingChunk(
  * OUTPUT_ROW_HORIZONTAL_PADDING there, not this.
  */
 const OUTPUT_ROW_HORIZONTAL_CHROME = 72;
-// Row padding plus glyph slack; the actions column is modelled separately.
-const HEADER_HORIZONTAL_CHROME = 118;
-const HEADER_COLUMN_GAP = 6; // gap-x-(--spacing-sm) between title and actions
-const HEADER_ACTION_GAP = 8; // gap-x-2 between actions
-const HEADER_ACTION_ICON_WIDTH = 16; // hide and pin codicons
-const HEADER_CHANGES_ICON_WIDTH = 20; // diff codicon (16) + gap-1 (4)
-const HEADER_ACTION_ROW_GAP = 4; // gap-y-1 between wrapped action lines
 const STATS_HORIZONTAL_CHROME = 96;
 const OUTPUT_BLOCK_VERTICAL_CHROME = 32;
 const THINKING_LABEL_HEIGHT = 18;
@@ -1136,83 +1123,17 @@ function estimateMarkdownBlockHeight(
   );
 }
 
-function estimateCliHeaderHeight(
-  row: CliHeaderRow,
-  outputContentWidth: number | undefined,
-  outputFontSize: number
-): number {
-  // Include timestamp so flex-wrap behavior matches actual rendering.
-  // Use sm font size (FS-1) with body line-height (1.4) to match the header's
-  // text-[cy-output-font-size-sm] class and inherited body line-height.
-  const timestamp =
-    row.output.timestampMs && !row.narrowLayout
-      ? `[${new Date(row.output.timestampMs).toLocaleTimeString()}]`
-      : "";
-  const headerText = [
-    timestamp,
-    row.stepLabel,
-    row.stepName,
-    row.output.structured?.metadata?.harness,
-    row.output.structured?.metadata?.model,
-  ]
-    .filter((value): value is string => Boolean(value && value.trim()))
-    .join(" ");
+/**
+ * A step header is always one line: `CliHeaderRowView` never wraps, it
+ * truncates the step name and model label instead, so its height depends only
+ * on the font size. That fixed height is also what keeps the sticky copy at one
+ * header line.
+ */
+function estimateCliHeaderHeight(outputFontSize: number): number {
+  // sm font size (FS-1) with the inherited body line-height (1.4), matching the
+  // header's text-[cy-output-font-size-sm] class.
   const smFontSize = Math.max(11, outputFontSize - 1);
-  const charWidthMultiplier = 0.58;
-  const charWidth = Math.max(5.5, smFontSize * charWidthMultiplier);
-
-  // Mirror CliHeaderRowView's flex layout: the title and actions columns start
-  // at their single-line widths and give up any overflow in proportion to
-  // them, the actions never narrower than their widest item. A narrowed
-  // actions column wraps the change viewer below hide + pin.
-  const iconsWidth = 2 * HEADER_ACTION_ICON_WIDTH + HEADER_ACTION_GAP;
-  const changesSummary = row.promptUndo?.summary;
-  const changesWidth =
-    changesSummary && changesSummary.total > 0
-      ? HEADER_CHANGES_ICON_WIDTH +
-        (row.narrowLayout ? changesSummary.compactLabel : changesSummary.label)
-          .length *
-          charWidth
-      : 0;
-  const actionsMaxWidth =
-    changesWidth > 0
-      ? changesWidth + HEADER_ACTION_GAP + iconsWidth
-      : iconsWidth;
-  const actionsMinWidth = Math.max(changesWidth, iconsWidth);
-  const titleWidth = headerText.length * charWidth;
-  const overflow =
-    titleWidth +
-    HEADER_COLUMN_GAP +
-    actionsMaxWidth -
-    resolveContentWidth(outputContentWidth, HEADER_HORIZONTAL_CHROME);
-  const actionsWidth =
-    overflow > 0
-      ? Math.max(
-          actionsMinWidth,
-          actionsMaxWidth -
-            (overflow * actionsMaxWidth) / (titleWidth + actionsMaxWidth)
-        )
-      : actionsMaxWidth;
-  const actionLines = actionsWidth < actionsMaxWidth ? 2 : 1;
-
-  const lineCount = Math.min(
-    CLI_HEADER_MAX_TITLE_LINES,
-    Math.max(
-      1,
-      estimateWrappedLineCount(headerText, outputContentWidth, smFontSize, {
-        chrome: HEADER_HORIZONTAL_CHROME + HEADER_COLUMN_GAP + actionsWidth,
-        charWidthMultiplier,
-      })
-    )
-  );
-  const lineHeight = Math.max(16, smFontSize * 1.4);
-
-  return (
-    Math.max(
-      lineCount * lineHeight,
-      actionLines * lineHeight + (actionLines - 1) * HEADER_ACTION_ROW_GAP
-    ) + HEADER_VERTICAL_CHROME
-  );
+  return Math.max(16, smFontSize * 1.4) + HEADER_VERTICAL_CHROME;
 }
 
 function estimateStatsRowHeight(
@@ -2048,7 +1969,7 @@ function estimateOutputRowContentHeight(
         }
       );
     case OUTPUT_ROW_KINDS.CLI_HEADER:
-      return estimateCliHeaderHeight(row, outputContentWidth, outputFontSize);
+      return estimateCliHeaderHeight(outputFontSize);
     case OUTPUT_ROW_KINDS.PROMPT:
       // OUTPUT_BLOCK_BASE: font-mono sm font, body line-height:1.4, py-sm+my-sm=24px chrome.
       // chrome:32 matches actual horizontal padding (px-md outer + px-sm inner + border-l-3).

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Step headers in the output pane are now always one line, shortening a long step name or model name with `…` (hover the title for the full text); a narrow pane shows the harness and model only in that tooltip. A pinned step header shows one prompt line instead of two, so it never takes more than two lines, and its bottom border is thicker.
 - Workflow failure notifications now include the failing step and reason, with one completion notice per stop; the CLI also keeps stopping reasons on stderr and in its JSON `error` field, and the duplicate error popup is gone.
 - Failed workflow step rows now show the failure reason when the workflow stops, as well as when it continues after the failure.
 - Copilot and Antigravity headless session errors now fail the step even when their CLI exits successfully; externally signalled process kills now follow `errorBehavior`.
