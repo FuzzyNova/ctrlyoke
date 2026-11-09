@@ -91,6 +91,8 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   helpers, with known and unknown ID coverage.
   Single-sourced "Parallel steps X–Y" in `formatParallelStepsLabel` across core, CLI
   and dashboard callers; kept the screen-reader "to" wording unchanged.
+  Removed dead, drifted execution-state helpers and their tests from the dashboard
+  status utilities; retained the shared step icon maps and live control logic.
 
 ## Deferred
 
