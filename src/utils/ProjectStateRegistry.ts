@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { type FileLockOptions, withFileLock } from "./FileLockUtils";
 import { renameWithTransientRetry } from "./AtomicFileUtils";
 import { pathsEqual } from "./PathCasing";
+import { relativePathEscapes } from "./PathSecurity";
 import {
   ctrlyokeStateHome,
   projectStateRoot,
@@ -255,12 +256,7 @@ function isPathWithinOrEqual(candidate: string, directory: string): boolean {
     return true;
   }
   const relative = path.relative(resolvedDirectory, resolvedCandidate);
-  return (
-    relative !== "" &&
-    relative !== ".." &&
-    !relative.startsWith(`..${path.sep}`) &&
-    !path.isAbsolute(relative)
-  );
+  return relative !== "" && !relativePathEscapes(relative);
 }
 
 async function readOrCreateMetadata(
@@ -431,11 +427,7 @@ async function assertContainedByRealRoot(
     path.basename(resolvedCandidate)
   );
   const relative = path.relative(realRoot, realCandidate);
-  if (
-    relative === ".." ||
-    relative.startsWith(`..${path.sep}`) ||
-    path.isAbsolute(relative)
-  ) {
+  if (relativePathEscapes(relative)) {
     throw new Error(
       `Project state path escapes the projects root: ${resolvedCandidate}`
     );

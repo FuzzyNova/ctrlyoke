@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
+import { relativePathEscapes } from "../utils/PathSecurity";
 import { Log } from "../utils/Log";
 import type { IndexedSymbol, SymbolIndex } from "../completions/SymbolIndex";
 import { LspSymbolKind } from "../completions/SymbolIndex";
@@ -141,10 +142,7 @@ export class VsCodeSymbolIndex implements SymbolIndex {
           return false;
         return configDirectories.some((directory) => {
           const relative = path.relative(directory, absolutePath);
-          return (
-            relative === "" ||
-            (!relative.startsWith(`..${path.sep}`) && relative !== "..")
-          );
+          return relative === "" || !relativePathEscapes(relative);
         });
       });
       for (const anchor of anchors) {

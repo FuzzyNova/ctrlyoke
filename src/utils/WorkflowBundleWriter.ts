@@ -8,6 +8,7 @@ import {
 } from "./WorkflowBundleAnalyzer";
 import { renameWithTransientRetry, writeFileAtomic } from "./AtomicFileUtils";
 import { foldPathForCompare } from "./PathCasing";
+import { relativePathEscapes } from "./PathSecurity";
 import { getErrorMessage, hasErrnoCode, getErrnoCode } from "./ErrorUtils";
 import { NODE_ERROR_CODES } from "../types/DashboardConstants";
 
@@ -189,9 +190,7 @@ function getAssetFileName(
   const relative = path.relative(assetsDirectory, destinationPath);
   if (
     !relative ||
-    path.isAbsolute(relative) ||
-    relative.startsWith(`..${path.sep}`) ||
-    relative === ".." ||
+    relativePathEscapes(relative) ||
     path.dirname(relative) !== "."
   ) {
     throw new Error(`Bundle asset destination escapes "${assetsDirectory}".`);
@@ -296,12 +295,7 @@ async function resolvesToPublishedFile(
 
 function isContainedPath(target: string, directory: string): boolean {
   const relative = path.relative(path.resolve(directory), path.resolve(target));
-  return (
-    relative !== "" &&
-    !path.isAbsolute(relative) &&
-    !relative.startsWith(`..${path.sep}`) &&
-    relative !== ".."
-  );
+  return relative !== "" && !relativePathEscapes(relative);
 }
 
 async function hasSymlinkAncestor(

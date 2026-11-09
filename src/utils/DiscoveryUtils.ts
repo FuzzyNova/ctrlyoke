@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { relativePathEscapes } from "./PathSecurity";
 import type {
   DiscoveredFileLocationInfo,
   ShadowedDiscoveryCopy,
@@ -39,11 +40,7 @@ export function formatDiscoveryPath(
 ): string {
   const isInside = (root: string) => {
     const relative = path.relative(root, filePath);
-    return (
-      relative !== "" &&
-      !relative.startsWith("..") &&
-      !path.isAbsolute(relative)
-    );
+    return relative !== "" && !relativePathEscapes(relative);
   };
   const toSlashes = (value: string) => value.split(path.sep).join("/");
 

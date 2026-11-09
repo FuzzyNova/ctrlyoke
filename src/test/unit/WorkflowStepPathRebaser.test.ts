@@ -60,4 +60,11 @@ suite("WorkflowStepPathRebaser", () => {
 
     assert.strictEqual(rebased, "Read @docs/guide.md");
   });
+
+  test("keeps workspace children whose names start with two dots relative", async () => {
+    await fs.mkdir(path.join(workspaceRoot, "..cache"));
+    const rebased = await rebasePrompt("Read @../..cache/guide.md");
+
+    assert.strictEqual(rebased, "Read @..cache/guide.md");
+  });
 });

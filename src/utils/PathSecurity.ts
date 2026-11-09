@@ -101,6 +101,18 @@ export function isPathWithinDirectory(
   );
 }
 
+/** Returns whether a `path.relative` result escapes its root directory. */
+export function relativePathEscapes(
+  relative: string,
+  pathImplementation: Pick<typeof path, "sep" | "isAbsolute"> = path
+): boolean {
+  return (
+    relative === ".." ||
+    relative.startsWith(".." + pathImplementation.sep) ||
+    pathImplementation.isAbsolute(relative)
+  );
+}
+
 /**
  * Returns true if `candidate` is equal to or a descendant of any directory in
  * `directories`. Use this for multi-root trust boundaries (e.g. every folder

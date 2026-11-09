@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
+import { relativePathEscapes } from "../utils/PathSecurity";
 import { configService } from "../config/CtrlYokeConfigService";
 import {
   cacheSourceFiles,
@@ -98,7 +99,7 @@ export function getCompletionCore(): CompletionCore {
               namedRoots,
             });
             const relative = path.relative(workspaceRoot, absolutePath);
-            return relative === ".." || relative.startsWith(`..${path.sep}`)
+            return relativePathEscapes(relative)
               ? undefined
               : { absolutePath, workspaceRoot };
           }
@@ -165,11 +166,7 @@ export function initializeCompletionHelpers(
       const folders = vscode.workspace.workspaceFolders ?? [];
       const root = folders.find((folder) => {
         const relative = path.relative(folder.uri.fsPath, uri.fsPath);
-        return (
-          relative !== ".." &&
-          !relative.startsWith(`..${path.sep}`) &&
-          !path.isAbsolute(relative)
-        );
+        return !relativePathEscapes(relative);
       });
       if (!root) return;
       const relative = path

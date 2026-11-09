@@ -110,6 +110,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   and `IN_FLIGHT_EXECUTION_STATES`; fixed and covered the PAUSING append and
   CANCELLING ownership bugs.
   Shared JSONC object-file reads and hardened atomic writes across settings, trust stores and the MCP registry; corrected empty and invalid-root trust-store handling.
+  Single-sourced native `path.relative` escape checks and fixed `..`-prefixed child paths.
   Candidates for a later pass: win32-only `toLowerCase()` path keys re-derived beside
   `PathCasing` (`RunSummaryCache.cacheKey`, `WorkspaceRepoDiscovery.pathKey` whose comment
   claims macOS folding too, `ExecutionPreviewService.normalizeComparisonPath`,
