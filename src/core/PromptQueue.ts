@@ -3165,14 +3165,19 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     newPendingOrder: number[],
     pendingGroups?: PendingParallelGroupRange[]
   ): Promise<string | undefined> {
+    // The order is relative to the current head. A payload that covers the
+    // resumable terminal failure is one entry longer than the slice after it;
+    // only then does the failure join the reorder. A payload for the steps
+    // after it must keep its meaning, so the failure stays where it is.
+    const failureIndex = getResumableTerminalFailureIndex({
+      executionState: this.stateMachine.status,
+      currentIndex: this.state.currentIndex,
+      steps: this.state.steps,
+      resultStatus: this.state.results[this.state.currentIndex - 1]?.status,
+    });
     if (
-      newPendingOrder.length > 0 &&
-      getResumableTerminalFailureIndex({
-        executionState: this.stateMachine.status,
-        currentIndex: this.state.currentIndex,
-        steps: this.state.steps,
-        resultStatus: this.state.results[this.state.currentIndex - 1]?.status,
-      }) !== undefined
+      failureIndex !== undefined &&
+      newPendingOrder.length === this.state.steps.length - failureIndex
     ) {
       await this.rewindTerminalFailureForContinuation();
     }

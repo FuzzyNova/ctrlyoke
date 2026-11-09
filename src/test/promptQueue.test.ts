@@ -1738,6 +1738,38 @@ suite("PromptQueue State Machine Tests", () => {
       );
     });
 
+    test("reordering only the steps after a terminal failure keeps the failure in place", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      await failCurrentPrompt(queue);
+
+      // The dashboard sends positions relative to currentIndex (1 here), so
+      // [1, 0] swaps the second and third steps and leaves the failure alone.
+      await queue.reorderPendingPrompts([1, 0]);
+
+      const state = queue.getState();
+      assert.deepStrictEqual(
+        state.steps.map((step) => (step as PromptStep).prompt),
+        ["First prompt", "Third prompt", "Second prompt"]
+      );
+      assert.strictEqual(state.currentIndex, 1);
+      assert.strictEqual(state.results[0].status, STEP_STATUS.FAILED);
+    });
+
+    test("a reorder that covers the terminal failure rewinds it into the pending steps", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      await failCurrentPrompt(queue);
+
+      await queue.reorderPendingPrompts([1, 0, 2]);
+
+      const state = queue.getState();
+      assert.deepStrictEqual(
+        state.steps.map((step) => (step as PromptStep).prompt),
+        ["Second prompt", "First prompt", "Third prompt"]
+      );
+      assert.strictEqual(state.currentIndex, 0);
+      assert.strictEqual(state.results[1].status, STEP_STATUS.PENDING);
+    });
+
     test("does not rewind a non-terminal failure", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await failCurrentPrompt(queue);

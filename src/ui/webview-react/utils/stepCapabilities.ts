@@ -74,13 +74,14 @@ export function getStepCapabilities(
     runtime !== undefined &&
     (("terminalStatus" in runtime && runtime.terminalStatus !== undefined) ||
       runtime.completedAt !== undefined);
-  const editableFailure = getResumableTerminalFailureIndex({
-    executionState: ctx.executionState,
-    currentIndex: ctx.currentStep,
-    steps: Array.from({ length: index + 1 }, (_, itemIndex) =>
-      itemIndex === index ? step : {}
-    ),
-  }) === index;
+  const editableFailure =
+    getResumableTerminalFailureIndex({
+      executionState: ctx.executionState,
+      currentIndex: ctx.currentStep,
+      steps: Array.from({ length: index + 1 }, (_, itemIndex) =>
+        itemIndex === index ? step : {}
+      ),
+    }) === index;
   // RunContinuationService permanently protects the executed prefix and terminal
   // statuses. PromptQueue also protects the completed prefix while executing.
   const hostLocked =

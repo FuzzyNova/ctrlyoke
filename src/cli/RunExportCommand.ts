@@ -137,9 +137,7 @@ export async function exportRunCommand(
   io.writeOut(
     `  ${result.eventCount} events${result.manifest.includesSnapshots ? ", with workspace snapshots" : ""}${result.manifest.includesStreamDeltas ? ", with streaming deltas" : ""}`
   );
-  io.writeOut(
-    `  ${result.continuable ? "Continuable run" : "History only"}`
-  );
+  io.writeOut(`  ${result.continuable ? "Continuable run" : "History only"}`);
   if (!result.continuable) {
     io.writeOut(
       "  This bundle is view-only because there is no pending work or the workspace has no Git commit to continue from."

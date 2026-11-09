@@ -1188,7 +1188,10 @@ suite("RunContinuationService addressed step mutations", () => {
       repaired.workingFile.steps?.[0]._runtime?.stepId,
       "terminal-failure"
     );
-    assert.strictEqual(repaired.workingFile.steps?.[0]._runtime?.startedAt, undefined);
+    assert.strictEqual(
+      repaired.workingFile.steps?.[0]._runtime?.startedAt,
+      undefined
+    );
     await seedRun(EXECUTION_STATES.RUNNING, 1, [
       { prompt: "done", _runtime: { completedAt: 10 } },
       { prompt: "in flight", _runtime: { startedAt: 11 } },

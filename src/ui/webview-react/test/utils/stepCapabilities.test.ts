@@ -101,11 +101,13 @@ describe("stepCapabilities", () => {
         terminalFailure: true,
       } as unknown as WorkflowStep["_runtime"],
     };
-    expect(getStepCapabilities(failed, 1, {
-      currentStep: 2,
-      executionState: EXECUTION_STATES.ERROR,
-      totalSteps: 3,
-    })).toMatchObject({
+    expect(
+      getStepCapabilities(failed, 1, {
+        currentStep: 2,
+        executionState: EXECUTION_STATES.ERROR,
+        totalSteps: 3,
+      })
+    ).toMatchObject({
       canToggleEnabled: true,
       canDelete: true,
       canReorder: true,

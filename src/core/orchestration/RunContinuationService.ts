@@ -1087,7 +1087,10 @@ export class RunContinuationService {
           currentIndex,
           steps: topology.steps,
         });
-        if (failureIndex !== undefined && absoluteOrder.includes(failureIndex)) {
+        if (
+          failureIndex !== undefined &&
+          absoluteOrder.includes(failureIndex)
+        ) {
           rewindTargetedFailure(source, topology.steps, failureIndex);
           currentIndex = failureIndex;
         }
