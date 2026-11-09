@@ -1315,6 +1315,81 @@ suite("RunContinuationService addressed step mutations", () => {
     );
   });
 
+  test("reorders the terminal failure of an errored run with the pending steps", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-step-reorder-failure-")
+    );
+    await seedRun(EXECUTION_STATES.ERROR, 2, [
+      { prompt: "done", _runtime: { completedAt: 5 } },
+      {
+        prompt: "failed",
+        _runtime: {
+          stepId: "terminal-failure",
+          startedAt: 10,
+          completedAt: 20,
+          terminalStatus: "failed",
+          terminalFailure: true,
+        },
+      },
+      { prompt: "pending" },
+    ]);
+    const repository = new WorkflowLineageRepository();
+
+    const reordered = await RunContinuationService.reorderStepsAtRun(
+      workspace,
+      workflowKey,
+      runRef,
+      [2, 1],
+      1,
+      repository
+    );
+    assert.deepStrictEqual(
+      reordered.workingFile.steps!.map(
+        (step) => (step as { prompt: string }).prompt
+      ),
+      ["done", "pending", "failed"]
+    );
+    assert.strictEqual(reordered.workingFile._runtime?.currentIndex, 1);
+    assert.strictEqual(
+      reordered.workingFile.steps![2]._runtime?.stepId,
+      "terminal-failure"
+    );
+    assert.strictEqual(
+      reordered.workingFile.steps![2]._runtime?.startedAt,
+      undefined
+    );
+
+    await seedRun(EXECUTION_STATES.ERROR, 2, [
+      { prompt: "done", _runtime: { completedAt: 5 } },
+      {
+        prompt: "failed",
+        _runtime: {
+          startedAt: 10,
+          completedAt: 20,
+          terminalStatus: "failed",
+          terminalFailure: true,
+        },
+      },
+      { prompt: "pending-a" },
+      { prompt: "pending-b" },
+    ]);
+    const suffixOnly = await RunContinuationService.reorderStepsAtRun(
+      workspace,
+      workflowKey,
+      runRef,
+      [3, 2],
+      1,
+      repository
+    );
+    assert.deepStrictEqual(
+      suffixOnly.workingFile.steps!.map(
+        (step) => (step as { prompt: string }).prompt
+      ),
+      ["done", "failed", "pending-b", "pending-a"]
+    );
+    assert.strictEqual(suffixOnly.workingFile._runtime?.currentIndex, 2);
+  });
+
   test("reorders only the pending suffix and keeps the in-flight step fixed", async () => {
     workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-step-reorder-")

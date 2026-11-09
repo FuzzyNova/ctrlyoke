@@ -198,9 +198,15 @@ export interface SelfOwnedUntrackedDiagnostic {
   decision: "preserve-non-mutating";
 }
 
-/** Return the pending queue indices that a reorder request may move. */
-export function getReorderableStepIndices(workingFile: WorkingFile): number[] {
-  const steps = workingFile.steps ?? [];
+/**
+ * Return the pending queue indices that a reorder request may move.
+ * `steps` overrides the file's own steps, e.g. a normalized topology a
+ * mutation has already rewound a terminal failure in.
+ */
+export function getReorderableStepIndices(
+  workingFile: WorkingFile,
+  steps: readonly WorkflowStep[] = workingFile.steps ?? []
+): number[] {
   const currentIndex = workingFile._runtime?.currentIndex ?? 0;
   const executionIsInFlight = hasInFlightStep(
     workingFile._runtime?.executionState,
@@ -1098,7 +1104,10 @@ export class RunContinuationService {
           throw new Error("Reorder indices must be integers");
         }
         const fixedIndices = new Set<number>();
-        const movableIndices = getReorderableStepIndices(source);
+        const movableIndices = getReorderableStepIndices(
+          source,
+          topology.steps
+        );
         const executionIsInFlight = hasInFlightStep(
           source._runtime?.executionState,
           source._runtime?.finalStep?.phase
@@ -1172,12 +1181,14 @@ export class RunContinuationService {
           steps: source.steps ?? [],
           parallelGroups: source.parallelGroups,
         });
-        const currentIndex = source._runtime?.currentIndex ?? 0;
         const newPendingOrder = resolvePendingOrder(
           source,
           topology,
-          currentIndex
+          source._runtime?.currentIndex ?? 0
         );
+        // Read the head after resolving: a resolver that moves the terminal
+        // failure rewinds the head to it, and the order is relative to that.
+        const currentIndex = source._runtime?.currentIndex ?? 0;
         assertPendingReorderIsSafe(source, topology.steps, newPendingOrder);
         const nextTopology = reorderParallelGroupPendingSteps(
           topology,
