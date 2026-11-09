@@ -201,7 +201,7 @@ export async function importRunCommand(
       JSON.stringify({
         schemaVersion: 1,
         success: false,
-        error: message,
+        error: { message },
       })
     );
     // Invalid bundle data is user input, and follows the CLI usage error code.

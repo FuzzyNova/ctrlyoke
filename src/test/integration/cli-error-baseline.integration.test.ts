@@ -56,6 +56,27 @@ suite("CLI error contract baseline", () => {
     assert.strictEqual(json.stderr, "");
   });
 
+  test("history errors use stderr text unless JSON is requested", async function () {
+    this.timeout(60000);
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-history-errors-"));
+    try {
+      const text = await runCli(["history", "runs", "--workflow", "nope"], cwd);
+      assert.strictEqual(text.code, 2, text.stderr);
+      assert.strictEqual(text.stdout, "");
+      assert.match(text.stderr, /^Error: .*nope/);
+
+      const json = await runCli(["history", "runs", "--workflow", "nope", "--json"], cwd);
+      assert.strictEqual(json.code, 2, json.stderr);
+      const envelope = JSON.parse(json.stdout);
+      assert.strictEqual(envelope.schemaVersion, 1);
+      assert.strictEqual(envelope.success, false);
+      assert.match(envelope.error.message, /nope/);
+      assert.strictEqual(json.stderr, "");
+    } finally {
+      await fs.rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   test("pins step and validate error text and JSON envelopes", async function () {
     this.timeout(60000);
     const cwd = await fs.mkdtemp(

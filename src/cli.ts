@@ -356,31 +356,31 @@ registerHistoryCommands(program, {
   list: (options) =>
     handleHistoryCommand(
       listHistoryCommand(options, createHistoryInspectionCommandIo()),
-      true,
+      options.json === true,
       "history list"
     ),
   runs: (options) =>
     handleHistoryCommand(
       runsHistoryCommand(options, createHistoryInspectionCommandIo()),
-      true,
+      options.json === true,
       "history runs"
     ),
   show: (options) =>
     handleHistoryCommand(
       showHistoryCommand(options, createHistoryInspectionCommandIo()),
-      true,
+      options.json === true,
       "history show"
     ),
   steps: (options) =>
     handleHistoryCommand(
       stepsHistoryCommand(options, createHistoryInspectionCommandIo()),
-      true,
+      options.json === true,
       "history steps"
     ),
   search: (query, options) =>
     handleHistoryCommand(
       searchHistoryCommand(query, options, createHistoryInspectionCommandIo()),
-      true,
+      options.json === true,
       "history search"
     ),
   trash: {

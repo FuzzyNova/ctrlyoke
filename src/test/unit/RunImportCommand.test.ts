@@ -214,7 +214,7 @@ suite("RunImportCommand", () => {
     assert.deepStrictEqual(JSON.parse(output[0]), {
       schemaVersion: 1,
       success: false,
-      error: `${bundleDir} is not a ctrlyoke run bundle.`,
+      error: { message: `${bundleDir} is not a ctrlyoke run bundle.` },
     });
     assert.strictEqual(exitCode, 2);
   });

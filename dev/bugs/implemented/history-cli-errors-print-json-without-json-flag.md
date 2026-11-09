@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli subagent, reproduced against `out/cli.js`)
 - **Area:** `src/cli.ts` (history command registration), `src/cli/RunImportCommand.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
