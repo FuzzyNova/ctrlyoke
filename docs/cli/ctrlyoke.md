@@ -981,8 +981,9 @@ ctrlyoke step edit replacement.ctrlyoke.yaml --workflow release --run 7 --index 
 ```
 
 `--prompt` and the file argument are mutually exclusive. An edit is accepted
-for any not-yet-executed step, including while another process executes the
-target run; the completed prefix and in-flight step remain protected.
+for any not-yet-executed step, including the failed step of a settled errored
+run, and while another process executes the target run; the completed prefix
+and in-flight step remain protected.
 
 ### `ctrlyoke step remove`
 
@@ -993,7 +994,8 @@ ctrlyoke step remove --workflow release --run 7 --index 3
 ### `ctrlyoke step reorder`
 
 Pass every not-yet-started step's absolute zero-based index exactly once, in
-the desired execution order. Never include a running or completed step:
+the desired execution order. The failed step of a settled errored run is
+included among these pending steps. Never include a running or completed step:
 
 ```bash
 ctrlyoke step reorder --workflow release --run 7 --order 3,4,5

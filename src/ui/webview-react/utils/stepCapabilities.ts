@@ -7,6 +7,7 @@ import {
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import type { WorkflowStep } from "@store/workflowStore";
 import { isWorkflowActive } from "./status";
+import { getResumableTerminalFailureIndex } from "@root/utils/StepStatusDerivation";
 
 export interface StepCapabilities {
   canEditColor: boolean;
@@ -73,11 +74,18 @@ export function getStepCapabilities(
     runtime !== undefined &&
     (("terminalStatus" in runtime && runtime.terminalStatus !== undefined) ||
       runtime.completedAt !== undefined);
+  const editableFailure = getResumableTerminalFailureIndex({
+    executionState: ctx.executionState,
+    currentIndex: ctx.currentStep,
+    steps: Array.from({ length: index + 1 }, (_, itemIndex) =>
+      itemIndex === index ? step : {}
+    ),
+  }) === index;
   // RunContinuationService permanently protects the executed prefix and terminal
   // statuses. PromptQueue also protects the completed prefix while executing.
   const hostLocked =
-    index < ctx.currentStep ||
-    terminalRuntime ||
+    (index < ctx.currentStep && !editableFailure) ||
+    (terminalRuntime && !editableFailure) ||
     isStepExecutionLocked(step, index, ctx.currentStep, ctx.executionState) ||
     (ctx.pendingRewindBoundary !== undefined &&
       index < ctx.pendingRewindBoundary);

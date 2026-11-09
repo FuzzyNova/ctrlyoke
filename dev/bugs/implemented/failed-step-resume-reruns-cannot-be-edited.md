@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli, CLI repro)
 - **Area:** `src/core/StepIdentity.ts` (`assertStepMutable`), `src/core/PromptQueue.ts` (`rewindTerminalFailureForContinuation` and the mutation guards), `src/core/orchestration/RunContinuationService.ts` (`assertEditableDuringExecution`), `src/ui/webview-react/utils/stepCapabilities.ts` (`getStepCapabilities`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -38,7 +38,26 @@ export interface StepWithRuntimeStatus {
     startedAt?: number;
     completedAt?: number;
     terminalStatus?: PromptTerminalStatus;
+    terminalFailure?: boolean;
   };
+}
+
+/** Queue index of the failed step that continuation will run again. */
+export function getResumableTerminalFailureIndex(state: {
+  executionState: string | undefined;
+  currentIndex: number | undefined;
+  steps: readonly (StepWithRuntimeStatus & { _runtime?: StepWithRuntimeStatus["_runtime"] & { terminalFailure?: boolean } })[];
+  resultStatus?: string;
+}): number | undefined {
+  const index = (state.currentIndex ?? 0) - 1;
+  const step = state.steps[index];
+  return state.executionState === EXECUTION_STATES.ERROR &&
+    (state.resultStatus === undefined || state.resultStatus === STEP_STATUS.FAILED) &&
+    index >= 0 &&
+    step?._runtime?.terminalStatus === STEP_STATUS.FAILED &&
+    step._runtime.terminalFailure !== false
+    ? index
+    : undefined;
 }
 
 /**

@@ -1159,6 +1159,41 @@ suite("RunContinuationService addressed step mutations", () => {
       ),
       /step that has already run/i
     );
+
+    await seedRun(EXECUTION_STATES.ERROR, 1, [
+      {
+        type: "script",
+        script: "exit 1",
+        _runtime: {
+          stepId: "terminal-failure",
+          startedAt: 10,
+          completedAt: 20,
+          terminalStatus: "failed",
+          terminalFailure: true,
+        },
+      },
+      { type: "script", script: "echo later" },
+    ]);
+    const repaired = await RunContinuationService.editStepAtRun(
+      workspace,
+      workflowKey,
+      runRef,
+      0,
+      { updates: { script: "exit 0" } },
+      1,
+      repository
+    );
+    assert.strictEqual(repaired.workingFile._runtime?.currentIndex, 0);
+    assert.strictEqual(
+      repaired.workingFile.steps?.[0]._runtime?.stepId,
+      "terminal-failure"
+    );
+    assert.strictEqual(repaired.workingFile.steps?.[0]._runtime?.startedAt, undefined);
+    await seedRun(EXECUTION_STATES.RUNNING, 1, [
+      { prompt: "done", _runtime: { completedAt: 10 } },
+      { prompt: "in flight", _runtime: { startedAt: 11 } },
+      { prompt: "pending" },
+    ]);
     await assert.rejects(
       RunContinuationService.editStepAtRun(
         workspace,
@@ -1166,7 +1201,7 @@ suite("RunContinuationService addressed step mutations", () => {
         runRef,
         1,
         { updates: { prompt: "must stay in flight" } },
-        2,
+        1,
         repository,
         true
       ),
@@ -1179,7 +1214,7 @@ suite("RunContinuationService addressed step mutations", () => {
         runRef,
         2,
         { updates: { prompt: "stale" } },
-        1,
+        0,
         repository,
         true
       ),
@@ -1642,7 +1677,7 @@ suite("RunContinuationService addressed step mutations", () => {
         type: "script",
         script: "exit 1",
         // Terminal status alone must protect this step in a stopped run.
-        _runtime: { terminalStatus: "failed" },
+        _runtime: { terminalStatus: "failed", terminalFailure: false },
       },
       { type: "script", script: "exit 0" },
     ]);

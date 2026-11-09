@@ -108,6 +108,7 @@ import {
 import {
   hasInFlightStep as isStepInFlight,
   hasStarted,
+  getResumableTerminalFailureIndex,
 } from "../utils/StepStatusDerivation";
 import { settleInterruptedRun } from "../utils/InterruptedRunSettlement";
 import {
@@ -947,19 +948,18 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
   /** Rewind a settled ERROR run to the terminal queue failure for continuation. */
   public async rewindTerminalFailureForContinuation(): Promise<boolean> {
-    if (this.stateMachine.status !== EXECUTION_STATES.ERROR) {
+    const failedIndex = getResumableTerminalFailureIndex({
+      executionState: this.stateMachine.status,
+      currentIndex: this.state.currentIndex,
+      steps: this.state.steps,
+      resultStatus: this.state.results[this.state.currentIndex - 1]?.status,
+    });
+    if (failedIndex === undefined) {
       return false;
     }
-    const failedIndex = this.state.currentIndex - 1;
     const result = this.state.results[failedIndex];
     const runtime = this.state.steps[failedIndex]?._runtime;
-    if (
-      !result ||
-      result.status !== STEP_STATUS.FAILED ||
-      runtime?.terminalFailure === false
-    ) {
-      return false;
-    }
+    if (!result || !runtime) return false;
 
     this.state.currentIndex = failedIndex;
     this.state.completedIndices.delete(String(failedIndex));
@@ -2815,6 +2815,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     index: number,
     updates: Partial<WorkflowStep>
   ): Promise<void> {
+    if (index === this.state.currentIndex - 1) {
+      await this.rewindTerminalFailureForContinuation();
+    }
     // Mutation and write run as one serialized operation, so no other
     // queued write can persist (or disk-merge away) the half-applied state.
     await this.workingFileManager.runInQueue(async () => {
@@ -2907,6 +2910,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     properties: Record<string, unknown>,
     clearProperties?: string[]
   ): Promise<void> {
+    if (indices.includes(this.state.currentIndex - 1)) {
+      await this.rewindTerminalFailureForContinuation();
+    }
     await this.workingFileManager.runInQueue(async () => {
       const unique = [...new Set(indices)];
       if (unique.length !== indices.length || unique.length === 0) {
@@ -2974,6 +2980,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    * @throws Error if index is out of range
    */
   public async replaceStep(index: number, step: WorkflowStep): Promise<void> {
+    if (index === this.state.currentIndex - 1) {
+      await this.rewindTerminalFailureForContinuation();
+    }
     // Mutation and write run as one serialized operation, so no other
     // queued write can persist (or disk-merge away) the half-applied state.
     await this.workingFileManager.runInQueue(async () => {
@@ -3027,6 +3036,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    * @returns A warning naming steps whose references the removal affected, if any.
    */
   public async deletePrompts(indices: number[]): Promise<string | undefined> {
+    if (indices.includes(this.state.currentIndex - 1)) {
+      await this.rewindTerminalFailureForContinuation();
+    }
     let warning: string | undefined;
     // Mutation and write run as one serialized operation, so no other
     // queued write can persist (or disk-merge away) the half-applied state.
@@ -3153,6 +3165,17 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     newPendingOrder: number[],
     pendingGroups?: PendingParallelGroupRange[]
   ): Promise<string | undefined> {
+    if (
+      newPendingOrder.length > 0 &&
+      getResumableTerminalFailureIndex({
+        executionState: this.stateMachine.status,
+        currentIndex: this.state.currentIndex,
+        steps: this.state.steps,
+        resultStatus: this.state.results[this.state.currentIndex - 1]?.status,
+      }) !== undefined
+    ) {
+      await this.rewindTerminalFailureForContinuation();
+    }
     if (
       this.hasInFlightStep &&
       !this.state.pendingRewind &&

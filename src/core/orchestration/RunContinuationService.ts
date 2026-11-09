@@ -66,9 +66,14 @@ import {
   assertStepMutable,
   ensureStepIds,
   findStepIndexById,
+  resetStepRuntimeForRewind,
   STEP_MUTATION_ERROR_MESSAGES,
 } from "../StepIdentity";
-import { hasInFlightStep, hasStarted } from "../../utils/StepStatusDerivation";
+import {
+  getResumableTerminalFailureIndex,
+  hasInFlightStep,
+  hasStarted,
+} from "../../utils/StepStatusDerivation";
 import {
   describeShiftedStepReferences,
   describeStepInsertion,
@@ -931,6 +936,7 @@ export class RunContinuationService {
           parallelGroups: source.parallelGroups,
         });
         assertStepIndex(topology.steps.length, index, "edit");
+        rewindTargetedFailure(source, topology.steps, index);
         assertEditableDuringExecution(source, topology.steps, index, "edit");
         assertPendingRewindSuffix(source, index, "edit");
         assertClearablePropertiesAreEditable(change.clearProperties);
@@ -1007,6 +1013,7 @@ export class RunContinuationService {
         }
         for (const index of unique) {
           assertStepIndex(topology.steps.length, index, "remove");
+          rewindTargetedFailure(source, topology.steps, index);
           assertEditableDuringExecution(
             source,
             topology.steps,
@@ -1075,6 +1082,15 @@ export class RunContinuationService {
       runRef,
       expectedDefinitionRevision,
       (source, topology, currentIndex) => {
+        const failureIndex = getResumableTerminalFailureIndex({
+          executionState: source._runtime?.executionState,
+          currentIndex,
+          steps: topology.steps,
+        });
+        if (failureIndex !== undefined && absoluteOrder.includes(failureIndex)) {
+          rewindTargetedFailure(source, topology.steps, failureIndex);
+          currentIndex = failureIndex;
+        }
         if (absoluteOrder.some((index) => !Number.isInteger(index))) {
           throw new Error("Reorder indices must be integers");
         }
@@ -1311,6 +1327,21 @@ export class RunContinuationService {
 
 function isInFlightExecutionState(state: ExecutionState | undefined): boolean {
   return state !== undefined && IN_FLIGHT_EXECUTION_STATES.has(state);
+}
+
+function rewindTargetedFailure(
+  source: WorkingFile,
+  steps: WorkflowStep[],
+  index: number
+): void {
+  const failureIndex = getResumableTerminalFailureIndex({
+    executionState: source._runtime?.executionState,
+    currentIndex: source._runtime?.currentIndex,
+    steps,
+  });
+  if (failureIndex !== index || !source._runtime) return;
+  source._runtime = { ...source._runtime, currentIndex: index };
+  steps[index] = resetStepRuntimeForRewind(steps[index]);
 }
 
 function isExecutionActiveState(state: ExecutionState | undefined): boolean {
