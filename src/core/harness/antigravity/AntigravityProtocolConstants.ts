@@ -76,3 +76,8 @@ export const ANTIGRAVITY_STREAM_JSON_EVENTS = {
   STEP_UPDATE: "step_update",
   RESULT: "result",
 } as const;
+
+/** `result.status` values on the terminal stream-json `result` event. */
+export const ANTIGRAVITY_STREAM_JSON_RESULT_STATUSES = {
+  ERROR: "ERROR",
+} as const;

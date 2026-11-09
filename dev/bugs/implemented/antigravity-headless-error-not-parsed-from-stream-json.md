@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by the Phase 0 re-capture for `dev/backlog/ERROR_HANDLING_CONSISTENCY_PLAN.md` (agy 1.5.3)
 - **Area:** `src/core/harness/antigravity/AntigravityLogParser.ts`, `src/core/harness/antigravity/AntigravityCliProvider.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

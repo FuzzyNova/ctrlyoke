@@ -25,7 +25,10 @@ import {
   ToolPermissionConfig,
 } from "../shared/interfaces/IToolPermissionMapper";
 import { CliParseUtils } from "../shared/CliParseUtils";
-import { ANTIGRAVITY_STREAM_JSON_EVENTS } from "./AntigravityProtocolConstants";
+import {
+  ANTIGRAVITY_STREAM_JSON_EVENTS,
+  ANTIGRAVITY_STREAM_JSON_RESULT_STATUSES,
+} from "./AntigravityProtocolConstants";
 import {
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
@@ -420,6 +423,26 @@ export class AntigravityCliProvider implements ICliProvider {
         candidate.conversation_id.length > 0
     );
     return event?.conversation_id as string | undefined;
+  }
+
+  /**
+   * agy reports a failed API turn only in the terminal stream-json `result`
+   * (`status: "ERROR"` with the text in `error`, then exit 3); it writes no
+   * transcript error entry for it (agy 1.5.3 capture in
+   * src/test/fixtures/harness-errors/antigravity/).
+   */
+  extractErrorFromStdout(stdout: string): string | undefined {
+    const result = CliParseUtils.parseJsonLines(stdout)
+      .reverse()
+      .find((event) => event.event === ANTIGRAVITY_STREAM_JSON_EVENTS.RESULT)
+      ?.result as { status?: unknown; error?: unknown } | undefined;
+    if (
+      result?.status !== ANTIGRAVITY_STREAM_JSON_RESULT_STATUSES.ERROR ||
+      typeof result.error !== "string"
+    ) {
+      return undefined;
+    }
+    return result.error.trim() || undefined;
   }
 
   /** Observe stream-json usage without adding a second event-mapping path. */

@@ -297,6 +297,29 @@ suite("AntigravityCliProvider", () => {
     assert.ok(provider.extractSessionIdFromLogs);
   });
 
+  test("reads a headless API error from the stream-json result event", async () => {
+    const stdout = await fs.readFile(
+      path.resolve(
+        __dirname,
+        "../../../src/test/fixtures/harness-errors/antigravity/headless-stream-json-error.jsonl"
+      ),
+      "utf8"
+    );
+    const provider = new AntigravityCliProvider();
+
+    assert.strictEqual(
+      provider.extractErrorFromStdout(stdout),
+      "agent executor error: generating and executing: Error 401, Message: stub: API key not valid. Please pass a valid API key., Status: UNAUTHENTICATED, Details: []"
+    );
+    assert.strictEqual(
+      provider.extractErrorFromStdout(
+        '{"event":"result","result":{"status":"DONE","response":"hi","error":""}}\n'
+      ),
+      undefined
+    );
+    assert.strictEqual(provider.extractErrorFromStdout(""), undefined);
+  });
+
   test("requires absolute file references", () => {
     assert.strictEqual(
       new AntigravityCliProvider().requiresAbsoluteFileReferences,

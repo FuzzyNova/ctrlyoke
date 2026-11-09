@@ -1,5 +1,8 @@
 import * as assert from "assert";
+import * as fs from "fs";
+import * as path from "path";
 import { suite, test } from "mocha";
+import { AntigravityCliProvider } from "../../core/harness/antigravity/AntigravityCliProvider";
 import { FAILURE_KINDS } from "../../types/DashboardConstants";
 import type { BackgroundWorkAbandonedData } from "../../types/CliOutputTypes";
 import { getTranscriptText } from "../../utils/StepOutputText";
@@ -484,6 +487,37 @@ suite("CliResponseCollector", () => {
     assert.strictEqual(inBandFailure.failureKind, FAILURE_KINDS.HARNESS_ERROR);
     assert.strictEqual(inBandFailure.failureMessage, "model is not supported");
     assert.strictEqual(stdoutSeen.length, 2);
+  });
+
+  test("classifies a captured Antigravity headless API error as a harness error", async () => {
+    const fixtureDir = path.resolve(
+      __dirname,
+      "../../../src/test/fixtures/harness-errors/antigravity"
+    );
+    const antigravity = new AntigravityCliProvider();
+    const result = await createCollector({
+      ...createProvider(createParsedOutput({ events: [], metadata: {} })),
+      extractErrorFromStdout: (stdout: string) =>
+        antigravity.extractErrorFromStdout(stdout),
+    }).collectHeadlessResponse({
+      stdout: fs.readFileSync(
+        path.join(fixtureDir, "headless-stream-json-error.jsonl"),
+        "utf8"
+      ),
+      stderr: fs.readFileSync(
+        path.join(fixtureDir, "headless-stderr.txt"),
+        "utf8"
+      ),
+      exitCode: 3,
+      promptForSessionLog: "say hi",
+      executionStartTime: new Date(),
+    });
+
+    assert.strictEqual(result.failureKind, FAILURE_KINDS.HARNESS_ERROR);
+    assert.match(
+      result.failureMessage ?? "",
+      /^agent executor error: .*Error 401, Message: stub: API key not valid/
+    );
   });
 
   test("should classify a killed process as cancellation, not a harness failure", async () => {
