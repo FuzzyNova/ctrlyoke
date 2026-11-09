@@ -410,6 +410,8 @@ interface HistoryTargetAttempts {
 /** Payload-free per-target attempt facts from one lifecycle scan. */
 interface HistoryAttemptIndex {
   targets: Map<string, HistoryTargetAttempts>;
+  /** 1-based target-wide ordinal for each started step attempt. */
+  attemptNumbers: Map<string, number>;
   /** The most recently started step attempt in the run. */
   latest?: HistoryAttemptIdentity;
   /** Attempt identity keys with any phase that never terminated. */
@@ -427,6 +429,7 @@ async function collectHistoryAttemptIndex(
   manifestPath: string
 ): Promise<HistoryAttemptIndex> {
   const targets = new Map<string, HistoryTargetAttempts>();
+  const attemptNumbers = new Map<string, number>();
   const openPhases = new Map<string, string>();
   const stepAttemptStarts = new Map<string, number>();
   const stepAttemptPhases = new Set<string>();
@@ -451,11 +454,13 @@ async function collectHistoryAttemptIndex(
       }
       stepAttemptStarts.set(phaseKey, event.timestampMs);
       const existing = targets.get(targetKey);
+      const attemptNumber = (existing?.attempts ?? 0) + 1;
+      attemptNumbers.set(identityKey, attemptNumber);
       if (!existing) {
         targets.set(targetKey, {
           target: event.target,
           attempts: 1,
-          maxAttemptNumber: event.attemptIndex + 1,
+          maxAttemptNumber: attemptNumber,
           latest: identity,
           firstStartedAt: event.timestampMs,
           elapsedMs: 0,
@@ -463,10 +468,7 @@ async function collectHistoryAttemptIndex(
         continue;
       }
       existing.attempts++;
-      existing.maxAttemptNumber = Math.max(
-        existing.maxAttemptNumber,
-        event.attemptIndex + 1
-      );
+      existing.maxAttemptNumber = attemptNumber;
       if (isLaterHistoryAttempt(identity, existing.latest)) {
         existing.latest = identity;
         existing.latestTerminalState = undefined;
@@ -492,6 +494,7 @@ async function collectHistoryAttemptIndex(
   }
   return {
     targets,
+    attemptNumbers,
     ...(latest ? { latest } : {}),
     running: new Set(openPhases.values()),
     finalPassCount,
@@ -543,14 +546,18 @@ function matchesHistoryShowAttempt(
     case HISTORY_SHOW_ATTEMPT_SELECTORS.ALL:
       return true;
     case HISTORY_SHOW_ATTEMPT_SELECTORS.NUMBER:
-      return attempt.attemptIndex + 1 === selection.attempt.number;
+      return (
+        selection.index?.attemptNumbers.get(historyAttemptKey(attempt)) ===
+        selection.attempt.number
+      );
     case HISTORY_SHOW_ATTEMPT_SELECTORS.LATEST: {
       const latest = selection.index?.targets.get(
         historyAttemptTargetKey(attempt.target)
       )?.latest;
       return (
         latest !== undefined &&
-        historyAttemptKey(latest) === historyAttemptKey(attempt)
+        selection.index?.attemptNumbers.get(historyAttemptKey(latest)) ===
+          selection.index?.attemptNumbers.get(historyAttemptKey(attempt))
       );
     }
   }

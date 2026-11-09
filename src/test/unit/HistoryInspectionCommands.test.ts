@@ -2745,6 +2745,79 @@ suite("CLI history inspection command handlers", () => {
     assert.deepStrictEqual(io.errors, []);
   });
 
+  test("numbers attempts across executions for selection, validation, and paging", async () => {
+    const key = "release" as WorkflowKey;
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const executions = [
+      settledAttempt(target, {
+        runIndex: 0,
+        output: { response: "first", elapsed: 1, isStreaming: false },
+      }),
+      settledAttempt(target, {
+        runIndex: 1,
+        output: { response: "second", elapsed: 1, isStreaming: false },
+      }),
+    ];
+    const invoke = async (attempt: string, limit?: string): Promise<TestIo> => {
+      const io = new TestIo();
+      await showHistoryCommand(
+        {
+          workflow: key,
+          run: "3",
+          step: "0",
+          attempt,
+          json: true,
+          summary: true,
+          ...(limit ? { limit } : {}),
+        },
+        io,
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          historyManagerForShow(key),
+          new TestRunOutputResolver(executions)
+        )
+      );
+      return io;
+    };
+    const first = await invoke("1");
+    assert.deepStrictEqual(
+      first.output.map(
+        (line) => (JSON.parse(line) as { runIndex: number }).runIndex
+      ),
+      [0]
+    );
+    const second = await invoke("2");
+    assert.deepStrictEqual(
+      second.output.map(
+        (line) => (JSON.parse(line) as { runIndex: number }).runIndex
+      ),
+      [1]
+    );
+    await assert.rejects(
+      showHistoryCommand(
+        {
+          workflow: key,
+          run: "3",
+          step: "0",
+          attempt: "3",
+          json: true,
+          summary: true,
+        },
+        new TestIo(),
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          historyManagerForShow(key),
+          new TestRunOutputResolver(executions)
+        )
+      ),
+      {
+        message:
+          'Invalid --attempt value "3" for --step 0; valid attempts are 1 to 2',
+      }
+    );
+    assert.strictEqual((await invoke("1", "100")).output.length, 1);
+  });
+
   test("says no events matched when --kind or --path filters out an attempt", async () => {
     const key = "release" as WorkflowKey;
     const statuses: string[] = [];

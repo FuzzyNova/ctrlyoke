@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli subagent, reproduced with `node out/cli.js`)
 - **Area:** `src/cli/HistoryInspectionCommands.ts` (`collectHistoryAttemptIndex` ~455-470, `matchesHistoryShowAttempt` ~546, `validateHistoryShowSelection` ~895-903)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
