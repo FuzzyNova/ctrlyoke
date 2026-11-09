@@ -8,9 +8,10 @@ import type {
 import {
   CLI_EVENT_TYPES,
   FAILURE_KINDS,
+  FAILURE_SOURCES,
   NOTIFICATION_OUTCOME_KINDS,
 } from "../../types/DashboardConstants";
-import type { FailureKind } from "../../types/CtrlYokeTypes";
+import type { FailureKind, FailureRecord } from "../../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
 import { getTranscriptText } from "../../utils/StepOutputText";
@@ -73,9 +74,13 @@ function describeHarnessError(
   data: { rawHookData?: unknown } | undefined
 ): string | undefined {
   const message = monitor?.describeHookError?.(data?.rawHookData);
-  const candidate = message ?? (data?.rawHookData as { message?: unknown } | undefined)?.message;
+  const candidate =
+    message ??
+    (data?.rawHookData as { message?: unknown } | undefined)?.message;
   if (typeof candidate !== "string" || !candidate.trim()) return undefined;
-  return sanitizeTerminalOutput(secretRedactionService.redactText(candidate)).trim();
+  return sanitizeTerminalOutput(
+    secretRedactionService.redactText(candidate)
+  ).trim();
 }
 
 /**
@@ -95,6 +100,8 @@ export interface LogMonitorResult {
   failureKind?: FailureKind;
   /** Human-readable failure message captured at the monitor boundary */
   failureMessage?: string;
+  failureSource?: FailureRecord["source"];
+  failureDetail?: FailureRecord["detail"];
   /** Set when monitoring ended because the CLI process exited before completion was detected.
    *  All CLI harnesses are TUIs that stay open between prompts, so any process exit
    *  before a Stop hook or log-based completion event is abnormal (Ctrl+C, crash, SIGKILL). */
@@ -245,6 +252,8 @@ export class CliLogMonitor {
       const resolveFailure = async (params: {
         failureKind: FailureKind;
         failureMessage: string;
+        failureSource?: FailureRecord["source"];
+        failureDetail?: FailureRecord["detail"];
         exitCode?: number;
         timedOut?: boolean;
         sessionIdOverride?: string;
@@ -306,6 +315,8 @@ export class CliLogMonitor {
           cliResult: partialResult,
           failureKind: params.failureKind,
           failureMessage: params.failureMessage,
+          failureSource: params.failureSource,
+          failureDetail: params.failureDetail,
           timedOut: params.timedOut,
           processExited:
             params.exitCode !== undefined
@@ -842,9 +853,14 @@ export class CliLogMonitor {
 
                 await resolveFailure({
                   failureKind: FAILURE_KINDS.HARNESS_ERROR,
+                  failureSource: FAILURE_SOURCES.HOOK,
                   failureMessage:
-                    describeHarnessError(this.deps.notificationMonitor, result.data) ||
-                    (result.error && result.error !== "Harness reported an error"
+                    describeHarnessError(
+                      this.deps.notificationMonitor,
+                      result.data
+                    ) ||
+                    (result.error &&
+                    result.error !== "Harness reported an error"
                       ? result.error
                       : describeHookErrorFallback(result.data?.rawHookData)),
                   sessionIdOverride: sessionIdFromNotification,
@@ -877,6 +893,7 @@ export class CliLogMonitor {
           void resolveFailure({
             failureKind: FAILURE_KINDS.TIMEOUT,
             failureMessage: "Log monitoring timeout",
+            failureSource: FAILURE_SOURCES.TIMEOUT,
             timedOut: true,
           });
         }, timeoutMs);
@@ -968,6 +985,8 @@ export class CliLogMonitor {
           void resolveFailure({
             failureKind: FAILURE_KINDS.PROCESS_EXIT,
             failureMessage: `CLI process exited unexpectedly (exit code ${ptyExit.exitCode})`,
+            failureSource: FAILURE_SOURCES.PROCESS_EXIT,
+            failureDetail: { exitCode: ptyExit.exitCode },
             exitCode: ptyExit.exitCode,
           });
         }

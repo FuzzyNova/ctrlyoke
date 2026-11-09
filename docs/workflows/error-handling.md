@@ -53,6 +53,11 @@ A script that runs and exits non-zero is **not** an internal error; it is a
 failed validation, and its `onFail` decides what happens. So is a comparison
 that doesn't match, including a numeric operator given non-numeric output.
 
+A session-level error parsed from Copilot or Antigravity output counts as an
+internal error even when the CLI exits with code 0. A process terminated by an
+external signal also follows this policy; a termination ctrlyoke requested is
+treated as cancellation.
+
 Worktree setup is outside this policy: it runs before any step is in flight,
 so a failed setup blocks the worktree and the next **Run** re-runs it. See
 [Worktrees](/workflows/worktrees).

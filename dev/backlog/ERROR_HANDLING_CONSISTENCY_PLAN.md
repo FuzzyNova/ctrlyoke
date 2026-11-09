@@ -1,9 +1,9 @@
 # Error Handling Consistency Plan (harnesses, scripts, CLI)
 
-**Status:** Phase 1 implemented on 2026-11-09 (H1, H4, R2 hook column). Several requested probes
-remain unresolved because the bounded run could not trigger the target event or the CLI was
-unavailable. Research and recommendation done; open decisions settled with the user on
-2026-11-08 (§7).
+**Status:** Phase 2 implemented on 2026-11-09 (H1, H2, H4, H5, H6, R1 types, R2 hook
+column, R3). Several requested probes remain unresolved because the bounded run could not
+trigger the target event or the CLI was unavailable. Research and recommendation done; open
+decisions settled with the user on 2026-11-08 (§7).
 
 **Origin:** the "CLI error reporting in `src/cli.ts`" entry under **Deferred** in
 `dev/backlog/CODE_SMELL_LEDGER.md`. While researching it, the same problem turned up in two
@@ -437,11 +437,12 @@ into 6a (reporter, sweep and JSON envelope) and 6b (strict integer flag parser).
    and close it in the same commit.~~ Claude and OpenCode had no real error-hook payload
    fixture available (§6); their extraction follows the observed documented shapes. Copilot
    extraction uses the captured fixture.
-2. **Headless extraction and classification (H2, H5, H6).** Copilot and Antigravity get
+2. ~~**Headless extraction and classification (H2, H5, H6).** Copilot and Antigravity get
    `metadata.error`. Add the classification rules in `getHeadlessFailure`, route
    `unknown`/`sessionRejected` through `errorBehavior`, and add `FAILURE_SOURCES`.
    _CHANGELOG Changed:_ a Copilot or Antigravity headless run that reported an error now
-   fails instead of succeeding, and an external signal kill now follows `errorBehavior`.
+   fails instead of succeeding, and an external signal kill now follows `errorBehavior`.~~
+   Implemented in Phase 2 on 2026-11-09.
 3. **Failure record surfaces (H7).**
    - Add `failureKind`/`failureSource` to the `ATTEMPT_TERMINATED` payload. This is an
      optional field; confirm under `PersistedSchemaGuard` rules whether the timeline format

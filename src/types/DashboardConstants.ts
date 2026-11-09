@@ -3644,6 +3644,19 @@ export const FAILURE_KINDS = {
 
 export type FailureKind = (typeof FAILURE_KINDS)[keyof typeof FAILURE_KINDS];
 
+/** Where a structured failure was detected. */
+export const FAILURE_SOURCES = {
+  HOOK: "hook",
+  HEADLESS_PARSE: "headlessParse",
+  PROCESS_EXIT: "processExit",
+  SIGNAL: "signal",
+  TIMEOUT: "timeout",
+  SPAWN: "spawn",
+} as const;
+
+export type FailureSource =
+  (typeof FAILURE_SOURCES)[keyof typeof FAILURE_SOURCES];
+
 // ============================================================================
 // TERMINAL SESSION STATUS - Status values for terminal sessions
 // ============================================================================

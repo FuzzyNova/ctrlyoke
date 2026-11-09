@@ -685,6 +685,8 @@ export class CopilotLogParser extends BaseLogParser {
     // session.shutdown still supplies a final used-token count, but no numeric limit.
     let contextWindowUsedTokens = 0;
     let contextWindowSize: number | undefined;
+    let reportedError: string | undefined;
+    let reportedErrorType: string | undefined;
 
     // Track pending tool calls to associate execution_start with execution_complete
     const pendingTools = new Map<string, CopilotPendingTool>();
@@ -797,6 +799,10 @@ export class CopilotLogParser extends BaseLogParser {
       if (event.type === "session.error" && event.data) {
         const errorCode = event.data.errorType || "UNKNOWN";
         const errorMessage = event.data.message || "Unknown error";
+        if (typeof event.data.message === "string")
+          reportedError = event.data.message;
+        if (typeof event.data.errorType === "string")
+          reportedErrorType = event.data.errorType;
         outputEvents.push({
           type: CLI_EVENT_TYPES.TEXT,
           timestamp,
@@ -1021,6 +1027,8 @@ export class CopilotLogParser extends BaseLogParser {
         sessionId,
         model: (model ?? this.resolvedModel) || undefined,
         harness: HARNESS_IDS.COPILOT_CLI,
+        error: reportedError,
+        errorType: reportedErrorType,
         usage:
           effectiveInputTokens > 0 ||
           outputTokens > 0 ||

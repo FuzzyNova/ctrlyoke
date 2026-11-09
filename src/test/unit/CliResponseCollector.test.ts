@@ -39,6 +39,71 @@ function createCollector(provider: any) {
 }
 
 suite("CliResponseCollector", () => {
+  test("classifies parsed harness errors regardless of exit code", async () => {
+    for (const exitCode of [0, 1]) {
+      const collector = createCollector({
+        ...createProvider(
+          createParsedOutput({
+            metadata: { error: "API denied", errorType: "query" },
+          })
+        ),
+      });
+      const result = await collector.collectHeadlessResponse({
+        stdout: "",
+        stderr: "",
+        exitCode,
+        promptForSessionLog: "",
+        executionStartTime: new Date(),
+      });
+      assert.strictEqual(result.failureKind, FAILURE_KINDS.HARNESS_ERROR);
+      assert.strictEqual(result.failureMessage, "API denied");
+      assert.strictEqual(result.failureSource, "headlessParse");
+      assert.deepStrictEqual(result.failureDetail, {
+        exitCode,
+        errorType: "query",
+      });
+    }
+  });
+
+  test("classifies manager termination as user cancellation", async () => {
+    const result = await createCollector(
+      createProvider()
+    ).collectHeadlessResponse({
+      stdout: "",
+      stderr: "",
+      exitCode: 1,
+      terminationSignal: "SIGTERM",
+      terminatedByManager: true,
+      promptForSessionLog: "",
+      executionStartTime: new Date(),
+    });
+    assert.strictEqual(result.failureKind, FAILURE_KINDS.USER_CANCELLED);
+    assert.deepStrictEqual(result.failureDetail, {
+      signal: "SIGTERM",
+      exitCode: 1,
+    });
+  });
+
+  test("classifies externally signalled process termination as a process exit", async () => {
+    const result = await createCollector(
+      createProvider()
+    ).collectHeadlessResponse({
+      stdout: "",
+      stderr: "",
+      exitCode: 1,
+      terminationSignal: "SIGKILL",
+      terminatedByManager: false,
+      promptForSessionLog: "",
+      executionStartTime: new Date(),
+    });
+    assert.strictEqual(result.failureKind, FAILURE_KINDS.PROCESS_EXIT);
+    assert.strictEqual(result.failureSource, "signal");
+    assert.deepStrictEqual(result.failureDetail, {
+      signal: "SIGKILL",
+      exitCode: 1,
+    });
+  });
+
   test("records a display-only notice when headless output ends with pending background work", async () => {
     const collector = createCollector({
       ...createProvider(),
@@ -364,7 +429,7 @@ suite("CliResponseCollector", () => {
       executionStartTime: new Date(),
     });
 
-    assert.strictEqual(result.failureKind, FAILURE_KINDS.PROCESS_EXIT);
+    assert.strictEqual(result.failureKind, FAILURE_KINDS.HARNESS_ERROR);
     assert.strictEqual(result.failureMessage, "Provider rejected key");
     assert.strictEqual(result.cliResult.error, "Provider rejected key");
   });
@@ -410,7 +475,7 @@ suite("CliResponseCollector", () => {
       });
 
     const failed = await run(1);
-    assert.strictEqual(failed.failureKind, FAILURE_KINDS.PROCESS_EXIT);
+    assert.strictEqual(failed.failureKind, FAILURE_KINDS.HARNESS_ERROR);
     assert.strictEqual(failed.failureMessage, "model is not supported");
     assert.deepStrictEqual(stdoutSeen, ['{"type":"turn.failed"}']);
 
@@ -433,6 +498,7 @@ suite("CliResponseCollector", () => {
       stderr: "Reading additional input from stdin...",
       exitCode: 1,
       terminationSignal: "SIGKILL",
+      terminatedByManager: true,
       promptForSessionLog: "say hi",
       executionStartTime: new Date(),
     });

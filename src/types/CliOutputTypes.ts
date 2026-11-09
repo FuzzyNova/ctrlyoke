@@ -367,6 +367,8 @@ export interface OutputMetadata {
   cliVersion?: string;
   /** Harness-reported response error, when the CLI provides one. */
   error?: string;
+  /** Provider error category when the harness supplies one. */
+  errorType?: string;
   /** Elapsed time in milliseconds */
   elapsed?: number;
   /** Harness identifier from the canonical HARNESS_IDS set. */

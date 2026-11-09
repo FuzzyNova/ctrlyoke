@@ -5611,11 +5611,32 @@ export class WorkflowExecutor {
             ? FAILURE_KINDS.TIMEOUT
             : undefined);
 
+    // Keep these existing notifications until Phase 3b centralizes failure
+    // toasts; the failure policy below still decides retry/continue/stop.
+    let failureReasonForPolicy: string | undefined;
+    if (
+      failureKind === FAILURE_KINDS.UNKNOWN ||
+      failureKind === FAILURE_KINDS.SESSION_REJECTED
+    ) {
+      failureReasonForPolicy = integration.getLastFailureReason();
+      const stepLabel =
+        signedStepIndex >= 0
+          ? `prompt ${signedStepIndex + 1}`
+          : formatFinalPassPhrase(Math.abs(signedStepIndex));
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        "error",
+        `Failed to execute ${stepLabel}: ${failureReasonForPolicy}`
+      );
+    }
+
     if (
       failureKind === FAILURE_KINDS.PROCESS_EXIT ||
       failureKind === FAILURE_KINDS.HARNESS_ERROR ||
       failureKind === FAILURE_KINDS.HARNESS_NOT_INSTALLED ||
-      failureKind === FAILURE_KINDS.TIMEOUT
+      failureKind === FAILURE_KINDS.TIMEOUT ||
+      failureKind === FAILURE_KINDS.UNKNOWN ||
+      failureKind === FAILURE_KINDS.SESSION_REJECTED
     ) {
       return this.handleHarnessFailure(
         integration,
@@ -5626,7 +5647,8 @@ export class WorkflowExecutor {
         attemptIndex,
         errorRetryCount,
         failureKind,
-        resolvedProperties
+        resolvedProperties,
+        failureReasonForPolicy
       );
     }
 
@@ -5715,16 +5737,21 @@ export class WorkflowExecutor {
       | typeof FAILURE_KINDS.PROCESS_EXIT
       | typeof FAILURE_KINDS.HARNESS_ERROR
       | typeof FAILURE_KINDS.HARNESS_NOT_INSTALLED
-      | typeof FAILURE_KINDS.TIMEOUT,
-    resolvedProperties?: ResolvedProperties
+      | typeof FAILURE_KINDS.TIMEOUT
+      | typeof FAILURE_KINDS.UNKNOWN
+      | typeof FAILURE_KINDS.SESSION_REJECTED,
+    resolvedProperties?: ResolvedProperties,
+    failureReasonOverride?: string
   ): Promise<PromptFailureDisposition> {
     const runtime = this.getRuntime();
-    const failureReason = integration.getLastFailureReason();
+    const failureReason =
+      failureReasonOverride ?? integration.getLastFailureReason();
     const attemptTimestampMs =
       this.getPromptPhaseStartedAt(target) ?? Date.now();
     const failureObservedAtMs = Date.now();
     const statusTimestampMs = Math.max(Date.now(), attemptTimestampMs + 1);
     const errorBehavior = resolvedProperties?.errorBehavior ?? {
+      // Session rejection previously stopped unconditionally; preserve that default.
       onError: CONDITION_ACTIONS.STOP_WORKFLOW,
     };
 
@@ -5735,7 +5762,11 @@ export class WorkflowExecutor {
           ? "Harness CLI is unavailable"
           : failureKind === FAILURE_KINDS.TIMEOUT
             ? "Harness execution timed out"
-            : "Harness reported an error";
+            : failureKind === FAILURE_KINDS.SESSION_REJECTED
+              ? "Harness rejected the session"
+              : failureKind === FAILURE_KINDS.UNKNOWN
+                ? "Harness invocation failed"
+                : "Harness reported an error";
 
     if (canRetryErrorBehavior(errorBehavior, errorRetryCount)) {
       const nextAttemptIndex = attemptIndex + 1;

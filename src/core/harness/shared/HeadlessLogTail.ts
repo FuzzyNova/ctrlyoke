@@ -65,6 +65,8 @@ export interface HeadlessProcessResult {
    * why the run ended.
    */
   terminationSignal?: NodeJS.Signals;
+  /** Whether ctrlyoke requested the termination. */
+  terminatedByManager?: boolean;
   headlessLogTail?: HeadlessLogTail;
 }
 

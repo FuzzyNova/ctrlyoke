@@ -5312,6 +5312,45 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     );
   });
 
+  test("routes unknown prompt failures through continue and retry policies", async () => {
+    for (const onError of ["continue", "retry"] as const) {
+      const queue = new PromptQueue();
+      const integration = new MockHarnessIntegration(undefined, false);
+      const executor = makeExecutor(queue);
+      let failedAttempts = 0;
+      let firstCall = true;
+      integration.onSend = async () => {
+        if (firstCall) {
+          firstCall = false;
+          failedAttempts++;
+          (integration as any).lastFailureReason = "unknown invocation failure";
+          return { success: false };
+        }
+        return { success: true, responseText: "recovered" };
+      };
+      (integration as any).getLastFailureKind = () => FAILURE_KINDS.UNKNOWN;
+      queue.loadPrompts({
+        steps: [
+          {
+            prompt: "unknown-failure",
+            errorBehavior: { onError, maxRetries: 1, retryDelaySec: 0 },
+          },
+          { prompt: "after-unknown" },
+        ],
+      });
+
+      await executor.execute(integration, makeContext(integration));
+      assert.strictEqual(failedAttempts, 1);
+      assert.deepStrictEqual(
+        integration.sentPrompts,
+        onError === "retry"
+          ? ["unknown-failure", "unknown-failure", "after-unknown"]
+          : ["unknown-failure", "after-unknown"]
+      );
+      assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+    }
+  });
+
   test("routes errored script steps through errorBehavior", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);

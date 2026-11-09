@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Copilot and Antigravity headless session errors now fail the step even when their CLI exits successfully; externally signalled process kills now follow `errorBehavior`.
 - Interactive Claude, Copilot and OpenCode failures now show the harness's own error text.
 - A shell opened from a workflow's **Terminal** tab now starts in the worktree that workflow runs in, the same folder its steps and scripts use, so you can resolve a merge or check `git status` there without changing directory. Workflows without a worktree still open shells in the workspace folder.
 - The output copy commands now say what they copy. In the output pane's right-click menu, **Copy All** is now **Copy All Responses**, **Copy Step Output** is **Copy Step Response**, and **Copy Full Output** is **Copy Step Transcript**. In the step menu, **Copy Output** is now **Copy Response** and **Copy Full Output** is **Copy Transcript**. The **Copy output** button at the end of each step is now **Copy response**. On a script step, which has no assistant response, the same commands read **Copy Output**, **Copy Step Output** and **Copy output**. Hover any of them to see what it includes.

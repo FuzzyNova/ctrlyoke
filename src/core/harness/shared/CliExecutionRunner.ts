@@ -4,6 +4,7 @@ import * as path from "path";
 import type { CliEvent } from "../../../types/CliOutputTypes";
 import {
   FAILURE_KINDS,
+  FAILURE_SOURCES,
   CTRLYOKE_ENV_VARS,
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
@@ -1078,19 +1079,23 @@ export class CliExecutionRunner {
     } else if (result.failureKind === FAILURE_KINDS.HARNESS_ERROR) {
       this.deps.runtimeState.setFailureReason(
         this.deps.failureTracker.markHarnessError(
-          result.failureMessage ?? "Harness reported an error"
+          result.failureMessage ?? "Harness reported an error",
+          result.failureDetail,
+          result.failureSource
         )
       );
     } else if (result.failureKind === FAILURE_KINDS.TIMEOUT) {
       this.deps.runtimeState.setFailureReason(
         this.deps.failureTracker.markTimeout(
-          result.failureMessage ?? "Log monitoring timeout"
+          result.failureMessage ?? "Log monitoring timeout",
+          result.failureDetail
         )
       );
     } else if (result.failureKind === FAILURE_KINDS.UNKNOWN) {
       this.deps.runtimeState.setFailureReason(
         this.deps.failureTracker.markUnknownFailure(
-          result.failureMessage ?? "CLI execution failed"
+          result.failureMessage ?? "CLI execution failed",
+          result.failureSource
         )
       );
     }
@@ -1118,7 +1123,9 @@ export class CliExecutionRunner {
       ) {
         throw new CliTransportError(
           result.stderr,
-          FAILURE_KINDS.SESSION_REJECTED
+          FAILURE_KINDS.SESSION_REJECTED,
+          undefined,
+          FAILURE_SOURCES.HEADLESS_PARSE
         );
       }
 
@@ -1138,6 +1145,7 @@ export class CliExecutionRunner {
         stderr: result.stderr,
         exitCode: result.exitCode,
         terminationSignal: result.terminationSignal,
+        terminatedByManager: result.terminatedByManager,
         promptForSessionLog: session.promptForSessionLog,
         executionStartTime: session.executionStartTime,
         resolvedSessionId: session.resolvedSessionId,

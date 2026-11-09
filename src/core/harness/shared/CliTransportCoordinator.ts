@@ -10,6 +10,7 @@ import {
   TERMINAL_SESSION_STATUS,
   type TerminalEndReason,
   NODE_ERROR_CODES,
+  FAILURE_SOURCES,
 } from "../../../types/DashboardConstants";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import type {
@@ -233,7 +234,9 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       // was never launched, so fail it with a reason instead.
       throw new CliTransportError(
         "Embedded terminal is unavailable: this host never initialized the PTY process manager, so the interactive harness could not be started.",
-        FAILURE_KINDS.HARNESS_ERROR
+        FAILURE_KINDS.HARNESS_ERROR,
+        undefined,
+        FAILURE_SOURCES.SPAWN
       );
     }
     const postMessage = this.deps.postTerminalMessage ?? ptyPostMessage;
@@ -772,14 +775,16 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         throw new CliTransportError(
           `Prompt execution timed out after ${error.timeoutMs}ms`,
           FAILURE_KINDS.TIMEOUT,
-          { cause: error }
+          { cause: error },
+          FAILURE_SOURCES.TIMEOUT
         );
       }
       if (hasErrnoCode(error, NODE_ERROR_CODES.ENOENT)) {
         throw new CliTransportError(
           `Harness CLI could not be started: ${getErrorMessage(error)}`,
           FAILURE_KINDS.HARNESS_NOT_INSTALLED,
-          { cause: error }
+          { cause: error },
+          FAILURE_SOURCES.SPAWN
         );
       }
       throw error;

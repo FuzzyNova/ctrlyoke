@@ -6,9 +6,10 @@ import type {
 import {
   CLI_EVENT_TYPES,
   FAILURE_KINDS,
+  FAILURE_SOURCES,
   HEADLESS_SOURCE_MODES,
 } from "../../../types/DashboardConstants";
-import type { FailureKind } from "../../../types/CtrlYokeTypes";
+import type { FailureKind, FailureRecord } from "../../../types/CtrlYokeTypes";
 import { Log } from "../../../utils/Log";
 import { sanitizeTerminalOutput } from "../../../utils/TerminalOutputSanitizer";
 import { CliOutputFormatter } from "./CliOutputFormatter";
@@ -80,6 +81,8 @@ export interface CollectedHeadlessResponse {
   extractedSessionId?: string;
   failureKind?: FailureKind;
   failureMessage?: string;
+  failureSource?: FailureRecord["source"];
+  failureDetail?: FailureRecord["detail"];
 }
 
 export class CliResponseCollector {
@@ -215,6 +218,8 @@ export class CliResponseCollector {
       extractedSessionId,
       failureKind: failure?.kind,
       failureMessage: failure?.message,
+      failureSource: failure?.source,
+      failureDetail: failure?.detail,
     };
   }
 
@@ -262,21 +267,23 @@ export class CliResponseCollector {
       stderr: string;
       exitCode: number;
       terminationSignal?: NodeJS.Signals;
+      terminatedByManager?: boolean;
     },
     parsedOutput: UniversalCliOutput
-  ): { kind: FailureKind; message: string } | undefined {
+  ): FailureRecord | undefined {
     const stderr = sanitizeTerminalOutput(
       secretRedactionService.redactText(params.stderr)
     ).trim();
 
-    // A killed process never reported a reason of its own — the exit code is
-    // synthetic and stderr holds only whatever it happened to be narrating.
-    // Classifying this as a harness failure invites a retry of something that
-    // did not fail on its own terms.
-    if (params.terminationSignal) {
+    // A manager-killed process never reported a reason of its own — the exit
+    // code is synthetic and stderr holds only whatever it happened to be
+    // narrating. Cancellation stays distinct from a harness failure.
+    if (params.terminationSignal && params.terminatedByManager) {
       return {
         kind: FAILURE_KINDS.USER_CANCELLED,
         message: `Harness process was terminated (${params.terminationSignal})`,
+        source: FAILURE_SOURCES.SIGNAL,
+        detail: { signal: params.terminationSignal, exitCode: params.exitCode },
       };
     }
 
@@ -292,8 +299,25 @@ export class CliResponseCollector {
     // Some CLIs (notably Qwen stream-json input mode) report a rejected turn
     // in-band and still exit successfully. A parsed provider error is a
     // harness failure regardless of the process exit code.
-    if (parsedError && params.exitCode === 0) {
-      return { kind: FAILURE_KINDS.HARNESS_ERROR, message: parsedError };
+    if (parsedError) {
+      return {
+        kind: FAILURE_KINDS.HARNESS_ERROR,
+        message: parsedError,
+        source: FAILURE_SOURCES.HEADLESS_PARSE,
+        detail: {
+          exitCode: params.exitCode,
+          errorType: parsedOutput.metadata.errorType,
+        },
+      };
+    }
+
+    if (params.terminationSignal) {
+      return {
+        kind: FAILURE_KINDS.PROCESS_EXIT,
+        message: `Harness process was terminated (${params.terminationSignal})`,
+        source: FAILURE_SOURCES.SIGNAL,
+        detail: { signal: params.terminationSignal, exitCode: params.exitCode },
+      };
     }
 
     if (params.exitCode !== 0) {
@@ -307,6 +331,8 @@ export class CliResponseCollector {
           parsedError ||
           detail ||
           `Process exited with code ${params.exitCode}`,
+        source: FAILURE_SOURCES.PROCESS_EXIT,
+        detail: { exitCode: params.exitCode },
       };
     }
 
@@ -319,7 +345,11 @@ export class CliResponseCollector {
     }
 
     return this.looksLikeCliInvocationError(stderr)
-      ? { kind: FAILURE_KINDS.UNKNOWN, message: stderr }
+      ? {
+          kind: FAILURE_KINDS.UNKNOWN,
+          message: stderr,
+          source: FAILURE_SOURCES.HEADLESS_PARSE,
+        }
       : undefined;
   }
 

@@ -44,6 +44,8 @@ export class CliExecutionSession {
   private terminalReusePrepared = false;
   private failureKindValue?: FailureKind;
   private failureMessageValue?: string;
+  private failureSourceValue?: import("../../../types/CtrlYokeTypes").FailureRecord["source"];
+  private failureDetailValue?: import("../../../types/CtrlYokeTypes").FailureRecord["detail"];
 
   constructor(params: CliExecutionSessionParams) {
     this.prompt = params.prompt;
@@ -121,6 +123,8 @@ export class CliExecutionSession {
     this.cliResult = collected.cliResult;
     this.failureKindValue = collected.failureKind;
     this.failureMessageValue = collected.failureMessage;
+    this.failureSourceValue = collected.failureSource;
+    this.failureDetailValue = collected.failureDetail;
     if (collected.extractedSessionId) {
       this.extractedSessionIdValue = collected.extractedSessionId;
     }
@@ -190,6 +194,14 @@ export class CliExecutionSession {
 
   get failureMessage(): string | undefined {
     return this.failureMessageValue;
+  }
+
+  get failureSource() {
+    return this.failureSourceValue;
+  }
+
+  get failureDetail() {
+    return this.failureDetailValue;
   }
 
   toSnapshot(): CliExecutionSessionSnapshot {

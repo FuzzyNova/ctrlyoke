@@ -346,9 +346,25 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
         harness: HARNESS_IDS.ANTIGRAVITY_CLI,
         sessionId: this.extractSessionId(events) ?? undefined,
         model: this.resolvedModel || undefined,
+        ...this.extractSessionError(events),
         usage,
       },
     };
+  }
+
+  private extractSessionError(events: BaseCliEvent[]): { error?: string } {
+    for (const event of events as AntigravityLogEvent[]) {
+      const entry = event.transcriptEntry;
+      if (
+        entry?.source === ANTIGRAVITY_WIRE_VALUES.SYSTEM &&
+        entry.type === ANTIGRAVITY_ENTRY_TYPES.ERROR_MESSAGE &&
+        typeof entry.content === "string" &&
+        entry.content.trim()
+      ) {
+        return { error: entry.content.trim() };
+      }
+    }
+    return {};
   }
 
   isComplete(event: BaseCliEvent): boolean {

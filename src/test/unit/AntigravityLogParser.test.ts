@@ -8,6 +8,10 @@ import { AntigravityTranscriptReader } from "../../core/harness/antigravity/Anti
 import { AntigravityToolEventBuilder } from "../../core/harness/antigravity/AntigravityToolEventBuilder";
 import { ANTIGRAVITY_TOOL_NAMES } from "../../core/harness/antigravity/AntigravityProtocolConstants";
 import {
+  ANTIGRAVITY_ENTRY_TYPES,
+  ANTIGRAVITY_WIRE_VALUES,
+} from "../../core/harness/antigravity/AntigravityProtocolConstants";
+import {
   CLI_EVENT_TYPES,
   HARNESS_IDS,
   OPERATION_STATUS,
@@ -120,6 +124,32 @@ function terminalPlannerResponse(
 }
 
 suite("AntigravityLogParser", () => {
+  test("extracts session SYSTEM ERROR_MESSAGE as failure metadata and visible text", () => {
+    const fixturePath = path.resolve(
+      __dirname,
+      "../../../src/test/fixtures/harness-errors/antigravity/headless-system-error.jsonl"
+    );
+    const entry = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
+    entry.source = ANTIGRAVITY_WIRE_VALUES.SYSTEM;
+    entry.type = ANTIGRAVITY_ENTRY_TYPES.ERROR_MESSAGE;
+    const output = new AntigravityLogParser().extractResponse([
+      {
+        type: "transcript.error",
+        line: entry.content,
+        transcriptEntry: entry,
+        timestamp: Date.now(),
+      } as any,
+    ]);
+    assert.strictEqual(output.metadata.error, entry.content);
+    assert.ok(
+      output.events.some(
+        (event) =>
+          event.type === CLI_EVENT_TYPES.TEXT &&
+          (event.data as { text?: string }).text === entry.content
+      )
+    );
+  });
+
   suite("readNewLines", () => {
     test("parses session and completion markers from plain text logs", async () => {
       const parser = new AntigravityLogParser();

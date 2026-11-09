@@ -1,9 +1,12 @@
 import {
   FAILURE_KINDS,
+  FAILURE_SOURCES,
   INTERACTIVE_ABORT_KINDS,
   type FailureKind,
+  type FailureSource,
   type InteractiveAbortKind,
 } from "../../../types/DashboardConstants";
+import type { FailureRecord } from "../../../types/CtrlYokeTypes";
 
 export type InteractiveAbortState =
   | { kind: typeof INTERACTIVE_ABORT_KINDS.USER_CANCELLED }
@@ -25,6 +28,8 @@ export class CliFailureTracker {
   private lastFailureOutput?: string;
   private lastFailureKind?: FailureKind;
   private lastFailureMessage?: string;
+  private lastFailureSource?: FailureSource;
+  private lastFailureDetail?: FailureRecord["detail"];
 
   reset(): void {
     this.ptyExitCode = null;
@@ -32,6 +37,8 @@ export class CliFailureTracker {
     this.lastFailureOutput = undefined;
     this.lastFailureKind = undefined;
     this.lastFailureMessage = undefined;
+    this.lastFailureSource = undefined;
+    this.lastFailureDetail = undefined;
   }
 
   capturePtyExit(exitCode: number, reconnectBuffer: string[]): void {
@@ -75,24 +82,35 @@ export class CliFailureTracker {
     this.processExitTermination = exitCode;
     this.lastFailureKind = FAILURE_KINDS.PROCESS_EXIT;
     this.lastFailureMessage = reason;
+    this.lastFailureSource = FAILURE_SOURCES.PROCESS_EXIT;
+    this.lastFailureDetail = { exitCode };
     return reason;
   }
 
-  markHarnessError(message: string): string {
+  markHarnessError(
+    message: string,
+    detail?: FailureRecord["detail"],
+    source: FailureSource = FAILURE_SOURCES.HOOK
+  ): string {
     this.lastFailureKind = FAILURE_KINDS.HARNESS_ERROR;
     this.lastFailureMessage = message;
+    this.lastFailureSource = source;
+    this.lastFailureDetail = detail;
     return message;
   }
 
   markHarnessNotInstalled(message: string): string {
     this.lastFailureKind = FAILURE_KINDS.HARNESS_NOT_INSTALLED;
     this.lastFailureMessage = message;
+    this.lastFailureSource = FAILURE_SOURCES.SPAWN;
     return message;
   }
 
-  markTimeout(message: string): string {
+  markTimeout(message: string, detail?: FailureRecord["detail"]): string {
     this.lastFailureKind = FAILURE_KINDS.TIMEOUT;
     this.lastFailureMessage = message;
+    this.lastFailureSource = FAILURE_SOURCES.TIMEOUT;
+    this.lastFailureDetail = detail;
     return message;
   }
 
@@ -105,12 +123,17 @@ export class CliFailureTracker {
   markUserCancelled(message: string): string {
     this.lastFailureKind = FAILURE_KINDS.USER_CANCELLED;
     this.lastFailureMessage = message;
+    this.lastFailureSource = FAILURE_SOURCES.SIGNAL;
     return message;
   }
 
-  markUnknownFailure(message: string): string {
+  markUnknownFailure(
+    message: string,
+    source: FailureSource = FAILURE_SOURCES.HEADLESS_PARSE
+  ): string {
     this.lastFailureKind = FAILURE_KINDS.UNKNOWN;
     this.lastFailureMessage = message;
+    this.lastFailureSource = source;
     return message;
   }
 
@@ -136,6 +159,22 @@ export class CliFailureTracker {
 
   getLastFailureMessage(): string | undefined {
     return this.lastFailureMessage;
+  }
+
+  getLastFailureRecord(): FailureRecord | undefined {
+    if (
+      !this.lastFailureKind ||
+      !this.lastFailureMessage ||
+      !this.lastFailureSource
+    ) {
+      return undefined;
+    }
+    return {
+      kind: this.lastFailureKind,
+      message: this.lastFailureMessage,
+      source: this.lastFailureSource,
+      detail: this.lastFailureDetail,
+    };
   }
 
   private extractInteractiveOutputTail(chunks: string[]): string | undefined {

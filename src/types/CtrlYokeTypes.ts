@@ -20,6 +20,7 @@ import {
   type HookEvent,
   type McpTransport,
   type FailureKind,
+  type FailureSource,
   type AttemptCostConfidence,
   type AttemptCostNoteCode,
   type AttemptCostSource,
@@ -52,6 +53,7 @@ export type {
   HookEvent,
   McpTransport,
   FailureKind,
+  FailureSource,
   AttemptCostConfidence,
   AttemptCostNoteCode,
   AttemptCostSource,
@@ -61,6 +63,19 @@ export type {
 };
 import type { ToolPermissionMode } from "./ExecutionPropertyTypes";
 export type { ToolPermissionMode };
+
+/** Structured cause retained while a harness failure moves through the runtime. */
+export interface FailureRecord {
+  kind: FailureKind;
+  message: string;
+  source: FailureSource;
+  detail?: {
+    exitCode?: number;
+    signal?: NodeJS.Signals;
+    hookEvent?: string;
+    errorType?: string;
+  };
+}
 
 /**
  * Controls which prior prompt outputs are injected into the current prompt as context.
