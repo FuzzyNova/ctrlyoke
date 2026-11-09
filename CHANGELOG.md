@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Commit-message diffs now keep untracked file hunks separate and report accurate line counts and missing final newlines.
 - Workspace viewer Stage, Unstage and Discard now target literal file paths, so bracketed route names cannot affect other files.
 - `ctrlyoke run` now checks workflow variables and trust grants before creating
   a workflow lineage, so a refusal leaves no empty history entry.

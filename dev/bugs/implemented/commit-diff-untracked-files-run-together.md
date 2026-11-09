@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli, node repro against `out/`)
 - **Area:** `src/git/CommitMessageGenerator.ts` (`CommitMessageGenerator.getDiff`, untracked-file loop)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

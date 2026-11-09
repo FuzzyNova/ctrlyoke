@@ -439,15 +439,25 @@ export class CommitMessageGenerator {
         );
         const contentBuffer = Buffer.concat([sample, restBuffer]);
         const content = contentBuffer.toString("utf8");
+        const isTruncatedPrefix = contentBuffer.length < stat.size;
+        const endsWithNewline = content.endsWith("\n");
         const lines = content.split("\n");
+        if (endsWithNewline) {
+          lines.pop();
+        }
         const prefix =
           `${header}new file mode 100644\n` +
           `--- /dev/null\n` +
           `+++ b/${filePath}\n` +
           `@@ -0,0 +1,${lines.length} @@\n`;
         append(prefix);
-        append(lines.map((line) => `+${line}`).join("\n"));
-        if (contentBuffer.length < stat.size || usedBytes >= MAX_DIFF_BYTES) {
+        if (lines.length > 0) {
+          append(`${lines.map((line) => `+${line}`).join("\n")}\n`);
+        }
+        if (!isTruncatedPrefix && !endsWithNewline) {
+          append("\\ No newline at end of file\n");
+        }
+        if (isTruncatedPrefix || usedBytes >= MAX_DIFF_BYTES) {
           truncated = true;
           break;
         }
