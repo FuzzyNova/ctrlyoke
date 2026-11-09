@@ -30,6 +30,7 @@ const {
 import type { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
 import * as fs from "fs/promises";
 import * as fsSync from "fs";
+import { isRecord } from "./utils/ctrlyokeToolViews/shared";
 import * as path from "path";
 import type {
   PromptStep,
@@ -514,6 +515,49 @@ function executionModeWarnings(
     : [];
 }
 
+/** Whether `sessionId` is a number that is not a valid 1-based step reference. */
+function isInvalidSessionIdReference(sessionId: unknown): boolean {
+  return (
+    typeof sessionId === "number" &&
+    (!Number.isInteger(sessionId) || sessionId < 1)
+  );
+}
+
+/**
+ * Reject a numeric `sessionId` that is not an integer >= 1 in append_step or
+ * edit_step, before schema validation, so `0` and `1.5` get the same message.
+ * The workflow schema allows only such integers; anything else would persist a
+ * step reference session resolution cannot use.
+ */
+function assertMcpSessionIdReferences(name: string, args: unknown): void {
+  if (!isRecord(args)) return;
+  if (name === MCP_APPEND_STEP_TOOL_NAME && Array.isArray(args.steps)) {
+    for (const [itemIndex, item] of args.steps.entries()) {
+      const grouped = isRecord(item) && "parallel" in item;
+      const members = grouped ? item.parallel : [item];
+      if (!Array.isArray(members)) continue;
+      for (const [memberIndex, member] of members.entries()) {
+        if (!isRecord(member) || !isInvalidSessionIdReference(member.sessionId))
+          continue;
+        const stepName = grouped
+          ? `steps[${itemIndex}].parallel[${memberIndex}]`
+          : `steps[${itemIndex}]`;
+        throw new Error(
+          `${MCP_APPEND_STEP_TOOL_NAME}: ${stepName}.sessionId must be an integer >= 1.`
+        );
+      }
+    }
+  } else if (
+    name === MCP_EDIT_STEP_TOOL_NAME &&
+    isRecord(args.updates) &&
+    isInvalidSessionIdReference(args.updates.sessionId)
+  ) {
+    throw new Error(
+      `${MCP_EDIT_STEP_TOOL_NAME}: step ${String(args.index)} sessionId must be an integer >= 1.`
+    );
+  }
+}
+
 export class CtrlYokeMCPServer {
   private server: InstanceType<typeof Server>;
   private readonly promptFileParser = new PromptFileParser();
@@ -623,51 +667,7 @@ export class CtrlYokeMCPServer {
     ) {
       assertRunAcceptsMutation(name, callingContext);
     }
-    if (name === MCP_APPEND_STEP_TOOL_NAME && args && typeof args === "object") {
-      const steps = (args as McpAppendStepArguments).steps;
-      if (Array.isArray(steps)) {
-        for (const [itemIndex, item] of steps.entries()) {
-          const members =
-            item && typeof item === "object" && "parallel" in item
-              ? (item as { parallel?: unknown }).parallel
-              : [item];
-          if (!Array.isArray(members)) continue;
-          for (const [memberIndex, member] of members.entries()) {
-            const sessionId =
-              member && typeof member === "object"
-                ? (member as { sessionId?: unknown }).sessionId
-                : undefined;
-            if (
-              typeof sessionId === "number" &&
-              (!Number.isInteger(sessionId) || sessionId < 1)
-            ) {
-              const stepName =
-                item && typeof item === "object" && "parallel" in item
-                  ? `steps[${itemIndex}].parallel[${memberIndex}]`
-                  : `steps[${itemIndex}]`;
-              throw new Error(
-                `${MCP_APPEND_STEP_TOOL_NAME}: ${stepName}.sessionId must be an integer >= 1.`
-              );
-            }
-          }
-        }
-      }
-    } else if (
-      name === MCP_EDIT_STEP_TOOL_NAME &&
-      args &&
-      typeof args === "object"
-    ) {
-      const { index, updates } = args as McpEditStepArguments;
-      if (
-        updates &&
-        typeof updates.sessionId === "number" &&
-        (!Number.isInteger(updates.sessionId) || updates.sessionId < 1)
-      ) {
-        throw new Error(
-          `${MCP_EDIT_STEP_TOOL_NAME}: step ${index} sessionId must be an integer >= 1.`
-        );
-      }
-    }
+    assertMcpSessionIdReferences(name, args);
     const call = validateMcpToolCall(name, args);
     switch (call.name) {
       case MCP_WORKFLOW_STATUS_TOOL_NAME:
@@ -1390,23 +1390,6 @@ export class CtrlYokeMCPServer {
     const promptSteps = steps.flatMap((item) =>
       "parallel" in item ? item.parallel : [item]
     );
-    for (const [itemIndex, item] of steps.entries()) {
-      const members = "parallel" in item ? item.parallel : [item];
-      for (const [memberIndex, step] of members.entries()) {
-        if (
-          typeof step.sessionId === "number" &&
-          (!Number.isInteger(step.sessionId) || step.sessionId < 1)
-        ) {
-          const stepName =
-            "parallel" in item
-              ? `steps[${itemIndex}].parallel[${memberIndex}]`
-              : `steps[${itemIndex}]`;
-          throw new Error(
-            `${MCP_APPEND_STEP_TOOL_NAME}: ${stepName}.sessionId must be an integer >= 1.`
-          );
-        }
-      }
-    }
     if (
       promptSteps.some((step) =>
         step.prompt.startsWith(MCP_SCRIPT_STEP_PROMPT_MARKER)
@@ -1621,14 +1604,6 @@ export class CtrlYokeMCPServer {
   /** Handle edit_step for a zero-based pending step index. */
   private async handleStepEdit(args: McpEditStepArguments) {
     const { index, updates, clearProperties } = args;
-    if (
-      typeof updates.sessionId === "number" &&
-      (!Number.isInteger(updates.sessionId) || updates.sessionId < 1)
-    ) {
-      throw new Error(
-        `${MCP_EDIT_STEP_TOOL_NAME}: step ${index} sessionId must be an integer >= 1.`
-      );
-    }
     if (
       Object.prototype.hasOwnProperty.call(updates, "additionalArgs") ||
       clearProperties?.includes("additionalArgs")

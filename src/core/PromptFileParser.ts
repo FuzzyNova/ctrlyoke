@@ -729,11 +729,7 @@ export class PromptFileParser {
       0,
       propertyPointer.lastIndexOf("/")
     );
-    const validKeys = this.getValidKeysAtPointer(
-      original,
-      parentPointer,
-      true
-    );
+    const validKeys = this.getValidKeysAtPointer(original, parentPointer, true);
     const suggestion = PromptFileParser.nearestKey(
       propertyName,
       validKeys.filter((key) => key !== propertyName)
@@ -782,17 +778,12 @@ export class PromptFileParser {
     const visit = (schema: unknown): void => {
       if (!isObject(schema) || visited.has(schema)) return;
       visited.add(schema);
-      if (typeof schema.$ref === "string" && schema.$ref.startsWith("#/")) {
-        const refSegments = schema.$ref
-          .slice(2)
-          .split("/")
-          .map(PromptFileParser.unescapePointerSegment);
-        let referenced: any = this.promptSchema;
-        for (const segment of refSegments) referenced = referenced?.[segment];
-        visit(referenced);
-      }
+      const referenced = this.resolveLocalSchemaRef(schema.$ref);
+      if (referenced !== undefined) visit(referenced);
       if (isObject(schema.properties)) {
-        for (const [name, propertySchema] of Object.entries(schema.properties)) {
+        for (const [name, propertySchema] of Object.entries(
+          schema.properties
+        )) {
           const schemasForName = propertySchemas.get(name) ?? [];
           schemasForName.push(propertySchema);
           propertySchemas.set(name, schemasForName);
@@ -810,21 +801,10 @@ export class PromptFileParser {
       let current = propertySchema;
       while (isObject(current) && !visitedRefs.has(current)) {
         visitedRefs.add(current);
-        if (
-          isObject(current.not) &&
-          Object.keys(current.not).length === 0
-        ) {
+        if (isObject(current.not) && Object.keys(current.not).length === 0) {
           return true;
         }
-        if (typeof current.$ref !== "string" || !current.$ref.startsWith("#/")) {
-          return false;
-        }
-        const refSegments = current.$ref
-          .slice(2)
-          .split("/")
-          .map(PromptFileParser.unescapePointerSegment);
-        current = this.promptSchema;
-        for (const segment of refSegments) current = (current as any)?.[segment];
+        current = this.resolveLocalSchemaRef(current.$ref);
       }
       return false;
     };
@@ -835,9 +815,24 @@ export class PromptFileParser {
       .filter(
         ([name, propertySchemasForName]) =>
           !name.startsWith("_") &&
-          propertySchemasForName.some((propertySchema) => !isRemovedField(propertySchema))
+          propertySchemasForName.some(
+            (propertySchema) => !isRemovedField(propertySchema)
+          )
       )
       .map(([name]) => name);
+  }
+
+  /** The schema a local `#/...` `$ref` points at, or `undefined` for any other value. */
+  private resolveLocalSchemaRef(ref: unknown): unknown {
+    if (typeof ref !== "string" || !ref.startsWith("#/")) return undefined;
+    let referenced: any = this.promptSchema;
+    for (const segment of ref
+      .slice(2)
+      .split("/")
+      .map(PromptFileParser.unescapePointerSegment)) {
+      referenced = referenced?.[segment];
+    }
+    return referenced;
   }
 
   private static getAtPointer(value: unknown, pointer: string): unknown {

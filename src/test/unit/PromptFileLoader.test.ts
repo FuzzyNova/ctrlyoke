@@ -130,8 +130,14 @@ suite("PromptFileLoader Tests", () => {
         propertyPointer: string;
         message: string;
       }>;
-      assert.ok(warnings.find((warning) => warning.propertyPointer.endsWith("/retruns")));
-      assert.ok(warnings.find((warning) => warning.propertyPointer.endsWith("/qqqqqqqqqqqqqq")));
+      assert.ok(
+        warnings.find((warning) => warning.propertyPointer.endsWith("/retruns"))
+      );
+      assert.ok(
+        warnings.find((warning) =>
+          warning.propertyPointer.endsWith("/qqqqqqqqqqqqqq")
+        )
+      );
       assert.ok(
         warnings
           .find((warning) => warning.propertyPointer.endsWith("/retruns"))
@@ -139,7 +145,9 @@ suite("PromptFileLoader Tests", () => {
       );
       assert.ok(
         warnings
-          .find((warning) => warning.propertyPointer.endsWith("/qqqqqqqqqqqqqq"))
+          .find((warning) =>
+            warning.propertyPointer.endsWith("/qqqqqqqqqqqqqq")
+          )
           ?.message.includes("Did you mean") === false
       );
       assert.ok(

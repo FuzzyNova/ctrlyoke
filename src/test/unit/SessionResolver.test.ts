@@ -147,7 +147,10 @@ suite("SessionResolver Tests", () => {
         resumeSession: true,
       };
       assert.doesNotThrow(() => {
-        assert.strictEqual(SessionResolver.resolve(prompt, 1, [prompt]), undefined);
+        assert.strictEqual(
+          SessionResolver.resolve(prompt, 1, [prompt]),
+          undefined
+        );
       });
     });
 

@@ -856,11 +856,14 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       );
       assert.deepStrictEqual(released.released, ["docs"]);
     } finally {
-      if (priorWorkingFile === undefined) delete process.env.CTRLYOKE_WORKING_FILE;
+      if (priorWorkingFile === undefined)
+        delete process.env.CTRLYOKE_WORKING_FILE;
       else process.env.CTRLYOKE_WORKING_FILE = priorWorkingFile;
-      if (priorExecutionRoot === undefined) delete process.env.CTRLYOKE_EXECUTION_ROOT;
+      if (priorExecutionRoot === undefined)
+        delete process.env.CTRLYOKE_EXECUTION_ROOT;
       else process.env.CTRLYOKE_EXECUTION_ROOT = priorExecutionRoot;
-      if (priorParticipantLabel === undefined) delete process.env.CTRLYOKE_PARTICIPANT_LABEL;
+      if (priorParticipantLabel === undefined)
+        delete process.env.CTRLYOKE_PARTICIPANT_LABEL;
       else process.env.CTRLYOKE_PARTICIPANT_LABEL = priorParticipantLabel;
     }
   });
