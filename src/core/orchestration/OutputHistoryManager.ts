@@ -1574,12 +1574,15 @@ export class OutputHistoryManager {
         if (step.type === STEP_TYPES.SCRIPT) {
           continue;
         }
-        const resolved = resolveStepHarnessAndModel(step, workingFile, {
-          harness: defaultHarness,
-          modelForHarness: (harness) =>
-            ConfigurationUtils.getModelForHarness(harness) || undefined,
-        });
-        const { harness, model } = resolved;
+        const { harness, model } = resolveStepHarnessAndModel(
+          step,
+          workingFile,
+          {
+            harness: defaultHarness,
+            modelForHarness: (harness) =>
+              ConfigurationUtils.getModelForHarness(harness) || undefined,
+          }
+        );
         if (harness) {
           harnesses.set(harness, (harnesses.get(harness) ?? 0) + 1);
         }

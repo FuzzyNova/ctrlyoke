@@ -238,7 +238,6 @@ export class AntigravityCliProvider implements ICliProvider {
       HARNESS_IDS.ANTIGRAVITY_CLI
     ),
   });
-  /** Snapshot files created by every prompt in this workflow. */
   /** Permission settings stay alive until their agy process or PTY exits. */
   private readonly permissionSettingsPaths = new Set<string>();
   /** Sidecar for the current prompt, retained for final snapshot consumers. */
@@ -452,19 +451,13 @@ export class AntigravityCliProvider implements ICliProvider {
   startExecutionSidecar(
     deps: CliExecutionSidecarDeps
   ): AntigravityStatuslineSidecar | undefined {
-    if (
-      !this.statuslineRegistration.enabled ||
-      !this.statuslineRegistration.token ||
-      !this.statuslineRegistration.directory
-    ) {
+    const snapshotPath = this.statuslineRegistration.snapshotPath;
+    if (!snapshotPath) {
       return undefined;
     }
 
     this.statusLineSidecar = new AntigravityStatuslineSidecar({
-      snapshotPath: path.join(
-        this.statuslineRegistration.directory,
-        `agy-statusline-${this.statuslineRegistration.token}.json`
-      ),
+      snapshotPath,
       model: deps.model,
       parser: this.logParser,
       onContextWindowUpdate: deps.onContextWindowUpdate,

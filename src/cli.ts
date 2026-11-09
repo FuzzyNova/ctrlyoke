@@ -758,12 +758,11 @@ function getCliPromptExecutionDetails(
   const workflow = instance.promptQueue.getWorkflowFile();
   const step = instance.promptQueue.getState().steps[stepIndex];
   const promptStep = step && !isScriptStep(step) ? step : undefined;
-  const resolved = resolveStepHarnessAndModel(promptStep ?? {}, workflow, {
+  return resolveStepHarnessAndModel(promptStep ?? {}, workflow, {
     ...defaults,
     modelForHarness: (harness) =>
       ConfigurationUtils.getModelForHarness(harness) || undefined,
   });
-  return resolved;
 }
 
 function getCliOutputStepName(

@@ -52,6 +52,18 @@ export class ProviderStatuslineRegistration {
     return this.enabledForPrompt;
   }
 
+  /** Snapshot file for the current prompt, once its registration is enabled. */
+  get snapshotPath(): string | undefined {
+    if (
+      !this.enabledForPrompt ||
+      !this.currentToken ||
+      !this.currentDirectory
+    ) {
+      return undefined;
+    }
+    return this.snapshotPathIn(this.currentDirectory);
+  }
+
   get snapshotPaths(): ReadonlySet<string> {
     return this.mutableSnapshotPaths;
   }
@@ -87,11 +99,7 @@ export class ProviderStatuslineRegistration {
       PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.TEMP_DIR
     );
-    const snapshotPath = path.join(
-      snapshotDirectory,
-      `${this.options.snapshotPrefix}-statusline-${this.currentToken}.json`
-    );
-    this.mutableSnapshotPaths.add(snapshotPath);
+    this.mutableSnapshotPaths.add(this.snapshotPathIn(snapshotDirectory));
 
     try {
       const result = await manager.install(workspaceRoot, command);
@@ -131,6 +139,13 @@ export class ProviderStatuslineRegistration {
         ? { CTRLYOKE_STATUSLINE_WORKSPACE_ROOT: this.currentWorkspaceRoot }
         : {}),
     };
+  }
+
+  private snapshotPathIn(directory: string): string {
+    return path.join(
+      directory,
+      `${this.options.snapshotPrefix}-statusline-${this.currentToken}.json`
+    );
   }
 
   private setNoOpResult(): StatuslineInstallResult {

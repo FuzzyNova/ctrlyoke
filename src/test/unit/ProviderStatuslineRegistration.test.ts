@@ -76,6 +76,7 @@ suite("ProviderStatuslineRegistration", () => {
     const snapshotPath = path.join(directory, "test-statusline-token.json");
     assert.strictEqual(registration.enabled, true);
     assert.deepStrictEqual([...registration.snapshotPaths], [snapshotPath]);
+    assert.strictEqual(registration.snapshotPath, snapshotPath);
     assert.deepStrictEqual(registration.buildSpawnEnv(), {
       CTRLYOKE_TEST_STATUSLINE_TOKEN: "token",
       CTRLYOKE_TEST_STATUSLINE_DIR: directory,
@@ -105,6 +106,7 @@ suite("ProviderStatuslineRegistration", () => {
       PERSISTENT_VALUE_INSTALL_RESULT_KINDS.DECLINED
     );
     assert.strictEqual(registration.enabled, false);
+    assert.strictEqual(registration.snapshotPath, undefined);
     assert.deepStrictEqual(registration.buildSpawnEnv(), {});
   });
 
@@ -132,6 +134,7 @@ suite("ProviderStatuslineRegistration", () => {
     assert.strictEqual(registration.token, "second");
     assert.strictEqual(registration.directory, undefined);
     assert.strictEqual(registration.workspaceRoot, undefined);
+    assert.strictEqual(registration.snapshotPath, undefined);
     assert.strictEqual(registration.enabled, false);
     assert.deepStrictEqual(registration.buildSpawnEnv(), {});
     assert.deepStrictEqual(registration.snapshotPaths, snapshotPaths);

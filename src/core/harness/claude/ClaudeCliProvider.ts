@@ -467,18 +467,12 @@ export class ClaudeCliProvider implements ICliProvider {
   startExecutionSidecar(
     deps: CliExecutionSidecarDeps
   ): CliExecutionSidecar | undefined {
-    if (
-      !this.statuslineRegistration.enabled ||
-      !this.statuslineRegistration.token ||
-      !this.statuslineRegistration.directory
-    ) {
+    const snapshotPath = this.statuslineRegistration.snapshotPath;
+    if (!snapshotPath) {
       return undefined;
     }
     this.statusLineSidecar = new ClaudeStatuslineSidecar({
-      snapshotPath: path.join(
-        this.statuslineRegistration.directory,
-        `claude-statusline-${this.statuslineRegistration.token}.json`
-      ),
+      snapshotPath,
       onProviderUsageUpdate: deps.onProviderUsageUpdate,
     });
     return this.statusLineSidecar;
