@@ -87,7 +87,7 @@ import {
   PERMISSION_MODES,
   SANDBOX_UI_LABELS,
   resolveSandboxRequest,
-  sandboxModeApplies,
+  workflowSandboxModeVisible,
   sandboxModeSelectOptions,
   sandboxModeSelectionFromValue,
   sandboxModeValueFromSelection,
@@ -546,8 +546,12 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const hookDiagnostics = diagnosticsForHookEvents(compatibility.diagnostics);
   const mcpDiagnostics = diagnosticsForMcpFiltering(compatibility.diagnostics);
   const sandboxSupport = sandboxSupportDiagnostic(compatibility.diagnostics);
-  const sandboxModeVisible = sandboxModeApplies(
-    resolveSandboxRequest(workflowProperties.sandbox, globalSettings.sandbox)
+  const steps = useWorkflowStore((s) => s.steps);
+  const finalStep = useWorkflowStore((s) => s.finalStep);
+  const sandboxModeVisible = workflowSandboxModeVisible(
+    resolveSandboxRequest(workflowProperties.sandbox, globalSettings.sandbox),
+    workflowProperties.sandboxMode,
+    [...steps, ...(finalStep ? [finalStep] : [])]
   );
   const allowedDiagnostics = diagnosticsForPermissionField(
     compatibility.diagnostics,
@@ -603,8 +607,6 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
   // Preview of what auto-resume would do for a new step appended to the
   // queue, shown when the Session ID field is blank.
-  const steps = useWorkflowStore((s) => s.steps);
-  const finalStep = useWorkflowStore((s) => s.finalStep);
   const inlineSecretNames = useMemo(
     () => [
       ...new Set(

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli, code review of 2024732ca)
 - **Area:** `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx` (`sandboxModeVisible`), `src/types/DashboardConstants.ts` (`sandboxModeApplies`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

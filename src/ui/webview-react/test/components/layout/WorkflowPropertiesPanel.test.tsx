@@ -1081,6 +1081,29 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     ).toBeTruthy();
     unmount();
 
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "workflow.ctrlyoke.yaml",
+      workflowName: "Sandboxed step",
+      steps: [{ prompt: "build", sandbox: true }],
+    });
+    render(<WorkflowPropertiesPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
+    expect(mode()).toBeInTheDocument();
+    cleanup();
+
+    useWorkflowStore.getState().resetWorkflow();
+    useSettingsStore
+      .getState()
+      .updateWorkflowProperty("sandboxMode", "read-only");
+    render(<WorkflowPropertiesPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
+    expect(mode()).toBeInTheDocument();
+    cleanup();
+
+    useSettingsStore
+      .getState()
+      .updateWorkflowProperty("sandboxMode", undefined);
+
     useSettingsStore.setState((state) => ({
       globalSettings: { ...state.globalSettings, sandbox: true },
     }));

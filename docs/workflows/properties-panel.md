@@ -130,7 +130,8 @@ Containment comes first, then approval:
   the control when the harness can't sandbox. Steps can override the workflow
   value.
 - **Sandbox mode** — how strict On is: **Workspace write** or **Read-only**.
-  It appears only while Sandbox resolves to On, because Off and None ignore it.
+  It appears when Sandbox resolves to On, a sandboxed step inherits its value,
+  or the workflow has an authored mode.
   See [Sandboxing](/workflows/permissions#sandboxing).
 - **Trusted External Roots** — directories outside the workspace this workflow
   may use. **Inherit** keeps the roots from your settings. See

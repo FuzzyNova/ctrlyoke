@@ -2237,6 +2237,29 @@ export function sandboxModeApplies(
   return resolved === true;
 }
 
+/** Whether the workflow Sandbox mode control governs any currently authored value. */
+export function workflowSandboxModeVisible(
+  resolvedWorkflowSandbox: SandboxRequest | undefined,
+  workflowSandboxMode: unknown,
+  steps: readonly {
+    type?: string;
+    prompt?: string;
+    sandbox?: SandboxRequest;
+    sandboxMode?: unknown;
+  }[]
+): boolean {
+  return (
+    sandboxModeApplies(resolvedWorkflowSandbox) ||
+    workflowSandboxMode !== undefined ||
+    steps.some(
+      (step) =>
+        typeof step.prompt === "string" &&
+        step.sandbox === true &&
+        step.sandboxMode === undefined
+    )
+  );
+}
+
 /** Whether a value is an authored sandbox request (`true`, `false` or `null`). */
 export function isSandboxRequest(value: unknown): value is SandboxRequest {
   return value === null || typeof value === "boolean";
