@@ -386,7 +386,9 @@ registerHistoryCommands(program, {
   trash: {
     list: (options) =>
       handleHistoryCommand(
-        listTrashCommand(options, createHistoryInspectionCommandIo())
+        listTrashCommand(options, createHistoryInspectionCommandIo()),
+        options.json === true,
+        "history trash list"
       ),
     restore: (entryId, options) =>
       handleHistoryCommand(
