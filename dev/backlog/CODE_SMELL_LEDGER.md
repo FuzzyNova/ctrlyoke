@@ -93,6 +93,7 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
   and dashboard callers; kept the screen-reader "to" wording unchanged.
   Removed dead, drifted execution-state helpers and their tests from the dashboard
   status utilities; retained the shared step icon maps and live control logic.
+  Replaced `WebPushService.atomicWriteJson`'s collision-prone temp write with `writeFileAtomic`, preserving JSON formatting and private file modes.
 
 ## Deferred
 

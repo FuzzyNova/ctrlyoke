@@ -5,6 +5,7 @@ import { createHash } from "crypto";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { ctrlyokeStateHome } from "../utils/ProjectStatePaths";
 import { withFileLock } from "../utils/FileLockUtils";
+import { writeFileAtomic } from "../utils/AtomicFileUtils";
 import { Log } from "../utils/Log";
 import { secretRedactionService } from "../utils/SecretRedactionService";
 import { stripLeadingBom } from "../utils/TextUtils";
@@ -618,19 +619,10 @@ async function atomicWriteJson(
   value: unknown
 ): Promise<void> {
   await ensurePrivateDirectory(path.dirname(targetPath));
-  const tempPath = `${targetPath}.${process.pid}.${Date.now()}.tmp`;
-  try {
-    await fsp.writeFile(tempPath, JSON.stringify(value, null, 2), {
-      encoding: "utf8",
-      mode: PRIVATE_FILE_MODE,
-    });
-    await fsp.chmod(tempPath, PRIVATE_FILE_MODE);
-    await fsp.rename(tempPath, targetPath);
-    await fsp.chmod(targetPath, PRIVATE_FILE_MODE);
-  } catch (error) {
-    await fsp.unlink(tempPath).catch(() => undefined);
-    throw error;
-  }
+  await writeFileAtomic(targetPath, JSON.stringify(value, null, 2), {
+    mode: PRIVATE_FILE_MODE,
+  });
+  await fsp.chmod(targetPath, PRIVATE_FILE_MODE);
 }
 
 function getStatusCode(error: unknown): number | undefined {
