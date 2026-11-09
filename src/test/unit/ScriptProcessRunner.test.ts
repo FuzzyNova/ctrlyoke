@@ -119,6 +119,21 @@ suite("ScriptProcessRunner", () => {
     );
   });
 
+  test("keeps stderr separate from process errors", async () => {
+    const runner = new ScriptProcessRunner(process.cwd());
+    const nodeExecutable = process.platform === "win32" ? "node.exe" : "node";
+    const result = await runner.run({
+      cwd: process.cwd(),
+      timeout: 1000,
+      argv: [nodeExecutable, "-e", "console.error('warning')"],
+    });
+
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.stderr, "warning");
+    assert.strictEqual(result.error, undefined);
+    runner.dispose();
+  });
+
   test("isolates timeout and cancellation state between runners", async () => {
     const root = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-script-runner-")

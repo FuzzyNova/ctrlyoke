@@ -19,13 +19,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Claude: a failed interactive turn (`StopFailure`) now shows the provider's error text instead of an error category such as `unknown`.
 - A missing command or externally killed script now counts as "could not run" and follows `errorBehavior`; an errored script step with `onError: continue` remains visible as failed while the workflow continues. The CLI now folds the error action into the script verdict instead of printing a second error line.
 - A decision hook that cannot start, times out, is killed, or exceeds its output limit now records a visible error and falls back to the harness's normal permission prompt instead of silently allowing; partial output is discarded.
+- Workspace settings approval prompts now show the complete value, including commands, arguments and environment variables.
 - A shell opened from a workflow's **Terminal** tab now starts in the worktree that workflow runs in, the same folder its steps and scripts use, so you can resolve a merge or check `git status` there without changing directory. Workflows without a worktree still open shells in the workspace folder.
 - The output copy commands now say what they copy. In the output pane's right-click menu, **Copy All** is now **Copy All Responses**, **Copy Step Output** is **Copy Step Response**, and **Copy Full Output** is **Copy Step Transcript**. In the step menu, **Copy Output** is now **Copy Response** and **Copy Full Output** is **Copy Transcript**. The **Copy output** button at the end of each step is now **Copy response**. On a script step, which has no assistant response, the same commands read **Copy Output**, **Copy Step Output** and **Copy output**. Hover any of them to see what it includes.
 - **Export Output** has a **Copy to Clipboard** button that copies the same markdown, with the options you chose, instead of saving it to a file.
-- The **Permissions** tab of the workflow and step properties is reordered: **Sandbox**, **Sandbox mode**, **Trusted External Roots** and **Secrets** come first, then **Tool Permission Mode** directly above the **Allowed Tools** and **Denied Tools** lists it controls. **Sandbox mode** now appears only while the sandbox resolves to On, since Off and None ignore it. Settings → Workflow Defaults → Permissions still always shows it.
+- The **Permissions** tab of the workflow and step properties is reordered: **Sandbox**, **Sandbox mode**, **Trusted External Roots** and **Secrets** come first, then **Tool Permission Mode** directly above the **Allowed Tools** and **Denied Tools** lists it controls. Workflow **Sandbox mode** stays visible when sandboxed steps inherit it or the workflow has an authored mode. Settings → Workflow Defaults → Permissions still always shows it.
 
 ### Fixed
 
+- Screen readers now announce when a step ends without starting an AI turn.
+- External-roots trust prompts now display workspace-supplied control and directional characters as visible escapes.
+- Workspace language server approval prompts now show the full command, environment and executable settings covered by approval.
+- CLI trust prompts now show workspace-supplied control and directional characters as visible escapes.
+- Commit-message diffs now keep untracked file hunks separate and report accurate line counts and missing final newlines.
+- Workspace viewer Stage, Unstage and Discard now target literal file paths, so bracketed route names cannot affect other files.
+- `ctrlyoke run` now checks workflow variables and trust grants before creating
+  a workflow lineage, so a refusal leaves no empty history entry.
+- Script verdicts now show the effective expected and actual values for valueless comparisons and exit-code fallbacks.
+- Unknown-property suggestions now use keys valid for the affected step kind.
+- `ctrlyoke history steps` now excludes idle time between retries from
+  final-step pass elapsed time.
+- Importing a history-only run bundle now flattens authored parallel groups before matching timeline attempts to steps, keeping imported step order, runtime state and history addressing aligned.
+- Importing a history-only run bundle now restores per-step completion and attempt timestamps from its timeline.
+- `ctrlyoke step edit --prompt` and MCP `edit_step` now reject prompt updates on script steps instead of silently converting them to prompt steps.
+- Headless slash commands with arguments are now passed intact instead of having their arguments moved into a prompt file.
+- `ctrlyoke run` no longer reports streamed script output as truncated just because the script also wrote to stderr.
+- Editing or enabling the failed queue step before continuing no longer lets it be moved, removed or displaced by an inserted step, so its recorded history stays attached to it.
+- Exporting a pending run without a Git repository or first commit now creates a view-only bundle instead of failing.
+- Script stderr no longer appears as a verdict error; failed worktree setup still includes its stderr.
+- `ctrlyoke run` now prints script and condition stdout and stderr as the scripts run.
+- Copy Metadata now resolves Sandbox None through workflow inheritance correctly and labels it as None rather than disabled.
+- Importing a run bundle now preserves its original completion time and active duration without adding a duplicate terminal event.
+- `ctrlyoke rerun`, `continue` and `append` headers now identify the workflow and run being addressed.
+- `ctrlyoke run` now stops before dispatching a step when interrupted during startup.
+- `ctrlyoke run` now exits with code 5 and writes its final result when interrupted by Ctrl+C or SIGTERM.
+- Resuming or continuing an errored run now re-runs the terminal failed step before continuing with later steps.
 - **Copy All Responses** (formerly **Copy All**) now copies each step's prompt. Before, the section labeled "Prompt" held the harness command line ctrlyoke ran, not the prompt. Each section is also headed with the step's name when it has one.
 - Copying a script step's output from the output pane or the step menu works again. Before, the copy command was disabled and the copy button at the end of the step never appeared, and **Copy All Responses** included the script's command but not its output.
 - Saving a step or the final step from the dashboard editor no longer removes its end condition. Before, any end condition that compared output with an operator, or simply passed on exit code 0, was dropped on save, so it never ran.

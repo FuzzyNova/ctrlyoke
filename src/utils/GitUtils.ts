@@ -16,6 +16,11 @@ import { getErrorMessage, hasErrnoCode } from "./ErrorUtils";
 
 export const GIT_DIFF_NO_EXT_DIFF_OPTION = "--no-ext-diff";
 
+/** Return a Git pathspec that addresses exactly the supplied path. */
+export function literalGitPathspec(filePath: string): string {
+  return `:(literal)${filePath}`;
+}
+
 const GIT_TIMEOUT_MS = 10_000;
 const GIT_MUTATION_TIMEOUT_MS = 5 * 60_000;
 const GIT_MAX_BUFFER = 50 * 1024 * 1024;
@@ -629,7 +634,7 @@ export async function getFileHistoryCommits(
   if (ref && ref.trim()) {
     args.push("--end-of-options", ref.trim());
   }
-  args.push("--", gitPath);
+  args.push("--", literalGitPathspec(gitPath));
 
   const { stdout } = await execFileAsync("git", args);
   return parseFileHistoryCommitOutput(stdout);
@@ -667,7 +672,7 @@ export function createFileHistoryCommitWalk(
   ];
   if (fullRefNames) args.push("--decorate=full");
   if (ref.trim()) args.push("--end-of-options", ref.trim());
-  args.push("--", gitPath);
+  args.push("--", literalGitPathspec(gitPath));
   gitCommandObserverForTests?.("git", args);
   const child = (
     fileHistorySpawnForTests ??
@@ -794,7 +799,7 @@ export async function getFileHistoryCommitsBounded(
   if (skip > 0) args.push(`--skip=${skip}`);
   args.push("-n", String(limit));
   if (ref.trim()) args.push("--end-of-options", ref.trim());
-  args.push("--", gitPath);
+  args.push("--", literalGitPathspec(gitPath));
   gitCommandObserverForTests?.("git", args);
 
   const chunks: Buffer[] = [];

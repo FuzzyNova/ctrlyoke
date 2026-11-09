@@ -87,6 +87,58 @@ suite("PromptFileParser Tests", () => {
     });
   });
 
+  suite("step-kind-specific unknown property suggestions", () => {
+    function warningFor(step: Record<string, unknown>, property: string) {
+      const warnings = parser.getSchemaWarnings({ steps: [step] });
+      return warnings.find((warning) =>
+        warning.propertyPointer.endsWith(`/${property}`)
+      );
+    }
+
+    test("does not suggest prompt-only keys for script steps", () => {
+      const harnessTypo = warningFor(
+        { type: "script", script: "echo hi", harnes: "claude-cli" },
+        "harnes"
+      );
+      const conditionTypo = warningFor(
+        {
+          type: "script",
+          script: "echo hi",
+          preCondition: { script: "exit 0" },
+        },
+        "preCondition"
+      );
+
+      assert.ok(harnessTypo);
+      assert.ok(!harnessTypo.message.includes("Did you mean 'harness'?"));
+      assert.ok(conditionTypo);
+      assert.ok(
+        !conditionTypo.message.includes("Did you mean 'endCondition'?")
+      );
+    });
+
+    test("does not suggest script-only keys for prompt steps", () => {
+      const warning = warningFor({ prompt: "hello", shel: "bash" }, "shel");
+
+      assert.ok(warning);
+      assert.ok(!warning.message.includes("Did you mean 'shell'?"));
+    });
+
+    test("suggests keys valid for each step kind", () => {
+      const promptTypo = warningFor(
+        { prompt: "hello", harnes: "claude-cli" },
+        "harnes"
+      );
+      const scriptTypo = warningFor(
+        { type: "script", script: "echo hi", shel: "bash" },
+        "shel"
+      );
+
+      assert.ok(promptTypo?.message.includes("Did you mean 'harness'?"));
+      assert.ok(scriptTypo?.message.includes("Did you mean 'shell'?"));
+    });
+  });
+
   suite("parsePromptFile - JSON Format", () => {
     test("preserves a script step shell override", async () => {
       const tempDir = await fs.mkdtemp(

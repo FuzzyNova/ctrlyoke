@@ -77,7 +77,9 @@ import {
   CliTerminalFormatter,
   type CliOutputTarget,
 } from "./cli/CliTerminalFormatter";
+import { formatCliRunHeaderLabel } from "./cli/CliRunHeader";
 import {
+  CLI_INTERRUPTED_EXIT_CODE,
   CLI_USAGE_EXIT_CODE,
   CliUsageError,
   getExitCode as getTypedExitCode,
@@ -1141,7 +1143,17 @@ async function runCommand(
       console.log(chalk.dim("━".repeat(52)));
       console.log();
       console.log(
-        `Running: ${chalk.cyan(resolvedFile ? path.basename(resolvedFile) : "<inline prompt>")}`
+        `Running: ${chalk.cyan(
+          formatCliRunHeaderLabel({
+            addressed: operation.kind !== CLI_RUN_OPERATION_KINDS.RUN,
+            workflowName: instance.promptQueue.getWorkflowFile().name,
+            workflowKey: instance.promptQueue.getState().workflowKey,
+            runRef: instance.promptQueue.getState().runRef,
+            resolvedFile,
+            inlinePrompt: Boolean(options.prompt),
+            fileBasename: path.basename,
+          })
+        )}`
       );
       console.log(
         `Harness: ${chalk.yellow(runHarness)}${runModel ? chalk.dim(" (" + runModel + ")") : ""}`
@@ -1351,7 +1363,8 @@ async function runCommand(
           toCliOutputTarget(
             data.target,
             getCliOutputStepName(instance, data.target)
-          )
+          ),
+          data.output.scriptOutput
         );
       })
     );
@@ -1428,6 +1441,7 @@ async function runCommand(
 
   // shutdown() requests a stop and waits for the execution to settle, which
   // guarantees the runner lock has been released before exit.
+  let interrupted = false;
   installTwoStageShutdown({
     signals: process,
     signalNames: [PROCESS_SIGNALS.INTERRUPT, PROCESS_SIGNALS.TERMINATE],
@@ -1457,27 +1471,58 @@ async function runCommand(
         console.log(chalk.yellow(message));
       }
     },
-    exitCodeForSignal: () => 5,
-    successExitCode: 5,
-    timeoutExitCode: 5,
+    exitCodeForSignal: () => CLI_INTERRUPTED_EXIT_CODE,
+    successExitCode: CLI_INTERRUPTED_EXIT_CODE,
+    timeoutExitCode: CLI_INTERRUPTED_EXIT_CODE,
+    exitOnSuccess: false,
+    onShutdownStarted: () => {
+      interrupted = true;
+    },
   });
 
   try {
     if (operation.kind === CLI_RUN_OPERATION_KINDS.RUN) {
+      // Run file-based pre-dispatch checks before loadPromptFile creates a
+      // persisted draft lineage. Keep the checks in the same order as the
+      // normal run path; loading below still owns defaults and working-file
+      // creation once all refusals have passed.
+      let preflightWorkflow:
+        Awaited<ReturnType<PromptFileParser["parsePromptFile"]>> | undefined;
+      if (!options.prompt && resolvedFile) {
+        const preflightParser = new PromptFileParser(
+          platform,
+          userFeedbackSink
+        );
+        preflightWorkflow = await preflightParser.parsePromptFile(resolvedFile);
+        if (preflightWorkflow) {
+          await exitUnlessTrustDecided(
+            workflowExternalRootsTrustRequest(
+              preflightWorkflow,
+              workingDir,
+              resolvedFile
+            )
+          );
+          mergeCliVarsIntoWorkflow(preflightWorkflow, config.vars);
+          await exitUnlessTrustDecided(
+            secretGrantsTrustRequest(
+              preflightWorkflow,
+              workingDir,
+              resolvedFile
+            )
+          );
+        }
+      }
+
       if (options.prompt) {
         instance.loadPromptString(options.prompt);
       } else {
-        const loaded = await instance.loadPromptFile(resolvedFile!);
+        const loaded = await instance.loadPromptFile(
+          resolvedFile!,
+          preflightWorkflow
+        );
         if (!loaded) {
           throw new Error(`Failed to load workflow file: ${resolvedFile}`);
         }
-        await exitUnlessTrustDecided(
-          workflowExternalRootsTrustRequest(
-            instance.promptQueue.getWorkflowFile(),
-            workingDir,
-            resolvedFile!
-          )
-        );
       }
 
       const overrides = buildCliPropertyOverrides(options, harness);
@@ -1510,36 +1555,41 @@ async function runCommand(
         await instance.promptQueue.updateWorkingFile(true);
       }
 
-      await exitUnlessTrustDecided(
-        secretGrantsTrustRequest(
-          instance.promptQueue.getWorkflowFile(),
-          workingDir,
-          resolvedFile
-        )
-      );
-
-      await instance.executeLoadedPromptFile();
+      if (interrupted) {
+        await instance.stop();
+      } else {
+        await instance.executeLoadedPromptFile();
+      }
     } else {
-      await executeAddressedCliOperation(
-        operation,
-        options,
-        workingDir,
-        platform,
-        instance,
-        hostCanProvidePty,
-        userFeedbackSink,
-        printRunHeader
-      );
+      if (interrupted) {
+        await instance.stop();
+      } else {
+        await executeAddressedCliOperation(
+          operation,
+          options,
+          workingDir,
+          platform,
+          instance,
+          hostCanProvidePty,
+          userFeedbackSink,
+          printRunHeader
+        );
+      }
     }
 
     releaseLiveOutputState();
 
     const state = instance.promptQueue.getState();
     const schemaRefusal = runStateRefusals.first();
-    const exitCode = applyRunStateRefusal(
+    let exitCode = applyRunStateRefusal(
       getExitCode(state, instance.promptQueue.getFinalStepRuntime()),
       schemaRefusal
     );
+    // Once the CLI has accepted an interrupt, completion belongs to the
+    // interrupted-run path even when no run identity or terminal state exists.
+    if (interrupted) {
+      exitCode = CLI_INTERRUPTED_EXIT_CODE;
+    }
     const completed = exitCode === 0;
 
     if (options.json) {

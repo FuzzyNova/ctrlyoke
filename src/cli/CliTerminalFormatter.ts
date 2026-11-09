@@ -45,7 +45,6 @@ import {
   type HarnessId,
 } from "../types/DashboardConstants";
 import {
-  DEFAULT_SCRIPT_VERDICT_EXPECTED_TEXT,
   type WorkflowStopReason,
   type ScriptVerdict,
 } from "../types/CtrlYokeTypes";
@@ -53,6 +52,7 @@ import type { ScriptRuntimeOutput } from "../types/CtrlYokeTypes";
 import type { CliOutput, TokenStats } from "../types/WebviewMessageTypes";
 import { formatVerdictSummary } from "../core/orchestration/ScriptExecutionReporter";
 import { formatComparison } from "../utils/ScriptComparison";
+import { resolveVerdictDisplay } from "../utils/ScriptComparison";
 import type {
   PromptAttemptStats,
   PromptStartData,
@@ -895,9 +895,27 @@ export class CliTerminalFormatter {
           output.cliCommandSentToRunningTerminal
         );
       }
+      const chunk = output.scriptOutput?.stdout ?? "";
+      if (chunk) {
+        if (!state) {
+          state = {
+            shownChars: 0,
+            shownLines: 0,
+            totalChars: 0,
+            totalLines: 0,
+            endsWithNewline: true,
+          };
+          CliTerminalFormatter._scriptStreaming.set(key, state);
+          console.log(`${border} ${chalk.dim(`${sourceLabel} output:`)}`);
+        }
+        CliTerminalFormatter.writeBoundedScriptChunk(chunk, state);
+      }
       return;
     }
 
+    // Streamed chunks carry stdout only, so stderr still needs printing after a
+    // stream; a completed-only render prints the whole text (stderr included).
+    const streamedStdout = state !== undefined;
     if (!state && outputText) {
       state = {
         shownChars: 0,
@@ -913,9 +931,11 @@ export class CliTerminalFormatter {
     }
 
     if (state) {
-      const totalText = outputText;
-      state.totalChars = Math.max(state.totalChars, totalText.length);
-      state.totalLines = countOutputLines(totalText);
+      const stderr = streamedStdout ? (scriptOutput?.stderr?.trim() ?? "") : "";
+      if (stderr) {
+        const unstreamedText = `${state.endsWithNewline ? "" : "\n"}${stderr}`;
+        CliTerminalFormatter.writeBoundedScriptChunk(unstreamedText, state);
+      }
       if (!state.endsWithNewline) process.stdout.write("\n");
       const omittedLines = Math.max(0, state.totalLines - state.shownLines);
       const omittedChars = Math.max(0, state.totalChars - state.shownChars);
@@ -991,19 +1011,22 @@ export class CliTerminalFormatter {
     border: string
   ): void {
     const presentation = scriptOutcomePresentation(verdict.outcome);
+    const display = resolveVerdictDisplay(verdict);
     const summary = formatVerdictSummary(sourceLabel, verdict);
     console.log(
       `${border} ${presentation.color(`${presentation.icon} ${presentation.label}`)} ${chalk.dim(`— ${summary}`)}`
     );
     console.log(`${border}   Compare: ${scriptCompareLabel(verdict)}`);
-    CliTerminalFormatter.writeBoundedScriptField(
-      "Expected",
-      verdict.expected ?? DEFAULT_SCRIPT_VERDICT_EXPECTED_TEXT,
-      border
-    );
+    if (display.expected !== undefined) {
+      CliTerminalFormatter.writeBoundedScriptField(
+        "Expected",
+        display.expected,
+        border
+      );
+    }
     CliTerminalFormatter.writeBoundedScriptField(
       "Actual",
-      verdict.actual || "∅",
+      display.actual || "∅",
       border
     );
     console.log(

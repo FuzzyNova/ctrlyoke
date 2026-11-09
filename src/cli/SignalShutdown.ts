@@ -39,6 +39,9 @@ export interface TwoStageShutdownOptions {
   exitCodeForSignal: (signal: ShutdownSignal) => number;
   successExitCode: number;
   timeoutExitCode: number;
+  /** Defaults to true. Set false when another completion path owns success exit. */
+  exitOnSuccess?: boolean;
+  onShutdownStarted?: () => void;
 }
 
 const DEFAULT_TIMERS: ShutdownTimers = {
@@ -87,6 +90,7 @@ export function installTwoStageShutdown(
 
   const beginShutdown = (): void => {
     shuttingDown = true;
+    options.onShutdownStarted?.();
     if (confirmationTimer !== undefined) {
       options.timers.clearTimeout(confirmationTimer);
       confirmationTimer = undefined;
@@ -104,7 +108,9 @@ export function installTwoStageShutdown(
     void Promise.resolve()
       .then(() => options.dispose())
       .then(() => {
-        requestExit(options.successExitCode);
+        if (options.exitOnSuccess !== false) {
+          requestExit(options.successExitCode);
+        }
       })
       .catch((error: unknown) => {
         options.onMessage(`Shutdown failed: ${getErrorMessage(error)}`);

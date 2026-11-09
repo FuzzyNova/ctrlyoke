@@ -103,6 +103,239 @@ suite("RunBundleImporter", () => {
     );
   });
 
+  test("rebuilds history-only step runtime from the latest attempts", async () => {
+    await fs.writeFile(
+      path.join(bundle, "workflow.ctrlyoke.json"),
+      JSON.stringify({
+        steps: [{ prompt: "one" }, { prompt: "rerun" }, { prompt: "not run" }],
+      })
+    );
+    const attempt = (
+      stepIndex: number,
+      attemptIndex: number,
+      started: number,
+      terminal?: string
+    ) => [
+      {
+        eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+        timestampMs: started,
+        target: { kind: "queue", stepIndex },
+        runIndex: 0,
+        attemptIndex,
+        definitionRevision: 1,
+        payload: {
+          kind: "script",
+          startReason: attemptIndex ? "retry" : "initial",
+          prompt: "run",
+        },
+      },
+      ...(terminal
+        ? [
+            {
+              eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
+              timestampMs: started + 10,
+              target: { kind: "queue", stepIndex },
+              runIndex: 0,
+              attemptIndex,
+              definitionRevision: 1,
+              payload: { terminalState: terminal },
+            },
+          ]
+        : []),
+    ];
+    await fs.writeFile(
+      path.join(bundle, "events.jsonl"),
+      [
+        ...attempt(0, 0, 100, "completed"),
+        ...attempt(1, 0, 110, "failed"),
+        ...attempt(1, 1, 130, "completed"),
+      ]
+        .map((event, index) =>
+          JSON.stringify({ ...event, sequence: index + 1 })
+        )
+        .join("\n") + "\n"
+    );
+    const result = await importer.importRun({
+      workspaceRoot: workspace,
+      bundleDir: bundle,
+    });
+    assert.strictEqual(result.status, "imported");
+    if (result.status !== "imported") return;
+    const runFile = JSON.parse(
+      await fs.readFile(
+        WorkflowPaths.runFilePath(workspace, result.workflowKey, result.runRef),
+        "utf8"
+      )
+    ) as WorkingFile;
+    assert.strictEqual(
+      runFile.steps?.[0]._runtime?.terminalStatus,
+      "completed"
+    );
+    assert.strictEqual(runFile.steps?.[0]._runtime?.startedAt, 100);
+    assert.strictEqual(runFile.steps?.[0]._runtime?.completedAt, 110);
+    assert.strictEqual(
+      runFile.steps?.[1]._runtime?.terminalStatus,
+      "completed"
+    );
+    assert.strictEqual(runFile.steps?.[1]._runtime?.startedAt, 130);
+    assert.strictEqual(runFile.steps?.[1]._runtime?.completedAt, 140);
+    assert.strictEqual(runFile.steps?.[2]._runtime, undefined);
+  });
+
+  test("flattens authored parallel groups before projecting history runtime", async () => {
+    await fs.writeFile(
+      path.join(bundle, "workflow.ctrlyoke.json"),
+      JSON.stringify({
+        steps: [
+          { name: "one", prompt: "one" },
+          {
+            parallel: [
+              { name: "pa", prompt: "parallel a" },
+              { name: "pb", prompt: "parallel b" },
+            ],
+            failFast: true,
+          },
+          { name: "three", prompt: "three" },
+        ],
+      })
+    );
+    const attempts: Record<string, unknown>[] = [0, 1, 2, 3].flatMap(
+      (stepIndex) => [
+        {
+          eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+          timestampMs: 100 + stepIndex * 20,
+          target: { kind: "queue", stepIndex },
+          runIndex: 0,
+          attemptIndex: 0,
+          definitionRevision: 1,
+          payload: { kind: "prompt", startReason: "initial", prompt: "run" },
+        },
+        {
+          eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
+          timestampMs: 110 + stepIndex * 20,
+          target: { kind: "queue", stepIndex },
+          runIndex: 0,
+          attemptIndex: 0,
+          definitionRevision: 1,
+          payload: { terminalState: "completed" },
+        },
+      ]
+    ) as Record<string, unknown>[];
+    attempts.push({
+      eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+      timestampMs: 180,
+      target: { kind: "queue", stepIndex: 3 },
+      attemptIndex: 0,
+      definitionRevision: 1,
+      payload: {
+        cliOutput: {
+          cliCommand: "step three output",
+          elapsed: 1,
+          isStreaming: false,
+          workingDirectory: workspace,
+        },
+      },
+    });
+    await fs.writeFile(
+      path.join(bundle, "events.jsonl"),
+      attempts
+        .map((event, index) =>
+          JSON.stringify({ ...event, sequence: index + 1 })
+        )
+        .join("\n") + "\n"
+    );
+
+    const result = await importer.importRun({
+      workspaceRoot: workspace,
+      bundleDir: bundle,
+    });
+    assert.strictEqual(result.status, "imported");
+    if (result.status !== "imported") return;
+    const runFile = JSON.parse(
+      await fs.readFile(
+        WorkflowPaths.runFilePath(workspace, result.workflowKey, result.runRef),
+        "utf8"
+      )
+    ) as WorkingFile;
+    assert.deepStrictEqual(
+      runFile.steps?.map((step) => step.name),
+      ["one", "pa", "pb", "three"]
+    );
+    assert.deepStrictEqual(runFile.parallelGroups, [
+      {
+        id: runFile.parallelGroups?.[0].id,
+        startIndex: 1,
+        endIndex: 2,
+        failFast: true,
+      },
+    ]);
+    assert.ok(runFile.parallelGroups?.[0].id);
+    assert.deepStrictEqual(
+      runFile.steps?.map((step) => step._runtime?.startedAt),
+      [100, 120, 140, 160]
+    );
+    const attempt = await new RunOutputResolver().resolveAttempt(
+      WorkflowPaths.manifestPath(workspace, result.workflowKey, result.runRef),
+      { kind: "queue", stepIndex: 3 },
+      0,
+      0
+    );
+    assert.strictEqual(attempt?.output?.cliCommand, "step three output");
+  });
+
+  test("preserves an existing terminal event and active duration when importing", async () => {
+    const completedAt = 200;
+    const activeExecutionMs = 115;
+    const manifestPath = path.join(bundle, "manifest.json");
+    const sourceManifest = JSON.parse(
+      await fs.readFile(manifestPath, "utf8")
+    ) as Record<string, unknown>;
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify({ ...sourceManifest, completedAt, activeExecutionMs })
+    );
+    const eventsPath = path.join(bundle, "events.jsonl");
+    const existingEvents = (await fs.readFile(eventsPath, "utf8"))
+      .trim()
+      .split("\n");
+    existingEvents.push(
+      JSON.stringify({
+        eventType: TIMELINE_EVENT_TYPES.RUN_TERMINATED,
+        timestampMs: completedAt,
+        sequence: 9,
+        payload: { executionState: EXECUTION_STATES.COMPLETED, stepCount: 1 },
+      })
+    );
+    await fs.writeFile(eventsPath, `${existingEvents.join("\n")}\n`);
+
+    const result = await importer.importRun({
+      workspaceRoot: workspace,
+      bundleDir: bundle,
+    });
+    assert.strictEqual(result.status, "imported");
+    if (result.status !== "imported") return;
+    const importedManifestPath = WorkflowPaths.manifestPath(
+      workspace,
+      result.workflowKey,
+      result.runRef
+    );
+    const timeline = new TimelineRecorder();
+    const importedManifest = await timeline.readManifest(importedManifestPath);
+    const importedEvents = await timeline.readEvents(importedManifestPath);
+    assert.strictEqual(
+      importedEvents.filter(
+        (event) => event.eventType === TIMELINE_EVENT_TYPES.RUN_TERMINATED
+      ).length,
+      1
+    );
+    assert.strictEqual(importedManifest.completedAt, completedAt);
+    assert.strictEqual(importedManifest.activeExecutionMs, activeExecutionMs);
+    assert.strictEqual(
+      importedEvents.at(-1)?.eventType,
+      TIMELINE_EVENT_TYPES.RUN_IMPORTED
+    );
+  });
+
   test("round-trips an exported fixture run through the importer", async () => {
     const sourceWorkspace = path.join(root, "source");
     await fs.mkdir(sourceWorkspace, { recursive: true });

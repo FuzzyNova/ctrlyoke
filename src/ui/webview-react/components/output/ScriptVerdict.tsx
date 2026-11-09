@@ -1,8 +1,5 @@
 import { memo, useEffect } from "react";
-import {
-  DEFAULT_SCRIPT_VERDICT_EXPECTED_TEXT,
-  type ScriptVerdict as ScriptVerdictData,
-} from "@root/types/CtrlYokeTypes";
+import { type ScriptVerdict as ScriptVerdictData } from "@root/types/CtrlYokeTypes";
 import {
   COMPARE_SOURCES,
   SCRIPT_VERDICT_OUTCOMES,
@@ -10,7 +7,7 @@ import {
 import {
   formatComparison,
   formatComparisonSubject,
-  operatorTakesNoValue,
+  resolveVerdictDisplay,
 } from "@root/utils/ScriptComparison";
 import {
   DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS,
@@ -30,10 +27,6 @@ interface ScriptVerdictProps {
 
 function getCompareLabel(verdict: ScriptVerdictData): string {
   return formatComparison(verdict);
-}
-
-function getExpectedLabel(verdict: ScriptVerdictData): string {
-  return verdict.expected ?? DEFAULT_SCRIPT_VERDICT_EXPECTED_TEXT;
 }
 
 function getOutcomePresentation(outcome: ScriptVerdictData["outcome"]): {
@@ -67,8 +60,8 @@ function formatDuration(durationMs: number): string {
   return `${(durationMs / 1000).toFixed(1)}s`;
 }
 
-function buildActualPreview(verdict: ScriptVerdictData, expanded: boolean) {
-  return buildCollapsedOutputPreview(verdict.actual, {
+function buildActualPreview(actual: string, expanded: boolean) {
+  return buildCollapsedOutputPreview(actual, {
     expanded,
     maxLines: DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
     maxChars: DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS,
@@ -99,18 +92,17 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
     onExpansionChange,
   }) => {
     const presentation = getOutcomePresentation(verdict.outcome);
-    const expected = getExpectedLabel(verdict);
+    const display = resolveVerdictDisplay(verdict);
+    const expected = display.expected;
     const action = getActionLabel(verdict);
-    const actualPreview = buildActualPreview(verdict, expanded);
+    const actualPreview = buildActualPreview(display.actual, expanded);
     const collapsedActual = actualPreview.visibleText.replace(/\s+/g, " ");
     const actualLabel = formatSummaryValue(
       collapsedActual || "∅",
-      verdict.compareSource
+      display.compareSource
     );
     // isEmpty/isNotEmpty carry no value, so the subject says it all.
-    const collapsedExpected = operatorTakesNoValue(verdict.operator)
-      ? undefined
-      : (verdict.expected ?? "0");
+    const collapsedExpected = display.expected;
 
     useEffect(() => {
       const activeActualMatch = actualFindMatches.find((match) => match.active);
@@ -118,11 +110,17 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
         !expanded &&
         activeActualMatch &&
         activeActualMatch.end >
-          buildActualPreview(verdict, false).visibleText.length
+          buildActualPreview(display.actual, false).visibleText.length
       ) {
         onExpansionChange?.(true);
       }
-    }, [actualFindMatches, expanded, onExpansionChange, verdict]);
+    }, [
+      actualFindMatches,
+      display.actual,
+      expanded,
+      onExpansionChange,
+      verdict,
+    ]);
 
     if (!expanded) {
       return (
@@ -193,10 +191,14 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
         <dl className="grid min-w-0 grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1">
           <dt className="text-description-fg">Compare</dt>
           <dd className="min-w-0">{getCompareLabel(verdict)}</dd>
-          <dt className="text-description-fg">Expected</dt>
-          <dd className="min-w-0 wrap-break-word">
-            {highlightText(expected, expectedFindMatches)}
-          </dd>
+          {expected !== undefined && (
+            <>
+              <dt className="text-description-fg">Expected</dt>
+              <dd className="min-w-0 wrap-break-word">
+                {highlightText(expected, expectedFindMatches)}
+              </dd>
+            </>
+          )}
           <dt className="text-description-fg">Actual</dt>
           <dd className="min-w-0 whitespace-pre-wrap wrap-break-word">
             {highlightText(actualPreview.visibleText || "∅", actualFindMatches)}

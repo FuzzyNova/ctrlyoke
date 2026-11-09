@@ -46,7 +46,8 @@ pending steps, session availability, and any blockers before import.
 ## Move a pending run to another machine
 
 Export a stopped, paused, or errored run that still has pending work. Before
-continuing elsewhere, make the exported base commit reachable in that
+continuing elsewhere, the workspace needs to be a Git repository with at least
+one commit. Make the exported base commit reachable in that
 workspace: push it from the source machine and fetch it on the destination.
 The import preview checks whether the commit is available. If it is missing,
 the run can still be imported for viewing, but it cannot continue until the

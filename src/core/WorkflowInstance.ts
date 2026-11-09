@@ -50,6 +50,7 @@ import {
   DynamicQueueConfig,
   deriveWorkflowFinalStepSummary,
   type RunRef,
+  type ParsedPromptFile,
   type WorkflowKey,
   type WorkflowLineageCreationOptions,
   type RunnerHostIdentity,
@@ -1337,7 +1338,8 @@ export class WorkflowInstance
       status === EXECUTION_STATES.PAUSING;
     if (
       (status === EXECUTION_STATES.RUNNING ||
-        status === EXECUTION_STATES.PAUSING) &&
+        status === EXECUTION_STATES.PAUSING ||
+        this.preDispatchStartup !== undefined) &&
       !preservePausingWorktree
     ) {
       await this.stop().catch((error) =>
@@ -1352,7 +1354,10 @@ export class WorkflowInstance
 
     let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([
-      this.executionSettledPromise,
+      Promise.all([
+        this.executionSettledPromise,
+        this.preDispatchStartup?.settled ?? Promise.resolve(),
+      ]).then(() => undefined),
       new Promise<void>((resolve) => {
         timeoutHandle = setTimeout(
           resolve,
@@ -1590,7 +1595,10 @@ export class WorkflowInstance
   /**
    * Load a prompt file into the dashboard without executing.
    */
-  async loadPromptFile(filePath: string): Promise<boolean> {
+  async loadPromptFile(
+    filePath: string,
+    parsedPromptFile?: ParsedPromptFile | null
+  ): Promise<boolean> {
     // Clear queue to reset cached workflow name — ensures fresh name from filename
     this.promptQueue.clearQueue();
     // Track the source file path for summaries and state sync
@@ -1599,7 +1607,8 @@ export class WorkflowInstance
 
     const workingFilePath = await this.promptFileLoader.loadPromptFile(
       filePath,
-      this.workspaceFolderPath
+      this.workspaceFolderPath,
+      parsedPromptFile
     );
 
     if (!workingFilePath) {
@@ -1607,7 +1616,10 @@ export class WorkflowInstance
       return false;
     }
 
-    const promptFile = await this.promptFileParser.parsePromptFile(filePath);
+    const promptFile =
+      parsedPromptFile === undefined
+        ? await this.promptFileParser.parsePromptFile(filePath)
+        : parsedPromptFile;
     if (!promptFile) {
       this.propagateWorkflowNameToIntegrations();
       return false;
@@ -2371,6 +2383,8 @@ export class WorkflowInstance
     );
     await onPrepared?.();
 
+    await this.promptQueue.rewindTerminalFailureForContinuation();
+
     const historyFilePath = this.outputHistoryManager.getHistoryFilePath(
       workflowKey,
       runRef
@@ -2527,13 +2541,16 @@ export class WorkflowInstance
     }
 
     // STOPPED = a step was appended to a completed workflow via reopenForContinuation().
-    // ERROR = the current step failed; retry it from the current (failed) position.
+    // ERROR = rewind the terminal queue failure, then retry it from that position.
     // Both use executeLoadedPromptFile so EXECUTION_STARTED is sent to the webview and
     // the history file is properly initialised for the new step's output.
     if (
       this.workflowRuntime.status === EXECUTION_STATES.STOPPED ||
       this.workflowRuntime.status === EXECUTION_STATES.ERROR
     ) {
+      if (this.workflowRuntime.status === EXECUTION_STATES.ERROR) {
+        await this.promptQueue.rewindTerminalFailureForContinuation();
+      }
       await this.executeLoadedPromptFile(undefined, true);
       return;
     }

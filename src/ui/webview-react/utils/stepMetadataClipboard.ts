@@ -7,6 +7,9 @@ import { formatPriorContextLabel } from "@utils/priorContext";
 import {
   PRIOR_CONTEXT_DETAILS,
   isHarnessId,
+  resolveSandboxRequest,
+  sandboxModeApplies,
+  sandboxValueLabel,
 } from "@root/types/DashboardConstants";
 import { isScriptWorkflowStep } from "./stepClipboard";
 
@@ -144,10 +147,11 @@ function resolvedLine(
   label: string,
   stepValue: unknown,
   effectiveValue: unknown,
-  format: (v: unknown) => string
+  format: (v: unknown) => string,
+  nullLabel = "(none) — explicitly disabled"
 ): string {
   if (stepValue === null) {
-    return `${label}: (none) — explicitly disabled`;
+    return `${label}: ${nullLabel}`;
   }
   if (stepValue !== undefined) {
     return `${label}: ${format(stepValue)}`;
@@ -211,6 +215,11 @@ export function buildStepMetadataClipboardText({
 
   if (!isScript) {
     const stepHarness = isHarnessId(step.harness) ? step.harness : undefined;
+    const resolvedSandbox = resolveSandboxRequest(
+      step.sandbox,
+      workflowProperties.sandbox,
+      globalSettings.sandbox
+    );
     lines.push(
       resolvedLine("harness", step.harness, getEffectiveHarness(), fmtString),
       resolvedLine(
@@ -284,15 +293,25 @@ export function buildStepMetadataClipboardText({
       resolvedLine(
         "sandbox",
         step.sandbox,
-        workflowProperties.sandbox ?? globalSettings.sandbox,
-        (value) => String(value)
-      ),
-      resolvedLine(
-        "sandboxMode",
-        step.sandboxMode,
-        workflowProperties.sandboxMode ?? globalSettings.sandboxMode,
-        (value) => String(value)
-      ),
+        resolveSandboxRequest(
+          workflowProperties.sandbox,
+          globalSettings.sandbox
+        ),
+        (value) => sandboxValueLabel(value as boolean | null | undefined),
+        sandboxValueLabel(null)
+      )
+    );
+    if (sandboxModeApplies(resolvedSandbox)) {
+      lines.push(
+        resolvedLine(
+          "sandboxMode",
+          step.sandboxMode,
+          workflowProperties.sandboxMode ?? globalSettings.sandboxMode,
+          (value) => String(value)
+        )
+      );
+    }
+    lines.push(
       resolvedLine(
         "endCondition",
         step.endCondition,

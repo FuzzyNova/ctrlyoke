@@ -252,6 +252,22 @@ suite("GitUtils.gitRefExists", function () {
     runGit(["commit", "-m", "Initial commit"]);
   });
 
+  test("file history treats bracketed paths literally", async () => {
+    await writeWorkspaceFile("app/[id].tsx", "target\n");
+    runGit(["add", "app/[id].tsx"]);
+    runGit(["commit", "-m", "Target file"]);
+    await writeWorkspaceFile("app/i.tsx", "other\n");
+    runGit(["add", "app/i.tsx"]);
+    runGit(["commit", "-m", "Only i file"]);
+
+    const history = await getFileHistoryCommits(workspaceRoot, "app/[id].tsx");
+
+    assert.deepStrictEqual(
+      history.map(({ subject }) => subject),
+      ["Target file"]
+    );
+  });
+
   teardown(async () => {
     // Windows can hold transient locks on git pack files (which are also
     // read-only), causing EBUSY/EPERM. maxRetries makes rm retry those.

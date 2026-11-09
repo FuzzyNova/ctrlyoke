@@ -14,6 +14,7 @@ import * as path from "path";
 import { suite, setup, teardown, test } from "mocha";
 import {
   exportRunBundle,
+  getRunBundleExportPreview,
   resolveRunBundleSecrets,
 } from "../../core/orchestration/RunBundleExporter";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
@@ -258,6 +259,47 @@ suite("RunBundleExporter secrets", () => {
     );
     const loaded = await readRunBundle(noChanges.bundleDir, workspace);
     assert.ok(loaded.runtime);
+  });
+
+  test("exports errored pending runs as history when execution root has no HEAD", async () => {
+    const run = await createRun({
+      state: EXECUTION_STATES.ERROR,
+      currentIndex: 0,
+      steps: [{ prompt: "retry" }, { prompt: "next" }],
+    });
+    const nonGitRoot = path.join(root, "not-a-repo");
+    await fs.mkdir(nonGitRoot);
+    const unbornRoot = path.join(root, "unborn-repo");
+    await fs.mkdir(unbornRoot);
+    await execGit(["init"], { cwd: unbornRoot });
+
+    for (const [label, executionRoot] of [
+      ["non-git", nonGitRoot],
+      ["unborn", unbornRoot],
+    ]) {
+      const bundleDir = path.join(root, `${label}.ctrlyokerun`);
+      const options = {
+        stateRoot: workspace,
+        workspaceRoot: executionRoot,
+        ...run,
+        bundleDir,
+        exportedByVersion: "test",
+        includeChanges: false,
+      };
+      const exported = await exportRunBundle(options);
+      assert.strictEqual(exported.continuable, false, label);
+      assert.strictEqual(exported.continuation, undefined, label);
+      assert.deepStrictEqual(
+        await getRunBundleExportPreview(
+          workspace,
+          executionRoot,
+          run.workflowKey,
+          run.runRef
+        ),
+        { continuable: false, changedFiles: [] },
+        label
+      );
+    }
   });
 
   test("a run whose owner died mid-step exports as continuing natively would", async () => {

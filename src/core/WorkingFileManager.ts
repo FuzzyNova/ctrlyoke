@@ -69,13 +69,20 @@ import {
   stripViewOnlyWorkflowStepFields,
 } from "./WorkflowStepSanitizer";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
-import { assertEditableDuringExecution } from "./orchestration/RunContinuationService";
+import {
+  assertEditableDuringExecution,
+  rewindTargetedFailure,
+} from "./orchestration/RunContinuationService";
 import {
   assertDefinitionRevision,
   assertDescriptorRevision,
 } from "./orchestration/RevisionPrecondition";
 import { RunContinuationService } from "./orchestration/RunContinuationService";
 import { TimelineRecorder } from "./orchestration/TimelineRecorder";
+import {
+  getProtectedTerminalFailureIndex,
+  terminalFailureMutationMessage,
+} from "../utils/StepStatusDerivation";
 import {
   ensureStepIds,
   findStepById,
@@ -1713,6 +1720,14 @@ export class WorkingFileManager {
           PARALLEL_GROUP_INSERT_POSITIONS.AFTER
         );
         const insertIndex = placement.insertedIndex;
+        const protectedFailureIndex = getProtectedTerminalFailureIndex({
+          executionState: source._runtime?.executionState,
+          currentIndex: source._runtime?.currentIndex,
+          steps,
+        });
+        if (protectedFailureIndex === insertIndex) {
+          throw new Error(terminalFailureMutationMessage("reorder"));
+        }
         const nextTopology = insertParallelGroupSteps(
           topology,
           requestedIndex,
@@ -1845,7 +1860,7 @@ export class WorkingFileManager {
       runRef,
       expectedDefinitionRevision,
       (source) => {
-        const steps = source.steps ?? [];
+        const steps = [...(source.steps ?? [])];
         const unique = [...new Set(indices)];
         if (unique.length !== indices.length || unique.length === 0) {
           throw new Error(
@@ -1862,6 +1877,7 @@ export class WorkingFileManager {
               `Cannot update step ${index + 1} before pending rewind boundary ${rewindBoundary + 1}`
             );
           }
+          rewindTargetedFailure(source, steps, index);
           assertEditableDuringExecution(source, steps, index, "update");
           assertBulkWorkflowStepUpdateAllowed(
             steps[index],
@@ -1982,6 +1998,15 @@ export class WorkingFileManager {
           if (!Number.isInteger(index) || index < 0 || index >= steps.length) {
             throw new Error(`Invalid prompt index: ${index}`);
           }
+          const failureIndex = getProtectedTerminalFailureIndex({
+            executionState: source._runtime?.executionState,
+            currentIndex: source._runtime?.currentIndex,
+            steps,
+          });
+          if (failureIndex === index) {
+            throw new Error(terminalFailureMutationMessage("remove"));
+          }
+          rewindTargetedFailure(source, steps, index);
           assertEditableDuringExecution(source, steps, index, "delete");
         }
         const nextTopology = deleteParallelGroupSteps(topology, unique);
@@ -2095,6 +2120,18 @@ export class WorkingFileManager {
           parallelGroups: source.parallelGroups,
         });
         const currentIndex = source._runtime?.currentIndex ?? 0;
+        const failureIndex = getProtectedTerminalFailureIndex({
+          executionState: source._runtime?.executionState,
+          currentIndex,
+          steps: topology.steps,
+        });
+        if (
+          failureIndex !== undefined &&
+          newPendingOrder.length === topology.steps.length - failureIndex &&
+          newPendingOrder[0] !== 0
+        ) {
+          throw new Error(terminalFailureMutationMessage("reorder"));
+        }
         const nextTopology = reorderParallelGroupPendingSteps(
           topology,
           currentIndex,

@@ -19,6 +19,7 @@ import {
   OPERATION_STATUS,
   OUTPUT_ANNOUNCEMENT_MODES,
   OUTPUT_HISTORY_KINDS,
+  PROMPT_TERMINAL_STATUS_LABELS,
   STEP_STATUS,
   isPromptExecutionPhase,
   type ExecutionState,
@@ -81,6 +82,7 @@ const STEP_STATUS_PHRASES: Partial<Record<StepStatus, string>> = {
   [STEP_STATUS.COMPLETED]: "completed",
   [STEP_STATUS.FAILED]: "failed",
   [STEP_STATUS.CANCELLED]: "cancelled",
+  [STEP_STATUS.NO_TURN_STARTED]: `ended: ${PROMPT_TERMINAL_STATUS_LABELS[STEP_STATUS.NO_TURN_STARTED].toLowerCase()}`,
 };
 
 const WORKFLOW_STATE_ANNOUNCEMENTS: Partial<Record<ExecutionState, string>> = {

@@ -58,7 +58,11 @@ import {
   FINAL_STEP_PHASES,
   WORKTREE_MODES,
 } from "../../types/DashboardConstants";
-import { execGit, execGitBuffer } from "../../utils/GitUtils";
+import {
+  execGit,
+  execGitBuffer,
+  isNotGitRepositoryError,
+} from "../../utils/GitUtils";
 import { settleInterruptedRun } from "../../utils/InterruptedRunSettlement";
 import { assertRunHasWorkToContinue } from "./RunContinuationService";
 import { getCliEntryKey } from "./OutputHistoryTimelineAdapter";
@@ -209,11 +213,26 @@ async function getContinuationInfo(
 
   const worktree = workingFile._runtime?.worktree;
   const executionRoot = worktree?.executionRoot ?? workspaceRoot;
-  const baseCommit =
-    worktree?.baseCommit ??
-    (
-      await execGit(["rev-parse", "HEAD"], { cwd: executionRoot })
-    ).stdout.trim();
+  let baseCommit = worktree?.baseCommit;
+  if (!baseCommit) {
+    try {
+      baseCommit = (
+        await execGit(["rev-parse", "--verify", "--quiet", "HEAD"], {
+          cwd: executionRoot,
+        })
+      ).stdout.trim();
+    } catch (error) {
+      const gitError = error as { code?: unknown; stderr?: unknown };
+      if (
+        isNotGitRepositoryError(error) ||
+        (gitError.code === 1 && !String(gitError.stderr ?? "").trim())
+      ) {
+        return undefined;
+      }
+      throw error;
+    }
+    if (!baseCommit) return undefined;
+  }
   const branch =
     worktree?.branchName ??
     (

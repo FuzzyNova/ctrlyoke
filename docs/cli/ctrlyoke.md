@@ -700,6 +700,8 @@ facts come from streamed attempt lifecycle records, not output payloads.
 `finalStep.elapsedSeconds` is the sum of finished passes' elapsed time, or
 `null` when none have finished. A pending next final-step pass is reported as
 `finalStep.nextPass` (otherwise `null`); text output marks it as next too.
+Each pass's elapsed time sums its finished step-attempt durations, excluding
+time between attempts; `startedAt` and `completedAt` still bound the whole pass.
 
 ## `ctrlyoke history show`
 
@@ -968,6 +970,8 @@ workflow lineage key and a run reference or numeric run ID.
 
 Edit a pending step with an inline prompt:
 
+`--prompt` applies only to prompt steps; use a one-step file to change a script step or its type.
+
 ```bash
 ctrlyoke step edit --workflow release --run 7 --index 3 --prompt "Correct the deployment target"
 ```
@@ -981,10 +985,15 @@ ctrlyoke step edit replacement.ctrlyoke.yaml --workflow release --run 7 --index 
 ```
 
 `--prompt` and the file argument are mutually exclusive. An edit is accepted
-for any not-yet-executed step, including while another process executes the
-target run; the completed prefix and in-flight step remain protected.
+for any not-yet-executed step, including the failed step of a settled errored
+run, and while another process executes the target run; the completed prefix
+and in-flight step remain protected.
 
 ### `ctrlyoke step remove`
+
+The terminal failed step of a settled errored run cannot be removed because
+its recorded history stays at that queue index. Disable it to skip it when you
+continue the run.
 
 ```bash
 ctrlyoke step remove --workflow release --run 7 --index 3
@@ -993,7 +1002,9 @@ ctrlyoke step remove --workflow release --run 7 --index 3
 ### `ctrlyoke step reorder`
 
 Pass every not-yet-started step's absolute zero-based index exactly once, in
-the desired execution order. Never include a running or completed step:
+the desired execution order. The terminal failed step of a settled errored
+run has recorded history and must stay first among pending steps; edit or
+disable it instead. Never include a running or completed step:
 
 ```bash
 ctrlyoke step reorder --workflow release --run 7 --order 3,4,5

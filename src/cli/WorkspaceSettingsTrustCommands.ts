@@ -27,6 +27,17 @@ function decisionTag(state: WorkspaceSensitiveSettingState): string {
   return "";
 }
 
+function formatDetail(state: WorkspaceSensitiveSettingState): string {
+  return state.request.detail
+    .split("\n")
+    .map((line) => `    ${line}`)
+    .join("\n");
+}
+
+function formatRequest(state: WorkspaceSensitiveSettingState): string {
+  return `${state.request.summary}\n${formatDetail(state)}`;
+}
+
 /**
  * Ask about each value in turn and record the answers. Returns how many
  * were allowed.
@@ -41,7 +52,7 @@ async function askAndRecord(
   const denied: WorkspaceSensitiveSettingRequest[] = [];
   for (const state of states) {
     const allow = await io.confirm(
-      `Allow ${state.request.summary}${decisionTag(state)}? [y/N] `
+      `Allow ${state.request.summary}${decisionTag(state)}? [y/N]\n${formatDetail(state)}\n> `
     );
     (allow ? approved : denied).push(state.request);
   }
@@ -68,7 +79,7 @@ export async function ensureWorkspaceSettingsDecided(
   return ensureCliTrustDecided(
     {
       heading: "This workspace's settings choose programs for ctrlyoke to run:",
-      items: pending.map((state) => state.request.summary),
+      items: pending.map(formatRequest),
       reviewCommand: `ctrlyoke ${TRUST_WORKSPACE_SETTINGS_COMMAND}`,
       ask: async (askIo) => {
         askIo.writeErr(TRUST_EXPLANATION);
@@ -109,7 +120,7 @@ export async function trustWorkspaceSettingsCommand(
       states.map((state) => state.request),
       []
     );
-    states.forEach((state) => io.writeOut(`Allowed ${state.request.summary}`));
+    states.forEach((state) => io.writeOut(`Allowed ${formatRequest(state)}`));
     return 0;
   }
 
@@ -118,7 +129,9 @@ export async function trustWorkspaceSettingsCommand(
       "Error: no terminal to ask in. Rerun in a terminal, or pass --yes to allow every listed value:"
     );
     states.forEach((state) =>
-      io.writeErr(`  - ${state.request.summary}${decisionTag(state)}`)
+      io.writeErr(
+        `  - ${state.request.summary}${decisionTag(state)}\n${formatDetail(state)}`
+      )
     );
     return 2;
   }

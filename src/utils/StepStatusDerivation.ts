@@ -38,7 +38,60 @@ export interface StepWithRuntimeStatus {
     startedAt?: number;
     completedAt?: number;
     terminalStatus?: PromptTerminalStatus;
+    terminalFailure?: boolean;
+    rewoundFailure?: boolean;
   };
+}
+
+/** Queue index whose attempt history must remain attached to the failed step. */
+export function getProtectedTerminalFailureIndex(state: {
+  executionState: string | undefined;
+  currentIndex: number | undefined;
+  steps: readonly StepWithRuntimeStatus[];
+  resultStatus?: string;
+}): number | undefined {
+  const terminalIndex = getResumableTerminalFailureIndex(state);
+  if (terminalIndex !== undefined) return terminalIndex;
+  const index = state.currentIndex ?? -1;
+  return state.executionState === EXECUTION_STATES.ERROR &&
+    index >= 0 &&
+    state.steps[index]?._runtime?.rewoundFailure === true
+    ? index
+    : undefined;
+}
+
+/** Queue index of the failed step that continuation will run again. */
+export function getResumableTerminalFailureIndex(state: {
+  executionState: string | undefined;
+  currentIndex: number | undefined;
+  steps: readonly (StepWithRuntimeStatus & {
+    _runtime?: StepWithRuntimeStatus["_runtime"] & {
+      terminalFailure?: boolean;
+    };
+  })[];
+  resultStatus?: string;
+}): number | undefined {
+  const index = (state.currentIndex ?? 0) - 1;
+  const step = state.steps[index];
+  return state.executionState === EXECUTION_STATES.ERROR &&
+    (state.resultStatus === undefined ||
+      state.resultStatus === STEP_STATUS.FAILED) &&
+    index >= 0 &&
+    step?._runtime?.terminalStatus === STEP_STATUS.FAILED &&
+    step._runtime.terminalFailure !== false
+    ? index
+    : undefined;
+}
+
+export function terminalFailureMutationMessage(
+  action: "remove" | "reorder"
+): string {
+  const operation = action === "remove" ? "remove" : "move";
+  const suggestion =
+    action === "remove"
+      ? "disable it to skip it on continue"
+      : "edit or disable it instead";
+  return `Cannot ${operation} the failed step because it has recorded history and must stay first among pending steps; ${suggestion}.`;
 }
 
 /**

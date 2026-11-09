@@ -664,7 +664,8 @@ CliTerminalFormatter.renderScriptOutput({
   },
 }, { stepIndex: 0, stepName: "script", key: "default-expected" });`);
 
-    assert.ok(output.includes("Expected: exit code 0 (no `expected` set)"));
+    assert.ok(output.includes("Expected: 0"));
+    assert.ok(output.includes("Actual: 0"));
     assert.ok(!output.includes("returns"));
   });
 
@@ -679,6 +680,43 @@ CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_S
     assert.ok(!output.includes("line 200"));
     assert.ok(output.includes("script output truncated"));
     assert.ok(output.includes("40 more lines"));
+  });
+
+  test("prints streamed stdout and completed stderr exactly once", () => {
+    const output = runFormatterScript(`
+const target = { stepIndex: 0, stepName: "script", key: "stdout-stderr" };
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, isStreaming: true, elapsed: 0, scriptOutput: { command: "check.sh", stdout: "out-marker\\n", stderr: "", exitCode: 0 } }, target);
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, isStreaming: false, elapsed: 0 }, target, { command: "check.sh", stdout: "out-marker\\n", stderr: "err-marker", exitCode: 0 });`);
+
+    assert.strictEqual((output.match(/out-marker/g) ?? []).length, 1);
+    assert.strictEqual((output.match(/err-marker/g) ?? []).length, 1);
+    assert.ok(!output.includes("script output truncated"));
+  });
+
+  test("counts only omitted streamed output when stderr exceeds the line cap", () => {
+    const output = runFormatterScript(`
+const chunk = Array.from({ length: 240 }, (_, index) => "line " + index + "\\n").join("");
+const target = { stepIndex: 0, stepName: "script", key: "bounded-stdout-stderr" };
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: "", elapsed: 0, isStreaming: true }, target);
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, isStreaming: true, elapsed: 0, scriptOutput: { command: "check.sh", stdout: chunk, stderr: "", exitCode: 0 } }, target);
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, elapsed: 0, isStreaming: false }, target, { command: "check.sh", stdout: chunk, stderr: "err-marker", exitCode: 0 });`);
+
+    assert.ok(output.includes("line 199"));
+    assert.ok(!output.includes("line 200"));
+    assert.ok(
+      output.includes(
+        "script output truncated: 41 more lines, 371 more characters"
+      )
+    );
+  });
+
+  test("prints completed stdout and stderr exactly once when nothing streamed", () => {
+    const output = runFormatterScript(`
+const target = { stepIndex: 0, stepName: "script", key: "completed-only" };
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, isStreaming: false, elapsed: 0 }, target, { command: "check.sh", stdout: "out-marker\\n", stderr: "err-marker", exitCode: 0 });`);
+
+    assert.strictEqual((output.match(/out-marker/g) ?? []).length, 1);
+    assert.strictEqual((output.match(/err-marker/g) ?? []).length, 1);
   });
 
   test("does not count single-character chunks as separate script lines", () => {

@@ -2,6 +2,9 @@ import * as fs from "fs";
 import {
   ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
+  FINAL_STEP_PHASES,
+  NO_TURN_STARTED_STATUS,
+  PROMPT_TERMINAL_STATUS,
   type ExecutionState,
 } from "../../types/DashboardConstants";
 import type {
@@ -12,8 +15,10 @@ import type {
 } from "../../types/CtrlYokeTypes";
 import {
   TIMELINE_EVENT_TYPES,
+  TIMELINE_ATTEMPT_TERMINAL_STATES,
   type WorkflowTimelineEventDraft,
   type WorkflowDefinitionSnapshot,
+  type TimelineAttemptTerminalState,
 } from "../../types/WorkflowTimelineTypes";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
@@ -33,6 +38,7 @@ export interface RunMaterializationInput {
   currentIndex?: number;
   runtimeState?: Partial<WorkingFileRuntime>;
   startedAt?: number;
+  activeExecutionMs?: number;
   provenance: NonNullable<WorkflowLineageDescriptor["importedFrom"]>;
   beforeEvents?: (identity: {
     workflowKey: WorkflowKey;
@@ -144,7 +150,11 @@ export class RunMaterializer {
       if (!manifestPath)
         throw new Error("Could not initialize imported run history.");
       let batch: WorkflowTimelineEventDraft[] = [];
+      let terminalTimestamp: number | undefined;
       for await (const event of input.events) {
+        if (event.eventType === TIMELINE_EVENT_TYPES.RUN_TERMINATED) {
+          terminalTimestamp = event.timestampMs;
+        }
         batch.push(event);
         if (batch.length === 250) {
           await this.timelineRecorder.appendEvents(manifestPath, batch);
@@ -153,7 +163,18 @@ export class RunMaterializer {
       }
       if (batch.length)
         await this.timelineRecorder.appendEvents(manifestPath, batch);
-      await history.finalizeRun(manifestPath, executionState, steps.length);
+      await history.finalizeRun(
+        manifestPath,
+        executionState,
+        steps.length,
+        input.activeExecutionMs,
+        terminalTimestamp === undefined
+          ? {}
+          : {
+              appendTerminationEvent: false,
+              completedAt: terminalTimestamp,
+            }
+      );
       await this.timelineRecorder.appendEvents(manifestPath, [
         {
           eventType: TIMELINE_EVENT_TYPES.RUN_IMPORTED,
@@ -205,4 +226,91 @@ export class RunMaterializer {
       throw error;
     }
   }
+}
+
+/** Event types {@link projectAttemptRuntime} reads; callers collect only these. */
+export const ATTEMPT_RUNTIME_EVENT_TYPES: ReadonlySet<string> = new Set([
+  TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+  TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
+]);
+
+/**
+ * Rebuilds per-step `_runtime` for a history-only bundle (which carries no
+ * working file) from its durable attempt events. Callers pass only events in
+ * {@link ATTEMPT_RUNTIME_EVENT_TYPES} so a large timeline is never buffered.
+ */
+export function projectAttemptRuntime(
+  definition: Record<string, unknown>,
+  events: Iterable<WorkflowTimelineEventDraft>
+): Record<string, unknown> {
+  const queue = Array.isArray(definition.steps)
+    ? (definition.steps as Array<Record<string, unknown>>)
+    : [];
+  const finalStep = definition.finalStep as Record<string, unknown> | undefined;
+  const projections = new Map<string, Record<string, unknown>>();
+  const keyOf = (target: unknown): string | undefined => {
+    if (!target || typeof target !== "object") return undefined;
+    const record = target as {
+      kind?: string;
+      stepIndex?: number;
+      loopIndex?: number;
+    };
+    if (
+      record.kind === FINAL_STEP_PHASES.QUEUE &&
+      Number.isInteger(record.stepIndex)
+    )
+      return `queue:${record.stepIndex}`;
+    if (
+      record.kind === FINAL_STEP_PHASES.FINAL_STEP &&
+      Number.isInteger(record.loopIndex)
+    )
+      return FINAL_STEP_PHASES.FINAL_STEP;
+    return undefined;
+  };
+  const terminalStatus = (state: TimelineAttemptTerminalState) => {
+    switch (state) {
+      case TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED:
+        return PROMPT_TERMINAL_STATUS.COMPLETED;
+      case TIMELINE_ATTEMPT_TERMINAL_STATES.FAILED:
+        return PROMPT_TERMINAL_STATUS.FAILED;
+      case TIMELINE_ATTEMPT_TERMINAL_STATES.CANCELLED:
+      case TIMELINE_ATTEMPT_TERMINAL_STATES.STOPPED:
+        return PROMPT_TERMINAL_STATUS.CANCELLED;
+      case NO_TURN_STARTED_STATUS:
+        return PROMPT_TERMINAL_STATUS.NO_TURN_STARTED;
+      default:
+        return undefined;
+    }
+  };
+  for (const event of events) {
+    const key = keyOf((event as { target?: unknown }).target);
+    if (!key) continue;
+    if (event.eventType === TIMELINE_EVENT_TYPES.ATTEMPT_STARTED) {
+      const projection = projections.get(key) ?? {};
+      projection.startedAt = event.timestampMs;
+      delete projection.completedAt;
+      delete projection.terminalStatus;
+      projections.set(key, projection);
+    } else if (event.eventType === TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED) {
+      const projection = projections.get(key) ?? {};
+      projection.completedAt = event.timestampMs;
+      if (typeof projection.startedAt === "number") {
+        projection.elapsed =
+          Math.max(0, event.timestampMs - projection.startedAt) / 1000;
+      }
+      projection.terminalStatus = terminalStatus(event.payload.terminalState);
+      projections.set(key, projection);
+    }
+  }
+  const withRuntime = (step: Record<string, unknown>, key: string) => {
+    const runtime = projections.get(key);
+    return runtime ? { ...step, _runtime: { ...runtime } } : step;
+  };
+  return {
+    ...definition,
+    steps: queue.map((step, index) => withRuntime(step, `queue:${index}`)),
+    ...(finalStep
+      ? { finalStep: withRuntime(finalStep, FINAL_STEP_PHASES.FINAL_STEP) }
+      : {}),
+  };
 }

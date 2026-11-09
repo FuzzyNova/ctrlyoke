@@ -1992,6 +1992,34 @@ suite("HostedWorkspaceViewerService", function () {
   // ── searchWorkspace ──────────────────────────────────────────────────────
 
   suite("discardFile", () => {
+    test("discards only a bracketed literal path", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      fs.mkdirSync(path.join(root, "app"));
+      for (const name of ["[id].tsx", "i.tsx", "d.tsx"]) {
+        commitFile(root, `app/${name}`, "original\n", `Add ${name}`);
+        fs.writeFileSync(path.join(root, "app", name), "edited\n");
+      }
+      const service = new HostedWorkspaceViewerService(root);
+
+      await service.discardFile("app/[id].tsx");
+
+      assert.strictEqual(
+        fs.readFileSync(path.join(root, "app/[id].tsx"), "utf8"),
+        "original\n"
+      );
+      assert.strictEqual(
+        fs.readFileSync(path.join(root, "app/i.tsx"), "utf8"),
+        "edited\n"
+      );
+      assert.strictEqual(
+        fs.readFileSync(path.join(root, "app/d.tsx"), "utf8"),
+        "edited\n"
+      );
+      service.dispose();
+    });
+
     for (const multiRoot of [false, true]) {
       test(`refuses to discard an untracked workspace root (${multiRoot ? "multi-root" : "single-root"})`, async () => {
         const repository = createWorkspace();
@@ -2018,6 +2046,45 @@ suite("HostedWorkspaceViewerService", function () {
         assert.strictEqual(fs.readFileSync(preciousFile, "utf8"), "keep me\n");
       });
     }
+  });
+
+  suite("literal pathspec SCM actions", () => {
+    test("stageFile stages only a bracketed literal path", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      fs.mkdirSync(path.join(root, "app"));
+      for (const name of ["[id].tsx", "i.tsx", "d.tsx"]) {
+        commitFile(root, `app/${name}`, "original\n", `Add ${name}`);
+        fs.writeFileSync(path.join(root, "app", name), "edited\n");
+      }
+      const service = new HostedWorkspaceViewerService(root);
+      await service.stageFile("app/[id].tsx");
+      assert.deepStrictEqual(
+        runGit(root, "diff", "--cached", "--name-only").split(/\r?\n/),
+        ["app/[id].tsx"]
+      );
+      service.dispose();
+    });
+
+    test("unstageFile unstages only a bracketed literal path", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      fs.mkdirSync(path.join(root, "app"));
+      for (const name of ["[id].tsx", "i.tsx", "d.tsx"]) {
+        commitFile(root, `app/${name}`, "original\n", `Add ${name}`);
+        fs.writeFileSync(path.join(root, "app", name), "edited\n");
+      }
+      runGit(root, "add", "-A");
+      const service = new HostedWorkspaceViewerService(root);
+      await service.unstageFile("app/[id].tsx");
+      assert.deepStrictEqual(
+        runGit(root, "diff", "--cached", "--name-only").split(/\r?\n/),
+        ["app/d.tsx", "app/i.tsx"]
+      );
+      service.dispose();
+    });
   });
 
   suite("searchWorkspace", () => {

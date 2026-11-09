@@ -2773,6 +2773,19 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       };
       await writeTrustedRunFile(run.runFilePath, file);
 
+      const beforePromptEdit = await fs.readFile(run.runFilePath, "utf8");
+      await assert.rejects(
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 2,
+          updates: { prompt: "echo another command" },
+        }),
+        /Script steps cannot be edited through MCP.*updates\.prompt/u
+      );
+      assert.strictEqual(
+        await fs.readFile(run.runFilePath, "utf8"),
+        beforePromptEdit
+      );
+
       await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
         index: 2,
         updates: { name: "renamed tests" },

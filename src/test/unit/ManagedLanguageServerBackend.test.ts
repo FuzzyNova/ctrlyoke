@@ -68,14 +68,51 @@ suite("ManagedLanguageServerBackend", () => {
     }
   });
 
+  test("escapes directional characters in the approval command detail", async () => {
+    let approvalDetail = "";
+    const interaction: UserInteractionPort = {
+      canPrompt: () => true,
+      requestChoice: async () => undefined,
+      requestBatchApproval: async (request) => {
+        approvalDetail = request.items[0]?.detail ?? "";
+        return { approvedValues: [], deniedValues: [] };
+      },
+    };
+    const backend = createBackend({
+      store: new Map<string, unknown>(),
+      interaction,
+      workspaceSettings: {
+        ...CTRLYOKE_SETTINGS_DEFAULTS.languageServers,
+        definitions: {
+          custom: {
+            command: ["custom-lsp", "--x‮\u0085"],
+            languages: ["typescript"],
+            extensions: ["ts"],
+            rootMarkers: [],
+          },
+        },
+        use: { typescript: "custom" },
+      },
+    });
+    await backend.resolveForPath(
+      "src/app.ts",
+      roots,
+      LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR
+    );
+    assert.ok(approvalDetail.includes('"--x\\u202e\\u0085"'));
+    assert.ok(!/[‮\u0085]/.test(approvalDetail));
+  });
+
   test("requires approval, remembers it, and asks again when executable fields change", async () => {
     let decisions = 0;
+    let approvalDetail = "";
     const store = new Map<string, unknown>();
     const interaction: UserInteractionPort = {
       canPrompt: () => true,
       requestChoice: async () => undefined,
       requestBatchApproval: async (request) => {
         decisions += 1;
+        approvalDetail = request.items[0]?.detail ?? "";
         return {
           approvedValues: request.items.map((item) => item.value),
           deniedValues: [],
@@ -110,6 +147,15 @@ suite("ManagedLanguageServerBackend", () => {
     );
     assert.ok("descriptor" in result);
     assert.strictEqual(decisions, 1);
+    assert.ok(
+      approvalDetail.includes('Command:\n[\n  "custom-lsp",\n  "--stdio"\n]')
+    );
+    assert.ok(approvalDetail.includes("MODE=one"));
+    assert.ok(
+      approvalDetail.includes(
+        'Execution options:\ntypescript.tsdk:"./node_modules/typescript/lib"'
+      )
+    );
     await backend.resolveForPath(
       "src/app.ts",
       roots,

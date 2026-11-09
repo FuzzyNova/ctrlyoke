@@ -12,6 +12,7 @@ import {
 import type { ChoiceRequest, UserInteractionPort } from "./UserInteractionPort";
 import { NullUserInteractionPort } from "./UserInteractionPort";
 import { Log } from "../utils/Log";
+import { escapeUntrustedDisplayText } from "../utils/EscapeUntrustedDisplayText";
 import {
   loadYamlDocument,
   WORKFLOW_YAML_SCHEMA,
@@ -233,7 +234,7 @@ export async function promptBatchApprovalForPendingRoots(
       "Uncheck a folder to keep it blocked. Dismissing asks again next time.",
     items: pendingRoots.map((root) => ({
       value: root,
-      label: root,
+      label: escapeUntrustedDisplayText(root, { escapeNewlines: true }),
       checked: true,
     })),
   });

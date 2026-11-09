@@ -66,9 +66,16 @@ import {
   assertStepMutable,
   ensureStepIds,
   findStepIndexById,
+  resetStepRuntimeForRewind,
   STEP_MUTATION_ERROR_MESSAGES,
 } from "../StepIdentity";
-import { hasInFlightStep, hasStarted } from "../../utils/StepStatusDerivation";
+import {
+  getResumableTerminalFailureIndex,
+  getProtectedTerminalFailureIndex,
+  hasInFlightStep,
+  hasStarted,
+  terminalFailureMutationMessage,
+} from "../../utils/StepStatusDerivation";
 import {
   describeShiftedStepReferences,
   describeStepInsertion,
@@ -193,9 +200,15 @@ export interface SelfOwnedUntrackedDiagnostic {
   decision: "preserve-non-mutating";
 }
 
-/** Return the pending queue indices that a reorder request may move. */
-export function getReorderableStepIndices(workingFile: WorkingFile): number[] {
-  const steps = workingFile.steps ?? [];
+/**
+ * Return the pending queue indices that a reorder request may move.
+ * `steps` overrides the file's own steps, e.g. a normalized topology a
+ * mutation has already rewound a terminal failure in.
+ */
+export function getReorderableStepIndices(
+  workingFile: WorkingFile,
+  steps: readonly WorkflowStep[] = workingFile.steps ?? []
+): number[] {
   const currentIndex = workingFile._runtime?.currentIndex ?? 0;
   const executionIsInFlight = hasInFlightStep(
     workingFile._runtime?.executionState,
@@ -881,6 +894,7 @@ export class RunContinuationService {
           _runtime: {
             ...step._runtime,
             startedAt,
+            rewoundFailure: undefined,
           },
         };
         const workingFile: WorkingFile = {
@@ -931,6 +945,7 @@ export class RunContinuationService {
           parallelGroups: source.parallelGroups,
         });
         assertStepIndex(topology.steps.length, index, "edit");
+        rewindTargetedFailure(source, topology.steps, index);
         assertEditableDuringExecution(source, topology.steps, index, "edit");
         assertPendingRewindSuffix(source, index, "edit");
         assertClearablePropertiesAreEditable(change.clearProperties);
@@ -1007,6 +1022,15 @@ export class RunContinuationService {
         }
         for (const index of unique) {
           assertStepIndex(topology.steps.length, index, "remove");
+          const failureIndex = getProtectedTerminalFailureIndex({
+            executionState: source._runtime?.executionState,
+            currentIndex: source._runtime?.currentIndex,
+            steps: topology.steps,
+          });
+          if (failureIndex === index) {
+            throw new Error(terminalFailureMutationMessage("remove"));
+          }
+          rewindTargetedFailure(source, topology.steps, index);
           assertEditableDuringExecution(
             source,
             topology.steps,
@@ -1075,11 +1099,33 @@ export class RunContinuationService {
       runRef,
       expectedDefinitionRevision,
       (source, topology, currentIndex) => {
+        const failureIndex = getProtectedTerminalFailureIndex({
+          executionState: source._runtime?.executionState,
+          currentIndex,
+          steps: topology.steps,
+        });
+        if (
+          failureIndex !== undefined &&
+          absoluteOrder.includes(failureIndex) &&
+          absoluteOrder[0] !== failureIndex
+        ) {
+          throw new Error(terminalFailureMutationMessage("reorder"));
+        }
+        if (
+          failureIndex !== undefined &&
+          absoluteOrder.includes(failureIndex)
+        ) {
+          rewindTargetedFailure(source, topology.steps, failureIndex);
+          currentIndex = failureIndex;
+        }
         if (absoluteOrder.some((index) => !Number.isInteger(index))) {
           throw new Error("Reorder indices must be integers");
         }
         const fixedIndices = new Set<number>();
-        const movableIndices = getReorderableStepIndices(source);
+        const movableIndices = getReorderableStepIndices(
+          source,
+          topology.steps
+        );
         const executionIsInFlight = hasInFlightStep(
           source._runtime?.executionState,
           source._runtime?.finalStep?.phase
@@ -1153,12 +1199,14 @@ export class RunContinuationService {
           steps: source.steps ?? [],
           parallelGroups: source.parallelGroups,
         });
-        const currentIndex = source._runtime?.currentIndex ?? 0;
         const newPendingOrder = resolvePendingOrder(
           source,
           topology,
-          currentIndex
+          source._runtime?.currentIndex ?? 0
         );
+        // Read the head after resolving: a resolver that moves the terminal
+        // failure rewinds the head to it, and the order is relative to that.
+        const currentIndex = source._runtime?.currentIndex ?? 0;
         assertPendingReorderIsSafe(source, topology.steps, newPendingOrder);
         const nextTopology = reorderParallelGroupPendingSteps(
           topology,
@@ -1311,6 +1359,28 @@ export class RunContinuationService {
 
 function isInFlightExecutionState(state: ExecutionState | undefined): boolean {
   return state !== undefined && IN_FLIGHT_EXECUTION_STATES.has(state);
+}
+
+/**
+ * When `index` is the resumable terminal failure of a settled ERROR run,
+ * rewind the run head to it and reset its runtime (keeping its step id), so the
+ * mutation guards treat it as the pending step continuation will run again.
+ * Mutates `source._runtime` and `steps` in place.
+ */
+export function rewindTargetedFailure(
+  source: WorkingFile,
+  steps: WorkflowStep[],
+  index: number
+): void {
+  const failureIndex = getResumableTerminalFailureIndex({
+    executionState: source._runtime?.executionState,
+    currentIndex: source._runtime?.currentIndex,
+    steps,
+  });
+  if (failureIndex !== index || !source._runtime) return;
+  source._runtime = { ...source._runtime, currentIndex: index };
+  steps[index] = resetStepRuntimeForRewind(steps[index]);
+  steps[index]._runtime = { ...steps[index]._runtime, rewoundFailure: true };
 }
 
 function isExecutionActiveState(state: ExecutionState | undefined): boolean {

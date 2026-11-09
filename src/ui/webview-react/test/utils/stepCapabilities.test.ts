@@ -91,6 +91,49 @@ describe("stepCapabilities", () => {
     ).toBe(false);
   });
 
+  it("allows mutations on the terminal failed step of an errored run", () => {
+    const failed: WorkflowStep = {
+      prompt: "failed",
+      _runtime: {
+        startedAt: 1,
+        completedAt: 2,
+        terminalStatus: PROMPT_TERMINAL_STATUS.FAILED,
+        terminalFailure: true,
+      } as unknown as WorkflowStep["_runtime"],
+    };
+    expect(
+      getStepCapabilities(failed, 1, {
+        currentStep: 2,
+        executionState: EXECUTION_STATES.ERROR,
+        totalSteps: 3,
+      })
+    ).toMatchObject({
+      canToggleEnabled: true,
+      canDelete: false,
+      canReorder: false,
+      canEditPromptProperties: true,
+    });
+  });
+
+  it("keeps a rewound failed step editable but protects its position", () => {
+    const failed: WorkflowStep = {
+      prompt: "failed",
+      _runtime: { rewoundFailure: true } as WorkflowStep["_runtime"],
+    };
+    expect(
+      getStepCapabilities(failed, 1, {
+        currentStep: 1,
+        executionState: EXECUTION_STATES.ERROR,
+        totalSteps: 3,
+      })
+    ).toMatchObject({
+      canToggleEnabled: true,
+      canDelete: false,
+      canReorder: false,
+      canEditPromptProperties: true,
+    });
+  });
+
   it("locks the preserved prefix while a rewind is pending", () => {
     const ctx = { ...defaultContext, pendingRewindBoundary: 1 };
     expect(getStepCapabilities(prompt, 0, ctx).canDelete).toBe(false);

@@ -9,6 +9,7 @@ import {
   isComparisonIncomplete,
   resolveReportedScriptProperties,
   resolveScriptComparison,
+  resolveVerdictDisplay,
 } from "../../utils/ScriptComparison";
 import { compareScriptOutputAsync } from "../../utils/ScriptComparisonAsync";
 import * as os from "os";
@@ -35,6 +36,42 @@ function ok(stdout: string) {
 }
 
 suite("ScriptComparison", () => {
+  suite("verdict display", () => {
+    const baseVerdict = {
+      compareSource: COMPARE_SOURCES.STDOUT,
+      operator: SCRIPT_OPERATORS.CONTAINS,
+      actual: "hello",
+      exitCode: 0,
+      outcome: "passed" as const,
+      action: "continue" as const,
+      durationMs: 1,
+    };
+
+    test("keeps valueless comparisons on their configured stream", () => {
+      assert.deepStrictEqual(
+        resolveVerdictDisplay({
+          ...baseVerdict,
+          operator: SCRIPT_OPERATORS.IS_EMPTY,
+        }),
+        {
+          compareSource: COMPARE_SOURCES.STDOUT,
+          operator: SCRIPT_OPERATORS.IS_EMPTY,
+          expected: undefined,
+          actual: "hello",
+        }
+      );
+    });
+
+    test("uses exit code 0 when the comparison has no expected value", () => {
+      assert.deepStrictEqual(resolveVerdictDisplay(baseVerdict), {
+        compareSource: COMPARE_SOURCES.EXIT_CODE,
+        operator: DEFAULT_SCRIPT_OPERATOR,
+        expected: "0",
+        actual: "0",
+      });
+    });
+  });
+
   suite("defaults", () => {
     test("an unconfigured comparison is exit code 0", () => {
       const resolved = resolveScriptComparison({});

@@ -68,6 +68,7 @@ export async function promptForWorkspaceSettingsTrust(
     items: states.map((state) => ({
       value: workspaceSensitiveSettingRequestKey(state.request),
       label: state.request.summary,
+      detail: state.request.detail,
       checked: state.decision === TRUST_DECISIONS.ALLOW,
     })),
   });

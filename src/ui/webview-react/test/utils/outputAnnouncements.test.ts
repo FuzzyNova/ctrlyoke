@@ -7,6 +7,7 @@ import {
   OPERATION_STATUS,
   OUTPUT_ANNOUNCEMENT_MODES,
   OUTPUT_HISTORY_KINDS,
+  PROMPT_TERMINAL_STATUS_LABELS,
   STEP_STATUS,
   type StepStatus,
 } from "@root/types/DashboardConstants";
@@ -102,6 +103,43 @@ describe("OutputAnnouncementTracker", () => {
         })
       )
     ).toEqual(["Step 1, Plan, completed.", "Step 2, Build, started."]);
+  });
+
+  it("announces a queue step ending without starting a turn", () => {
+    const tracker = new OutputAnnouncementTracker(
+      OUTPUT_ANNOUNCEMENT_MODES.COMPLETIONS
+    );
+    tracker.observe(snapshot({ steps: [step("Plan", STEP_STATUS.RUNNING)] }));
+    expect(
+      tracker.observe(
+        snapshot({ steps: [step("Plan", STEP_STATUS.NO_TURN_STARTED)] })
+      )
+    ).toEqual([
+      `Step 1, Plan, ended: ${PROMPT_TERMINAL_STATUS_LABELS[STEP_STATUS.NO_TURN_STARTED].toLowerCase()}.`,
+    ]);
+  });
+
+  it("announces the final step ending without starting a turn", () => {
+    const tracker = new OutputAnnouncementTracker(
+      OUTPUT_ANNOUNCEMENT_MODES.COMPLETIONS
+    );
+    const finalStep = step("Review");
+    tracker.observe(
+      snapshot({
+        finalStep,
+        finalStepStatus: STEP_STATUS.RUNNING,
+      })
+    );
+    expect(
+      tracker.observe(
+        snapshot({
+          finalStep,
+          finalStepStatus: STEP_STATUS.NO_TURN_STARTED,
+        })
+      )
+    ).toEqual([
+      `Final Step Pass 1, Review, ended: ${PROMPT_TERMINAL_STATUS_LABELS[STEP_STATUS.NO_TURN_STARTED].toLowerCase()}.`,
+    ]);
   });
 
   it("ignores status differences while nothing is running", () => {

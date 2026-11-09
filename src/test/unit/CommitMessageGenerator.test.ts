@@ -393,6 +393,74 @@ suite("CommitMessageGenerator", () => {
     }
   });
 
+  test("emits separate untracked file hunks with accurate line counts", async () => {
+    const cwd = await fs.mkdtemp(
+      path.join(os.tmpdir(), "cy-commit-multiple-untracked-")
+    );
+    try {
+      await execFileAsync("git", ["init"], { cwd });
+      await fs.writeFile(path.join(cwd, "a.txt"), "one\ntwo\n");
+      await fs.writeFile(path.join(cwd, "b.txt"), "three\n");
+
+      const result = await new CommitMessageGenerator().getDiff(cwd);
+
+      assert.ok(result);
+      assert.match(result.diff, /(^|\n)diff --git a\/a\.txt b\/a\.txt\n/);
+      assert.match(result.diff, /(^|\n)diff --git a\/b\.txt b\/b\.txt\n/);
+      assert.match(result.diff, /@@ -0,0 \+1,2 @@\n\+one\n\+two\n/);
+      assert.match(result.diff, /@@ -0,0 \+1,1 @@\n\+three\n/);
+      assert.ok(!result.diff.split("\n").includes("+"), result.diff);
+    } finally {
+      await fs
+        .rm(cwd, { recursive: true, force: true, maxRetries: 5 })
+        .catch(() => {});
+    }
+  });
+
+  test("marks an untracked file that lacks a trailing newline", async () => {
+    const cwd = await fs.mkdtemp(
+      path.join(os.tmpdir(), "cy-commit-no-final-newline-")
+    );
+    try {
+      await execFileAsync("git", ["init"], { cwd });
+      await fs.writeFile(path.join(cwd, "no-newline.txt"), "single line");
+
+      const result = await new CommitMessageGenerator().getDiff(cwd);
+
+      assert.ok(result);
+      assert.match(
+        result.diff,
+        /@@ -0,0 \+1,1 @@\n\+single line\n\\ No newline at end of file\n/
+      );
+    } finally {
+      await fs
+        .rm(cwd, { recursive: true, force: true, maxRetries: 5 })
+        .catch(() => {});
+    }
+  });
+
+  test("lists an empty untracked file without a hunk", async () => {
+    const cwd = await fs.mkdtemp(
+      path.join(os.tmpdir(), "cy-commit-empty-untracked-")
+    );
+    try {
+      await execFileAsync("git", ["init"], { cwd });
+      await fs.writeFile(path.join(cwd, "empty.txt"), "");
+
+      const result = await new CommitMessageGenerator().getDiff(cwd);
+
+      assert.ok(result);
+      assert.strictEqual(
+        result.diff,
+        "diff --git a/empty.txt b/empty.txt\nnew file mode 100644\n"
+      );
+    } finally {
+      await fs
+        .rm(cwd, { recursive: true, force: true, maxRetries: 5 })
+        .catch(() => {});
+    }
+  });
+
   test("lists untracked files from the repository root when cwd is a subdirectory", async () => {
     const repositoryRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "cy-commit-subdirectory-")

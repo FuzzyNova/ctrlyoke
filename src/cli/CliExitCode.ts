@@ -48,6 +48,9 @@ export function selectTerminalFailure(
 /** Exit code for CLI usage, parsing, and unexpected errors. */
 export const CLI_USAGE_EXIT_CODE = 2;
 
+/** A run interrupted by SIGINT or SIGTERM. */
+export const CLI_INTERRUPTED_EXIT_CODE = 5;
+
 /** Guardrail stops have a dedicated non-zero code for automation callers. */
 export const CLI_GUARDRAIL_STOP_EXIT_CODE = 6;
 

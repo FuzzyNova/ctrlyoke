@@ -1148,6 +1148,8 @@ export interface ConditionEvaluationSummary {
  * Tracks execution state for individual prompts within a workflow.
  */
 export interface PromptRuntimeMetadata extends ExecutionProperties {
+  /** Preserves queue-index history ownership after an edited failure is rewound. */
+  rewoundFailure?: boolean;
   /**
    * Timestamp when the executor claimed this step for dispatch. This is not
    * the timestamp when runtime metadata was written.

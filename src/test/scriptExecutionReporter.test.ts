@@ -9,6 +9,7 @@ import type {
 } from "../core/EndConditionEvaluator";
 import {
   ScriptExecutionReporter,
+  formatVerdictSummary,
   type ScriptExecutionReporterContext,
 } from "../core/orchestration/ScriptExecutionReporter";
 import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
@@ -140,6 +141,86 @@ suite("ScriptExecutionReporter", () => {
       "regex timed out after 2s on 100001 chars"
     );
     assert.strictEqual(report.verdict.outcome, "failed");
+  });
+
+  test("summarizes passing stderr output with its comparison", async () => {
+    const events: string[] = [];
+    const { reporter, context } = makeReporter(
+      makeResult({ stderr: "oops", actual: "oops" }),
+      events
+    );
+    const report = await reporter.report({
+      context,
+      source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
+      properties: resolveReportedScriptProperties({
+        script: "check.sh",
+        compareSource: "stderr",
+        operator: "contains",
+        expected: "oop",
+      }),
+      phase: EXECUTION_PHASES.PROMPT,
+      target: { kind: "queue", stepIndex: 0 },
+      signedStepIndex: 0,
+      runIndex: 0,
+      attemptIndex: 0,
+      timestampMs: 100,
+      onPass: "continue",
+      onFail: "stopWorkflow",
+      actionForErrored: "stopWorkflow",
+      evaluate: async () => makeResult({ stderr: "oops", actual: "oops" }),
+    });
+
+    assert.strictEqual(report.verdict.error, undefined);
+    assert.strictEqual(
+      formatVerdictSummary("Script step", report.verdict),
+      "Script step passed (stderr contains oop) → continue"
+    );
+  });
+
+  test("summarizes a failed exit-code comparison without stderr", async () => {
+    const events: string[] = [];
+    const { reporter, context } = makeReporter(
+      makeResult({
+        passed: false,
+        actual: "3",
+        result: "",
+        stderr: "warning",
+        exitCode: 3,
+      }),
+      events
+    );
+    const report = await reporter.report({
+      context,
+      source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
+      properties: resolveReportedScriptProperties({
+        script: "check.sh",
+        compareSource: "stdout",
+        operator: "eq",
+      }),
+      phase: EXECUTION_PHASES.PROMPT,
+      target: { kind: "queue", stepIndex: 0 },
+      signedStepIndex: 0,
+      runIndex: 0,
+      attemptIndex: 0,
+      timestampMs: 100,
+      onPass: "continue",
+      onFail: "stopWorkflow",
+      actionForErrored: "stopWorkflow",
+      evaluate: async () =>
+        makeResult({
+          passed: false,
+          actual: "3",
+          result: "",
+          stderr: "warning",
+          exitCode: 3,
+        }),
+    });
+
+    assert.strictEqual(report.verdict.error, undefined);
+    assert.strictEqual(
+      formatVerdictSummary("Script step", report.verdict),
+      'Script step failed (exit code == 0, got "3") → stopWorkflow'
+    );
   });
 
   test("redacts split streamed stdout and complete stderr before publishing", async () => {

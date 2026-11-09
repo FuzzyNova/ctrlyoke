@@ -47,6 +47,7 @@ import { LANGUAGE_SERVER_CATALOG } from "./LanguageServerCatalog";
 import { ctrlyokeStateHome } from "../../utils/ProjectStatePaths";
 import { Log } from "../../utils/Log";
 import { getErrorMessage } from "../../utils/ErrorUtils";
+import { escapeUntrustedDisplayText } from "../../utils/EscapeUntrustedDisplayText";
 
 export type LanguageServerStatus =
   (typeof LANGUAGE_SERVER_STATUSES)[keyof typeof LANGUAGE_SERVER_STATUSES];
@@ -92,6 +93,39 @@ interface RunningServer {
 const APPROVAL_KEY = "languageServers.workspaceDefinitionApprovals";
 const INITIALIZE_TIMEOUT_MS = 60_000;
 const INITIALIZE_TIMEOUT_SECONDS = INITIALIZE_TIMEOUT_MS / 1_000;
+
+function formatWorkspaceDefinitionDetail(
+  definition: LanguageServerDefinition,
+  settings: Record<string, unknown>
+): string {
+  const sections = [
+    `Command:\n${escapeUntrustedDisplayText(JSON.stringify(definition.command, null, 2))}`,
+  ];
+  const envEntries = Object.entries(definition.env ?? {}).sort(
+    ([left], [right]) => left.localeCompare(right)
+  );
+  if (envEntries.length) {
+    sections.push(
+      `Environment:\n${envEntries
+        .map(
+          ([key, value]) =>
+            `${escapeUntrustedDisplayText(key, { escapeNewlines: true })}=${escapeUntrustedDisplayText(String(value), { escapeNewlines: true })}`
+        )
+        .join("\n")}`
+    );
+  }
+  const executionOptions = getWorkspaceExecutionOptionEntries(settings);
+  if (executionOptions.length) {
+    sections.push(
+      `Execution options:\n${executionOptions
+        .map((entry) =>
+          escapeUntrustedDisplayText(entry, { escapeNewlines: true })
+        )
+        .join("\n")}`
+    );
+  }
+  return sections.join("\n\n");
+}
 
 /** Spawns and supervises stdio language servers for a single workspace host. */
 export class ManagedLanguageServerBackend implements LanguageServerBackend {
@@ -613,7 +647,13 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
         "These workspace definitions can run commands on this machine. Review each executable before allowing it.",
       items: pending.map(([id, definition]) => ({
         value: `${id}:${hashes.get(id)}`,
-        label: `${id}: ${definition.command.join(" ")}`,
+        label: `${escapeUntrustedDisplayText(id)}: ${definition.command
+          .map((part) => escapeUntrustedDisplayText(part))
+          .join(" ")}`,
+        detail: formatWorkspaceDefinitionDetail(
+          definition,
+          settings.settings[id] ?? {}
+        ),
         checked: false,
       })),
     });

@@ -1720,6 +1720,137 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(queue.getState().currentIndex, 1);
     });
 
+    test("rewinds a terminal failure for continuation without changing settled ERROR state", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      await failCurrentPrompt(queue);
+
+      assert.strictEqual(
+        await queue.rewindTerminalFailureForContinuation(),
+        true
+      );
+      const state = queue.getState();
+      assert.strictEqual(state.currentIndex, 0);
+      assert.strictEqual(state.results[0].status, STEP_STATUS.PENDING);
+      assert.strictEqual(state.status, EXECUTION_STATES.ERROR);
+      assert.strictEqual(
+        queue.getState().steps[0]._runtime?.terminalStatus,
+        undefined
+      );
+    });
+
+    test("reordering only the steps after a terminal failure keeps the failure in place", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      await failCurrentPrompt(queue);
+
+      // The dashboard sends positions relative to currentIndex (1 here), so
+      // [1, 0] swaps the second and third steps and leaves the failure alone.
+      await queue.reorderPendingPrompts([1, 0]);
+
+      const state = queue.getState();
+      assert.deepStrictEqual(
+        state.steps.map((step) => (step as PromptStep).prompt),
+        ["First prompt", "Third prompt", "Second prompt"]
+      );
+      assert.strictEqual(state.currentIndex, 1);
+      assert.strictEqual(state.results[0].status, STEP_STATUS.FAILED);
+    });
+
+    test("a reorder that moves the terminal failure is rejected without rewinding it", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      await failCurrentPrompt(queue);
+
+      await assert.rejects(
+        () => queue.reorderPendingPrompts([1, 0, 2]),
+        /recorded history and must stay first/i
+      );
+
+      const state = queue.getState();
+      assert.deepStrictEqual(
+        state.steps.map((step) => (step as PromptStep).prompt),
+        ["First prompt", "Second prompt", "Third prompt"]
+      );
+      assert.strictEqual(state.currentIndex, 1);
+      assert.strictEqual(state.results[0].status, STEP_STATUS.FAILED);
+    });
+
+    test("a reorder that keeps the terminal failure first is accepted", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      await failCurrentPrompt(queue);
+
+      await queue.reorderPendingPrompts([0, 2, 1]);
+
+      const state = queue.getState();
+      assert.deepStrictEqual(
+        state.steps.map((step) => (step as PromptStep).prompt),
+        ["First prompt", "Third prompt", "Second prompt"]
+      );
+      assert.strictEqual(state.currentIndex, 0);
+      assert.strictEqual(state.results[0].status, STEP_STATUS.PENDING);
+    });
+
+    test("cannot remove a terminal failure with recorded history", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      await failCurrentPrompt(queue);
+
+      await assert.rejects(
+        () => queue.deletePrompts([0]),
+        /recorded history and must stay first.*disable it/i
+      );
+      assert.strictEqual(queue.getState().currentIndex, 1);
+      assert.strictEqual(
+        queue.getState().results[0].status,
+        STEP_STATUS.FAILED
+      );
+    });
+
+    test("editing a failed step keeps its history position protected", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      await failCurrentPrompt(queue);
+      await queue.updatePrompt(0, { prompt: "edited failed prompt" });
+
+      await assert.rejects(() => queue.deletePrompts([0]), /recorded history/i);
+      await assert.rejects(
+        () => queue.reorderPendingPrompts([1, 0, 2]),
+        /recorded history/i
+      );
+      assert.strictEqual(
+        (queue.getState().steps[0] as PromptStep).prompt,
+        "edited failed prompt"
+      );
+      assert.strictEqual(
+        queue.getState().steps[0]._runtime?.rewoundFailure,
+        true
+      );
+    });
+
+    test("toggling a failed step keeps its history position protected", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      await failCurrentPrompt(queue);
+      await queue.updateSteps([0], { enabled: false });
+
+      await assert.rejects(() => queue.deletePrompts([0]), /recorded history/i);
+      assert.strictEqual(
+        queue.getState().steps[0]._runtime?.rewoundFailure,
+        true
+      );
+    });
+
+    test("does not rewind a non-terminal failure", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      await failCurrentPrompt(queue);
+      queue.getState().steps[0]._runtime!.terminalFailure = false;
+
+      assert.strictEqual(
+        await queue.rewindTerminalFailureForContinuation(),
+        false
+      );
+      assert.strictEqual(queue.getState().currentIndex, 1);
+      assert.strictEqual(
+        queue.getState().results[0].status,
+        STEP_STATUS.FAILED
+      );
+    });
+
     test("should record terminalStatus as failed on the prompt runtime", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await failCurrentPrompt(queue);

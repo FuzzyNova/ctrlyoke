@@ -2686,7 +2686,9 @@ export class WorktreeManager {
     });
     if (!result.success) {
       throw new Error(
-        result.error || `Setup exited with code ${result.exitCode ?? "unknown"}`
+        result.error ||
+          result.stderr ||
+          `Setup exited with code ${result.exitCode ?? "unknown"}`
       );
     }
   }

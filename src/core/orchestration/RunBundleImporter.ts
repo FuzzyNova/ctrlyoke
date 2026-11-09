@@ -36,7 +36,11 @@ import {
   streamRunBundleEvents,
   type ReadRunBundleOptions,
 } from "./RunBundleReader";
-import { RunMaterializer } from "./RunMaterializer";
+import {
+  ATTEMPT_RUNTIME_EVENT_TYPES,
+  projectAttemptRuntime,
+  RunMaterializer,
+} from "./RunMaterializer";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import {
   EXECUTION_STATES,
@@ -52,6 +56,7 @@ import type {
   WorkingFileRuntime,
 } from "../../types/CtrlYokeTypes";
 import { hasErrnoCode } from "../../utils/ErrorUtils";
+import { flattenParallelItems } from "../ParallelGroupTopology";
 
 export interface RunBundleImportOptions extends ReadRunBundleOptions {
   workspaceRoot: string;
@@ -148,8 +153,13 @@ export class RunBundleImporter {
     }
 
     // Complete a validation pass before copying assets or allocating a lineage.
-    for await (const _event of streamRunBundleEvents(header, options)) {
-      /* validate */
+    // A history-only bundle has no working file, so keep just its attempt
+    // events to rebuild step runtime without buffering the whole timeline.
+    const attemptEvents: WorkflowTimelineEventDraft[] = [];
+    for await (const event of streamRunBundleEvents(header, options)) {
+      if (!header.runtime && ATTEMPT_RUNTIME_EVENT_TYPES.has(event.eventType)) {
+        attemptEvents.push(event as WorkflowTimelineEventDraft);
+      }
     }
     const { rewrite: rewriteAssets, cleanup: cleanupAssets } =
       await this.createAssetReferenceRewriter(
@@ -184,6 +194,10 @@ export class RunBundleImporter {
     }
     try {
       definition = rewriteAssets(header.definition) as Record<string, unknown>;
+      if (!header.runtime) {
+        definition = flattenAuthoredParallelDefinition(definition);
+        definition = projectAttemptRuntime(definition, attemptEvents);
+      }
       runFile = header.runtime
         ? (rewriteAssets(header.runtime) as WorkingFile)
         : undefined;
@@ -199,6 +213,7 @@ export class RunBundleImporter {
           : header.runManifest.executionState,
         currentIndex: (definition.steps as unknown[] | undefined)?.length ?? 0,
         startedAt: header.runManifest.startedAt,
+        activeExecutionMs: header.runManifest.activeExecutionMs,
         provenance,
         ...(header.manifest.continuation
           ? {
@@ -435,6 +450,21 @@ export class RunBundleImporter {
       return rewritten;
     }
   }
+}
+
+/** History bundles store the authored form; timeline indices use flat steps. */
+function flattenAuthoredParallelDefinition(
+  definition: Record<string, unknown>
+): Record<string, unknown> {
+  if (!Array.isArray(definition.steps)) return definition;
+  const { topology } = flattenParallelItems(
+    definition.steps as Parameters<typeof flattenParallelItems>[0]
+  );
+  return {
+    ...definition,
+    steps: topology.steps,
+    parallelGroups: topology.parallelGroups,
+  };
 }
 
 function normalizeReferenceAssetPath(value: string): string {

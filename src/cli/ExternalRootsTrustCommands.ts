@@ -1,6 +1,7 @@
 import { TRUST_DECISIONS } from "../types/DashboardConstants";
 import type { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import type { CliTrustIo } from "./CliTrustGate";
+import { escapeUntrustedDisplayText } from "../utils/EscapeUntrustedDisplayText";
 
 export interface TrustExternalRootsOptions {
   cwd?: string;
@@ -23,7 +24,9 @@ export async function trustExternalRootsCommand(
   }
 
   io.writeErr(heading);
-  roots.forEach((root) => io.writeErr(`  - ${root}`));
+  roots.forEach((root) =>
+    io.writeErr(`  - ${escapeUntrustedDisplayText(root, { escapeNewlines: true })}`)
+  );
 
   if (!options.yes && !io.isInteractive) {
     io.writeErr(

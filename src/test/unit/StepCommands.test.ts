@@ -9,6 +9,7 @@ import {
   RUN_DEFINITION_DECISIONS,
   RUN_DEFINITION_INTEGRITY,
   RUNNER_IDS,
+  STEP_TYPES,
   type ExecutionState,
 } from "../../types/DashboardConstants";
 import {
@@ -215,6 +216,47 @@ suite("CLI step command handlers", () => {
       "new prompt"
     );
     assert.match(io.output[0], /Edited step 0/);
+  });
+
+  test("rejects --prompt on a script step without changing the stored step", async () => {
+    const scriptStep: WorkflowStep = {
+      type: STEP_TYPES.SCRIPT,
+      script: "npm test",
+      name: "tests",
+      onFail: "stopWorkflow",
+    };
+    await seedRun(EXECUTION_STATES.IDLE, 0, [scriptStep]);
+
+    await assert.rejects(
+      () =>
+        editStepCommand(
+          undefined,
+          editOptions({ index: "0", prompt: "run another command" }),
+          context(),
+          new RecordingIo()
+        ),
+      /step 0 is a script step; --prompt only edits prompt steps/u
+    );
+
+    assert.deepStrictEqual((await readRun()).steps?.[0], scriptStep);
+  });
+
+  test("--prompt preserves the name of a prompt step", async () => {
+    await seedRun(EXECUTION_STATES.IDLE, 0, [
+      { name: "review", prompt: "old prompt" },
+    ]);
+
+    await editStepCommand(
+      undefined,
+      editOptions({ index: "0", prompt: "new prompt" }),
+      context(),
+      new RecordingIo()
+    );
+
+    assert.deepStrictEqual((await readRun()).steps?.[0], {
+      name: "review",
+      prompt: "new prompt",
+    });
   });
 
   test("edits a pending step while another process actively executes the run", async () => {

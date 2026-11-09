@@ -802,7 +802,19 @@ suite("CLI history inspection command handlers", () => {
           lifecycleTerminated(step0, { attemptIndex: 1 }),
           lifecycleStarted(step1),
           lifecycleStarted(pass1, { timestampMs: 10_000 }),
-          lifecycleTerminated(pass1, { timestampMs: 14_500 }),
+          lifecycleTerminated(pass1, {
+            timestampMs: 10_500,
+            terminalState: "failed",
+          }),
+          // The idle interval before retrying the pass is not elapsed time.
+          lifecycleStarted(pass1, {
+            timestampMs: 14_000,
+            attemptIndex: 1,
+          }),
+          lifecycleTerminated(pass1, {
+            timestampMs: 14_500,
+            attemptIndex: 1,
+          }),
           lifecycleStarted(pass2, { timestampMs: 20_000 }),
         ]
       );
@@ -863,17 +875,17 @@ suite("CLI history inspection command handlers", () => {
         state: "completed",
         harness: "claude-cli",
         model: "opus",
-        elapsedSeconds: 4.5,
+        elapsedSeconds: 1,
         nextPass: null,
         passes: [
           {
             selector: "final:1",
             pass: 1,
             state: "completed",
-            attempts: 1,
+            attempts: 2,
             startedAt: 10_000,
             completedAt: 14_500,
-            elapsedSeconds: 4.5,
+            elapsedSeconds: 1,
           },
           {
             selector: "final:2",
@@ -908,7 +920,7 @@ suite("CLI history inspection command handlers", () => {
         assert.match(row.slice(stateColumn), /^(completed|running|pending) /);
       }
       assert.match(rows[0], / 1h2m /);
-      assert.match(rows[3], / 5s /);
+      assert.match(rows[3], / 1s /);
       assert.match(rows[2], /^2 +— +pending/);
       assert.match(rows[1], /running \(next\)/);
       assert.match(rows[3], /^final +review +completed .* 2 passes +Review/);

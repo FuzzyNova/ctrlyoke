@@ -173,7 +173,6 @@ export class ScriptProcessRunner {
             ? `Process terminated by ${result.terminationSignal}`
             : undefined) ||
           shellFailureMessage ||
-          result.stderr.trim() ||
           undefined,
         ...(externalSignal ? { signal: result.terminationSignal } : {}),
         ...(managerTerminated

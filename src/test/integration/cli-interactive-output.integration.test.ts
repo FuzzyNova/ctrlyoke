@@ -48,4 +48,45 @@ suite("CLI interactive run output", () => {
     assert.match(result.stdout, /hello from the script step/);
     assert.match(result.stdout, /greet/);
   });
+
+  test("prints headless script stdout and stderr after the echoed command", async function () {
+    this.timeout(60_000);
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-cli-script-output-")
+    );
+    temporaryRoots.push(root);
+    const workflowPath = path.join(root, "workflow.ctrlyoke.json");
+    await fs.writeFile(
+      workflowPath,
+      JSON.stringify({
+        steps: [
+          {
+            type: "script",
+            name: "markers",
+            script: "echo out-marker; echo err-marker 1>&2",
+          },
+        ],
+      }),
+      "utf8"
+    );
+
+    const result = await runCli(
+      ["run", workflowPath, "--headless", "--cwd", root],
+      root,
+      { CTRLYOKE_HOME: path.join(root, "state") }
+    );
+
+    assert.strictEqual(result.code, 0, result.stderr);
+    const commandLineEnd = result.stdout.indexOf(
+      "echo out-marker; echo err-marker 1>&2"
+    );
+    assert.notStrictEqual(commandLineEnd, -1, result.stdout);
+    const outputAfterCommand = result.stdout
+      .slice(commandLineEnd)
+      .split("\n")
+      .slice(1)
+      .join("\n");
+    assert.ok(outputAfterCommand.includes("out-marker"), result.stdout);
+    assert.ok(outputAfterCommand.includes("err-marker"), result.stdout);
+  });
 });

@@ -204,8 +204,8 @@ export const ExportRunDialog: React.FC = () => {
               </>
             ) : (
               <p>
-                This run has no pending work to continue; history only will be
-                exported.
+                This run has no pending work to continue, or the workspace has
+                no Git commit to continue from; history only will be exported.
               </p>
             )}
             <SettingToggleRow
