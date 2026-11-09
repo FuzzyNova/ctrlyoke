@@ -1282,6 +1282,12 @@ describe("outputRows", () => {
           };
         })
       );
+      return buildSequentialRowsFromMessages(allMessages, options);
+    };
+    const buildSequentialRowsFromMessages = (
+      allMessages: OutputMessage[],
+      options: { finalStep?: WorkflowStep | null; steps?: WorkflowStep[] } = {}
+    ) => {
       const result = buildOutputRows({
         allMessages,
         steps: options.steps ?? steps,
@@ -1365,6 +1371,54 @@ describe("outputRows", () => {
 
       expect(contentRows).toHaveLength(2);
       expect(contentRows.some((row) => row.activityFirst)).toBe(false);
+    });
+
+    it("labels a follow-up after a non-activity step block", () => {
+      const firstAndLast = mapOrderedHistoryEntriesToMessages([], [
+        {
+          timestampMs: 1000,
+          sequence: 1,
+          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.TEXT,
+          text: "A",
+        },
+        {
+          timestampMs: 1002,
+          sequence: 3,
+          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.STRUCTURED,
+          events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "A-followup" } }],
+        },
+      ]);
+      const middle = {
+        type: "cli",
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 1 },
+        timestamp: 1001,
+        sequence: 2,
+        attemptIndex: 0,
+        runIndex: 0,
+        data: {
+          cliCommand: "",
+          scriptOutput: { command: "", stdout: "", stderr: "" },
+          responseText: "",
+          exitCode: 0,
+          elapsed: 0,
+          isStreaming: false,
+          source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
+        },
+      } as unknown as OutputMessage;
+      const { contentRows } = buildSequentialRowsFromMessages([
+        firstAndLast[0],
+        middle,
+        firstAndLast[1],
+      ]);
+      const followUp = contentRows[contentRows.length - 1];
+      expect(followUp?.activityFirst).toBe(true);
+      expect(followUp?.activityLabel).toBe("Step 1");
     });
 
     it("labels a final-step follow-up as its pass on the CLI and status paths", () => {
