@@ -3590,8 +3590,17 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     // suffix editability is governed by `assertPendingRewindSuffixIndex`. Defer to
     // it entirely rather than treating the boundary as a locked running step.
     if (this.state.pendingRewind) return;
-    if (!this.isExecutionActive) return;
     const step = this.state.steps[index];
+    if (!this.isExecutionActive) {
+      // Once execution stops, a step that ran keeps its definition and
+      // position for good, as RunContinuationService enforces for offline
+      // edits. A failed step continuation will retry is rewound before this
+      // check, which returns it to pending.
+      if (hasStarted(step) || step?._runtime?.terminalStatus !== undefined) {
+        throw new Error(STEP_MUTATION_ERROR_MESSAGES.completed(operation));
+      }
+      return;
+    }
     assertStepMutable(
       step,
       operation,

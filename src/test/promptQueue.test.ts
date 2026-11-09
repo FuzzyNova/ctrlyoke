@@ -3671,7 +3671,7 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(state.steps[2]._runtime?.sessionId, "s2");
     });
 
-    test("should restore deleted prompt runtime from the queue archive when webview snapshot lacks it", async () => {
+    test("refuses to delete a step that ran once the run has stopped", async () => {
       queue.loadPrompts(
         createPromptFile([
           {
@@ -3682,51 +3682,26 @@ suite("PromptQueue State Machine Tests", () => {
               completedAt: 200,
             },
           },
+          { prompt: "p1" },
         ])
       );
       (queue as any).state.currentIndex = 1;
 
-      await queue.deletePrompts([0]);
-      await queue.syncStepsForUndoRedo([{ prompt: "p0" }]);
+      await assert.rejects(
+        () => queue.deletePrompts([0]),
+        /Cannot delete a step that has already run/
+      );
+      await assert.rejects(
+        () => queue.replaceStep(0, { prompt: "replaced" }),
+        /Cannot replace a step that has already run/
+      );
 
       const state = queue.getState();
+      assert.strictEqual(state.steps.length, 2);
       assert.strictEqual(state.steps[0]._runtime?.sessionId, "s0");
       assert.strictEqual(state.currentIndex, 1);
-      assert.strictEqual(state.results[0].status, STEP_STATUS.COMPLETED);
-    });
-
-    test("should restore shifted completed prompt runtime after undoing delete", async () => {
-      queue.loadPrompts(
-        createPromptFile([
-          {
-            prompt: "p0",
-            _runtime: {
-              sessionId: "s0",
-              startedAt: 100,
-              completedAt: 200,
-            },
-          },
-          {
-            prompt: "p1",
-            _runtime: {
-              sessionId: "s1",
-              startedAt: 300,
-              completedAt: 400,
-            },
-          },
-        ])
-      );
-      (queue as any).state.currentIndex = 2;
-
-      await queue.deletePrompts([0]);
-      await queue.syncStepsForUndoRedo([{ prompt: "p0" }, { prompt: "p1" }]);
-
-      const state = queue.getState();
-      assert.strictEqual(state.steps[0]._runtime?.sessionId, "s0");
-      assert.strictEqual(state.steps[1]._runtime?.sessionId, "s1");
-      assert.strictEqual(state.currentIndex, 2);
-      assert.strictEqual(state.results[0].status, STEP_STATUS.COMPLETED);
-      assert.strictEqual(state.results[1].status, STEP_STATUS.COMPLETED);
+      await queue.deletePrompts([1]);
+      assert.strictEqual(queue.getState().steps.length, 1);
     });
 
     test("should restore completed added prompt runtime when redo snapshot lacks it", async () => {

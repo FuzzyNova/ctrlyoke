@@ -2498,7 +2498,11 @@ suite("WorkflowExecutor finalStep phase 2", () => {
         () => queue.updateSteps([2], { enabled: false }),
         /completed step/i
       );
-      await queue.replaceStep(2, { prompt: "also-succeeds" });
+      await assert.rejects(
+        () => queue.replaceStep(2, { prompt: "edited" }),
+        /already run/i
+      );
+      await assert.rejects(() => queue.deletePrompts([2]), /already run/i);
       assert.strictEqual(queue.getState().currentIndex, 3);
       assert.strictEqual(
         queue.getState().results[1].status,
