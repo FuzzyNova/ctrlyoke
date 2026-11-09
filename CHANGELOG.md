@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `ctrlyoke run` no longer reports streamed script output as truncated just because the script also wrote to stderr.
 - The failed queue step in an errored run can now be edited, removed, reordered, or enabled before continuing.
 - Exporting a pending run without a Git repository or first commit now creates a view-only bundle instead of failing.
 - Script stderr no longer appears as a verdict error; failed worktree setup still includes its stderr.

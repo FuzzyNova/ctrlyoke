@@ -931,15 +931,10 @@ export class CliTerminalFormatter {
     }
 
     if (state) {
-      const totalText = outputText;
-      state.totalChars = Math.max(state.totalChars, totalText.length);
-      state.totalLines = countOutputLines(totalText);
       const stderr = streamedStdout ? (scriptOutput?.stderr?.trim() ?? "") : "";
       if (stderr) {
         const unstreamedText = `${state.endsWithNewline ? "" : "\n"}${stderr}`;
         CliTerminalFormatter.writeBoundedScriptChunk(unstreamedText, state);
-        state.totalChars = Math.max(state.totalChars, totalText.length);
-        state.totalLines = countOutputLines(totalText);
       }
       if (!state.endsWithNewline) process.stdout.write("\n");
       const omittedLines = Math.max(0, state.totalLines - state.shownLines);
