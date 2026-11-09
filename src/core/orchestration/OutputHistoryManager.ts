@@ -1096,15 +1096,16 @@ export class OutputHistoryManager {
     try {
       await this.streamingBuffer.flush(historyFilePath);
       const completedAt = options.completedAt ?? Date.now();
-      const events = options.appendTerminationEvent === false
-        ? []
-        : await this.timelineRecorder.appendEvents(historyFilePath, [
-            {
-              eventType: TIMELINE_EVENT_TYPES.RUN_TERMINATED,
-              timestampMs: completedAt,
-              payload: { executionState, stepCount },
-            },
-          ]);
+      const events =
+        options.appendTerminationEvent === false
+          ? []
+          : await this.timelineRecorder.appendEvents(historyFilePath, [
+              {
+                eventType: TIMELINE_EVENT_TYPES.RUN_TERMINATED,
+                timestampMs: completedAt,
+                payload: { executionState, stepCount },
+              },
+            ]);
       await this.applyTokenEvents(historyFilePath, events, true);
       await this.timelineRecorder.updateManifest(
         historyFilePath,
