@@ -945,6 +945,46 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     return this.state.currentIndex < this.state.steps.length;
   }
 
+  /** Rewind a settled ERROR run to the terminal queue failure for continuation. */
+  public async rewindTerminalFailureForContinuation(): Promise<boolean> {
+    if (this.stateMachine.status !== EXECUTION_STATES.ERROR) {
+      return false;
+    }
+    const failedIndex = this.state.currentIndex - 1;
+    const result = this.state.results[failedIndex];
+    const runtime = this.state.steps[failedIndex]?._runtime;
+    if (
+      !result ||
+      result.status !== STEP_STATUS.FAILED ||
+      runtime?.terminalFailure === false
+    ) {
+      return false;
+    }
+
+    this.state.currentIndex = failedIndex;
+    this.state.completedIndices.delete(String(failedIndex));
+    result.status = STEP_STATUS.PENDING;
+    result.timestamp = new Date();
+    delete result.error;
+    delete result.failureKind;
+    const step = this.state.steps[failedIndex];
+    if (step?._runtime) {
+      const {
+        startedAt: _startedAt,
+        completedAt: _completedAt,
+        terminalStatus: _terminalStatus,
+        failureMessage: _failureMessage,
+        failureKind: _failureKind,
+        terminalFailure: _terminalFailure,
+        ...remainingRuntime
+      } = step._runtime;
+      step._runtime = remainingRuntime;
+    }
+    this.emitStateChange();
+    await this.updateWorkingFile();
+    return true;
+  }
+
   /**
    * Get current prompt
    */

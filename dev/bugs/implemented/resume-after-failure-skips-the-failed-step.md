@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-08 by bug-hunt final step (claude-cli, CLI repro)
 - **Area:** `src/core/PromptQueue.ts` (`commitStepOutcomeAndAdvance`), `src/core/WorkflowInstance.ts` (`resume`, `executeContinuationAtRun`), `src/core/orchestration/WorkflowStartupPipeline.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

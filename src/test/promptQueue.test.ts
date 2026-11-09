@@ -1720,6 +1720,40 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(queue.getState().currentIndex, 1);
     });
 
+    test("rewinds a terminal failure for continuation without changing settled ERROR state", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      await failCurrentPrompt(queue);
+
+      assert.strictEqual(
+        await queue.rewindTerminalFailureForContinuation(),
+        true
+      );
+      const state = queue.getState();
+      assert.strictEqual(state.currentIndex, 0);
+      assert.strictEqual(state.results[0].status, STEP_STATUS.PENDING);
+      assert.strictEqual(state.status, EXECUTION_STATES.ERROR);
+      assert.strictEqual(
+        queue.getState().steps[0]._runtime?.terminalStatus,
+        undefined
+      );
+    });
+
+    test("does not rewind a non-terminal failure", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      await failCurrentPrompt(queue);
+      queue.getState().steps[0]._runtime!.terminalFailure = false;
+
+      assert.strictEqual(
+        await queue.rewindTerminalFailureForContinuation(),
+        false
+      );
+      assert.strictEqual(queue.getState().currentIndex, 1);
+      assert.strictEqual(
+        queue.getState().results[0].status,
+        STEP_STATUS.FAILED
+      );
+    });
+
     test("should record terminalStatus as failed on the prompt runtime", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await failCurrentPrompt(queue);

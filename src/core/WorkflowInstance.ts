@@ -2343,6 +2343,8 @@ export class WorkflowInstance
     );
     await onPrepared?.();
 
+    await this.promptQueue.rewindTerminalFailureForContinuation();
+
     const historyFilePath = this.outputHistoryManager.getHistoryFilePath(
       workflowKey,
       runRef
@@ -2499,13 +2501,16 @@ export class WorkflowInstance
     }
 
     // STOPPED = a step was appended to a completed workflow via reopenForContinuation().
-    // ERROR = the current step failed; retry it from the current (failed) position.
+    // ERROR = rewind the terminal queue failure, then retry it from that position.
     // Both use executeLoadedPromptFile so EXECUTION_STARTED is sent to the webview and
     // the history file is properly initialised for the new step's output.
     if (
       this.workflowRuntime.status === EXECUTION_STATES.STOPPED ||
       this.workflowRuntime.status === EXECUTION_STATES.ERROR
     ) {
+      if (this.workflowRuntime.status === EXECUTION_STATES.ERROR) {
+        await this.promptQueue.rewindTerminalFailureForContinuation();
+      }
       await this.executeLoadedPromptFile(undefined, true);
       return;
     }

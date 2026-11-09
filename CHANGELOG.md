@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Resuming or continuing an errored run now re-runs the terminal failed step before continuing with later steps.
 - **Copy All Responses** (formerly **Copy All**) now copies each step's prompt. Before, the section labeled "Prompt" held the harness command line ctrlyoke ran, not the prompt. Each section is also headed with the step's name when it has one.
 - Copying a script step's output from the output pane or the step menu works again. Before, the copy command was disabled and the copy button at the end of the step never appeared, and **Copy All Responses** included the script's command but not its output.
 - Saving a step or the final step from the dashboard editor no longer removes its end condition. Before, any end condition that compared output with an operator, or simply passed on exit code 0, was dropped on save, so it never ran.
