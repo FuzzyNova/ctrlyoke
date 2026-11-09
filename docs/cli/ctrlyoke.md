@@ -1029,6 +1029,24 @@ change; their JSON result reports `"changed": false` in that case.
 All `ctrlyoke step` commands support `--cwd <path>` and `--json`. JSON output
 is a versioned one-line result envelope; failures exit with code `2`.
 
+### JSON errors
+
+Commands that support `--json` write failures to stdout as a single
+`schemaVersion: 1` object:
+
+```json
+{
+  "schemaVersion": 1,
+  "success": false,
+  "error": { "message": "The operation failed" }
+}
+```
+
+The `error` object may include a stable `code` when the command defines one.
+Diagnostics and warnings remain on stderr. `run` retains its run-result error
+object, `step` retains its string-valued `error`, and `validate` retains its
+`error` and `errorCode` fields.
+
 ## Environment variables
 
 | Variable                                            | Effect                                                                                                                                        |

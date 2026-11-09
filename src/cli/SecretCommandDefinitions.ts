@@ -5,26 +5,31 @@ import {
 } from "../types/DashboardConstants";
 
 export interface SecretSetOptions {
+  json?: boolean;
   scope?: SettingWriteScope;
   stdin?: boolean;
   cwd?: string;
 }
 
 export interface SecretListOptions {
+  json?: boolean;
   cwd?: string;
 }
 
 export interface SecretRemoveOptions {
+  json?: boolean;
   scope?: SettingWriteScope;
   yes?: boolean;
   cwd?: string;
 }
 
 export interface SecretCheckOptions {
+  json?: boolean;
   cwd?: string;
 }
 
 export interface TrustSecretGrantsOptions {
+  json?: boolean;
   cwd?: string;
   yes?: boolean;
 }
@@ -60,6 +65,7 @@ export function registerSecretCommands(
       SETTING_SCOPES.USER
     )
     .option("--stdin", "Read the secret value from stdin")
+    .option("--json", "Emit one versioned JSON result line")
     .option(
       "-d, --cwd <path>",
       "Workspace directory (default: current directory)"
@@ -77,6 +83,7 @@ export function registerSecretCommands(
       "-d, --cwd <path>",
       "Workspace directory (default: current directory)"
     )
+    .option("--json", "Emit one versioned JSON result line")
     .action(async (options: SecretListOptions) => handlers.list(options));
 
   secret
@@ -88,6 +95,7 @@ export function registerSecretCommands(
       SETTING_SCOPES.USER
     )
     .option("-y, --yes", "Skip the confirmation prompt")
+    .option("--json", "Emit one versioned JSON result line")
     .option(
       "-d, --cwd <path>",
       "Workspace directory (default: current directory)"
@@ -105,6 +113,7 @@ export function registerSecretCommands(
       "-d, --cwd <path>",
       "Workspace directory (default: current directory)"
     )
+    .option("--json", "Emit one versioned JSON result line")
     .action(async (file: string | undefined, options: SecretCheckOptions) =>
       handlers.check(file, options)
     );
@@ -117,6 +126,7 @@ export function registerSecretCommands(
       "Workspace directory (default: current directory)"
     )
     .option("-y, --yes", "Approve all pending grants without prompting")
+    .option("--json", "Emit one versioned JSON result line")
     .action(async (file: string, options: TrustSecretGrantsOptions) => {
       await handlers.trustSecretGrants(file, options);
     });

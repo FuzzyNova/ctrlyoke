@@ -10,6 +10,8 @@ import type {
   QueueState,
 } from "../types/CtrlYokeTypes";
 import { getErrorMessage } from "../utils/ErrorUtils";
+import { secretRedactionService } from "../utils/SecretRedactionService";
+import { exitQuietlyOnClosedPipe } from "./CliClosedPipe";
 
 export type TerminalFailure =
   | { kind: "queue"; index: number; result: PromptResult }
@@ -50,14 +52,52 @@ export const CLI_USAGE_EXIT_CODE = 2;
 export const CLI_GUARDRAIL_STOP_EXIT_CODE = 6;
 
 /** Report an unexpected CLI error and exit with the documented usage code. */
-export function handleCliError(
+export class CliUsageError extends Error {
+  constructor(
+    message: string,
+    readonly exitCode = CLI_USAGE_EXIT_CODE
+  ) {
+    super(message);
+    this.name = "CliUsageError";
+  }
+}
+
+export interface CliErrorReportOptions {
+  json?: boolean;
+  command?: string;
+  exitCode?: number;
+  envelope?: (message: string, code: number) => unknown;
+  writeOut?: (message: string) => void;
+  writeErr?: (message: string) => void;
+  exit?: (code: number) => void;
+}
+
+/** Redact and consistently report an error on the command's selected surface. */
+export function reportCliError(
   error: unknown,
-  writeError: (message: string) => void = (message) => console.error(message),
-  exit: (code: number) => void = (code) => process.exit(code)
+  options: CliErrorReportOptions = {}
 ): void {
-  const message = getErrorMessage(error);
-  writeError(`Error: ${message}`);
-  exit(CLI_USAGE_EXIT_CODE);
+  const code =
+    options.exitCode ??
+    (error instanceof CliUsageError ? error.exitCode : CLI_USAGE_EXIT_CODE);
+  const rawMessage = getErrorMessage(error);
+  const message = secretRedactionService.redactText(rawMessage);
+  exitQuietlyOnClosedPipe();
+  if (options.json) {
+    const payload = options.envelope
+      ? options.envelope(message, code)
+      : { schemaVersion: 1, success: false, error: { message } };
+    (options.writeOut ?? ((value) => process.stdout.write(value)))(
+      `${secretRedactionService.redactText(JSON.stringify(payload))}\n`
+    );
+  } else {
+    (options.writeErr ?? ((value) => console.error(value)))(
+      secretRedactionService.redactText(
+        message.startsWith("Error: ") ? message : `Error: ${message}`
+      )
+    );
+  }
+  (options.exit ?? ((value) => process.exit(value)))(code);
 }
 
 /** Determine the CLI process exit code from the final workflow state. */

@@ -31,7 +31,7 @@ import {
 } from "../../platform/SecretStore";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import type { ShutdownSignal, ShutdownTimers } from "../../cli/SignalShutdown";
-import { handleCliError } from "../../cli/CliExitCode";
+import { reportCliError } from "../../cli/CliExitCode";
 import { PROCESS_SIGNALS } from "../../types/DashboardConstants";
 
 const settings = {
@@ -204,11 +204,10 @@ suite("ServerCommand", () => {
 
     const messages: string[] = [];
     const exitCodes: number[] = [];
-    handleCliError(
-      error,
-      (message) => messages.push(message),
-      (code) => exitCodes.push(code)
-    );
+    reportCliError(error, {
+      writeErr: (message) => messages.push(message),
+      exit: (code) => exitCodes.push(code),
+    });
 
     assert.deepStrictEqual(messages, [
       "Error: --port must be an integer between 0 and 65535.",

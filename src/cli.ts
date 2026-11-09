@@ -79,7 +79,7 @@ import {
 import {
   CLI_USAGE_EXIT_CODE,
   getExitCode as getTypedExitCode,
-  handleCliError,
+  reportCliError,
 } from "./cli/CliExitCode";
 import {
   buildCliJsonResult,
@@ -249,7 +249,6 @@ import {
 } from "./utils/ProjectStateRegistry";
 import { ctrlyokeStateHome } from "./utils/ProjectStatePaths";
 import { initializeRunHistoryLocation } from "./utils/RunHistoryStoragePolicy";
-import { secretRedactionService } from "./utils/SecretRedactionService";
 import {
   analyzeCliCompatibility,
   assertCliValidateHarnessId as assertHarnessId,
@@ -352,23 +351,33 @@ registerHistoryCommands(program, {
     ),
   list: (options) =>
     handleHistoryCommand(
-      listHistoryCommand(options, createHistoryInspectionCommandIo())
+      listHistoryCommand(options, createHistoryInspectionCommandIo()),
+      true,
+      "history list"
     ),
   runs: (options) =>
     handleHistoryCommand(
-      runsHistoryCommand(options, createHistoryInspectionCommandIo())
+      runsHistoryCommand(options, createHistoryInspectionCommandIo()),
+      true,
+      "history runs"
     ),
   show: (options) =>
     handleHistoryCommand(
-      showHistoryCommand(options, createHistoryInspectionCommandIo())
+      showHistoryCommand(options, createHistoryInspectionCommandIo()),
+      true,
+      "history show"
     ),
   steps: (options) =>
     handleHistoryCommand(
-      stepsHistoryCommand(options, createHistoryInspectionCommandIo())
+      stepsHistoryCommand(options, createHistoryInspectionCommandIo()),
+      true,
+      "history steps"
     ),
   search: (query, options) =>
     handleHistoryCommand(
-      searchHistoryCommand(query, options, createHistoryInspectionCommandIo())
+      searchHistoryCommand(query, options, createHistoryInspectionCommandIo()),
+      true,
+      "history search"
     ),
   trash: {
     list: (options) =>
@@ -399,7 +408,9 @@ registerExportCommand(program, (options) =>
     exportRunCommand(version, options, {
       writeOut: (message) => console.log(message),
       writeErr: (message) => console.error(chalk.yellow(message)),
-    })
+    }),
+    options.json === true,
+    "export"
   )
 );
 
@@ -420,7 +431,9 @@ registerImportCommand(program, (options) =>
             denyTool: [],
           }),
       }
-    )
+    ),
+    options.json === true,
+    "import"
   )
 );
 
@@ -430,7 +443,9 @@ registerStatusCommand(program, {
       statusCommand(options, {
         writeOut: (message) => console.log(message),
         writeErr: (message) => console.error(message),
-      })
+      }),
+      options.json === true,
+      "status"
     ),
 });
 
@@ -496,7 +511,8 @@ registerSecretCommands(program, {
           path.resolve(options.cwd ?? process.cwd())
         ),
         createSecretCommandIo()
-      )
+      ),
+      options.json === true
     ),
   list: (options) =>
     handleSecretCommand(
@@ -506,7 +522,8 @@ registerSecretCommands(program, {
           path.resolve(options.cwd ?? process.cwd())
         ),
         createSecretCommandIo()
-      )
+      ),
+      options.json === true
     ),
   remove: (name, options) =>
     handleSecretCommand(
@@ -517,7 +534,8 @@ registerSecretCommands(program, {
           path.resolve(options.cwd ?? process.cwd())
         ),
         createSecretCommandIo()
-      )
+      ),
+      options.json === true
     ),
   check: (file, options) =>
     handleSecretCommand(
@@ -531,7 +549,8 @@ registerSecretCommands(program, {
           ),
           createSecretCommandIo()
         );
-      })()
+      })(),
+      options.json === true
     ),
   trustSecretGrants: (file, options) =>
     handleSecretCommand(
@@ -545,14 +564,17 @@ registerSecretCommands(program, {
           ),
           createSecretCommandIo()
         );
-      })()
+      })(),
+      options.json === true
     ),
 });
 
 registerLicenseCommands(program, {
   status: (options) =>
-    runLicenseCommand((dependencies) =>
-      licenseStatusCommand(options, dependencies, createSecretCommandIo())
+    runLicenseCommand(
+      (dependencies) =>
+        licenseStatusCommand(options, dependencies, createSecretCommandIo()),
+      options.json === true
     ),
   activate: (options) =>
     runLicenseCommand((dependencies) =>
@@ -680,7 +702,7 @@ program
   });
 
 void program.parseAsync().catch((error: unknown) => {
-  handleCliError(error, (message) => console.error(chalk.red(message)));
+  reportCliError(error);
 });
 
 // ---- Types ----
@@ -1605,13 +1627,15 @@ async function runCommand(
  * Run a history or status command. Their output is commonly piped into `head`
  * or `grep -m`, so a reader closing stdout early ends the command quietly.
  */
-function handleHistoryCommand(operation: Promise<void>): Promise<void> {
+function handleHistoryCommand(
+  operation: Promise<void>,
+  json = false,
+  command = "history"
+): Promise<void> {
   exitQuietlyOnClosedPipe();
   return operation.catch((error: unknown) => {
     if (isClosedPipeError(error)) process.exit(CLI_CLOSED_PIPE_EXIT_CODE);
-    const message = getErrorMessage(error);
-    console.error(chalk.red(`Error: ${message}`));
-    process.exit(2);
+    reportCliError(error, { json, command });
   });
 }
 
@@ -1638,16 +1662,18 @@ function handleStepCommand(
   json: boolean
 ): Promise<void> {
   return operation.catch((error: unknown) => {
-    const message = getErrorMessage(error);
     if (json) {
-      process.stdout.write(
-        JSON.stringify({ schemaVersion: 1, success: false, error: message }) +
-          "\n"
-      );
+      reportCliError(error, {
+        json: true,
+        envelope: (redacted) => ({
+          schemaVersion: 1,
+          success: false,
+          error: redacted,
+        }),
+      });
     } else {
-      console.error(chalk.red(`Error: ${message}`));
+      reportCliError(error);
     }
-    process.exit(2);
   });
 }
 
@@ -1667,15 +1693,20 @@ async function prepareStepCommand(
 
 /** Runs a `license` command on the shared secret store, then releases it. */
 function runLicenseCommand(
-  command: (dependencies: LicenseCommandDependencies) => Promise<void>
+  command: (dependencies: LicenseCommandDependencies) => Promise<void>,
+  json = false
 ): Promise<void> {
   const dependencies = createCliLicenseCommandDependencies();
   return handleSecretCommand(
-    command(dependencies).finally(() => dependencies.dispose())
+    command(dependencies).finally(() => dependencies.dispose()),
+    json
   );
 }
 
-function handleSecretCommand(operation: Promise<void | number>): Promise<void> {
+function handleSecretCommand(
+  operation: Promise<void | number>,
+  json = false
+): Promise<void> {
   return operation
     .then((exitCode) => {
       if (typeof exitCode === "number") {
@@ -1683,11 +1714,7 @@ function handleSecretCommand(operation: Promise<void | number>): Promise<void> {
       }
     })
     .catch((error: unknown) => {
-      const message = getErrorMessage(error);
-      console.error(
-        chalk.red(secretRedactionService.redactText(`Error: ${message}`))
-      );
-      process.exit(2);
+      reportCliError(error, { json });
     });
 }
 
@@ -1951,9 +1978,7 @@ async function dryRunCommand(
     );
     process.exit(hasErrors ? 1 : 0);
   } catch (error) {
-    const message = getErrorMessage(error);
-    console.error(chalk.red("Error: " + message));
-    process.exit(2);
+    reportCliError(error, { json: options.json === true, command: "dry run" });
   }
 }
 
