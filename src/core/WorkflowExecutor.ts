@@ -67,6 +67,7 @@ import {
   type WorkflowExecutionOutcome,
   type ExecutionMode,
 } from "../types/DashboardConstants";
+import { outputTargetKey } from "../utils/OutputTargetKeys";
 import type { CompatibilityDiagnostic } from "../types/CompatibilityTypes";
 import { PromptQueue } from "./PromptQueue";
 import { findStepIndexById } from "./StepIdentity";
@@ -434,9 +435,7 @@ export type ParallelGroupJoinResult =
 type ExecutionTarget = WorkflowAttemptTarget;
 
 function getExecutionTargetRunKey(target: ExecutionTarget): string {
-  return target.kind === FINAL_STEP_PHASES.QUEUE
-    ? `queue:${target.stepIndex}`
-    : `final:${target.loopIndex}`;
+  return outputTargetKey(target);
 }
 
 function isStepEnabled(step: WorkflowStep | undefined | null): boolean {

@@ -17,6 +17,7 @@
 
 import { ensureMinFsThreadpoolSize } from "./utils/ThreadPoolBootstrap";
 import { toError } from "./utils/ErrorUtils";
+import { queueTargetKey } from "./utils/OutputTargetKeys";
 ensureMinFsThreadpoolSize(64);
 
 // Use require with CJS paths - package.json has wildcard export "./*" mapping to "./dist/cjs/*"
@@ -1939,7 +1940,7 @@ export class CtrlYokeMCPServer {
       .filter((i) => i >= 0 && i < allSteps.length)
       .map((i) => {
         const p = allSteps[i];
-        const resolvedOutput = resolved.get(`queue:${i}`);
+        const resolvedOutput = resolved.get(queueTargetKey(i));
         const fullResponseText = resolvedOutput
           ? getStepOutputText(resolvedOutput, StepOutputTextMode.TRANSCRIPT)
           : null;

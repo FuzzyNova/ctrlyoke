@@ -19,6 +19,10 @@ import type {
 import type { WorkflowAttemptTarget } from "../../types/CtrlYokeTypes";
 import type { LegacyCliOutputV1 } from "../../types/WorkflowTimelineTypes";
 import {
+  outputTargetKey,
+  type OutputTargetKey,
+} from "../../utils/OutputTargetKeys";
+import {
   OutputHistoryManager,
   type DefinitionRevisionContext,
 } from "./OutputHistoryManager";
@@ -112,10 +116,7 @@ export class SessionActivityRecorder {
     sessionId: string | undefined,
     target: OutputExecutionTarget
   ): string {
-    const targetKey =
-      target.kind === FINAL_STEP_PHASES.QUEUE
-        ? `queue:${target.stepIndex}`
-        : `final:${target.loopIndex}`;
+    const targetKey = outputTargetKey(target);
     return `${this.getActivitySessionKey(integration, sessionId)}:${targetKey}`;
   }
 
@@ -182,10 +183,8 @@ export class SessionActivityRecorder {
 
   getExecutionTargetRunKey(
     target: OutputExecutionTarget | WorkflowAttemptTarget
-  ): `queue:${number}` | `final:${number}` {
-    return target.kind === FINAL_STEP_PHASES.QUEUE
-      ? `queue:${target.stepIndex}`
-      : `final:${target.loopIndex}`;
+  ): OutputTargetKey {
+    return outputTargetKey(target);
   }
 
   /** Forward resumed activity live, then merge it into the completed attempt. */

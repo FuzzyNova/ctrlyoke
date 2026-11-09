@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { queueTargetKey } from "../../utils/OutputTargetKeys";
 import {
   EXECUTION_STATES,
   deriveWorkflowFinalStepSummary,
@@ -889,7 +890,7 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
       const stepIndex = historyEntry.target.stepIndex;
       const output = historyEntry.cliOutput as CliOutput;
       const entryKey = [
-        `queue:${stepIndex}`,
+        queueTargetKey(stepIndex),
         `run:${historyEntry.runIndex ?? output.runIndex ?? 0}`,
         `attempt:${historyEntry.attemptIndex ?? output.attemptIndex ?? 0}`,
         `phase:${historyEntry.phase ?? EXECUTION_PHASES.PROMPT}`,

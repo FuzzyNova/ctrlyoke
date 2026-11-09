@@ -28,6 +28,7 @@ import {
   getBackgroundWorkHoldHeadline,
   getBackgroundWorkAbandonedNotice,
 } from "../utils/BackgroundWorkHoldText";
+import { queueTargetKey } from "../utils/OutputTargetKeys";
 import {
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
@@ -823,7 +824,9 @@ export class CliTerminalFormatter {
   };
 
   private static targetKey(target?: CliOutputTarget): string {
-    return target?.key ?? (target ? `queue:${target.stepIndex}` : "default");
+    return (
+      target?.key ?? (target ? queueTargetKey(target.stepIndex) : "default")
+    );
   }
 
   private static writeTargetPrefix(target?: CliOutputTarget): void {

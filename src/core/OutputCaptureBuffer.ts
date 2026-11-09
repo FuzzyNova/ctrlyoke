@@ -14,6 +14,7 @@ import {
 } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
+import { queueTargetKey } from "../utils/OutputTargetKeys";
 import { normalizeCliEvents } from "../utils/CliEventNormalizer";
 import { Log } from "../utils/Log";
 import { noteMemoryActivity } from "../utils/MemoryDiagnostics";
@@ -629,7 +630,7 @@ export class OutputCaptureBuffer {
       (hasInFlightStep || activeTargets.size > 0)
     ) {
       for (const [stepIndex, buffer] of this.stepOutputBuffer) {
-        if (!hasInFlightStep && !activeTargets.has(`queue:${stepIndex}`)) {
+        if (!hasInFlightStep && !activeTargets.has(queueTargetKey(stepIndex))) {
           continue;
         }
         Log.trace(

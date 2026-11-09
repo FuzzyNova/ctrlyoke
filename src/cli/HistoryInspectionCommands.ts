@@ -66,6 +66,7 @@ import {
   NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
 import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
+import { outputTargetKey } from "../utils/OutputTargetKeys";
 import type {
   HistoryEventKind,
   HistorySearchQuery,
@@ -1876,10 +1877,7 @@ function createHistoryOutputTarget(attempt: ResolvedRunAttemptValue): {
         ? attempt.target.stepIndex
         : attempt.target.loopIndex,
     stepName: historyStepName(attempt),
-    key:
-      attempt.target.kind === FINAL_STEP_PHASES.QUEUE
-        ? `queue:${attempt.target.stepIndex}`
-        : `final:${attempt.target.loopIndex}`,
+    key: outputTargetKey(attempt.target),
   };
 }
 

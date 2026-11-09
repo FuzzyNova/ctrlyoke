@@ -9,7 +9,6 @@ import {
   CLI_EVENT_TYPES,
   DIFF_CHANGE_TYPES,
   FINAL_STEP_PHASES,
-  getExecutionPhaseKeySuffix,
   PRIOR_CONTEXT_DETAILS,
   PRIOR_CONTEXT_ITEM_TYPES,
   PRIOR_CONTEXT_KEYWORDS,
@@ -21,6 +20,12 @@ import {
   type ExecutionState,
 } from "../../types/DashboardConstants";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
+import {
+  outputAttemptKey,
+  outputTargetKey,
+} from "../../utils/OutputTargetKeys";
+/** Shared key producer re-exported for existing consumers. */
+export { queueTargetKey } from "../../utils/OutputTargetKeys";
 import type {
   CliEvent,
   FileDeleteData,
@@ -684,19 +689,19 @@ export class RunOutputResolver {
     manifestPath: string,
     targets: readonly OutputExecutionTarget[]
   ): Promise<Map<string, ResolvedRunAttemptValue>> {
-    const requested = new Set(targets.map(getTargetKey));
+    const requested = new Set(targets.map(outputTargetKey));
     const latest = new Map<string, ResolvedRunAttemptValue>();
 
     for await (const event of this.streamAttempts(manifestPath)) {
       if (
         event.kind !== RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED ||
         !isStepAttemptKind(event.attempt.kind ?? TIMELINE_ATTEMPT_KINDS.AI) ||
-        !requested.has(getTargetKey(event.attempt.target))
+        !requested.has(outputTargetKey(event.attempt.target))
       ) {
         continue;
       }
 
-      const key = getTargetKey(event.attempt.target);
+      const key = outputTargetKey(event.attempt.target);
       const existing = latest.get(key);
       if (
         !existing ||
@@ -733,7 +738,7 @@ export class RunOutputResolver {
       queueAccumulators
     ).projection;
     for (const target of finalStepTargets) {
-      finalTargetKeys.add(getTargetKey(target));
+      finalTargetKeys.add(outputTargetKey(target));
     }
 
     const finalAccumulator = new ProjectionAccumulator();
@@ -749,7 +754,7 @@ export class RunOutputResolver {
           continue;
         }
 
-        const key = getTargetKey(event.attempt.target);
+        const key = outputTargetKey(event.attempt.target);
         const queueAccumulator = queueAccumulators.get(key);
         const isFinalTarget = finalTargetKeys.has(key);
         if (!queueAccumulator && !isFinalTarget) {
@@ -903,7 +908,7 @@ export class RunOutputResolver {
     accumulators: Map<string, ProjectionAccumulator>;
   } {
     for (const target of queueTargets) {
-      const key = getTargetKey(target);
+      const key = outputTargetKey(target);
       if (!accumulators.has(key)) {
         accumulators.set(key, new ProjectionAccumulator(target));
       }
@@ -1062,7 +1067,7 @@ export class RunOutputResolver {
         ? await this.getFinalStepTargets(manifestPath)
         : []),
     ];
-    const requested = new Set(targets.map(getTargetKey));
+    const requested = new Set(targets.map(outputTargetKey));
     const latestValues = new Map<
       string,
       {
@@ -1093,7 +1098,7 @@ export class RunOutputResolver {
         !isStepAttemptKind(event.attempt.kind ?? TIMELINE_ATTEMPT_KINDS.AI)
       )
         continue;
-      const key = getTargetKey(event.attempt.target);
+      const key = outputTargetKey(event.attempt.target);
       if (!requested.has(key)) continue;
       const value = event.attempt;
       const identity: ProjectionAttemptIdentity = {
@@ -1194,7 +1199,7 @@ export class RunOutputResolver {
       .sort((left, right) => left - right)
       .flatMap((index): PriorContextItem[] => {
         const value = resolved.get(
-          getTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: index })
+          outputTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: index })
         );
         const step = value?.definition?.step ?? allPrompts[index];
         if (!step || !value) return [];
@@ -1212,7 +1217,7 @@ export class RunOutputResolver {
                 .join("\n")
                 .trim()
             : (latestValues.get(
-                getTargetKey({
+                outputTargetKey({
                   kind: FINAL_STEP_PHASES.QUEUE,
                   stepIndex: index,
                 })
@@ -1230,20 +1235,20 @@ export class RunOutputResolver {
                   scriptOutput,
                   filesChanged:
                     allAttemptFileChanges.get(
-                      getTargetKey({
+                      outputTargetKey({
                         kind: FINAL_STEP_PHASES.QUEUE,
                         stepIndex: index,
                       })
                     ) ?? [],
                   ...(earlierAttempts.has(
-                    getTargetKey({
+                    outputTargetKey({
                       kind: FINAL_STEP_PHASES.QUEUE,
                       stepIndex: index,
                     })
                   )
                     ? {
                         earlierAttempts: earlierAttempts.get(
-                          getTargetKey({
+                          outputTargetKey({
                             kind: FINAL_STEP_PHASES.QUEUE,
                             stepIndex: index,
                           })
@@ -1256,7 +1261,7 @@ export class RunOutputResolver {
             : [];
         }
         const projected = latestValues.get(
-          getTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: index })
+          outputTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: index })
         );
         const transcript = projected?.transcript;
         const text = projected?.legacyText ?? "";
@@ -1270,7 +1275,7 @@ export class RunOutputResolver {
                   merged.detailByQueueIndex.get(index) ?? merged.allQueueDetail,
                 filesChanged:
                   allAttemptFileChanges.get(
-                    getTargetKey({
+                    outputTargetKey({
                       kind: FINAL_STEP_PHASES.QUEUE,
                       stepIndex: index,
                     })
@@ -1278,14 +1283,14 @@ export class RunOutputResolver {
                 ...(transcript?.length ? { transcript } : {}),
                 ...(text ? { text } : {}),
                 ...(earlierAttempts.has(
-                  getTargetKey({
+                  outputTargetKey({
                     kind: FINAL_STEP_PHASES.QUEUE,
                     stepIndex: index,
                   })
                 )
                   ? {
                       earlierAttempts: earlierAttempts.get(
-                        getTargetKey({
+                        outputTargetKey({
                           kind: FINAL_STEP_PHASES.QUEUE,
                           stepIndex: index,
                         })
@@ -1334,7 +1339,7 @@ export class RunOutputResolver {
         const index = (value.target as { loopIndex: number }).loopIndex;
         const scriptVerdict = scriptVerdicts.get(getAttemptKey(value));
         const step = value.definition?.step;
-        const targetKey = getTargetKey(value.target);
+        const targetKey = outputTargetKey(value.target);
         const common = {
           index,
           type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP,
@@ -1440,7 +1445,10 @@ export class RunOutputResolver {
       )
         continue;
       if (event.attempt.target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-        targets.set(getTargetKey(event.attempt.target), event.attempt.target);
+        targets.set(
+          outputTargetKey(event.attempt.target),
+          event.attempt.target
+        );
       }
     }
     return [...targets.values()];
@@ -1707,7 +1715,7 @@ function sameProjectionAttempt(
     (identity.phase === undefined ||
       attempt.phase === undefined ||
       identity.phase === attempt.phase) &&
-    getTargetKey(identity.target) === getTargetKey(attempt.target)
+    outputTargetKey(identity.target) === outputTargetKey(attempt.target)
   );
 }
 
@@ -1728,17 +1736,6 @@ function toPortableRelativePath(root: string, candidate: string): string {
   return path.relative(root, candidate).replace(/\\/g, "/");
 }
 
-/**
- * The one producer of `RunOutputProjection.targets` keys. Exported because
- * consumers outside this module (notably `CliJsonResultBuilder`) must look
- * entries up by the same format — a hand-built `queue:${index}` literal on the
- * reader side silently degrades to a miss if this ever changes, yielding
- * `attempts: 0` and empty file lists instead of an error.
- */
-export function queueTargetKey(stepIndex: number): string {
-  return `queue:${stepIndex}`;
-}
-
 function lifecycleRecord(
   event: AttemptStartedEvent | AttemptTerminatedEvent
 ): RunAttemptLifecycleRecord {
@@ -1749,12 +1746,6 @@ function lifecycleRecord(
     ...(event.phase !== undefined ? { phase: event.phase } : {}),
     timestampMs: event.timestampMs,
   };
-}
-
-function getTargetKey(target: OutputExecutionTarget): string {
-  return target.kind === FINAL_STEP_PHASES.QUEUE
-    ? queueTargetKey(target.stepIndex)
-    : `final:${target.loopIndex}`;
 }
 
 /**
@@ -1770,7 +1761,12 @@ function getStepScriptVerdict(
 }
 
 function getAttemptKey(attempt: ResolvedRunAttempt): string {
-  return `${getTargetKey(attempt.target)}:run:${attempt.runIndex}:attempt:${attempt.attemptIndex}${getExecutionPhaseKeySuffix(attempt.phase)}`;
+  return outputAttemptKey(
+    attempt.target,
+    attempt.runIndex,
+    attempt.attemptIndex,
+    attempt.phase
+  );
 }
 
 function isNewerAttempt(

@@ -59,6 +59,7 @@ import {
 import type { PartialCtrlYokeSettings } from "./types/CtrlYokeSettings";
 import type { QueueState } from "./types/CtrlYokeTypes";
 import type { OutputExecutionTarget } from "./types/OutputHistoryTypes";
+import { outputTargetKey } from "./utils/OutputTargetKeys";
 import { CliTerminalOutputGate } from "./cli/CliTerminalOutputGate";
 import {
   defaultShutdownTimers,
@@ -791,12 +792,12 @@ function toCliOutputTarget(
     ? {
         stepIndex: target.stepIndex,
         stepName,
-        key: `queue:${target.stepIndex}`,
+        key: outputTargetKey(target),
       }
     : {
         stepIndex: target.loopIndex,
         stepName,
-        key: `final:${target.loopIndex}`,
+        key: outputTargetKey(target),
       };
 }
 
