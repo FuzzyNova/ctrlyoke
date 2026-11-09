@@ -3,10 +3,7 @@ import {
   FAILURE_KINDS,
   FINAL_STEP_PHASES,
 } from "../types/DashboardConstants";
-import type {
-  FinalStepRuntimeState,
-  QueueState,
-} from "../types/CtrlYokeTypes";
+import type { FinalStepRuntimeState, QueueState } from "../types/CtrlYokeTypes";
 import { selectTerminalFailure } from "../utils/TerminalFailure";
 export { selectTerminalFailure } from "../utils/TerminalFailure";
 export type { TerminalFailure } from "../utils/TerminalFailure";

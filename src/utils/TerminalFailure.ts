@@ -25,10 +25,7 @@ export type TerminalFailure =
 /** Select the failed step that made an errored workflow stop. */
 export function selectTerminalFailure(
   state: Pick<QueueState, "status"> & {
-    results?: readonly Pick<
-      PromptResult,
-      "status" | "error" | "failureKind"
-    >[];
+    results?: readonly Pick<PromptResult, "status" | "error" | "failureKind">[];
   },
   finalStepRuntime?: FinalStepRuntimeState
 ): TerminalFailure | undefined {

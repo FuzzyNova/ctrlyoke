@@ -90,7 +90,10 @@ function deriveTerminalFailureSummary(
     selected?.kind === FINAL_STEP_PHASES.FINAL_STEP
       ? selected.runtime.failureMessage
       : selected?.result.error;
-  if (executionState !== EXECUTION_STATES.ERROR || (!message && (selected || !stopReason?.message))) {
+  if (
+    executionState !== EXECUTION_STATES.ERROR ||
+    (!message && (selected || !stopReason?.message))
+  ) {
     return undefined;
   }
   return {
@@ -1010,11 +1013,7 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
           executionState?: string;
           currentIndex?: number;
           tokenTotals?: WorkflowSummary["tokenTotals"];
-          stopReason?: WorkingFile["_runtime"] extends infer R
-            ? R extends { stopReason?: infer S }
-              ? S
-              : never
-            : never;
+          stopReason?: NonNullable<WorkingFile["_runtime"]>["stopReason"];
           finalStep?: NonNullable<WorkingFile["_runtime"]>["finalStep"];
         };
         steps?: StepWithRuntimeStatus[];

@@ -194,12 +194,7 @@ suite("Secret command parser", () => {
         ] as const) {
           for (const json of [false, true]) {
             const io = new TestIo();
-            const code = await command(
-              file,
-              { json },
-              deps,
-              io
-            );
+            const code = await command(file, { json }, deps, io);
             assert.strictEqual(code, 2, `${commandName} exit code`);
             const message = json
               ? (JSON.parse(io.output[0]) as { error: { message: string } })

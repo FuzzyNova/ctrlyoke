@@ -1494,9 +1494,9 @@ export class WorkflowInstance
                 terminalFailure?.kind === FINAL_STEP_PHASES.FINAL_STEP,
                 terminalFailure?.kind === FINAL_STEP_PHASES.FINAL_STEP
                   ? terminalFailure.runtime.loopCount
-                  : (terminalFailure?.kind === TERMINAL_FAILURE_KINDS.QUEUE
-                      ? terminalFailure.index
-                      : state.currentIndex)
+                  : terminalFailure?.kind === TERMINAL_FAILURE_KINDS.QUEUE
+                    ? terminalFailure.index
+                    : state.currentIndex
               ),
               kind: failureKind ?? FAILURE_KINDS.UNKNOWN,
               message: failureMessage ?? state.stopReason?.message ?? "",

@@ -6,7 +6,8 @@ import {
 } from "../types/CtrlYokeTypes";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import type { UserFeedbackSink } from "../core/UserFeedbackSink";
-import type { HarnessId } from "../types/DashboardConstants";
+import { NODE_ERROR_CODES, type HarnessId } from "../types/DashboardConstants";
+import { hasErrnoCode } from "../utils/ErrorUtils";
 import { resolveCliFileArgument } from "./CliFileArgument";
 
 /** Parse a CLI-authored workflow source and preserve its useful failure reason. */
@@ -18,22 +19,13 @@ export async function parseCliPromptFile(
   const parser = new PromptFileParser(platform, userFeedbackSink);
   const parsed = await parser.parsePromptFile(resolveCliFileArgument(file));
   if (parsed) return parsed;
-  if (parser.lastParseError && isMissingFileError(parser.lastParseError)) {
+  if (hasErrnoCode(parser.lastParseError, NODE_ERROR_CODES.ENOENT)) {
     throw new Error(`File not found: ${resolveCliFileArgument(file)}`);
   }
   throw new Error(
     parser.lastNewerSchemaError?.message ??
       parser.lastParseError?.message ??
       `Failed to load workflow file: ${file}`
-  );
-}
-
-function isMissingFileError(error: Error): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    error.code === "ENOENT"
   );
 }
 
