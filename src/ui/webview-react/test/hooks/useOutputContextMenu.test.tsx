@@ -4,7 +4,10 @@ import { useRef } from "react";
 import { useOutputContextMenu } from "@hooks/useOutputContextMenu";
 import type { OutputMessage } from "@utils/outputProjection";
 import { FINAL_STEP_PHASES } from "@/types/messages";
-import { OUTPUT_MESSAGE_TYPES } from "@root/types/DashboardConstants";
+import {
+  OUTPUT_MESSAGE_TYPES,
+  SCRIPT_OUTPUT_SOURCES,
+} from "@root/types/DashboardConstants";
 import type { WorkflowStep } from "@store/workflowStore";
 
 function makeCliMessage(
@@ -192,6 +195,37 @@ describe("useOutputContextMenu", () => {
     expect(
       screen.getByRole("menuitem", { name: "Copy Step Transcript" })
     ).toHaveAttribute("title", expect.stringContaining("tool calls"));
+  });
+
+  it("names a script step's copy commands after its output", () => {
+    const scriptMessage: OutputMessage = {
+      type: OUTPUT_MESSAGE_TYPES.CLI,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+      timestamp: 1,
+      data: {
+        elapsed: 1,
+        isStreaming: false,
+        source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
+        cliCommand: "npm test",
+        scriptOutput: { command: "npm test", stdout: "all passed", stderr: "" },
+      },
+    };
+    render(<TestHarness allMessages={[scriptMessage]} hiddenTargetKeys={[]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    expect(
+      screen.queryByRole("menuitem", { name: "Copy Step Response" })
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy Step Output" }));
+    expect(writeText).toHaveBeenLastCalledWith("all passed");
+
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: "Copy All Responses" })
+    );
+    const copiedText = writeText.mock.lastCall![0] as string;
+    expect(copiedText).toContain("Command:\nnpm test");
+    expect(copiedText).toContain("Output:\nall passed");
   });
 
   it("keeps real step numbers when output arrives out of order", () => {

@@ -12,16 +12,16 @@ dashboard, with a **Terminal** tab beside it for interactive sessions.
 Each step's output starts with a header row: the time, the step number and
 name, and its harness and model. Below it, in the order they happened:
 
-| Block                     | What it shows                                                                                                                                                                 |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Replies                   | The harness's text, rendered as Markdown. File paths and references are links; click one to open it.                                                                          |
-| **Thinking** / reasoning  | The model's reasoning, dimmed and indented, when the harness reports it. The label comes from the harness, and shows a token count, or "encrypted" when it is hidden.         |
-| Commands                  | Each shell command with its exit code and result.                                                                                                                             |
-| Tool calls                | Tools the harness called, including MCP tools (see [Tool calls](#tool-calls)).                                                                                                |
-| File operations           | Files the harness read, edited, wrote or deleted. Changes have a diff and an **Undo** button (see [Diffs](#diffs)).                                                           |
-| **User message**          | A steer message you sent to the running step.                                                                                                                                 |
-| Script and condition rows | A script step's or condition's output, and its verdict: **Passed**, **Failed** or **Errored**, the comparison, and what happens next.                                         |
-| Stats                     | Context window use, tokens, an estimated cost, the session ID, the duration, and **Copy response**. See [Reading a step's token counts](/guide/usage-and-stats#token-counts). |
+| Block                     | What it shows                                                                                                                                                                                                     |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Replies                   | The harness's text, rendered as Markdown. File paths and references are links; click one to open it.                                                                                                              |
+| **Thinking** / reasoning  | The model's reasoning, dimmed and indented, when the harness reports it. The label comes from the harness, and shows a token count, or "encrypted" when it is hidden.                                             |
+| Commands                  | Each shell command with its exit code and result.                                                                                                                                                                 |
+| Tool calls                | Tools the harness called, including MCP tools (see [Tool calls](#tool-calls)).                                                                                                                                    |
+| File operations           | Files the harness read, edited, wrote or deleted. Changes have a diff and an **Undo** button (see [Diffs](#diffs)).                                                                                               |
+| **User message**          | A steer message you sent to the running step.                                                                                                                                                                     |
+| Script and condition rows | A script step's or condition's output, and its verdict: **Passed**, **Failed** or **Errored**, the comparison, and what happens next.                                                                             |
+| Stats                     | Context window use, tokens, an estimated cost, the session ID, the duration, and **Copy response** (**Copy output** for a script step). See [Reading a step's token counts](/guide/usage-and-stats#token-counts). |
 
 A banner at the top names the run, when it started, how long it has run, its
 state and its token total. It scrolls away with the output; click its pin to
@@ -114,9 +114,15 @@ marker popup or the step menu, to bring the output back.
 
 ## Copying and exporting {#copying-and-exporting}
 
-A step's **response** is the assistant's text. Its **transcript** is
-everything the step produced: the prompt, thinking, tool calls and results,
-diffs, commands, and terminal output.
+A prompt step's **response** is the assistant's text. A script step has no
+assistant, so it has **output** instead: its stdout and stderr. A step's
+**transcript** is everything it produced: the prompt, thinking, tool calls and
+results, diffs, commands, and terminal output. For a script step, that's its
+command and output.
+
+Each command below is named after the step it copies from. On a script step,
+**Copy Response** reads **Copy Output**, and **Copy Step Response** reads
+**Copy Step Output**.
 
 - **Copy response** at the end of each step copies that step's response. The
   step menu offers **Copy Response** and **Copy Transcript**.
@@ -124,7 +130,8 @@ diffs, commands, and terminal output.
   - **Copy**: the selected text.
   - **Copy All Responses**: every step's prompt and response, in order, so the
     responses read in context. Tool calls, thinking and diffs are left out.
-    Hidden steps are skipped, and the item says how many.
+    Script steps contribute their command and output. Hidden steps are
+    skipped, and the item says how many.
   - **Copy Step Response** and **Copy Step Transcript**: the step under the
     pointer.
 - For whole-run transcripts, use **Export output to markdown**.

@@ -27,7 +27,7 @@ import {
 import { startReplyFromStep } from "./replyToStep";
 import {
   OUTPUT_COPY_MENU_LABELS,
-  OUTPUT_COPY_MENU_TITLES,
+  getStepCopyLabels,
 } from "./outputCopyMenuLabels";
 import { generateSingleStepMarkdownExport } from "./markdownExport";
 
@@ -37,7 +37,7 @@ export interface StepCopyMenuItemsInput {
   slotNumber?: number;
   /** True for the workflow's final step, which has no queue position. */
   isFinalStep?: boolean;
-  /** Response/output text to copy; undefined disables the Copy Response item. */
+  /** Response/output text to copy; undefined disables the Copy Response (or, for a script, Copy Output) item. */
   outputText?: string;
   latestOutput?: CliOutput | null;
   latestPrompt?: string;
@@ -59,9 +59,9 @@ export function buildStepCopyMenuItems({
   runtimeMeta,
   liveContextWindow,
 }: StepCopyMenuItemsInput): StepContextMenuItem[] {
-  const copyContentLabel = isScriptWorkflowStep(step)
-    ? "Copy Script"
-    : "Copy Prompt";
+  const isScript = isScriptWorkflowStep(step);
+  const copyContentLabel = isScript ? "Copy Script" : "Copy Prompt";
+  const copyLabels = getStepCopyLabels(isScript);
 
   return [
     {
@@ -81,10 +81,10 @@ export function buildStepCopyMenuItems({
       },
     },
     {
-      label: OUTPUT_COPY_MENU_LABELS.COPY_RESPONSE,
+      label: copyLabels.menu,
       icon: "codicon-copy",
       disabled: !outputText,
-      title: OUTPUT_COPY_MENU_TITLES.RESPONSE,
+      title: copyLabels.title,
       disabledTitle: "No output to copy",
       onClick: () => {
         if (!outputText) return;
@@ -95,7 +95,7 @@ export function buildStepCopyMenuItems({
       label: OUTPUT_COPY_MENU_LABELS.COPY_TRANSCRIPT,
       icon: "codicon-copy",
       disabled: !latestOutput,
-      title: OUTPUT_COPY_MENU_TITLES.TRANSCRIPT,
+      title: copyLabels.transcriptTitle,
       disabledTitle: "No output to copy",
       onClick: () => {
         if (!latestOutput) return;

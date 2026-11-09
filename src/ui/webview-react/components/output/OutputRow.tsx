@@ -174,7 +174,7 @@ import { Icon } from "../shared/Icon";
 import { ErrorBoundary } from "../shared/ErrorBoundary";
 import {
   OUTPUT_COPY_BUTTON_LABELS,
-  OUTPUT_COPY_MENU_TITLES,
+  getStepCopyLabels,
 } from "@utils/outputCopyMenuLabels";
 
 export interface OutputRowFileUndoRequest {
@@ -1839,6 +1839,7 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
   }
 
   if (!output.isStreaming && outputText) {
+    const copyLabels = getStepCopyLabels(isScriptOutput(output));
     parts.push(
       <button
         key="copy-response"
@@ -1849,14 +1850,14 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
             : "text-description-fg hover:text-foreground"
         }`}
         onClick={handleCopyResponse}
-        title={OUTPUT_COPY_MENU_TITLES.RESPONSE}
-        aria-label={OUTPUT_COPY_BUTTON_LABELS.ARIA_LABEL}
+        title={copyLabels.title}
+        aria-label={copyLabels.buttonAriaLabel}
       >
         <Icon name={copiedResponse ? "codicon-check" : "codicon-copy"} />
         <span>
           {copiedResponse
             ? OUTPUT_COPY_BUTTON_LABELS.COPIED
-            : OUTPUT_COPY_BUTTON_LABELS.COPY_RESPONSE}
+            : copyLabels.button}
         </span>
       </button>
     );

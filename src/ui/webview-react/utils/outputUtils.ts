@@ -138,8 +138,9 @@ interface CachedCopyText {
 const copyTextCache = new WeakMap<CliOutputType, CachedCopyText>();
 
 /**
- * Extracts assistant-authored text from a CLI output's structured events.
- * Returns undefined when there is no text content.
+ * The text a step's Copy Response / Copy Output commands copy: the
+ * assistant-authored text of a prompt step, or a script step's stdout and
+ * stderr. Returns undefined when there is no text content.
  */
 export function getStepAssistantTextForCopy(
   output: CliOutputType
@@ -150,8 +151,13 @@ export function getStepAssistantTextForCopy(
   if (cached && cached.events === events && cached.eventCount === eventCount) {
     return cached.text;
   }
+  // A script result carries its text on `scriptOutput`, which
+  // getStepOutputText only reads from the source, not from the output.
   const text =
-    getStepOutputText({ output }, StepOutputTextMode.ASSISTANT) || undefined;
+    getStepOutputText(
+      { output, scriptOutput: output.scriptOutput },
+      StepOutputTextMode.ASSISTANT
+    ) || undefined;
   if (!output.isStreaming) {
     copyTextCache.set(output, { events, eventCount, text });
   }

@@ -130,6 +130,58 @@ function buildStatsRow(tokens: TokenStats): OutputRenderRow {
   };
 }
 
+describe("OutputRow stats copy button", () => {
+  it("offers Copy response for a prompt step", () => {
+    render(
+      <OutputRow
+        row={{
+          key: "row-stats",
+          target: TARGET,
+          estimateSize: 24,
+          rowKind: OUTPUT_ROW_KINDS.STATS,
+          output: {
+            structured: {
+              events: [{ type: "text", data: { text: "response" } }],
+              metadata: {},
+            },
+            elapsed: 1,
+            isStreaming: false,
+          },
+          outputText: "response",
+        }}
+        isExecutionActive={false}
+      />
+    );
+    expect(
+      screen.getByRole("button", { name: "Copy response to clipboard" })
+    ).toHaveTextContent("Copy response");
+  });
+
+  it("offers Copy output for a script step", () => {
+    render(
+      <OutputRow
+        row={{
+          key: "row-stats",
+          target: TARGET,
+          estimateSize: 24,
+          rowKind: OUTPUT_ROW_KINDS.STATS,
+          output: {
+            elapsed: 1,
+            isStreaming: false,
+            source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
+            scriptOutput: { command: "npm test", stdout: "ok", stderr: "" },
+          },
+          outputText: "ok",
+        }}
+        isExecutionActive={false}
+      />
+    );
+    expect(
+      screen.getByRole("button", { name: "Copy output to clipboard" })
+    ).toHaveTextContent("Copy output");
+  });
+});
+
 describe("OutputRow token stats", () => {
   it("shows current context without inventing a visible total", () => {
     const { container } = render(

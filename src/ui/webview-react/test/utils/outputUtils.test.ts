@@ -138,6 +138,21 @@ describe("extractCliOutputText", () => {
     output.structured.events[0].data.text = "partial and more";
     expect(extractCliOutputText(output)).toBe("partial and more");
   });
+
+  it("copies a script step's stdout and stderr", () => {
+    expect(
+      extractCliOutputText({
+        isStreaming: false,
+        elapsed: 1,
+        source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
+        scriptOutput: {
+          command: "npm test",
+          stdout: "all passed",
+          stderr: "1 warning",
+        },
+      })
+    ).toBe("all passed\n1 warning");
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

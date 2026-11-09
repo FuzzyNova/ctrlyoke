@@ -10,12 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - A shell opened from a workflow's **Terminal** tab now starts in the worktree that workflow runs in, the same folder its steps and scripts use, so you can resolve a merge or check `git status` there without changing directory. Workflows without a worktree still open shells in the workspace folder.
-- The output copy commands now say what they copy. In the output pane's right-click menu, **Copy All** is now **Copy All Responses**, **Copy Step Output** is **Copy Step Response**, and **Copy Full Output** is **Copy Step Transcript**. In the step menu, **Copy Output** is now **Copy Response** and **Copy Full Output** is **Copy Transcript**. The **Copy output** button at the end of each step is now **Copy response**. Hover any of them to see what it includes.
+- The output copy commands now say what they copy. In the output pane's right-click menu, **Copy All** is now **Copy All Responses**, **Copy Step Output** is **Copy Step Response**, and **Copy Full Output** is **Copy Step Transcript**. In the step menu, **Copy Output** is now **Copy Response** and **Copy Full Output** is **Copy Transcript**. The **Copy output** button at the end of each step is now **Copy response**. On a script step, which has no assistant response, the same commands read **Copy Output**, **Copy Step Output** and **Copy output**. Hover any of them to see what it includes.
 - **Export Output** has a **Copy to Clipboard** button that copies the same markdown, with the options you chose, instead of saving it to a file.
 
 ### Fixed
 
 - **Copy All Responses** (formerly **Copy All**) now copies each step's prompt. Before, the section labeled "Prompt" held the harness command line ctrlyoke ran, not the prompt. Each section is also headed with the step's name when it has one.
+- Copying a script step's output from the output pane or the step menu works again. Before, the copy command was disabled and the copy button at the end of the step never appeared, and **Copy All Responses** included the script's command but not its output.
 - Saving a step or the final step from the dashboard editor no longer removes its end condition. Before, any end condition that compared output with an operator, or simply passed on exit code 0, was dropped on save, so it never ran.
 - MCP step tools now reject numeric session references unless they are integers of at least 1; session resolution safely ignores fractional references. Coordination path claims normalize backslashes before checking containment and conflicts.
 - Unknown workflow properties no longer suggest removed or internal fields, or unrelated keys for distant typos.

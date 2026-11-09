@@ -417,6 +417,13 @@ describe("useStepContextMenu", () => {
     expect(
       screen.getByRole("menuitem", { name: "Copy Script" })
     ).toBeInTheDocument();
+    // A script has no assistant, so its copy command names its output.
+    expect(
+      screen.getByRole("menuitem", { name: "Copy Output" })
+    ).toHaveAttribute("title", expect.stringContaining("stdout"));
+    expect(
+      screen.queryByRole("menuitem", { name: "Copy Response" })
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("menuitem", { name: "Enable" })
     ).toBeInTheDocument();

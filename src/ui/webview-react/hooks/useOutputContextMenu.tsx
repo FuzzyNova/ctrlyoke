@@ -16,6 +16,7 @@ import {
   OUTPUT_COPY_MENU_LABELS,
   OUTPUT_COPY_MENU_TITLES,
   formatCopyAllResponsesLabel,
+  getStepCopyLabels,
 } from "@utils/outputCopyMenuLabels";
 import { isScriptOutput } from "@utils/outputRenderUtils";
 import type { WorkflowStep } from "@store/workflowStore";
@@ -81,7 +82,10 @@ function buildCopyAllText(
     if (input || outputText) {
       const section: string[] = [`=== ${header} ===`];
       if (input) section.push(`\n${input.label}:\n${input.text}`);
-      if (outputText) section.push(`\nResponse:\n${outputText}`);
+      if (outputText) {
+        const outputLabel = isScriptOutput(output) ? "Output" : "Response";
+        section.push(`\n${outputLabel}:\n${outputText}`);
+      }
       parts.push(section.join("\n"));
     }
   }
@@ -168,6 +172,9 @@ export function useOutputContextMenu({
       const hasAnyOutput = allMessages.some(
         (m) => m.type === OUTPUT_MESSAGE_TYPES.CLI
       );
+      const hoveredCopyLabels = getStepCopyLabels(
+        !!hoveredOutput && isScriptOutput(hoveredOutput)
+      );
 
       setContextMenu({
         x,
@@ -193,10 +200,10 @@ export function useOutputContextMenu({
             },
           },
           {
-            label: OUTPUT_COPY_MENU_LABELS.COPY_STEP_RESPONSE,
+            label: hoveredCopyLabels.outputMenu,
             icon: "codicon-copy",
             disabled: !hoveredOutputText,
-            title: OUTPUT_COPY_MENU_TITLES.RESPONSE,
+            title: hoveredCopyLabels.title,
             disabledTitle: hoveredStepKey
               ? "No output to copy for this step"
               : "No step under cursor",
@@ -209,7 +216,7 @@ export function useOutputContextMenu({
             label: OUTPUT_COPY_MENU_LABELS.COPY_STEP_TRANSCRIPT,
             icon: "codicon-copy",
             disabled: !hoveredOutput || !hoveredTarget,
-            title: OUTPUT_COPY_MENU_TITLES.TRANSCRIPT,
+            title: hoveredCopyLabels.transcriptTitle,
             disabledTitle: hoveredStepKey
               ? "No output to copy for this step"
               : "No step under cursor",

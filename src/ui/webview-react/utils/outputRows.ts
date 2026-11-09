@@ -115,7 +115,7 @@ import {
   formatStepTargetLabel,
 } from "@root/utils/FinalStepLabels";
 import { subagentGroupKey } from "@root/utils/SubagentAttribution";
-import { OUTPUT_COPY_BUTTON_LABELS } from "./outputCopyMenuLabels";
+import { getStepCopyLabels } from "./outputCopyMenuLabels";
 
 export interface OutputRowPromptUndoMeta {
   workspacePath: string;
@@ -1231,7 +1231,7 @@ function estimateStatsRowHeight(
     parts.push(`${row.output.elapsed}s`);
   }
   if (!row.output.isStreaming && row.outputText) {
-    parts.push(OUTPUT_COPY_BUTTON_LABELS.COPY_RESPONSE);
+    parts.push(getStepCopyLabels(isScriptOutput(row.output)).button);
   }
   if (parts.length === 0) {
     return 0;
