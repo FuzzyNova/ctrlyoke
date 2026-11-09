@@ -9,9 +9,11 @@ import {
 import { WORKSPACE_GIT_REF_DIFF_DEFAULT_PAGE_SIZE } from "@root/types/HostedWorkspaceViewerTypes";
 import {
   isAbortError,
+  isExpiredListingError,
   listingKey,
   normalizeRepo,
   pageOffset,
+  rangePageOffsets,
 } from "@utils/pagedListing";
 import { toError } from "@root/utils/ErrorUtils";
 
@@ -216,7 +218,14 @@ export function usePagedGitRefDiff(
   const initialControllerRef = useRef<AbortController | null>(null);
   const pendingOffsetsRef = useRef(new Set<number>());
   const lastVisibleStartRef = useRef<number | null>(null);
+  const lastRangeRef = useRef<VirtualizedListRange | null>(null);
   const skipOptionStartRef = useRef<string | null>(null);
+  // True while a fresh listing replaces an expired one in place; page
+  // requests wait for it instead of naming the dead listing id.
+  const recoveringRef = useRef(false);
+  // One automatic recovery per expiry, so a listing that expires again before
+  // any page loads surfaces its error instead of looping.
+  const expiryRecoveryUsedRef = useRef(false);
 
   const [state, setState] = useState<GitRefDiffState>(() =>
     EMPTY_STATE(normalizedOptionRef, normalizedOptionRepo, requestedPageSize)
@@ -266,10 +275,17 @@ export function usePagedGitRefDiff(
     []
   );
 
+  /**
+   * Start a diff listing for `ref`. With `reloadOffsets`, it replaces an
+   * expired listing in place: the rows on screen stay until the fresh first
+   * page arrives, so the list keeps its length and scroll position, and then
+   * the given offsets are fetched from the new listing.
+   */
   const startListing = useCallback(
-    (ref: string, repo?: string): void => {
+    (ref: string, repo?: string, reloadOffsets?: readonly number[]): void => {
       const normalizedRef = normalizeRef(ref);
       const normalizedRepo = normalizeRepo(repo);
+      const isRecovery = reloadOffsets !== undefined;
       const generation = generationRef.current + 1;
       generationRef.current = generation;
       if (generation > 1) pendingOffsetsRef.current.clear();
@@ -277,13 +293,26 @@ export function usePagedGitRefDiff(
       currentKeyRef.current = listingKey(normalizedRef, normalizedRepo);
       currentRefRef.current = normalizedRef;
       currentRepoRef.current = normalizedRepo;
-      lastVisibleStartRef.current = null;
+      recoveringRef.current = isRecovery;
+      expiryRecoveryUsedRef.current = isRecovery;
 
       const pageSize = configRef.current.pageSize;
-      updateState(() => ({
-        ...EMPTY_STATE(normalizedRef, normalizedRepo, pageSize),
-        initialLoading: true,
-      }));
+      if (isRecovery) {
+        for (const offset of reloadOffsets)
+          pendingOffsetsRef.current.add(offset);
+        updateState((current) => ({
+          ...current,
+          failedRanges: new Map(),
+          error: null,
+        }));
+      } else {
+        lastVisibleStartRef.current = null;
+        lastRangeRef.current = null;
+        updateState(() => ({
+          ...EMPTY_STATE(normalizedRef, normalizedRepo, pageSize),
+          initialLoading: true,
+        }));
+      }
 
       const controller = new AbortController();
       initialControllerRef.current = controller;
@@ -332,6 +361,7 @@ export function usePagedGitRefDiff(
         .finally(() => {
           if (initialControllerRef.current !== controller) return;
           initialControllerRef.current = null;
+          recoveringRef.current = false;
           updateState((current) =>
             current.initialLoading
               ? { ...current, initialLoading: false }
@@ -349,7 +379,11 @@ export function usePagedGitRefDiff(
         requestedOffset,
         current?.pageSize ?? configRef.current.pageSize
       );
-      if (!current?.listingId || current.initialLoading) {
+      if (
+        !current?.listingId ||
+        current.initialLoading ||
+        recoveringRef.current
+      ) {
         pendingOffsetsRef.current.add(offset);
         return;
       }
@@ -395,6 +429,7 @@ export function usePagedGitRefDiff(
           ) {
             return;
           }
+          expiryRecoveryUsedRef.current = false;
           updateState((previous) => {
             const pages = new Map(previous.pages);
             pages.set(offset, response.entries);
@@ -411,6 +446,13 @@ export function usePagedGitRefDiff(
             isAbortError(value) ||
             !isCurrent(generation, ref, repo, listingId)
           ) {
+            return;
+          }
+          if (isExpiredListingError(value) && !expiryRecoveryUsedRef.current) {
+            startListing(ref, repo, [
+              offset,
+              ...rangePageOffsets(lastRangeRef.current, current.pageSize),
+            ]);
             return;
           }
           const error = toError(value);
@@ -437,7 +479,7 @@ export function usePagedGitRefDiff(
           });
         });
     },
-    [isCurrent, updateState]
+    [isCurrent, startListing, updateState]
   );
 
   useEffect(() => {
@@ -487,6 +529,7 @@ export function usePagedGitRefDiff(
     (range: VirtualizedListRange): void => {
       const current = stateRef.current;
       const pageSize = current?.pageSize ?? configRef.current.pageSize;
+      lastRangeRef.current = range;
       const previousStart = lastVisibleStartRef.current;
       const direction =
         previousStart === null || range.visibleStartIndex === previousStart

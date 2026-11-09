@@ -374,10 +374,11 @@ still deferred.
     reload.
 
   A single hook would need a hook point for each difference, at medium-high risk.
-  Shared leaf helpers in `utils/pagedListing.ts` are the right level; the missing
-  expiry recovery is a bug, filed as
-  `dev/bugs/backlog/paged-git-hooks-never-recover-from-expired-listing.md`.
-  (2026-11-09)
+  Shared leaf helpers in `utils/pagedListing.ts` are the right level. The missing
+  expiry recovery was a bug, now fixed
+  (`dev/bugs/implemented/paged-git-hooks-never-recover-from-expired-listing.md`);
+  the three git hooks share `isExpiredListingError` and `rangePageOffsets` from
+  there. (2026-11-09)
 
 - A shared base class for the three trust stores in `src/config/`
   (`SecretGrantsTrustStore`, `ExternalRootsTrustStore`, `WorkspaceSettingsTrustStore`).

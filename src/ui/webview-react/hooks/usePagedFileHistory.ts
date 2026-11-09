@@ -4,6 +4,7 @@ import { WORKSPACE_FILE_HISTORY_DEFAULT_PAGE_SIZE } from "@root/types/HostedWork
 import { workspaceFileHistory } from "@utils/hostedApi";
 import {
   isAbortError,
+  isExpiredListingError,
   listingKey,
   loadedRowCount,
   normalizePagedPath,
@@ -209,6 +210,15 @@ export function usePagedFileHistory(
   const lastVisibleStartRef = useRef<number | null>(null);
   const lastRangeRef = useRef<VirtualizedListRange | null>(null);
   const skipOptionStartRef = useRef<string | null>(null);
+  // True while a fresh listing replaces an expired one in place; page
+  // requests wait for it instead of naming the dead listing id.
+  const recoveringRef = useRef(false);
+  // One automatic recovery per expiry, so a listing that expires again before
+  // any page loads surfaces its error instead of looping.
+  const expiryRecoveryUsedRef = useRef(false);
+  // Last row the replaced listing had to reach. The history only loads in
+  // order, so recovery keeps appending pages until it gets there.
+  const recoveryTargetRef = useRef<number | null>(null);
 
   const [state, setState] = useState<FileHistoryState>(() =>
     EMPTY_STATE(normalizedOptionPath, normalizedOptionRepo, requestedPageSize)
@@ -258,10 +268,17 @@ export function usePagedFileHistory(
     []
   );
 
+  /**
+   * Start a history listing for `path`. With `recoveryTarget`, it replaces an
+   * expired listing in place: the rows on screen stay until the fresh first
+   * page arrives, so the list keeps its length and scroll position, and then
+   * pages are appended until row `recoveryTarget` is loaded again.
+   */
   const startListing = useCallback(
-    (path: string, repo?: string): void => {
+    (path: string, repo?: string, recoveryTarget?: number): void => {
       const normalizedPath = normalizePagedPath(path);
       const normalizedRepo = normalizeRepo(repo);
+      const isRecovery = recoveryTarget !== undefined;
       const generation = generationRef.current + 1;
       generationRef.current = generation;
       if (generation > 1) pendingOffsetsRef.current.clear();
@@ -272,14 +289,25 @@ export function usePagedFileHistory(
       virtualLengthRef.current = 0;
       rawCursorRef.current = undefined;
       nextCursorRef.current = undefined;
-      lastVisibleStartRef.current = null;
-      lastRangeRef.current = null;
+      recoveringRef.current = isRecovery;
+      expiryRecoveryUsedRef.current = isRecovery;
+      recoveryTargetRef.current = recoveryTarget ?? null;
 
       const pageSize = configRef.current.pageSize;
-      updateState(() => ({
-        ...EMPTY_STATE(normalizedPath, normalizedRepo, pageSize),
-        initialLoading: true,
-      }));
+      if (isRecovery) {
+        updateState((current) => ({
+          ...current,
+          failedRanges: new Map(),
+          error: null,
+        }));
+      } else {
+        lastVisibleStartRef.current = null;
+        lastRangeRef.current = null;
+        updateState(() => ({
+          ...EMPTY_STATE(normalizedPath, normalizedRepo, pageSize),
+          initialLoading: true,
+        }));
+      }
 
       const controller = new AbortController();
       initialControllerRef.current = controller;
@@ -323,6 +351,16 @@ export function usePagedFileHistory(
               (response.nextOffset !== undefined && response.nextOffset > 0))
           ) {
             setTimeout(() => rangeRequestRef.current(0), 0);
+          } else if (
+            response.hasMore &&
+            recoveryTargetRef.current !== null &&
+            response.entries.length <= recoveryTargetRef.current
+          ) {
+            const loadedLength = response.entries.length;
+            setTimeout(() => {
+              if (generationRef.current !== generation) return;
+              rangeRequestRef.current(loadedLength);
+            }, 0);
           }
         })
         .catch((value: unknown) => {
@@ -341,6 +379,7 @@ export function usePagedFileHistory(
         .finally(() => {
           if (initialControllerRef.current !== controller) return;
           initialControllerRef.current = null;
+          recoveringRef.current = false;
           updateState((current) =>
             current.initialLoading
               ? { ...current, initialLoading: false }
@@ -355,7 +394,11 @@ export function usePagedFileHistory(
     (requestedOffset: number): void => {
       const current = stateRef.current;
       const targetOffset = Math.max(0, requestedOffset);
-      if (!current?.listingId || current.initialLoading) {
+      if (
+        !current?.listingId ||
+        current.initialLoading ||
+        recoveringRef.current
+      ) {
         pendingOffsetsRef.current.add(targetOffset);
         return;
       }
@@ -413,6 +456,7 @@ export function usePagedFileHistory(
           ) {
             return;
           }
+          expiryRecoveryUsedRef.current = false;
           updateState((previous) => {
             const pages = new Map(previous.pages);
             pages.set(offset, response.entries);
@@ -441,10 +485,15 @@ export function usePagedFileHistory(
                 : response.entries.length > 0;
           const lastRange = lastRangeRef.current;
           const loadedLength = virtualLengthRef.current;
+          const recoveryTarget = recoveryTargetRef.current;
+          if (recoveryTarget !== null && loadedLength > recoveryTarget) {
+            recoveryTargetRef.current = null;
+          }
           if (
             response.hasMore &&
             cursorAdvanced &&
             (response.entries.length === 0 ||
+              (recoveryTarget !== null && loadedLength <= recoveryTarget) ||
               (response.entries.length < response.pageSize &&
                 lastRange !== null &&
                 loadedLength >= lastRange.overscanStartIndex &&
@@ -463,6 +512,14 @@ export function usePagedFileHistory(
             isAbortError(value) ||
             !isCurrent(generation, path, repo, listingId)
           ) {
+            return;
+          }
+          if (isExpiredListingError(value) && !expiryRecoveryUsedRef.current) {
+            startListing(
+              path,
+              repo,
+              Math.max(offset, lastRangeRef.current?.overscanEndIndex ?? 0)
+            );
             return;
           }
           const error = toError(value);
@@ -494,7 +551,7 @@ export function usePagedFileHistory(
           }
         });
     },
-    [isCurrent, updateState]
+    [isCurrent, startListing, updateState]
   );
   rangeRequestRef.current = requestRange;
 

@@ -10,10 +10,11 @@ import {
   DEFAULT_WORKSPACE_ENTRY_SORT,
   WORKSPACE_TREE_DEFAULT_PAGE_SIZE,
 } from "@root/types/HostedWorkspaceViewerTypes";
-import { HostedHttpError, workspaceTree } from "@utils/hostedApi";
+import { workspaceTree } from "@utils/hostedApi";
 import type { VirtualizedListRange } from "@components/shared/VirtualizedListFoundation";
 import {
   isAbortError,
+  isExpiredListingError,
   normalizePagedPath,
   pageOffset,
 } from "@utils/pagedListing";
@@ -160,10 +161,6 @@ function sameSort(
   right: WorkspaceEntrySort
 ): boolean {
   return left.key === right.key && left.direction === right.direction;
-}
-
-function isExpiredError(value: unknown): boolean {
-  return value instanceof HostedHttpError && value.status === 410;
 }
 
 function normalizeResponse(
@@ -444,7 +441,10 @@ export function usePagedWorkspaceDirectory(
           ) {
             return;
           }
-          if (isExpiredError(value) && !expirationRecoveryUsedRef.current) {
+          if (
+            isExpiredListingError(value) &&
+            !expirationRecoveryUsedRef.current
+          ) {
             const anchor = findAnchor(lastVisibleStartRef.current ?? 0);
             startListing(normalizedPath, anchor?.path, true);
             return;
@@ -541,7 +541,10 @@ export function usePagedWorkspaceDirectory(
           ) {
             return;
           }
-          if (isExpiredError(value) && !expirationRecoveryUsedRef.current) {
+          if (
+            isExpiredListingError(value) &&
+            !expirationRecoveryUsedRef.current
+          ) {
             const anchor = findAnchor(lastVisibleStartRef.current ?? 0);
             startListing(path, anchor?.path, true);
             return;

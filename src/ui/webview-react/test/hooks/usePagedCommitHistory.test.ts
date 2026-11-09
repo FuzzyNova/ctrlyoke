@@ -8,6 +8,7 @@ import type {
   WorkspaceCommitLogEntry,
   WorkspaceCommitLogResponse,
 } from "@root/types/HostedWorkspaceViewerTypes";
+import { HostedHttpError } from "@utils/hostedApi";
 
 const HISTORY_A = "00000000-0000-4000-8000-000000000001";
 const HISTORY_B = "00000000-0000-4000-8000-000000000002";
@@ -479,5 +480,89 @@ describe("usePagedCommitHistory", () => {
       pageSize: 3,
     });
     expect(result.current.getCommit(0)?.hash).toBe("hash-1");
+  });
+});
+
+describe("usePagedCommitHistory expired listings", () => {
+  const range = (start: number, end: number) => ({
+    visibleStartIndex: start,
+    visibleEndIndex: end,
+    overscanStartIndex: start,
+    overscanEndIndex: end,
+    startIndex: start,
+    endIndex: end,
+  });
+  const page = (historyId: string, offset: number) =>
+    response(
+      historyId,
+      offset,
+      [offset, offset + 1, offset + 2].filter((index) => index < 10).map(commit)
+    );
+
+  it("replaces an expired listing in place and reloads the visible pages", async () => {
+    const fresh = deferred<WorkspaceCommitLogResponse>();
+    let initialCalls = 0;
+    const fetchPage = vi.fn<PagedCommitHistoryFetcher>((request) => {
+      if (!request.historyId) {
+        initialCalls += 1;
+        return initialCalls === 1
+          ? Promise.resolve(page(HISTORY_A, 0))
+          : fresh.promise;
+      }
+      if (request.historyId === HISTORY_A) {
+        return Promise.reject(new HostedHttpError(410, "expired"));
+      }
+      return Promise.resolve(page(HISTORY_B, request.offset));
+    });
+    const { result } = renderHistory(fetchPage);
+    await waitFor(() => expect(result.current.listingId).toBe(HISTORY_A));
+
+    act(() => result.current.onRangeChange(range(6, 7)));
+
+    await waitFor(() => expect(initialCalls).toBe(2));
+    // The stale rows stay on screen while the fresh listing loads.
+    expect(result.current.totalCount).toBe(10);
+    expect(result.current.isInitialLoading).toBe(false);
+    expect(result.current.getCommit(0)?.hash).toBe("hash-0");
+    expect(result.current.failedRanges).toEqual([]);
+
+    act(() => fresh.resolve(page(HISTORY_B, 0)));
+
+    await waitFor(() =>
+      expect(result.current.getCommit(6)?.hash).toBe("hash-6")
+    );
+    expect(result.current.listingId).toBe(HISTORY_B);
+    expect(result.current.error).toBeNull();
+    expect(
+      fetchPage.mock.calls
+        .map(([request]) => request)
+        .filter((request) => request.historyId === HISTORY_B)
+        .map((request) => request.offset)
+    ).toEqual([6]);
+  });
+
+  it("shows a failed range when the fresh listing expires again", async () => {
+    let initialCalls = 0;
+    const fetchPage = vi.fn<PagedCommitHistoryFetcher>((request) => {
+      if (!request.historyId) {
+        initialCalls += 1;
+        return Promise.resolve(
+          page(initialCalls === 1 ? HISTORY_A : HISTORY_B, 0)
+        );
+      }
+      return Promise.reject(new HostedHttpError(410, "expired"));
+    });
+    const { result } = renderHistory(fetchPage);
+    await waitFor(() => expect(result.current.listingId).toBe(HISTORY_A));
+
+    act(() => result.current.requestRange(6));
+
+    await waitFor(() =>
+      expect(result.current.failedRanges.map((item) => item.offset)).toEqual([
+        6,
+      ])
+    );
+    expect(result.current.listingId).toBe(HISTORY_B);
+    expect(initialCalls).toBe(2);
   });
 });

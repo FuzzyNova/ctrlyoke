@@ -8,6 +8,7 @@ import type {
   WorkspaceGitRefDiffEntry,
   WorkspaceGitRefDiffPageResponse,
 } from "@root/types/HostedWorkspaceViewerTypes";
+import { HostedHttpError } from "@utils/hostedApi";
 
 const DIFF_A = "00000000-0000-4000-8000-000000000001";
 const DIFF_B = "00000000-0000-4000-8000-000000000002";
@@ -206,5 +207,80 @@ describe("usePagedGitRefDiff", () => {
       expect(result.current.getEntry(4)?.path).toBe("src/file-4.ts")
     );
     expect(result.current.failedRanges).toEqual([]);
+  });
+});
+
+describe("usePagedGitRefDiff expired listings", () => {
+  const page = (diffId: string, offset: number) =>
+    response(
+      diffId,
+      offset,
+      [offset, offset + 1, offset + 2].filter((index) => index < 10).map(entry)
+    );
+
+  it("replaces an expired listing in place and reloads the visible pages", async () => {
+    const fresh = deferred<WorkspaceGitRefDiffPageResponse>();
+    let initialCalls = 0;
+    const fetchPage = vi.fn<PagedGitRefDiffFetcher>((request) => {
+      if (!request.diffId) {
+        initialCalls += 1;
+        return initialCalls === 1
+          ? Promise.resolve(page(DIFF_A, 0))
+          : fresh.promise;
+      }
+      if (request.diffId === DIFF_A) {
+        return Promise.reject(new HostedHttpError(410, "expired"));
+      }
+      return Promise.resolve(page(DIFF_B, request.offset));
+    });
+    const { result } = renderDiff(fetchPage);
+    await waitFor(() => expect(result.current.listingId).toBe(DIFF_A));
+
+    act(() =>
+      result.current.onRangeChange({
+        visibleStartIndex: 6,
+        visibleEndIndex: 7,
+        overscanStartIndex: 6,
+        overscanEndIndex: 7,
+        startIndex: 6,
+        endIndex: 7,
+      })
+    );
+
+    await waitFor(() => expect(initialCalls).toBe(2));
+    expect(result.current.totalCount).toBe(10);
+    expect(result.current.isInitialLoading).toBe(false);
+    expect(result.current.getEntry(0)?.path).toBe("src/file-0.ts");
+
+    act(() => fresh.resolve(page(DIFF_B, 0)));
+
+    await waitFor(() =>
+      expect(result.current.getEntry(6)?.path).toBe("src/file-6.ts")
+    );
+    expect(result.current.listingId).toBe(DIFF_B);
+    expect(result.current.error).toBeNull();
+  });
+
+  it("shows a failed range when the fresh listing expires again", async () => {
+    let initialCalls = 0;
+    const fetchPage = vi.fn<PagedGitRefDiffFetcher>((request) => {
+      if (!request.diffId) {
+        initialCalls += 1;
+        return Promise.resolve(page(initialCalls === 1 ? DIFF_A : DIFF_B, 0));
+      }
+      return Promise.reject(new HostedHttpError(410, "expired"));
+    });
+    const { result } = renderDiff(fetchPage);
+    await waitFor(() => expect(result.current.listingId).toBe(DIFF_A));
+
+    act(() => result.current.requestRange(6));
+
+    await waitFor(() =>
+      expect(result.current.failedRanges.map((item) => item.offset)).toEqual([
+        6,
+      ])
+    );
+    expect(result.current.listingId).toBe(DIFF_B);
+    expect(initialCalls).toBe(2);
   });
 });

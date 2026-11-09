@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by deferred code-smell review, claude-cli
 - **Area:** `src/ui/webview-react/hooks/usePaged{CommitHistory,FileHistory,GitRefDiff}.ts`, `src/ui/webview-react/utils/pagedListing.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

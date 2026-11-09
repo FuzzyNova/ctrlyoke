@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The workspace viewer's commit history, file history and changed-file lists (for a commit, a stash, or staged and working-tree changes) now keep loading when you scroll after leaving them idle for a few minutes. Before, the rows that hadn't loaded yet failed, and their **Retry** button kept failing until you refreshed the whole list.
 - With `execution.ctrlyokeMcpMode` set to `skill` and `storage.runHistoryLocation` set to `workspace`, the ctrlyoke tools now find the run they were called for. Before, they looked in user-scope history and reported that the run file no longer existed. They also now use your `queue.maxSteps` and `queue.maxParallelSteps` settings in that mode, not the built-in defaults.
 - Screen readers now announce when a step ends without starting an AI turn.
 - External-roots trust prompts now display workspace-supplied control and directional characters as visible escapes.
