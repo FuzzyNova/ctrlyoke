@@ -50,6 +50,13 @@ suite("CliTrustGate", () => {
     assert.deepStrictEqual(recorded, []);
   });
 
+  test("escapes controls in listed items", async () => {
+    const io = new RecordingCliTrustIo(false);
+    await ensureCliTrustDecided(rootsRequest(["/tmp/a\u001b[2K"], []), io);
+    assert.ok(io.err.some((line) => line.includes("/tmp/a\\u001b[2K")));
+    assert.ok(io.err.every((line) => !line.includes("\u001b")));
+  });
+
   for (const answer of [true, false]) {
     test(`asks once in a terminal, records ${answer ? "allow" : "deny"}, and continues`, async () => {
       const io = new RecordingCliTrustIo(true, [answer]);

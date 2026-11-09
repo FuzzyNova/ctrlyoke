@@ -15,6 +15,7 @@ import {
   isRankNoWiderThan,
 } from "../types/DashboardConstants";
 import { stableStringify } from "../utils/StableJson";
+import { escapeUntrustedDisplayText } from "../utils/EscapeUntrustedDisplayText";
 
 /**
  * One workspace-scoped value that can choose a program for ctrlyoke to run.
@@ -307,7 +308,8 @@ const PROGRAM_FIELD_ORDER = ["command", "args", PROGRAM_ENV_FIELD] as const;
 
 /** Pretty-print complete values, putting executable details before metadata. */
 function formatSensitiveValue(value: unknown): string {
-  if (typeof value === "string") return value;
+  if (typeof value === "string")
+    return escapeUntrustedDisplayText(value, { escapeNewlines: true });
   if (!isPlainObject(value))
     return JSON.stringify(value, null, 2) ?? String(value);
 
@@ -329,7 +331,10 @@ function formatSensitiveValue(value: unknown): string {
     if (key === PROGRAM_ENV_FIELD && isPlainObject(item)) {
       return `  env: ${Object.entries(item)
         .sort(([left], [right]) => left.localeCompare(right))
-        .map(([envKey, envValue]) => `${envKey}=${String(envValue)}`)
+        .map(
+          ([envKey, envValue]) =>
+            `${escapeUntrustedDisplayText(envKey, { escapeNewlines: true })}=${escapeUntrustedDisplayText(String(envValue), { escapeNewlines: true })}`
+        )
         .join("\n       ")}`;
     }
     const rendered = JSON.stringify(item, null, 2) ?? String(item);
@@ -355,8 +360,10 @@ function createRequest(
   return {
     settingPath,
     fingerprint: fingerprintOf(value),
-    summary: `${label}: ${valueText}`,
-    detail: formatSensitiveValue(value),
+    summary: escapeUntrustedDisplayText(`${label}: ${valueText}`, {
+      escapeNewlines: true,
+    }),
+    detail: escapeUntrustedDisplayText(formatSensitiveValue(value)),
   };
 }
 

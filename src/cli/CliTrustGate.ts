@@ -1,4 +1,5 @@
 import { promptYesNo } from "./CliPrompt";
+import { escapeUntrustedDisplayText } from "../utils/EscapeUntrustedDisplayText";
 
 /** Terminal access for the CLI's trust prompts; prompts and errors use stderr. */
 export interface CliTrustIo {
@@ -55,7 +56,9 @@ export async function ensureCliTrustDecided(
   }
 
   io.writeErr(request.heading);
-  request.items.forEach((item) => io.writeErr(`  - ${item}`));
+  request.items.forEach((item) =>
+    io.writeErr(`  - ${escapeUntrustedDisplayText(item)}`)
+  );
 
   if (!io.isInteractive) {
     io.writeErr(

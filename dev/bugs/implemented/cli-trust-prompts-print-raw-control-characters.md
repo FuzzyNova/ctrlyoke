@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (pass 26), claude-cli
 - **Area:** `src/config/WorkspaceSensitiveSettings.ts`, `src/cli/WorkspaceSettingsTrustCommands.ts`, `src/cli/CliTrustGate.ts`
-- **Severity:** high (security: approval prompt spoofing)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

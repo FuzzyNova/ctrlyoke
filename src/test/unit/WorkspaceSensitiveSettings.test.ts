@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { createHash } from "crypto";
 import { suite, test } from "mocha";
 import {
   collectWorkspaceMcpRegistryRequests,
@@ -8,6 +9,7 @@ import {
 } from "../../config/WorkspaceSensitiveSettings";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
 import type { McpServerConfig } from "../../types/CtrlYokeTypes";
+import { stableStringify } from "../../utils/StableJson";
 import {
   PERMISSION_MODES,
   SANDBOX_MODES,
@@ -24,6 +26,53 @@ function settings(value: unknown): PartialCtrlYokeSettings {
 }
 
 suite("WorkspaceSensitiveSettings", () => {
+  test("escapes untrusted display controls without changing fingerprints", () => {
+    const shell = "/tmp/evil\u001b\r/bin\u202e/zsh";
+    const hook = {
+      event: "stop",
+      command: "node\u001b",
+      env: { X: "1\u001b" },
+    };
+    const requests = collectWorkspaceSensitiveSettingRequests(
+      settings({
+        terminal: { shellExecutable: shell },
+        defaults: { hooks: [hook] },
+      }),
+      {}
+    );
+    const shellRequest = requests.find(
+      (request) =>
+        request.settingPath === SETTING_PATHS.TERMINAL_SHELL_EXECUTABLE
+    )!;
+    assert.strictEqual(
+      shellRequest.summary,
+      "terminal.shellExecutable: /tmp/evil\\u001b\\u000d/bin\\u202e/zsh"
+    );
+    assert.strictEqual(
+      shellRequest.detail,
+      "/tmp/evil\\u001b\\u000d/bin\\u202e/zsh"
+    );
+    assert.strictEqual(
+      shellRequest.fingerprint,
+      createHash("sha256")
+        .update(stableStringify(shell))
+        .digest("hex")
+        .slice(0, 32)
+    );
+    const hookRequest = requests.find(
+      (request) => request.settingPath === SETTING_PATHS.DEFAULTS_HOOKS
+    )!;
+    assert.ok(hookRequest.summary.includes("node\\u001b"));
+    assert.ok(hookRequest.detail.includes("X=1\\u001b"));
+    assert.strictEqual(
+      hookRequest.fingerprint,
+      createHash("sha256")
+        .update(stableStringify(hook))
+        .digest("hex")
+        .slice(0, 32)
+    );
+  });
+
   suite("default sandbox", () => {
     // Containment order: true (on) > null (harness settings) > false (off).
     const rows: Array<[unknown, unknown, boolean]> = [
