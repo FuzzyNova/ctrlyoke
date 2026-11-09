@@ -762,9 +762,16 @@ export class PromptFileParser {
     } else if (isObject(target) && Array.isArray(target.parallel)) {
       schemas = [defs.parallelGroupItem];
     } else {
-      // workflowStep is the shared closure for ordinary steps, finalStep, and
-      // parallel members. Its oneOf intentionally supplies both step kinds.
-      schemas = [defs.workflowStep];
+      // Keep the union for validation relaxation, but suggestions should only
+      // include fields valid for the authored step kind.
+      schemas =
+        suggestionCandidatesOnly && isObject(target)
+          ? [
+              target.type === STEP_TYPES.SCRIPT
+                ? defs.scriptStep
+                : defs.promptStep,
+            ]
+          : [defs.workflowStep];
     }
 
     const propertySchemas = new Map<string, unknown[]>();

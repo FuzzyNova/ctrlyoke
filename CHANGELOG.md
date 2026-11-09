@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Unknown-property suggestions now use keys valid for the affected step kind.
 - `ctrlyoke history steps` now excludes idle time between retries from
   final-step pass elapsed time.
 - Importing a history-only run bundle now flattens authored parallel groups before matching timeline attempts to steps, keeping imported step order, runtime state and history addressing aligned.
