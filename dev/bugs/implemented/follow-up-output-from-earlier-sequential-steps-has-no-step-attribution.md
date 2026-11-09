@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by user
 - **Area:** `src/ui/webview-react/utils/outputRows.ts` (`buildOutputRows`, activity label stamping)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -97,7 +97,8 @@ live, so the next step can continue the same conversation:
 The terminal also stays open when the workflow finishes, so you can keep
 talking to the harness or continue the run later. Anything that happens in it
 after the step ended, such as your messages and the harness's replies and tool
-calls, still appears in that step's output. Terminals close on their own only
+calls, still appears in that step's output. When it lands below another step's
+output, it is labelled with the step it belongs to. Terminals close on their own only
 in these cases, and a strip at the bottom of an ended terminal says why:
 
 | Message                                        | Why the terminal closed                                                               |

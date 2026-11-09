@@ -596,6 +596,49 @@ function getStepKind(step: WorkflowStep | null | undefined): StepType {
     : STEP_TYPES.PROMPT;
 }
 
+/** How an output target names itself: its step, label and authored name. */
+interface StepTargetIdentity {
+  workflowStep: WorkflowStep | null | undefined;
+  stepLabel: string;
+  stepName: string | undefined;
+}
+
+function getStepTargetIdentity(
+  input: BuildOutputRowsInput,
+  target: OutputMessageTarget
+): StepTargetIdentity {
+  const isFinalStep = target.kind === FINAL_STEP_PHASES.FINAL_STEP;
+  const workflowStep = isFinalStep
+    ? input.finalStep
+    : input.steps[target.index];
+  return {
+    workflowStep,
+    stepLabel: formatStepTargetLabel(isFinalStep, target.index),
+    stepName: isFinalStep
+      ? getStepName(workflowStep, formatFinalPassLabel(target.index + 1))
+      : workflowStep?.name?.trim() || undefined,
+  };
+}
+
+/**
+ * The `⚡ Step N` attribution stamped on the row that opens an activity slice.
+ * Shared by the CLI and status paths so a final-step pass is labelled as a pass
+ * on both.
+ */
+function getActivityAttribution(
+  identity: StepTargetIdentity
+): Pick<
+  OutputRowBase,
+  "activityFirst" | "activityLabel" | "activityName" | "activityStepType"
+> {
+  return {
+    activityFirst: true,
+    activityLabel: identity.stepLabel,
+    activityName: identity.stepName,
+    activityStepType: getStepKind(identity.workflowStep),
+  };
+}
+
 function getEffectiveStepHarness(
   step: WorkflowStep,
   effectiveHarness: HarnessId | undefined
@@ -2345,6 +2388,19 @@ export function buildOutputRows(
     return color;
   };
   let previousActivityTargetKey: string | undefined;
+  // The target of the last message that emitted rows, activity or not. A slice
+  // whose step already has rows, but which lands under another step's rows,
+  // resumes that step's output: an open interactive terminal's follow-up keeps
+  // writing after later sequential steps have run, so being outside a parallel
+  // group does not mean the output is contiguous.
+  let previousRowTargetKey: string | undefined;
+  // Attempts (run + attempt, phase-agnostic) whose leading chrome has been
+  // emitted. A status activity for an attempt that has not opened yet comes
+  // ahead of that attempt's header, so it is not a resume.
+  const openedAttempts = new Set<string>();
+  const isInParallelGroup = (target: OutputMessageTarget): boolean =>
+    target.kind === FINAL_STEP_PHASES.QUEUE &&
+    getParallelGroupForStep(input.parallelGroups, target.index) !== undefined;
   // An attempt's chrome belongs to the attempt, not to each activity slice
   // inside it: the header/prompt/command/error open the block and the
   // verdict/stats close it. Emitting them per slice repeated a full CLI header
@@ -2462,18 +2518,13 @@ export function buildOutputRows(
         estimateSize: 1,
       });
       if (input.hiddenTargetKeys?.has(targetKey)) {
-        const isFinalStep = target.kind === FINAL_STEP_PHASES.FINAL_STEP;
-        const workflowStep = isFinalStep
-          ? input.finalStep
-          : input.steps[target.index];
+        const { stepLabel, stepName } = getStepTargetIdentity(input, target);
         rows.push({
           key: `${targetKey}:hidden`,
           rowKind: OUTPUT_ROW_KINDS.STEP_HIDDEN,
           target,
-          stepLabel: formatStepTargetLabel(isFinalStep, target.index),
-          stepName: isFinalStep
-            ? getStepName(workflowStep, formatFinalPassLabel(target.index + 1))
-            : workflowStep?.name?.trim() || undefined,
+          stepLabel,
+          stepName,
           estimateSize: STEP_HIDDEN_ROW_HEIGHT,
         });
         continue;
@@ -2495,28 +2546,33 @@ export function buildOutputRows(
       if (!message.isActivity && activityStatusTargets.has(targetKey)) continue;
       const activityFirst =
         message.isActivity && previousActivityTargetKey !== targetKey;
+      // A status has no header of its own, so the CLI path's leading-chrome
+      // check becomes "its attempt has already opened": one that precedes a
+      // new attempt's header is not resuming anything.
+      const resumesAfterOtherStep =
+        !isFirstForTarget &&
+        previousRowTargetKey !== targetKey &&
+        openedAttempts.has(
+          getAttemptRowKeyBase(
+            targetKey,
+            message.runIndex ?? 0,
+            message.attemptIndex ?? 0,
+            undefined
+          )
+        );
       const stampActivityFirst =
-        activityFirst &&
-        getParallelGroupForStep(input.parallelGroups, target.index) !==
-          undefined;
+        activityFirst && (isInParallelGroup(target) || resumesAfterOtherStep);
       if (message.isActivity) previousActivityTargetKey = targetKey;
+      previousRowTargetKey = targetKey;
       rows.push({
         key: `${targetKey}:status:${messageIndex}`,
         rowKind: OUTPUT_ROW_KINDS.STATUS,
         target,
         status: message.data as OutputStatusMessage,
         activityKey: message.activityKey,
-        activityFirst:
-          message.isActivity && stampActivityFirst ? true : undefined,
-        activityLabel: message.isActivity
-          ? stampActivityFirst
-            ? `Step ${target.index + 1}`
-            : undefined
-          : undefined,
-        activityStepType:
-          message.isActivity && stampActivityFirst
-            ? getStepKind(input.steps[target.index])
-            : undefined,
+        ...(stampActivityFirst
+          ? getActivityAttribution(getStepTargetIdentity(input, target))
+          : {}),
         estimateSize: 36,
       });
       continue;
@@ -2570,6 +2626,7 @@ export function buildOutputRows(
         groupEnd: true,
         estimateSize: 36,
       });
+      previousRowTargetKey = targetKey;
       continue;
     }
 
@@ -2578,13 +2635,8 @@ export function buildOutputRows(
     let output = aggregateOutput;
     const groupStartIndex = rows.length;
     const isFinalStep = target.kind === FINAL_STEP_PHASES.FINAL_STEP;
-    const workflowStep = isFinalStep
-      ? input.finalStep
-      : input.steps[target.index];
-    const stepName = isFinalStep
-      ? getStepName(workflowStep, formatFinalPassLabel(target.index + 1))
-      : workflowStep?.name?.trim() || undefined;
-    const stepLabel = formatStepTargetLabel(isFinalStep, target.index);
+    const stepIdentity = getStepTargetIdentity(input, target);
+    const { stepLabel, stepName } = stepIdentity;
     const attemptIndex = message.attemptIndex ?? 0;
     const runIndex = message.runIndex ?? output.runIndex ?? 0;
     const attemptRowKeyBase = getAttemptRowKeyBase(
@@ -2683,10 +2735,20 @@ export function buildOutputRows(
     const scriptish = isScriptOutput(output);
     const activityFirst =
       message.isActivity && previousActivityTargetKey !== targetKey;
+    // A slice that opens a new attempt or run already has a header naming the
+    // step, and a step's first slice has its `cli-header`, so neither resumes.
+    const resumesAfterOtherStep =
+      !isFirstForTarget &&
+      previousRowTargetKey !== targetKey &&
+      !emitsLeadingChrome;
     const stampActivityFirst =
-      activityFirst &&
-      getParallelGroupForStep(input.parallelGroups, target.index) !== undefined;
+      activityFirst && (isInParallelGroup(target) || resumesAfterOtherStep);
     if (message.isActivity) previousActivityTargetKey = targetKey;
+    if (emitsLeadingChrome) {
+      openedAttempts.add(
+        getAttemptRowKeyBase(targetKey, runIndex, attemptIndex, undefined)
+      );
+    }
     // What belongs to *every* row the slice emits. `activityKey` is looked up
     // per row by the minimap and the streaming anchor.
     //
@@ -3015,10 +3077,7 @@ export function buildOutputRows(
         ? rows[contentRowStart]
         : undefined;
     if (sliceOpener) {
-      sliceOpener.activityFirst = true;
-      sliceOpener.activityLabel = stepLabel;
-      sliceOpener.activityName = stepName;
-      sliceOpener.activityStepType = getStepKind(workflowStep);
+      Object.assign(sliceOpener, getActivityAttribution(stepIdentity));
     }
 
     if (emitsTrailingChrome && aggregateOutput.scriptVerdict) {
@@ -3063,6 +3122,7 @@ export function buildOutputRows(
     }
 
     if (rows.length > groupStartIndex) {
+      previousRowTargetKey = targetKey;
       // The block's top padding and bottom border belong to the attempt, not to
       // each activity slice inside it: `cli-header` is always the first row and
       // `stats` the last, which is what `outputRowGroupPadding` estimates

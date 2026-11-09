@@ -1228,6 +1228,210 @@ describe("outputRows", () => {
     ]);
   });
 
+  // An open interactive terminal keeps writing after its step completes, so a
+  // sequential step's follow-up can land under a later step's output. Those
+  // resumes are attributed; output that stays contiguous is not.
+  describe("sequential follow-up attribution", () => {
+    const queue = (stepIndex: number) =>
+      ({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex }) as const;
+    const finalPass = (loopIndex: number) =>
+      ({ kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex }) as const;
+    type SliceTarget = ReturnType<typeof queue> | ReturnType<typeof finalPass>;
+    interface Slice {
+      target: SliceTarget;
+      text: string;
+      /** Follow-ups stream structured events; the first turn streams text. */
+      kind?: "text" | "followUp" | "status";
+    }
+    const steps = [
+      { name: "auth" },
+      { name: "database" },
+      { name: "api" },
+    ] as WorkflowStep[];
+
+    const buildSequentialRows = (
+      slices: Slice[],
+      options: { finalStep?: WorkflowStep | null; steps?: WorkflowStep[] } = {}
+    ) => {
+      const allMessages = mapOrderedHistoryEntriesToMessages(
+        [],
+        slices.map((slice, index) => {
+          const base = {
+            timestampMs: 1000 + index,
+            sequence: index + 1,
+            target: slice.target,
+            runIndex: 0,
+            attemptIndex: 0,
+          };
+          if (slice.kind === "followUp") {
+            return {
+              ...base,
+              kind: OUTPUT_ACTIVITY_KINDS.STRUCTURED,
+              events: [
+                { type: CLI_EVENT_TYPES.TEXT, data: { text: slice.text } },
+              ],
+            };
+          }
+          return {
+            ...base,
+            kind:
+              slice.kind === "status"
+                ? OUTPUT_ACTIVITY_KINDS.STATUS
+                : OUTPUT_ACTIVITY_KINDS.TEXT,
+            text: slice.text,
+          };
+        })
+      );
+      const result = buildOutputRows({
+        allMessages,
+        steps: options.steps ?? steps,
+        finalStep: options.finalStep ?? null,
+        streamingChunks: {},
+        finalStepStreamingChunks: {},
+        isExecutionActive: false,
+        allowUndoActions: false,
+        isViewingHistory: false,
+        historyOutputs: null,
+        workspaceSnapshots: {},
+        finalStepWorkspaceSnapshots: {},
+        undoRecords: {},
+        diffCollapseState: new Map(),
+        diffExpansionState: new Map(),
+        toolCallExpansionState: new Map(),
+        defaultDiffCollapsed: false,
+        effectiveHarness: HARNESS_IDS.CLAUDE_CLI,
+      });
+      const contentRows = result.rows.filter(
+        (row) =>
+          row.rowKind === OUTPUT_ROW_KINDS.PLAIN_RESPONSE ||
+          row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT ||
+          row.rowKind === OUTPUT_ROW_KINDS.STATUS
+      );
+      return { result, contentRows };
+    };
+    const stamps = (
+      rows: ReturnType<typeof buildSequentialRows>["contentRows"]
+    ) =>
+      rows.map((row) =>
+        row.activityFirst
+          ? {
+              label: row.activityLabel,
+              name: row.activityName,
+              stepType: row.activityStepType,
+            }
+          : undefined
+      );
+
+    it("labels every follow-up slice that resumes under another step's output", () => {
+      const { contentRows } = buildSequentialRows([
+        { target: queue(0), text: "A" },
+        { target: queue(1), text: "B" },
+        { target: queue(2), text: "C" },
+        { target: queue(0), text: "A'", kind: "followUp" },
+        { target: queue(1), text: "B'", kind: "followUp" },
+        { target: queue(0), text: 'A"', kind: "followUp" },
+      ]);
+
+      expect(contentRows).toHaveLength(6);
+      expect(stamps(contentRows)).toEqual([
+        undefined,
+        undefined,
+        undefined,
+        { label: "Step 1", name: "auth", stepType: STEP_TYPES.PROMPT },
+        { label: "Step 2", name: "database", stepType: STEP_TYPES.PROMPT },
+        { label: "Step 1", name: "auth", stepType: STEP_TYPES.PROMPT },
+      ]);
+    });
+
+    it("does not label a follow-up that only follows its own step's output", () => {
+      const { contentRows } = buildSequentialRows([
+        { target: queue(0), text: "A" },
+        { target: queue(1), text: "B" },
+        { target: queue(1), text: "B'", kind: "followUp" },
+      ]);
+
+      expect(contentRows).toHaveLength(3);
+      expect(contentRows.some((row) => row.activityFirst)).toBe(false);
+    });
+
+    it("does not label a single step's follow-up", () => {
+      const { contentRows } = buildSequentialRows(
+        [
+          { target: queue(0), text: "A" },
+          { target: queue(0), text: "A'", kind: "followUp" },
+        ],
+        { steps: [{ name: "auth" }] as WorkflowStep[] }
+      );
+
+      expect(contentRows).toHaveLength(2);
+      expect(contentRows.some((row) => row.activityFirst)).toBe(false);
+    });
+
+    it("labels a final-step follow-up as its pass on the CLI and status paths", () => {
+      const finalStep = { name: "review" } as WorkflowStep;
+      const finalStamp = {
+        label: "Final Step Pass 1",
+        name: "review",
+        stepType: STEP_TYPES.PROMPT,
+      };
+      const queueStamp = {
+        label: "Step 1",
+        name: "auth",
+        stepType: STEP_TYPES.PROMPT,
+      };
+      const lead: Slice[] = [
+        { target: queue(0), text: "A" },
+        { target: finalPass(0), text: "F" },
+        { target: queue(0), text: "A'", kind: "followUp" },
+      ];
+
+      const cli = buildSequentialRows(
+        [...lead, { target: finalPass(0), text: "F'", kind: "followUp" }],
+        { finalStep }
+      );
+      expect(stamps(cli.contentRows)).toEqual([
+        undefined,
+        undefined,
+        queueStamp,
+        finalStamp,
+      ]);
+
+      const status = buildSequentialRows(
+        [
+          ...lead,
+          { target: finalPass(0), text: "Follow-up", kind: "status" },
+          { target: finalPass(0), text: "F'", kind: "followUp" },
+        ],
+        { finalStep }
+      );
+      expect(status.contentRows.map((row) => row.rowKind)).toContain(
+        OUTPUT_ROW_KINDS.STATUS
+      );
+      // The status opens the resumed slice; the CLI rows after it continue it.
+      expect(stamps(status.contentRows)).toEqual([
+        undefined,
+        undefined,
+        queueStamp,
+        finalStamp,
+        undefined,
+      ]);
+    });
+
+    it("charges a stamped resume row the activity label's height", () => {
+      const { contentRows } = buildSequentialRows([
+        { target: queue(0), text: "A" },
+        { target: queue(1), text: "B" },
+        { target: queue(0), text: "A'", kind: "followUp" },
+      ]);
+      const opener = contentRows.find((row) => row.activityFirst);
+      if (!opener) throw new Error("Expected a stamped resume row");
+      expect(estimateOutputRowHeight(opener, 13, 760)).toBe(
+        estimateOutputRowHeight({ ...opener, activityFirst: false }, 13, 760) +
+          20
+      );
+    });
+  });
+
   it("separates the parallel-group predicate from the snapshot-gated undo predicate", () => {
     const parallelGroups = [
       {
