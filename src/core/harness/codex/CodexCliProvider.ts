@@ -487,9 +487,11 @@ export class CodexCliProvider implements ICliProvider {
 
     // Add workspace directories
     if (workspaceRoot) {
-      // Read-only Codex refuses --add-dir, and only workspace-write needs the
-      // git admin dirs. Under `sandbox: null` config.toml decides the mode, so
-      // only the external roots are passed, as before.
+      // Interactive read-only Codex exits on any --add-dir ("Error adding
+      // directories", 0.163-0.166; `codex exec` ignores it), and only
+      // workspace-write needs the git admin dirs. Under `sandbox: null`
+      // config.toml decides the mode, so only the external roots are passed;
+      // a read-only config.toml then fails launch (documented limitation).
       const resolvedSandboxMode = codexSandboxFlag(
         workflowContext?.resolvedProperties?.sandbox,
         workflowContext?.resolvedProperties?.sandboxMode ??

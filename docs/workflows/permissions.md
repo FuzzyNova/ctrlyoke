@@ -189,6 +189,30 @@ steps:
     prompt: Install the project dependencies.
 ```
 
+### External roots and the sandbox {#external-roots-and-the-sandbox}
+
+Approved [external roots](/reference/settings#external-file-roots) are handed
+to the harness as extra directories, and to its sandbox as extra writable
+places. A root never overrides the sandbox, and the sandbox never blocks an
+approved root, except in read-only mode:
+
+| Sandbox               | Codex                                                      | Claude Code                                                                       |
+| --------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| On, `workspace-write` | Terminal commands can write each root (`--add-dir`)        | Bash can write each root (`sandbox.filesystem.allowWrite`)                        |
+| On, `read-only`       | Roots are not passed; terminal commands can write nothing  | Bash writes to each root are denied; Write and Edit still follow tool permissions |
+| Off                   | Roots are passed, but terminal commands can write anywhere | Roots widen the file tools' reach; Bash can write anywhere                        |
+| None                  | Roots are passed and `config.toml` decides the mode        | Claude's own settings decide                                                      |
+
+So a workflow's `trustedExternalRoots` limits where **terminal commands** can
+write only while `sandbox` resolves to On. With the sandbox Off or None, the
+list still limits which outside directories ctrlyoke and the harness's file
+tools are given, but a shell command can write anywhere your account can.
+
+Under None, interactive Codex refuses to start when your `config.toml` sets
+`sandbox_mode = "read-only"` and the workflow has any approved external root
+(`codex exec` ignores the roots instead). Use `sandbox: true` with
+`sandboxMode: read-only` for that combination.
+
 A workspace `defaults.sandbox` that is less contained than your own value
 (`false` or `null` while yours is `true`, or `false` while yours is `null`)
 waits for your approval before it applies. So does a workspace

@@ -395,7 +395,14 @@ Revised 2026-11-04: `resolveCodexContainment` and the clamp were removed. `codex
 | --------------- | -------------------------------------- | ---------------------------------------------------------- |
 | `true`          | `-s workspace-write` or `-s read-only` | external roots plus Git admin dirs; none under `read-only` |
 | `false`         | `-s danger-full-access`                | external roots                                             |
-| `null` / absent | nothing (`config.toml` decides)        | external roots; a `read-only` `config.toml` refuses them   |
+| `null` / absent | nothing (`config.toml` decides)        | external roots; a `read-only` `config.toml` refuses them\* |
+
+\* Rechecked 2026-11-08 on Codex 0.166.0: interactive `codex` exits 1 ("Error adding
+directories: Ignoring --add-dir … effective permissions do not allow additional writable
+roots"); `codex exec` starts and ignores the roots. Left as a documented limitation:
+fixing it means resolving Codex's effective `sandbox_mode` (`CODEX_HOME`, project config,
+profiles, `-c`) without a TOML parser, and `-c sandbox_workspace_write.writable_roots`
+would replace the user's own roots.
 
 ### The other harnesses
 

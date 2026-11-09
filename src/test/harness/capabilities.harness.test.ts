@@ -237,8 +237,8 @@ const RUN_MARKER_OR_STOP_PROMPT = orStop(RUN_MARKER_PROMPT);
  *   ({@link approvalSandbox}), and its workspace-write sandbox lets a workspace
  *   write through without asking, so its command writes outside the workspace,
  *   which needs an escalation request. (A read-only sandbox would ask for any
- *   write, but Codex 0.163 will not start in one:
- *   dev/bugs/backlog/codex-read-only-sandbox-refuses-add-dir.md.)
+ *   write, but interactive Codex will not start in one with any --add-dir:
+ *   dev/bugs/implemented/codex-read-only-sandbox-refuses-add-dir.md.)
  */
 function approvalPrompt(harness: HarnessId, workspace: Workspace): string {
   if (harness === HARNESS_IDS.CLAUDE_CLI) {
