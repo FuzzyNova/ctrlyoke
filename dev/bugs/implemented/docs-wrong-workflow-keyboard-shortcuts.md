@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli subagent, docs-vs-code sweep)
 - **Area:** `docs/reference/commands.md` (~34-42), `docs/workflows/templates.md` (~29-30)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

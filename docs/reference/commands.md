@@ -33,13 +33,13 @@ output can contain nested ctrlyoke boxes that make rendered text ambiguous.
 
 | Command                                | What it does                                                     | Shortcut (dashboard focused)   |
 | -------------------------------------- | ---------------------------------------------------------------- | ------------------------------ |
-| `ctrlyoke: New Workflow from Template` | Open the template picker                                         | `Ctrl+Shift+T` / `Cmd+Shift+T` |
-| `ctrlyoke: New Blank Workflow`         | Clear the current workflow and start fresh                       | `Ctrl+Shift+N` / `Cmd+Shift+N` |
+| `ctrlyoke: New Workflow from Template` | Open the template picker                                         | `Ctrl+Shift+N` / `Cmd+Shift+N` (dashboard) <!-- dashboard shortcut overrides package keybinding --> |
+| `ctrlyoke: New Blank Workflow`         | Clear the current workflow and start fresh                       | `Ctrl+N` / `Cmd+N` (dashboard) <!-- dashboard shortcut overrides package keybinding --> |
 | `ctrlyoke: Create New Custom Template` | Open the template picker's create-template form                  |                                |
-| `ctrlyoke: Select Prompt File`         | Pick a workflow or prompt file in the workspace and load it      | `Ctrl+Shift+L` / `Cmd+Shift+L` |
-| `ctrlyoke: Queue Prompt File`          | Pick a workflow or prompt file and append its steps to the queue | `Ctrl+Shift+Q` / `Cmd+Shift+Q` |
+| `ctrlyoke: Select Prompt File`         | Pick a workflow or prompt file in the workspace and load it      | <!-- dashboard shortcut overrides package keybinding --> |
+| `ctrlyoke: Queue Prompt File`          | Pick a workflow or prompt file and append its steps to the queue | <!-- dashboard shortcut overrides package keybinding --> |
 
-The keyboard shortcuts apply only while the ctrlyoke dashboard view has focus.
+These shortcuts work while the ctrlyoke dashboard has focus, outside a text field or editor.
 
 The prompt editor's convert button writes a step prompt to a file under `.ctrlyoke/prompts/` and
 replaces the inline prompt with a reference to it. Script templates for end conditions are created

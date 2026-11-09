@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-09 by bug-hunt final step (claude-cli subagent, docs-vs-code sweep)
 - **Area:** `schemas/workflow-schema.json` (`$defs.executionProperties.priorContext.description`, ~770) and its generated copies (`docs/reference/workflow-schema.md`, `src/types/generated/SchemaDescriptions.ts`, `WorkflowSchemaOutline.ts`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

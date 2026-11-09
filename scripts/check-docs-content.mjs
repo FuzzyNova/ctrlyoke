@@ -278,6 +278,12 @@ export function findCommandDrift(markdown, contributes) {
     );
     if (!command) continue;
     const row = lines.find((line) => line.includes(command.title));
+    // Some commands are handled inside the dashboard webview, where VS Code's
+    // contributed keybindings do not fire. Their docs row can explicitly
+    // document the active webview shortcut instead.
+    if (row?.includes("<!-- dashboard shortcut overrides package keybinding -->")) {
+      continue;
+    }
     const keys = [binding.key, binding.mac]
       .filter(Boolean)
       .map(formatKeybinding);

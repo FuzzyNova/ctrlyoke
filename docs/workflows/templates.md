@@ -26,8 +26,8 @@ Open the **Create Workflow from Template** dialog in any of these ways:
 
 - the arrow beside **New** in the dashboard header, then **New From Template...**;
 - **Create from Template** in the steps panel of an empty workflow;
-- the **ctrlyoke: New Workflow from Template** command (`Ctrl+Shift+T`, or
-  `Cmd+Shift+T` on macOS).
+- the **ctrlyoke: New Workflow from Template** command (`Ctrl+Shift+N`, or
+  `Cmd+Shift+N` on macOS) in the dashboard.
 
 ![The Create Workflow from Template dialog with Full Feature Pipeline selected and Set as Default beside the Template label. Under its description, the Variables form has featureDescription in a multi-line box, planDocument ".ctrlyoke/plans/plan.md", reviewHarness set to Codex in a harness picker, testCommand changed to "npm run test:unit" with Save as Default beside its label, and formatCommand "npm run format", each with helper text. Workflow Name is "notes-tags", and the footer has Cancel, Create and Create & Run](/screenshots/template-modal-full-feature-840x1119.png)
 
