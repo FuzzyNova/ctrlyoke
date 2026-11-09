@@ -658,6 +658,7 @@ suite("EndConditionHandler", () => {
       stderr: "stderr",
       durationMs: 7,
       error: "could not run",
+      errored: true,
     });
   });
 
