@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Claude: Amazon Bedrock and Google Vertex AI model IDs (such as `us.anthropic.claude-sonnet-4-5-20250929-v1:0` or `claude-sonnet-4-5@20250929`), Bedrock inference-profile ARNs, and older IDs such as `claude-3-5-sonnet-20241022` are now passed to Claude Code as written. Before, any ID naming a Claude family was quietly replaced by its alias (`sonnet`), which dropped the pinned version, and an ARN was replaced by your default model.
 - OpenCode: a question option whose description has more than one paragraph now shows all of it as the description. Before, every paragraph after the first appeared in a preview block meant for ASCII mockups. A description followed by a mockup still shows the mockup as a preview, as it already did for Qwen.
 
 - Claude, Copilot and Codex: when a harness's default model is `None`, a step with no model, or with one the harness doesn't recognise, now runs with no `--model` flag. Before, ctrlyoke passed `--model none` and the step failed. The `ctrlyoke` CLI, which doesn't look up Claude's model list, now passes an unlisted Claude model through as written instead of swapping in your default, as it already did for Copilot and Codex.

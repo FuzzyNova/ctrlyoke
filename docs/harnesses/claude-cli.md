@@ -76,11 +76,13 @@ If Claude Code isn't installed or doesn't answer, the picker falls back to the f
 
 Set `model` on the workflow or on a step. Without one, ctrlyoke uses
 [`defaults.models["claude-cli"]`](/reference/settings#defaults-models), which is `sonnet` out of
-the box. A full model ID such as `claude-opus-4-6` is passed to Claude Code as written. A
-Copilot-style ID such as `claude-sonnet-4.6` is mapped to the alias for its family (`sonnet`), and
-so is the old `sonnet[1m]` or `opus[1m]`: Sonnet and Opus now always run with a 1M context. Any
-other value is replaced by your default, with a warning in the log; if the default is `none`, no
-`--model` flag is passed. The `ctrlyoke` CLI doesn't look the model list up, so it passes any other
+the box. A full model ID is passed to Claude Code as written, so the version it pins is kept. That
+includes Anthropic IDs such as `claude-opus-4-6`, Amazon Bedrock IDs such as
+`us.anthropic.claude-sonnet-4-5-20250929-v1:0` and Bedrock inference-profile ARNs, and Google
+Vertex AI IDs such as `claude-sonnet-4-5@20250929`. A Copilot-style ID such as `claude-sonnet-4.6`
+is mapped to the alias for its family (`sonnet`), and so is the old `sonnet[1m]` or `opus[1m]`:
+Sonnet and Opus now always run with a 1M context. Any other value is replaced by your default, with
+a warning in the log; if the default is `none`, no `--model` flag is passed. The `ctrlyoke` CLI doesn't look the model list up, so it passes any other
 value to Claude Code as you wrote it. Keep model overrides harness-specific.
 
 `model: none` passes no `--model` flag, so Claude Code uses its own default model. See

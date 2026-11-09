@@ -337,5 +337,13 @@ suite("ClaudeCliProvider", () => {
         `unexpected model args: ${JSON.stringify(args)}`
       );
     });
+
+    test("passes a Bedrock model ID through as written", async () => {
+      const bedrockId = "us.anthropic.claude-sonnet-4-5-20250929-v1:0";
+      assert.deepStrictEqual(await modelArgs(bedrockId), [
+        "--model",
+        bedrockId,
+      ]);
+    });
   });
 });

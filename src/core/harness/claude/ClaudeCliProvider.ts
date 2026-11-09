@@ -489,7 +489,7 @@ export class ClaudeCliProvider implements ICliProvider {
       recognize: (model) =>
         isKnownClaudeModel(model) ? model : getClaudeModelName(model),
       acceptedFormats:
-        "aliases (sonnet, opus, haiku), full model IDs (claude-opus-4-6), or Copilot-style names (claude-sonnet-4.5)",
+        "aliases (sonnet, opus, haiku), full model IDs (claude-opus-4-6, Bedrock or Vertex IDs, Bedrock ARNs), or Copilot-style names (claude-sonnet-4.5)",
     });
   }
 

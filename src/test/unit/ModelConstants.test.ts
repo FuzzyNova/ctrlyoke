@@ -110,8 +110,22 @@ suite("ModelConstants", () => {
       assert.strictEqual(getClaudeModelName("opus[1m]"), "opus");
     });
 
+    test("passes provider-qualified IDs through without losing their version", () => {
+      for (const id of [
+        "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        "anthropic.claude-3-5-sonnet-20240620-v1:0",
+        "claude-sonnet-4-5@20250929",
+        "claude-3-5-sonnet-20241022",
+        "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/a1b2c3",
+      ]) {
+        assert.strictEqual(getClaudeModelName(id), id);
+      }
+    });
+
     test("returns undefined for unrecognized model", () => {
       assert.strictEqual(getClaudeModelName("gpt-4o"), undefined);
+      // A bare family name inside some other word is not a Claude model.
+      assert.strictEqual(getClaudeModelName("my-sonnet-thing"), undefined);
     });
 
     test("handles case-insensitive matching", () => {

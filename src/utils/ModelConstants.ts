@@ -289,36 +289,45 @@ export function isPinnedClaudeModelId(model: string): boolean {
 }
 
 /**
+ * A name ctrlyoke rewrites to a Claude alias: a Copilot-style dotted ID
+ * (`claude-sonnet-4.6`) or a legacy 1M alias (`sonnet[1m]`). Group 1 or 2 is
+ * the family alias.
+ */
+const CLAUDE_ALIAS_SPELLING_PATTERN =
+  /^(?:claude-(fable|sonnet|opus|haiku)-\d+(?:\.\d+)+|(fable|sonnet|opus|haiku)\[1m\])$/;
+
+/** A Bedrock model or inference-profile ARN, which never names its model. */
+const BEDROCK_ARN_PATTERN = /^arn:aws[a-z-]*:bedrock:/;
+
+/**
  * Get the value to pass to `claude --model` for a given model identifier.
- * Aliases (fable, sonnet, opus, haiku) and pinned model IDs
- * (`claude-opus-4-6`) pass through unchanged.
  *
- * @param model The model identifier (alias, pinned ID, or Copilot-style name like "claude-sonnet-4.5")
+ * - Aliases (`fable`, `sonnet`, `opus`, `haiku`) pass through, lower-cased.
+ * - Copilot-style dotted IDs (`claude-sonnet-4.6`) and the legacy
+ *   `sonnet[1m]`/`opus[1m]` become their family alias.
+ * - Any other ID that names a Claude model passes through exactly as written,
+ *   so the version it pins is kept: Anthropic's pinned IDs
+ *   (`claude-opus-4-6`), Bedrock IDs (`us.anthropic.claude-sonnet-4-5-…`),
+ *   Vertex IDs (`claude-sonnet-4-5@20250929`) and Bedrock ARNs. Claude Code
+ *   validates them.
+ *
  * @returns The Claude CLI model value, or undefined if not recognized
  */
 export function getClaudeModelName(model: string): string | undefined {
-  // Direct match for aliases
-  if (CLAUDE_CLI_MODELS.includes(model as ClaudeCliModelAlias)) {
-    return model;
-  }
-
-  // Try lowercase normalization
   const normalized = model.toLowerCase();
   if (CLAUDE_CLI_MODELS.includes(normalized as ClaudeCliModelAlias)) {
     return normalized;
   }
 
-  if (isPinnedClaudeModelId(normalized)) {
-    return normalized;
+  const aliasSpelling = CLAUDE_ALIAS_SPELLING_PATTERN.exec(normalized);
+  if (aliasSpelling) {
+    return aliasSpelling[1] ?? aliasSpelling[2];
   }
 
-  // Map Copilot-style names and legacy aliases (`sonnet[1m]`) to aliases
-  if (normalized.includes("fable")) return "fable";
-  if (normalized.includes("sonnet")) return "sonnet";
-  if (normalized.includes("opus")) return "opus";
-  if (normalized.includes("haiku")) return "haiku";
+  if (normalized.includes("claude") || BEDROCK_ARN_PATTERN.test(normalized)) {
+    return model;
+  }
 
-  // Not recognized
   return undefined;
 }
 

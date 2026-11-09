@@ -161,6 +161,9 @@ deferred or ruled out. One bullet per smell: files involved and a one-line reaso
     and `CtrlYokeHostedServer` build their messages with `src/ui/DashboardProviderMessages.ts`.
   - The WebSocket `connection` handler's dead 4401 check is gone. HTTP routes and the
     upgrade share `tokenMatches`, so the upgrade also accepts `HOSTED_TOKEN_HEADER`.
+  - `getClaudeModelName` rewrites only Copilot-style dotted IDs and `sonnet[1m]`-style
+    aliases; every other ID naming Claude (Bedrock, Vertex, ARNs, pinned) passes through.
+    That removes the Claude model-name entry from Deferred.
   - Qwen and OpenCode share `splitDescriptionPreview`
     (`src/core/harness/shared/AskUserQuestionPreview.ts`), the first piece of the shared
     ask-user-question parser.
@@ -187,15 +190,6 @@ still deferred.
   - **Before merging.** Add a characterization test per harness for every alias key.
   - **Already shared.** The description splitter: Qwen and OpenCode both call
     `splitDescriptionPreview` (`shared/AskUserQuestionPreview.ts`).
-- Claude's model-name matching (`getClaudeModelName` in `src/utils/ModelConstants.ts`)
-  turns any ID containing `sonnet`/`opus`/`fable`/`haiku` (for example a Bedrock
-  `us.anthropic.claude-sonnet-…` ID) into the bare alias with no warning, losing the
-  pinned version. _2026-11-09: a product question, still open._ The rest of this entry
-  (the drifted `validateAndGetModel` copies) landed: Claude, Copilot and Codex now share
-  `resolveCliModelFlag` (`src/core/harness/shared/CliModelSelection.ts`), and a `none`
-  default never becomes `--model none`. Antigravity, Qwen and OpenCode keep their own
-  rules on purpose: their CLIs validate models themselves, as each harness's docs page
-  says.
 - Run-history/project-state bootstrap in `src/cli.ts` (`runCommand`),
   `src/mcp-server.ts` (`initializeMcpStorage`), `src/extension.ts` and
   `src/cli/CliWorkspaceBootstrap.ts`: drifted. MCP reads the location from
